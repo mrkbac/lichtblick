@@ -62,6 +62,12 @@ E2E tests:
 - New source files should include the MPL-2.0 license header used in this repo.
 - If changing UI behavior, validate in both desktop and web modes when relevant.
 
+## UI Consistency
+
+- Keep new and updated UI consistent with Lichtblick's existing design language. Reuse existing components, MUI controls, `tss-react/mui` styles, and theme tokens for typography, colors, spacing, borders, and icons.
+- Match the alignment, sizing, and information density of neighboring panels. Do not introduce separate branding or a bespoke visual style unless the user explicitly requests it.
+- Preserve existing UI terminology and the selected interface language; use the project's localization patterns for new text.
+
 ## Testing Guidance
 
 - Add or update tests with code changes.
