@@ -111,6 +111,7 @@ describe("makeSeriesNode", () => {
     expect(label).toEqual(seriesNode.path.label);
     expect(fields!.value).toEqual({
       input: "messagepath",
+      supportsMathModifiers: true,
       label: "labels.messagePath",
       validTypes: PLOTABLE_ROS_TYPES,
       value: seriesNode.path.value,

@@ -25,6 +25,8 @@ export function handlePath({ state, action }: HandlePathProps): PieChartState {
       newPath?.messagePath.some(
         (part) =>
           (part.type === "filter" && typeof part.value === "object") ||
+          (part.type === "modifier" &&
+            part.args.some((arg) => typeof arg === "object" && "variableName" in arg)) ||
           (part.type === "slice" &&
             (typeof part.start === "object" || typeof part.end === "object")),
       ) ??

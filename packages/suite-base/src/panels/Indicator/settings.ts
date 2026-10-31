@@ -154,6 +154,7 @@ export function useSettingsTree(
         path: {
           label: "Message path",
           input: "messagepath",
+          supportsMathModifiers: true,
           value: path,
           error: pathParseError,
         },

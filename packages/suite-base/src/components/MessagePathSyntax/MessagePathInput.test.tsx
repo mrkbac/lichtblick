@@ -20,7 +20,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import React from "react";
 import { useDebounce } from "use-debounce";
 
-import { MessagePath } from "@lichtblick/message-path";
+import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";
 import { useUserProfileStorage } from "@lichtblick/suite-base/context/UserProfileStorageContext";
@@ -31,7 +31,10 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import MessagePathInput, {
   tryToSetDefaultGlobalVar,
   getFirstInvalidVariableFromRosPath,
+  getModifierNameAutocomplete,
+  getModifierResultFieldAutocomplete,
 } from "./MessagePathInput";
+import { messagePathStructures, traverseStructure } from "./messagePathsForDatatype";
 import { MessagePathInputBaseProps } from "./types";
 
 // Re-assignable mocks for tests
@@ -96,6 +99,72 @@ describe("getFirstInvalidVariableFromRosPath", () => {
   });
 });
 
+describe("modifier autocomplete", () => {
+  const structure = messagePathStructures(
+    new Map([
+      [
+        "msg",
+        {
+          definitions: [
+            { name: "speed", type: "float64" },
+            { name: "orientation", type: "quaternion" },
+          ],
+        },
+      ],
+      [
+        "quaternion",
+        {
+          definitions: ["x", "y", "z", "w"].map((name) => ({ name, type: "float64" })),
+        },
+      ],
+    ]),
+  ).msg;
+
+  const nameAutocomplete = (path: string, { supportsStreamModifiers = false } = {}) => {
+    const rosPath = parseMessagePath(path)!;
+    return getModifierNameAutocomplete(
+      path,
+      rosPath,
+      traverseStructure(structure, rosPath.messagePath),
+      { supportsStreamModifiers },
+    );
+  };
+
+  it("suggests modifier names that apply to the value", () => {
+    expect(nameAutocomplete("/t.orientation.@r")).toEqual({
+      autocompleteItems: ["norm", "rpy"],
+      autocompleteFilterText: "r",
+      autocompleteRange: { start: 16, end: 17 },
+    });
+    expect(nameAutocomplete("/t.speed.@")?.autocompleteItems).toContain("mul(1)");
+    expect(nameAutocomplete("/t.speed.@")?.autocompleteItems).not.toContain("delta");
+    expect(
+      nameAutocomplete("/t.speed.@", { supportsStreamModifiers: true })?.autocompleteItems,
+    ).toContain("delta");
+    // Complete modifiers need no suggestions
+    expect(nameAutocomplete("/t.speed.@abs")).toBeUndefined();
+  });
+
+  it("suggests fields of a modifier result", () => {
+    const path = "/t.orientation.@rpy.y";
+    expect(
+      getModifierResultFieldAutocomplete(path, parseMessagePath(path)!, structure, {}),
+    ).toEqual({
+      autocompleteItems: expect.arrayContaining([
+        ".orientation.@rpy.roll",
+        ".orientation.@rpy.pitch",
+        ".orientation.@rpy.yaw",
+      ]),
+      autocompleteFilterText: ".orientation.@rpy.y",
+      autocompleteRange: { start: 2, end: Infinity },
+    });
+    const numeric = "/t.speed.@abs.";
+    expect(
+      getModifierResultFieldAutocomplete(numeric, parseMessagePath(numeric)!, structure, {}),
+    ).toBeUndefined();
+  });
+});
+
 describe("MessagePathInput Component", () => {
   const mockOnChange = jest.fn();
   (useGlobalVariables as jest.Mock).mockReturnValue({
@@ -149,6 +218,23 @@ describe("MessagePathInput Component", () => {
     await user.type(input, "{{");
 
     expect(mockOnChange).toHaveBeenCalledWith("{}", 0);
+  });
+
+  it.each<[string, Partial<MessagePathInputBaseProps>, boolean]>([
+    ["/t.x.@abs", {}, true],
+    ["/t.x.@abs", { supportsMathModifiers: true }, false],
+    ["/t.x.@delta", { supportsMathModifiers: true }, true],
+    ["/t.x.@@delta", { supportsMathModifiers: true, supportsStreamModifiers: true }, false],
+    ["/t.x.@@nope", { supportsMathModifiers: true, supportsStreamModifiers: true }, true],
+  ])("flags %s as invalid with %p: %p", (path, props, invalid) => {
+    mockTopics = [{ name: "/t", schemaName: "msg" }];
+    mockDatatypes = new Map([["msg", { definitions: [{ name: "x", type: "float64" }] }]]);
+
+    renderComponent({ path, ...props });
+
+    expect(screen.getByTestId("autocomplete-textfield").className.includes("inputError")).toBe(
+      invalid,
+    );
   });
 
   describe("autoComplete logic", () => {

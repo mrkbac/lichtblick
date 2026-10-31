@@ -17,6 +17,7 @@
 import { Grammar, Parser } from "nearley";
 
 import grammar from "./grammar.ne";
+import { STREAM_MODIFIERS } from "./modifiers";
 import { MessagePath } from "./types";
 
 const grammarObj = Grammar.fromCompiled(grammar);
@@ -49,9 +50,23 @@ const parseMessagePath = (path: string): MessagePath | undefined => {
 
   const parser = new Parser(grammarObj);
   try {
-    const feedResults = parser.feed(path).results;
-    CacheMessagePath[path] = feedResults[0];
-    return feedResults[0];
+    const result: MessagePath | undefined = parser.feed(path).results[0];
+    const last = result?.messagePath.at(-1);
+    // `.@derivative` at the end of a path is a cross-message modifier, like `.@@derivative`
+    if (
+      result &&
+      result.modifier == undefined &&
+      last?.type === "modifier" &&
+      last.args.length === 0 &&
+      STREAM_MODIFIERS.includes(last.name)
+    ) {
+      result.messagePath.pop();
+      result.modifier = last.name;
+    }
+    if (result) {
+      CacheMessagePath[path] = result;
+    }
+    return result;
   } catch (err: unknown) {
     console.error("Error parsing message path", err);
     return undefined;

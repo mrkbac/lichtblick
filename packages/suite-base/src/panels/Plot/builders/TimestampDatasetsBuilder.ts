@@ -28,9 +28,7 @@ import type {
   UpdateDataAction,
 } from "./TimestampDatasetsBuilderImpl";
 import { buildCurrentSeriesActions, buildFullSeriesActions } from "./utils";
-import { MATH_FUNCTIONS } from "../constants";
 import { resolveChartDatum } from "../utils/datum";
-import { MathFunction } from "../utils/mathFunctions";
 
 // If the datasets builder is garbage collected we also need to cleanup the worker
 // This registry ensures the worker is cleaned up when the builder is garbage collected
@@ -90,18 +88,13 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
       const { actions: seriesActions, datasetsChanged: seriesChanged } = buildCurrentSeriesActions(
         this.#series,
         { didSeek, hasRangeSource: this.#hasRangeSource },
-        (config) => {
-          const mathFn = config.parsed.modifier
-            ? MATH_FUNCTIONS[config.parsed.modifier]
-            : undefined;
-          return readMessagePathItems(
+        (config) =>
+          readMessagePathItems(
             msgEvents,
             config.parsed,
             config.timestampMethod,
             activeData.startTime,
-            mathFn,
-          );
-        },
+          ),
       );
       this.#pendingDispatch.push(...(seriesActions as UpdateDataAction[]));
       datasetsChanged ||= seriesChanged;
@@ -124,16 +117,9 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
       return;
     }
 
-    const actions = buildFullSeriesActions(this.#series, topic, options, (config) => {
-      const mathFn = config.parsed.modifier ? MATH_FUNCTIONS[config.parsed.modifier] : undefined;
-      return readMessagePathItems(
-        messages,
-        config.parsed,
-        config.timestampMethod,
-        startTime,
-        mathFn,
-      );
-    });
+    const actions = buildFullSeriesActions(this.#series, topic, options, (config) =>
+      readMessagePathItems(messages, config.parsed, config.timestampMethod, startTime),
+    );
     this.#pendingDispatch.push(...(actions as UpdateDataAction[]));
   }
 
@@ -168,7 +154,6 @@ function readMessagePathItems(
   path: Immutable<MessagePath>,
   timestampMethod: TimestampMethod,
   startTime: Immutable<Time>,
-  mathFunction?: MathFunction,
 ): DataItem[] {
   const out = [];
   for (const event of events) {
@@ -178,7 +163,7 @@ function readMessagePathItems(
 
     const items = simpleGetMessagePathDataItems(event, path);
     for (const item of items) {
-      const datum = resolveChartDatum(item, mathFunction);
+      const datum = resolveChartDatum(item);
       if (!datum) {
         continue;
       }

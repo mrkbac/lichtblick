@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { STREAM_MODIFIERS } from "@lichtblick/message-path";
 import { Immutable, Time } from "@lichtblick/suite";
 import {
   MAX_POINTS,
@@ -90,6 +91,42 @@ function getDerivativeY(
   return (item.y - prevY) / (item.x - prevX);
 }
 
+/** Cross-message modifiers whose first datum has no previous datum to compare against. */
+const NEEDS_PREVIOUS = ["derivative", "delta", "timedelta"];
+
+/** Replace each datum's y with the result of a cross-message modifier like `.@@delta`. */
+function applyStreamModifier(data: IndexedDatum[], modifier: string): void {
+  let prev: IndexedDatum | undefined;
+  let integral = 0;
+  for (let i = 0; i < data.length; ++i) {
+    const item = data[i]!;
+    const valid = !Number.isNaN(item.x) && !Number.isNaN(item.y);
+    let y = Number.NaN;
+    if (valid) {
+      switch (modifier) {
+        case "derivative":
+          y = getDerivativeY(item, prev?.x, prev?.y);
+          break;
+        case "delta":
+          y = prev ? item.y - prev.y : Number.NaN;
+          break;
+        case "timedelta":
+          y = prev ? item.x - prev.x : Number.NaN;
+          break;
+        case "integral":
+          // Trapezoidal rule. Gaps (NaN values) contribute nothing.
+          if (prev) {
+            integral += ((item.y + prev.y) / 2) * (item.x - prev.x);
+          }
+          y = integral;
+          break;
+      }
+    }
+    data[i] = { ...item, y, value: Number.isNaN(y) ? null : y };
+    prev = valid ? item : undefined;
+  }
+}
+
 export class TimestampDatasetsBuilderImpl {
   #seriesByKey = new Map<SeriesConfigKey, Series>();
 
@@ -117,7 +154,7 @@ export class TimestampDatasetsBuilderImpl {
       const xBounds: Bounds1D = { min: Number.MAX_VALUE, max: Number.MIN_VALUE };
       const yBounds: Bounds1D = { min: Number.MAX_VALUE, max: Number.MIN_VALUE };
 
-      const derivative = series.config.parsed.modifier === "derivative";
+      const needsPrevious = NEEDS_PREVIOUS.includes(series.config.parsed.modifier ?? "");
 
       // Trim the dataset down to the view area. include one point on either side so it appears
       // to extend out of the view area.
@@ -125,8 +162,8 @@ export class TimestampDatasetsBuilderImpl {
         const item = allData[i]!;
         item.index = i;
 
-        if (derivative && i === 0) {
-          // When we compute the derivative we will remove the first datum since we cannot compute its derivative
+        if (needsPrevious && i === 0) {
+          // The first datum has no previous datum, so it has no value
           startIdx = 1;
           continue;
         }
@@ -258,30 +295,9 @@ export class TimestampDatasetsBuilderImpl {
     const allData: IndexedDatum[] = series.full.slice();
     allData.push(...series.current);
 
-    if (series.config.parsed.modifier !== "derivative") {
-      return allData;
-    }
-
-    let prevX: number | undefined;
-    let prevY: number | undefined;
-    for (let i = 0; i < allData.length; ++i) {
-      const item = allData[i]!;
-      if (i > 0) {
-        const newY = getDerivativeY(item, prevX, prevY);
-        allData[i] = {
-          ...item,
-          y: newY,
-          value: Number.isNaN(newY) ? null : newY,
-        };
-      }
-
-      if (Number.isNaN(item.x) || Number.isNaN(item.y)) {
-        prevX = undefined;
-        prevY = undefined;
-      } else {
-        prevX = item.x;
-        prevY = item.y;
-      }
+    const { modifier } = series.config.parsed;
+    if (modifier != undefined && STREAM_MODIFIERS.includes(modifier)) {
+      applyStreamModifier(allData, modifier);
     }
 
     return allData;

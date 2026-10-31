@@ -13,7 +13,9 @@
 # easier for both humans and computers to understand what's going on.
 #
 # For more examples, please see parseRosPath.test.js
-main -> topicName messagePath:? modifier:?
+# A trailing per-message modifier with a cross-message name (e.g. `.@derivative`) is moved into
+# `modifier` by parseMessagePath.
+main -> topicName messagePath:? streamModifier:?
   {% (d) => ({ topicName: d[0].value, topicNameRepr: d[0].repr, messagePath: d[1] || [], modifier: d[2] }) %}
 
 ## Primitives
@@ -33,8 +35,13 @@ string
 
 variable -> "$" id:? {% (d, loc) => ({ value: {variableName: d[1] || "", startLoc: loc }, repr: `$${d[1] || ""}` }) %}
 
-# An integer, string, or boolean.
+# Decimal number like `0.5` or `-3.25`. Integers use `integer` to keep int64 precision.
+decimal -> "-":? [0-9]:+ "." [0-9]:+
+  {% (d) => { const repr = (d[0] ?? "") + d[1].join("") + "." + d[3].join(""); return { value: Number(repr), repr }; } %}
+
+# An integer, decimal, string, or boolean.
 value -> integer  {% (d) => d[0] %}
+       | decimal {% (d) => d[0] %}
        | string  {% (d) => d[0] %}
        | "true"  {% (d) => ({ value: true, repr: "true" }) %}
        | "false" {% (d) => ({ value: false, repr: "false" }) %}
@@ -90,6 +97,7 @@ messagePath -> messagePathElement:* ".":?
 messagePathElement ->
   "." name slice:? filter:? {% (d) => [d[1], d[2], d[3]].filter(x => x !== null) %}
   | filter {% id %}
+  | modifier {% id %}
 
 # Name part is just an id, e.g. `field`.
 name ->
@@ -133,8 +141,34 @@ filter -> "{" simplePath:? "}"
               })
             %}
 
-## Modifier.
-# Optional modifier at the end of a path, e.g. `.@derivative` or Math modifiers. Currently only used by the Plot
-# panel, and we should either deprecate this or actually support it properly.
-modifier -> ".@" id:?
-  {% (d) => d[1] || "" %}
+## Modifiers.
+# Per-message modifier, e.g. `.@abs`, `.@mul(2, $scale)` or `.@product(width, height)`. The name may be
+# empty to allow for autocomplete.
+modifier -> ".@" id:? modifierArgs:?
+  {%
+    (d) => {
+      const name = d[1] || "";
+      const args = d[2] || { args: [], repr: "" };
+      return { type: "modifier", name, args: args.args, repr: name + args.repr };
+    }
+  %}
+
+modifierArgs -> "(" _ modifierArg (_ "," _ modifierArg):* _ ")"
+  {%
+    (d) => {
+      const all = [d[2], ...d[3].map((x) => x[3])];
+      return { args: all.map((a) => a.value), repr: `(${all.map((a) => a.repr).join(", ")})` };
+    }
+  %}
+
+# A number, a variable, or a field path relative to the modified value.
+modifierArg -> integer {% (d) => ({ value: Number(d[0].value), repr: d[0].repr }) %}
+             | decimal {% id %}
+             | variable {% id %}
+             | simplePath
+                {% (d, _loc, reject) => /^[0-9-]/.test(d[0][0]) ? reject : { value: d[0], repr: d[0].join(".") } %}
+
+_ -> " ":* {% () => null %}
+
+# Cross-message modifier at the end of a path, e.g. `.@@delta`.
+streamModifier -> ".@@" id {% (d) => d[1] %}

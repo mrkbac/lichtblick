@@ -241,6 +241,8 @@ export type HandleUpdateAction = HandleAction & Omit<SettingsTreeActionUpdatePay
 
 export type MakeSeriesNode = {
   path: PlotPath;
+  /** Cross-message modifiers like `.@derivative` need a time axis */
+  supportsStreamModifiers: boolean;
   index: number;
   canDelete: boolean;
   canReorder: boolean;
@@ -249,6 +251,7 @@ export type MakeSeriesNode = {
 
 export type MakeRootSeriesNode = {
   paths: PlotPath[];
+  supportsStreamModifiers: boolean;
   t: TFunction<"plot">;
 };
 

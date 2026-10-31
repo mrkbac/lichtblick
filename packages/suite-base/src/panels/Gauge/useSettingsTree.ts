@@ -24,6 +24,7 @@ export function useSettingsTree({
         path: {
           label: t("messagePath.label"),
           input: "messagepath",
+          supportsMathModifiers: true,
           value: path,
           error: pathParseError,
           validTypes: DATA_TYPES,

@@ -21,7 +21,6 @@ import {
 } from "./IDatasetsBuilder";
 import { CurrentFrameSeriesItem } from "./types";
 import { buildViewportDatasets, lastMatchingTopic, setSeries } from "./utils";
-import { MATH_FUNCTIONS } from "../constants";
 import { resolveChartDatum } from "../utils/datum";
 
 export class IndexDatasetsBuilder implements IDatasetsBuilder {
@@ -48,8 +47,6 @@ export class IndexDatasetsBuilder implements IDatasetsBuilder {
     const range: Bounds1D = { min: 0, max: 0 };
     let datasetsChanged = false;
     for (const series of this.#seriesByKey.values()) {
-      const mathFn = series.parsed.modifier ? MATH_FUNCTIONS[series.parsed.modifier] : undefined;
-
       const msgEvent = lastMatchingTopic(msgEvents, series.parsed.topicName);
       if (!msgEvent) {
         continue;
@@ -61,7 +58,7 @@ export class IndexDatasetsBuilder implements IDatasetsBuilder {
 
       const items = simpleGetMessagePathDataItems(msgEvent, series.parsed);
       const pathItems = filterMap(items, (item, idx) => {
-        const datum = resolveChartDatum(item, mathFn);
+        const datum = resolveChartDatum(item);
         if (!datum) {
           return;
         }

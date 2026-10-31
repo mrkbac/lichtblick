@@ -22,7 +22,10 @@ import {
   quoteTopicNameIfNeeded,
   parseMessagePath,
   MessagePath,
+  MessagePathStructureItem,
+  modifierSuggestions,
   PrimitiveType,
+  STREAM_MODIFIERS,
 } from "@lichtblick/message-path";
 import * as PanelAPI from "@lichtblick/suite-base/PanelAPI";
 import { Autocomplete } from "@lichtblick/suite-base/components/Autocomplete";
@@ -73,6 +76,16 @@ export function getFirstInvalidVariableFromRosPath(
     ) {
       const [variableName, loc] = [path.value.variableName, path.valueLoc];
       messagePathParts.push({ variableName, loc });
+    } else if (path.type === "modifier") {
+      for (const arg of path.args) {
+        if (
+          typeof arg === "object" &&
+          "variableName" in arg &&
+          !globalVars.includes(arg.variableName)
+        ) {
+          messagePathParts.push({ variableName: arg.variableName, loc: arg.startLoc });
+        }
+      }
     } else if (path.type === "slice") {
       if (typeof path.start === "object" && !globalVars.includes(path.start.variableName)) {
         const [variableName, loc] = [path.start.variableName, path.start.startLoc];
@@ -85,6 +98,72 @@ export function getFirstInvalidVariableFromRosPath(
     }
     return messagePathParts;
   }).find(({ variableName }) => !tryToSetDefaultGlobalVar(variableName, setGlobalVariables));
+}
+
+type AutocompleteState = {
+  autocompleteItems: string[];
+  autocompleteFilterText: string;
+  autocompleteRange: { start: number; end: number };
+};
+
+/** Suggest modifier names for an unfinished modifier at the end of the path, e.g. `/topic.x.@ro`. */
+export function getModifierNameAutocomplete(
+  path: string,
+  rosPath: MessagePath,
+  traversal: StructureTraversalResult | undefined,
+  { supportsStreamModifiers }: { supportsStreamModifiers: boolean },
+): AutocompleteState | undefined {
+  const last = rosPath.messagePath.at(-1);
+  if (
+    rosPath.modifier != undefined ||
+    last?.type !== "modifier" ||
+    traversal?.valid !== false ||
+    traversal.msgPathPart !== last
+  ) {
+    return undefined;
+  }
+  const start = path.lastIndexOf(".@") + 2;
+  return {
+    autocompleteItems: modifierSuggestions(traversal.structureItem, {
+      streamModifiers: supportsStreamModifiers,
+    }),
+    autocompleteFilterText: path.slice(start),
+    autocompleteRange: { start, end: path.length },
+  };
+}
+
+/** Suggest fields of a modifier result that is a message, e.g. `/topic.orientation.@rpy.yaw`. */
+export function getModifierResultFieldAutocomplete(
+  path: string,
+  rosPath: MessagePath,
+  structure: MessagePathStructureItem | undefined,
+  options: { validTypes?: readonly string[]; noMultiSlices?: boolean },
+): AutocompleteState | undefined {
+  const parts = rosPath.messagePath;
+  const modifierIndex = _.findLastIndex(parts, (part) => part.type === "modifier");
+  const modifier = parts[modifierIndex];
+  if (
+    rosPath.modifier != undefined ||
+    modifier?.type !== "modifier" ||
+    !parts.slice(modifierIndex + 1).every((part) => part.type === "name")
+  ) {
+    return undefined;
+  }
+  const result = traverseStructure(structure, parts.slice(0, modifierIndex + 1));
+  const modifierText = `.@${modifier.repr}`;
+  const modifierStart = path.lastIndexOf(modifierText);
+  if (!result.valid || result.structureItem?.structureType !== "message" || modifierStart < 0) {
+    return undefined;
+  }
+  const start = rosPath.topicNameRepr.length;
+  const prefix = path.slice(start, modifierStart + modifierText.length);
+  return {
+    autocompleteItems: messagePathsForStructure(result.structureItem, options).map(
+      (item) => prefix + item.path,
+    ),
+    autocompleteFilterText: path.slice(start),
+    autocompleteRange: { start, end: Infinity },
+  };
 }
 
 function getExamplePrimitive(primitiveType: PrimitiveType) {
@@ -132,7 +211,8 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
   const { datatypes, topics } = PanelAPI.useDataSourceInfo();
 
   const {
-    supportsMathModifiers,
+    supportsMathModifiers = false,
+    supportsStreamModifiers = false,
     path,
     prioritizedDatatype,
     validTypes,
@@ -201,7 +281,13 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
       // or if we just autocompleted something with a filter (because we might want to
       // edit that filter), or if the autocomplete already has a filter (because we might
       // have just autocompleted a name inside that filter).
-      if (keepGoingAfterTopicName || value.includes("{") || path.includes("{")) {
+      // Also keep going after a modifier with arguments, so the arguments can be edited.
+      if (
+        keepGoingAfterTopicName ||
+        value.includes("{") ||
+        path.includes("{") ||
+        value.includes("(")
+      ) {
         const newCursorPosition = autocompleteRange.start + value.length;
         setImmediate(() => {
           autocomplete.setSelectionRange(newCursorPosition, newCursorPosition);
@@ -345,13 +431,21 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
             end: msgPathPart.nameLoc + filterText.length,
           },
         };
+      }
+
+      const structure = topic.schemaName != undefined ? structures[topic.schemaName] : undefined;
+      const modifierAutocomplete =
+        getModifierNameAutocomplete(path, rosPath, structureTraversalResult, {
+          supportsStreamModifiers,
+        }) ??
+        getModifierResultFieldAutocomplete(path, rosPath, structure, { validTypes, noMultiSlices });
+      if (modifierAutocomplete) {
+        return modifierAutocomplete;
       } else {
         // Exclude any initial filters ("/topic{foo=='bar'}") from the range that will be replaced
         // when the user chooses a new message path.
         const initialFilterLength =
           rosPath.messagePath[0]?.type === "filter" ? rosPath.messagePath[0].repr.length + 2 : 0;
-
-        const structure = topic.schemaName != undefined ? structures[topic.schemaName] : undefined;
 
         return {
           autocompleteItems:
@@ -413,6 +507,7 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
     validTypes,
     noMultiSlices,
     globalVariables,
+    supportsStreamModifiers,
   ]);
 
   const orderedAutocompleteItems = useMemo(() => {
@@ -428,11 +523,14 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
     return result;
   }, [autocompleteItems, prioritizedDatatype, topicsByName]);
 
-  const usesUnsupportedMathModifier =
-    (supportsMathModifiers == undefined || !supportsMathModifiers) && path.includes(".@");
+  const usesUnsupportedModifier = rosPath
+    ? (!supportsMathModifiers && rosPath.messagePath.some((part) => part.type === "modifier")) ||
+      (rosPath.modifier != undefined &&
+        (!supportsStreamModifiers || !STREAM_MODIFIERS.includes(rosPath.modifier)))
+    : !supportsMathModifiers && path.includes(".@");
 
   const hasError =
-    usesUnsupportedMathModifier ||
+    usesUnsupportedModifier ||
     (autocompleteType != undefined && !disableAutocomplete && path.length > 0);
 
   return (

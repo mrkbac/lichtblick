@@ -103,6 +103,36 @@ describe("useCachedGetMessagePathDataItems", () => {
   });
 
   describe("getMessagePathDataItems", () => {
+    it("applies modifiers and includes them in the item path", () => {
+      const messages: MessageEvent[] = [
+        {
+          topic: "/some/topic",
+          receiveTime: { sec: 0, nsec: 0 },
+          message: { point: { x: 3, y: 4 } },
+          schemaName: "datatype",
+          sizeInBytes: 0,
+        },
+      ];
+      const topics: Topic[] = [{ name: "/some/topic", schemaName: "some_datatype" }];
+      const datatypes: RosDatatypes = new Map(
+        Object.entries({
+          some_datatype: { definitions: [{ name: "point", type: "point_datatype" }] },
+          point_datatype: {
+            definitions: [
+              { name: "x", type: "float64" },
+              { name: "y", type: "float64" },
+            ],
+          },
+        }),
+      );
+
+      expect(
+        addValuesWithPathsToItems(messages, "/some/topic.point.@norm.@mul(2)", topics, datatypes),
+      ).toEqual([
+        [{ value: 10, path: "/some/topic.point.@norm.@mul(2)", constantName: undefined }],
+      ]);
+    });
+
     it("traverses down the path for every item", () => {
       const messages: MessageEvent[] = [
         {
@@ -620,6 +650,32 @@ describe("useCachedGetMessagePathDataItems", () => {
 describe("fillInGlobalVariablesInPath", () => {
   const equal: OperatorType = "==";
   const notEqual: OperatorType = "!=";
+
+  it("fills in global variables in modifier arguments", () => {
+    const filled = fillInGlobalVariablesInPath(
+      {
+        topicName: "/foo",
+        topicNameRepr: "/foo",
+        messagePath: [
+          {
+            type: "modifier",
+            name: "mul",
+            args: [
+              2,
+              ["width"],
+              { variableName: "scale", startLoc: 0 },
+              { variableName: "x", startLoc: 0 },
+            ],
+            repr: "mul(2, width, $scale, $x)",
+          },
+        ],
+      },
+      { scale: 1.5, x: "not a number" },
+    );
+    expect(filled.messagePath[0]).toEqual(
+      expect.objectContaining({ args: [2, ["width"], 1.5, NaN] }),
+    );
+  });
 
   it("fills in global variables in slices", () => {
     expect(

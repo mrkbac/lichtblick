@@ -86,7 +86,12 @@ function TablePanel({ config, saveConfig }: Props) {
   return (
     <Stack flex="auto" overflow="hidden" position="relative">
       <PanelToolbar className={classes.toolbar}>
-        <MessagePathInput index={0} path={topicPath} onChange={onTopicPathChange} />
+        <MessagePathInput
+          index={0}
+          supportsMathModifiers
+          path={topicPath}
+          onChange={onTopicPathChange}
+        />
       </PanelToolbar>
       {topicPath.length === 0 && <EmptyState>No topic selected</EmptyState>}
       {topicPath.length !== 0 && cachedMessages.length === 0 && (

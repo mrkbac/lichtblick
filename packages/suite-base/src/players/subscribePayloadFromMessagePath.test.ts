@@ -23,6 +23,18 @@ describe("subscribePayloadFromMessagePath", () => {
     expect(result).toEqual({ topic: "topic", fields: ["field"], preloadType: "partial" });
   });
 
+  it("subscribes to the whole message when a modifier precedes the first field", () => {
+    expect(subscribePayloadFromMessagePath("topic.@quat.w")).toEqual({
+      topic: "topic",
+      preloadType: "partial",
+    });
+    expect(subscribePayloadFromMessagePath("topic.field.@product(a, b)")).toEqual({
+      topic: "topic",
+      fields: ["field"],
+      preloadType: "partial",
+    });
+  });
+
   it("handles complex paths", () => {
     const result = subscribePayloadFromMessagePath("topic{x==1}.field[:].subfield");
     expect(result).toEqual({ topic: "topic", fields: ["field"], preloadType: "partial" });

@@ -29,7 +29,6 @@ import {
 } from "./IDatasetsBuilder";
 import { buildCurrentSeriesActions, buildFullSeriesActions } from "./utils";
 import { resolveChartDatum } from "../utils/datum";
-import { MathFunction, mathFunctions } from "../utils/mathFunctions";
 
 type CustomDatasetsSeriesItem = {
   config: Immutable<SeriesItem>;
@@ -105,10 +104,7 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
       const { actions: seriesActions, datasetsChanged: seriesChanged } = buildCurrentSeriesActions(
         this.#series,
         { didSeek, hasRangeSource: this.#hasRangeSource },
-        (config) => {
-          const mathFn = config.parsed.modifier ? mathFunctions[config.parsed.modifier] : undefined;
-          return readMessagePathItems(msgEvents, config.parsed, mathFn);
-        },
+        (config) => readMessagePathItems(msgEvents, config.parsed),
       );
       this.#pendingDispatch.push(...(seriesActions as UpdateDataAction[]));
       datasetsChanged ||= seriesChanged;
@@ -161,10 +157,9 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
       return;
     }
 
-    const actions = buildFullSeriesActions(this.#series, topic, options, (config) => {
-      const mathFn = config.parsed.modifier ? mathFunctions[config.parsed.modifier] : undefined;
-      return readMessagePathItems(messages, config.parsed, mathFn);
-    });
+    const actions = buildFullSeriesActions(this.#series, topic, options, (config) =>
+      readMessagePathItems(messages, config.parsed),
+    );
     this.#pendingDispatch.push(...(actions as UpdateDataAction[]));
   }
 
@@ -216,14 +211,12 @@ function parseXPathItems(
   messages: Immutable<MessageEvent[]>,
   xParsedPath: Immutable<MessagePath>,
 ): ValueItem[] {
-  const mathFn = xParsedPath.modifier ? mathFunctions[xParsedPath.modifier] : undefined;
-  return readMessagePathItems(messages, xParsedPath, mathFn);
+  return readMessagePathItems(messages, xParsedPath);
 }
 
 function readMessagePathItems(
   events: Immutable<MessageEvent[]>,
   path: Immutable<MessagePath>,
-  mathFunction?: MathFunction,
 ): ValueItem[] {
   const out = [];
   for (const event of events) {
@@ -233,7 +226,7 @@ function readMessagePathItems(
 
     const items = simpleGetMessagePathDataItems(event, path);
     for (const item of items) {
-      const datum = resolveChartDatum(item, mathFunction);
+      const datum = resolveChartDatum(item);
       if (!datum) {
         continue;
       }

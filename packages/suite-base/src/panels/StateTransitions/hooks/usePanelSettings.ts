@@ -77,6 +77,7 @@ export const makeSeriesNode = memoizeWeak(
         value: {
           ...(isArray ? { error: t("pathErrorMessage") } : {}),
           input: "messagepath",
+          supportsMathModifiers: true,
           label: t("labels.messagePath"),
           validTypes: PLOTABLE_ROS_TYPES,
           value: path.value,

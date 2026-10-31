@@ -223,6 +223,52 @@ describe("TimestampDatasetsBuilder", () => {
     });
   });
 
+  it.each([
+    [
+      "/foo.val.@mul(2).@delta",
+      [
+        { x: 1, y: 2, value: 2 },
+        { x: 2, y: 4, value: 4 },
+      ],
+    ],
+    [
+      "/foo.val.@@timedelta",
+      [
+        { x: 1, y: 1, value: 1 },
+        { x: 2, y: 1, value: 1 },
+      ],
+    ],
+    [
+      "/foo.val.@mul(2).@@integral",
+      [
+        { x: 0, y: 0, value: 0 },
+        { x: 1, y: 1, value: 1 },
+        { x: 2, y: 5, value: 5 },
+      ],
+    ],
+  ])("applies the cross-message modifier in %s", async (value, data) => {
+    const builder = new TimestampDatasetsBuilder();
+    builder.setSeries(buildSeriesItems([{ enabled: true, timestampMethod: "receiveTime", value }]));
+    builder.handlePlayerState(
+      buildPlayerState({
+        messages: [0, 1, 3].map((val, sec) => ({
+          topic: "/foo",
+          schemaName: "foo",
+          receiveTime: { sec, nsec: 0 },
+          sizeInBytes: 0,
+          message: { val },
+        })),
+      }),
+    );
+
+    await expect(
+      builder.getViewportDatasets({ size: { width: 1_000, height: 1_000 }, bounds: {} }),
+    ).resolves.toEqual({
+      pathsWithMismatchedDataLengths: new Set(),
+      datasetsByConfigIndex: [expect.objectContaining({ data })],
+    });
+  });
+
   it("resets the derivative segment after a gap instead of computing across it", async () => {
     const builder = new TimestampDatasetsBuilder();
 

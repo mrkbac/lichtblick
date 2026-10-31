@@ -17,6 +17,7 @@
 import * as _ from "lodash-es";
 
 import {
+  modifierResultStructure,
   MessagePathFilter,
   quoteFieldNameIfNeeded,
   MessagePathPart,
@@ -303,8 +304,14 @@ export const traverseStructure = (
         return { valid: false, msgPathPart, structureItem };
       }
       structureItem = structureItem.next;
-      //eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     } else if (msgPathPart.type === "filter") {
+      // A filter without a field compares the value itself, e.g. `.@norm{<=30}`
+      if (msgPathPart.path.length === 0 && msgPathPart.value != undefined) {
+        if (structureItem.structureType !== "primitive") {
+          return { valid: false, msgPathPart, structureItem };
+        }
+        continue;
+      }
       if (
         structureItem.structureType !== "message" ||
         msgPathPart.path.length === 0 ||
@@ -322,6 +329,13 @@ export const traverseStructure = (
           return { valid: false, msgPathPart, structureItem };
         }
       }
+      //eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+    } else if (msgPathPart.type === "modifier") {
+      const next = modifierResultStructure(msgPathPart, structureItem);
+      if (!next) {
+        return { valid: false, msgPathPart, structureItem };
+      }
+      structureItem = next;
     } else {
       assertNever(
         msgPathPart,

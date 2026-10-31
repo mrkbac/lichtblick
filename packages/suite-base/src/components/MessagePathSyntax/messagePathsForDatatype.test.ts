@@ -595,6 +595,50 @@ describe("traverseStructure", () => {
   const equal: OperatorType = "==";
   const notEqual: OperatorType = "!=";
   const greaterThan: OperatorType = ">=";
+
+  it("validates modifiers against their input and continues with the result structure", () => {
+    const structure = messagePathStructures(datatypes)["pose_msgs/PoseDebug"];
+    const somePose = { type: "name", name: "some_pose", repr: "some_pose" } as const;
+    const dummyArray = { type: "name", name: "dummy_array", repr: "dummy_array" } as const;
+    const float64 = { structureType: "primitive", primitiveType: "float64", datatype: "" };
+
+    expect(
+      traverseStructure(structure, [
+        somePose,
+        dummyArray,
+        { type: "modifier", name: "max", args: [], repr: "max" },
+      ]),
+    ).toEqual({ valid: true, msgPathPart: undefined, structureItem: float64 });
+
+    // A filter without a field applies to the modifier result
+    const lessThan: OperatorType = "<";
+    expect(
+      traverseStructure(structure, [
+        somePose,
+        dummyArray,
+        { type: "modifier", name: "max", args: [], repr: "max" },
+        {
+          type: "filter",
+          path: [],
+          operator: lessThan,
+          value: 1,
+          nameLoc: 0,
+          valueLoc: 0,
+          repr: "<1",
+        },
+      ]).valid,
+    ).toBe(true);
+
+    // `.@abs` does not apply to a message, and unknown modifiers are invalid
+    for (const name of ["abs", "nope"]) {
+      const modifier = { type: "modifier", name, args: [], repr: name } as const;
+      expect(traverseStructure(structure, [somePose, modifier])).toEqual({
+        valid: false,
+        msgPathPart: modifier,
+        structureItem: structure?.nextByName.some_pose,
+      });
+    }
+  });
   it("returns whether the path is valid for the structure, plus some metadata", () => {
     const structure = messagePathStructures(datatypes)["pose_msgs/PoseDebug"];
 

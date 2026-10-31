@@ -20,6 +20,7 @@ import { useCallback, useMemo } from "react";
 import { filterMap } from "@lichtblick/den/collection";
 import { useDeepMemo, useShallowMemo } from "@lichtblick/hooks";
 import {
+  applyModifier,
   quoteTopicNameIfNeeded,
   parseMessagePath,
   MessagePathStructureItem,
@@ -188,6 +189,17 @@ export function fillInGlobalVariablesInPath(
           value = variable;
         }
         return { ...messagePathPart, value };
+      } else if (messagePathPart.type === "modifier") {
+        return {
+          ...messagePathPart,
+          args: messagePathPart.args.map((arg) => {
+            if (typeof arg !== "object" || !("variableName" in arg)) {
+              return arg;
+            }
+            // An unset or non-numeric variable becomes NaN
+            return Number(globalVariables[arg.variableName]);
+          }),
+        };
       }
 
       return messagePathPart;
@@ -314,6 +326,12 @@ export function getMessagePathDataItems(
     } else if (pathItem.type === "filter") {
       if (filterMatches(pathItem, value)) {
         traverse(value, pathIndex + 1, `${path}{${pathItem.repr}}`, structureItem);
+      }
+    } else if (pathItem.type === "modifier") {
+      const modified = applyModifier(value, pathItem);
+      if (modified != undefined) {
+        // The schema does not describe modifier results
+        traverse(modified, pathIndex + 1, `${path}.@${pathItem.repr}`, undefined);
       }
     } else {
       console.warn(

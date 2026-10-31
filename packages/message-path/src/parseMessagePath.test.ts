@@ -465,8 +465,11 @@ describe("parseRosPath", () => {
     expect(parseMessagePath("/topic.hi.@")).toEqual({
       topicName: "/topic",
       topicNameRepr: "/topic",
-      messagePath: [{ type: "name", name: "hi", repr: "hi" }],
-      modifier: "",
+      messagePath: [
+        { type: "name", name: "hi", repr: "hi" },
+        { type: "modifier", name: "", args: [], repr: "" },
+      ],
+      modifier: MISSING,
     });
     expect(parseMessagePath("/topic.foo{}")).toEqual({
       topicName: "/topic",
@@ -542,6 +545,55 @@ describe("parseRosPath", () => {
     expect(parseMessagePath("blah.blah")).toBeDefined();
   });
 
+  it("parses chained modifiers with arguments", () => {
+    expect(parseMessagePath("/t.a.@mul(2, $scale).@add(-1.5).@rpy.yaw")?.messagePath).toEqual([
+      { type: "name", name: "a", repr: "a" },
+      {
+        type: "modifier",
+        name: "mul",
+        args: [2, { variableName: "scale", startLoc: 13 }],
+        repr: "mul(2, $scale)",
+      },
+      { type: "modifier", name: "add", args: [-1.5], repr: "add(-1.5)" },
+      { type: "modifier", name: "rpy", args: [], repr: "rpy" },
+      { type: "name", name: "yaw", repr: "yaw" },
+    ]);
+    expect(parseMessagePath("/img.@product(width,shape.height)")?.messagePath).toEqual([
+      {
+        type: "modifier",
+        name: "product",
+        args: [["width"], ["shape", "height"]],
+        repr: "product(width, shape.height)",
+      },
+    ]);
+  });
+
+  it("parses filters on modifier results and decimal filter values", () => {
+    expect(parseMessagePath("/t.v[:]{c>0.5}.@norm{<=-2.25}")?.messagePath).toEqual([
+      { type: "name", name: "v", repr: "v" },
+      { type: "slice", start: 0, end: Infinity },
+      expect.objectContaining({ path: ["c"], operator: ">", value: 0.5, repr: "c>0.5" }),
+      { type: "modifier", name: "norm", args: [], repr: "norm" },
+      expect.objectContaining({ path: [], operator: "<=", value: -2.25, repr: "<=-2.25" }),
+    ]);
+  });
+
+  it("moves a trailing cross-message modifier into `modifier`", () => {
+    for (const path of ["/t.a.@abs.@delta", "/t.a.@abs.@@delta"]) {
+      expect(parseMessagePath(path)).toEqual({
+        topicName: "/t",
+        topicNameRepr: "/t",
+        messagePath: [
+          { type: "name", name: "a", repr: "a" },
+          { type: "modifier", name: "abs", args: [], repr: "abs" },
+        ],
+        modifier: "delta",
+      });
+    }
+    // Only at the end of the path
+    expect(parseMessagePath("/t.a.@delta.@abs")?.modifier).toBe(MISSING);
+  });
+
   it("returns undefined for invalid strings", () => {
     expect(parseMessagePath("[100]")).toBeUndefined();
     expect(parseMessagePath("[-100]")).toBeUndefined();
@@ -550,6 +602,8 @@ describe("parseRosPath", () => {
     expect(parseMessagePath("/topic.foo[bar]")).toBeUndefined();
     expect(parseMessagePath("/topic.foo{bar==}")).toBeUndefined();
     expect(parseMessagePath("/topic.foo{bar==baz}")).toBeUndefined();
+    expect(parseMessagePath("/topic.foo.@mul(")).toBeUndefined();
+    expect(parseMessagePath("/topic.foo.@@delta.bar")).toBeUndefined();
   });
 
   it("uses the cached value instead of parse the path again", () => {

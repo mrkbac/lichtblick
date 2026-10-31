@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { parseMessagePath, MessagePathPart } from "@lichtblick/message-path";
+import { parseMessagePath } from "@lichtblick/message-path";
 
 import { SubscriptionPreloadType, SubscribePayload } from "./types";
 
@@ -24,11 +24,12 @@ export function subscribePayloadFromMessagePath(
     return undefined;
   }
 
-  type NamePart = MessagePathPart & { type: "name" };
-
-  const firstField = parsedPath.messagePath.find(
-    (element): element is NamePart => element.type === "name",
+  // A modifier before the first field (e.g. `/topic.@product(width, height)`) reads arbitrary
+  // fields, so it needs the whole message.
+  const firstFieldOrModifier = parsedPath.messagePath.find(
+    (element) => element.type === "name" || element.type === "modifier",
   );
+  const firstField = firstFieldOrModifier?.type === "name" ? firstFieldOrModifier : undefined;
 
   if (!firstField) {
     const payload: SubscribePayload = {

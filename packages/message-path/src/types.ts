@@ -58,7 +58,26 @@ type MessagePathSlice = {
 };
 
 // A parsed version of paths.
-export type MessagePathPart = MessagePathName | MessagePathSlice | MessagePathFilter;
+/** A global variable reference, filled in before evaluation. */
+type MessagePathVariable = { variableName: string; startLoc: number };
+
+/** A modifier argument: a number, a field path relative to the modified value, or a variable. */
+export type MessagePathModifierArg = number | readonly string[] | Readonly<MessagePathVariable>;
+
+/** A per-message modifier like `.@abs`, `.@mul(2)` or `.@product(width, height)`. */
+export type MessagePathModifier = {
+  type: "modifier";
+  name: string;
+  args: readonly MessagePathModifierArg[];
+  /** Original spelling after `.@`, e.g. `mul(2)` */
+  repr: string;
+};
+
+export type MessagePathPart =
+  | MessagePathName
+  | MessagePathSlice
+  | MessagePathFilter
+  | MessagePathModifier;
 
 export type MessagePath = {
   /** Referenced topic name */
@@ -69,6 +88,10 @@ export type MessagePath = {
    */
   topicNameRepr: string;
   messagePath: MessagePathPart[];
+  /**
+   * Trailing cross-message modifier like `.@derivative` or `.@@delta`. Per-message modifiers are
+   * part of `messagePath` instead.
+   */
   modifier?: string;
 };
 

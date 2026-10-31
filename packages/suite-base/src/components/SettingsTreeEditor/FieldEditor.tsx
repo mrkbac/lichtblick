@@ -240,6 +240,7 @@ function FieldInput({
           disabled={field.disabled}
           readOnly={field.readonly}
           supportsMathModifiers={field.supportsMathModifiers}
+          supportsStreamModifiers={field.supportsStreamModifiers}
           onChange={handleMessagePathChange}
           validTypes={field.validTypes}
         />
