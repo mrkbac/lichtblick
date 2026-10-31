@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { applyModifier, isKnownModifier } from "./modifiers";
-import { MessagePathModifierArg } from "./types";
+import { applyModifier, modifierResultStructure, modifierSuggestions } from "./modifiers";
+import { MessagePathModifierArg, MessagePathStructureItem } from "./types";
 
 function apply(value: unknown, name: string, args: MessagePathModifierArg[] = []): unknown {
   return applyModifier(value, { type: "modifier", name, args, repr: name });
@@ -63,11 +63,60 @@ describe("applyModifier", () => {
       (apply({ x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 }, "rpy") as typeof rpy).yaw,
     ).toBeCloseTo(Math.PI / 2);
   });
+});
 
-  it("knows which modifiers exist", () => {
-    expect(isKnownModifier("abs")).toBe(true);
-    expect(isKnownModifier("rpy")).toBe(true);
-    expect(isKnownModifier("")).toBe(false);
-    expect(isKnownModifier("derivative")).toBe(false);
+describe("modifierResultStructure", () => {
+  const float64: MessagePathStructureItem = {
+    structureType: "primitive",
+    primitiveType: "float64",
+    datatype: "",
+  };
+  const string: MessagePathStructureItem = {
+    structureType: "primitive",
+    primitiveType: "string",
+    datatype: "",
+  };
+  const floats: MessagePathStructureItem = { structureType: "array", next: float64, datatype: "" };
+  const quaternion: MessagePathStructureItem = {
+    structureType: "message",
+    datatype: "geometry_msgs/Quaternion",
+    nextByName: { x: float64, y: float64, z: float64, w: float64 },
+  };
+  const rpy = expect.objectContaining({
+    nextByName: { roll: float64, pitch: float64, yaw: float64 },
+  });
+
+  it.each<[string, boolean, MessagePathStructureItem | undefined, unknown]>([
+    ["abs", false, float64, float64],
+    ["abs", false, floats, floats],
+    ["abs", false, string, undefined],
+    ["abs", false, quaternion, undefined],
+    ["mul", true, float64, float64],
+    ["mul", false, float64, undefined],
+    ["max", false, floats, float64],
+    ["max", false, float64, undefined],
+    ["max", true, floats, floats],
+    ["sum", true, quaternion, float64],
+    ["length", false, floats, float64],
+    ["norm", false, quaternion, float64],
+    ["rpy", false, quaternion, rpy],
+    ["rpy", false, floats, undefined],
+    ["quat", false, quaternion, undefined],
+    ["nope", false, float64, undefined],
+    ["nope", false, undefined, undefined],
+    ["abs", false, undefined, float64],
+    ["rpy", false, undefined, rpy],
+  ])(".@%s (args: %p) on %p", (name, hasArgs, input, expected) => {
+    expect(modifierResultStructure({ name, args: hasArgs ? [1] : [] }, input)).toEqual(expected);
+  });
+
+  it("suggests only modifiers that apply to the input", () => {
+    expect(modifierSuggestions(quaternion, { streamModifiers: true })).toEqual(["norm", "rpy"]);
+    expect(modifierSuggestions(floats, { streamModifiers: true })).toEqual(
+      expect.arrayContaining(["abs", "mul(1)", "max", "length", "norm"]),
+    );
+    expect(modifierSuggestions(floats, { streamModifiers: true })).not.toContain("delta");
+    expect(modifierSuggestions(float64, { streamModifiers: false })).not.toContain("delta");
+    expect(modifierSuggestions(float64, { streamModifiers: true })).toContain("delta");
   });
 });

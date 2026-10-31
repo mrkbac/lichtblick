@@ -35,6 +35,7 @@ describe("useSettingsTree", () => {
     expect(general?.fields?.path).toEqual({
       label: "Message path",
       input: "messagepath",
+      supportsMathModifiers: true,
       value: props.config.path,
       error: undefined,
       validTypes: SUPPORTED_DATA_TYPES,

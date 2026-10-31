@@ -1,7 +1,12 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { MessagePathModifier, MessagePathModifierArg } from "./types";
+import {
+  MessagePathModifier,
+  MessagePathModifierArg,
+  MessagePathStructureItem,
+  MessagePathStructureItemMessage,
+} from "./types";
 
 /** Modifiers computed across messages. Only valid at the end of a path, see `MessagePath.modifier`. */
 export const STREAM_MODIFIERS: readonly string[] = ["derivative", "delta", "timedelta", "integral"];
@@ -58,10 +63,144 @@ const REDUCERS: Record<string, (values: number[]) => number | undefined> = {
   max: (v) => (v.length > 0 ? Math.max(...v) : undefined),
 };
 
-const ROBOTICS = ["length", "norm", "magnitude", "rpy", "quat"];
+const FLOAT64: MessagePathStructureItem = {
+  structureType: "primitive",
+  primitiveType: "float64",
+  datatype: "",
+};
 
-export function isKnownModifier(name: string): boolean {
-  return name in SCALAR || name in ARITHMETIC || name in REDUCERS || ROBOTICS.includes(name);
+function messageStructure(datatype: string, names: string[]): MessagePathStructureItemMessage {
+  return {
+    structureType: "message",
+    datatype,
+    nextByName: Object.fromEntries(names.map((name) => [name, FLOAT64])),
+  };
+}
+
+const RPY_STRUCTURE = messageStructure("lichtblick.modifier.EulerAngles", ["roll", "pitch", "yaw"]);
+const QUATERNION_STRUCTURE = messageStructure("lichtblick.modifier.Quaternion", [
+  "x",
+  "y",
+  "z",
+  "w",
+]);
+
+function isNumericStructure(item: MessagePathStructureItem | undefined): boolean {
+  return (
+    item?.structureType === "primitive" &&
+    item.primitiveType !== "string" &&
+    item.primitiveType !== "bool"
+  );
+}
+
+function hasNumericFields(item: MessagePathStructureItem, names: string[]): boolean {
+  return (
+    item.structureType === "message" &&
+    names.every((name) => isNumericStructure(item.nextByName[name]))
+  );
+}
+
+function isNumericArray(item: MessagePathStructureItem): boolean {
+  return item.structureType === "array" && isNumericStructure(item.next);
+}
+
+/** Result structure of applying a per-element modifier to a number or numeric array. */
+function mapNumericStructure(
+  input: MessagePathStructureItem,
+): MessagePathStructureItem | undefined {
+  if (isNumericStructure(input)) {
+    return FLOAT64;
+  }
+  return isNumericArray(input)
+    ? { structureType: "array", next: FLOAT64, datatype: "" }
+    : undefined;
+}
+
+/**
+ * Structure of a modifier's result, mirroring `applyModifier`. Returns undefined for unknown
+ * modifiers and for modifiers that do not apply to `input`. An undefined `input` (unknown schema)
+ * accepts any known modifier.
+ */
+export function modifierResultStructure(
+  modifier: Pick<MessagePathModifier, "name" | "args">,
+  input: MessagePathStructureItem | undefined,
+): MessagePathStructureItem | undefined {
+  const { name } = modifier;
+  const hasArgs = modifier.args.length > 0;
+  const isElementWise =
+    (name in SCALAR && !hasArgs) || (name in ARITHMETIC && (hasArgs || name === "round"));
+  const isReducer = name in REDUCERS;
+  if (input == undefined) {
+    if (name === "rpy") {
+      return RPY_STRUCTURE;
+    }
+    if (name === "quat") {
+      return QUATERNION_STRUCTURE;
+    }
+    const known = isElementWise || isReducer || ["length", "norm", "magnitude"].includes(name);
+    return known ? FLOAT64 : undefined;
+  }
+  if (isElementWise) {
+    return mapNumericStructure(input);
+  }
+  if (isReducer) {
+    if (!hasArgs) {
+      return isNumericArray(input) ? FLOAT64 : undefined;
+    }
+    if (input.structureType === "message") {
+      return FLOAT64;
+    }
+    return name === "min" || name === "max" ? mapNumericStructure(input) : undefined;
+  }
+  switch (name) {
+    case "length":
+      return input.structureType === "array" ? FLOAT64 : undefined;
+    case "norm":
+    case "magnitude":
+      return isNumericArray(input) || hasNumericFields(input, ["x", "y"]) ? FLOAT64 : undefined;
+    case "rpy":
+      return hasNumericFields(input, ["x", "y", "z", "w"]) ? RPY_STRUCTURE : undefined;
+    case "quat":
+      return hasNumericFields(input, ["roll", "pitch", "yaw"]) ? QUATERNION_STRUCTURE : undefined;
+  }
+  return undefined;
+}
+
+const SUGGESTIONS = [
+  ...Object.keys(SCALAR).filter((name) => name !== "deg2rad" && name !== "rad2deg"),
+  "round(2)",
+  "add(1)",
+  "sub(1)",
+  "mul(1)",
+  "div(1)",
+  "min(0)",
+  "max(0)",
+  ...Object.keys(REDUCERS),
+  "length",
+  "norm",
+  "rpy",
+  "quat",
+];
+
+/** Autocomplete suggestions for a modifier applied to a value with the given structure. */
+export function modifierSuggestions(
+  input: MessagePathStructureItem | undefined,
+  { streamModifiers }: { streamModifiers: boolean },
+): string[] {
+  const result = SUGGESTIONS.filter((suggestion) => {
+    const [name = "", args] = suggestion.split("(");
+    if (args != undefined && input?.structureType === "message") {
+      // Templates with numeric arguments make no sense for messages
+      return false;
+    }
+    return (
+      modifierResultStructure({ name, args: args != undefined ? [0] : [] }, input) != undefined
+    );
+  });
+  if (streamModifiers && (input == undefined || isNumericStructure(input))) {
+    result.push(...STREAM_MODIFIERS);
+  }
+  return result;
 }
 
 type Obj = Record<string, unknown>;

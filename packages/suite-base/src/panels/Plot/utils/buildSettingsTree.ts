@@ -13,7 +13,14 @@ import { PLOTABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/shared/constan
 import { lineColors } from "@lichtblick/suite-base/util/plotColors";
 
 const makeSeriesNode = memoizeWeak(
-  ({ canDelete, canReorder, index, path, t }: MakeSeriesNode): SettingsTreeNode => {
+  ({
+    canDelete,
+    canReorder,
+    index,
+    path,
+    supportsStreamModifiers,
+    t,
+  }: MakeSeriesNode): SettingsTreeNode => {
     const actions = [];
 
     if (canDelete) {
@@ -37,6 +44,7 @@ const makeSeriesNode = memoizeWeak(
           input: "messagepath",
           label: t("messagePath"),
           supportsMathModifiers: true,
+          supportsStreamModifiers,
           validTypes: PLOTABLE_ROS_TYPES,
           value: path.value,
         },
@@ -77,40 +85,50 @@ const makeSeriesNode = memoizeWeak(
   },
 );
 
-const makeRootSeriesNode = memoizeWeak(({ paths, t }: MakeRootSeriesNode): SettingsTreeNode => {
-  const children = Object.fromEntries(
-    paths.length === 0
-      ? [
-          [
-            "0",
+const makeRootSeriesNode = memoizeWeak(
+  ({ paths, supportsStreamModifiers, t }: MakeRootSeriesNode): SettingsTreeNode => {
+    const children = Object.fromEntries(
+      paths.length === 0
+        ? [
+            [
+              "0",
+              makeSeriesNode({
+                canDelete: false,
+                canReorder: false,
+                path: DEFAULT_PLOT_PATH,
+                index: 0,
+                supportsStreamModifiers,
+                t,
+              }),
+            ],
+          ]
+        : paths.map((path, index) => [
+            `${index}`,
             makeSeriesNode({
-              canDelete: false,
-              canReorder: false,
-              path: DEFAULT_PLOT_PATH,
-              index: 0,
+              canDelete: true,
+              canReorder: true,
+              index,
+              path,
+              supportsStreamModifiers,
               t,
             }),
-          ],
-        ]
-      : paths.map((path, index) => [
-          `${index}`,
-          makeSeriesNode({ canDelete: true, canReorder: true, index, path, t }),
-        ]),
-  );
-  return {
-    label: t("series"),
-    children,
-    actions: [
-      {
-        type: "action",
-        id: "add-series",
-        display: "inline",
-        icon: "Addchart",
-        label: t("addSeries"),
-      },
-    ],
-  };
-});
+          ]),
+    );
+    return {
+      label: t("series"),
+      children,
+      actions: [
+        {
+          type: "action",
+          id: "add-series",
+          display: "inline",
+          icon: "Addchart",
+          label: t("addSeries"),
+        },
+      ],
+    };
+  },
+);
 
 export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): SettingsTreeNodes {
   const maxYError =
@@ -209,6 +227,7 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
             ? {
                 label: t("messagePath"),
                 input: "messagepath",
+                supportsMathModifiers: true,
                 value: config.xAxisPath?.value ?? "",
                 validTypes: PLOTABLE_ROS_TYPES,
               }
@@ -240,6 +259,10 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
         },
       },
     },
-    paths: makeRootSeriesNode({ paths: config.paths, t }),
+    paths: makeRootSeriesNode({
+      paths: config.paths,
+      supportsStreamModifiers: config.xAxisVal === "timestamp",
+      t,
+    }),
   };
 }

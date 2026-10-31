@@ -63,6 +63,7 @@ function ToolbarComponent(props: PropsToolbar): React.JSX.Element {
         <Stack fullWidth paddingLeft={0.25}>
           <MessagePathInput
             index={0}
+            supportsMathModifiers
             path={topicPath}
             onChange={onTopicPathChange}
             inputStyle={{ height: 20 }}
@@ -89,6 +90,7 @@ function ToolbarComponent(props: PropsToolbar): React.JSX.Element {
           {diffMethod === CUSTOM_METHOD && (
             <MessagePathInput
               index={1}
+              supportsMathModifiers
               path={diffTopicPath}
               onChange={onDiffTopicPathChange}
               {...(topic ? { prioritizedDatatype: topic.schemaName } : {})}

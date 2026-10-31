@@ -33,6 +33,7 @@ export function useSettingsTree({
       path: {
         label: "Message path",
         input: "messagepath",
+        supportsMathModifiers: true,
         value: config.path,
         error: pathParseError,
         validTypes: SUPPORTED_DATA_TYPES,

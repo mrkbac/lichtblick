@@ -17,7 +17,7 @@
 import * as _ from "lodash-es";
 
 import {
-  isKnownModifier,
+  modifierResultStructure,
   MessagePathFilter,
   quoteFieldNameIfNeeded,
   MessagePathPart,
@@ -281,12 +281,6 @@ export function messagePathsForStructure(
 //
 // We use memoizeWeak because it works with multiple arguments (lodash's memoize
 // does not) and does not hold onto objects as strongly (it uses WeakMap).
-const MODIFIER_RESULT: MessagePathStructureItem = {
-  structureType: "primitive",
-  primitiveType: "float64",
-  datatype: "",
-};
-
 export const traverseStructure = (
   initialStructureItem: MessagePathStructureItem | undefined,
   messagePath: MessagePathPart[],
@@ -311,6 +305,13 @@ export const traverseStructure = (
       }
       structureItem = structureItem.next;
     } else if (msgPathPart.type === "filter") {
+      // A filter without a field compares the value itself, e.g. `.@norm{<=30}`
+      if (msgPathPart.path.length === 0 && msgPathPart.value != undefined) {
+        if (structureItem.structureType !== "primitive") {
+          return { valid: false, msgPathPart, structureItem };
+        }
+        continue;
+      }
       if (
         structureItem.structureType !== "message" ||
         msgPathPart.path.length === 0 ||
@@ -330,12 +331,11 @@ export const traverseStructure = (
       }
       //eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
     } else if (msgPathPart.type === "modifier") {
-      if (!isKnownModifier(msgPathPart.name)) {
+      const next = modifierResultStructure(msgPathPart, structureItem);
+      if (!next) {
         return { valid: false, msgPathPart, structureItem };
       }
-      // ponytail: modifier results are not typed, so validation stops here and assumes a number.
-      // Add per-modifier result structures if autocomplete after modifiers (e.g. `.@rpy.`) matters.
-      return { valid: true, msgPathPart: undefined, structureItem: MODIFIER_RESULT };
+      structureItem = next;
     } else {
       assertNever(
         msgPathPart,
