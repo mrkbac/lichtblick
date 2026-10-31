@@ -272,6 +272,9 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
     };
 
     for (const init of initializations) {
+      if (init.recordingFiles) {
+        resultInit.recordingFiles = [...(resultInit.recordingFiles ?? []), ...init.recordingFiles];
+      }
       resultInit.start = setStartTime(resultInit.start, init.start);
       resultInit.end = setEndTime(resultInit.end, init.end);
 
@@ -285,6 +288,10 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
       resultInit.alerts.push(...init.alerts);
       validateAndAddNewDatatypes(resultInit, init);
       validateAndAddNewTopics(resultInit, init);
+    }
+    // A partial container summary would understate storage and channel totals.
+    if (initializations.some((init) => init.recordingFiles == undefined)) {
+      resultInit.recordingFiles = undefined;
     }
     return resultInit;
   }

@@ -40,6 +40,7 @@ import {
   PlayerStateActiveData,
   Progress,
   PublishPayload,
+  RecordingFileInfo,
   SubscribePayload,
   Topic,
   TopicSelection,
@@ -172,6 +173,7 @@ export class IterablePlayer implements Player {
 
   #capabilities: string[] = [PLAYER_CAPABILITIES.setSpeed, PLAYER_CAPABILITIES.playbackControl];
   #profile: string | undefined;
+  #recordingFiles: readonly RecordingFileInfo[] | undefined;
   #metricsCollector: PlayerMetricsCollectorInterface;
   #subscriptions: SubscribePayload[] = [];
   #allTopics: TopicSelection = new Map();
@@ -429,6 +431,42 @@ export class IterablePlayer implements Player {
     // no-op
   }
 
+  public getInspectionIterator(
+    topics: readonly string[],
+    options?: { start?: Time; end?: Time },
+  ): AsyncIterableIterator<Readonly<IteratorResult>> | undefined {
+    if (!this.#messageRangeSource) {
+      return undefined;
+    }
+    const source = this.#iterableSource;
+    const iterator = source.messageIterator({
+      topics: new Map(topics.map((topic) => [topic, { topic }])),
+      consumptionType: "full",
+      ...options,
+    });
+    return (async function* () {
+      for await (const item of iterator) {
+        if (item.type !== "message-event") {
+          yield item;
+          continue;
+        }
+        const event = item.msgEvent;
+        const serializedSizeInBytes =
+          source.sourceType === "serialized"
+            ? (event.message as Uint8Array).byteLength
+            : event.serializedSizeInBytes;
+        yield {
+          type: "message-event" as const,
+          msgEvent: {
+            ...event,
+            message: undefined,
+            serializedSizeInBytes,
+          },
+        };
+      }
+    })();
+  }
+
   public getBatchIterator(
     topic: string,
     options?: { start?: Time; end?: Time },
@@ -603,6 +641,7 @@ export class IterablePlayer implements Player {
       freezeMetadata(this.#metadata);
 
       this.#profile = profile;
+      this.#recordingFiles = initResult.recordingFiles;
       this.#start = start;
       this.#currentTime = this.#seekTarget ?? start;
       this.#end = end;
@@ -991,6 +1030,7 @@ export class IterablePlayer implements Player {
         lastSeekTime: this.#lastSeekEmitTime,
         topics: this.#providerTopics,
         topicStats: this.#providerTopicStats,
+        recordingFiles: this.#recordingFiles,
         datatypes: this.#providerDatatypes,
         publishedTopics: this.#publishedTopics,
       };

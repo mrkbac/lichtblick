@@ -239,6 +239,16 @@ export class McapIterableSource implements ISerializedIterableSource {
       // pooling them is non-trivial because re-hydration would re-stream the entire file.
       this.#eagerInner = opened.inner;
     }
+    if (init.recordingFiles) {
+      const sizeBytes =
+        this.#source.type === "file"
+          ? this.#source.file.size
+          : Number(await opened.readable?.size());
+      init.recordingFiles = init.recordingFiles.map((file) => ({
+        ...file,
+        sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : undefined,
+      }));
+    }
     return init;
   }
 

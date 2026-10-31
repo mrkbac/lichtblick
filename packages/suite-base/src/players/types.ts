@@ -85,6 +85,11 @@ export interface Player {
     topic: string,
     options?: { start?: Time; end?: Time },
   ) => AsyncIterableIterator<Readonly<IteratorResult>> | undefined;
+  /** One pass over source topics without decoding serialized message payloads. */
+  getInspectionIterator?: (
+    topics: readonly string[],
+    options?: { start?: Time; end?: Time },
+  ) => AsyncIterableIterator<Readonly<IteratorResult>> | undefined;
   // Read the most recent message per topic at or before a given time, independent of the current
   // playback position. Not available for live/real-time data sources.
   getBackfillMessages?(args: GetBackfillMessagesArgs): Promise<MessageEvent[]>;
@@ -198,6 +203,9 @@ export type PlayerStateActiveData = {
   // current state.
   topicStats: Map<string, TopicStats>;
 
+  /** Container facts from each physical MCAP file, independent of playback. */
+  recordingFiles?: readonly RecordingFileInfo[];
+
   // A complete list of ROS datatypes. Allowed to change. But it must always be "complete" (every
   // topic must refer to a datatype that is present in this list, every datatypes that refers to
   // another datatype must refer to a datatype that is present in this list).
@@ -230,6 +238,26 @@ export type Topic = {
 };
 
 export type TopicWithSchemaName = Topic & { schemaName: string };
+
+export type RecordingFileInfo = {
+  sizeBytes?: number;
+  library: string;
+  channels: {
+    id: number;
+    topic: string;
+    schemaName?: string;
+    messageEncoding: string;
+    schemaEncoding?: string;
+    metadata: Record<string, string>;
+  }[];
+  schemaCount: number;
+  compression: {
+    format: string;
+    compressedBytes: number;
+    uncompressedBytes: number;
+  }[];
+  attachments: { name: string; mediaType: string; sizeBytes: number }[];
+};
 
 export type TopicStats = {
   // The number of messages observed on the topic.

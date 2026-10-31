@@ -162,6 +162,8 @@ export type MessageEvent<T = unknown> = {
    * useful for statistics tracking and cache eviction.
    */
   sizeInBytes: number;
+  /** Exact serialized payload size before decoding, when supplied by the data source. */
+  serializedSizeInBytes?: number;
 
   /**
    * When subscribing to a topic using the `convertTo` option, the message event `message`

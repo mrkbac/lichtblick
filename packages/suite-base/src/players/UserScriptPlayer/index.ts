@@ -1019,6 +1019,16 @@ export default class UserScriptPlayer implements Player {
     return this.#player.getMetadata?.() ?? Object.freeze([]);
   }
 
+  public getInspectionIterator(
+    topics: readonly string[],
+    options?: { start?: Time; end?: Time },
+  ): AsyncIterableIterator<Readonly<IIterableSourceIteratorResult>> | undefined {
+    if (topics.some((topic) => this.#outputTopicRegistrations.has(topic))) {
+      return undefined;
+    }
+    return this.#player.getInspectionIterator?.(topics, options);
+  }
+
   public getBatchIterator(
     topic: string,
     options?: { start?: Time; end?: Time },

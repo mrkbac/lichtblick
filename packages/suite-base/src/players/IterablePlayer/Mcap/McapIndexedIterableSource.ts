@@ -19,7 +19,7 @@ import {
   MessageIteratorArgs,
   TopicWithDecodingInfo,
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
-import { PlayerAlert, TopicStats } from "@lichtblick/suite-base/players/types";
+import { PlayerAlert, RecordingFileInfo, TopicStats } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
 const log = Logger.getLogger(__filename);
@@ -100,11 +100,11 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
           schemaEncoding: schema?.encoding,
         };
         topicsByName.set(channel.topic, topic);
-
-        const numMessages = this.#reader.statistics?.channelMessageCounts.get(channel.id);
-        if (numMessages != undefined) {
-          topicStats.set(channel.topic, { numMessages: Number(numMessages) });
-        }
+      }
+      const numMessages = this.#reader.statistics?.channelMessageCounts.get(channel.id);
+      if (numMessages != undefined) {
+        const previous = topicStats.get(channel.topic)?.numMessages ?? 0;
+        topicStats.set(channel.topic, { numMessages: previous + Number(numMessages) });
       }
 
       // Track the publisher for this topic. "callerid" is defined in the MCAP ROS 1 Well-known
@@ -137,7 +137,44 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       metadataIterator = await metadataGenerator.next();
     }
 
+    const compression = new Map<string, RecordingFileInfo["compression"][number]>();
+    for (const chunk of this.#reader.chunkIndexes) {
+      const format = chunk.compression || "none";
+      const group = compression.get(format) ?? {
+        format,
+        compressedBytes: 0,
+        uncompressedBytes: 0,
+      };
+      group.compressedBytes += Number(chunk.compressedSize);
+      group.uncompressedBytes += Number(chunk.uncompressedSize);
+      compression.set(format, group);
+    }
+    const recordingFiles: RecordingFileInfo[] = [
+      {
+        library: this.#reader.header.library,
+        schemaCount: this.#reader.schemasById.size,
+        compression: [...compression.values()],
+        channels: [...this.#reader.channelsById.values()].map((channel) => {
+          const schema = this.#reader.schemasById.get(channel.schemaId);
+          return {
+            id: channel.id,
+            topic: channel.topic,
+            schemaName: schema?.name,
+            messageEncoding: channel.messageEncoding,
+            schemaEncoding: schema?.encoding,
+            metadata: Object.fromEntries(channel.metadata),
+          };
+        }),
+        attachments: this.#reader.attachmentIndexes.map((attachment) => ({
+          name: attachment.name,
+          mediaType: attachment.mediaType,
+          sizeBytes: Number(attachment.dataSize),
+        })),
+      },
+    ];
+
     return {
+      recordingFiles,
       start: this.#start,
       end: this.#end,
       topics: [...topicsByName.values()],
