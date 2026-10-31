@@ -411,6 +411,8 @@ function initRenderStateBuilder(): BuildRenderStateFn {
           { ...messageEvent, topicConfig: configTopics[topic] },
           topicSchemaConverters,
           postProcessedFrame,
+          { ...globalVariables } as Readonly<GlobalVariables>,
+          { emitAlert },
         );
       }
 

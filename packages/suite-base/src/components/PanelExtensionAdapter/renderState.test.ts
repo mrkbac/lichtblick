@@ -834,7 +834,7 @@ describe("renderState", () => {
         },
       ],
       colorScheme: undefined,
-      globalVariables: {},
+      globalVariables: { speed: 2 },
       hoverValue: undefined,
       sharedPanelState: {},
       sortedTopics: [{ name: "test", schemaName: "schema" }],
@@ -872,6 +872,12 @@ describe("renderState", () => {
     });
 
     expect(converter).toHaveBeenCalledTimes(1);
+    expect(converter).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ topicConfig: { flag: "forced" } }),
+      { speed: 2 },
+      expect.objectContaining({ emitAlert: expect.any(Function) }),
+    );
     expect(state2).toMatchObject({
       currentFrame: [
         {
