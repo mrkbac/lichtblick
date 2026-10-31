@@ -53,17 +53,21 @@ describe("AppMenu", () => {
   const mockImportLayout = jest.fn();
   const mockExportLayout = jest.fn();
   const mockSelectRecent = jest.fn();
+  const mockClearRecents = jest.fn();
   const logEvent = jest.fn();
   const mockAnalytics: IAnalytics = { logEvent };
 
   beforeEach(() => {
     (useTranslation as jest.Mock).mockReturnValue({
       t: (key: string) => key,
+      i18n: { language: "en" },
     });
 
     (usePlayerSelection as jest.Mock).mockReturnValue({
       recentSources: [{ id: "1", title: "Recent Source 1" }],
       selectRecent: mockSelectRecent,
+      clearRecents: mockClearRecents,
+      availableSources: [],
     });
 
     (useWorkspaceStore as jest.Mock).mockImplementation((selector) =>
@@ -121,7 +125,9 @@ describe("AppMenu", () => {
     fireEvent.click(screen.getByText("open"));
 
     // Then
-    expect(logEvent).toHaveBeenCalledWith(AppEvent.APP_MENU_CLICK, { id: "menu-item-open" });
+    expect(logEvent).toHaveBeenCalledWith(AppEvent.APP_MENU_CLICK, {
+      id: "menu-item-open",
+    });
   });
 
   it("handles View menu actions", () => {
@@ -152,6 +158,37 @@ describe("AppMenu", () => {
 
     expect(mockSelectRecent).toHaveBeenCalledWith("1");
     expect(mockHandleClose).toHaveBeenCalled();
+  });
+  it("shows the file name of recent URLs and clears unpinned recents", () => {
+    (usePlayerSelection as jest.Mock).mockReturnValue({
+      recentSources: [
+        {
+          id: "1",
+          title: "ws://localhost:8765/dir/example.mcap",
+          type: "connection",
+        },
+      ],
+      selectRecent: mockSelectRecent,
+      clearRecents: mockClearRecents,
+      availableSources: [],
+    });
+    renderAppMenu();
+
+    fireEvent.pointerEnter(screen.getByText("file"));
+    expect(screen.getByText("example.mcap")).toBeInTheDocument();
+    expect(screen.getByText("localhost:8765/dir")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("clearRecentDataSources"));
+    expect(mockClearRecents).toHaveBeenCalled();
+  });
+
+  it("opens the start dialog to see all recents", () => {
+    renderAppMenu();
+
+    fireEvent.pointerEnter(screen.getByText("file"));
+    fireEvent.click(screen.getByText("allRecentDataSources"));
+
+    expect(mockDialogActions.dataSource.open).toHaveBeenCalledWith("start");
   });
 
   it("handles layout import and export in View menu", async () => {

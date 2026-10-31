@@ -14,6 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import * as _ from "lodash-es";
 import { useSnackbar } from "notistack";
 import {
   PropsWithChildren,
@@ -41,6 +42,7 @@ import PlayerSelectionContext, {
   DataSourceArgs,
   IDataSourceFactory,
   PlayerSelection,
+  RecentSource,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import {
   UserScriptStore,
@@ -95,7 +97,8 @@ export default function PlayerManager(
 
   const [basePlayer, setBasePlayer] = useState<Player | undefined>();
 
-  const { recents, addRecent } = useIndexedDbRecents();
+  const { recents, addRecent, removeRecent, togglePinRecent, clearRecents } = useIndexedDbRecents();
+  const [currentRecentId, setCurrentRecentId] = useState<string | undefined>();
 
   const userScripts = useCurrentLayoutSelector(userScriptsSelector);
   const globalVariables = useCurrentLayoutSelector(globalVariablesSelector);
@@ -171,11 +174,14 @@ export default function PlayerManager(
         (source) => (source.id === sourceId || source.legacyIds?.includes(sourceId)) ?? false,
       );
       if (!foundSource) {
-        enqueueSnackbar(`Unknown data source: ${sourceId}`, { variant: "warning" });
+        enqueueSnackbar(`Unknown data source: ${sourceId}`, {
+          variant: "warning",
+        });
         return;
       }
 
       metricsCollector.setProperty("player", sourceId);
+      setCurrentRecentId(undefined);
 
       setSelectedSource(foundSource);
 
@@ -190,7 +196,9 @@ export default function PlayerManager(
       }
 
       if (!args) {
-        enqueueSnackbar("Unable to initialize player: no args", { variant: "error" });
+        enqueueSnackbar("Unable to initialize player: no args", {
+          variant: "error",
+        });
         setSelectedSource(undefined);
         return;
       }
@@ -206,13 +214,14 @@ export default function PlayerManager(
             setBasePlayer(newPlayer);
 
             if (args.params?.url) {
-              addRecent({
+              const recentId = addRecent({
                 type: "connection",
                 sourceId: foundSource.id,
                 title: args.params.url,
                 label: foundSource.displayName,
                 extra: args.params,
               });
+              setCurrentRecentId(recentId);
             }
 
             return;
@@ -244,13 +253,17 @@ export default function PlayerManager(
               return;
             } else if (handles) {
               for (const handle of handles) {
-                const permission = await handle.queryPermission({ mode: "read" });
+                const permission = await handle.queryPermission({
+                  mode: "read",
+                });
                 if (!isMounted()) {
                   return;
                 }
 
                 if (permission !== "granted") {
-                  const newPerm = await handle.requestPermission({ mode: "read" });
+                  const newPerm = await handle.requestPermission({
+                    mode: "read",
+                  });
                   if (newPerm !== "granted") {
                     throw new Error(`Permission denied: ${handle.name}`);
                   }
@@ -267,12 +280,14 @@ export default function PlayerManager(
               });
 
               setBasePlayer(newPlayer);
-              addRecent({
-                type: "file",
-                title: mergeMultipleFileNames(handles.map((h) => h.name)),
-                sourceId: foundSource.id,
-                handles,
-              });
+              setCurrentRecentId(
+                addRecent({
+                  type: "file",
+                  title: mergeMultipleFileNames(handles.map((h) => h.name)),
+                  sourceId: foundSource.id,
+                  handles,
+                }),
+              );
 
               return;
             }
@@ -297,14 +312,28 @@ export default function PlayerManager(
 
   // Make a RecentSources array for the PlayerSelectionContext
   const recentSources = useMemo(() => {
-    return recents.map((item) => {
-      return { id: item.id, title: item.title, label: item.label };
-    });
-  }, [recents]);
+    const sources = recents.map(
+      (item): RecentSource => ({
+        id: item.id,
+        title: item.title,
+        label: item.label,
+        sourceId: item.sourceId,
+        type: item.type,
+        lastOpened: item.lastOpened,
+        pinned: item.pinned,
+        current: item.id === currentRecentId,
+      }),
+    );
+    // Stable sort: pinned first, otherwise keep most-recent-first order
+    return _.sortBy(sources, (source) => (source.pinned === true ? 0 : 1));
+  }, [recents, currentRecentId]);
 
   const value: PlayerSelection = {
     selectSource,
     selectRecent,
+    removeRecent,
+    togglePinRecent,
+    clearRecents,
     selectedSource,
     availableSources: playerSources,
     recentSources,
@@ -337,7 +366,9 @@ function createSelectRecentCallback(
     // find the recent from the list and initialize
     const foundRecent = recents.find((value) => value.id === recentId);
     if (!foundRecent) {
-      enqueueSnackbar(`Failed to restore recent: ${recentId}`, { variant: "error" });
+      enqueueSnackbar(`Failed to restore recent: ${recentId}`, {
+        variant: "error",
+      });
       return;
     }
 

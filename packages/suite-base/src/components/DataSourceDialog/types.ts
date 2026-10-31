@@ -3,15 +3,6 @@
 
 import { ReactNode } from "react";
 
-export type DataSourceOptionProps = {
-  text: string;
-  secondaryText: string;
-  icon: React.JSX.Element;
-  onClick: () => void;
-  href?: string;
-  target: "_blank";
-};
-
 export type SidebarItem = {
   id: string;
   title: string;

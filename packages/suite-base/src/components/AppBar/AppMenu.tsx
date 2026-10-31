@@ -10,7 +10,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useStyles } from "@lichtblick/suite-base/components/AppBar/AppMenu.style";
-import TextMiddleTruncate from "@lichtblick/suite-base/components/TextMiddleTruncate";
+import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import {
@@ -26,6 +26,9 @@ import { formatKeyboardShortcut } from "@lichtblick/suite-base/util/formatKeyboa
 import { NestedMenuItem } from "./NestedMenuItem";
 import { AppBarMenuItem, AppMenuProps } from "./types";
 
+// Number of recent sources listed in the menu; the open dialog lists all of them
+const MENU_RECENTS_COUNT = 5;
+
 const selectLeftSidebarOpen = (store: WorkspaceContextStore) => store.sidebars.left.open;
 const selectRightSidebarOpen = (store: WorkspaceContextStore) => store.sidebars.right.open;
 
@@ -37,7 +40,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
   const [nestedMenu, setNestedMenu] = useState<string | undefined>();
   const captureMenuClick = useInteractionCapture(AppEvent.APP_MENU_CLICK);
 
-  const { recentSources, selectRecent } = usePlayerSelection();
+  const { recentSources, selectRecent, clearRecents } = usePlayerSelection();
 
   const leftSidebarOpen = useWorkspaceStore(selectLeftSidebarOpen);
   const rightSidebarOpen = useWorkspaceStore(selectRightSidebarOpen);
@@ -106,25 +109,59 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
           handleNestedMenuClose();
         },
       },
-      { type: "divider" },
-      { type: "item", label: t("recentDataSources"), key: "recent-sources", disabled: true },
     ];
 
-    recentSources.slice(0, 5).map((recent) => {
+    if (recentSources.length === 0) {
+      return items;
+    }
+
+    items.push(
+      { type: "divider" },
+      {
+        type: "item",
+        label: t("recentDataSources"),
+        key: "recent-sources",
+        disabled: true,
+      },
+    );
+    for (const recent of recentSources.slice(0, MENU_RECENTS_COUNT)) {
       items.push({
         type: "item",
         key: recent.id,
+        selected: recent.current,
         onClick: () => {
           selectRecent(recent.id);
           handleNestedMenuClose();
         },
-        label: <TextMiddleTruncate text={recent.title} className={classes.truncate} />,
+        label: <RecentSourceLabel recent={recent} />,
       });
-    });
+    }
+    items.push(
+      { type: "divider" },
+      {
+        type: "item",
+        key: "all-recent-sources",
+        label: t("allRecentDataSources"),
+        onClick: () => {
+          dialogActions.dataSource.open("start");
+          handleNestedMenuClose();
+        },
+      },
+      {
+        type: "item",
+        key: "clear-recent-sources",
+        label: t("clearRecentDataSources"),
+        disabled: recentSources.every((recent) => recent.pinned === true),
+        onClick: () => {
+          clearRecents();
+          handleNestedMenuClose();
+        },
+      },
+    );
 
     return items;
   }, [
-    classes.truncate,
+    clearRecents,
     dialogActions.dataSource,
     dialogActions.openFile,
     handleNestedMenuClose,
@@ -211,9 +248,19 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
     () => [
       { type: "item", key: "about", label: t("about"), onClick: onAboutClick },
       { type: "divider" },
-      { type: "item", key: "docs", label: t("documentation"), onClick: onDocsClick },
+      {
+        type: "item",
+        key: "docs",
+        label: t("documentation"),
+        onClick: onDocsClick,
+      },
       { type: "divider" },
-      { type: "item", key: "demo", label: t("exploreSampleData"), onClick: onDemoClick },
+      {
+        type: "item",
+        key: "demo",
+        label: t("exploreSampleData"),
+        onClick: onDemoClick,
+      },
     ],
     [onAboutClick, onDemoClick, onDocsClick, t],
   );

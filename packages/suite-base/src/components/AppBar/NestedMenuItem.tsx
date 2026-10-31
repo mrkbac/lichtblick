@@ -114,6 +114,7 @@ export function NestedMenuItem(
                   onClick={item.onClick}
                   data-testid={item.dataTestId}
                   disabled={item.disabled}
+                  selected={item.selected}
                 >
                   {item.label}
                   {item.shortcut && <kbd>{item.shortcut}</kbd>}
