@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "Lichtblick ws:// proxy",
+  "version": "0.1.0",
+  "description": "Lets Lichtblick on licht.marko.im (HTTPS) connect to insecure ws:// Foxglove/rosbridge servers that the browser blocks as mixed content.",
+  "background": { "service_worker": "background.js" },
+  "host_permissions": ["<all_urls>"],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://licht.marko.im/*",
+        "https://lichtblick-2pl.pages.dev/*",
+        "https://*.lichtblick-2pl.pages.dev/*"
+      ],
+      "js": ["main.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": [
+        "https://licht.marko.im/*",
+        "https://lichtblick-2pl.pages.dev/*",
+        "https://*.lichtblick-2pl.pages.dev/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_start"
+    }
+  ]
+}
