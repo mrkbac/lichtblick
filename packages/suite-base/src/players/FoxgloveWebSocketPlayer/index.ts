@@ -205,14 +205,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
     const subprotocols = [FoxgloveClient.SUPPORTED_SUBPROTOCOL, "foxglove.sdk.v1"];
 
-    // The ws:// proxy extension (web/ws-proxy-extension) patches only the page's WebSocket, so
-    // ws:// URLs must be opened on the main thread when it's present.
-    const useProxy =
-      this.#url.startsWith("ws:") &&
-      typeof document !== "undefined" &&
-      document.documentElement.dataset.wsProxy != undefined;
     const ws =
-      typeof Worker !== "undefined" && !useProxy
+      typeof Worker !== "undefined"
         ? new WorkerSocketAdapter(this.#url, subprotocols)
         : (new WebSocket(this.#url, subprotocols) as IWebSocket);
     this.#ws = ws;
