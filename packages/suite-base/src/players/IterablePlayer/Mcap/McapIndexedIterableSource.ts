@@ -164,8 +164,8 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     const topicNames = Array.from(topics.keys());
 
     for await (const message of this.#reader.readMessages({
-      startTime: toNanoSec(start),
-      endTime: toNanoSec(end),
+      startingAt: toNanoSec(start),
+      endingAt: toNanoSec(end),
       topics: topicNames,
       validateCrcs: false,
     })) {
@@ -218,7 +218,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       // An single iterator for all the topics could result in iterating through many
       // irrelevant messages to get to an older message on a topic.
       for await (const message of this.#reader.readMessages({
-        endTime: toNanoSec(time),
+        endingAt: toNanoSec(time),
         topics: [topic],
         reverse: true,
         validateCrcs: false,
