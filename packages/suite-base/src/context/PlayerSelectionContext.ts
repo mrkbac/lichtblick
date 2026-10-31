@@ -80,6 +80,13 @@ export type RecentSource = {
   id: string;
   title: string;
   label?: string;
+  sourceId?: string;
+  type?: "file" | "connection";
+  /** Epoch milliseconds of the last time this source was opened */
+  lastOpened?: number;
+  pinned?: boolean;
+  /** True for the source that is currently open */
+  current?: boolean;
 };
 
 // File data sources accept either file instances or handles
@@ -103,6 +110,10 @@ export type DataSourceArgs = FileDataSourceArgs | ConnectionDataSourceArgs;
 export interface PlayerSelection {
   selectSource: (sourceId: string, args?: DataSourceArgs) => void;
   selectRecent: (recentId: string) => void;
+  removeRecent: (recentId: string) => void;
+  togglePinRecent: (recentId: string) => void;
+  /** Remove all recent sources that are not pinned */
+  clearRecents: () => void;
 
   /** Currently selected data source */
   selectedSource?: IDataSourceFactory;
@@ -110,13 +121,16 @@ export interface PlayerSelection {
   /** List of available data sources */
   availableSources: readonly IDataSourceFactory[];
 
-  /** Recently selected sources */
+  /** Recently selected sources, pinned first then most recent first */
   recentSources: readonly RecentSource[];
 }
 
 const PlayerSelectionContext = createContext<PlayerSelection>({
   selectSource: () => {},
   selectRecent: () => {},
+  removeRecent: () => {},
+  togglePinRecent: () => {},
+  clearRecents: () => {},
   availableSources: [],
   recentSources: [],
 });

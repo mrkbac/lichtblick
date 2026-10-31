@@ -8,7 +8,4 @@ export const useStyles = makeStyles()({
     minWidth: 180,
     maxWidth: 220,
   },
-  truncate: {
-    alignSelf: "center !important",
-  },
 });

@@ -51,6 +51,9 @@ export default {
 const playerSelection: PlayerSelection = {
   selectSource: () => {},
   selectRecent: () => {},
+  removeRecent: () => {},
+  togglePinRecent: () => {},
+  clearRecents: () => {},
   recentSources: [],
   availableSources: [
     {
