@@ -100,6 +100,7 @@ describe("DeserializingIterableSources", () => {
             receiveTime: { sec: 0, nsec: i * 1e8 },
             message: { foo: "bar", iteration: i },
             sizeInBytes: 36,
+            serializedSizeInBytes: 27,
             topic: "json_topic",
             schemaName: "some_type",
           },
@@ -173,6 +174,7 @@ describe("DeserializingIterableSources", () => {
           msgEvent: {
             message: { foo: "bar", iteration: i },
             sizeInBytes: 36,
+            serializedSizeInBytes: 27,
           },
         },
       });

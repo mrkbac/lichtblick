@@ -44,6 +44,11 @@ export type MessagePipelineContext = Immutable<{
     topic: string,
     options?: { start?: Time; end?: Time },
   ) => AsyncIterableIterator<Readonly<IteratorResult>> | undefined;
+  /** One pass over source topics without decoding serialized message payloads. */
+  getInspectionIterator?: (
+    topics: readonly string[],
+    options?: { start?: Time; end?: Time },
+  ) => AsyncIterableIterator<Readonly<IteratorResult>> | undefined;
   // Read the most recent message on `topic` at or before `time`, independent of the current
   // playback position. Resolves to `undefined` if unsupported (e.g. live data sources) or if no
   // matching message exists.

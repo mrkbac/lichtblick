@@ -220,6 +220,9 @@ export function createMessagePipelineStore({
         const player = get().player;
         return player?.getBatchIterator(topic, options);
       },
+      getInspectionIterator(topics: readonly string[], options?: { start?: Time; end?: Time }) {
+        return get().player?.getInspectionIterator?.(topics, options);
+      },
       async getMessageAtTime(topic: string, time: Time) {
         const player = get().player;
         if (player?.getBackfillMessages == undefined) {

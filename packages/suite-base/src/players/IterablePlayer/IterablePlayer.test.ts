@@ -26,6 +26,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import {
   GetBackfillMessagesArgs,
   IDeserializedIterableSource,
+  ISerializedIterableSource,
   Initialization,
   IteratorResult,
   MessageIteratorArgs,
@@ -1313,6 +1314,68 @@ describe("IterablePlayer", () => {
   });
 
   describe("getBatchIterator", () => {
+    it("inspects multiple serialized topics in one source iterator without decoding payloads", async () => {
+      const baseSource = new TestSource();
+      const rawIterator = jest.fn(async function* (
+        args: MessageIteratorArgs,
+      ): AsyncIterableIterator<IteratorResult<Uint8Array>> {
+        if (args.consumptionType !== "full") {
+          return;
+        }
+        for (const topic of args.topics.keys()) {
+          yield {
+            type: "message-event",
+            msgEvent: {
+              topic,
+              schemaName: "",
+              receiveTime: { sec: 0, nsec: 0 },
+              message: new Uint8Array([123]),
+              sizeInBytes: 999,
+            },
+          };
+        }
+      });
+      const source: ISerializedIterableSource = {
+        sourceType: "serialized",
+        initialize: async () => await baseSource.initialize(),
+        messageIterator: rawIterator,
+        getBackfillMessages: async () => [],
+      };
+      const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+      expect(player.getInspectionIterator(["/a"])).toBeUndefined();
+      const store = new PlayerStateStore(4);
+      player.setListener(async (state) => {
+        await store.add(state);
+      });
+      await store.done;
+      rawIterator.mockClear();
+      const iterator = player.getInspectionIterator(["/a", "/b"], { start: { sec: 0, nsec: 0 } });
+      expect(iterator).toBeDefined();
+      const results = [];
+      for await (const item of iterator!) {
+        results.push(item);
+      }
+      expect(rawIterator).toHaveBeenCalledTimes(1);
+      expect(rawIterator).toHaveBeenCalledWith({
+        topics: new Map([
+          ["/a", { topic: "/a" }],
+          ["/b", { topic: "/b" }],
+        ]),
+        start: { sec: 0, nsec: 0 },
+        consumptionType: "full",
+      });
+      expect(results).toHaveLength(2);
+      expect(results[0]).toMatchObject({
+        type: "message-event",
+        msgEvent: {
+          topic: "/a",
+          serializedSizeInBytes: 1,
+          message: undefined,
+        },
+      });
+      player.close();
+    });
+
     it("should return undefined when messageRangeSource is not available", () => {
       const source = new TestSource();
       const player = new IterablePlayer({

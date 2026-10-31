@@ -9,6 +9,7 @@ import { Time } from "@lichtblick/rostime";
 import { Immutable, MessageEvent, Metadata } from "@lichtblick/suite";
 import {
   PlayerAlert,
+  RecordingFileInfo,
   Topic,
   TopicSelection,
   TopicStats,
@@ -26,6 +27,7 @@ export type Initialization = {
   end: Time;
   topics: TopicWithDecodingInfo[];
   topicStats: Map<string, TopicStats>;
+  recordingFiles?: RecordingFileInfo[];
   datatypes: RosDatatypes;
   profile: string | undefined;
   name?: string;

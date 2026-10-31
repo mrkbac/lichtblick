@@ -451,10 +451,26 @@ describe("MultiIterableSource", () => {
         metadata: [{ name: "key", metadata: { key: "value2" } }],
       });
 
+      init1.recordingFiles = [
+        {
+          library: "first",
+          sizeBytes: 100,
+          channels: [{ id: 1, topic: topicName, messageEncoding: "json", metadata: {} }],
+          schemaCount: 1,
+          compression: [],
+          attachments: [],
+        },
+      ];
+      init2.recordingFiles = [{ ...init1.recordingFiles[0]!, library: "second", sizeBytes: 200 }];
       mockInitialization(init1);
       mockInitialization(init2);
 
       const result = await multiSource.initialize();
+      expect(result.recordingFiles).toEqual([...init1.recordingFiles, ...init2.recordingFiles]);
+      expect(
+        multiSource["mergeInitializations"]([{ ...init1 }, { ...init2, recordingFiles: undefined }])
+          .recordingFiles,
+      ).toBeUndefined();
 
       expect(result.start.sec).toBe(0);
       expect(result.end.sec).toBe(40);

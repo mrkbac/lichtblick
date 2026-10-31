@@ -111,6 +111,7 @@ describe("MessagePipelineProvider/useMessagePipeline", () => {
         setParameter: expect.any(Function),
         pauseFrame: expect.any(Function),
         getBatchIterator: expect.any(Function),
+        getInspectionIterator: expect.any(Function),
         getMessageAtTime: expect.any(Function),
       },
       {
@@ -141,6 +142,7 @@ describe("MessagePipelineProvider/useMessagePipeline", () => {
         setParameter: expect.any(Function),
         pauseFrame: expect.any(Function),
         getBatchIterator: expect.any(Function),
+        getInspectionIterator: expect.any(Function),
         getMessageAtTime: expect.any(Function),
       },
     ]);

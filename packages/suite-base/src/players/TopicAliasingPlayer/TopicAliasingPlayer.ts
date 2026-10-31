@@ -74,6 +74,13 @@ export class TopicAliasingPlayer implements Player {
     return this.#player.getMetadata?.() ?? Object.freeze([]);
   }
 
+  public getInspectionIterator(
+    topics: readonly string[],
+    options?: { start?: Time; end?: Time },
+  ): AsyncIterableIterator<Readonly<IteratorResult>> | undefined {
+    return this.#player.getInspectionIterator?.(topics, options);
+  }
+
   public getBatchIterator(
     topic: string,
     options?: { start?: Time; end?: Time },

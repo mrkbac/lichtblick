@@ -233,4 +233,48 @@ describe("McapIndexedIterableSource", () => {
       expect(source.getEnd()).toEqual({ sec: 10, nsec: 0 });
     });
   });
+  it("preserves container and channel facts and sums all publishers on a topic", async () => {
+    const buffer = new TempBuffer();
+    const writer = new McapWriter({ writable: buffer, useChunks: true });
+    await writer.start({ library: "inspector-test", profile: "" });
+    const schemaId = await writer.registerSchema({
+      name: "Example",
+      encoding: "jsonschema",
+      data: new TextEncoder().encode('{"type":"object"}'),
+    });
+    const firstId = await writer.registerChannel({
+      topic: "/shared",
+      schemaId,
+      messageEncoding: "json",
+      metadata: new Map([["callerid", "first"]]),
+    });
+    const secondId = await writer.registerChannel({
+      topic: "/shared",
+      schemaId,
+      messageEncoding: "json",
+      metadata: new Map([["callerid", "second"]]),
+    });
+    for (const channelId of [firstId, secondId, secondId]) {
+      await writer.addMessage({
+        channelId,
+        logTime: 1_000_000_000n,
+        publishTime: 1_000_000_000n,
+        sequence: 0,
+        data: new TextEncoder().encode("{}"),
+      });
+    }
+    await writer.end();
+    const readable = new BlobReadable(new Blob([buffer.get()]) as unknown as globalThis.Blob);
+    const reader = await McapIndexedReader.Initialize({
+      readable,
+      decompressHandlers: await loadDecompressHandlers(),
+    });
+    const result = await new McapIndexedIterableSource(reader).initialize();
+    expect(result.topicStats.get("/shared")?.numMessages).toBe(3);
+    expect(result.recordingFiles?.[0]?.library).toBe("inspector-test");
+    expect(
+      result.recordingFiles?.[0]?.channels.map((channel) => channel.metadata.callerid),
+    ).toEqual(["first", "second"]);
+    expect(result.recordingFiles?.[0]?.compression[0]).toMatchObject({ format: "none" });
+  });
 });

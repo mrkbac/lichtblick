@@ -423,6 +423,7 @@ export class DeserializingIterableSource implements IDeserializedIterableSource 
     return {
       ...rawMessageEvent,
       message: msg,
+      serializedSizeInBytes: subscription.fields ? undefined : message.byteLength,
       sizeInBytes,
     };
   }
