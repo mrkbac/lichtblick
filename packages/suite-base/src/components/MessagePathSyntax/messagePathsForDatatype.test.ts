@@ -595,6 +595,29 @@ describe("traverseStructure", () => {
   const equal: OperatorType = "==";
   const notEqual: OperatorType = "!=";
   const greaterThan: OperatorType = ">=";
+
+  it("accepts known modifiers as numeric results and rejects unknown ones", () => {
+    const structure = messagePathStructures(datatypes)["pose_msgs/PoseDebug"];
+    const somePose = { type: "name", name: "some_pose", repr: "some_pose" } as const;
+
+    expect(
+      traverseStructure(structure, [
+        somePose,
+        { type: "modifier", name: "norm", args: [], repr: "norm" },
+      ]),
+    ).toEqual({
+      valid: true,
+      msgPathPart: undefined,
+      structureItem: { structureType: "primitive", primitiveType: "float64", datatype: "" },
+    });
+
+    const unknown = { type: "modifier", name: "nope", args: [], repr: "nope" } as const;
+    expect(traverseStructure(structure, [somePose, unknown])).toEqual({
+      valid: false,
+      msgPathPart: unknown,
+      structureItem: structure?.nextByName.some_pose,
+    });
+  });
   it("returns whether the path is valid for the structure, plus some metadata", () => {
     const structure = messagePathStructures(datatypes)["pose_msgs/PoseDebug"];
 

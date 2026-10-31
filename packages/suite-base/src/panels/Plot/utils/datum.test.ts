@@ -103,14 +103,11 @@ describe("Chart Value Utilities", () => {
       expect(resolveChartDatum(() => {})).toBeUndefined();
     });
 
-    it("should map a null item to a gap without invoking the math function", () => {
-      const mathFunction = jest.fn();
-
-      expect(resolveChartDatum(null, mathFunction)).toEqual({ y: NaN, value: null });
-      expect(mathFunction).not.toHaveBeenCalled();
+    it("should map a null item to a gap", () => {
+      expect(resolveChartDatum(null)).toEqual({ y: NaN, value: null });
     });
 
-    it("should resolve a numeric item without a math function", () => {
+    it("should resolve a numeric item", () => {
       const value = 3.14;
 
       expect(resolveChartDatum(value)).toEqual({ y: value, value });
@@ -118,13 +115,6 @@ describe("Chart Value Utilities", () => {
 
     it("should map a value that resolves to NaN to a null value", () => {
       expect(resolveChartDatum("not-a-number")).toEqual({ y: NaN, value: null });
-    });
-
-    it("should apply the math function to the resolved chart value", () => {
-      const mathFunction = jest.fn().mockReturnValue(42);
-
-      expect(resolveChartDatum(3, mathFunction)).toEqual({ y: 42, value: 42 });
-      expect(mathFunction).toHaveBeenCalledWith(3);
     });
 
     it("should resolve Time objects using toSec", () => {

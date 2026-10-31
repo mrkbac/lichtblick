@@ -112,4 +112,31 @@ describe("simpleGetMessagePathDataItems", () => {
       simpleGetMessagePathDataItems(message, parseMessagePath("/foo.foo.bars[$id]")!),
     ).toThrow("Variables in slices are not supported");
   });
+
+  it("applies chained modifiers, field arguments and filters on modifier results", () => {
+    const message: MessageEvent = {
+      topic: "/foo",
+      receiveTime: { sec: 0, nsec: 0 },
+      sizeInBytes: 0,
+      schemaName: "datatype",
+      message: {
+        image: { width: 4, height: 3 },
+        orientation: { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 },
+        vectors: [
+          { x: 3, y: 4 },
+          { x: 30, y: 40 },
+        ],
+        samples: new Float64Array([-1, 2, -3]),
+      },
+    };
+    const get = (path: string) => simpleGetMessagePathDataItems(message, parseMessagePath(path)!);
+
+    expect(get("/foo.image.@product(width, height).@mul(0.5)")).toEqual([6]);
+    expect(get("/foo.orientation.@rpy.yaw.@degrees.@round")).toEqual([90]);
+    expect(get("/foo.vectors[:].@norm{<=10}")).toEqual([5]);
+    expect(get("/foo.samples.@abs.@max")).toEqual([3]);
+    expect(get("/foo.samples[:].@abs")).toEqual([1, 2, 3]);
+    // Modifiers that do not apply drop the item
+    expect(get("/foo.image.@abs")).toEqual([]);
+  });
 });

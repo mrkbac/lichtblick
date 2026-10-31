@@ -73,6 +73,16 @@ export function getFirstInvalidVariableFromRosPath(
     ) {
       const [variableName, loc] = [path.value.variableName, path.valueLoc];
       messagePathParts.push({ variableName, loc });
+    } else if (path.type === "modifier") {
+      for (const arg of path.args) {
+        if (
+          typeof arg === "object" &&
+          "variableName" in arg &&
+          !globalVars.includes(arg.variableName)
+        ) {
+          messagePathParts.push({ variableName: arg.variableName, loc: arg.startLoc });
+        }
+      }
     } else if (path.type === "slice") {
       if (typeof path.start === "object" && !globalVars.includes(path.start.variableName)) {
         const [variableName, loc] = [path.start.variableName, path.start.startLoc];

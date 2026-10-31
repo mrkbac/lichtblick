@@ -34,6 +34,8 @@ function stringifyMessagePathPart(part: Immutable<MessagePathPart>): string {
       return filterToString(part);
     case "slice":
       return sliceToString(part);
+    case "modifier":
+      return `.@${part.repr}`;
   }
   return "";
 }

@@ -5,14 +5,12 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import type { MessagePathPart, MessagePath, MessagePathName } from "@lichtblick/message-path";
+import type { MessagePath, MessagePathName } from "@lichtblick/message-path";
 import type { Immutable } from "@lichtblick/suite";
 import type {
   SubscribePayload,
   SubscriptionPreloadType,
 } from "@lichtblick/suite-base/players/types";
-
-const typeIsName = (part: Immutable<MessagePathPart>) => part.type === "name";
 
 export function pathToSubscribePayload(
   path: Immutable<MessagePath>,
@@ -20,8 +18,17 @@ export function pathToSubscribePayload(
 ): SubscribePayload | undefined {
   const { messagePath: parts, topicName: topic } = path;
 
-  const firstField: MessagePathName | undefined = parts.find(typeIsName);
+  const firstFieldOrModifier = parts.find(
+    (part) => part.type === "name" || part.type === "modifier",
+  );
 
+  if (firstFieldOrModifier?.type === "modifier") {
+    // A modifier before the first field (e.g. `/topic.@product(width, height)`) reads arbitrary
+    // fields, so it needs the whole message.
+    return { topic, preloadType };
+  }
+
+  const firstField: Immutable<MessagePathName> | undefined = firstFieldOrModifier;
   if (firstField == undefined || firstField.name.length === 0) {
     return undefined;
   }

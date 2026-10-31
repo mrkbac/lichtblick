@@ -5,13 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import * as _ from "lodash-es";
-
 import { filterMap } from "@lichtblick/den/collection";
 import { MessagePath } from "@lichtblick/message-path";
 import { Immutable } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
-import { mathFunctions } from "@lichtblick/suite-base/panels/Plot/utils/mathFunctions";
 import { PlayerState } from "@lichtblick/suite-base/players/types";
 
 import {
@@ -55,10 +52,6 @@ export class CurrentCustomDatasetsBuilder implements IDatasetsBuilder {
 
     let datasetsChanged = false;
     {
-      const xAxisMathFn =
-        (this.#xParsedPath.modifier ? mathFunctions[this.#xParsedPath.modifier] : undefined) ??
-        _.identity<number>;
-
       const msgEvent = lastMatchingTopic(msgEvents, this.#xParsedPath.topicName);
       if (msgEvent) {
         const items = simpleGetMessagePathDataItems(msgEvent, this.#xParsedPath);
@@ -75,14 +68,12 @@ export class CurrentCustomDatasetsBuilder implements IDatasetsBuilder {
             continue;
           }
 
-          this.#xValues.push(xAxisMathFn(chartValue));
+          this.#xValues.push(chartValue);
         }
       }
     }
 
     for (const series of this.#seriesByKey.values()) {
-      const mathFn = series.parsed.modifier ? mathFunctions[series.parsed.modifier] : undefined;
-
       const msgEvent = lastMatchingTopic(msgEvents, series.parsed.topicName);
       if (!msgEvent) {
         continue;
@@ -92,7 +83,7 @@ export class CurrentCustomDatasetsBuilder implements IDatasetsBuilder {
       datasetsChanged ||= items.length > 0;
 
       const pathItems = filterMap(items, (item, idx) => {
-        const datum = resolveChartDatum(item, mathFn);
+        const datum = resolveChartDatum(item);
         if (!datum) {
           return;
         }

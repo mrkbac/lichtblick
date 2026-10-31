@@ -10,8 +10,6 @@ import { ScatterDataPoint } from "chart.js";
 import { isTime, toSec } from "@lichtblick/rostime";
 import { Time } from "@lichtblick/suite";
 
-import { MathFunction } from "./mathFunctions";
-
 // In addition to the base datum, we also add receiveTime and optionally header stamp to our datums
 // These are used in the csv export.
 export type Datum = ScatterDataPoint & {
@@ -70,16 +68,13 @@ export function getChartValue(value: unknown): number | undefined {
 export type ChartDatum = { y: number; value: OriginalValue };
 
 /**
- * Resolves a raw message-path item into a chart-safe {y, value} pair, applying an optional math
- * modifier. Returns undefined when the item cannot be plotted at all.
+ * Resolves a raw message-path item into a chart-safe {y, value} pair. Returns undefined when the
+ * item cannot be plotted at all.
  *
  * A `null` item represents a gap: `y` is NaN (breaks the line/segment) but `value` stays `null`
  * (not NaN) so CSV export and tooltips render blank instead of the literal text "NaN".
  */
-export function resolveChartDatum(
-  item: unknown,
-  mathFunction?: MathFunction,
-): ChartDatum | undefined {
+export function resolveChartDatum(item: unknown): ChartDatum | undefined {
   if (!isChartValue(item)) {
     return undefined;
   }
@@ -92,9 +87,8 @@ export function resolveChartDatum(
     return undefined;
   }
 
-  const y = mathFunction ? mathFunction(chartValue) : chartValue;
   if (Number.isNaN(chartValue)) {
-    return { y, value: null };
+    return { y: chartValue, value: null };
   }
-  return { y, value: mathFunction ? y : item };
+  return { y: chartValue, value: item };
 }

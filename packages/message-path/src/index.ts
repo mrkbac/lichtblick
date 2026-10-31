@@ -7,3 +7,4 @@
 
 export * from "./parseMessagePath";
 export * from "./types";
+export * from "./modifiers";

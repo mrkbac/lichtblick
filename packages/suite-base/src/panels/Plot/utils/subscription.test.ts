@@ -25,6 +25,13 @@ describe("subscription", () => {
       expect(toPayload("/foo.")).toEqual(undefined);
     });
 
+    it("subscribes to the whole message when a modifier precedes the first field", () => {
+      expect(toPayload("/foo.@product(width, height)")).toEqual({
+        topic: "/foo",
+        preloadType: "full",
+      });
+    });
+
     it("subscribes to one field", () => {
       expect(toPayload("/foo.bar")).toEqual({
         topic: "/foo",
