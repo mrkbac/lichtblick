@@ -44,7 +44,7 @@ export type MessagePipelineContext = Immutable<{
     topic: string,
     options?: { start?: Time; end?: Time },
   ) => AsyncIterableIterator<Readonly<IteratorResult>> | undefined;
-  /** One pass over source topics without decoding serialized message payloads. */
+  /** Inspect topics in one pass without decoding; returned events omit message payloads. */
   getInspectionIterator?: (
     topics: readonly string[],
     options?: { start?: Time; end?: Time },
