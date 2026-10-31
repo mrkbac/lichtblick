@@ -106,7 +106,7 @@ function newStudioWindow(deepLinks: string[] = [], reloadMainWindow: () => void)
   }
 
   const browserWindow = new BrowserWindow(windowOptions);
-  nativeTheme.on("updated", () => {
+  const onThemeUpdated = () => {
     if (!isMac) {
       // Although the TS types say this function is always available, it is undefined on non-Windows platforms
       browserWindow.setTitleBarOverlay(getTitleBarOverlayOptions());
@@ -115,7 +115,10 @@ function newStudioWindow(deepLinks: string[] = [], reloadMainWindow: () => void)
     if (bgColor != undefined) {
       browserWindow.setBackgroundColor(bgColor);
     }
-  });
+  };
+  nativeTheme.on("updated", onThemeUpdated);
+  // Remove the listener when the window goes away, otherwise a later theme change touches a destroyed window
+  browserWindow.once("closed", () => nativeTheme.off("updated", onThemeUpdated));
 
   // Forward full screen events to the renderer
   browserWindow.addListener("enter-full-screen", () => {
