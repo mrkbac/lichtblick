@@ -9,8 +9,8 @@
     {
       "matches": [
         "https://licht.marko.im/*",
-        "https://licht-marko-im.pages.dev/*",
-        "https://*.licht-marko-im.pages.dev/*"
+        "https://lichtblick-2pl.pages.dev/*",
+        "https://*.lichtblick-2pl.pages.dev/*"
       ],
       "js": ["main.js"],
       "world": "MAIN",
@@ -19,8 +19,8 @@
     {
       "matches": [
         "https://licht.marko.im/*",
-        "https://licht-marko-im.pages.dev/*",
-        "https://*.licht-marko-im.pages.dev/*"
+        "https://lichtblick-2pl.pages.dev/*",
+        "https://*.lichtblick-2pl.pages.dev/*"
       ],
       "js": ["content.js"],
       "run_at": "document_start"
