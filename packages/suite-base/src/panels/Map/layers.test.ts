@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
-import type { StyleSpecification } from "maplibre-gl";
+import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
 
 import { emptyOverlayData, overlayStyle } from "./features";
-import { composeStyle, MapLayer, validateSourceUrl } from "./layers";
+import { composeStyle, MapLayer, validateSourceUrl, vectorGroup, withBuildings3d } from "./layers";
 
 const VECTOR_URL = "https://example.com/style.json";
 const vectorStyle: StyleSpecification = {
@@ -33,7 +33,12 @@ const vectorStyle: StyleSpecification = {
       source: "tiles",
       "source-layer": "transportation",
     },
-    { id: "district-border", type: "line", source: "tiles", "source-layer": "boundary" },
+    {
+      id: "district-border",
+      type: "line",
+      source: "tiles",
+      "source-layer": "boundary",
+    },
     { id: "river", type: "line", source: "tiles", "source-layer": "waterway" },
     {
       id: "labels",
@@ -174,5 +179,52 @@ describe("validateSourceUrl", () => {
       /\{s\}/,
     );
     expect(validateSourceUrl({ kind: "vector", url: "tiles.example.com" })).toMatch(/http/);
+  });
+});
+
+describe("withBuildings3d", () => {
+  const building: LayerSpecification = {
+    id: "building",
+    type: "fill",
+    source: "openmaptiles",
+    "source-layer": "building",
+    paint: { "fill-color": "#ccc" },
+  };
+  const labels: LayerSpecification = {
+    id: "labels",
+    type: "symbol",
+    source: "openmaptiles",
+  };
+
+  it("extrudes buildings after the flat building layer", () => {
+    const layers = withBuildings3d([building, labels], { enabled: true });
+    expect(layers.map((l) => l.id)).toEqual(["building", "building-3d", "labels"]);
+    expect(layers[1]).toMatchObject({
+      type: "fill-extrusion",
+      paint: { "fill-extrusion-color": "#ccc" },
+    });
+  });
+
+  it("keeps a style's own extrusion, removes it when off, and ignores styles without buildings", () => {
+    const extruded = withBuildings3d([building], { enabled: true });
+    expect(withBuildings3d(extruded, { enabled: true })).toBe(extruded);
+    expect(withBuildings3d(extruded, { enabled: false }).map((l) => l.id)).toEqual(["building"]);
+    expect(withBuildings3d([labels], { enabled: true })).toEqual([labels]);
+  });
+});
+
+describe("vectorGroup", () => {
+  it.each([
+    [{ id: "poi", type: "symbol", source: "t", "source-layer": "poi" }, "pois"],
+    [{ id: "place", type: "symbol", source: "t", "source-layer": "place" }, "labels"],
+    [{ id: "road", type: "line", source: "t", "source-layer": "transportation" }, "roads"],
+    [{ id: "oneway", type: "symbol", source: "t", "source-layer": "transportation" }, "roads"],
+    [{ id: "name", type: "symbol", source: "t", "source-layer": "transportation_name" }, "labels"],
+    [{ id: "b", type: "fill-extrusion", source: "t", "source-layer": "building" }, "buildings"],
+    [{ id: "border", type: "line", source: "t", "source-layer": "boundary" }, "boundaries"],
+    [{ id: "river", type: "line", source: "t", "source-layer": "waterway" }, "areas"],
+    [{ id: "background", type: "background" }, "areas"],
+  ] as [LayerSpecification, string][])("%j is %s", (styleLayer, group) => {
+    expect(vectorGroup(styleLayer)).toBe(group);
   });
 });
