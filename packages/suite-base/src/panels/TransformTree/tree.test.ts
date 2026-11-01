@@ -36,9 +36,15 @@ function rows(current: FrameEntries, now: number, collapsed: string[] = []) {
 }
 
 describe("samplesFromMessage", () => {
-  it("reads ROS TFMessage and strips leading slashes", () => {
+  it("should strip leading slashes when reading a ROS TFMessage", () => {
+    // Given
     const event = rosTf("/tf", 1, [["/map", "odom"]]);
-    expect(samplesFromMessage(event.schemaName, event.message)).toEqual([
+
+    // When
+    const samples = samplesFromMessage(event.schemaName, event.message);
+
+    // Then
+    expect(samples).toEqual([
       {
         parent: "map",
         child: "odom",
@@ -49,7 +55,8 @@ describe("samplesFromMessage", () => {
     ]);
   });
 
-  it("reads foxglove FrameTransforms", () => {
+  it("should read parent, child and stamp when given foxglove FrameTransforms", () => {
+    // Given
     const message = {
       transforms: [
         {
@@ -61,15 +68,24 @@ describe("samplesFromMessage", () => {
         },
       ],
     };
-    expect(samplesFromMessage("foxglove.FrameTransforms", message)).toMatchObject([
-      { parent: "base_link", child: "lidar", stamp: 2.5 },
-    ]);
+
+    // When
+    const samples = samplesFromMessage("foxglove.FrameTransforms", message);
+
+    // Then
+    expect(samples).toMatchObject([{ parent: "base_link", child: "lidar", stamp: 2.5 }]);
   });
 });
 
 describe("quaternionToRpy", () => {
-  it("converts a 90° yaw", () => {
-    const rpy = quaternionToRpy({ x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 });
+  it("should return a 90° yaw when given a 90° rotation around z", () => {
+    // Given
+    const rotation = { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 };
+
+    // When
+    const rpy = quaternionToRpy(rotation);
+
+    // Then
     expect(rpy.x).toBeCloseTo(0);
     expect(rpy.y).toBeCloseTo(0);
     expect(rpy.z).toBeCloseTo(Math.PI / 2);
@@ -77,7 +93,8 @@ describe("quaternionToRpy", () => {
 });
 
 describe("buildRows", () => {
-  it("builds a depth-first tree with sorted children and static frames", () => {
+  it("should build a depth-first tree with sorted children when given static and dynamic frames", () => {
+    // Given
     let entries = addTransformEvents(new Map(), [
       rosTf("/tf_static", 0, [
         ["base_link", "lidar"],
@@ -95,7 +112,10 @@ describe("buildRows", () => {
       ]),
     ]);
 
+    // When
     const result = rows(entries, 1.2);
+
+    // Then
     expect(result.map((row) => [row.frame, row.depth])).toEqual([
       ["map", 0],
       ["odom", 1],
@@ -110,39 +130,58 @@ describe("buildRows", () => {
     expect(result.every((row) => row.warnings.length === 0)).toBe(true);
   });
 
-  it("hides children of collapsed frames", () => {
+  it("should hide children when their parent is collapsed", () => {
+    // Given
     const entries = addTransformEvents(new Map(), [
       rosTf("/tf", 1, [
         ["map", "odom"],
         ["odom", "base_link"],
       ]),
     ]);
-    expect(rows(entries, 1, ["odom"]).map((row) => row.frame)).toEqual(["map", "odom"]);
+
+    // When
+    const result = rows(entries, 1, ["odom"]);
+
+    // Then
+    expect(result.map((row) => row.frame)).toEqual(["map", "odom"]);
   });
 
-  it("flags frames with several parents", () => {
+  it("should flag multipleParents when a frame is published with several parents", () => {
+    // Given
     const entries = addTransformEvents(new Map(), [
       rosTf("/tf", 1, [["map", "base_link"]]),
       rosTf("/tf", 2, [["odom", "base_link"]]),
     ]);
+
+    // When
     const baseLink = rows(entries, 2).find((row) => row.frame === "base_link");
+
+    // Then
     expect(baseLink?.warnings).toContain("multipleParents");
     expect(baseLink?.entry?.parent).toBe("odom");
   });
 
-  it("flags stale dynamic frames but never static ones", () => {
+  it("should flag stale dynamic frames but never static ones when no update arrives", () => {
+    // Given
     const entries = addTransformEvents(new Map(), [
       rosTf("/tf", 1, [["map", "odom"]]),
       rosTf("/tf", 1.1, [["map", "odom"]]),
       rosTf("/tf_static", 0, [["odom", "base_link"]]),
     ]);
+
+    // When
     const result = rows(entries, 5);
+
+    // Then
     expect(result.find((row) => row.frame === "odom")?.warnings).toEqual(["stale"]);
     expect(result.find((row) => row.frame === "base_link")?.warnings).toEqual([]);
   });
 
-  it("keeps known frames without current data as noData", () => {
+  it("should keep known frames as noData when they have no current data", () => {
+    // Given
     const known = addTransformEvents(new Map(), [rosTf("/tf", 1, [["map", "odom"]])]);
+
+    // When
     const result = buildRows({
       current: new Map(),
       known,
@@ -150,16 +189,19 @@ describe("buildRows", () => {
       collapsed: new Set(),
       staticTopics: new Set(),
     });
+
+    // Then
     expect(result.find((row) => row.frame === "odom")?.warnings).toEqual(["noData"]);
   });
 
-  it("does not warn about frames that are only published later, e.g. after looping", () => {
-    // Seen on a previous pass: odom from t=1, base_link only from t=5.
+  it("should not warn about a frame when playback is before its first sample, e.g. after looping", () => {
+    // Given seen on a previous pass: odom from t=1, base_link only from t=5
     const known = addTransformEvents(new Map(), [
       rosTf("/tf", 1, [["map", "odom"]]),
       rosTf("/tf", 5, [["odom", "base_link"]]),
     ]);
-    // Looped back to the start: nothing received yet this pass.
+
+    // When looped back to the start, with nothing received yet this pass
     const result = buildRows({
       current: new Map(),
       known,
@@ -167,30 +209,43 @@ describe("buildRows", () => {
       collapsed: new Set(),
       staticTopics: new Set(),
     });
+
+    // Then
     const odom = result.find((row) => row.frame === "odom");
     const baseLink = result.find((row) => row.frame === "base_link");
     expect(odom).toMatchObject({ notYetPublished: false, warnings: ["noData"] });
     expect(baseLink).toMatchObject({ notYetPublished: true, warnings: [] });
   });
 
-  it("still shows frames that form a cycle", () => {
+  it("should still show frames when they form a cycle", () => {
+    // Given
     const entries = addTransformEvents(new Map(), [
       rosTf("/tf", 1, [
         ["a", "b"],
         ["b", "a"],
       ]),
     ]);
-    expect(rows(entries, 1).map((row) => row.frame)).toEqual(["a", "b"]);
+
+    // When
+    const result = rows(entries, 1);
+
+    // Then
+    expect(result.map((row) => row.frame)).toEqual(["a", "b"]);
   });
 });
 
 describe("mergeEntries", () => {
-  it("keeps parents from both maps", () => {
+  it("should keep parents and the earliest first receive time from both maps", () => {
+    // Given
     const fromStatic = addTransformEvents(new Map(), [
       rosTf("/tf_static", 0, [["base_footprint", "base_link"]]),
     ]);
     const fromTf = addTransformEvents(new Map(), [rosTf("/tf", 1, [["odom", "base_link"]])]);
+
+    // When
     const merged = mergeEntries(fromStatic, fromTf);
+
+    // Then
     expect(merged.get("base_link")?.parent).toBe("odom");
     expect(merged.get("base_link")?.parents).toEqual(["base_footprint", "odom"]);
     expect(merged.get("base_link")?.firstReceiveTime).toBe(0);
