@@ -283,8 +283,14 @@ export default function CurrentLayoutProvider({
   useAsync(async () => {
     // A layout given in the url wins for this session only, without becoming the remembered one.
     const urlLayoutId = windowAppURLState()?.layoutId;
-    if (urlLayoutId != undefined && (await layoutManager.getLayout(urlLayoutId)) != undefined) {
-      await setSelectedLayoutId(urlLayoutId, { saveToProfile: false });
+    // A layout that can't be looked up (unknown, or a remote lookup failing) falls back to the
+    // remembered one below.
+    const urlLayout =
+      urlLayoutId != undefined
+        ? await layoutManager.getLayout(urlLayoutId).catch(() => undefined)
+        : undefined;
+    if (urlLayout != undefined) {
+      await setSelectedLayoutId(urlLayout.id, { saveToProfile: false });
       return;
     }
 

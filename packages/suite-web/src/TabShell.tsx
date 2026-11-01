@@ -60,8 +60,12 @@ function loadTabs(): SavedTabs {
     if (active) {
       // Reloading restores every tab; the address bar wins for the active one so pasted links work.
       const tabs = saved.tabs.map((tab) => {
-        const url = tab === active ? window.location.href : tab.url;
-        return { ...tab, src: withLayout(url, tab.layoutId), url };
+        if (tab === active && window.location.href !== tab.url) {
+          // A new link opened into this tab keeps its own layout, if it names one.
+          const layoutId = new URL(window.location.href).searchParams.get("layoutId") ?? undefined;
+          return { ...tab, src: window.location.href, url: window.location.href, layoutId };
+        }
+        return { ...tab, src: withLayout(tab.url, tab.layoutId) };
       });
       return { tabs, activeId: active.id };
     }
@@ -252,7 +256,10 @@ export function TabShell(): React.JSX.Element {
         }
       };
       // A tab may pick its first layout (the remembered one) before this runs.
-      const rememberedLayoutId = parseLayoutId(localStorage.getItem(LOCAL_STORAGE_PROFILE_DATA));
+      // A layout named in the tab's URL is selected without being remembered, so it comes first.
+      const rememberedLayoutId =
+        new URL(win.location.href).searchParams.get("layoutId") ??
+        parseLayoutId(localStorage.getItem(LOCAL_STORAGE_PROFILE_DATA));
       setState((state) => ({
         ...state,
         tabs: state.tabs.map((tab) =>
