@@ -50,6 +50,9 @@ export const panels = {
   teleopDescription: "Teleoperate a robot over a live connection.",
   topicGraph: "Topic Graph",
   topicGraphDescription: "Display a graph of active nodes, topics, and services.",
+  transformTree: "Transform Tree",
+  transformTreeDescription:
+    "Inspect the coordinate frame tree: transforms, publish rates, and broken or stale frames.",
   userScripts: "User Scripts",
   userScriptsDescription:
     "Write custom data transformations in TypeScript. Previously known as Node Playground.",
