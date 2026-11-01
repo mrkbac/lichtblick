@@ -19,6 +19,7 @@ import {
   useWorkspaceStore,
 } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
+import { useInstallPrompt } from "@lichtblick/suite-base/hooks/useInstallPrompt";
 import { useInteractionCapture } from "@lichtblick/suite-base/hooks/useInteractionCapture";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
 import { checkForServiceWorkerUpdate } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdatePrompt";
@@ -225,6 +226,12 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
   }, [enqueueSnackbar, handleNestedMenuClose, t]);
 
   // only the web build registers a service worker (not desktop or the dev server)
+  const installApp = useInstallPrompt();
+  const onInstallClick = useCallback(() => {
+    handleNestedMenuClose();
+    installApp?.();
+  }, [handleNestedMenuClose, installApp]);
+
   const hasServiceWorker =
     (navigator.serviceWorker as ServiceWorkerContainer | undefined)?.controller != undefined;
 
@@ -241,12 +248,31 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
             },
           ]
         : []),
+      ...(installApp
+        ? [
+            {
+              type: "item" as const,
+              key: "install-app",
+              label: t("installApp"),
+              onClick: onInstallClick,
+            },
+          ]
+        : []),
       { type: "divider" },
       { type: "item", key: "docs", label: t("documentation"), onClick: onDocsClick },
       { type: "divider" },
       { type: "item", key: "demo", label: t("exploreSampleData"), onClick: onDemoClick },
     ],
-    [hasServiceWorker, onAboutClick, onCheckForUpdatesClick, onDemoClick, onDocsClick, t],
+    [
+      hasServiceWorker,
+      installApp,
+      onAboutClick,
+      onCheckForUpdatesClick,
+      onDemoClick,
+      onDocsClick,
+      onInstallClick,
+      t,
+    ],
   );
 
   return (

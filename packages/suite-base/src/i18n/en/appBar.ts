@@ -11,6 +11,7 @@ export const appBar = {
   documentation: "Documentation",
   checkForUpdates: "Check for updates",
   exploreSampleData: "Explore sample data",
+  installApp: "Install app",
   noUpdateAvailable: "You're on the latest version.",
   updateCheckFailed: "Couldn't check for updates.",
   exportLayoutToFile: "Export layout to file…",
