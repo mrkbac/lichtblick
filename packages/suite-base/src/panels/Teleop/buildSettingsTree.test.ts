@@ -4,7 +4,7 @@
 
 import { Topic } from "@lichtblick/suite";
 import { buildSettingsTreeTeleop } from "@lichtblick/suite-base/panels/Teleop/buildSettingsTree";
-import { geometryMsgOptions } from "@lichtblick/suite-base/panels/Teleop/constants";
+import { DEFAULT_CONFIG, geometryMsgOptions } from "@lichtblick/suite-base/panels/Teleop/constants";
 import { TeleopConfig } from "@lichtblick/suite-base/panels/Teleop/types";
 import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -13,6 +13,7 @@ describe("buildSettingsTree for TeleopPanel", () => {
   const publishRate = BasicBuilder.number();
   const topic = BasicBuilder.string();
   const defaultConfig: TeleopConfig = {
+    ...DEFAULT_CONFIG,
     publishRate,
     topic,
     upButton: { field: "linear.x", value: 1 },
@@ -35,15 +36,32 @@ describe("buildSettingsTree for TeleopPanel", () => {
 
     // Then
     expect(result.general).toBeDefined();
-    expect(result.general?.fields).toEqual({
-      publishRate: { label: "Publish rate", input: "number", value: publishRate },
-      topic: {
-        label: "Topic",
-        input: "autocomplete",
-        value: topic,
-        items: ["topic1", "topic2"],
-      },
+    expect(result.general?.fields?.publishRate).toMatchObject({ value: publishRate });
+    expect(result.general?.fields?.topic).toEqual({
+      label: "Topic",
+      input: "autocomplete",
+      value: topic,
+      items: ["topic1", "topic2"],
     });
+    expect(result.general?.fields?.frameId).toBeUndefined();
+  });
+
+  it("lists velocity command topics first", () => {
+    const topics = [
+      PlayerBuilder.topic({ name: "/scan", schemaName: "sensor_msgs/LaserScan" }),
+      PlayerBuilder.topic({ name: "/cmd", schemaName: "geometry_msgs/msg/TwistStamped" }),
+    ] as Readonly<Topic[]>;
+    const result = buildSettingsTreeTeleop(defaultConfig, topics);
+    expect((result.general?.fields?.topic as { items: string[] }).items).toEqual(["/cmd", "/scan"]);
+  });
+
+  it("shows stamped and gamepad options only when relevant", () => {
+    const stamped = buildSettingsTreeTeleop(
+      { ...defaultConfig, messageType: "TwistStamped", gamepad: false },
+      [],
+    );
+    expect(stamped.general?.fields?.frameId).toBeDefined();
+    expect(stamped.general?.fields?.gamepadDeadzone).toBeUndefined();
   });
 
   it("should configure all directional buttons correctly", () => {
@@ -67,11 +85,12 @@ describe("buildSettingsTree for TeleopPanel", () => {
     const buttons = ["upButton", "downButton", "leftButton", "rightButton"] as const;
     const expectedValues = [1.5, -2.0, 3.0, -4.0];
     const expectedFields = ["linear.x", "linear.y", "angular.z", "linear.z"];
+    const expectedLabels = ["Up / forward", "Down / backward", "Left", "Right"];
 
     buttons.forEach((button, index) => {
       expect(children!).toBeDefined();
       expect(children![button]).toEqual({
-        label: button.replace("Button", " Button").replace(/^./, (str) => str.toUpperCase()),
+        label: expectedLabels[index],
         fields: {
           field: {
             label: "Field",
@@ -80,7 +99,7 @@ describe("buildSettingsTree for TeleopPanel", () => {
             options: geometryMsgOptions,
           },
           value: {
-            label: "Value",
+            label: "Max value",
             input: "number",
             value: expectedValues[index],
           },

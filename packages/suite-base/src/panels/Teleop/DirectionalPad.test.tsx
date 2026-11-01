@@ -16,11 +16,24 @@ describe("DirectionalPad", () => {
     const upButton = container.querySelector('g[role="button"]');
 
     // when
-    fireEvent.mouseDown(upButton!);
+    fireEvent.pointerDown(upButton!);
 
     // then
     expect(onAction).toHaveBeenCalledWith(DirectionalPadAction.UP);
-    expect(upButton?.parentElement?.querySelector(".active")).toBeTruthy();
+
+    // when
+    fireEvent.pointerUp(upButton!);
+
+    // then
+    expect(onAction).toHaveBeenLastCalledWith();
+  });
+
+  it("should highlight the buttons matching the vector", () => {
+    const { container } = render(<DirectionalPad vector={{ x: -0.5, y: 1 }} />);
+    const buttons = container.querySelectorAll('g[role="button"]');
+    const active = [...buttons].map((button) => button.querySelector(".active") != undefined);
+    // up, down, left, right
+    expect(active).toEqual([true, false, true, false]);
   });
 
   it("should not call onAction when disabled", () => {
@@ -30,7 +43,7 @@ describe("DirectionalPad", () => {
     const upButton = container.querySelector('g[role="button"]');
 
     // when
-    fireEvent.mouseDown(upButton!);
+    fireEvent.pointerDown(upButton!);
 
     // then
     expect(onAction).not.toHaveBeenCalled();
@@ -43,11 +56,11 @@ describe("DirectionalPad", () => {
     const upButton = container.querySelector('g[role="button"]');
 
     // when
-    fireEvent.mouseDown(upButton!);
+    fireEvent.pointerDown(upButton!);
 
     // then
-    expect(upButton?.parentElement?.querySelector(".active")).toBeTruthy();
     // No error should be thrown
+    expect(upButton).toBeTruthy();
   });
 
   it("should update state for different directional actions", () => {
@@ -65,10 +78,9 @@ describe("DirectionalPad", () => {
     ];
 
     buttons.forEach((button, index) => {
-      fireEvent.mouseDown(button);
+      fireEvent.pointerDown(button);
       expect(onAction).toHaveBeenCalledWith(actions[index]);
-      expect(button.parentElement?.querySelector(".active")).toBeTruthy();
-      fireEvent.mouseUp(button);
+      fireEvent.pointerUp(button);
     });
   });
 });

@@ -52,3 +52,9 @@ export const WithTopic: StoryObj = {
     return <TeleopPanel overrideConfig={{ topic: "/abc" }} />;
   },
 };
+
+export const DirectionalPadMode: StoryObj = {
+  render: () => {
+    return <TeleopPanel overrideConfig={{ topic: "/abc", mode: "dpad" }} />;
+  },
+};

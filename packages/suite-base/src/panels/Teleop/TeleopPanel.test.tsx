@@ -6,6 +6,7 @@ import { render, screen, fireEvent } from "@testing-library/react";
 
 import { Topic } from "@lichtblick/suite";
 import { buildSettingsTreeTeleop } from "@lichtblick/suite-base/panels/Teleop/buildSettingsTree";
+import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Teleop/constants";
 import {
   DirectionalPadAction,
   DirectionalPadProps,
@@ -24,6 +25,7 @@ function MockDirectionalPad({ onAction, disabled }: DirectionalPadProps): React.
       <button onClick={() => onAction?.(DirectionalPadAction.DOWN)}>DOWN</button>
       <button onClick={() => onAction?.(DirectionalPadAction.LEFT)}>LEFT</button>
       <button onClick={() => onAction?.(DirectionalPadAction.RIGHT)}>RIGHT</button>
+      <button onClick={() => onAction?.()}>RELEASE</button>
     </div>
   );
 }
@@ -49,16 +51,19 @@ jest.mock("@lichtblick/suite-base/components/Stack", () => ({
 }));
 
 function getMockContext(overrides: any = {}) {
+  const { initialState, ...rest } = overrides;
   return {
-    initialState: {},
     saveState: jest.fn(),
+    setDefaultPanelTitle: jest.fn(),
     watch: jest.fn(),
     updatePanelSettingsEditor: jest.fn(),
     advertise: jest.fn(),
     unadvertise: jest.fn(),
     publish: jest.fn(),
     onRender: undefined,
-    ...overrides,
+    ...rest,
+    // the mocked directional pad is only shown in d-pad mode
+    initialState: { mode: "dpad", ...initialState },
   };
 }
 
@@ -220,6 +225,7 @@ describe("TeleopPanel", () => {
 
   it("buildSettingsTree returns correct structure", () => {
     const config: TeleopConfig = {
+      ...DEFAULT_CONFIG,
       topic: BasicBuilder.string(),
       publishRate: 2,
       upButton: { field: "linear-x", value: 1 },
@@ -252,6 +258,8 @@ describe("TeleopPanel", () => {
         const publish = jest.fn();
         const topic = "test/cmd_vel";
         const defaultConfig: TeleopConfig = {
+          ...DEFAULT_CONFIG,
+          mode: "dpad",
           topic,
           publishRate: 10,
           upButton: { field: "linear-x", value: 2.0 },
@@ -701,6 +709,121 @@ describe("TeleopPanel", () => {
 
       // Then
       expect(console.error).toHaveBeenCalledWith("Failed to publish message:", publishError);
+    });
+  });
+  describe("Safety and input sources", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    const zero = { linear: { x: 0, y: 0, z: 0 }, angular: { x: 0, y: 0, z: 0 } };
+
+    function setup(initialState: Partial<TeleopConfig> = {}) {
+      const publish = jest.fn();
+      const context = getMockContext({
+        publish,
+        initialState: { topic: "/cmd", publishRate: 10, ...initialState },
+      });
+      const result = render(<TeleopPanel context={context} />);
+      const root = result.container.querySelector<HTMLElement>("[tabindex]")!;
+      return { publish, context, root };
+    }
+
+    it("publishes a zero command when the control is released", () => {
+      const { publish } = setup();
+      fireEvent.click(screen.getByText("UP"));
+      publish.mockClear();
+      fireEvent.click(screen.getByText("RELEASE"));
+      expect(publish).toHaveBeenCalledWith("/cmd", zero);
+      publish.mockClear();
+      jest.advanceTimersByTime(1000);
+      expect(publish).not.toHaveBeenCalled();
+    });
+
+    it("does not publish a zero command on release when stopOnRelease is off", () => {
+      const { publish } = setup({ stopOnRelease: false });
+      fireEvent.click(screen.getByText("UP"));
+      publish.mockClear();
+      fireEvent.click(screen.getByText("RELEASE"));
+      expect(publish).not.toHaveBeenCalled();
+    });
+
+    it("drives with combined keys and stops when they are released", () => {
+      const { publish, root } = setup();
+      fireEvent.keyDown(root, { key: "w" });
+      fireEvent.keyDown(root, { key: "ArrowLeft" });
+      jest.advanceTimersByTime(100);
+      expect(publish).toHaveBeenLastCalledWith("/cmd", {
+        linear: { x: 1, y: 0, z: 0 },
+        angular: { x: 0, y: 0, z: 1 },
+      });
+      fireEvent.keyUp(root, { key: "w" });
+      fireEvent.keyUp(root, { key: "ArrowLeft" });
+      expect(publish).toHaveBeenLastCalledWith("/cmd", zero);
+    });
+
+    it("ignores drive keys with modifiers and when keyboard is disabled", () => {
+      const { publish, root } = setup();
+      fireEvent.keyDown(root, { key: "w", metaKey: true });
+      expect(publish).not.toHaveBeenCalled();
+
+      const other = setup({ keyboard: false });
+      fireEvent.keyDown(other.root, { key: "w" });
+      expect(other.publish).not.toHaveBeenCalled();
+    });
+
+    it("stops on Space and when the window loses focus", () => {
+      const { publish, root } = setup();
+      fireEvent.keyDown(root, { key: "w" });
+      publish.mockClear();
+      fireEvent.keyDown(root, { key: " " });
+      expect(publish).toHaveBeenCalledWith("/cmd", zero);
+
+      fireEvent.keyDown(root, { key: "w" });
+      publish.mockClear();
+      fireEvent.blur(window);
+      expect(publish).toHaveBeenCalledWith("/cmd", zero);
+    });
+
+    it("scales the command with the speed keys", () => {
+      const { publish, root } = setup({ speedScale: 0.5 });
+      fireEvent.keyDown(root, { key: "+" });
+      fireEvent.keyDown(root, { key: "w" });
+      expect(publish).toHaveBeenLastCalledWith(
+        "/cmd",
+        expect.objectContaining({ linear: { x: 0.6, y: 0, z: 0 } }),
+      );
+    });
+
+    it("publishes TwistStamped with a header", () => {
+      const { publish, context } = setup({ messageType: "TwistStamped", frameId: "base_link" });
+      expect(context.advertise).toHaveBeenCalledWith(
+        "/cmd",
+        "geometry_msgs/TwistStamped",
+        expect.anything(),
+      );
+      fireEvent.click(screen.getByText("UP"));
+      expect(publish).toHaveBeenCalledWith("/cmd", {
+        header: {
+          stamp: { sec: expect.any(Number), nsec: expect.any(Number) },
+          frame_id: "base_link",
+        },
+        twist: expect.objectContaining({ linear: { x: 1, y: 0, z: 0 } }),
+      });
+    });
+
+    it("stops the robot when unmounted while driving", () => {
+      const publish = jest.fn();
+      const context = getMockContext({ publish, initialState: { topic: "/cmd" } });
+      const { unmount } = render(<TeleopPanel context={context} />);
+      fireEvent.click(screen.getByText("UP"));
+      publish.mockClear();
+      unmount();
+      expect(publish).toHaveBeenCalledWith("/cmd", zero);
     });
   });
 });
