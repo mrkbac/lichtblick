@@ -26,7 +26,13 @@ function rosTf(topic: string, receiveSec: number, pairs: [string, string][]): Me
 }
 
 function rows(current: FrameEntries, now: number, collapsed: string[] = []) {
-  return buildRows({ current, known: current, now, collapsed: new Set(collapsed) });
+  return buildRows({
+    current,
+    known: current,
+    now,
+    collapsed: new Set(collapsed),
+    staticTopics: new Set(["/tf_static"]),
+  });
 }
 
 describe("samplesFromMessage", () => {
@@ -98,7 +104,7 @@ describe("buildRows", () => {
       ["lidar", 3],
     ]);
     expect(result[0]!.entry).toBeUndefined();
-    expect(result[3]!.entry?.isStatic).toBe(true);
+    expect(result[3]!.isStatic).toBe(true);
     expect(result[1]!.rate).toBeCloseTo(10);
     expect(result[1]!.age).toBeCloseTo(0.1);
     expect(result.every((row) => row.warnings.length === 0)).toBe(true);
@@ -137,7 +143,13 @@ describe("buildRows", () => {
 
   it("keeps known frames without current data as noData", () => {
     const known = addTransformEvents(new Map(), [rosTf("/tf", 1, [["map", "odom"]])]);
-    const result = buildRows({ current: new Map(), known, now: 2, collapsed: new Set() });
+    const result = buildRows({
+      current: new Map(),
+      known,
+      now: 2,
+      collapsed: new Set(),
+      staticTopics: new Set(),
+    });
     expect(result.find((row) => row.frame === "odom")?.warnings).toEqual(["noData"]);
   });
 

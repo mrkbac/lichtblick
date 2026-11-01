@@ -3,11 +3,12 @@
 
 import { ChevronDown12Filled, ChevronRight12Filled, Warning16Filled } from "@fluentui/react-icons";
 import { Tooltip } from "@mui/material";
-import { memo, useCallback, useMemo, useRef } from "react";
+import { TFunction } from "i18next";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { toSec } from "@lichtblick/rostime";
-import { Immutable } from "@lichtblick/suite";
+import { Immutable, SettingsTreeAction } from "@lichtblick/suite";
 import {
   useBlocksSubscriptions,
   useDataSourceInfo,
@@ -18,15 +19,18 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { MessageEvent, SubscribePayload } from "@lichtblick/suite-base/players/types";
+import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
 import { useStyles } from "./TransformTree.style";
-import { isStaticTopic, isTransformSchema, quaternionToRpy } from "./transforms";
+import { buildSettingsTree, resolveTopics, settingsActionReducer } from "./settings";
+import { isTransformSchema, quaternionToRpy } from "./transforms";
 import { addTransformEvents, buildRows, mergeEntries } from "./tree";
-import { FrameEntries, FrameRow, TransformTreeConfig } from "./types";
+import { FrameEntries, FrameRow, FrameWarning, TransformTreeConfig } from "./types";
 
 type Props = {
   config: TransformTreeConfig;
@@ -35,19 +39,44 @@ type Props = {
 
 const EMPTY_ENTRIES: FrameEntries = new Map();
 
-const restoreEntries = (prev: FrameEntries | undefined): FrameEntries => prev ?? EMPTY_ENTRIES;
 const addEntries = (prev: FrameEntries, events: Immutable<MessageEvent[]>): FrameEntries =>
   addTransformEvents(prev, events);
+
+const onlyTopics = (entries: FrameEntries, topics: ReadonlySet<string>): FrameEntries =>
+  new Map([...entries].filter(([, entry]) => topics.has(entry.topic)));
 
 const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
 
 const RAD_TO_DEG = 180 / Math.PI;
 
-const formatNumbers = (values: number[], digits: number): string =>
-  values.map((value) => value.toFixed(digits).padStart(digits + 4)).join(" ");
+const NO_COLLAPSED: ReadonlySet<string> = new Set();
+
+/** Fixed decimals so decimal points line up in a right-aligned column; no "-0.000". */
+function formatFixed(value: number, digits: number): string {
+  const text = value.toFixed(digits);
+  return /^-0\.?0*$/.test(text) ? text.slice(1) : text;
+}
 
 function formatDuration(seconds: number): string {
   return seconds < 1 ? `${Math.round(seconds * 1000)} ms` : `${seconds.toFixed(1)} s`;
+}
+
+function warningMessage(
+  t: TFunction<"transformTree">,
+  row: FrameRow,
+  warning: FrameWarning,
+): string {
+  switch (warning) {
+    case "multipleParents":
+      return t("warnings.multipleParents", { parents: row.entry?.parents.join(", ") ?? "" });
+    case "stale":
+      return t("warnings.stale", {
+        age: formatDuration(row.age ?? 0),
+        period: formatDuration(row.rate != undefined ? 1 / row.rate : 0),
+      });
+    case "noData":
+      return t("warnings.noData");
+  }
 }
 
 export function TransformTree({ config, saveConfig }: Props): React.JSX.Element {
@@ -60,9 +89,52 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
     [topics],
   );
 
+  const resolvedTopics = useMemo(
+    () => resolveTopics(config, transformTopics),
+    [config, transformTopics],
+  );
+  // Keyed by the names so unrelated config changes (e.g. collapsing a frame) keep the same
+  // arrays, which would otherwise reset the data and resubscribe. Topic names have no newlines.
+  const visibleKey = resolvedTopics
+    .filter((topic) => topic.visible)
+    .map(({ name }) => name)
+    .join("\n");
+  const staticKey = resolvedTopics
+    .filter((topic) => topic.visible && topic.isStatic)
+    .map(({ name }) => name)
+    .join("\n");
+  const visibleTopics = useMemo(() => (visibleKey ? visibleKey.split("\n") : []), [visibleKey]);
+  const visibleTopicSet = useMemo(() => new Set(visibleTopics), [visibleTopics]);
+  const staticTopics = useMemo(
+    () => new Set(staticKey ? staticKey.split("\n") : []),
+    [staticKey],
+  );
+
+  const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
+  const settingsActionHandler = useCallback(
+    (action: SettingsTreeAction) => {
+      saveConfig(settingsActionReducer(config, action));
+    },
+    [config, saveConfig],
+  );
+  useEffect(() => {
+    updatePanelSettingsTree({
+      actionHandler: settingsActionHandler,
+      nodes: buildSettingsTree(resolvedTopics, t),
+    });
+  }, [resolvedTopics, settingsActionHandler, t, updatePanelSettingsTree]);
+
+  // Entries remember every parent a frame had, including from topics that are now hidden, so
+  // start over when the visible topics change. useMessageReducer calls `restore` on a seek and
+  // whenever `restore` itself changes, so a new function per topic set resets the state.
+  const restoreEntries = useMemo(() => {
+    void visibleTopics;
+    return (): FrameEntries => EMPTY_ENTRIES;
+  }, [visibleTopics]);
+
   // Dynamic and static transforms around the current playback position.
   const streamed = useMessageReducer<FrameEntries>({
-    topics: transformTopics,
+    topics: visibleTopics,
     restore: restoreEntries,
     addMessages: addEntries,
   });
@@ -71,8 +143,8 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
   // lose them. Preload them from the whole recording when the data source supports it.
   const staticSubscriptions = useMemo<SubscribePayload[]>(
     () =>
-      transformTopics.filter(isStaticTopic).map((topic) => ({ topic, preloadType: "full" })),
-    [transformTopics],
+      [...staticTopics].map((topic) => ({ topic, preloadType: "full" })),
+    [staticTopics],
   );
   const staticBlocks = useBlocksSubscriptions(staticSubscriptions);
   const preloadedStatic = useMemo(
@@ -85,27 +157,78 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
   );
 
   const current = useMemo(
-    () => mergeEntries(preloadedStatic, streamed),
-    [preloadedStatic, streamed],
+    () => onlyTopics(mergeEntries(preloadedStatic, streamed), visibleTopicSet),
+    [preloadedStatic, streamed, visibleTopicSet],
   );
 
   // Every frame seen for this data source, so the tree keeps its shape across seeks.
-  const knownRef = useRef({ playerId, entries: EMPTY_ENTRIES });
+  const knownRef = useRef({ playerId, visibleTopics, entries: EMPTY_ENTRIES });
   const known = useMemo(() => {
-    const previous = knownRef.current.playerId === playerId ? knownRef.current.entries : undefined;
-    const entries = mergeEntries(previous ?? EMPTY_ENTRIES, current);
-    knownRef.current = { playerId, entries };
+    const previous =
+      knownRef.current.playerId === playerId && knownRef.current.visibleTopics === visibleTopics
+        ? knownRef.current.entries
+        : EMPTY_ENTRIES;
+    const entries = mergeEntries(previous, current);
+    knownRef.current = { playerId, visibleTopics, entries };
     return entries;
-  }, [current, playerId]);
+  }, [current, playerId, visibleTopics]);
 
   const currentTime = useMessagePipeline(selectCurrentTime);
   const now = currentTime ? toSec(currentTime) : undefined;
 
   const collapsed = useMemo(() => new Set(config.collapsed), [config.collapsed]);
   const rows = useMemo(
-    () => buildRows({ current, known, now, collapsed }),
-    [current, known, now, collapsed],
+    () => buildRows({ current, known, now, collapsed, staticTopics }),
+    [current, known, now, collapsed, staticTopics],
   );
+
+  // Warnings and counts cover every frame, including those under collapsed frames.
+  const allRows = useMemo(
+    () =>
+      collapsed.size === 0
+        ? rows
+        : buildRows({ current, known, now, collapsed: NO_COLLAPSED, staticTopics }),
+    [rows, collapsed.size, current, known, now, staticTopics],
+  );
+  const roots = useMemo(
+    () => allRows.filter((row) => row.depth === 0).map((row) => row.frame),
+    [allRows],
+  );
+
+  // Report each problem once in the panel log when it appears, with details. "noData" is left out
+  // because it is expected for a moment after every seek.
+  const { logError } = usePanelContext();
+  const loggedRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (logError == undefined) {
+      return;
+    }
+    const messages = new Map<string, string>();
+    for (const topic of resolvedTopics) {
+      if (topic.visible && !topic.available) {
+        messages.set(`topic:${topic.name}`, `${topic.name}: ${t("settings.topicUnavailable")}`);
+      }
+    }
+    for (const row of allRows) {
+      for (const warning of row.warnings) {
+        if (warning !== "noData") {
+          messages.set(`${warning}:${row.frame}`, `${row.frame}: ${warningMessage(t, row, warning)}`);
+        }
+      }
+    }
+    if (roots.length > 1) {
+      messages.set(
+        `roots:${roots.join(",")}`,
+        `${t("multipleRoots", { count: roots.length })}: ${roots.join(", ")}`,
+      );
+    }
+    for (const [key, message] of messages) {
+      if (!loggedRef.current.has(key)) {
+        logError(message);
+      }
+    }
+    loggedRef.current = new Set(messages.keys());
+  }, [allRows, logError, resolvedTopics, roots, t]);
 
   const toggleCollapsed = useCallback(
     (frame: string) => {
@@ -118,13 +241,15 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
     [collapsed, saveConfig],
   );
 
-  const staticCount = [...known.values()].filter((entry) => entry.isStatic).length;
-  const rootCount = rows.filter((row) => row.depth === 0).length;
-  const warningCount = rows.filter((row) => row.warnings.length > 0).length;
+  const staticCount = [...known.values()].filter((entry) => staticTopics.has(entry.topic)).length;
+  const rootCount = roots.length;
+  const warningCount = allRows.filter((row) => row.warnings.length > 0).length;
 
   let body: React.ReactNode;
-  if (transformTopics.length === 0) {
+  if (resolvedTopics.length === 0) {
     body = <EmptyState>{t("noTransformTopics")}</EmptyState>;
+  } else if (visibleTopics.length === 0) {
+    body = <EmptyState>{t("allTopicsHidden")}</EmptyState>;
   } else if (rows.length === 0) {
     body = <EmptyState>{t("waitingForTransforms")}</EmptyState>;
   } else {
@@ -148,11 +273,15 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
           <table className={classes.table}>
             <thead>
               <tr>
-                <th>{t("frame")}</th>
-                <th>{t("translation")}</th>
-                <th>{t("rotation")}</th>
-                <th>{t("age")}</th>
-                <th>{t("rate")}</th>
+                <th>{t("columns.frame")}</th>
+                <th className={classes.groupStart}>{t("columns.x")}</th>
+                <th>{t("columns.y")}</th>
+                <th>{t("columns.z")}</th>
+                <th className={classes.groupStart}>{t("columns.roll")}</th>
+                <th>{t("columns.pitch")}</th>
+                <th>{t("columns.yaw")}</th>
+                <th className={classes.groupStart}>{t("columns.age")}</th>
+                <th>{t("columns.rate")}</th>
               </tr>
             </thead>
             <tbody>
@@ -205,19 +334,7 @@ const FrameTableRow = memo(function FrameTableRowImpl({
             .map((value) => value.toFixed(4))
             .join(", "),
         }),
-        ...row.warnings.map((warning) => {
-          switch (warning) {
-            case "multipleParents":
-              return t("warnings.multipleParents", { parents: entry.parents.join(", ") });
-            case "stale":
-              return t("warnings.stale", {
-                age: formatDuration(age ?? 0),
-                period: formatDuration(rate != undefined ? 1 / rate : 0),
-              });
-            case "noData":
-              return t("warnings.noData");
-          }
-        }),
+        ...row.warnings.map((warning) => warningMessage(t, row, warning)),
       ].join("\n")
     : undefined;
 
@@ -253,23 +370,24 @@ const FrameTableRow = memo(function FrameTableRowImpl({
           {row.warnings.length > 0 && <Warning16Filled className={classes.warningIcon} />}
         </div>
       </td>
-      <td className={valueClass}>
-        {entry &&
-          formatNumbers([entry.translation.x, entry.translation.y, entry.translation.z], 3)}
-      </td>
-      <td className={valueClass}>
-        {rpy && formatNumbers([rpy.x * RAD_TO_DEG, rpy.y * RAD_TO_DEG, rpy.z * RAD_TO_DEG], 1)}
-      </td>
-      <td className={valueClass}>
-        {entry?.isStatic === true ? (
+      {[entry?.translation.x, entry?.translation.y, entry?.translation.z].map((value, i) => (
+        <td key={`t${i}`} className={cx(valueClass, { [classes.groupStart]: i === 0 })}>
+          {value != undefined && formatFixed(value, 3)}
+        </td>
+      ))}
+      {[rpy?.x, rpy?.y, rpy?.z].map((value, i) => (
+        <td key={`r${i}`} className={cx(valueClass, { [classes.groupStart]: i === 0 })}>
+          {value != undefined && formatFixed(value * RAD_TO_DEG, 1)}
+        </td>
+      ))}
+      <td className={cx(valueClass, classes.groupStart)}>
+        {row.isStatic ? (
           <span className={classes.staticBadge}>{t("static")}</span>
         ) : (
-          age != undefined && formatDuration(age)
+          age != undefined && formatFixed(age, 3)
         )}
       </td>
-      <td className={valueClass}>
-        {entry?.isStatic !== true && rate != undefined && `${rate.toFixed(1)} Hz`}
-      </td>
+      <td className={valueClass}>{!row.isStatic && rate != undefined && formatFixed(rate, 1)}</td>
     </tr>
   );
 });
