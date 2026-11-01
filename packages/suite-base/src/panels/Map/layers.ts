@@ -6,7 +6,7 @@ import type { LayerSpecification, SourceSpecification, StyleSpecification } from
 
 import type { LngLat } from "./geo";
 
-export type SourceKind = "raster" | "vector" | "dem" | "geotiff";
+export type SourceKind = "raster" | "vector" | "dem" | "geotiff" | "3dtiles";
 
 /** Everything needed to fetch one map source. */
 export type SourceParams = {
@@ -14,6 +14,7 @@ export type SourceParams = {
   /**
    * raster/dem: XYZ template ({z}/{x}/{y}, {quadkey}, {bbox-epsg-3857}), a TileJSON URL, or
    * `pmtiles://…`. vector: a MapLibre style JSON URL. geotiff: URL of a GeoTIFF file.
+   * 3dtiles: a 3D Tiles tileset.json URL (3D panel only).
    */
   url: string;
   attribution?: string;
@@ -134,6 +135,8 @@ export type MapLayer = {
   hillshade?: boolean;
   terrain?: boolean;
   exaggeration?: number;
+  /** 3D Tiles only: meters added to the location fix's altitude. */
+  heightOffset?: number;
 };
 
 export function resolveSource(layer: MapLayer): SourceParams | undefined {
@@ -148,7 +151,8 @@ export function layerLabel(layer: MapLayer): string {
     return layer.label;
   }
   if (layer.source === "custom") {
-    return `Custom ${layer.custom?.kind ?? "raster"}`;
+    const kind = layer.custom?.kind ?? "raster";
+    return `Custom ${kind === "3dtiles" ? "3D Tiles" : kind}`;
   }
   return PRESETS[layer.source]?.label ?? layer.source;
 }
@@ -363,6 +367,8 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
         }
         break;
       }
+      case "3dtiles":
+        break; // Not a MapLibre source; the 3D panel renders these itself.
       case "vector": {
         const vector = input.vectorStyles.get(params.url);
         if (!vector) {
