@@ -352,11 +352,11 @@ class MapRenderable extends Renderable<MapUserData> {
         }
       }),
     );
-    if (errors.size > 0) {
-      this.#styleKey = undefined; // Retry failed loads on the next settings change.
-    }
     if (this.#disposed || request !== this.#styleRequest) {
       return;
+    }
+    if (errors.size > 0) {
+      this.#styleKey = undefined; // Retry failed loads on the next settings change.
     }
     const map = await this.#getMap();
     if (request !== this.#styleRequest) {
@@ -535,7 +535,8 @@ class MapRenderable extends Renderable<MapUserData> {
   }
 
   /** Create and drop TilesRenderers to match the visible 3D Tiles layers. */
-  async #syncTilesets(): Promise<void> {
+  /** URL by MapLayer id of each visible 3D Tiles layer. */
+  #wantedTilesets(): Map<string, string> {
     const wanted = new Map<string, string>();
     for (const layer of this.userData.settings.layers) {
       const params = resolveSource(layer);
@@ -543,6 +544,11 @@ class MapRenderable extends Renderable<MapUserData> {
         wanted.set(layer.id, params.url.trim());
       }
     }
+    return wanted;
+  }
+
+  async #syncTilesets(): Promise<void> {
+    const wanted = this.#wantedTilesets();
     for (const [id, tileset] of this.#tilesets) {
       if (wanted.get(id) !== tileset.url) {
         tileset.tiles.dispose();
@@ -560,9 +566,11 @@ class MapRenderable extends Renderable<MapUserData> {
     if (this.#disposed) {
       return;
     }
+    // Settings may have changed while importing; create only what is still wanted.
+    const stillWanted = this.#wantedTilesets();
     for (const [id, url] of missing) {
-      if (this.#tilesets.has(id)) {
-        continue; // Created by a concurrent sync.
+      if (this.#tilesets.has(id) || stillWanted.get(id) !== url) {
+        continue; // Created by a concurrent sync, or no longer wanted.
       }
       const tiles = new TilesRenderer(url);
       tiles.registerPlugin(
