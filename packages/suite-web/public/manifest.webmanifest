@@ -1,0 +1,37 @@
+{
+  "name": "Lichtblick",
+  "short_name": "Lichtblick",
+  "description": "Visualize and debug robotics data",
+  "id": ".",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "background_color": "#15151a",
+  "theme_color": "#15151a",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ],
+  "file_handlers": [
+    {
+      "action": ".",
+      "accept": { "application/x-mcap": [".mcap"] },
+      "icons": [{ "src": "file-icon-mcap.png", "sizes": "256x256", "type": "image/png" }]
+    },
+    {
+      "action": ".",
+      "accept": {
+        "application/x-rosbag": [".bag"],
+        "application/x-sqlite3": [".db3"],
+        "application/x-ulog": [".ulg", ".ulog"]
+      },
+      "icons": [{ "src": "file-icon-bag.png", "sizes": "256x256", "type": "image/png" }]
+    },
+    {
+      "action": ".",
+      "accept": { "application/zip": [".foxe"] },
+      "icons": [{ "src": "file-icon-foxe.png", "sizes": "256x256", "type": "image/png" }]
+    }
+  ],
+  "launch_handler": { "client_mode": "focus-existing" }
+}

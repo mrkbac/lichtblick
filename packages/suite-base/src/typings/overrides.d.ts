@@ -12,6 +12,14 @@
 // forces callers to handle the undefined case and prevent crashes.
 // See issue https://github.com/microsoft/TypeScript/issues/18879
 declare global {
+  // https://developer.mozilla.org/en-US/docs/Web/API/Launch_Handler_API (installed PWA file_handlers)
+  interface LaunchParams {
+    readonly files: readonly FileSystemHandle[];
+  }
+  interface Window {
+    launchQueue?: { setConsumer(consumer: (params: LaunchParams) => void): void };
+  }
+
   interface JSON {
     stringify(
       value: any,

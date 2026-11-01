@@ -87,6 +87,7 @@ import useElectronFilesToOpen from "@lichtblick/suite-base/hooks/useElectronFile
 import { useHandleFiles } from "@lichtblick/suite-base/hooks/useHandleFiles";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
 import useSeekTimeFromCLI from "@lichtblick/suite-base/hooks/useSeekTimeFromCLI";
+import { useServiceWorkerUpdatePrompt } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdatePrompt";
 import { useStructureItemsStoreManager } from "@lichtblick/suite-base/panels/Plot/hooks/useStructureItemsStoreManager";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { PanelStateContextProvider } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
@@ -168,6 +169,8 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
   const { enqueueSnackbar } = useSnackbar();
   const { dialogActions, sidebarActions } = useWorkspaceActions();
+  useServiceWorkerUpdatePrompt();
+
   const { handleFiles } = useHandleFiles({
     availableSources,
     selectSource,
@@ -252,6 +255,16 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       void handleFilesRef.current(Array.from(filesToOpen));
     }
   }, [filesToOpen]);
+
+  // files the OS asked the installed PWA to open (manifest file_handlers)
+  useEffect(() => {
+    window.launchQueue?.setConsumer(async ({ files }) => {
+      const fileHandles = files.filter((h): h is FileSystemFileHandle => h.kind === "file");
+      if (fileHandles.length > 0) {
+        await handleFilesRef.current(await Promise.all(fileHandles.map(async (h) => await h.getFile())));
+      }
+    });
+  }, []);
 
   const dropHandler = useCallback(
     async ({
