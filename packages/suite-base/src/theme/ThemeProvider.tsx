@@ -40,14 +40,15 @@ export default function ThemeProvider({
   const muiTheme = useMemo(() => createMuiTheme(isDark ? "dark" : "light"), [isDark]);
 
   useLayoutEffect(() => {
-    // Set the theme color to match the sidebar and playback bar
-    const meta = document.createElement("meta");
-    meta.name = "theme-color";
-    meta.content = muiTheme.palette.background.paper;
-    document.head.appendChild(meta);
-    return () => {
-      meta.remove();
-    };
+    // Match the app bar, which the installed PWA draws in the title bar next to the browser's
+    // own controls. Update the existing tag: browsers only read the first theme-color meta.
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    if (!meta) {
+      meta = document.createElement("meta");
+      meta.name = "theme-color";
+      document.head.appendChild(meta);
+    }
+    meta.content = muiTheme.palette.appBar.main ?? "";
   }, [muiTheme]);
 
   return (
