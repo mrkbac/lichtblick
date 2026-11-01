@@ -31,6 +31,7 @@ import CommonRosTypes from "@lichtblick/rosmsg-msgs-common";
 import { MessageWriter as Ros1MessageWriter } from "@lichtblick/rosmsg-serialization";
 import { MessageWriter as Ros2MessageWriter } from "@lichtblick/rosmsg2-serialization";
 import {
+  compare,
   fromMillis,
   fromNanoSec,
   isGreaterThan,
@@ -218,7 +219,9 @@ export default class FoxgloveWebSocketPlayer implements Player {
     ws.onmessage = (event: unknown) => {
       const data = (event as { data: unknown }).data;
       if (isPlaybackStateMessage(data)) {
-        this.#handlePlaybackState(decodePlaybackState(data));
+        if (this.#serverControlsPlayback) {
+          this.#handlePlaybackState(decodePlaybackState(data));
+        }
         return;
       }
       clientOnMessage?.(event);
@@ -293,6 +296,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
       this.#client?.close();
       this.#client = undefined;
+      this.#serverControlsPlayback = false;
 
       this.#alerts.addAlert("ws:connection-failed", {
         severity: "error",
@@ -401,10 +405,13 @@ export default class FoxgloveWebSocketPlayer implements Player {
       }
 
       const { dataStartTime, dataEndTime } = event as PlaybackServerInfo;
+      const wasControllingPlayback = this.#serverControlsPlayback;
+      this.#dropPlaybackCapabilities();
       this.#serverControlsPlayback =
         event.capabilities.includes(PLAYBACK_CONTROL_CAPABILITY) &&
         dataStartTime != undefined &&
-        dataEndTime != undefined;
+        dataEndTime != undefined &&
+        compare(dataStartTime, dataEndTime) <= 0;
       if (this.#serverControlsPlayback) {
         this.#startTime = dataStartTime;
         this.#endTime = dataEndTime;
@@ -412,6 +419,9 @@ export default class FoxgloveWebSocketPlayer implements Player {
           PLAYER_CAPABILITIES.playbackControl,
           PLAYER_CAPABILITIES.setSpeed,
         );
+      } else if (wasControllingPlayback) {
+        this.#startTime = undefined;
+        this.#endTime = undefined;
       }
 
       this.#emitState();
@@ -1273,7 +1283,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
   }
 
   public seekPlayback(time: Time): void {
-    this.#sendPlaybackControl(toNanoSec(time));
+    const seekTimeNs = toNanoSec(time);
+    if (seekTimeNs < 0n) {
+      return;
+    }
+    this.#sendPlaybackControl(seekTimeNs);
   }
 
   public setGlobalVariables(): void {}
@@ -1290,7 +1304,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #getCurrentTime(): Time {
     // If the server does not publish the time, then we set the clock time to realtime as long as
     // the server is connected. When the server is not connected, time stops.
-    if (!this.#serverPublishesTime) {
+    if (!this.#serverPublishesTime && !this.#serverControlsPlayback) {
       this.#clockTime =
         this.#presence === PlayerPresence.PRESENT ? fromMillis(Date.now()) : this.#clockTime;
     }
@@ -1397,7 +1411,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
   }
 
   #sendPlaybackControl(seekTimeNs?: bigint): void {
-    if (!this.#serverControlsPlayback) {
+    if (!this.#serverControlsPlayback || !this.#client) {
       return;
     }
     this.#ws?.send(
@@ -1419,8 +1433,16 @@ export default class FoxgloveWebSocketPlayer implements Player {
     }
     this.#clockTime = fromNanoSec(state.currentTimeNs);
     this.#isPlaying = state.status === PlaybackStatus.Playing;
-    this.#speed = state.speed;
+    if (Number.isFinite(state.speed)) {
+      this.#speed = state.speed;
+    }
     this.#emitState();
+  }
+
+  #dropPlaybackCapabilities(): void {
+    this.#playerCapabilities = this.#playerCapabilities.filter(
+      (cap) => cap !== PLAYER_CAPABILITIES.playbackControl && cap !== PLAYER_CAPABILITIES.setSpeed,
+    );
   }
 
   #resetSessionState(): void {
@@ -1428,6 +1450,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#endTime = undefined;
     this.#clockTime = undefined;
     this.#serverControlsPlayback = false;
+    this.#dropPlaybackCapabilities();
     this.#isPlaying = true;
     this.#speed = 1;
     this.#topicsStats = new Map();
