@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { validateStyleMin } from "@maplibre/maplibre-gl-style-spec";
-import type { StyleSpecification } from "maplibre-gl";
+import type { LayerSpecification, StyleSpecification } from "maplibre-gl";
 
 import { emptyOverlayData, overlayStyle } from "./features";
-import { composeStyle, MapLayer, validateSourceUrl } from "./layers";
+import { composeStyle, MapLayer, validateSourceUrl, withBuildings3d } from "./layers";
 
 const VECTOR_URL = "https://example.com/style.json";
 const vectorStyle: StyleSpecification = {
@@ -33,7 +33,12 @@ const vectorStyle: StyleSpecification = {
       source: "tiles",
       "source-layer": "transportation",
     },
-    { id: "district-border", type: "line", source: "tiles", "source-layer": "boundary" },
+    {
+      id: "district-border",
+      type: "line",
+      source: "tiles",
+      "source-layer": "boundary",
+    },
     { id: "river", type: "line", source: "tiles", "source-layer": "waterway" },
     {
       id: "labels",
@@ -174,5 +179,36 @@ describe("validateSourceUrl", () => {
       /\{s\}/,
     );
     expect(validateSourceUrl({ kind: "vector", url: "tiles.example.com" })).toMatch(/http/);
+  });
+});
+
+describe("withBuildings3d", () => {
+  const building: LayerSpecification = {
+    id: "building",
+    type: "fill",
+    source: "openmaptiles",
+    "source-layer": "building",
+    paint: { "fill-color": "#ccc" },
+  };
+  const labels: LayerSpecification = {
+    id: "labels",
+    type: "symbol",
+    source: "openmaptiles",
+  };
+
+  it("extrudes buildings after the flat building layer", () => {
+    const layers = withBuildings3d([building, labels], { enabled: true });
+    expect(layers.map((l) => l.id)).toEqual(["building", "building-3d", "labels"]);
+    expect(layers[1]).toMatchObject({
+      type: "fill-extrusion",
+      paint: { "fill-extrusion-color": "#ccc" },
+    });
+  });
+
+  it("keeps a style's own extrusion, removes it when off, and ignores styles without buildings", () => {
+    const extruded = withBuildings3d([building], { enabled: true });
+    expect(withBuildings3d(extruded, { enabled: true })).toBe(extruded);
+    expect(withBuildings3d(extruded, { enabled: false }).map((l) => l.id)).toEqual(["building"]);
+    expect(withBuildings3d([labels], { enabled: true })).toEqual([labels]);
   });
 });

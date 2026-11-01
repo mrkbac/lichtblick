@@ -143,12 +143,18 @@ function shortUrl(url: string): string {
   return stripped.length > 48 ? `${stripped.slice(0, 22)}…${stripped.slice(-22)}` : stripped;
 }
 
+/** The first preset of a provider stands for the whole provider in the source picker. */
+function providerKey(source: string): string {
+  const provider = PRESETS[source]?.variant?.provider;
+  return (provider && _.findKey(PRESETS, (p) => p.variant?.provider === provider)) ?? source;
+}
+
 function sourceOptions(saved: readonly SourceParams[]) {
   return [
     ..._.map(PRESETS, (preset, value) => ({
       value,
-      label: `${preset.group}: ${preset.label}`,
-    })),
+      label: preset.variant?.provider ?? preset.label,
+    })).filter(({ value }) => providerKey(value) === value),
     ..._.map(CUSTOM_KIND_LABELS, (label, kind) => ({
       value: `custom:${kind}`,
       label,
@@ -246,13 +252,26 @@ function layerNode(
 ): SettingsTreeNode {
   const kind =
     layer.source === "custom" ? (layer.custom?.kind ?? "raster") : PRESETS[layer.source]?.kind;
+  const variant = PRESETS[layer.source]?.variant;
   const fields: SettingsTreeFields = {
     source: {
       label: "Source",
       input: "select",
-      value: layer.source === "custom" ? `custom:${kind}` : layer.source,
+      value: layer.source === "custom" ? `custom:${kind}` : providerKey(layer.source),
       options: sourceOptions(saved),
     },
+    style: variant
+      ? {
+          label: "Style",
+          input: "select",
+          value: layer.source,
+          options: _.flatMap(PRESETS, (preset, value) =>
+            preset.variant?.provider === variant.provider
+              ? [{ label: preset.variant.style, value }]
+              : [],
+          ),
+        }
+      : undefined,
     ...(layer.source === "custom" && kind
       ? customSourceFields(kind, layer.custom ?? { kind, url: "" })
       : {}),
@@ -269,6 +288,14 @@ function layerNode(
       ],
       help: "Roads and labels only turns a vector map into a transparent overlay, e.g. on top of satellite imagery.",
     };
+    if (layer.vectorContent !== "lines-labels") {
+      fields.buildings3d = {
+        label: "3D buildings",
+        input: "boolean",
+        value: layer.buildings3d !== false,
+        help: "Extrude buildings by height from zoom 14 (OpenMapTiles styles). Tilt the map (right-drag or ctrl+drag) to see them.",
+      };
+    }
   }
 
   if (kind === "dem") {
@@ -362,7 +389,11 @@ function colorScaleFields(style: TopicStyle): SettingsTreeFields {
       value: style.colorMax,
       placeholder: "auto",
     },
-    colorReverse: { label: "Reverse colors", input: "boolean", value: style.colorReverse === true },
+    colorReverse: {
+      label: "Reverse colors",
+      input: "boolean",
+      value: style.colorReverse === true,
+    },
   };
 }
 
@@ -553,7 +584,7 @@ function updateLayerSource(layer: MapLayer, choice: string, saved: readonly Sour
       kind,
       url: layer.custom?.kind === kind ? layer.custom.url : "",
     };
-  } else {
+  } else if (providerKey(layer.source) !== choice) {
     layer.source = choice;
     layer.custom = undefined;
   }
@@ -585,6 +616,12 @@ function updateLayer(
       break;
     case "source":
       updateLayerSource(layer, String(value), saved);
+      break;
+    case "style":
+      if (typeof value === "string" && PRESETS[value]) {
+        layer.source = value;
+        layer.label = undefined;
+      }
       break;
     case "url":
       if (custom) {
@@ -624,6 +661,9 @@ function updateLayer(
       break;
     case "vectorContent":
       layer.vectorContent = value === "lines-labels" ? "lines-labels" : "all";
+      break;
+    case "buildings3d":
+      layer.buildings3d = value === true;
       break;
   }
 }

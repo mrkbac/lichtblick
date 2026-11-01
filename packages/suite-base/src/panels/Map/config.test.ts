@@ -92,6 +92,24 @@ describe("applySettingsAction", () => {
     expect(config.layers[0]!.opacity).toBe(0.5);
   });
 
+  it("lists a provider once and picks its style per layer", () => {
+    const fields = (config: Config) =>
+      buildSettingsTree(config, [], [], new Map()).layers?.children?.["0"]?.fields;
+    const source = fields(base)?.source;
+    const labels = source?.input === "select" ? source.options.map((o) => o.label) : [];
+    expect(labels.filter((l) => l.startsWith("OpenFreeMap"))).toEqual(["OpenFreeMap (vector)"]);
+    expect(labels.filter((l) => l.startsWith("Esri"))).toEqual(["Esri (raster)"]);
+
+    let config = apply(base, update(["layers", "0", "style"], "ofm-dark"));
+    expect(config.layers[0]!.source).toBe("ofm-dark");
+    expect(fields(config)?.source?.value).toBe("ofm-liberty");
+    // Re-picking the provider keeps the chosen style.
+    config = apply(config, update(["layers", "0", "source"], "ofm-liberty"));
+    expect(config.layers[0]!.source).toBe("ofm-dark");
+    config = apply(config, update(["layers", "0", "source"], "osm"));
+    expect(fields(config)?.style).toBeUndefined();
+  });
+
   it("toggles topics and drops a hidden follow topic", () => {
     let config = apply(base, update(["general", "followTopic"], "/gps"));
     config = apply(config, update(["topics", "/gps", "visible"], false));
