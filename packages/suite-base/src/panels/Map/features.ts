@@ -268,13 +268,19 @@ const collection = (features: Feature[]): FeatureCollection => ({
 });
 
 /** Full recorded track. Point property `i` indexes into `messages`. */
+/** Per-message color and label when a track is colored by a value (speed, message path). */
+export type ValueStyle = { color: string; label: string };
+
 export function trackFeatures(
   messages: readonly NavMessage[],
   colors: ReadonlyMap<string, string>,
   styles: Readonly<Record<string, TopicStyle>>,
+  valueStyleAt?: (index: number) => ValueStyle | undefined,
 ): { points: FeatureCollection; lines: FeatureCollection } {
   const points: Feature[] = [];
+  const lines: Feature[] = [];
   const lineCoords = new Map<string, LngLat[]>();
+  const previous = new Map<string, LngLat>();
   messages.forEach((event, i) => {
     const style = styles[event.topic] ?? {};
     const history = style.history ?? "points";
@@ -282,34 +288,53 @@ export function trackFeatures(
     if (history === "none" || base == undefined) {
       return;
     }
+    const valueStyle = valueStyleAt?.(i);
+    const position = lngLatOf(event);
     if (history === "points" || history === "both") {
       points.push({
         type: "Feature",
-        geometry: { type: "Point", coordinates: lngLatOf(event) },
+        geometry: { type: "Point", coordinates: position },
         properties: {
           i,
-          c: lightColor(base),
+          c: valueStyle?.color ?? lightColor(base),
           r: style.pointSize ?? DEFAULT_POINT_SIZE,
+          ...(valueStyle ? { v: valueStyle.label } : {}),
         },
       });
     }
     if (history === "line" || history === "both") {
+      const width = Math.max(1.5, (style.pointSize ?? DEFAULT_POINT_SIZE) * 0.8);
+      const from = previous.get(event.topic);
+      previous.set(event.topic, position);
+      if ((style.colorBy ?? "topic") !== "topic") {
+        // Colored by value: one segment per fix pair, in the color of its end point.
+        if (from) {
+          lines.push({
+            type: "Feature",
+            geometry: { type: "LineString", coordinates: [from, position] },
+            properties: { c: valueStyle?.color ?? lightColor(base), w: width },
+          });
+        }
+        return;
+      }
       let coords = lineCoords.get(event.topic);
       if (!coords) {
         coords = [];
         lineCoords.set(event.topic, coords);
       }
-      coords.push(lngLatOf(event));
+      coords.push(position);
     }
   });
-  const lines: Feature[] = [...lineCoords].map(([topic, coordinates]) => ({
-    type: "Feature",
-    geometry: { type: "LineString", coordinates },
-    properties: {
-      c: lightColor(colors.get(topic)!),
-      w: Math.max(1.5, (styles[topic]?.pointSize ?? DEFAULT_POINT_SIZE) * 0.8),
-    },
-  }));
+  for (const [topic, coordinates] of lineCoords) {
+    lines.push({
+      type: "Feature",
+      geometry: { type: "LineString", coordinates },
+      properties: {
+        c: lightColor(colors.get(topic)!),
+        w: Math.max(1.5, (styles[topic]?.pointSize ?? DEFAULT_POINT_SIZE) * 0.8),
+      },
+    });
+  }
   return { points: collection(points), lines: collection(lines) };
 }
 
