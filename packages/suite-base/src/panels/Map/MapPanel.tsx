@@ -484,6 +484,9 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         topic: topic.name,
         convertTo: topic.schemaName,
         onNewRangeIterator: async (iterator) => {
+          // A new iterator replaces the topic's data (e.g. an edited user script); drop the old.
+          pendingTrack.current = pendingTrack.current.filter((m) => m.topic !== topic.name);
+          setTrackMessages((prev) => prev.filter((m) => m.topic !== topic.name));
           rangeTopicsRef.current.add(topic.name);
           for await (const batch of iterator) {
             const valid = batch.filter(
@@ -503,35 +506,46 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     };
   }, [appendTrack, context, navTopics]);
 
+  // Batched and (for live sources) capped like the track: each flush recolors the whole track.
+  const pendingSamples = useRef(new Map<string, Sample[]>());
+  const sampleTimer = useRef<ReturnType<typeof setTimeout>>();
   const appendPathSamples = useCallback(
     (
       messages: readonly MessageEvent[],
       paths: readonly { path: string; parsed: MessagePath }[],
+      cap?: number,
     ) => {
-      const added = new Map<string, Sample[]>();
       for (const { path, parsed } of paths) {
-        const samples: Sample[] = [];
         for (const message of messages) {
           const value = simpleGetMessagePathDataItems(message, parsed).find(
             (item): item is number | bigint => typeof item === "number" || typeof item === "bigint",
           );
           if (value != undefined) {
+            const samples = pendingSamples.current.get(path) ?? [];
             samples.push({ time: eventTimeSec(message), value: Number(value) });
+            pendingSamples.current.set(path, samples);
           }
         }
-        if (samples.length > 0) {
-          added.set(path, samples);
-        }
       }
-      if (added.size > 0) {
-        setPathSamples((prev) => {
-          const next = new Map(prev);
-          for (const [path, samples] of added) {
-            next.set(path, (prev.get(path) ?? []).concat(samples));
-          }
-          return next;
-        });
+      if (pendingSamples.current.size === 0) {
+        return;
       }
+      sampleTimer.current ??= setTimeout(
+        () => {
+          sampleTimer.current = undefined;
+          const pending = pendingSamples.current;
+          pendingSamples.current = new Map();
+          setPathSamples((prev) => {
+            const next = new Map(prev);
+            for (const [path, samples] of pending) {
+              const all = (prev.get(path) ?? []).concat(samples);
+              next.set(path, cap != undefined && all.length > cap ? all.slice(-cap) : all);
+            }
+            return next;
+          });
+        },
+        cap == undefined ? 50 : 500,
+      );
     },
     [],
   );
@@ -539,12 +553,23 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   // Recorded values for "color by message path".
   useLayoutEffect(() => {
     setPathSamples(new Map());
+    pendingSamples.current = new Map();
     pathRangeTopicsRef.current = new Set();
     const byTopic = _.groupBy(colorPaths, ({ parsed }) => parsed.topicName);
     const unsubscribes = Object.entries(byTopic).map(([topic, paths]) =>
       context.unstable_subscribeMessageRange({
         topic,
         onNewRangeIterator: async (iterator) => {
+          for (const { path } of paths) {
+            pendingSamples.current.delete(path);
+          }
+          setPathSamples((prev) => {
+            const next = new Map(prev);
+            for (const { path } of paths) {
+              next.delete(path);
+            }
+            return next;
+          });
           pathRangeTopicsRef.current.add(topic);
           for await (const batch of iterator) {
             appendPathSamples(batch, paths);
@@ -582,7 +607,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         (m) => !pathRangeTopicsRef.current.has(m.topic),
       );
       if (livePathMessages && livePathMessages.length > 0 && colorPathsRef.current.length > 0) {
-        appendPathSamples(livePathMessages, colorPathsRef.current);
+        appendPathSamples(livePathMessages, colorPathsRef.current, LIVE_TRAIL_LIMIT);
       }
 
       // After a seek the frame is a backfill: drop positions of topics it doesn't contain.
