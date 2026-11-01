@@ -9,12 +9,12 @@ import * as THREE from "three";
 
 import { ICameraModel } from "@lichtblick/suite";
 import { RosObject } from "@lichtblick/suite-base/players/types";
-import { LabelPool } from "@lichtblick/three-text";
 
 import { RenderableLineAnnotation } from "./RenderableLineAnnotation";
 import { RenderablePointsAnnotation } from "./RenderablePointsAnnotation";
 import { RenderableTextAnnotation } from "./RenderableTextAnnotation";
 import { Annotation as NormalizedAnnotation } from "./types";
+import { LabelPool } from "../../../text";
 
 /**
  * Holds renderables for all the 2D image annotations on a single topic.
@@ -46,7 +46,7 @@ export class RenderableTopicAnnotations extends THREE.Object3D {
     this.#topicName = topicName;
   }
 
-  public dispose(): void {
+  public override dispose(): void {
     for (const points of this.#points) {
       points.dispose();
     }

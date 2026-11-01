@@ -334,7 +334,7 @@ export class FoxgloveGridRenderable extends Renderable<FoxgloveGridUserData> {
       }
     } else {
       // RGBA textures (flat & rgba modes)
-      const rgba = texture.image.data;
+      const rgba = texture.image.data!;
       let hasTransparency = false;
       if (settings.colorMode === "rgba-fields") {
         this.#getRgbaFieldReaders(tempRgbaFieldReaders, foxgloveGrid);

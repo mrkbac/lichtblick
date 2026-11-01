@@ -8,12 +8,12 @@
 import { SceneEntity, TextPrimitive } from "@foxglove/schemas";
 
 import { toNanoSec } from "@lichtblick/rostime";
-import { Label, LabelPool } from "@lichtblick/three-text";
 
 import { RenderablePrimitive } from "./RenderablePrimitive";
 import type { IRenderer } from "../../IRenderer";
 import { getLuminance, makeRgba, SRGBToLinear, stringToRgba } from "../../color";
 import { LayerSettingsEntity } from "../../settings";
+import { Label, LabelPool } from "../../text";
 
 const tempRgba = makeRgba();
 

@@ -24,8 +24,9 @@ const tempResolution = new THREE.Vector2(0, 0);
 
 const WHITE_COLOR = new THREE.Color(0xffffff);
 
-// This works around an incorrect method definition, where passing null is valid
+// These work around incorrect method definitions, where passing null is valid
 const NullScene = ReactNull as unknown as THREE.Scene;
+const NullGroup = ReactNull as unknown as THREE.GeometryGroup;
 
 export type PickedRenderable = {
   renderable: Renderable;
@@ -260,8 +261,7 @@ export class Picker {
           object,
           geometry: maybeRender.geometry,
           material: maybeRender.material as THREE.Material,
-          // `program` is not used by WebGLRenderer even though it is defined in RenderItem
-          program: undefined as unknown as THREE.WebGLProgram,
+          materialVariant: 0,
           groupOrder: 0,
           renderOrder: 0,
           z: 0,
@@ -321,7 +321,7 @@ export class Picker {
       geometry,
       renderMaterial,
       object,
-      ReactNull,
+      NullGroup,
     );
   };
 
@@ -348,7 +348,7 @@ export class Picker {
       geometry,
       renderMaterial,
       object,
-      ReactNull,
+      NullGroup,
     );
   };
 

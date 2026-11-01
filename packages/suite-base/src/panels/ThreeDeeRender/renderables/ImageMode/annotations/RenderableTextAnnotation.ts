@@ -7,13 +7,13 @@
 
 import { ICameraModel } from "@lichtblick/suite";
 import { RosObject, RosValue } from "@lichtblick/suite-base/players/types";
-import { Label, LabelPool } from "@lichtblick/three-text";
 
 import { ANNOTATION_RENDER_ORDER } from "./annotationRenderOrder";
 import { getAnnotationAtPath } from "./normalizeAnnotations";
 import { TextAnnotation as NormalizedTextAnnotation } from "./types";
 import { BaseUserData, Renderable } from "../../../Renderable";
 import { SRGBToLinear, getLuminance } from "../../../color";
+import { Label, LabelPool } from "../../../text";
 
 /**
  * Handles rendering of 2D text annotations.

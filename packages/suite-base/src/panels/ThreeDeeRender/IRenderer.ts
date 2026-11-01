@@ -29,7 +29,6 @@ import {
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/HUDItemManager";
 import { ICameraHandler } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ICameraHandler";
 import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
-import { LabelPool } from "@lichtblick/three-text";
 
 import { Input } from "./Input";
 import { MeshUpAxis, ModelCache } from "./ModelCache";
@@ -46,6 +45,7 @@ import { ColorModeSettings } from "./renderables/colorMode";
 import { MarkerPool } from "./renderables/markers/MarkerPool";
 import { Quaternion, Vector3 } from "./ros";
 import { BaseSettings, CustomLayerSettings, SelectEntry } from "./settings";
+import { LabelPool } from "./text";
 import { AddTransformResult, TransformTree } from "./transforms";
 import { InterfaceMode } from "./types";
 

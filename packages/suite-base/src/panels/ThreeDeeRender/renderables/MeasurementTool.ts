@@ -6,11 +6,10 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 import * as THREE from "three";
 
-import { Label } from "@lichtblick/three-text";
-
 import type { IRenderer } from "../IRenderer";
 import { Renderable } from "../Renderable";
 import { SceneExtension } from "../SceneExtension";
+import { Label } from "../text";
 
 type MeasurementState = "idle" | "place-first-point" | "place-second-point";
 

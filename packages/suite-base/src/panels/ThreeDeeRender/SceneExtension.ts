@@ -81,7 +81,7 @@ export class SceneExtension<
    * Called when the scene is being destroyed. Free any unmanaged resources such as GPU buffers
    * here. The base class implementation calls dispose() on all `renderables`.
    */
-  public dispose(): void {
+  public override dispose(): void {
     for (const renderable of this.renderables.values()) {
       renderable.dispose();
     }

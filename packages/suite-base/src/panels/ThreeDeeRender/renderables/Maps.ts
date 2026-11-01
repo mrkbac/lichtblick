@@ -573,25 +573,13 @@ class MapRenderable extends Renderable<MapUserData> {
         continue; // Created by a concurrent sync, or no longer wanted.
       }
       const tiles = new TilesRenderer(url);
-      tiles.registerPlugin(
-        // The typings mark every option required; these are the library defaults.
-        new GLTFExtensionsPlugin({
-          metadata: true,
-          rtc: true,
-          plugins: [],
-          dracoLoader: createBundledDracoLoader(),
-          ktxLoader: null,
-          autoDispose: true,
-        }),
-      );
-      const rerender = () => {
+      tiles.registerPlugin(new GLTFExtensionsPlugin({ dracoLoader: createBundledDracoLoader() }));
+      tiles.addEventListener("needs-update", () => {
         this.renderer.queueAnimationFrame();
-      };
-      tiles.addEventListener("load-model", rerender);
-      tiles.addEventListener("load-tile-set", () => {
+      });
+      tiles.addEventListener("load-root-tileset", () => {
         this.#setLayerError(id, undefined);
         rememberSource({ kind: "3dtiles", url });
-        rerender();
       });
       tiles.addEventListener("load-error", (event: { error?: unknown }) => {
         this.#setLayerError(id, `Failed to load 3D tiles: ${String(event.error)}`);
@@ -618,15 +606,15 @@ class MapRenderable extends Renderable<MapUserData> {
           continue;
         }
         const layer = this.userData.settings.layers.find((l) => l.id === id);
-        // The ellipsoid's ENU frame has its origin at height 0 under the fix.
+        // Earth-centered → ENU at the fix; the height offset raises the tiles.
         const ellipsoidToEnu = WGS84_ELLIPSOID.getEastNorthUpFrame(
           THREE.MathUtils.degToRad(anchor.lat),
           THREE.MathUtils.degToRad(anchor.lon),
+          (anchor.altitude ?? 0) - (layer?.heightOffset ?? 0),
           new THREE.Matrix4(),
         ).invert();
-        const height = (layer?.heightOffset ?? 0) - (anchor.altitude ?? 0);
         tileset.group.matrix
-          .makeTranslation(anchor.position.x, anchor.position.y, anchor.position.z + height)
+          .makeTranslation(anchor.position.x, anchor.position.y, anchor.position.z)
           .multiply(ellipsoidToEnu);
         tileset.group.matrixWorldNeedsUpdate = true;
       }

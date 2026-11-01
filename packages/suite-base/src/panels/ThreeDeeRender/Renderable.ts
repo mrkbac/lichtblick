@@ -68,7 +68,7 @@ export class Renderable<
    * Dispose of any unmanaged resources uniquely associated with this Renderable
    * such as GPU buffers.
    */
-  public dispose(): void {
+  public override dispose(): void {
     this.children.length = 0;
   }
 
