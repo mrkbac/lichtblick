@@ -11,13 +11,16 @@ import {
 } from "@lichtblick/suite";
 
 import {
+  hiddenVectorGroups,
   layerLabel,
   MapLayer,
   PRESETS,
   resolveSource,
   SourceKind,
   SourceParams,
+  VECTOR_GROUPS,
   validateSourceUrl,
+  VectorGroup,
 } from "./layers";
 
 // The map layer stack's settings, shared by the Map panel and the 3D panel's Map layer.
@@ -45,15 +48,21 @@ function shortUrl(url: string): string {
   return stripped.length > 48 ? `${stripped.slice(0, 22)}…${stripped.slice(-22)}` : stripped;
 }
 
+/** The first preset of a provider stands for the whole provider in the source picker. */
+function providerKey(source: string): string {
+  const provider = PRESETS[source]?.variant?.provider;
+  return (provider && _.findKey(PRESETS, (p) => p.variant?.provider === provider)) ?? source;
+}
+
 function sourceOptions(saved: readonly SourceParams[], kinds: readonly SourceKind[]) {
   return [
     ..._.map(
       _.pickBy(PRESETS, (preset) => kinds.includes(preset.kind)),
       (preset, value) => ({
         value,
-        label: `${preset.group}: ${preset.label}`,
+        label: preset.variant?.provider ?? preset.label,
       }),
-    ),
+    ).filter(({ value }) => providerKey(value) === value),
     ...kinds.map((kind) => ({ value: `custom:${kind}`, label: CUSTOM_KIND_LABELS[kind] })),
     // Keyed by identity, not position: the saved list can change while the tree is open.
     ...saved
@@ -161,29 +170,61 @@ function layerNode(
 ): SettingsTreeNode {
   const kind =
     layer.source === "custom" ? (layer.custom?.kind ?? "raster") : PRESETS[layer.source]?.kind;
+  const variant = PRESETS[layer.source]?.variant;
   const fields: SettingsTreeFields = {
     source: {
       label: "Source",
       input: "select",
-      value: layer.source === "custom" ? `custom:${kind}` : layer.source,
+      value: layer.source === "custom" ? `custom:${kind}` : providerKey(layer.source),
       options: sourceOptions(saved, kinds),
     },
+    style: variant
+      ? {
+          label: "Style",
+          input: "select",
+          value: layer.source,
+          options: _.flatMap(PRESETS, (preset, value) =>
+            preset.variant?.provider === variant.provider
+              ? [{ label: preset.variant.style, value }]
+              : [],
+          ),
+        }
+      : undefined,
     ...(layer.source === "custom" && kind
       ? customSourceFields(kind, layer.custom ?? { kind, url: "" })
       : {}),
   };
 
   if (kind === "vector") {
-    fields.vectorContent = {
-      label: "Show",
-      input: "select",
-      value: layer.vectorContent ?? "all",
-      options: [
-        { label: "Everything", value: "all" },
-        { label: "Roads and labels only", value: "lines-labels" },
-      ],
-      help: "Roads and labels only turns a vector map into a transparent overlay, e.g. on top of satellite imagery.",
-    };
+    const hidden = hiddenVectorGroups(layer);
+    for (const [group, label] of Object.entries(VECTOR_GROUPS)) {
+      fields[`show:${group}`] =
+        group === "buildings"
+          ? {
+              label,
+              input: "toggle",
+              value: hidden.includes("buildings")
+                ? "off"
+                : layer.buildings3d === false
+                  ? "flat"
+                  : "3d",
+              options: [
+                { label: "Off", value: "off" },
+                { label: "Flat", value: "flat" },
+                { label: "3D", value: "3d" },
+              ],
+              help: "3D extrudes buildings by height from zoom 14. Tilt the map (right-drag or ctrl+drag) to see them.",
+            }
+          : {
+              label,
+              input: "boolean",
+              value: !hidden.includes(group as VectorGroup),
+              help:
+                group === "areas"
+                  ? "Turn off land and water to use the map as an overlay, e.g. roads and labels on satellite imagery."
+                  : undefined,
+            };
+    }
   }
 
   if (kind === "dem") {
@@ -272,7 +313,7 @@ function updateLayerSource(layer: MapLayer, choice: string, saved: readonly Sour
       kind,
       url: layer.custom?.kind === kind ? layer.custom.url : "",
     };
-  } else {
+  } else if (providerKey(layer.source) !== choice) {
     layer.source = choice;
     layer.custom = undefined;
   }
@@ -289,6 +330,20 @@ function updateLayer(
   value: unknown,
   saved: readonly SourceParams[],
 ) {
+  if (field.startsWith("show:")) {
+    const group = field.slice("show:".length) as VectorGroup;
+    const show = group === "buildings" ? value !== "off" : value === true;
+    if (group === "buildings" && show) {
+      layer.buildings3d = value === "3d";
+    }
+    layer.hiddenGroups = _.uniq(
+      hiddenVectorGroups(layer)
+        .filter((g) => g !== group)
+        .concat(show ? [] : [group]),
+    );
+    layer.vectorContent = undefined;
+    return;
+  }
   const custom = layer.custom;
   switch (field) {
     case "visible":
@@ -337,8 +392,11 @@ function updateLayer(
     case "terrain":
       layer[field] = value === true;
       break;
-    case "vectorContent":
-      layer.vectorContent = value === "lines-labels" ? "lines-labels" : "all";
+    case "style":
+      if (typeof value === "string" && PRESETS[value]) {
+        layer.source = value;
+        layer.label = undefined;
+      }
       break;
   }
 }
