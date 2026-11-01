@@ -652,6 +652,30 @@ describe("VirtualizedTree", () => {
     });
   });
 
+  describe("when highlighting changes since the previous message", () => {
+    it("does not mark equal empty arrays as changed but marks changed values", () => {
+      useVirtualizer.mockReturnValue({
+        getVirtualItems: jest.fn(() => [
+          { index: 0, key: "0", size: 24, start: 0, end: 24 },
+          { index: 1, key: "1", size: 24, start: 24, end: 48 },
+        ]),
+        getTotalSize: jest.fn(() => 48),
+        scrollToIndex: jest.fn(),
+        measureElement: jest.fn(),
+      });
+
+      renderVirtualizedTree({
+        data: { empty: [], count: 2 },
+        previousData: { empty: [], count: 1 },
+        renderValue: (node) => <span data-testid={`value-${node.key}`} />,
+      });
+
+      const rows = screen.getAllByRole("treeitem");
+      expect(rows[0]!.className).toBe(rows[0]!.className.replace(/changedValue/, ""));
+      expect(rows[1]!.className).toMatch(/changedValue/);
+    });
+  });
+
   describe("when handling data updates", () => {
     it("should update rows when expandedNodes changes", () => {
       // Given
