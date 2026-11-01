@@ -7,7 +7,7 @@
 
 import createCache from "@emotion/cache";
 import { CacheProvider } from "@emotion/react";
-import { ThemeProvider as MuiThemeProvider } from "@mui/material";
+import { ThemeProvider as MuiThemeProvider, darken } from "@mui/material";
 import * as React from "react";
 import { useEffect, useLayoutEffect, useMemo } from "react";
 
@@ -48,7 +48,21 @@ export default function ThemeProvider({
       meta.name = "theme-color";
       document.head.appendChild(meta);
     }
-    meta.content = muiTheme.palette.appBar.main ?? "";
+    const appBar = muiTheme.palette.appBar.main ?? "";
+    // An open dialog's backdrop (black at 0.4, see MuiBackdrop) dims the app bar; dim the
+    // title bar controls with it. Dialogs are portaled into <body>, so watching its children
+    // is enough. Menus and popovers use invisible backdrops and leave the color alone.
+    const dimmed = darken(appBar, 0.4);
+    const update = () => {
+      const backdrop = document.querySelector(".MuiBackdrop-root:not(.MuiBackdrop-invisible)");
+      meta.content = backdrop ? dimmed : appBar;
+    };
+    update();
+    const observer = new MutationObserver(update);
+    observer.observe(document.body, { childList: true });
+    return () => {
+      observer.disconnect();
+    };
   }, [muiTheme]);
 
   return (
