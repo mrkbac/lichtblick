@@ -2,20 +2,46 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { renderHook, act } from "@testing-library/react";
+import { renderHook, act, waitFor } from "@testing-library/react";
+
+import type { Time } from "@lichtblick/rostime";
 
 import type { SharedConfig, UseSharedRawMessagesLogicProps } from "./types";
 import { useSharedRawMessagesLogic } from "./useSharedRawMessagesLogic";
 
+const TOPIC = "/some/topic";
+const at = (sec: number): Time => ({ sec, nsec: 0 });
+const messageAt = (time: Time) => ({ topic: TOPIC, receiveTime: time, message: {} });
+
+let mockTopics: { name: string; schemaName: string }[] = [];
+let mockMatches: { messageEvent: ReturnType<typeof messageAt>; queriedData: unknown[] }[] = [];
+const mockPipeline = {
+  playerState: { activeData: { currentTime: at(5) as Time | undefined, topicStats: new Map() } },
+  seekPlayback: jest.fn() as jest.Mock | undefined,
+  pausePlayback: jest.fn(),
+  getBatchIterator: jest.fn(),
+  getMessageAtTime: jest.fn(),
+};
+
 // Minimal mocks for deps the hook uses
 jest.mock("@lichtblick/suite-base/PanelAPI", () => ({
-  useDataSourceInfo: () => ({ topics: [], datatypes: new Map() }),
+  useDataSourceInfo: () => ({ topics: mockTopics, datatypes: new Map() }),
 }));
+jest.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
+  useMessagePipeline: (selector: (ctx: typeof mockPipeline) => unknown) => selector(mockPipeline),
+}));
+jest.mock(
+  "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems",
+  () => {
+    const getItems = () => [{ value: {}, path: "" }];
+    return { useCachedGetMessagePathDataItems: () => getItems };
+  },
+);
 jest.mock("@lichtblick/suite-base/components/PanelContext", () => ({
   usePanelContext: () => ({ setMessagePathDropConfig: jest.fn() }),
 }));
 jest.mock("@lichtblick/suite-base/components/MessagePathSyntax/useMessageDataItem", () => ({
-  useMessageDataItem: () => [],
+  useMessageDataItem: () => mockMatches,
 }));
 
 const setup = (inputOverride?: {
@@ -46,6 +72,10 @@ const setup = (inputOverride?: {
 describe("given useSharedRawMessagesLogic", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockTopics = [];
+    mockMatches = [];
+    mockPipeline.seekPlayback = jest.fn();
+    mockPipeline.playerState.activeData.currentTime = at(5);
   });
   describe("when toggling diff", () => {
     it("then enables diff when currently disabled", () => {
@@ -144,6 +174,74 @@ describe("given useSharedRawMessagesLogic", () => {
       expect(saveConfig).toHaveBeenCalledWith({
         expansion: expect.any(Object),
       });
+    });
+  });
+
+  describe("when stepping through messages", () => {
+    beforeEach(() => {
+      mockTopics = [{ name: TOPIC, schemaName: "Schema" }];
+      // Playhead sits between messages; the displayed message is at 4s.
+      mockMatches = [{ messageEvent: messageAt(at(4)), queriedData: [{ value: {} }] }];
+    });
+
+    it("then steps back from the displayed message, not the playhead", async () => {
+      mockPipeline.getMessageAtTime.mockResolvedValue(messageAt(at(3)));
+      const { result } = setup({ config: { topicPath: TOPIC } });
+
+      act(() => {
+        result.current.onStepPrevious();
+      });
+
+      await waitFor(() => {
+        expect(mockPipeline.seekPlayback).toHaveBeenCalledWith(at(3));
+      });
+      expect(mockPipeline.getMessageAtTime).toHaveBeenCalledWith(TOPIC, {
+        sec: 3,
+        nsec: 999_999_999,
+      });
+      expect(mockPipeline.pausePlayback).toHaveBeenCalled();
+    });
+
+    it("then steps forward to the first message after the playhead", async () => {
+      mockPipeline.getBatchIterator.mockImplementation(async function* () {
+        yield { type: "message-event", msgEvent: messageAt(at(5)) };
+        yield { type: "message-event", msgEvent: messageAt(at(6)) };
+      });
+      const { result } = setup({ config: { topicPath: TOPIC } });
+
+      act(() => {
+        result.current.onStepNext();
+      });
+
+      await waitFor(() => {
+        expect(mockPipeline.seekPlayback).toHaveBeenCalledWith(at(6));
+      });
+    });
+
+    it("then disables stepping for sources that cannot seek", () => {
+      mockPipeline.seekPlayback = undefined;
+      const { result } = setup({ config: { topicPath: TOPIC } });
+
+      expect(result.current.canStep).toBe(false);
+      expect(result.current.canStepPrevious).toBe(false);
+      expect(result.current.canStepNext).toBe(false);
+    });
+  });
+
+  describe("when diffing against the previous message after a seek", () => {
+    it("then reads the previous message from the source", async () => {
+      mockTopics = [{ name: TOPIC, schemaName: "Schema" }];
+      mockMatches = [{ messageEvent: messageAt(at(4)), queriedData: [{ value: {} }] }];
+      mockPipeline.getMessageAtTime.mockResolvedValue(messageAt(at(3)));
+
+      const { result } = setup({
+        config: { topicPath: TOPIC, diffEnabled: true, diffMethod: "previous message" },
+      });
+
+      await waitFor(() => {
+        expect(result.current.baseItem?.messageEvent.receiveTime).toEqual(at(3));
+      });
+      expect(result.current.diffItem?.messageEvent.receiveTime).toEqual(at(4));
     });
   });
 });

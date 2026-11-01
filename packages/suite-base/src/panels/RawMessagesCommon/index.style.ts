@@ -5,6 +5,14 @@ import { makeStyles } from "tss-react/mui";
 import { customTypography } from "@lichtblick/theme";
 
 export const useStylesRawMessages = makeStyles()((theme) => ({
+  root: {
+    display: "flex",
+    flexDirection: "column",
+    flex: "auto",
+    overflow: "hidden",
+    position: "relative",
+    outline: "none",
+  },
   topic: {
     fontFamily: theme.typography.body1.fontFamily,
     fontFeatureSettings: `${customTypography.fontFeatureSettings}, "zero"`,
@@ -16,6 +24,14 @@ export const useStylesRawMessages = makeStyles()((theme) => ({
 }));
 
 export const useStylesRawMessagesVirtual = makeStyles()((theme) => ({
+  root: {
+    display: "flex",
+    flexDirection: "column",
+    flex: "auto",
+    overflow: "hidden",
+    position: "relative",
+    outline: "none",
+  },
   topic: {
     fontFamily: theme.typography.body1.fontFamily,
     fontFeatureSettings: `${customTypography.fontFeatureSettings}, "zero"`,

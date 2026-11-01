@@ -33,6 +33,7 @@ import {
   getSingleValue,
   getValueString,
   isSingleElemArray,
+  handleStepKeyDown,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
 import { VirtualizedTree } from "@lichtblick/suite-base/panels/RawMessagesVirtual/VirtualizedTree";
 
@@ -59,10 +60,19 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
     onToggleDiff,
     onToggleExpandAll,
     onLabelClick,
+    canStep,
+    canStepPrevious,
+    canStepNext,
+    onStepPrevious,
+    onStepNext,
   } = useSharedRawMessagesLogic({
     config,
     saveConfig,
   });
+  const stepping = useMemo(
+    () => ({ canStepPrevious, canStepNext, onStepPrevious, onStepNext }),
+    [canStepPrevious, canStepNext, onStepPrevious, onStepNext],
+  );
 
   const valueRenderer = useValueRenderer({
     datatypes,
@@ -270,12 +280,14 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
           message={messageEvent}
           {...(topic ? { datatype: topic.schemaName } : undefined)}
           {...(diffItem ? { diffMessage: diffItem.messageEvent } : undefined)}
+          {...(canStep ? { stepping } : undefined)}
         />
         {renderContent()}
       </Stack>
     );
   }, [
     baseItem,
+    canStep,
     classes.topic,
     fontSize,
     diffEnabled,
@@ -286,6 +298,7 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
     handleToggleExpand,
     memoizedRenderValue,
     saveConfig,
+    stepping,
     showFullMessageForDiff,
     topic,
     topicPath,
@@ -298,7 +311,16 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
   });
 
   return (
-    <Stack flex="auto" overflow="hidden" position="relative">
+    // A focusable div (Stack has no event props) so the step shortcuts work while the panel has focus.
+    <div
+      tabIndex={-1}
+      className={classes.root}
+      onKeyDown={(event) => {
+        if (canStep) {
+          handleStepKeyDown(event, stepping);
+        }
+      }}
+    >
       <Toolbar
         canExpandAll={canExpandAll}
         diffEnabled={diffEnabled}
@@ -312,7 +334,7 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
         topicPath={topicPath}
       />
       {renderSingleTopicOrDiffOutput()}
-    </Stack>
+    </div>
   );
 };
 

@@ -43,6 +43,7 @@ import {
   getSingleValue,
   isSingleElemArray,
   typedArrayToArray,
+  handleStepKeyDown,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
 import { useJsonTreeTheme } from "@lichtblick/suite-base/util/globalConstants";
 
@@ -70,10 +71,19 @@ function RawMessages(props: PropsRawMessages) {
     onToggleDiff,
     onToggleExpandAll,
     onLabelClick,
+    canStep,
+    canStepPrevious,
+    canStepNext,
+    onStepPrevious,
+    onStepNext,
   } = useSharedRawMessagesLogic({
     config,
     saveConfig,
   });
+  const stepping = useMemo(
+    () => ({ canStepPrevious, canStepNext, onStepPrevious, onStepNext }),
+    [canStepPrevious, canStepNext, onStepPrevious, onStepNext],
+  );
 
   // Use shared rendering hooks
   const valueRenderer = useValueRenderer({
@@ -172,6 +182,7 @@ function RawMessages(props: PropsRawMessages) {
           message={baseItem.messageEvent}
           {...(topic ? { datatype: topic.schemaName } : undefined)}
           {...(diffItem ? { diffMessage: diffItem.messageEvent } : undefined)}
+          {...(canStep ? { stepping } : undefined)}
         />
         {shouldDisplaySingleVal ? (
           <Typography
@@ -380,6 +391,7 @@ function RawMessages(props: PropsRawMessages) {
     );
   }, [
     baseItem,
+    canStep,
     classes.topic,
     fontSize,
     diffEnabled,
@@ -393,6 +405,7 @@ function RawMessages(props: PropsRawMessages) {
     renderDiffLabel,
     rootStructureItem,
     saveConfig,
+    stepping,
     showFullMessageForDiff,
     themePreference,
     topic,
@@ -407,7 +420,16 @@ function RawMessages(props: PropsRawMessages) {
   });
 
   return (
-    <Stack flex="auto" overflow="hidden" position="relative">
+    // A focusable div (Stack has no event props) so the step shortcuts work while the panel has focus.
+    <div
+      tabIndex={-1}
+      className={classes.root}
+      onKeyDown={(event) => {
+        if (canStep) {
+          handleStepKeyDown(event, stepping);
+        }
+      }}
+    >
       <Toolbar
         canExpandAll={canExpandAll}
         diffEnabled={diffEnabled}
@@ -421,7 +443,7 @@ function RawMessages(props: PropsRawMessages) {
         topicPath={topicPath}
       />
       {renderSingleTopicOrDiffOutput()}
-    </Stack>
+    </div>
   );
 }
 
