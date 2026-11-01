@@ -36,6 +36,7 @@ import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import {
   MessagePipelineContext,
   useMessagePipeline,
+  useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
@@ -89,7 +90,17 @@ function offset(time: Time, start: Time): string {
 export function RecordingInspector(): React.JSX.Element {
   const { classes, cx } = useStyles();
   const topics = useMessagePipeline(selectTopics);
-  const topicStats = useMessagePipeline(selectStats);
+  const getPipeline = useMessagePipelineGetter();
+  // Live players emit a new topicStats map per message, so sample it instead of re-rendering per emit.
+  const [topicStats, setTopicStats] = useState(() => selectStats(getPipeline()));
+  useEffect(() => {
+    const id = setInterval(() => {
+      setTopicStats(selectStats(getPipeline()));
+    }, 1000);
+    return () => {
+      clearInterval(id);
+    };
+  }, [getPipeline]);
   const start = useMessagePipeline(selectStart);
   const end = useMessagePipeline(selectEnd);
   const name = useMessagePipeline(selectName);

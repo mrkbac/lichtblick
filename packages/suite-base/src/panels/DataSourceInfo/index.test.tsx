@@ -190,6 +190,7 @@ it("uses a shared scan, displays timing details, and reuses completed results", 
 });
 
 it("keeps namespace totals visible when collapsed and sorts folders by their combined counts", () => {
+  jest.mocked(useMessagePipeline).mockImplementation(actualUseMessagePipeline);
   render(
     <MockMessagePipelineProvider
       startTime={{ sec: 0, nsec: 0 }}
