@@ -298,21 +298,7 @@ export class ModelCache {
   #getDracoLoader(manager: THREE.LoadingManager): DRACOLoader {
     let dracoLoader = this.#dracoLoader;
     if (!dracoLoader) {
-      dracoLoader = new DRACOLoader(manager);
-      // Hack in a replacement function to load assets from the webpack bundle
-      (dracoLoader as { _loadLibrary?: (url: string, responseType: string) => unknown })[
-        "_loadLibrary"
-      ] = async function (url: string, responseType: string) {
-        if (url === "draco_wasm_wrapper.js" && responseType === "text") {
-          return dracoWasmWrapperJs;
-        } else if (url === "draco_decoder.wasm" && responseType === "arraybuffer") {
-          return await (await fetch(dracoDecoderWasmUrl)).arrayBuffer();
-        } else {
-          throw new Error(
-            `DRACOLoader attempt to load non-bundled asset: ${url} as ${responseType}`,
-          );
-        }
-      };
+      dracoLoader = createBundledDracoLoader(manager);
       this.#dracoLoader = dracoLoader;
     }
 
@@ -432,4 +418,22 @@ function unrewriteUrl(url: string): string {
 
 function baseUrl(url: string): string {
   return url.slice(0, url.lastIndexOf("/") + 1);
+}
+
+/** A DRACOLoader that loads its decoder from the webpack bundle instead of a CDN. */
+export function createBundledDracoLoader(manager?: THREE.LoadingManager): DRACOLoader {
+  const dracoLoader = new DRACOLoader(manager);
+  // Hack in a replacement function to load assets from the webpack bundle
+  (dracoLoader as { _loadLibrary?: (url: string, responseType: string) => unknown })[
+    "_loadLibrary"
+  ] = async function (url: string, responseType: string) {
+    if (url === "draco_wasm_wrapper.js" && responseType === "text") {
+      return dracoWasmWrapperJs;
+    } else if (url === "draco_decoder.wasm" && responseType === "arraybuffer") {
+      return await (await fetch(dracoDecoderWasmUrl)).arrayBuffer();
+    } else {
+      throw new Error(`DRACOLoader attempt to load non-bundled asset: ${url} as ${responseType}`);
+    }
+  };
+  return dracoLoader;
 }
