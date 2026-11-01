@@ -38,6 +38,7 @@ const CUSTOM_KIND_LABELS: Record<SourceKind, string> = {
 };
 
 const SAVED_PREFIX = "saved:";
+const savedKey = (source: SourceParams) => `${source.kind}|${source.url}`;
 
 function shortUrl(url: string): string {
   const stripped = url.replace(/^[a-z]+:\/\//i, "");
@@ -54,12 +55,13 @@ function sourceOptions(saved: readonly SourceParams[], kinds: readonly SourceKin
       }),
     ),
     ...kinds.map((kind) => ({ value: `custom:${kind}`, label: CUSTOM_KIND_LABELS[kind] })),
-    // Indices stay those of `saved`, which the source value refers to.
-    ...saved.flatMap((source, i) =>
-      kinds.includes(source.kind)
-        ? [{ value: `${SAVED_PREFIX}${i}`, label: `Saved ${source.kind}: ${shortUrl(source.url)}` }]
-        : [],
-    ),
+    // Keyed by identity, not position: the saved list can change while the tree is open.
+    ...saved
+      .filter((source) => kinds.includes(source.kind))
+      .map((source) => ({
+        value: `${SAVED_PREFIX}${savedKey(source)}`,
+        label: `Saved ${source.kind}: ${shortUrl(source.url)}`,
+      })),
   ];
 }
 
@@ -256,7 +258,8 @@ function layerNode(
 
 function updateLayerSource(layer: MapLayer, choice: string, saved: readonly SourceParams[]) {
   if (choice.startsWith(SAVED_PREFIX)) {
-    const source = saved[Number(choice.slice(SAVED_PREFIX.length))];
+    const key = choice.slice(SAVED_PREFIX.length);
+    const source = saved.find((s) => savedKey(s) === key);
     if (!source) {
       return;
     }
