@@ -9,6 +9,7 @@ export const transformTree = {
   frameCount_other: "{{count}} frames",
   staticCount: "{{count}} static",
   multipleRoots: "{{count}} disconnected trees",
+  notYetPublishedCount: "{{count}} not published yet",
   warningCount_one: "{{count}} warning",
   warningCount_other: "{{count}} warnings",
   columns: {
@@ -28,6 +29,7 @@ export const transformTree = {
   parent: "Parent: {{parent}}",
   topic: "Topic: {{topic}}",
   quaternion: "Quaternion (x, y, z, w): {{value}}",
+  notYetPublished: "Not published yet at this point in the recording; values are from later on",
   settings: {
     topics: "Topics",
     static: "Static",

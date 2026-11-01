@@ -153,6 +153,26 @@ describe("buildRows", () => {
     expect(result.find((row) => row.frame === "odom")?.warnings).toEqual(["noData"]);
   });
 
+  it("does not warn about frames that are only published later, e.g. after looping", () => {
+    // Seen on a previous pass: odom from t=1, base_link only from t=5.
+    const known = addTransformEvents(new Map(), [
+      rosTf("/tf", 1, [["map", "odom"]]),
+      rosTf("/tf", 5, [["odom", "base_link"]]),
+    ]);
+    // Looped back to the start: nothing received yet this pass.
+    const result = buildRows({
+      current: new Map(),
+      known,
+      now: 2,
+      collapsed: new Set(),
+      staticTopics: new Set(),
+    });
+    const odom = result.find((row) => row.frame === "odom");
+    const baseLink = result.find((row) => row.frame === "base_link");
+    expect(odom).toMatchObject({ notYetPublished: false, warnings: ["noData"] });
+    expect(baseLink).toMatchObject({ notYetPublished: true, warnings: [] });
+  });
+
   it("still shows frames that form a cycle", () => {
     const entries = addTransformEvents(new Map(), [
       rosTf("/tf", 1, [
@@ -173,5 +193,6 @@ describe("mergeEntries", () => {
     const merged = mergeEntries(fromStatic, fromTf);
     expect(merged.get("base_link")?.parent).toBe("odom");
     expect(merged.get("base_link")?.parents).toEqual(["base_footprint", "odom"]);
+    expect(merged.get("base_link")?.firstReceiveTime).toBe(0);
   });
 });

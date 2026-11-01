@@ -267,6 +267,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
   const staticCount = [...known.values()].filter((entry) => staticTopics.has(entry.topic)).length;
   const rootCount = roots.length;
   const warningCount = allRows.filter((row) => row.warnings.length > 0).length;
+  const notYetPublishedCount = allRows.filter((row) => row.notYetPublished).length;
 
   let body: React.ReactNode;
   if (resolvedTopics.length === 0) {
@@ -281,6 +282,9 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
         <div className={classes.summary}>
           <span>{t("frameCount", { count: known.size })}</span>
           <span>{t("staticCount", { count: staticCount })}</span>
+          {notYetPublishedCount > 0 && (
+            <span>{t("notYetPublishedCount", { count: notYetPublishedCount })}</span>
+          )}
           {rootCount > 1 && (
             <span className={classes.warningText}>
               <Warning16Filled /> {t("multipleRoots", { count: rootCount })}
@@ -355,7 +359,7 @@ const FrameTableRow = memo(function FrameTableRowImpl({
   const { classes, cx } = useStyles();
   const { t } = useTranslation("transformTree");
   const { entry, age, rate } = row;
-  const hasData = !row.warnings.includes("noData");
+  const hasData = !row.notYetPublished && !row.warnings.includes("noData");
 
   const details = entry
     ? [
@@ -366,6 +370,7 @@ const FrameTableRow = memo(function FrameTableRowImpl({
             .map((value) => value.toFixed(4))
             .join(", "),
         }),
+        ...(row.notYetPublished ? [t("notYetPublished")] : []),
         ...row.warnings.map((warning) => warningMessage(t, row, warning)),
       ].join("\n")
     : undefined;
