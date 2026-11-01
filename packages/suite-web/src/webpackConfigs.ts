@@ -203,7 +203,7 @@ export const mainConfig =
   </html>
   `,
           foxgloveExtraHeadTags: `
-            <title>Digitalis</title>
+            <title>Lichtblick</title>
             <link rel="manifest" href="manifest.webmanifest" />
             <meta name="theme-color" content="${palette.dark.background?.default}" />
             <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
