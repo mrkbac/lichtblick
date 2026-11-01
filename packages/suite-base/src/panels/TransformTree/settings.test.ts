@@ -4,15 +4,23 @@
 import { resolveTopics, settingsActionReducer } from "./settings";
 
 describe("resolveTopics", () => {
-  it("defaults to every topic visible, static only for *tf_static", () => {
-    expect(resolveTopics({}, ["/tf_static", "/tf", "/robot/tf_static"])).toEqual([
+  it("should show every topic and mark only *tf_static as static when there is no config", () => {
+    // Given
+    const available = ["/tf_static", "/tf", "/robot/tf_static"];
+
+    // When
+    const topics = resolveTopics({}, available);
+
+    // Then
+    expect(topics).toEqual([
       { name: "/robot/tf_static", visible: true, isStatic: true, available: true },
       { name: "/tf", visible: true, isStatic: false, available: true },
       { name: "/tf_static", visible: true, isStatic: true, available: true },
     ]);
   });
 
-  it("applies per-topic settings and keeps configured topics that are missing", () => {
+  it("should apply per-topic settings and keep missing topics when they are configured", () => {
+    // Given
     const config = {
       topics: {
         "/calibration": { static: true },
@@ -20,7 +28,12 @@ describe("resolveTopics", () => {
         "/tf_static": { static: false },
       },
     };
-    expect(resolveTopics(config, ["/tf", "/tf_static"])).toEqual([
+
+    // When
+    const topics = resolveTopics(config, ["/tf", "/tf_static"]);
+
+    // Then
+    expect(topics).toEqual([
       { name: "/calibration", visible: true, isStatic: true, available: false },
       { name: "/tf", visible: false, isStatic: false, available: true },
       { name: "/tf_static", visible: true, isStatic: false, available: true },
@@ -29,24 +42,31 @@ describe("resolveTopics", () => {
 });
 
 describe("settingsActionReducer", () => {
-  it("updates a topic setting without splitting the topic name on dots", () => {
-    const config = settingsActionReducer(
-      {},
-      {
-        action: "update",
-        payload: { path: ["topics", "/robot.1/tf", "static"], input: "boolean", value: true },
-      },
-    );
+  it("should not split the topic name on dots when updating a topic setting", () => {
+    // Given
+    const initial = {};
+
+    // When
+    const config = settingsActionReducer(initial, {
+      action: "update",
+      payload: { path: ["topics", "/robot.1/tf", "static"], input: "boolean", value: true },
+    });
+
+    // Then
     expect(config).toEqual({ topics: { "/robot.1/tf": { static: true } } });
   });
 
-  it("ignores unrelated actions", () => {
+  it("should return the config unchanged when given an unrelated action", () => {
+    // Given
     const config = { collapsed: ["map"] };
-    expect(
-      settingsActionReducer(config, {
-        action: "perform-node-action",
-        payload: { id: "x", path: ["topics"] },
-      }),
-    ).toBe(config);
+
+    // When
+    const result = settingsActionReducer(config, {
+      action: "perform-node-action",
+      payload: { id: "x", path: ["topics"] },
+    });
+
+    // Then
+    expect(result).toBe(config);
   });
 });

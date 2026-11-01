@@ -67,12 +67,16 @@ const VALUE_COLUMNS = [
   { key: "rate", chars: 9, groupStart: false },
 ] as const;
 const FRAME_COLUMN_MIN_CHARS = 24;
+// Matches the frame cell indentation per tree level below.
+const INDENT_PX = 12;
 // Matches the cell padding in TransformTree.style.ts: 8px per side, 20px left at a group start.
 const columnWidth = ({ chars, groupStart }: (typeof VALUE_COLUMNS)[number]) =>
   `calc(${chars}ch + ${groupStart ? 28 : 16}px)`;
-const TABLE_MIN_WIDTH = `calc(${
-  FRAME_COLUMN_MIN_CHARS + VALUE_COLUMNS.reduce((sum, column) => sum + column.chars, 0)
-}ch + ${16 * (VALUE_COLUMNS.length + 1) + 12 * 3}px)`;
+// The frame column grows with the deepest shown level so indentation never clips the name.
+const tableMinWidth = (maxDepth: number) =>
+  `calc(${
+    FRAME_COLUMN_MIN_CHARS + VALUE_COLUMNS.reduce((sum, column) => sum + column.chars, 0)
+  }ch + ${16 * (VALUE_COLUMNS.length + 1) + 12 * 3 + maxDepth * INDENT_PX}px)`;
 
 /** Fixed decimals so decimal points line up in a right-aligned column; no "-0.000". */
 function formatFixed(value: number, digits: number): string {
@@ -128,10 +132,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
     .join("\n");
   const visibleTopics = useMemo(() => (visibleKey ? visibleKey.split("\n") : []), [visibleKey]);
   const visibleTopicSet = useMemo(() => new Set(visibleTopics), [visibleTopics]);
-  const staticTopics = useMemo(
-    () => new Set(staticKey ? staticKey.split("\n") : []),
-    [staticKey],
-  );
+  const staticTopics = useMemo(() => new Set(staticKey ? staticKey.split("\n") : []), [staticKey]);
 
   const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
   const settingsActionHandler = useCallback(
@@ -165,8 +166,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
   // Static transforms are published once, usually at the start of a recording, so a seek would
   // lose them. Preload them from the whole recording when the data source supports it.
   const staticSubscriptions = useMemo<SubscribePayload[]>(
-    () =>
-      [...staticTopics].map((topic) => ({ topic, preloadType: "full" })),
+    () => [...staticTopics].map((topic) => ({ topic, preloadType: "full" })),
     [staticTopics],
   );
   const staticBlocks = useBlocksSubscriptions(staticSubscriptions);
@@ -191,10 +191,12 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
       knownRef.current.playerId === playerId && knownRef.current.visibleTopics === visibleTopics
         ? knownRef.current.entries
         : EMPTY_ENTRIES;
-    const entries = mergeEntries(previous, current);
-    knownRef.current = { playerId, visibleTopics, entries };
-    return entries;
+    return mergeEntries(previous, current);
   }, [current, playerId, visibleTopics]);
+  // Only remember committed results; a render React discards must not change what is known.
+  useEffect(() => {
+    knownRef.current = { playerId, visibleTopics, entries: known };
+  }, [known, playerId, visibleTopics]);
 
   const currentTime = useMessagePipeline(selectCurrentTime);
   const now = currentTime ? toSec(currentTime) : undefined;
@@ -235,7 +237,10 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
     for (const row of allRows) {
       for (const warning of row.warnings) {
         if (warning !== "noData") {
-          messages.set(`${warning}:${row.frame}`, `${row.frame}: ${warningMessage(t, row, warning)}`);
+          messages.set(
+            `${warning}:${row.frame}`,
+            `${row.frame}: ${warningMessage(t, row, warning)}`,
+          );
         }
       }
     }
@@ -266,6 +271,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
 
   const staticCount = [...known.values()].filter((entry) => staticTopics.has(entry.topic)).length;
   const rootCount = roots.length;
+  const maxDepth = rows.reduce((max, row) => Math.max(max, row.depth), 0);
   const warningCount = allRows.filter((row) => row.warnings.length > 0).length;
   const notYetPublishedCount = allRows.filter((row) => row.notYetPublished).length;
 
@@ -297,24 +303,18 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
           )}
         </div>
         <div className={classes.scroll}>
-          <table className={classes.table} style={{ minWidth: TABLE_MIN_WIDTH }}>
+          <table className={classes.table} style={{ minWidth: tableMinWidth(maxDepth) }}>
             <colgroup>
               <col />
               {VALUE_COLUMNS.map((column) => (
-                <col
-                  key={column.key}
-                  style={{ width: columnWidth(column) }}
-                />
+                <col key={column.key} style={{ width: columnWidth(column) }} />
               ))}
             </colgroup>
             <thead>
               <tr>
                 <th>{t("columns.frame")}</th>
                 {VALUE_COLUMNS.map((column) => (
-                  <th
-                    key={column.key}
-                    className={cx({ [classes.groupStart]: column.groupStart })}
-                  >
+                  <th key={column.key} className={cx({ [classes.groupStart]: column.groupStart })}>
                     {t(`columns.${column.key}`)}
                   </th>
                 ))}
@@ -361,27 +361,32 @@ const FrameTableRow = memo(function FrameTableRowImpl({
   const { entry, age, rate } = row;
   const hasData = !row.notYetPublished && !row.warnings.includes("noData");
 
-  const details = entry
-    ? [
-        t("parent", { parent: entry.parent }),
-        t("topic", { topic: entry.topic }),
-        t("quaternion", {
-          value: [entry.rotation.x, entry.rotation.y, entry.rotation.z, entry.rotation.w]
-            .map((value) => value.toFixed(4))
-            .join(", "),
-        }),
-        ...(row.notYetPublished ? [t("notYetPublished")] : []),
-        ...row.warnings.map((warning) => warningMessage(t, row, warning)),
-      ].join("\n")
-    : undefined;
+  const details = [
+    row.frame,
+    ...(entry
+      ? [
+          t("parent", { parent: entry.parent }),
+          t("topic", { topic: entry.topic }),
+          t("quaternion", {
+            value: [entry.rotation.x, entry.rotation.y, entry.rotation.z, entry.rotation.w]
+              .map((value) => value.toFixed(4))
+              .join(", "),
+          }),
+          ...(row.notYetPublished ? [t("notYetPublished")] : []),
+          ...row.warnings.map((warning) => warningMessage(t, row, warning)),
+        ]
+      : []),
+  ].join("\n");
 
   const rpy = entry ? quaternionToRpy(entry.rotation) : undefined;
   const valueClass = cx({ [classes.muted]: !hasData });
+  const ageText = !row.isStatic && age != undefined ? formatFixed(age, 3) : undefined;
+  const rateText = !row.isStatic && rate != undefined ? formatFixed(rate, 1) : undefined;
 
   return (
     <tr className={className}>
       <td>
-        <div className={classes.frameCell} style={{ paddingLeft: row.depth * 12 }}>
+        <div className={classes.frameCell} style={{ paddingLeft: row.depth * INDENT_PX }}>
           {row.hasChildren ? (
             <button
               type="button"
@@ -397,7 +402,7 @@ const FrameTableRow = memo(function FrameTableRowImpl({
             <span className={classes.togglePlaceholder} />
           )}
           <Tooltip
-            title={details ? <span style={{ whiteSpace: "pre-line" }}>{details}</span> : ""}
+            title={<span style={{ whiteSpace: "pre-line" }}>{details}</span>}
             placement="right"
           >
             <span
@@ -412,24 +417,37 @@ const FrameTableRow = memo(function FrameTableRowImpl({
           {row.warnings.length > 0 && <Warning16Filled className={classes.warningIcon} />}
         </div>
       </td>
-      {[entry?.translation.x, entry?.translation.y, entry?.translation.z].map((value, i) => (
-        <td key={`t${i}`} className={cx(valueClass, { [classes.groupStart]: i === 0 })}>
-          {value != undefined && formatFixed(value, 3)}
-        </td>
-      ))}
-      {[rpy?.x, rpy?.y, rpy?.z].map((value, i) => (
-        <td key={`r${i}`} className={cx(valueClass, { [classes.groupStart]: i === 0 })}>
-          {value != undefined && formatFixed(value * RAD_TO_DEG, 1)}
-        </td>
-      ))}
-      <td className={cx(valueClass, classes.groupStart)}>
-        {row.isStatic ? (
-          <span className={classes.staticBadge}>{t("static")}</span>
-        ) : (
-          age != undefined && formatFixed(age, 3)
-        )}
+      {/* Values can be wider than their column and get clipped, so the title has the full text. */}
+      {[entry?.translation.x, entry?.translation.y, entry?.translation.z].map((value, i) => {
+        const text = value != undefined ? formatFixed(value, 3) : undefined;
+        return (
+          <td
+            key={`t${i}`}
+            title={text}
+            className={cx(valueClass, { [classes.groupStart]: i === 0 })}
+          >
+            {text}
+          </td>
+        );
+      })}
+      {[rpy?.x, rpy?.y, rpy?.z].map((value, i) => {
+        const text = value != undefined ? formatFixed(value * RAD_TO_DEG, 1) : undefined;
+        return (
+          <td
+            key={`r${i}`}
+            title={text}
+            className={cx(valueClass, { [classes.groupStart]: i === 0 })}
+          >
+            {text}
+          </td>
+        );
+      })}
+      <td title={ageText} className={cx(valueClass, classes.groupStart)}>
+        {row.isStatic ? <span className={classes.staticBadge}>{t("static")}</span> : ageText}
       </td>
-      <td className={valueClass}>{!row.isStatic && rate != undefined && formatFixed(rate, 1)}</td>
+      <td title={rateText} className={valueClass}>
+        {rateText}
+      </td>
     </tr>
   );
 });
