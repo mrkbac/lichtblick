@@ -132,7 +132,9 @@ export type MapLayer = {
   visible: boolean;
   /** Opacity for imagery and vector styles, intensity for hillshade. */
   opacity: number;
-  /** Vector styles only: draw everything, or only roads and labels (for use over imagery). */
+  /** Vector styles only: feature groups to leave out, e.g. all but roads and labels over imagery. */
+  hiddenGroups?: VectorGroup[];
+  /** Legacy (before `hiddenGroups`): "lines-labels" hid areas, buildings, and borders. */
   vectorContent?: "all" | "lines-labels";
   /** Vector styles only: extrude buildings by their height when tilted. Default on. */
   buildings3d?: boolean;
@@ -257,16 +259,45 @@ function withOpacity(layer: LayerSpecification, opacity: number): LayerSpecifica
  */
 const ROAD_LINE = /transport|road|street|highway|motorway|rail|path|bridge|tunnel|aeroway|ferry/i;
 
-/** For "roads and labels only": road lines and all labels; no borders, water, or areas. */
-export function isRoadOrLabel(layer: LayerSpecification): boolean {
+/** Feature groups of a vector style, top to bottom, with their settings labels. */
+export const VECTOR_GROUPS = {
+  labels: "Labels",
+  pois: "Points of interest",
+  roads: "Roads",
+  buildings: "Buildings",
+  boundaries: "Borders",
+  areas: "Land & water",
+} as const;
+
+export type VectorGroup = keyof typeof VECTOR_GROUPS;
+
+/** Group a style layer by its source layer (or id): OpenMapTiles names, plus common others. */
+export function vectorGroup(layer: LayerSpecification): VectorGroup {
+  const sourceLayer = "source-layer" in layer ? layer["source-layer"] : undefined;
+  const name = sourceLayer != undefined && sourceLayer !== "" ? sourceLayer : layer.id;
   if (layer.type === "symbol") {
-    return true;
+    if (/poi|aerodrome/i.test(name)) {
+      return "pois";
+    }
+    // Road markings such as one-way arrows; road names and shields are labels.
+    return ROAD_LINE.test(name) && !/name|label|shield/i.test(name) ? "roads" : "labels";
   }
-  if (layer.type !== "line") {
-    return false;
+  if (/building/i.test(name)) {
+    return "buildings";
   }
-  const sourceLayer = "source-layer" in layer ? (layer["source-layer"] ?? "") : "";
-  return ROAD_LINE.test(sourceLayer) || (sourceLayer === "" && ROAD_LINE.test(layer.id));
+  if (/boundar|admin/i.test(name)) {
+    return "boundaries";
+  }
+  return ROAD_LINE.test(name) && (layer.type === "line" || layer.type === "fill")
+    ? "roads"
+    : "areas";
+}
+
+export function hiddenVectorGroups(layer: MapLayer): readonly VectorGroup[] {
+  return (
+    layer.hiddenGroups ??
+    (layer.vectorContent === "lines-labels" ? ["areas", "buildings", "boundaries"] : [])
+  );
 }
 
 /**
@@ -420,10 +451,11 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
         for (const [name, source] of Object.entries(vector.sources)) {
           style.sources[`${id}:${name}`] = source;
         }
+        const hidden = hiddenVectorGroups(layer);
         for (const vectorLayer of withBuildings3d(vector.layers, {
           enabled: layer.buildings3d !== false,
         })) {
-          if (layer.vectorContent === "lines-labels" && !isRoadOrLabel(vectorLayer)) {
+          if (hidden.includes(vectorGroup(vectorLayer))) {
             continue;
           }
           const namespaced = { ...vectorLayer, id: `${id}:${vectorLayer.id}` };

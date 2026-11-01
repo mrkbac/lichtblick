@@ -110,6 +110,30 @@ describe("applySettingsAction", () => {
     expect(fields(config)?.style).toBeUndefined();
   });
 
+  it("shows and hides vector feature groups, migrating roads-and-labels layers", () => {
+    const legacy = normalizeConfig({
+      layers: [
+        {
+          id: "a",
+          source: "ofm-liberty",
+          visible: true,
+          opacity: 1,
+          vectorContent: "lines-labels",
+        },
+      ],
+    });
+    let config = apply(legacy, update(["layers", "0", "show:labels"], false));
+    expect(config.layers[0]).toMatchObject({
+      hiddenGroups: ["areas", "buildings", "boundaries", "labels"],
+      vectorContent: undefined,
+    });
+    config = apply(config, update(["layers", "0", "show:buildings"], "flat"));
+    expect(config.layers[0]).toMatchObject({
+      hiddenGroups: ["areas", "boundaries", "labels"],
+      buildings3d: false,
+    });
+  });
+
   it("toggles topics and drops a hidden follow topic", () => {
     let config = apply(base, update(["general", "followTopic"], "/gps"));
     config = apply(config, update(["topics", "/gps", "visible"], false));

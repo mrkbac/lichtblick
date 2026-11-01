@@ -21,13 +21,16 @@ import { lineColors } from "@lichtblick/suite-base/util/plotColors";
 
 import type { Units } from "./geo";
 import {
+  hiddenVectorGroups,
   layerLabel,
   MapLayer,
   PRESETS,
   resolveSource,
   SourceKind,
   SourceParams,
+  VECTOR_GROUPS,
   validateSourceUrl,
+  VectorGroup,
 } from "./layers";
 import { isGeoJSONSchema } from "./support";
 
@@ -278,23 +281,34 @@ function layerNode(
   };
 
   if (kind === "vector") {
-    fields.vectorContent = {
-      label: "Show",
-      input: "select",
-      value: layer.vectorContent ?? "all",
-      options: [
-        { label: "Everything", value: "all" },
-        { label: "Roads and labels only", value: "lines-labels" },
-      ],
-      help: "Roads and labels only turns a vector map into a transparent overlay, e.g. on top of satellite imagery.",
-    };
-    if (layer.vectorContent !== "lines-labels") {
-      fields.buildings3d = {
-        label: "3D buildings",
-        input: "boolean",
-        value: layer.buildings3d !== false,
-        help: "Extrude buildings by height from zoom 14 (OpenMapTiles styles). Tilt the map (right-drag or ctrl+drag) to see them.",
-      };
+    const hidden = hiddenVectorGroups(layer);
+    for (const [group, label] of Object.entries(VECTOR_GROUPS)) {
+      fields[`show:${group}`] =
+        group === "buildings"
+          ? {
+              label,
+              input: "toggle",
+              value: hidden.includes("buildings")
+                ? "off"
+                : layer.buildings3d === false
+                  ? "flat"
+                  : "3d",
+              options: [
+                { label: "Off", value: "off" },
+                { label: "Flat", value: "flat" },
+                { label: "3D", value: "3d" },
+              ],
+              help: "3D extrudes buildings by height from zoom 14. Tilt the map (right-drag or ctrl+drag) to see them.",
+            }
+          : {
+              label,
+              input: "boolean",
+              value: !hidden.includes(group as VectorGroup),
+              help:
+                group === "areas"
+                  ? "Turn off land and water to use the map as an overlay, e.g. roads and labels on satellite imagery."
+                  : undefined,
+            };
     }
   }
 
@@ -606,6 +620,20 @@ function updateLayer(
   if (!layer || field == undefined) {
     return;
   }
+  if (field.startsWith("show:")) {
+    const group = field.slice("show:".length) as VectorGroup;
+    const show = group === "buildings" ? value !== "off" : value === true;
+    if (group === "buildings" && show) {
+      layer.buildings3d = value === "3d";
+    }
+    layer.hiddenGroups = _.uniq(
+      hiddenVectorGroups(layer)
+        .filter((g) => g !== group)
+        .concat(show ? [] : [group]),
+    );
+    layer.vectorContent = undefined;
+    return;
+  }
   const custom = layer.custom;
   switch (field) {
     case "visible":
@@ -658,12 +686,6 @@ function updateLayer(
     case "hillshade":
     case "terrain":
       layer[field] = value === true;
-      break;
-    case "vectorContent":
-      layer.vectorContent = value === "lines-labels" ? "lines-labels" : "all";
-      break;
-    case "buildings3d":
-      layer.buildings3d = value === true;
       break;
   }
 }
