@@ -5,7 +5,7 @@ import { toSec } from "@lichtblick/rostime";
 import { Immutable } from "@lichtblick/suite";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
-import { isStaticTopic, samplesFromMessage } from "./transforms";
+import { samplesFromMessage } from "./transforms";
 import { FrameEntries, FrameEntry, FrameRow, FrameWarning } from "./types";
 
 const RATE_WINDOW = 20;
@@ -35,7 +35,6 @@ export function addTransformEvents(
       next.set(sample.child, {
         ...sample,
         topic: event.topic,
-        isStatic: isStaticTopic(event.topic),
         receiveTime,
         recentReceiveTimes,
         parents,
@@ -75,11 +74,13 @@ export function buildRows({
   known,
   now,
   collapsed,
+  staticTopics,
 }: {
   current: FrameEntries;
   known: FrameEntries;
   now: number | undefined;
   collapsed: ReadonlySet<string>;
+  staticTopics: ReadonlySet<string>;
 }): FrameRow[] {
   const entries = mergeEntries(known, current);
   const childrenOf = new Map<string, string[]>();
@@ -125,9 +126,10 @@ export function buildRows({
     const hasChildren = children.length > 0;
     const entry = entries.get(frame);
     if (!entry) {
-      return { frame, depth, hasChildren, warnings: [] };
+      return { frame, depth, hasChildren, isStatic: false, warnings: [] };
     }
     const hasData = current.has(frame);
+    const isStatic = staticTopics.has(entry.topic);
     const rate = rateOf(entry);
     const age = hasData && now != undefined ? Math.max(0, now - entry.receiveTime) : undefined;
     const warnings: FrameWarning[] = [];
@@ -138,10 +140,10 @@ export function buildRows({
       warnings.push("multipleParents");
     }
     const staleAfter = Math.max(MIN_STALE_SEC, rate != undefined ? STALE_PERIODS / rate : 0);
-    if (!entry.isStatic && age != undefined && age > staleAfter) {
+    if (!isStatic && age != undefined && age > staleAfter) {
       warnings.push("stale");
     }
-    return { frame, depth, hasChildren, entry, age, rate, warnings };
+    return { frame, depth, hasChildren, isStatic, entry, age, rate, warnings };
   };
 
   const roots = [...childrenOf.keys()].filter((frame) => !entries.has(frame)).sort();

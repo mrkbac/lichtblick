@@ -16,7 +16,6 @@ export type TransformSample = {
 /** Latest known state of one child frame. */
 export type FrameEntry = TransformSample & {
   topic: string;
-  isStatic: boolean;
   /** Receive time of the latest sample, in seconds. */
   receiveTime: number;
   /** Receive times of the most recent samples (oldest first), used for the rate. */
@@ -34,6 +33,8 @@ export type FrameRow = {
   frame: string;
   depth: number;
   hasChildren: boolean;
+  /** True when the frame comes from a topic marked as static. */
+  isStatic: boolean;
   /** Undefined for root frames, which are only ever referenced as a parent. */
   entry?: FrameEntry;
   /** Seconds since the last sample, undefined for root frames. */
@@ -43,6 +44,14 @@ export type FrameRow = {
   warnings: FrameWarning[];
 };
 
+export type TopicConfig = {
+  visible?: boolean;
+  /** Static transforms never go stale and are preloaded from the whole recording. */
+  static?: boolean;
+};
+
 export type TransformTreeConfig = {
   collapsed?: string[];
+  /** Per-topic settings, keyed by topic name. Topics without an entry use the defaults. */
+  topics?: Record<string, TopicConfig>;
 };

@@ -34,7 +34,7 @@ export const useStyles = makeStyles()((theme) => ({
 
     "th, td": {
       padding: theme.spacing(0.25, 1),
-      whiteSpace: "pre",
+      whiteSpace: "nowrap",
       textAlign: "right",
     },
     "th:first-of-type, td:first-of-type": {
@@ -53,6 +53,9 @@ export const useStyles = makeStyles()((theme) => ({
     "tbody tr:hover": {
       backgroundColor: theme.palette.action.hover,
     },
+  },
+  groupStart: {
+    paddingLeft: `${theme.spacing(2.5)} !important`,
   },
   frameCell: {
     display: "flex",

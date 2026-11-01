@@ -24,8 +24,11 @@ export function isTransformSchema(schemaName: string | undefined): boolean {
   );
 }
 
-/** By convention static transforms are published on a `tf_static` topic. */
-export function isStaticTopic(topic: string): boolean {
+/**
+ * Default for a topic's "static" setting: by convention static transforms are published on a
+ * `tf_static` topic. Users can override it per topic in the panel settings.
+ */
+export function defaultIsStatic(topic: string): boolean {
   return topic.endsWith("tf_static");
 }
 
