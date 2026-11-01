@@ -825,5 +825,54 @@ describe("TeleopPanel", () => {
       unmount();
       expect(publish).toHaveBeenCalledWith("/cmd", zero);
     });
+    it("advertises the ROS 2 schema name for ROS 2 data sources", () => {
+      const advertise = jest.fn();
+      const context = getMockContext({
+        publish: jest.fn(),
+        advertise,
+        dataSourceProfile: "ros2",
+        initialState: { topic: "/cmd", messageType: "TwistStamped" },
+      });
+      render(<TeleopPanel context={context} />);
+      const [, schemaName, options] = advertise.mock.calls[0];
+      expect(schemaName).toBe("geometry_msgs/msg/TwistStamped");
+      // ROS 2 headers have no seq field
+      expect(options.datatypes.get(schemaName).definitions[0].name).toBe("header");
+      expect(
+        options.datatypes.get("std_msgs/Header").definitions.map((d: { name: string }) => d.name),
+      ).toEqual(["stamp", "frame_id"]);
+    });
+
+    it("does not resume driving from a held joystick after an emergency stop", () => {
+      Element.prototype.setPointerCapture = jest.fn();
+      const publish = jest.fn();
+      const context = getMockContext({
+        publish,
+        initialState: { topic: "/cmd", mode: "joystick" },
+      });
+      const { container } = render(<TeleopPanel context={context} />);
+      const root = container.querySelector<HTMLElement>("[tabindex]")!;
+      const rect = { left: 0, top: 0, width: 256, height: 256 } as DOMRect;
+      const joystick = () => {
+        const element = screen.getByTestId("teleop-joystick");
+        jest.spyOn(element, "getBoundingClientRect").mockReturnValue(rect);
+        return element;
+      };
+      // jsdom's PointerEvent drops clientX/clientY
+      const pointer = (type: string) =>
+        new MouseEvent(type, { bubbles: true, clientX: 128, clientY: 0 });
+
+      fireEvent(joystick(), pointer("pointerdown"));
+      expect(publish).toHaveBeenLastCalledWith(
+        "/cmd",
+        expect.objectContaining({ linear: { x: 1, y: 0, z: 0 } }),
+      );
+
+      fireEvent.keyDown(root, { key: " " });
+      publish.mockClear();
+      fireEvent(joystick(), pointer("pointermove"));
+      jest.advanceTimersByTime(1000);
+      expect(publish).not.toHaveBeenCalled();
+    });
   });
 });

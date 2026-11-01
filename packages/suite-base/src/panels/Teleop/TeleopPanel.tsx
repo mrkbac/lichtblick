@@ -188,8 +188,12 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
     }
   }, [publishVector]);
 
+  // bumping this remounts the joystick, dropping its drag and pointer capture so a held mouse
+  // can't resume driving after a stop
+  const [releaseCount, setReleaseCount] = useState(0);
   const releaseAll = useCallback(() => {
     sources.current = { keys: new Set<DirectionalPadAction>() };
+    setReleaseCount((count) => count + 1);
     updateVector();
   }, [updateVector]);
 
@@ -206,16 +210,21 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
       return;
     }
 
-    const datatypes = context.dataSourceProfile === "ros2" ? ros2humble : ros1;
-    context.advertise?.(currentTopic, `geometry_msgs/${messageType}`, {
-      datatypes: new Map(
-        [
+    const isRos2 = context.dataSourceProfile === "ros2";
+    const datatypes = isRos2 ? ros2humble : ros1;
+    const rootType = `geometry_msgs/${messageType}` as const;
+    // ROS 2 schema names include "/msg/"; the definition maps use the short names
+    const schemaName = isRos2 ? `geometry_msgs/msg/${messageType}` : rootType;
+    context.advertise?.(currentTopic, schemaName, {
+      datatypes: new Map([
+        ...[
           "geometry_msgs/Vector3",
           "geometry_msgs/Twist",
           "geometry_msgs/TwistStamped",
           "std_msgs/Header",
-        ].map((name) => [name, datatypes[name as keyof typeof datatypes]]),
-      ),
+        ].map((name) => [name, datatypes[name as keyof typeof datatypes]] as const),
+        [schemaName, datatypes[rootType]],
+      ]),
     });
 
     return () => {
@@ -421,7 +430,7 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
                 {config.mode === "dpad" ? (
                   <DirectionalPad onAction={onDirectionalPadAction} vector={vector} />
                 ) : (
-                  <Joystick vector={vector} onChange={setPointer} />
+                  <Joystick key={releaseCount} vector={vector} onChange={setPointer} />
                 )}
               </Stack>
               <Typography
