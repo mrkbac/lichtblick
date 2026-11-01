@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import Logger from "@lichtblick/log";
 import { parseMessagePath, MessagePath, MessagePathStructureItem } from "@lichtblick/message-path";
@@ -122,23 +122,31 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
 
   // A seek resets the message history, so after stepping (or scrubbing) there is no previous
   // tick to diff against. Read the message before the current one directly from the source.
-  const [fetchedPrevItem, setFetchedPrevItem] = useState<MessageAndData>();
+  // Until it arrives, keep showing the last pair so the panel doesn't flash "Waiting…" (which
+  // would also unmount the focused step button).
+  const [fetchedPair, setFetchedPair] = useState<{ base?: MessageAndData; diff: MessageAndData }>();
   const currMessageEvent = currTickObj?.messageEvent;
   const needsFetchedPrev = inTimetickDiffMode && prevTickObj == undefined;
   useEffect(() => {
-    setFetchedPrevItem(undefined);
-    if (!needsFetchedPrev || !currMessageEvent) {
+    setFetchedPair(undefined);
+  }, [topicPath]);
+  useEffect(() => {
+    if (!needsFetchedPrev || !currTickObj) {
       return;
     }
     let cancelled = false;
-    getMessageAtTime(
-      currMessageEvent.topic,
-      subtractTime(currMessageEvent.receiveTime, ONE_NANOSECOND),
-    )
+    const { messageEvent: curr } = currTickObj;
+    getMessageAtTime(curr.topic, subtractTime(curr.receiveTime, ONE_NANOSECOND))
       .then((messageEvent) => {
         const queriedData = messageEvent && cachedGetMessagePathDataItems(topicPath, messageEvent);
-        if (!cancelled && messageEvent && queriedData && queriedData.length > 0) {
-          setFetchedPrevItem({ messageEvent, queriedData });
+        if (!cancelled) {
+          setFetchedPair({
+            base:
+              messageEvent && queriedData && queriedData.length > 0
+                ? { messageEvent, queriedData }
+                : undefined,
+            diff: currTickObj,
+          });
         }
       })
       .catch((error: unknown) => {
@@ -147,16 +155,14 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
     return () => {
       cancelled = true;
     };
-  }, [
-    needsFetchedPrev,
-    currMessageEvent,
-    getMessageAtTime,
-    cachedGetMessagePathDataItems,
-    topicPath,
-  ]);
+  }, [needsFetchedPrev, currTickObj, getMessageAtTime, cachedGetMessagePathDataItems, topicPath]);
 
-  const baseItem = inTimetickDiffMode ? (prevTickObj ?? fetchedPrevItem) : currTickObj;
-  const diffItem = inTimetickDiffMode ? currTickObj : diffTopicObj;
+  const baseItem = inTimetickDiffMode ? (prevTickObj ?? fetchedPair?.base) : currTickObj;
+  const diffItem = inTimetickDiffMode
+    ? prevTickObj
+      ? currTickObj
+      : fetchedPair?.diff
+    : diffTopicObj;
 
   const nodes = useMemo(() => {
     if (baseItem) {
@@ -215,7 +221,8 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
 
   // Message stepping: seek to the previous/next message on the topic. Only for sources that can
   // seek; live sources have nothing to step through.
-  const [isStepping, setIsStepping] = useState(false);
+  // A ref, not state: disabling the focused button mid-step would drop focus and the shortcuts.
+  const isSteppingRef = useRef(false);
   const canStep = seekPlayback != undefined && topic != undefined;
   const stats = topic ? topicStats?.get(topic.name) : undefined;
   // Step back from the displayed message rather than the playhead, so the first click always
@@ -223,18 +230,19 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
   const prevAnchorTime = currMessageEvent?.receiveTime ?? currentTime;
   const canStepPrevious =
     canStep &&
-    !isStepping &&
     prevAnchorTime != undefined &&
     (stats?.firstMessageTime == undefined || compare(prevAnchorTime, stats.firstMessageTime) > 0);
   const canStepNext =
     canStep &&
-    !isStepping &&
     currentTime != undefined &&
     (stats?.lastMessageTime == undefined || compare(currentTime, stats.lastMessageTime) < 0);
 
   const seekTo = useCallback(
     async (findTime: () => Promise<Time | undefined>) => {
-      setIsStepping(true);
+      if (isSteppingRef.current) {
+        return;
+      }
+      isSteppingRef.current = true;
       try {
         const time = await findTime();
         if (time) {
@@ -244,7 +252,7 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
       } catch (error) {
         log.warn("Failed to step to message", error);
       } finally {
-        setIsStepping(false);
+        isSteppingRef.current = false;
       }
     },
     [pausePlayback, seekPlayback],
