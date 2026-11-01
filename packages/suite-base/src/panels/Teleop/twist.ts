@@ -40,7 +40,8 @@ export function computeTwist(config: TeleopConfig, vector: TeleopVector): Twist 
   const twist = zeroTwist();
   const add = ({ field, value }: TeleopButtonConfig, amount: number) => {
     const [kind, axis] = field.split("-");
-    if (amount <= 0 || (kind !== "linear" && kind !== "angular")) {
+    // a cleared number field in the settings arrives as undefined; never publish NaN
+    if (!(amount > 0) || !Number.isFinite(value) || (kind !== "linear" && kind !== "angular")) {
       return;
     }
     if (axis === "x" || axis === "y" || axis === "z") {
@@ -57,7 +58,8 @@ export function computeTwist(config: TeleopConfig, vector: TeleopVector): Twist 
 /** Radial deadzone, rescaled so output starts at 0 just past the deadzone */
 export function applyDeadzone(x: number, y: number, deadzone: number): TeleopVector {
   const magnitude = Math.hypot(x, y);
-  if (magnitude <= deadzone || deadzone >= 1) {
+  // negated so a non-numeric deadzone (cleared settings field) yields no motion
+  if (!(magnitude > deadzone) || !(deadzone < 1)) {
     return ZERO_VECTOR;
   }
   const scale = Math.min(1, (magnitude - deadzone) / (1 - deadzone)) / magnitude;
