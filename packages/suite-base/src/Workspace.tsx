@@ -263,18 +263,11 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       handles?: FileSystemFileHandle[];
       namespace?: Namespace;
     }) => {
-      const filesArray: File[] = [];
+      const filesArray = handles
+        ? await Promise.all(handles.map(async (h) => await h.getFile()))
+        : (files ?? []);
 
-      if (handles?.length === 1) {
-        const fileHandle = handles[0];
-        if (fileHandle) {
-          filesArray.push(await fileHandle.getFile());
-        }
-      } else if (files?.length != undefined) {
-        filesArray.push(...files);
-      }
-
-      void handleFiles(filesArray, namespace);
+      void handleFiles(filesArray, namespace, handles);
     },
     [handleFiles],
   );

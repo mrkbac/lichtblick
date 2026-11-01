@@ -202,6 +202,17 @@ describe("useHandleFiles", () => {
     expect(selectSource).toHaveBeenCalled();
   });
 
+  it("selects the source with handles when they are given, so the file lands in recents", async () => {
+    const { handleFiles, files } = setup();
+    const handles = files.map((file) => ({ name: file.name }) as FileSystemFileHandle);
+
+    await act(async () => {
+      await handleFiles(files, "local", handles);
+    });
+
+    expect(selectSource).toHaveBeenCalledWith(availableSources[0]!.id, { type: "file", handles });
+  });
+
   it("does not select source if no file type matches availableSources", async () => {
     const { handleFiles, files } = setup({
       filesOverride: [fileBuilder("csv", FILE_ACCEPT_TYPE)],

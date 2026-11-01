@@ -57,6 +57,9 @@ interface IRecentsStore {
   // Recent records
   recents: RecentRecord[];
 
+  // True once the stored recents have been loaded into `recents`
+  recentsLoaded: boolean;
+
   // Add a new recent
   addRecent: (newRecent: UnsavedRecentRecord) => void;
 
@@ -71,6 +74,7 @@ function useIndexedDbRecents(): IRecentsStore {
   );
 
   const [recents, setRecents] = useState<RecentRecord[]>([]);
+  const [recentsLoaded, setRecentsLoaded] = useState(false);
 
   // Track new recents in a ref and update the state after persisting
   const newRecentsRef = useRef<RecentRecord[]>([]);
@@ -153,6 +157,7 @@ function useIndexedDbRecents(): IRecentsStore {
       // Normally a save invokes set - but since we don't need to save we set here
       setRecents(newRecentsRef.current);
     }
+    setRecentsLoaded(true);
   }, [loading, initialRecents, save]);
 
   const addRecent = useCallback(
@@ -170,10 +175,11 @@ function useIndexedDbRecents(): IRecentsStore {
   return useMemo<IRecentsStore>(() => {
     return {
       recents,
+      recentsLoaded,
       addRecent,
       save,
     };
-  }, [addRecent, recents, save]);
+  }, [addRecent, recents, recentsLoaded, save]);
 }
 
 export default useIndexedDbRecents;

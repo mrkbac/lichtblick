@@ -14,6 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { Button } from "@mui/material";
 import { useSnackbar } from "notistack";
 import {
   PropsWithChildren,
@@ -22,6 +23,7 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { useLatest, useMountedState } from "react-use";
@@ -62,6 +64,10 @@ import { mergeMultipleFileNames } from "@lichtblick/suite-base/util/mergeMultipl
 
 const log = Logger.getLogger(__filename);
 
+// Per tab, so a reload reopens the file that tab had open
+const LAST_FILE_SOURCE_KEY = "lichtblick.lastFileSource";
+type LastFileSource = { sourceId: string; title: string };
+
 type PlayerManagerProps = {
   playerSources: readonly IDataSourceFactory[];
 };
@@ -95,7 +101,7 @@ export default function PlayerManager(
 
   const [basePlayer, setBasePlayer] = useState<Player | undefined>();
 
-  const { recents, addRecent } = useIndexedDbRecents();
+  const { recents, recentsLoaded, addRecent } = useIndexedDbRecents();
 
   const userScripts = useCurrentLayoutSelector(userScriptsSelector);
   const globalVariables = useCurrentLayoutSelector(globalVariablesSelector);
@@ -159,7 +165,7 @@ export default function PlayerManager(
     });
   }, [player, userScripts, isLayoutLoading]);
 
-  const { enqueueSnackbar } = useSnackbar();
+  const { enqueueSnackbar, closeSnackbar } = useSnackbar();
 
   const [selectedSource, setSelectedSource] = useState<IDataSourceFactory | undefined>();
 
@@ -176,6 +182,8 @@ export default function PlayerManager(
       }
 
       metricsCollector.setProperty("player", sourceId);
+      // Set again below once a file source opens from handles
+      sessionStorage.removeItem(LAST_FILE_SOURCE_KEY);
 
       setSelectedSource(foundSource);
 
@@ -219,30 +227,11 @@ export default function PlayerManager(
           }
           case "file": {
             const handles = args.handles;
-            const files = args.files;
+            let files = args.files;
 
-            // files we can try loading immediately
-            // We do not add these to recents entries because putting File in indexedb results in
-            // the entire file being stored in the database.
-            if (files) {
-              let file = files[0];
-              const fileList: File[] = [];
-
-              for (const curFile of files) {
-                file ??= curFile;
-                fileList.push(curFile);
-              }
-              const multiFile = foundSource.supportsMultiFile === true && fileList.length > 1;
-
-              const newPlayer = foundSource.initialize({
-                file: multiFile ? undefined : file,
-                files: multiFile ? fileList : undefined,
-                metricsCollector,
-              });
-
-              setBasePlayer(newPlayer);
-              return;
-            } else if (handles) {
+            // Handles are stored in recents (IndexedDB) so the file can be reopened later.
+            // File instances are not: storing a File in IndexedDB copies the entire file.
+            if (handles) {
               for (const handle of handles) {
                 const permission = await handle.queryPermission({ mode: "read" });
                 if (!isMounted()) {
@@ -256,24 +245,31 @@ export default function PlayerManager(
                   }
                 }
               }
-              const filesHandled = await Promise.all(handles.map(async (f) => await f.getFile()));
+              files = await Promise.all(handles.map(async (f) => await f.getFile()));
               if (!isMounted()) {
                 return;
               }
+            }
+
+            if (files) {
+              const multiFile = foundSource.supportsMultiFile === true && files.length > 1;
 
               const newPlayer = foundSource.initialize({
-                files: filesHandled,
+                file: multiFile ? undefined : files[0],
+                files: multiFile ? files : undefined,
                 metricsCollector,
               });
 
               setBasePlayer(newPlayer);
-              addRecent({
-                type: "file",
-                title: mergeMultipleFileNames(handles.map((h) => h.name)),
-                sourceId: foundSource.id,
-                handles,
-              });
 
+              if (handles) {
+                const lastFile: LastFileSource = {
+                  sourceId: foundSource.id,
+                  title: mergeMultipleFileNames(handles.map((h) => h.name)),
+                };
+                addRecent({ type: "file", ...lastFile, handles });
+                sessionStorage.setItem(LAST_FILE_SOURCE_KEY, JSON.stringify(lastFile) ?? "");
+              }
               return;
             }
           }
@@ -294,6 +290,53 @@ export default function PlayerManager(
     createSelectRecentCallback(recents, selectSource, enqueueSnackbar),
     [recents, enqueueSnackbar, selectSource],
   );
+
+  // After a reload, reopen the file this tab had open. The URL takes precedence (ds=...).
+  const restoredLastFile = useRef(false);
+  useEffect(() => {
+    if (!recentsLoaded || restoredLastFile.current) {
+      return;
+    }
+    restoredLastFile.current = true;
+
+    const stored = sessionStorage.getItem(LAST_FILE_SOURCE_KEY);
+    if (!stored || new URL(window.location.href).searchParams.has("ds")) {
+      return;
+    }
+    const lastFile = JSON.parse(stored) as LastFileSource;
+    const recent = recents.find(
+      (r) => r.type === "file" && r.sourceId === lastFile.sourceId && r.title === lastFile.title,
+    );
+    if (recent?.type !== "file") {
+      return;
+    }
+
+    void (async () => {
+      const permissions = await Promise.all(
+        recent.handles.map(async (h) => await h.queryPermission({ mode: "read" })),
+      );
+      if (permissions.every((p) => p === "granted")) {
+        void selectSource(recent.sourceId, { type: "file", handles: recent.handles });
+        return;
+      }
+      // requestPermission needs a user gesture, so ask with a click
+      enqueueSnackbar(`Reopen ${recent.title}?`, {
+        variant: "info",
+        persist: true,
+        action: (key) => (
+          <Button
+            color="inherit"
+            onClick={() => {
+              closeSnackbar(key);
+              void selectSource(recent.sourceId, { type: "file", handles: recent.handles });
+            }}
+          >
+            Reopen
+          </Button>
+        ),
+      });
+    })();
+  }, [recentsLoaded, recents, selectSource, enqueueSnackbar, closeSnackbar]);
 
   // Make a RecentSources array for the PlayerSelectionContext
   const recentSources = useMemo(() => {

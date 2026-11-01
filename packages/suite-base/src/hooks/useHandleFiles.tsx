@@ -16,7 +16,11 @@ import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfe
 import { Namespace } from "@lichtblick/suite-base/types";
 
 type UseHandleFiles = {
-  handleFiles: (files: File[], namespace?: Namespace) => Promise<void>;
+  handleFiles: (
+    files: File[],
+    namespace?: Namespace,
+    handles?: FileSystemFileHandle[],
+  ) => Promise<void>;
 };
 
 type UseHandleFilesProps = {
@@ -45,7 +49,7 @@ export function useHandleFiles({
   const { parseAndInstallLayout } = useLayoutTransfer();
 
   const handleFiles = useCallback(
-    async (files: File[], namespace: Namespace = "local") => {
+    async (files: File[], namespace: Namespace = "local", handles?: FileSystemFileHandle[]) => {
       if (files.length === 0) {
         return;
       }
@@ -86,7 +90,11 @@ export function useHandleFiles({
           otherFiles.some((file) => s.supportedFileTypes?.includes(extname(file.name)) ?? false),
         );
 
-        if (source) {
+        // Prefer handles: they are kept in recents, so the file can be reopened after a reload
+        const otherHandles = handles?.filter((h) => otherFiles.some((f) => f.name === h.name));
+        if (source && otherHandles?.length === otherFiles.length) {
+          selectSource(source.id, { type: "file", handles: otherHandles });
+        } else if (source) {
           selectSource(source.id, { type: "file", files: otherFiles });
         }
       }
