@@ -10,6 +10,25 @@ import Logger from "@lichtblick/log";
 const log = Logger.getLogger(__filename);
 
 /**
+ * Ask the browser to fetch the service worker now instead of waiting for its periodic check.
+ * A found update is installed and announced by useServiceWorkerUpdatePrompt; one that is
+ * already waiting is activated right away, which reloads every window.
+ * Resolves false when no update is available.
+ */
+export async function checkForServiceWorkerUpdate(): Promise<boolean> {
+  const registration = await navigator.serviceWorker.getRegistration();
+  if (!registration) {
+    return false;
+  }
+  await registration.update();
+  if (registration.waiting && navigator.serviceWorker.controller) {
+    registration.waiting.postMessage({ type: "SKIP_WAITING" });
+    return true;
+  }
+  return registration.installing != undefined;
+}
+
+/**
  * When a new service worker version is installed and waiting, offer to reload into it.
  * The waiting worker is activated via the workbox SKIP_WAITING message; every open window
  * then reloads on controllerchange so no window keeps running against deleted precache chunks.

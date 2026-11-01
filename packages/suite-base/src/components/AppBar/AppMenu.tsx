@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Menu, PaperProps } from "@mui/material";
+import { useSnackbar } from "notistack";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -20,6 +21,7 @@ import {
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { useInteractionCapture } from "@lichtblick/suite-base/hooks/useInteractionCapture";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
+import { checkForServiceWorkerUpdate } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdatePrompt";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { formatKeyboardShortcut } from "@lichtblick/suite-base/util/formatKeyboardShortcut";
 
@@ -36,6 +38,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
   const { open, handleClose, anchorEl, anchorReference, anchorPosition, disablePortal } = props;
   const { classes } = useStyles();
   const { t } = useTranslation("appBar");
+  const { enqueueSnackbar } = useSnackbar();
 
   const [nestedMenu, setNestedMenu] = useState<string | undefined>();
   const captureMenuClick = useInteractionCapture(AppEvent.APP_MENU_CLICK);
@@ -244,9 +247,37 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
     handleNestedMenuClose();
   }, [handleNestedMenuClose]);
 
+  const onCheckForUpdatesClick = useCallback(() => {
+    handleNestedMenuClose();
+    checkForServiceWorkerUpdate()
+      .then((found) => {
+        if (!found) {
+          enqueueSnackbar(t("noUpdateAvailable"), { variant: "success" });
+        }
+      })
+      .catch((error: unknown) => {
+        console.error(error);
+        enqueueSnackbar(t("updateCheckFailed"), { variant: "error" });
+      });
+  }, [enqueueSnackbar, handleNestedMenuClose, t]);
+
+  // only the web build registers a service worker (not desktop or the dev server)
+  const hasServiceWorker =
+    (navigator.serviceWorker as ServiceWorkerContainer | undefined)?.controller != undefined;
+
   const helpItems = useMemo<AppBarMenuItem[]>(
     () => [
       { type: "item", key: "about", label: t("about"), onClick: onAboutClick },
+      ...(hasServiceWorker
+        ? [
+            {
+              type: "item" as const,
+              key: "check-for-updates",
+              label: t("checkForUpdates"),
+              onClick: onCheckForUpdatesClick,
+            },
+          ]
+        : []),
       { type: "divider" },
       {
         type: "item",
@@ -262,7 +293,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
         onClick: onDemoClick,
       },
     ],
-    [onAboutClick, onDemoClick, onDocsClick, t],
+    [hasServiceWorker, onAboutClick, onCheckForUpdatesClick, onDemoClick, onDocsClick, t],
   );
 
   return (

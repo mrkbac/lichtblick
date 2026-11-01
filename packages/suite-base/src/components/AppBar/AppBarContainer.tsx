@@ -26,6 +26,8 @@ const useStyles = makeStyles()((theme) => {
       color: theme.palette.appBar.text,
       height: APP_BAR_HEIGHT,
 
+      // Installed PWA with window controls overlay: keep clear of the OS window controls.
+      paddingLeft: "env(titlebar-area-x, 0)",
       paddingRight: "calc(100% - env(titlebar-area-x) - env(titlebar-area-width))",
       WebkitAppRegion: "drag", // make custom window title bar draggable for desktop app
     },
