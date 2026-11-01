@@ -13,8 +13,8 @@ import {
 } from "@mui/material";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { makeStyles } from "tss-react/mui";
 
+import { useStyles } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput.style";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import {
@@ -23,21 +23,6 @@ import {
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { detectConnection } from "@lichtblick/suite-base/util/recentSources";
-
-const useStyles = makeStyles()((theme) => ({
-  input: {
-    flex: "auto",
-    minWidth: 0,
-  },
-  sourceSelect: {
-    fontSize: theme.typography.body2.fontSize,
-    color: theme.palette.primary.main,
-  },
-  button: {
-    flex: "none",
-    whiteSpace: "nowrap",
-  },
-}));
 
 const filterOptions = createFilterOptions<RecentSource>({
   stringify: (option) => `${option.title} ${option.label ?? ""}`,
