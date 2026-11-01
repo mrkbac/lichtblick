@@ -27,7 +27,6 @@ updates:
         patterns:
           - "electron"
           - "electron-*"
-          - "app-builder-lib"
           - "builder-util"
       jest:
         patterns:
@@ -47,7 +46,6 @@ updates:
         patterns:
           - "monaco-editor"
           - "monaco-editor-webpack-plugin"
-          - "react-monaco-editor"
 
   - package-ecosystem: "github-actions"
     directory: "/"

@@ -146,7 +146,7 @@ const createMockEditor = () => {
   };
 };
 
-jest.mock("react-monaco-editor", () => {
+jest.mock("./MonacoEditor", () => {
   return function MockMonacoEditor(props: {
     editorWillMount?: (monaco: unknown) => unknown;
     editorDidMount?: (editor: unknown, monaco: unknown) => void;

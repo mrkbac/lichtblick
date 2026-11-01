@@ -3697,13 +3697,12 @@ __metadata:
     react-i18next: "npm:17.0.8"
     react-json-tree: "patch:react-json-tree@0.15.1#../../patches/react-json-tree.patch"
     react-markdown: "npm:9.0.1"
-    react-monaco-editor: "npm:0.59.0"
     react-mosaic-component: "npm:6.2.0"
     react-refresh-typescript: "npm:2.0.10"
     react-resizable-panels: "npm:2.1.6"
     react-resize-detector: "npm:12.3.0"
     react-transition-group: "npm:4.4.5"
-    react-use: "npm:17.6.0"
+    react-use: "npm:17.6.1"
     react-virtualized-auto-sizer: "npm:1.0.26"
     react-window: "npm:2.2.7"
     readable-stream: "npm:4.7.0"
@@ -3782,7 +3781,7 @@ __metadata:
     react: "npm:18.3.1"
     react-dom: "npm:18.3.1"
     react-refresh-typescript: "npm:2.0.10"
-    react-use: "npm:17.6.0"
+    react-use: "npm:17.6.1"
     tinycolor2: "npm:1.6.0"
     tss-react: "npm:4.9.19"
     utif: "npm:3.1.0"
@@ -6463,10 +6462,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/js-cookie@npm:^2.2.6":
-  version: 2.2.7
-  resolution: "@types/js-cookie@npm:2.2.7"
-  checksum: 10/851f47e94ca1fc43661d8f51614d67a613e7810c91b876d0a3b311ce72f7df800107fd02a08cb6948184e12c120b4f058edca2f50424d8798bdcffd6627281e3
+"@types/js-cookie@npm:^3.0.0":
+  version: 3.0.6
+  resolution: "@types/js-cookie@npm:3.0.6"
+  checksum: 10/272d551687547445cb210213c73e72e0e5d58ad73e2e444a65d688b8ff9425529779ee0cd6492aaa1f070161916d4254ef2b1a76d64179100437f60749d094ef
   languageName: node
   linkType: hard
 
@@ -15474,7 +15473,7 @@ __metadata:
     playwright: "npm:1.60.0"
     prettier: "npm:3.9.4"
     react-refresh: "npm:0.18.0"
-    react-use: "npm:17.6.0"
+    react-use: "npm:17.6.1"
     rehype-raw: "npm:7.0.0"
     rimraf: "npm:6.0.1"
     semver: "npm:7.7.2"
@@ -16715,7 +16714,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nano-css@npm:^5.3.1":
+"nano-css@npm:^5.6.2":
   version: 5.6.2
   resolution: "nano-css@npm:5.6.2"
   dependencies:
@@ -18596,28 +18595,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-monaco-editor@npm:0.59.0":
-  version: 0.59.0
-  resolution: "react-monaco-editor@npm:0.59.0"
-  peerDependencies:
-    monaco-editor: ^0.52.0
-    react: ">=16.8.0 <20.0.0"
-    react-dom: ">=16.8.0 <20.0.0"
-  checksum: 10/2eb1a5340718052a01e7145a5ebd42effe0a669bb15d337e74de0deb1846f1dcaa86464878ef75df90c5a2202408bd415b836e24a4b1943cc7bdb1cdae30690b
-  languageName: node
-  linkType: hard
-
-"react-monaco-editor@patch:react-monaco-editor@npm:0.59.0#./patches/react-monaco-editor.patch::locator=lichtblick%40workspace%3A.":
-  version: 0.59.0
-  resolution: "react-monaco-editor@patch:react-monaco-editor@npm%3A0.59.0#./patches/react-monaco-editor.patch::version=0.59.0&hash=1ac4bf&locator=lichtblick%40workspace%3A."
-  peerDependencies:
-    monaco-editor: ^0.52.0
-    react: ">=16.8.0 <20.0.0"
-    react-dom: ">=16.8.0 <20.0.0"
-  checksum: 10/7cf2abd13b51d8981f8d76c489ac0f1c397c1d7b634bddca1da8ad0136850006c5e3976597e1da39f927f5f6e7eb4f4ea1af5729c7a783fec7a0da6d106fa587
-  languageName: node
-  linkType: hard
-
 "react-mosaic-component@npm:6.2.0":
   version: 6.2.0
   resolution: "react-mosaic-component@npm:6.2.0"
@@ -18715,17 +18692,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-use@npm:17.4.0":
-  version: 17.4.0
-  resolution: "react-use@npm:17.4.0"
+"react-use@npm:17.6.1":
+  version: 17.6.1
+  resolution: "react-use@npm:17.6.1"
   dependencies:
-    "@types/js-cookie": "npm:^2.2.6"
+    "@types/js-cookie": "npm:^3.0.0"
     "@xobotyi/scrollbar-width": "npm:^1.9.5"
     copy-to-clipboard: "npm:^3.3.1"
     fast-deep-equal: "npm:^3.1.3"
     fast-shallow-equal: "npm:^1.0.0"
-    js-cookie: "npm:^2.2.1"
-    nano-css: "npm:^5.3.1"
+    js-cookie: "npm:^3.0.0"
+    nano-css: "npm:^5.6.2"
     react-universal-interface: "npm:^0.6.2"
     resize-observer-polyfill: "npm:^1.5.1"
     screenfull: "npm:^5.1.0"
@@ -18734,34 +18711,9 @@ __metadata:
     ts-easing: "npm:^0.2.0"
     tslib: "npm:^2.1.0"
   peerDependencies:
-    react: ^16.8.0  || ^17.0.0 || ^18.0.0
-    react-dom: ^16.8.0  || ^17.0.0 || ^18.0.0
-  checksum: 10/98566c4817b00251107824743ea9dff41f167b548bd5f249f6eb9e2ec09388a2de1e89988e4432cead3f8aa83cf706e0255db8a20c0615768c670751973d2761
-  languageName: node
-  linkType: hard
-
-"react-use@patch:react-use@17.4.0#./patches/react-use.patch::locator=lichtblick%40workspace%3A.":
-  version: 17.4.0
-  resolution: "react-use@patch:react-use@npm%3A17.4.0#./patches/react-use.patch::version=17.4.0&hash=16b4d0&locator=lichtblick%40workspace%3A."
-  dependencies:
-    "@types/js-cookie": "npm:^2.2.6"
-    "@xobotyi/scrollbar-width": "npm:^1.9.5"
-    copy-to-clipboard: "npm:^3.3.1"
-    fast-deep-equal: "npm:^3.1.3"
-    fast-shallow-equal: "npm:^1.0.0"
-    js-cookie: "npm:^2.2.1"
-    nano-css: "npm:^5.3.1"
-    react-universal-interface: "npm:^0.6.2"
-    resize-observer-polyfill: "npm:^1.5.1"
-    screenfull: "npm:^5.1.0"
-    set-harmonic-interval: "npm:^1.0.1"
-    throttle-debounce: "npm:^3.0.1"
-    ts-easing: "npm:^0.2.0"
-    tslib: "npm:^2.1.0"
-  peerDependencies:
-    react: ^16.8.0  || ^17.0.0 || ^18.0.0
-    react-dom: ^16.8.0  || ^17.0.0 || ^18.0.0
-  checksum: 10/e3bae1080099ad60e50f432b0a81c83902921786d712cc1328b3458ea38327a3df6be3e48db9d2551504c16a6df3bf9c6a9949e19145f4b9ea5a0b7c5b5331dc
+    react: "*"
+    react-dom: "*"
+  checksum: 10/0b3630ac9a02b755cdfa205d0a0dbee0c620a4b0fcfb00b5cceb4f38fdf928fca3c6d924671e210d89b34aafeda222f7500eb4ceb9883baf2b9ce0181f4fcd82
   languageName: node
   linkType: hard
 

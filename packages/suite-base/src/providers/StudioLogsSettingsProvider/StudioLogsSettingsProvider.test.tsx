@@ -5,7 +5,6 @@
 import { act, render, renderHook } from "@testing-library/react";
 import "@testing-library/jest-dom";
 import { PropsWithChildren, useContext } from "react";
-import { useLocalStorage } from "react-use";
 
 import Log from "@lichtblick/log";
 import { SESSION_STORAGE_LOGS_SETTINGS } from "@lichtblick/suite-base/constants/browserStorageKeys";
@@ -13,12 +12,13 @@ import {
   StudioLogsSettingsContext,
   IStudioLogsSettings,
 } from "@lichtblick/suite-base/context/StudioLogsSettingsContext";
+import { useLocalStorage } from "@lichtblick/suite-base/hooks/useLocalStorage";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { StudioLogsSettingsProvider } from "./StudioLogsSettingsProvider";
 import { createStudioLogsSettingsStore } from "./store";
 
-jest.mock("react-use", () => ({
+jest.mock("@lichtblick/suite-base/hooks/useLocalStorage", () => ({
   useLocalStorage: jest.fn(),
 }));
 

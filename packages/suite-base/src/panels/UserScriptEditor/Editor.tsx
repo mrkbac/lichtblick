@@ -23,7 +23,6 @@ import * as monacoApi from "monaco-editor/editor/editor.api.js";
 import { StandaloneServices } from "monaco-editor/editor/standalone/browser/standaloneServices";
 import * as path from "path";
 import React, { Suspense, ReactElement, useCallback, useEffect, useRef } from "react";
-import MonacoEditor, { EditorDidMount, EditorWillMount } from "react-monaco-editor";
 import { ResizePayload, useResizeDetector } from "react-resize-detector";
 import { useLatest } from "react-use";
 import { ModuleResolutionKind } from "typescript";
@@ -36,6 +35,7 @@ import inScreenshotTests from "@lichtblick/suite-base/stories/inScreenshotTests"
 import { DEFAULT_STUDIO_SCRIPT_PREFIX } from "@lichtblick/suite-base/util/constants";
 import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuallyBePartial";
 
+import MonacoEditor, { EditorDidMount, EditorWillMount } from "./MonacoEditor";
 import { themes } from "./theme";
 
 const codeEditorService = StandaloneServices.get(ICodeEditorService);
