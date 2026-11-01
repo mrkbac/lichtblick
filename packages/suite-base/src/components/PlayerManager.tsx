@@ -70,6 +70,36 @@ const log = Logger.getLogger(__filename);
 const LAST_FILE_SOURCE_KEY = "lichtblick.lastFileSource";
 type LastFileSource = { sourceId: string; title: string };
 
+// Reopening on reload is a convenience: blocked storage or a bad value must not break the app
+function readLastFile(): LastFileSource | undefined {
+  try {
+    const value = JSON.parse(sessionStorage.getItem(LAST_FILE_SOURCE_KEY) ?? "null") as unknown;
+    if (
+      typeof value === "object" &&
+      value != undefined &&
+      typeof (value as LastFileSource).sourceId === "string" &&
+      typeof (value as LastFileSource).title === "string"
+    ) {
+      return value as LastFileSource;
+    }
+  } catch (err: unknown) {
+    log.warn("Unable to read last file source", err);
+  }
+  return undefined;
+}
+
+function writeLastFile(lastFile: LastFileSource | undefined): void {
+  try {
+    if (lastFile) {
+      sessionStorage.setItem(LAST_FILE_SOURCE_KEY, JSON.stringify(lastFile) ?? "");
+    } else {
+      sessionStorage.removeItem(LAST_FILE_SOURCE_KEY);
+    }
+  } catch (err: unknown) {
+    log.warn("Unable to store last file source", err);
+  }
+}
+
 type PlayerManagerProps = {
   playerSources: readonly IDataSourceFactory[];
 };
@@ -189,8 +219,6 @@ export default function PlayerManager(
 
       metricsCollector.setProperty("player", sourceId);
       setCurrentRecentId(undefined);
-      // Set again below once a file source opens from handles
-      sessionStorage.removeItem(LAST_FILE_SOURCE_KEY);
 
       setSelectedSource(foundSource);
 
@@ -201,6 +229,7 @@ export default function PlayerManager(
         });
 
         setBasePlayer(newPlayer);
+        writeLastFile(undefined);
         return;
       }
 
@@ -221,6 +250,7 @@ export default function PlayerManager(
               sourceMetadata: args.sourceMetadata,
             });
             setBasePlayer(newPlayer);
+            writeLastFile(undefined);
 
             if (args.params?.url) {
               const recentId = addRecent({
@@ -276,13 +306,16 @@ export default function PlayerManager(
 
               setBasePlayer(newPlayer);
 
+              // Only handles can be reopened after a reload
               if (handles) {
                 const lastFile: LastFileSource = {
                   sourceId: foundSource.id,
                   title: mergeMultipleFileNames(handles.map((h) => h.name)),
                 };
                 setCurrentRecentId(addRecent({ type: "file", ...lastFile, handles }));
-                sessionStorage.setItem(LAST_FILE_SOURCE_KEY, JSON.stringify(lastFile) ?? "");
+                writeLastFile(lastFile);
+              } else {
+                writeLastFile(undefined);
               }
               return;
             }
@@ -313,11 +346,10 @@ export default function PlayerManager(
     }
     restoredLastFile.current = true;
 
-    const stored = sessionStorage.getItem(LAST_FILE_SOURCE_KEY);
-    if (!stored || new URL(window.location.href).searchParams.has("ds")) {
+    const lastFile = readLastFile();
+    if (!lastFile || new URL(window.location.href).searchParams.has("ds")) {
       return;
     }
-    const lastFile = JSON.parse(stored) as LastFileSource;
     const recent = recents.find(
       (r) => r.type === "file" && r.sourceId === lastFile.sourceId && r.title === lastFile.title,
     );
