@@ -40,7 +40,7 @@ export const defaultLayout: LayoutData =
           },
         },
       },
-      "RawMessagesVirtual!os6rgs": {},
+      "RawMessages!os6rgs": {},
       "Image!3mnp456": {},
     },
     globalVariables: {},
@@ -50,7 +50,7 @@ export const defaultLayout: LayoutData =
       first: "3D!18i6zy7",
       second: {
         first: "Image!3mnp456",
-        second: "RawMessagesVirtual!os6rgs",
+        second: "RawMessages!os6rgs",
         direction: "column",
         splitPercentage: 30,
       },

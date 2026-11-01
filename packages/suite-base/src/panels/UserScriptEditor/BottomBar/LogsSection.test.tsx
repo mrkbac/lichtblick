@@ -14,8 +14,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import LogsSection from "./LogsSection";
 
 jest.mock("react-json-tree", () => ({
-  __esModule: true,
-  default: ({ data }: { data: unknown }) => (
+  JSONTree: ({ data }: { data: unknown }) => (
     <div data-testid="json-tree">{JSON.stringify(data)}</div>
   ),
 }));

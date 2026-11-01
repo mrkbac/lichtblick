@@ -164,7 +164,7 @@ describe("given useSharedRawMessagesLogic", () => {
       });
 
       act(() => {
-        result.current.onLabelClick(["field1"]);
+        result.current.onToggleExpand("field1", {});
       });
 
       // After clicking a label, expansion should become an object state

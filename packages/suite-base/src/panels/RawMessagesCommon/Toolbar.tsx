@@ -7,6 +7,7 @@
 
 import DiffIcon from "@mui/icons-material/Difference";
 import DiffOutlinedIcon from "@mui/icons-material/DifferenceOutlined";
+import SearchIcon from "@mui/icons-material/Search";
 import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
 import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import { IconButton, MenuItem, Select, SelectChangeEvent } from "@mui/material";
@@ -35,6 +36,8 @@ function ToolbarComponent(props: PropsToolbar): React.JSX.Element {
     saveConfig,
     topic,
     topicPath,
+    searchOpen = false,
+    onToggleSearch,
   } = props;
 
   const { classes, cx } = useStylesToolbar();
@@ -60,6 +63,16 @@ function ToolbarComponent(props: PropsToolbar): React.JSX.Element {
         >
           {canExpandAll ? <UnfoldMoreIcon fontSize="small" /> : <UnfoldLessIcon fontSize="small" />}
         </IconButton>
+        {onToggleSearch && (
+          <IconButton
+            className={cx(classes.iconButton, { "Mui-selected": searchOpen })}
+            title="Search fields and values (Ctrl+F)"
+            onClick={onToggleSearch}
+            size="small"
+          >
+            <SearchIcon fontSize="small" />
+          </IconButton>
+        )}
         <Stack fullWidth paddingLeft={0.25}>
           <MessagePathInput
             index={0}

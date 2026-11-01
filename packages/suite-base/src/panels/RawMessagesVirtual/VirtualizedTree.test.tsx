@@ -23,10 +23,14 @@ jest.mock("@tanstack/react-virtual", () => ({
   })),
 }));
 
-function renderVirtualizedTree(props: Partial<React.ComponentProps<typeof VirtualizedTree>> = {}) {
+type TestProps = Partial<React.ComponentProps<typeof VirtualizedTree>> & {
+  expandedNodes?: Set<string>;
+};
+
+function renderVirtualizedTree({ expandedNodes = new Set<string>(), ...props }: TestProps = {}) {
   const defaultProps: React.ComponentProps<typeof VirtualizedTree> = {
     data: {},
-    expandedNodes: new Set<string>(),
+    isExpanded: (key) => expandedNodes.has(key),
     onToggleExpand: jest.fn(),
     renderValue: jest.fn(),
     ...props,
@@ -110,7 +114,7 @@ describe("VirtualizedTree", () => {
       const fontSize = BasicBuilder.number({ min: 10, max: 24 });
 
       // When
-      const { container } = renderVirtualizedTree({
+      renderVirtualizedTree({
         data,
         expandedNodes,
         onToggleExpand: mockOnToggleExpand,
@@ -118,8 +122,7 @@ describe("VirtualizedTree", () => {
       });
 
       // Then
-      const containerDiv = container.firstChild as HTMLElement;
-      expect(containerDiv).toHaveStyle({ fontSize: `${fontSize}px` });
+      expect(screen.getByRole("tree")).toHaveStyle({ fontSize: `${fontSize}px` });
     });
 
     it("should use inherit fontSize when not provided", () => {
@@ -128,15 +131,14 @@ describe("VirtualizedTree", () => {
       const expandedNodes = new Set<string>();
 
       // When
-      const { container } = renderVirtualizedTree({
+      renderVirtualizedTree({
         data,
         expandedNodes,
         onToggleExpand: mockOnToggleExpand,
       });
 
       // Then
-      const containerDiv = container.firstChild as HTMLElement;
-      expect(containerDiv).toHaveStyle({ fontSize: "inherit" });
+      expect(screen.getByRole("tree")).toHaveStyle({ fontSize: "inherit" });
     });
   });
 
@@ -210,7 +212,7 @@ describe("VirtualizedTree", () => {
 
       // Then
       expect(mockOnToggleExpand).toHaveBeenCalledTimes(1);
-      expect(mockOnToggleExpand).toHaveBeenCalledWith("nested");
+      expect(mockOnToggleExpand).toHaveBeenCalledWith("nested", data.nested);
     });
 
     it("should not show expand button for non-expandable nodes", () => {
@@ -733,7 +735,7 @@ describe("VirtualizedTree", () => {
       rerender(
         <VirtualizedTree
           data={newData}
-          expandedNodes={expandedNodes}
+          isExpanded={(key) => expandedNodes.has(key)}
           onToggleExpand={mockOnToggleExpand}
           renderValue={jest.fn()}
         />,

@@ -7,7 +7,7 @@
 
 import { Link, List, ListItem, ListItemButton, ListItemText, Typography } from "@mui/material";
 import { useEffect, useRef, useState } from "react";
-import Tree from "react-json-tree";
+import { JSONTree as Tree } from "react-json-tree";
 import { makeStyles } from "tss-react/mui";
 
 import Stack from "@lichtblick/suite-base/components/Stack";

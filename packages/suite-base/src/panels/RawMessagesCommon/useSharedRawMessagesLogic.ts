@@ -24,14 +24,19 @@ import {
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { Topic } from "@lichtblick/suite-base/players/types";
 
-import { PATH_NAME_AGGREGATOR, PREV_MSG_METHOD } from "./constants";
+import { PREV_MSG_METHOD } from "./constants";
 import { NodeState } from "./types";
 import type {
   UseSharedRawMessagesLogicProps,
   SharedConfig,
   UseSharedRawMessagesLogicResult,
 } from "./types";
-import { dataWithoutWrappingArray, generateDeepKeyPaths, toggleExpansion } from "./utils";
+import {
+  dataWithoutWrappingArray,
+  generateDeepKeyPaths,
+  isNodeExpanded,
+  toggleNodeExpansion,
+} from "./utils";
 
 const log = Logger.getLogger(__filename);
 
@@ -206,11 +211,14 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
     setExpansion(canExpandAll ? "all" : "none");
   }, [canExpandAll]);
 
-  const onLabelClick = useCallback(
-    (keypath: (string | number)[]) => {
-      setExpansion((old) =>
-        toggleExpansion(old ?? "none", nodes, keypath.join(PATH_NAME_AGGREGATOR)),
-      );
+  const isExpanded = useCallback(
+    (key: string, value: unknown) => isNodeExpanded(expansion, key, value),
+    [expansion],
+  );
+
+  const onToggleExpand = useCallback(
+    (key: string, value: unknown) => {
+      setExpansion((old) => toggleNodeExpansion(old, nodes, key, value));
     },
     [nodes],
   );
@@ -303,7 +311,8 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
     onDiffTopicPathChange,
     onToggleDiff,
     onToggleExpandAll,
-    onLabelClick,
+    isExpanded,
+    onToggleExpand,
     canStep,
     canStepPrevious,
     canStepNext,

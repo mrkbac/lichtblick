@@ -14,8 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { ChevronLeft16Regular, ChevronRight16Regular } from "@fluentui/react-icons";
-import { IconButton, Link, Typography } from "@mui/material";
+import { Link, Typography } from "@mui/material";
 import { useCallback } from "react";
 import { useLatest } from "react-use";
 
@@ -26,6 +25,7 @@ import { PropsMetadata } from "@lichtblick/suite-base/panels/RawMessagesCommon/t
 import { getMessageDocumentationLink } from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
 
+import { StepButtons } from "./StepButtons";
 import { copyMessageReplacer } from "./copyMessageReplacer";
 
 export default function Metadata({
@@ -81,30 +81,7 @@ export default function Metadata({
           })()}
           {` @ ${formatTimeRaw(message.receiveTime)} sec`}
         </Typography>
-        {stepping && (
-          <>
-            <IconButton
-              size="small"
-              className={classes.button}
-              title="Previous message (Alt+[)"
-              aria-label="Previous message"
-              disabled={!stepping.canStepPrevious}
-              onClick={stepping.onStepPrevious}
-            >
-              <ChevronLeft16Regular />
-            </IconButton>
-            <IconButton
-              size="small"
-              className={classes.button}
-              title="Next message (Alt+])"
-              aria-label="Next message"
-              disabled={!stepping.canStepNext}
-              onClick={stepping.onStepNext}
-            >
-              <ChevronRight16Regular />
-            </IconButton>
-          </>
-        )}
+        {stepping && <StepButtons stepping={stepping} />}
         <CopyButton size="small" iconSize="small" className={classes.button} getText={copyData} />
       </Stack>
 

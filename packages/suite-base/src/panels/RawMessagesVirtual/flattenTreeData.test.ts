@@ -5,9 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { diffLabels } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-import { flattenTreeData } from "./flattenTreeData";
+import { flattenTreeData, searchTreeData } from "./flattenTreeData";
 
 describe("flattenTreeData", () => {
   let expandedNodes = new Set<string>();
@@ -20,7 +21,7 @@ describe("flattenTreeData", () => {
       const data = undefined;
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toEqual([]);
@@ -33,7 +34,7 @@ describe("flattenTreeData", () => {
       const data = BasicBuilder.string();
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toEqual([]);
@@ -44,7 +45,7 @@ describe("flattenTreeData", () => {
       const data = BasicBuilder.number();
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toEqual([]);
@@ -55,7 +56,7 @@ describe("flattenTreeData", () => {
       const data = BasicBuilder.boolean();
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toEqual([]);
@@ -68,7 +69,7 @@ describe("flattenTreeData", () => {
       const data = new Uint8Array([1, 2, 3]);
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(3);
@@ -85,7 +86,7 @@ describe("flattenTreeData", () => {
       const data = new Float32Array([1.5, 2.5, 3.5]);
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(3);
@@ -112,7 +113,7 @@ describe("flattenTreeData", () => {
       const data = new Int16Array([10, 20, 30]);
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(3);
@@ -124,7 +125,7 @@ describe("flattenTreeData", () => {
       const data = new Float32Array([]);
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toEqual([]);
@@ -141,7 +142,7 @@ describe("flattenTreeData", () => {
       };
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(3);
@@ -182,7 +183,7 @@ describe("flattenTreeData", () => {
       };
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(2);
@@ -197,7 +198,7 @@ describe("flattenTreeData", () => {
       };
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(1);
@@ -212,7 +213,7 @@ describe("flattenTreeData", () => {
       expandedNodes = new Set<string>(["values"]);
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(4);
@@ -236,7 +237,7 @@ describe("flattenTreeData", () => {
       };
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(1);
@@ -250,7 +251,7 @@ describe("flattenTreeData", () => {
       };
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(1);
@@ -264,7 +265,7 @@ describe("flattenTreeData", () => {
       };
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(1);
@@ -283,7 +284,7 @@ describe("flattenTreeData", () => {
       };
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(1);
@@ -309,7 +310,7 @@ describe("flattenTreeData", () => {
       expandedNodes = new Set<string>(["user"]);
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(3);
@@ -349,7 +350,7 @@ describe("flattenTreeData", () => {
       expandedNodes = new Set<string>(["level1", "level2~level1", "level3~level2~level1"]);
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(4);
@@ -378,7 +379,7 @@ describe("flattenTreeData", () => {
       expandedNodes = new Set<string>(["level1"]); // level2 is not expanded
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(2);
@@ -394,7 +395,7 @@ describe("flattenTreeData", () => {
       const data = [BasicBuilder.string(), BasicBuilder.string(), BasicBuilder.string()];
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(3);
@@ -436,7 +437,7 @@ describe("flattenTreeData", () => {
       expandedNodes = new Set<string>(["0", "1"]);
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(6);
@@ -465,7 +466,7 @@ describe("flattenTreeData", () => {
       expandedNodes = new Set<string>(["matrix", "0~matrix", "1~matrix"]);
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result[0]?.key).toBe("matrix");
@@ -497,7 +498,7 @@ describe("flattenTreeData", () => {
       expandedNodes = new Set<string>(["outer", "middle~outer"]);
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(3);
@@ -514,7 +515,7 @@ describe("flattenTreeData", () => {
       expandedNodes = new Set<string>(["items", "0~items"]);
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result[0]?.keyPath).toEqual(["items"]);
@@ -537,7 +538,7 @@ describe("flattenTreeData", () => {
       expandedNodes = new Set<string>(["users", "0~users", "roles~0~users"]);
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result[0]?.key).toBe("users");
@@ -566,7 +567,7 @@ describe("flattenTreeData", () => {
       expandedNodes = new Set<string>(["header", "stamp~header", "pose", "position~pose"]);
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result.find((node) => node.key === "header")).toBeTruthy();
@@ -601,7 +602,7 @@ describe("flattenTreeData", () => {
       const parentPath = "custom~parent";
 
       // When
-      const result = flattenTreeData(data, expandedNodes, parentPath);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key), { parentPath });
 
       // Then
       expect(result[0]?.key).toBe("field~custom~parent");
@@ -615,7 +616,7 @@ describe("flattenTreeData", () => {
       const depth = BasicBuilder.number({ min: 1, max: 10 });
 
       // When
-      const result = flattenTreeData(data, expandedNodes, parentPath, depth);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key), { parentPath, depth });
 
       // Then
       expect(result[0]?.depth).toBe(depth);
@@ -629,7 +630,11 @@ describe("flattenTreeData", () => {
       const keyPath = [BasicBuilder.string(), BasicBuilder.string()];
 
       // When
-      const result = flattenTreeData(data, expandedNodes, parentPath, depth, keyPath);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key), {
+        parentPath,
+        depth,
+        keyPath,
+      });
 
       // Then
       expect(result[0]?.keyPath).toEqual(["field", keyPath[0], keyPath[1]]);
@@ -645,7 +650,11 @@ describe("flattenTreeData", () => {
       const keyPath = ["root"];
 
       // When
-      const result = flattenTreeData(data, expandedNodes, parentPath, depth, keyPath);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key), {
+        parentPath,
+        depth,
+        keyPath,
+      });
 
       // Then
       expect(result[0]?.key).toBe(`nested~${parentPath}`);
@@ -668,7 +677,7 @@ describe("flattenTreeData", () => {
       };
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(3);
@@ -687,7 +696,7 @@ describe("flattenTreeData", () => {
       };
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(3);
@@ -705,7 +714,7 @@ describe("flattenTreeData", () => {
       };
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       // Symbols are not included in Object.entries()
@@ -718,12 +727,58 @@ describe("flattenTreeData", () => {
       const data = Array.from({ length: 1000 }, (_, i) => i);
 
       // When
-      const result = flattenTreeData(data, expandedNodes);
+      const result = flattenTreeData(data, (key) => expandedNodes.has(key));
 
       // Then
       expect(result).toHaveLength(1000);
       expect(result[0]?.value).toBe(0);
       expect(result[999]?.value).toBe(999);
+    });
+  });
+
+  describe("when flattening a diff", () => {
+    const { ADDED, CHANGED, DELETED, ID } = diffLabels;
+    const diff = {
+      a: { [CHANGED.labelText]: "1 -> 2" },
+      list: [
+        { [ID.labelText]: { id: 7 }, value: { [CHANGED.labelText]: "3 -> 4" } },
+        { [ADDED.labelText]: { [ID.labelText]: { id: 8 }, id: 8, value: 5 } },
+      ],
+      gone: { [DELETED.labelText]: 9 },
+    };
+
+    it("unwraps diff labels into statuses and hides id entries", () => {
+      const rows = flattenTreeData(diff, () => true, { diff: true });
+
+      expect(rows.map((row) => [row.key, row.diffStatus])).toEqual([
+        ["a", "changed"],
+        ["list", undefined],
+        ["0~list", undefined],
+        ["value~0~list", "changed"],
+        ["1~list", "added"],
+        ["id~1~list", "added"],
+        ["value~1~list", "added"],
+        ["gone", "deleted"],
+      ]);
+      expect(rows[0]?.value).toBe("1 -> 2");
+    });
+  });
+
+  describe("when searching", () => {
+    const data = { header: { frame_id: "base_link" }, status: [{ name: "motor", level: 1 }] };
+
+    it("finds keys and values anywhere and keeps the path to them", () => {
+      const { matches, visible, ancestors } = searchTreeData(data, "MOTOR");
+
+      expect([...matches]).toEqual(["name~0~status"]);
+      expect(ancestors).toEqual(new Set(["status", "0~status"]));
+      expect(visible.has("header")).toBe(false);
+
+      const rows = flattenTreeData(data, (key) => ancestors.has(key), {
+        include: (key) => visible.has(key),
+        includeSubtreeOf: matches,
+      });
+      expect(rows.map((row) => row.key)).toEqual(["status", "0~status", "name~0~status"]);
     });
   });
 });

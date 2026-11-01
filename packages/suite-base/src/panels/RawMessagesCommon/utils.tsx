@@ -40,37 +40,60 @@ function isTypedArray(obj: unknown): boolean {
   return isTyped;
 }
 
-function invert(value: NodeState): NodeState {
-  return value === NodeState.Expanded ? NodeState.Collapsed : NodeState.Expanded;
+// ponytail: "expand all" leaves big arrays (point clouds, images) collapsed so a message with
+// millions of elements stays responsive; they can still be expanded one by one.
+const EXPAND_ALL_MAX_ARRAY_LENGTH = 500;
+
+function isLargeArray(value: unknown): boolean {
+  if (ArrayBuffer.isView(value)) {
+    return true;
+  }
+  return Array.isArray(value) && value.length > EXPAND_ALL_MAX_ARRAY_LENGTH;
 }
 
-/*
- * Calculate the new expansion state after toggling the node at `path`.
+/** Whether the node `key` (holding `value`) is shown expanded. Unknown keys are collapsed. */
+export function isNodeExpanded(
+  expansion: NodeExpansion | undefined,
+  key: string,
+  value: unknown,
+): boolean {
+  if (expansion === "all") {
+    return !isLargeArray(value);
+  }
+  if (expansion == undefined || expansion === "none") {
+    return false;
+  }
+  return expansion[key] === NodeState.Expanded;
+}
+
+/**
+ * Flip the shown state of node `key`. "all" and "none" first become an explicit map (using
+ * `paths`, all known node keys), so the rest of the tree keeps its current state.
  */
-export function toggleExpansion(
-  state: NodeExpansion,
+export function toggleNodeExpansion(
+  expansion: NodeExpansion | undefined,
   paths: Set<string>,
   key: string,
+  value: unknown,
 ): NodeExpansion {
-  if (state === "all" || state === "none") {
-    const next = state === "all" ? NodeState.Expanded : NodeState.Collapsed;
-    const nextState: NodeExpansion = {};
-    for (const leaf of paths) {
-      // Implicitly all descendents are collapsed
-      if (next === NodeState.Collapsed && leaf.startsWith(key + PATH_NAME_AGGREGATOR)) {
-        continue;
+  const shown = isNodeExpanded(expansion, key, value);
+  const next: Record<string, NodeState> =
+    expansion === "all"
+      ? Object.fromEntries([...paths].map((path) => [path, NodeState.Expanded]))
+      : expansion == undefined || expansion === "none"
+        ? {}
+        : { ...expansion };
+  next[key] = shown ? NodeState.Collapsed : NodeState.Expanded;
+  if (shown) {
+    // Collapsing hides the subtree; forget its descendants so re-expanding starts compact.
+    // Keys are child-first ("child~parent"), so descendants end with "~key".
+    for (const path of Object.keys(next)) {
+      if (path.endsWith(`${PATH_NAME_AGGREGATOR}${key}`)) {
+        delete next[path];
       }
-      nextState[leaf] = leaf === key ? invert(next) : next;
     }
-    return nextState;
   }
-
-  const prev = state[key];
-  const next = prev == undefined ? NodeState.Collapsed : invert(prev);
-  return {
-    ...state,
-    [key]: next,
-  };
+  return next;
 }
 
 /**

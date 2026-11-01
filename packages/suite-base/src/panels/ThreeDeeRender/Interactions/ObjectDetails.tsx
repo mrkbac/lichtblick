@@ -15,7 +15,7 @@
 //   You may not use this file except in compliance with the License.
 
 import * as _ from "lodash-es";
-import Tree from "react-json-tree";
+import { JSONTree as Tree } from "react-json-tree";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { RosValue } from "@lichtblick/suite-base/players/types";
@@ -42,7 +42,7 @@ function ObjectDetails({ interactionData, selectedObject, timezone }: Props): Re
       <Stack paddingY={1}>
         <Tree
           data={selectedObject}
-          shouldExpandNode={(_markerKeyPath, _data, level) => level < 2}
+          shouldExpandNodeInitially={(_markerKeyPath, _data, level) => level < 2}
           invertTheme={false}
           theme={{ ...jsonTreeTheme, tree: { margin: 0 } }}
           hideRoot
@@ -55,7 +55,7 @@ function ObjectDetails({ interactionData, selectedObject, timezone }: Props): Re
     <Stack paddingY={1}>
       <Tree
         data={originalObject}
-        shouldExpandNode={() => false}
+        shouldExpandNodeInitially={() => false}
         invertTheme={false}
         theme={{ ...jsonTreeTheme, tree: { margin: 0, whiteSpace: "pre-line" } }}
         hideRoot
@@ -66,8 +66,8 @@ function ObjectDetails({ interactionData, selectedObject, timezone }: Props): Re
           const label = _.first(markerKeyPath);
           return <span style={{ padding: "0 4px 0 0" }}>{label}</span>;
         }}
-        valueRenderer={(label: string) => {
-          return <span>{label}</span>;
+        valueRenderer={(label) => {
+          return <span>{String(label)}</span>;
         }}
       />
     </Stack>

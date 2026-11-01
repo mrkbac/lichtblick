@@ -24,6 +24,9 @@ export type PanelInfo = {
   /** Set this to true if a panel has custom toolbar items and so cannot be renamed. */
   hasCustomToolbar?: boolean;
 
+  /** Keep the panel loadable from saved layouts but don't offer it in the panel list. */
+  hidden?: boolean;
+
   /**
    * The panel module is a function to load the panel.
    * This is to support our lazy built-in panels
