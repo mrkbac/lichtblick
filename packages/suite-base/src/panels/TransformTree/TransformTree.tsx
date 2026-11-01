@@ -51,6 +51,29 @@ const RAD_TO_DEG = 180 / Math.PI;
 
 const NO_COLLAPSED: ReadonlySet<string> = new Set();
 
+/**
+ * Fixed widths (in characters of the monospace table font) for the value columns, so the layout
+ * never shifts while playing when a value gains a sign or a digit. Each fits its header and the
+ * largest expected value: "-12345.678" m, "-180.0" °, "9999.999" s, "1000.0" Hz.
+ */
+const VALUE_COLUMNS = [
+  { key: "x", chars: 10, groupStart: true },
+  { key: "y", chars: 10, groupStart: false },
+  { key: "z", chars: 10, groupStart: false },
+  { key: "roll", chars: 9, groupStart: true },
+  { key: "pitch", chars: 9, groupStart: false },
+  { key: "yaw", chars: 9, groupStart: false },
+  { key: "age", chars: 9, groupStart: true },
+  { key: "rate", chars: 9, groupStart: false },
+] as const;
+const FRAME_COLUMN_MIN_CHARS = 24;
+// Matches the cell padding in TransformTree.style.ts: 8px per side, 20px left at a group start.
+const columnWidth = ({ chars, groupStart }: (typeof VALUE_COLUMNS)[number]) =>
+  `calc(${chars}ch + ${groupStart ? 28 : 16}px)`;
+const TABLE_MIN_WIDTH = `calc(${
+  FRAME_COLUMN_MIN_CHARS + VALUE_COLUMNS.reduce((sum, column) => sum + column.chars, 0)
+}ch + ${16 * (VALUE_COLUMNS.length + 1) + 12 * 3}px)`;
+
 /** Fixed decimals so decimal points line up in a right-aligned column; no "-0.000". */
 function formatFixed(value: number, digits: number): string {
   const text = value.toFixed(digits);
@@ -270,18 +293,27 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
           )}
         </div>
         <div className={classes.scroll}>
-          <table className={classes.table}>
+          <table className={classes.table} style={{ minWidth: TABLE_MIN_WIDTH }}>
+            <colgroup>
+              <col />
+              {VALUE_COLUMNS.map((column) => (
+                <col
+                  key={column.key}
+                  style={{ width: columnWidth(column) }}
+                />
+              ))}
+            </colgroup>
             <thead>
               <tr>
                 <th>{t("columns.frame")}</th>
-                <th className={classes.groupStart}>{t("columns.x")}</th>
-                <th>{t("columns.y")}</th>
-                <th>{t("columns.z")}</th>
-                <th className={classes.groupStart}>{t("columns.roll")}</th>
-                <th>{t("columns.pitch")}</th>
-                <th>{t("columns.yaw")}</th>
-                <th className={classes.groupStart}>{t("columns.age")}</th>
-                <th>{t("columns.rate")}</th>
+                {VALUE_COLUMNS.map((column) => (
+                  <th
+                    key={column.key}
+                    className={cx({ [classes.groupStart]: column.groupStart })}
+                  >
+                    {t(`columns.${column.key}`)}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -363,7 +395,12 @@ const FrameTableRow = memo(function FrameTableRowImpl({
             title={details ? <span style={{ whiteSpace: "pre-line" }}>{details}</span> : ""}
             placement="right"
           >
-            <span className={cx({ [classes.root]: !entry, [classes.muted]: !hasData })}>
+            <span
+              className={cx(classes.frameName, {
+                [classes.root]: !entry,
+                [classes.muted]: !hasData,
+              })}
+            >
               {row.frame}
             </span>
           </Tooltip>
