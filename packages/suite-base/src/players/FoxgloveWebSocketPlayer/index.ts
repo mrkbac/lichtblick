@@ -31,9 +31,7 @@ import {
   BinaryOpcode,
   IWebSocket,
 } from "@foxglove/ws-protocol";
-import * as base64 from "@protobufjs/base64";
 import * as _ from "lodash-es";
-import { v4 as uuidv4 } from "uuid";
 
 import { debouncePromise } from "@lichtblick/den/async";
 import Log from "@lichtblick/log";
@@ -92,7 +90,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #url: string; // WebSocket URL.
   #name: string;
   #client?: FoxgloveClient; // The client when we're connected.
-  #id: string = uuidv4(); // Unique ID for this player session.
+  #id: string = crypto.randomUUID(); // Unique ID for this player session.
   #serverCapabilities: string[] = [];
   #playerCapabilities: (typeof PLAYER_CAPABILITIES)[keyof typeof PLAYER_CAPABILITIES][] = [];
   #supportedEncodings?: string[];
@@ -286,7 +284,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         });
       }
 
-      const newSessionId = event.sessionId ?? uuidv4();
+      const newSessionId = event.sessionId ?? crypto.randomUUID();
       if (this.#id !== newSessionId) {
         this.#resetSessionState();
       }
@@ -416,19 +414,13 @@ export default class FoxgloveWebSocketPlayer implements Player {
             (channel.schemaEncoding == undefined || channel.schemaEncoding === "protobuf")
           ) {
             schemaEncoding = "protobuf";
-            schemaData = new Uint8Array(base64.length(channel.schema));
-            if (base64.decode(channel.schema, schemaData, 0) !== schemaData.byteLength) {
-              throw new Error(`Failed to decode base64 schema on channel ${channel.id}`);
-            }
+            schemaData = Uint8Array.fromBase64(channel.schema);
           } else if (
             channel.encoding === "flatbuffer" &&
             (channel.schemaEncoding == undefined || channel.schemaEncoding === "flatbuffer")
           ) {
             schemaEncoding = "flatbuffer";
-            schemaData = new Uint8Array(base64.length(channel.schema));
-            if (base64.decode(channel.schema, schemaData, 0) !== schemaData.byteLength) {
-              throw new Error(`Failed to decode base64 schema on channel ${channel.id}`);
-            }
+            schemaData = Uint8Array.fromBase64(channel.schema);
           } else if (
             channel.encoding === "ros1" &&
             (channel.schemaEncoding == undefined || channel.schemaEncoding === "ros1msg")
@@ -1089,7 +1081,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
           type: isByteArray ? "byte_array" : this.#parameterTypeByName.get(key),
         },
       ],
-      uuidv4(),
+      crypto.randomUUID(),
     );
 
     // Pre-actively update our parameter map, such that a change is detected if our update failed

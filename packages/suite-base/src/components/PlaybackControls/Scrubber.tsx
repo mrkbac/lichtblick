@@ -16,7 +16,6 @@ import { Fade, PopperProps, Tooltip } from "@mui/material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLatest } from "react-use";
 import { makeStyles } from "tss-react/mui";
-import { v4 as uuidv4 } from "uuid";
 
 import {
   MessagePipelineContext,
@@ -74,7 +73,7 @@ export default function Scrubber(props: Props): React.JSX.Element {
   const { onSeek } = props;
   const { classes, cx } = useStyles();
 
-  const [hoverComponentId] = useState<string>(() => uuidv4());
+  const [hoverComponentId] = useState<string>(() => crypto.randomUUID());
 
   const startTime = useMessagePipeline(selectStartTime);
   const currentTime = useMessagePipeline(selectCurrentTime);

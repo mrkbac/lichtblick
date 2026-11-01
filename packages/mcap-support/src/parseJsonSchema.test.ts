@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { foxgloveMessageSchemas, generateJsonSchema } from "@foxglove/schemas/internal";
-import * as protobufjs from "protobufjs";
 
 import { parseJsonSchema } from "./parseJsonSchema";
 
@@ -78,7 +77,7 @@ describe("parseJsonSchema", () => {
       ]),
       value: {
         str: "str",
-        bin: protobufjs.util.base64.encode(new Uint8Array([0, 1, 0xfe, 0xff]), 0, 4),
+        bin: new Uint8Array([0, 1, 0xfe, 0xff]).toBase64(),
         num: 1.5,
         int: 1.5,
         bool: true,
@@ -183,12 +182,12 @@ describe("parseJsonSchema", () => {
         ["Foo.nested.bar", { definitions: [{ name: "bin3", type: "uint8", isArray: true }] }],
       ]),
       value: {
-        bin: protobufjs.util.base64.encode(new Uint8Array([0xa1, 0xb2, 0xc3]), 0, 3),
+        bin: new Uint8Array([0xa1, 0xb2, 0xc3]).toBase64(),
         nested: {
-          bin2: protobufjs.util.base64.encode(new Uint8Array([0xd4, 0xe5, 0xf6]), 0, 3),
+          bin2: new Uint8Array([0xd4, 0xe5, 0xf6]).toBase64(),
           bar: [
-            { bin3: protobufjs.util.base64.encode(new Uint8Array([0, 1, 0xfe, 0xff]), 0, 4) },
-            { bin3: protobufjs.util.base64.encode(new Uint8Array([2, 3, 0xfe, 0xff]), 0, 4) },
+            { bin3: new Uint8Array([0, 1, 0xfe, 0xff]).toBase64() },
+            { bin3: new Uint8Array([2, 3, 0xfe, 0xff]).toBase64() },
           ],
         },
       },
@@ -203,17 +202,14 @@ describe("parseJsonSchema", () => {
         },
       },
     },
-  ])("converts schema to datatypes and decodes base64", ({
-    name,
-    schema,
-    expectedDatatypes,
-    value,
-    expectedValue,
-  }) => {
-    const { datatypes, postprocessValue } = parseJsonSchema(schema, name);
-    expect(datatypes).toEqual(expectedDatatypes);
-    expect(postprocessValue(value)).toEqual(expectedValue);
-  });
+  ])(
+    "converts schema to datatypes and decodes base64",
+    ({ name, schema, expectedDatatypes, value, expectedValue }) => {
+      const { datatypes, postprocessValue } = parseJsonSchema(schema, name);
+      expect(datatypes).toEqual(expectedDatatypes);
+      expect(postprocessValue(value)).toEqual(expectedValue);
+    },
+  );
 
   it("allows missing sub-properties", () => {
     const { postprocessValue } = parseJsonSchema(

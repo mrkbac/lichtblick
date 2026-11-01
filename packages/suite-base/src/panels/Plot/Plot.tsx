@@ -9,7 +9,6 @@ import { Button, Tooltip, Fade, useTheme } from "@mui/material";
 import * as _ from "lodash-es";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { v4 as uuidv4 } from "uuid";
 
 import { Immutable } from "@lichtblick/suite";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
@@ -65,7 +64,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
 
   const [activeTooltip, setActiveTooltip] = useState<TooltipStateSetter>();
 
-  const [subscriberId] = useState(() => uuidv4());
+  const [subscriberId] = useState(() => crypto.randomUUID());
   const [canvasDiv, setCanvasDiv] = useState<HTMLDivElement | ReactNull>(ReactNull);
   const [coordinator, setCoordinator] = useState<PlotCoordinator | undefined>(undefined);
   const shouldSync = config.isSynced;

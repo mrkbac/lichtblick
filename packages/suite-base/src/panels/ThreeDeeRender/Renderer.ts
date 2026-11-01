@@ -13,7 +13,6 @@ import i18next from "i18next";
 import { produce } from "immer";
 import * as THREE from "three";
 import { DeepPartial, assert } from "ts-essentials";
-import { v4 as uuidv4 } from "uuid";
 
 import { ObjectPool } from "@lichtblick/den/collection";
 import { CameraModelsMap } from "@lichtblick/den/image/types";
@@ -896,7 +895,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     const handler = options.handler;
     // A unique id is assigned to each action to deduplicate selection events
     // The layerId is used to map selection events back to their handlers
-    const instanceId = uuidv4();
+    const instanceId = crypto.randomUUID();
     const action: SettingsTreeNodeActionItem = {
       type: "action",
       id: `${options.layerId}-${instanceId}`,

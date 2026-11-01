@@ -6,6 +6,6 @@
     "outDir": "./dist",
     "jsx": "react-jsx",
     "types": ["node", "jest"],
-    "lib": ["dom", "es2022"]
+    "lib": ["dom", "es2025", "esnext.typedarrays"]
   }
 }

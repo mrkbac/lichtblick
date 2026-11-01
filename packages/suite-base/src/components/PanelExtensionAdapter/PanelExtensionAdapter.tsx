@@ -10,7 +10,6 @@ import { useTheme } from "@mui/material";
 import { produce } from "immer";
 import { CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "react-use";
-import { v4 as uuid } from "uuid";
 
 import { useSynchronousMountedState, useValueChangedDebugLog } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
@@ -169,7 +168,7 @@ function PanelExtensionAdapter(
 
   const { openSiblingPanel, setMessagePathDropConfig, type: panelName } = usePanelContext();
 
-  const [panelId] = useState(() => uuid());
+  const [panelId] = useState(() => crypto.randomUUID());
   const isMounted = useSynchronousMountedState();
   const [error, setError] = useState<Error | undefined>();
   const [forceConversion, setForceConversion] = useState(new Set<string>());

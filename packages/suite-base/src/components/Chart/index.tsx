@@ -18,7 +18,6 @@ import * as R from "ramda";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useMountedState } from "react-use";
 import { assert } from "ts-essentials";
-import { v4 as uuidv4 } from "uuid";
 
 import Logger from "@lichtblick/log";
 import ChartJsMux, {
@@ -101,7 +100,7 @@ const supportsOffscreenCanvas =
   typeof HTMLCanvasElement.prototype.transferControlToOffscreen === "function";
 
 function Chart(props: Props): React.JSX.Element {
-  const [id] = useState(() => uuidv4());
+  const [id] = useState(() => crypto.randomUUID());
 
   const initialized = useRef(false);
   const canvasRef = useRef<HTMLCanvasElement>();

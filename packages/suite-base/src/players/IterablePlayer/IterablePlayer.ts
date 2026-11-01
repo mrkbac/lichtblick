@@ -17,7 +17,6 @@ import {
 } from "@foxglove/rostime";
 import assert from "assert";
 import * as _ from "lodash-es";
-import { v4 as uuidv4 } from "uuid";
 
 import { debouncePromise } from "@lichtblick/den/async";
 import { filterMap } from "@lichtblick/den/collection";
@@ -178,7 +177,7 @@ export class IterablePlayer implements Player {
   #preloadTopics: TopicSelection = new Map();
 
   #progress: Progress = {};
-  #id: string = uuidv4();
+  #id: string = crypto.randomUUID();
   #messages: Immutable<MessageEvent[]> = [];
   #receivedBytes: number = 0;
   #hasError = false;

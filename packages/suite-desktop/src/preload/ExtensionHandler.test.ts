@@ -5,7 +5,8 @@ import { existsSync } from "fs";
 import { readdir, readFile, mkdir, rm, writeFile } from "fs/promises";
 import JSZip from "jszip";
 import { join } from "path";
-import randomString from "randomstring";
+
+import { BasicBuilder, Capitalization, StringBuilder } from "@lichtblick/test-builders";
 
 import { ExtensionsHandler } from "./ExtensionHandler";
 import type { ExtensionPackageJson } from "./types";
@@ -27,11 +28,11 @@ jest.mock("jszip", () => ({
   loadAsync: jest.fn(),
 }));
 
-const genericString = (options: Randomstring.GenerateOptions = {}): string =>
-  randomString.generate({
+const genericString = (options: Partial<StringBuilder> = {}): string =>
+  BasicBuilder.string({
     length: 6,
     charset: "alphanumeric",
-    capitalization: "lowercase",
+    capitalization: Capitalization.LOWERCASE,
     ...options,
   });
 
@@ -177,7 +178,7 @@ describe("ExtensionsHandler", () => {
         name: genericString(),
         version: "1.0.0",
         main: "main.js",
-        publisher: genericString({ capitalization: "uppercase" }),
+        publisher: genericString({ capitalization: Capitalization.UPPERCASE }),
       };
 
       // When
@@ -190,7 +191,7 @@ describe("ExtensionsHandler", () => {
 
     it("should use namespace as publisher if publisher is missing", () => {
       // Given
-      const name = `@${genericString({ capitalization: "uppercase" })}/${genericString()}`;
+      const name = `@${genericString({ capitalization: Capitalization.UPPERCASE })}/${genericString()}`;
       const pkgJson: ExtensionPackageJson = {
         name,
         version: "1.0.0",
@@ -211,7 +212,7 @@ describe("ExtensionsHandler", () => {
         name: genericString(),
         version: "1.0.0",
         main: "main.js",
-        publisher: genericString({ capitalization: "uppercase" }),
+        publisher: genericString({ capitalization: Capitalization.UPPERCASE }),
       };
 
       // When

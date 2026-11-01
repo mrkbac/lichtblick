@@ -3,7 +3,7 @@
   "include": ["**/*"],
   "compilerOptions": {
     "jsx": "react-jsx",
-    "lib": ["dom", "dom.iterable", "es2022", "webworker"],
+    "lib": ["dom", "dom.iterable", "es2025", "esnext.typedarrays", "webworker"],
     "types": ["node", "jest"],
     "noEmit": true,
     "experimentalDecorators": true,

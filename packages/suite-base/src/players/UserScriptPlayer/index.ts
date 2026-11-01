@@ -18,7 +18,6 @@ import { Time, compare } from "@foxglove/rostime";
 import { Mutex } from "async-mutex";
 import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
-import { v4 as uuidv4 } from "uuid";
 
 import { MutexLocked } from "@lichtblick/den/async";
 import { filterMap } from "@lichtblick/den/collection";
@@ -181,7 +180,7 @@ export default class UserScriptPlayer implements Player {
     return new SharedWorker(new URL("./transformerWorker/index", import.meta.url), {
       // Although we are using SharedWorkers, we do not actually want to share worker instances
       // between tabs. We achieve this by passing in a unique name.
-      name: uuidv4(),
+      name: crypto.randomUUID(),
     });
   };
 
@@ -191,7 +190,7 @@ export default class UserScriptPlayer implements Player {
     return new SharedWorker(new URL("./runtimeWorker/index", import.meta.url), {
       // Although we are using SharedWorkers, we do not actually want to share worker instances
       // between tabs. We achieve this by passing in a unique name.
-      name: uuidv4(),
+      name: crypto.randomUUID(),
     });
   };
 

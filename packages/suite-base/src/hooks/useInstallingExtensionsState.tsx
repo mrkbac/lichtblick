@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { nanoid } from "nanoid";
 import { SnackbarKey, useSnackbar } from "notistack";
 import { useCallback, useEffect, useRef } from "react";
 
@@ -36,7 +35,9 @@ export function useInstallingExtensionsState({
 
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
 
-  const progressSnackbarKeyRef = useRef<SnackbarKey>(`installing-extensions-${nanoid()}`);
+  const progressSnackbarKeyRef = useRef<SnackbarKey>(
+    `installing-extensions-${crypto.randomUUID()}`,
+  );
   const progressSnackbarKey = progressSnackbarKeyRef.current;
 
   // Helper function to format loader failures into user-friendly messages

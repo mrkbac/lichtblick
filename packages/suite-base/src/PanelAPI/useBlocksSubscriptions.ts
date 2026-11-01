@@ -16,7 +16,6 @@
 
 import memoizeWeak from "memoize-weak";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { v4 as uuidv4 } from "uuid";
 
 import { Immutable } from "@lichtblick/suite";
 import {
@@ -64,7 +63,7 @@ const filterBlockByTopics = memoizeWeak(
 );
 
 const useSubscriptionsForBlocks = (subscriptions: Immutable<SubscribePayload[]>) => {
-  const [id] = useState(() => uuidv4());
+  const [id] = useState(() => crypto.randomUUID());
 
   const setSubscriptions = useMessagePipeline(
     useCallback(

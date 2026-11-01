@@ -20,7 +20,6 @@ import { MessageReader as ROS1MessageReader } from "@foxglove/rosmsg-serializati
 import { MessageReader as ROS2MessageReader } from "@foxglove/rosmsg2-serialization";
 import { Time, fromMillis, toSec } from "@foxglove/rostime";
 import * as _ from "lodash-es";
-import { v4 as uuidv4 } from "uuid";
 
 import { debouncePromise } from "@lichtblick/den/async";
 import { filterMap } from "@lichtblick/den/collection";
@@ -88,7 +87,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export default class RosbridgePlayer implements Player {
   #url: string; // WebSocket URL.
   #rosClient?: roslib.Ros; // The roslibjs client when we're connected.
-  #id: string = uuidv4(); // Unique ID for this player.
+  #id: string = crypto.randomUUID(); // Unique ID for this player.
   #isRefreshing = false; // True if currently refreshing the node graph.
   #listener?: (arg0: PlayerState) => Promise<void>; // Listener for _emitState().
   #closed: boolean = false; // Whether the player has been completely closed using close().

@@ -31,7 +31,6 @@ import React, {
 } from "react";
 import { useMountedState } from "react-use";
 import { makeStyles } from "tss-react/mui";
-import { v4 as uuidv4 } from "uuid";
 
 import { filterMap } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
@@ -229,7 +228,7 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
   const bounds = dataBounds ?? datasetBounds;
 
   const { classes, cx, theme } = useStyles();
-  const componentId = useMemo(() => uuidv4(), []);
+  const componentId = useMemo(() => crypto.randomUUID(), []);
   const isMounted = useMountedState();
   const canvasContainer = useRef<HTMLDivElement>(ReactNull);
 

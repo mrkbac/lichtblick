@@ -8,7 +8,6 @@
 import { Sockets, UdpRemoteInfo, UdpSocketRenderer } from "@foxglove/electron-socket/renderer";
 import { Time, fromMillis, add as addTimes, toDate, fromDate, fromMicros } from "@foxglove/rostime";
 import { Model, RawPacket, ReturnMode, packetRate } from "@foxglove/velodyne-cloud";
-import { v4 as uuidv4 } from "uuid";
 
 import { debouncePromise } from "@lichtblick/den/async";
 import Logger from "@lichtblick/log";
@@ -71,7 +70,7 @@ type VelodynePlayerOpts = {
 };
 
 export default class VelodynePlayer implements Player {
-  #id: string = uuidv4(); // Unique ID for this player
+  #id: string = crypto.randomUUID(); // Unique ID for this player
   #port: number; // Listening UDP port
   #listener?: (arg0: PlayerState) => Promise<void>; // Listener for _emitState()
   #socket?: UdpSocketRenderer;

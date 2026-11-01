@@ -11,7 +11,6 @@ import { RosNode, TcpSocket } from "@foxglove/ros1";
 import { Time, fromMillis, isGreaterThan, toSec } from "@foxglove/rostime";
 import { HttpServer } from "@foxglove/xmlrpc";
 import * as _ from "lodash-es";
-import { v4 as uuidv4 } from "uuid";
 
 import { debouncePromise } from "@lichtblick/den/async";
 import Logger from "@lichtblick/log";
@@ -65,7 +64,7 @@ export default class Ros1Player implements Player {
   #url: string; // rosmaster URL.
   #hostname?: string; // ROS_HOSTNAME
   #rosNode?: RosNode; // Our ROS node when we're connected.
-  #id: string = uuidv4(); // Unique ID for this player.
+  #id: string = crypto.randomUUID(); // Unique ID for this player.
   #listener?: (arg0: PlayerState) => Promise<void>; // Listener for _emitState().
   #closed: boolean = false; // Whether the player has been completely closed using close().
   #providerTopics?: TopicWithSchemaName[]; // Topics as advertised by rosmaster.

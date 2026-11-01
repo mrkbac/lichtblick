@@ -34,7 +34,6 @@ import {
 } from "react-resizable-panels";
 import tc from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
-import { v4 as uuidv4 } from "uuid";
 
 import { SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
@@ -280,7 +279,7 @@ function UserScriptEditor(props: Props) {
   const addNewNode = useCallback(
     (code?: string) => {
       saveCurrentNode();
-      const newScriptId = uuidv4();
+      const newScriptId = crypto.randomUUID();
       const sourceCode = code ?? skeletonBody;
       setUserScripts({
         [newScriptId]: {

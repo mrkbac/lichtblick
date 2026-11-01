@@ -12,7 +12,6 @@ import { useTranslation } from "react-i18next";
 import { getNodeAtPath } from "react-mosaic-component";
 import { useAsync, useAsyncFn, useMountedState } from "react-use";
 import shallowequal from "shallowequal";
-import { v4 as uuidv4 } from "uuid";
 
 import { useShallowMemo } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
@@ -83,7 +82,7 @@ export default function CurrentLayoutProvider({
 
   const appParameters = useAppParameters();
 
-  const [mosaicId] = useState(() => uuidv4());
+  const [mosaicId] = useState(() => crypto.randomUUID());
 
   const layoutStateListeners = useRef(new Set<(_: LayoutState) => void>());
   const addLayoutStateListener = useCallback((listener: (_: LayoutState) => void) => {

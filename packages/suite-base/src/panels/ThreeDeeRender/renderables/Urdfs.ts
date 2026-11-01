@@ -10,7 +10,6 @@ import { vec3 } from "gl-matrix";
 import i18next from "i18next";
 import * as _ from "lodash-es";
 import * as THREE from "three";
-import { v4 as uuidv4 } from "uuid";
 
 import { filterMap } from "@lichtblick/den/collection";
 import {
@@ -555,7 +554,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
         this.updateSettingsTree();
         this.renderer.updateCustomLayersCount();
       } else if (action.payload.id === "duplicate") {
-        const newInstanceId = uuidv4();
+        const newInstanceId = crypto.randomUUID();
         const config = {
           ...this.renderer.config.layers[instanceId],
           instanceId: newInstanceId,

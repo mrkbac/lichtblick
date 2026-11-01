@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
-import randomString from "randomstring";
 
 import { ExtensionInfo } from "@lichtblick/suite-base";
+import { BasicBuilder, Capitalization } from "@lichtblick/test-builders";
 
 import { DesktopExtensionLoader } from "./DesktopExtensionLoader";
 import { Desktop, DesktopExtension, LoadedExtension } from "../../common/types";
@@ -14,7 +14,11 @@ jest.mock("@lichtblick/log", () => ({
 }));
 
 const genericString = (): string =>
-  randomString.generate({ length: 6, charset: "alphanumeric", capitalization: "lowercase" });
+  BasicBuilder.string({
+    length: 6,
+    charset: "alphanumeric",
+    capitalization: Capitalization.LOWERCASE,
+  });
 
 describe("DesktopExtensionLoader", () => {
   let mockBridge: jest.Mocked<Desktop>;

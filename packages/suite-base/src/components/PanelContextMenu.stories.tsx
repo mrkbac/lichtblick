@@ -8,7 +8,6 @@
 import { StoryObj } from "@storybook/react-webpack5";
 import { useCallback } from "react";
 import { userEvent } from "storybook/test";
-import { v4 as uuid } from "uuid";
 
 import Panel from "@lichtblick/suite-base/components/Panel";
 import {
@@ -22,7 +21,7 @@ export default {
   title: "components/PanelContextMenu",
 };
 
-const DUMMY_CLASS = uuid();
+const DUMMY_CLASS = crypto.randomUUID();
 
 function DummyPanel(): React.JSX.Element {
   const getItems = useCallback(

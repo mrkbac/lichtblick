@@ -5,7 +5,8 @@ import fs, { Dirent, Stats } from "fs";
 import mockFs from "mock-fs";
 import { DirectoryItems } from "mock-fs/lib/filesystem";
 import os from "os";
-import randomString from "randomstring";
+
+import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { getFilesFromDirectory, isPathToDirectory, resolveSourcePaths } from "./resolveSourcePaths";
 
@@ -16,7 +17,7 @@ type FileStructure = {
 };
 
 function genericString(): string {
-  return randomString.generate({ length: 6, charset: "alphanumeric" });
+  return BasicBuilder.string({ length: 6, charset: "alphanumeric" });
 }
 
 function buildFile(file: Partial<FileStructure> = {}): Pick<FileStructure, "name" | "content"> {

@@ -3516,7 +3516,6 @@ __metadata:
     "@foxglove/wasm-zstd": "npm:1.0.1"
     "@lichtblick/tsconfig": "npm:1.1.2"
     "@mcap/core": "npm:2.4.0"
-    "@protobufjs/base64": "npm:1.1.2"
     flatbuffers: "npm:25.9.23"
     flatbuffers_reflection: "npm:1.3.0"
     protobufjs: "npm:8.8.1"
@@ -3654,7 +3653,6 @@ __metadata:
     "@opentelemetry/sdk-logs": "npm:0.221.0"
     "@opentelemetry/sdk-trace-web": "npm:2.12.0"
     "@opentelemetry/semantic-conventions": "npm:1.44.0"
-    "@protobufjs/base64": "npm:1.1.2"
     "@storybook/react-webpack5": "npm:10.6.5"
     "@svgr/webpack": "npm:8.1.0"
     "@tanstack/react-table": "npm:9.3.1"
@@ -3725,7 +3723,6 @@ __metadata:
     moment-timezone: "npm:0.6.6"
     monaco-editor: "npm:0.57.0"
     monaco-editor-webpack-plugin: "npm:7.1.1"
-    nanoid: "npm:5.1.16"
     natsort: "npm:2.0.3"
     nearley: "npm:2.20.1"
     nearley-loader: "npm:2.0.0"
@@ -3771,7 +3768,6 @@ __metadata:
     typescript: "npm:6.0.3"
     use-debounce: "npm:10.1.1"
     use-immer: "npm:0.11.0"
-    uuid: "npm:14.0.3"
     webpack: "npm:5.112.2"
     zustand: "npm:4.5.7"
   languageName: unknown
@@ -3790,6 +3786,7 @@ __metadata:
     "@lichtblick/log": "workspace:*"
     "@lichtblick/mcap-support": "workspace:*"
     "@lichtblick/suite-base": "workspace:*"
+    "@lichtblick/test-builders": "npm:1.0.1"
     "@lichtblick/theme": "workspace:*"
     "@lichtblick/tsconfig": "npm:1.1.2"
     "@mcap/core": "npm:2.4.0"
@@ -3798,7 +3795,6 @@ __metadata:
     "@types/mock-fs": "npm:4.13.4"
     "@types/plist": "npm:^3.0.5"
     "@types/pngjs": "npm:^6.0.5"
-    "@types/randomstring": "npm:1.3.0"
     "@types/tinycolor2": "npm:1.4.6"
     "@types/utif": "npm:^3.0.6"
     "@xmldom/xmldom": "npm:0.9.12"
@@ -3821,7 +3817,6 @@ __metadata:
     plist: "npm:4.0.0"
     pngjs: "npm:7.0.0"
     quicklookjs: "npm:1.0.1"
-    randomstring: "npm:1.3.2"
     react: "npm:18.3.1"
     react-dom: "npm:18.3.1"
     react-refresh-typescript: "npm:2.0.12"
@@ -5353,13 +5348,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@protobufjs/base64@npm:1.1.2":
-  version: 1.1.2
-  resolution: "@protobufjs/base64@npm:1.1.2"
-  checksum: 10/c71b100daeb3c9bdccab5cbc29495b906ba0ae22ceedc200e1ba49717d9c4ab15a6256839cebb6f9c6acae4ed7c25c67e0a95e734f612b258261d1a3098fe342
-  languageName: node
-  linkType: hard
-
 "@react-dnd/asap@npm:^5.0.1":
   version: 5.0.2
   resolution: "@react-dnd/asap@npm:5.0.2"
@@ -6576,13 +6564,6 @@ __metadata:
   dependencies:
     types-ramda: "npm:^0.29.4"
   checksum: 10/ff373b32ed83f2b2287c05a1357224a0ee62e99b569b35f03059eb6657bb1190f0fc81e7c49c3f0c8897fbe8b7619848288096a91cf94ed574df971b91c71de3
-  languageName: node
-  linkType: hard
-
-"@types/randomstring@npm:1.3.0":
-  version: 1.3.0
-  resolution: "@types/randomstring@npm:1.3.0"
-  checksum: 10/540f470222bef888395576063ba20c260502ac8f2768f9dac988118a9fd1ac5916df36d5a28ec571bbabe49d6d7a56895187fc24ea910a54f19becba37958355
   languageName: node
   linkType: hard
 
@@ -16130,15 +16111,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nanoid@npm:5.1.16":
-  version: 5.1.16
-  resolution: "nanoid@npm:5.1.16"
-  bin:
-    nanoid: bin/nanoid.js
-  checksum: 10/b1e702e2b7072e74ac2ae880907d0a291853a36617ec5c3d27d81ab04965ebc0d4d0f707cf9220928cf93d5370b1f561c930efee853dc9c1a3facaefdf1a42ee
-  languageName: node
-  linkType: hard
-
 "nanoid@npm:^3.3.16":
   version: 3.3.18
   resolution: "nanoid@npm:3.3.18"
@@ -17636,17 +17608,6 @@ __metadata:
   dependencies:
     safe-buffer: "npm:^5.1.0"
   checksum: 10/4efd1ad3d88db77c2d16588dc54c2b52fd2461e70fe5724611f38d283857094fe09040fa2c9776366803c3152cf133171b452ef717592b65631ce5dc3a2bdafc
-  languageName: node
-  linkType: hard
-
-"randomstring@npm:1.3.2":
-  version: 1.3.2
-  resolution: "randomstring@npm:1.3.2"
-  dependencies:
-    randombytes: "npm:2.1.0"
-  bin:
-    randomstring: bin/randomstring
-  checksum: 10/03c1a1095ee01931b5ebf333de1ae4d53c7be88e34ef6c09bbc48d46abbf78d0ec271ddf9b59b08678ee7a48c38d1f5c14cc8a1535c599f5b0ec6964ec7f4e45
   languageName: node
   linkType: hard
 
