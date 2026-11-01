@@ -676,6 +676,39 @@ describe("VirtualizedTree", () => {
     });
   });
 
+  describe("when collapsing a parent kept open by search", () => {
+    it("collapses it without touching the saved expansion", () => {
+      useVirtualizer.mockImplementation(({ count }: { count: number }) => ({
+        getVirtualItems: jest.fn(() =>
+          Array.from({ length: count }, (_v, index) => ({
+            index,
+            key: String(index),
+            size: 24,
+            start: index * 24,
+            end: (index + 1) * 24,
+          })),
+        ),
+        getTotalSize: jest.fn(() => count * 24),
+        scrollToIndex: jest.fn(),
+        measureElement: jest.fn(),
+      }));
+      const onToggleExpand = jest.fn();
+
+      renderVirtualizedTree({
+        data: { status: { name: "motor" } },
+        search: "motor",
+        onToggleExpand,
+      });
+      expect(screen.getByText("name")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByLabelText("Collapse status"));
+
+      expect(screen.queryByText("name")).not.toBeInTheDocument();
+      expect(screen.getByLabelText("Expand status")).toBeInTheDocument();
+      expect(onToggleExpand).not.toHaveBeenCalled();
+    });
+  });
+
   describe("when handling data updates", () => {
     it("should update rows when expandedNodes changes", () => {
       // Given
