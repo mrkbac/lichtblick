@@ -23,12 +23,14 @@ export function MessagePathRow({
   style,
   selected,
   onClick,
+  onDoubleClick,
   onContextMenu,
 }: {
   messagePathResult: FzfResultItem<MessagePathSearchItem>;
   style: React.CSSProperties;
   selected: boolean;
   onClick: React.MouseEventHandler<HTMLDivElement>;
+  onDoubleClick?: React.MouseEventHandler<HTMLDivElement>;
   onContextMenu: React.MouseEventHandler<HTMLDivElement>;
 }): React.JSX.Element {
   const { cx, classes } = useTopicListStyles();
@@ -73,6 +75,7 @@ export function MessagePathRow({
       })}
       style={{ ...style, cursor }}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
     >
       {draggedItemCount > 1 && (

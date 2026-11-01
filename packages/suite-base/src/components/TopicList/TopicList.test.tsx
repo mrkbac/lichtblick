@@ -22,6 +22,9 @@ jest.mock("@lichtblick/suite-base/PanelAPI", () => ({
 }));
 jest.mock("@lichtblick/suite-base/components/MessagePipeline");
 jest.mock("./useTopicListSearch");
+jest.mock("./useOpenMessagePathsInPanel", () => ({
+  useOpenMessagePathsInPanel: () => jest.fn(),
+}));
 jest.mock("./useMultiSelection", () => ({
   useMultiSelection: jest.fn().mockReturnValue({
     selectedIndexes: new Set(),
