@@ -264,7 +264,9 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         return;
       }
       try {
-        await handleFilesRef.current(await Promise.all(fileHandles.map(async (h) => await h.getFile())));
+        await handleFilesRef.current(
+          await Promise.all(fileHandles.map(async (h) => await h.getFile())),
+        );
       } catch (error) {
         log.error("Failed to open launched files", error);
         enqueueSnackbar("Failed to open the launched file", { variant: "error" });
@@ -282,18 +284,11 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       handles?: FileSystemFileHandle[];
       namespace?: Namespace;
     }) => {
-      const filesArray: File[] = [];
+      const filesArray = handles
+        ? await Promise.all(handles.map(async (h) => await h.getFile()))
+        : (files ?? []);
 
-      if (handles?.length === 1) {
-        const fileHandle = handles[0];
-        if (fileHandle) {
-          filesArray.push(await fileHandle.getFile());
-        }
-      } else if (files?.length != undefined) {
-        filesArray.push(...files);
-      }
-
-      void handleFiles(filesArray, namespace);
+      void handleFiles(filesArray, namespace, handles);
     },
     [handleFiles],
   );
