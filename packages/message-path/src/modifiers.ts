@@ -59,9 +59,15 @@ const REDUCERS: Record<string, (values: number[]) => number | undefined> = {
   mean: (v) => (v.length > 0 ? v.reduce((acc, x) => acc + x, 0) / v.length : undefined),
   rms: (v) =>
     v.length > 0 ? Math.sqrt(v.reduce((acc, x) => acc + x * x, 0) / v.length) : undefined,
-  min: (v) => (v.length > 0 ? Math.min(...v) : undefined),
-  max: (v) => (v.length > 0 ? Math.max(...v) : undefined),
+  // reduce instead of spreading: Math.min(...v) throws a RangeError on very large arrays
+  min: (v) => (v.length > 0 ? v.reduce((acc, x) => Math.min(acc, x), Infinity) : undefined),
+  max: (v) => (v.length > 0 ? v.reduce((acc, x) => Math.max(acc, x), -Infinity) : undefined),
 };
+
+// Own-property lookup so user-typed names like `valueOf` or `__proto__` don't hit Object.prototype
+function own<T>(table: Record<string, T>, name: string): T | undefined {
+  return Object.hasOwn(table, name) ? table[name] : undefined;
+}
 
 const FLOAT64: MessagePathStructureItem = {
   structureType: "primitive",
@@ -128,8 +134,9 @@ export function modifierResultStructure(
   const { name } = modifier;
   const hasArgs = modifier.args.length > 0;
   const isElementWise =
-    (name in SCALAR && !hasArgs) || (name in ARITHMETIC && (hasArgs || name === "round"));
-  const isReducer = name in REDUCERS;
+    (own(SCALAR, name) != undefined && !hasArgs) ||
+    (own(ARITHMETIC, name) != undefined && (hasArgs || name === "round"));
+  const isReducer = own(REDUCERS, name) != undefined;
   if (input == undefined) {
     if (name === "rpy") {
       return RPY_STRUCTURE;
@@ -309,15 +316,15 @@ export function applyModifier(value: unknown, modifier: MessagePathModifier): un
     args.push(resolved);
   }
 
-  const scalarFn = SCALAR[name];
+  const scalarFn = own(SCALAR, name);
   if (scalarFn && args.length === 0) {
     return mapNumeric(value, scalarFn);
   }
-  const arithmeticFn = ARITHMETIC[name];
+  const arithmeticFn = own(ARITHMETIC, name);
   if (arithmeticFn && (args.length > 0 || name === "round")) {
     return mapNumeric(value, (x) => arithmeticFn(x, args));
   }
-  const reducer = REDUCERS[name];
+  const reducer = own(REDUCERS, name);
   if (reducer) {
     if (args.length === 0) {
       // `/topic.values.@max`: reduce an array within the message
