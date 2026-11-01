@@ -15,7 +15,7 @@
 //   You may not use this file except in compliance with the License.
 
 import { StoryObj } from "@storybook/react-webpack5";
-import { fireEvent, screen } from "@storybook/testing-library";
+import { fireEvent, screen } from "storybook/test";
 
 import TextMiddleTruncate from "./TextMiddleTruncate";
 
@@ -29,7 +29,7 @@ export default {
 
 async function hoverText(): Promise<void> {
   const allText = await screen.findAllByTestId("text-middle-truncate");
-  fireEvent.pointerOver(allText[3]!);
+  await fireEvent.pointerOver(allText[3]!);
 }
 
 export const Default: StoryObj = {

@@ -4,9 +4,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import "@testing-library/jest-dom";
-import { userEvent } from "@storybook/testing-library";
 import { render, screen } from "@testing-library/react";
 import { useMemo } from "react";
+import { userEvent } from "storybook/test";
 
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import { useSelectedPanels } from "@lichtblick/suite-base/context/CurrentLayoutContext";

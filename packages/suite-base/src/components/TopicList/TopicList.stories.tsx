@@ -7,10 +7,10 @@
 
 import { ros2humble } from "@foxglove/rosmsg-msgs-common";
 import { Meta, StoryObj } from "@storybook/react-webpack5";
-import { fireEvent, userEvent, waitFor, within } from "@storybook/testing-library";
 import * as _ from "lodash-es";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import { fireEvent, userEvent, waitFor, within } from "storybook/test";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
@@ -90,7 +90,7 @@ export const EmptyJapanese: Story = {
 export const ContextMenuSingleTopic: Story = {
   play: async ({ canvasElement }) => {
     for (const item of await findAllByTextContent(canvasElement, "/topic_1", 2)) {
-      fireEvent.contextMenu(item, {
+      await fireEvent.contextMenu(item, {
         clientX: item.getBoundingClientRect().left + 100,
         clientY: item.getBoundingClientRect().top + 20,
       });
@@ -106,9 +106,9 @@ export const ContextMenuMultipleTopics: Story = {
       if (!topic1 || !topic2) {
         continue;
       }
-      fireEvent.click(topic1);
-      fireEvent.click(topic2, { metaKey: true });
-      fireEvent.contextMenu(topic1, {
+      await fireEvent.click(topic1);
+      await fireEvent.click(topic2, { metaKey: true });
+      await fireEvent.contextMenu(topic1, {
         clientX: topic1.getBoundingClientRect().left + 100,
         clientY: topic1.getBoundingClientRect().top + 20,
       });
@@ -128,7 +128,7 @@ export const ContextMenuSinglePath: Story = {
     const pathItems = await findAllByTextContent(canvasElement, ".data", 4);
 
     for (const item of pathItems) {
-      fireEvent.contextMenu(item, {
+      await fireEvent.contextMenu(item, {
         clientX: item.getBoundingClientRect().left + 100,
         clientY: item.getBoundingClientRect().top + 20,
       });
@@ -149,13 +149,13 @@ export const ContextMenuMultiplePaths: Story = {
     const pathItems = await findAllByTextContent(canvasElement, ".data", 4);
 
     for (const item of topic1Items) {
-      fireEvent.click(item);
+      await fireEvent.click(item);
     }
     for (const item of pathItems) {
-      fireEvent.click(item, { shiftKey: true });
+      await fireEvent.click(item, { shiftKey: true });
     }
     for (const item of topic1Items) {
-      fireEvent.contextMenu(item, {
+      await fireEvent.contextMenu(item, {
         clientX: item.getBoundingClientRect().left + 100,
         clientY: item.getBoundingClientRect().top + 20,
       });

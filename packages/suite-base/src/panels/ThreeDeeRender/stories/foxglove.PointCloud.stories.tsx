@@ -7,8 +7,8 @@
 
 import type { PointCloud } from "@foxglove/schemas";
 import { StoryObj } from "@storybook/react-webpack5";
-import { screen, userEvent } from "@storybook/testing-library";
 import { vec3 } from "gl-matrix";
+import { screen, userEvent } from "storybook/test";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { Topic } from "@lichtblick/suite-base/players/types";

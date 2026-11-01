@@ -15,9 +15,9 @@
 //   You may not use this file except in compliance with the License.
 
 import { StoryObj } from "@storybook/react-webpack5";
-import { fireEvent, screen } from "@storybook/testing-library";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import { fireEvent, screen } from "storybook/test";
 
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
@@ -28,12 +28,12 @@ import PanelLayout from "./PanelLayout";
 
 async function openPanelMenu(): Promise<void> {
   const buttons = await screen.findAllByTestId("panel-menu");
-  fireEvent.click(buttons[0]!);
+  await fireEvent.click(buttons[0]!);
 }
 
 async function goFullScreen(): Promise<void> {
   await openPanelMenu();
-  fireEvent.click(screen.getAllByTestId("panel-menu-fullscreen")[0]!);
+  await fireEvent.click(screen.getAllByTestId("panel-menu-fullscreen")[0]!);
 }
 
 const allPanels: readonly PanelInfo[] = [
@@ -145,10 +145,12 @@ export const RemoveUnknownPanel: StoryObj = {
   },
 
   play: async () => {
-    (await screen.findAllByTestId("panel-menu")).forEach((button) => fireEvent.click(button));
-    (await screen.findAllByTestId("panel-menu-remove")).forEach((button) =>
-      fireEvent.click(button),
-    );
+    for (const button of await screen.findAllByTestId("panel-menu")) {
+      await fireEvent.click(button);
+    }
+    for (const button of await screen.findAllByTestId("panel-menu-remove")) {
+      await fireEvent.click(button);
+    }
   },
 };
 

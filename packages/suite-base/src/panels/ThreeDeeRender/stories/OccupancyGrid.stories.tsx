@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { StoryObj } from "@storybook/react-webpack5";
-import { screen, userEvent, waitFor } from "@storybook/testing-library";
+import { screen, userEvent, waitFor } from "storybook/test";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { LayerSettingsOccupancyGrid } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/OccupancyGrids";

@@ -7,8 +7,8 @@
 
 import { FrameTransform, PosesInFrame } from "@foxglove/schemas";
 import { StoryObj } from "@storybook/react-webpack5";
-import { userEvent, screen } from "@storybook/testing-library";
 import { quat } from "gl-matrix";
+import { userEvent, screen } from "storybook/test";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { Topic } from "@lichtblick/suite-base/players/types";

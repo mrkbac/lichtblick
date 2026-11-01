@@ -6,8 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { StoryFn, StoryObj } from "@storybook/react-webpack5";
-import { screen, userEvent } from "@storybook/testing-library";
 import * as _ from "lodash-es";
+import { screen, userEvent } from "storybook/test";
 
 import { ExtensionInfo, IExtensionLoader } from "@lichtblick/suite-base";
 import ExtensionMarketplaceContext, {

@@ -6,8 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { StoryObj } from "@storybook/react-webpack5";
-import { userEvent } from "@storybook/testing-library";
 import { useCallback } from "react";
+import { userEvent } from "storybook/test";
 import { v4 as uuid } from "uuid";
 
 import Panel from "@lichtblick/suite-base/components/Panel";

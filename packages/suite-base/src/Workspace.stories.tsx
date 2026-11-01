@@ -6,8 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { StoryObj } from "@storybook/react-webpack5";
-import { fireEvent, screen, waitFor } from "@storybook/testing-library";
 import { useEffect, useState } from "react";
+import { fireEvent, screen, waitFor } from "storybook/test";
 
 import MultiProvider from "@lichtblick/suite-base/components/MultiProvider";
 import Panel from "@lichtblick/suite-base/components/Panel";
@@ -160,8 +160,8 @@ export const Japanese: typeof Basic = {
 export const FullscreenPanel: typeof Basic = {
   ...Basic,
   play: async () => {
-    fireEvent.click(await screen.findByTestId("panel-menu"));
-    fireEvent.click(await screen.findByTestId("panel-menu-fullscreen"));
+    await fireEvent.click(await screen.findByTestId("panel-menu"));
+    await fireEvent.click(await screen.findByTestId("panel-menu-fullscreen"));
   },
 };
 
@@ -185,43 +185,43 @@ export const DragTopicStart: typeof Basic = {
     },
   },
   play: async () => {
-    fireEvent.click(await screen.findByText("Topics"));
+    await fireEvent.click(await screen.findByText("Topics"));
 
     const handle = await screen.findByTestId("TopicListDragHandle");
-    fireEvent.dragStart(handle);
+    await fireEvent.dragStart(handle);
   },
 };
 
 export const DragTopicOver: typeof Basic = {
   ...DragTopicStart,
   play: async () => {
-    fireEvent.click(await screen.findByText("Topics"));
+    await fireEvent.click(await screen.findByText("Topics"));
 
     const handle = await screen.findByTestId("TopicListDragHandle");
-    fireEvent.dragStart(handle);
+    await fireEvent.dragStart(handle);
     const dest = await screen.findByText("Drop here!");
-    fireEvent.dragOver(dest);
+    await fireEvent.dragOver(dest);
   },
 };
 
 export const DragTopicDrop: typeof Basic = {
   ...DragTopicStart,
   play: async () => {
-    fireEvent.click(await screen.findByText("Topics"));
+    await fireEvent.click(await screen.findByText("Topics"));
 
     const handle = await screen.findByTestId("TopicListDragHandle");
-    fireEvent.dragStart(handle);
+    await fireEvent.dragStart(handle);
     const dest = await screen.findByText("Drop here!");
-    fireEvent.dragOver(dest);
-    fireEvent.drop(dest);
+    await fireEvent.dragOver(dest);
+    await fireEvent.drop(dest);
   },
 };
 
 export const DragPathDrop: typeof Basic = {
   ...DragTopicStart,
   play: async () => {
-    fireEvent.click(await screen.findByText("Topics"));
-    fireEvent.change(await screen.findByPlaceholderText("Filter by topic or schema name…"), {
+    await fireEvent.click(await screen.findByText("Topics"));
+    await fireEvent.change(await screen.findByPlaceholderText("Filter by topic or schema name…"), {
       target: { value: "foobar" },
     });
     const handle = await waitFor(async () => {
@@ -231,27 +231,27 @@ export const DragPathDrop: typeof Basic = {
       }
       return handles[1]!;
     });
-    fireEvent.dragStart(handle);
+    await fireEvent.dragStart(handle);
     const dest = await screen.findByText("Drop here!");
-    fireEvent.dragOver(dest);
-    fireEvent.drop(dest);
+    await fireEvent.dragOver(dest);
+    await fireEvent.drop(dest);
   },
 };
 
 export const DragMultipleItems: typeof Basic = {
   ...DragTopicStart,
   play: async () => {
-    fireEvent.click(await screen.findByText("Topics"));
-    fireEvent.change(await screen.findByPlaceholderText("Filter by topic or schema name…"), {
+    await fireEvent.click(await screen.findByText("Topics"));
+    await fireEvent.change(await screen.findByPlaceholderText("Filter by topic or schema name…"), {
       target: { value: "fooba" },
     });
-    fireEvent.click(
+    await fireEvent.click(
       await screen.findByText(
         (_content, element) =>
           element instanceof HTMLSpanElement && element.textContent === '."bar field"',
       ),
     );
-    fireEvent.click(
+    await fireEvent.click(
       await screen.findByText(
         (_content, element) =>
           element instanceof HTMLSpanElement && element.textContent === '."baz field"',
@@ -265,9 +265,9 @@ export const DragMultipleItems: typeof Basic = {
       }
       return handles[2]!;
     });
-    fireEvent.dragStart(handle);
+    await fireEvent.dragStart(handle);
     const dest = await screen.findByText("Drop here!");
-    fireEvent.dragOver(dest);
-    fireEvent.drop(dest);
+    await fireEvent.dragOver(dest);
+    await fireEvent.drop(dest);
   },
 };

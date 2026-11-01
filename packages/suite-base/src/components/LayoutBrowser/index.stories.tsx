@@ -6,8 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { StoryObj, StoryContext, StoryFn } from "@storybook/react-webpack5";
-import { fireEvent, screen, userEvent, within } from "@storybook/testing-library";
 import { useMemo, useState } from "react";
+import { fireEvent, screen, userEvent, within } from "storybook/test";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import AppConfigurationContext from "@lichtblick/suite-base/context/AppConfigurationContext";
@@ -88,7 +88,7 @@ async function clickMenuButtonAction(index: number) {
   const actions = await screen.findAllByTestId("layout-actions");
   const action = actions[index];
   if (action != undefined) {
-    fireEvent.click(action);
+    await fireEvent.click(action);
   }
 }
 
@@ -96,21 +96,21 @@ async function deleteLayoutInteraction(index: number) {
   await clickMenuButtonAction(index);
 
   const deleteButton = await screen.findByText("Delete");
-  fireEvent.click(deleteButton);
+  await fireEvent.click(deleteButton);
   const confirmButton = await screen.findByText("Delete");
-  fireEvent.click(confirmButton);
+  await fireEvent.click(confirmButton);
 }
 
 async function doMultiAction(action: string) {
   await selectAllAction();
   await clickMenuButtonAction(0);
   const button = await screen.findByText(action);
-  fireEvent.click(button);
+  await fireEvent.click(button);
 }
 
 async function selectAllAction() {
   const layouts = await screen.findAllByTestId("layout-list-item");
-  layouts.forEach((layout) => fireEvent.click(layout, { ctrlKey: true }));
+  layouts.forEach(async (layout) => await fireEvent.click(layout, { ctrlKey: true }));
 }
 
 function WithSetup(Child: StoryFn, ctx: StoryContext): React.JSX.Element {
@@ -211,7 +211,7 @@ export const MultiDelete: StoryObj = {
     await doMultiAction("Delete");
 
     const confirmButton = await screen.findByText("Delete");
-    fireEvent.click(confirmButton);
+    await fireEvent.click(confirmButton);
   },
 };
 
@@ -244,7 +244,7 @@ export const MultiRevert: StoryObj = {
     await doMultiAction("Revert");
 
     const revertButton = await screen.findByText("Discard changes");
-    fireEvent.click(revertButton);
+    await fireEvent.click(revertButton);
   },
 };
 
@@ -306,7 +306,7 @@ export const AddLayout: StoryObj = {
 
   play: async () => {
     const button = await screen.findByTestId("add-layout");
-    fireEvent.click(button);
+    await fireEvent.click(button);
   },
 };
 
@@ -320,7 +320,7 @@ export const MenuOpen: StoryObj = {
   play: async () => {
     const actions = await screen.findAllByTestId("layout-actions");
     if (actions[1]) {
-      fireEvent.click(actions[1]);
+      await fireEvent.click(actions[1]);
     }
   },
 };
@@ -331,7 +331,7 @@ export const MenuOpenLight: StoryObj = {
   play: async () => {
     const actions = await screen.findAllByTestId("layout-actions");
     if (actions[1]) {
-      fireEvent.click(actions[1]);
+      await fireEvent.click(actions[1]);
     }
   },
 };
@@ -346,10 +346,10 @@ export const EditingName: StoryObj = {
   play: async () => {
     const actions = await screen.findAllByTestId("layout-actions");
     if (actions[1]) {
-      fireEvent.click(actions[1]);
+      await fireEvent.click(actions[1]);
     }
     const button = await screen.findByText("Rename");
-    fireEvent.click(button);
+    await fireEvent.click(button);
   },
 };
 
@@ -363,11 +363,11 @@ export const CancelRenameWithEscape: StoryObj = {
   play: async () => {
     const actions = await screen.findAllByTestId("layout-actions");
     if (actions[1]) {
-      fireEvent.click(actions[1]);
+      await fireEvent.click(actions[1]);
     }
     const button = await screen.findByText("Rename");
-    fireEvent.click(button);
-    fireEvent.keyDown(document.activeElement!, { key: "Escape" });
+    await fireEvent.click(button);
+    await fireEvent.keyDown(document.activeElement!, { key: "Escape" });
   },
 };
 
@@ -381,12 +381,12 @@ export const CommitRenameWithTab: StoryObj = {
   play: async () => {
     const actions = await screen.findAllByTestId("layout-actions");
     if (actions[1]) {
-      fireEvent.click(actions[1]);
+      await fireEvent.click(actions[1]);
     }
     const button = await screen.findByText("Rename");
-    fireEvent.click(button);
-    fireEvent.change(document.activeElement!, { target: { value: "New name" } });
-    fireEvent.focusOut(document.activeElement!);
+    await fireEvent.click(button);
+    await fireEvent.change(document.activeElement!, { target: { value: "New name" } });
+    await fireEvent.focusOut(document.activeElement!);
   },
 };
 
@@ -400,10 +400,10 @@ export const Duplicate: StoryObj = {
   play: async () => {
     const actions = await screen.findAllByTestId("layout-actions");
     if (actions[1]) {
-      fireEvent.click(actions[1]);
+      await fireEvent.click(actions[1]);
     }
     const button = await screen.findByText("Duplicate");
-    fireEvent.click(button);
+    await fireEvent.click(button);
   },
 };
 
@@ -426,11 +426,11 @@ export const DeleteSelectedLayout: StoryObj = {
   play: async () => {
     const layouts = await screen.findAllByTestId("layout-list-item");
     if (layouts[1]) {
-      fireEvent.click(layouts[1]);
+      await fireEvent.click(layouts[1]);
     }
     await deleteLayoutInteraction(1);
     if (layouts[0]) {
-      fireEvent.click(layouts[0]);
+      await fireEvent.click(layouts[0]);
     }
   },
 

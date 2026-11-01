@@ -7,9 +7,9 @@
 
 import { ImageAnnotations, PointsAnnotationType } from "@foxglove/schemas";
 import { StoryObj } from "@storybook/react-webpack5";
-import { screen, userEvent } from "@storybook/testing-library";
 import * as _ from "lodash-es";
 import { useEffect, useState } from "react";
+import { screen, userEvent } from "storybook/test";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { ImageModeConfig } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";

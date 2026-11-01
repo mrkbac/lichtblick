@@ -5,9 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { expect } from "@storybook/jest";
 import { StoryContext, StoryFn, StoryObj } from "@storybook/react-webpack5";
-import { userEvent, within } from "@storybook/testing-library";
+import { expect } from "storybook/test";
+import { userEvent, within } from "storybook/test";
 
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import PanelSetup, { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";

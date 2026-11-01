@@ -7,7 +7,7 @@
 
 import { ImageAnnotations, SceneUpdate } from "@foxglove/schemas";
 import { StoryObj } from "@storybook/react-webpack5";
-import { fireEvent } from "@storybook/testing-library";
+import { fireEvent } from "storybook/test";
 import * as THREE from "three";
 
 import { MessageEvent } from "@lichtblick/suite";
@@ -185,19 +185,29 @@ export const PanZoom: StoryObj<
     }
 
     setMarkerPos(cx, cy);
-    fireEvent.mouseDown(canvas, { clientX: cx, clientY: cy });
+    await fireEvent.mouseDown(canvas, { clientX: cx, clientY: cy });
 
     setMarkerPos(cx + args.panX, cy + args.panY);
-    fireEvent.mouseMove(canvas, { clientX: cx + args.panX, clientY: cy + args.panY });
-    fireEvent.mouseUp(canvas, { clientX: cx + args.panX, clientY: cy + args.panY });
+    await fireEvent.mouseMove(canvas, { clientX: cx + args.panX, clientY: cy + args.panY });
+    await fireEvent.mouseUp(canvas, { clientX: cx + args.panX, clientY: cy + args.panY });
 
-    fireEvent.wheel(canvas, { clientX: cx + args.panX, clientY: cy + args.panY, deltaY: 100 });
+    await fireEvent.wheel(canvas, {
+      clientX: cx + args.panX,
+      clientY: cy + args.panY,
+      deltaY: 100,
+    });
 
     // pan again after zooming to ensure the zoom scale is accounted for
-    fireEvent.mouseDown(canvas, { clientX: cx + args.panX, clientY: cy + args.panY });
+    await fireEvent.mouseDown(canvas, { clientX: cx + args.panX, clientY: cy + args.panY });
     setMarkerPos(cx + args.panX * 0.3, cy + args.panY * 0.3);
-    fireEvent.mouseMove(canvas, { clientX: cx + args.panX * 0.3, clientY: cy + args.panY * 0.3 });
-    fireEvent.mouseUp(canvas, { clientX: cx + args.panX * 0.3, clientY: cy + args.panY * 0.3 });
+    await fireEvent.mouseMove(canvas, {
+      clientX: cx + args.panX * 0.3,
+      clientY: cy + args.panY * 0.3,
+    });
+    await fireEvent.mouseUp(canvas, {
+      clientX: cx + args.panX * 0.3,
+      clientY: cy + args.panY * 0.3,
+    });
   },
 };
 

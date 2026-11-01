@@ -15,7 +15,7 @@
 //   You may not use this file except in compliance with the License.
 
 import { Meta, StoryObj } from "@storybook/react-webpack5";
-import { screen, userEvent } from "@storybook/testing-library";
+import { screen, userEvent } from "storybook/test";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import PlaybackSpeedControls from "@lichtblick/suite-base/components/PlaybackSpeedControls";

@@ -15,9 +15,9 @@
 //   You may not use this file except in compliance with the License.
 
 import { useTheme } from "@mui/material";
-import { expect } from "@storybook/jest";
 import { StoryObj, Meta } from "@storybook/react-webpack5";
-import { fireEvent, within } from "@storybook/testing-library";
+import { expect } from "storybook/test";
+import { fireEvent, within } from "storybook/test";
 
 import Panel from "@lichtblick/suite-base/components/Panel";
 import { PanelCatalog as PanelCatalogComponent } from "@lichtblick/suite-base/components/PanelCatalog";
@@ -61,9 +61,9 @@ const allPanels: readonly PanelInfo[] = [
   { title: "Tab", type: "Tab", module: async () => ({ default: Tab }) },
 ];
 
-function dragAndDrop(source: Element, target: Element): void {
-  fireEvent.dragStart(source);
-  fireEvent.drop(target);
+async function dragAndDrop(source: Element, target: Element): Promise<void> {
+  await fireEvent.dragStart(source);
+  await fireEvent.drop(target);
 }
 
 class MockPanelCatalog implements PanelCatalog {
@@ -161,7 +161,7 @@ export const PickingAPanelFromThePanelListCreatesANewTabIfThereAreNone: Story = 
     const canvas = within(canvasElement);
 
     const panel = await canvas.findAllByTestId("panel-grid-card Some Panel");
-    fireEvent.click(panel[0]!);
+    await fireEvent.click(panel[0]!);
   },
 };
 
@@ -180,7 +180,7 @@ export const PickingAPanelFromThePanelListUpdatesTheTabsLayout: Story = {
     const canvas = within(canvasElement);
 
     const panel = await canvas.findAllByTestId("panel-grid-card Some Panel");
-    fireEvent.click(panel[0]!);
+    await fireEvent.click(panel[0]!);
   },
 };
 
@@ -201,7 +201,7 @@ export const DraggingAPanelFromThePanelListUpdatesTheTabsLayout: Story = {
     const imageItem = await canvas.findAllByTestId("panel-menu-item Some Panel");
     const panel = await canvas.findAllByTestId("empty-drop-target");
 
-    dragAndDrop(imageItem[0]!, panel[0]!);
+    await dragAndDrop(imageItem[0]!, panel[0]!);
   },
 };
 
@@ -220,7 +220,7 @@ export const DraggingAPanelFromThePanelListCreatesANewTabIfThereAreNone: Story =
     const imageItem = await canvas.findAllByTestId("panel-menu-item Some Panel");
     const panel = await canvas.findAllByTestId("empty-drop-target");
 
-    dragAndDrop(imageItem[0]!, panel[0]!);
+    await dragAndDrop(imageItem[0]!, panel[0]!);
   },
 };
 
@@ -268,7 +268,7 @@ export const AddTab: Story = {
   name: "add tab",
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    fireEvent.click(await canvas.findByTestId("add-tab"));
+    await fireEvent.click(await canvas.findByTestId("add-tab"));
   },
 };
 
@@ -283,7 +283,7 @@ export const RemoveTab: Story = {
   name: "remove tab",
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    fireEvent.click(await canvas.findByTestId("tab-icon"));
+    await fireEvent.click(await canvas.findByTestId("tab-icon"));
   },
 };
 
@@ -306,7 +306,7 @@ export const ReorderTabsWithinTabPanelByDroppingOnTab: Story = {
     const tabs = await canvas.findAllByTestId("toolbar-tab");
 
     // Drag and drop the first tab onto the third tab
-    dragAndDrop(tabs[0]!, tabs[2]!);
+    await dragAndDrop(tabs[0]!, tabs[2]!);
   },
 };
 
@@ -332,7 +332,7 @@ export const MoveTabToDifferentTabPanel: Story = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const tabs = await canvas.findAllByTestId("toolbar-tab");
-    dragAndDrop(tabs[0]!, tabs[2]!);
+    await dragAndDrop(tabs[0]!, tabs[2]!);
   },
 };
 
@@ -358,10 +358,10 @@ export const PreventDraggingSelectedParentTabIntoChildTabPanel: Story = {
     const canvas = within(canvasElement);
     const tabs = await canvas.findAllByTestId("toolbar-tab");
 
-    fireEvent.dragStart(tabs[0]!);
+    await fireEvent.dragStart(tabs[0]!);
 
     try {
-      fireEvent.dragOver(tabs[2]!);
+      await fireEvent.dragOver(tabs[2]!);
     } catch (error) {
       if (error.message === "ignoredException") {
         // supress this error specifically as it is the expected behavior
@@ -381,11 +381,11 @@ export const DraggingAndDroppingANestedTabPanelDoesNotRemoveAnyTabs: Story = {
     const tabLeft = await canvas.findByTestId("panel-mouseenter-container Tab!Left");
     const tabRightInner = await canvas.findByTestId("panel-mouseenter-container Tab!RightInner");
 
-    fireEvent.click(await within(tabLeft).findByTestId("add-tab"));
+    await fireEvent.click(await within(tabLeft).findByTestId("add-tab"));
     const dragHandle = await within(tabRightInner).findAllByTestId("panel-menu");
     const target = await within(tabLeft).findByTestId("empty-drop-target");
 
-    dragAndDrop(dragHandle[0]!, target);
+    await dragAndDrop(dragHandle[0]!, target);
   },
 };
 
@@ -401,7 +401,7 @@ export const SupportsDraggingBetweenTabsAnywhereInTheLayout: Story = {
     const dragHandle = await within(sample1).findAllByTestId("panel-menu");
     const target = targetTab.querySelector(".drop-target.left");
 
-    dragAndDrop(dragHandle[0]!, target!);
+    await dragAndDrop(dragHandle[0]!, target!);
   },
 };
 
@@ -443,7 +443,7 @@ export const DraggingOntoTabRootDoesNotReplaceTabContents: Story = {
 
     const dragHandle = await within(sample1).findAllByTestId("panel-menu");
 
-    dragAndDrop(dragHandle[0]!, targetTab);
+    await dragAndDrop(dragHandle[0]!, targetTab);
 
     // Drag & drop should not have replaced existing tab contents
     await expect(

@@ -6,8 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { StoryObj } from "@storybook/react-webpack5";
-import { userEvent, screen } from "@storybook/testing-library";
 import { useEffect, useState } from "react";
+import { userEvent, screen } from "storybook/test";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { Topic } from "@lichtblick/suite-base/players/types";

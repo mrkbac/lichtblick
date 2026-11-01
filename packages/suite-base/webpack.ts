@@ -100,9 +100,10 @@ export function makeConfig(
         path: localRequire.resolve("path-browserify"), // foxglove-depcheck-used: path-browserify
         stream: localRequire.resolve("readable-stream"), // foxglove-depcheck-used: readable-stream
         assert: false,
-        zlib: localRequire.resolve("browserify-zlib"), // foxglove-depcheck-used: browserify-zlib
-        crypto: localRequire.resolve("crypto-browserify"), // foxglove-depcheck-used: crypto-browserify
-        vm: localRequire.resolve("vm-browserify"), // foxglove-depcheck-used: vm-browserify
+        zlib: false,
+        // Only reached by Node-only code paths (sql.js); the polyfill pulled in ~1 MiB.
+        crypto: false,
+        vm: false,
 
         // TypeScript tries to use this when running in node
         perf_hooks: false,

@@ -7,10 +7,10 @@
 
 import { useTheme } from "@mui/material";
 import { StoryObj } from "@storybook/react-webpack5";
-import { userEvent, within } from "@storybook/testing-library";
 import { produce } from "immer";
 import * as _ from "lodash-es";
 import { useCallback, useMemo, useState, useEffect } from "react";
+import { userEvent, within } from "storybook/test";
 
 import Logger from "@lichtblick/log";
 import {

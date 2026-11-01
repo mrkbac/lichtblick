@@ -15,9 +15,9 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { userEvent } from "@storybook/testing-library";
 import { render, screen, fireEvent } from "@testing-library/react";
 import React from "react";
+import { userEvent } from "storybook/test";
 import { useDebounce } from "use-debounce";
 
 import { MessagePath } from "@lichtblick/message-path";

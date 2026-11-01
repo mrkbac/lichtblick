@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { isTime, toSec } from "@foxglove/rostime";
-import { ScatterDataPoint } from "chart.js";
 
 import { Time } from "@lichtblick/suite";
 
@@ -14,7 +13,7 @@ import { MathFunction } from "./mathFunctions";
 
 // In addition to the base datum, we also add receiveTime and optionally header stamp to our datums
 // These are used in the csv export.
-export type Datum = ScatterDataPoint & {
+export type Datum = { x: number; y: number } & {
   value: OriginalValue;
   receiveTime: Time;
   headerStamp?: Time;

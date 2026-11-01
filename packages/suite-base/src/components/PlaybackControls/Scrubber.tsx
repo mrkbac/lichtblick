@@ -13,7 +13,6 @@ import {
   Time,
 } from "@foxglove/rostime";
 import { Fade, PopperProps, Tooltip } from "@mui/material";
-import type { Instance } from "@popperjs/core";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLatest } from "react-use";
 import { makeStyles } from "tss-react/mui";
@@ -36,6 +35,8 @@ import PlaybackBarHoverTicks from "./PlaybackBarHoverTicks";
 import { PlaybackControlsTooltipContent } from "./PlaybackControlsTooltipContent";
 import { ProgressPlot } from "./ProgressPlot";
 import Slider, { HoverOverEvent } from "./Slider";
+
+type PopperInstance = PopperProps["popperRef"] extends React.Ref<infer T> | undefined ? T : never;
 
 const useStyles = makeStyles()((theme) => ({
   marker: {
@@ -158,7 +159,7 @@ export default function Scrubber(props: Props): React.JSX.Element {
 
   const loading = presence === PlayerPresence.INITIALIZING || presence === PlayerPresence.BUFFERING;
 
-  const popperRef = React.useRef<Instance>(ReactNull);
+  const popperRef = React.useRef<PopperInstance>(ReactNull);
 
   const isHovered = hoverInfo != undefined;
   const popperProps: Partial<PopperProps> = useMemo(

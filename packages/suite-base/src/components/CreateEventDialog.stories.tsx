@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { StoryObj, StoryFn, Meta } from "@storybook/react-webpack5";
-import { screen, userEvent } from "@storybook/testing-library";
+import { screen, userEvent } from "storybook/test";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import EventsProvider from "@lichtblick/suite-base/providers/EventsProvider";

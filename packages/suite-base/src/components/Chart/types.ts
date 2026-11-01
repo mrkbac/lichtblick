@@ -5,9 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { ScatterDataPoint, ChartData as ChartJsChartData } from "chart.js";
+import { ChartData as ChartJsChartData } from "chart.js";
 
-type Datum = ScatterDataPoint & {
+type Datum = { x: number; y: number } & {
   // chart.js supported properties to show a label above the datapoint
   // used by the state transition panel to show a label above the transition datum
   label?: string;

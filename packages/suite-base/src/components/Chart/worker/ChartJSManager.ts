@@ -32,6 +32,7 @@ import EventEmitter from "eventemitter3";
 
 import Logger from "@lichtblick/log";
 import {
+  ObjectData,
   RpcElement,
   RpcScales,
   TypedChartData,
@@ -94,7 +95,7 @@ const lastX: InteractionModeFunction = (chart, event, _options, useFinalPosition
   const datasetIndexToLastItem: InteractionItem[] = [];
   Interaction.evaluateInteractionItems(chart, "x", position, (element, datasetIndex, index) => {
     const center = element.getCenterPoint(useFinalPosition);
-    if (center.x <= position.x) {
+    if (center.x != undefined && center.x <= position.x) {
       datasetIndexToLastItem[datasetIndex] = { element, datasetIndex, index };
     }
   });
@@ -346,9 +347,8 @@ export default class ChartJSManager {
     const out = new Array<RpcElement>();
 
     for (const element of elements) {
-      const data = (this.#chartInstance?.data as ChartData<"scatter"> | undefined)?.datasets[
-        element.datasetIndex
-      ]?.data[element.index];
+      const data = (this.#chartInstance?.data as ChartData<"scatter", ObjectData> | undefined)
+        ?.datasets[element.datasetIndex]?.data[element.index];
       if (data == undefined || typeof data === "number") {
         continue;
       }

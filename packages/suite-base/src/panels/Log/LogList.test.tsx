@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { userEvent } from "@storybook/testing-library";
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { userEvent } from "storybook/test";
 import "@testing-library/jest-dom";
 
 import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";

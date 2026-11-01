@@ -6,9 +6,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { StoryObj } from "@storybook/react-webpack5";
-import { fireEvent, screen } from "@storybook/testing-library";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import { fireEvent, screen } from "storybook/test";
 
 import MockCurrentLayoutProvider from "@lichtblick/suite-base/providers/CurrentLayoutProvider/MockCurrentLayoutProvider";
 
@@ -69,24 +69,24 @@ export const Interactive: StoryObj = {
 
   play: async () => {
     const addButton = await screen.findByTestId("add-variable-button");
-    fireEvent.click(addButton);
+    await fireEvent.click(addButton);
 
     const input = await screen.findByPlaceholderText("variable_name");
-    fireEvent.change(input, { target: { value: "new_variable_name" } });
+    await fireEvent.change(input, { target: { value: "new_variable_name" } });
 
     const valueInput = await screen.findByDisplayValue('""');
-    fireEvent.change(valueInput, { target: { value: '"edited value"' } });
+    await fireEvent.change(valueInput, { target: { value: '"edited value"' } });
 
     const menuButton = await screen.findByTestId("variable-action-button");
-    fireEvent.click(menuButton);
+    await fireEvent.click(menuButton);
 
     await screen.findByTestId("global-variable-key-input-new_variable_name");
 
     const menuButton2 = await screen.findByTestId("variable-action-button");
-    fireEvent.click(menuButton2);
+    await fireEvent.click(menuButton2);
 
     const deleteButton = await screen.findByText("Delete variable");
-    fireEvent.click(deleteButton);
+    await fireEvent.click(deleteButton);
   },
 
   parameters: { colorScheme: "light" },

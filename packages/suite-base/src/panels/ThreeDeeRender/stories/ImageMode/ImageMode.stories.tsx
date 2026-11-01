@@ -14,9 +14,9 @@ import {
   RawImage,
 } from "@foxglove/schemas";
 import { Meta, StoryObj } from "@storybook/react-webpack5";
-import { fireEvent, screen, userEvent, waitFor } from "@storybook/testing-library";
 import { useCallback, useMemo, useState } from "react";
 import { useAsync } from "react-use";
+import { fireEvent, screen, userEvent, waitFor } from "storybook/test";
 import tinycolor from "tinycolor2";
 
 import { MessageEvent } from "@lichtblick/suite";
@@ -1081,7 +1081,7 @@ export const RationalPolynomialDistortion: StoryObj = {
     const canvas = document.querySelector("canvas")!;
     const rect = canvas.getBoundingClientRect();
 
-    fireEvent.wheel(canvas, {
+    await fireEvent.wheel(canvas, {
       clientX: rect.left + rect.width / 2,
       clientY: rect.top + rect.height / 2,
       deltaY: 100,

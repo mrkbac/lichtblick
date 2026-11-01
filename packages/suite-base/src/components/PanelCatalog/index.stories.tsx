@@ -7,9 +7,9 @@
 
 import { useTheme } from "@mui/material";
 import { Meta, StoryFn, StoryObj } from "@storybook/react-webpack5";
-import { userEvent } from "@storybook/testing-library";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import { userEvent } from "storybook/test";
 
 import Panel from "@lichtblick/suite-base/components/Panel";
 import { PanelCatalog as PanelCatalogComponent } from "@lichtblick/suite-base/components/PanelCatalog";

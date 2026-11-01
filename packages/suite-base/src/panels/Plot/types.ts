@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Chart, ChartDataset, ScatterDataPoint } from "chart.js";
+import { Chart, ChartDataset } from "chart.js";
 import { TFunction } from "i18next";
 import { MutableRefObject } from "react";
 
@@ -67,7 +67,7 @@ export type InteractionEvent =
   | PanMoveInteractionEvent
   | PanEndInteractionEvent;
 
-export type Datum = ScatterDataPoint & { value?: OriginalValue };
+export type Datum = { x: number; y: number } & { value?: OriginalValue };
 
 export type Dataset = ChartDataset<"scatter", Datum[]>;
 

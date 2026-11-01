@@ -7,8 +7,8 @@
 
 import { PopoverPosition, PopoverReference } from "@mui/material";
 import { Meta, StoryObj } from "@storybook/react-webpack5";
-import { userEvent, within } from "@storybook/testing-library";
 import * as _ from "lodash-es";
+import { userEvent, within } from "storybook/test";
 
 import PlayerSelectionContext, {
   PlayerSelection,

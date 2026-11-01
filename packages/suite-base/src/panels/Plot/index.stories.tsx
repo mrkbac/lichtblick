@@ -15,9 +15,9 @@
 //   You may not use this file except in compliance with the License.
 
 import { StoryObj } from "@storybook/react-webpack5";
-import { fireEvent, screen, userEvent } from "@storybook/testing-library";
 import { produce } from "immer";
 import { useEffect, useState } from "react";
+import { fireEvent, screen, userEvent } from "storybook/test";
 import { makeStyles } from "tss-react/mui";
 
 import PanelSetup, { Fixture, triggerWheel } from "@lichtblick/suite-base/stories/PanelSetup";
@@ -344,13 +344,13 @@ export const DeltaMeasureMode: StoryObj = {
 
     // The single series rises steeply near the start of the timeline - click there, comfortably
     // inside the visible x range, so both markers land on the line.
-    fireEvent.click(target, {
+    await fireEvent.click(target, {
       clientX: rect.left + rect.width * 0.08,
       clientY: rect.top + rect.height * 0.6,
     });
     await delay(200);
 
-    fireEvent.click(target, {
+    await fireEvent.click(target, {
       clientX: rect.left + rect.width * 0.14,
       clientY: rect.top + rect.height * 0.5,
     });

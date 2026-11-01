@@ -8,7 +8,7 @@
 import { fromSec } from "@foxglove/rostime";
 import { FrameTransform, LaserScan, PointCloud } from "@foxglove/schemas";
 import { StoryObj } from "@storybook/react-webpack5";
-import { screen, userEvent } from "@storybook/testing-library";
+import { screen, userEvent } from "storybook/test";
 import * as THREE from "three";
 
 import { MessageEvent } from "@lichtblick/suite";

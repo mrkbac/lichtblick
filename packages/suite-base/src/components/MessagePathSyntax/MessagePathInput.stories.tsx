@@ -16,8 +16,8 @@
 
 import { Stack } from "@mui/material";
 import { StoryObj } from "@storybook/react-webpack5";
-import { fireEvent, screen, userEvent, waitFor, within } from "@storybook/testing-library";
 import { useState } from "react";
+import { fireEvent, screen, userEvent, waitFor, within } from "storybook/test";
 
 import { Topic } from "@lichtblick/suite-base/players/types";
 import PanelSetup, { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";
@@ -47,7 +47,7 @@ const heavyFixture: Fixture = {
 
 const clickInput: StoryObj["play"] = async ({ canvasElement }) => {
   const canvas = within(canvasElement);
-  fireEvent.click(await canvas.findByTestId("autocomplete-textfield"));
+  await fireEvent.click(await canvas.findByTestId("autocomplete-textfield"));
 };
 
 function MessagePathInputStory(props: {
@@ -101,9 +101,9 @@ export const AutocompleteScalarFromTopicAndEmptyPath: MsgPathInputStoryObj = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
 
-    fireEvent.click(await canvas.findByTestId("autocomplete-textfield"));
+    await fireEvent.click(await canvas.findByTestId("autocomplete-textfield"));
     const options = await waitFor(() => screen.queryAllByTestId("autocomplete-item"));
-    fireEvent.click(options[2]!);
+    await fireEvent.click(options[2]!);
   },
 };
 
@@ -115,11 +115,11 @@ export const AutocompleteScalarFromTopic: MsgPathInputStoryObj = {
     const canvas = within(canvasElement);
     const input = await canvas.findByTestId("autocomplete-textfield");
 
-    fireEvent.click(input);
+    await fireEvent.click(input);
     await keyboard("/some_logs_");
 
     const options = await waitFor(() => screen.queryAllByTestId("autocomplete-item"));
-    fireEvent.click(options[1]!);
+    await fireEvent.click(options[1]!);
   },
 };
 
@@ -131,11 +131,11 @@ export const AutocompleteScalarFromFullTopic: MsgPathInputStoryObj = {
     const canvas = within(canvasElement);
     const input = await canvas.findByTestId("autocomplete-textfield");
 
-    fireEvent.click(input);
+    await fireEvent.click(input);
     await keyboard("/some_logs_topic");
 
     const options = await waitFor(() => screen.queryAllByTestId("autocomplete-item"));
-    fireEvent.click(options[0]!);
+    await fireEvent.click(options[0]!);
   },
 };
 
