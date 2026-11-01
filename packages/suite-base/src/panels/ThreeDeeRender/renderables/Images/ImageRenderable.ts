@@ -926,7 +926,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
 
 let tempColor = { r: 0, g: 0, b: 0, a: 0 };
 
-function createCanvasTexture(bitmap: ImageBitmap): THREE.CanvasTexture {
+function createCanvasTexture(bitmap: ImageBitmap): THREE.CanvasTexture<ImageBitmap> {
   const texture = new THREE.CanvasTexture(
     bitmap,
     THREE.UVMapping,

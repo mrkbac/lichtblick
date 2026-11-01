@@ -288,7 +288,7 @@ class LinePrimitiveRenderable extends THREE.Object3D {
     this.#pickingMaterial.needsUpdate = true;
   }
 
-  public dispose(): void {
+  public override dispose(): void {
     this.#line?.removeFromParent();
     this.#geometry?.dispose();
     this.#material.dispose();
@@ -388,7 +388,10 @@ class PickingMaterial extends LineMaterialWithAlphaVertex {
     this.uniforms.objectId = { value: [NaN, NaN, NaN, NaN] };
   }
 
-  public override onBeforeCompile(shader: THREE.Shader, renderer: THREE.WebGLRenderer): void {
+  public override onBeforeCompile(
+    shader: THREE.WebGLProgramParametersWithUniforms,
+    renderer: THREE.WebGLRenderer,
+  ): void {
     super.onBeforeCompile(shader, renderer);
     shader.fragmentShader = /* glsl */ `
       uniform vec4 objectId;

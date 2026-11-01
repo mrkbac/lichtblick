@@ -44,7 +44,6 @@ import { LayerErrors } from "@lichtblick/suite-base/panels/ThreeDeeRender/LayerE
 import { ICameraHandler } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ICameraHandler";
 import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
 import { palette, fontMonospace } from "@lichtblick/theme";
-import { LabelMaterial, LabelPool } from "@lichtblick/three-text";
 
 import {
   IRenderer,
@@ -91,6 +90,7 @@ import {
   Vector3,
 } from "./ros";
 import { SelectEntry } from "./settings";
+import { LabelPool } from "./text";
 import {
   AddTransformResult,
   CoordinateFrame,
@@ -139,25 +139,6 @@ const tempVec2 = new THREE.Vector2();
 // for transforms
 const tempVec3: vec3 = [0, 0, 0];
 const tempQuat: quat = [0, 0, 0, 1];
-
-// We use a patched version of THREE.js where the internal WebGLShaderCache class has been
-// modified to allow caching based on `vertexShaderKey` and/or `fragmentShaderKey` instead of
-// using the full shader source as a Map key
-Object.defineProperty(LabelMaterial.prototype, "vertexShaderKey", {
-  get() {
-    return "LabelMaterial-VertexShader";
-  },
-  enumerable: true,
-  configurable: true,
-});
-Object.defineProperty(LabelMaterial.prototype, "fragmentShaderKey", {
-  get() {
-    // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
-    return this.picking ? "LabelMaterial-FragmentShader-picking" : "LabelMaterial-FragmentShader";
-  },
-  enumerable: true,
-  configurable: true,
-});
 
 type StaticTransform = {
   parentFrameId: string;
@@ -307,6 +288,8 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
       canvas,
       alpha: true,
       antialias: true,
+      // Line materials use a stencil prepass; three.js stopped allocating a stencil buffer by default in r163
+      stencil: true,
     });
     if (!this.gl.capabilities.isWebGL2) {
       throw new Error("WebGL2 is not supported");

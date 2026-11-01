@@ -376,7 +376,7 @@ function updateTexture(
   settings: LayerSettingsOccupancyGrid,
 ): void {
   const size = occupancyGrid.info.width * occupancyGrid.info.height;
-  const rgba = texture.image.data;
+  const rgba = texture.image.data!;
   stringToRgba(tempMinColor, settings.minColor);
   stringToRgba(tempMaxColor, settings.maxColor);
   stringToRgba(tempUnknownColor, settings.unknownColor);

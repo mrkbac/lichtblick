@@ -24,7 +24,6 @@ import {
   ImageMarker as RosImageMarker,
   ImageMarkerArray as RosImageMarkerArray,
 } from "@lichtblick/suite-base/types/Messages";
-import { LabelPool } from "@lichtblick/three-text";
 
 import { RenderableTopicAnnotations } from "./RenderableTopicAnnotations";
 import { Annotation } from "./types";
@@ -32,6 +31,7 @@ import { AnyRendererSubscription, ImageModeConfig } from "../../../IRenderer";
 import { SettingsTreeEntry } from "../../../SettingsManager";
 import { IMAGE_ANNOTATIONS_DATATYPES } from "../../../foxglove";
 import { IMAGE_MARKER_ARRAY_DATATYPES, IMAGE_MARKER_DATATYPES } from "../../../ros";
+import { LabelPool } from "../../../text";
 import { topicIsConvertibleToSchema } from "../../../topicIsConvertibleToSchema";
 import { sortPrefixMatchesToFront } from "../../Images/topicPrefixMatching";
 import { IMessageHandler, MessageRenderState } from "../MessageHandler";
@@ -132,7 +132,7 @@ export class ImageAnnotations extends THREE.Object3D {
     return msgs;
   }
 
-  public dispose(): void {
+  public override dispose(): void {
     for (const renderable of this.#renderablesByTopic.values()) {
       renderable.dispose();
     }
