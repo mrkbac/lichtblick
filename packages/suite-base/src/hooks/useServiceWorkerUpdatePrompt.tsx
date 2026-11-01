@@ -5,6 +5,10 @@ import { Button } from "@mui/material";
 import { useSnackbar } from "notistack";
 import { useEffect } from "react";
 
+import Logger from "@lichtblick/log";
+
+const log = Logger.getLogger(__filename);
+
 /**
  * When a new service worker version is installed and waiting, offer to reload into it.
  * The waiting worker is activated via the workbox SKIP_WAITING message; every open window
@@ -47,23 +51,28 @@ export function useServiceWorkerUpdatePrompt(): void {
       });
     };
 
-    void container.getRegistration().then((registration) => {
-      if (!registration) {
-        return;
-      }
-      // `controller` is null on the very first install, which is not an update
-      if (registration.waiting && container.controller) {
-        prompt(registration.waiting);
-      }
-      registration.addEventListener("updatefound", () => {
-        const worker = registration.installing;
-        worker?.addEventListener("statechange", () => {
-          if (worker.state === "installed" && container.controller) {
-            prompt(worker);
-          }
+    container
+      .getRegistration()
+      .then((registration) => {
+        if (!registration) {
+          return;
+        }
+        // `controller` is null on the very first install, which is not an update
+        if (registration.waiting && container.controller) {
+          prompt(registration.waiting);
+        }
+        registration.addEventListener("updatefound", () => {
+          const worker = registration.installing;
+          worker?.addEventListener("statechange", () => {
+            if (worker.state === "installed" && container.controller) {
+              prompt(worker);
+            }
+          });
         });
+      })
+      .catch((error: unknown) => {
+        log.warn("Service worker registration lookup failed", error);
       });
-    });
 
     return () => {
       container.removeEventListener("controllerchange", onControllerChange);

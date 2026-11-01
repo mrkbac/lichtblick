@@ -260,11 +260,17 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   useEffect(() => {
     window.launchQueue?.setConsumer(async ({ files }) => {
       const fileHandles = files.filter((h): h is FileSystemFileHandle => h.kind === "file");
-      if (fileHandles.length > 0) {
+      if (fileHandles.length === 0) {
+        return;
+      }
+      try {
         await handleFilesRef.current(await Promise.all(fileHandles.map(async (h) => await h.getFile())));
+      } catch (error) {
+        log.error("Failed to open launched files", error);
+        enqueueSnackbar("Failed to open the launched file", { variant: "error" });
       }
     });
-  }, []);
+  }, [enqueueSnackbar]);
 
   const dropHandler = useCallback(
     async ({
