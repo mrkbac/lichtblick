@@ -15,6 +15,7 @@ import type {
   ConnectHistoryApiFallbackOptions,
   Configuration as WebpackDevServerConfiguration,
 } from "webpack-dev-server";
+import { GenerateSW } from "workbox-webpack-plugin";
 
 import type { WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
 import { makeConfig } from "@lichtblick/suite-base/webpack";
@@ -121,6 +122,22 @@ export const mainConfig =
       plugins.push(new ReactRefreshPlugin());
     }
 
+    if (!isDev) {
+      // Precache the whole build so the installed PWA works fully offline, including lazy-loaded
+      // panels, workers and wasm. The new version activates once all app windows are closed, or
+      // when the user accepts the update prompt (see registerServiceWorker.ts).
+      plugins.push(
+        new GenerateSW({
+          swDest: "sw.js",
+          exclude: [/\.map$/, /\.LICENSE\.txt$/],
+          // serve the precached app shell for any navigation (deep links, file_handlers launches)
+          navigateFallback: "index.html",
+          maximumFileSizeToCacheInBytes: 100 * 1024 * 1024,
+          cleanupOutdatedCaches: true,
+        }),
+      );
+    }
+
     const appWebpackConfig = makeConfig(env, argv, {
       allowUnusedVariables,
       version: params.version,
@@ -187,6 +204,8 @@ export const mainConfig =
   `,
           foxgloveExtraHeadTags: `
             <title>Lichtblick</title>
+            <link rel="manifest" href="manifest.webmanifest" />
+            <meta name="theme-color" content="${palette.dark.background?.default}" />
             <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
             <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png" />
             <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png" />
