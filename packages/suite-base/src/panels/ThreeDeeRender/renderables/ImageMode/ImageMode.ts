@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { toNanoSec } from "@foxglove/rostime";
 import * as _ from "lodash-es";
 import * as THREE from "three";
 import { Writable } from "ts-essentials";
@@ -13,7 +14,6 @@ import { filterMap } from "@lichtblick/den/collection";
 import { selectCameraModel } from "@lichtblick/den/image";
 import { CameraModelsMap } from "@lichtblick/den/image/types";
 import Logger from "@lichtblick/log";
-import { toNanoSec } from "@lichtblick/rostime";
 import {
   ICameraModel,
   Immutable,

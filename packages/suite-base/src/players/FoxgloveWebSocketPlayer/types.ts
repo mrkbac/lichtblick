@@ -5,12 +5,12 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { MessageDefinition } from "@foxglove/message-definition";
+import { MessageWriter as Ros1MessageWriter } from "@foxglove/rosmsg-serialization";
+import { MessageWriter as Ros2MessageWriter } from "@foxglove/rosmsg2-serialization";
 import { Channel, ClientChannel, Service } from "@foxglove/ws-protocol";
 
 import { ParsedChannel } from "@lichtblick/mcap-support";
-import { MessageDefinition } from "@lichtblick/message-definition";
-import { MessageWriter as Ros1MessageWriter } from "@lichtblick/rosmsg-serialization";
-import { MessageWriter as Ros2MessageWriter } from "@lichtblick/rosmsg2-serialization";
 
 export type ResolvedChannel = {
   channel: Channel;

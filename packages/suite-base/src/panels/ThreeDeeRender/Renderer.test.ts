@@ -6,12 +6,12 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { fromNanoSec, toNanoSec } from "@foxglove/rostime";
 import { FrameTransform, FrameTransforms } from "@foxglove/schemas";
 import { setupJestCanvasMock } from "jest-canvas-mock";
 import * as THREE from "three";
 
 import { CameraModelsMap } from "@lichtblick/den/image/types";
-import { fromNanoSec, toNanoSec } from "@lichtblick/rostime";
 import { MessageEvent } from "@lichtblick/suite";
 import { Asset, DraggedMessagePath } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";

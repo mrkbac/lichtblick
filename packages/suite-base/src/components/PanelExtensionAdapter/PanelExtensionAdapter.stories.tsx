@@ -5,11 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { toSec } from "@foxglove/rostime";
 import { StoryObj } from "@storybook/react-webpack5";
 import { ReactElement, useLayoutEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
 
-import { toSec } from "@lichtblick/rostime";
 import {
   Immutable,
   PanelExtensionContext,

@@ -5,13 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { subtract as subtractTime, toSec } from "@foxglove/rostime";
 import EventEmitter from "eventemitter3";
 import * as _ from "lodash-es";
 
 import { debouncePromise } from "@lichtblick/den/async";
 import { filterMap } from "@lichtblick/den/collection";
 import { parseMessagePath } from "@lichtblick/message-path";
-import { subtract as subtractTime, toSec } from "@lichtblick/rostime";
 import { Immutable, Time } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 import { stringifyMessagePath } from "@lichtblick/suite-base/components/MessagePathSyntax/stringifyRosPath";

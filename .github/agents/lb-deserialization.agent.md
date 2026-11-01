@@ -23,9 +23,9 @@ Decoded message objects (ready for panels)
 
 | Encoding | Schema Format | Deserializer |
 |----------|--------------|--------------|
-| `ros1msg` | ROS 1 message definition text | `@lichtblick/rosmsg-serialization` MessageReader |
-| `ros2msg` | ROS 2 message definition text | `@lichtblick/rosmsg2-serialization` MessageReader |
-| `ros2idl` | OMG IDL text | `@lichtblick/omgidl-serialization` MessageReader |
+| `ros1msg` | ROS 1 message definition text | `@foxglove/rosmsg-serialization` MessageReader |
+| `ros2msg` | ROS 2 message definition text | `@foxglove/rosmsg2-serialization` MessageReader |
+| `ros2idl` | OMG IDL text | `@foxglove/omgidl-serialization` MessageReader |
 | `jsonschema` | JSON Schema object | JSON.parse + postprocessValue (base64 decode) |
 | `protobuf` | FileDescriptorSet binary | `protobufjs` Root.fromDescriptor |
 | `flatbuffer` | Binary reflection schema | `flatbuffers_reflection` Parser |

@@ -28,7 +28,7 @@ dispose(); // releases Comlink proxy + terminates worker
 
 ### Worker Implementation (worker thread)
 ```typescript
-import * as Comlink from "@lichtblick/comlink";
+import * as Comlink from "@foxglove/comlink";
 
 class MyWorkerImpl {
   async process(data: Uint8Array): Promise<Result> {

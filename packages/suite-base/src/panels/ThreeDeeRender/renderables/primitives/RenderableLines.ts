@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { toNanoSec } from "@foxglove/rostime";
 import { LinePrimitive, LineType, SceneEntity } from "@foxglove/schemas";
 import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
@@ -13,7 +14,6 @@ import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { assert } from "ts-essentials";
 
-import { toNanoSec } from "@lichtblick/rostime";
 import { LineMaterialWithAlphaVertex } from "@lichtblick/suite-base/panels/ThreeDeeRender/LineMaterialWithAlphaVertex";
 
 import { RenderablePrimitive } from "./RenderablePrimitive";

@@ -9,13 +9,13 @@
 
 /* eslint-disable jest/no-done-callback */
 
+import type { MessageDefinition } from "@foxglove/message-definition";
+import { Time } from "@foxglove/rostime";
 import { render } from "@testing-library/react";
 import { act } from "react";
 import { createStore } from "zustand";
 
 import { Condvar, signal } from "@lichtblick/den/async";
-import type { MessageDefinition } from "@lichtblick/message-definition";
-import { Time } from "@lichtblick/rostime";
 import {
   PanelExtensionContext,
   RenderState,

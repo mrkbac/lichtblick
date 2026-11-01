@@ -1,14 +1,15 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import * as Comlink from "@lichtblick/comlink";
+import * as Comlink from "@foxglove/comlink";
+
 import { MessageEvent } from "@lichtblick/suite";
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
 
 import { ComlinkTransferIteratorCursor } from "./ComlinkTransferIteratorCursor";
 import type { IMessageCursor, IteratorResult } from "./IIterableSource";
 
-jest.mock("@lichtblick/comlink", () => ({
+jest.mock("@foxglove/comlink", () => ({
   transfer: jest.fn((value, transferables) => ({ value, transferables })),
 }));
 

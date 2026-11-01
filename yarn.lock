@@ -2384,10 +2384,68 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@foxglove/avl@npm:1.0.0":
+  version: 1.0.0
+  resolution: "@foxglove/avl@npm:1.0.0"
+  checksum: 10/710de03ef0d26b95b650143f864a635799e10ab02a76a1c745d218d6f674deefa89f4529ce90ea315001f8024f20ad6d3872e1ac8c56a9d1c7a6f52a2b75b9fb
+  languageName: node
+  linkType: hard
+
+"@foxglove/cdr@npm:3.5.0":
+  version: 3.5.0
+  resolution: "@foxglove/cdr@npm:3.5.0"
+  checksum: 10/769d72b47a89f3ce7e13a8230fe751f2272298d3e9168b3e441b092333bc1736bf3e63940138482e1848a88f0576b74e38d0214a5e8d8bb835c75803e33eaa0a
+  languageName: node
+  linkType: hard
+
+"@foxglove/cdr@npm:^3.5.1":
+  version: 3.5.1
+  resolution: "@foxglove/cdr@npm:3.5.1"
+  checksum: 10/1b8faf9a30310ce29fcbc25702146b8966779e651b228b018d6881c5d1a17087eed60c514621056dabc4fe49b65d8f11c53ffc288098bd9615579d5ef3ef0e86
+  languageName: node
+  linkType: hard
+
+"@foxglove/chartjs-plugin-zoom@npm:2.1.0":
+  version: 2.1.0
+  resolution: "@foxglove/chartjs-plugin-zoom@npm:2.1.0"
+  dependencies:
+    hammerjs: "npm:^2.0.8"
+  peerDependencies:
+    chart.js: ^3.0.0-beta.13
+  checksum: 10/250093948281e0433259475bc8df2db3dc0d1e437ea844fd700eca53f200a02791c04a2921e7f9fa3f2046c77bc89cef83558d3357dd221f2fad9e9d8540606e
+  languageName: node
+  linkType: hard
+
+"@foxglove/comlink@npm:4.4.3":
+  version: 4.4.3
+  resolution: "@foxglove/comlink@npm:4.4.3"
+  checksum: 10/ee1256baaf1b6990fef822c3a59667a48590c61f0c3025a6d48e7fdbafbfad02a2ba205f13c5dce767ea04a38204f81dd6afdfdb4d5ce65693a353b837a67a1a
+  languageName: node
+  linkType: hard
+
+"@foxglove/crc@npm:1.0.1":
+  version: 1.0.1
+  resolution: "@foxglove/crc@npm:1.0.1"
+  checksum: 10/fb24f6aa22f28fc7a0dade9e201061b43716f131044eb12450f4acc4cea6a2f0d45070325de9522ac3b62f6f0c2490183e2bc1838d120b40ccb2bce49b95fd83
+  languageName: node
+  linkType: hard
+
 "@foxglove/crc@npm:^0.0.3":
   version: 0.0.3
   resolution: "@foxglove/crc@npm:0.0.3"
   checksum: 10/53e2f78fb001884ed4baeb1cb4dd510e1d67d9389e0457c57c4d4eb6ada346528310a7e5e486f93cfcf131657ed8e4a57cc3ba6d0e7a564742c0a51498504065
+  languageName: node
+  linkType: hard
+
+"@foxglove/electron-socket@npm:2.1.1":
+  version: 2.1.1
+  resolution: "@foxglove/electron-socket@npm:2.1.1"
+  dependencies:
+    dns-packet: "npm:^5.2.4"
+    eventemitter3: "npm:^4.0.7"
+  peerDependencies:
+    electron: ">=12"
+  checksum: 10/d9072557724f6000f93c44b417953151d6c6f2725a7a9965b8a1a6911827f5de7569473e47545c6fda8e085b0bd1cd519eb2c68e36b2a6a5b662e4225bfad7ae
   languageName: node
   linkType: hard
 
@@ -2400,10 +2458,90 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@foxglove/message-definition@npm:0.5.0":
+"@foxglove/message-definition@npm:0.5.0, @foxglove/message-definition@npm:^0.5.0":
   version: 0.5.0
   resolution: "@foxglove/message-definition@npm:0.5.0"
   checksum: 10/679ecc3416a153f4aee969e4031fdd4ccf0c63b04c46da74e9c8c78e72284a83dd2d4a3ee9786962f0394711635256dfc1bc69330206da7fec224447b2c7ff09
+  languageName: node
+  linkType: hard
+
+"@foxglove/omgidl-parser@npm:1.2.2":
+  version: 1.2.2
+  resolution: "@foxglove/omgidl-parser@npm:1.2.2"
+  dependencies:
+    tslib: "npm:^2"
+  checksum: 10/97f8511cf6a82410d39998c94ce4d2042a6119bd23d2ba7d57a740cc0b6da60fce82f617e3f0eb631591577c4a52b6e975c731f5ba6cfa4f36e9b30561cd4b51
+  languageName: node
+  linkType: hard
+
+"@foxglove/omgidl-serialization@npm:1.2.5":
+  version: 1.2.5
+  resolution: "@foxglove/omgidl-serialization@npm:1.2.5"
+  dependencies:
+    "@foxglove/cdr": "npm:3.5.0"
+    "@foxglove/message-definition": "npm:^0.5.0"
+  checksum: 10/34ecf6fa06a1ff2ee811b8269d99d729a4ebace0fa680a0c6a40c952b24808a5558dc35b5ecb54e4a8550e225c13a807f515c1828ed3980ca5a4e0e242ae4d8c
+  languageName: node
+  linkType: hard
+
+"@foxglove/ros1@npm:3.0.1":
+  version: 3.0.1
+  resolution: "@foxglove/ros1@npm:3.0.1"
+  dependencies:
+    "@foxglove/message-definition": "npm:0.5.0"
+    "@foxglove/rosmsg": "npm:^5.0.5"
+    "@foxglove/rosmsg-serialization": "npm:^2.0.4"
+    "@foxglove/xmlrpc": "npm:^1.3.0"
+    eventemitter3: "npm:^5.0.0"
+    ipaddr.js: "npm:^2.0.1"
+  bin:
+    roscore: dist/nodejs/roscore.js
+  checksum: 10/87bb9b6171d6a169f240bcf7404fb2244947ed713a3389afadad136b25e776c6c7d3aa9da4bfe6ea9a588ac88a1786369841cf71f828cf927b6ffd247c352ba3
+  languageName: node
+  linkType: hard
+
+"@foxglove/ros2idl-parser@npm:0.3.6":
+  version: 0.3.6
+  resolution: "@foxglove/ros2idl-parser@npm:0.3.6"
+  dependencies:
+    "@foxglove/message-definition": "npm:^0.5.0"
+    "@foxglove/omgidl-parser": "npm:1.2.2"
+    md5-typescript: "npm:^1.0.5"
+  checksum: 10/5df7a40316d079e5d00491bccd7b988f0a802c05a4be6b2770945af044f9b1d761653b3b16290d8efb845334b51f5dc31974960046a495e4aee674dacb435673
+  languageName: node
+  linkType: hard
+
+"@foxglove/rosbag@npm:0.4.2":
+  version: 0.4.2
+  resolution: "@foxglove/rosbag@npm:0.4.2"
+  dependencies:
+    "@foxglove/rosmsg": "npm:^5.0.5"
+    "@foxglove/rosmsg-serialization": "npm:^2.1.2"
+    "@foxglove/rostime": "npm:^1.1.3"
+    heap: "npm:^0.2.7"
+  checksum: 10/56456ae9550a7bc1d551bda9b7dcd1eae0b4ab1776d8cae43be0ccdfdc3ca71e0f3be79330b28a7fa921550648c671044da3cd1b83304df3eff6e5cc203375b2
+  languageName: node
+  linkType: hard
+
+"@foxglove/roslibjs@npm:0.0.4":
+  version: 0.0.4
+  resolution: "@foxglove/roslibjs@npm:0.0.4"
+  dependencies:
+    cbor-js: "npm:^0.1.0"
+    eventemitter2: "npm:^6.4.0"
+    object-assign: "npm:^4.0.1"
+    webworkify: "npm:^1.5.0"
+  checksum: 10/d8e04a1207de0df3e40d00c93f2ad1c2960d69d0224fdfae3059a417cd33b8bf1783b24c9e456e4b2c672883faca7c3e0ac7fcf6c9146794a58573009a6d843b
+  languageName: node
+  linkType: hard
+
+"@foxglove/rosmsg-msgs-common@npm:3.3.0":
+  version: 3.3.0
+  resolution: "@foxglove/rosmsg-msgs-common@npm:3.3.0"
+  dependencies:
+    "@foxglove/message-definition": "npm:0.5.0"
+    "@foxglove/rosmsg": "npm:^5.0.5"
+  checksum: 10/9580488fd3751f9c4005607c27361db3f0a05c8ce0b99c1fef48f7003523cbef80ca70dab928cbae4057f97470dd8c66fff629f1e5708c5d7e29309acfa3b68c
   languageName: node
   linkType: hard
 
@@ -2417,13 +2555,40 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@foxglove/rosmsg@npm:^5.0.5":
+"@foxglove/rosmsg-serialization@npm:2.1.3, @foxglove/rosmsg-serialization@npm:^2.0.4, @foxglove/rosmsg-serialization@npm:^2.1.2":
+  version: 2.1.3
+  resolution: "@foxglove/rosmsg-serialization@npm:2.1.3"
+  dependencies:
+    "@foxglove/message-definition": "npm:0.5.0"
+  checksum: 10/0f28d558e19766ef453f2eb2d8f410af923094aceef6c180182e4c43290c825749f26284074bb34eb66435b8ec1e7cd873bfb251e2312cba55b9ef19bfc1659f
+  languageName: node
+  linkType: hard
+
+"@foxglove/rosmsg2-serialization@npm:3.1.2":
+  version: 3.1.2
+  resolution: "@foxglove/rosmsg2-serialization@npm:3.1.2"
+  dependencies:
+    "@foxglove/cdr": "npm:^3.5.1"
+    "@foxglove/message-definition": "npm:0.5.0"
+    "@foxglove/rostime": "npm:^1.1.3"
+  checksum: 10/16913883617b56e7b313dd9fe5990cf61d96779dc114bf4c2c6f91ab8dd8ba0abf081f805aca8be17d213f60714067cc7935a6ea8f79c9f530a099c2a49c8c42
+  languageName: node
+  linkType: hard
+
+"@foxglove/rosmsg@npm:5.0.5, @foxglove/rosmsg@npm:^5.0.5":
   version: 5.0.5
   resolution: "@foxglove/rosmsg@npm:5.0.5"
   dependencies:
     "@foxglove/message-definition": "npm:0.5.0"
     md5-typescript: "npm:^1.0.5"
   checksum: 10/c5980ec59749525d79a8aed26c0e1de6bf315644490f2b8cb8df9055bbac1176a8f738c8a029d7c0911385a620839d88fc9a82224d57c8fd01fa7888a4979b1a
+  languageName: node
+  linkType: hard
+
+"@foxglove/rostime@npm:1.1.3, @foxglove/rostime@npm:^1.1.3":
+  version: 1.1.3
+  resolution: "@foxglove/rostime@npm:1.1.3"
+  checksum: 10/056bb9b4df45aa04e9486f074915f4cb440288d9b981d15a73d76b7cd084a03dc6853b3f69ab05ac24a7d5cd31b758a341c61f8b5b065f0da62db9dc24be7c6f
   languageName: node
   linkType: hard
 
@@ -2454,6 +2619,43 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@foxglove/ulog@npm:2.3.2":
+  version: 2.3.2
+  resolution: "@foxglove/ulog@npm:2.3.2"
+  checksum: 10/1d1e2096e1dd24cbdcaad6ae8116ec2863365dec899489f0ec0e1183973007a523966fe9c77cf91c18c4e8a56bf198d25f287724c573f885e7afa9847a29edfd
+  languageName: node
+  linkType: hard
+
+"@foxglove/velodyne-cloud@npm:1.0.1":
+  version: 1.0.1
+  resolution: "@foxglove/velodyne-cloud@npm:1.0.1"
+  checksum: 10/d4ba90359faf08fe0a9d6e73cfc9d1934139c45f5f85295640651ee942502e7fcb7c50a0de5fbd5a67e5ab6d4ae746a2bb671abe0349aa8c9ebdf3ff5a238297
+  languageName: node
+  linkType: hard
+
+"@foxglove/wasm-bz2@npm:0.3.0":
+  version: 0.3.0
+  resolution: "@foxglove/wasm-bz2@npm:0.3.0"
+  dependencies:
+    tslib: "npm:^2"
+  checksum: 10/f363e700b2088eeddeac83f42dbae86f0c9bb0344322c85c920166cf75595dda0b726ba10822b669aa3b22cc7efe6257fc6cd975afbe17b1ad2af017a58754f1
+  languageName: node
+  linkType: hard
+
+"@foxglove/wasm-lz4@npm:1.0.2":
+  version: 1.0.2
+  resolution: "@foxglove/wasm-lz4@npm:1.0.2"
+  checksum: 10/0efc4dc9dbacbd79b475460a890410986c5dea0ddd6b3f7c3025d17b90fb5fe313007c7aa1c8f54b20677c8c1eec9af6e6a8247922dad344e6f02174122445c0
+  languageName: node
+  linkType: hard
+
+"@foxglove/wasm-zstd@npm:1.0.1":
+  version: 1.0.1
+  resolution: "@foxglove/wasm-zstd@npm:1.0.1"
+  checksum: 10/d23db12b7ec55a2fee2e3e0673730c6a2e70350340d3699a3ca0aa64bdb8364c1db7dffec7f63bffa33bc8154d890688989da51bb89d1f4bad4c3f0839752b3f
+  languageName: node
+  linkType: hard
+
 "@foxglove/ws-protocol@npm:0.8.0":
   version: 0.8.0
   resolution: "@foxglove/ws-protocol@npm:0.8.0"
@@ -2462,6 +2664,18 @@ __metadata:
     eventemitter3: "npm:^5.0.1"
     tslib: "npm:^2.8.1"
   checksum: 10/d56bafd78c7cf0ffcceda380aaa401a1ea6b4dfbbd003eb28d85f9978d4c15ee148e00c15ab1cb3c1cc02fbf49278136b4adfc85178491a858f859fdc6678218
+  languageName: node
+  linkType: hard
+
+"@foxglove/xmlrpc@npm:1.4.0, @foxglove/xmlrpc@npm:^1.3.0":
+  version: 1.4.0
+  resolution: "@foxglove/xmlrpc@npm:1.4.0"
+  dependencies:
+    "@foxglove/just-fetch": "npm:^1.2.4"
+    byte-base64: "npm:^1.1.0"
+    sax: "npm:^1.2.4"
+    xmlbuilder2: "npm:^4.0.3"
+  checksum: 10/ec3933080b2eaa5315a5702e38588dd71acb727f24b0fda69a8fd72e9637c2433ab340f37bebe597faa480aff62d2e3a3f483680901cdacd2822c31c58625960
   languageName: node
   linkType: hard
 
@@ -3233,60 +3447,21 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lichtblick/avl@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/avl@npm:1.0.0"
-  checksum: 10/9806233f42fa0842dfadcb40b8385b2c03c6111a053ada2500d4076bd152b6e7154ce72e041e2a30e420cf5ccd6eee952eb70b20250eef2b1f3aaa9804117973
-  languageName: node
-  linkType: hard
-
-"@lichtblick/cdr@npm:1.0.1":
-  version: 1.0.1
-  resolution: "@lichtblick/cdr@npm:1.0.1"
-  checksum: 10/042aa55d29b4c2b592eb986ec2971860887b5ed1d54dc1dab0deffc9a4e48d5517b4d40cebaf18c87552a487503da05c05acddcfe9c7faa80d850d18a63f21a7
-  languageName: node
-  linkType: hard
-
-"@lichtblick/chartjs-plugin-zoom@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/chartjs-plugin-zoom@npm:1.0.0"
-  dependencies:
-    hammerjs: "npm:^2.0.8"
-  peerDependencies:
-    chart.js: ^3.0.0-beta.13
-  checksum: 10/409d25577f8defc2ce9400c59b826ec6f676a14a17bd721d60f1eacf7b35fe813c2299fe60b9d6c30e78896212b5fca42e89d2b7a17bc2dc4b9ce72df6732414
-  languageName: node
-  linkType: hard
-
 "@lichtblick/comlink-transfer-handlers@workspace:*, @lichtblick/comlink-transfer-handlers@workspace:packages/comlink-transfer-handlers":
   version: 0.0.0-use.local
   resolution: "@lichtblick/comlink-transfer-handlers@workspace:packages/comlink-transfer-handlers"
   dependencies:
-    "@lichtblick/comlink": "npm:1.0.3"
+    "@foxglove/comlink": "npm:4.4.3"
     "@lichtblick/tsconfig": "npm:1.1.2"
     typescript: "npm:6.0.3"
   languageName: unknown
   linkType: soft
 
-"@lichtblick/comlink@npm:1.0.3":
-  version: 1.0.3
-  resolution: "@lichtblick/comlink@npm:1.0.3"
-  checksum: 10/3600c3822307b991c14c78564e65e20052af5029413fd20016aed99c47afac08d2112d658c8f0222f7a6da2a71f006d889a6ee46908eb7bf205d6d13d49a5dd2
-  languageName: node
-  linkType: hard
-
-"@lichtblick/crc@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/crc@npm:1.0.0"
-  checksum: 10/1f8611baec2d4ad918ad4c42afa87f3d6b099cea3915d6c6ba7c291c7c9988936c89ca22ee38647dca12fea2d26098633dbcf6c543626b0bd1212914c496c99f
-  languageName: node
-  linkType: hard
-
 "@lichtblick/den@workspace:*, @lichtblick/den@workspace:packages/den":
   version: 0.0.0-use.local
   resolution: "@lichtblick/den@workspace:packages/den"
   dependencies:
-    "@lichtblick/comlink": "npm:1.0.3"
+    "@foxglove/comlink": "npm:4.4.3"
     "@lichtblick/suite": "workspace:*"
     "@lichtblick/tsconfig": "npm:1.1.2"
     "@types/dom-webcodecs": "npm:0.1.14"
@@ -3295,18 +3470,6 @@ __metadata:
     xacro-parser: "npm:0.3.11"
   languageName: unknown
   linkType: soft
-
-"@lichtblick/electron-socket@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/electron-socket@npm:1.0.0"
-  dependencies:
-    dns-packet: "npm:^5.2.4"
-    eventemitter3: "npm:^4.0.7"
-  peerDependencies:
-    electron: ">=12"
-  checksum: 10/228b3c0575c2caaa834ad78f371c30ea38534a5b599b6c4767da70913f4c7184752dab6cd6e0c3da3254d3d6487437d793b7c79e7569c3b601b35552e54a9295
-  languageName: node
-  linkType: hard
 
 "@lichtblick/eslint-plugin-suite@workspace:*, @lichtblick/eslint-plugin-suite@workspace:packages/eslint-plugin-suite":
   version: 0.0.0-use.local
@@ -3373,18 +3536,18 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@lichtblick/mcap-support@workspace:packages/mcap-support"
   dependencies:
+    "@foxglove/message-definition": "npm:0.5.0"
+    "@foxglove/omgidl-parser": "npm:1.2.2"
+    "@foxglove/omgidl-serialization": "npm:1.2.5"
+    "@foxglove/ros2idl-parser": "npm:0.3.6"
+    "@foxglove/rosmsg": "npm:5.0.5"
+    "@foxglove/rosmsg-serialization": "npm:2.1.3"
+    "@foxglove/rosmsg2-serialization": "npm:3.1.2"
     "@foxglove/schemas": "npm:1.13.0"
-    "@lichtblick/message-definition": "npm:1.0.0"
-    "@lichtblick/omgidl-parser": "npm:1.0.0"
-    "@lichtblick/omgidl-serialization": "npm:1.0.0"
-    "@lichtblick/ros2idl-parser": "npm:1.0.0"
-    "@lichtblick/rosmsg": "npm:1.0.0"
-    "@lichtblick/rosmsg-serialization": "npm:1.0.0"
-    "@lichtblick/rosmsg2-serialization": "npm:1.0.0"
+    "@foxglove/wasm-bz2": "npm:0.3.0"
+    "@foxglove/wasm-lz4": "npm:1.0.2"
+    "@foxglove/wasm-zstd": "npm:1.0.1"
     "@lichtblick/tsconfig": "npm:1.1.2"
-    "@lichtblick/wasm-bz2": "npm:1.0.0"
-    "@lichtblick/wasm-lz4": "npm:1.0.0"
-    "@lichtblick/wasm-zstd": "npm:1.0.0"
     "@mcap/core": "npm:2.2.0"
     "@protobufjs/base64": "npm:1.1.2"
     flatbuffers: "npm:25.9.23"
@@ -3394,7 +3557,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@lichtblick/message-definition@npm:1.0.0, @lichtblick/message-definition@npm:^1.0.0":
+"@lichtblick/message-definition@npm:1.0.0":
   version: 1.0.0
   resolution: "@lichtblick/message-definition@npm:1.0.0"
   checksum: 10/479c18bfa520c983fa796a088c23f4b081e2b1a5250c4bf243108011e5d82876568c40b733566bc0d27369a404f84e93f1ed8ce0caee30553c6091bb91223b7c
@@ -3412,52 +3575,6 @@ __metadata:
     typescript: "npm:6.0.3"
   languageName: unknown
   linkType: soft
-
-"@lichtblick/omgidl-parser@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/omgidl-parser@npm:1.0.0"
-  dependencies:
-    tslib: "npm:^2"
-  checksum: 10/0974bffb708e6e0e1a89a473e07a08dfc4825ff2745fb76a2f95de076bb610cd5d8f30a5007edc8721a7c45555475a9dc3c17ab00f538d5c8dbe2803ba942f67
-  languageName: node
-  linkType: hard
-
-"@lichtblick/omgidl-serialization@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/omgidl-serialization@npm:1.0.0"
-  dependencies:
-    "@lichtblick/cdr": "npm:1.0.1"
-    "@lichtblick/message-definition": "npm:^1.0.0"
-  checksum: 10/f93fdc55a734c8b665a024ef4cc35e6d8aa13724c47bbab2ec1f2ed238374960d8f29bc643d5c37cf13df19c1ccccf538a6b2ae98c51adf2f5174b1638e89601
-  languageName: node
-  linkType: hard
-
-"@lichtblick/ros1@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/ros1@npm:1.0.0"
-  dependencies:
-    "@lichtblick/message-definition": "npm:1.0.0"
-    "@lichtblick/rosmsg": "npm:1.0.0"
-    "@lichtblick/rosmsg-serialization": "npm:1.0.0"
-    "@lichtblick/xmlrpc": "npm:1.0.0"
-    eventemitter3: "npm:^5.0.0"
-    ipaddr.js: "npm:^2.0.1"
-  bin:
-    roscore: dist/nodejs/roscore.js
-  checksum: 10/f10977e69e635e9ed507604101b2a80bf4c6dae7572cbcec137f591fc5df8377a61dc3bb4657fcc62ea3241804f871ea290f2a6688e590fcce5de635ed4b2b63
-  languageName: node
-  linkType: hard
-
-"@lichtblick/ros2idl-parser@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/ros2idl-parser@npm:1.0.0"
-  dependencies:
-    "@lichtblick/message-definition": "npm:^1.0.0"
-    "@lichtblick/omgidl-parser": "npm:1.0.0"
-    md5-typescript: "npm:^1.0.5"
-  checksum: 10/71cdef976f04be29b1093ce24e83dc6b1fc755889a32928d9a9be02e465d7b80a1fc30cb168230310de3022e3d7068d0b03fd135dc9a779ca5ad96b5c0a133b6
-  languageName: node
-  linkType: hard
 
 "@lichtblick/rosbag2-web@npm:1.0.5":
   version: 1.0.5
@@ -3483,28 +3600,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lichtblick/rosbag@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/rosbag@npm:1.0.0"
-  dependencies:
-    heap: "npm:^0.2.7"
-  checksum: 10/b9468688acbb5426273ce0fab73eec6bf943a6256097e0b61de9e2af57dc89960015862a577a1a0c3d546319b0c77dacc710ee5187dcf8ffc8118c3d27fc69c7
-  languageName: node
-  linkType: hard
-
-"@lichtblick/roslibjs@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/roslibjs@npm:1.0.0"
-  dependencies:
-    cbor-js: "npm:^0.1.0"
-    eventemitter2: "npm:^6.4.0"
-    object-assign: "npm:^4.0.1"
-    webworkify: "npm:^1.5.0"
-  checksum: 10/cbb74af7711e6384c70aa7a6f80e1981c0aff6cdad273ad02c7ac2d28300b8b3940be4199864676f0102fdea46ab3c15c25f088ba37eff57849f1413dde0f1d5
-  languageName: node
-  linkType: hard
-
-"@lichtblick/rosmsg-msgs-common@npm:1.0.1, @lichtblick/rosmsg-msgs-common@npm:^1.0.1":
+"@lichtblick/rosmsg-msgs-common@npm:^1.0.1":
   version: 1.0.1
   resolution: "@lichtblick/rosmsg-msgs-common@npm:1.0.1"
   dependencies:
@@ -3514,14 +3610,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lichtblick/rosmsg-serialization@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/rosmsg-serialization@npm:1.0.0"
-  checksum: 10/03f721a882eee4e62b4a49033ab6009258dfb259985692e9e9767b8f85083ab9d0d659cafd953a02152471af0fa9a90dc036a95020170f84ef4f2185b7fb96de
-  languageName: node
-  linkType: hard
-
-"@lichtblick/rosmsg2-serialization@npm:1.0.0, @lichtblick/rosmsg2-serialization@npm:^1.0.0":
+"@lichtblick/rosmsg2-serialization@npm:^1.0.0":
   version: 1.0.0
   resolution: "@lichtblick/rosmsg2-serialization@npm:1.0.0"
   checksum: 10/d6db1733299ed554327222cad860341a86d115bc452fe0f57ad7288f408c3dde15ac40581c980eb2eec6855682a818baaec6ea74726ae675b60134c7707aabdd
@@ -3537,7 +3626,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@lichtblick/rostime@npm:1.0.0, @lichtblick/rostime@npm:^1.0.0":
+"@lichtblick/rostime@npm:^1.0.0":
   version: 1.0.0
   resolution: "@lichtblick/rostime@npm:1.0.0"
   checksum: 10/836b7f3ee42e68c9303df8f40636aba3b9f229251d906f8bd96f2b2c98eccb104bf3ef81cd9413af6b6f2b73d92429113b1f4d51b2066fbe0b41f5bdcf13080c
@@ -3552,40 +3641,40 @@ __metadata:
     "@emotion/react": "npm:11.14.0"
     "@emotion/styled": "npm:11.14.1"
     "@fluentui/react-icons": "npm:2.0.308"
+    "@foxglove/avl": "npm:1.0.0"
+    "@foxglove/chartjs-plugin-zoom": "npm:2.1.0"
+    "@foxglove/comlink": "npm:4.4.3"
+    "@foxglove/crc": "npm:1.0.1"
+    "@foxglove/electron-socket": "npm:2.1.1"
+    "@foxglove/message-definition": "npm:0.5.0"
+    "@foxglove/ros1": "npm:3.0.1"
+    "@foxglove/rosbag": "npm:0.4.2"
+    "@foxglove/roslibjs": "npm:0.0.4"
+    "@foxglove/rosmsg": "npm:5.0.5"
+    "@foxglove/rosmsg-msgs-common": "npm:3.3.0"
+    "@foxglove/rosmsg-serialization": "npm:2.1.3"
+    "@foxglove/rosmsg2-serialization": "npm:3.1.2"
+    "@foxglove/rostime": "npm:1.1.3"
     "@foxglove/schemas": "npm:1.13.0"
+    "@foxglove/ulog": "npm:2.3.2"
+    "@foxglove/velodyne-cloud": "npm:1.0.1"
+    "@foxglove/wasm-bz2": "npm:0.3.0"
+    "@foxglove/wasm-lz4": "npm:1.0.2"
     "@foxglove/ws-protocol": "npm:0.8.0"
-    "@lichtblick/avl": "npm:1.0.0"
-    "@lichtblick/chartjs-plugin-zoom": "npm:1.0.0"
-    "@lichtblick/comlink": "npm:1.0.3"
+    "@foxglove/xmlrpc": "npm:1.4.0"
     "@lichtblick/comlink-transfer-handlers": "workspace:*"
-    "@lichtblick/crc": "npm:1.0.0"
     "@lichtblick/den": "workspace:*"
-    "@lichtblick/electron-socket": "npm:1.0.0"
     "@lichtblick/hooks": "workspace:*"
     "@lichtblick/log": "workspace:*"
     "@lichtblick/mcap-support": "workspace:*"
-    "@lichtblick/message-definition": "npm:1.0.0"
     "@lichtblick/message-path": "workspace:*"
-    "@lichtblick/ros1": "npm:1.0.0"
-    "@lichtblick/rosbag": "npm:1.0.0"
     "@lichtblick/rosbag2-web": "npm:1.0.5"
-    "@lichtblick/roslibjs": "npm:1.0.0"
-    "@lichtblick/rosmsg": "npm:1.0.0"
-    "@lichtblick/rosmsg-msgs-common": "npm:1.0.1"
-    "@lichtblick/rosmsg-serialization": "npm:1.0.0"
-    "@lichtblick/rosmsg2-serialization": "npm:1.0.0"
-    "@lichtblick/rostime": "npm:1.0.0"
     "@lichtblick/suite": "workspace:*"
     "@lichtblick/test-builders": "npm:1.0.1"
     "@lichtblick/theme": "workspace:*"
     "@lichtblick/three-text": "npm:1.0.0"
     "@lichtblick/tsconfig": "npm:1.1.2"
     "@lichtblick/typescript-transformers": "workspace:*"
-    "@lichtblick/ulog": "npm:1.0.0"
-    "@lichtblick/velodyne-cloud": "npm:1.0.0"
-    "@lichtblick/wasm-bz2": "npm:1.0.0"
-    "@lichtblick/wasm-lz4": "npm:1.0.0"
-    "@lichtblick/xmlrpc": "npm:1.0.0"
     "@mcap/core": "npm:2.2.0"
     "@mui/icons-material": "npm:7.3.8"
     "@mui/material": "npm:7.2.0"
@@ -3611,11 +3700,11 @@ __metadata:
     "@testing-library/user-event": "npm:14.5.2"
     "@types/base16": "npm:^1.0.5"
     "@types/cytoscape": "npm:^3.21.9"
+    "@types/foxglove__roslibjs": "workspace:*"
     "@types/geojson": "npm:7946.0.16"
     "@types/gl-matrix": "npm:3.2.0"
     "@types/hammerjs": "npm:2.0.46"
     "@types/leaflet": "npm:1.9.20"
-    "@types/lichtblick__roslibjs": "workspace:*"
     "@types/memoize-weak": "workspace:*"
     "@types/moment-duration-format": "npm:2.2.7"
     "@types/nearley": "npm:2.11.5"
@@ -3739,12 +3828,12 @@ __metadata:
   dependencies:
     "@actions/exec": "npm:1.1.1"
     "@actions/tool-cache": "npm:2.0.2"
+    "@foxglove/electron-socket": "npm:2.1.1"
+    "@foxglove/rosbag": "npm:0.4.2"
+    "@foxglove/rostime": "npm:1.1.3"
     "@lichtblick/den": "workspace:*"
-    "@lichtblick/electron-socket": "npm:1.0.0"
     "@lichtblick/log": "workspace:*"
     "@lichtblick/mcap-support": "workspace:*"
-    "@lichtblick/rosbag": "npm:1.0.0"
-    "@lichtblick/rostime": "npm:1.0.0"
     "@lichtblick/suite-base": "workspace:*"
     "@lichtblick/theme": "workspace:*"
     "@lichtblick/tsconfig": "npm:1.1.2"
@@ -3819,7 +3908,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@lichtblick/suite@workspace:packages/suite"
   dependencies:
-    "@lichtblick/message-definition": "npm:1.0.0"
+    "@foxglove/message-definition": "npm:0.5.0"
     "@lichtblick/tsconfig": "npm:1.1.2"
     typescript: "npm:6.0.3"
   languageName: unknown
@@ -3880,55 +3969,6 @@ __metadata:
     typescript: "npm:6.0.3"
   languageName: unknown
   linkType: soft
-
-"@lichtblick/ulog@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/ulog@npm:1.0.0"
-  checksum: 10/8cd9ef968a979fd019ce303b995bc3858819c79082d97ad039387a882fb4e95b8e1d890c576e26156a160ad0084688748d7c066a018753d0050dbffc6e306162
-  languageName: node
-  linkType: hard
-
-"@lichtblick/velodyne-cloud@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/velodyne-cloud@npm:1.0.0"
-  checksum: 10/ef223c1997a07a72f3a39b548cf5676b6449001e28df86d3a17994fe4ac5a9d5367a4631f3a35ea00aad7301092606f42a9424af335f79e0951ad78f9e5c5e7d
-  languageName: node
-  linkType: hard
-
-"@lichtblick/wasm-bz2@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/wasm-bz2@npm:1.0.0"
-  dependencies:
-    tslib: "npm:^2"
-  checksum: 10/fe92660561f64a94f7710f3455e32c4c8d03c2a17995b6702ccc51eeaf473690c4eec25f858032ca85ca7cd59f76f95e5341501a86e45580564f7c00f64f62cc
-  languageName: node
-  linkType: hard
-
-"@lichtblick/wasm-lz4@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/wasm-lz4@npm:1.0.0"
-  checksum: 10/5111a7ea8799ac663821c5836556176c0a3921b20b177735b9a51362bb8aeed62e9dc41a4985683fb2e7bffbbe5ee413f0b18d2599e9f3d4e9bf7ede5417db47
-  languageName: node
-  linkType: hard
-
-"@lichtblick/wasm-zstd@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/wasm-zstd@npm:1.0.0"
-  checksum: 10/eec38bdb1bc8473be7d210eab82979f7d70d8e0167be05d6e5c3444f5b7fe5dc1b745ffe904b1292bf0f27f7feb7e84015f21fa2af62fe17ec5f99a85c54f81d
-  languageName: node
-  linkType: hard
-
-"@lichtblick/xmlrpc@npm:1.0.0":
-  version: 1.0.0
-  resolution: "@lichtblick/xmlrpc@npm:1.0.0"
-  dependencies:
-    "@foxglove/just-fetch": "npm:^1.2.4"
-    byte-base64: "npm:^1.1.0"
-    sax: "npm:^1.2.4"
-    xmlbuilder2: "npm:^3.0.2"
-  checksum: 10/280c65f38f88306b7278f333905195e092c0e9f6dc37c681ce92cd2fc9a627f072f0135ed03bb033ec14ffd88caa75cc3778008ec90473aa55765f0f59c744b9
-  languageName: node
-  linkType: hard
 
 "@malept/cross-spawn-promise@npm:^2.0.0":
   version: 2.0.0
@@ -4507,40 +4547,40 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@oozcitak/dom@npm:1.15.10":
-  version: 1.15.10
-  resolution: "@oozcitak/dom@npm:1.15.10"
+"@oozcitak/dom@npm:^2.0.2":
+  version: 2.0.2
+  resolution: "@oozcitak/dom@npm:2.0.2"
   dependencies:
-    "@oozcitak/infra": "npm:1.0.8"
-    "@oozcitak/url": "npm:1.0.4"
-    "@oozcitak/util": "npm:8.3.8"
-  checksum: 10/cc1ecbde9a1b72b34c4500db16188b831b4d1e6acb16659b31716d26a210c18e9eaabcf990dea56cbd0c308023e7a014c888f7529bf69697af83bf72438aa10d
+    "@oozcitak/infra": "npm:^2.0.2"
+    "@oozcitak/url": "npm:^3.0.0"
+    "@oozcitak/util": "npm:^10.0.0"
+  checksum: 10/907a4170b7716c57f0b29987ab2d9e1662dc59f30aa12eaef13207d1c27a5787e00fc12d4d2359466c842219ff3c5f9d8a126b043a14622236624da7c33499ae
   languageName: node
   linkType: hard
 
-"@oozcitak/infra@npm:1.0.8":
-  version: 1.0.8
-  resolution: "@oozcitak/infra@npm:1.0.8"
+"@oozcitak/infra@npm:^2.0.2":
+  version: 2.0.2
+  resolution: "@oozcitak/infra@npm:2.0.2"
   dependencies:
-    "@oozcitak/util": "npm:8.3.8"
-  checksum: 10/568833490051825435fd99865d58b258ee7aca1a5d640f5002ec792224a3f2e4808e8ca7cdefa7469dbde6e9ab0e98d2eae388fdbb84ffd871a3e8fff34a564c
+    "@oozcitak/util": "npm:^10.0.0"
+  checksum: 10/34e15c688bd5b1cbd425b3d94e2488953115072a060892c4e2c97603baf7b98fc1664728daa9dc8a33d2d720cbfc3ce8c8aaf9f1fc830d096cfde536e78a3a4d
   languageName: node
   linkType: hard
 
-"@oozcitak/url@npm:1.0.4":
-  version: 1.0.4
-  resolution: "@oozcitak/url@npm:1.0.4"
+"@oozcitak/url@npm:^3.0.0":
+  version: 3.0.0
+  resolution: "@oozcitak/url@npm:3.0.0"
   dependencies:
-    "@oozcitak/infra": "npm:1.0.8"
-    "@oozcitak/util": "npm:8.3.8"
-  checksum: 10/f81890a2a21429295ee99e1e5b386ce07621a99d3f10551ea2456eeb338065b6820f80c771921ec4d5e382358f478e1c67d4194892d04f98f84c0449bd6c3c74
+    "@oozcitak/infra": "npm:^2.0.2"
+    "@oozcitak/util": "npm:^10.0.0"
+  checksum: 10/6765b8ab41b22975ab03811d4463e6e748c2a473ad9f3384d26409c9615f90cfec3ac6ba183e20117315f086afeab73208849f223e16ff335afa830361d41ca1
   languageName: node
   linkType: hard
 
-"@oozcitak/util@npm:8.3.8":
-  version: 8.3.8
-  resolution: "@oozcitak/util@npm:8.3.8"
-  checksum: 10/844c0e55d13803aff8e0be368c32e5e5b4a96d93b5a359d7899bb657ca14410a67a838070b1d2a554fe743f83f75d0906d836891c0c5d6585b8a5909f96a9e93
+"@oozcitak/util@npm:^10.0.0":
+  version: 10.0.0
+  resolution: "@oozcitak/util@npm:10.0.0"
+  checksum: 10/8585a4302fa5cc3916c3e6fa3ed87669f5843c95ad716c2af4235a773feb3059c157e128f9b314801674cff6b20fb9092b78dffc088322ba46bfe57ed7d4b399
   languageName: node
   linkType: hard
 
@@ -6321,6 +6361,12 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@types/foxglove__roslibjs@workspace:*, @types/foxglove__roslibjs@workspace:packages/@types/foxglove__roslibjs":
+  version: 0.0.0-use.local
+  resolution: "@types/foxglove__roslibjs@workspace:packages/@types/foxglove__roslibjs"
+  languageName: unknown
+  linkType: soft
+
 "@types/foxglove__web@workspace:*, @types/foxglove__web@workspace:packages/@types/foxglove__web":
   version: 0.0.0-use.local
   resolution: "@types/foxglove__web@workspace:packages/@types/foxglove__web"
@@ -6518,12 +6564,6 @@ __metadata:
   checksum: 10/9446f2ed96dae685b9a0e018a5b5bf12ffba4aa59aaa4383f18158a9614f2f129612e6655b4419add12d388c5ee5cb2795e4bfbefecaafd1b4d5d701b7c06173
   languageName: node
   linkType: hard
-
-"@types/lichtblick__roslibjs@workspace:*, @types/lichtblick__roslibjs@workspace:packages/@types/lichtblick__roslibjs":
-  version: 0.0.0-use.local
-  resolution: "@types/lichtblick__roslibjs@workspace:packages/@types/lichtblick__roslibjs"
-  languageName: unknown
-  linkType: soft
 
 "@types/lodash-es@npm:^4":
   version: 4.17.12
@@ -8618,10 +8658,10 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "benchmark@workspace:benchmark"
   dependencies:
+    "@foxglove/rostime": "npm:1.1.3"
     "@foxglove/schemas": "npm:1.13.0"
     "@lichtblick/den": "workspace:*"
     "@lichtblick/log": "workspace:*"
-    "@lichtblick/rostime": "npm:1.0.0"
     "@lichtblick/suite": "workspace:*"
     "@lichtblick/suite-base": "workspace:*"
     "@lichtblick/tsconfig": "npm:1.1.2"
@@ -15418,13 +15458,13 @@ __metadata:
     "@babel/preset-typescript": "npm:7.29.7"
     "@biomejs/biome": "npm:2.5.2"
     "@eslint/compat": "npm:2.1.0"
+    "@foxglove/omgidl-parser": "npm:1.2.2"
+    "@foxglove/omgidl-serialization": "npm:1.2.5"
+    "@foxglove/ros2idl-parser": "npm:0.3.6"
     "@lichtblick/eslint-plugin": "npm:2.0.7"
     "@lichtblick/eslint-plugin-suite": "workspace:*"
     "@lichtblick/hooks": "workspace:*"
     "@lichtblick/log": "workspace:*"
-    "@lichtblick/omgidl-parser": "npm:1.0.0"
-    "@lichtblick/omgidl-serialization": "npm:1.0.0"
-    "@lichtblick/ros2idl-parser": "npm:1.0.0"
     "@lichtblick/suite": "workspace:*"
     "@lichtblick/tsconfig": "npm:1.1.2"
     "@mui/material": "npm:7.2.0"
@@ -22441,15 +22481,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"xmlbuilder2@npm:^3.0.2":
-  version: 3.1.1
-  resolution: "xmlbuilder2@npm:3.1.1"
+"xmlbuilder2@npm:^4.0.3":
+  version: 4.0.3
+  resolution: "xmlbuilder2@npm:4.0.3"
   dependencies:
-    "@oozcitak/dom": "npm:1.15.10"
-    "@oozcitak/infra": "npm:1.0.8"
-    "@oozcitak/util": "npm:8.3.8"
-    js-yaml: "npm:3.14.1"
-  checksum: 10/e628d2f5c374ad84508200f015fd3eef6a815912db17d3b78a4132bdce2ed9a898ab9c6ef9332827eda7c2d662e81e4c0b9b25a0a08d7a8c20520b5ad929b91d
+    "@oozcitak/dom": "npm:^2.0.2"
+    "@oozcitak/infra": "npm:^2.0.2"
+    "@oozcitak/util": "npm:^10.0.0"
+    js-yaml: "npm:^4.1.1"
+  checksum: 10/17a2bac5b9263d991148bd0d657f5b08fd4bd6e67ce7fb4a7333b85ef3b729cdab9cb606feabb25f893454db902945ed20e81cf32be964bbb20b4657ad4573df
   languageName: node
   linkType: hard
 

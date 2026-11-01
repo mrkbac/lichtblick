@@ -15,8 +15,9 @@
 //   You may not use this file except in compliance with the License.
 
 // No time functions that require `moment` should live in this file.
+import { fromRFC3339String, fromString, Time } from "@foxglove/rostime";
+
 import log from "@lichtblick/log";
-import { fromRFC3339String, fromString, Time } from "@lichtblick/rostime";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import { MarkerArray, StampedMessage } from "@lichtblick/suite-base/types/Messages";
 

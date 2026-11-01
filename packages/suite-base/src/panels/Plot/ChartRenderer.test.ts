@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
+import { Zoom as ZoomPlugin } from "@foxglove/chartjs-plugin-zoom";
 import { Chart, ChartOptions, Element, InteractionItem, Scale } from "chart.js";
 
-import { Zoom as ZoomPlugin } from "@lichtblick/chartjs-plugin-zoom";
 import { Immutable } from "@lichtblick/suite";
 import { ChartRenderer } from "@lichtblick/suite-base/panels/Plot/ChartRenderer";
 import { DEFAULT_ANNOTATION } from "@lichtblick/suite-base/panels/Plot/constants";
@@ -71,7 +71,7 @@ jest.mock("chart.js", () => {
   };
 });
 
-jest.mock("@lichtblick/chartjs-plugin-zoom", () => ({
+jest.mock("@foxglove/chartjs-plugin-zoom", () => ({
   Zoom: {
     start: jest.fn(),
   },

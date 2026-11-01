@@ -5,10 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { compare } from "@foxglove/rostime";
+
 import { pickFields } from "@lichtblick/den/records";
 import Logger from "@lichtblick/log";
 import { parseChannel } from "@lichtblick/mcap-support";
-import { compare } from "@lichtblick/rostime";
 import { MessageEvent } from "@lichtblick/suite";
 import {
   MessageIteratorArgs,

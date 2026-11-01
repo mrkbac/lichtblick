@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { isTime, toSec } from "@lichtblick/rostime";
+import { isTime, toSec } from "@foxglove/rostime";
+
 import { Time } from "@lichtblick/suite";
 import {
   getChartValue,
@@ -10,7 +11,7 @@ import {
 } from "@lichtblick/suite-base/panels/Plot/utils/datum";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-jest.mock("@lichtblick/rostime", () => ({
+jest.mock("@foxglove/rostime", () => ({
   isTime: jest.fn(),
   toSec: jest.fn(),
 }));

@@ -14,17 +14,17 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import roslib from "@foxglove/roslibjs";
+import { parse as parseMessageDefinition } from "@foxglove/rosmsg";
+import { MessageReader as ROS1MessageReader } from "@foxglove/rosmsg-serialization";
+import { MessageReader as ROS2MessageReader } from "@foxglove/rosmsg2-serialization";
+import { Time, fromMillis, toSec } from "@foxglove/rostime";
 import * as _ from "lodash-es";
 import { v4 as uuidv4 } from "uuid";
 
 import { debouncePromise } from "@lichtblick/den/async";
 import { filterMap } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
-import roslib from "@lichtblick/roslibjs";
-import { parse as parseMessageDefinition } from "@lichtblick/rosmsg";
-import { MessageReader as ROS1MessageReader } from "@lichtblick/rosmsg-serialization";
-import { MessageReader as ROS2MessageReader } from "@lichtblick/rosmsg2-serialization";
-import { Time, fromMillis, toSec } from "@lichtblick/rostime";
 import { ParameterValue } from "@lichtblick/suite";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";

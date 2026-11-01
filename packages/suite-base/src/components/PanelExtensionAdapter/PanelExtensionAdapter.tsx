@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { fromSec, toSec } from "@foxglove/rostime";
 import { useTheme } from "@mui/material";
 import { produce } from "immer";
 import { CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -13,7 +14,6 @@ import { v4 as uuid } from "uuid";
 
 import { useSynchronousMountedState, useValueChangedDebugLog } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
-import { fromSec, toSec } from "@lichtblick/rostime";
 import {
   AppSettingValue,
   ExtensionPanelRegistration,

@@ -4,9 +4,12 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
+import { ros1 } from "@foxglove/rosmsg-msgs-common";
+import { Time, fromMicros, isTimeInRangeInclusive, toMicroSec } from "@foxglove/rostime";
+import { MessageType, ULog } from "@foxglove/ulog";
+import { BlobReader } from "@foxglove/ulog/web";
+
 import Logger from "@lichtblick/log";
-import { ros1 } from "@lichtblick/rosmsg-msgs-common";
-import { Time, fromMicros, isTimeInRangeInclusive, toMicroSec } from "@lichtblick/rostime";
 import { MessageEvent, ParameterValue } from "@lichtblick/suite";
 import {
   MessageDefinitionsByTopic,
@@ -16,8 +19,6 @@ import {
   PlayerAlert,
 } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
-import { MessageType, ULog } from "@lichtblick/ulog";
-import { BlobReader } from "@lichtblick/ulog/web";
 
 import { messageIdToTopic, messageDefinitionToRos, logLevelToRosout } from "./support";
 import {

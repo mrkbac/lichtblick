@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { fromSec, Time } from "@lichtblick/rostime";
+import { fromSec, Time } from "@foxglove/rostime";
+
 import { parseTimeStr } from "@lichtblick/suite-base/util/formatTime";
 
 export const parseTimestampStr = (timeStr: string): Time | undefined => {

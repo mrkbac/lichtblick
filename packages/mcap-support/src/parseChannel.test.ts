@@ -70,6 +70,21 @@ describe("parseChannel", () => {
     expect(obj).toEqual({ data: "ABCD" });
   });
 
+  it("rejects ros1 type names that would inject code into the generated reader", () => {
+    const evil = "foo_msgs/X(){}};globalThis.injected=1;class Y{static Z";
+    expect(() =>
+      parseChannel({
+        messageEncoding: "ros1",
+        schema: {
+          name: "foo_msgs/Bar",
+          encoding: "ros1msg",
+          data: new TextEncoder().encode(`${evil} x\n===\nMSG: ${evil}\nint32 y`),
+        },
+      }),
+    ).toThrow();
+    expect((globalThis as { injected?: number }).injected).toBeUndefined();
+  });
+
   it("works with ros2", () => {
     const channel = parseChannel({
       messageEncoding: "cdr",

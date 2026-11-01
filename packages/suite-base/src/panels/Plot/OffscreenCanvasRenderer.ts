@@ -5,9 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import * as Comlink from "@foxglove/comlink";
 import type { Theme } from "@mui/material";
 
-import * as Comlink from "@lichtblick/comlink";
 import { ComlinkWrap } from "@lichtblick/den/worker";
 import { Immutable } from "@lichtblick/suite";
 import { Bounds } from "@lichtblick/suite-base/types/Bounds";

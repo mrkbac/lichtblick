@@ -27,10 +27,10 @@ import {
   Previous20Filled,
   Previous20Regular,
 } from "@fluentui/react-icons";
+import { Time, compare } from "@foxglove/rostime";
 import { Tooltip } from "@mui/material";
 import { useCallback, useMemo, useState } from "react";
 
-import { Time, compare } from "@lichtblick/rostime";
 import { CreateEventDialog } from "@lichtblick/suite-base/components/CreateEventDialog";
 import { DataSourceInfoView } from "@lichtblick/suite-base/components/DataSourceInfoView";
 import EventIcon from "@lichtblick/suite-base/components/EventIcon";
