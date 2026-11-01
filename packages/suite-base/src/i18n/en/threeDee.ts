@@ -99,7 +99,6 @@ export const threeDee = {
   topics: "Topics",
 
   // Custom layers
-  add3DMap: "Add 3D Map",
   addGrid: "Add Grid",
   addMap: "Add Map",
   addURDF: "Add URDF",

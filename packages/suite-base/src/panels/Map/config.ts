@@ -21,14 +21,12 @@ import { lineColors } from "@lichtblick/suite-base/util/plotColors";
 
 import type { Units } from "./geo";
 import {
-  layerLabel,
-  MapLayer,
-  PRESETS,
-  resolveSource,
-  SourceKind,
-  SourceParams,
-  validateSourceUrl,
-} from "./layers";
+  applyLayerStackAction,
+  layerStackActions,
+  layerStackChildren,
+  MAP_SOURCE_KINDS,
+} from "./layerSettings";
+import { MapLayer, SourceParams } from "./layers";
 import { isGeoJSONSchema } from "./support";
 
 export type HistoryStyle = "points" | "line" | "both" | "none";
@@ -74,10 +72,6 @@ type LegacyConfig = {
 };
 
 export const DEFAULT_POINT_SIZE = 3;
-
-export function newLayerId(): string {
-  return Math.random().toString(36).slice(2, 10);
-}
 
 function migrateLayers(legacy: LegacyConfig): MapLayer[] {
   const base = { id: "base", visible: true, opacity: 1 };
@@ -126,209 +120,6 @@ export function normalizeConfig(initial: unknown): Config {
     disabledTopics: config.disabledTopics ?? [],
     topicColors: config.topicColors ?? {},
     topicStyles: config.topicStyles ?? {},
-  };
-}
-
-const CUSTOM_KIND_LABELS: Record<SourceKind, string> = {
-  raster: "Custom raster tiles / PMTiles",
-  vector: "Custom vector style (style.json)",
-  dem: "Custom elevation tiles (DEM)",
-  geotiff: "GeoTIFF file (URL)",
-};
-
-const SAVED_PREFIX = "saved:";
-
-function shortUrl(url: string): string {
-  const stripped = url.replace(/^[a-z]+:\/\//i, "");
-  return stripped.length > 48 ? `${stripped.slice(0, 22)}…${stripped.slice(-22)}` : stripped;
-}
-
-function sourceOptions(saved: readonly SourceParams[]) {
-  return [
-    ..._.map(PRESETS, (preset, value) => ({
-      value,
-      label: `${preset.group}: ${preset.label}`,
-    })),
-    ..._.map(CUSTOM_KIND_LABELS, (label, kind) => ({
-      value: `custom:${kind}`,
-      label,
-    })),
-    ...saved.map((source, i) => ({
-      value: `${SAVED_PREFIX}${i}`,
-      label: `Saved ${source.kind}: ${shortUrl(source.url)}`,
-    })),
-  ];
-}
-
-function customSourceFields(kind: SourceKind, custom: SourceParams): SettingsTreeFields {
-  const tiled = kind === "raster" || kind === "dem";
-  const urlHelp: Record<SourceKind, string> = {
-    raster:
-      "XYZ template with {z} {x} {y} (also {quadkey}, {bbox-epsg-3857}), a TileJSON URL, or pmtiles://https://… for a PMTiles archive.",
-    dem: "Terrarium or Terrain-RGB tiles: XYZ template, TileJSON URL, or pmtiles://https://…",
-    vector:
-      "A MapLibre / Mapbox GL style JSON. Styles that need an API key must include it in the URL.",
-    geotiff:
-      "GeoTIFF in WGS84 (EPSG:4326), Web Mercator (EPSG:3857), or UTM (EPSG:326xx/327xx). Large files are downsampled to 4096 px.",
-  };
-  const fields: SettingsTreeFields = {
-    url: {
-      label: kind === "vector" ? "Style URL" : kind === "geotiff" ? "File URL" : "Tile URL",
-      input: "string",
-      value: custom.url,
-      placeholder:
-        kind === "vector"
-          ? "https://example.com/style.json"
-          : kind === "geotiff"
-            ? "https://example.com/orthophoto.tif"
-            : "https://example.com/{z}/{x}/{y}.png",
-      error: validateSourceUrl(custom),
-      help: urlHelp[kind],
-    },
-  };
-  if (tiled) {
-    fields.maxZoom = {
-      label: "Max tile zoom",
-      input: "number",
-      value: custom.maxZoom,
-      min: 0,
-      max: 24,
-      step: 1,
-      placeholder: "22",
-      help: "Highest zoom the server provides. Zooming further scales up those tiles instead of requesting missing ones.",
-    };
-    fields.tileSize = {
-      label: "Tile size",
-      input: "select",
-      value: custom.tileSize ?? 256,
-      options: [256, 512].map((size) => ({ label: `${size} px`, value: size })),
-    };
-  }
-  if (kind === "raster") {
-    fields.scheme = {
-      label: "Y axis",
-      input: "select",
-      value: custom.scheme ?? "xyz",
-      options: [
-        { label: "XYZ (y down)", value: "xyz" },
-        { label: "TMS (y up)", value: "tms" },
-      ],
-    };
-  }
-  if (kind === "dem") {
-    fields.encoding = {
-      label: "Encoding",
-      input: "select",
-      value: custom.encoding ?? "terrarium",
-      options: [
-        { label: "Terrarium", value: "terrarium" },
-        { label: "Mapbox Terrain-RGB", value: "mapbox" },
-      ],
-    };
-  }
-  if (kind !== "vector") {
-    fields.attribution = {
-      label: "Attribution",
-      input: "string",
-      value: custom.attribution,
-      placeholder: "© Data provider",
-    };
-  }
-  return fields;
-}
-
-function layerNode(
-  layer: MapLayer,
-  index: number,
-  count: number,
-  saved: readonly SourceParams[],
-  error: string | undefined,
-): SettingsTreeNode {
-  const kind =
-    layer.source === "custom" ? (layer.custom?.kind ?? "raster") : PRESETS[layer.source]?.kind;
-  const fields: SettingsTreeFields = {
-    source: {
-      label: "Source",
-      input: "select",
-      value: layer.source === "custom" ? `custom:${kind}` : layer.source,
-      options: sourceOptions(saved),
-    },
-    ...(layer.source === "custom" && kind
-      ? customSourceFields(kind, layer.custom ?? { kind, url: "" })
-      : {}),
-  };
-
-  if (kind === "vector") {
-    fields.vectorContent = {
-      label: "Show",
-      input: "select",
-      value: layer.vectorContent ?? "all",
-      options: [
-        { label: "Everything", value: "all" },
-        { label: "Roads and labels only", value: "lines-labels" },
-      ],
-      help: "Roads and labels only turns a vector map into a transparent overlay, e.g. on top of satellite imagery.",
-    };
-  }
-
-  if (kind === "dem") {
-    fields.hillshade = {
-      label: "Hillshade",
-      input: "boolean",
-      value: layer.hillshade !== false,
-    };
-    if (layer.hillshade !== false) {
-      fields.opacity = {
-        label: "Shading",
-        input: "slider",
-        value: layer.opacity,
-        min: 0,
-        max: 1,
-        step: 0.05,
-      };
-    }
-    fields.terrain = {
-      label: "3D terrain",
-      input: "boolean",
-      value: layer.terrain === true,
-      help: "Raise the map by elevation. Tilt the map (right-drag or ctrl+drag) to see it.",
-    };
-    if (layer.terrain === true) {
-      fields.exaggeration = {
-        label: "Exaggeration",
-        input: "slider",
-        value: layer.exaggeration ?? 1,
-        min: 0.1,
-        max: 5,
-        step: 0.1,
-      };
-    }
-  } else {
-    fields.opacity = {
-      label: "Opacity",
-      input: "slider",
-      value: layer.opacity,
-      min: 0,
-      max: 1,
-      step: 0.05,
-    };
-  }
-
-  return {
-    label: layerLabel(layer),
-    renamable: true,
-    visible: layer.visible,
-    reorderable: true,
-    order: index,
-    error,
-    fields,
-    actions: [
-      ...(index > 0 ? [{ type: "action" as const, id: "move-up", label: "Move up" }] : []),
-      ...(index < count - 1
-        ? [{ type: "action" as const, id: "move-down", label: "Move down" }]
-        : []),
-      { type: "action", id: "delete-layer", label: "Delete layer" },
-    ],
   };
 }
 
@@ -502,29 +293,9 @@ export function buildSettingsTree(
 
   const layers: SettingsTreeNode = {
     label: "Map layers",
-    actions: [
-      {
-        type: "action",
-        id: "add-layer",
-        label: "Add layer",
-        icon: "Add",
-        display: "inline",
-      },
-      ...(saved.length > 0
-        ? [
-            {
-              type: "action" as const,
-              id: "forget-saved",
-              label: "Forget saved custom sources",
-            },
-          ]
-        : []),
-    ],
-    children: Object.fromEntries(
-      config.layers.map((layer, i) => [
-        String(i),
-        layerNode(layer, i, config.layers.length, saved, layerErrors.get(layer.id)),
-      ]),
+    actions: layerStackActions(saved),
+    children: layerStackChildren(config.layers, saved, MAP_SOURCE_KINDS, (layer) =>
+      layerErrors.get(layer.id),
     ),
   };
 
@@ -536,96 +307,6 @@ export function buildSettingsTree(
       children: Object.fromEntries(eligibleTopics.map((t) => [t.name, topicNode(config, t)])),
     },
   };
-}
-
-function updateLayerSource(layer: MapLayer, choice: string, saved: readonly SourceParams[]) {
-  if (choice.startsWith(SAVED_PREFIX)) {
-    const source = saved[Number(choice.slice(SAVED_PREFIX.length))];
-    if (!source) {
-      return;
-    }
-    layer.source = "custom";
-    layer.custom = { ...source };
-  } else if (choice.startsWith("custom:")) {
-    const kind = choice.slice("custom:".length) as SourceKind;
-    layer.source = "custom";
-    layer.custom = {
-      kind,
-      url: layer.custom?.kind === kind ? layer.custom.url : "",
-    };
-  } else {
-    layer.source = choice;
-    layer.custom = undefined;
-  }
-  layer.label = undefined;
-  // Full-strength hillshade is very dark; start elevation layers subtle.
-  if (resolveSource(layer)?.kind === "dem" || layer.custom?.kind === "dem") {
-    layer.opacity = Math.min(layer.opacity, 0.5);
-  }
-}
-
-function updateLayer(
-  draft: Config,
-  path: readonly string[],
-  value: unknown,
-  saved: readonly SourceParams[],
-) {
-  const layer = draft.layers[Number(path[1])];
-  const field = path[2];
-  if (!layer || field == undefined) {
-    return;
-  }
-  const custom = layer.custom;
-  switch (field) {
-    case "visible":
-      layer.visible = value === true;
-      break;
-    case "label":
-      layer.label = typeof value === "string" && value.length > 0 ? value : undefined;
-      break;
-    case "source":
-      updateLayerSource(layer, String(value), saved);
-      break;
-    case "url":
-      if (custom) {
-        custom.url = typeof value === "string" ? value.trim() : "";
-      }
-      break;
-    case "attribution":
-      if (custom) {
-        custom.attribution = typeof value === "string" && value.length > 0 ? value : undefined;
-      }
-      break;
-    case "maxZoom":
-    case "tileSize":
-      if (custom) {
-        custom[field] = typeof value === "number" && isFinite(value) ? value : undefined;
-      }
-      break;
-    case "scheme":
-      if (custom) {
-        custom.scheme = value === "tms" ? "tms" : "xyz";
-      }
-      break;
-    case "encoding":
-      if (custom) {
-        custom.encoding = value === "mapbox" ? "mapbox" : "terrarium";
-      }
-      break;
-    case "opacity":
-    case "exaggeration":
-      if (typeof value === "number") {
-        layer[field] = value;
-      }
-      break;
-    case "hillshade":
-    case "terrain":
-      layer[field] = value === true;
-      break;
-    case "vectorContent":
-      layer.vectorContent = value === "lines-labels" ? "lines-labels" : "all";
-      break;
-  }
 }
 
 function updateTopic(draft: Config, path: readonly string[], value: unknown) {
@@ -682,13 +363,6 @@ function updateTopic(draft: Config, path: readonly string[], value: unknown) {
   }
 }
 
-function moveLayer(draft: Config, from: number, to: number) {
-  const [moved] = draft.layers.splice(from, 1);
-  if (moved) {
-    draft.layers.splice(Math.max(0, Math.min(to, draft.layers.length)), 0, moved);
-  }
-}
-
 /** Pure reducer for settings tree actions. "forget-saved" is a side effect left to the caller. */
 export function applySettingsAction(
   config: Config,
@@ -706,39 +380,16 @@ export function applySettingsAction(
             draft.pitch = 0;
           }
         } else if (path[0] === "layers") {
-          updateLayer(draft, path, value, saved);
+          applyLayerStackAction(draft.layers, action, 1, saved);
         } else if (path[0] === "topics") {
           updateTopic(draft, path, value);
         }
         break;
       }
       case "reorder-node":
-        moveLayer(draft, Number(action.payload.path[1]), Number(action.payload.targetPath[1]));
+      case "perform-node-action":
+        applyLayerStackAction(draft.layers, action, 1, saved);
         break;
-      case "perform-node-action": {
-        const index = Number(action.payload.path[1]);
-        switch (action.payload.id) {
-          case "add-layer":
-            // New layers go on top; a transparent overlay is the most common addition.
-            draft.layers.unshift({
-              id: newLayerId(),
-              source: "esri-transportation",
-              visible: true,
-              opacity: 1,
-            });
-            break;
-          case "delete-layer":
-            draft.layers.splice(index, 1);
-            break;
-          case "move-up":
-            moveLayer(draft, index, index - 1);
-            break;
-          case "move-down":
-            moveLayer(draft, index, index + 1);
-            break;
-        }
-        break;
-      }
     }
   });
 }
