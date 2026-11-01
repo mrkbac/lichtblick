@@ -68,11 +68,32 @@ export const VirtualizedTree = memo(function VirtualizedTree({
     [data, diff, search],
   );
 
-  // Search shows the path to matches expanded; toggles, ARIA and keys must agree with that.
+  // Search shows the path to matches expanded. Collapsing such a parent is remembered for the
+  // current search text only, so it wins over the search without changing the saved expansion.
+  const [searchCollapsed, setSearchCollapsed] = useState({ search, keys: new Set<string>() });
+  const collapsedInSearch = searchCollapsed.search === search ? searchCollapsed.keys : undefined;
+
   const isShownExpanded = useCallback(
     (key: string, value: unknown) =>
-      searchResult?.ancestors.has(key) === true || isExpanded(key, value),
-    [isExpanded, searchResult],
+      searchResult?.ancestors.has(key) === true
+        ? collapsedInSearch?.has(key) !== true
+        : isExpanded(key, value),
+    [collapsedInSearch, isExpanded, searchResult],
+  );
+
+  const toggle = useCallback(
+    (key: string, value: unknown) => {
+      if (searchResult?.ancestors.has(key) !== true) {
+        onToggleExpand(key, value);
+        return;
+      }
+      const keys = new Set(collapsedInSearch);
+      if (!keys.delete(key)) {
+        keys.add(key);
+      }
+      setSearchCollapsed({ search, keys });
+    },
+    [collapsedInSearch, onToggleExpand, search, searchResult],
   );
 
   const flatData = useMemo(() => {
@@ -146,14 +167,14 @@ export const VirtualizedTree = memo(function VirtualizedTree({
           break;
         case "ArrowRight":
           if (node.isExpandable && !expanded) {
-            onToggleExpand(node.key, node.value);
+            toggle(node.key, node.value);
           } else if (expanded) {
             focusRow(activeIndex + 1);
           }
           break;
         case "ArrowLeft":
           if (expanded) {
-            onToggleExpand(node.key, node.value);
+            toggle(node.key, node.value);
           } else if (node.parentPath) {
             focusRow(flatData.findIndex((other) => other.key === node.parentPath));
           }
@@ -161,7 +182,7 @@ export const VirtualizedTree = memo(function VirtualizedTree({
         case "Enter":
         case " ":
           if (node.isExpandable) {
-            onToggleExpand(node.key, node.value);
+            toggle(node.key, node.value);
           }
           break;
         default:
@@ -169,7 +190,7 @@ export const VirtualizedTree = memo(function VirtualizedTree({
       }
       event.preventDefault();
     },
-    [activeIndex, flatData, focusRow, isShownExpanded, onToggleExpand],
+    [activeIndex, flatData, focusRow, isShownExpanded, toggle],
   );
 
   // Breadcrumb of the topmost visible row's ancestors, so deep rows keep their context.
@@ -261,7 +282,7 @@ export const VirtualizedTree = memo(function VirtualizedTree({
                   {node.isExpandable && (
                     <button
                       onClick={() => {
-                        onToggleExpand(node.key, node.value);
+                        toggle(node.key, node.value);
                       }}
                       tabIndex={-1}
                       aria-label={`${expanded ? "Collapse" : "Expand"} ${node.label}`}
