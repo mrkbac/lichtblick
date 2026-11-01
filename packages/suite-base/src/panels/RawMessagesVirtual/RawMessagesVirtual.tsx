@@ -1,24 +1,32 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
-import { Checkbox, FormControlLabel, Typography, useTheme } from "@mui/material";
+import { Checkbox, FormControlLabel, InputBase, Typography } from "@mui/material";
 import * as _ from "lodash-es";
-import { useCallback, useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
+import {
+  MessagePipelineContext,
+  useMessagePipeline,
+} from "@lichtblick/suite-base/components/MessagePipeline";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import DiffStats from "@lichtblick/suite-base/panels/RawMessagesCommon/DiffStats";
 import MaybeCollapsedValue from "@lichtblick/suite-base/panels/RawMessagesCommon/MaybeCollapsedValue";
 import Metadata from "@lichtblick/suite-base/panels/RawMessagesCommon/Metadata";
+import ObjectSummary from "@lichtblick/suite-base/panels/RawMessagesCommon/ObjectSummary";
+import { StepButtons } from "@lichtblick/suite-base/panels/RawMessagesCommon/StepButtons";
 import { Toolbar } from "@lichtblick/suite-base/panels/RawMessagesCommon/Toolbar";
-import {
-  CUSTOM_METHOD,
-  PATH_NAME_AGGREGATOR,
-} from "@lichtblick/suite-base/panels/RawMessagesCommon/constants";
+import { CUSTOM_METHOD } from "@lichtblick/suite-base/panels/RawMessagesCommon/constants";
 import getDiff from "@lichtblick/suite-base/panels/RawMessagesCommon/getDiff";
-import { useStylesRawMessagesVirtual } from "@lichtblick/suite-base/panels/RawMessagesCommon/index.style";
 import {
-  NodeState,
+  useStylesRawMessagesVirtual,
+  useStylesToolbar,
+} from "@lichtblick/suite-base/panels/RawMessagesCommon/index.style";
+import {
+  diffLabels,
+  DiffObject,
   PropsRawMessagesVirtual,
   TreeNode,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
@@ -37,29 +45,30 @@ import {
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
 import { VirtualizedTree } from "@lichtblick/suite-base/panels/RawMessagesVirtual/VirtualizedTree";
 
+const selectIsPlaying = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.isPlaying;
+
 const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element => {
-  const {
-    palette: { mode: _themePreference },
-  } = useTheme();
   const { classes } = useStylesRawMessagesVirtual();
+  const { classes: toolbarClasses } = useStylesToolbar();
   const { config, saveConfig } = props;
   const { openSiblingPanel } = usePanelContext();
   const { topicPath, diffMethod, diffTopicPath, diffEnabled, showFullMessageForDiff, fontSize } =
     config;
   const { datatypes } = useDataSourceInfo();
+  const isPlaying = useMessagePipeline(selectIsPlaying) === true;
 
   const {
     topic,
     rootStructureItem,
     baseItem,
     diffItem,
-    expansion,
+    isExpanded,
+    onToggleExpand,
     canExpandAll,
     onTopicPathChange,
     onDiffTopicPathChange,
     onToggleDiff,
     onToggleExpandAll,
-    onLabelClick,
     canStep,
     canStepPrevious,
     canStepNext,
@@ -69,10 +78,9 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
     config,
     saveConfig,
   });
-  const stepping = useMemo(
-    () => ({ canStepPrevious, canStepNext, onStepPrevious, onStepNext }),
-    [canStepPrevious, canStepNext, onStepPrevious, onStepNext],
-  );
+  const stepping = { canStepPrevious, canStepNext, onStepPrevious, onStepNext };
+
+  const [search, setSearch] = useState<string | undefined>();
 
   const valueRenderer = useValueRenderer({
     datatypes,
@@ -86,100 +94,62 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
     openSiblingPanel,
   });
 
-  // VirtualizedTree-specific logic
-  const handleToggleExpand = useCallback(
-    (keyPath: string) => {
-      onLabelClick(
-        keyPath.split(PATH_NAME_AGGREGATOR).map((key) => {
-          const num = Number(key);
-          return Number.isNaN(num) ? key : num;
-        }),
-      );
-    },
-    [onLabelClick],
+  // Remember the previously shown message so changed values can be highlighted while stepping.
+  const data = useMemo(
+    () => baseItem && dataWithoutWrappingArray(baseItem.queriedData.map(({ value }) => value)),
+    [baseItem],
   );
-  const baseItemRef = useRef(baseItem);
-  baseItemRef.current = baseItem;
-
-  const expandedNodesSet = useMemo(() => {
-    if (expansion === "all") {
-      if (!baseItemRef.current) {
-        return new Set<string>();
-      }
-
-      const data = dataWithoutWrappingArray(
-        baseItemRef.current.queriedData.map(({ value }) => value),
-      );
-
-      const allNodes = new Set<string>();
-
-      const generatePaths = (obj: unknown, prefix: string = "") => {
-        if (obj == undefined || typeof obj !== "object") {
-          return;
-        }
-        // Typed arrays are iterable by index; treat them like regular arrays
-        const iterableObj =
-          ArrayBuffer.isView(obj) && !(obj instanceof DataView)
-            ? Array.from(obj as unknown as ArrayLike<unknown>)
-            : obj;
-        const entries = Array.isArray(iterableObj)
-          ? iterableObj.map((item, index) => [index, item] as [number, unknown])
-          : Object.entries(iterableObj as Record<string, unknown>);
-
-        for (const [key, value] of entries) {
-          const nodePath = prefix ? `${key}${PATH_NAME_AGGREGATOR}${prefix}` : String(key);
-          allNodes.add(nodePath);
-
-          if (value != undefined && typeof value === "object") {
-            generatePaths(value, nodePath);
-          }
-        }
-      };
-
-      generatePaths(data);
-
-      return allNodes;
-    }
-
-    if (expansion === "none") {
-      return new Set<string>();
-    }
-
-    const expanded = new Set<string>();
-    if (typeof expansion === "object") {
-      for (const [key, state] of Object.entries(expansion)) {
-        if (state === NodeState.Expanded) {
-          expanded.add(key);
-        }
-      }
-    }
-    return expanded;
-  }, [expansion]);
-
-  const hideWrappingArrayRef = useRef(false);
-
-  const memoizedRenderValue = useCallback(
-    (node: TreeNode, data: unknown) => {
-      const valueString = getValueString(node.value);
-
-      if (diffEnabled) {
-        return renderDiffLabel(valueString, node.value);
-      }
-
-      return valueRenderer(
-        rootStructureItem,
-        hideWrappingArrayRef.current ? [data] : (data as unknown[]),
-        baseItem?.queriedData ?? [],
-        valueString,
-        node.value,
-        ...node.keyPath,
-        ...(hideWrappingArrayRef.current ? [0] : []),
-      );
-    },
-    [diffEnabled, renderDiffLabel, valueRenderer, rootStructureItem, baseItem],
+  const diffData = useMemo(
+    () => diffItem && dataWithoutWrappingArray(diffItem.queriedData.map(({ value }) => value)),
+    [diffItem],
   );
+  const diff = useMemo(
+    () =>
+      diffEnabled
+        ? getDiff({ before: data, after: diffData, idLabel: undefined, showFullMessageForDiff })
+        : {},
+    [data, diffData, diffEnabled, showFullMessageForDiff],
+  );
+  const shownRef = useRef<{ event: unknown; data: unknown; topicPath: string }>();
+  const previousDataRef = useRef<unknown>();
+  if (shownRef.current?.event !== baseItem?.messageEvent) {
+    previousDataRef.current =
+      shownRef.current?.topicPath === topicPath ? shownRef.current.data : undefined;
+    shownRef.current = baseItem ? { event: baseItem.messageEvent, data, topicPath } : undefined;
+  }
 
-  const renderSingleTopicOrDiffOutput = useCallback(() => {
+  const hideWrappingArray =
+    baseItem?.queriedData.length === 1 && typeof baseItem.queriedData[0]?.value === "object";
+
+  const renderValue = (node: TreeNode): React.ReactNode => {
+    if (diffEnabled) {
+      if (node.isExpandable) {
+        // Items matched by an id field show that id (from DiffStats) instead of a preview.
+        const hasId = diffLabels.ID.labelText in (node.value as DiffObject);
+        return (
+          <>
+            {!hasId && <ObjectSummary value={node.value} />}
+            <DiffStats data={node.value as DiffObject} itemType={undefined} />
+          </>
+        );
+      }
+      // Changed leaves already hold a formatted "before -> after" string.
+      const label = node.diffStatus === "changed" ? String(node.value) : getValueString(node.value);
+      return renderDiffLabel(label, node.value);
+    }
+
+    return valueRenderer(
+      rootStructureItem,
+      hideWrappingArray ? [data] : (data as unknown[]),
+      baseItem?.queriedData ?? [],
+      getValueString(node.value),
+      node.value,
+      ...node.keyPath,
+      ...(hideWrappingArray ? [0] : []),
+    );
+  };
+
+  const renderOutput = () => {
     if (topicPath.length === 0) {
       return <EmptyState>No topic selected</EmptyState>;
     }
@@ -190,33 +160,29 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
     }
 
     if (!baseItem) {
-      return <EmptyState>Waiting for next message…</EmptyState>;
+      return (
+        <>
+          {canStep && (
+            // Keep the step buttons reachable before the first message, e.g. to jump to it.
+            <Stack direction="row" alignItems="center" paddingInline={1} paddingBlockStart={0.75}>
+              <Typography variant="caption" color="text.secondary">
+                No message yet
+              </Typography>
+              <StepButtons stepping={stepping} />
+            </Stack>
+          )}
+          <EmptyState>Waiting for next message…</EmptyState>
+        </>
+      );
     }
 
     const { messageEvent, queriedData } = baseItem;
-
-    const data = dataWithoutWrappingArray(queriedData.map(({ value }) => value));
-
-    hideWrappingArrayRef.current =
-      queriedData.length === 1 && typeof queriedData[0]?.value === "object";
 
     const shouldDisplaySingleVal =
       (data != undefined && typeof data !== "object") ||
       (isSingleElemArray(data) && data[0] != undefined && typeof data[0] !== "object");
 
     const singleVal = getSingleValue(data, queriedData);
-
-    const diffData =
-      diffItem && dataWithoutWrappingArray(diffItem.queriedData.map(({ value }) => value));
-
-    const diff = diffEnabled
-      ? getDiff({
-          before: data,
-          after: diffData,
-          idLabel: undefined,
-          showFullMessageForDiff,
-        })
-      : {};
 
     const renderContent = () => {
       if (shouldDisplaySingleVal) {
@@ -245,7 +211,6 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
               control={
                 <Checkbox
                   size="small"
-                  defaultChecked
                   onChange={() => {
                     saveConfig({ showFullMessageForDiff: !showFullMessageForDiff });
                   }}
@@ -256,10 +221,13 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
           )}
           <VirtualizedTree
             data={diffEnabled ? diff : data}
-            expandedNodes={expandedNodesSet}
-            onToggleExpand={handleToggleExpand}
+            diff={diffEnabled}
+            isExpanded={isExpanded}
+            onToggleExpand={onToggleExpand}
             fontSize={fontSize}
-            renderValue={(node: TreeNode) => memoizedRenderValue(node, data)}
+            renderValue={renderValue}
+            search={search}
+            previousData={isPlaying ? undefined : previousDataRef.current}
           />
         </>
       );
@@ -285,24 +253,7 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
         {renderContent()}
       </Stack>
     );
-  }, [
-    baseItem,
-    canStep,
-    classes.topic,
-    fontSize,
-    diffEnabled,
-    diffItem,
-    diffMethod,
-    diffTopicPath,
-    expandedNodesSet,
-    handleToggleExpand,
-    memoizedRenderValue,
-    saveConfig,
-    stepping,
-    showFullMessageForDiff,
-    topic,
-    topicPath,
-  ]);
+  };
 
   // Setup settings in panel settings tree
   useRawMessagesPanelSettings({
@@ -311,11 +262,16 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
   });
 
   return (
-    // A focusable div (Stack has no event props) so the step shortcuts work while the panel has focus.
+    // A focusable div (Stack has no event props) so the shortcuts work while the panel has focus.
     <div
       tabIndex={-1}
       className={classes.root}
       onKeyDown={(event) => {
+        if ((event.metaKey || event.ctrlKey) && event.key === "f") {
+          event.preventDefault();
+          setSearch((old) => old ?? "");
+          return;
+        }
         if (canStep) {
           handleStepKeyDown(event, stepping);
         }
@@ -332,8 +288,32 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
         onTopicPathChange={onTopicPathChange}
         saveConfig={saveConfig}
         topicPath={topicPath}
+        searchOpen={search != undefined}
+        onToggleSearch={() => {
+          setSearch((old) => (old == undefined ? "" : undefined));
+        }}
       />
-      {renderSingleTopicOrDiffOutput()}
+      {search != undefined && (
+        <div className={toolbarClasses.diffOptions}>
+          <InputBase
+            autoFocus
+            fullWidth
+            size="small"
+            placeholder="Search fields and values"
+            value={search}
+            inputProps={{ "aria-label": "Search fields and values" }}
+            onChange={(event) => {
+              setSearch(event.target.value);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                setSearch(undefined);
+              }
+            }}
+          />
+        </div>
+      )}
+      {renderOutput()}
     </div>
   );
 };

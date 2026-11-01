@@ -3736,7 +3736,7 @@ __metadata:
     react-dom: "npm:18.3.1"
     react-hover-observer: "npm:2.1.1"
     react-i18next: "npm:17.0.8"
-    react-json-tree: "patch:react-json-tree@0.15.1#../../patches/react-json-tree.patch"
+    react-json-tree: "npm:0.20.0"
     react-markdown: "npm:9.0.1"
     react-monaco-editor: "npm:0.59.0"
     react-mosaic-component: "npm:6.2.0"
@@ -6532,7 +6532,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/base16@npm:^1.0.2, @types/base16@npm:^1.0.5":
+"@types/base16@npm:^1.0.5":
   version: 1.0.5
   resolution: "@types/base16@npm:1.0.5"
   checksum: 10/caa391944e9af95d395ad8a489ad7e6bc3b358f73f876215313e8a2f97a18d109d8ab3d6d92bd473d9a1c782639a82921a3c30124922f2492082b550a2e9f6a6
@@ -6994,10 +6994,17 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/lodash@npm:*, @types/lodash@npm:^4.14.178":
+"@types/lodash@npm:*":
   version: 4.17.24
   resolution: "@types/lodash@npm:4.17.24"
   checksum: 10/0f2082565f60f9787eefc046edc38458054512be5a8b3584ef0bad5fd9e85d0ab55ec5a1fbfae1ed6ba015cf1f9e837d5fb4da1f99fc60b8f74b2a46146fb00f
+  languageName: node
+  linkType: hard
+
+"@types/lodash@npm:^4.17.0, @types/lodash@npm:^4.17.15":
+  version: 4.17.27
+  resolution: "@types/lodash@npm:4.17.27"
+  checksum: 10/ae02ef86268664e5a024fd1a7d907b676fe7cd9b58b52bdddc7c42c7ffb3d05e869f6bd13e3e6cbb4001cac1d072f5e2a6e5deed2ef7dc62d7853fc735a077be
   languageName: node
   linkType: hard
 
@@ -7111,7 +7118,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@types/prop-types@npm:*, @types/prop-types@npm:^15.7.12, @types/prop-types@npm:^15.7.14, @types/prop-types@npm:^15.7.15, @types/prop-types@npm:^15.7.4":
+"@types/prop-types@npm:*, @types/prop-types@npm:^15.7.12, @types/prop-types@npm:^15.7.14, @types/prop-types@npm:^15.7.15":
   version: 15.7.15
   resolution: "@types/prop-types@npm:15.7.15"
   checksum: 10/31aa2f59b28f24da6fb4f1d70807dae2aedfce090ec63eaf9ea01727a9533ef6eaf017de5bff99fbccad7d1c9e644f52c6c2ba30869465dd22b1a7221c29f356
@@ -9055,13 +9062,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"base16@npm:^1.0.0":
-  version: 1.0.0
-  resolution: "base16@npm:1.0.0"
-  checksum: 10/7fdd91cc01c0ff8301f500c75f4dcf80e2e05124c137fa91a11955f74dacb7babceac11c7a8db232f49429c33f27d2dee29a36a3a347d2f2c4d319715056d348
-  languageName: node
-  linkType: hard
-
 "base64-arraybuffer-es6@npm:^0.7.0":
   version: 0.7.0
   resolution: "base64-arraybuffer-es6@npm:0.7.0"
@@ -9950,7 +9950,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"color-convert@npm:^1.9.0, color-convert@npm:^1.9.3":
+"color-convert@npm:^1.9.0":
   version: 1.9.3
   resolution: "color-convert@npm:1.9.3"
   dependencies:
@@ -9982,7 +9982,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"color-string@npm:^1.6.0":
+"color-string@npm:^1.9.0":
   version: 1.9.1
   resolution: "color-string@npm:1.9.1"
   dependencies:
@@ -9992,13 +9992,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"color@npm:^3.2.1":
-  version: 3.2.1
-  resolution: "color@npm:3.2.1"
+"color@npm:^4.2.3":
+  version: 4.2.3
+  resolution: "color@npm:4.2.3"
   dependencies:
-    color-convert: "npm:^1.9.3"
-    color-string: "npm:^1.6.0"
-  checksum: 10/bf70438e0192f4f62f4bfbb303e7231289e8cc0d15ff6b6cbdb722d51f680049f38d4fdfc057a99cb641895cf5e350478c61d98586400b060043afc44285e7ae
+    color-convert: "npm:^2.0.1"
+    color-string: "npm:^1.9.0"
+  checksum: 10/b23f5e500a79ea22428db43d1a70642d983405c0dd1f95ef59dbdb9ba66afbb4773b334fa0b75bb10b0552fd7534c6b28d4db0a8b528f91975976e70973c0152
   languageName: node
   linkType: hard
 
@@ -16172,7 +16172,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"lodash-es@npm:4.18.1":
+"lodash-es@npm:4.18.1, lodash-es@npm:^4.17.21":
   version: 4.18.1
   resolution: "lodash-es@npm:4.18.1"
   checksum: 10/8bfad225ef09ef42b04283cdaf7830efcc2ba29ae41b56501c74422155ee1ccaa1f0f6e8319def3451a1fe54dec501c8e4bee622bae2b2d98ac993731e0a5cce
@@ -16183,13 +16183,6 @@ __metadata:
   version: 4.3.0
   resolution: "lodash.camelcase@npm:4.3.0"
   checksum: 10/c301cc379310441dc73cd6cebeb91fb254bea74e6ad3027f9346fc43b4174385153df420ffa521654e502fd34c40ef69ca4e7d40ee7129a99e06f306032bfc65
-  languageName: node
-  linkType: hard
-
-"lodash.curry@npm:^4.1.1":
-  version: 4.1.1
-  resolution: "lodash.curry@npm:4.1.1"
-  checksum: 10/ce6c2bc42eacc25c5697b90a6fc42a121fec2b3c944fd324b61f93a6e1b4c8bb4875dc8c32b89ca4ce5f7be7346f485ed8410d3f4728eceebcbca9760bcac3d1
   languageName: node
   linkType: hard
 
@@ -18782,7 +18775,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"prop-types@npm:^15.6.0, prop-types@npm:^15.6.2, prop-types@npm:^15.7.2, prop-types@npm:^15.8.1":
+"prop-types@npm:^15.6.0, prop-types@npm:^15.6.2, prop-types@npm:^15.8.1":
   version: 15.8.1
   resolution: "prop-types@npm:15.8.1"
   dependencies:
@@ -19040,17 +19033,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-base16-styling@npm:^0.8.1":
-  version: 0.8.2
-  resolution: "react-base16-styling@npm:0.8.2"
+"react-base16-styling@npm:^0.10.0":
+  version: 0.10.0
+  resolution: "react-base16-styling@npm:0.10.0"
   dependencies:
-    "@types/base16": "npm:^1.0.2"
-    "@types/lodash": "npm:^4.14.178"
-    base16: "npm:^1.0.0"
-    color: "npm:^3.2.1"
-    csstype: "npm:^3.0.10"
-    lodash.curry: "npm:^4.1.1"
-  checksum: 10/501158d6a144e2dbd930c4cbd56e03f4a28fdf57f2b3a2eed4a307154909c3565163b9fe9d4c33fb95b31af7fc5617c62435b171a228a96044d4e6fddd7792b7
+    "@types/lodash": "npm:^4.17.0"
+    color: "npm:^4.2.3"
+    csstype: "npm:^3.1.3"
+    lodash-es: "npm:^4.17.21"
+  checksum: 10/af1263d3638e61418bc770ddb5d86b23d574ba34706419e61fa9c339ed5e532bd788b060831876699ef510ce46b7392b984c95737ed529a8fe07b27e3dac3ac1
   languageName: node
   linkType: hard
 
@@ -19253,31 +19244,16 @@ __metadata:
   languageName: node
   linkType: hard
 
-"react-json-tree@npm:0.15.1":
-  version: 0.15.1
-  resolution: "react-json-tree@npm:0.15.1"
+"react-json-tree@npm:0.20.0":
+  version: 0.20.0
+  resolution: "react-json-tree@npm:0.20.0"
   dependencies:
-    "@types/prop-types": "npm:^15.7.4"
-    prop-types: "npm:^15.7.2"
-    react-base16-styling: "npm:^0.8.1"
+    "@types/lodash": "npm:^4.17.15"
+    react-base16-styling: "npm:^0.10.0"
   peerDependencies:
-    "@types/react": ^16.3.0 || ^17.0.0
-    react: ^16.3.0 || ^17.0.0
-  checksum: 10/3891d9910b7a0f0c31cea4d936a85f3c629b4c4f5225f41c56f7f1a2c00adcedb2e16f52d0bd8f0dddddf411687367d1cddb09a51e40ab79ced27a77f326094a
-  languageName: node
-  linkType: hard
-
-"react-json-tree@patch:react-json-tree@0.15.1#../../patches/react-json-tree.patch::locator=%40lichtblick%2Fsuite-base%40workspace%3Apackages%2Fsuite-base":
-  version: 0.15.1
-  resolution: "react-json-tree@patch:react-json-tree@npm%3A0.15.1#../../patches/react-json-tree.patch::version=0.15.1&hash=5e2bac&locator=%40lichtblick%2Fsuite-base%40workspace%3Apackages%2Fsuite-base"
-  dependencies:
-    "@types/prop-types": "npm:^15.7.4"
-    prop-types: "npm:^15.7.2"
-    react-base16-styling: "npm:^0.8.1"
-  peerDependencies:
-    "@types/react": ^16.3.0 || ^17.0.0
-    react: ^16.3.0 || ^17.0.0
-  checksum: 10/829d00658a288218b4ec140bcaa3870a9dd08566ddb5af21e82a006ee0a31f5c68848251ede01f14b640066229dd479cfaa1cfe1cda4b7e3a131d522f77b5eca
+    "@types/react": ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+    react: ^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0
+  checksum: 10/6198266f9b5f587f849145867538410778270acd8eb1715056a66e6b90ab2a44adfe4ecbd568f36db6b059f682956b1beb18a6f3bb117e8bddfc21d9f7333082
   languageName: node
   linkType: hard
 

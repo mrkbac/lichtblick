@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
-import { NodeExpansion, NodeState } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
+import { NodeState } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
 import {
   dataWithoutWrappingArray,
   getConstantNameByKeyPath,
@@ -20,7 +20,8 @@ import {
   getValueLabels,
   getValueString,
   isSingleElemArray,
-  toggleExpansion,
+  isNodeExpanded,
+  toggleNodeExpansion,
   typedArrayToArray,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -43,47 +44,32 @@ describe("getMessageDocumentationLink", () => {
   });
 });
 
-describe("toggleExpansion", () => {
-  const PATH_NAME_AGGREGATOR = "~";
+describe("toggleNodeExpansion", () => {
+  const paths = new Set(["key1", "key2", "child~key1"]);
 
-  it("should keep all states expanded when state is 'all' except for the state of the key passed, changes it to collapsed", () => {
-    const paths = new Set(["key1", "key2", `child${PATH_NAME_AGGREGATOR}key1`]);
-    const result = toggleExpansion("all", paths, "key1");
-
-    expect(result).toEqual({
-      key1: NodeState.Collapsed,
+  it("collapses a node from 'all' and keeps the rest expanded", () => {
+    expect(toggleNodeExpansion("all", paths, "key1", {})).toEqual({
       key2: NodeState.Expanded,
-      [`child${PATH_NAME_AGGREGATOR}key1`]: NodeState.Expanded,
-    });
-  });
-
-  it("should keep all states collapsed when state is 'none' except for the state of the key passed, changes it to expanded", () => {
-    const paths = new Set(["key1", "key2", `child${PATH_NAME_AGGREGATOR}key1`]);
-    const result = toggleExpansion("none", paths, "key1");
-
-    expect(result).toEqual({
-      key1: NodeState.Expanded,
-      key2: NodeState.Collapsed,
-      [`child${PATH_NAME_AGGREGATOR}key1`]: NodeState.Collapsed,
-    });
-  });
-
-  it("should toggle an individual path without affecting others (children or not)", () => {
-    const paths = new Set(["key1", "key1~child", "key1~child~grandchild"]);
-    const initialState: NodeExpansion = {
-      key1: NodeState.Expanded,
-      [`child${PATH_NAME_AGGREGATOR}key1`]: NodeState.Expanded,
-      [`grandchild${PATH_NAME_AGGREGATOR}child${PATH_NAME_AGGREGATOR}key1`]: NodeState.Expanded,
-      key2: NodeState.Collapsed,
-    };
-
-    const result = toggleExpansion(initialState, paths, "key1");
-
-    expect(result).toEqual({
       key1: NodeState.Collapsed,
-      [`child${PATH_NAME_AGGREGATOR}key1`]: NodeState.Expanded,
-      [`grandchild${PATH_NAME_AGGREGATOR}child${PATH_NAME_AGGREGATOR}key1`]: NodeState.Expanded,
-      key2: NodeState.Collapsed,
+    });
+  });
+
+  it("expands a node from 'none' without expanding anything else", () => {
+    expect(toggleNodeExpansion("none", paths, "key1", {})).toEqual({ key1: NodeState.Expanded });
+  });
+
+  it("expands a node that is unknown to the map in one click", () => {
+    expect(toggleNodeExpansion({ key1: NodeState.Expanded }, paths, "new~key1", {})).toEqual({
+      key1: NodeState.Expanded,
+      "new~key1": NodeState.Expanded,
+    });
+  });
+
+  it("expands a large array that 'all' left collapsed", () => {
+    const big = new Float32Array(10);
+    expect(isNodeExpanded("all", "data", big)).toBe(false);
+    expect(toggleNodeExpansion("all", paths, "data", big)).toMatchObject({
+      data: NodeState.Expanded,
     });
   });
 });

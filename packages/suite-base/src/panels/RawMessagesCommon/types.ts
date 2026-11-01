@@ -41,6 +41,8 @@ export type NodeExpansion = "all" | "none" | Record<string, NodeState>;
 
 export type DiffObject = Record<string, unknown>;
 
+export type DiffStatus = "added" | "changed" | "deleted";
+
 export type TreeNode = {
   key: string;
   label: string;
@@ -49,6 +51,8 @@ export type TreeNode = {
   isExpandable: boolean;
   keyPath: (string | number)[];
   parentPath: string;
+  /** Set in diff mode for added/changed/deleted nodes. */
+  diffStatus?: DiffStatus;
 };
 
 export type ValueAction = {
@@ -113,6 +117,8 @@ export type PropsToolbar = {
   saveConfig: SaveConfig<RawMessagesVirtualPanelConfig>;
   topic?: Topic;
   topicPath: string;
+  searchOpen?: boolean;
+  onToggleSearch?: () => void;
 };
 
 export type PropsValue = {
@@ -136,10 +142,16 @@ export type ValueActionItem = {
 
 export type PropsVirtualizedTree = {
   data: unknown;
-  expandedNodes: Set<string>;
-  onToggleExpand: (keyPath: string) => void;
+  /** Treat `data` as getDiff output. */
+  diff?: boolean;
+  isExpanded: (key: string, value: unknown) => boolean;
+  onToggleExpand: (key: string, value: unknown) => void;
   fontSize?: number;
   renderValue: (node: TreeNode) => React.ReactNode;
+  /** Only show rows whose key or value contains this text, plus their ancestors. */
+  search?: string;
+  /** Data of the previously shown message; leaf values that differ from it are highlighted. */
+  previousData?: unknown;
 };
 export type ValueLabelsProps = {
   constantName: string | undefined;
@@ -198,7 +210,8 @@ export type UseSharedRawMessagesLogicResult = {
   onDiffTopicPathChange: (newDiffTopicPath: string) => void;
   onToggleDiff: () => void;
   onToggleExpandAll: () => void;
-  onLabelClick: (keypath: (string | number)[]) => void;
+  isExpanded: (key: string, value: unknown) => boolean;
+  onToggleExpand: (key: string, value: unknown) => void;
 
   /** Whether the data source supports stepping through messages at all. */
   canStep: boolean;

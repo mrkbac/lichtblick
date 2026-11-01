@@ -135,11 +135,14 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     hasCustomToolbar: true,
   },
   {
-    title: "Raw Messages Virtual",
+    // Alias of Raw Messages for layouts saved with this type; not offered in the panel list.
+    title: t("rawMessages"),
     type: "RawMessagesVirtual",
-    description: "Virtualized Raw Messages panel",
+    description: t("rawMessagesDescription"),
+    thumbnail: rawMessagesThumbnail,
     module: async () => await import("./RawMessagesVirtual"),
     hasCustomToolbar: true,
+    hidden: true,
   },
   {
     title: t("log"),

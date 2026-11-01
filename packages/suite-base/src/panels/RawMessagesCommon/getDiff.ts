@@ -19,8 +19,6 @@ import { isTypicalFilterName } from "@lichtblick/suite-base/components/MessagePa
 import { diffArrow } from "@lichtblick/suite-base/panels/RawMessagesCommon/constants";
 import { diffLabels, DiffObject } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
 
-export const diffLabelsByLabelText = _.keyBy(Object.values(diffLabels), "labelText");
-
 function isValidObjectArray(items: unknown[]): boolean {
   return items.every((item) => typeof item === "object" && item != undefined);
 }
