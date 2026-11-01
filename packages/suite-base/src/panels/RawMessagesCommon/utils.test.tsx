@@ -20,6 +20,7 @@ import {
   getValueLabels,
   getValueString,
   isSingleElemArray,
+  generateDeepKeyPaths,
   isNodeExpanded,
   toggleNodeExpansion,
   typedArrayToArray,
@@ -63,6 +64,13 @@ describe("toggleNodeExpansion", () => {
       key1: NodeState.Expanded,
       "new~key1": NodeState.Expanded,
     });
+  });
+
+  it("keeps a large array collapsed when another node is toggled from 'all'", () => {
+    const data = { big: Array.from({ length: 1000 }, (_v, i) => i), small: { a: 1 } };
+    const next = toggleNodeExpansion("all", generateDeepKeyPaths(data), "small", data.small);
+    expect(isNodeExpanded(next, "big", data.big)).toBe(false);
+    expect(isNodeExpanded(next, "small", data.small)).toBe(false);
   });
 
   it("expands a large array that 'all' left collapsed", () => {

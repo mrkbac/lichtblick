@@ -7,7 +7,7 @@
 
 import { useVirtualizer } from "@tanstack/react-virtual";
 import * as _ from "lodash-es";
-import { Fragment, memo, useCallback, useMemo, useRef, useState } from "react";
+import { Fragment, memo, useCallback, useId, useMemo, useRef, useState } from "react";
 
 import { PATH_NAME_AGGREGATOR } from "@lichtblick/suite-base/panels/RawMessagesCommon/constants";
 import {
@@ -31,6 +31,10 @@ function hasChanged(node: TreeNode, previousData: unknown): boolean {
     return false;
   }
   const previous: unknown = _.get(previousData, node.keyPath.slice().reverse());
+  // Empty objects/arrays are leaves too, and every message has new instances of them.
+  if (typeof node.value === "object" && node.value != undefined) {
+    return !_.isEqual(previous, node.value);
+  }
   return !Object.is(previous, node.value);
 }
 
@@ -48,6 +52,8 @@ export const VirtualizedTree = memo(function VirtualizedTree({
   const { classes, cx } = useStyles();
 
   const parentRef = useRef<HTMLDivElement>(null);
+  // Row ids must be unique across panels for aria-activedescendant.
+  const rowIdPrefix = useId();
   const [activeKey, setActiveKey] = useState<string>();
 
   // Cache typed-array → regular-array conversions so Array.from() is called at most
@@ -62,11 +68,18 @@ export const VirtualizedTree = memo(function VirtualizedTree({
     [data, diff, search],
   );
 
+  // Search shows the path to matches expanded; toggles, ARIA and keys must agree with that.
+  const isShownExpanded = useCallback(
+    (key: string, value: unknown) =>
+      searchResult?.ancestors.has(key) === true || isExpanded(key, value),
+    [isExpanded, searchResult],
+  );
+
   const flatData = useMemo(() => {
     if (searchResult) {
       // Show matches and the path to them, expanded. Inside a match, the user's expansion applies.
-      const { matches, visible, ancestors } = searchResult;
-      return flattenTreeData(data, (key, value) => ancestors.has(key) || isExpanded(key, value), {
+      const { matches, visible } = searchResult;
+      return flattenTreeData(data, isShownExpanded, {
         diff,
         include: (key) => visible.has(key),
         includeSubtreeOf: matches,
@@ -74,7 +87,7 @@ export const VirtualizedTree = memo(function VirtualizedTree({
       });
     }
     return flattenTreeData(data, isExpanded, { diff, cache: typedArrayCache.current });
-  }, [data, diff, isExpanded, searchResult]);
+  }, [data, diff, isExpanded, isShownExpanded, searchResult]);
 
   const getScrollElement = useCallback(() => parentRef.current, []);
 
@@ -117,7 +130,7 @@ export const VirtualizedTree = memo(function VirtualizedTree({
       if (!node) {
         return;
       }
-      const expanded = node.isExpandable && isExpanded(node.key, node.value);
+      const expanded = node.isExpandable && isShownExpanded(node.key, node.value);
       switch (event.key) {
         case "ArrowDown":
           focusRow(Math.min(activeIndex + 1, flatData.length - 1));
@@ -156,7 +169,7 @@ export const VirtualizedTree = memo(function VirtualizedTree({
       }
       event.preventDefault();
     },
-    [activeIndex, flatData, focusRow, isExpanded, onToggleExpand],
+    [activeIndex, flatData, focusRow, isShownExpanded, onToggleExpand],
   );
 
   // Breadcrumb of the topmost visible row's ancestors, so deep rows keep their context.
@@ -203,7 +216,9 @@ export const VirtualizedTree = memo(function VirtualizedTree({
         style={{ fontSize: fontSize ?? "inherit" }}
         role="tree"
         tabIndex={0}
-        aria-activedescendant={flatData[activeIndex] ? `tree-row-${activeIndex}` : undefined}
+        aria-activedescendant={
+          flatData[activeIndex] ? `${rowIdPrefix}-row-${activeIndex}` : undefined
+        }
         onKeyDown={onKeyDown}
       >
         <div className={classes.innerWrapper} style={{ height: virtualizer.getTotalSize() }}>
@@ -214,13 +229,13 @@ export const VirtualizedTree = memo(function VirtualizedTree({
               return undefined;
             }
 
-            const expanded = node.isExpandable && isExpanded(node.key, node.value);
+            const expanded = node.isExpandable && isShownExpanded(node.key, node.value);
             const changed = diff ? node.diffStatus === "changed" : hasChanged(node, previousData);
 
             return (
               <div
                 key={virtualRow.key}
-                id={`tree-row-${virtualRow.index}`}
+                id={`${rowIdPrefix}-row-${virtualRow.index}`}
                 data-index={virtualRow.index}
                 ref={virtualizer.measureElement}
                 role="treeitem"

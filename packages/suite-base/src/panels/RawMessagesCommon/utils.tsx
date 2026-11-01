@@ -110,7 +110,8 @@ export function generateDeepKeyPaths(obj: unknown): Set<string> {
       return;
     }
 
-    if (isTypedArray(nestedObj)) {
+    // "Expand all" leaves these collapsed; listing them would expand them when it becomes a map.
+    if (isTypedArray(nestedObj) || isLargeArray(nestedObj)) {
       return;
     }
 
