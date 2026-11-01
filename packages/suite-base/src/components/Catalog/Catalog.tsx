@@ -171,35 +171,40 @@ export default function Catalog(): React.JSX.Element {
       { retryErrors = false }: { retryErrors?: boolean } = {},
     ) => {
       const scanId = ++scanIdRef.current;
+      const isStale = () => scanId !== scanIdRef.current;
       setFolderName(name);
       setRelist(() => list);
       setError(undefined);
       try {
         const folderFiles = await list();
+        if (isStale()) {
+          return;
+        }
         setFiles(folderFiles);
         setRecordings([]);
         setProgress({ done: 0, total: folderFiles.length });
         const ready: CatalogRecording[] = [];
         const flush = _.throttle(() => {
-          if (scanId === scanIdRef.current) {
+          if (!isStale()) {
             setRecordings([...ready]);
             setProgress({ done: ready.length, total: folderFiles.length });
           }
         }, 250);
         const results = await indexFiles(folderFiles, {
           retryErrors,
+          isCancelled: isStale,
           onRecording: (recording) => {
             ready.push(recording);
             flush();
           },
         });
         flush.cancel();
-        if (scanId === scanIdRef.current) {
+        if (!isStale()) {
           setRecordings(results);
           setProgress(undefined);
         }
       } catch (err: unknown) {
-        if (scanId === scanIdRef.current) {
+        if (!isStale()) {
           setError(String(err));
           setProgress(undefined);
         }
@@ -242,7 +247,10 @@ export default function Catalog(): React.JSX.Element {
       }
       return;
     }
-    await saveLastFolder(dir);
+    // Remembering the folder is a convenience; open it even if that fails.
+    await saveLastFolder(dir).catch((err: unknown) => {
+      console.warn("Failed to remember the catalog folder", err);
+    });
     await openDirectory(dir);
   }, [openDirectory]);
 

@@ -84,31 +84,42 @@ async function indexFile(
   // path is left out because it is relative to the picked folder, so opening a parent or a moved
   // folder still hits the cache.
   const key = `${file.name}|${file.size}|${file.lastModified}`;
-  let summary = await idbGet<CatalogSummary>(key, summaryStore);
+  // The cache is only an optimization, so a failing IndexedDB never fails the scan.
+  let summary = await idbGet<CatalogSummary>(key, summaryStore).catch((err: unknown) => {
+    console.warn("Catalog cache read failed", err);
+    return undefined;
+  });
   if (!summary || (summary.error != undefined && retryErrors)) {
     try {
       summary = await summarizeMcap(file);
     } catch (err: unknown) {
       summary = { error: err instanceof Error ? err.message : String(err) };
     }
-    await idbSet(key, summary, summaryStore);
+    await idbSet(key, summary, summaryStore).catch((err: unknown) => {
+      console.warn("Catalog cache write failed", err);
+    });
   }
   return { ...base, size: file.size, ...summary };
 }
 
 /**
  * Summarize every file, reading a few at a time. Results come back in input order; `onRecording`
- * reports each one as soon as it is ready.
+ * reports each one as soon as it is ready. Once `isCancelled` returns true no new files are read,
+ * and the result has gaps for the files that were skipped.
  */
 export async function indexFiles(
   files: readonly FolderFile[],
-  opts: { retryErrors?: boolean; onRecording?: (recording: CatalogRecording) => void } = {},
+  opts: {
+    retryErrors?: boolean;
+    onRecording?: (recording: CatalogRecording) => void;
+    isCancelled?: () => boolean;
+  } = {},
 ): Promise<CatalogRecording[]> {
   const results = new Array<CatalogRecording>(files.length);
   let next = 0;
   await Promise.all(
     Array.from({ length: Math.min(CONCURRENCY, files.length) }, async () => {
-      while (next < files.length) {
+      while (next < files.length && opts.isCancelled?.() !== true) {
         const index = next++;
         const recording = await indexFile(files[index]!, {
           retryErrors: opts.retryErrors ?? false,
