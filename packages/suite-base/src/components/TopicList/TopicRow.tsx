@@ -177,6 +177,7 @@ export function TopicRow({
                 aria-label="Previous message"
                 onClick={seekToPreviousMessage}
                 onMouseDown={handleButtonMouseDown}
+                onDoubleClick={handleButtonMouseDown}
                 disabled={isPreviousDisabled}
                 className={classes.navIconButton}
               >
@@ -191,6 +192,7 @@ export function TopicRow({
                 aria-label="Next message"
                 onClick={seekToNextMessage}
                 onMouseDown={handleButtonMouseDown}
+                onDoubleClick={handleButtonMouseDown}
                 disabled={isNextDisabled}
                 className={classes.navIconButton}
               >

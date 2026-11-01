@@ -83,6 +83,13 @@ export function useOpenMessagePathsInPanel(): (paths: readonly DraggedMessagePat
       const type = getPanelTypeForPaths(paths);
       const shownPaths = type === "RawMessages" ? paths.slice(0, 1) : paths;
       const id = getPanelIdForType(type);
+      // The 3D panel only accepts image drops, so show its topics through the initial config
+      if (type === "3D") {
+        const topics = Object.fromEntries(shownPaths.map((p) => [p.topicName, { visible: true }]));
+        addPanel({ id, config: { topics } });
+        setSelectedPanelIds([id]);
+        return;
+      }
       addPanel({ id });
       setSelectedPanelIds([id]);
       queuePanelDrop(id, shownPaths);
