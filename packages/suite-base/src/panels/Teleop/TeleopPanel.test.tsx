@@ -825,6 +825,25 @@ describe("TeleopPanel", () => {
       unmount();
       expect(publish).toHaveBeenCalledWith("/cmd", zero);
     });
+
+    it("stops the robot on unmount after a release that skipped the zero command", () => {
+      // Given stopOnRelease is off and the last published command was nonzero
+      const publish = jest.fn();
+      const context = getMockContext({
+        publish,
+        initialState: { topic: "/cmd", stopOnRelease: false },
+      });
+      const { unmount } = render(<TeleopPanel context={context} />);
+      fireEvent.click(screen.getByText("UP"));
+      fireEvent.click(screen.getByText("RELEASE"));
+      publish.mockClear();
+
+      // When the panel unmounts
+      unmount();
+
+      // Then a zero command is published
+      expect(publish).toHaveBeenCalledWith("/cmd", zero);
+    });
     it("advertises the ROS 2 schema name for ROS 2 data sources", () => {
       const advertise = jest.fn();
       const context = getMockContext({

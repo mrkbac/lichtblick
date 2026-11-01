@@ -138,6 +138,8 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
     latest.current = { config, enabled };
   }, [config, enabled]);
 
+  // last command actually sent; cleanup stops it even when stopOnRelease skipped the zero
+  const lastPublishedRef = useRef<TeleopVector>(ZERO_VECTOR);
   const publishVector = useCallback(
     (vector: TeleopVector) => {
       const { config: cfg, enabled: canSend } = latest.current;
@@ -157,6 +159,7 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
               twist,
             }
           : twist;
+      lastPublishedRef.current = vector;
       try {
         context.publish?.(cfg.topic, message);
       } catch (error) {
@@ -229,7 +232,7 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
 
     return () => {
       // never leave the robot driving on a topic we stop publishing to
-      if (isActive(vectorRef.current)) {
+      if (isActive(lastPublishedRef.current)) {
         publishVector(ZERO_VECTOR);
       }
       if (!isInitialMount.current) {
