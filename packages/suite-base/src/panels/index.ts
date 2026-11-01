@@ -171,6 +171,12 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     module: async () => await import("./TopicGraph"),
   },
   {
+    title: t("transformTree"),
+    type: "TransformTree",
+    description: t("transformTreeDescription"),
+    module: async () => await import("./TransformTree"),
+  },
+  {
     title: t("dataSourceInfo"),
     type: "SourceInfo",
     description: t("dataSourceInfoDescription"),
