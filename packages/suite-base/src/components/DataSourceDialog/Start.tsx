@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import FolderOpenOutlinedIcon from "@mui/icons-material/FolderOpenOutlined";
 import { List, ListItem, ListItemButton, SvgIcon, Typography } from "@mui/material";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -42,6 +43,16 @@ export default function Start(): React.JSX.Element {
         onClick: () => {
           dialogActions.dataSource.open("file");
           analytics.logEvent(AppEvent.DIALOG_SELECT_VIEW, { type: "local" });
+        },
+      },
+      {
+        key: "open-catalog",
+        text: t("openCatalog"),
+        secondaryText: t("openCatalogDescription"),
+        icon: <FolderOpenOutlinedIcon fontSize="large" color="primary" />,
+        onClick: () => {
+          dialogActions.dataSource.open("catalog");
+          analytics.logEvent(AppEvent.DIALOG_SELECT_VIEW, { type: "catalog" });
         },
       },
       {
