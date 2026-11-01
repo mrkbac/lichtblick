@@ -262,7 +262,10 @@ class CylinderMaterial extends MeshStandardMaterialWithInstanceOpacity {
     super({ metalness: 0, roughness: 1, dithering: true });
   }
 
-  public override onBeforeCompile(shader: THREE.Shader, renderer: THREE.WebGLRenderer): void {
+  public override onBeforeCompile(
+    shader: THREE.WebGLProgramParametersWithUniforms,
+    renderer: THREE.WebGLRenderer,
+  ): void {
     super.onBeforeCompile(shader, renderer);
     shader.vertexShader = makeCylinderVertexShader(shader.vertexShader);
   }
@@ -275,7 +278,10 @@ class CylinderOutlineMaterial extends THREE.LineBasicMaterial {
     this.defines.USE_INSTANCING = true;
   }
 
-  public override onBeforeCompile(shader: THREE.Shader, renderer: THREE.WebGLRenderer): void {
+  public override onBeforeCompile(
+    shader: THREE.WebGLProgramParametersWithUniforms,
+    renderer: THREE.WebGLRenderer,
+  ): void {
     super.onBeforeCompile(shader, renderer);
     shader.vertexShader = makeCylinderVertexShader(shader.vertexShader);
   }

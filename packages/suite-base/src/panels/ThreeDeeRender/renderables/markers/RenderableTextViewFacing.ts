@@ -5,12 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Label } from "@lichtblick/three-text";
-
 import { RenderableMarker } from "./RenderableMarker";
 import type { Renderer } from "../../Renderer";
 import { getLuminance, SRGBToLinear } from "../../color";
 import { Marker } from "../../ros";
+import { Label } from "../../text";
 
 export class RenderableTextViewFacing extends RenderableMarker {
   #label: Label;

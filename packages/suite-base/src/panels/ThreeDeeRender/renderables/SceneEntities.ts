@@ -20,6 +20,7 @@ import {
   TextPrimitive,
   TriangleListPrimitive,
 } from "@foxglove/schemas";
+import * as THREE from "three";
 
 import { toNanoSec } from "@lichtblick/rostime";
 import { SettingsTreeAction } from "@lichtblick/suite";

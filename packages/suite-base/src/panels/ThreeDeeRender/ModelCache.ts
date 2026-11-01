@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { MeshoptDecoder } from "meshoptimizer";
+import { MeshoptDecoder } from "meshoptimizer/decoder";
 import * as THREE from "three";
 import dracoDecoderWasmUrl from "three/examples/jsm/libs/draco/draco_decoder.wasm";
 import dracoWasmWrapperJs from "three/examples/jsm/libs/draco/draco_wasm_wrapper.js?raw";
@@ -255,6 +255,9 @@ export class ModelCache {
     manager.itemStart(url);
     const dae = daeLoader.parse(xmlText, baseUrl(url));
     manager.itemEnd(url);
+    if (dae == undefined) {
+      throw new Error(`Failed to parse COLLADA model "${url}"`);
+    }
 
     // If the <up_axis> is Y_UP, rotate to the Studio convention of Z-up following
     // ROS [REP-0103](https://www.ros.org/reps/rep-0103.html)

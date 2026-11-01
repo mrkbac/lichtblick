@@ -66,7 +66,7 @@ export class Axis extends THREE.Object3D {
     this.add(this.#headMesh);
   }
 
-  public dispose(): void {
+  public override dispose(): void {
     this.#shaftMesh.material.dispose();
     this.#shaftMesh.dispose();
     this.#headMesh.material.dispose();
