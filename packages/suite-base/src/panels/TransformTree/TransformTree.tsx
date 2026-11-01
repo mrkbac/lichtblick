@@ -132,10 +132,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
     .join("\n");
   const visibleTopics = useMemo(() => (visibleKey ? visibleKey.split("\n") : []), [visibleKey]);
   const visibleTopicSet = useMemo(() => new Set(visibleTopics), [visibleTopics]);
-  const staticTopics = useMemo(
-    () => new Set(staticKey ? staticKey.split("\n") : []),
-    [staticKey],
-  );
+  const staticTopics = useMemo(() => new Set(staticKey ? staticKey.split("\n") : []), [staticKey]);
 
   const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
   const settingsActionHandler = useCallback(
@@ -169,8 +166,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
   // Static transforms are published once, usually at the start of a recording, so a seek would
   // lose them. Preload them from the whole recording when the data source supports it.
   const staticSubscriptions = useMemo<SubscribePayload[]>(
-    () =>
-      [...staticTopics].map((topic) => ({ topic, preloadType: "full" })),
+    () => [...staticTopics].map((topic) => ({ topic, preloadType: "full" })),
     [staticTopics],
   );
   const staticBlocks = useBlocksSubscriptions(staticSubscriptions);
@@ -241,7 +237,10 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
     for (const row of allRows) {
       for (const warning of row.warnings) {
         if (warning !== "noData") {
-          messages.set(`${warning}:${row.frame}`, `${row.frame}: ${warningMessage(t, row, warning)}`);
+          messages.set(
+            `${warning}:${row.frame}`,
+            `${row.frame}: ${warningMessage(t, row, warning)}`,
+          );
         }
       }
     }
@@ -308,20 +307,14 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
             <colgroup>
               <col />
               {VALUE_COLUMNS.map((column) => (
-                <col
-                  key={column.key}
-                  style={{ width: columnWidth(column) }}
-                />
+                <col key={column.key} style={{ width: columnWidth(column) }} />
               ))}
             </colgroup>
             <thead>
               <tr>
                 <th>{t("columns.frame")}</th>
                 {VALUE_COLUMNS.map((column) => (
-                  <th
-                    key={column.key}
-                    className={cx({ [classes.groupStart]: column.groupStart })}
-                  >
+                  <th key={column.key} className={cx({ [classes.groupStart]: column.groupStart })}>
                     {t(`columns.${column.key}`)}
                   </th>
                 ))}
@@ -372,16 +365,16 @@ const FrameTableRow = memo(function FrameTableRowImpl({
     row.frame,
     ...(entry
       ? [
-        t("parent", { parent: entry.parent }),
-        t("topic", { topic: entry.topic }),
-        t("quaternion", {
-          value: [entry.rotation.x, entry.rotation.y, entry.rotation.z, entry.rotation.w]
-            .map((value) => value.toFixed(4))
-            .join(", "),
-        }),
-        ...(row.notYetPublished ? [t("notYetPublished")] : []),
-        ...row.warnings.map((warning) => warningMessage(t, row, warning)),
-      ]
+          t("parent", { parent: entry.parent }),
+          t("topic", { topic: entry.topic }),
+          t("quaternion", {
+            value: [entry.rotation.x, entry.rotation.y, entry.rotation.z, entry.rotation.w]
+              .map((value) => value.toFixed(4))
+              .join(", "),
+          }),
+          ...(row.notYetPublished ? [t("notYetPublished")] : []),
+          ...row.warnings.map((warning) => warningMessage(t, row, warning)),
+        ]
       : []),
   ].join("\n");
 

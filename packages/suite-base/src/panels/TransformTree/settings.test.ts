@@ -47,13 +47,10 @@ describe("settingsActionReducer", () => {
     const initial = {};
 
     // When
-    const config = settingsActionReducer(
-      initial,
-      {
-        action: "update",
-        payload: { path: ["topics", "/robot.1/tf", "static"], input: "boolean", value: true },
-      },
-    );
+    const config = settingsActionReducer(initial, {
+      action: "update",
+      payload: { path: ["topics", "/robot.1/tf", "static"], input: "boolean", value: true },
+    });
 
     // Then
     expect(config).toEqual({ topics: { "/robot.1/tf": { static: true } } });
