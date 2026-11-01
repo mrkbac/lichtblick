@@ -193,6 +193,8 @@ class MapRenderable extends Renderable<MapUserData> {
   #anchorElevation?: number;
   #demAbort?: AbortController;
   #tilesets = new Map<string, Tileset>();
+  /** Async loads check this so nothing is created after dispose(). */
+  #disposed = false;
 
   public constructor(
     name: string,
@@ -207,6 +209,7 @@ class MapRenderable extends Renderable<MapUserData> {
   }
 
   public override dispose(): void {
+    this.#disposed = true;
     this.#updateSoon.cancel();
     this.#demAbort?.abort();
     this.#map?.remove();
@@ -261,6 +264,7 @@ class MapRenderable extends Renderable<MapUserData> {
       this.#anchor = anchor;
       this.#anchorElevation = undefined;
       this.#center = undefined;
+      this.#geometryKey = undefined; // Same first fix after a seek must still rebuild.
       this.#placeTilesets();
     }
     if (!anchor || !fix) {
@@ -278,8 +282,9 @@ class MapRenderable extends Renderable<MapUserData> {
 
   // URL fields update on every keystroke; load once typing pauses.
   #updateSoon = _.debounce(() => {
-    void this.#updateStyle();
-    void this.#syncTilesets();
+    // Rejects only when the layer is removed mid-load.
+    this.#updateStyle().catch(_.noop);
+    this.#syncTilesets().catch(_.noop);
   }, URL_DEBOUNCE_MS);
 
   /** Vector styles and GeoTIFFs, fetched once per URL. */
@@ -347,6 +352,12 @@ class MapRenderable extends Renderable<MapUserData> {
         }
       }),
     );
+    if (errors.size > 0) {
+      this.#styleKey = undefined; // Retry failed loads on the next settings change.
+    }
+    if (this.#disposed || request !== this.#styleRequest) {
+      return;
+    }
     const map = await this.#getMap();
     if (request !== this.#styleRequest) {
       return;
@@ -374,6 +385,9 @@ class MapRenderable extends Renderable<MapUserData> {
 
   async #createMap(): Promise<MapLibreMap> {
     const maplibre = await import("@lichtblick/suite-base/panels/Map/maplibre");
+    if (this.#disposed) {
+      throw new Error("Map layer was removed");
+    }
     const container = document.createElement("div");
     Object.assign(container.style, {
       position: "fixed",
@@ -462,9 +476,9 @@ class MapRenderable extends Renderable<MapUserData> {
     if (terrain && !dem) {
       this.#setLayerError(terrain.layer.id, "3D terrain in the 3D panel needs an XYZ tile URL");
     }
-    void this.#getMap().then(() => {
+    this.#getMap().then(() => {
       this.#jumpMap();
-    });
+    }, _.noop);
 
     const { east, north } = enuOffset(anchor, center);
     this.#mesh.position.set(anchor.position.x + east, anchor.position.y + north, s.zOffset);
@@ -489,6 +503,7 @@ class MapRenderable extends Renderable<MapUserData> {
       })
       .catch((error: unknown) => {
         if (!abort.signal.aborted) {
+          this.#geometryKey = undefined; // Retry on the next settings or location change.
           log.warn("Failed to load terrain", error);
           this.#setLayerError(terrain.layer.id, `Failed to load terrain: ${String(error)}`);
         }
@@ -542,6 +557,9 @@ class MapRenderable extends Renderable<MapUserData> {
     }
     const { TilesRenderer } = await import("3d-tiles-renderer");
     const { GLTFExtensionsPlugin } = await import("3d-tiles-renderer/plugins");
+    if (this.#disposed) {
+      return;
+    }
     for (const [id, url] of missing) {
       if (this.#tilesets.has(id)) {
         continue; // Created by a concurrent sync.

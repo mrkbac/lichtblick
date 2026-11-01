@@ -83,7 +83,13 @@ describe("applySettingsAction", () => {
         encoding: "mapbox" as const,
       },
     ];
-    config = applySettingsAction(config, update(["layers", "0", "source"], "saved:0"), saved);
+    // The option names the source, so a source remembered meanwhile can't shift the pick.
+    const savedNow = [{ kind: "raster" as const, url: "https://other/{z}/{x}/{y}.png" }, ...saved];
+    config = applySettingsAction(
+      config,
+      update(["layers", "0", "source"], "saved:dem|https://dem/{z}/{x}/{y}.png"),
+      savedNow,
+    );
     expect(config.layers[0]).toMatchObject({
       source: "custom",
       custom: saved[0],
