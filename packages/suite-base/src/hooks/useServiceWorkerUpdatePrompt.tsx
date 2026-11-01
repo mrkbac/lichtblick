@@ -61,13 +61,17 @@ export function useServiceWorkerUpdatePrompt(): void {
         if (registration.waiting && container.controller) {
           prompt(registration.waiting);
         }
-        registration.addEventListener("updatefound", () => {
-          const worker = registration.installing;
+        const watch = (worker: ServiceWorker | null) => {
           worker?.addEventListener("statechange", () => {
             if (worker.state === "installed" && container.controller) {
               prompt(worker);
             }
           });
+        };
+        // an update may already be installing if updatefound fired before this lookup resolved
+        watch(registration.installing);
+        registration.addEventListener("updatefound", () => {
+          watch(registration.installing);
         });
       })
       .catch((error: unknown) => {
