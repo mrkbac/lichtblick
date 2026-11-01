@@ -484,6 +484,9 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         topic: topic.name,
         convertTo: topic.schemaName,
         onNewRangeIterator: async (iterator) => {
+          // A new iterator replaces the topic's data (e.g. an edited user script); drop the old.
+          pendingTrack.current = pendingTrack.current.filter((m) => m.topic !== topic.name);
+          setTrackMessages((prev) => prev.filter((m) => m.topic !== topic.name));
           rangeTopicsRef.current.add(topic.name);
           for await (const batch of iterator) {
             const valid = batch.filter(
@@ -545,6 +548,13 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       context.unstable_subscribeMessageRange({
         topic,
         onNewRangeIterator: async (iterator) => {
+          setPathSamples((prev) => {
+            const next = new Map(prev);
+            for (const { path } of paths) {
+              next.delete(path);
+            }
+            return next;
+          });
           pathRangeTopicsRef.current.add(topic);
           for await (const batch of iterator) {
             appendPathSamples(batch, paths);
