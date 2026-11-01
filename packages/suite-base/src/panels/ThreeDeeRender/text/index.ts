@@ -7,5 +7,4 @@
 //
 // Adapted from @lichtblick/three-text 1.0.0 (MIT, Copyright (c) Foxglove Technologies Inc)
 
-export * from "./FontManager";
-export * from "./LabelPool";
+export { Label, LabelPool } from "./LabelPool";
