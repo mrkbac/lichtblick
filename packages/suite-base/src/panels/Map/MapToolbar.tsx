@@ -654,7 +654,7 @@ export function MapToolbar(props: Props): React.JSX.Element {
   const summaryCache = useRef(new WeakMap<Measurement, { key: string; summary: Summary }>());
   const summaries = useMemo(() => {
     const elevationAt = (point: LngLat) => groundElevation(map, point);
-    const cacheKey = `${units}|${terrainTick}`;
+    const cacheKey = `${units}|${hasTerrain}|${terrainTick}`;
     return new Map(
       measurements.map((m) => {
         if (m.id === selected?.id && preview) {
@@ -674,7 +674,17 @@ export function MapToolbar(props: Props): React.JSX.Element {
     );
     // isClosed depends on the same inputs as pointsOf.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map, measurements, pointsOf, preview, selected?.id, terrainTick, units, cursor?.onFirst]);
+  }, [
+    map,
+    measurements,
+    pointsOf,
+    preview,
+    selected?.id,
+    hasTerrain,
+    terrainTick,
+    units,
+    cursor?.onFirst,
+  ]);
 
   useEffect(() => {
     setMeasureData({

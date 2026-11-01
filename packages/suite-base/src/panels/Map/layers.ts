@@ -24,47 +24,53 @@ export type SourceParams = {
   encoding?: "terrarium" | "mapbox";
 };
 
-export type Preset = SourceParams & { label: string; group: string };
+export type Preset = SourceParams & {
+  label: string;
+  /** One style of a provider: the source picker lists the provider once, the layer picks a style. */
+  variant?: { provider: string; style: string };
+};
 
 const OSM_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services";
 const ESRI_ATTRIBUTION = "&copy; Esri, Maxar, Earthstar Geographics, and the GIS User Community";
 
+const OFM = "OpenFreeMap (vector)";
+const ESRI_PROVIDER = "Esri (raster)";
+
 /** Free public services that need no API key. */
 export const PRESETS: Record<string, Preset> = {
   "ofm-liberty": {
-    group: "Vector (OpenFreeMap)",
     label: "OpenFreeMap Liberty",
+    variant: { provider: OFM, style: "Liberty" },
     kind: "vector",
     url: "https://tiles.openfreemap.org/styles/liberty",
   },
   "ofm-bright": {
-    group: "Vector (OpenFreeMap)",
     label: "OpenFreeMap Bright",
+    variant: { provider: OFM, style: "Bright" },
     kind: "vector",
     url: "https://tiles.openfreemap.org/styles/bright",
   },
   "ofm-positron": {
-    group: "Vector (OpenFreeMap)",
     label: "OpenFreeMap Positron (light)",
+    variant: { provider: OFM, style: "Positron (light)" },
     kind: "vector",
     url: "https://tiles.openfreemap.org/styles/positron",
   },
   "ofm-dark": {
-    group: "Vector (OpenFreeMap)",
     label: "OpenFreeMap Dark",
+    variant: { provider: OFM, style: "Dark" },
     kind: "vector",
     url: "https://tiles.openfreemap.org/styles/dark",
   },
   "ofm-fiord": {
-    group: "Vector (OpenFreeMap)",
     label: "OpenFreeMap Fiord",
+    variant: { provider: OFM, style: "Fiord" },
     kind: "vector",
     url: "https://tiles.openfreemap.org/styles/fiord",
   },
   osm: {
-    group: "Raster",
     label: "OpenStreetMap",
     kind: "raster",
     url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -72,32 +78,31 @@ export const PRESETS: Record<string, Preset> = {
     attribution: OSM_ATTRIBUTION,
   },
   "esri-imagery": {
-    group: "Raster",
     label: "Esri satellite imagery",
+    variant: { provider: ESRI_PROVIDER, style: "Satellite imagery" },
     kind: "raster",
     url: `${ESRI}/World_Imagery/MapServer/tile/{z}/{y}/{x}`,
     maxZoom: 19,
     attribution: ESRI_ATTRIBUTION,
   },
   "esri-labels": {
-    group: "Overlay",
-    label: "Esri places & boundaries (labels)",
+    label: "Esri labels overlay",
+    variant: { provider: ESRI_PROVIDER, style: "Labels overlay" },
     kind: "raster",
     url: `${ESRI}/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}`,
     maxZoom: 19,
     attribution: ESRI_ATTRIBUTION,
   },
   "esri-transportation": {
-    group: "Overlay",
-    label: "Esri roads (transparent)",
+    label: "Esri roads overlay",
+    variant: { provider: ESRI_PROVIDER, style: "Roads overlay" },
     kind: "raster",
     url: `${ESRI}/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}`,
     maxZoom: 19,
     attribution: ESRI_ATTRIBUTION,
   },
   mapterhorn: {
-    group: "Elevation",
-    label: "Mapterhorn terrain",
+    label: "Mapterhorn elevation",
     kind: "dem",
     url: "https://tiles.mapterhorn.com/{z}/{x}/{y}.webp",
     tileSize: 512,
@@ -106,8 +111,7 @@ export const PRESETS: Record<string, Preset> = {
     attribution: '<a href="https://mapterhorn.com/attribution">&copy; Mapterhorn</a>',
   },
   "aws-terrain": {
-    group: "Elevation",
-    label: "AWS Terrain Tiles",
+    label: "AWS elevation (Terrain Tiles)",
     kind: "dem",
     url: "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
     tileSize: 256,
@@ -128,8 +132,12 @@ export type MapLayer = {
   visible: boolean;
   /** Opacity for imagery and vector styles, intensity for hillshade. */
   opacity: number;
-  /** Vector styles only: draw everything, or only roads and labels (for use over imagery). */
+  /** Vector styles only: feature groups to leave out, e.g. all but roads and labels over imagery. */
+  hiddenGroups?: VectorGroup[];
+  /** Legacy (before `hiddenGroups`): "lines-labels" hid areas, buildings, and borders. */
   vectorContent?: "all" | "lines-labels";
+  /** Vector styles only: extrude buildings by their height when tilted. Default on. */
+  buildings3d?: boolean;
   /** Elevation only. */
   hillshade?: boolean;
   terrain?: boolean;
@@ -251,16 +259,84 @@ function withOpacity(layer: LayerSpecification, opacity: number): LayerSpecifica
  */
 const ROAD_LINE = /transport|road|street|highway|motorway|rail|path|bridge|tunnel|aeroway|ferry/i;
 
-/** For "roads and labels only": road lines and all labels; no borders, water, or areas. */
-export function isRoadOrLabel(layer: LayerSpecification): boolean {
+/** Feature groups of a vector style, top to bottom, with their settings labels. */
+export const VECTOR_GROUPS = {
+  labels: "Labels",
+  pois: "Points of interest",
+  roads: "Roads",
+  buildings: "Buildings",
+  boundaries: "Borders",
+  areas: "Land & water",
+} as const;
+
+export type VectorGroup = keyof typeof VECTOR_GROUPS;
+
+/** Group a style layer by its source layer (or id): OpenMapTiles names, plus common others. */
+export function vectorGroup(layer: LayerSpecification): VectorGroup {
+  const sourceLayer = "source-layer" in layer ? layer["source-layer"] : undefined;
+  const name = sourceLayer != undefined && sourceLayer !== "" ? sourceLayer : layer.id;
   if (layer.type === "symbol") {
-    return true;
+    if (/poi|aerodrome/i.test(name)) {
+      return "pois";
+    }
+    // Road markings such as one-way arrows; road names and shields are labels.
+    return ROAD_LINE.test(name) && !/name|label|shield/i.test(name) ? "roads" : "labels";
   }
-  if (layer.type !== "line") {
-    return false;
+  if (/building/i.test(name)) {
+    return "buildings";
   }
-  const sourceLayer = "source-layer" in layer ? (layer["source-layer"] ?? "") : "";
-  return ROAD_LINE.test(sourceLayer) || (sourceLayer === "" && ROAD_LINE.test(layer.id));
+  if (/boundar|admin/i.test(name)) {
+    return "boundaries";
+  }
+  return ROAD_LINE.test(name) && (layer.type === "line" || layer.type === "fill")
+    ? "roads"
+    : "areas";
+}
+
+export function hiddenVectorGroups(layer: MapLayer): readonly VectorGroup[] {
+  return (
+    layer.hiddenGroups ??
+    (layer.vectorContent === "lines-labels" ? ["areas", "buildings", "boundaries"] : [])
+  );
+}
+
+/**
+ * Add or remove 3D buildings. Styles with an OpenMapTiles "building" layer but no extrusion (all
+ * OpenFreeMap styles except Liberty) get one modeled on Liberty's, in the style's building color.
+ */
+export function withBuildings3d(
+  layers: readonly LayerSpecification[],
+  { enabled }: { enabled: boolean },
+): readonly LayerSpecification[] {
+  if (!enabled) {
+    return layers.filter((layer) => layer.type !== "fill-extrusion");
+  }
+  if (layers.some((layer) => layer.type === "fill-extrusion")) {
+    return layers;
+  }
+  const index = _.findLastIndex(
+    layers,
+    (layer) => layer.type === "fill" && layer["source-layer"] === "building",
+  );
+  const fill = layers[index];
+  if (fill?.type !== "fill") {
+    return layers;
+  }
+  const extrusion: LayerSpecification = {
+    id: "building-3d",
+    type: "fill-extrusion",
+    source: fill.source,
+    "source-layer": "building",
+    minzoom: 14,
+    filter: ["!", ["has", "hide_3d"]],
+    paint: {
+      "fill-extrusion-color": fill.paint?.["fill-color"] ?? "hsl(35,8%,85%)",
+      "fill-extrusion-base": ["get", "render_min_height"],
+      "fill-extrusion-height": ["get", "render_height"],
+      "fill-extrusion-opacity": 0.8,
+    },
+  };
+  return [...layers.slice(0, index + 1), extrusion, ...layers.slice(index + 1)];
 }
 
 export type ImageOverlay = {
@@ -375,8 +451,11 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
         for (const [name, source] of Object.entries(vector.sources)) {
           style.sources[`${id}:${name}`] = source;
         }
-        for (const vectorLayer of vector.layers) {
-          if (layer.vectorContent === "lines-labels" && !isRoadOrLabel(vectorLayer)) {
+        const hidden = hiddenVectorGroups(layer);
+        for (const vectorLayer of withBuildings3d(vector.layers, {
+          enabled: layer.buildings3d !== false,
+        })) {
+          if (hidden.includes(vectorGroup(vectorLayer))) {
             continue;
           }
           const namespaced = { ...vectorLayer, id: `${id}:${vectorLayer.id}` };
