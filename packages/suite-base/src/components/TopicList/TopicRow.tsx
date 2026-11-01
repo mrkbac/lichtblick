@@ -34,12 +34,14 @@ export function TopicRow({
   style,
   selected,
   onClick,
+  onDoubleClick,
   onContextMenu,
 }: {
   topicResult: FzfResultItem<Topic>;
   style: React.CSSProperties;
   selected: boolean;
   onClick: React.MouseEventHandler<HTMLDivElement>;
+  onDoubleClick?: React.MouseEventHandler<HTMLDivElement>;
   onContextMenu: React.MouseEventHandler<HTMLDivElement>;
 }): React.JSX.Element {
   const { cx, classes } = useTopicListStyles();
@@ -133,6 +135,7 @@ export function TopicRow({
       })}
       style={{ ...style, cursor }}
       onClick={onClick}
+      onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
       data-testid="topic-row"
     >

@@ -19,6 +19,7 @@ import {
   Profiler,
   useCallback,
   useContext,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -42,6 +43,7 @@ import { MosaicPathContext } from "@lichtblick/suite-base/components/MosaicPathC
 import { useStyles } from "@lichtblick/suite-base/components/Panel.style";
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import PanelErrorBoundary from "@lichtblick/suite-base/components/PanelErrorBoundary";
+import { MessagePathDropConfig } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import PanelLogs from "@lichtblick/suite-base/components/PanelLogs";
 import { PanelOverlay, PanelOverlayProps } from "@lichtblick/suite-base/components/PanelOverlay";
 import { PanelRoot } from "@lichtblick/suite-base/components/PanelRoot";
@@ -64,6 +66,10 @@ import { useInteractionCapture } from "@lichtblick/suite-base/hooks/useInteracti
 import usePanelDrag from "@lichtblick/suite-base/hooks/usePanelDrag";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { useMessagePathDrop } from "@lichtblick/suite-base/services/messagePathDragging";
+import {
+  clearPanelDrop,
+  setPanelDropConfig,
+} from "@lichtblick/suite-base/services/messagePathDragging/panelDropRegistry";
 import { OpenSiblingPanel, PanelConfig, SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 
@@ -389,8 +395,23 @@ export default function Panel<
       isValidTarget,
       connectMessagePathDropTarget,
       dropMessage,
-      setMessagePathDropConfig,
+      setMessagePathDropConfig: setLocalMessagePathDropConfig,
     } = useMessagePathDrop();
+
+    // Also register the drop config globally so the topic list can drop onto this panel on double-click
+    const setMessagePathDropConfig = useCallback(
+      (config: MessagePathDropConfig | undefined) => {
+        setLocalMessagePathDropConfig(config);
+        setPanelDropConfig(childId, config);
+      },
+      [childId, setLocalMessagePathDropConfig],
+    );
+    useEffect(
+      () => () => {
+        clearPanelDrop(childId);
+      },
+      [childId],
+    );
 
     // We use two separate sets of key handlers because the panel context and exitFullScreen
     // change often and invalidate our key handlers during user interactions.

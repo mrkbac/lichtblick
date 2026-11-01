@@ -34,6 +34,7 @@ import { MessagePathRow } from "./MessagePathRow";
 import { useStyles } from "./TopicList.style";
 import { TopicRow } from "./TopicRow";
 import { useMultiSelection } from "./useMultiSelection";
+import { useOpenMessagePathsInPanel } from "./useOpenMessagePathsInPanel";
 import { useTopicListSearch } from "./useTopicListSearch";
 
 const selectPlayerPresence = ({ playerState }: MessagePipelineContext) => playerState.presence;
@@ -92,6 +93,12 @@ export function TopicList(): React.JSX.Element {
     [getSelectedIndexes, getSelectedItemsAsDraggedMessagePaths, onSelect],
   );
 
+  const openMessagePathsInPanel = useOpenMessagePathsInPanel();
+  const handleDoubleClick = useCallback(() => {
+    // The two clicks before the double-click already updated the selection
+    openMessagePathsInPanel(getSelectedItemsAsDraggedMessagePaths());
+  }, [getSelectedItemsAsDraggedMessagePaths, openMessagePathsInPanel]);
+
   const handleContextMenuClose = useCallback(() => {
     setContextMenuState(undefined);
   }, []);
@@ -124,6 +131,7 @@ export function TopicList(): React.JSX.Element {
               topicResult={treeItem.item}
               selected={selected}
               onClick={onClick}
+              onDoubleClick={handleDoubleClick}
               onContextMenu={(event) => {
                 handleContextMenu(event, index);
               }}
@@ -136,6 +144,7 @@ export function TopicList(): React.JSX.Element {
               messagePathResult={treeItem.item}
               selected={selected}
               onClick={onClick}
+              onDoubleClick={handleDoubleClick}
               onContextMenu={(event) => {
                 handleContextMenu(event, index);
               }}
@@ -144,7 +153,7 @@ export function TopicList(): React.JSX.Element {
       }
       return ReactNull;
     },
-    [handleContextMenu, onSelect],
+    [handleContextMenu, handleDoubleClick, onSelect],
   );
 
   if (playerPresence === PlayerPresence.NOT_PRESENT) {
