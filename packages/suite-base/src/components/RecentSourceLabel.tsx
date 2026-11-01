@@ -4,37 +4,14 @@
 import { Pin16Filled } from "@fluentui/react-icons";
 import { Tooltip, Typography } from "@mui/material";
 import { useTranslation } from "react-i18next";
-import { makeStyles } from "tss-react/mui";
 
 import { BuiltinIcon } from "@lichtblick/suite-base/components/BuiltinIcon";
+import { useStyles } from "@lichtblick/suite-base/components/RecentSourceLabel.style";
 import {
   RecentSource,
   usePlayerSelection,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { formatTimeAgo, splitRecentTitle } from "@lichtblick/suite-base/util/recentSources";
-
-const useStyles = makeStyles()((theme) => ({
-  root: {
-    display: "flex",
-    alignItems: "center",
-    gap: theme.spacing(1.5),
-    minWidth: 0,
-    flex: "auto",
-  },
-  icon: {
-    display: "flex",
-    flex: "none",
-    color: theme.palette.primary.main,
-  },
-  text: {
-    minWidth: 0,
-    flex: "auto",
-  },
-  pin: {
-    flex: "none",
-    color: theme.palette.text.secondary,
-  },
-}));
 
 type Props = {
   recent: RecentSource;
