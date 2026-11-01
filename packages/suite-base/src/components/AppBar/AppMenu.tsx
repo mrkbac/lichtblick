@@ -7,7 +7,7 @@
 
 import { Menu, PaperProps } from "@mui/material";
 import { useSnackbar } from "notistack";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useStyles } from "@lichtblick/suite-base/components/AppBar/AppMenu.style";
@@ -225,15 +225,23 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
       });
   }, [enqueueSnackbar, handleNestedMenuClose, t]);
 
-  // only the web build registers a service worker (not desktop or the dev server)
   const installApp = useInstallPrompt();
   const onInstallClick = useCallback(() => {
     handleNestedMenuClose();
     installApp?.();
   }, [handleNestedMenuClose, installApp]);
 
-  const hasServiceWorker =
-    (navigator.serviceWorker as ServiceWorkerContainer | undefined)?.controller != undefined;
+  // Only the web build registers a service worker (not desktop or the dev server). Check the
+  // registration, not `controller`: a hard reload or the very first load runs uncontrolled.
+  const [hasServiceWorker, setHasServiceWorker] = useState(false);
+  useEffect(() => {
+    (navigator.serviceWorker as ServiceWorkerContainer | undefined)
+      ?.getRegistration()
+      .then((registration) => {
+        setHasServiceWorker(registration != undefined);
+      })
+      .catch(() => {});
+  }, []);
 
   const helpItems = useMemo<AppBarMenuItem[]>(
     () => [
