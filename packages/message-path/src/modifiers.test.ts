@@ -41,8 +41,13 @@ describe("applyModifier", () => {
     [{ width: 3 }, "product", [["width"], ["missing"]], undefined],
     [10, "mul", [{ variableName: "unfilled", startLoc: 0 }], undefined],
     [1, "unknown", [], undefined],
+    [1, "valueOf", [], undefined],
   ])("%p.@%s(%p) = %p", (value, name, args, expected) => {
     expect(apply(value, name, args)).toEqual(expected);
+  });
+
+  it("reduces arrays too large to spread into Math.max", () => {
+    expect(apply(new Float64Array(200_000).fill(1), "max")).toBe(1);
   });
 
   it("converts between quaternions and roll/pitch/yaw", () => {
@@ -104,6 +109,8 @@ describe("modifierResultStructure", () => {
     ["quat", false, quaternion, undefined],
     ["nope", false, float64, undefined],
     ["nope", false, undefined, undefined],
+    ["valueOf", false, float64, undefined],
+    ["__proto__", false, undefined, undefined],
     ["abs", false, undefined, float64],
     ["rpy", false, undefined, rpy],
   ])(".@%s (args: %p) on %p", (name, hasArgs, input, expected) => {
