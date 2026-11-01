@@ -36,6 +36,7 @@ export function addTransformEvents(
         ...sample,
         topic: event.topic,
         receiveTime,
+        firstReceiveTime: prev?.firstReceiveTime ?? receiveTime,
         recentReceiveTimes,
         parents,
       });
@@ -51,7 +52,8 @@ export function mergeEntries(base: FrameEntries, overlay: FrameEntries): Map<str
     const prev = merged.get(frame);
     const parents =
       prev == undefined ? entry.parents : [...new Set([...prev.parents, ...entry.parents])];
-    merged.set(frame, { ...entry, parents });
+    const firstReceiveTime = Math.min(prev?.firstReceiveTime ?? Infinity, entry.firstReceiveTime);
+    merged.set(frame, { ...entry, parents, firstReceiveTime });
   }
   return merged;
 }
@@ -67,7 +69,9 @@ function rateOf(entry: FrameEntry): number | undefined {
  *
  * `current` holds the frames with data at the current playback position. `known` holds every
  * frame seen since the data source was opened, so the tree keeps its shape after a seek even
- * before all transforms have been received again; those frames get a `noData` warning.
+ * before all transforms have been received again. Those frames get a `noData` warning, unless
+ * playback is before their first sample (e.g. after looping back to the start), where missing
+ * data is expected.
  */
 export function buildRows({
   current,
@@ -126,14 +130,15 @@ export function buildRows({
     const hasChildren = children.length > 0;
     const entry = entries.get(frame);
     if (!entry) {
-      return { frame, depth, hasChildren, isStatic: false, warnings: [] };
+      return { frame, depth, hasChildren, isStatic: false, notYetPublished: false, warnings: [] };
     }
     const hasData = current.has(frame);
     const isStatic = staticTopics.has(entry.topic);
     const rate = rateOf(entry);
     const age = hasData && now != undefined ? Math.max(0, now - entry.receiveTime) : undefined;
+    const notYetPublished = !hasData && now != undefined && now < entry.firstReceiveTime;
     const warnings: FrameWarning[] = [];
-    if (!hasData) {
+    if (!hasData && !notYetPublished) {
       warnings.push("noData");
     }
     if (entry.parents.length > 1) {
@@ -143,7 +148,7 @@ export function buildRows({
     if (!isStatic && age != undefined && age > staleAfter) {
       warnings.push("stale");
     }
-    return { frame, depth, hasChildren, isStatic, entry, age, rate, warnings };
+    return { frame, depth, hasChildren, isStatic, notYetPublished, entry, age, rate, warnings };
   };
 
   const roots = [...childrenOf.keys()].filter((frame) => !entries.has(frame)).sort();

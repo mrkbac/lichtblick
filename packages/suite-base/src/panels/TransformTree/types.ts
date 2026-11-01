@@ -18,6 +18,8 @@ export type FrameEntry = TransformSample & {
   topic: string;
   /** Receive time of the latest sample, in seconds. */
   receiveTime: number;
+  /** Earliest receive time seen for this frame, in seconds. */
+  firstReceiveTime: number;
   /** Receive times of the most recent samples (oldest first), used for the rate. */
   recentReceiveTimes: number[];
   /** Every parent this child has been published with. More than one is a TF error. */
@@ -35,6 +37,11 @@ export type FrameRow = {
   hasChildren: boolean;
   /** True when the frame comes from a topic marked as static. */
   isStatic: boolean;
+  /**
+   * True when playback is before the frame's first sample, e.g. at the start of a recording
+   * after looping. Expected while the tree builds up, so it is not a warning.
+   */
+  notYetPublished: boolean;
   /** Undefined for root frames, which are only ever referenced as a parent. */
   entry?: FrameEntry;
   /** Seconds since the last sample, undefined for root frames. */
