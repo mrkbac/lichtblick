@@ -10,10 +10,10 @@ import Logger from "@lichtblick/log";
 const log = Logger.getLogger(__filename);
 
 /**
- * Ask the browser to fetch the service worker now instead of waiting for its periodic check.
- * A found update is installed and announced by useServiceWorkerUpdatePrompt; one that is
- * already waiting is activated right away, which reloads every window.
- * Resolves false when no update is available.
+ * Ask the browser to fetch the service worker now instead of waiting for its periodic check,
+ * and switch to a new version right away: the user explicitly asked for it, so unlike the
+ * background update prompt this doesn't ask again before every window reloads.
+ * Resolves false when no update is available; rejects when the update fails to install.
  */
 export async function checkForServiceWorkerUpdate(): Promise<boolean> {
   const registration = await navigator.serviceWorker.getRegistration();
@@ -21,11 +21,30 @@ export async function checkForServiceWorkerUpdate(): Promise<boolean> {
     return false;
   }
   await registration.update();
+  // update() resolves once the new script is fetched, before it has finished precaching
+  const installing = registration.installing;
+  if (installing) {
+    await new Promise<void>((resolve, reject) => {
+      const onStateChange = () => {
+        if (installing.state === "installing") {
+          return;
+        }
+        installing.removeEventListener("statechange", onStateChange);
+        if (installing.state === "redundant") {
+          reject(new Error("Service worker update failed to install"));
+        } else {
+          resolve();
+        }
+      };
+      installing.addEventListener("statechange", onStateChange);
+      onStateChange(); // it may have finished installing before the listener was attached
+    });
+  }
   if (registration.waiting && navigator.serviceWorker.controller) {
     registration.waiting.postMessage({ type: "SKIP_WAITING" });
     return true;
   }
-  return registration.installing != undefined;
+  return installing != undefined;
 }
 
 /**
