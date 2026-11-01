@@ -5,8 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Feature, FeatureCollection, GeoJsonObject } from "geojson";
-import { PathOptions, geoJSON } from "leaflet";
+import { Feature, FeatureCollection, GeoJsonObject, Geometry } from "geojson";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { FoxgloveMessages } from "@lichtblick/suite-base/types/FoxgloveMessages";
@@ -16,29 +15,23 @@ import { MapPanelMessage, NavSatFixMsg, NavSatFixStatus } from "./types";
 export type GeoJsonMessage = MessageEvent<FoxgloveMessages["foxglove.GeoJSON"]>;
 
 /**
- * @returns true if the message event status indicates there is a fix
+ * @returns true unless the message reports that there is no fix
  */
 export function hasFix(ev: MessageEvent<NavSatFixMsg>): boolean {
   switch (ev.message.status?.status) {
     case NavSatFixStatus.STATUS_GBAS_FIX:
     case NavSatFixStatus.STATUS_SBAS_FIX:
     case NavSatFixStatus.STATUS_FIX:
+    case undefined: // LocationFix has no status; don't paint every LocationFix as "no fix".
       return true;
     case NavSatFixStatus.STATUS_NO_FIX:
-    case undefined:
     default:
       return false;
   }
 }
 
 export function isGeoJSONMessage(msgEvent: MessageEvent): msgEvent is GeoJsonMessage {
-  const datatype = msgEvent.schemaName;
-  return (
-    datatype === "foxglove_msgs/GeoJSON" ||
-    datatype === "foxglove_msgs/msg/GeoJSON" ||
-    datatype === "foxglove::GeoJSON" ||
-    datatype === "foxglove.GeoJSON"
-  );
+  return isGeoJSONSchema(msgEvent.schemaName);
 }
 
 /**
@@ -78,27 +71,63 @@ export function isSupportedSchema(schemaName: string): boolean {
   }
 }
 
+export function isGeoJSONSchema(schemaName: string): boolean {
+  switch (schemaName) {
+    case "foxglove_msgs/GeoJSON":
+    case "foxglove_msgs/msg/GeoJSON":
+    case "foxglove::GeoJSON":
+    case "foxglove.GeoJSON":
+      return true;
+    default:
+      return false;
+  }
+}
+
 /**
- * Parse a geoJSON string into individual GeoJsonObjects, extracting the nonstandard
- * `style` property, if it exists.
+ * Leaflet-style path options that publishers put in the nonstandard `properties.style` of a
+ * feature (kept for compatibility with existing GeoJSON publishers).
  */
-export function parseGeoJSON(json: string): Array<{ object: GeoJsonObject; style: PathOptions }> {
+export type GeoJsonStyle = {
+  color?: string;
+  weight?: number;
+  opacity?: number | string;
+  fillColor?: string;
+  fillOpacity?: number | string;
+  radius?: number;
+};
+
+/** Parse a GeoJSON string into flat features, extracting the nonstandard `style` property. */
+export function parseGeoJSON(json: string): { feature: Feature; style: GeoJsonStyle }[] {
   try {
-    const parsed = JSON.parse(json) as Parameters<typeof geoJSON>[0];
-    const geoJsons = parsed ? (Array.isArray(parsed) ? parsed : [parsed]) : [];
-    return geoJsons.flatMap((geoJson) => {
-      switch (geoJson.type) {
+    const parsed = JSON.parse(json) as GeoJsonObject | GeoJsonObject[] | null;
+    const objects = parsed ? (Array.isArray(parsed) ? parsed : [parsed]) : [];
+    return objects.flatMap((object) => {
+      switch (object.type) {
         case "Feature": {
-          const style: PathOptions = (geoJson as Feature).properties?.style ?? {};
-          return { object: geoJson, style };
+          const feature = object as Feature;
+          return [
+            {
+              feature,
+              style: (feature.properties?.style ?? {}) as GeoJsonStyle,
+            },
+          ];
         }
         case "FeatureCollection":
-          return ((geoJson as Partial<FeatureCollection>).features ?? []).map((feature) => {
-            const style: PathOptions = feature.properties?.style ?? {};
-            return { object: feature, style };
-          });
+          return ((object as Partial<FeatureCollection>).features ?? []).map((feature) => ({
+            feature,
+            style: (feature.properties?.style ?? {}) as GeoJsonStyle,
+          }));
         default:
-          return { object: geoJson, style: {} };
+          return [
+            {
+              feature: {
+                type: "Feature",
+                geometry: object as Geometry,
+                properties: {},
+              },
+              style: {},
+            },
+          ];
       }
     });
   } catch (error) {

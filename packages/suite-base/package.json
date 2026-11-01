@@ -54,6 +54,7 @@
     "@lichtblick/wasm-bz2": "1.0.0",
     "@lichtblick/wasm-lz4": "1.0.0",
     "@lichtblick/xmlrpc": "1.0.0",
+    "@maplibre/maplibre-gl-style-spec": "26.5.1",
     "@mcap/core": "2.4.0",
     "@mui/icons-material": "7.3.8",
     "@mui/material": "7.2.0",
@@ -82,7 +83,6 @@
     "@types/geojson": "7946.0.16",
     "@types/gl-matrix": "3.2.0",
     "@types/hammerjs": "2.0.46",
-    "@types/leaflet": "1.9.20",
     "@types/lichtblick__roslibjs": "workspace:*",
     "@types/memoize-weak": "workspace:*",
     "@types/moment-duration-format": "2.2.7",
@@ -136,8 +136,6 @@
     "intervals-fn": "3.0.3",
     "jest-canvas-mock": "2.5.8",
     "jszip": "3.10.1",
-    "leaflet": "1.9.4",
-    "leaflet-ellipse": "0.9.1",
     "lodash-es": "4.18.1",
     "mathjs": "15.2.0",
     "memoize-weak": "1.0.2",
@@ -199,5 +197,10 @@
     "vm-browserify": "1.1.2",
     "webpack": "5.108.3",
     "zustand": "4.5.7"
+  },
+  "dependencies": {
+    "geotiff": "3.0.5",
+    "maplibre-gl": "6.14.0",
+    "pmtiles": "4.5.0"
   }
 }

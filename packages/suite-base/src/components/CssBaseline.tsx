@@ -195,40 +195,6 @@ const useStyles = makeStyles()(({ palette, typography }) => ({
         },
       },
     },
-
-    // leaflet GUI styling
-    ".leaflet-bar": {
-      userSelect: "none",
-      backgroundColor: palette.background.paper,
-      borderRadius: 4,
-
-      a: {
-        lineHeight: 1.2,
-        backgroundColor: "transparent",
-        color: palette.text.primary,
-        borderBottomColor: palette.divider,
-
-        "&:hover": {
-          backgroundColor: palette.action.hover,
-          color: palette.text.primary,
-          borderBottomColor: palette.divider,
-        },
-        "&:focus": {
-          color: palette.text.primary,
-        },
-        "&:active": {
-          color: palette.text.primary,
-        },
-      },
-    },
-    ".leaflet-bar a.leaflet-disabled": {
-      backgroundColor: palette.action.disabledBackground,
-      color: palette.text.disabled,
-
-      "&:hover": {
-        backgroundColor: palette.action.disabledBackground,
-      },
-    },
   },
 }));
 
