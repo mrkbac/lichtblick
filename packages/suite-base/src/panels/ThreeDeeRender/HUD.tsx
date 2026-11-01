@@ -34,6 +34,20 @@ const useStyles = makeStyles()((theme) => ({
   chip: {
     backgroundColor: tc(theme.palette.background.paper).setAlpha(0.8).toString(),
   },
+  attribution: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    maxWidth: "60%",
+    padding: theme.spacing(0, 0.5),
+    pointerEvents: "none",
+    fontSize: theme.typography.caption.fontSize,
+    color: theme.palette.text.secondary,
+    backgroundColor: tc(theme.palette.background.paper).setAlpha(0.6).toString(),
+    whiteSpace: "nowrap",
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+  },
   empty: {
     backgroundColor: theme.palette.background.default,
     position: "absolute",
@@ -54,10 +68,10 @@ export function HUD(props: HUDProps): React.ReactElement {
     props.renderer,
   );
 
-  const [emptyStates, notices] = React.useMemo(
-    () => _.partition(hudItems, (i) => i.displayType === "empty"),
-    [hudItems],
-  );
+  const [emptyStates, notices, attributions] = React.useMemo(() => {
+    const groups = _.groupBy(hudItems, (i) => i.displayType);
+    return [groups.empty ?? [], groups.notice ?? [], groups.attribution ?? []];
+  }, [hudItems]);
 
   if (hudItems.length === 0) {
     return <></>;
@@ -68,11 +82,17 @@ export function HUD(props: HUDProps): React.ReactElement {
     return <EmptyState className={classes.empty}>{highPriorityEmptyState.getMessage()}</EmptyState>;
   }
 
+  const attribution = attributions.map((item) => item.getMessage()).join(" · ");
   return (
-    <div className={classes.root}>
-      {notices.map((item, index) => (
-        <Chip className={classes.chip} size="small" key={index} label={item.getMessage()} />
-      ))}
-    </div>
+    <>
+      {notices.length > 0 && (
+        <div className={classes.root}>
+          {notices.map((item, index) => (
+            <Chip className={classes.chip} size="small" key={index} label={item.getMessage()} />
+          ))}
+        </div>
+      )}
+      {attribution !== "" && <div className={classes.attribution}>{attribution}</div>}
+    </>
   );
 }

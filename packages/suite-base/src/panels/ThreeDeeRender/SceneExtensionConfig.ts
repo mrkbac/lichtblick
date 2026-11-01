@@ -12,6 +12,7 @@ import { Grids } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/
 import { ImageMode } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/ImageMode";
 import { Images } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images";
 import { LaserScans } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/LaserScans";
+import { Maps } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Maps";
 import { Markers } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Markers";
 import { OccupancyGrids } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/OccupancyGrids";
 import { PointClouds } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PointClouds";
@@ -71,6 +72,10 @@ export const DEFAULT_SCENE_EXTENSION_CONFIG: SceneExtensionConfig = {
     },
     [Cameras.extensionId]: {
       init: (renderer: IRenderer) => new Cameras(renderer),
+      supportedInterfaceModes: ["3d"],
+    },
+    [Maps.extensionId]: {
+      init: (renderer: IRenderer) => new Maps(renderer),
       supportedInterfaceModes: ["3d"],
     },
     [SceneSettings.extensionId]: {

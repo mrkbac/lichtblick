@@ -25,7 +25,7 @@ export type HUDItem = {
   /** Function to return message content to show on HUD */
   getMessage: () => string;
   /** Display type */
-  displayType: "empty" | "notice";
+  displayType: "empty" | "notice" | "attribution";
 };
 
 /** Priority list of HUD item ids. IDs earlier in the list should be shown before items later in the list.
