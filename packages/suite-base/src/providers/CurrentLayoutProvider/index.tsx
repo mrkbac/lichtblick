@@ -281,8 +281,10 @@ export default function CurrentLayoutProvider({
 
   // Load initial state by re-selecting the last selected layout from the UserProfile.
   useAsync(async () => {
-    // Don't restore the layout if there's one specified in the app state url.
-    if (windowAppURLState()?.layoutId) {
+    // A layout given in the url wins for this session only, without becoming the remembered one.
+    const urlLayoutId = windowAppURLState()?.layoutId;
+    if (urlLayoutId != undefined && (await layoutManager.getLayout(urlLayoutId)) != undefined) {
+      await setSelectedLayoutId(urlLayoutId, { saveToProfile: false });
       return;
     }
 

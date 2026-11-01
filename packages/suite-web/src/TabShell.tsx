@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   KEY_WORKSPACE_PREFIX,
   LOCAL_STORAGE_APP_CONFIGURATION,
+  LOCAL_STORAGE_PROFILE_DATA,
 } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import { palette } from "@lichtblick/theme";
 
@@ -20,6 +21,8 @@ type Tab = {
   /** current URL of the tab, kept up to date while it plays */
   url: string;
   title: string;
+  /** layout selected in the tab; the app remembers only one layout for all tabs */
+  layoutId?: string;
 };
 
 type SavedTabs = { tabs: Tab[]; activeId: string };
@@ -41,17 +44,25 @@ function blankTabUrl(): string {
   return url.href;
 }
 
+function withLayout(href: string, layoutId: string | undefined): string {
+  if (layoutId == undefined) {
+    return href;
+  }
+  const url = new URL(href);
+  url.searchParams.set("layoutId", layoutId);
+  return url.href;
+}
+
 function loadTabs(): SavedTabs {
   try {
     const saved = JSON.parse(sessionStorage.getItem(SESSION_STORAGE_TABS) ?? "") as SavedTabs;
     const active = saved.tabs.find((tab) => tab.id === saved.activeId);
     if (active) {
       // Reloading restores every tab; the address bar wins for the active one so pasted links work.
-      const tabs = saved.tabs.map((tab) =>
-        tab === active
-          ? { ...tab, src: window.location.href, url: window.location.href }
-          : { ...tab, src: tab.url },
-      );
+      const tabs = saved.tabs.map((tab) => {
+        const url = tab === active ? window.location.href : tab.url;
+        return { ...tab, src: withLayout(url, tab.layoutId), url };
+      });
       return { tabs, activeId: active.id };
     }
   } catch {
@@ -171,6 +182,7 @@ export function TabShell(): React.JSX.Element {
   activeIdRef.current = activeTab.id;
 
   // Keyboard shortcuts. Browsers reserve Ctrl/Cmd+T and Ctrl/Cmd+W, so new/close use Alt.
+  // Ctrl+Tab only reaches the page in the installed PWA, so Alt+[ and Alt+] cycle too.
   // Key events stay inside the focused iframe, so the handler is installed on every tab too.
   const onKeyDown = useCallback(
     (event: KeyboardEvent) => {
@@ -181,6 +193,10 @@ export function TabShell(): React.JSX.Element {
         closeTab(activeIdRef.current);
       } else if (event.ctrlKey && event.code === "Tab") {
         selectRelative(event.shiftKey ? -1 : 1);
+      } else if (event.altKey && !mod && event.code === "BracketLeft") {
+        selectRelative(-1);
+      } else if (event.altKey && !mod && event.code === "BracketRight") {
+        selectRelative(1);
       } else {
         return;
       }
@@ -227,6 +243,35 @@ export function TabShell(): React.JSX.Element {
       });
       syncTitle();
 
+      // Remember which layout the tab picks, so a reload restores each tab's own layout.
+      const parseLayoutId = (profile: string | null) => {
+        try {
+          return (JSON.parse(profile ?? "{}") as { currentLayoutId?: string }).currentLayoutId;
+        } catch {
+          return undefined;
+        }
+      };
+      // A tab may pick its first layout (the remembered one) before this runs.
+      const rememberedLayoutId = parseLayoutId(localStorage.getItem(LOCAL_STORAGE_PROFILE_DATA));
+      setState((state) => ({
+        ...state,
+        tabs: state.tabs.map((tab) =>
+          tab.id === id && tab.layoutId == undefined
+            ? { ...tab, layoutId: rememberedLayoutId }
+            : tab,
+        ),
+      }));
+      // The tab's own Storage prototype, so other tabs and this page are unaffected.
+      const storage = Object.getPrototypeOf(win.localStorage) as Storage;
+      // eslint-disable-next-line @typescript-eslint/unbound-method
+      const setItem = storage.setItem;
+      storage.setItem = function (this: Storage, key: string, value: string) {
+        setItem.call(this, key, value);
+        if (key === LOCAL_STORAGE_PROFILE_DATA) {
+          updateTab(id, { layoutId: parseLayoutId(value) });
+        }
+      };
+
       win.addEventListener(
         "keydown",
         (event) => {
@@ -251,8 +296,14 @@ export function TabShell(): React.JSX.Element {
     }
   }, [activeTab, tabs, activeId]);
 
+  const stripRef = useRef<HTMLDivElement>(ReactNull);
   useEffect(() => {
-    frames.current.get(activeTab.id)?.contentWindow?.focus();
+    // Arrow keys in the tab strip keep focus there; anything else hands focus to the tab.
+    if (stripRef.current?.contains(document.activeElement) === true) {
+      stripRef.current.querySelector<HTMLElement>('[aria-selected="true"]')?.focus();
+    } else {
+      frames.current.get(activeTab.id)?.contentWindow?.focus();
+    }
   }, [activeTab.id]);
 
   // Color the browser's own title bar controls (installed PWA) like the tab strip.
@@ -269,13 +320,26 @@ export function TabShell(): React.JSX.Element {
   return (
     <div className="tabshell" style={{ "--tabshell-active": activeColor } as React.CSSProperties}>
       <style>{css}</style>
-      <div className="tabshell-strip" role="tablist">
+      <div className="tabshell-strip" role="tablist" ref={stripRef}>
         {tabs.map((tab) => (
           <div
             key={tab.id}
             className="tabshell-tab"
             role="tab"
             aria-selected={tab.id === activeTab.id}
+            tabIndex={tab.id === activeTab.id ? 0 : -1}
+            onKeyDown={(event) => {
+              if (event.key === "ArrowRight" || event.key === "ArrowLeft") {
+                selectRelative(event.key === "ArrowRight" ? 1 : -1);
+              } else if (event.key === "Delete") {
+                closeTab(tab.id);
+              } else if (event.key === "Enter" || event.key === " ") {
+                frames.current.get(tab.id)?.contentWindow?.focus();
+              } else {
+                return;
+              }
+              event.preventDefault();
+            }}
             title={tab.title}
             draggable
             onMouseDown={(event) => {
