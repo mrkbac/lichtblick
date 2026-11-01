@@ -458,15 +458,19 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   const flushTimer = useRef<ReturnType<typeof setTimeout>>();
   const appendTrack = useCallback((messages: NavMessage[], cap?: number) => {
     pendingTrack.current.push(...messages);
-    flushTimer.current ??= setTimeout(() => {
-      flushTimer.current = undefined;
-      const pending = pendingTrack.current;
-      pendingTrack.current = [];
-      setTrackMessages((prev) => {
-        const next = prev.concat(pending);
-        return cap != undefined && next.length > cap ? next.slice(-cap) : next;
-      });
-    }, 50);
+    // Live trails (capped) rebuild less often: each flush redraws the whole retained trail.
+    flushTimer.current ??= setTimeout(
+      () => {
+        flushTimer.current = undefined;
+        const pending = pendingTrack.current;
+        pendingTrack.current = [];
+        setTrackMessages((prev) => {
+          const next = prev.concat(pending);
+          return cap != undefined && next.length > cap ? next.slice(-cap) : next;
+        });
+      },
+      cap == undefined ? 50 : 500,
+    );
   }, []);
 
   // The full track comes from the recorded range. GeoJSON is deliberately not ranged: each
@@ -560,6 +564,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     context.watch("currentFrame");
     context.watch("previewTime");
     context.watch("colorScheme");
+    context.watch("didSeek");
 
     context.onRender = (renderState, done) => {
       setRenderDone(() => done);
@@ -578,6 +583,12 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       );
       if (livePathMessages && livePathMessages.length > 0 && colorPathsRef.current.length > 0) {
         appendPathSamples(livePathMessages, colorPathsRef.current);
+      }
+
+      // After a seek the frame is a backfill: drop positions of topics it doesn't contain.
+      if (renderState.didSeek === true) {
+        setCurrentNav(new Map());
+        setCurrentGeo(new Map());
       }
 
       const frame = renderState.currentFrame?.filter(isValidMapMessage);
@@ -813,38 +824,68 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     };
   }, [config.layers, config.projection, images, map, urlsSettled, vectorStyles]);
 
-  // Load vector styles and GeoTIFFs referenced by layers.
-  const loadingRef = useRef(new Set<string>());
+  // Load vector styles and GeoTIFFs referenced by layers. Each URL loads once with its own
+  // controller, aborted only when no layer references the URL any more, so unrelated setting
+  // changes (e.g. an opacity slider) never restart a download.
+  const loadsRef = useRef(new Map<string, AbortController>());
+  const loadedRef = useLatest({ vectorStyles, images, sourceErrors });
   useEffect(() => {
     if (!urlsSettled) {
       return;
     }
-    const controller = new AbortController();
-    const loading = loadingRef.current;
+    const loads = loadsRef.current;
+    const wanted = new Map<string, "vector" | "geotiff">();
     for (const layer of config.layers) {
       const params = resolveSource(layer);
       if (
-        !params ||
-        (params.kind !== "vector" && params.kind !== "geotiff") ||
-        validateSourceUrl(params) ||
-        loading.has(params.url)
+        params &&
+        (params.kind === "vector" || params.kind === "geotiff") &&
+        !validateSourceUrl(params)
       ) {
+        wanted.set(params.url, params.kind);
+      }
+    }
+
+    for (const [url, controller] of loads) {
+      if (!wanted.has(url)) {
+        controller.abort();
+        loads.delete(url);
+      }
+    }
+    // Free decoded images that no layer uses any more.
+    setImages((prev) => {
+      const unused = [...prev.keys()].filter((url) => !wanted.has(url));
+      if (unused.length === 0) {
+        return prev;
+      }
+      const next = new Map(prev);
+      for (const url of unused) {
+        URL.revokeObjectURL(prev.get(url)!.url);
+        next.delete(url);
+      }
+      return next;
+    });
+
+    const loaded = loadedRef.current;
+    for (const [url, kind] of wanted) {
+      const have = kind === "vector" ? loaded.vectorStyles.has(url) : loaded.images.has(url);
+      // A failed URL is retried once it is changed (its error is shown on the layer).
+      if (have || loads.has(url) || loaded.sourceErrors.has(url)) {
         continue;
       }
-      const { url, kind } = params;
-      if (kind === "vector" ? vectorStyles.has(url) : images.has(url)) {
-        continue;
-      }
-      loading.add(url);
+      const controller = new AbortController();
+      loads.set(url, controller);
+      const settle = () => {
+        if (loads.get(url) === controller) {
+          loads.delete(url);
+        }
+      };
       const done = () => {
-        loading.delete(url);
+        settle();
         rememberWorkingSource((_id, p) => p.url === url);
-        setSourceErrors((prev) =>
-          prev.has(url) ? new Map([...prev].filter(([k]) => k !== url)) : prev,
-        );
       };
       const fail = (error: unknown) => {
-        loading.delete(url);
+        settle();
         if (!controller.signal.aborted) {
           setSourceErrors((prev) =>
             new Map(prev).set(url, String(error instanceof Error ? error.message : error)),
@@ -858,26 +899,29 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         }, fail);
       } else {
         loadGeoTiff(url, controller.signal).then((image) => {
+          if (controller.signal.aborted) {
+            URL.revokeObjectURL(image.url);
+            return;
+          }
           setImages((prev) => new Map(prev).set(url, image));
           done();
         }, fail);
       }
     }
-    return () => {
-      controller.abort();
-      loading.clear();
-    };
-  }, [config.layers, images, rememberWorkingSource, urlsSettled, vectorStyles]);
+  }, [config.layers, loadedRef, rememberWorkingSource, urlsSettled]);
 
+  // On unmount: stop downloads and free decoded images.
+  const imagesRef = useLatest(images);
   useEffect(
     () => () => {
-      for (const image of images.values()) {
+      for (const controller of loadsRef.current.values()) {
+        controller.abort();
+      }
+      for (const image of imagesRef.current.values()) {
         URL.revokeObjectURL(image.url);
       }
     },
-    // Revoke object URLs only on unmount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
+    [imagesRef],
   );
 
   // Tile sources: remember them once a tile loads; report errors only if none ever loaded.

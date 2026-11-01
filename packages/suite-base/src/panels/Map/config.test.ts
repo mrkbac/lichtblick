@@ -35,6 +35,12 @@ describe("normalizeConfig", () => {
     ]);
   });
 
+  it("converts Leaflet zoom levels once", () => {
+    expect(normalizeConfig({ layer: "map", zoomLevel: 17 }).zoomLevel).toBe(16);
+    const layers = [{ id: "a", source: "osm", visible: true, opacity: 1 }];
+    expect(normalizeConfig({ layer: "map", layers, zoomLevel: 17 }).zoomLevel).toBe(17);
+  });
+
   it("gives new panels a vector base map and keeps saved layers", () => {
     expect(normalizeConfig({}).layers).toMatchObject([{ source: "ofm-liberty" }]);
     const layers = [{ id: "a", source: "osm", visible: false, opacity: 0.3 }];

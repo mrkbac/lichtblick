@@ -108,7 +108,11 @@ export function normalizeConfig(initial: unknown): Config {
   const config = (initial ?? {}) as Partial<Config> & LegacyConfig;
   return {
     center: config.center,
-    zoomLevel: config.zoomLevel,
+    // Leaflet zoom levels are one higher than MapLibre's (256 vs. 512 px tiles) for the same scale.
+    zoomLevel:
+      config.layers == undefined && config.layer != undefined && config.zoomLevel != undefined
+        ? config.zoomLevel - 1
+        : config.zoomLevel,
     bearing: config.bearing,
     pitch: config.pitch,
     layers: config.layers ?? migrateLayers(config),

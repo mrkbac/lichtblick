@@ -28,8 +28,11 @@ export function crsToLngLat(epsg: number): (x: number, y: number) => LngLat {
   );
 }
 
+/** Raster bands as geotiff.js returns them (typed arrays: indexable and iterable without copying). */
+type Band = ArrayLike<number> & Iterable<number>;
+
 function toRgba(
-  bands: ArrayLike<number>[],
+  bands: Band[],
   width: number,
   height: number,
   noData: number | null,
@@ -51,7 +54,7 @@ function toRgba(
   const band = bands[0]!;
   let min = Infinity;
   let max = -Infinity;
-  for (const v of Array.from(band)) {
+  for (const v of band) {
     if (v !== noData && isFinite(v)) {
       min = Math.min(min, v);
       max = Math.max(max, v);
@@ -96,12 +99,7 @@ export async function loadGeoTiff(url: string, signal: AbortSignal): Promise<Ima
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  const rgba = toRgba(
-    bands as unknown as ArrayLike<number>[],
-    width,
-    height,
-    image.getGDALNoData(),
-  );
+  const rgba = toRgba(bands as unknown as Band[], width, height, image.getGDALNoData());
   canvas.getContext("2d")!.putImageData(new ImageData(rgba, width, height), 0, 0);
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((b) => {
