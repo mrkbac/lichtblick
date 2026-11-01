@@ -141,6 +141,17 @@ export function makeConfig(
           type: "asset/resource",
         },
         {
+          // MapLibre's self-contained worker, loaded by URL (see panels/Map/initPanel.tsx)
+          test: /maplibre-gl-worker\.mjs$/,
+          type: "asset/resource",
+        },
+        {
+          // MapLibre resolves runtime URLs with `new URL(variable, import.meta.url)`, which webpack
+          // would try to bundle. The worker URL is set explicitly instead.
+          test: /maplibre-gl\.mjs$/,
+          parser: { url: false },
+        },
+        {
           test: /\.tsx?$/,
           exclude: /node_modules/,
           resourceQuery: { not: [/raw/] },

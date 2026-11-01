@@ -5,743 +5,1020 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Feature } from "geojson";
-import { produce } from "immer";
-import {
-  CircleMarker,
-  FeatureGroup,
-  geoJSON,
-  LatLngBounds,
-  Layer,
-  LayerGroup,
-  Map as LeafMap,
-  TileLayer,
-} from "leaflet";
+import { Chip, alpha } from "@mui/material";
+import type { FeatureCollection, Position } from "geojson";
 import * as _ from "lodash-es";
+import {
+  AttributionControl,
+  GeoJSONSource,
+  LngLatBounds,
+  Map as MapLibreMap,
+  MapMouseEvent,
+  NavigationControl,
+  Popup,
+  ScaleControl,
+  StyleSpecification,
+} from "maplibre-gl";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useResizeDetector } from "react-resize-detector";
-import { useDebouncedCallback } from "use-debounce";
+import { useLatest } from "react-use";
+import { makeStyles } from "tss-react/mui";
+import { useDebounce } from "use-debounce";
 
 import { filterMap } from "@lichtblick/den/collection";
+import Logger from "@lichtblick/log";
 import { toSec } from "@lichtblick/rostime";
-import {
-  MessageEvent,
-  PanelExtensionContext,
-  SettingsTreeAction,
-  Subscription,
-  Topic,
-} from "@lichtblick/suite";
-import EmptyState from "@lichtblick/suite-base/components/EmptyState";
-import Stack from "@lichtblick/suite-base/components/Stack";
-import FilteredPointLayer from "@lichtblick/suite-base/panels/Map/FilteredPointLayer";
-import { POINT_MARKER_RADIUS } from "@lichtblick/suite-base/panels/Map/constants";
+import { MessageEvent, PanelExtensionContext, SettingsTreeAction, Topic } from "@lichtblick/suite";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
-import { darkColor, lightColor, lineColors } from "@lichtblick/suite-base/util/plotColors";
+import { formatTime } from "@lichtblick/suite-base/util/formatTime";
+import { darkColor, lineColors } from "@lichtblick/suite-base/util/plotColors";
+import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
 
-import { buildSettingsTree, Config, validateCustomUrl } from "./config";
+import { MapToolbar } from "./MapToolbar";
+import {
+  applySettingsAction,
+  buildSettingsTree,
+  Config,
+  DEFAULT_POINT_SIZE,
+  normalizeConfig,
+} from "./config";
+import {
+  ARROW_IMAGE,
+  createArrowImage,
+  currentFeatures,
+  emptyOverlayData,
+  geoJsonFeatures,
+  headingFromTrack,
+  INTERACTIVE_LAYERS,
+  lngLatOf,
+  NavMessage,
+  OVERLAY,
+  OverlaySource,
+  overlayStyle,
+  trackFeatures,
+} from "./features";
+import { loadGeoTiff } from "./geotiff";
+import {
+  composeStyle,
+  fetchVectorStyle,
+  ImageOverlay,
+  resolveSource,
+  SourceParams,
+  validateSourceUrl,
+} from "./layers";
+import { forgetSavedSources, loadSavedSources, rememberSource } from "./savedSources";
 import {
   GeoJsonMessage,
   hasFix,
   isGeoJSONMessage,
+  isGeoJSONSchema,
   isSupportedSchema,
   isValidMapMessage,
-  parseGeoJSON,
 } from "./support";
-import { MapPanelMessage, Point } from "./types";
+
+const log = Logger.getLogger(__filename);
+
+/** Cap for the trail built from live data, where no recorded range is available. */
+const LIVE_TRAIL_LIMIT = 100_000;
+
+type Hit =
+  | { kind: "nav"; message: NavMessage }
+  | { kind: "geojson"; message: GeoJsonMessage; name?: string };
+
+type View = Pick<Config, "center" | "zoomLevel" | "bearing" | "pitch">;
+
+function eventTimeSec(event: MessageEvent): number {
+  return toSec(event.receiveTime);
+}
+
+function popupContent(hit: Hit): HTMLElement {
+  const root = document.createElement("div");
+  root.style.font = "12px/1.4 system-ui, sans-serif";
+  const line = (text: string, style?: { bold: boolean }) => {
+    const el = document.createElement("div");
+    el.textContent = text;
+    if (style?.bold === true) {
+      el.style.fontWeight = "600";
+    }
+    root.appendChild(el);
+  };
+  if (hit.kind === "geojson" && hit.name) {
+    line(hit.name, { bold: true });
+  }
+  line(hit.message.topic, { bold: hit.kind === "nav" });
+  const stamp = hit.message.receiveTime;
+  line(isAbsoluteTime(stamp) ? formatTime(stamp) : `${formatTimeRaw(stamp)} s`);
+  if (hit.kind === "nav") {
+    const { latitude, longitude, altitude } = hit.message.message;
+    line(`${latitude.toFixed(7)}, ${longitude.toFixed(7)}`);
+    if (altitude != undefined && isFinite(altitude)) {
+      line(`alt ${altitude.toFixed(2)} m`);
+    }
+    line(hasFix(hit.message) ? "fix" : "no fix");
+  }
+  return root;
+}
+
+function extendWithCoordinates(bounds: LngLatBounds, coords: unknown): void {
+  if (Array.isArray(coords) && typeof coords[0] === "number") {
+    bounds.extend(coords as Position as [number, number]);
+  } else if (Array.isArray(coords)) {
+    for (const c of coords) {
+      extendWithCoordinates(bounds, c);
+    }
+  }
+}
+
+const useStyles = makeStyles()((theme) => ({
+  root: {
+    position: "relative",
+    width: "100%",
+    height: "100%",
+    overflow: "hidden",
+    backgroundColor: theme.palette.background.default,
+    "& .maplibregl-popup-content": {
+      backgroundColor: theme.palette.background.paper,
+      color: theme.palette.text.primary,
+      boxShadow: theme.shadows[4],
+      padding: theme.spacing(0.75, 1),
+    },
+    "& .maplibregl-popup-tip": { display: "none" },
+    // Theme MapLibre's built-in controls.
+    "& .maplibregl-ctrl-group": {
+      backgroundColor: theme.palette.background.paper,
+      boxShadow: theme.shadows[2],
+      "& button + button": { borderTopColor: theme.palette.divider },
+      "& button:not(:disabled):hover": {
+        backgroundColor: theme.palette.action.hover,
+      },
+    },
+    "& .maplibregl-ctrl-icon, & .maplibregl-ctrl-attrib-button": {
+      filter: theme.palette.mode === "dark" ? "invert(1)" : undefined,
+    },
+    "& .maplibregl-ctrl-attrib, & .maplibregl-ctrl-attrib.maplibregl-compact": {
+      backgroundColor: alpha(theme.palette.background.paper, 0.85),
+      color: theme.palette.text.secondary,
+      "& a": { color: theme.palette.text.secondary },
+    },
+    "& .maplibregl-ctrl-scale": {
+      backgroundColor: alpha(theme.palette.background.paper, 0.85),
+      color: theme.palette.text.primary,
+      borderColor: theme.palette.text.primary,
+    },
+  },
+  // MapLibre adds `.maplibregl-map { position: relative }`, so size explicitly.
+  map: { width: "100%", height: "100%" },
+  notice: {
+    position: "absolute",
+    top: 10,
+    left: "50%",
+    transform: "translateX(-50%)",
+  },
+}));
+
+/** Themed container; rendered inside ThemeProvider so it follows the panel's color scheme. */
+function MapFrame(
+  props: React.PropsWithChildren<{
+    containerRef: React.RefObject<HTMLDivElement>;
+  }>,
+): React.JSX.Element {
+  const { classes } = useStyles();
+  return (
+    <div className={classes.root}>
+      <div ref={props.containerRef} className={classes.map} />
+      {props.children}
+    </div>
+  );
+}
+
+function MapNotice({ children }: { children: string }): React.JSX.Element {
+  const { classes } = useStyles();
+  return <Chip size="small" label={children} className={classes.notice} />;
+}
 
 type MapPanelProps = {
   context: PanelExtensionContext;
 };
 
-function MapPanel(props: MapPanelProps): React.JSX.Element {
-  const { context } = props;
+function MapPanel({ context }: MapPanelProps): React.JSX.Element {
+  const [config, setConfig] = useState<Config>(() => normalizeConfig(context.initialState));
+  const configRef = useLatest(config);
   const [colorScheme, setColorScheme] = useState<"dark" | "light">("light");
-
-  const mapContainerRef = useRef<HTMLDivElement>(ReactNull);
-
-  const [config, setConfig] = useState<Config>(() => {
-    const initialConfig = props.context.initialState as Partial<Config>;
-    return {
-      center: initialConfig.center,
-      customTileUrl: initialConfig.customTileUrl ?? "",
-      disabledTopics: initialConfig.disabledTopics ?? [],
-      followTopic: initialConfig.followTopic ?? "",
-      layer: initialConfig.layer ?? "map",
-      topicColors: initialConfig.topicColors ?? {},
-      zoomLevel: initialConfig.zoomLevel,
-      maxNativeZoom: initialConfig.maxNativeZoom ?? 18,
-    };
-  });
-
-  const [tileLayer] = useState(
-    new TileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="http://osm.org/copyright">OpenStreetMap</a> contributors',
-      maxNativeZoom: 18,
-      maxZoom: 24,
-    }),
-  );
-
-  const [satelliteLayer] = useState(
-    new TileLayer(
-      "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-      {
-        attribution:
-          "&copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community",
-        maxNativeZoom: 18,
-        maxZoom: 24,
-      },
-    ),
-  );
-
-  const [customLayer] = useState(
-    new TileLayer("https://example.com/{z}/{y}/{x}", {
-      attribution: "",
-      maxNativeZoom: 18,
-      maxZoom: 24,
-    }),
-  );
-
-  // Panel state management to update our set of messages
-  // We use state to trigger a render on the panel
-  const [allMapMessages, setAllMapMessages] = useState<MapPanelMessage[]>([]);
-  const [currentMapMessages, setCurrentMapMessages] = useState<MapPanelMessage[]>([]);
-
-  const [allGeoMessages, allNavMessages] = useMemo(
-    () => _.partition(allMapMessages, isGeoJSONMessage),
-    [allMapMessages],
-  );
-
-  const [currentGeoMessages, currentNavMessages] = useMemo(
-    () => _.partition(currentMapMessages, isGeoJSONMessage),
-    [currentMapMessages],
-  );
-
-  // Panel state management to track the list of available topics
   const [topics, setTopics] = useState<readonly Topic[]>([]);
-
-  // Panel state management to track the current preview time
+  const [trackMessages, setTrackMessages] = useState<NavMessage[]>([]);
+  const [currentNav, setCurrentNav] = useState<ReadonlyMap<string, NavMessage[]>>(new Map());
+  const [currentGeo, setCurrentGeo] = useState<ReadonlyMap<string, GeoJsonMessage>>(new Map());
   const [previewTime, setPreviewTime] = useState<number | undefined>();
-
-  const [currentMap, setCurrentMap] = useState<LeafMap | undefined>(undefined);
-
-  // Use a debounce and 0 refresh rate to avoid triggering a resize observation while handling
-  // an existing resize observation.
-  // https://github.com/maslianok/react-resize-detector/issues/45
-  const {
-    width: panelWidth,
-    height: panelHeight,
-    ref: sizeRef,
-  } = useResizeDetector({
-    refreshRate: 0,
-    refreshMode: "debounce",
-  });
-
-  useEffect(() => {
-    // We depend on changes in the resized panel dimensions to tell the Leaflet map to
-    // recalculate its size. We do this inside a separate useEffect instead of directly
-    // in the map's change callbacks to avoid a react error from calling setState
-    // during a render.
-    void { panelWidth, panelHeight };
-    currentMap?.invalidateSize();
-  }, [panelWidth, panelHeight, currentMap]);
-
-  // panel extensions must notify when they've completed rendering
-  // onRender will setRenderDone to a done callback which we can invoke after we've rendered
   const [renderDone, setRenderDone] = useState<() => void>(() => () => {});
+  const [savedSources, setSavedSources] = useState(loadSavedSources);
+  const savedSourcesRef = useLatest(savedSources);
+  const [vectorStyles, setVectorStyles] = useState<ReadonlyMap<string, StyleSpecification>>(
+    new Map(),
+  );
+  const [images, setImages] = useState<ReadonlyMap<string, ImageOverlay>>(new Map());
+  const [sourceErrors, setSourceErrors] = useState<ReadonlyMap<string, string>>(new Map());
+  const [map, setMap] = useState<MapLibreMap | undefined>();
 
-  const eligibleTopics = useMemo(() => {
-    return filterMap(topics, (topic) => {
-      if (isSupportedSchema(topic.schemaName)) {
-        return topic;
-      }
+  const containerRef = useRef<HTMLDivElement>(ReactNull);
+  const overlayData = useRef(emptyOverlayData());
+  const measuringRef = useRef(false);
+  const rangeTopicsRef = useRef(new Set<string>());
+  const rememberedRef = useRef(new Set<string>());
+  const viewRef = useRef<View>({
+    center: config.center,
+    zoomLevel: config.zoomLevel,
+    bearing: config.bearing,
+    pitch: config.pitch,
+  });
+  const didInitialFitRef = useRef(config.center != undefined);
+  const userMovingRef = useRef(false);
 
-      if (topic.convertibleTo) {
-        for (const schemaName of topic.convertibleTo) {
-          if (isSupportedSchema(schemaName)) {
-            return { name: topic.name, schemaName };
-          }
+  // --- Topics -----------------------------------------------------------------------------
+
+  const eligibleTopics = useMemo(
+    () =>
+      filterMap(topics, (topic) => {
+        if (isSupportedSchema(topic.schemaName)) {
+          return { name: topic.name, schemaName: topic.schemaName };
         }
-      }
-      return undefined;
+        const schemaName = topic.convertibleTo?.find(isSupportedSchema);
+        return schemaName ? { name: topic.name, schemaName } : undefined;
+      }),
+    [topics],
+  );
+
+  const enabledTopics = useMemo(
+    () => eligibleTopics.filter((topic) => !config.disabledTopics.includes(topic.name)),
+    [config.disabledTopics, eligibleTopics],
+  );
+  const enabledNames = useMemo(() => new Set(enabledTopics.map((t) => t.name)), [enabledTopics]);
+
+  // Stable identity unless the set of enabled position topics changes, so unrelated settings
+  // (layer opacity, colors, ...) don't re-read the whole recording.
+  const navTopicsKey = enabledTopics
+    .filter((t) => !isGeoJSONSchema(t.schemaName))
+    .map((t) => `${t.name}\0${t.schemaName}`)
+    .join("\n");
+  const navTopics = useMemo(
+    () =>
+      navTopicsKey === ""
+        ? []
+        : navTopicsKey.split("\n").map((line) => {
+            const [name, schemaName] = line.split("\0") as [string, string];
+            return { name, schemaName };
+          }),
+    [navTopicsKey],
+  );
+
+  const colors = useMemo(() => {
+    const result = new Map<string, string>();
+    eligibleTopics.forEach((topic, i) => {
+      result.set(topic.name, config.topicColors[topic.name] ?? lineColors[i % lineColors.length]!);
     });
-  }, [topics]);
+    return result;
+  }, [config.topicColors, eligibleTopics]);
 
-  const settingsActionHandler = useCallback((action: SettingsTreeAction) => {
-    if (action.action !== "update") {
-      return;
-    }
+  // --- Settings ---------------------------------------------------------------------------
 
-    const { path, input, value } = action.payload;
-
-    if (path[0] === "topics" && input === "boolean") {
-      const topic = path[1];
-      if (topic) {
-        setConfig(
-          produce((draft) => {
-            draft.disabledTopics =
-              value === true
-                ? _.difference(draft.disabledTopics, [topic])
-                : _.union(draft.disabledTopics, [topic]);
-          }),
-        );
-      }
-    }
-
-    if (path[0] === "topics" && path[2] === "coloring") {
-      const topic = path[1];
-      if (topic) {
-        setConfig(
-          produce((draft) => {
-            if (value === "Custom") {
-              draft.topicColors[topic] = lineColors[0]!;
-            } else {
-              delete draft.topicColors[topic];
-            }
-          }),
-        );
-      }
-    }
-
-    if (path[0] === "topics" && path[2] === "color" && input === "rgb" && value != undefined) {
-      const topic = path[1];
-      if (topic) {
-        setConfig(
-          produce((draft) => {
-            draft.topicColors[topic] = value;
-          }),
-        );
-      }
-    }
-
-    if (path[1] === "layer" && input === "select") {
-      setConfig((oldConfig) => {
-        return { ...oldConfig, layer: String(value) };
-      });
-    }
-
-    if (path[1] === "customTileUrl" && input === "string") {
-      setConfig((oldConfig) => {
-        return { ...oldConfig, customTileUrl: String(value) };
-      });
-    }
-
-    if (path[1] === "maxNativeZoom" && input === "select") {
-      setConfig((oldConfig) => {
-        const zoom = parseInt(String(value));
-        return { ...oldConfig, maxNativeZoom: isFinite(zoom) ? zoom : oldConfig.maxNativeZoom };
-      });
-    }
-
-    if (path[1] === "followTopic" && input === "select") {
-      setConfig((oldConfig) => {
-        return { ...oldConfig, followTopic: String(value) };
-      });
-    }
-  }, []);
-
-  useEffect(() => {
-    if (config.layer === "map") {
-      currentMap?.addLayer(tileLayer);
-      currentMap?.removeLayer(satelliteLayer);
-      currentMap?.removeLayer(customLayer);
-    } else if (config.layer === "satellite") {
-      currentMap?.addLayer(satelliteLayer);
-      currentMap?.removeLayer(tileLayer);
-      currentMap?.removeLayer(customLayer);
-    } else if (config.layer === "custom") {
-      currentMap?.addLayer(customLayer);
-      currentMap?.removeLayer(tileLayer);
-      currentMap?.removeLayer(satelliteLayer);
-    }
-  }, [config.layer, currentMap, customLayer, satelliteLayer, tileLayer]);
-
-  useEffect(() => {
-    if (config.layer === "custom") {
-      // validate URL to avoid leaflet map placeholder variable error
-      // Ignore urls with an error - the settings tree will inform the user that their valid is invalid
-      if (validateCustomUrl(config.customTileUrl)) {
+  const settingsActionHandler = useCallback(
+    (action: SettingsTreeAction) => {
+      if (action.action === "perform-node-action" && action.payload.id === "forget-saved") {
+        forgetSavedSources();
+        rememberedRef.current.clear();
+        setSavedSources([]);
         return;
       }
+      setConfig((prev) => applySettingsAction(prev, action, savedSourcesRef.current));
+    },
+    [savedSourcesRef],
+  );
 
-      customLayer.setUrl(config.customTileUrl);
-    }
-  }, [config.layer, config.customTileUrl, customLayer]);
-
-  useEffect(() => {
-    if (config.layer === "custom") {
-      customLayer.options.maxNativeZoom = config.maxNativeZoom;
-    }
-  }, [config.layer, config.maxNativeZoom, customLayer]);
-
-  // Subscribe to eligible and enabled topics
-  useEffect(() => {
-    const subscriptions: Subscription[] = [];
-    for (const topic of eligibleTopics) {
-      if (config.disabledTopics.includes(topic.name)) {
-        continue;
+  const layerErrors = useMemo(() => {
+    const errors = new Map<string, string>();
+    for (const layer of config.layers) {
+      const params = resolveSource(layer);
+      const error = params ? sourceErrors.get(params.url) : undefined;
+      if (error) {
+        errors.set(layer.id, error);
       }
+    }
+    return errors;
+  }, [config.layers, sourceErrors]);
 
-      subscriptions.push({
+  useEffect(() => {
+    context.updatePanelSettingsEditor({
+      actionHandler: settingsActionHandler,
+      nodes: buildSettingsTree(config, eligibleTopics, savedSources, layerErrors),
+    });
+  }, [config, context, eligibleTopics, layerErrors, savedSources, settingsActionHandler]);
+
+  useEffect(() => {
+    // Drop the Leaflet-era fields once the config has been migrated.
+    context.saveState({
+      ...config,
+      ...viewRef.current,
+      layer: undefined,
+      customTileUrl: undefined,
+      maxNativeZoom: undefined,
+    });
+  }, [context, config]);
+
+  /** Remember custom sources that actually worked, for reuse in other panels and layouts. */
+  const rememberWorkingSource = useCallback(
+    (match: (layerId: string, params: SourceParams) => boolean) => {
+      for (const layer of configRef.current.layers) {
+        const custom = layer.custom;
+        if (layer.source !== "custom" || !custom?.url || validateSourceUrl(custom)) {
+          continue;
+        }
+        const key = `${custom.kind}|${custom.url}`;
+        if (match(layer.id, custom) && !rememberedRef.current.has(key)) {
+          rememberedRef.current.add(key);
+          setSavedSources(rememberSource(custom));
+        }
+      }
+    },
+    [configRef],
+  );
+
+  // --- Subscriptions ----------------------------------------------------------------------
+
+  useEffect(() => {
+    context.subscribe(
+      enabledTopics.map((topic) => ({
         topic: topic.name,
         convertTo: topic.schemaName,
         preload: false,
-      });
-    }
+      })),
+    );
+  }, [context, enabledTopics]);
 
-    context.subscribe(subscriptions);
-
-    const tree = buildSettingsTree(config, eligibleTopics);
-    context.updatePanelSettingsEditor({
-      actionHandler: settingsActionHandler,
-      nodes: tree,
-    });
-
-    return () => {
+  useEffect(
+    () => () => {
       context.unsubscribeAll();
-    };
-  }, [config, context, eligibleTopics, settingsActionHandler]);
+    },
+    [context],
+  );
 
-  // Subscribe to eligible and enabled topics for range messages
+  // Batch incoming messages so long recordings don't re-render once per range batch.
+  const pendingTrack = useRef<NavMessage[]>([]);
+  const flushTimer = useRef<ReturnType<typeof setTimeout>>();
+  const appendTrack = useCallback((messages: NavMessage[], cap?: number) => {
+    pendingTrack.current.push(...messages);
+    flushTimer.current ??= setTimeout(() => {
+      flushTimer.current = undefined;
+      const pending = pendingTrack.current;
+      pendingTrack.current = [];
+      setTrackMessages((prev) => {
+        const next = prev.concat(pending);
+        return cap != undefined && next.length > cap ? next.slice(-cap) : next;
+      });
+    }, 50);
+  }, []);
+
+  // The full track comes from the recorded range. GeoJSON is deliberately not ranged: each
+  // message is a complete scene that replaces the previous one.
   useLayoutEffect(() => {
-    // Clear previous messages when subscriptions change
-    setAllMapMessages([]);
-
-    const unsubscriptions: (() => void)[] = [];
-    for (const topic of eligibleTopics) {
-      if (config.disabledTopics.includes(topic.name)) {
-        continue;
-      }
-      const unsubscribe = context.unstable_subscribeMessageRange({
+    setTrackMessages([]);
+    pendingTrack.current = [];
+    rangeTopicsRef.current = new Set();
+    const unsubscribes = navTopics.map((topic) =>
+      context.unstable_subscribeMessageRange({
         topic: topic.name,
         convertTo: topic.schemaName,
-        onNewRangeIterator: async (batchIterator) => {
-          for await (const messages of batchIterator) {
-            const validMessages = messages.filter(isValidMapMessage);
-            setAllMapMessages((prev) => [...prev, ...validMessages]);
+        onNewRangeIterator: async (iterator) => {
+          rangeTopicsRef.current.add(topic.name);
+          for await (const batch of iterator) {
+            const valid = batch.filter(
+              (event): event is NavMessage => isValidMapMessage(event) && !isGeoJSONMessage(event),
+            );
+            if (valid.length > 0) {
+              appendTrack(valid);
+            }
           }
         },
-      });
-      unsubscriptions.push(unsubscribe);
-    }
-
+      }),
+    );
     return () => {
-      for (const unsubscribe of unsubscriptions) {
+      for (const unsubscribe of unsubscribes) {
         unsubscribe();
       }
     };
-  }, [config, context, eligibleTopics]);
-
-  type TopicGroups = {
-    baseColor: string;
-    topicGroup: LayerGroup;
-    currentFrame: FeatureGroup;
-    allFrames: FeatureGroup;
-  };
-
-  // topic layers is a map of topic -> two feature groups
-  // A feature group for all messages markers, and a feature group for current frame markers
-  const topicLayers = useMemo(() => {
-    const topicLayerMap = new Map<string, TopicGroups>();
-    let i = 0;
-    for (const topic of eligibleTopics) {
-      const allFrames = new FeatureGroup();
-      const currentFrame = new FeatureGroup();
-      const topicGroup = new LayerGroup([allFrames, currentFrame]);
-      topicLayerMap.set(topic.name, {
-        topicGroup,
-        allFrames,
-        currentFrame,
-        baseColor: config.topicColors[topic.name] ?? lineColors[i]!,
-      });
-      i = (i + 1) % lineColors.length;
-    }
-    return topicLayerMap;
-  }, [config.topicColors, eligibleTopics]);
+  }, [appendTrack, context, navTopics]);
 
   useLayoutEffect(() => {
-    if (!currentMap) {
-      return;
-    }
-
-    const topicLayerEntries = [...topicLayers.entries()];
-    for (const [topic, featureGroups] of topicLayerEntries) {
-      // if the topic does not appear in the disabled topics list, add to map so it displays
-      if (!config.disabledTopics.includes(topic)) {
-        currentMap.addLayer(featureGroups.topicGroup);
-      }
-    }
-
-    return () => {
-      for (const [_topic, featureGroups] of topicLayerEntries) {
-        currentMap.removeLayer(featureGroups.topicGroup);
-      }
-    };
-  }, [config.disabledTopics, currentMap, topicLayers]);
-
-  // During the initial mount we setup our context render handler
-  useLayoutEffect(() => {
-    if (!mapContainerRef.current) {
-      return;
-    }
-
-    const map = new LeafMap(mapContainerRef.current);
-
-    // Remove default prefix from the attribution control
-    map.attributionControl.setPrefix(false);
-
-    // the map must be initialized with some view before other features work
-    map.setView(
-      config.center ? [config.center.lat, config.center.lon] : [0, 0],
-      config.zoomLevel ?? 10,
-    );
-
-    setCurrentMap(map);
-
-    // tell the context we care about updates on these fields
     context.watch("topics");
     context.watch("currentFrame");
     context.watch("previewTime");
     context.watch("colorScheme");
 
-    // The render event handler updates the state for our messages an triggers a component render
-    //
-    // The panel must call the _done_ function passed to render indicating the render completed.
-    // The panel will not receive render calls until it calls done.
     context.onRender = (renderState, done) => {
       setRenderDone(() => done);
       setPreviewTime(renderState.previewTime);
 
       if (renderState.topics) {
-        // Changing the topic list clears all map layers so we try to preserve reference identity
-        // if the contents of the topic list haven't changed.
-        setTopics((oldTopics) => {
-          return _.isEqual(oldTopics, renderState.topics) ? oldTopics : (renderState.topics ?? []);
-        });
+        setTopics((old) => (_.isEqual(old, renderState.topics) ? old : (renderState.topics ?? [])));
       }
-
-      // Only update the current frame if we have new messages.
-      if (renderState.currentFrame && renderState.currentFrame.length > 0) {
-        setCurrentMapMessages(renderState.currentFrame.filter(isValidMapMessage));
-      }
-
       if (renderState.colorScheme) {
         setColorScheme(renderState.colorScheme);
       }
+
+      const frame = renderState.currentFrame?.filter(isValidMapMessage);
+      if (!frame || frame.length === 0) {
+        return;
+      }
+      const [geo, nav] = _.partition(frame, isGeoJSONMessage) as [GeoJsonMessage[], NavMessage[]];
+      if (nav.length > 0) {
+        // Only replace topics present in this frame; other topics keep their last position.
+        setCurrentNav(
+          (prev) => new Map([...prev, ...Object.entries(_.groupBy(nav, (m) => m.topic))]),
+        );
+        // Live sources have no recorded range: build the track from what arrives.
+        const live = nav.filter((m) => !rangeTopicsRef.current.has(m.topic));
+        if (live.length > 0) {
+          appendTrack(live, LIVE_TRAIL_LIMIT);
+        }
+      }
+      if (geo.length > 0) {
+        setCurrentGeo((prev) => {
+          const next = new Map(prev);
+          for (const message of geo) {
+            next.set(message.topic, message);
+          }
+          return next;
+        });
+      }
     };
 
     return () => {
-      map.remove();
       context.onRender = undefined;
     };
-  }, [config.center, config.zoomLevel, context]);
+  }, [appendTrack, context]);
 
-  const onHover = useCallback(
-    (messageEvent?: MessageEvent) => {
-      context.setPreviewTime(
-        messageEvent == undefined ? undefined : toSec(messageEvent.receiveTime),
-      );
-    },
-    [context],
-  );
-
-  const onClick = useCallback(
-    (messageEvent: MessageEvent) => {
-      context.seekPlayback?.(messageEvent.receiveTime);
-    },
-    [context],
-  );
-
-  /// --- the remaining code is unrelated to the extension api ----- ///
-
-  const [center, setCenter] = useState<Point | undefined>(config.center);
-  const [filterBounds, setFilterBounds] = useState<LatLngBounds | undefined>();
-
-  const addGeoFeatureEventHandlers = useCallback(
-    (feature: Feature, message: MessageEvent, layer: Layer) => {
-      const featureName = feature.properties?.name;
-      if (typeof featureName === "string" && featureName.length > 0) {
-        layer.bindTooltip(featureName);
-      }
-      layer.on("mouseover", () => {
-        onHover(message);
-        layer.openTooltip();
-      });
-      layer.on("mouseout", () => {
-        onHover(undefined);
-        layer.closeTooltip();
-      });
-      layer.on("click", () => {
-        onClick(message);
-      });
-    },
-    [onClick, onHover],
-  );
-
-  const addGeoJsonMessage = useCallback(
-    (message: GeoJsonMessage, group: FeatureGroup) => {
-      const parsed = parseGeoJSON(message.message.geojson);
-      for (const { object, style } of parsed) {
-        geoJSON(object, {
-          onEachFeature: (feature: Feature, layer) => {
-            addGeoFeatureEventHandlers(feature, message, layer);
-          },
-          style: config.topicColors[message.topic]
-            ? { color: config.topicColors[message.topic], ...style }
-            : style,
-        }).addTo(group);
-      }
-    },
-    [addGeoFeatureEventHandlers, config.topicColors],
-  );
-
-  // calculate center point from blocks if we don't have a center point
-  useEffect(() => {
-    setCenter((old) => {
-      if (!config.followTopic) {
-        // When not following a topic center the map from the first message at startup
-        if (old) {
-          return old;
-        }
-      }
-
-      for (const messages of [currentNavMessages, allNavMessages]) {
-        for (const message of messages) {
-          // When re-centering to follow topic, only use the messages of the matching topic
-          if (config.followTopic && old) {
-            if (message.topic !== config.followTopic) {
-              continue;
-            }
-          }
-          return {
-            lat: message.message.latitude,
-            lon: message.message.longitude,
-          };
-        }
-      }
-
-      return old;
-    });
-  }, [allNavMessages, currentNavMessages, config]);
-
-  useEffect(() => {
-    if (!currentMap) {
-      return;
-    }
-
-    for (const [topic, topicLayer] of topicLayers) {
-      topicLayer.allFrames.clearLayers();
-
-      const navMessages = allNavMessages.filter((message) => message.topic === topic);
-      const pointLayer = FilteredPointLayer({
-        map: currentMap,
-        navSatMessageEvents: navMessages,
-        bounds: filterBounds ?? currentMap.getBounds(),
-        color: lightColor(topicLayer.baseColor),
-        hoverColor: darkColor(topicLayer.baseColor),
-        onHover,
-        onClick,
-      });
-
-      topicLayer.allFrames.addLayer(pointLayer);
-
-      // Push this layer to the back so it renders under the current messages.
-      pointLayer.bringToBack();
-
-      allGeoMessages
-        .filter((message) => message.topic === topic)
-        .forEach((message) => {
-          addGeoJsonMessage(message, topicLayer.allFrames);
-        });
-    }
-  }, [
-    addGeoJsonMessage,
-    allGeoMessages,
-    allNavMessages,
-    currentMap,
-    filterBounds,
-    onClick,
-    onHover,
-    topicLayers,
-  ]);
-
-  // create a filtered marker layer for the current nav messages
-  // this effect is added after the allNavMessages so the layer appears above
-  useEffect(() => {
-    if (!currentMap) {
-      return;
-    }
-
-    const navByTopic = _.groupBy(currentNavMessages, (msg) => msg.topic);
-    for (const [topic, messages] of Object.entries(navByTopic)) {
-      const topicLayer = topicLayers.get(topic);
-      if (!topicLayer) {
-        continue;
-      }
-
-      topicLayer.currentFrame.clearLayers();
-      const [fixEvents, noFixEvents] = _.partition(messages, hasFix);
-
-      const pointLayerNoFix = FilteredPointLayer({
-        map: currentMap,
-        navSatMessageEvents: noFixEvents,
-        bounds: filterBounds ?? currentMap.getBounds(),
-        color: darkColor(topicLayer.baseColor),
-        hoverColor: darkColor(topicLayer.baseColor),
-        showAccuracy: true,
-      });
-
-      const pointLayerFix = FilteredPointLayer({
-        map: currentMap,
-        navSatMessageEvents: fixEvents,
-        bounds: filterBounds ?? currentMap.getBounds(),
-        color: topicLayer.baseColor,
-        hoverColor: darkColor(topicLayer.baseColor),
-        showAccuracy: true,
-      });
-
-      topicLayer.currentFrame.addLayer(pointLayerNoFix);
-      topicLayer.currentFrame.addLayer(pointLayerFix);
-    }
-
-    const geoByTopic = _.groupBy(currentGeoMessages, (msg) => msg.topic);
-    for (const [topic, messages] of Object.entries(geoByTopic)) {
-      const topicLayer = topicLayers.get(topic);
-      if (topicLayer) {
-        topicLayer.currentFrame.clearLayers();
-        for (const message of messages) {
-          addGeoJsonMessage(message, topicLayer.currentFrame);
-        }
-      }
-    }
-  }, [
-    addGeoJsonMessage,
-    currentGeoMessages,
-    currentMap,
-    currentNavMessages,
-    filterBounds,
-    topicLayers,
-  ]);
-
-  // create a marker for the closest gps message to our current preview time
-  useEffect(() => {
-    if (!currentMap || previewTime == undefined) {
-      return;
-    }
-
-    // Find the point occuring most recently before or at preview time but not after
-    // preview time.
-    const prevNavMessages = allNavMessages.filter(
-      (message) => toSec(message.receiveTime) <= previewTime,
-    );
-    const event = _.minBy(prevNavMessages, (message) => previewTime - toSec(message.receiveTime));
-    if (!event) {
-      return;
-    }
-
-    const topicLayer = topicLayers.get(event.topic);
-
-    const marker = new CircleMarker([event.message.latitude, event.message.longitude], {
-      radius: POINT_MARKER_RADIUS,
-      color: topicLayer ? darkColor(topicLayer.baseColor) : undefined,
-      stroke: false,
-      fillOpacity: 1,
-      interactive: false,
-    });
-
-    marker.addTo(currentMap);
-    return () => {
-      marker.remove();
-    };
-  }, [allNavMessages, currentMap, previewTime, topicLayers]);
-
-  // persist panel config on zoom changes
-  useEffect(() => {
-    if (!currentMap) {
-      return;
-    }
-
-    const moveChange = () => {
-      context.saveState({
-        center: { lat: currentMap.getCenter().lat, lon: currentMap.getCenter().lng },
-      });
-    };
-
-    const zoomChange = () => {
-      context.saveState({ zoomLevel: currentMap.getZoom() });
-    };
-
-    currentMap.on("move", moveChange);
-    currentMap.on("zoom", zoomChange);
-    return () => {
-      currentMap.off("move", moveChange);
-      currentMap.off("zoom", zoomChange);
-    };
-  }, [context, currentMap]);
-
-  useEffect(() => {
-    context.saveState(config);
-  }, [context, config]);
-
-  // we don't want to invoke filtering on every user map move so we rate limit to 100ms
-  const moveHandler = useDebouncedCallback(
-    (map: LeafMap) => {
-      setFilterBounds(map.getBounds());
-    },
-    100,
-    // maxWait equal to debounce timeout makes the debounce act like a throttle
-    // Without a maxWait - invocations of the debounced invalidate reset the countdown
-    // resulting in no invalidation when scales are constantly changing (playback)
-    { leading: false, maxWait: 100 },
-  );
-
-  // setup handler for map move events to re-filter points
-  // this also handles zoom changes
-  useEffect(() => {
-    if (!currentMap) {
-      return;
-    }
-
-    const handler = () => moveHandler(currentMap);
-    currentMap.on("move", handler);
-    return () => {
-      currentMap.off("move", handler);
-    };
-  }, [currentMap, moveHandler]);
-
-  // Update the map view to focus on the centerpoint when it changes
-  // Zoom is reset only once
-  const didResetZoomRef = useRef(false);
-  useEffect(() => {
-    if (!center) {
-      return;
-    }
-
-    // If center updates when following a topic we don't want to keep resetting the zoom.
-    const zoom = didResetZoomRef.current ? currentMap?.getZoom() : (config.zoomLevel ?? 10);
-    currentMap?.setView([center.lat, center.lon], zoom);
-    didResetZoomRef.current = true;
-  }, [center, config.zoomLevel, currentMap]);
-
-  // Indicate render is complete - the effect runs after the dom is updated
   useEffect(() => {
     renderDone();
   }, [renderDone]);
 
+  // --- Derived data -----------------------------------------------------------------------
+
+  const visibleTrack = useMemo(
+    () => trackMessages.filter((m) => enabledNames.has(m.topic)),
+    [enabledNames, trackMessages],
+  );
+  const trackByTopic = useMemo(() => _.groupBy(visibleTrack, (m) => m.topic), [visibleTrack]);
+  const trackTimesByTopic = useMemo(
+    () => _.mapValues(trackByTopic, (m) => m.map(eventTimeSec)),
+    [trackByTopic],
+  );
+
+  const currentMessages = useMemo(
+    () => [...currentNav.values()].flat().filter((m) => enabledNames.has(m.topic)),
+    [currentNav, enabledNames],
+  );
+  const geoMessages = useMemo(
+    () => [...currentGeo.values()].filter((m) => enabledNames.has(m.topic)),
+    [currentGeo, enabledNames],
+  );
+
+  const headings = useMemo(() => {
+    const result = new Map<string, number>();
+    for (const [topic, messages] of currentNav) {
+      const current = messages[messages.length - 1];
+      if (!current) {
+        continue;
+      }
+      const history = trackByTopic[topic] ?? [];
+      const end = _.sortedLastIndexBy(history, current, eventTimeSec);
+      const heading = headingFromTrack([...history.slice(Math.max(0, end - 500), end), current]);
+      if (heading != undefined) {
+        result.set(topic, heading);
+      }
+    }
+    return result;
+  }, [currentNav, trackByTopic]);
+
+  // Refs for event handlers, which map feature indices back to messages.
+  const trackRef = useLatest(visibleTrack);
+  const currentRef = useLatest(currentMessages);
+  const geoRef = useLatest(geoMessages);
+
+  // --- Map --------------------------------------------------------------------------------
+
+  const setOverlay = useCallback(
+    (id: OverlaySource, data: FeatureCollection) => {
+      overlayData.current[id] = data;
+      void map?.getSource<GeoJSONSource>(id)?.setData(data);
+    },
+    [map],
+  );
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) {
+      return;
+    }
+    const initial = viewRef.current;
+    const instance = new MapLibreMap({
+      container,
+      style: { version: 8, sources: {}, layers: [] },
+      center: initial.center ? [initial.center.lon, initial.center.lat] : [0, 20],
+      zoom: initial.zoomLevel ?? (initial.center ? 16 : 1.5),
+      bearing: initial.bearing ?? 0,
+      pitch: initial.pitch ?? 0,
+      maxPitch: 85,
+      attributionControl: false,
+    });
+    instance.addControl(new AttributionControl({ compact: true }), "bottom-right");
+    instance.addControl(new NavigationControl({ visualizePitch: true }), "top-right");
+
+    instance.on("styleimagemissing", (event) => {
+      if (event.id === ARROW_IMAGE && !instance.hasImage(ARROW_IMAGE)) {
+        instance.addImage(ARROW_IMAGE, createArrowImage(), {
+          sdf: true,
+          pixelRatio: 2,
+        });
+      }
+    });
+    // A full style reload recreates the overlay sources; restore their latest data.
+    instance.on("style.load", () => {
+      for (const [id, data] of Object.entries(overlayData.current)) {
+        void instance.getSource<GeoJSONSource>(id)?.setData(data);
+      }
+    });
+    instance.on("movestart", (event) => {
+      if ("originalEvent" in event && event.originalEvent) {
+        userMovingRef.current = true;
+        didInitialFitRef.current = true;
+      }
+    });
+    instance.on("moveend", () => {
+      userMovingRef.current = false;
+      const center = instance.getCenter();
+      viewRef.current = {
+        center: { lat: center.lat, lon: center.lng },
+        zoomLevel: instance.getZoom(),
+        bearing: instance.getBearing(),
+        pitch: instance.getPitch(),
+      };
+      context.saveState(viewRef.current);
+    });
+
+    // The panel resizes without window resizes, so observe the container directly.
+    const observer = new ResizeObserver(() => {
+      instance.resize();
+    });
+    observer.observe(container);
+    setMap(instance);
+    return () => {
+      observer.disconnect();
+      instance.remove();
+      setMap(undefined);
+    };
+  }, [context]);
+
+  // Custom URL fields update on every keystroke; only use URLs once they stop changing so
+  // half-typed URLs aren't fetched. Other layer settings (sliders, toggles) apply immediately.
+  const customUrls = config.layers.map((layer) => layer.custom?.url ?? "").join("\n");
+  const [settledUrls] = useDebounce(customUrls, 400);
+  const urlsSettled = customUrls === settledUrls;
+
+  // Compose and apply the style. MapLibre diffs it against the current one.
+  useEffect(() => {
+    if (!map || !urlsSettled) {
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      map.setStyle(
+        composeStyle({
+          layers: config.layers,
+          vectorStyles,
+          images,
+          projection: config.projection,
+          overlay: overlayStyle(overlayData.current),
+        }),
+        { diff: true },
+      );
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [config.layers, config.projection, images, map, urlsSettled, vectorStyles]);
+
+  // Load vector styles and GeoTIFFs referenced by layers.
+  const loadingRef = useRef(new Set<string>());
+  useEffect(() => {
+    if (!urlsSettled) {
+      return;
+    }
+    const controller = new AbortController();
+    const loading = loadingRef.current;
+    for (const layer of config.layers) {
+      const params = resolveSource(layer);
+      if (
+        !params ||
+        (params.kind !== "vector" && params.kind !== "geotiff") ||
+        validateSourceUrl(params) ||
+        loading.has(params.url)
+      ) {
+        continue;
+      }
+      const { url, kind } = params;
+      if (kind === "vector" ? vectorStyles.has(url) : images.has(url)) {
+        continue;
+      }
+      loading.add(url);
+      const done = () => {
+        loading.delete(url);
+        rememberWorkingSource((_id, p) => p.url === url);
+        setSourceErrors((prev) =>
+          prev.has(url) ? new Map([...prev].filter(([k]) => k !== url)) : prev,
+        );
+      };
+      const fail = (error: unknown) => {
+        loading.delete(url);
+        if (!controller.signal.aborted) {
+          setSourceErrors((prev) =>
+            new Map(prev).set(url, String(error instanceof Error ? error.message : error)),
+          );
+        }
+      };
+      if (kind === "vector") {
+        fetchVectorStyle(url, controller.signal).then((style) => {
+          setVectorStyles((prev) => new Map(prev).set(url, style));
+          done();
+        }, fail);
+      } else {
+        loadGeoTiff(url, controller.signal).then((image) => {
+          setImages((prev) => new Map(prev).set(url, image));
+          done();
+        }, fail);
+      }
+    }
+    return () => {
+      controller.abort();
+      loading.clear();
+    };
+  }, [config.layers, images, rememberWorkingSource, urlsSettled, vectorStyles]);
+
+  useEffect(
+    () => () => {
+      for (const image of images.values()) {
+        URL.revokeObjectURL(image.url);
+      }
+    },
+    // Revoke object URLs only on unmount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
+  // Tile sources: remember them once a tile loads; report errors only if none ever loaded.
+  useEffect(() => {
+    if (!map) {
+      return;
+    }
+    const loaded = new Set<string>();
+    const urlOfSource = (sourceId: string) => {
+      const layer = configRef.current.layers.find((l) => sourceId.startsWith(l.id));
+      return layer ? resolveSource(layer)?.url : undefined;
+    };
+    const onData = (event: { dataType: string; sourceId?: string; tile?: unknown }) => {
+      if (
+        event.dataType !== "source" ||
+        !event.sourceId ||
+        event.tile == undefined ||
+        loaded.has(event.sourceId)
+      ) {
+        return;
+      }
+      loaded.add(event.sourceId);
+      const url = urlOfSource(event.sourceId);
+      rememberWorkingSource((id) => event.sourceId!.startsWith(id));
+      if (url) {
+        setSourceErrors((prev) =>
+          prev.has(url) ? new Map([...prev].filter(([k]) => k !== url)) : prev,
+        );
+      }
+    };
+    const onError = (event: { error?: { message?: string }; sourceId?: string }) => {
+      if (!event.sourceId) {
+        // Listening to "error" stops MapLibre's own logging, so keep non-tile errors visible.
+        log.warn("Map error:", event.error?.message ?? event.error);
+        return;
+      }
+      if (loaded.has(event.sourceId) || event.sourceId.startsWith("lb:")) {
+        return;
+      }
+      const url = urlOfSource(event.sourceId);
+      if (url) {
+        setSourceErrors((prev) =>
+          new Map(prev).set(url, event.error?.message ?? "Failed to load tiles"),
+        );
+      }
+    };
+    map.on("data", onData);
+    map.on("error", onError);
+    return () => {
+      map.off("data", onData);
+      map.off("error", onError);
+    };
+  }, [configRef, map, rememberWorkingSource]);
+
+  // Interaction settings and controls.
+  useEffect(() => {
+    if (!map) {
+      return;
+    }
+    if (config.allowRotation) {
+      map.dragRotate.enable();
+      map.touchZoomRotate.enableRotation();
+      map.touchPitch.enable();
+    } else {
+      map.dragRotate.disable();
+      map.touchZoomRotate.disableRotation();
+      map.touchPitch.disable();
+      if (config.followMode !== "heading" || !config.followTopic) {
+        map.easeTo({ bearing: 0, pitch: 0 });
+      }
+    }
+  }, [config.allowRotation, config.followMode, config.followTopic, map]);
+
+  useEffect(() => {
+    if (!map || !config.showScale) {
+      return;
+    }
+    const scale = new ScaleControl({ unit: config.units, maxWidth: 120 });
+    map.addControl(scale, "bottom-left");
+    return () => {
+      // The map may already be removed when the panel unmounts.
+      if (map.hasControl(scale)) {
+        map.removeControl(scale);
+      }
+    };
+  }, [config.showScale, config.units, map]);
+
+  // --- Overlay data -----------------------------------------------------------------------
+
+  useEffect(() => {
+    const { points, lines } = trackFeatures(visibleTrack, colors, config.topicStyles);
+    setOverlay(OVERLAY.track, points);
+    setOverlay(OVERLAY.trackLine, lines);
+  }, [colors, config.topicStyles, setOverlay, visibleTrack]);
+
+  useEffect(() => {
+    const { markers, accuracy } = currentFeatures(
+      currentMessages,
+      colors,
+      config.topicStyles,
+      headings,
+    );
+    setOverlay(OVERLAY.current, markers);
+    setOverlay(OVERLAY.accuracy, accuracy);
+  }, [colors, config.topicStyles, currentMessages, headings, setOverlay]);
+
+  useEffect(() => {
+    setOverlay(OVERLAY.geojson, geoJsonFeatures(geoMessages, colors));
+  }, [colors, geoMessages, setOverlay]);
+
+  // Marker for the hovered time (e.g. from a plot) on any track.
+  useEffect(() => {
+    let best: NavMessage | undefined;
+    if (previewTime != undefined) {
+      for (const [topic, messages] of Object.entries(trackByTopic)) {
+        const index = _.sortedLastIndex(trackTimesByTopic[topic], previewTime);
+        const candidate = messages[index - 1];
+        if (candidate && (!best || eventTimeSec(candidate) > eventTimeSec(best))) {
+          best = candidate;
+        }
+      }
+    }
+    const base = best ? colors.get(best.topic) : undefined;
+    setOverlay(OVERLAY.preview, {
+      type: "FeatureCollection",
+      features:
+        best && base
+          ? [
+              {
+                type: "Feature",
+                geometry: { type: "Point", coordinates: lngLatOf(best) },
+                properties: {
+                  c: darkColor(base),
+                  r: config.topicStyles[best.topic]?.pointSize ?? DEFAULT_POINT_SIZE,
+                },
+              },
+            ]
+          : [],
+    });
+  }, [colors, config.topicStyles, previewTime, setOverlay, trackByTopic, trackTimesByTopic]);
+
+  const setMeasureData = useCallback(
+    (data: FeatureCollection) => {
+      setOverlay(OVERLAY.measure, data);
+    },
+    [setOverlay],
+  );
+
+  // --- Camera -----------------------------------------------------------------------------
+
+  const dataBounds = useCallback((): LngLatBounds | undefined => {
+    const bounds = new LngLatBounds();
+    for (const message of trackRef.current) {
+      bounds.extend(lngLatOf(message));
+    }
+    for (const message of currentRef.current) {
+      bounds.extend(lngLatOf(message));
+    }
+    for (const feature of overlayData.current[OVERLAY.geojson].features) {
+      if (feature.geometry.type !== "GeometryCollection") {
+        extendWithCoordinates(bounds, feature.geometry.coordinates);
+      }
+    }
+    return bounds.isEmpty() ? undefined : bounds;
+  }, [currentRef, trackRef]);
+
+  const fitToData = useCallback(
+    (duration = 600) => {
+      const bounds = dataBounds();
+      if (!map || !bounds) {
+        return;
+      }
+      // Fit as if looking straight down, then keep the user's tilt: fitting at a steep pitch
+      // zooms in far too much.
+      const camera = map.cameraForBounds(bounds, {
+        padding: 48,
+        maxZoom: 18,
+        bearing: map.getBearing(),
+        pitch: 0,
+      });
+      if (camera) {
+        map.easeTo({ ...camera, pitch: map.getPitch(), duration });
+      }
+    },
+    [dataBounds, map],
+  );
+
+  // First data without a saved view: frame it, re-fitting while the recording streams in,
+  // until the user takes over or loading settles.
+  const firstDataAtRef = useRef<number>();
+  const dataSize = visibleTrack.length + currentMessages.length + geoMessages.length;
+  useEffect(() => {
+    if (!map || dataSize === 0 || didInitialFitRef.current) {
+      return;
+    }
+    firstDataAtRef.current ??= Date.now();
+    if (Date.now() - firstDataAtRef.current > 3000) {
+      didInitialFitRef.current = true;
+      return;
+    }
+    const timer = setTimeout(() => {
+      if (!didInitialFitRef.current) {
+        fitToData(0);
+      }
+    }, 150);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [dataSize, fitToData, map]);
+
+  // Follow a topic.
+  useEffect(() => {
+    if (!map || !config.followTopic || userMovingRef.current) {
+      return;
+    }
+    const messages = currentNav.get(config.followTopic);
+    const current = messages?.[messages.length - 1];
+    if (!current) {
+      return;
+    }
+    const center = lngLatOf(current);
+    const heading = config.followMode === "heading" ? headings.get(config.followTopic) : undefined;
+    const options = {
+      center,
+      ...(heading != undefined ? { bearing: heading } : {}),
+    };
+    // Jump on seeks and big moves, glide during normal playback.
+    if (map.getBounds().contains(center)) {
+      map.easeTo({
+        ...options,
+        duration: 200,
+        easing: (t) => t,
+        essential: true,
+      });
+    } else {
+      map.jumpTo(options);
+    }
+  }, [config.followMode, config.followTopic, currentNav, headings, map]);
+
+  // --- Hover and click --------------------------------------------------------------------
+
+  useEffect(() => {
+    if (!map) {
+      return;
+    }
+    const popup = new Popup({
+      closeButton: false,
+      closeOnClick: false,
+      offset: 10,
+      maxWidth: "280px",
+    });
+    let hovered: Hit | undefined;
+
+    const pick = (event: MapMouseEvent): Hit | undefined => {
+      const layers = [
+        ...INTERACTIVE_LAYERS.current,
+        ...INTERACTIVE_LAYERS.geojson,
+        INTERACTIVE_LAYERS.track,
+      ].filter((id) => map.getLayer(id) != undefined);
+      const feature = map.queryRenderedFeatures(event.point, { layers })[0];
+      const index = feature?.properties.i as number | undefined;
+      if (!feature || index == undefined) {
+        return undefined;
+      }
+      const layerId = feature.layer.id;
+      if (layerId === INTERACTIVE_LAYERS.track) {
+        const message = trackRef.current[index];
+        return message ? { kind: "nav", message } : undefined;
+      }
+      if ((INTERACTIVE_LAYERS.current as readonly string[]).includes(layerId)) {
+        const message = currentRef.current[index];
+        return message ? { kind: "nav", message } : undefined;
+      }
+      const message = geoRef.current[index];
+      const name: unknown = feature.properties.name;
+      return message
+        ? {
+            kind: "geojson",
+            message,
+            name: typeof name === "string" && name ? name : undefined,
+          }
+        : undefined;
+    };
+
+    const clear = () => {
+      if (hovered) {
+        hovered = undefined;
+        popup.remove();
+        map.getCanvas().style.cursor = "";
+        context.setPreviewTime(undefined);
+      }
+    };
+
+    const onMove = (event: MapMouseEvent) => {
+      if (measuringRef.current) {
+        clear();
+        return;
+      }
+      const hit = pick(event);
+      if (!hit) {
+        clear();
+        return;
+      }
+      map.getCanvas().style.cursor = "pointer";
+      popup.setLngLat(event.lngLat);
+      if (hit.message !== hovered?.message) {
+        hovered = hit;
+        popup.setDOMContent(popupContent(hit)).addTo(map);
+        context.setPreviewTime(eventTimeSec(hit.message));
+      }
+    };
+    const onClick = (event: MapMouseEvent) => {
+      if (measuringRef.current) {
+        return;
+      }
+      const hit = pick(event);
+      if (hit) {
+        context.seekPlayback?.(hit.message.receiveTime);
+      }
+    };
+
+    map.on("mousemove", onMove);
+    map.on("click", onClick);
+    map.getCanvas().addEventListener("mouseleave", clear);
+    return () => {
+      map.off("mousemove", onMove);
+      map.off("click", onClick);
+      map.getCanvas().removeEventListener("mouseleave", clear);
+      popup.remove();
+    };
+  }, [context, currentRef, geoRef, map, trackRef]);
+
+  // --- Render -----------------------------------------------------------------------------
+
   return (
     <ThemeProvider isDark={colorScheme === "dark"}>
-      <Stack ref={sizeRef} fullHeight fullWidth position="relative">
-        {!center && <EmptyState>Waiting for first GPS point...</EmptyState>}
-        <Stack
-          position="absolute"
-          ref={mapContainerRef}
-          style={{
-            inset: 0,
-            cursor: "auto",
-            visibility: center ? "visible" : "hidden",
-          }}
-        />
-        x
-      </Stack>
+      <MapFrame containerRef={containerRef}>
+        {map && (
+          <MapToolbar
+            map={map}
+            units={config.units}
+            showCoordinates={config.showCoordinates}
+            setMeasureData={setMeasureData}
+            measuringRef={measuringRef}
+            onFitToData={dataSize > 0 ? fitToData : undefined}
+          />
+        )}
+        {eligibleTopics.length === 0 && (
+          <MapNotice>No NavSatFix, LocationFix, or GeoJSON topics</MapNotice>
+        )}
+      </MapFrame>
     </ThemeProvider>
   );
 }

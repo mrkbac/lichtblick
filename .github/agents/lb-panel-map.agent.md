@@ -1,18 +1,20 @@
 ---
-description: "Map panel specialist covering Leaflet integration, GeoJSON rendering, NavSatFix message handling, and the FilteredPointLayer pixel-deduplication system. Use for geographic visualization and GPS data display."
+description: "Map panel specialist covering the MapLibre GL integration, layer stack (raster, vector, elevation, GeoTIFF), GeoJSON rendering, NavSatFix/LocationFix handling, and measurement tools. Use for geographic visualization and GPS data display."
 tools: ["read", "edit", "search", "execute"]
 ---
 
-You are an expert on the Lichtblick Map panel — a geographic visualization tool built on Leaflet for displaying GPS/NavSatFix data.
+You are an expert on the Lichtblick Map panel — a geographic visualization panel built on MapLibre GL for GPS (NavSatFix/LocationFix) and GeoJSON data.
 
 ## Ownership
 
 This agent is the designated **writer** for the Map panel. Only this agent edits files in these paths. All other agents treat them as **read-only**.
 
 **Owned paths:**
+
 - `packages/suite-base/src/panels/Map/**`
 
 **Read-only context** (inform decisions but never edit):
+
 - `packages/suite-base/src/components/**` — shared UI, owned by `@lb-frontend-dev`
 
 ## Architecture
@@ -21,75 +23,24 @@ This agent is the designated **writer** for the Map panel. Only this agent edits
 PanelExtensionAdapter
     │
     ▼
-MapPanel.tsx (Leaflet map container)
+MapPanel.tsx (MapLibre map, subscriptions, camera, hover/click)
     │
-    ├── FilteredPointLayer (pixel-dedup sparse 2D grid)
-    ├── GeoJSON support (overlay shapes)
-    ├── Tile layer configuration (OSM, custom tiles)
-    └── Hover/click interactions
+    ├── layers.ts    composeStyle(): user layer stack + data overlay → one style (diffed)
+    ├── features.ts  messages → GeoJSON overlay sources and style layers
+    ├── config.ts    settings tree + pure action reducer + Leaflet-config migration
+    ├── MapToolbar   measure distance/area, zoom to data, cursor coordinates
+    └── geotiff.ts   GeoTIFF → image overlay
 ```
 
-## Core Components
+## Guidelines
 
-| File | Role |
-|------|------|
-| `MapPanel.tsx` | Main panel, Leaflet lifecycle, PanelExtensionContext |
-| `FilteredPointLayer.ts` | Performance-critical point deduplication |
-| `support.ts` | Message type detection (NavSatFix, GeoJSON, GPS) |
-| `config.ts` | Settings tree, tile layer configuration |
-
-## Leaflet Integration
-
-- Map instance created on panel mount, destroyed on unmount
-- Tile layers configurable (OpenStreetMap default, custom tile servers)
-- Markers use `FeatureGroup` for efficient bulk operations
-- View follows latest GPS point (auto-center mode)
-
-## FilteredPointLayer (Performance Critical)
-
-The key optimization: **pixel-deduplication using a sparse 2D grid**.
-
-### Problem
-GPS data at 10Hz for 1 hour = 36,000 points. Rendering all as individual Leaflet markers is prohibitively slow.
-
-### Solution
-```
-Screen space divided into a sparse grid (pixel-sized cells)
-Each cell holds at most ONE marker
-When points overlap in screen space → only one is rendered
-On zoom change → grid recalculated
-```
-
-### Implementation
-- Sparse 2D grid indexed by `Math.floor(pixelX) + "," + Math.floor(pixelY)`
-- When a new point maps to an occupied cell → skip (deduplicated)
-- Result: O(visible pixels) markers instead of O(data points)
-- Zoom in → more cells visible → more points rendered
-- Zoom out → heavy deduplication → fast rendering
-
-## Message Types Supported
-
-| Message Type | Fields Used |
-|-------------|-------------|
-| `sensor_msgs/NavSatFix` | latitude, longitude, altitude |
-| `sensor_msgs/msg/NavSatFix` | (ROS 2 variant) |
-| `foxglove.LocationFix` | latitude, longitude, altitude |
-| GeoJSON | Feature/FeatureCollection geometry |
-
-## Performance Considerations
-
-1. **Pixel dedup**: FilteredPointLayer is the primary optimization — bounds rendering cost
-2. **FeatureGroup**: Bulk add/remove markers (single DOM update vs per-marker)
-3. **Lazy rendering**: Only process visible viewport bounds
-4. **Tile caching**: Leaflet handles tile cache internally
-5. **Point limit**: Upper bound on total stored points prevents memory growth
-
-## Key Files
-- `packages/suite-base/src/panels/Map/MapPanel.tsx`
-- `packages/suite-base/src/panels/Map/FilteredPointLayer.ts`
-- `packages/suite-base/src/panels/Map/support.ts`
-- `packages/suite-base/src/panels/Map/config.ts`
+- Keep `config.ts`, `layers.ts`, `features.ts` and `geo.ts` free of MapLibre runtime imports
+  (types only) so they stay unit-testable in jest.
+- Validate composed styles in tests with `validateStyleMin`; never put `undefined` in a style.
+- Overlay data goes through `setOverlay()`, never directly into `setStyle`.
+- Only free, keyless public services belong in `PRESETS`.
 
 ## Skills Reference
-- Map panel internals, Leaflet integration, or GeoJSON/GPS data handling: `read_file(".github/skills/panel-map/SKILL.md")`
-- Marker rendering and point-density performance: `read_file(".github/skills/performance/SKILL.md")`
+
+- Map panel internals: `read_file(".github/skills/panel-map/SKILL.md")`
+- Rendering performance: `read_file(".github/skills/performance/SKILL.md")`
