@@ -8,6 +8,7 @@
 import { produce } from "immer";
 import * as _ from "lodash-es";
 
+import { parseMessagePath } from "@lichtblick/message-path";
 import {
   SettingsTreeAction,
   SettingsTreeFields,
@@ -15,6 +16,7 @@ import {
   SettingsTreeNodes,
   Topic,
 } from "@lichtblick/suite";
+import { PLOTABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/shared/constants";
 import { lineColors } from "@lichtblick/suite-base/util/plotColors";
 
 import type { Units } from "./geo";
@@ -30,10 +32,18 @@ import {
 import { isGeoJSONSchema } from "./support";
 
 export type HistoryStyle = "points" | "line" | "both" | "none";
+export type ColorBy = "topic" | "speed" | "path";
 export type TopicStyle = {
   history?: HistoryStyle;
   pointSize?: number;
   accuracy?: boolean;
+  /** Color the track by the topic color, ground speed, or a numeric message path. */
+  colorBy?: ColorBy;
+  colorPath?: string;
+  /** Color scale bounds; undefined = automatic. */
+  colorMin?: number;
+  colorMax?: number;
+  colorReverse?: boolean;
 };
 
 // Persisted panel state
@@ -318,6 +328,40 @@ function layerNode(
   };
 }
 
+function colorScaleFields(style: TopicStyle): SettingsTreeFields {
+  const pathError =
+    style.colorBy === "path" && style.colorPath
+      ? parseMessagePath(style.colorPath) == undefined
+        ? "Invalid message path"
+        : undefined
+      : undefined;
+  return {
+    colorPath:
+      style.colorBy === "path"
+        ? {
+            label: "Value path",
+            input: "messagepath",
+            value: style.colorPath ?? "",
+            validTypes: PLOTABLE_ROS_TYPES,
+            error: pathError,
+          }
+        : undefined,
+    colorMin: {
+      label: "Scale min",
+      input: "number",
+      value: style.colorMin,
+      placeholder: "auto",
+    },
+    colorMax: {
+      label: "Scale max",
+      input: "number",
+      value: style.colorMax,
+      placeholder: "auto",
+    },
+    colorReverse: { label: "Reverse colors", input: "boolean", value: style.colorReverse === true },
+  };
+}
+
 function topicNode(config: Config, topic: Omit<Topic, "datatype">): SettingsTreeNode {
   const color = config.topicColors[topic.name];
   const style = config.topicStyles[topic.name] ?? {};
@@ -326,8 +370,22 @@ function topicNode(config: Config, topic: Omit<Topic, "datatype">): SettingsTree
     label: topic.name,
     visible: !config.disabledTopics.includes(topic.name),
     fields: {
+      colorBy: isNav
+        ? {
+            label: "Color by",
+            input: "select",
+            value: style.colorBy ?? "topic",
+            options: [
+              { label: "Topic color", value: "topic" },
+              { label: "Speed", value: "speed" },
+              { label: "Message path value", value: "path" },
+            ],
+            help: "Color the track by ground speed (from the fixes) or by a numeric value from any topic, matched by time.",
+          }
+        : undefined,
+      ...(isNav && (style.colorBy ?? "topic") !== "topic" ? colorScaleFields(style) : {}),
       coloring: {
-        label: "Coloring",
+        label: (style.colorBy ?? "topic") === "topic" ? "Coloring" : "Current position",
         input: "select",
         value: color ? "Custom" : "Automatic",
         options: [
@@ -602,6 +660,20 @@ function updateTopic(draft: Config, path: readonly string[], value: unknown) {
       break;
     case "accuracy":
       style.accuracy = value === true;
+      break;
+    case "colorBy":
+      style.colorBy = value === "speed" || value === "path" ? value : "topic";
+      style.colorMin = style.colorMax = undefined;
+      break;
+    case "colorPath":
+      style.colorPath = typeof value === "string" && value.length > 0 ? value : undefined;
+      break;
+    case "colorMin":
+    case "colorMax":
+      style[path[2]] = typeof value === "number" && isFinite(value) ? value : undefined;
+      break;
+    case "colorReverse":
+      style.colorReverse = value === true;
       break;
   }
 }

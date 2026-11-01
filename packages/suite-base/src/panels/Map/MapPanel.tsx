@@ -26,14 +26,18 @@ import { useDebounce } from "use-debounce";
 
 import { filterMap } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
+import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
 import { toSec } from "@lichtblick/rostime";
 import { MessageEvent, PanelExtensionContext, SettingsTreeAction, Topic } from "@lichtblick/suite";
+import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
+import { turboColorString } from "@lichtblick/suite-base/util/colorUtils";
 import { formatTime } from "@lichtblick/suite-base/util/formatTime";
 import { darkColor, lineColors } from "@lichtblick/suite-base/util/plotColors";
 import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
 
 import { MapToolbar } from "./MapToolbar";
+import { normalize, Sample, sampleAt, speedUnitLabel, speedValues, valueRange } from "./colorBy";
 import {
   applySettingsAction,
   buildSettingsTree,
@@ -55,6 +59,7 @@ import {
   OverlaySource,
   overlayStyle,
   trackFeatures,
+  ValueStyle,
 } from "./features";
 import { loadGeoTiff } from "./geotiff";
 import {
@@ -81,7 +86,7 @@ const log = Logger.getLogger(__filename);
 const LIVE_TRAIL_LIMIT = 100_000;
 
 type Hit =
-  | { kind: "nav"; message: NavMessage }
+  | { kind: "nav"; message: NavMessage; value?: string }
   | { kind: "geojson"; message: GeoJsonMessage; name?: string };
 
 type View = Pick<Config, "center" | "zoomLevel" | "bearing" | "pitch">;
@@ -114,6 +119,9 @@ function popupContent(hit: Hit): HTMLElement {
       line(`alt ${altitude.toFixed(2)} m`);
     }
     line(hasFix(hit.message) ? "fix" : "no fix");
+    if (hit.value != undefined) {
+      line(hit.value, { bold: true });
+    }
   }
   return root;
 }
@@ -142,6 +150,8 @@ const useStyles = makeStyles()((theme) => ({
       padding: theme.spacing(0.75, 1),
     },
     "& .maplibregl-popup-tip": { display: "none" },
+    // Above the panel's own overlays (legends, toolbar).
+    "& .maplibregl-popup": { zIndex: 3 },
     // Theme MapLibre's built-in controls.
     "& .maplibregl-ctrl-group": {
       backgroundColor: theme.palette.background.paper,
@@ -167,6 +177,33 @@ const useStyles = makeStyles()((theme) => ({
   },
   // MapLibre adds `.maplibregl-map { position: relative }`, so size explicitly.
   map: { width: "100%", height: "100%" },
+  legends: {
+    // Under the zoom/compass controls; the attribution at the bottom can wrap to several lines.
+    position: "absolute",
+    right: 10,
+    top: 110,
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(0.5),
+    pointerEvents: "none",
+  },
+  legend: {
+    width: 180,
+    padding: theme.spacing(0.5, 1),
+    borderRadius: theme.shape.borderRadius,
+    backgroundColor: alpha(theme.palette.background.paper, 0.9),
+    boxShadow: theme.shadows[2],
+    fontSize: theme.typography.caption.fontSize,
+    color: theme.palette.text.primary,
+  },
+  legendTitle: { overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" },
+  legendBar: { height: 8, borderRadius: 2, margin: theme.spacing(0.25, 0) },
+  legendScale: {
+    display: "flex",
+    justifyContent: "space-between",
+    color: theme.palette.text.secondary,
+    fontVariantNumeric: "tabular-nums",
+  },
   notice: {
     position: "absolute",
     top: 10,
@@ -186,6 +223,36 @@ function MapFrame(
     <div className={classes.root}>
       <div ref={props.containerRef} className={classes.map} />
       {props.children}
+    </div>
+  );
+}
+
+/** CSS gradient of the color scale; reversed scales map high values to the low end. */
+const LEGEND_GRADIENT = _.range(0, 11).map((i) => turboColorString(i / 10));
+
+function ColorLegends(props: {
+  legends: { topic: string; title: string; range: [number, number]; reverse: boolean }[];
+}): React.JSX.Element {
+  const { classes } = useStyles();
+  return (
+    <div className={classes.legends}>
+      {props.legends.map(({ topic, title, range, reverse }) => (
+        <div key={topic} className={classes.legend}>
+          <div className={classes.legendTitle} title={`${topic}: ${title}`}>
+            {topic} · {title}
+          </div>
+          <div
+            className={classes.legendBar}
+            style={{
+              background: `linear-gradient(to ${reverse ? "left" : "right"}, ${LEGEND_GRADIENT.join(", ")})`,
+            }}
+          />
+          <div className={classes.legendScale}>
+            <span>{Number(range[0].toPrecision(4))}</span>
+            <span>{Number(range[1].toPrecision(4))}</span>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
@@ -222,6 +289,9 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   const overlayData = useRef(emptyOverlayData());
   const measuringRef = useRef(false);
   const rangeTopicsRef = useRef(new Set<string>());
+  // Values of "color by message path" expressions over time, by path string.
+  const [pathSamples, setPathSamples] = useState<ReadonlyMap<string, Sample[]>>(new Map());
+  const pathRangeTopicsRef = useRef(new Set<string>());
   const rememberedRef = useRef(new Set<string>());
   const viewRef = useRef<View>({
     center: config.center,
@@ -342,15 +412,39 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
 
   // --- Subscriptions ----------------------------------------------------------------------
 
+  // Message paths that color a track, parsed. Stable unless the set of paths changes.
+  const colorPathsKey = _.uniq(
+    enabledTopics.flatMap((topic) => {
+      const style = config.topicStyles[topic.name];
+      return style?.colorBy === "path" && style.colorPath ? [style.colorPath] : [];
+    }),
+  )
+    .sort()
+    .join("\n");
+  const colorPaths = useMemo(
+    () =>
+      filterMap(colorPathsKey === "" ? [] : colorPathsKey.split("\n"), (path) => {
+        const parsed = parseMessagePath(path);
+        return parsed ? { path, parsed } : undefined;
+      }),
+    [colorPathsKey],
+  );
+  const colorPathsRef = useLatest(colorPaths);
+
   useEffect(() => {
-    context.subscribe(
-      enabledTopics.map((topic) => ({
+    const subscribed = new Set(enabledTopics.map((topic) => topic.name));
+    context.subscribe([
+      ...enabledTopics.map((topic) => ({
         topic: topic.name,
         convertTo: topic.schemaName,
         preload: false,
       })),
-    );
-  }, [context, enabledTopics]);
+      // Topics read by "color by message path" (unless already subscribed above).
+      ..._.uniq(colorPaths.map(({ parsed }) => parsed.topicName))
+        .filter((topic) => !subscribed.has(topic))
+        .map((topic) => ({ topic, preload: false })),
+    ]);
+  }, [colorPaths, context, enabledTopics]);
 
   useEffect(
     () => () => {
@@ -405,6 +499,62 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     };
   }, [appendTrack, context, navTopics]);
 
+  const appendPathSamples = useCallback(
+    (
+      messages: readonly MessageEvent[],
+      paths: readonly { path: string; parsed: MessagePath }[],
+    ) => {
+      const added = new Map<string, Sample[]>();
+      for (const { path, parsed } of paths) {
+        const samples: Sample[] = [];
+        for (const message of messages) {
+          const value = simpleGetMessagePathDataItems(message, parsed).find(
+            (item): item is number | bigint => typeof item === "number" || typeof item === "bigint",
+          );
+          if (value != undefined) {
+            samples.push({ time: eventTimeSec(message), value: Number(value) });
+          }
+        }
+        if (samples.length > 0) {
+          added.set(path, samples);
+        }
+      }
+      if (added.size > 0) {
+        setPathSamples((prev) => {
+          const next = new Map(prev);
+          for (const [path, samples] of added) {
+            next.set(path, (prev.get(path) ?? []).concat(samples));
+          }
+          return next;
+        });
+      }
+    },
+    [],
+  );
+
+  // Recorded values for "color by message path".
+  useLayoutEffect(() => {
+    setPathSamples(new Map());
+    pathRangeTopicsRef.current = new Set();
+    const byTopic = _.groupBy(colorPaths, ({ parsed }) => parsed.topicName);
+    const unsubscribes = Object.entries(byTopic).map(([topic, paths]) =>
+      context.unstable_subscribeMessageRange({
+        topic,
+        onNewRangeIterator: async (iterator) => {
+          pathRangeTopicsRef.current.add(topic);
+          for await (const batch of iterator) {
+            appendPathSamples(batch, paths);
+          }
+        },
+      }),
+    );
+    return () => {
+      for (const unsubscribe of unsubscribes) {
+        unsubscribe();
+      }
+    };
+  }, [appendPathSamples, colorPaths, context]);
+
   useLayoutEffect(() => {
     context.watch("topics");
     context.watch("currentFrame");
@@ -420,6 +570,14 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       }
       if (renderState.colorScheme) {
         setColorScheme(renderState.colorScheme);
+      }
+
+      // Live sources have no recorded range: collect "color by" values as they arrive.
+      const livePathMessages = renderState.currentFrame?.filter(
+        (m) => !pathRangeTopicsRef.current.has(m.topic),
+      );
+      if (livePathMessages && livePathMessages.length > 0 && colorPathsRef.current.length > 0) {
+        appendPathSamples(livePathMessages, colorPathsRef.current);
       }
 
       const frame = renderState.currentFrame?.filter(isValidMapMessage);
@@ -452,7 +610,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     return () => {
       context.onRender = undefined;
     };
-  }, [appendTrack, context]);
+  }, [appendPathSamples, appendTrack, colorPathsRef, context]);
 
   useEffect(() => {
     renderDone();
@@ -469,6 +627,58 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     () => _.mapValues(trackByTopic, (m) => m.map(eventTimeSec)),
     [trackByTopic],
   );
+
+  // "Color by": per-fix colors from speed or a message path, with a range per topic.
+  const { valueStyles, legends } = useMemo(() => {
+    const styles = new Map<NavMessage, ValueStyle>();
+    const legendList: {
+      topic: string;
+      title: string;
+      range: [number, number];
+      reverse: boolean;
+    }[] = [];
+    for (const [topic, messages] of Object.entries(trackByTopic)) {
+      const style = config.topicStyles[topic];
+      const colorBy = style?.colorBy ?? "topic";
+      if (colorBy === "topic") {
+        continue;
+      }
+      const times = trackTimesByTopic[topic] ?? [];
+      const values =
+        colorBy === "speed"
+          ? speedValues(
+              messages.map((m, i) => ({ time: times[i]!, position: lngLatOf(m) })),
+              config.units,
+            )
+          : sampleAt(pathSamples.get(style?.colorPath ?? "") ?? [], times);
+      const range = valueRange(values, style?.colorMin, style?.colorMax);
+      if (!range) {
+        continue;
+      }
+      const reverse = style?.colorReverse === true;
+      const unit = colorBy === "speed" ? ` ${speedUnitLabel(config.units)}` : "";
+      messages.forEach((message, i) => {
+        const value = values[i];
+        if (value != undefined && isFinite(value)) {
+          const t = normalize(value, range);
+          styles.set(message, {
+            color: turboColorString(reverse ? 1 - t : t),
+            label: `${Number(value.toPrecision(4))}${unit}`,
+          });
+        }
+      });
+      legendList.push({
+        topic,
+        title:
+          colorBy === "speed"
+            ? `Speed (${speedUnitLabel(config.units)})`
+            : (style?.colorPath ?? ""),
+        range,
+        reverse,
+      });
+    }
+    return { valueStyles: styles, legends: legendList };
+  }, [config.topicStyles, config.units, pathSamples, trackByTopic, trackTimesByTopic]);
 
   const currentMessages = useMemo(
     () => [...currentNav.values()].flat().filter((m) => enabledNames.has(m.topic)),
@@ -758,10 +968,12 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   // --- Overlay data -----------------------------------------------------------------------
 
   useEffect(() => {
-    const { points, lines } = trackFeatures(visibleTrack, colors, config.topicStyles);
+    const { points, lines } = trackFeatures(visibleTrack, colors, config.topicStyles, (i) =>
+      valueStyles.get(visibleTrack[i]!),
+    );
     setOverlay(OVERLAY.track, points);
     setOverlay(OVERLAY.trackLine, lines);
-  }, [colors, config.topicStyles, setOverlay, visibleTrack]);
+  }, [colors, config.topicStyles, setOverlay, valueStyles, visibleTrack]);
 
   useEffect(() => {
     const { markers, accuracy } = currentFeatures(
@@ -922,12 +1134,23 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     let hovered: Hit | undefined;
 
     const pick = (event: MapMouseEvent): Hit | undefined => {
-      const layers = [
+      // Most specific first: a track point inside a GeoJSON area should win over the area.
+      const priority: string[] = [
         ...INTERACTIVE_LAYERS.current,
-        ...INTERACTIVE_LAYERS.geojson,
         INTERACTIVE_LAYERS.track,
-      ].filter((id) => map.getLayer(id) != undefined);
-      const feature = map.queryRenderedFeatures(event.point, { layers })[0];
+        ...INTERACTIVE_LAYERS.geojson.slice().reverse(),
+      ];
+      const layers = priority.filter((id) => map.getLayer(id) != undefined);
+      // A few pixels of slack makes small points easy to hover.
+      const { x, y } = event.point;
+      const hits = map.queryRenderedFeatures(
+        [
+          [x - 4, y - 4],
+          [x + 4, y + 4],
+        ],
+        { layers },
+      );
+      const feature = _.minBy(hits, (hit) => priority.indexOf(hit.layer.id));
       const index = feature?.properties.i as number | undefined;
       if (!feature || index == undefined) {
         return undefined;
@@ -935,7 +1158,10 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       const layerId = feature.layer.id;
       if (layerId === INTERACTIVE_LAYERS.track) {
         const message = trackRef.current[index];
-        return message ? { kind: "nav", message } : undefined;
+        const value: unknown = feature.properties.v;
+        return message
+          ? { kind: "nav", message, value: typeof value === "string" ? value : undefined }
+          : undefined;
       }
       if ((INTERACTIVE_LAYERS.current as readonly string[]).includes(layerId)) {
         const message = currentRef.current[index];
@@ -1015,6 +1241,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
             onFitToData={dataSize > 0 ? fitToData : undefined}
           />
         )}
+        {legends.length > 0 && <ColorLegends legends={legends} />}
         {eligibleTopics.length === 0 && (
           <MapNotice>No NavSatFix, LocationFix, or GeoJSON topics</MapNotice>
         )}

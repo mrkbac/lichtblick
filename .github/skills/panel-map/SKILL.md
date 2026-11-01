@@ -13,6 +13,7 @@ A geographic visualization panel built on MapLibre GL (WebGL) for GPS (NavSatFix
 panels/Map/
 ├── MapPanel.tsx      # panel: subscriptions, MapLibre lifecycle, camera, hover/click
 ├── MapToolbar.tsx    # measure tools, map-anchored labels, zoom to data, cursor coordinates
+├── colorBy.ts        # color tracks by speed or a message path: speed, time matching, ranges
 ├── measure.ts        # measure tool rules, angle/height math, measure overlay geometry
 ├── config.ts         # persisted Config, legacy migration, settings tree, pure action reducer
 ├── layers.ts         # free-service presets, MapLayer model, composeStyle(), vector style fetch
@@ -46,6 +47,13 @@ panels/Map/
 - Heading: bearing from the most recent fix at least 1 m back (ignores GNSS jitter when stationary).
 - Custom URL fields are debounced before use so half-typed URLs are never fetched; a custom source
   is remembered only after it loads successfully.
+
+## Color by value
+
+Position topics can be colored by ground speed (from the fixes, over a 0.5 s window) or by a
+numeric message path on any topic (latest sample at or before each fix). Colors use the Turbo
+scale with a per-topic range (2nd–98th percentile unless set) and a legend. Path topics are
+range-subscribed like the track; live values come from the current frame.
 
 ## Measurement
 
