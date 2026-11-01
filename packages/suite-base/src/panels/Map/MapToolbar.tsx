@@ -13,7 +13,15 @@ import { Divider, IconButton, Paper, Tooltip, Typography } from "@mui/material";
 import type { FeatureCollection } from "geojson";
 import { Marker } from "maplibre-gl";
 import type { Map as MapLibreMap, MapMouseEvent, PointLike } from "maplibre-gl";
-import { MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  MutableRefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { customTypography } from "@lichtblick/theme";
@@ -358,7 +366,9 @@ export function MapToolbar(props: Props): React.JSX.Element {
   const [terrainTick, setTerrainTick] = useState(0);
   // Mirror for the map event handlers, which are bound once per tool.
   const stateRef = useRef({ measurements, selectedId });
-  stateRef.current = { measurements, selectedId };
+  useLayoutEffect(() => {
+    stateRef.current = { measurements, selectedId };
+  }, [measurements, selectedId]);
 
   useEffect(() => {
     measuringRef.current = tool != undefined;
@@ -561,8 +571,18 @@ export function MapToolbar(props: Props): React.JSX.Element {
         removePoint(handle.measurement, handle.index);
       }
     };
+    // Only keys aimed at this panel (map canvas or toolbar), so other panels, dialogs, and menus
+    // keep their keys.
+    const panelRoot = map.getContainer().parentElement ?? map.getContainer();
     const onKey = (event: KeyboardEvent) => {
-      if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+      const target = event.target;
+      if (
+        !(target instanceof Node) ||
+        !panelRoot.contains(target) ||
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable)
+      ) {
         return;
       }
       const current = selected();
@@ -629,18 +649,32 @@ export function MapToolbar(props: Props): React.JSX.Element {
     [live, selected?.id],
   );
 
+  // Summaries sample terrain heavily (profiles, slopes), so only the measurement being drawn is
+  // recomputed as the cursor moves; the others are cached per (immutable) measurement object.
+  const summaryCache = useRef(new WeakMap<Measurement, { key: string; summary: Summary }>());
   const summaries = useMemo(() => {
-    void terrainTick; // re-read elevations once terrain tiles load
     const elevationAt = (point: LngLat) => groundElevation(map, point);
+    const cacheKey = `${units}|${terrainTick}`;
     return new Map(
-      measurements.map((m) => [
-        m.id,
-        summarize(m.tool, pointsOf(m), isClosed(m) ? "area" : "path", units, elevationAt),
-      ]),
+      measurements.map((m) => {
+        if (m.id === selected?.id && preview) {
+          return [
+            m.id,
+            summarize(m.tool, pointsOf(m), isClosed(m) ? "area" : "path", units, elevationAt),
+          ];
+        }
+        const cached = summaryCache.current.get(m);
+        if (cached?.key === cacheKey) {
+          return [m.id, cached.summary];
+        }
+        const summary = summarize(m.tool, m.points, m.closed ? "area" : "path", units, elevationAt);
+        summaryCache.current.set(m, { key: cacheKey, summary });
+        return [m.id, summary];
+      }),
     );
     // isClosed depends on the same inputs as pointsOf.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map, measurements, pointsOf, terrainTick, units, cursor?.onFirst]);
+  }, [map, measurements, pointsOf, preview, selected?.id, terrainTick, units, cursor?.onFirst]);
 
   useEffect(() => {
     setMeasureData({
@@ -659,21 +693,51 @@ export function MapToolbar(props: Props): React.JSX.Element {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursor?.onFirst, live, measurements, selected?.id, setMeasureData]);
 
-  // Labels anchored on the map (they follow 3D terrain).
+  // Labels anchored on the map (they follow 3D terrain). Markers are reused and only updated
+  // when their position or text changes, instead of being recreated on every pointer move.
+  const markersRef = useRef(new Map<string, Marker>());
   useEffect(() => {
-    const markers = [...summaries.values()].flatMap((summary) =>
-      summary.labels.map((label) =>
-        new Marker({ element: labelElement(label.text), anchor: "bottom", offset: [0, -8] })
-          .setLngLat(label.at)
-          .addTo(map),
-      ),
-    );
-    return () => {
-      for (const marker of markers) {
+    const markers = markersRef.current;
+    const seen = new Set<string>();
+    for (const [id, summary] of summaries) {
+      summary.labels.forEach((label, i) => {
+        const key = `${id}:${i}`;
+        seen.add(key);
+        const existing = markers.get(key);
+        if (existing) {
+          const at = existing.getLngLat();
+          if (at.lng !== label.at[0] || at.lat !== label.at[1]) {
+            existing.setLngLat(label.at);
+          }
+          if (existing.getElement().textContent !== label.text) {
+            existing.getElement().textContent = label.text;
+          }
+        } else {
+          markers.set(
+            key,
+            new Marker({ element: labelElement(label.text), anchor: "bottom", offset: [0, -8] })
+              .setLngLat(label.at)
+              .addTo(map),
+          );
+        }
+      });
+    }
+    for (const [key, marker] of markers) {
+      if (!seen.has(key)) {
+        marker.remove();
+        markers.delete(key);
+      }
+    }
+  }, [map, summaries]);
+  useEffect(
+    () => () => {
+      for (const marker of markersRef.current.values()) {
         marker.remove();
       }
-    };
-  }, [map, summaries]);
+      markersRef.current.clear();
+    },
+    [map],
+  );
 
   const summary = selected ? summaries.get(selected.id) : undefined;
   const activeRules = tool ? TOOL_RULES[tool] : undefined;
