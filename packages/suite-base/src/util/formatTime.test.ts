@@ -19,13 +19,13 @@ import * as formatTime from "./formatTime";
 describe("formatTime.format", () => {
   it("formats date and time based on provided timezone", () => {
     expect(formatTime.format({ sec: 1, nsec: 0 }, "Asia/Bangkok")).toBe(
-      "1970-01-01 7:00:01.000 AM +07",
+      "1970-01-01 7:00:01.000 AM GMT+7",
     );
     expect(formatTime.format({ sec: 1, nsec: 1 }, "Australia/Currie")).toBe(
-      "1970-01-01 11:00:01.000 AM AEDT",
+      "1970-01-01 11:00:01.000 AM GMT+11",
     );
     expect(formatTime.format({ sec: 1000000, nsec: 0 }, "Pacific/Midway")).toBe(
-      "1970-01-12 2:46:40.000 AM SST",
+      "1970-01-12 2:46:40.000 AM GMT-11",
     );
     expect(formatTime.format({ sec: 1100000, nsec: 1000000000 }, "America/Los_Angeles")).toBe(
       "1970-01-13 9:33:21.000 AM PST",

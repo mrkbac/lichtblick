@@ -1,23 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import moment from "moment-timezone";
-
 import { parseTimestampStr } from "./parseMultipleTimes";
 
 describe("parseTimestampStr", () => {
-  const originalTz = moment.tz.guess();
-
-  beforeEach(() => {
-    // Set default timezone to UTC for consistent results across different environments
-    moment.tz.setDefault("UTC");
-  });
-
-  afterEach(() => {
-    // Restore original timezone
-    moment.tz.setDefault(originalTz);
-  });
-
+  // jest.globalSetup.js runs tests in UTC
   it("should return the same number if input is a Unix timestamp in seconds", () => {
     expect(parseTimestampStr("1633046400")).toEqual({ sec: 1633046400, nsec: 0 });
   });

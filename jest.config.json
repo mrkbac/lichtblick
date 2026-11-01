@@ -6,5 +6,6 @@
     "<rootDir>/desktop/jest.config.json",
     "<rootDir>/packages/*/jest.config.json"
   ],
-  "coverageDirectory": "coverage"
+  "coverageDirectory": "coverage",
+  "globalSetup": "<rootDir>/jest.globalSetup.js"
 }
