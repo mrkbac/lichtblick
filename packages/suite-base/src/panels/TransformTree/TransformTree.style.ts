@@ -27,6 +27,7 @@ export const useStyles = makeStyles()((theme) => ({
   },
   table: {
     borderCollapse: "collapse",
+    tableLayout: "fixed",
     width: "100%",
     fontFamily: fontMonospace,
     fontSize: theme.typography.caption.fontSize,
@@ -36,10 +37,11 @@ export const useStyles = makeStyles()((theme) => ({
       padding: theme.spacing(0.25, 1),
       whiteSpace: "nowrap",
       textAlign: "right",
+      overflow: "hidden",
+      textOverflow: "ellipsis",
     },
     "th:first-of-type, td:first-of-type": {
       textAlign: "left",
-      width: "100%",
     },
     th: {
       position: "sticky",
@@ -61,6 +63,11 @@ export const useStyles = makeStyles()((theme) => ({
     display: "flex",
     alignItems: "center",
     gap: theme.spacing(0.5),
+    minWidth: 0,
+  },
+  frameName: {
+    overflow: "hidden",
+    textOverflow: "ellipsis",
   },
   toggle: {
     display: "inline-flex",
