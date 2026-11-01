@@ -11,6 +11,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { useMountedState } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
+import Catalog from "@lichtblick/suite-base/components/Catalog/Catalog";
 import Snow from "@lichtblick/suite-base/components/DataSourceDialog/Snow";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
@@ -25,7 +26,7 @@ import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import Connection from "./Connection";
 import Start from "./Start";
 
-export type DataSourceDialogItem = "start" | "file" | "demo" | "remote" | "connection";
+export type DataSourceDialogItem = "start" | "file" | "demo" | "remote" | "connection" | "catalog";
 
 type DataSourceDialogProps = {
   backdropAnimation?: boolean;
@@ -35,6 +36,12 @@ const useStyles = makeStyles()((theme) => ({
   paper: {
     position: "relative",
     maxWidth: `calc(min(${theme.breakpoints.values.md}px, 100% - ${theme.spacing(4)}))`,
+  },
+  fullScreenPaper: {
+    // The theme caps dialog height; a full-screen page should fill the window, below any
+    // window title bar controls.
+    maxHeight: "none",
+    paddingTop: "env(titlebar-area-height, 0px)",
   },
   closeButton: {
     position: "absolute",
@@ -115,6 +122,11 @@ export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Elemen
           title: "Open new connection",
           component: <Connection />,
         };
+      case "catalog":
+        return {
+          title: "Catalog",
+          component: <Catalog />,
+        };
       default:
         return {
           title: "Get started",
@@ -129,6 +141,7 @@ export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Elemen
       open
       onClose={onModalClose}
       fullWidth
+      fullScreen={activeView === "catalog"}
       maxWidth="lg"
       slotProps={{
         backdrop: {
@@ -137,7 +150,7 @@ export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Elemen
         paper: {
           square: false,
           elevation: 4,
-          className: classes.paper,
+          className: activeView === "catalog" ? classes.fullScreenPaper : classes.paper,
         },
       }}
     >
@@ -148,7 +161,7 @@ export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Elemen
         flexGrow={1}
         fullHeight
         justifyContent="space-between"
-        overflow={activeView === "connection" ? "hidden" : undefined}
+        overflow={activeView === "connection" || activeView === "catalog" ? "hidden" : undefined}
       >
         {view.component}
       </Stack>
