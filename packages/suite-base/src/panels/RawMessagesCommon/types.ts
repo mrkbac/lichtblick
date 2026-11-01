@@ -93,7 +93,13 @@ export type PropsMetadata = {
   datatype?: string;
   message: MessageEvent;
   diffMessage?: MessageEvent;
+  stepping?: MessageStepping;
 };
+
+export type MessageStepping = Pick<
+  UseSharedRawMessagesLogicResult,
+  "canStepPrevious" | "canStepNext" | "onStepPrevious" | "onStepNext"
+>;
 
 export type PropsToolbar = {
   canExpandAll: boolean;
@@ -193,6 +199,13 @@ export type UseSharedRawMessagesLogicResult = {
   onToggleDiff: () => void;
   onToggleExpandAll: () => void;
   onLabelClick: (keypath: (string | number)[]) => void;
+
+  /** Whether the data source supports stepping through messages at all. */
+  canStep: boolean;
+  canStepPrevious: boolean;
+  canStepNext: boolean;
+  onStepPrevious: () => void;
+  onStepNext: () => void;
 };
 
 /** useRenderers */

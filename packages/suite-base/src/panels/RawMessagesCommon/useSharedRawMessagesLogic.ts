@@ -3,13 +3,24 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import Logger from "@lichtblick/log";
 import { parseMessagePath, MessagePath, MessagePathStructureItem } from "@lichtblick/message-path";
+import type { Time } from "@lichtblick/rostime";
+import { add as addTime, compare, subtract as subtractTime } from "@lichtblick/rostime";
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import {
   messagePathStructures,
   traverseStructure,
 } from "@lichtblick/suite-base/components/MessagePathSyntax/messagePathsForDatatype";
+import {
+  MessageAndData,
+  useCachedGetMessagePathDataItems,
+} from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import { useMessageDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useMessageDataItem";
+import {
+  MessagePipelineContext,
+  useMessagePipeline,
+} from "@lichtblick/suite-base/components/MessagePipeline";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { Topic } from "@lichtblick/suite-base/players/types";
 
@@ -21,6 +32,17 @@ import type {
   UseSharedRawMessagesLogicResult,
 } from "./types";
 import { dataWithoutWrappingArray, generateDeepKeyPaths, toggleExpansion } from "./utils";
+
+const log = Logger.getLogger(__filename);
+
+const ONE_NANOSECOND = Object.freeze({ sec: 0, nsec: 1 });
+
+const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
+const selectTopicStats = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.topicStats;
+const selectSeekPlayback = (ctx: MessagePipelineContext) => ctx.seekPlayback;
+const selectPausePlayback = (ctx: MessagePipelineContext) => ctx.pausePlayback;
+const selectGetBatchIterator = (ctx: MessagePipelineContext) => ctx.getBatchIterator;
+const selectGetMessageAtTime = (ctx: MessagePipelineContext) => ctx.getMessageAtTime;
 
 const LATEST_PER_RENDER_TICK_SAMPLING = Object.freeze({
   mode: "latest-per-render-tick" as const,
@@ -89,7 +111,51 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
   const prevTickObj = matchedMessages[matchedMessages.length - 2];
 
   const inTimetickDiffMode = diffEnabled && diffMethod === PREV_MSG_METHOD;
-  const baseItem = inTimetickDiffMode ? prevTickObj : currTickObj;
+
+  const currentTime = useMessagePipeline(selectCurrentTime);
+  const topicStats = useMessagePipeline(selectTopicStats);
+  const seekPlayback = useMessagePipeline(selectSeekPlayback);
+  const pausePlayback = useMessagePipeline(selectPausePlayback);
+  const getBatchIterator = useMessagePipeline(selectGetBatchIterator);
+  const getMessageAtTime = useMessagePipeline(selectGetMessageAtTime);
+  const cachedGetMessagePathDataItems = useCachedGetMessagePathDataItems([topicPath]);
+
+  // A seek resets the message history, so after stepping (or scrubbing) there is no previous
+  // tick to diff against. Read the message before the current one directly from the source.
+  const [fetchedPrevItem, setFetchedPrevItem] = useState<MessageAndData>();
+  const currMessageEvent = currTickObj?.messageEvent;
+  const needsFetchedPrev = inTimetickDiffMode && prevTickObj == undefined;
+  useEffect(() => {
+    setFetchedPrevItem(undefined);
+    if (!needsFetchedPrev || !currMessageEvent) {
+      return;
+    }
+    let cancelled = false;
+    getMessageAtTime(
+      currMessageEvent.topic,
+      subtractTime(currMessageEvent.receiveTime, ONE_NANOSECOND),
+    )
+      .then((messageEvent) => {
+        const queriedData = messageEvent && cachedGetMessagePathDataItems(topicPath, messageEvent);
+        if (!cancelled && messageEvent && queriedData && queriedData.length > 0) {
+          setFetchedPrevItem({ messageEvent, queriedData });
+        }
+      })
+      .catch((error: unknown) => {
+        log.warn("Failed to read previous message for diff", error);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    needsFetchedPrev,
+    currMessageEvent,
+    getMessageAtTime,
+    cachedGetMessagePathDataItems,
+    topicPath,
+  ]);
+
+  const baseItem = inTimetickDiffMode ? (prevTickObj ?? fetchedPrevItem) : currTickObj;
   const diffItem = inTimetickDiffMode ? currTickObj : diffTopicObj;
 
   const nodes = useMemo(() => {
@@ -147,6 +213,74 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
     saveConfig({ expansion } as Partial<T>);
   }, [expansion, saveConfig]);
 
+  // Message stepping: seek to the previous/next message on the topic. Only for sources that can
+  // seek; live sources have nothing to step through.
+  const [isStepping, setIsStepping] = useState(false);
+  const canStep = seekPlayback != undefined && topic != undefined;
+  const stats = topic ? topicStats?.get(topic.name) : undefined;
+  // Step back from the displayed message rather than the playhead, so the first click always
+  // changes what is shown even when the playhead sits between two messages.
+  const prevAnchorTime = currMessageEvent?.receiveTime ?? currentTime;
+  const canStepPrevious =
+    canStep &&
+    !isStepping &&
+    prevAnchorTime != undefined &&
+    (stats?.firstMessageTime == undefined || compare(prevAnchorTime, stats.firstMessageTime) > 0);
+  const canStepNext =
+    canStep &&
+    !isStepping &&
+    currentTime != undefined &&
+    (stats?.lastMessageTime == undefined || compare(currentTime, stats.lastMessageTime) < 0);
+
+  const seekTo = useCallback(
+    async (findTime: () => Promise<Time | undefined>) => {
+      setIsStepping(true);
+      try {
+        const time = await findTime();
+        if (time) {
+          pausePlayback?.();
+          seekPlayback?.(time);
+        }
+      } catch (error) {
+        log.warn("Failed to step to message", error);
+      } finally {
+        setIsStepping(false);
+      }
+    },
+    [pausePlayback, seekPlayback],
+  );
+
+  const onStepPrevious = useCallback(() => {
+    if (!canStepPrevious) {
+      return;
+    }
+    void seekTo(
+      async () =>
+        (await getMessageAtTime(topic.name, subtractTime(prevAnchorTime, ONE_NANOSECOND)))
+          ?.receiveTime,
+    );
+  }, [canStepPrevious, getMessageAtTime, prevAnchorTime, seekTo, topic]);
+
+  const onStepNext = useCallback(() => {
+    if (!canStepNext) {
+      return;
+    }
+    void seekTo(async () => {
+      const iterator = getBatchIterator(topic.name, {
+        start: addTime(currentTime, ONE_NANOSECOND),
+      });
+      for await (const result of iterator ?? []) {
+        if (
+          result.type === "message-event" &&
+          compare(result.msgEvent.receiveTime, currentTime) > 0
+        ) {
+          return result.msgEvent.receiveTime;
+        }
+      }
+      return undefined;
+    });
+  }, [canStepNext, currentTime, getBatchIterator, seekTo, topic]);
+
   return {
     topicRosPath,
     topic,
@@ -162,5 +296,10 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
     onToggleDiff,
     onToggleExpandAll,
     onLabelClick,
+    canStep,
+    canStepPrevious,
+    canStepNext,
+    onStepPrevious,
+    onStepNext,
   };
 }

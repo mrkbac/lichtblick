@@ -23,6 +23,7 @@ import {
   DiffObject,
   NodeExpansion,
   NodeState,
+  MessageStepping,
   ValueActionItem,
   ValueLabels,
   ValueLabelsProps,
@@ -374,3 +375,21 @@ export const isArrayElement = (
 export const formatValueForFilter = (value: unknown): string => {
   return typeof value === "bigint" ? value.toString() : (JSON.stringify(value) ?? "");
 };
+
+/** Alt+[ / Alt+] (Option on macOS) step to the previous/next message while the panel has focus. */
+export function handleStepKeyDown(
+  event: React.KeyboardEvent,
+  { onStepPrevious, onStepNext }: Pick<MessageStepping, "onStepPrevious" | "onStepNext">,
+): void {
+  if (!event.altKey || event.ctrlKey || event.metaKey || event.target instanceof HTMLInputElement) {
+    return;
+  }
+  // Use `code`, since Option+[ produces a different `key` on macOS.
+  if (event.code === "BracketLeft") {
+    event.preventDefault();
+    onStepPrevious();
+  } else if (event.code === "BracketRight") {
+    event.preventDefault();
+    onStepNext();
+  }
+}

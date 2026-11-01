@@ -14,7 +14,8 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { Link, Typography } from "@mui/material";
+import { ChevronLeft16Regular, ChevronRight16Regular } from "@fluentui/react-icons";
+import { IconButton, Link, Typography } from "@mui/material";
 import { useCallback } from "react";
 import { useLatest } from "react-use";
 
@@ -34,6 +35,7 @@ export default function Metadata({
   datatype,
   message,
   diffMessage,
+  stepping,
 }: PropsMetadata): React.JSX.Element {
   const { classes } = useStylesMetadata();
 
@@ -79,6 +81,30 @@ export default function Metadata({
           })()}
           {` @ ${formatTimeRaw(message.receiveTime)} sec`}
         </Typography>
+        {stepping && (
+          <>
+            <IconButton
+              size="small"
+              className={classes.button}
+              title="Previous message (Alt+[)"
+              aria-label="Previous message"
+              disabled={!stepping.canStepPrevious}
+              onClick={stepping.onStepPrevious}
+            >
+              <ChevronLeft16Regular />
+            </IconButton>
+            <IconButton
+              size="small"
+              className={classes.button}
+              title="Next message (Alt+])"
+              aria-label="Next message"
+              disabled={!stepping.canStepNext}
+              onClick={stepping.onStepNext}
+            >
+              <ChevronRight16Regular />
+            </IconButton>
+          </>
+        )}
         <CopyButton size="small" iconSize="small" className={classes.button} getText={copyData} />
       </Stack>
 
