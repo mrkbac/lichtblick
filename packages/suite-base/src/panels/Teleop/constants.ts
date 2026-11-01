@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { TeleopConfig } from "@lichtblick/suite-base/panels/Teleop/types";
+
 export const geometryMsgOptions = [
   { label: "linear-x", value: "linear-x" },
   { label: "linear-y", value: "linear-y" },
@@ -23,4 +25,21 @@ export const svgPathsDisabled = {
   down: "M128,225.345l-20,-20l40,0l-20,20Z",
   left: "M30.449,127.854l20,-20l0,40l-20,-20Z",
   right: "M225.43,127.854l-20,20l0,-40l20,20Z",
+};
+
+export const DEFAULT_CONFIG: TeleopConfig = {
+  topic: undefined,
+  messageType: "Twist",
+  frameId: "",
+  publishRate: 10,
+  stopOnRelease: true,
+  mode: "joystick",
+  keyboard: true,
+  gamepad: true,
+  gamepadDeadzone: 0.15,
+  speedScale: 1,
+  upButton: { field: "linear-x", value: 1 },
+  downButton: { field: "linear-x", value: -1 },
+  leftButton: { field: "angular-z", value: 1 },
+  rightButton: { field: "angular-z", value: -1 },
 };
