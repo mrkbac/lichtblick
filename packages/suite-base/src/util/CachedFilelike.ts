@@ -48,6 +48,8 @@ type ReadRequest = {
   requestTime: number;
   // Set while the read is served by its own one-off fetch instead of the main connection.
   sideFetch?: boolean;
+  // A one-off fetch for this read failed, so it is left to the main connection.
+  sideFetchFailed?: boolean;
 };
 
 export default class CachedFilelike implements Filelike {
@@ -71,7 +73,7 @@ export default class CachedFilelike implements Filelike {
   // A list of read requests and associated ranges for all read requests, in order.
   #readRequests: ReadRequest[] = [];
 
-  // When a read was last resolved while the main connection was open.
+  // When a read was last resolved while the main connection was open, or when it was opened.
   #lastMainServeTime = 0;
   #sideFetchCount = 0;
 
@@ -317,7 +319,7 @@ export default class CachedFilelike implements Filelike {
         if (this.#sideFetchCount >= MAX_SIDE_FETCHES) {
           break;
         }
-        if (connectionFor(request.range)) {
+        if (request.sideFetchFailed !== true && connectionFor(request.range)) {
           this.#startSideFetch(request);
         }
       }
@@ -343,6 +345,7 @@ export default class CachedFilelike implements Filelike {
         // Leave the read to the main connection, which has its own retry handling.
         this.#log.info(`Side fetch @ ${rangeToString(request.range)} failed: ${String(error)}`);
         request.sideFetch = false;
+        request.sideFetchFailed = true;
       })
       .finally(() => {
         this.#sideFetchCount--;
@@ -371,6 +374,8 @@ export default class CachedFilelike implements Filelike {
 
     const stream = this.#fileReader.fetch(range.start, range.end - range.start);
     this.#currentConnection = { stream, remainingRange: range };
+    // A new connection is in use until its first read resolves, so far reads don't replace it.
+    this.#lastMainServeTime = Date.now();
 
     stream.on("error", (error: Error) => {
       this.#handleConnectionInterrupted({
