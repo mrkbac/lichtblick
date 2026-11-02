@@ -1,9 +1,9 @@
 # Build stage
-FROM node:22 AS build
+FROM node:26 AS build
 WORKDIR /src
 COPY . ./
 
-RUN corepack enable
+RUN npm i -g corepack && corepack enable
 RUN yarn install --immutable
 
 RUN yarn run web:build:prod
