@@ -20,7 +20,6 @@
   },
   "devDependencies": {
     "@lichtblick/suite": "workspace:*",
-    "@lichtblick/tsconfig": "1.1.2",
     "@types/dom-webcodecs": "0.1.19"
   }
 }

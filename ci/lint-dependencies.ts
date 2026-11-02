@@ -7,9 +7,7 @@
 
 import { info, warning, error } from "@actions/core";
 import depcheck, { Detector } from "depcheck";
-import glob from "glob";
 import fs from "node:fs";
-import { promisify } from "node:util";
 import path from "path";
 
 /**
@@ -40,8 +38,6 @@ const tripleSlashDetector: Detector = (node) => {
   }
   return results;
 };
-
-const globAsync = promisify(glob);
 
 async function run(rootPath: string) {
   info(`Linting dependencies in ${rootPath}...`);
@@ -137,7 +133,7 @@ async function getAllWorkspacePackages(roots: string[]) {
         : [];
     const cwd = path.resolve(process.cwd(), workspaceRoot);
     for (const pattern of patterns) {
-      const matches = await globAsync(pattern, { cwd });
+      const matches = fs.globSync(pattern, { cwd });
       for (const packagePath of matches) {
         const absPath = path.resolve(cwd, packagePath);
         const packageJsonPath = path.join(absPath, "package.json");
