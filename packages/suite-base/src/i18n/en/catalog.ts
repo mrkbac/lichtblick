@@ -4,6 +4,7 @@
 export const catalog = {
   back: "Back",
   catalog: "Catalog",
+  close: "Close",
   closeDetails: "Close details",
   duration: "Duration",
   emptyDescription:

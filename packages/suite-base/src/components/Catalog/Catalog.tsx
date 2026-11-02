@@ -3,6 +3,7 @@
 
 import { subtract, toSec } from "@foxglove/rostime";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
+import CloseIcon from "@mui/icons-material/Close";
 import FolderOpenOutlinedIcon from "@mui/icons-material/FolderOpenOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import {
@@ -82,8 +83,6 @@ const useStyles = makeStyles()((theme) => ({
     display: "flex",
     alignItems: "center",
     gap: theme.spacing(1),
-    // Leave room for the dialog's close button.
-    paddingRight: theme.spacing(6),
   },
   title: {
     flex: 1,
@@ -171,7 +170,7 @@ function formatStart(r: CatalogRecording): string {
   return isAbsoluteTime(r.start) ? format(r.start) : formatTimeRaw(r.start);
 }
 
-export default function Catalog(): React.JSX.Element {
+export default function Catalog({ onClose }: { onClose: () => void }): React.JSX.Element {
   const { classes, cx } = useStyles();
   const { t } = useTranslation("catalog");
   const { selectSource } = usePlayerSelection();
@@ -360,6 +359,12 @@ export default function Catalog(): React.JSX.Element {
     </TableSortLabel>
   );
 
+  const closeButton = (
+    <IconButton edge="end" onClick={onClose} title={t("close")}>
+      <CloseIcon />
+    </IconButton>
+  );
+
   const folderInput = (
     <input
       ref={inputRef}
@@ -387,6 +392,7 @@ export default function Catalog(): React.JSX.Element {
           <Typography variant="h3" className={classes.title}>
             {t("catalog")}
           </Typography>
+          {closeButton}
         </div>
         <Stack className={classes.empty}>
           <FolderOpenOutlinedIcon color="primary" className={classes.emptyIcon} />
@@ -437,6 +443,7 @@ export default function Catalog(): React.JSX.Element {
         <Button variant="outlined" onClick={() => void pickFolder()}>
           {t("openFolder")}
         </Button>
+        {closeButton}
       </div>
       <Stack gap={0.5}>
         <TextField

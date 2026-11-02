@@ -11,6 +11,7 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { useMountedState } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
+import { APP_BAR_HEIGHT } from "@lichtblick/suite-base/components/AppBar/constants";
 import Catalog from "@lichtblick/suite-base/components/Catalog/Catalog";
 import Snow from "@lichtblick/suite-base/components/DataSourceDialog/Snow";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -38,10 +39,13 @@ const useStyles = makeStyles()((theme) => ({
     maxWidth: `calc(min(${theme.breakpoints.values.md}px, 100% - ${theme.spacing(4)}))`,
   },
   fullScreenPaper: {
-    // The theme caps dialog height; a full-screen page should fill the window, below any
-    // window title bar controls.
+    // The theme caps dialog height; a full-screen page should fill the window.
     maxHeight: "none",
-    paddingTop: "env(titlebar-area-height, 0px)",
+  },
+  // Keep the app bar visible above a full-screen page: it holds the window controls and is the
+  // drag region of an installed app's title bar.
+  belowAppBar: {
+    top: APP_BAR_HEIGHT,
   },
   closeButton: {
     position: "absolute",
@@ -125,7 +129,7 @@ export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Elemen
       case "catalog":
         return {
           title: "Catalog",
-          component: <Catalog />,
+          component: <Catalog onClose={onModalClose} />,
         };
       default:
         return {
@@ -133,7 +137,7 @@ export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Elemen
           component: <Start />,
         };
     }
-  }, [activeView]);
+  }, [activeView, onModalClose]);
 
   return (
     <Dialog
@@ -142,10 +146,12 @@ export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Elemen
       onClose={onModalClose}
       fullWidth
       fullScreen={activeView === "catalog"}
+      className={activeView === "catalog" ? classes.belowAppBar : undefined}
       maxWidth="lg"
       slotProps={{
         backdrop: {
           children: backdrop,
+          className: activeView === "catalog" ? classes.belowAppBar : undefined,
         },
         paper: {
           square: false,
@@ -154,9 +160,11 @@ export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Elemen
         },
       }}
     >
-      <IconButton className={classes.closeButton} onClick={onModalClose} edge="end">
-        <CloseIcon data-testid="CloseIcon" />
-      </IconButton>
+      {activeView !== "catalog" && (
+        <IconButton className={classes.closeButton} onClick={onModalClose} edge="end">
+          <CloseIcon data-testid="CloseIcon" />
+        </IconButton>
+      )}
       <Stack
         flexGrow={1}
         fullHeight
