@@ -1,15 +1,19 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { EventEmitter } from "events";
 import type { Mock } from "vitest";
-import { EventEmitter } from "events";
 
-const mockNativeTheme = Object.assign(new EventEmitter(), { shouldUseDarkColors: false });
-const mockWindows: (EventEmitter & { setBackgroundColor: Mock })[] = [];
+const { mockNativeTheme, mockWindows } = await vi.hoisted(async () => {
+  const { EventEmitter: Emitter } = await import("events");
+  return {
+    mockNativeTheme: Object.assign(new Emitter(), { shouldUseDarkColors: false }),
+    mockWindows: [] as (EventEmitter & { setBackgroundColor: Mock })[],
+  };
+});
 
-vi.mock("electron", () => {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { EventEmitter: Emitter } = require("events") as typeof import("events");
+vi.mock("electron", async () => {
+  const { EventEmitter: Emitter } = await import("events");
   class MockBrowserWindow extends Emitter {
     public webContents = { id: mockWindows.length, on: vi.fn(),
       once: vi.fn(),
@@ -32,7 +36,10 @@ vi.mock("electron", () => {
     systemPreferences: { getUserDefault: vi.fn() },
   };
 });
-vi.mock("@lichtblick/log", () => ({ getLogger: () => ({ info: vi.fn() }) }));
+vi.mock("@lichtblick/log", () => {
+  const logger = { info: vi.fn(), debug: vi.fn(), warn: vi.fn(), error: vi.fn() };
+  return { default: { getLogger: () => logger }, getLogger: () => logger };
+});
 vi.mock("@lichtblick/suite-base/src/i18n", () => ({
   sharedI18nObject: { on: vi.fn(), t: (key: string) => key },
 }));
@@ -44,19 +51,18 @@ vi.mock("@lichtblick/theme", () => ({
 }));
 vi.mock("../common/webpackDefines", () => ({ LICHTBLICK_PRODUCT_NAME: "Lichtblick" }));
 vi.mock("./StudioAppUpdater", () => ({
-  Instance: () => ({ checkNow: vi.fn(), canCheckForUpdates: () => false }),
+  default: { Instance: () => ({ checkNow: vi.fn(), canCheckForUpdates: () => false }) },
 }));
 vi.mock("./telemetry", () => ({
   getTelemetrySettings: () => ({ crashReportingEnabled: false, telemetryEnabled: false }),
 }));
-vi.mock("./getDevModeIcon", () => () => undefined);
+vi.mock("./getDevModeIcon", () => ({ default: () => undefined }));
 
 (global as unknown as { MAIN_WINDOW_WEBPACK_ENTRY: string }).MAIN_WINDOW_WEBPACK_ENTRY = "file://";
 
 describe("StudioWindow theme listener", () => {
-  it("stops updating a window after it is closed", () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const StudioWindow = (require("./StudioWindow") as typeof import("./StudioWindow")).default;
+  it("stops updating a window after it is closed", async () => {
+    const { default: StudioWindow } = await import("./StudioWindow");
     new StudioWindow();
     const win = mockWindows[0]!;
 

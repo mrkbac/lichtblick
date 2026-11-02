@@ -6,7 +6,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import { fromNanoSec } from "@foxglove/rostime";
@@ -28,9 +28,9 @@ vi.mock("@lichtblick/suite-base/components/MessagePipeline", async () => ({
   ...await vi.importActual("@lichtblick/suite-base/components/MessagePipeline"),
   useMessagePipeline: vi.fn(),
 }));
-const actualUseMessagePipeline = vi.requireActual<
+const { useMessagePipeline: actualUseMessagePipeline } = await vi.importActual<
   typeof import("@lichtblick/suite-base/components/MessagePipeline")
->("@lichtblick/suite-base/components/MessagePipeline").useMessagePipeline;
+>("@lichtblick/suite-base/components/MessagePipeline");
 const seek = vi.fn();
 const pause = vi.fn();
 
@@ -50,8 +50,7 @@ async function* iterator(): AsyncIterableIterator<IteratorResult> {
 }
 
 function setup({ live = false }: { live?: boolean } = {}) {
-  jest
-    .mocked(useMessagePipeline)
+  vi    .mocked(useMessagePipeline)
     .mockImplementation((selector) =>
       actualUseMessagePipeline((ctx: MessagePipelineContext) =>
         selector({ ...ctx, getBatchIterator: () => iterator() }),

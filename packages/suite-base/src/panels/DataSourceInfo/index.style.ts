@@ -318,7 +318,7 @@ export const useStyles = makeStyles()((theme) => ({
   },
   namespace: {
     background: alpha(theme.palette.text.primary, 0.025),
-    "& > td:first-child > button": {
+    "& > td:first-of-type > button": {
       border: 0,
       background: "transparent",
       display: "flex",
