@@ -6,10 +6,10 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { MessageDefinition } from "@foxglove/message-definition";
+import { ROS2_TO_DEFINITIONS, Rosbag2, SqliteSqljs } from "@foxglove/rosbag2-web";
 import { stringify } from "@foxglove/rosmsg";
 import { Time, add as addTime } from "@foxglove/rostime";
 
-import { ROS2_TO_DEFINITIONS, Rosbag2, SqliteSqljs } from "@lichtblick/rosbag2-web";
 import { MessageEvent } from "@lichtblick/suite";
 import { PlayerAlert, TopicStats } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
