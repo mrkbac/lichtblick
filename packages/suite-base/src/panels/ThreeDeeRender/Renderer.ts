@@ -161,6 +161,8 @@ function isStaticTransformTopic(topic: string): boolean {
 export class Renderer extends EventEmitter<RendererEvents> implements IRenderer {
   public readonly interfaceMode: InterfaceMode;
   #canvas: HTMLCanvasElement;
+  // The label atlas never shrinks, so an overflow stays true across clear()
+  #labelAtlasError: string | undefined;
   public readonly gl: THREE.WebGLRenderer;
   public maxLod = DetailLevel.High;
 
@@ -310,6 +312,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     }
 
     this.labelPool.addEventListener("error", ({ error }) => {
+      this.#labelAtlasError = error.message;
       this.settings.errors.add(["scene"], LABEL_ATLAS_ERROR, error.message);
     });
 
@@ -583,6 +586,9 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
       this.#resetAllFramesCursor();
     }
     this.settings.errors.clear();
+    if (this.#labelAtlasError != undefined) {
+      this.settings.errors.add(["scene"], LABEL_ATLAS_ERROR, this.#labelAtlasError);
+    }
     this.hud.clear();
 
     for (const extension of this.sceneExtensions.values()) {
