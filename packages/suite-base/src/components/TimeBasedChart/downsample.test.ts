@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import * as R from "ramda";
+import * as _ from "lodash-es";
 
 import { iterateObjects } from "@lichtblick/suite-base/components/Chart/datasets";
 
@@ -52,7 +52,7 @@ describe("downsampleTimeseries", () => {
 
     const numPoints = 10_000;
     const deltaX = realBounds.bounds.x.max / numPoints;
-    const dataset = R.range(0, numPoints).map((v) => {
+    const dataset = _.range(0, numPoints).map((v) => {
       const x = v * deltaX;
       return {
         x,
@@ -64,14 +64,13 @@ describe("downsampleTimeseries", () => {
     const fullPoints = downsampleTimeseries(iterateObjects(dataset), realBounds);
 
     const numSplits = 400;
-    const [indices, finalState] = R.reduce(
+    const [indices, finalState] = _.chunk(dataset, Math.trunc(numPoints / numSplits)).reduce(
       (a: [number[], DownsampleState], v) => {
         const [oldIndices, oldState] = a;
         const [newIndices, newState] = continueDownsample(iterateObjects(v), oldState);
         return [[...oldIndices, ...newIndices], newState];
       },
       [[], initDownsample(realBounds)],
-      R.splitEvery(Math.trunc(numPoints / numSplits), dataset),
     );
 
     const partialPoints = [...indices, ...finishDownsample(finalState)];

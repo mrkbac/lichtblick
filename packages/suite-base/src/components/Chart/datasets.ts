@@ -5,8 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import * as R from "ramda";
-
 import { TypedData, ObjectData } from "./types";
 
 export type Point = { index: number; x: number; y: number; label?: string | undefined };
@@ -80,7 +78,7 @@ export function* iterateTyped<T extends { [key: string]: Array<any> | Float32Arr
   let index = 0;
   for (const slice of dataset) {
     // Find a property for which we can check the length
-    const first = R.head(Object.values(slice));
+    const first = Object.values(slice)[0];
     if (first == undefined) {
       continue;
     }

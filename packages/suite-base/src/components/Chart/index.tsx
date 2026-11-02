@@ -13,7 +13,6 @@
 
 import { type ZoomPluginOptions } from "@foxglove/chartjs-plugin-zoom/types/options";
 import { ChartOptions } from "chart.js";
-import * as R from "ramda";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useMountedState } from "react-use";
 import { assert } from "ts-essentials";
@@ -262,7 +261,7 @@ function Chart(props: Props): React.JSX.Element {
 
         // We merge all of the pending updates together to do as few renders as
         // possible when we fall behind
-        const coalesced = R.mergeAll(updates);
+        const coalesced = Object.assign({}, ...updates) as (typeof updates)[number];
         onStartRender?.();
         const scales = await send<RpcScales>("update", coalesced);
         maybeUpdateScales(scales);

@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as _ from "lodash-es";
-import * as R from "ramda";
 
 import { Immutable } from "@lichtblick/suite";
 import { applySamplingGuardToSubscription } from "@lichtblick/suite-base/players/samplingGuard";
@@ -44,12 +43,14 @@ function mergeSubscription(
   b: Immutable<InternalSubscribePayload>,
 ): Immutable<InternalSubscribePayload> {
   const isAllFields = a.fields == undefined || b.fields == undefined;
-  const fields = R.pipe(
-    R.chain((payload: Immutable<SubscribePayload>): readonly string[] => payload.fields ?? []),
-    R.map((v) => v.trim()),
-    R.filter((v: string) => v.length > 0),
-    R.uniq,
-  )([a, b]);
+  const fields = [
+    ...new Set(
+      [a, b]
+        .flatMap((payload) => payload.fields ?? [])
+        .map((v) => v.trim())
+        .filter((v) => v.length > 0),
+    ),
+  ];
 
   const sameSamplingMode =
     a.samplingRequest?.mode != undefined && a.samplingRequest.mode === b.samplingRequest?.mode;
@@ -74,32 +75,14 @@ function mergeSubscription(
 function denormalizeSubscriptions(
   subscriptions: Immutable<InternalSubscribePayload[]>,
 ): Immutable<InternalSubscribePayload[]> {
-  return R.pipe(
-    R.groupBy((v: Immutable<InternalSubscribePayload>) => v.topic),
-    R.values,
-    // Filter out any set of payloads that contains _only_ empty `fields`
-    R.filter((payloads: Immutable<InternalSubscribePayload[]> | undefined) => {
-      // Handle this later
-      if (payloads == undefined) {
-        return true;
-      }
-
-      return !payloads.every((v: Immutable<InternalSubscribePayload>) => v.fields?.length === 0);
-    }),
-    // Now reduce them down to a single payload for each topic
-    R.chain(
-      (
-        payloads: Immutable<InternalSubscribePayload[]> | undefined,
-      ): Immutable<InternalSubscribePayload>[] => {
-        const first = payloads?.[0];
-        if (payloads == undefined || first == undefined || payloads.length === 0) {
-          return [];
-        }
-        const merged = R.reduce(mergeSubscription, first, payloads.slice(1));
-        return [applySamplingGuardToSubscription(merged)];
-      },
-    ),
-  )(subscriptions);
+  const byTopic = Object.groupBy(subscriptions, (v) => v.topic);
+  return (
+    Object.values(byTopic)
+      // Filter out any set of payloads that contains _only_ empty `fields`
+      .filter((payloads) => !payloads!.every((v) => v.fields?.length === 0))
+      // Now reduce them down to a single payload for each topic
+      .map((payloads) => applySamplingGuardToSubscription(payloads!.reduce(mergeSubscription)))
+  );
 }
 
 /**
@@ -112,18 +95,11 @@ function denormalizeSubscriptions(
 export function mergeSubscriptions(
   subscriptions: Immutable<InternalSubscribePayload[]>,
 ): Immutable<InternalSubscribePayload[]> {
-  return R.pipe(
-    R.chain((v: Immutable<InternalSubscribePayload>): Immutable<InternalSubscribePayload>[] => {
-      const { preloadType } = v;
-      if (preloadType !== "full") {
-        return [v];
-      }
-
-      // a "full" subscription to all fields implies a "partial" subscription
-      // to those fields, too
-      return [v, { ...v, preloadType: "partial" }];
-    }),
-    R.partition((v: Immutable<InternalSubscribePayload>) => v.preloadType === "full"),
-    ([full, partial]) => [...denormalizeSubscriptions(full), ...denormalizeSubscriptions(partial)],
-  )(subscriptions);
+  const expanded = subscriptions.flatMap((v): Immutable<InternalSubscribePayload>[] =>
+    // a "full" subscription to all fields implies a "partial" subscription to those fields, too
+    v.preloadType === "full" ? [v, { ...v, preloadType: "partial" }] : [v],
+  );
+  const full = expanded.filter((v) => v.preloadType === "full");
+  const partial = expanded.filter((v) => v.preloadType !== "full");
+  return [...denormalizeSubscriptions(full), ...denormalizeSubscriptions(partial)];
 }
