@@ -4,6 +4,13 @@
 import { McapWriter, TempBuffer } from "@mcap/core";
 
 import { summarizeMcap } from "./summarizeMcap";
+import { renderThumbnail } from "./thumbnail";
+
+// jsdom cannot decode images; keep the frame selection real and fake only the rendering.
+jest.mock("./thumbnail", () => ({
+  ...jest.requireActual("./thumbnail"),
+  renderThumbnail: jest.fn(async ({ format }: { format: string }) => `thumb:${format}`),
+}));
 
 const SEC = 1_000_000_000n;
 const NOW_MS = Date.UTC(2026, 10, 1);
@@ -72,7 +79,9 @@ describe("summarizeMcap", () => {
 
   it("ignores chunks with outlier stamps", async () => {
     // One message per chunk, so the 1970 stamp lands in its own chunk.
-    const file = await writeMcap([5n * SEC, t0, t0 + 10n * SEC], { chunkSize: 1 });
+    const file = await writeMcap([5n * SEC, t0, t0 + 10n * SEC], {
+      chunkSize: 1,
+    });
     const summary = await summarizeMcap(file, NOW_MS);
     expect(summary.start).toEqual({ sec: 1_780_000_000, nsec: 0 });
     expect(summary.end).toEqual({ sec: 1_780_000_010, nsec: 0 });
@@ -86,6 +95,51 @@ describe("summarizeMcap", () => {
 
   it("reports files without a summary", async () => {
     const file = await writeMcap([t0], { summary: false });
-    await expect(summarizeMcap(file, NOW_MS)).resolves.toEqual({ noSummary: true });
+    await expect(summarizeMcap(file, NOW_MS)).resolves.toEqual({
+      noSummary: true,
+    });
+  });
+
+  it("makes a thumbnail from the middle frame of the first image topic", async () => {
+    const buffer = new TempBuffer();
+    const writer = new McapWriter({ writable: buffer, chunkSize: 1 });
+    await writer.start({ library: "", profile: "" });
+    const schemaId = await writer.registerSchema({
+      name: "foxglove.CompressedImage",
+      encoding: "jsonschema",
+      data: new TextEncoder().encode(
+        JSON.stringify({
+          type: "object",
+          properties: {
+            format: { type: "string" },
+            data: { type: "string", contentEncoding: "base64" },
+          },
+        }),
+      ),
+    });
+    for (const topic of ["/z_cam", "/a_cam"]) {
+      const channelId = await writer.registerChannel({
+        topic,
+        schemaId,
+        messageEncoding: "json",
+        metadata: new Map(),
+      });
+      for (const i of [0, 1, 2]) {
+        const logTime = t0 + BigInt(i) * SEC;
+        const message = { format: `${topic}-${i}`, data: "AQI=" };
+        await writer.addMessage({
+          channelId,
+          sequence: i,
+          logTime,
+          publishTime: logTime,
+          data: new TextEncoder().encode(JSON.stringify(message)),
+        });
+      }
+    }
+    await writer.end();
+
+    const summary = await summarizeMcap(new Blob([new Uint8Array(buffer.get())]), NOW_MS);
+    expect(summary.thumbnail).toBe("thumb:/a_cam-1");
+    expect(jest.mocked(renderThumbnail).mock.calls[0]![0].data).toEqual(new Uint8Array([1, 2]));
   });
 });

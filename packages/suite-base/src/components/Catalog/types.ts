@@ -25,6 +25,8 @@ export type CatalogSummary = {
   end?: Time;
   messages?: number;
   topics?: CatalogTopic[];
+  /** Image URL (also `data:`) of a frame from the recording. */
+  thumbnail?: string;
   /** The file has no summary section, so nothing is known without a full scan. */
   noSummary?: boolean;
   /** Reading the summary failed. */

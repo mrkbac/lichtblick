@@ -31,6 +31,7 @@ import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/us
 import { format, formatDuration } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
 
+import { RecordingDetails } from "./RecordingDetails";
 import {
   FolderFile,
   indexFiles,
@@ -43,7 +44,8 @@ import { filterRecordings } from "./search";
 import { CatalogRecording } from "./types";
 
 const ROW_HEIGHT = 52;
-const COLUMNS = "minmax(0, 1fr) 210px 120px 100px 120px 80px";
+const THUMB_WIDTH = 72;
+const COLUMNS = `${THUMB_WIDTH}px minmax(0, 1fr) 210px 120px 100px 120px 80px`;
 
 type SortKey = "name" | "start" | "duration" | "size" | "messages" | "topics";
 
@@ -108,6 +110,18 @@ const useStyles = makeStyles()((theme) => ({
     borderBottom: `1px solid ${theme.palette.divider}`,
     "&:hover": { backgroundColor: theme.palette.action.hover },
   },
+  selectedRow: {
+    backgroundColor: theme.palette.action.selected,
+  },
+  body: {
+    flex: 1,
+    minHeight: 0,
+    paddingBottom: theme.spacing(2),
+  },
+  list: {
+    flex: 1,
+    minWidth: 0,
+  },
   scroller: {
     flex: 1,
     overflow: "auto",
@@ -116,6 +130,19 @@ const useStyles = makeStyles()((theme) => ({
   numeric: {
     textAlign: "right",
     fontFeatureSettings: `"tnum"`,
+  },
+  thumbnail: {
+    display: "block",
+    width: THUMB_WIDTH,
+    height: (THUMB_WIDTH * 9) / 16,
+    objectFit: "cover",
+    borderRadius: theme.shape.borderRadius,
+    backgroundColor: theme.palette.action.hover,
+  },
+  preview: {
+    display: "block",
+    width: 240,
+    borderRadius: theme.shape.borderRadius,
   },
   emptyIcon: {
     fontSize: 64,
@@ -157,7 +184,11 @@ export default function Catalog(): React.JSX.Element {
   const [progress, setProgress] = useState<{ done: number; total: number }>();
   const [error, setError] = useState<string>();
   const [query, setQuery] = useState("");
-  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "start", desc: true });
+  const [selectedId, setSelectedId] = useState<string>();
+  const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({
+    key: "start",
+    desc: true,
+  });
   const scanIdRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(ReactNull);
   const scrollRef = useRef<HTMLDivElement>(ReactNull);
@@ -288,7 +319,10 @@ export default function Catalog(): React.JSX.Element {
         }
         case "remote-file":
         case "foxglove-websocket":
-          selectSource(source.type, { type: "connection", params: { url: source.url } });
+          selectSource(source.type, {
+            type: "connection",
+            params: { url: source.url },
+          });
           break;
       }
     },
@@ -299,6 +333,9 @@ export default function Catalog(): React.JSX.Element {
     () => sortRecordings(filterRecordings(recordings, query), sort),
     [recordings, query, sort],
   );
+
+  const selected = recordings.find((r) => r.id === selectedId);
+  const topicTerm = /(?:^|\s)topic:(\S+)/i.exec(query)?.[1];
 
   const virtualizer = useVirtualizer({
     count: shown.length,
@@ -313,7 +350,10 @@ export default function Catalog(): React.JSX.Element {
       active={sort.key === key}
       direction={sort.key === key && sort.desc ? "desc" : "asc"}
       onClick={() => {
-        setSort((prev) => ({ key, desc: prev.key === key ? !prev.desc : key !== "name" }));
+        setSort((prev) => ({
+          key,
+          desc: prev.key === key ? !prev.desc : key !== "name",
+        }));
       }}
     >
       {label}
@@ -418,7 +458,10 @@ export default function Catalog(): React.JSX.Element {
         <Typography variant="body2" color="text.secondary">
           {query.trim() === ""
             ? t("recordingCount", { count: recordings.length })
-            : t("shownCount", { shown: shown.length, total: recordings.length })}
+            : t("shownCount", {
+                shown: shown.length,
+                total: recordings.length,
+              })}
         </Typography>
         {progress && (
           <>
@@ -433,81 +476,124 @@ export default function Catalog(): React.JSX.Element {
           </>
         )}
       </Stack>
-      <div className={cx(classes.row, classes.headRow)}>
-        {sortLabel("name", t("name"))}
-        {sortLabel("start", t("start"))}
-        {sortLabel("duration", t("duration"))}
-        {sortLabel("size", t("size"))}
-        {sortLabel("messages", t("messages"))}
-        {sortLabel("topics", t("topics"))}
-      </div>
-      <div ref={scrollRef} className={classes.scroller}>
-        {shown.length === 0 && progress == undefined && (
-          <Typography color="text.secondary" className={classes.message}>
-            {recordings.length === 0 ? t("noRecordings") : t("noMatches")}
-          </Typography>
-        )}
-        <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
-          {virtualizer.getVirtualItems().map((item) => {
-            const r = shown[item.index]!;
-            const path = r.source.type === "local-file" ? r.source.path : r.source.url;
-            return (
-              <ButtonBase
-                key={r.id}
-                className={cx(classes.row, classes.bodyRow)}
-                style={{ transform: `translateY(${item.start}px)` }}
-                onClick={() => void open(r)}
-              >
-                <Stack style={{ minWidth: 0 }}>
-                  <Stack direction="row" alignItems="center" gap={1} style={{ minWidth: 0 }}>
+      <Stack direction="row" className={classes.body}>
+        <Stack className={classes.list}>
+          <div className={cx(classes.row, classes.headRow)}>
+            <span />
+            {sortLabel("name", t("name"))}
+            {sortLabel("start", t("start"))}
+            {sortLabel("duration", t("duration"))}
+            {sortLabel("size", t("size"))}
+            {sortLabel("messages", t("messages"))}
+            {sortLabel("topics", t("topics"))}
+          </div>
+          <div ref={scrollRef} className={classes.scroller}>
+            {shown.length === 0 && progress == undefined && (
+              <Typography color="text.secondary" className={classes.message}>
+                {recordings.length === 0 ? t("noRecordings") : t("noMatches")}
+              </Typography>
+            )}
+            <div
+              style={{
+                height: virtualizer.getTotalSize(),
+                position: "relative",
+              }}
+            >
+              {virtualizer.getVirtualItems().map((item) => {
+                const r = shown[item.index]!;
+                const path = r.source.type === "local-file" ? r.source.path : r.source.url;
+                return (
+                  <ButtonBase
+                    key={r.id}
+                    className={cx(classes.row, classes.bodyRow, {
+                      [classes.selectedRow]: r.id === selectedId,
+                    })}
+                    style={{ transform: `translateY(${item.start}px)` }}
+                    onClick={() => {
+                      setSelectedId(r.id);
+                    }}
+                    onDoubleClick={() => void open(r)}
+                  >
+                    {r.thumbnail != undefined ? (
+                      <Tooltip
+                        placement="right"
+                        title={<img src={r.thumbnail} alt="" className={classes.preview} />}
+                      >
+                        <img
+                          src={r.thumbnail}
+                          alt=""
+                          loading="lazy"
+                          className={classes.thumbnail}
+                        />
+                      </Tooltip>
+                    ) : (
+                      <span className={classes.thumbnail} />
+                    )}
+                    <Stack style={{ minWidth: 0 }}>
+                      <Stack direction="row" alignItems="center" gap={1} style={{ minWidth: 0 }}>
+                        <Typography variant="body2" noWrap>
+                          {r.name}
+                        </Typography>
+                        {r.error != undefined && (
+                          <Tooltip title={r.error}>
+                            <Chip size="small" color="error" label={t("error")} />
+                          </Tooltip>
+                        )}
+                        {r.noSummary === true && (
+                          <Tooltip title={t("noSummaryDescription")}>
+                            <Chip size="small" label={t("noSummary")} />
+                          </Tooltip>
+                        )}
+                      </Stack>
+                      {path !== r.name && (
+                        <Typography variant="caption" color="text.secondary" noWrap>
+                          {path}
+                        </Typography>
+                      )}
+                    </Stack>
                     <Typography variant="body2" noWrap>
-                      {r.name}
+                      {formatStart(r)}
                     </Typography>
-                    {r.error != undefined && (
-                      <Tooltip title={r.error}>
-                        <Chip size="small" color="error" label={t("error")} />
-                      </Tooltip>
-                    )}
-                    {r.noSummary === true && (
-                      <Tooltip title={t("noSummaryDescription")}>
-                        <Chip size="small" label={t("noSummary")} />
-                      </Tooltip>
-                    )}
-                  </Stack>
-                  {path !== r.name && (
-                    <Typography variant="caption" color="text.secondary" noWrap>
-                      {path}
+                    <Typography variant="body2" className={classes.numeric}>
+                      {r.start && r.end ? formatDuration(subtract(r.end, r.start)) : "–"}
                     </Typography>
-                  )}
-                </Stack>
-                <Typography variant="body2" noWrap>
-                  {formatStart(r)}
-                </Typography>
-                <Typography variant="body2" className={classes.numeric}>
-                  {r.start && r.end ? formatDuration(subtract(r.end, r.start)) : "–"}
-                </Typography>
-                <Typography variant="body2" className={classes.numeric}>
-                  {r.size != undefined ? formatByteSize(r.size) : "–"}
-                </Typography>
-                <Typography variant="body2" className={classes.numeric}>
-                  {r.messages?.toLocaleString() ?? "–"}
-                </Typography>
-                <Tooltip
-                  title={r.topics
-                    ?.slice(0, 30)
-                    .map((topic) => topic.name)
-                    .join("\n")}
-                  slotProps={{ tooltip: { sx: { whiteSpace: "pre-line" } } }}
-                >
-                  <Typography variant="body2" className={classes.numeric}>
-                    {r.topics?.length ?? "–"}
-                  </Typography>
-                </Tooltip>
-              </ButtonBase>
-            );
-          })}
-        </div>
-      </div>
+                    <Typography variant="body2" className={classes.numeric}>
+                      {r.size != undefined ? formatByteSize(r.size) : "–"}
+                    </Typography>
+                    <Typography variant="body2" className={classes.numeric}>
+                      {r.messages?.toLocaleString() ?? "–"}
+                    </Typography>
+                    <Tooltip
+                      title={r.topics
+                        ?.slice(0, 30)
+                        .map((topic) => topic.name)
+                        .join("\n")}
+                      slotProps={{
+                        tooltip: { sx: { whiteSpace: "pre-line" } },
+                      }}
+                    >
+                      <Typography variant="body2" className={classes.numeric}>
+                        {r.topics?.length ?? "–"}
+                      </Typography>
+                    </Tooltip>
+                  </ButtonBase>
+                );
+              })}
+            </div>
+          </div>
+        </Stack>
+        {selected && (
+          <RecordingDetails
+            key={`${selected.id}|${topicTerm ?? ""}`}
+            recording={selected}
+            initialFilter={topicTerm}
+            onOpen={() => void open(selected)}
+            onClose={() => {
+              setSelectedId(undefined);
+            }}
+          />
+        )}
+      </Stack>
       {folderInput}
     </Stack>
   );

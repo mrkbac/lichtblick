@@ -23,6 +23,8 @@ const folderStore = createStore(`${DB_NAME}-folders`, "folders");
 const LAST_FOLDER_KEY = "last";
 
 const CONCURRENCY = 4;
+// Bump when CatalogSummary gains fields, so cached summaries are read again.
+const CACHE_VERSION = 2;
 
 function isMcap(name: string): boolean {
   return name.toLowerCase().endsWith(".mcap");
@@ -71,7 +73,11 @@ async function indexFile(
   { retryErrors }: { retryErrors: boolean },
 ): Promise<CatalogRecording> {
   const name = entry.path.split("/").pop() ?? entry.path;
-  const base = { id: entry.path, name, source: { type: "local-file" as const, path: entry.path } };
+  const base = {
+    id: entry.path,
+    name,
+    source: { type: "local-file" as const, path: entry.path },
+  };
 
   let file: File;
   try {
@@ -83,7 +89,7 @@ async function indexFile(
   // Same name, size and modification time means the same content: reuse the cached summary. The
   // path is left out because it is relative to the picked folder, so opening a parent or a moved
   // folder still hits the cache.
-  const key = `${file.name}|${file.size}|${file.lastModified}`;
+  const key = `${CACHE_VERSION}|${file.name}|${file.size}|${file.lastModified}`;
   // The cache is only an optimization, so a failing IndexedDB never fails the scan.
   let summary = await idbGet<CatalogSummary>(key, summaryStore).catch((err: unknown) => {
     console.warn("Catalog cache read failed", err);
