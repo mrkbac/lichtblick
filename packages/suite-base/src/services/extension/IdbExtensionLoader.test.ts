@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import fs from "fs";
-import { openDB } from "idb/with-async-ittr";
+import { openDB } from "idb";
 import JSZip from "jszip";
 import type { Mock } from "vitest";
 
@@ -21,7 +21,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { IdbExtensionLoader } from "./IdbExtensionLoader";
 
-vi.mock("idb/with-async-ittr", () => ({
+vi.mock("idb", () => ({
   openDB: vi.fn(),
 }));
 
