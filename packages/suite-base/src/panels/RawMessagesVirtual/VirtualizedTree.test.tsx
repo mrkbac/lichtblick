@@ -140,7 +140,7 @@ describe("VirtualizedTree", () => {
       });
 
       // Then
-      expect(screen.getByRole("tree")).toHaveStyle({ fontSize: "inherit" });
+      expect(screen.getByRole("tree").style.fontSize).toBe("inherit");
     });
   });
 

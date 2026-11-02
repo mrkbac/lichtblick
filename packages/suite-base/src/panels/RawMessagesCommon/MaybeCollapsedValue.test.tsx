@@ -117,7 +117,7 @@ describe("MaybeCollapsedValue", () => {
       await user.click(button);
 
       expect(button).not.toHaveAttribute("tabIndex");
-      expect(button).toHaveStyle({ cursor: "inherit" });
+      expect(button.style.cursor).toBe("inherit");
     });
 
     it("should have tooltip configured when collapsed", () => {
