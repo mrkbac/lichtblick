@@ -22,8 +22,8 @@ import {
 } from "@lichtblick/suite-base/test/MockSendNotification";
 
 // Mock out sendNotification for all tests
-jest.mock("@lichtblick/suite-base/util/sendNotification", () => {
-  const actual = jest.requireActual("@lichtblick/suite-base/util/sendNotification");
+vi.mock("@lichtblick/suite-base/util/sendNotification", async () => {
+  const actual = await vi.importActual("@lichtblick/suite-base/util/sendNotification");
   return {
     ...actual,
     __esModule: true,
@@ -42,8 +42,8 @@ beforeEach(() => {
 // We assign rather than spy to expose the mock for the user
 const origError = console.error;
 const origWarn = console.warn;
-const consoleErrorMock = (console.error = jest.fn());
-const consoleWarnMock = (console.warn = jest.fn());
+const consoleErrorMock = (console.error = vi.fn());
+const consoleWarnMock = (console.warn = vi.fn());
 
 beforeAll(async () => {
   await initI18n();

@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time, toRFC3339String } from "@foxglove/rostime";
+import type { MockedFunction } from "vitest";
 
 import {
   AppURLState,
@@ -15,12 +16,12 @@ import {
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-jest.mock("@lichtblick/suite-base/util/isDesktopApp", () => ({
+vi.mock("@lichtblick/suite-base/util/isDesktopApp", () => ({
   __esModule: true,
-  default: jest.fn(),
+  default: vi.fn(),
 }));
 
-const mockIsDesktop = isDesktopApp as jest.MockedFunction<typeof isDesktopApp>;
+const mockIsDesktop = isDesktopApp as MockedFunction<typeof isDesktopApp>;
 
 describe("app state url parser", () => {
   // Note that the foxglove URL here is different from actual foxglove URLs because Node's URL parser

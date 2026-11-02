@@ -62,10 +62,7 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
   }
 
   public constructor() {
-    const worker = new Worker(
-      // foxglove-depcheck-used: babel-plugin-transform-import-meta
-      new URL("./CustomDatasetsBuilderImpl.worker", import.meta.url),
-    );
+    const worker = new Worker(new URL("./CustomDatasetsBuilderImpl.worker", import.meta.url));
     const { remote, dispose } =
       ComlinkWrap<Comlink.RemoteObject<CustomDatasetsBuilderImpl>>(worker);
 

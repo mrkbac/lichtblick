@@ -174,11 +174,11 @@ export function TimezoneSettings(): React.ReactElement {
       <Autocomplete
         options={[...fixedItems, ...timezoneItems]}
         value={selectedItem}
-        renderOption={(props, option: Option) =>
+        renderOption={({ key: _muiKey, ...props }, option: Option) =>
           option.divider === true ? (
             <Divider key={option.key} />
           ) : (
-            <li {...props} key={option.key}>
+            <li key={option.key} {...props}>
               {option.label}
             </li>
           )

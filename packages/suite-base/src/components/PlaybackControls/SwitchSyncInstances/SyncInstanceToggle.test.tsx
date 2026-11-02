@@ -5,22 +5,23 @@
 
 // SyncInstanceToggle.test.tsx
 import { render, screen, fireEvent } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import type { Mock } from "vitest";
+import "@testing-library/jest-dom/vitest";
 
 import { useWorkspaceStore } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 
 import SyncInstanceToggle from "./SyncInstanceToggle";
 
-jest.mock("@lichtblick/suite-base/context/Workspace/WorkspaceContext", () => ({
-  useWorkspaceStore: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/Workspace/WorkspaceContext", () => ({
+  useWorkspaceStore: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => ({
-  useWorkspaceActions: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => ({
+  useWorkspaceActions: vi.fn(),
 }));
 
-jest.mock("./SyncInstanceToggle.style", () => ({
+vi.mock("./SyncInstanceToggle.style", () => ({
   useStyles: () => ({
     classes: {
       button: "mock-button",
@@ -32,10 +33,10 @@ jest.mock("./SyncInstanceToggle.style", () => ({
 }));
 
 describe("SyncInstanceToggle", () => {
-  const useWorkspaceActionsMock = useWorkspaceActions as jest.Mock;
-  const useWorkspaceStoreMock = useWorkspaceStore as jest.Mock;
+  const useWorkspaceActionsMock = useWorkspaceActions as Mock;
+  const useWorkspaceStoreMock = useWorkspaceStore as Mock;
 
-  const setSyncInstancesMock = jest.fn();
+  const setSyncInstancesMock = vi.fn();
 
   beforeEach(() => {
     useWorkspaceActionsMock.mockReturnValue({
@@ -44,7 +45,7 @@ describe("SyncInstanceToggle", () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("renders button with correct text when sync is on", () => {

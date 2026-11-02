@@ -3,7 +3,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { render, screen } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import type { Mock } from "vitest";
+import "@testing-library/jest-dom/vitest";
 
 import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";
 import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/DiagnosticStatus/constants";
@@ -20,33 +21,10 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import DiagnosticStatusPanel from "./DiagnosticStatusPanel";
 
-jest.mock("@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnostics");
+vi.mock("@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnostics");
 
 describe("DiagnosticStatusPanel", () => {
-  const mockSaveConfig = jest.fn();
-  const mockUseDataSourceInfo = jest.fn(() => ({
-    topics: [],
-  }));
-  const mockUsePanelContext = jest.fn(() => ({
-    openSiblingPanel: jest.fn(),
-  }));
-  const mockUseAvailableDiagnostics = jest.fn();
-
-  jest.mock("@lichtblick/suite-base/PanelAPI", () => ({
-    useDataSourceInfo: mockUseDataSourceInfo,
-  }));
-  jest.mock("@lichtblick/suite-base/components/PanelContext", () => ({
-    usePanelContext: mockUsePanelContext,
-  }));
-
-  jest.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", () => ({
-    usePanelSettingsTreeUpdate: jest.fn(),
-  }));
-
-  jest.mock("@lichtblick/suite-base/panels/DiagnosticStatus/hooks/useAvailableDiagnostics", () => ({
-    __esModule: true,
-    default: mockUseAvailableDiagnostics,
-  }));
+  const mockSaveConfig = vi.fn();
 
   const setup = (configOverride: Partial<DiagnosticStatusConfig> = {}) => {
     const config = DiagnosticsBuilder.statusConfig({
@@ -74,12 +52,12 @@ describe("DiagnosticStatusPanel", () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("should render the empty state when no diagnostics are available", () => {
     const diagnosticResult: UseDiagnosticsResult = new Map();
-    (useDiagnostics as jest.Mock).mockReturnValue(diagnosticResult);
+    (useDiagnostics as Mock).mockReturnValue(diagnosticResult);
 
     setup();
 
@@ -88,7 +66,7 @@ describe("DiagnosticStatusPanel", () => {
 
   it("should render the empty state when there is a selected display name", () => {
     const diagnosticResult: UseDiagnosticsResult = new Map();
-    (useDiagnostics as jest.Mock).mockReturnValue(diagnosticResult);
+    (useDiagnostics as Mock).mockReturnValue(diagnosticResult);
 
     const { config } = setup({
       selectedHardwareId: BasicBuilder.string(),
@@ -114,7 +92,7 @@ describe("DiagnosticStatusPanel", () => {
         new Map([[BasicBuilder.string(), DiagnosticsBuilder.info({ status: statusMessage })]]),
       ],
     ]);
-    (useDiagnostics as jest.Mock).mockReturnValue(diagnosticResult);
+    (useDiagnostics as Mock).mockReturnValue(diagnosticResult);
 
     setup({
       selectedHardwareId: hardwareId,

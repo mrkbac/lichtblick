@@ -26,10 +26,8 @@ import type {
 
 let currentHandler: NotificationHandler | undefined = undefined;
 
-const mockSendNotification = jest.fn<
-  void,
-  [string, DetailsType, NotificationType, NotificationSeverity]
->();
+const mockSendNotification =
+  vi.fn<(...args: [string, DetailsType, NotificationType, NotificationSeverity]) => void>();
 
 const mockSetNotificationHandler = (handler?: NotificationHandler): void => {
   currentHandler = handler;

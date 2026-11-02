@@ -9,20 +9,20 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import { RosDb3IterableSource } from "./RosDb3IterableSource";
 import { initialize } from "./RosDb3IterableSourceWorker.worker";
 
-jest.mock("@foxglove/comlink", () => ({
-  expose: jest.fn((val) => val),
-  proxy: jest.fn((val) => val),
+vi.mock("@foxglove/comlink", () => ({
+  expose: vi.fn((val) => val),
+  proxy: vi.fn((val) => val),
   transferHandlers: {
-    set: jest.fn(),
+    set: vi.fn(),
   },
 }));
 
-jest.mock("./RosDb3IterableSource");
-jest.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSourceWorker");
+vi.mock("./RosDb3IterableSource");
+vi.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSourceWorker");
 
 describe("initialize", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("should initialize with multiple files", () => {

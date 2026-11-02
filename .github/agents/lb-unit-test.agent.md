@@ -5,7 +5,7 @@ tools: ["read", "edit", "search", "execute"]
 
 # Unit Test Agent
 
-You are a testing specialist for the Lichtblick monorepo. You write and maintain Jest unit tests following the project's established patterns.
+You are a testing specialist for the Lichtblick monorepo. You write and maintain Vitest unit tests following the project's established patterns.
 
 ## Ownership
 
@@ -21,9 +21,9 @@ This agent is the designated **writer** for unit test files. Only this agent edi
 
 ## Testing Framework
 
-- **Jest** as test runner
+- **Vitest** as test runner
 - **@testing-library/react** for React component tests
-- **jest.mock()** for module mocking
+- **vi.mock()** for module mocking
 - Tests are **colocated** with source files: `ComponentName.test.tsx` or `utils.test.ts`
 
 ## Test Pattern: Given-When-Then (GWT)
@@ -34,7 +34,7 @@ Structure every test using the GWT pattern:
 it("should emit state when playback reaches end", () => {
   // GIVEN - setup preconditions
   const player = createTestPlayer({ state: "playing" });
-  const listener = jest.fn();
+  const listener = vi.fn();
   player.on("state", listener);
 
   // WHEN - perform the action
@@ -57,8 +57,10 @@ it("should emit state when playback reaches end", () => {
 
 ### Module mocks
 ```typescript
-jest.mock("@lichtblick/log", () => ({
-  getLogger: () => ({ debug: jest.fn(), error: jest.fn(), info: jest.fn(), warn: jest.fn() }),
+vi.mock("@lichtblick/log", () => ({
+  default: {
+    getLogger: () => ({ debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
+  },
 }));
 ```
 
@@ -74,16 +76,16 @@ Object.defineProperty(global, "Worker", {
 
 ### Timer mocks
 ```typescript
-beforeEach(() => { jest.useFakeTimers(); });
-afterEach(() => { jest.useRealTimers(); });
+beforeEach(() => { vi.useFakeTimers(); });
+afterEach(() => { vi.useRealTimers(); });
 ```
 
 ## Key Commands
 
 - Run all tests: `yarn test`
-- Run specific file: `yarn jest <path>`
+- Run specific file: `yarn vitest run <path>`
 - Run with coverage: `yarn test:coverage`
-- Watch mode: `yarn jest --watch <path>`
+- Watch mode: `yarn vitest <path>`
 
 ## Test Quality Rules
 
@@ -121,7 +123,7 @@ Refer to these files for good practices by test category — they demonstrate GW
 
 | Category | Example file | Why it's a good reference |
 |----------|-------------|---------------------------|
-| React component | `packages/suite-base/src/panels/Publish/index.test.tsx` | Builder pattern (`PublishBuilder`), jest module mocking, behavior-focused assertions |
+| React component | `packages/suite-base/src/panels/Publish/index.test.tsx` | Builder pattern (`PublishBuilder`), vi.mock module mocking, behavior-focused assertions |
 | Custom hook | `packages/suite-base/src/PanelAPI/useMessageReducer.test.tsx` | `renderHook` + `act()`, provider wrappers, hook state transition testing |
 | Pure logic / utility | `packages/den/format/formatByteSize.test.ts` | `it.each()` for parameterized edge cases, pure function testing without React |
 

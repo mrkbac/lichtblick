@@ -6,7 +6,7 @@
 import { Row } from "@tanstack/react-table";
 import { fireEvent, render, screen } from "@testing-library/react";
 
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { BasicBuilder } from "@lichtblick/test-builders";
 

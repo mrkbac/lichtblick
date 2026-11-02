@@ -32,14 +32,16 @@ function createTestParams(overrides: Partial<WebpackConfigParams> = {}): Webpack
   };
 }
 
-jest.mock("webpack", () => {
-  const original = jest.requireActual("webpack");
+vi.mock("webpack", async () => {
+  const original = await vi.importActual("webpack");
   return {
     ...original,
-    DefinePlugin: jest.fn().mockImplementation((defs) => ({
-      pluginName: "DefinePlugin",
-      definitions: defs,
-    })),
+    DefinePlugin: vi.fn().mockImplementation(function (defs) {
+      return {
+        pluginName: "DefinePlugin",
+        definitions: defs,
+      };
+    }),
   };
 });
 

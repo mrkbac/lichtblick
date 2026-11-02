@@ -8,7 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 
 import { Immutable, SettingsTreeAction, SettingsTreeNode } from "@lichtblick/suite";
 import {
@@ -26,7 +26,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 // FieldEditor mocks can be rendered at once for a single NodeEditor.
 const capturedActionHandlers: Record<string, (action: SettingsTreeAction) => void> = {};
 
-jest.mock("@lichtblick/suite-base/components/SettingsTreeEditor/FieldEditor", () => ({
+vi.mock("@lichtblick/suite-base/components/SettingsTreeEditor/FieldEditor", () => ({
   FieldEditor: (props: FieldEditorProps) => {
     const key = props.path[props.path.length - 1] ?? "";
     capturedActionHandlers[key] = props.actionHandler;
@@ -50,7 +50,7 @@ const changeTextFilter = (value: string) => {
 
 function setupFn(propsOverride: Partial<NodeEditorProps> = {}) {
   const props: Readonly<NodeEditorProps> = {
-    actionHandler: jest.fn(),
+    actionHandler: vi.fn(),
     path: BasicBuilder.strings({ count: 2 }),
     settings: {
       label: BasicBuilder.string(),
@@ -75,7 +75,7 @@ function setupFn(propsOverride: Partial<NodeEditorProps> = {}) {
 describe("handleDropNode", () => {
   it("calls actionHandler with reorder-node action", () => {
     // Given: A drop item and action handler
-    const actionHandler = jest.fn();
+    const actionHandler = vi.fn();
     const sourcePath = [BasicBuilder.string(), BasicBuilder.string()];
     const targetPath = [BasicBuilder.string(), BasicBuilder.string()];
     const dragItem = { path: sourcePath };
@@ -96,7 +96,7 @@ describe("handleDropNode", () => {
 
 describe("NodeEditor childNodes filtering", () => {
   const nodes = BasicBuilder.strings({ count: 3 }) as [string, string, string];
-  const scrollIntoViewMock = jest.fn();
+  const scrollIntoViewMock = vi.fn();
 
   const tree: Immutable<SettingsTreeNode> = {
     enableVisibilityFilter: true,
@@ -115,7 +115,7 @@ describe("NodeEditor childNodes filtering", () => {
 
   const renderComponent = async (overrides: Partial<NodeEditorProps> = {}) => {
     const props: NodeEditorProps = {
-      actionHandler: jest.fn(),
+      actionHandler: vi.fn(),
       path: ["root"],
       settings: tree,
       focusedPath: [],
@@ -333,7 +333,7 @@ describe("NodeEditor childNodes filtering", () => {
   it("stops event propagation when CheckIcon button is clicked", async () => {
     // Given: A renamable node in editing mode
     const nodeLabel = BasicBuilder.string();
-    const stopPropagationSpy = jest.fn();
+    const stopPropagationSpy = vi.fn();
 
     await renderComponent({ settings: { label: nodeLabel, renamable: true } });
 
@@ -445,7 +445,7 @@ describe("NodeEditor childNodes filtering", () => {
 describe("NodeEditor drag and drop functionality", () => {
   function setupMultipleNodes(
     nodes: Array<{ path: string[]; label: string; reorderable?: boolean }>,
-    actionHandler = jest.fn(),
+    actionHandler = vi.fn(),
   ) {
     const ui: React.ReactElement = (
       <DndProvider backend={HTML5Backend}>
@@ -576,7 +576,7 @@ describe("NodeEditor drag and drop functionality", () => {
 
       // When: dragStart event is fired
       fireEvent.dragStart(nodeHeader, {
-        dataTransfer: { setData: jest.fn(), effectAllowed: "move" },
+        dataTransfer: { setData: vi.fn(), effectAllowed: "move" },
       });
 
       // Then: The node should still be in the document
@@ -604,7 +604,7 @@ describe("NodeEditor drag and drop functionality", () => {
 
     it("should handle drop event on valid sibling target", () => {
       // Given: Two sibling reorderable nodes with shared actionHandler
-      const actionHandler = jest.fn();
+      const actionHandler = vi.fn();
       setupMultipleNodes(
         [
           { path: ["topics", "node1"], label: "Source" },

@@ -3,10 +3,11 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { useMemo } from "react";
-import { userEvent } from "storybook/test";
+import type { Mock } from "vitest";
 
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import { useSelectedPanels } from "@lichtblick/suite-base/context/CurrentLayoutContext";
@@ -16,7 +17,7 @@ import { PlotLegend } from "./PlotLegend";
 
 const defaultProps = {
   showLegend: true,
-  saveConfig: jest.fn(),
+  saveConfig: vi.fn(),
   sidebarDimension: BasicBuilder.number(),
   paths: [],
 };
@@ -26,16 +27,16 @@ const getContextValue = () => ({
   id: "bar",
   title: "Foo Panel",
   config: {},
-  saveConfig: jest.fn(),
-  updatePanelConfigs: jest.fn(),
-  exitFullscreen: jest.fn(),
-  setHasFullscreenDescendant: jest.fn(),
+  saveConfig: vi.fn(),
+  updatePanelConfigs: vi.fn(),
+  exitFullscreen: vi.fn(),
+  setHasFullscreenDescendant: vi.fn(),
   isFullscreen: false,
-  connectToolbarDragHandle: jest.fn(),
-  setMessagePathDropConfig: jest.fn(),
-  openSiblingPanel: jest.fn(),
-  replacePanel: jest.fn(),
-  enterFullscreen: jest.fn(),
+  connectToolbarDragHandle: vi.fn(),
+  setMessagePathDropConfig: vi.fn(),
+  openSiblingPanel: vi.fn(),
+  replacePanel: vi.fn(),
+  enterFullscreen: vi.fn(),
 });
 
 const TestWrapper = ({ children }: { children: React.ReactNode }) => {
@@ -55,7 +56,7 @@ const setup = (overrides = {}) => {
         <PlotLegend
           coordinator={undefined}
           legendDisplay="floating"
-          onClickPath={jest.fn()}
+          onClickPath={vi.fn()}
           showValues={false}
           {...props}
         />
@@ -64,36 +65,36 @@ const setup = (overrides = {}) => {
   );
 };
 
-jest.mock("@lichtblick/hooks", () => ({
-  useGuaranteedContext: jest.fn(() => ({
-    setState: jest.fn(),
+vi.mock("@lichtblick/hooks", () => ({
+  useGuaranteedContext: vi.fn(() => ({
+    setState: vi.fn(),
     state: {},
   })),
-  useSetState: jest.fn(),
-  useContext: jest.fn(),
+  useSetState: vi.fn(),
+  useContext: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
-  useCurrentLayoutActions: jest.fn(() => ({
-    getCurrentLayoutState: jest.fn(),
-    setCurrentLayout: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
+  useCurrentLayoutActions: vi.fn(() => ({
+    getCurrentLayoutState: vi.fn(),
+    setCurrentLayout: vi.fn(),
   })),
-  useSelectedPanels: jest.fn(() => []),
+  useSelectedPanels: vi.fn(() => []),
 }));
 
 describe("PlotLegend", () => {
-  const mockSetSelectedPanelIds = jest.fn();
+  const mockSetSelectedPanelIds = vi.fn();
   const path = BasicBuilder.string();
   const secondPath = BasicBuilder.string();
 
   beforeEach(() => {
-    (useSelectedPanels as jest.Mock).mockReturnValue({
+    (useSelectedPanels as Mock).mockReturnValue({
       setSelectedPanelIds: mockSetSelectedPanelIds,
     });
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("renders PlotLegend without crashing", () => {
@@ -102,7 +103,7 @@ describe("PlotLegend", () => {
   });
 
   it("toggles legend visibility when IconButton is clicked", async () => {
-    const mockSaveConfig = jest.fn();
+    const mockSaveConfig = vi.fn();
     const { getByRole } = setup({ showLegend: false, saveConfig: mockSaveConfig });
 
     await userEvent.setup().click(getByRole("button"));
@@ -122,7 +123,7 @@ describe("PlotLegend", () => {
   });
 
   it("calls onClickPath when a path is clicked", async () => {
-    const mockOnClickPath = jest.fn();
+    const mockOnClickPath = vi.fn();
     const paths = [{ value: path, enabled: true }];
 
     setup({ paths, onClickPath: mockOnClickPath });

@@ -10,13 +10,13 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import PanelSettings from ".";
 
-jest.mock("react-i18next", () => ({
+vi.mock("react-i18next", () => ({
   useTranslation: () => ({ t: (key: string) => key }),
 }));
 
-jest.mock("@lichtblick/suite-base/hooks", () => ({
-  ...jest.requireActual("@lichtblick/suite-base/hooks"),
-  useAppConfigurationValue: jest.fn().mockReturnValue([true, jest.fn()]),
+vi.mock("@lichtblick/suite-base/hooks", async () => ({
+  ...(await vi.importActual("@lichtblick/suite-base/hooks")),
+  useAppConfigurationValue: vi.fn().mockReturnValue([true, vi.fn()]),
 }));
 
 const panelType = BasicBuilder.string();

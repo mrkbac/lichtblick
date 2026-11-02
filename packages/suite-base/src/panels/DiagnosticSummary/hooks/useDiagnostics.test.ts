@@ -15,6 +15,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 import { renderHook } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import * as PanelAPI from "@lichtblick/suite-base/PanelAPI";
 import { DiagnosticStatusArrayMsg } from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
@@ -26,15 +27,15 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import useDiagnostics, { addMessages, UseDiagnosticsResult } from "./useDiagnostics";
 import { computeDiagnosticInfo } from "../utils/util";
 
-jest.mock("../utils/util", () => ({
-  ...jest.requireActual("../utils/util"),
-  computeDiagnosticInfo: jest.fn(),
+vi.mock("../utils/util", async () => ({
+  ...(await vi.importActual("../utils/util")),
+  computeDiagnosticInfo: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/PanelAPI");
+vi.mock("@lichtblick/suite-base/PanelAPI");
 
 describe("addMessages", () => {
-  const computeDiagnosticInfoMock = computeDiagnosticInfo as jest.Mock;
+  const computeDiagnosticInfoMock = computeDiagnosticInfo as Mock;
 
   beforeEach(() => {
     computeDiagnosticInfoMock.mockReset();
@@ -114,7 +115,7 @@ describe("addMessages", () => {
 });
 
 describe("useDiagnostics", () => {
-  const useMessageReducerMock = PanelAPI.useMessageReducer as jest.Mock;
+  const useMessageReducerMock = PanelAPI.useMessageReducer as Mock;
 
   beforeEach(() => {
     useMessageReducerMock.mockReset();

@@ -15,6 +15,8 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import type { Mock } from "vitest";
+
 import { signal } from "@lichtblick/den/async";
 import FakePlayer from "@lichtblick/suite-base/components/MessagePipeline/FakePlayer";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
@@ -42,8 +44,8 @@ import UserScriptPlayer from ".";
 import { DIAGNOSTIC_SEVERITY, ERROR_CODES, SOURCES } from "./constants";
 import exampleDatatypes from "./transformerWorker/fixtures/example-datatypes";
 
-jest.mock("./constants", () => ({
-  ...jest.requireActual("./constants"),
+vi.mock("./constants", async () => ({
+  ...(await vi.importActual("./constants")),
   MAX_GLOBAL_BUFFER_SIZE: 5,
 }));
 
@@ -89,10 +91,10 @@ const nodeUserCodeWithLogAndError = `
 `;
 
 const defaultUserScriptActions = {
-  setUserScriptDiagnostics: jest.fn(),
-  addUserScriptLogs: jest.fn(),
-  setUserScriptRosLib: jest.fn(),
-  setUserScriptTypesLib: jest.fn(),
+  setUserScriptDiagnostics: vi.fn(),
+  addUserScriptLogs: vi.fn(),
+  setUserScriptRosLib: vi.fn(),
+  setUserScriptTypesLib: vi.fn(),
 };
 
 const basicPlayerState: PlayerStateActiveData = {
@@ -188,8 +190,8 @@ describe("UserScriptPlayer", () => {
 
     it("delegates play and pause calls to underlying player", () => {
       const fakePlayer = new FakePlayer();
-      jest.spyOn(fakePlayer, "startPlayback");
-      jest.spyOn(fakePlayer, "pausePlayback");
+      vi.spyOn(fakePlayer, "startPlayback");
+      vi.spyOn(fakePlayer, "pausePlayback");
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
       const messages = [];
       userScriptPlayer.setListener(async (playerState) => {
@@ -207,7 +209,7 @@ describe("UserScriptPlayer", () => {
 
     it("delegates setPlaybackSpeed to underlying player", () => {
       const fakePlayer = new FakePlayer();
-      jest.spyOn(fakePlayer, "setPlaybackSpeed");
+      vi.spyOn(fakePlayer, "setPlaybackSpeed");
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
       const messages = [];
       userScriptPlayer.setListener(async (playerState) => {
@@ -220,7 +222,7 @@ describe("UserScriptPlayer", () => {
 
     it("delegates seekPlayback to underlying player", () => {
       const fakePlayer = new FakePlayer();
-      jest.spyOn(fakePlayer, "seekPlayback");
+      vi.spyOn(fakePlayer, "seekPlayback");
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
       const messages = [];
       userScriptPlayer.setListener(async (playerState) => {
@@ -233,8 +235,8 @@ describe("UserScriptPlayer", () => {
 
     it("delegates publishing to underlying player", () => {
       const fakePlayer = new FakePlayer();
-      jest.spyOn(fakePlayer, "setPublishers");
-      jest.spyOn(fakePlayer, "publish");
+      vi.spyOn(fakePlayer, "setPublishers");
+      vi.spyOn(fakePlayer, "publish");
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
       expect(fakePlayer.setPublishers).not.toHaveBeenCalled();
       expect(fakePlayer.publish).not.toHaveBeenCalled();
@@ -250,7 +252,7 @@ describe("UserScriptPlayer", () => {
     it("should pass through backfill lookups for real topics when requested", async () => {
       // GIVEN - a player with an initialized script and a real input topic
       const fakePlayer = new FakePlayer() as FakePlayer & {
-        getBackfillMessages: jest.Mock;
+        getBackfillMessages: Mock;
       };
       const backfillMessage = {
         topic: "/np_input",
@@ -261,7 +263,7 @@ describe("UserScriptPlayer", () => {
         schemaName: "foo",
         sizeInBytes: 0,
       };
-      fakePlayer.getBackfillMessages = jest.fn().mockResolvedValue([backfillMessage]);
+      fakePlayer.getBackfillMessages = vi.fn().mockResolvedValue([backfillMessage]);
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
       userScriptPlayer.setListener(async () => {
         // no-op
@@ -295,9 +297,9 @@ describe("UserScriptPlayer", () => {
     it("should return no messages when backfill lookups only include virtual topics", async () => {
       // GIVEN - a player with an initialized script whose output topic is virtual
       const fakePlayer = new FakePlayer() as FakePlayer & {
-        getBackfillMessages: jest.Mock;
+        getBackfillMessages: Mock;
       };
-      fakePlayer.getBackfillMessages = jest.fn();
+      fakePlayer.getBackfillMessages = vi.fn();
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
       userScriptPlayer.setListener(async () => {
         // no-op
@@ -346,8 +348,8 @@ describe("UserScriptPlayer", () => {
   describe("resetWorkers", () => {
     function setup(overrides?: Partial<typeof defaultUserScriptActions>) {
       const fakePlayer = new FakePlayer();
-      const mockSetRosLib = jest.fn();
-      const mockSetTypesLib = jest.fn();
+      const mockSetRosLib = vi.fn();
+      const mockSetTypesLib = vi.fn();
       const actions = {
         ...defaultUserScriptActions,
         setUserScriptRosLib: mockSetRosLib,
@@ -468,7 +470,7 @@ describe("UserScriptPlayer", () => {
   describe("user node behavior", () => {
     it("exposes user node topics when available", async () => {
       const fakePlayer = new FakePlayer();
-      const mockSetNodeDiagnostics = jest.fn();
+      const mockSetNodeDiagnostics = vi.fn();
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, {
         ...defaultUserScriptActions,
         setUserScriptDiagnostics: mockSetNodeDiagnostics,
@@ -499,7 +501,7 @@ describe("UserScriptPlayer", () => {
 
     it("updates when topics change", async () => {
       const fakePlayer = new FakePlayer();
-      const mockSetNodeDiagnostics = jest.fn();
+      const mockSetNodeDiagnostics = vi.fn();
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, {
         ...defaultUserScriptActions,
         setUserScriptDiagnostics: mockSetNodeDiagnostics,
@@ -555,7 +557,7 @@ describe("UserScriptPlayer", () => {
 
     it("memoizes topics and datatypes (even after seeking / reinitializing nodes)", async () => {
       const fakePlayer = new FakePlayer();
-      const mockSetNodeDiagnostics = jest.fn();
+      const mockSetNodeDiagnostics = vi.fn();
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, {
         ...defaultUserScriptActions,
         setUserScriptDiagnostics: mockSetNodeDiagnostics,
@@ -631,10 +633,10 @@ describe("UserScriptPlayer", () => {
 
     it("outputs updated messages on next when user script is changed with no new messages as part of active state", async () => {
       const fakePlayer = new FakePlayer();
-      const mockAddUserNodeLogs = jest.fn();
+      const mockAddUserNodeLogs = vi.fn();
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, {
         ...defaultUserScriptActions,
-        setUserScriptDiagnostics: jest.fn(),
+        setUserScriptDiagnostics: vi.fn(),
         addUserScriptLogs: mockAddUserNodeLogs,
       });
 
@@ -723,10 +725,10 @@ describe("UserScriptPlayer", () => {
 
     it("outputs updated messages on when user script is changed and player is paused", async () => {
       const fakePlayer = new FakePlayer();
-      const mockAddUserNodeLogs = jest.fn();
+      const mockAddUserNodeLogs = vi.fn();
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, {
         ...defaultUserScriptActions,
-        setUserScriptDiagnostics: jest.fn(),
+        setUserScriptDiagnostics: vi.fn(),
         addUserScriptLogs: mockAddUserNodeLogs,
       });
 
@@ -968,10 +970,10 @@ describe("UserScriptPlayer", () => {
 
     it("does not add to logs when there is no 'log' invocation in the user code", async () => {
       const fakePlayer = new FakePlayer();
-      const mockAddUserNodeLogs = jest.fn();
+      const mockAddUserNodeLogs = vi.fn();
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, {
         ...defaultUserScriptActions,
-        setUserScriptDiagnostics: jest.fn(),
+        setUserScriptDiagnostics: vi.fn(),
         addUserScriptLogs: mockAddUserNodeLogs,
       });
 
@@ -998,8 +1000,8 @@ describe("UserScriptPlayer", () => {
 
     it("adds to logs even when there is a runtime error", async () => {
       const fakePlayer = new FakePlayer();
-      const addUserNodeLogs = jest.fn();
-      const setUserNodeDiagnostics = jest.fn();
+      const addUserNodeLogs = vi.fn();
+      const setUserNodeDiagnostics = vi.fn();
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, {
         ...defaultUserScriptActions,
         addUserScriptLogs: addUserNodeLogs,
@@ -1118,7 +1120,7 @@ describe("UserScriptPlayer", () => {
 
     it("should error if multiple nodes output to the same topic", async () => {
       const fakePlayer = new FakePlayer();
-      const mockSetNodeDiagnostics = jest.fn();
+      const mockSetNodeDiagnostics = vi.fn();
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, {
         ...defaultUserScriptActions,
         setUserScriptDiagnostics: mockSetNodeDiagnostics,
@@ -1172,7 +1174,7 @@ describe("UserScriptPlayer", () => {
 
     it("should error if a user node outputs to an existing input topic", async () => {
       const fakePlayer = new FakePlayer();
-      const mockSetNodeDiagnostics = jest.fn();
+      const mockSetNodeDiagnostics = vi.fn();
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, {
         ...defaultUserScriptActions,
         setUserScriptDiagnostics: mockSetNodeDiagnostics,
@@ -1419,7 +1421,7 @@ describe("UserScriptPlayer", () => {
       },
     ])("records runtime errors in the diagnostics handler", async ({ code, error }) => {
       const fakePlayer = new FakePlayer();
-      const mockSetNodeDiagnostics = jest.fn();
+      const mockSetNodeDiagnostics = vi.fn();
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, {
         ...defaultUserScriptActions,
         setUserScriptDiagnostics: mockSetNodeDiagnostics,
@@ -1511,7 +1513,7 @@ describe("UserScriptPlayer", () => {
         export default (messages: any): any => {};
       `;
       const fakePlayer = new FakePlayer();
-      const mockSetNodeDiagnostics = jest.fn();
+      const mockSetNodeDiagnostics = vi.fn();
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, {
         ...defaultUserScriptActions,
         setUserScriptDiagnostics: mockSetNodeDiagnostics,
@@ -1574,7 +1576,7 @@ describe("UserScriptPlayer", () => {
         ];
 
         const fakePlayer = new FakePlayer();
-        const mockAddNodeLogs = jest.fn();
+        const mockAddNodeLogs = vi.fn();
         const userScriptPlayer = new UserScriptPlayer(fakePlayer, {
           ...defaultUserScriptActions,
           addUserScriptLogs: mockAddNodeLogs,
@@ -1624,7 +1626,7 @@ describe("UserScriptPlayer", () => {
       `;
 
         const fakePlayer = new FakePlayer();
-        const mockAddNodeLogs = jest.fn();
+        const mockAddNodeLogs = vi.fn();
         const userScriptPlayer = new UserScriptPlayer(fakePlayer, {
           ...defaultUserScriptActions,
           addUserScriptLogs: mockAddNodeLogs,
@@ -1835,7 +1837,7 @@ describe("UserScriptPlayer", () => {
         // Given
         const fakePlayer = new FakePlayer();
         const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
-        const setGlobalVariablesSpy = jest.spyOn(fakePlayer, "setGlobalVariables");
+        const setGlobalVariablesSpy = vi.spyOn(fakePlayer, "setGlobalVariables");
         const globalVariables = GlobalVariableBuilder.globalVariables();
 
         // When
@@ -1849,7 +1851,7 @@ describe("UserScriptPlayer", () => {
         // Given
         const fakePlayer = new FakePlayer();
         const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
-        const setGlobalVariablesSpy = jest.spyOn(fakePlayer, "setGlobalVariables");
+        const setGlobalVariablesSpy = vi.spyOn(fakePlayer, "setGlobalVariables");
         const initialGlobalVariables: GlobalVariables = { testVar: BasicBuilder.string() };
         userScriptPlayer.setGlobalVariables(initialGlobalVariables);
 
@@ -1879,7 +1881,7 @@ describe("UserScriptPlayer", () => {
     let callCount: any;
 
     beforeEach(() => {
-      const messageSpy = jest.spyOn(MockUserScriptPlayerWorker.prototype, "messageSpy");
+      const messageSpy = vi.spyOn(MockUserScriptPlayerWorker.prototype, "messageSpy");
       callCount = (action: any) => {
         return messageSpy.mock.calls.filter(([a]) => a === action).length;
       };
@@ -1916,7 +1918,7 @@ describe("UserScriptPlayer", () => {
       };
     });
     afterEach(() => {
-      jest.restoreAllMocks();
+      vi.restoreAllMocks();
     });
 
     const [userNode0, userNode1, userNode2] = new Array(3).fill(0).map((_, i) => {
@@ -2015,7 +2017,7 @@ describe("UserScriptPlayer", () => {
       const fakePlayer = new FakePlayer();
 
       if (mockBatchIterator) {
-        jest.spyOn(fakePlayer, "getBatchIterator").mockImplementation(mockBatchIterator);
+        vi.spyOn(fakePlayer, "getBatchIterator").mockImplementation(mockBatchIterator);
       }
 
       const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
@@ -2048,7 +2050,7 @@ describe("UserScriptPlayer", () => {
           msgEvent: upstreamFirst,
         };
       })();
-      const getBatchIteratorSpy = jest
+      const getBatchIteratorSpy = vi
         .spyOn(fakePlayer, "getBatchIterator")
         .mockReturnValue(mockIterator);
 
@@ -2080,7 +2082,7 @@ describe("UserScriptPlayer", () => {
         }),
       ];
 
-      jest.spyOn(fakePlayer, "getBatchIterator").mockImplementation((topic) => {
+      vi.spyOn(fakePlayer, "getBatchIterator").mockImplementation((topic) => {
         if (topic === "/np_input") {
           return (async function* () {
             for (const msg of inputMessages) {
@@ -2363,9 +2365,9 @@ describe("UserScriptPlayer", () => {
         const messageCount = 10;
         const fakePlayer = new FakePlayer();
 
-        jest
-          .spyOn(fakePlayer, "getBatchIterator")
-          .mockImplementation(createInputIterator(messageCount));
+        vi.spyOn(fakePlayer, "getBatchIterator").mockImplementation(
+          createInputIterator(messageCount),
+        );
         const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
 
         void userScriptPlayer.setUserScripts({
@@ -2419,9 +2421,9 @@ describe("UserScriptPlayer", () => {
         const messageCount = 10;
         const fakePlayer = new FakePlayer();
 
-        jest
-          .spyOn(fakePlayer, "getBatchIterator")
-          .mockImplementation(createInputIterator(messageCount));
+        vi.spyOn(fakePlayer, "getBatchIterator").mockImplementation(
+          createInputIterator(messageCount),
+        );
 
         const userScriptPlayer = new UserScriptPlayer(fakePlayer, defaultUserScriptActions);
 
@@ -2500,7 +2502,7 @@ describe("UserScriptPlayer", () => {
       async function setupMerge(mockIterators: Record<string, AsyncGenerator>) {
         const fakePlayer = new FakePlayer();
 
-        jest.spyOn(fakePlayer, "getBatchIterator").mockImplementation((topic) => {
+        vi.spyOn(fakePlayer, "getBatchIterator").mockImplementation((topic) => {
           const iter = mockIterators[topic];
           return iter as AsyncIterableIterator<any>;
         });

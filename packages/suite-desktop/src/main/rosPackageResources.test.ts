@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import path from "path";
+import type { Mock } from "vitest";
 
 import { findRosPackage, rosPackageNameAtPath } from "./rosPackageResources";
 
@@ -33,7 +34,7 @@ describe("rosPackageResources", () => {
       expect(packagePath).toEqual(path.join(PACKAGES_ROOT, "./foo"));
 
       expect(console.error).toHaveBeenCalled();
-      (console.error as jest.Mock).mockClear();
+      (console.error as Mock).mockClear();
     });
 
     it("should find package within process.env.ROS_PACKAGE_PATH", async () => {
@@ -46,7 +47,7 @@ describe("rosPackageResources", () => {
       }
 
       expect(console.error).toHaveBeenCalled();
-      (console.error as jest.Mock).mockClear();
+      (console.error as Mock).mockClear();
     });
 
     it("should find packages recursively within rosPackagePath", async () => {
@@ -56,7 +57,7 @@ describe("rosPackageResources", () => {
       expect(packagePath).toEqual(path.join(PACKAGES_ROOT, "nested", "child"));
 
       expect(console.error).toHaveBeenCalled();
-      (console.error as jest.Mock).mockClear();
+      (console.error as Mock).mockClear();
     });
   });
 });

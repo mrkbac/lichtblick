@@ -96,8 +96,8 @@ function createFrame(timestamp: number): VideoFrame {
     timestamp,
     codedWidth: 640,
     codedHeight: 480,
-    close: jest.fn(),
-    clone: jest.fn().mockImplementation(function (this: VideoFrame) {
+    close: vi.fn(),
+    clone: vi.fn().mockImplementation(function (this: VideoFrame) {
       return this;
     }),
   } as unknown as VideoFrame;
@@ -108,14 +108,14 @@ describe("VideoPlayer", () => {
   const originalEncodedVideoChunk = globalThis.EncodedVideoChunk;
 
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
     globalThis.VideoDecoder = originalVideoDecoder;
     globalThis.EncodedVideoChunk = originalEncodedVideoChunk;
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("should return the target frame when it arrives before timeout", async () => {
@@ -180,7 +180,7 @@ describe("VideoPlayer", () => {
       { data: new Uint8Array([2]), timestampMicros: 33333, type: "delta" },
     ]);
     await Promise.resolve();
-    await jest.advanceTimersByTimeAsync(10);
+    await vi.advanceTimersByTimeAsync(10);
     // The reference frame arrives after the deadline; it has no waiter and is dropped.
     outputFrames.get(0)?.(createFrame(0));
 
@@ -200,7 +200,7 @@ describe("VideoPlayer", () => {
       { data: new Uint8Array([2]), timestampMicros: 33333, type: "delta" },
     ]);
     await Promise.resolve();
-    await jest.advanceTimersByTimeAsync(30);
+    await vi.advanceTimersByTimeAsync(30);
     outputFrames.get(0)?.(createFrame(0));
 
     // Then decodeFrames is still pending — HEVC waits for queue drain before returning intermediate
@@ -211,7 +211,7 @@ describe("VideoPlayer", () => {
     // And once the target arrives and the overall timeout elapses, the target frame is returned
     const targetFrame = createFrame(33333);
     outputFrames.get(33333)?.(targetFrame);
-    await jest.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(2000);
 
     await expect(decodePromise).resolves.toEqual<DecodeFramesResult>({
       type: "target",
@@ -228,7 +228,7 @@ describe("VideoPlayer", () => {
     const decodePromise = player.decodeFrames([
       { data: new Uint8Array([1]), timestampMicros: 0, type: "key" },
     ]);
-    await jest.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(2000);
 
     // Then decodeFrames resolves with the timeout result
     await expect(decodePromise).resolves.toEqual({ type: "timeout" });
@@ -314,7 +314,7 @@ describe("VideoPlayer", () => {
       { data: new Uint8Array([1]), timestampMicros: 1000, type: "key" },
     ]);
     await Promise.resolve();
-    await jest.advanceTimersByTimeAsync(40);
+    await vi.advanceTimersByTimeAsync(40);
 
     // Then decodeFrames resolves with the target frame
     await expect(decodePromise).resolves.toMatchObject({ type: "target" });
@@ -415,7 +415,7 @@ describe("VideoPlayer", () => {
 
   it("should retry configure with no-preference when default config fails", async () => {
     // Given a mock decoder whose first configure() throws and second succeeds
-    const configure = jest
+    const configure = vi
       .fn()
       .mockImplementationOnce(() => {
         throw new Error("Unsupported configuration");
@@ -522,7 +522,7 @@ describe("VideoPlayer", () => {
     ]);
 
     // Flush the serialized mutex hand-offs so all three submit in order.
-    await jest.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(0);
     expect(submissionOrder).toEqual([1000, 2000, 3000]);
     expect(releaseFirstDecode).toBeDefined();
 

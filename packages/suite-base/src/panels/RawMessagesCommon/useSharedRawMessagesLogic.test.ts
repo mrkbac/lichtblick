@@ -3,18 +3,19 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { renderHook, act } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import type { SharedConfig, UseSharedRawMessagesLogicProps } from "./types";
 import { useSharedRawMessagesLogic } from "./useSharedRawMessagesLogic";
 
 // Minimal mocks for deps the hook uses
-jest.mock("@lichtblick/suite-base/PanelAPI", () => ({
+vi.mock("@lichtblick/suite-base/PanelAPI", () => ({
   useDataSourceInfo: () => ({ topics: [], datatypes: new Map() }),
 }));
-jest.mock("@lichtblick/suite-base/components/PanelContext", () => ({
-  usePanelContext: () => ({ setMessagePathDropConfig: jest.fn() }),
+vi.mock("@lichtblick/suite-base/components/PanelContext", () => ({
+  usePanelContext: () => ({ setMessagePathDropConfig: vi.fn() }),
 }));
-jest.mock("@lichtblick/suite-base/components/MessagePathSyntax/useMessageDataItem", () => ({
+vi.mock("@lichtblick/suite-base/components/MessagePathSyntax/useMessageDataItem", () => ({
   useMessageDataItem: () => [],
 }));
 
@@ -34,18 +35,18 @@ const setup = (inputOverride?: {
       ...defaultConfig,
       ...inputOverride?.config,
     },
-    saveConfig: inputOverride?.saveConfig ?? jest.fn(),
+    saveConfig: inputOverride?.saveConfig ?? vi.fn(),
   };
 
   return {
     ...renderHook(() => useSharedRawMessagesLogic(input)),
     input,
-    saveConfig: input.saveConfig as jest.Mock,
+    saveConfig: input.saveConfig as Mock,
   };
 };
 describe("given useSharedRawMessagesLogic", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
   describe("when toggling diff", () => {
     it("then enables diff when currently disabled", () => {

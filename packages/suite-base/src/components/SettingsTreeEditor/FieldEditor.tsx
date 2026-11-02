@@ -69,8 +69,8 @@ function FieldInput({
           value={field.value}
           disabled={field.disabled}
           readOnly={field.readonly}
-          renderOption={(props, option, { selected }) => (
-            <MenuItem selected={selected} {...props}>
+          renderOption={({ key, ...props }, option, { selected }) => (
+            <MenuItem key={key} selected={selected} {...props}>
               {option}
             </MenuItem>
           )}

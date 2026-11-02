@@ -7,8 +7,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { setupJestCanvasMock } from "jest-canvas-mock";
 import * as THREE from "three";
+import type { Mock } from "vitest";
+import { setupVitestCanvasMock } from "vitest-canvas-mock";
 
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
@@ -29,13 +30,13 @@ let mockOrbitControls!: {
   mouseButtons: { LEFT: number; RIGHT: number };
   touches: { ONE: number; TWO: number };
   keys: { LEFT: string; RIGHT: string; UP: string; BOTTOM: string };
-  addEventListener: jest.Mock;
-  listenToKeyEvents: jest.Mock;
-  getDistance: jest.Mock;
-  getPolarAngle: jest.Mock;
-  getAzimuthalAngle: jest.Mock;
+  addEventListener: Mock;
+  listenToKeyEvents: Mock;
+  getDistance: Mock;
+  getPolarAngle: Mock;
+  getAzimuthalAngle: Mock;
   target: THREE.Vector3;
-  update: jest.Mock;
+  update: Mock;
   minPolarAngle: number;
   maxPolarAngle: number;
 };
@@ -43,15 +44,15 @@ let mockOrbitControls!: {
 function setupOrbitControlsMock() {
   mockOrbitControls = {
     ...DEFAULT_ORBIT_CONTROLS_CONFIG,
-    addEventListener: jest.fn(),
-    listenToKeyEvents: jest.fn(),
-    getDistance: jest.fn().mockReturnValue(DEFAULT_CAMERA_STATE.distance),
-    getPolarAngle: jest.fn().mockReturnValue(THREE.MathUtils.degToRad(DEFAULT_CAMERA_STATE.phi)),
-    getAzimuthalAngle: jest
+    addEventListener: vi.fn(),
+    listenToKeyEvents: vi.fn(),
+    getDistance: vi.fn().mockReturnValue(DEFAULT_CAMERA_STATE.distance),
+    getPolarAngle: vi.fn().mockReturnValue(THREE.MathUtils.degToRad(DEFAULT_CAMERA_STATE.phi)),
+    getAzimuthalAngle: vi
       .fn()
       .mockReturnValue(THREE.MathUtils.degToRad(-DEFAULT_CAMERA_STATE.thetaOffset)),
     target: new THREE.Vector3(...DEFAULT_CAMERA_STATE.targetOffset),
-    update: jest.fn(),
+    update: vi.fn(),
     minPolarAngle: 0,
     maxPolarAngle: Math.PI,
   };
@@ -64,15 +65,15 @@ let mockGl: {
   toneMapping: THREE.ToneMapping;
   shadowMap: { enabled: boolean };
   capabilities: { isWebGL2: boolean };
-  setPixelRatio: jest.Mock;
-  setSize: jest.Mock;
-  render: jest.Mock;
-  clear: jest.Mock;
-  setClearColor: jest.Mock;
-  readRenderTargetPixels: jest.Mock;
-  info: { reset: jest.Mock };
-  dispose: jest.Mock;
-  clearDepth: jest.Mock;
+  setPixelRatio: Mock;
+  setSize: Mock;
+  render: Mock;
+  clear: Mock;
+  setClearColor: Mock;
+  readRenderTargetPixels: Mock;
+  info: { reset: Mock };
+  dispose: Mock;
+  clearDepth: Mock;
   getDrawingBufferSize: () => { width: number; height: number };
 };
 
@@ -81,29 +82,31 @@ function resetMockGl() {
     toneMapping: THREE.NoToneMapping,
     shadowMap: { enabled: false },
     capabilities: { isWebGL2: true },
-    setPixelRatio: jest.fn(),
-    setSize: jest.fn(),
-    render: jest.fn(),
-    clear: jest.fn(),
-    setClearColor: jest.fn(),
-    readRenderTargetPixels: jest.fn(),
-    info: { reset: jest.fn() },
-    dispose: jest.fn(),
-    clearDepth: jest.fn(),
+    setPixelRatio: vi.fn(),
+    setSize: vi.fn(),
+    render: vi.fn(),
+    clear: vi.fn(),
+    setClearColor: vi.fn(),
+    readRenderTargetPixels: vi.fn(),
+    info: { reset: vi.fn() },
+    dispose: vi.fn(),
+    clearDepth: vi.fn(),
     getDrawingBufferSize: () => ({ width: 100, height: 100 }),
   };
 }
 
 // --- Jest module mocks ---
 
-jest.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => "");
+vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
 
-jest.mock("three/examples/jsm/controls/OrbitControls", () => ({
-  OrbitControls: jest.fn().mockImplementation(() => mockOrbitControls),
+vi.mock("three/examples/jsm/controls/OrbitControls", () => ({
+  OrbitControls: vi.fn().mockImplementation(function () {
+    return mockOrbitControls;
+  }),
 }));
 
-jest.mock("three", () => {
-  const ActualTHREE = jest.requireActual("three");
+vi.mock("three", async () => {
+  const ActualTHREE = await vi.importActual("three");
   return {
     ...ActualTHREE,
     WebGLRenderer: function WebGLRenderer() {
@@ -117,20 +120,22 @@ jest.mock("three", () => {
 beforeEach(() => {
   Object.defineProperty(window, "matchMedia", {
     writable: true,
-    value: jest.fn().mockImplementation((query) => ({
-      matches: false,
-      media: query,
-      onchange: undefined,
-      addListener: jest.fn(),
-      removeListener: jest.fn(),
-      addEventListener: jest.fn(),
-      removeEventListener: jest.fn(),
-      dispatchEvent: jest.fn(),
-    })),
+    value: vi.fn().mockImplementation(function (query) {
+      return {
+        matches: false,
+        media: query,
+        onchange: undefined,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      };
+    }),
   });
   resetMockGl();
   setupOrbitControlsMock();
-  setupJestCanvasMock();
+  setupVitestCanvasMock();
 });
 
 // --- Test helpers ---
@@ -174,12 +179,12 @@ function makeRenderer(config: RendererConfig = makeDefaultConfig()): Renderer {
 }
 
 // --- Tests ---
-// All describe blocks include afterEach(() => { (console.warn as jest.Mock).mockClear() })
+// All describe blocks include afterEach(() => { (console.warn as Mock).mockClear() })
 // so they run before the framework-level check (inner describe afterEach runs before outer).
 
 describe("SceneSettings — settingsNodes", () => {
   afterEach(() => {
-    (console.warn as jest.Mock).mockClear();
+    (console.warn as Mock).mockClear();
   });
 
   it("includes the three new lighting fields in the settings tree", () => {
@@ -227,13 +232,13 @@ describe("SceneSettings — settingsNodes", () => {
 
 describe("SceneSettings — handleSettingsAction", () => {
   afterEach(() => {
-    (console.warn as jest.Mock).mockClear();
+    (console.warn as Mock).mockClear();
   });
 
   it("calls updateSceneRenderSettings when mainLightMode changes", () => {
     const renderer = makeRenderer();
     const sceneSettings = new SceneSettings(renderer);
-    const spy = jest.spyOn(renderer, "updateSceneRenderSettings");
+    const spy = vi.spyOn(renderer, "updateSceneRenderSettings");
 
     sceneSettings.handleSettingsAction({
       action: "update",
@@ -244,27 +249,27 @@ describe("SceneSettings — handleSettingsAction", () => {
     renderer.dispose();
   });
 
-  it.each([
-    "directionalLightIntensity",
-    "hemisphereLightIntensity",
-  ] as const)("calls updateSceneRenderSettings when number field '%s' changes", (settingKey) => {
-    const renderer = makeRenderer();
-    const sceneSettings = new SceneSettings(renderer);
-    const spy = jest.spyOn(renderer, "updateSceneRenderSettings");
+  it.each(["directionalLightIntensity", "hemisphereLightIntensity"] as const)(
+    "calls updateSceneRenderSettings when number field '%s' changes",
+    (settingKey) => {
+      const renderer = makeRenderer();
+      const sceneSettings = new SceneSettings(renderer);
+      const spy = vi.spyOn(renderer, "updateSceneRenderSettings");
 
-    sceneSettings.handleSettingsAction({
-      action: "update",
-      payload: { path: ["scene", settingKey], value: 2, input: "number" },
-    });
+      sceneSettings.handleSettingsAction({
+        action: "update",
+        payload: { path: ["scene", settingKey], value: 2, input: "number" },
+      });
 
-    expect(spy).toHaveBeenCalledTimes(1);
-    renderer.dispose();
-  });
+      expect(spy).toHaveBeenCalledTimes(1);
+      renderer.dispose();
+    },
+  );
 
   it("calls updateSceneRenderSettings on reset-scene action", () => {
     const renderer = makeRenderer();
     const sceneSettings = new SceneSettings(renderer);
-    const spy = jest.spyOn(renderer, "updateSceneRenderSettings");
+    const spy = vi.spyOn(renderer, "updateSceneRenderSettings");
 
     sceneSettings.handleSettingsAction({
       action: "perform-node-action",
@@ -278,7 +283,7 @@ describe("SceneSettings — handleSettingsAction", () => {
   it("resets labelPool scale factor on reset-scene action", () => {
     const renderer = makeRenderer(makeDefaultConfig({ labelScaleFactor: 3 }));
     const sceneSettings = new SceneSettings(renderer);
-    const setScaleSpy = jest.spyOn(renderer.labelPool, "setScaleFactor");
+    const setScaleSpy = vi.spyOn(renderer.labelPool, "setScaleFactor");
 
     sceneSettings.handleSettingsAction({
       action: "perform-node-action",
@@ -292,7 +297,7 @@ describe("SceneSettings — handleSettingsAction", () => {
   it("ignores actions that are not 'update' and not the reset-scene node-action", () => {
     const renderer = makeRenderer();
     const sceneSettings = new SceneSettings(renderer);
-    const updateConfigSpy = jest.spyOn(renderer, "updateConfig");
+    const updateConfigSpy = vi.spyOn(renderer, "updateConfig");
 
     sceneSettings.handleSettingsAction({
       action: "perform-node-action",
@@ -306,7 +311,7 @@ describe("SceneSettings — handleSettingsAction", () => {
   it("ignores update actions with an empty path", () => {
     const renderer = makeRenderer();
     const sceneSettings = new SceneSettings(renderer);
-    const updateConfigSpy = jest.spyOn(renderer, "updateConfig");
+    const updateConfigSpy = vi.spyOn(renderer, "updateConfig");
 
     sceneSettings.handleSettingsAction({
       action: "update",
@@ -320,7 +325,7 @@ describe("SceneSettings — handleSettingsAction", () => {
   it("ignores update actions outside the 'scene' category", () => {
     const renderer = makeRenderer();
     const sceneSettings = new SceneSettings(renderer);
-    const updateConfigSpy = jest.spyOn(renderer, "updateConfig");
+    const updateConfigSpy = vi.spyOn(renderer, "updateConfig");
 
     sceneSettings.handleSettingsAction({
       action: "update",
@@ -334,7 +339,7 @@ describe("SceneSettings — handleSettingsAction", () => {
   it("updates debugPicking directly without touching the renderer config", () => {
     const renderer = makeRenderer();
     const sceneSettings = new SceneSettings(renderer);
-    const updateConfigSpy = jest.spyOn(renderer, "updateConfig");
+    const updateConfigSpy = vi.spyOn(renderer, "updateConfig");
 
     sceneSettings.handleSettingsAction({
       action: "update",
@@ -349,7 +354,7 @@ describe("SceneSettings — handleSettingsAction", () => {
   it("updates the background color scheme when backgroundColor changes", () => {
     const renderer = makeRenderer();
     const sceneSettings = new SceneSettings(renderer);
-    const setColorSchemeSpy = jest.spyOn(renderer, "setColorScheme");
+    const setColorSchemeSpy = vi.spyOn(renderer, "setColorScheme");
 
     sceneSettings.handleSettingsAction({
       action: "update",
@@ -363,7 +368,7 @@ describe("SceneSettings — handleSettingsAction", () => {
   it("updates the label pool scale factor when labelScaleFactor changes", () => {
     const renderer = makeRenderer();
     const sceneSettings = new SceneSettings(renderer);
-    const setScaleSpy = jest.spyOn(renderer.labelPool, "setScaleFactor");
+    const setScaleSpy = vi.spyOn(renderer.labelPool, "setScaleFactor");
 
     sceneSettings.handleSettingsAction({
       action: "update",
@@ -377,7 +382,7 @@ describe("SceneSettings — handleSettingsAction", () => {
   it("falls back to the default label scale factor when labelScaleFactor is cleared", () => {
     const renderer = makeRenderer();
     const sceneSettings = new SceneSettings(renderer);
-    const setScaleSpy = jest.spyOn(renderer.labelPool, "setScaleFactor");
+    const setScaleSpy = vi.spyOn(renderer.labelPool, "setScaleFactor");
 
     sceneSettings.handleSettingsAction({
       action: "update",

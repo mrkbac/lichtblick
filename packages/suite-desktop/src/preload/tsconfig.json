@@ -5,7 +5,7 @@
     "rootDir": "../../",
     "noEmit": true,
     "lib": ["dom", "es2025", "esnext.typedarrays"],
-    "types": ["node", "jest"],
+    "types": ["node", "vitest/globals"],
     "useUnknownInCatchVariables": false
   }
 }

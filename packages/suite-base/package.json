@@ -87,8 +87,6 @@
     "@types/wicg-file-system-access": "2023.10.7",
     "@uiw/react-textarea-code-editor": "3.1.2",
     "async-mutex": "0.5.0",
-    "babel-jest": "30.5.2",
-    "babel-plugin-transform-import-meta": "2.2.1",
     "chart.js": "4.6.1",
     "chartjs-plugin-annotation": "3.1.0",
     "chartjs-plugin-datalabels": "2.2.0",
@@ -111,7 +109,6 @@
     "idb-keyval": "6.3.0",
     "immer": "10.1.1",
     "intervals-fn": "3.0.3",
-    "jest-canvas-mock": "2.5.8",
     "jszip": "3.10.2",
     "leaflet": "1.9.4",
     "leaflet-ellipse": "0.9.1",
@@ -156,6 +153,7 @@
     "typescript": "6.0.3",
     "use-debounce": "10.1.1",
     "use-immer": "0.11.0",
+    "vitest-canvas-mock": "1.2.0",
     "webpack": "5.112.2",
     "zustand": "4.5.7"
   }

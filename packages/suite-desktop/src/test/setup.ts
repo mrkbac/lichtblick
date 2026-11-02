@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock } from "vitest";
+
 // intercept console.error and console.warn calls to fail tests if they are called
 // the user can indicate they expect the call to happen by checking the mock.calls
 // and then clearing the mock via mockClear()
@@ -8,8 +10,8 @@
 // We assign rather than spy to expose the mock for the user
 const origError = console.error;
 const origWarn = console.warn;
-const consoleErrorMock = (console.error = jest.fn());
-const consoleWarnMock = (console.warn = jest.fn());
+const consoleErrorMock: Mock = (console.error = vi.fn());
+const consoleWarnMock: Mock = (console.warn = vi.fn());
 
 beforeEach(() => {
   consoleErrorMock.mockClear();

@@ -44,7 +44,7 @@ describe("AppParametersProvider", () => {
   });
 
   it("should throw an error if useAppParameters is called without AppParametersProvider", () => {
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     const TestComponent = () => {
       useAppParameters();

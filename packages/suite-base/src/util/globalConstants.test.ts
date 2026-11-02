@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { useTheme } from "@mui/material";
+import type { Mock } from "vitest";
 
 import { getValueColor, useJsonTreeTheme } from "./globalConstants";
 
-jest.mock("@mui/material", () => ({
-  useTheme: jest.fn(),
+vi.mock("@mui/material", () => ({
+  useTheme: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/util/constants", () => ({
+vi.mock("@lichtblick/suite-base/util/constants", () => ({
   JSON_TREE_THEME_COLORS: {
     light: {
       null: "#808080",
@@ -80,7 +81,7 @@ describe("getValueColor", () => {
 
 describe("useJsonTreeTheme", () => {
   it("should return dark theme when mode is dark", () => {
-    (useTheme as jest.Mock).mockReturnValue({
+    (useTheme as Mock).mockReturnValue({
       palette: {
         mode: "dark",
         text: { secondary: "#AAAAAA" },
@@ -99,7 +100,7 @@ describe("useJsonTreeTheme", () => {
   });
 
   it("should return light theme when mode is light", () => {
-    (useTheme as jest.Mock).mockReturnValue({
+    (useTheme as Mock).mockReturnValue({
       palette: {
         mode: "light",
         text: { secondary: "#666666" },

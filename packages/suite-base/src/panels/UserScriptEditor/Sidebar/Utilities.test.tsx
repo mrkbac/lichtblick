@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 
 import { getUserScriptProjectConfig } from "@lichtblick/suite-base/players/UserScriptPlayer/transformerWorker/typescript/projectConfig";
 import ScriptBuilder from "@lichtblick/suite-base/testing/builders/ScriptBuilder";
@@ -14,7 +14,7 @@ import { Utilities } from "./Utilities";
 
 const GENERATED_TYPES_PATH = "/studio_script/generatedTypes.ts";
 
-jest.mock(
+vi.mock(
   "@lichtblick/suite-base/players/UserScriptPlayer/transformerWorker/typescript/projectConfig",
   () => ({
     getUserScriptProjectConfig: () => ({
@@ -29,8 +29,8 @@ jest.mock(
 const { utilityFiles } = getUserScriptProjectConfig();
 
 function renderUtilities(props: Partial<React.ComponentProps<typeof Utilities>> = {}) {
-  const onClose = props.onClose ?? jest.fn();
-  const gotoUtils = props.gotoUtils ?? jest.fn();
+  const onClose = props.onClose ?? vi.fn();
+  const gotoUtils = props.gotoUtils ?? vi.fn();
 
   render(
     <ThemeProvider isDark={false}>
@@ -43,8 +43,8 @@ function renderUtilities(props: Partial<React.ComponentProps<typeof Utilities>> 
 
 describe("Utilities", () => {
   afterEach(() => {
-    jest.clearAllMocks();
-    jest.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("should render each utility file name and the generated types entry", () => {

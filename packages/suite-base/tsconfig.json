@@ -20,6 +20,7 @@
     },
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
-    "useUnknownInCatchVariables": false
+    "useUnknownInCatchVariables": false,
+    "typeRoots": ["../../node_modules/@types"]
   }
 }

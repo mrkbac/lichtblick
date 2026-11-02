@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { render, screen, fireEvent } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 
 import TextContent from "@lichtblick/suite-base/components/TextContent";
 import LinkHandlerContext from "@lichtblick/suite-base/context/LinkHandlerContext";
@@ -18,7 +18,7 @@ type SetupProps = {
 };
 
 function setup({ children, style, allowMarkdownHtml, handleLink }: SetupProps) {
-  const handleLinkMock = handleLink ?? jest.fn();
+  const handleLinkMock = handleLink ?? vi.fn();
   const utils = render(
     <LinkHandlerContext.Provider value={handleLinkMock}>
       <TextContent style={style} allowMarkdownHtml={allowMarkdownHtml}>
@@ -32,8 +32,8 @@ function setup({ children, style, allowMarkdownHtml, handleLink }: SetupProps) {
 describe("TextContent", () => {
   const sampleText = BasicBuilder.string();
   afterEach(() => {
-    jest.clearAllMocks();
-    jest.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   describe("rendering children", () => {

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { isTime, toSec } from "@foxglove/rostime";
+import type { Mock } from "vitest";
 
 import { Time } from "@lichtblick/suite";
 import {
@@ -11,23 +12,23 @@ import {
 } from "@lichtblick/suite-base/panels/Plot/utils/datum";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-jest.mock("@foxglove/rostime", () => ({
-  isTime: jest.fn(),
-  toSec: jest.fn(),
+vi.mock("@foxglove/rostime", () => ({
+  isTime: vi.fn(),
+  toSec: vi.fn(),
 }));
 
 describe("Chart Value Utilities", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   const setupMocks = (options: {
     isTimeMockReturnValue: boolean;
     toSecMockReturnValue?: number;
   }) => {
-    (isTime as unknown as jest.Mock).mockReturnValue(options.isTimeMockReturnValue);
+    (isTime as unknown as Mock).mockReturnValue(options.isTimeMockReturnValue);
     if (options.toSecMockReturnValue != undefined) {
-      (toSec as jest.Mock).mockReturnValue(options.toSecMockReturnValue);
+      (toSec as Mock).mockReturnValue(options.toSecMockReturnValue);
     }
   };
 
@@ -105,7 +106,7 @@ describe("Chart Value Utilities", () => {
     });
 
     it("should map a null item to a gap without invoking the math function", () => {
-      const mathFunction = jest.fn();
+      const mathFunction = vi.fn();
 
       expect(resolveChartDatum(null, mathFunction)).toEqual({ y: NaN, value: null });
       expect(mathFunction).not.toHaveBeenCalled();
@@ -122,7 +123,7 @@ describe("Chart Value Utilities", () => {
     });
 
     it("should apply the math function to the resolved chart value", () => {
-      const mathFunction = jest.fn().mockReturnValue(42);
+      const mathFunction = vi.fn().mockReturnValue(42);
 
       expect(resolveChartDatum(3, mathFunction)).toEqual({ y: 42, value: 42 });
       expect(mathFunction).toHaveBeenCalledWith(3);

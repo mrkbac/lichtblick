@@ -31,10 +31,7 @@ export class OffscreenCanvasRenderer {
   public constructor(canvas: OffscreenCanvas, theme: Theme) {
     this.#theme = theme;
     this.#canvas = canvas;
-    const worker = new Worker(
-      // foxglove-depcheck-used: babel-plugin-transform-import-meta
-      new URL("./ChartRenderer.worker", import.meta.url),
-    );
+    const worker = new Worker(new URL("./ChartRenderer.worker", import.meta.url));
 
     const { remote, dispose } = ComlinkWrap<Service<Comlink.RemoteObject<ChartRenderer>>>(worker);
 

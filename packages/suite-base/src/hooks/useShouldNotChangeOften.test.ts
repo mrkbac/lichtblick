@@ -21,7 +21,7 @@ import useShouldNotChangeOften from "@lichtblick/suite-base/hooks/useShouldNotCh
 
 describe("useShouldNotChangeOften", () => {
   it("logs when value changes twice in a row", () => {
-    const warn = jest.fn();
+    const warn = vi.fn();
     const { result, rerender } = renderHook((val) => useShouldNotChangeOften(val, warn), {
       initialProps: "a",
     });

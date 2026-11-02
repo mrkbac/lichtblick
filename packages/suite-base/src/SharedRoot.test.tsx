@@ -17,18 +17,18 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import { SharedRoot } from "./SharedRoot";
 import { useSharedRootContext } from "./context/SharedRootContext";
 
-jest.mock("./components/ColorSchemeThemeProvider", () => ({
+vi.mock("./components/ColorSchemeThemeProvider", () => ({
   ColorSchemeThemeProvider: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-jest.mock("./components/CssBaseline", () => ({
+vi.mock("./components/CssBaseline", () => ({
   __esModule: true,
   default: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-jest.mock("./components/ErrorBoundary", () => ({
+vi.mock("./components/ErrorBoundary", () => ({
   __esModule: true,
   default: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-jest.mock("./components/GlobalCss", () => ({
+vi.mock("./components/GlobalCss", () => ({
   __esModule: true,
   default: () => <></>,
 }));

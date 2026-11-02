@@ -4,11 +4,11 @@
 
 import { render, screen } from "@testing-library/react";
 
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 
 import { EmptyWrapper, EmptyWrapperProps } from "./EmptyWrapper";
 
-jest.mock("react-i18next", () => ({
+vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
   }),

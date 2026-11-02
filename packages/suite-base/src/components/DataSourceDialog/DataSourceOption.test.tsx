@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 
 import { DataSourceOptionProps } from "@lichtblick/suite-base/components/DataSourceDialog/types";
@@ -14,7 +14,7 @@ import DataSourceOption from "./DataSourceOption";
 describe("DataSourceOption", () => {
   const mockProps: DataSourceOptionProps = {
     icon: <span data-testid="icon">Icon</span>,
-    onClick: jest.fn(),
+    onClick: vi.fn(),
     text: BasicBuilder.string(),
     secondaryText: BasicBuilder.string(),
     href: undefined,

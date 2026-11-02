@@ -4,7 +4,7 @@
 import { parseTimestampStr } from "./parseMultipleTimes";
 
 describe("parseTimestampStr", () => {
-  // jest.globalSetup.js runs tests in UTC
+  // vi.globalSetup.js runs tests in UTC
   it("should return the same number if input is a Unix timestamp in seconds", () => {
     expect(parseTimestampStr("1633046400")).toEqual({ sec: 1633046400, nsec: 0 });
   });

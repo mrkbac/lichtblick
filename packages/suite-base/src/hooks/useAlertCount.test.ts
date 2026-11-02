@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { renderHook } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { getAlertKey, useAlertsStore } from "@lichtblick/suite-base/context/AlertsContext";
@@ -12,13 +13,13 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import useAlertCount from "./useAlertCount";
 
-jest.mock("@lichtblick/suite-base/components/MessagePipeline");
-jest.mock("@lichtblick/suite-base/context/AlertsContext");
+vi.mock("@lichtblick/suite-base/components/MessagePipeline");
+vi.mock("@lichtblick/suite-base/context/AlertsContext");
 
 describe("useAlertCount", () => {
-  const mockUseMessagePipeline = useMessagePipeline as jest.Mock;
-  const mockUseAlertsStore = useAlertsStore as jest.Mock;
-  const mockGetPlayerAlertKey = getAlertKey as jest.Mock;
+  const mockUseMessagePipeline = useMessagePipeline as Mock;
+  const mockUseAlertsStore = useAlertsStore as Mock;
+  const mockGetPlayerAlertKey = getAlertKey as Mock;
 
   function setupAlertsStore(
     alerts: unknown[],
@@ -30,7 +31,7 @@ describe("useAlertCount", () => {
   }
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockGetPlayerAlertKey.mockImplementation(
       (alert: PlayerAlert) => `${alert.severity}::${alert.message}`,
     );

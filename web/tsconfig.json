@@ -1,6 +1,6 @@
 {
   "extends": "@lichtblick/tsconfig/base",
-  "include": ["**/*", "../integration-test-build.ts"],
+  "include": ["**/*"],
   "compilerOptions": {
     "jsx": "react-jsx",
     "lib": ["ESNext.Disposable"],

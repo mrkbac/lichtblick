@@ -5,6 +5,7 @@ import fs, { Dirent, Stats } from "fs";
 import mockFs from "mock-fs";
 import { DirectoryItems } from "mock-fs/lib/filesystem";
 import os from "os";
+import type { Mock } from "vitest";
 
 import { BasicBuilder } from "@lichtblick/test-builders";
 
@@ -81,7 +82,7 @@ describe("getFilesFromDirectory", () => {
         message: expect.stringContaining("ENOENT, no such file or directory"),
       }),
     );
-    (console.error as jest.Mock).mockClear();
+    (console.error as Mock).mockClear();
   });
 
   it("should return an empty array when an error occurs in fs.readdirSync", () => {
@@ -94,7 +95,7 @@ describe("getFilesFromDirectory", () => {
         message: "ENOENT: no such file or directory, scandir ''",
       }),
     );
-    (console.error as jest.Mock).mockClear();
+    (console.error as Mock).mockClear();
   });
 });
 
@@ -135,12 +136,12 @@ describe("isPathToDirectory", () => {
         message: "ENOENT: no such file or directory, stat ''",
       }),
     );
-    (console.error as jest.Mock).mockClear();
+    (console.error as Mock).mockClear();
   });
 });
 
 describe("resolveSourcePaths", () => {
-  jest.spyOn(os, "homedir").mockReturnValue(buildPath());
+  vi.spyOn(os, "homedir").mockReturnValue(buildPath());
 
   it("should return an empty array because there was no source parameter provided", () => {
     const mockSourceParameter = undefined;
@@ -164,7 +165,7 @@ describe("resolveSourcePaths", () => {
         message: expect.stringContaining("ENOENT: no such file or directory"),
       }),
     );
-    (console.error as jest.Mock).mockClear();
+    (console.error as Mock).mockClear();
   });
 
   it("should return an array with multiple paths to supported files", () => {
@@ -180,7 +181,7 @@ describe("resolveSourcePaths", () => {
   });
 
   it("should return an empty array after getting a path to a directory with no mcap files", () => {
-    jest.spyOn(fs, "statSync").mockReturnValueOnce({
+    vi.spyOn(fs, "statSync").mockReturnValueOnce({
       isDirectory: () => true,
     } as Stats);
     const path = buildPath();
@@ -196,7 +197,7 @@ describe("resolveSourcePaths", () => {
         message: expect.stringContaining("ENOENT: no such file or directory"),
       }),
     );
-    (console.error as jest.Mock).mockClear();
+    (console.error as Mock).mockClear();
   });
 
   it("should return an array with mcap files after getting a path to a directory with mcap files", () => {
@@ -204,12 +205,13 @@ describe("resolveSourcePaths", () => {
     const file1 = buildFile({ extension: "mcap" });
     const file2 = buildFile({ extension: "bag" });
     const file3 = buildFile({ extension: "mcap" });
-    jest.spyOn(fs, "statSync").mockReturnValueOnce({
+    vi.spyOn(fs, "statSync").mockReturnValueOnce({
       isDirectory: () => true,
     } as Stats);
-    jest
-      .spyOn(fs, "readdirSync")
-      .mockReturnValueOnce([file1.name, file3.name] as unknown as Dirent[]);
+    vi.spyOn(fs, "readdirSync").mockReturnValueOnce([
+      file1.name,
+      file3.name,
+    ] as unknown as Dirent[]);
 
     setup({
       [path]: {

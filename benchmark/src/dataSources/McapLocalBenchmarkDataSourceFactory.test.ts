@@ -13,7 +13,7 @@ import { McapLocalBenchmarkDataSourceFactory } from "./McapLocalBenchmarkDataSou
 function setupArgs(file?: File): DataSourceFactoryInitializeArgs {
   return {
     file,
-    metricsCollector: jest.fn() as unknown as PlayerMetricsCollectorInterface,
+    metricsCollector: vi.fn() as unknown as PlayerMetricsCollectorInterface,
   };
 }
 

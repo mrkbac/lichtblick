@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock } from "vitest";
+
 import { HydratedSourcePool, SourceHydrator } from "./HydratedSourcePool";
 
 // Build a hydrator whose open() yields a distinct value and whose open/close are jest spies so
@@ -9,21 +11,21 @@ function makeHydrator(
   value: unknown,
   weight?: number,
 ): SourceHydrator<unknown> & {
-  open: jest.Mock;
-  close: jest.Mock;
-  weigh?: jest.Mock;
+  open: Mock;
+  close: Mock;
+  weigh?: Mock;
 } {
   const hydrator: SourceHydrator<unknown> & {
-    open: jest.Mock;
-    close: jest.Mock;
-    weigh?: jest.Mock;
+    open: Mock;
+    close: Mock;
+    weigh?: Mock;
   } = {
-    open: jest.fn().mockResolvedValue(value),
-    close: jest.fn().mockResolvedValue(undefined),
+    open: vi.fn().mockResolvedValue(value),
+    close: vi.fn().mockResolvedValue(undefined),
   };
 
   if (weight != undefined) {
-    hydrator.weigh = jest.fn().mockReturnValue(weight);
+    hydrator.weigh = vi.fn().mockReturnValue(weight);
   }
 
   return hydrator;
@@ -216,8 +218,8 @@ describe("HydratedSourcePool", () => {
     const pool = new HydratedSourcePool({ maxCount: 2 });
     const token = {};
     const hydrator = {
-      open: jest.fn().mockRejectedValueOnce(new Error("boom")).mockResolvedValueOnce("recovered"),
-      close: jest.fn().mockResolvedValue(undefined),
+      open: vi.fn().mockRejectedValueOnce(new Error("boom")).mockResolvedValueOnce("recovered"),
+      close: vi.fn().mockResolvedValue(undefined),
     };
 
     // WHEN/THEN: the first acquire rejects and the broken entry is removed.
@@ -335,11 +337,11 @@ describe("HydratedSourcePool", () => {
     const pool = new HydratedSourcePool({ maxBytes: 1000, maxCount: 2 });
     const failingToken = {};
     const failingHydrator: SourceHydrator<unknown> & {
-      open: jest.Mock;
-      close: jest.Mock;
+      open: Mock;
+      close: Mock;
     } = {
-      open: jest.fn().mockRejectedValue(new Error("boom")),
-      close: jest.fn().mockResolvedValue(undefined),
+      open: vi.fn().mockRejectedValue(new Error("boom")),
+      close: vi.fn().mockResolvedValue(undefined),
     };
 
     // WHEN: the same token is acquired twice concurrently.
@@ -369,9 +371,9 @@ describe("HydratedSourcePool", () => {
     // GIVEN: a token with no resident entry and a hydrator whose open() always rejects.
     const pool = new HydratedSourcePool({ maxCount: 2 });
     const token = {};
-    const hydrator: SourceHydrator<unknown> & { open: jest.Mock; close: jest.Mock } = {
-      open: jest.fn().mockRejectedValue(new Error("boom")),
-      close: jest.fn().mockResolvedValue(undefined),
+    const hydrator: SourceHydrator<unknown> & { open: Mock; close: Mock } = {
+      open: vi.fn().mockRejectedValue(new Error("boom")),
+      close: vi.fn().mockResolvedValue(undefined),
     };
 
     // WHEN: a third acquire() joins the same token while the first two are still in flight
@@ -391,7 +393,7 @@ describe("HydratedSourcePool", () => {
     // WHEN: the token is retried after the failure.
     const value = await pool.acquire(token, {
       ...hydrator,
-      open: jest.fn().mockResolvedValue("ok"),
+      open: vi.fn().mockResolvedValue("ok"),
     });
 
     // THEN: the retry succeeds normally.
@@ -482,11 +484,11 @@ describe("HydratedSourcePool", () => {
       const pool = new HydratedSourcePool({ maxCount: 1 });
       const tokenA = {};
       let resolveClose: (() => void) | undefined;
-      const closeStarted = jest.fn();
-      const closeFinished = jest.fn();
-      const hydratorA: SourceHydrator<unknown> & { open: jest.Mock; close: jest.Mock } = {
-        open: jest.fn().mockResolvedValue("A-instance"),
-        close: jest.fn().mockImplementation(async () => {
+      const closeStarted = vi.fn();
+      const closeFinished = vi.fn();
+      const hydratorA: SourceHydrator<unknown> & { open: Mock; close: Mock } = {
+        open: vi.fn().mockResolvedValue("A-instance"),
+        close: vi.fn().mockImplementation(async () => {
           closeStarted();
           await new Promise<void>((resolve) => {
             resolveClose = resolve;

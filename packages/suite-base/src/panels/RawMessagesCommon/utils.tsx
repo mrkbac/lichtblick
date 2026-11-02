@@ -27,17 +27,9 @@ import {
   ValueLabels,
   ValueLabelsProps,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
+import { isTypedArray } from "@lichtblick/suite-base/types/isTypedArray";
 
 ROS1_COMMON_MSG_PACKAGES.add("turtlesim");
-
-function isTypedArray(obj: unknown): boolean {
-  const isTyped =
-    obj != undefined &&
-    typeof obj === "object" &&
-    ArrayBuffer.isView(obj) &&
-    !(obj instanceof DataView);
-  return isTyped;
-}
 
 function invert(value: NodeState): NodeState {
   return value === NodeState.Expanded ? NodeState.Collapsed : NodeState.Expanded;

@@ -14,6 +14,8 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import type { Mock } from "vitest";
+
 import * as formatTime from "./formatTime";
 
 describe("formatTime.format", () => {
@@ -48,7 +50,7 @@ describe("formatTime.formatDate", () => {
     expect(formatTime.formatDate({ sec: 0, nsec: -1 }, "UTC")).toBe("(invalid negative time)");
     expect(console.error).toHaveBeenCalledTimes(2);
     expect(console.error).toHaveBeenCalledWith("Times are not allowed to be negative");
-    (console.error as jest.Mock).mockClear();
+    (console.error as Mock).mockClear();
   });
 });
 
@@ -96,7 +98,7 @@ describe("formatTime.formatTime", () => {
     expect(formatTime.formatTime({ sec: 0, nsec: -1 }, "UTC")).toBe("(invalid negative time)");
     expect(console.error).toHaveBeenCalledTimes(2);
     expect(console.error).toHaveBeenCalledWith("Times are not allowed to be negative");
-    (console.error as jest.Mock).mockClear();
+    (console.error as Mock).mockClear();
   });
 });
 

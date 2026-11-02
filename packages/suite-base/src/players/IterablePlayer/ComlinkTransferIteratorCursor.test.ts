@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import * as Comlink from "@foxglove/comlink";
+import type { Mock, Mocked } from "vitest";
 
 import { MessageEvent } from "@lichtblick/suite";
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
@@ -9,21 +10,21 @@ import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuild
 import { ComlinkTransferIteratorCursor } from "./ComlinkTransferIteratorCursor";
 import type { IMessageCursor, IteratorResult } from "./IIterableSource";
 
-jest.mock("@foxglove/comlink", () => ({
-  transfer: jest.fn((value, transferables) => ({ value, transferables })),
+vi.mock("@foxglove/comlink", () => ({
+  transfer: vi.fn((value, transferables) => ({ value, transferables })),
 }));
 
 describe("ComlinkTransferIteratorCursor", () => {
-  let mockCursor: jest.Mocked<IMessageCursor<Uint8Array>>;
+  let mockCursor: Mocked<IMessageCursor<Uint8Array>>;
 
   beforeEach(() => {
     mockCursor = {
-      next: jest.fn(),
-      nextBatch: jest.fn(),
-      readUntil: jest.fn(),
-      end: jest.fn(),
+      next: vi.fn(),
+      nextBatch: vi.fn(),
+      readUntil: vi.fn(),
+      end: vi.fn(),
     };
-    (Comlink.transfer as jest.Mock).mockClear();
+    (Comlink.transfer as Mock).mockClear();
   });
 
   it("transfers buffer in next() if type is 'message-event' and message is Uint8Array", async () => {
@@ -100,7 +101,7 @@ describe("ComlinkTransferIteratorCursor", () => {
     await cursor.readUntil(time);
 
     // eslint-disable-next-line @typescript-eslint/unbound-method
-    expect(mockCursor.readUntil as jest.MockableFunction).toHaveBeenCalledWith(time);
+    expect(mockCursor.readUntil as Mock).toHaveBeenCalledWith(time);
   });
 
   it("delegates end()", async () => {

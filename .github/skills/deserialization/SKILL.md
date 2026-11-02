@@ -1,4 +1,5 @@
 ---
+
 name: "deserialization"
 description: "Deep deserialization knowledge: parseChannel schema dispatch, ros1msg/ros2msg/ros2idl/jsonschema/protobuf/flatbuffer decoders, WASM decompression handlers, and the DeserializingIterableSource wrapping pattern."
 ---
@@ -21,14 +22,14 @@ Decoded message objects (ready for panels)
 
 ## Schema Encodings
 
-| Encoding | Schema Format | Deserializer |
-|----------|--------------|--------------|
-| `ros1msg` | ROS 1 message definition text | `@foxglove/rosmsg-serialization` `MessageReader` |
-| `ros2msg` | ROS 2 message definition text | `@foxglove/rosmsg2-serialization` `MessageReader` |
-| `ros2idl` | OMG IDL text | `@foxglove/omgidl-serialization` `MessageReader` |
-| `jsonschema` | JSON Schema object | `JSON.parse` + `postprocessValue` (base64 decode) |
-| `protobuf` | `FileDescriptorSet` binary | `protobufjs` `Root.fromDescriptor` |
-| `flatbuffer` | Binary reflection schema | `flatbuffers_reflection` `Parser` |
+| Encoding     | Schema Format                 | Deserializer                                      |
+| ------------ | ----------------------------- | ------------------------------------------------- |
+| `ros1msg`    | ROS 1 message definition text | `@foxglove/rosmsg-serialization` `MessageReader`  |
+| `ros2msg`    | ROS 2 message definition text | `@foxglove/rosmsg2-serialization` `MessageReader` |
+| `ros2idl`    | OMG IDL text                  | `@foxglove/omgidl-serialization` `MessageReader`  |
+| `jsonschema` | JSON Schema object            | `JSON.parse` + `postprocessValue` (base64 decode) |
+| `protobuf`   | `FileDescriptorSet` binary    | `protobufjs` `Root.fromDescriptor`                |
+| `flatbuffer` | Binary reflection schema      | `flatbuffers_reflection` `Parser`                 |
 
 ## Core Entry Point: `parseChannel()`
 
@@ -44,6 +45,7 @@ function parseChannel(channel: Channel): ParsedChannel {
 This is the single function that resolves any channel's schema into a deserializer.
 
 ### Per-encoding parsers
+
 - `packages/mcap-support/src/parseProtobufSchema.ts`
 - `packages/mcap-support/src/parseFlatbufferSchema.ts`
 - `packages/mcap-support/src/parseJsonSchema.ts`
@@ -79,6 +81,7 @@ Handlers are loaded once (singleton promise) and shared across all readers.
 - ROS: `MessageReader` precompiles field offsets at schema-parse time
 
 ## Skills Reference
+
 - For MCAP chunk structure: load `mcap-format` skill
 - For Worker patterns: load `web-workers` skill
 - For the iterator layering: load `player-internals` skill

@@ -7,7 +7,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -17,29 +17,26 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import Value from "./Value";
 
 // Mock dependencies
-jest.mock("@lichtblick/suite-base/util/clipboard", () => ({
-  copy: jest.fn().mockResolvedValue(undefined),
+vi.mock("@lichtblick/suite-base/util/clipboard", () => ({
+  copy: vi.fn().mockResolvedValue(undefined),
 }));
 
-jest.mock("@lichtblick/suite-base/panels/Plot/utils/openSiblingPlotPanel", () => ({
-  openSiblingPlotPanel: jest.fn(),
+vi.mock("@lichtblick/suite-base/panels/Plot/utils/openSiblingPlotPanel", () => ({
+  openSiblingPlotPanel: vi.fn(),
 }));
 
-jest.mock(
-  "@lichtblick/suite-base/panels/StateTransitions/openSiblingStateTransitionsPanel",
-  () => ({
-    openSiblingStateTransitionsPanel: jest.fn(),
-  }),
-);
+vi.mock("@lichtblick/suite-base/panels/StateTransitions/openSiblingStateTransitionsPanel", () => ({
+  openSiblingStateTransitionsPanel: vi.fn(),
+}));
 
-jest.mock("./HighlightedValue", () => ({
+vi.mock("./HighlightedValue", () => ({
   __esModule: true,
   default: ({ itemLabel }: { itemLabel: string }) => (
     <span data-testid="highlighted-value">{itemLabel}</span>
   ),
 }));
 
-jest.mock("./index.style", () => ({
+vi.mock("./index.style", () => ({
   useStylesValue: () => ({
     classes: {
       placeholderActionContainer: "mock-placeholder-container",
@@ -54,14 +51,14 @@ const createDefaultProps = (overrides?: Partial<PropsValue>): PropsValue => ({
   itemLabel: BasicBuilder.string(),
   itemValue: BasicBuilder.number(),
   valueAction: undefined,
-  onTopicPathChange: jest.fn(),
-  openSiblingPanel: jest.fn(),
+  onTopicPathChange: vi.fn(),
+  openSiblingPanel: vi.fn(),
   ...overrides,
 });
 
 describe("Value", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("rendering basic values", () => {
@@ -198,7 +195,7 @@ describe("Value", () => {
       const user = userEvent.setup();
       const basePath = BasicBuilder.string("/topic");
       const filterPath = BasicBuilder.string(".field");
-      const onTopicPathChange = jest.fn();
+      const onTopicPathChange = vi.fn();
       const valueAction: ValueAction = {
         singleSlicePath: BasicBuilder.string(".field"),
         multiSlicePath: BasicBuilder.string(".field[:]"),
@@ -468,7 +465,7 @@ describe("Value", () => {
     describe("when component unmounts", () => {
       it("then should clean up timeout", () => {
         // Given
-        jest.useFakeTimers();
+        vi.useFakeTimers();
         const props = createDefaultProps({
           arrLabel: `(${BasicBuilder.string()}) [${BasicBuilder.string()}]`,
         });
@@ -479,10 +476,10 @@ describe("Value", () => {
 
         // Then
         expect(() => {
-          jest.runAllTimers();
+          vi.runAllTimers();
         }).not.toThrow();
 
-        jest.useRealTimers();
+        vi.useRealTimers();
       });
     });
   });

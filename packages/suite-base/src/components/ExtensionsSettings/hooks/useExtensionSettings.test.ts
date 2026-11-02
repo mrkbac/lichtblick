@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { act, renderHook } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import { InstalledExtension } from "@lichtblick/suite-base/components/ExtensionsSettings/types";
 import { useExtensionCatalog } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
@@ -11,8 +12,8 @@ import { useExtensionMarketplace } from "@lichtblick/suite-base/context/Extensio
 
 import useExtensionSettings from "./useExtensionSettings";
 
-jest.mock("@lichtblick/suite-base/context/ExtensionCatalogContext");
-jest.mock("@lichtblick/suite-base/context/ExtensionMarketplaceContext");
+vi.mock("@lichtblick/suite-base/context/ExtensionCatalogContext");
+vi.mock("@lichtblick/suite-base/context/ExtensionMarketplaceContext");
 
 describe("useExtensionSettings", () => {
   const mockInstalledExtensions: InstalledExtension[] = [
@@ -83,10 +84,10 @@ describe("useExtensionSettings", () => {
   };
 
   beforeEach(() => {
-    (useExtensionCatalog as jest.Mock).mockReturnValue(mockInstalledExtensions);
+    (useExtensionCatalog as Mock).mockReturnValue(mockInstalledExtensions);
 
-    (useExtensionMarketplace as jest.Mock).mockReturnValue({
-      getAvailableExtensions: jest.fn().mockResolvedValue(mockAvailableExtensions),
+    (useExtensionMarketplace as Mock).mockReturnValue({
+      getAvailableExtensions: vi.fn().mockResolvedValue(mockAvailableExtensions),
     });
   });
 

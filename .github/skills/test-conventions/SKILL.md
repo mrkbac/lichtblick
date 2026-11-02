@@ -77,7 +77,7 @@ it("should return the layout when ID is valid", async () => {
 
 ## Test Naming
 
-### TypeScript (Unit tests — Jest)
+### TypeScript (Unit tests — Vitest)
 
 - Describe blocks: `describe('ComponentName')` → `describe('methodOrBehavior')`
 - Test titles: `it('should <expected outcome> when <condition>')`
@@ -91,12 +91,12 @@ it("should return the layout when ID is valid", async () => {
 
 ## Cleanup
 
-### Jest (unit tests)
+### Vitest (unit tests)
 
 ```typescript
 afterEach(() => {
-    jest.clearAllMocks();
-    jest.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
 });
 ```
 
@@ -109,7 +109,7 @@ afterEach(() => {
 
 ## Error Testing
 
-### Jest
+### Vitest
 
 ```typescript
 await expect(service.create(dto)).rejects.toThrow(SomeException);

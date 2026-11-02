@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 
 import LayoutBuilder from "@lichtblick/suite-base/testing/builders/LayoutBuilder";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
@@ -23,7 +23,7 @@ type ScriptListItemProps = {
 
 let mockRenameValue = "";
 
-jest.mock("./ScriptListItem", () => ({
+vi.mock("./ScriptListItem", () => ({
   ScriptListItem: ({ title, selected, onClick, onDelete, onRename }: ScriptListItemProps) => (
     <div data-testid="script-list-item" data-selected={String(selected)}>
       <span>{title}</span>
@@ -43,11 +43,11 @@ type Props = React.ComponentProps<typeof ScriptsList>;
 
 function renderScriptsList(props: Partial<Props> = {}) {
   const scripts = props.scripts ?? LayoutBuilder.userScripts();
-  const addNewScript = props.addNewScript ?? jest.fn();
-  const selectScript = props.selectScript ?? jest.fn();
-  const deleteScript = props.deleteScript ?? jest.fn();
-  const onClose = props.onClose ?? jest.fn();
-  const setUserScripts = props.setUserScripts ?? jest.fn();
+  const addNewScript = props.addNewScript ?? vi.fn();
+  const selectScript = props.selectScript ?? vi.fn();
+  const deleteScript = props.deleteScript ?? vi.fn();
+  const onClose = props.onClose ?? vi.fn();
+  const setUserScripts = props.setUserScripts ?? vi.fn();
 
   render(
     <ThemeProvider isDark={false}>
@@ -69,8 +69,8 @@ function renderScriptsList(props: Partial<Props> = {}) {
 
 describe("ScriptsList", () => {
   afterEach(() => {
-    jest.clearAllMocks();
-    jest.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("should render one item per script", () => {

@@ -4,6 +4,7 @@
 
 import { renderHook } from "@testing-library/react";
 import { enqueueSnackbar } from "notistack";
+import type { Mock } from "vitest";
 
 import {
   IDataSourceFactory,
@@ -15,14 +16,14 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { useOpenFile } from "./useOpenFile";
 
-jest.mock("@lichtblick/suite-base/context/PlayerSelectionContext", () => ({
-  usePlayerSelection: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/PlayerSelectionContext", () => ({
+  usePlayerSelection: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/util/showOpenFilePicker", () => jest.fn());
+vi.mock("@lichtblick/suite-base/util/showOpenFilePicker", () => ({ default: vi.fn() }));
 
-jest.mock("notistack", () => ({
-  enqueueSnackbar: jest.fn(),
+vi.mock("notistack", () => ({
+  enqueueSnackbar: vi.fn(),
 }));
 
 const SUPPORTED_FILE_TYPES = [".mcap"];
@@ -33,15 +34,15 @@ type Setup = {
 };
 
 describe("useOpenFile", () => {
-  let selectSource: jest.Mock;
+  let selectSource: Mock;
 
   beforeEach(() => {
-    selectSource = jest.fn();
-    (usePlayerSelection as jest.Mock).mockReturnValue({ selectSource });
+    selectSource = vi.fn();
+    (usePlayerSelection as Mock).mockReturnValue({ selectSource });
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   function buildFile(extension: string, type: string): File {
@@ -63,11 +64,11 @@ describe("useOpenFile", () => {
     const files = filesOverride ?? [buildFile("mcap", FILE_ACCEPT_TYPE)];
     files.forEach((file) => {
       fsHandles.push({
-        getFile: jest.fn().mockResolvedValue(file),
+        getFile: vi.fn().mockResolvedValue(file),
       } as unknown as FileSystemFileHandle);
     });
 
-    (showOpenFilePicker as jest.Mock).mockResolvedValue(fsHandles);
+    (showOpenFilePicker as Mock).mockResolvedValue(fsHandles);
 
     return {
       ...renderHook(() => useOpenFile(sources)),

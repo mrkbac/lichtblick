@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -12,7 +12,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import { SidebarHeader } from "./SidebarHeader";
 
 function renderSidebarHeader(props: Partial<React.ComponentProps<typeof SidebarHeader>> = {}) {
-  const onClose = props.onClose ?? jest.fn();
+  const onClose = props.onClose ?? vi.fn();
   const title = props.title ?? BasicBuilder.string();
 
   render(
@@ -26,8 +26,8 @@ function renderSidebarHeader(props: Partial<React.ComponentProps<typeof SidebarH
 
 describe("SidebarHeader", () => {
   afterEach(() => {
-    jest.clearAllMocks();
-    jest.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("should render the title", () => {

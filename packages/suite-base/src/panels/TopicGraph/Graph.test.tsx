@@ -2,29 +2,33 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 import { render } from "@testing-library/react";
 
 import GraphBuilder from "@lichtblick/suite-base/testing/builders/GraphBuilder";
 
 import Graph from "./Graph";
 
-// Variables starting with "mock" can be used inside jest.mock factory due to babel-jest hoisting rules
-const mockRun = jest.fn();
-const mockMakeLayout = jest.fn(() => ({ run: mockRun }));
+// The vi.mock factories below only read these inside functions, after the module has run
+const mockRun = vi.fn();
+const mockMakeLayout = vi.fn(() => {
+  return { run: mockRun };
+});
 const mockElementsObj = {
-  remove: jest.fn(),
+  remove: vi.fn(),
   makeLayout: mockMakeLayout,
 };
-const mockOn = jest.fn();
-const mockBatch = jest.fn((fn: () => void) => {
+const mockOn = vi.fn();
+const mockBatch = vi.fn((fn: () => void) => {
   fn();
 });
-const mockElementsFn = jest.fn(() => mockElementsObj);
-const mockAdd = jest.fn();
-const mockSetStyle = jest.fn();
-const mockFit = jest.fn();
-const mockDestroy = jest.fn();
+const mockElementsFn = vi.fn(() => {
+  return mockElementsObj;
+});
+const mockAdd = vi.fn();
+const mockSetStyle = vi.fn();
+const mockFit = vi.fn();
+const mockDestroy = vi.fn();
 const mockCyInstance = {
   on: mockOn,
   batch: mockBatch,
@@ -35,21 +39,23 @@ const mockCyInstance = {
   destroy: mockDestroy,
 };
 
-jest.mock("cytoscape", () =>
-  Object.assign(
-    jest.fn(() => mockCyInstance),
+vi.mock("cytoscape", () => ({
+  default: Object.assign(
+    vi.fn(() => {
+      return mockCyInstance;
+    }),
     {
-      use: jest.fn(),
-      warnings: jest.fn(),
+      use: vi.fn(),
+      warnings: vi.fn(),
     },
   ),
-);
+}));
 
-jest.mock("cytoscape-dagre", () => ({}));
+vi.mock("cytoscape-dagre", () => ({ default: {} }));
 
 describe("Graph", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockBatch.mockImplementation((fn: () => void) => {
       fn();
     });

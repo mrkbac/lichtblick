@@ -244,7 +244,7 @@ Before pushing, ensure your changes pass all checks:
 ```sh
 yarn format                 # Formatting (Biome)
 yarn lint                   # Linting (ESLint)
-yarn test                   # Unit tests (Jest)
+yarn test                   # Unit tests (Vitest)
 yarn run tsc --noEmit       # TypeScript type checking
 ```
 
@@ -368,7 +368,7 @@ The project uses a **Builder pattern** to streamline the creation of test data a
 - **Entity builders** generate consistent domain-specific mock data.
 - Component-specific builders live in the component's own `builders/` directory (see [Component Structure](#component-structure)).
 
-### Unit Tests (Jest)
+### Unit Tests (Vitest)
 
 - All new features and bug fixes should be covered by unit tests.
 - Tests are located alongside source files with the `.test.ts` / `.test.tsx` extension.

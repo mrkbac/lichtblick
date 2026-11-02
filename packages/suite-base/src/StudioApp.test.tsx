@@ -4,7 +4,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { render, screen } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import type { Mock } from "vitest";
+import "@testing-library/jest-dom/vitest";
 
 import { IdbLayoutStorage } from "@lichtblick/suite-base/IdbLayoutStorage";
 import { LayoutsAPI } from "@lichtblick/suite-base/api/layouts/LayoutsAPI";
@@ -13,15 +14,21 @@ import { SharedRootContext } from "@lichtblick/suite-base/context/SharedRootCont
 import { StudioApp } from "./StudioApp";
 
 // Mock all the heavy dependencies
-const mockMultiProvider = jest.fn(
-  ({ providers, children }: { providers: React.JSX.Element[]; children?: React.ReactNode }) => (
+const mockMultiProvider = vi.fn(function ({
+  providers,
+  children,
+}: {
+  providers: React.JSX.Element[];
+  children?: React.ReactNode;
+}) {
+  return (
     <div data-testid="multi-provider" data-provider-count={providers.length}>
       {children}
     </div>
-  ),
-);
+  );
+});
 
-jest.mock("./Workspace", () => ({
+vi.mock("./Workspace", () => ({
   __esModule: true,
   default: ({ deepLinks, appBarLeftInset, AppBarComponent, ...props }: any) => (
     <div
@@ -43,64 +50,70 @@ jest.mock("./Workspace", () => ({
   ),
 }));
 
-jest.mock("./components/MultiProvider", () => ({
+vi.mock("./components/MultiProvider", () => ({
   __esModule: true,
   default: (props: { providers: React.JSX.Element[]; children?: React.ReactNode }) =>
     mockMultiProvider(props),
 }));
 
-jest.mock("./components/DocumentTitleAdapter", () => ({
+vi.mock("./components/DocumentTitleAdapter", () => ({
   __esModule: true,
   default: () => <div data-testid="document-title-adapter" />,
 }));
 
-jest.mock("./components/SendNotificationToastAdapter", () => ({
+vi.mock("./components/SendNotificationToastAdapter", () => ({
   __esModule: true,
   default: () => <div data-testid="notification-toast-adapter" />,
 }));
 
-jest.mock("./providers/PanelCatalogProvider", () => ({
+vi.mock("./providers/PanelCatalogProvider", () => ({
   __esModule: true,
   default: ({ children }: any) => <div data-testid="panel-catalog-provider">{children}</div>,
 }));
 
-jest.mock("./screens/LaunchPreference", () => ({
+vi.mock("./screens/LaunchPreference", () => ({
   LaunchPreference: ({ children }: any) => <div data-testid="launch-preference">{children}</div>,
 }));
 
-jest.mock("@lichtblick/suite-base/IdbLayoutStorage", () => ({
-  IdbLayoutStorage: jest.fn().mockImplementation(() => ({
-    mockLayoutStorage: true,
-  })),
+vi.mock("@lichtblick/suite-base/IdbLayoutStorage", () => ({
+  IdbLayoutStorage: vi.fn().mockImplementation(function () {
+    return {
+      mockLayoutStorage: true,
+    };
+  }),
 }));
 
-jest.mock("@lichtblick/suite-base/api/layouts/LayoutsAPI", () => ({
-  LayoutsAPI: jest.fn().mockImplementation(() => ({
-    mockRemoteLayoutStorage: true,
-  })),
+vi.mock("@lichtblick/suite-base/api/layouts/LayoutsAPI", () => ({
+  LayoutsAPI: vi.fn().mockImplementation(function () {
+    return {
+      mockRemoteLayoutStorage: true,
+    };
+  }),
 }));
 
 // Mock react-dnd
-jest.mock("react-dnd", () => ({
+vi.mock("react-dnd", () => ({
   DndProvider: ({ children }: any) => <div data-testid="dnd-provider">{children}</div>,
 }));
 
-jest.mock("react-dnd-html5-backend", () => ({
+vi.mock("react-dnd-html5-backend", () => ({
   HTML5Backend: {},
 }));
 
 // Mock the LayoutManager to avoid private fields issue
-jest.mock("./services/LayoutManager/LayoutManager", () => ({
-  LayoutManager: jest.fn().mockImplementation(() => ({
-    supportsSharing: false,
-    getLayouts: jest.fn().mockResolvedValue([]),
-    addListener: jest.fn(),
-    removeListener: jest.fn(),
-  })),
+vi.mock("./services/LayoutManager/LayoutManager", () => ({
+  LayoutManager: vi.fn().mockImplementation(function () {
+    return {
+      supportsSharing: false,
+      getLayouts: vi.fn().mockResolvedValue([]),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+    };
+  }),
 }));
 
 // Mock LayoutManagerProvider
-jest.mock("./providers/LayoutManagerProvider", () => ({
+vi.mock("./providers/LayoutManagerProvider", () => ({
   __esModule: true,
   default: ({ children }: any) => <div data-testid="layout-manager-provider">{children}</div>,
 }));
@@ -129,7 +142,7 @@ describe("StudioApp", () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     // Clear console.error mock to avoid setupTestFramework.ts throwing
     if (typeof (console.error as any).mockClear === "function") {
@@ -137,19 +150,25 @@ describe("StudioApp", () => {
     }
 
     // Mock URL constructor
-    global.URL = jest.fn().mockImplementation((_url) => ({
-      searchParams: {
-        get: jest.fn().mockReturnValue(undefined),
-      },
-    })) as any;
+    global.URL = vi.fn().mockImplementation(function (_url) {
+      return {
+        searchParams: {
+          get: vi.fn().mockReturnValue(undefined),
+        },
+      };
+    }) as any;
 
     // Mock document.addEventListener
-    jest.spyOn(document, "addEventListener").mockImplementation();
-    jest.spyOn(document, "removeEventListener").mockImplementation();
+    vi.spyOn(document, "addEventListener").mockImplementation(function () {
+      return undefined;
+    });
+    vi.spyOn(document, "removeEventListener").mockImplementation(function () {
+      return undefined;
+    });
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("should render basic StudioApp structure", () => {
@@ -200,10 +219,10 @@ describe("StudioApp", () => {
       showCustomWindowControls: true,
       isMaximized: false,
       initialZoomFactor: 1.2,
-      onMinimizeWindow: jest.fn(),
-      onMaximizeWindow: jest.fn(),
-      onUnmaximizeWindow: jest.fn(),
-      onCloseWindow: jest.fn(),
+      onMinimizeWindow: vi.fn(),
+      onMaximizeWindow: vi.fn(),
+      onUnmaximizeWindow: vi.fn(),
+      onCloseWindow: vi.fn(),
     };
 
     renderWithContext({
@@ -271,7 +290,7 @@ describe("StudioApp", () => {
   });
 
   it("should handle context menu prevention", () => {
-    const addEventListenerSpy = jest.spyOn(document, "addEventListener");
+    const addEventListenerSpy = vi.spyOn(document, "addEventListener");
     renderWithContext();
 
     expect(addEventListenerSpy).toHaveBeenCalledWith("contextmenu", expect.any(Function));
@@ -279,42 +298,46 @@ describe("StudioApp", () => {
 
   it("should create remote layout storage when workspace is provided", () => {
     // Mock URL with workspace parameter
-    global.URL = jest.fn().mockImplementation(() => ({
-      searchParams: {
-        get: jest.fn().mockImplementation((key) => {
-          if (key === "workspace") {
-            return "test-workspace";
-          }
-          return undefined;
-        }),
-      },
-    })) as any;
+    global.URL = vi.fn().mockImplementation(function () {
+      return {
+        searchParams: {
+          get: vi.fn().mockImplementation(function (key) {
+            if (key === "workspace") {
+              return "test-workspace";
+            }
+            return undefined;
+          }),
+        },
+      };
+    }) as any;
 
     renderWithContext();
 
-    expect(jest.mocked(LayoutsAPI)).toHaveBeenCalledWith("test-workspace");
+    expect(vi.mocked(LayoutsAPI)).toHaveBeenCalledWith("test-workspace");
   });
 
   it("should not create remote layout storage when no workspace is provided", () => {
     // Clear previous calls
-    jest.mocked(LayoutsAPI).mockClear();
+    vi.mocked(LayoutsAPI).mockClear();
 
     // Mock URL without workspace parameter
-    global.URL = jest.fn().mockImplementation(() => ({
-      searchParams: {
-        get: jest.fn().mockReturnValue(undefined),
-      },
-    })) as any;
+    global.URL = vi.fn().mockImplementation(function () {
+      return {
+        searchParams: {
+          get: vi.fn().mockReturnValue(undefined),
+        },
+      };
+    }) as any;
 
     renderWithContext();
 
-    expect(jest.mocked(LayoutsAPI)).not.toHaveBeenCalled();
+    expect(vi.mocked(LayoutsAPI)).not.toHaveBeenCalled();
   });
 
   it("should create IdbLayoutStorage", () => {
     renderWithContext();
 
-    expect(jest.mocked(IdbLayoutStorage)).toHaveBeenCalled();
+    expect(vi.mocked(IdbLayoutStorage)).toHaveBeenCalled();
   });
 
   describe("context menu handler", () => {
@@ -324,7 +347,7 @@ describe("StudioApp", () => {
       renderWithContext();
 
       // Get the context menu handler that was registered
-      const addEventListenerCalls = (document.addEventListener as jest.Mock).mock.calls;
+      const addEventListenerCalls = (document.addEventListener as Mock).mock.calls;
       const contextMenuCall = addEventListenerCalls.find((call) => call[0] === "contextmenu");
       contextMenuHandler = contextMenuCall?.[1];
     });
@@ -332,7 +355,7 @@ describe("StudioApp", () => {
     it("should prevent context menu on non-input elements", () => {
       const mockEvent = {
         target: document.createElement("div"),
-        preventDefault: jest.fn(),
+        preventDefault: vi.fn(),
       } as any;
 
       const result = contextMenuHandler(mockEvent);
@@ -344,7 +367,7 @@ describe("StudioApp", () => {
     it("should allow context menu on input elements", () => {
       const mockEvent = {
         target: document.createElement("input"),
-        preventDefault: jest.fn(),
+        preventDefault: vi.fn(),
       } as any;
 
       contextMenuHandler(mockEvent);
@@ -355,7 +378,7 @@ describe("StudioApp", () => {
     it("should allow context menu on textarea elements", () => {
       const mockEvent = {
         target: document.createElement("textarea"),
-        preventDefault: jest.fn(),
+        preventDefault: vi.fn(),
       } as any;
 
       contextMenuHandler(mockEvent);
@@ -365,7 +388,7 @@ describe("StudioApp", () => {
   });
 
   it("should cleanup event listeners on unmount", () => {
-    const removeEventListenerSpy = jest.spyOn(document, "removeEventListener");
+    const removeEventListenerSpy = vi.spyOn(document, "removeEventListener");
     const { unmount } = renderWithContext();
 
     unmount();

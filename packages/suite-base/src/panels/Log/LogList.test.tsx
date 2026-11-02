@@ -3,8 +3,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { render, screen, cleanup, fireEvent } from "@testing-library/react";
-import { userEvent } from "storybook/test";
-import "@testing-library/jest-dom";
+import userEvent from "@testing-library/user-event";
+import type { Mock } from "vitest";
+import "@testing-library/jest-dom/vitest";
 
 import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
@@ -26,15 +27,15 @@ function createMockLogMessage(
 }
 
 // Mock the hooks
-jest.mock("@lichtblick/suite-base/hooks", () => ({
-  useAppTimeFormat: jest.fn(),
+vi.mock("@lichtblick/suite-base/hooks", () => ({
+  useAppTimeFormat: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/hooks/useElementSize", () => ({
+vi.mock("@lichtblick/suite-base/hooks/useElementSize", () => ({
   useElementSize: () => ({
     width: 800,
     height: 600,
-    ref: jest.fn(),
+    ref: vi.fn(),
   }),
 }));
 
@@ -42,8 +43,8 @@ describe("LogList Component", () => {
   let originalClientHeight: PropertyDescriptor | undefined;
 
   beforeEach(() => {
-    jest.spyOn(console, "error").mockImplementation(() => {});
-    (useAppTimeFormat as jest.Mock).mockReturnValue({
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    (useAppTimeFormat as Mock).mockReturnValue({
       timeFormat: "SEC",
       timeZone: "UTC",
     });
@@ -61,7 +62,7 @@ describe("LogList Component", () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     cleanup();
     if (originalClientHeight) {
       Object.defineProperty(HTMLElement.prototype, "clientHeight", originalClientHeight);

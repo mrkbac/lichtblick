@@ -17,7 +17,7 @@ import {
 } from "./videoSeekBackfill";
 
 afterEach(() => {
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
 });
 
 describe("needsGopBackfill", () => {
@@ -148,14 +148,12 @@ describe("readVideoGopForSeekTarget", () => {
     });
 
     const sequence = [target, delta1, keyframe];
-    const getBackfillMessages = jest.fn(
+    const getBackfillMessages = vi.fn(
       async () => [sequence.shift()].filter((m) => m) as MessageEvent[],
     );
-    jest
-      .spyOn(H265, "IsKeyframe")
-      .mockImplementation(
-        (data: Uint8Array) => data === (keyframe.message as { data: Uint8Array }).data,
-      );
+    vi.spyOn(H265, "IsKeyframe").mockImplementation(
+      (data: Uint8Array) => data === (keyframe.message as { data: Uint8Array }).data,
+    );
 
     // When
     const result = await readVideoGopForSeekTarget(target, getBackfillMessages, () => undefined);
@@ -174,8 +172,8 @@ describe("readVideoGopForSeekTarget", () => {
       message: { format: "h265", data: new Uint8Array([0x01]) },
       sizeInBytes: 1,
     });
-    const getBackfillMessages = jest.fn(async () => []);
-    jest.spyOn(H265, "IsKeyframe").mockReturnValue(false);
+    const getBackfillMessages = vi.fn(async () => []);
+    vi.spyOn(H265, "IsKeyframe").mockReturnValue(false);
 
     // When
     const result = await readVideoGopForSeekTarget(target, getBackfillMessages, () => undefined);
@@ -193,7 +191,7 @@ describe("readVideoGopForSeekTarget", () => {
       message: { format: "h265", data: new Uint8Array([0x01]) },
       sizeInBytes: 1,
     });
-    const getBackfillMessages = jest.fn(async () => [
+    const getBackfillMessages = vi.fn(async () => [
       MessageEventBuilder.messageEvent({
         topic: "video",
         schemaName: "other",
@@ -202,7 +200,7 @@ describe("readVideoGopForSeekTarget", () => {
         sizeInBytes: 1,
       }),
     ]);
-    jest.spyOn(H265, "IsKeyframe").mockReturnValue(false);
+    vi.spyOn(H265, "IsKeyframe").mockReturnValue(false);
 
     // When
     const result = await readVideoGopForSeekTarget(target, getBackfillMessages, () => undefined);
@@ -220,7 +218,7 @@ describe("readVideoGopForSeekTarget", () => {
       message: { format: "h265", data: new Uint8Array([0x01]) },
       sizeInBytes: 1,
     });
-    const getBackfillMessages = jest.fn(async () => [
+    const getBackfillMessages = vi.fn(async () => [
       MessageEventBuilder.messageEvent({
         topic: "video",
         schemaName: "foxglove.CompressedVideo",
@@ -229,7 +227,7 @@ describe("readVideoGopForSeekTarget", () => {
         sizeInBytes: 1,
       }),
     ]);
-    jest.spyOn(H265, "IsKeyframe").mockReturnValue(false);
+    vi.spyOn(H265, "IsKeyframe").mockReturnValue(false);
 
     // When
     const result = await readVideoGopForSeekTarget(target, getBackfillMessages, () => undefined);
@@ -247,7 +245,7 @@ describe("readVideoGopForSeekTarget", () => {
       message: { format: "h265", data: new Uint8Array([0x01]) },
       sizeInBytes: 1,
     });
-    const getBackfillMessages = jest.fn(async () => [
+    const getBackfillMessages = vi.fn(async () => [
       MessageEventBuilder.messageEvent({
         topic: "video",
         schemaName: "foxglove.CompressedVideo",
@@ -256,7 +254,7 @@ describe("readVideoGopForSeekTarget", () => {
         sizeInBytes: 1,
       }),
     ]);
-    jest.spyOn(H265, "IsKeyframe").mockReturnValue(false);
+    vi.spyOn(H265, "IsKeyframe").mockReturnValue(false);
 
     // When
     const result = await readVideoGopForSeekTarget(target, getBackfillMessages, () => undefined);
@@ -268,7 +266,7 @@ describe("readVideoGopForSeekTarget", () => {
   it("aborts after MAX_SEEK_BACKFILL_VIDEO_GOP_MESSAGES iterations", async () => {
     // Given
     let counter = 0;
-    const getBackfillMessages = jest.fn(async () => [
+    const getBackfillMessages = vi.fn(async () => [
       MessageEventBuilder.messageEvent({
         topic: "video",
         schemaName: "foxglove.CompressedVideo",
@@ -277,7 +275,7 @@ describe("readVideoGopForSeekTarget", () => {
         sizeInBytes: 1,
       }),
     ]);
-    jest.spyOn(H265, "IsKeyframe").mockReturnValue(false);
+    vi.spyOn(H265, "IsKeyframe").mockReturnValue(false);
 
     const target = MessageEventBuilder.messageEvent({
       topic: "video",
@@ -311,8 +309,8 @@ describe("readVideoGopForSeekTarget", () => {
       message: { format: "h265", data: new Uint8Array([0x02]) },
       sizeInBytes: 1,
     });
-    const getBackfillMessages = jest.fn(async (_args: GetBackfillMessagesArgs) => [keyframe]);
-    jest.spyOn(H265, "IsKeyframe").mockReturnValue(true);
+    const getBackfillMessages = vi.fn(async (_args: GetBackfillMessagesArgs) => [keyframe]);
+    vi.spyOn(H265, "IsKeyframe").mockReturnValue(true);
     const controller = new AbortController();
 
     // When
@@ -340,8 +338,8 @@ describe("expandVideoSeekBackfill", () => {
       message: { format: "h265", data: new Uint8Array([0x02]) },
       sizeInBytes: 1,
     });
-    jest.spyOn(H265, "IsKeyframe").mockReturnValue(true);
-    const getBackfillMessages = jest.fn(async () => []);
+    vi.spyOn(H265, "IsKeyframe").mockReturnValue(true);
+    const getBackfillMessages = vi.fn(async () => []);
 
     // When
     const result = await expandVideoSeekBackfill(
@@ -380,14 +378,12 @@ describe("expandVideoSeekBackfill", () => {
     });
     const sequence = [target, delta1, keyframe];
 
-    const getBackfillMessages = jest.fn(
+    const getBackfillMessages = vi.fn(
       async () => [sequence.shift()].filter((m) => m) as MessageEvent[],
     );
-    jest
-      .spyOn(H265, "IsKeyframe")
-      .mockImplementation(
-        (data: Uint8Array) => data === (keyframe.message as { data: Uint8Array }).data,
-      );
+    vi.spyOn(H265, "IsKeyframe").mockImplementation(
+      (data: Uint8Array) => data === (keyframe.message as { data: Uint8Array }).data,
+    );
 
     // When
     const result = await expandVideoSeekBackfill([target], getBackfillMessages, () => undefined);
@@ -414,18 +410,16 @@ describe("expandVideoSeekBackfill", () => {
     });
 
     let firstCall = true;
-    const getBackfillMessages = jest.fn(async () => {
+    const getBackfillMessages = vi.fn(async () => {
       if (firstCall) {
         firstCall = false;
         return [keyframe];
       }
       return [];
     });
-    jest
-      .spyOn(H265, "IsKeyframe")
-      .mockImplementation(
-        (data: Uint8Array) => data === (keyframe.message as { data: Uint8Array }).data,
-      );
+    vi.spyOn(H265, "IsKeyframe").mockImplementation(
+      (data: Uint8Array) => data === (keyframe.message as { data: Uint8Array }).data,
+    );
 
     // When
     const result = await expandVideoSeekBackfill([target], getBackfillMessages, () => undefined);

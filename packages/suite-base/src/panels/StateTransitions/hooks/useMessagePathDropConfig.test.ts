@@ -4,24 +4,25 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { renderHook } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 
 import useMessagePathDropConfig from "./useMessagePathDropConfig";
 import { StateTransitionConfig } from "../types";
 
-jest.mock("@lichtblick/suite-base/components/PanelContext");
+vi.mock("@lichtblick/suite-base/components/PanelContext");
 
 describe("useMessagePathDropConfig", () => {
-  const setMessagePathDropConfig = jest.fn();
-  const saveConfig = jest.fn();
+  const setMessagePathDropConfig = vi.fn();
+  const saveConfig = vi.fn();
 
   beforeEach(() => {
-    (usePanelContext as jest.Mock).mockReturnValue({ setMessagePathDropConfig });
+    (usePanelContext as Mock).mockReturnValue({ setMessagePathDropConfig });
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("should set the drop config on mount", () => {
@@ -40,7 +41,7 @@ describe("useMessagePathDropConfig", () => {
       useMessagePathDropConfig(saveConfig);
     });
 
-    const dropConfig = setMessagePathDropConfig.mock.calls[0][0];
+    const dropConfig = setMessagePathDropConfig.mock.calls[0]![0];
     const draggedPaths = [{ isLeaf: false }];
 
     const result = dropConfig.getDropStatus(draggedPaths);
@@ -53,7 +54,7 @@ describe("useMessagePathDropConfig", () => {
       useMessagePathDropConfig(saveConfig);
     });
 
-    const dropConfig = setMessagePathDropConfig.mock.calls[0][0];
+    const dropConfig = setMessagePathDropConfig.mock.calls[0]![0];
     const draggedPaths = [{ isLeaf: true }];
 
     const result = dropConfig.getDropStatus(draggedPaths);
@@ -66,14 +67,14 @@ describe("useMessagePathDropConfig", () => {
       useMessagePathDropConfig(saveConfig);
     });
 
-    const dropConfig = setMessagePathDropConfig.mock.calls[0][0];
+    const dropConfig = setMessagePathDropConfig.mock.calls[0]![0];
     const draggedPaths = [{ path: "path1", isLeaf: true }];
 
     dropConfig.handleDrop(draggedPaths);
 
     expect(saveConfig).toHaveBeenCalledWith(expect.any(Function));
 
-    const updateConfig = saveConfig.mock.calls[0][0];
+    const updateConfig = saveConfig.mock.calls[0]![0];
     const prevConfig: StateTransitionConfig = { paths: [], isSynced: true };
     const newConfig = updateConfig(prevConfig);
 

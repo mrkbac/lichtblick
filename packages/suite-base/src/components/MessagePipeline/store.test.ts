@@ -6,6 +6,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import type { Mock } from "vitest";
+
 import FakePlayer from "@lichtblick/suite-base/components/MessagePipeline/FakePlayer";
 
 import { createMessagePipelineStore } from "./store";
@@ -31,7 +33,7 @@ describe("createMessagePipelineStore", () => {
   it("should return the matching backfill message when the player can resolve messages", async () => {
     // GIVEN - a player that can return multiple backfill messages
     const player = new FakePlayer() as FakePlayer & {
-      getBackfillMessages: jest.Mock;
+      getBackfillMessages: Mock;
     };
     const matchingMessage = {
       topic: "/topic",
@@ -47,7 +49,7 @@ describe("createMessagePipelineStore", () => {
       schemaName: "schema",
       sizeInBytes: 0,
     };
-    player.getBackfillMessages = jest.fn().mockResolvedValue([otherMessage, matchingMessage]);
+    player.getBackfillMessages = vi.fn().mockResolvedValue([otherMessage, matchingMessage]);
     const store = createMessagePipelineStore({
       promisesToWaitForRef: { current: [] },
       initialPlayer: player,

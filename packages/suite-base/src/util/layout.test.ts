@@ -676,31 +676,28 @@ describe("layout", () => {
       expect(validateLayoutData(data)).toBe(data);
     });
 
-    it.each([
-      undefined,
-      null,
-      42,
-      "string",
-      [],
-    ])("throws when the value is not an object (%p)", (value) => {
-      // Given a non-object value
-      // When validating it
-      // Then it throws
-      expect(() => validateLayoutData(value)).toThrow("expected an object");
-    });
+    it.each([undefined, null, 42, "string", []])(
+      "throws when the value is not an object (%p)",
+      (value) => {
+        // Given a non-object value
+        // When validating it
+        // Then it throws
+        expect(() => validateLayoutData(value)).toThrow("expected an object");
+      },
+    );
 
-    it.each([
-      "configById",
-      "globalVariables",
-    ] as const)("throws when required object field %s is missing", (field) => {
-      // Given a layout missing a required object field
-      const data = validData();
-      delete data[field];
+    it.each(["configById", "globalVariables"] as const)(
+      "throws when required object field %s is missing",
+      (field) => {
+        // Given a layout missing a required object field
+        const data = validData();
+        delete data[field];
 
-      // When validating it
-      // Then it throws referencing that field
-      expect(() => validateLayoutData(data)).toThrow(`missing or invalid "${field}"`);
-    });
+        // When validating it
+        // Then it throws referencing that field
+        expect(() => validateLayoutData(data)).toThrow(`missing or invalid "${field}"`);
+      },
+    );
 
     it("accepts a layout that omits userNodes", () => {
       // Given a valid layout without a userNodes field

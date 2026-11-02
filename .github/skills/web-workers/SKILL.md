@@ -1,4 +1,5 @@
 ---
+
 name: "web-workers"
 description: "Web Worker patterns used throughout the Lichtblick codebase: Comlink integration, ComlinkWrap lifecycle, transfer handlers, OffscreenCanvas, SharedWorker isolation, and testing utilities."
 ---
@@ -10,11 +11,12 @@ description: "Web Worker patterns used throughout the Lichtblick codebase: Comli
 All Worker communication in Lichtblick uses Comlink with the `ComlinkWrap` utility for safe lifecycle management.
 
 ### Worker Creation (main thread)
+
 ```typescript
 import { ComlinkWrap } from "@lichtblick/den/worker";
 
 const worker = new Worker(
-  new URL("./MyWorker.worker", import.meta.url),  // webpack-compatible URL
+  new URL("./MyWorker.worker", import.meta.url), // webpack-compatible URL
 );
 
 const { remote, dispose } = ComlinkWrap<MyWorkerAPI>(worker);
@@ -27,6 +29,7 @@ dispose(); // releases Comlink proxy + terminates worker
 ```
 
 ### Worker Implementation (worker thread)
+
 ```typescript
 import * as Comlink from "@foxglove/comlink";
 
@@ -60,6 +63,7 @@ This prevents Worker leaks if the wrapping object is GC'd without explicit dispo
 ## Transfer Handlers
 
 ### AbortSignal Transfer
+
 ```typescript
 import { abortSignalTransferHandler } from "@lichtblick/comlink-transfer-handlers";
 
@@ -70,6 +74,7 @@ Comlink.transferHandlers.set("abortsignal", abortSignalTransferHandler);
 Allows passing `AbortSignal` across Worker boundaries — used by `WorkerIterableSource` to cancel iteration.
 
 ### OffscreenCanvas Transfer
+
 ```typescript
 const offscreenCanvas = canvas.transferControlToOffscreen();
 
@@ -77,7 +82,7 @@ const { remote, dispose } = ComlinkWrap<RendererService>(worker);
 await remote.init(
   Comlink.transfer(
     { canvas: offscreenCanvas, devicePixelRatio: window.devicePixelRatio },
-    [offscreenCanvas],  // Transfer list
+    [offscreenCanvas], // Transfer list
   ),
 );
 ```
@@ -85,6 +90,7 @@ await remote.init(
 Used by: Plot panel (`OffscreenCanvasRenderer`), Chart component.
 
 ### ArrayBuffer Transfer
+
 ```typescript
 // Transfer large binary data to Worker (zero-copy)
 await remote.processData(Comlink.transfer(buffer, [buffer.buffer]));
@@ -100,7 +106,7 @@ new Worker(new URL("./MyWorker.worker", import.meta.url));
 ```
 
 - File must be named `*.worker.ts` (webpack recognizes this pattern)
-- `babel-plugin-transform-import-meta` handles the URL resolution
+- webpack resolves `new URL("...", import.meta.url)` to the worker chunk
 - Each Worker file is bundled as a separate chunk
 
 ## SharedWorker Pattern
@@ -109,7 +115,7 @@ Used by UserScriptPlayer for script execution:
 
 ```typescript
 new SharedWorker(new URL("./transformerWorker/index", import.meta.url), {
-  name: uuidv4(),  // Unique name prevents sharing between tabs
+  name: uuidv4(), // Unique name prevents sharing between tabs
 });
 ```
 
@@ -119,6 +125,7 @@ new SharedWorker(new URL("./transformerWorker/index", import.meta.url), {
 ## Testing Workers
 
 ### makeComlinkWorkerMock
+
 ```typescript
 import { makeComlinkWorkerMock } from "@lichtblick/den/testing";
 
@@ -136,15 +143,15 @@ Located in `packages/den/testing/makeComlinkWorkerMock.ts`:
 
 ## Workers in the Codebase
 
-| Location | Purpose | Pattern |
-|----------|---------|---------|
-| `IterablePlayer/WorkerIterableSource.ts` | Data source parsing | ComlinkWrap + AbortSignal |
-| `Plot/OffscreenCanvasRenderer.ts` | Chart.js rendering | ComlinkWrap + OffscreenCanvas |
-| `Plot/builders/TimestampDatasetsBuilder.ts` | Dataset building | ComlinkWrap + FinalizationRegistry |
-| `ThreeDeeRender/renderables/Images/WorkerImageDecoder.ts` | Image decoding | ComlinkWrap |
-| `UserScriptPlayer/index.ts` | Script execution | SharedWorker + unique name |
-| `FoxgloveWebSocketPlayer/WorkerSocketAdapter.ts` | WebSocket I/O | Raw Worker + postMessage |
-| `components/Chart/index.tsx` | Legacy chart rendering | WebWorkerManager + Rpc |
+| Location                                                  | Purpose                | Pattern                            |
+| --------------------------------------------------------- | ---------------------- | ---------------------------------- |
+| `IterablePlayer/WorkerIterableSource.ts`                  | Data source parsing    | ComlinkWrap + AbortSignal          |
+| `Plot/OffscreenCanvasRenderer.ts`                         | Chart.js rendering     | ComlinkWrap + OffscreenCanvas      |
+| `Plot/builders/TimestampDatasetsBuilder.ts`               | Dataset building       | ComlinkWrap + FinalizationRegistry |
+| `ThreeDeeRender/renderables/Images/WorkerImageDecoder.ts` | Image decoding         | ComlinkWrap                        |
+| `UserScriptPlayer/index.ts`                               | Script execution       | SharedWorker + unique name         |
+| `FoxgloveWebSocketPlayer/WorkerSocketAdapter.ts`          | WebSocket I/O          | Raw Worker + postMessage           |
+| `components/Chart/index.tsx`                              | Legacy chart rendering | WebWorkerManager + Rpc             |
 
 ## Performance Considerations
 

@@ -10,7 +10,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import { settingsActionReducer } from "./settingsActionReducer";
 import { SettingsActionReducerProps } from "./types";
 
-jest.mock("react-i18next", () => ({
+vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
   }),

@@ -5,6 +5,7 @@ import { existsSync } from "fs";
 import { readdir, readFile, mkdir, rm, writeFile } from "fs/promises";
 import JSZip from "jszip";
 import { join } from "path";
+import type { Mock } from "vitest";
 
 import { BasicBuilder, Capitalization, StringBuilder } from "@lichtblick/test-builders";
 
@@ -12,20 +13,22 @@ import { ExtensionsHandler } from "./ExtensionHandler";
 import type { ExtensionPackageJson } from "./types";
 import { DesktopExtension } from "../common/types";
 
-jest.mock("fs", () => ({
-  existsSync: jest.fn(),
+vi.mock("fs", () => ({
+  existsSync: vi.fn(),
 }));
 
-jest.mock("fs/promises", () => ({
-  readdir: jest.fn(),
-  readFile: jest.fn(),
-  mkdir: jest.fn(),
-  rm: jest.fn(),
-  writeFile: jest.fn(),
+vi.mock("fs/promises", () => ({
+  readdir: vi.fn(),
+  readFile: vi.fn(),
+  mkdir: vi.fn(),
+  rm: vi.fn(),
+  writeFile: vi.fn(),
 }));
 
-jest.mock("jszip", () => ({
-  loadAsync: jest.fn(),
+vi.mock("jszip", () => ({
+  default: {
+    loadAsync: vi.fn(),
+  },
 }));
 
 const genericString = (options: Partial<StringBuilder> = {}): string =>
@@ -66,7 +69,7 @@ describe("ExtensionsHandler", () => {
   const extensionsHandler = new ExtensionsHandler(rootDir);
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("getPackageId", () => {
@@ -327,7 +330,7 @@ describe("ExtensionsHandler", () => {
     it("should return undefined if the root folder does not exist", async () => {
       // Given
       const extensionId = genericString();
-      (existsSync as jest.Mock).mockReturnValue(false);
+      (existsSync as Mock).mockReturnValue(false);
 
       // When
       const result = await extensionsHandler.get(extensionId);
@@ -349,9 +352,9 @@ describe("ExtensionsHandler", () => {
       });
       const extensionId = `${publisher}.${extensionName}`;
 
-      (existsSync as jest.Mock).mockReturnValue(true);
-      (readdir as jest.Mock).mockResolvedValue([{ name: extensionName, isDirectory: () => true }]);
-      (readFile as jest.Mock).mockImplementation(async (path: string) => {
+      (existsSync as Mock).mockReturnValue(true);
+      (readdir as Mock).mockResolvedValue([{ name: extensionName, isDirectory: () => true }]);
+      (readFile as Mock).mockImplementation(async (path: string) => {
         if (path.endsWith("package.json")) {
           return JSON.stringify(mockPackageJson);
         }
@@ -387,9 +390,9 @@ describe("ExtensionsHandler", () => {
       });
       const extensionId = `${publisher}.${extensionName}`;
 
-      (existsSync as jest.Mock).mockReturnValue(true);
-      (readdir as jest.Mock).mockResolvedValue([{ name: extensionName, isDirectory: () => true }]);
-      (readFile as jest.Mock).mockImplementation(async (path: string) => {
+      (existsSync as Mock).mockReturnValue(true);
+      (readdir as Mock).mockResolvedValue([{ name: extensionName, isDirectory: () => true }]);
+      (readFile as Mock).mockImplementation(async (path: string) => {
         if (path.endsWith("package.json")) {
           return JSON.stringify(mockPackageJson);
         }
@@ -415,8 +418,8 @@ describe("ExtensionsHandler", () => {
       const extensionName = genericString();
       const extensionId = `${publisher}.${extensionName}`;
 
-      (existsSync as jest.Mock).mockReturnValue(true);
-      (readdir as jest.Mock).mockResolvedValue([{ name: "notadir", isDirectory: () => false }]);
+      (existsSync as Mock).mockReturnValue(true);
+      (readdir as Mock).mockResolvedValue([{ name: "notadir", isDirectory: () => false }]);
 
       // When
       const result = await extensionsHandler.get(extensionId);
@@ -428,7 +431,7 @@ describe("ExtensionsHandler", () => {
 
   describe("list", () => {
     it("should return an empty array if the root folder does not exist", async () => {
-      (existsSync as jest.Mock).mockReturnValue(false);
+      (existsSync as Mock).mockReturnValue(false);
 
       const result = await extensionsHandler.list();
 
@@ -437,8 +440,8 @@ describe("ExtensionsHandler", () => {
     });
 
     it("should return an empty array if the root folder is empty", async () => {
-      (existsSync as jest.Mock).mockReturnValue(true);
-      (readdir as jest.Mock).mockResolvedValue([]);
+      (existsSync as Mock).mockReturnValue(true);
+      (readdir as Mock).mockResolvedValue([]);
 
       const result = await extensionsHandler.list();
 
@@ -447,8 +450,8 @@ describe("ExtensionsHandler", () => {
     });
 
     it("should skip all entries when isDirectory is false", async () => {
-      (existsSync as jest.Mock).mockReturnValue(true);
-      (readdir as jest.Mock).mockResolvedValue([{ isDirectory: () => false }]);
+      (existsSync as Mock).mockReturnValue(true);
+      (readdir as Mock).mockResolvedValue([{ isDirectory: () => false }]);
 
       const result = await extensionsHandler.list();
 
@@ -461,12 +464,12 @@ describe("ExtensionsHandler", () => {
         publisher: genericString(),
       });
 
-      (existsSync as jest.Mock).mockReturnValue(true);
-      (readdir as jest.Mock).mockResolvedValue([
+      (existsSync as Mock).mockReturnValue(true);
+      (readdir as Mock).mockResolvedValue([
         { name: "extension1", isDirectory: () => true },
         { name: "extension2", isDirectory: () => true },
       ]);
-      (readFile as jest.Mock).mockImplementation(async (path: string) => {
+      (readFile as Mock).mockImplementation(async (path: string) => {
         if (path.endsWith("package.json")) {
           return await Promise.resolve(JSON.stringify(mockPackageJson));
         }
@@ -497,12 +500,12 @@ describe("ExtensionsHandler", () => {
       const mockReadmeContent = genericString();
       const mockChangelogContent = genericString();
 
-      (existsSync as jest.Mock).mockReturnValue(true);
-      (readdir as jest.Mock).mockResolvedValue([
+      (existsSync as Mock).mockReturnValue(true);
+      (readdir as Mock).mockResolvedValue([
         { name: "extension1", isDirectory: () => true },
         { name: "extension2", isDirectory: () => true },
       ]);
-      (readFile as jest.Mock).mockImplementation(async (path: string) => {
+      (readFile as Mock).mockImplementation(async (path: string) => {
         if (path.includes("extension1")) {
           // Simulate error for extension1's package.json
           if (path.endsWith("package.json")) {
@@ -525,7 +528,7 @@ describe("ExtensionsHandler", () => {
 
       const result = await extensionsHandler.list();
 
-      const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
       expect(result).toHaveLength(1);
       expect(result[0]).toMatchObject({
         id: `${mockPackageJson.publisher}.${mockPackageJson.name}`,
@@ -549,26 +552,26 @@ describe("ExtensionsHandler", () => {
     let mockArchive: any;
 
     beforeEach(() => {
-      jest.clearAllMocks();
+      vi.clearAllMocks();
 
       mockArchive = {
         files: {
           "package.json": {
-            async: jest.fn().mockResolvedValue(JSON.stringify(mockPackageJson)),
+            async: vi.fn().mockResolvedValue(JSON.stringify(mockPackageJson)),
           },
           "README.md": {
-            async: jest.fn().mockResolvedValue(mockReadmeContent),
+            async: vi.fn().mockResolvedValue(mockReadmeContent),
           },
           "CHANGELOG.md": {
-            async: jest.fn().mockResolvedValue(mockChangelogContent),
+            async: vi.fn().mockResolvedValue(mockChangelogContent),
           },
           "file.txt": {
-            async: jest.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
+            async: vi.fn().mockResolvedValue(new Uint8Array([1, 2, 3])),
           },
         },
       };
 
-      (JSZip.loadAsync as jest.Mock).mockResolvedValue(mockArchive);
+      (JSZip.loadAsync as Mock).mockResolvedValue(mockArchive);
     });
 
     it("should install an extension successfully", async () => {
@@ -616,13 +619,13 @@ describe("ExtensionsHandler", () => {
       await expect(extensionsHandler.install(foxeFileData)).rejects.toThrow(
         "Extension contains an invalid package.json",
       );
-      (console.error as jest.Mock).mockClear();
+      (console.error as Mock).mockClear();
     });
   });
 
   describe("uninstall", () => {
     afterEach(() => {
-      jest.clearAllMocks();
+      vi.clearAllMocks();
     });
 
     it("should uninstall an extension by removing its directory", async () => {
@@ -630,8 +633,8 @@ describe("ExtensionsHandler", () => {
       const extensionId = genericString();
       const desktopExtension = generateDesktopExtension();
 
-      jest.spyOn(extensionsHandler, "get").mockResolvedValue(desktopExtension);
-      (rm as jest.Mock).mockResolvedValue(undefined);
+      vi.spyOn(extensionsHandler, "get").mockResolvedValue(desktopExtension);
+      (rm as Mock).mockResolvedValue(undefined);
 
       // When
       const result = await extensionsHandler.uninstall(extensionId);
@@ -648,7 +651,7 @@ describe("ExtensionsHandler", () => {
       // Given
       const extensionId = genericString();
 
-      jest.spyOn(extensionsHandler, "get").mockResolvedValue(undefined);
+      vi.spyOn(extensionsHandler, "get").mockResolvedValue(undefined);
 
       // When
       const result = await extensionsHandler.uninstall(extensionId);
@@ -660,12 +663,12 @@ describe("ExtensionsHandler", () => {
   });
 
   describe("load", () => {
-    const getByIdSpy = jest.spyOn(extensionsHandler, "get");
+    const getByIdSpy = vi.spyOn(extensionsHandler, "get");
 
     it("should throw an error when extension is not found", async () => {
       // Given
       const extensionId = genericString();
-      jest.spyOn(extensionsHandler, "get").mockResolvedValue(undefined);
+      vi.spyOn(extensionsHandler, "get").mockResolvedValue(undefined);
 
       // When Then
       await expect(extensionsHandler.load(extensionId)).rejects.toThrow(
@@ -679,7 +682,7 @@ describe("ExtensionsHandler", () => {
       const desktopExtension = generateDesktopExtension();
 
       getByIdSpy.mockResolvedValue(desktopExtension);
-      (readFile as jest.Mock).mockReturnValueOnce(JSON.stringify(desktopExtension.packageJson));
+      (readFile as Mock).mockReturnValueOnce(JSON.stringify(desktopExtension.packageJson));
 
       // When
       await extensionsHandler.load(extensionId);

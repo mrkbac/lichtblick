@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -14,9 +14,9 @@ import { ScriptListItem } from "./ScriptListItem";
 type Props = React.ComponentProps<typeof ScriptListItem>;
 
 function renderScriptListItem(props: Partial<Props> = {}) {
-  const onClick = props.onClick ?? jest.fn();
-  const onDelete = props.onDelete ?? jest.fn();
-  const onRename = props.onRename ?? jest.fn();
+  const onClick = props.onClick ?? vi.fn();
+  const onDelete = props.onDelete ?? vi.fn();
+  const onRename = props.onRename ?? vi.fn();
   const title = props.title ?? BasicBuilder.string();
 
   render(
@@ -36,8 +36,8 @@ function renderScriptListItem(props: Partial<Props> = {}) {
 
 describe("ScriptListItem", () => {
   afterEach(() => {
-    jest.clearAllMocks();
-    jest.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("should render the title", () => {
@@ -211,7 +211,7 @@ describe("ScriptListItem", () => {
     renderScriptListItem();
     fireEvent.click(screen.getByTitle("Rename"));
     const input = screen.getByRole<HTMLInputElement>("textbox");
-    const selectSpy = jest.spyOn(input, "select");
+    const selectSpy = vi.spyOn(input, "select");
 
     // When
     fireEvent.focus(input);

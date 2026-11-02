@@ -3,9 +3,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 import { render, screen } from "@testing-library/react";
 import { useTranslation } from "react-i18next";
+import type { Mock } from "vitest";
 
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useCurrentUser } from "@lichtblick/suite-base/context/CurrentUserContext";
@@ -17,36 +18,36 @@ import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 
 import DataSourceSidebar from "./DataSourceSidebar";
 
-jest.mock("react-i18next", () => ({
-  useTranslation: jest.fn(),
+vi.mock("react-i18next", () => ({
+  useTranslation: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
-  useMessagePipeline: jest.fn(),
+vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
+  useMessagePipeline: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/context/CurrentUserContext", () => ({
-  useCurrentUser: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/CurrentUserContext", () => ({
+  useCurrentUser: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/context/EventsContext", () => ({
-  useEvents: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/EventsContext", () => ({
+  useEvents: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => ({
-  useWorkspaceActions: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => ({
+  useWorkspaceActions: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/hooks/useAlertCount", () => ({
+vi.mock("@lichtblick/suite-base/hooks/useAlertCount", () => ({
   __esModule: true,
-  default: jest.fn(),
+  default: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/hooks/useAppConfigurationValue", () => ({
-  useAppConfigurationValue: jest.fn(),
+vi.mock("@lichtblick/suite-base/hooks/useAppConfigurationValue", () => ({
+  useAppConfigurationValue: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/components/SidebarContent", () => ({
+vi.mock("@lichtblick/suite-base/components/SidebarContent", () => ({
   SidebarContent: ({
     children,
     trailingItems,
@@ -58,48 +59,48 @@ jest.mock("@lichtblick/suite-base/components/SidebarContent", () => ({
   ),
 }));
 
-jest.mock("@lichtblick/suite-base/components/TopicList", () => ({
+vi.mock("@lichtblick/suite-base/components/TopicList", () => ({
   TopicList: () => <div data-testid="topic-list" />,
 }));
 
-jest.mock("@lichtblick/suite-base/components/EventsList", () => ({
+vi.mock("@lichtblick/suite-base/components/EventsList", () => ({
   EventsList: () => <div data-testid="events-list" />,
 }));
 
-jest.mock("@lichtblick/suite-base/components/WssErrorModal", () => ({
+vi.mock("@lichtblick/suite-base/components/WssErrorModal", () => ({
   __esModule: true,
   default: () => <div data-testid="wss-error-modal" />,
 }));
 
-jest.mock("../AlertList/AlertsList", () => ({
+vi.mock("../AlertList/AlertsList", () => ({
   AlertsList: () => <div data-testid="alerts-list" />,
 }));
 
-jest.mock("../DataSourceInfoView", () => ({
+vi.mock("../DataSourceInfoView", () => ({
   DataSourceInfoView: () => <div data-testid="data-source-info-view" />,
 }));
 
 describe("DataSourceSidebar - Alerts tab badge", () => {
-  const mockUseMessagePipeline = useMessagePipeline as jest.Mock;
-  const mockUseAlertCount = useAlertCount as jest.Mock;
-  const mockUseCurrentUser = useCurrentUser as jest.Mock;
-  const mockUseEvents = useEvents as jest.Mock;
-  const mockUseWorkspaceActions = useWorkspaceActions as jest.Mock;
-  const mockUseAppConfigurationValue = useAppConfigurationValue as jest.Mock;
+  const mockUseMessagePipeline = useMessagePipeline as Mock;
+  const mockUseAlertCount = useAlertCount as Mock;
+  const mockUseCurrentUser = useCurrentUser as Mock;
+  const mockUseEvents = useEvents as Mock;
+  const mockUseWorkspaceActions = useWorkspaceActions as Mock;
+  const mockUseAppConfigurationValue = useAppConfigurationValue as Mock;
 
   beforeEach(() => {
-    (useTranslation as jest.Mock).mockReturnValue({ t: (key: string) => key });
+    (useTranslation as Mock).mockReturnValue({ t: (key: string) => key });
     mockUseMessagePipeline.mockReturnValue(PlayerPresence.PRESENT);
     mockUseCurrentUser.mockReturnValue({ currentUser: undefined });
     mockUseEvents.mockReturnValue(undefined);
     mockUseWorkspaceActions.mockReturnValue({
-      dialogActions: { dataSource: { open: jest.fn() } },
+      dialogActions: { dataSource: { open: vi.fn() } },
     });
     mockUseAppConfigurationValue.mockReturnValue([true]);
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("should not show the badge when alertCount is 0", () => {

@@ -8,22 +8,24 @@ import { BasicBuilder } from "@lichtblick/test-builders";
  */
 
 describe("browserStorageKeys", () => {
-  let originalGlobalThis: typeof globalThis;
+  const keys = ["API_URL", "LICHTBLICK_SUITE_VERSION", "DEV_WORKSPACE"] as const;
+  let original: Record<string, unknown>;
 
   beforeEach(() => {
-    // Store original globalThis to restore later
-    originalGlobalThis = { ...globalThis };
+    // Store the globals we change so they can be restored
+    original = Object.fromEntries(
+      keys.map((key) => [key, (globalThis as Record<string, unknown>)[key]]),
+    );
 
     // Clear any existing global variables
     delete (globalThis as any).DEV_WORKSPACE;
 
     // Clear module cache to ensure fresh imports
-    jest.resetModules();
+    vi.resetModules();
   });
 
   afterEach(() => {
-    // Restore original globalThis
-    Object.assign(globalThis, originalGlobalThis);
+    Object.assign(globalThis, original);
   });
 
   it("should generate keys without workspace prefix when DEV_WORKSPACE is not set", async () => {

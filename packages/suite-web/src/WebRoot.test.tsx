@@ -15,8 +15,8 @@ import { WebRoot } from "./WebRoot";
 
 const mockSharedRootProps: Array<Record<string, unknown>> = [];
 
-jest.mock("@lichtblick/suite-base", () => {
-  const Stub = jest.fn();
+vi.mock("@lichtblick/suite-base", () => {
+  const Stub = vi.fn();
   return {
     __esModule: true,
     AppSetting: { SHOW_DEBUG_PANELS: "showDebugPanels" },
@@ -37,13 +37,13 @@ jest.mock("@lichtblick/suite-base", () => {
   };
 });
 
-jest.mock("@lichtblick/suite-base/constants/config", () => ({
+vi.mock("@lichtblick/suite-base/constants/config", () => ({
   APP_CONFIG: { apiUrl: undefined },
 }));
 
-jest.mock("./services/LocalStorageAppConfiguration", () => ({
+vi.mock("./services/LocalStorageAppConfiguration", () => ({
   __esModule: true,
-  default: jest.fn(),
+  default: vi.fn(),
 }));
 
 describe("WebRoot", () => {

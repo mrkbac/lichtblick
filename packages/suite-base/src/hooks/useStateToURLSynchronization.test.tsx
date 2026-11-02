@@ -17,19 +17,20 @@
 
 import { renderHook } from "@testing-library/react";
 import { ReactNode } from "react";
+import type { Mock } from "vitest";
 
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useStateToURLSynchronization } from "@lichtblick/suite-base/hooks/useStateToURLSynchronization";
 import EventsProvider from "@lichtblick/suite-base/providers/EventsProvider";
 
-jest.mock("@lichtblick/suite-base/context/CurrentLayoutContext");
-jest.mock("@lichtblick/suite-base/components/MessagePipeline");
+vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext");
+vi.mock("@lichtblick/suite-base/components/MessagePipeline");
 
 describe("useStateToURLSynchronization", () => {
   it("updates the url with a stable source & player state", () => {
-    const spy = jest.spyOn(window.history, "replaceState");
+    const spy = vi.spyOn(window.history, "replaceState");
 
-    (useMessagePipeline as jest.Mock).mockImplementation((selector) =>
+    (useMessagePipeline as Mock).mockImplementation((selector) =>
       selector({
         playerState: {
           activeData: {
@@ -61,7 +62,7 @@ describe("useStateToURLSynchronization", () => {
       "http://localhost/?ds=test-source&ds.a=one&ds.b=two&time=1970-01-01T00:00:01.000000001Z",
     );
 
-    (useMessagePipeline as jest.Mock).mockImplementation((selector) =>
+    (useMessagePipeline as Mock).mockImplementation((selector) =>
       selector({
         playerState: {
           activeData: {
@@ -84,12 +85,12 @@ describe("useStateToURLSynchronization", () => {
   });
 
   it("suppresses ds param writeback when mcap-bundle is present in the URL", () => {
-    const spy = jest.spyOn(window.history, "replaceState");
+    const spy = vi.spyOn(window.history, "replaceState");
 
     // Set the URL to include mcap-bundle
     window.history.pushState({}, "", "http://localhost/?mcap-bundle=test-session-123");
 
-    (useMessagePipeline as jest.Mock).mockImplementation((selector) =>
+    (useMessagePipeline as Mock).mockImplementation((selector) =>
       selector({
         playerState: {
           activeData: {
@@ -118,12 +119,12 @@ describe("useStateToURLSynchronization", () => {
   });
 
   it("writes ds params when mcap-bundle is present but empty in the URL", () => {
-    const spy = jest.spyOn(window.history, "replaceState");
+    const spy = vi.spyOn(window.history, "replaceState");
 
     // Set the URL to include an empty mcap-bundle value
     window.history.pushState({}, "", "http://localhost/?mcap-bundle=");
 
-    (useMessagePipeline as jest.Mock).mockImplementation((selector) =>
+    (useMessagePipeline as Mock).mockImplementation((selector) =>
       selector({
         playerState: {
           activeData: {

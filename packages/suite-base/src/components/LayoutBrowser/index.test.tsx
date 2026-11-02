@@ -4,7 +4,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { act, render, screen, waitFor } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
+import { useSnackbar } from "notistack";
+import type { Mock } from "vitest";
 
 import { LayoutSelectionState } from "@lichtblick/suite-base/components/LayoutBrowser/types";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
@@ -27,85 +29,86 @@ import MockLayoutManager from "@lichtblick/suite-base/services/LayoutManager/Moc
 import LayoutBuilder from "@lichtblick/suite-base/testing/builders/LayoutBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
+import LayoutSection from "./LayoutSection";
 import LayoutBrowser from "./index";
 
-jest.mock("notistack", () => ({
-  useSnackbar: jest.fn().mockReturnValue({ enqueueSnackbar: jest.fn() }),
+vi.mock("notistack", () => ({
+  useSnackbar: vi.fn().mockReturnValue({ enqueueSnackbar: vi.fn() }),
 }));
 
-jest.mock("@lichtblick/suite-base/context/LayoutManagerContext", () => ({
-  useLayoutManager: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/LayoutManagerContext", () => ({
+  useLayoutManager: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/context/AnalyticsContext", () => ({
-  useAnalytics: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/AnalyticsContext", () => ({
+  useAnalytics: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
-  useCurrentLayoutSelector: jest.fn(),
-  useCurrentLayoutActions: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
+  useCurrentLayoutSelector: vi.fn(),
+  useCurrentLayoutActions: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/context/CurrentUserContext", () => ({
-  useCurrentUser: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/CurrentUserContext", () => ({
+  useCurrentUser: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/hooks/useLayoutNavigation", () => ({
-  useLayoutNavigation: jest.fn(),
+vi.mock("@lichtblick/suite-base/hooks/useLayoutNavigation", () => ({
+  useLayoutNavigation: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/hooks/useConfirm", () => ({
-  useConfirm: jest.fn(),
+vi.mock("@lichtblick/suite-base/hooks/useConfirm", () => ({
+  useConfirm: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/hooks/usePrompt", () => ({
-  usePrompt: jest.fn(),
+vi.mock("@lichtblick/suite-base/hooks/usePrompt", () => ({
+  usePrompt: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/hooks/useAppConfigurationValue", () => ({
-  useAppConfigurationValue: jest.fn(),
+vi.mock("@lichtblick/suite-base/hooks/useAppConfigurationValue", () => ({
+  useAppConfigurationValue: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/context/Workspace/WorkspaceContext", () => ({
-  useWorkspaceStore: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/Workspace/WorkspaceContext", () => ({
+  useWorkspaceStore: vi.fn(),
   WorkspaceStoreSelectors: {
-    selectLayoutSectionExpanded: jest.fn(),
+    selectLayoutSectionExpanded: vi.fn(),
   },
 }));
 
-jest.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => ({
-  useWorkspaceActions: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => ({
+  useWorkspaceActions: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/hooks/useLayoutTransfer", () => ({
-  useLayoutTransfer: jest.fn().mockReturnValue({
-    importLayout: jest.fn(),
-    exportLayout: jest.fn(),
+vi.mock("@lichtblick/suite-base/hooks/useLayoutTransfer", () => ({
+  useLayoutTransfer: vi.fn().mockReturnValue({
+    importLayout: vi.fn(),
+    exportLayout: vi.fn(),
   }),
 }));
 
-jest.mock("@lichtblick/suite-base/hooks/useCallbackWithToast", () => ({
+vi.mock("@lichtblick/suite-base/hooks/useCallbackWithToast", () => ({
   __esModule: true,
   default: <Args extends unknown[]>(fn: (...args: Args) => Promise<void>) => fn,
 }));
 
-jest.mock("@lichtblick/suite-base/hooks/useLayoutActions", () => ({
-  useLayoutActions: jest.fn().mockReturnValue({
-    onRenameLayout: jest.fn(),
-    onDuplicateLayout: jest.fn(),
-    onDeleteLayout: jest.fn(),
-    onRevertLayout: jest.fn(),
-    onOverwriteLayout: jest.fn(),
+vi.mock("@lichtblick/suite-base/hooks/useLayoutActions", () => ({
+  useLayoutActions: vi.fn().mockReturnValue({
+    onRenameLayout: vi.fn(),
+    onDuplicateLayout: vi.fn(),
+    onDeleteLayout: vi.fn(),
+    onRevertLayout: vi.fn(),
+    onOverwriteLayout: vi.fn(),
     confirmModal: undefined,
   }),
 }));
 
-jest.mock("./LayoutSection", () => ({
-  __esModule: true,
-  default: () => <div data-testid="layout-section" />,
+const renderDefaultLayoutSection = () => <div data-testid="layout-section" />;
+vi.mock("./LayoutSection", () => ({
+  default: vi.fn(() => <div data-testid="layout-section" />),
 }));
 
-jest.mock("@lichtblick/suite-base/components/SidebarContent", () => ({
+vi.mock("@lichtblick/suite-base/components/SidebarContent", () => ({
   SidebarContent: ({ children, title }: { children: React.ReactNode; title: string }) => (
     <div data-testid="sidebar-content">
       <span>{title}</span>
@@ -116,29 +119,29 @@ jest.mock("@lichtblick/suite-base/components/SidebarContent", () => ({
 
 describe("LayoutBrowser", () => {
   const mockLayoutManager = new MockLayoutManager();
-  let dispatchMock: jest.Mock;
+  let dispatchMock: Mock;
 
   const ids = [BasicBuilder.string(), BasicBuilder.string()];
 
   beforeEach(() => {
-    dispatchMock = jest.fn();
-    (useLayoutManager as jest.Mock).mockReturnValue(mockLayoutManager);
-    (useAnalytics as jest.Mock).mockReturnValue({ logEvent: jest.fn() });
-    (useCurrentLayoutSelector as jest.Mock).mockReturnValue(undefined);
-    (useCurrentLayoutActions as jest.Mock).mockReturnValue({ setSelectedLayoutId: jest.fn() });
-    (useCurrentUser as jest.Mock).mockReturnValue({ signIn: undefined });
-    (useConfirm as jest.Mock).mockReturnValue([jest.fn(), undefined]);
-    (usePrompt as jest.Mock).mockReturnValue([jest.fn(), undefined]);
-    (useAppConfigurationValue as jest.Mock).mockReturnValue([true, jest.fn()]);
-    (useWorkspaceStore as jest.Mock).mockReturnValue({ personal: true, shared: true });
-    (useWorkspaceActions as jest.Mock).mockReturnValue({
+    dispatchMock = vi.fn();
+    (useLayoutManager as Mock).mockReturnValue(mockLayoutManager);
+    (useAnalytics as Mock).mockReturnValue({ logEvent: vi.fn() });
+    (useCurrentLayoutSelector as Mock).mockReturnValue(undefined);
+    (useCurrentLayoutActions as Mock).mockReturnValue({ setSelectedLayoutId: vi.fn() });
+    (useCurrentUser as Mock).mockReturnValue({ signIn: undefined });
+    (useConfirm as Mock).mockReturnValue([vi.fn(), undefined]);
+    (usePrompt as Mock).mockReturnValue([vi.fn(), undefined]);
+    (useAppConfigurationValue as Mock).mockReturnValue([true, vi.fn()]);
+    (useWorkspaceStore as Mock).mockReturnValue({ personal: true, shared: true });
+    (useWorkspaceActions as Mock).mockReturnValue({
       layoutBrowserActions: {
-        setPersonalSectionExpanded: jest.fn(),
-        setSharedSectionExpanded: jest.fn(),
+        setPersonalSectionExpanded: vi.fn(),
+        setSharedSectionExpanded: vi.fn(),
       },
     });
-    (useLayoutNavigation as jest.Mock).mockReturnValue({
-      onSelectLayout: jest.fn(),
+    (useLayoutNavigation as Mock).mockReturnValue({
+      onSelectLayout: vi.fn(),
       state: {
         busy: false,
         error: undefined,
@@ -152,7 +155,7 @@ describe("LayoutBrowser", () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("renders without crashing", () => {
@@ -161,11 +164,11 @@ describe("LayoutBrowser", () => {
   });
 
   describe("processAction useEffect", () => {
-    let enqueueSnackbarMock: jest.Mock;
+    let enqueueSnackbarMock: Mock;
 
     const renderWithMultiAction = (multiAction: LayoutSelectionState["multiAction"]) => {
-      (useLayoutNavigation as jest.Mock).mockReturnValue({
-        onSelectLayout: jest.fn(),
+      (useLayoutNavigation as Mock).mockReturnValue({
+        onSelectLayout: vi.fn(),
         state: {
           busy: false,
           error: undefined,
@@ -180,13 +183,13 @@ describe("LayoutBrowser", () => {
     };
 
     beforeEach(() => {
-      enqueueSnackbarMock = jest.fn();
-      (jest.requireMock("notistack").useSnackbar as jest.Mock).mockReturnValue({
+      enqueueSnackbarMock = vi.fn();
+      vi.mocked(useSnackbar).mockReturnValue({
         enqueueSnackbar: enqueueSnackbarMock,
-      });
-      mockLayoutManager.deleteLayout = jest.fn().mockResolvedValue(undefined);
-      mockLayoutManager.revertLayout = jest.fn().mockResolvedValue(undefined);
-      mockLayoutManager.overwriteLayout = jest.fn().mockResolvedValue(undefined);
+      } as unknown as ReturnType<typeof useSnackbar>);
+      mockLayoutManager.deleteLayout = vi.fn().mockResolvedValue(undefined);
+      mockLayoutManager.revertLayout = vi.fn().mockResolvedValue(undefined);
+      mockLayoutManager.overwriteLayout = vi.fn().mockResolvedValue(undefined);
     });
 
     it("does nothing when multiAction is undefined", () => {
@@ -237,8 +240,8 @@ describe("LayoutBrowser", () => {
     it("calls getLayout then saveNewLayout for each id on duplicate action", async () => {
       // GIVEN
       const layout = LayoutBuilder.layout({ id: "id1" as LayoutID });
-      mockLayoutManager.getLayout = jest.fn().mockResolvedValue(layout);
-      mockLayoutManager.saveNewLayout = jest.fn().mockResolvedValue(LayoutBuilder.layout());
+      mockLayoutManager.getLayout = vi.fn().mockResolvedValue(layout);
+      mockLayoutManager.saveNewLayout = vi.fn().mockResolvedValue(LayoutBuilder.layout());
 
       // WHEN
       renderWithMultiAction({ action: "duplicate", ids: ["id1"] });
@@ -258,7 +261,7 @@ describe("LayoutBrowser", () => {
     it("shows error snackbar and dispatches clear-multi-action on failure", async () => {
       // GIVEN
       const errorMessage = "Something went wrong";
-      mockLayoutManager.revertLayout = jest.fn().mockRejectedValue(new Error(errorMessage));
+      mockLayoutManager.revertLayout = vi.fn().mockRejectedValue(new Error(errorMessage));
 
       // WHEN
       renderWithMultiAction({ action: "revert", ids: ["id1"] });
@@ -275,28 +278,26 @@ describe("LayoutBrowser", () => {
   });
 
   describe("section collapse persistence", () => {
-    let setPersonalExpandedMock: jest.Mock;
-    let setSharedExpandedMock: jest.Mock;
-    let onSelectLayoutMock: jest.Mock;
-    let logEventMock: jest.Mock;
-
-    const originalLayoutSectionMock = jest.requireMock("./LayoutSection").default;
+    let setPersonalExpandedMock: Mock;
+    let setSharedExpandedMock: Mock;
+    let onSelectLayoutMock: Mock;
+    let logEventMock: Mock;
 
     beforeEach(() => {
-      setPersonalExpandedMock = jest.fn();
-      setSharedExpandedMock = jest.fn();
-      onSelectLayoutMock = jest.fn().mockResolvedValue(undefined);
-      logEventMock = jest.fn().mockResolvedValue(undefined);
+      setPersonalExpandedMock = vi.fn();
+      setSharedExpandedMock = vi.fn();
+      onSelectLayoutMock = vi.fn().mockResolvedValue(undefined);
+      logEventMock = vi.fn().mockResolvedValue(undefined);
 
-      (useAnalytics as jest.Mock).mockReturnValue({ logEvent: logEventMock });
-      (useWorkspaceStore as jest.Mock).mockReturnValue({ personal: true, shared: true });
-      (useWorkspaceActions as jest.Mock).mockReturnValue({
+      (useAnalytics as Mock).mockReturnValue({ logEvent: logEventMock });
+      (useWorkspaceStore as Mock).mockReturnValue({ personal: true, shared: true });
+      (useWorkspaceActions as Mock).mockReturnValue({
         layoutBrowserActions: {
           setPersonalSectionExpanded: setPersonalExpandedMock,
           setSharedSectionExpanded: setSharedExpandedMock,
         },
       });
-      (useLayoutNavigation as jest.Mock).mockReturnValue({
+      (useLayoutNavigation as Mock).mockReturnValue({
         onSelectLayout: onSelectLayoutMock,
         state: {
           busy: false,
@@ -311,20 +312,18 @@ describe("LayoutBrowser", () => {
     });
 
     afterEach(() => {
-      jest.requireMock("./LayoutSection").default = originalLayoutSectionMock;
+      vi.mocked(LayoutSection).mockImplementation(renderDefaultLayoutSection);
     });
 
     it("passes expanded state and toggle handlers to LayoutSection", () => {
       // GIVEN
-      (useWorkspaceStore as jest.Mock).mockReturnValue({ personal: false, shared: true });
+      (useWorkspaceStore as Mock).mockReturnValue({ personal: false, shared: true });
 
       const capturedProps: Record<string, unknown>[] = [];
-      jest.requireMock("./LayoutSection").default = jest
-        .fn()
-        .mockImplementation((props: Record<string, unknown>) => {
-          capturedProps.push(props);
-          return <div data-testid="layout-section" />;
-        });
+      vi.mocked(LayoutSection).mockImplementation((props: Record<string, unknown>) => {
+        capturedProps.push(props);
+        return <div data-testid="layout-section" />;
+      });
 
       // WHEN
       render(<LayoutBrowser />);
@@ -337,14 +336,12 @@ describe("LayoutBrowser", () => {
     it("calls setPersonalSectionExpanded with toggler when togglePersonalExpanded is invoked", () => {
       // GIVEN
       let capturedOnToggle: (() => void) | undefined;
-      jest.requireMock("./LayoutSection").default = jest
-        .fn()
-        .mockImplementation((props: { onToggleExpanded?: () => void }) => {
-          if (!capturedOnToggle && props.onToggleExpanded) {
-            capturedOnToggle = props.onToggleExpanded;
-          }
-          return <div data-testid="layout-section" />;
-        });
+      vi.mocked(LayoutSection).mockImplementation((props: { onToggleExpanded?: () => void }) => {
+        if (!capturedOnToggle && props.onToggleExpanded) {
+          capturedOnToggle = props.onToggleExpanded;
+        }
+        return <div data-testid="layout-section" />;
+      });
 
       render(<LayoutBrowser />);
 
@@ -361,14 +358,12 @@ describe("LayoutBrowser", () => {
       mockLayoutManager.supportsSharing = true;
 
       const capturedOnToggles: (() => void)[] = [];
-      jest.requireMock("./LayoutSection").default = jest
-        .fn()
-        .mockImplementation((props: { onToggleExpanded?: () => void }) => {
-          if (props.onToggleExpanded) {
-            capturedOnToggles.push(props.onToggleExpanded);
-          }
-          return <div data-testid="layout-section" />;
-        });
+      vi.mocked(LayoutSection).mockImplementation((props: { onToggleExpanded?: () => void }) => {
+        if (props.onToggleExpanded) {
+          capturedOnToggles.push(props.onToggleExpanded);
+        }
+        return <div data-testid="layout-section" />;
+      });
 
       render(<LayoutBrowser />);
 
@@ -384,7 +379,7 @@ describe("LayoutBrowser", () => {
     it("expands personal section when creating a new layout", async () => {
       // GIVEN
       const newLayout = LayoutBuilder.layout();
-      mockLayoutManager.saveNewLayout = jest.fn().mockResolvedValue(newLayout);
+      mockLayoutManager.saveNewLayout = vi.fn().mockResolvedValue(newLayout);
       render(<LayoutBrowser currentDateForStorybook={new Date("2025-01-01")} />);
 
       // WHEN - simulate createNewLayout by clicking the button
@@ -401,17 +396,15 @@ describe("LayoutBrowser", () => {
       // GIVEN
       const layout = LayoutBuilder.layout();
       const newLayout = LayoutBuilder.layout();
-      const promptMock = jest.fn().mockResolvedValue("Shared Layout");
-      (usePrompt as jest.Mock).mockReturnValue([promptMock, undefined]);
-      mockLayoutManager.saveNewLayout = jest.fn().mockResolvedValue(newLayout);
+      const promptMock = vi.fn().mockResolvedValue("Shared Layout");
+      (usePrompt as Mock).mockReturnValue([promptMock, undefined]);
+      mockLayoutManager.saveNewLayout = vi.fn().mockResolvedValue(newLayout);
 
       let capturedOnShare: ((item: Layout) => void) | undefined;
-      jest.requireMock("./LayoutSection").default = jest
-        .fn()
-        .mockImplementation((props: { onShare: (item: Layout) => void }) => {
-          capturedOnShare = props.onShare;
-          return <div data-testid="layout-section" />;
-        });
+      vi.mocked(LayoutSection).mockImplementation((props: { onShare: (item: Layout) => void }) => {
+        capturedOnShare = props.onShare;
+        return <div data-testid="layout-section" />;
+      });
 
       render(<LayoutBrowser />);
 
@@ -428,15 +421,15 @@ describe("LayoutBrowser", () => {
       // GIVEN
       const layout = LayoutBuilder.layout();
       const newLayout = LayoutBuilder.layout();
-      mockLayoutManager.makePersonalCopy = jest.fn().mockResolvedValue(newLayout);
+      mockLayoutManager.makePersonalCopy = vi.fn().mockResolvedValue(newLayout);
 
       let capturedOnMakePersonalCopy: ((item: Layout) => void) | undefined;
-      jest.requireMock("./LayoutSection").default = jest
-        .fn()
-        .mockImplementation((props: { onMakePersonalCopy: (item: Layout) => void }) => {
+      vi.mocked(LayoutSection).mockImplementation(
+        (props: { onMakePersonalCopy: (item: Layout) => void }) => {
           capturedOnMakePersonalCopy = props.onMakePersonalCopy;
           return <div data-testid="layout-section" />;
-        });
+        },
+      );
 
       render(<LayoutBrowser />);
 
@@ -467,7 +460,7 @@ describe("LayoutBrowser", () => {
       const sharedA = LayoutBuilder.layout({ name: "a", permission: "ORG_WRITE" });
       const sharedB = LayoutBuilder.layout({ name: "b", permission: "ORG_WRITE" });
       mockLayoutManager.supportsSharing = true;
-      mockLayoutManager.getLayouts = jest
+      mockLayoutManager.getLayouts = vi
         .fn()
         .mockResolvedValue([personalC, sharedB, personalA, sharedA, personalB]);
       setFavorites({
@@ -476,12 +469,12 @@ describe("LayoutBrowser", () => {
       });
 
       const renderedItems: (readonly Layout[] | undefined)[] = [];
-      jest.requireMock("./LayoutSection").default = jest
-        .fn()
-        .mockImplementation((props: { items: readonly Layout[] | undefined }) => {
+      vi.mocked(LayoutSection).mockImplementation(
+        (props: { items: readonly Layout[] | undefined }) => {
           renderedItems.push(props.items);
           return <div data-testid="layout-section" />;
-        });
+        },
+      );
 
       // WHEN
       render(<LayoutBrowser />);
@@ -499,16 +492,16 @@ describe("LayoutBrowser", () => {
       // GIVEN
       const layoutA = LayoutBuilder.layout({ name: "a", permission: "CREATOR_WRITE" });
       const layoutB = LayoutBuilder.layout({ name: "b", permission: "CREATOR_WRITE" });
-      mockLayoutManager.getLayouts = jest.fn().mockResolvedValue([layoutA, layoutB]);
+      mockLayoutManager.getLayouts = vi.fn().mockResolvedValue([layoutA, layoutB]);
       setFavorites({ personal: new Set([layoutB.id]) });
 
       const renderedItems: (readonly Layout[] | undefined)[] = [];
-      jest.requireMock("./LayoutSection").default = jest
-        .fn()
-        .mockImplementation((props: { items: readonly Layout[] | undefined }) => {
+      vi.mocked(LayoutSection).mockImplementation(
+        (props: { items: readonly Layout[] | undefined }) => {
           renderedItems.push(props.items);
           return <div data-testid="layout-section" />;
-        });
+        },
+      );
       const renderedNames = () => renderedItems.at(-1)?.map((layout) => layout.name);
 
       render(<LayoutBrowser />);
@@ -535,20 +528,15 @@ describe("LayoutBrowser", () => {
       // GIVEN
       const layout = LayoutBuilder.layout({ permission: "CREATOR_WRITE" });
       const newLayout = LayoutBuilder.layout({ permission: "ORG_WRITE" });
-      (usePrompt as jest.Mock).mockReturnValue([
-        jest.fn().mockResolvedValue("Shared Layout"),
-        undefined,
-      ]);
-      mockLayoutManager.saveNewLayout = jest.fn().mockResolvedValue(newLayout);
+      (usePrompt as Mock).mockReturnValue([vi.fn().mockResolvedValue("Shared Layout"), undefined]);
+      mockLayoutManager.saveNewLayout = vi.fn().mockResolvedValue(newLayout);
       setFavorites({ personal: new Set([layout.id]) });
 
       let capturedOnShare: ((item: Layout) => void) | undefined;
-      jest.requireMock("./LayoutSection").default = jest
-        .fn()
-        .mockImplementation((props: { onShare: (item: Layout) => void }) => {
-          capturedOnShare = props.onShare;
-          return <div data-testid="layout-section" />;
-        });
+      vi.mocked(LayoutSection).mockImplementation((props: { onShare: (item: Layout) => void }) => {
+        capturedOnShare = props.onShare;
+        return <div data-testid="layout-section" />;
+      });
 
       render(<LayoutBrowser />);
 
@@ -565,19 +553,14 @@ describe("LayoutBrowser", () => {
       // GIVEN
       const layout = LayoutBuilder.layout({ permission: "CREATOR_WRITE" });
       const newLayout = LayoutBuilder.layout({ permission: "ORG_WRITE" });
-      (usePrompt as jest.Mock).mockReturnValue([
-        jest.fn().mockResolvedValue("Shared Layout"),
-        undefined,
-      ]);
-      mockLayoutManager.saveNewLayout = jest.fn().mockResolvedValue(newLayout);
+      (usePrompt as Mock).mockReturnValue([vi.fn().mockResolvedValue("Shared Layout"), undefined]);
+      mockLayoutManager.saveNewLayout = vi.fn().mockResolvedValue(newLayout);
 
       let capturedOnShare: ((item: Layout) => void) | undefined;
-      jest.requireMock("./LayoutSection").default = jest
-        .fn()
-        .mockImplementation((props: { onShare: (item: Layout) => void }) => {
-          capturedOnShare = props.onShare;
-          return <div data-testid="layout-section" />;
-        });
+      vi.mocked(LayoutSection).mockImplementation((props: { onShare: (item: Layout) => void }) => {
+        capturedOnShare = props.onShare;
+        return <div data-testid="layout-section" />;
+      });
 
       render(<LayoutBrowser />);
 

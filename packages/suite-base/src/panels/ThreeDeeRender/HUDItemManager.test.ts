@@ -6,15 +6,16 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as _ from "lodash-es";
+import type { Mock } from "vitest";
 
 import { HUDItem, HUDItemManager, HUD_ID_PRIORITIES } from "./HUDItemManager";
 
 describe("HUDItemManager", () => {
   let manager: HUDItemManager;
-  let onChange: jest.Mock;
+  let onChange: Mock;
 
   beforeEach(() => {
-    onChange = jest.fn();
+    onChange = vi.fn();
     manager = new HUDItemManager(onChange);
   });
 

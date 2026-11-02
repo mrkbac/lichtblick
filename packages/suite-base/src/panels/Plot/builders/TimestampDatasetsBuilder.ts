@@ -65,10 +65,7 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
   #hasRangeSource = false;
 
   public constructor() {
-    const worker = new Worker(
-      // foxglove-depcheck-used: babel-plugin-transform-import-meta
-      new URL("./TimestampDatasetsBuilderImpl.worker", import.meta.url),
-    );
+    const worker = new Worker(new URL("./TimestampDatasetsBuilderImpl.worker", import.meta.url));
     const { remote, dispose } =
       ComlinkWrap<Comlink.RemoteObject<TimestampDatasetsBuilderImpl>>(worker);
     this.#datasetsBuilderRemote = remote;

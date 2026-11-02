@@ -4,6 +4,6 @@
   "compilerOptions": {
     "rootDir": "../../",
     "noEmit": true,
-    "lib": ["dom", "es2022"]
+    "lib": ["dom", "es2025", "esnext.typedarrays"]
   }
 }

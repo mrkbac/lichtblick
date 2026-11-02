@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { renderHook } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import * as PanelAPI from "@lichtblick/suite-base/PanelAPI";
 import {
@@ -17,7 +18,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import useAvailableDiagnostics, { addMessages } from "./useAvailableDiagnostics";
 
-jest.mock("@lichtblick/suite-base/PanelAPI");
+vi.mock("@lichtblick/suite-base/PanelAPI");
 
 describe("addMessages", () => {
   it("should add a new hardware ID and diagnostic name", () => {
@@ -86,7 +87,7 @@ describe("addMessages", () => {
 });
 
 describe("useAvailableDiagnostics", () => {
-  const useMessageReducerMock = PanelAPI.useMessageReducer as jest.Mock;
+  const useMessageReducerMock = PanelAPI.useMessageReducer as Mock;
 
   beforeEach(() => {
     useMessageReducerMock.mockReset();

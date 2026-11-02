@@ -8,6 +8,7 @@
 
 import { render, waitFor } from "@testing-library/react";
 import { useNetworkState } from "react-use";
+import type { Mock } from "vitest";
 
 import { useVisibilityState } from "@lichtblick/hooks";
 import { useLayoutStorage } from "@lichtblick/suite-base/context/LayoutStorageContext";
@@ -19,30 +20,32 @@ import LayoutManager from "@lichtblick/suite-base/services/LayoutManager/LayoutM
 import MockLayoutManager from "@lichtblick/suite-base/services/LayoutManager/MockLayoutManager";
 
 // Mock dependencies
-jest.mock("react-use");
-jest.mock("@lichtblick/hooks");
-jest.mock("@lichtblick/suite-base/context/LayoutStorageContext");
-jest.mock("@lichtblick/suite-base/context/RemoteLayoutStorageContext");
+vi.mock("react-use");
+vi.mock("@lichtblick/hooks");
+vi.mock("@lichtblick/suite-base/context/LayoutStorageContext");
+vi.mock("@lichtblick/suite-base/context/RemoteLayoutStorageContext");
 
 const mockLayoutManager = new MockLayoutManager();
 
-jest.mock("@lichtblick/suite-base/services/LayoutManager/LayoutManager", () =>
-  jest.fn(() => mockLayoutManager),
-);
+vi.mock("@lichtblick/suite-base/services/LayoutManager/LayoutManager", () => ({
+  default: vi.fn(function () {
+    return mockLayoutManager;
+  }),
+}));
 
 describe("LayoutManagerProvider", () => {
   // Mock necessary hooks to render <LayoutManagerProvider /> component, otherwise it will fail
-  (useNetworkState as jest.Mock).mockReturnValue({ online: true });
-  (useVisibilityState as jest.Mock).mockReturnValue("visible");
-  (useLayoutStorage as jest.Mock).mockReturnValue({});
-  (useRemoteLayoutStorage as jest.Mock).mockReturnValue({});
+  (useNetworkState as Mock).mockReturnValue({ online: true });
+  (useVisibilityState as Mock).mockReturnValue("visible");
+  (useLayoutStorage as Mock).mockReturnValue({});
+  (useRemoteLayoutStorage as Mock).mockReturnValue({});
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("should call layoutManager.setOnline accordingly with useNetworkState", async () => {
-    (useNetworkState as jest.Mock).mockResolvedValueOnce({ online: false });
+    (useNetworkState as Mock).mockResolvedValueOnce({ online: false });
 
     // 1 render with true and another with false.
     render(<LayoutManagerProvider />);
@@ -64,7 +67,7 @@ describe("LayoutManagerProvider", () => {
   });
 
   it("should not call layoutManager.syncWithRemote if offline", async () => {
-    (useNetworkState as jest.Mock).mockReturnValueOnce({ online: false });
+    (useNetworkState as Mock).mockReturnValueOnce({ online: false });
 
     render(<LayoutManagerProvider />);
 
@@ -74,7 +77,7 @@ describe("LayoutManagerProvider", () => {
   });
 
   it("should not call layoutManager.syncWithRemote if not visible", async () => {
-    (useVisibilityState as jest.Mock).mockReturnValueOnce("invisible");
+    (useVisibilityState as Mock).mockReturnValueOnce("invisible");
 
     render(<LayoutManagerProvider />);
 
@@ -84,7 +87,7 @@ describe("LayoutManagerProvider", () => {
   });
 
   it("should not call layoutManager.syncWithRemote if there is not remote storage", async () => {
-    (useRemoteLayoutStorage as jest.Mock).mockReturnValueOnce(undefined);
+    (useRemoteLayoutStorage as Mock).mockReturnValueOnce(undefined);
 
     render(<LayoutManagerProvider />);
 
@@ -95,11 +98,11 @@ describe("LayoutManagerProvider", () => {
 
   it("should give the favorites storages to the layout manager and load favorites", () => {
     // Given
-    const userProfile = { getUserProfile: jest.fn(), setUserProfile: jest.fn() };
+    const userProfile = { getUserProfile: vi.fn(), setUserProfile: vi.fn() };
     const remoteFavorites = {
-      getFavoriteLayoutIds: jest.fn(),
-      addFavoriteLayout: jest.fn(),
-      removeFavoriteLayout: jest.fn(),
+      getFavoriteLayoutIds: vi.fn(),
+      addFavoriteLayout: vi.fn(),
+      removeFavoriteLayout: vi.fn(),
     };
 
     // When
@@ -112,7 +115,7 @@ describe("LayoutManagerProvider", () => {
     );
 
     // Then
-    expect(jest.mocked(LayoutManager)).toHaveBeenCalledWith(
+    expect(vi.mocked(LayoutManager)).toHaveBeenCalledWith(
       expect.objectContaining({ userProfile, remoteFavorites }),
     );
     expect(mockLayoutManager.loadFavorites).toHaveBeenCalled();

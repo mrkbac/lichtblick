@@ -3,16 +3,17 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { fireEvent, render, screen } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import { DeltaMarkerBarsProps, Scale, YScale } from "@lichtblick/suite-base/panels/Plot/types";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { DeltaMarkerBars } from "./DeltaMarkerBars";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 
 type MockCoordinator = {
-  on: jest.Mock;
-  off: jest.Mock;
+  on: Mock;
+  off: Mock;
 };
 
 describe("DeltaMarkerBars", () => {
@@ -28,15 +29,15 @@ describe("DeltaMarkerBars", () => {
       yColumnLabel: "Y",
       markerALabel: "P1",
       markerBLabel: "P2",
-      onRemoveMarkerA: jest.fn(),
-      onRemoveMarkerB: jest.fn(),
+      onRemoveMarkerA: vi.fn(),
+      onRemoveMarkerB: vi.fn(),
       ...propsOverride,
     };
     return { ...render(<DeltaMarkerBars {...props} />), props };
   };
 
   beforeEach(() => {
-    mockCoordinator = { on: jest.fn(), off: jest.fn() };
+    mockCoordinator = { on: vi.fn(), off: vi.fn() };
   });
 
   it("renders nothing without a coordinator", () => {
@@ -126,8 +127,8 @@ describe("DeltaMarkerBars", () => {
 
   it("forwards onRemoveMarkerA/onRemoveMarkerB to the overlay buttons", () => {
     // Given
-    const onRemoveMarkerA = jest.fn();
-    const onRemoveMarkerB = jest.fn();
+    const onRemoveMarkerA = vi.fn();
+    const onRemoveMarkerB = vi.fn();
     setup({
       active: true,
       markerA: { xValue: 1, seriesValues: [] },
@@ -170,13 +171,13 @@ describe("DeltaMarkerBars", () => {
   });
 
   function triggerXScaleChanged(scale: Scale): void {
-    const call = mockCoordinator.on.mock.calls.find(([name]: [string]) => name === "xScaleChanged");
-    call[1](scale);
+    const call = mockCoordinator.on.mock.calls.find(([name]) => name === "xScaleChanged");
+    call![1](scale);
   }
 
   function triggerYScaleChanged(scale: YScale): void {
-    const call = mockCoordinator.on.mock.calls.find(([name]: [string]) => name === "yScaleChanged");
-    call[1](scale);
+    const call = mockCoordinator.on.mock.calls.find(([name]) => name === "yScaleChanged");
+    call![1](scale);
   }
 
   it("positions and labels the on-chart marker once both scales are known", () => {

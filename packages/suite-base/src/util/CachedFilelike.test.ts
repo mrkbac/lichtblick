@@ -14,6 +14,8 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import type { Mock } from "vitest";
+
 import delay from "@lichtblick/suite-base/util/delay";
 
 import CachedFilelike from "./CachedFilelike";
@@ -91,7 +93,7 @@ describe("CachedFilelike", () => {
     it("requests only the exact range when read-ahead is disabled", async () => {
       // GIVEN: a file that fits entirely in the cache.
       const fileReader = new InMemoryFileReader(new Uint8Array(100));
-      const fetch = jest.spyOn(fileReader, "fetch");
+      const fetch = vi.spyOn(fileReader, "fetch");
       const cachedFileReader = new CachedFilelike({
         fileReader,
         cacheSizeInBytes: 100,
@@ -110,7 +112,7 @@ describe("CachedFilelike", () => {
     it("bounds speculative fetch length with readAheadBufferBytes", async () => {
       // GIVEN: a large remote-like file with a small cache budget and a much smaller read-ahead cap.
       const readAheadBufferBytes = 2 * 1024 * 1024;
-      const fetch = jest.fn(
+      const fetch = vi.fn(
         (_offset: number, length: number): FileStream => ({
           on: (
             type: "data" | "error" | "end",
@@ -148,7 +150,7 @@ describe("CachedFilelike", () => {
     it("resolves a later overlapping read instead of hanging when a small read-ahead buffer trails cached bytes", async () => {
       // GIVEN: a file where an earlier 2 MiB speculative fetch is still in flight when a later
       // 4 MiB read arrives, matching the production hang scenario exposed by a 2 MiB buffer.
-      const fetch = jest.fn(
+      const fetch = vi.fn(
         (_offset: number, length: number): FileStream => ({
           on: (
             type: "data" | "error" | "end",
@@ -186,7 +188,10 @@ describe("CachedFilelike", () => {
       // THEN: the second fetch makes forward progress by requesting the missing 2 MiB tail
       // instead of issuing a degenerate 2 MiB-2 MiB range and hanging forever.
       await expect(firstReadPromise).resolves.toEqual(new Uint8Array([0]));
-      await expect(secondReadPromise).resolves.toEqual(new Uint8Array(4 * MEBIBYTE));
+      // Element-wise toEqual on 4 MiB is slow, so check size and contents directly
+      const secondRead = await secondReadPromise;
+      expect(secondRead.byteLength).toBe(4 * MEBIBYTE);
+      expect(secondRead.every((byte) => byte === 0)).toBe(true);
       expect(fetch.mock.calls.slice(0, 2)).toEqual([
         [0, 2 * MEBIBYTE],
         [2 * MEBIBYTE, 2 * MEBIBYTE],
@@ -194,20 +199,20 @@ describe("CachedFilelike", () => {
     }, 2000);
 
     it("ignores a degenerate zero-width idle connection instead of fetching it", async () => {
-      jest.resetModules();
-      const getNewConnection = jest
+      vi.resetModules();
+      const getNewConnection = vi
         .fn()
         .mockReturnValueOnce({ start: 0, end: 4 })
         .mockReturnValueOnce({ start: 4, end: 4 })
         .mockReturnValue(undefined);
-      jest.doMock("./getNewConnection", () => ({
+      vi.doMock("./getNewConnection", () => ({
         getNewConnection,
       }));
       const { default: MockedCachedFilelike } = await import("./CachedFilelike");
 
       const fileReader = new InMemoryFileReader(new Uint8Array([0, 1, 2, 3]));
-      const fetch = jest.spyOn(fileReader, "fetch");
-      const debug = jest.fn();
+      const fetch = vi.spyOn(fileReader, "fetch");
+      const debug = vi.fn();
       const cachedFileReader = new MockedCachedFilelike({
         fileReader,
         log: { ...log, debug },
@@ -222,8 +227,8 @@ describe("CachedFilelike", () => {
         expect(fetch).toHaveBeenCalledWith(0, 4);
         expect(debug).toHaveBeenCalledWith(expect.stringContaining("Ignoring degenerate"));
       } finally {
-        jest.dontMock("./getNewConnection");
-        jest.resetModules();
+        vi.doUnmock("./getNewConnection");
+        vi.resetModules();
       }
     });
 
@@ -255,7 +260,7 @@ describe("CachedFilelike", () => {
       const fileReader = new InMemoryFileReader(new Uint8Array([0, 1, 2, 3]));
       let interval: any;
       let destroyed: any;
-      jest.spyOn(fileReader, "fetch").mockImplementation(() => {
+      vi.spyOn(fileReader, "fetch").mockImplementation(() => {
         return {
           on: (
             type: "data" | "error" | "end",
@@ -284,7 +289,7 @@ describe("CachedFilelike", () => {
       let dataCallback: ((_: Uint8Array) => void) | undefined;
       let errorCallback: ((_: Error) => void) | undefined;
       let destroyed: any;
-      const mockFetch = jest.spyOn(fileReader, "fetch").mockImplementation(() => {
+      const mockFetch = vi.spyOn(fileReader, "fetch").mockImplementation(() => {
         return {
           on: (
             type: "data" | "error" | "end",
@@ -303,7 +308,7 @@ describe("CachedFilelike", () => {
         };
       });
 
-      const keepReconnectingCallback = jest.fn();
+      const keepReconnectingCallback = vi.fn();
       const cachedFileReader = new CachedFilelike({ fileReader, log, keepReconnectingCallback });
 
       const readerPromise = cachedFileReader.read(1, 2);
@@ -332,7 +337,7 @@ describe("CachedFilelike", () => {
 
     it("rejects instead of hanging when a cached connection ends before the requested range is fully downloaded", async () => {
       // GIVEN: a cached read whose underlying stream ends early twice in a row.
-      const fetch = jest.fn(
+      const fetch = vi.fn(
         (_offset: number, length: number): FileStream => ({
           on: (
             type: "data" | "error" | "end",
@@ -400,7 +405,7 @@ describe("CachedFilelike", () => {
     it("rejects an in-flight pending read request", async () => {
       // GIVEN: a file reader whose fetch never delivers data, so the read stays pending.
       const fileReader = new InMemoryFileReader(new Uint8Array([0, 1, 2, 3]));
-      jest.spyOn(fileReader, "fetch").mockImplementation(() => ({
+      vi.spyOn(fileReader, "fetch").mockImplementation(() => ({
         on: () => {
           // Never emits "data" or "error", leaving the read request pending.
         },
@@ -423,7 +428,7 @@ describe("CachedFilelike", () => {
       // GIVEN: a small cache and a fetch that never delivers data, so an oversized (uncached)
       // read stays pending.
       const fileReader = new InMemoryFileReader(new Uint8Array(100));
-      jest.spyOn(fileReader, "fetch").mockImplementation(() => ({
+      vi.spyOn(fileReader, "fetch").mockImplementation(() => ({
         on: () => {
           // Never emits "data", "end", or "error", leaving the uncached read pending.
         },
@@ -446,9 +451,9 @@ describe("CachedFilelike", () => {
     it("destroys the active connection when two quick stream errors trigger the fatal close path", async () => {
       // GIVEN: a read that reconnects once and then hits the fatal double-error close path.
       const fileReader = new InMemoryFileReader(new Uint8Array([0, 1, 2, 3]));
-      const streams: Array<{ destroy: jest.Mock; error?: (_error: Error) => void }> = [];
-      jest.spyOn(fileReader, "fetch").mockImplementation(() => {
-        const stream = { destroy: jest.fn() };
+      const streams: Array<{ destroy: Mock; error?: (_error: Error) => void }> = [];
+      vi.spyOn(fileReader, "fetch").mockImplementation(() => {
+        const stream = { destroy: vi.fn() };
         streams.push(stream);
         return {
           on: (
@@ -463,7 +468,7 @@ describe("CachedFilelike", () => {
         };
       });
       let now = 1_000;
-      const dateNow = jest.spyOn(Date, "now").mockImplementation(() => now);
+      const dateNow = vi.spyOn(Date, "now").mockImplementation(() => now);
       const cachedFileReader = new CachedFilelike({ fileReader, log });
 
       try {

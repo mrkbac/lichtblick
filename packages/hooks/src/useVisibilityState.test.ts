@@ -12,7 +12,7 @@ import useVisibilityState from "./useVisibilityState";
 
 describe("useVisibilityState", () => {
   it("returns document visibility state and tracks changes", () => {
-    const visibilityState = jest.spyOn(document, "visibilityState", "get");
+    const visibilityState = vi.spyOn(document, "visibilityState", "get");
     visibilityState.mockImplementation(() => "hidden");
 
     const { result } = renderHook(() => useVisibilityState());

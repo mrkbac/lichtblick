@@ -14,7 +14,7 @@ import { default as useValueChangedDebugLog } from "./useValueChangedDebugLog";
 
 describe("useValueChangeDebugLog", () => {
   it("should log an error when value changes", () => {
-    const debugMock = jest.fn();
+    const debugMock = vi.fn();
     Logger.channels().forEach((channel) => {
       if (channel.name().endsWith("useValueChangedDebugLog.ts")) {
         channel.debug = debugMock;

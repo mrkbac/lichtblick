@@ -5,6 +5,7 @@
 
 import { Time } from "@foxglove/rostime";
 import { renderHook } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import { MessageDataItemsByPath } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import { messagesToDataset } from "@lichtblick/suite-base/panels/StateTransitions/messagesToDataset";
@@ -14,12 +15,12 @@ import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuild
 
 import useStateTransitionsData from "./useStateTransitionsData";
 
-jest.mock("@lichtblick/suite-base/panels/StateTransitions/messagesToDataset");
-jest.mock("@lichtblick/suite-base/panels/StateTransitions/shared");
+vi.mock("@lichtblick/suite-base/panels/StateTransitions/messagesToDataset");
+vi.mock("@lichtblick/suite-base/panels/StateTransitions/shared");
 
 describe("useStateTransitionsData", () => {
-  const mockMessagesToDataset = messagesToDataset as jest.Mock;
-  const mockDatasetContainsArray = datasetContainsArray as jest.Mock;
+  const mockMessagesToDataset = messagesToDataset as Mock;
+  const mockDatasetContainsArray = datasetContainsArray as Mock;
 
   beforeEach(() => {
     mockMessagesToDataset.mockClear();

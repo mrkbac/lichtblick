@@ -18,8 +18,8 @@ type Setup = {
 };
 
 describe("DiagnosticTable", () => {
-  const mockOnChangeSplitFraction = jest.fn();
-  const mockOpenSiblingPanel = jest.fn();
+  const mockOnChangeSplitFraction = vi.fn();
+  const mockOpenSiblingPanel = vi.fn();
 
   function setup({ infoOverride }: Setup = {}) {
     const info = {

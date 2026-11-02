@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { fixupPluginRules } from "@eslint/compat";
+import vitest from "@vitest/eslint-plugin";
 import fileProgressPlugin from "eslint-plugin-file-progress";
 import storybookPlugin from "eslint-plugin-storybook";
 import tssUnusedClassesPlugin from "eslint-plugin-tss-unused-classes";
@@ -118,9 +119,9 @@ export default [
     },
   },
   ...lichtblickPlugin.configs.react,
-  // Jest config scoped to test/spec files
-  ...lichtblickPlugin.configs.jest.map((config) => ({
-    ...config,
+  // Vitest rules scoped to test/spec files
+  {
+    ...vitest.configs.recommended,
     files: [
       "**/*.test.ts",
       "**/*.test.tsx",
@@ -130,14 +131,17 @@ export default [
       "**/*.spec.js",
     ],
     rules: {
-      ...config.rules,
+      ...vitest.configs.recommended.rules,
+      "vitest/consistent-test-it": ["error", { fn: "it" }],
+      // Mocks that code calls with `new` must be function expressions; vitest can't construct arrows
+      "prefer-arrow-callback": "off",
       // Custom assertFunctionNames so that tests using sendNotification assertions don't fail.
-      "jest/expect-expect": [
+      "vitest/expect-expect": [
         "error",
         { assertFunctionNames: ["expect*", "sendNotification.expectCalledDuringTest"] },
       ],
     },
-  })),
+  },
 
   // Project-wide config
   {

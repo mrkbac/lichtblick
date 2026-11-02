@@ -2,29 +2,36 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import * as path from "path";
+import type { MockedClass, MockedFunction } from "vitest";
 
 // Mock all dependencies before any imports
-jest.mock("@lichtblick/log", () => ({
-  getLogger: () => ({
-    debug: jest.fn(),
-  }),
+vi.mock("@lichtblick/log", () => ({
+  default: {
+    getLogger: () => ({
+      debug: vi.fn(),
+    }),
+  },
 }));
 
-jest.mock("./fileUtils", () => ({
-  isFileToOpen: jest.fn(),
+vi.mock("./fileUtils", () => ({
+  isFileToOpen: vi.fn(),
 }));
 
-jest.mock("./injectFilesToOpen", () => jest.fn());
+vi.mock("./injectFilesToOpen", () => ({ default: vi.fn() }));
 
 // Mock StudioWindow completely to avoid React dependencies
-const mockLoad = jest.fn();
-const mockGetBrowserWindow = jest.fn();
+const mockLoad = vi.fn();
+const mockGetBrowserWindow = vi.fn();
 
-jest.mock("./StudioWindow", () => {
-  return jest.fn().mockImplementation(() => ({
-    load: mockLoad,
-    getBrowserWindow: mockGetBrowserWindow,
-  }));
+vi.mock("./StudioWindow", () => {
+  return {
+    default: vi.fn().mockImplementation(function () {
+      return {
+        load: mockLoad,
+        getBrowserWindow: mockGetBrowserWindow,
+      };
+    }),
+  };
 });
 
 // Import after mocks
@@ -37,18 +44,18 @@ import { isFileToOpen } from "./fileUtils";
 // eslint-disable-next-line import/first
 import injectFilesToOpen from "./injectFilesToOpen";
 
-const mockIsFileToOpen = isFileToOpen as jest.MockedFunction<typeof isFileToOpen>;
-const mockInjectFilesToOpen = injectFilesToOpen as jest.MockedFunction<typeof injectFilesToOpen>;
-const MockStudioWindow = StudioWindow as jest.MockedClass<typeof StudioWindow>;
+const mockIsFileToOpen = isFileToOpen as MockedFunction<typeof isFileToOpen>;
+const mockInjectFilesToOpen = injectFilesToOpen as MockedFunction<typeof injectFilesToOpen>;
+const MockStudioWindow = StudioWindow as MockedClass<typeof StudioWindow>;
 
 describe("createNewWindow", () => {
   const mockWebContents = {
-    once: jest.fn(),
+    once: vi.fn(),
     debugger: { mock: "debugger" },
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockGetBrowserWindow.mockReturnValue({ webContents: mockWebContents });
   });
 
@@ -77,7 +84,7 @@ describe("createNewWindow", () => {
     mockIsFileToOpen.mockReturnValue(true);
 
     let callback: (() => Promise<void>) | undefined;
-    mockWebContents.once.mockImplementation((event: string, cb: () => Promise<void>) => {
+    mockWebContents.once.mockImplementation(function (event: string, cb: () => Promise<void>) {
       if (event === "did-finish-load") {
         callback = cb;
       }
@@ -100,7 +107,7 @@ describe("createNewWindow", () => {
     mockIsFileToOpen.mockReturnValue(false);
 
     let callback: (() => Promise<void>) | undefined;
-    mockWebContents.once.mockImplementation((event: string, cb: () => Promise<void>) => {
+    mockWebContents.once.mockImplementation(function (event: string, cb: () => Promise<void>) {
       if (event === "did-finish-load") {
         callback = cb;
       }

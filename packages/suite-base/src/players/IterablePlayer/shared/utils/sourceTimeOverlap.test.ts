@@ -14,9 +14,9 @@ import {
 function makeSource(start?: Time, end?: Time): IIterableSource {
   return {
     sourceType: "deserialized",
-    initialize: jest.fn(),
-    messageIterator: jest.fn(),
-    getBackfillMessages: jest.fn(),
+    initialize: vi.fn(),
+    messageIterator: vi.fn(),
+    getBackfillMessages: vi.fn(),
     getStart: start ? () => start : undefined,
     getEnd: end ? () => end : undefined,
   } as unknown as IIterableSource;

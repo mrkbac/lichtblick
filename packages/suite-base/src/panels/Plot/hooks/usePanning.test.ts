@@ -22,7 +22,7 @@ describe("usePanning", () => {
     if (canvasDiv) {
       canvasDiv.getBoundingClientRect = () => ({ toJSON: () => boundingClientRect }) as DOMRect;
     }
-    const addInteractionEvent = jest.fn();
+    const addInteractionEvent = vi.fn();
     const coordinator = withCoordinator
       ? ({ addInteractionEvent } as unknown as PlotCoordinator)
       : undefined;
@@ -45,7 +45,7 @@ describe("usePanning", () => {
   });
 
   it("reports panstart, panmove and panend with deltas from the pointerdown position", () => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     const { canvasDiv, addInteractionEvent, draggingRef } = setup();
 
     pointer(canvasDiv, "pointerdown", 100, 100);
@@ -69,9 +69,9 @@ describe("usePanning", () => {
 
     // Reset after the click handler had a chance to see the drag
     expect(draggingRef.current).toBe(true);
-    jest.runAllTimers();
+    vi.runAllTimers();
     expect(draggingRef.current).toBe(false);
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it("stops listening on unmount", () => {

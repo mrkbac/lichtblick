@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 import { Zoom as ZoomPlugin } from "@foxglove/chartjs-plugin-zoom";
 import { Chart, ChartOptions, Element, InteractionItem, Scale } from "chart.js";
+import type { Mock } from "vitest";
 
 import { Immutable } from "@lichtblick/suite";
 import { ChartRenderer } from "@lichtblick/suite-base/panels/Plot/ChartRenderer";
@@ -22,19 +23,19 @@ import {
   WheelInteractionEvent,
 } from "./types";
 
-const OPTIONS_CHART: ChartOptionsPlot = {
+const OPTIONS_CHART: ChartOptionsPlot = vi.hoisted(() => ({
   devicePixelRatio: 2,
   gridColor: "#ccc",
   tickColor: "#000",
   titleColor: "#111",
-};
+}));
 
 const SCALES_CHART: Record<string, Partial<Scale>> = {
   x: { min: 0, max: 100 },
   y: { min: 0, max: 100 },
 };
 
-jest.mock("chart.js", () => {
+vi.mock("chart.js", () => {
   const canvas = { width: 0, height: 0 };
   const options: ChartOptions = {
     scales: {
@@ -54,31 +55,33 @@ jest.mock("chart.js", () => {
   };
 
   return {
-    Chart: jest.fn().mockImplementation(() => ({
-      update: jest.fn(),
-      resize: jest.fn(),
-      data: { datasets: [] },
-      options,
-      scales: SCALES_CHART,
-      canvas,
-      $zoom: {
-        panStartHandler: jest.fn(),
-        panHandler: jest.fn(),
-        panEndHandler: jest.fn(),
-      },
-      getElementsAtEventForMode: jest.fn().mockReturnValue([]),
-    })),
+    Chart: vi.fn().mockImplementation(function () {
+      return {
+        update: vi.fn(),
+        resize: vi.fn(),
+        data: { datasets: [] },
+        options,
+        scales: SCALES_CHART,
+        canvas,
+        $zoom: {
+          panStartHandler: vi.fn(),
+          panHandler: vi.fn(),
+          panEndHandler: vi.fn(),
+        },
+        getElementsAtEventForMode: vi.fn().mockReturnValue([]),
+      };
+    }),
   };
 });
 
-jest.mock("@foxglove/chartjs-plugin-zoom", () => ({
+vi.mock("@foxglove/chartjs-plugin-zoom", () => ({
   Zoom: {
-    start: jest.fn(),
+    start: vi.fn(),
   },
 }));
 
-jest.mock("@lichtblick/suite-base/panels/Plot/utils/getChartOptions", () => ({
-  getChartOptions: jest.fn().mockReturnValue({}),
+vi.mock("@lichtblick/suite-base/panels/Plot/utils/getChartOptions", () => ({
+  getChartOptions: vi.fn().mockReturnValue({}),
 }));
 
 global.OffscreenCanvas = class {
@@ -101,8 +104,8 @@ type ChartRendererTestSetup = {
 
 describe("ChartRenderer", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    console.error = jest.fn();
+    vi.clearAllMocks();
+    console.error = vi.fn();
   });
 
   function setup({ actionOverride }: ChartRendererTestSetup = {}) {
@@ -123,7 +126,7 @@ describe("ChartRenderer", () => {
         y: { ticks: { tickColor: props.tickColor } },
       },
     };
-    (getChartOptions as jest.Mock).mockReturnValue(chartOptions);
+    (getChartOptions as Mock).mockReturnValue(chartOptions);
 
     const chartRenderer = new ChartRenderer(props);
 
@@ -168,7 +171,7 @@ describe("ChartRenderer", () => {
 
       chartRenderer.update(action);
       const chartInstance = (chartRenderer as any).getChartInstance();
-      const resizeSpy = jest.spyOn(chartInstance, "resize");
+      const resizeSpy = vi.spyOn(chartInstance, "resize");
 
       expect(chartInstance.canvas.width).toBe(action.size?.width);
       expect(chartInstance.canvas.height).toBe(action.size?.height);
@@ -263,7 +266,7 @@ describe("ChartRenderer", () => {
 
       chartRenderer.update(action);
       const chartInstance = (chartRenderer as any).getChartInstance();
-      const updateSpy = jest.spyOn(chartInstance, "update");
+      const updateSpy = vi.spyOn(chartInstance, "update");
 
       expect(updateSpy).toHaveBeenCalledTimes(1);
       expect(updateSpy).toHaveBeenCalledWith("none");
@@ -281,13 +284,15 @@ describe("ChartRenderer", () => {
     });
 
     it("should update returns undefined", () => {
-      (Chart as unknown as jest.Mock).mockImplementationOnce(() => ({
-        update: jest.fn(),
-        scales: {
-          x: undefined,
-          y: undefined,
-        },
-      }));
+      (Chart as unknown as Mock).mockImplementationOnce(function () {
+        return {
+          update: vi.fn(),
+          scales: {
+            x: undefined,
+            y: undefined,
+          },
+        };
+      });
       const { action, chartRenderer } = setup();
 
       const chartUpdated = chartRenderer.update(action);
@@ -308,7 +313,7 @@ describe("ChartRenderer", () => {
           interactionEvents: [wheelEvent],
         },
       });
-      const fakeNodeEventsEmitSpy = jest.spyOn((chartRenderer as any).getFakeNodeEvents(), "emit");
+      const fakeNodeEventsEmitSpy = vi.spyOn((chartRenderer as any).getFakeNodeEvents(), "emit");
 
       chartRenderer.update(action);
 
@@ -334,7 +339,7 @@ describe("ChartRenderer", () => {
         },
       });
       const chartInstance = (chartRenderer as any).getChartInstance();
-      const panStartHandlerSpy = jest.spyOn(chartInstance.$zoom, "panStartHandler");
+      const panStartHandlerSpy = vi.spyOn(chartInstance.$zoom, "panStartHandler");
 
       chartRenderer.update(action);
 
@@ -359,7 +364,7 @@ describe("ChartRenderer", () => {
         },
       });
       const chartInstance = (chartRenderer as any).getChartInstance();
-      const panHandlerSpy = jest.spyOn(chartInstance.$zoom, "panHandler");
+      const panHandlerSpy = vi.spyOn(chartInstance.$zoom, "panHandler");
 
       chartRenderer.update(action);
 
@@ -377,7 +382,7 @@ describe("ChartRenderer", () => {
         },
       });
       const chartInstance = (chartRenderer as any).getChartInstance();
-      const panHandlerSpy = jest.spyOn(chartInstance.$zoom, "panEndHandler");
+      const panHandlerSpy = vi.spyOn(chartInstance.$zoom, "panEndHandler");
 
       chartRenderer.update(action);
 
@@ -385,17 +390,19 @@ describe("ChartRenderer", () => {
     });
 
     it("should handle reference lines in update action", () => {
-      (Chart as unknown as jest.Mock).mockImplementationOnce(() => ({
-        update: jest.fn(),
-        scales: SCALES_CHART,
-        options: {
-          plugins: {
-            annotation: {
-              annotations: [{}],
+      (Chart as unknown as Mock).mockImplementationOnce(function () {
+        return {
+          update: vi.fn(),
+          scales: SCALES_CHART,
+          options: {
+            plugins: {
+              annotation: {
+                annotations: [{}],
+              },
             },
-          },
-        } as ChartOptions,
-      }));
+          } as ChartOptions,
+        };
+      });
       const referenceLines: ReferenceLine[] = [
         { value: BasicBuilder.number(), color: BasicBuilder.string() },
         { value: BasicBuilder.number(), color: BasicBuilder.string() },
@@ -433,7 +440,7 @@ describe("ChartRenderer", () => {
         { element: { x: 20, y: 20 } as Element, datasetIndex: 2, index: 2 },
       ];
 
-      (chartInstance.getElementsAtEventForMode as jest.Mock).mockReturnValue(elementsAtEventMock);
+      (chartInstance.getElementsAtEventForMode as Mock).mockReturnValue(elementsAtEventMock);
       chartInstance.data.datasets = [
         {
           data: [{ x: 10, y: 10 }],
@@ -467,7 +474,7 @@ describe("ChartRenderer", () => {
         y: BasicBuilder.number({ min: 16, max: 30 }),
       };
 
-      (chartInstance.getElementsAtEventForMode as jest.Mock).mockReturnValue([
+      (chartInstance.getElementsAtEventForMode as Mock).mockReturnValue([
         { element: element1, datasetIndex: 0, index: 0 },
         { element: element2, datasetIndex: 1, index: 1 },
       ]);
@@ -495,7 +502,7 @@ describe("ChartRenderer", () => {
         { data: [{ x: BasicBuilder.number(), y: BasicBuilder.number() }] },
       ];
       const chartInstance = (chartRenderer as any).getChartInstance();
-      const updateSpy = jest.spyOn(chartInstance, "update");
+      const updateSpy = vi.spyOn(chartInstance, "update");
 
       const result = chartRenderer.updateDatasets(datasets);
 

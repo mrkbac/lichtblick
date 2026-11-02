@@ -7,34 +7,34 @@ import { renderHook, act } from "@testing-library/react";
 
 import useConfigById from "./useConfigById";
 
-const mockGetCurrentLayoutState = jest.fn();
-const mockSavePanelConfigs = jest.fn();
-const mockUseCurrentLayoutActions = jest.fn();
-const mockUseCurrentLayoutSelector = jest.fn();
-const mockUseExtensionCatalog = jest.fn();
-const mockUseMessagePipeline = jest.fn();
+const mockGetCurrentLayoutState = vi.fn();
+const mockSavePanelConfigs = vi.fn();
+const mockUseCurrentLayoutActions = vi.fn();
+const mockUseCurrentLayoutSelector = vi.fn();
+const mockUseExtensionCatalog = vi.fn();
+const mockUseMessagePipeline = vi.fn();
 
-jest.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
+vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
   useCurrentLayoutActions: () => mockUseCurrentLayoutActions(),
   useCurrentLayoutSelector: (selector: any) => mockUseCurrentLayoutSelector(selector),
 }));
 
-jest.mock("@lichtblick/suite-base/context/ExtensionCatalogContext", () => ({
+vi.mock("@lichtblick/suite-base/context/ExtensionCatalogContext", () => ({
   useExtensionCatalog: (selector: any) => mockUseExtensionCatalog(selector),
-  getExtensionPanelSettings: jest.fn(() => ({})),
+  getExtensionPanelSettings: vi.fn(() => ({})),
 }));
 
-jest.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
+vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   useMessagePipeline: (selector: any) => mockUseMessagePipeline(selector),
 }));
 
-jest.mock("../util/layout", () => ({
+vi.mock("../util/layout", () => ({
   getPanelTypeFromId: (id: string) => `panelType:${id}`,
 }));
 
 describe("useConfigById", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockUseCurrentLayoutActions.mockReturnValue({
       getCurrentLayoutState: mockGetCurrentLayoutState,

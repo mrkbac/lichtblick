@@ -5,6 +5,7 @@
 
 import { Time, toSec } from "@foxglove/rostime";
 import { renderHook } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import {
   MessagePipelineContext,
@@ -15,16 +16,16 @@ import { PlayerStateActiveData } from "@lichtblick/suite-base/players/types";
 
 import useStateTransitionsTime from "./useStateTransitionsTime";
 
-jest.mock("@lichtblick/suite-base/components/MessagePipeline");
-jest.mock("@foxglove/rostime");
-jest.mock(
+vi.mock("@lichtblick/suite-base/components/MessagePipeline");
+vi.mock("@foxglove/rostime");
+vi.mock(
   "@lichtblick/suite-base/players/UserScriptPlayer/transformerWorker/typescript/userUtils/time",
 );
 
 describe("useStateTransitionsTime", () => {
-  const mockUseMessagePipeline = useMessagePipeline as jest.Mock;
-  const mockToSec = toSec as jest.Mock;
-  const mockSubtractTimes = subtractTimes as jest.Mock;
+  const mockUseMessagePipeline = useMessagePipeline as Mock;
+  const mockToSec = toSec as Mock;
+  const mockSubtractTimes = subtractTimes as Mock;
   const activeDataCases: Array<Partial<PlayerStateActiveData> | undefined> = [{}, undefined];
 
   const mockActiveData = (activeData: Partial<PlayerStateActiveData> | undefined) => {
@@ -35,22 +36,21 @@ describe("useStateTransitionsTime", () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
-  it.each(
-    activeDataCases,
-  )("should return undefined values when there is no active data or it is undefined. (testing with %s)", (activeDataValue:
-    | Partial<PlayerStateActiveData>
-    | undefined) => {
-    mockActiveData(activeDataValue);
+  it.each(activeDataCases)(
+    "should return undefined values when there is no active data or it is undefined. (testing with %s)",
+    (activeDataValue: Partial<PlayerStateActiveData> | undefined) => {
+      mockActiveData(activeDataValue);
 
-    const { result } = renderHook(() => useStateTransitionsTime());
+      const { result } = renderHook(() => useStateTransitionsTime());
 
-    expect(result.current.startTime).toBeUndefined();
-    expect(result.current.currentTimeSinceStart).toBeUndefined();
-    expect(result.current.endTimeSinceStart).toBeUndefined();
-  });
+      expect(result.current.startTime).toBeUndefined();
+      expect(result.current.currentTimeSinceStart).toBeUndefined();
+      expect(result.current.endTimeSinceStart).toBeUndefined();
+    },
+  );
 
   it("should calculate currentTimeSinceStart correctly", () => {
     const startTime: Time = { sec: 1, nsec: 0 };
