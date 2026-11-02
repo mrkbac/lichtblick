@@ -27,7 +27,7 @@
     "async-mutex": "0.5.0",
     "builder-util": "*",
     "dotenv": "17.2.2",
-    "electron": "44.4.5",
+    "electron": "45.1.0",
     "electron-builder": "26.18.0",
     "electron-devtools-installer": "4.0.0",
     "electron-squirrel-startup": "1.0.1",
