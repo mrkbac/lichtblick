@@ -38,7 +38,7 @@ Before contributing, ensure you have the following installed:
 | Tool                                             | Version                | Notes                                                |
 | ------------------------------------------------ | ---------------------- | ---------------------------------------------------- |
 | [Node.js](https://nodejs.org/)                   | >= 20                  | LTS recommended                                      |
-| [Corepack](https://nodejs.org/api/corepack.html) | (bundled with Node.js) | Must be enabled: `corepack enable`                   |
+| [Corepack](https://github.com/nodejs/corepack) | latest | `npm install --global corepack && corepack enable` |
 | [Yarn](https://yarnpkg.com/)                     | 3.6.3                  | Managed via Corepack — do **not** install separately |
 | [Git](https://git-scm.com/)                      | Latest                 | Required for version control                         |
 
@@ -80,6 +80,7 @@ cd lichtblick
 1. **Enable Corepack** and install dependencies:
 
    ```sh
+   npm install --global corepack # Node 25+ no longer bundles Corepack
    corepack enable
    yarn install
    ```

@@ -96,7 +96,7 @@
     "react-dnd": "patch:react-dnd@npm:16.0.1#./patches/react-dnd.patch",
     "@types/react": "18.3.12",
     "esbuild": "0.28.1",
-    "dompurify": "3.4.11",
+    "dompurify": "3.4.17",
     "js-yaml": "4.3.2",
     "js-cookie": "3.0.7",
     "qs": "6.15.2",

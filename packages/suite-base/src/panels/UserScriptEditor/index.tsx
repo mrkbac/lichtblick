@@ -53,6 +53,7 @@ import BottomBar from "@lichtblick/suite-base/panels/UserScriptEditor/BottomBar"
 import { Sidebar } from "@lichtblick/suite-base/panels/UserScriptEditor/Sidebar";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig, UserScripts } from "@lichtblick/suite-base/types/panels";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import Config from "./Config";
 import { Script } from "./script";
@@ -279,7 +280,7 @@ function UserScriptEditor(props: Props) {
   const addNewNode = useCallback(
     (code?: string) => {
       saveCurrentNode();
-      const newScriptId = crypto.randomUUID();
+      const newScriptId = randomUUID();
       const sourceCode = code ?? skeletonBody;
       setUserScripts({
         [newScriptId]: {

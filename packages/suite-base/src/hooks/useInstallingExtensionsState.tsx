@@ -15,6 +15,7 @@ import {
 } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import { HttpError } from "@lichtblick/suite-base/services/http/HttpError";
 import { Namespace } from "@lichtblick/suite-base/types";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { useInstallingExtensionsStore } from "./useInstallingExtensionsStore";
 
@@ -35,9 +36,7 @@ export function useInstallingExtensionsState({
 
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
 
-  const progressSnackbarKeyRef = useRef<SnackbarKey>(
-    `installing-extensions-${crypto.randomUUID()}`,
-  );
+  const progressSnackbarKeyRef = useRef<SnackbarKey>(`installing-extensions-${randomUUID()}`);
   const progressSnackbarKey = progressSnackbarKeyRef.current;
 
   // Helper function to format loader failures into user-friendly messages

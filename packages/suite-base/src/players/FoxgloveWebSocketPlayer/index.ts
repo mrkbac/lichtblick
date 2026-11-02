@@ -56,6 +56,7 @@ import {
 } from "@lichtblick/suite-base/players/types";
 import { HIGH_FREQUENCY_ALERT } from "@lichtblick/suite-base/players/utils/constants";
 import { isTopicHighFrequency } from "@lichtblick/suite-base/players/utils/isTopicHighFrequency";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import rosDatatypesToMessageDefinition from "@lichtblick/suite-base/util/rosDatatypesToMessageDefinition";
 
 import { JsonMessageWriter } from "./JsonMessageWriter";
@@ -90,7 +91,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #url: string; // WebSocket URL.
   #name: string;
   #client?: FoxgloveClient; // The client when we're connected.
-  #id: string = crypto.randomUUID(); // Unique ID for this player session.
+  #id: string = randomUUID(); // Unique ID for this player session.
   #serverCapabilities: string[] = [];
   #playerCapabilities: (typeof PLAYER_CAPABILITIES)[keyof typeof PLAYER_CAPABILITIES][] = [];
   #supportedEncodings?: string[];
@@ -284,7 +285,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         });
       }
 
-      const newSessionId = event.sessionId ?? crypto.randomUUID();
+      const newSessionId = event.sessionId ?? randomUUID();
       if (this.#id !== newSessionId) {
         this.#resetSessionState();
       }
@@ -1081,7 +1082,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
           type: isByteArray ? "byte_array" : this.#parameterTypeByName.get(key),
         },
       ],
-      crypto.randomUUID(),
+      randomUUID(),
     );
 
     // Pre-actively update our parameter map, such that a change is detected if our update failed

@@ -42,6 +42,7 @@ import {
 import { LayerErrors } from "@lichtblick/suite-base/panels/ThreeDeeRender/LayerErrors";
 import { ICameraHandler } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ICameraHandler";
 import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { palette, fontMonospace } from "@lichtblick/theme";
 import { LabelMaterial, LabelPool } from "@lichtblick/three-text";
 
@@ -895,7 +896,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     const handler = options.handler;
     // A unique id is assigned to each action to deduplicate selection events
     // The layerId is used to map selection events back to their handlers
-    const instanceId = crypto.randomUUID();
+    const instanceId = randomUUID();
     const action: SettingsTreeNodeActionItem = {
       type: "action",
       id: `${options.layerId}-${instanceId}`,

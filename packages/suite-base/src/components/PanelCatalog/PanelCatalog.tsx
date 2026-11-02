@@ -138,9 +138,13 @@ export const PanelCatalog = forwardRef<HTMLDivElement, Props>(function PanelCata
         return panels;
       }
       // Title matches rank above description-only matches
-      const byTitle = new Fzf(panels, { selector: (panel) => panel.title }).find(searchQuery);
+      const byTitle = new Fzf(panels, {
+        selector: (panel) => panel.title,
+        casing: "case-insensitive",
+      }).find(searchQuery);
       const byDescription = new Fzf(panels, {
         selector: (panel) => panel.description ?? "",
+        casing: "case-insensitive",
       }).find(searchQuery);
       return [...new Set([...byTitle, ...byDescription].map((result) => result.item))];
     },

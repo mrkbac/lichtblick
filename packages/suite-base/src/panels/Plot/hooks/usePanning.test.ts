@@ -8,9 +8,16 @@ import { PlotCoordinator } from "@lichtblick/suite-base/panels/Plot/PlotCoordina
 import usePanning from "./usePanning";
 
 // jsdom has no PointerEvent; a MouseEvent with a pointer event type reaches the same listeners.
-function pointer(target: HTMLElement, type: string, clientX: number, clientY: number): void {
-  const event = new MouseEvent(type, { clientX, clientY, button: 0, bubbles: true });
+function pointer(
+  target: HTMLElement,
+  type: string,
+  clientX: number,
+  clientY: number,
+  { buttons = type === "pointerup" ? 0 : 1 } = {},
+): void {
+  const event = new MouseEvent(type, { clientX, clientY, button: 0, buttons, bubbles: true });
   Object.defineProperty(event, "pointerId", { value: 1 });
+  Object.defineProperty(event, "isPrimary", { value: true });
   target.dispatchEvent(event);
 }
 
@@ -72,6 +79,17 @@ describe("usePanning", () => {
     vi.runAllTimers();
     expect(draggingRef.current).toBe(false);
     vi.useRealTimers();
+  });
+
+  it("does not pan on hover after a press was released outside the element", () => {
+    const { canvasDiv, addInteractionEvent } = setup();
+
+    pointer(canvasDiv, "pointerdown", 100, 100);
+    // released outside: no pointerup reaches the element, the next move has no button held
+    pointer(canvasDiv, "pointermove", 200, 200, { buttons: 0 });
+    pointer(canvasDiv, "pointermove", 300, 300, { buttons: 0 });
+
+    expect(addInteractionEvent).not.toHaveBeenCalled();
   });
 
   it("stops listening on unmount", () => {

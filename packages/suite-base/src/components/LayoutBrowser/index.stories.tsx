@@ -110,7 +110,9 @@ async function doMultiAction(action: string) {
 
 async function selectAllAction() {
   const layouts = await screen.findAllByTestId("layout-list-item");
-  layouts.forEach(async (layout) => await fireEvent.click(layout, { ctrlKey: true }));
+  for (const layout of layouts) {
+    await fireEvent.click(layout, { ctrlKey: true });
+  }
 }
 
 function WithSetup(Child: StoryFn, ctx: StoryContext): React.JSX.Element {

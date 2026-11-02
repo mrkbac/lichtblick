@@ -16,12 +16,13 @@ import {
 } from "@lichtblick/suite-base/components/PanelContextMenu";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 export default {
   title: "components/PanelContextMenu",
 };
 
-const DUMMY_CLASS = crypto.randomUUID();
+const DUMMY_CLASS = randomUUID();
 
 function DummyPanel(): React.JSX.Element {
   const getItems = useCallback(

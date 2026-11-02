@@ -25,6 +25,7 @@ import Rpc, { createLinkedChannels } from "@lichtblick/suite-base/util/Rpc";
 import WebWorkerManager from "@lichtblick/suite-base/util/WebWorkerManager";
 import { listenForPan } from "@lichtblick/suite-base/util/listenForPan";
 import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuallyBePartial";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { TypedChartData, ChartData, RpcElement, RpcScales } from "./types";
 
@@ -98,7 +99,7 @@ const supportsOffscreenCanvas =
   typeof HTMLCanvasElement.prototype.transferControlToOffscreen === "function";
 
 function Chart(props: Props): React.JSX.Element {
-  const [id] = useState(() => crypto.randomUUID());
+  const [id] = useState(() => randomUUID());
 
   const initialized = useRef(false);
   const canvasRef = useRef<HTMLCanvasElement>();

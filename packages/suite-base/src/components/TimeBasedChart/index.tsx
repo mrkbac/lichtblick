@@ -45,6 +45,7 @@ import {
   useTimelineInteractionState,
 } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import { Bounds } from "@lichtblick/suite-base/types/Bounds";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { fontMonospace } from "@lichtblick/theme";
 
 import HoverBar from "./HoverBar";
@@ -227,7 +228,7 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
   const bounds = dataBounds ?? datasetBounds;
 
   const { classes, cx, theme } = useStyles();
-  const componentId = useMemo(() => crypto.randomUUID(), []);
+  const componentId = useMemo(() => randomUUID(), []);
   const isMounted = useMountedState();
   const canvasContainer = useRef<HTMLDivElement>(ReactNull);
 

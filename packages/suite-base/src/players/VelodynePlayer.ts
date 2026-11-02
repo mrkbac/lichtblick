@@ -27,6 +27,7 @@ import {
   TopicStats,
 } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 const log = Logger.getLogger(__filename);
 
@@ -70,7 +71,7 @@ type VelodynePlayerOpts = {
 };
 
 export default class VelodynePlayer implements Player {
-  #id: string = crypto.randomUUID(); // Unique ID for this player
+  #id: string = randomUUID(); // Unique ID for this player
   #port: number; // Listening UDP port
   #listener?: (arg0: PlayerState) => Promise<void>; // Listener for _emitState()
   #socket?: UdpSocketRenderer;

@@ -48,6 +48,7 @@ import { HIGH_FREQUENCY_ALERT } from "@lichtblick/suite-base/players/utils/const
 import { isTopicHighFrequency } from "@lichtblick/suite-base/players/utils/isTopicHighFrequency";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import delay from "@lichtblick/suite-base/util/delay";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { BlockLoader } from "./BlockLoader";
 import { BufferedIterableSource } from "./BufferedIterableSource";
@@ -177,7 +178,7 @@ export class IterablePlayer implements Player {
   #preloadTopics: TopicSelection = new Map();
 
   #progress: Progress = {};
-  #id: string = crypto.randomUUID();
+  #id: string = randomUUID();
   #messages: Immutable<MessageEvent[]> = [];
   #receivedBytes: number = 0;
   #hasError = false;

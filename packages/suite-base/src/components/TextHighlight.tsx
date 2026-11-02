@@ -33,7 +33,9 @@ export default function TextHighlight({ targetStr, searchText = "" }: Props): Re
   const { classes } = useStyles();
 
   const positions =
-    searchText.length > 0 ? new Fzf([targetStr]).find(searchText)[0]?.positions : undefined;
+    searchText.length > 0
+      ? new Fzf([targetStr], { casing: "case-insensitive" }).find(searchText)[0]?.positions
+      : undefined;
   if (positions == undefined || positions.size === 0) {
     return <>{targetStr}</>;
   }

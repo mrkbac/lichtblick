@@ -33,6 +33,7 @@ import {
   TopicWithSchemaName,
 } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import rosDatatypesToMessageDefinition from "@lichtblick/suite-base/util/rosDatatypesToMessageDefinition";
 
 const log = Logger.getLogger(__filename);
@@ -64,7 +65,7 @@ export default class Ros1Player implements Player {
   #url: string; // rosmaster URL.
   #hostname?: string; // ROS_HOSTNAME
   #rosNode?: RosNode; // Our ROS node when we're connected.
-  #id: string = crypto.randomUUID(); // Unique ID for this player.
+  #id: string = randomUUID(); // Unique ID for this player.
   #listener?: (arg0: PlayerState) => Promise<void>; // Listener for _emitState().
   #closed: boolean = false; // Whether the player has been completely closed using close().
   #providerTopics?: TopicWithSchemaName[]; // Topics as advertised by rosmaster.

@@ -14,6 +14,7 @@ import { buildConicGradient } from "@lichtblick/suite-base/panels/Gauge/buildCon
 import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Gauge/constants";
 import { stateReducer } from "@lichtblick/suite-base/panels/shared/gaugeAndIndicatorStateReducer";
 import { GaugeAndIndicatorState } from "@lichtblick/suite-base/panels/shared/types";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { settingsActionReducer } from "./settingsActionReducer";
 import { GaugeConfig, GaugeProps } from "./types";
@@ -131,7 +132,7 @@ export function Gauge({ context }: GaugeProps): React.JSX.Element {
     ) + padding;
   const needleThickness = 8;
   const needleExtraLength = 0.05;
-  const [clipPathId] = useState(() => `gauge-clip-path-${crypto.randomUUID()}`);
+  const [clipPathId] = useState(() => `gauge-clip-path-${randomUUID()}`);
   return (
     <div className={classes.root}>
       <div className={classes.gaugeContainer}>

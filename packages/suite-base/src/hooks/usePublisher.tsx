@@ -20,6 +20,7 @@ import { Immutable } from "@lichtblick/suite";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 type Props = Immutable<{
   topic: string;
@@ -36,7 +37,7 @@ export default function usePublisher({
   datatypes,
   name,
 }: Props): (msg: Record<string, unknown>) => void {
-  const [id] = useState(() => crypto.randomUUID());
+  const [id] = useState(() => randomUUID());
   const canPublish = useMessagePipeline((context) =>
     context.playerState.capabilities.includes(PLAYER_CAPABILITIES.advertise),
   );

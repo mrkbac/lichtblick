@@ -42,6 +42,7 @@ import {
 } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { bagConnectionsToDatatypes } from "@lichtblick/suite-base/util/bagConnectionsHelper";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 const log = Log.getLogger(__dirname);
 
@@ -87,7 +88,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export default class RosbridgePlayer implements Player {
   #url: string; // WebSocket URL.
   #rosClient?: roslib.Ros; // The roslibjs client when we're connected.
-  #id: string = crypto.randomUUID(); // Unique ID for this player.
+  #id: string = randomUUID(); // Unique ID for this player.
   #isRefreshing = false; // True if currently refreshing the node graph.
   #listener?: (arg0: PlayerState) => Promise<void>; // Listener for _emitState().
   #closed: boolean = false; // Whether the player has been completely closed using close().

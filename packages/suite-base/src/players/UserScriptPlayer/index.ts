@@ -61,6 +61,7 @@ import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { UserScript, UserScripts } from "@lichtblick/suite-base/types/panels";
 import Rpc from "@lichtblick/suite-base/util/Rpc";
 import { basicDatatypes } from "@lichtblick/suite-base/util/basicDatatypes";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { DIAGNOSTIC_SEVERITY, ERROR_CODES, MAX_GLOBAL_BUFFER_SIZE, SOURCES } from "./constants";
 import { getPreloadTypes, remapVirtualSubscriptions } from "./subscriptions";
@@ -179,7 +180,7 @@ export default class UserScriptPlayer implements Player {
     return new SharedWorker(new URL("./transformerWorker/index", import.meta.url), {
       // Although we are using SharedWorkers, we do not actually want to share worker instances
       // between tabs. We achieve this by passing in a unique name.
-      name: crypto.randomUUID(),
+      name: randomUUID(),
     });
   };
 
@@ -188,7 +189,7 @@ export default class UserScriptPlayer implements Player {
     return new SharedWorker(new URL("./runtimeWorker/index", import.meta.url), {
       // Although we are using SharedWorkers, we do not actually want to share worker instances
       // between tabs. We achieve this by passing in a unique name.
-      name: crypto.randomUUID(),
+      name: randomUUID(),
     });
   };
 

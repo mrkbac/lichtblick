@@ -29,6 +29,7 @@ import {
   SubscribePayload,
   SubscriptionPreloadType,
 } from "@lichtblick/suite-base/players/types";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 const log = Log.getLogger(__filename);
 
@@ -71,7 +72,7 @@ function selectSetSubscriptions(ctx: MessagePipelineContext) {
 }
 
 export function useMessageReducer<T>(props: Params<T>): T {
-  const [id] = useState(() => crypto.randomUUID());
+  const [id] = useState(() => randomUUID());
   const { restore, addMessage, addMessages, preloadType = "partial" } = props;
 
   // only one of the add message callbacks should be provided

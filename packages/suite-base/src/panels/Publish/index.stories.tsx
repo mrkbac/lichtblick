@@ -136,9 +136,9 @@ export const PublishEnabledWithCustomButtonSettings: Story = {
     const canvas = within(canvasElement);
     const buttons = await canvas.findAllByText("Send message");
 
-    buttons.forEach(async (button) => {
+    for (const button of buttons) {
       await userEvent.hover(button);
-    });
+    }
   },
 };
 
@@ -230,9 +230,9 @@ export const PublishEnabledWithCustomButtonSettingsEditingOff: Story = {
     const canvas = within(canvasElement);
     const buttons = await canvas.findAllByText("Send message");
 
-    buttons.forEach(async (button) => {
+    for (const button of buttons) {
       await userEvent.hover(button);
-    });
+    }
   },
 };
 

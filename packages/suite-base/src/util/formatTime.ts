@@ -116,7 +116,16 @@ export function parseTimeStr(str: string, timezone?: string): Time | undefined {
     ampm == undefined ? Number(hour) : (Number(hour) % 12) + (ampm.toUpperCase() === "PM" ? 12 : 0);
   const millis = Number(fraction.slice(0, 3).padEnd(3, "0"));
   const wallMs = Date.UTC(+year!, +month! - 1, +day!, hour24, +minute, +second, millis);
-  if (isNaN(wallMs)) {
+  // Date.UTC rolls over out-of-range fields (Feb 31 -> Mar 3); reject those instead
+  const wall = new Date(wallMs);
+  if (
+    isNaN(wallMs) ||
+    wall.getUTCMonth() !== +month! - 1 ||
+    wall.getUTCDate() !== +day! ||
+    wall.getUTCHours() !== hour24 ||
+    wall.getUTCMinutes() !== +minute ||
+    wall.getUTCSeconds() !== +second
+  ) {
     return undefined;
   }
   const tz = timezone ?? guessTimezone();

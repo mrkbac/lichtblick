@@ -16,10 +16,16 @@
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "accent" });
 
+const DECIMAL = /^\s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?\s*$/;
+
+/** Numbers and decimal strings compare by value ("2.09" < "2.1"); everything else naturally. */
 function sortFn(a: string | number, b: string | number): number {
-  return typeof a === "number" && typeof b === "number"
-    ? a - b
-    : collator.compare(String(a), String(b));
+  const numA = typeof a === "number" ? a : DECIMAL.test(a) ? Number(a) : undefined;
+  const numB = typeof b === "number" ? b : DECIMAL.test(b) ? Number(b) : undefined;
+  if (numA != undefined && numB != undefined) {
+    return numA - numB;
+  }
+  return collator.compare(String(a), String(b));
 }
 
 type StringOrNumberFields<T> =

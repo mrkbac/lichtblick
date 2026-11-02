@@ -32,6 +32,7 @@ import { PlotProps, TooltipStateSetter } from "@lichtblick/suite-base/panels/Plo
 import { MeasureModeToolbarButton } from "@lichtblick/suite-base/panels/shared/MeasureModeToolbarButton";
 import { createMeasureModeEscapeHandler } from "@lichtblick/suite-base/panels/shared/measureModeEscapeHandler";
 import useAppendOnlyKey from "@lichtblick/suite-base/panels/shared/useAppendOnlyKey";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { useStyles } from "./Plot.style";
 import { PlotCoordinator } from "./PlotCoordinator";
@@ -64,7 +65,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
 
   const [activeTooltip, setActiveTooltip] = useState<TooltipStateSetter>();
 
-  const [subscriberId] = useState(() => crypto.randomUUID());
+  const [subscriberId] = useState(() => randomUUID());
   const [canvasDiv, setCanvasDiv] = useState<HTMLDivElement | ReactNull>(ReactNull);
   const [coordinator, setCoordinator] = useState<PlotCoordinator | undefined>(undefined);
   const shouldSync = config.isSynced;

@@ -57,6 +57,7 @@ import { LayoutManagerEventTypes } from "@lichtblick/suite-base/services/ILayout
 import { PanelConfig, PlaybackConfig, UserScripts } from "@lichtblick/suite-base/types/panels";
 import { windowAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { IncompatibleLayoutVersionAlert } from "./IncompatibleLayoutVersionAlert";
 
@@ -82,7 +83,7 @@ export default function CurrentLayoutProvider({
 
   const appParameters = useAppParameters();
 
-  const [mosaicId] = useState(() => crypto.randomUUID());
+  const [mosaicId] = useState(() => randomUUID());
 
   const layoutStateListeners = useRef(new Set<(_: LayoutState) => void>());
   const addLayoutStateListener = useCallback((listener: (_: LayoutState) => void) => {

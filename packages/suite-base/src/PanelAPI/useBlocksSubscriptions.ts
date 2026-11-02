@@ -27,6 +27,7 @@ import {
   MessageBlock as PlayerMessageBlock,
   SubscribePayload,
 } from "@lichtblick/suite-base/players/types";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 export type MessageBlock = Immutable<{
   [topicName: string]: MessageEvent[];
@@ -63,7 +64,7 @@ const filterBlockByTopics = memoizeWeak(
 );
 
 const useSubscriptionsForBlocks = (subscriptions: Immutable<SubscribePayload[]>) => {
-  const [id] = useState(() => crypto.randomUUID());
+  const [id] = useState(() => randomUUID());
 
   const setSubscriptions = useMessagePipeline(
     useCallback(

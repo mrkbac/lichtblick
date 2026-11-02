@@ -34,14 +34,28 @@ export function listenForPan(
   });
 
   const onPointerDown = (event: PointerEvent) => {
-    if (event.button !== 0 || start != undefined) {
+    // Every primary press starts a new gesture, so a press released outside the element can't
+    // leave a stale start behind
+    if (event.button !== 0 || !event.isPrimary) {
       return;
     }
     start = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
     panning = false;
   };
+  const end = (event: PointerEvent) => {
+    if (panning) {
+      onEnd(toPanEvent(event));
+    }
+    start = undefined;
+    panning = false;
+  };
   const onPointerMove = (event: PointerEvent) => {
     if (start?.pointerId !== event.pointerId) {
+      return;
+    }
+    // The button was released where we didn't see the pointerup (e.g. outside the element)
+    if ((event.buttons & 1) === 0) {
+      end(event);
       return;
     }
     const pan = toPanEvent(event);
@@ -60,14 +74,9 @@ export function listenForPan(
     onMove(pan);
   };
   const onPointerUp = (event: PointerEvent) => {
-    if (start?.pointerId !== event.pointerId) {
-      return;
+    if (start?.pointerId === event.pointerId) {
+      end(event);
     }
-    if (panning) {
-      onEnd(toPanEvent(event));
-    }
-    start = undefined;
-    panning = false;
   };
 
   // Touch drags pan the chart instead of scrolling the page

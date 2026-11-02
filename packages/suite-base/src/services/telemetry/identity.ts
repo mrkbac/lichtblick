@@ -7,6 +7,7 @@
 
 import { DEVICE_ID_STORAGE_KEY } from "@lichtblick/suite-base/services/telemetry/constants";
 import type { IdentityStorage } from "@lichtblick/suite-base/services/telemetry/types";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 function getDefaultStorage(): IdentityStorage | undefined {
   try {
@@ -26,7 +27,7 @@ export function getDeviceId(storage: IdentityStorage | undefined = getDefaultSto
         return existing;
       }
 
-      const generated = crypto.randomUUID();
+      const generated = randomUUID();
       storage.setItem(DEVICE_ID_STORAGE_KEY, generated);
       return generated;
     } catch {
@@ -34,8 +35,8 @@ export function getDeviceId(storage: IdentityStorage | undefined = getDefaultSto
     }
   }
 
-  memoizedDeviceId ??= crypto.randomUUID();
+  memoizedDeviceId ??= randomUUID();
   return memoizedDeviceId;
 }
 
-export const sessionId: string = crypto.randomUUID();
+export const sessionId: string = randomUUID();

@@ -163,7 +163,14 @@ export function TimezoneSettings(): React.ReactElement {
 
   const selectedItem = useMemo(() => {
     if (timezone != undefined) {
-      return allItems.find((item) => item.data === timezone) ?? detectItem;
+      // Intl lists canonical zone names only; keep showing a saved alias such as US/Pacific
+      return (
+        allItems.find((item) => item.data === timezone) ?? {
+          key: `zone:${timezone}`,
+          label: formatTimezone(timezone),
+          data: timezone,
+        }
+      );
     }
     return detectItem;
   }, [allItems, detectItem, timezone]);
@@ -172,7 +179,7 @@ export function TimezoneSettings(): React.ReactElement {
     <FormControl fullWidth>
       <FormLabel>{t("displayTimestampsIn")}:</FormLabel>
       <Autocomplete
-        options={[...fixedItems, ...timezoneItems]}
+        options={allItems.includes(selectedItem) ? allItems : [...allItems, selectedItem]}
         value={selectedItem}
         renderOption={({ key: _muiKey, ...props }, option: Option) =>
           option.divider === true ? (

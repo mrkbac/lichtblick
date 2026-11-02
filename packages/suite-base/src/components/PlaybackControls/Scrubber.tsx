@@ -28,6 +28,7 @@ import {
 } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import BroadcastManager from "@lichtblick/suite-base/util/broadcast/BroadcastManager";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { EventsOverlay } from "./EventsOverlay";
 import PlaybackBarHoverTicks from "./PlaybackBarHoverTicks";
@@ -73,7 +74,7 @@ export default function Scrubber(props: Props): React.JSX.Element {
   const { onSeek } = props;
   const { classes, cx } = useStyles();
 
-  const [hoverComponentId] = useState<string>(() => crypto.randomUUID());
+  const [hoverComponentId] = useState<string>(() => randomUUID());
 
   const startTime = useMessagePipeline(selectStartTime);
   const currentTime = useMessagePipeline(selectCurrentTime);

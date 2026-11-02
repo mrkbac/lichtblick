@@ -81,9 +81,10 @@ Clone the repository:
 $ git clone https://github.com/lichtblick-suite/lichtblick.git
 ```
 
-Enable corepack:
+Install and enable Corepack (Node 25+ no longer bundles it):
 
 ```sh
+$ npm install --global corepack
 $ corepack enable
 ```
 

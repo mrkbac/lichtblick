@@ -30,6 +30,7 @@ import { makeRgba, stringToRgba } from "@lichtblick/suite-base/panels/ThreeDeeRe
 import { eulerToQuaternion } from "@lichtblick/suite-base/util/geometry";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { isValidUrl } from "@lichtblick/suite-base/util/isValidURL";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { RenderableCube } from "./markers/RenderableCube";
 import { RenderableCylinder } from "./markers/RenderableCylinder";
@@ -554,7 +555,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
         this.updateSettingsTree();
         this.renderer.updateCustomLayersCount();
       } else if (action.payload.id === "duplicate") {
-        const newInstanceId = crypto.randomUUID();
+        const newInstanceId = randomUUID();
         const config = {
           ...this.renderer.config.layers[instanceId],
           instanceId: newInstanceId,

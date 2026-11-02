@@ -8,6 +8,7 @@ This file helps AI coding agents work effectively in the Lichtblick monorepo.
 - Enable Corepack and install dependencies with Yarn 3.6.3:
 
 ```sh
+npm install --global corepack # Node 25+ no longer bundles Corepack
 corepack enable
 yarn install
 ```

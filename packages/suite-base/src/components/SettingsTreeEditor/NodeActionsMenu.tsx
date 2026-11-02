@@ -10,6 +10,7 @@ import { Menu, MenuItem, IconButton, ListItemIcon, ListItemText, Divider } from 
 import { useCallback, useMemo, useState } from "react";
 
 import { NodeActionsMenuProps } from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { icons } from "./icons";
 
@@ -40,7 +41,7 @@ export function NodeActionsMenu({
   const actionsWithUniqueIds = useMemo(() => {
     return actions.map((action) => ({
       ...action,
-      uniqueId: action.type === "divider" ? crypto.randomUUID() : undefined,
+      uniqueId: action.type === "divider" ? randomUUID() : undefined,
     }));
   }, [actions]);
 

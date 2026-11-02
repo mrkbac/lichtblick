@@ -74,7 +74,7 @@ ComponentName/
 ## Package Manager
 
 - **Yarn 3.6.3** via Corepack (do not use npm or pnpm)
-- Enable with: `corepack enable`
+- Enable with: `npm install --global corepack && corepack enable` (Node 25+ no longer bundles Corepack)
 
 ### Key Commands
 

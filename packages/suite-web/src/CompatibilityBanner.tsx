@@ -20,7 +20,8 @@ import { makeStyles } from "tss-react/mui";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { createMuiTheme } from "@lichtblick/theme";
 
-const MINIMUM_CHROME_VERSION = 76;
+// First Chrome with every Baseline API we use (e.g. Uint8Array.fromBase64)
+const MINIMUM_CHROME_VERSION = 140;
 const BANNER_HEIGHT = 54;
 const BANNER_MOBILE_HEIGHT = 100;
 

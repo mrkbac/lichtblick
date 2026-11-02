@@ -65,6 +65,7 @@ import {
 import { PanelConfig, SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { assertNever } from "@lichtblick/suite-base/util/assertNever";
 import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { PanelConfigVersionError } from "./PanelConfigVersionError";
 import { RenderStateConfig, initRenderStateBuilder } from "./renderState";
@@ -168,7 +169,7 @@ function PanelExtensionAdapter(
 
   const { openSiblingPanel, setMessagePathDropConfig, type: panelName } = usePanelContext();
 
-  const [panelId] = useState(() => crypto.randomUUID());
+  const [panelId] = useState(() => randomUUID());
   const isMounted = useSynchronousMountedState();
   const [error, setError] = useState<Error | undefined>();
   const [forceConversion, setForceConversion] = useState(new Set<string>());

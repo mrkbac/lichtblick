@@ -53,7 +53,11 @@ export function getAccuracy(
       const mean = (a + d) / 2;
       const spread = Math.hypot((a - d) / 2, c);
       const primaryRadius = Math.sqrt(mean + spread);
-      const secondaryRadius = Math.sqrt(mean - spread);
+      // A singular covariance can round to a tiny negative minor eigenvalue; clamp only that noise
+      const minor = mean - spread;
+      const secondaryRadius = Math.sqrt(
+        minor > -1e-12 * Math.max(Math.abs(mean), 1) ? Math.max(minor, 0) : minor,
+      );
 
       // Ellipse `tilt` is defined as number of degrees from the negative x axis
       const tilt = (-0.5 * Math.atan2(2 * c, a - d) * 180) / Math.PI;

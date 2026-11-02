@@ -12,6 +12,7 @@ import { useAsync } from "react-use";
 
 import Logger from "@lichtblick/log";
 import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 const log = Logger.getLogger(__filename);
 
@@ -157,7 +158,7 @@ function useIndexedDbRecents(): IRecentsStore {
   const addRecent = useCallback(
     (record: UnsavedRecentRecord) => {
       const fullRecord: RecentRecord = {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         ...record,
       };
       newRecentsRef.current.unshift(fullRecord);
