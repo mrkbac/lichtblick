@@ -78,7 +78,7 @@ async function createMcapFile({
   }
 
   await writer.end();
-  return new Blob([tempBuffer.get()]) as unknown as globalThis.Blob;
+  return new Blob([tempBuffer.get().slice()]) as unknown as globalThis.Blob;
 }
 
 describe("McapIterableSource", () => {
@@ -117,7 +117,7 @@ describe("McapIterableSource", () => {
       // not available at runtime. We use node:buffer's Blob to test here, but the
       // type is technically not compatible with the global Blob type, so we cast
       // to get around this.
-      file: new Blob([tempBuffer.get()]) as unknown as globalThis.Blob,
+      file: new Blob([tempBuffer.get().slice()]) as unknown as globalThis.Blob,
     });
     const { alerts } = await source.initialize();
     expect(alerts).toEqual([
@@ -317,7 +317,7 @@ describe("McapIterableSource", () => {
       const mcapData = await buildUnindexedMcap([{ logTime: 3_000_000_000n }]);
       mockRemoteFileReadableWith(mcapData);
       const mockFetch = vi.fn().mockResolvedValue({
-        body: new Blob([mcapData]).stream(),
+        body: new Blob([mcapData.slice()]).stream(),
         headers: new Headers({ "content-length": String(mcapData.byteLength) }),
       });
       global.fetch = mockFetch;
@@ -365,7 +365,7 @@ describe("McapIterableSource", () => {
       const mcapData = await buildUnindexedMcap([{ logTime: 1_000_000_000n }]);
       mockRemoteFileReadableWith(mcapData);
       global.fetch = vi.fn().mockResolvedValue({
-        body: new Blob([mcapData]).stream(),
+        body: new Blob([mcapData.slice()]).stream(),
         headers: new Headers(),
       });
 

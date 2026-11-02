@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { existsSync, Dirent } from "fs";
+import { existsSync } from "fs";
 import { readFile, readdir } from "fs/promises";
 import type { Mock, MockedFunction } from "vitest";
 
@@ -47,7 +47,7 @@ describe("fetchLayouts", () => {
     const mockLayout2 = { some: "data2" };
 
     mockExistsSync.mockReturnValueOnce(true);
-    mockReaddir.mockResolvedValueOnce(mockFiles as Dirent[]);
+    mockReaddir.mockResolvedValueOnce(mockFiles as never);
     mockReadFile
       .mockResolvedValueOnce(JSON.stringify(mockLayout1)!)
       .mockResolvedValueOnce(JSON.stringify(mockLayout2)!);
@@ -68,7 +68,7 @@ describe("fetchLayouts", () => {
     const mockLayout1 = { some: "data1" };
 
     mockExistsSync.mockReturnValueOnce(true);
-    mockReaddir.mockResolvedValueOnce(mockFiles as Dirent[]);
+    mockReaddir.mockResolvedValueOnce(mockFiles as never);
     mockReadFile.mockResolvedValueOnce(JSON.stringify(mockLayout1)!);
 
     const result = await fetchLayouts("/valid/path");
@@ -84,7 +84,7 @@ describe("fetchLayouts", () => {
     const mockLayout1 = { some: "data1" };
 
     mockExistsSync.mockReturnValueOnce(true);
-    mockReaddir.mockResolvedValueOnce(mockFiles as Dirent[]);
+    mockReaddir.mockResolvedValueOnce(mockFiles as never);
     mockReadFile.mockResolvedValueOnce(JSON.stringify(mockLayout1)!);
 
     const result = await fetchLayouts("/valid/path");
@@ -100,7 +100,7 @@ describe("fetchLayouts", () => {
     const mockLayout1 = { some: "data1" };
 
     mockExistsSync.mockReturnValueOnce(true);
-    mockReaddir.mockResolvedValueOnce(mockFiles as Dirent[]);
+    mockReaddir.mockResolvedValueOnce(mockFiles as never);
     mockReadFile
       .mockResolvedValueOnce(JSON.stringify(mockLayout1)!)
       .mockRejectedValueOnce(new Error("read error"));

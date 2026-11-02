@@ -42,7 +42,9 @@ describe("McapIndexedIterableSource", () => {
     });
     await writer.end();
 
-    const readable = new BlobReadable(new Blob([tempBuffer.get()]) as unknown as globalThis.Blob);
+    const readable = new BlobReadable(
+      new Blob([tempBuffer.get().slice()]) as unknown as globalThis.Blob,
+    );
     const decompressHandlers = await loadDecompressHandlers();
     const reader = await McapIndexedReader.Initialize({ readable, decompressHandlers });
 
@@ -84,7 +86,9 @@ describe("McapIndexedIterableSource", () => {
     });
     await writer.end();
 
-    const readable = new BlobReadable(new Blob([tempBuffer.get()]) as unknown as globalThis.Blob);
+    const readable = new BlobReadable(
+      new Blob([tempBuffer.get().slice()]) as unknown as globalThis.Blob,
+    );
     const decompressHandlers = await loadDecompressHandlers();
     const reader = await McapIndexedReader.Initialize({ readable, decompressHandlers });
 
@@ -133,7 +137,9 @@ describe("McapIndexedIterableSource", () => {
     });
     await writer.end();
 
-    const readable = new BlobReadable(new Blob([tempBuffer.get()]) as unknown as globalThis.Blob);
+    const readable = new BlobReadable(
+      new Blob([tempBuffer.get().slice()]) as unknown as globalThis.Blob,
+    );
     const decompressHandlers = await loadDecompressHandlers();
     const reader = await McapIndexedReader.Initialize({ readable, decompressHandlers });
 
@@ -179,7 +185,9 @@ describe("McapIndexedIterableSource", () => {
       });
       await writer.end();
 
-      const readable = new BlobReadable(new Blob([tempBuffer.get()]) as unknown as globalThis.Blob);
+      const readable = new BlobReadable(
+        new Blob([tempBuffer.get().slice()]) as unknown as globalThis.Blob,
+      );
       const decompressHandlers = await loadDecompressHandlers();
       const reader = await McapIndexedReader.Initialize({ readable, decompressHandlers });
       const source = new McapIndexedIterableSource(reader);
@@ -221,7 +229,9 @@ describe("McapIndexedIterableSource", () => {
       });
       await writer.end();
 
-      const readable = new BlobReadable(new Blob([tempBuffer.get()]) as unknown as globalThis.Blob);
+      const readable = new BlobReadable(
+        new Blob([tempBuffer.get().slice()]) as unknown as globalThis.Blob,
+      );
       const decompressHandlers = await loadDecompressHandlers();
       const reader = await McapIndexedReader.Initialize({ readable, decompressHandlers });
       const source = new McapIndexedIterableSource(reader);

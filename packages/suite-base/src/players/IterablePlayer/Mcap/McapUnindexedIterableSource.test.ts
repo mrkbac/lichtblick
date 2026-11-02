@@ -22,7 +22,7 @@ describe("McapUnindexedIterableSource", () => {
     });
     await writer.end();
 
-    const file = new Blob([tempBuffer.get()]);
+    const file = new Blob([tempBuffer.get().slice()]);
 
     const source = new McapUnindexedIterableSource({
       size: file.size,
@@ -47,7 +47,7 @@ describe("McapUnindexedIterableSource", () => {
     await writer.start({ library: "", profile: "" });
     await writer.end();
 
-    const file = new Blob([tempBuffer.get()]);
+    const file = new Blob([tempBuffer.get().slice()]);
 
     const source = new McapUnindexedIterableSource({
       size: file.size,
@@ -64,7 +64,7 @@ describe("McapUnindexedIterableSource", () => {
     it("should return undefined before initialization", () => {
       // Given a source that has not been initialized
       const tempBuffer = new TempBuffer();
-      const file = new Blob([tempBuffer.get()]);
+      const file = new Blob([tempBuffer.get().slice()]);
       const source = new McapUnindexedIterableSource({
         size: file.size,
         stream: file.stream() as ReadableStream<Uint8Array>,
@@ -107,7 +107,7 @@ describe("McapUnindexedIterableSource", () => {
       });
       await writer.end();
 
-      const file = new Blob([tempBuffer.get()]);
+      const file = new Blob([tempBuffer.get().slice()]);
       const source = new McapUnindexedIterableSource({
         size: file.size,
         stream: file.stream() as ReadableStream<Uint8Array>,
