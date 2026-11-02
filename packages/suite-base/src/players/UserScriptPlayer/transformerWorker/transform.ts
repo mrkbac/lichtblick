@@ -41,6 +41,7 @@ import {
 } from "@lichtblick/suite-base/players/UserScriptPlayer/types";
 import { Topic } from "@lichtblick/suite-base/players/types";
 import { DEFAULT_STUDIO_SCRIPT_PREFIX } from "@lichtblick/suite-base/util/constants";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { TransformArgs } from "./types";
 import generatedTypesLibSrc from "./typescript/userUtils/generatedTypes.ts?raw";
@@ -406,7 +407,7 @@ export const extractDatatypes = (scriptData: ScriptData): ScriptData => {
       diagnostics: [
         ...scriptData.diagnostics,
         {
-          message: error.message,
+          message: toError(error).message,
           severity: DIAGNOSTIC_SEVERITY.Error,
           source: SOURCES.DatatypeExtraction,
           code: ERROR_CODES.DatatypeExtraction.UNKNOWN_ERROR,

@@ -31,6 +31,7 @@ import {
 import { TabPanelConfig } from "@lichtblick/suite-base/src/types/layouts";
 import PanelSetup, { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";
 import { ExpectedResult } from "@lichtblick/suite-base/stories/storyHelpers";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import Tab from "./index";
 
@@ -363,7 +364,7 @@ export const PreventDraggingSelectedParentTabIntoChildTabPanel: Story = {
     try {
       await fireEvent.dragOver(tabs[2]!);
     } catch (error) {
-      if (error.message === "ignoredException") {
+      if (toError(error).message === "ignoredException") {
         // supress this error specifically as it is the expected behavior
         return;
       }

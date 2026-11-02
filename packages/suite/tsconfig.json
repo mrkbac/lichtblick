@@ -1,5 +1,5 @@
 {
-  "extends": "@lichtblick/tsconfig/base",
+  "extends": "../../tsconfig.base.json",
   "include": ["./**/*"],
   "compilerOptions": {
     "composite": true,

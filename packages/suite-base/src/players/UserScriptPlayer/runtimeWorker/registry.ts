@@ -129,7 +129,7 @@ export const registerScript = ({
       userScriptDiagnostics,
     };
   } catch (e) {
-    const error: string = e.toString();
+    const error = String(e);
     return {
       error: error.length > 0 ? error : `Unknown error encountered registering this node.`,
       userScriptLogs,

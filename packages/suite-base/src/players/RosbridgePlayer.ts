@@ -43,6 +43,7 @@ import {
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { bagConnectionsToDatatypes } from "@lichtblick/suite-base/util/bagConnectionsHelper";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Log.getLogger(__dirname);
 
@@ -337,7 +338,7 @@ export default class RosbridgePlayer implements Player {
       this.#alerts.addAlert("requestTopics:error", {
         severity: "error",
         message: "Failed to fetch topics from rosbridge",
-        error,
+        error: toError(error),
       });
     } finally {
       this.#emitState();
@@ -525,7 +526,7 @@ export default class RosbridgePlayer implements Player {
           this.#alerts.addAlert(alertId, {
             severity: "error",
             message: `Failed to parse message on ${topicName}`,
-            error,
+            error: toError(error),
           });
         }
 
@@ -729,7 +730,7 @@ export default class RosbridgePlayer implements Player {
       this.#alerts.addAlert("requestTopics:system-state", {
         severity: "error",
         message: "Failed to fetch node details from rosbridge",
-        error,
+        error: toError(error),
       });
     } finally {
       this.#isRefreshing = false;

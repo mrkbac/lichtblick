@@ -12,7 +12,7 @@ import path from "path";
 import { TsCheckerRspackPlugin } from "ts-checker-rspack-plugin";
 
 import type { WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
-import { swcRule } from "@lichtblick/suite-base/webpack";
+import { swcRule, tsCheckerOptions } from "@lichtblick/suite-base/webpack";
 
 import { WebpackConfigParams } from "./WebpackConfigParams";
 
@@ -48,6 +48,7 @@ export const webpackQuicklookConfig =
       plugins: [
         new TsCheckerRspackPlugin({
           typescript: {
+            ...tsCheckerOptions(),
             configOverwrite: {
               compilerOptions: {
                 noUnusedLocals: !allowUnusedVariables,

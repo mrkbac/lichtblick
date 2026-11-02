@@ -31,6 +31,7 @@ import {
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import { PlayerAlert, TopicStats } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 const DURATION_YEAR_SEC = 365 * 24 * 60 * 60;
 
@@ -140,8 +141,8 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
             channelIdsWithErrors.add(record.id);
             alerts.push({
               severity: "error",
-              message: `Error in topic ${record.topic} (channel ${record.id}): ${error.message}`,
-              error,
+              message: `Error in topic ${record.topic} (channel ${record.id}): ${toError(error).message}`,
+              error: toError(error),
             });
           }
           break;

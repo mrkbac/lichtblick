@@ -10,6 +10,7 @@ import {
   GaugeAndIndicatorState,
   GaugeAndIndicatorAction,
 } from "@lichtblick/suite-base/panels/shared/types";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 export function getSingleDataItem(results: unknown[]): unknown {
   if (results.length <= 1) {
@@ -106,7 +107,7 @@ export function stateReducer(
     return {
       ...state,
       latestMatchingQueriedData: undefined,
-      error,
+      error: toError(error),
     };
   }
 }

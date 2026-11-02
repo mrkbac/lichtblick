@@ -28,6 +28,7 @@ import {
 } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Logger.getLogger(__filename);
 
@@ -135,7 +136,7 @@ export default class VelodynePlayer implements Player {
       this.#addAlert(PROBLEM_SOCKET_ERROR, {
         message: "Could not bind to the Velodyne UDP data port",
         severity: "error",
-        error,
+        error: toError(error),
         tip: `Check that port ${this.#port} is not in use by another application`,
       });
     }

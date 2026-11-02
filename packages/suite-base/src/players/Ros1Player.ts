@@ -35,6 +35,7 @@ import {
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import rosDatatypesToMessageDefinition from "@lichtblick/suite-base/util/rosDatatypesToMessageDefinition";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Logger.getLogger(__filename);
 const rosLog = Logger.getLogger("ROS1");
@@ -253,7 +254,7 @@ export default class Ros1Player implements Player {
             severity: "warn",
             message: "ROS parameter fetch failed",
             tip: `Ensure that roscore is running and accessible at: ${this.#url}`,
-            error,
+            error: toError(error),
           },
           { skipEmit: true },
         );
@@ -273,7 +274,7 @@ export default class Ros1Player implements Player {
           severity: "error",
           message: "ROS connection failed",
           tip: `Ensure that roscore is running and accessible at: ${this.#url}`,
-          error,
+          error: toError(error),
         },
         { skipEmit: false },
       );
@@ -659,7 +660,7 @@ export default class Ros1Player implements Player {
 stale graph may result in missing topics you expect. Ensure that roscore is reachable at ${
             this.#url
           }.`,
-          error,
+          error: toError(error),
         },
         { skipEmit: true },
       );

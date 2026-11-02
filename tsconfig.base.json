@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "@lichtblick/tsconfig/base",
+  "compilerOptions": {
+    // Stricter than the shared Lichtblick config
+    "allowUnusedLabels": false,
+    "noUncheckedSideEffectImports": true
+  }
+}

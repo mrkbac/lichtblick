@@ -21,6 +21,7 @@ import {
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import { PlayerAlert, TopicStats } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Logger.getLogger(__filename);
 
@@ -79,8 +80,8 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       } catch (error) {
         alerts.push({
           severity: "error",
-          message: `Error in topic ${channel.topic} (channel ${channel.id}): ${error.message}`,
-          error,
+          message: `Error in topic ${channel.topic} (channel ${channel.id}): ${toError(error).message}`,
+          error: toError(error),
         });
         continue;
       }
@@ -199,7 +200,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
           connectionId: message.channelId,
           alert: {
             message: `Error decoding message on ${channelInfo.channel.topic}`,
-            error,
+            error: toError(error),
             severity: "error",
           },
         };

@@ -37,6 +37,7 @@ import computeLayoutSyncOperations, {
 import { isLayoutEqual } from "@lichtblick/suite-base/services/LayoutManager/utils/isLayoutEqual";
 import { updateOrFetchLayout } from "@lichtblick/suite-base/services/LayoutManager/utils/updateOrFetchLayouts";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { migratePanelsState } from "../migrateLayout";
 import { NamespacedLayoutStorage } from "./NamespacedLayoutStorage";
@@ -681,7 +682,7 @@ export default class LayoutManager implements ILayoutManager {
         this.setError(undefined);
       }
     } catch (error) {
-      this.setError(error);
+      this.setError(toError(error));
       throw error;
     } finally {
       this.currentSync = undefined;

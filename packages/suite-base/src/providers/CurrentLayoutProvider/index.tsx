@@ -58,6 +58,7 @@ import { PanelConfig, PlaybackConfig, UserScripts } from "@lichtblick/suite-base
 import { windowAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { IncompatibleLayoutVersionAlert } from "./IncompatibleLayoutVersionAlert";
 
@@ -186,7 +187,7 @@ export default function CurrentLayoutProvider({
         }
       } catch (error) {
         console.error(error);
-        enqueueSnackbar(`The layout could not be loaded. ${error.toString()}`, {
+        enqueueSnackbar(`The layout could not be loaded. ${toError(error).toString()}`, {
           variant: "error",
         });
         setIncompatibleLayoutVersionError(false);

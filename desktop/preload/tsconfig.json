@@ -1,10 +1,9 @@
 {
-  "extends": "@lichtblick/tsconfig/base",
+  "extends": "../../tsconfig.base.json",
   "include": ["./**/*", "../common/*", "../../package.json"],
   "compilerOptions": {
     "rootDir": "../../",
     "noEmit": true,
-    "lib": ["dom", "es2025", "esnext.typedarrays"],
-    "useUnknownInCatchVariables": false
+    "lib": ["dom", "es2025", "esnext.typedarrays"]
   }
 }

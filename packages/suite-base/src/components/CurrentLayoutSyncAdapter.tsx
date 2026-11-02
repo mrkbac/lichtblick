@@ -19,6 +19,7 @@ import {
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 type UpdatedLayout = NonNullable<LayoutState["selectedLayout"]>;
 
@@ -78,7 +79,7 @@ export function CurrentLayoutSyncAdapter(): ReactNull {
       } catch (error) {
         log.error(error);
         if (isMounted()) {
-          enqueueSnackbar(`Your changes could not be saved. ${error.toString()}`, {
+          enqueueSnackbar(`Your changes could not be saved. ${toError(error).toString()}`, {
             variant: "error",
             key: "CurrentLayoutProvider.throttledSave",
           });

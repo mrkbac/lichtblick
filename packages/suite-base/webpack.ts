@@ -15,6 +15,16 @@ import { TsCheckerRspackPlugin } from "ts-checker-rspack-plugin";
 import { WebpackArgv } from "./WebpackArgv";
 
 /**
+ * Type checking runs on the native TypeScript 7 compiler (installed as "typescript7"); tooling
+ * that needs the compiler API (ESLint) stays on the "typescript" 6 package.
+ */
+export function tsCheckerOptions(): { tsgo: true; typescriptPath: string } {
+  // Builds run from the repo root, where typescript7 is installed (works in ESM and CJS)
+  const rootRequire = _nodeCreateRequire(`${process.cwd()}/package.json`);
+  return { tsgo: true, typescriptPath: rootRequire.resolve("typescript7/package.json") };
+}
+
+/**
  * Transpiles TypeScript/TSX with Rspack's built-in SWC loader (type checking runs separately in
  * TsCheckerRspackPlugin). `refresh` enables React Fast Refresh for the dev server.
  */
@@ -286,6 +296,7 @@ export function makeConfig(
       }),
       new TsCheckerRspackPlugin({
         typescript: {
+          ...tsCheckerOptions(),
           configFile: tsconfigPath,
           configOverwrite: {
             compilerOptions: {

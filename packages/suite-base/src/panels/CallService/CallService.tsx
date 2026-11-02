@@ -14,6 +14,7 @@ import { PanelExtensionContext, SettingsTreeAction } from "@lichtblick/suite";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { Config } from "@lichtblick/suite-base/panels/CallService/types";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
+import { toError } from "@lichtblick/suite-base/util/toError";
 import { customTypography } from "@lichtblick/theme";
 
 import { defaultConfig, settingsActionReducer, useSettingsTree } from "./settings";
@@ -83,7 +84,7 @@ function parseInput(value: string): { error?: string; parsedObject?: unknown } {
       parsedObject = parsedAny;
     }
   } catch (e) {
-    error = value.length !== 0 ? e.message : "Enter valid request content as JSON";
+    error = value.length !== 0 ? toError(e).message : "Enter valid request content as JSON";
   }
   return { error, parsedObject };
 }

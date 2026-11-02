@@ -6,7 +6,7 @@ import dotenv from "dotenv";
 import path from "path";
 import { TsCheckerRspackPlugin } from "ts-checker-rspack-plugin";
 
-import { swcRule } from "@lichtblick/suite-base/webpack";
+import { swcRule, tsCheckerOptions } from "@lichtblick/suite-base/webpack";
 
 import { WebpackConfigParams } from "./WebpackConfigParams";
 
@@ -39,7 +39,7 @@ export function createCommonWebpackConfig(
           ? JSON.stringify(process.env.OTLP_ENDPOINT)
           : undefined,
       }),
-      new TsCheckerRspackPlugin(),
+      new TsCheckerRspackPlugin({ typescript: tsCheckerOptions() }),
     ],
 
     resolve: {

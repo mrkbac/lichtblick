@@ -58,6 +58,7 @@ import { HIGH_FREQUENCY_ALERT } from "@lichtblick/suite-base/players/utils/const
 import { isTopicHighFrequency } from "@lichtblick/suite-base/players/utils/isTopicHighFrequency";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import rosDatatypesToMessageDefinition from "@lichtblick/suite-base/util/rosDatatypesToMessageDefinition";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { JsonMessageWriter } from "./JsonMessageWriter";
 import WorkerSocketAdapter from "./WorkerSocketAdapter";
@@ -450,7 +451,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
           this.#alerts.addAlert(`schema:${channel.topic}`, {
             severity: "error",
             message: `Failed to parse channel schema on ${channel.topic}`,
-            error,
+            error: toError(error),
           });
           this.#emitState();
           continue;
@@ -589,7 +590,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         this.#alerts.addAlert(`message:${chanInfo.channel.topic}`, {
           severity: "error",
           message: `Failed to parse message on ${chanInfo.channel.topic}`,
-          error,
+          error: toError(error),
         });
       }
       this.#emitState();
@@ -775,7 +776,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
           this.#alerts.addAlert(serviceAlertId, {
             severity: "error",
             message: `Failed to parse service ${service.name}`,
-            error,
+            error: toError(error),
           });
         }
       }

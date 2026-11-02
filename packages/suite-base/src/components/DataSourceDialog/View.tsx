@@ -71,6 +71,4 @@ export default function View(props: PropsWithChildren<ViewProps>): React.JSX.Ele
       </Stack>
     </>
   );
-
-  return <>{props.children}</>;
 }

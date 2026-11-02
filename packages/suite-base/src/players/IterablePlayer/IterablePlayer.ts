@@ -49,6 +49,7 @@ import { isTopicHighFrequency } from "@lichtblick/suite-base/players/utils/isTop
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import delay from "@lichtblick/suite-base/util/delay";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { BlockLoader } from "./BlockLoader";
 import { BufferedIterableSource } from "./BufferedIterableSource";
@@ -701,7 +702,7 @@ export class IterablePlayer implements Player {
 
       this.#presence = PlayerPresence.PRESENT;
     } catch (error) {
-      this.#setError(`Error initializing: ${error.message}`, error);
+      this.#setError(`Error initializing: ${toError(error).message}`, toError(error));
     }
     this.#queueEmitState();
 

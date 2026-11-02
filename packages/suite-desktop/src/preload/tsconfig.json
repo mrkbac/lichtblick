@@ -1,11 +1,10 @@
 {
-  "extends": "@lichtblick/tsconfig/base",
+  "extends": "../../../../tsconfig.base.json",
   "include": ["./**/*", "../common/*", "../../package.json"],
   "compilerOptions": {
     "rootDir": "../../",
     "noEmit": true,
     "lib": ["dom", "es2025", "esnext.typedarrays"],
-    "types": ["node", "vitest/globals"],
-    "useUnknownInCatchVariables": false
+    "types": ["node", "vitest/globals"]
   }
 }

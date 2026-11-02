@@ -1,12 +1,11 @@
 {
-  "extends": "@lichtblick/tsconfig/base",
+  "extends": "../../../../tsconfig.base.json",
   "include": ["./**/*", "../common/**/*", "../../package.json"],
   "compilerOptions": {
     "rootDir": "../../",
     "noEmit": true,
     "jsx": "react-jsx",
     "experimentalDecorators": true,
-    "useUnknownInCatchVariables": false,
     "types": ["node", "vitest/globals"],
     "lib": ["dom", "dom.iterable", "es2025", "esnext.typedarrays", "webworker"],
     "paths": {
