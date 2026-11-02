@@ -7,6 +7,7 @@
 
 import { Time, fromNanoSec, isLessThan, toNanoSec } from "@foxglove/rostime";
 import type { FrameTransform, FrameTransforms, SceneUpdate } from "@foxglove/schemas";
+import { LabelPool } from "@foxglove/three-text";
 import EventEmitter from "eventemitter3";
 import { quat, vec3 } from "gl-matrix";
 import i18next from "i18next";
@@ -90,7 +91,6 @@ import {
   Vector3,
 } from "./ros";
 import { SelectEntry } from "./settings";
-import { LabelPool } from "./text";
 import {
   AddTransformResult,
   CoordinateFrame,
@@ -126,6 +126,7 @@ const TF_OVERFLOW = "TF_OVERFLOW";
 const CYCLE_DETECTED = "CYCLE_DETECTED";
 const FOLLOW_FRAME_NOT_FOUND = "FOLLOW_FRAME_NOT_FOUND";
 const ADD_TRANSFORM_ERROR = "ADD_TRANSFORM_ERROR";
+const LABEL_ATLAS_ERROR = "LABEL_ATLAS_ERROR";
 
 // An extensionId for creating the top-level settings nodes such as "Topics" and
 // "Custom Layers"
@@ -160,6 +161,8 @@ function isStaticTransformTopic(topic: string): boolean {
 export class Renderer extends EventEmitter<RendererEvents> implements IRenderer {
   public readonly interfaceMode: InterfaceMode;
   #canvas: HTMLCanvasElement;
+  // The label atlas never shrinks, so an overflow stays true across clear()
+  #labelAtlasError: string | undefined;
   public readonly gl: THREE.WebGLRenderer;
   public maxLod = DetailLevel.High;
 
@@ -307,6 +310,11 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
       height = canvas.parentElement.clientHeight;
       this.gl.setSize(width, height);
     }
+
+    this.labelPool.addEventListener("error", ({ error }) => {
+      this.#labelAtlasError = error.message;
+      this.settings.errors.add(["scene"], LABEL_ATLAS_ERROR, error.message);
+    });
 
     this.modelCache = new ModelCache({
       ignoreColladaUpAxis: config.scene.ignoreColladaUpAxis ?? false,
@@ -578,6 +586,9 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
       this.#resetAllFramesCursor();
     }
     this.settings.errors.clear();
+    if (this.#labelAtlasError != undefined) {
+      this.settings.errors.add(["scene"], LABEL_ATLAS_ERROR, this.#labelAtlasError);
+    }
     this.hud.clear();
 
     for (const extension of this.sceneExtensions.values()) {

@@ -2595,6 +2595,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@foxglove/three-text@npm:0.6.1":
+  version: 0.6.1
+  resolution: "@foxglove/three-text@npm:0.6.1"
+  dependencies:
+    "@mapbox/tiny-sdf": "npm:2.0.6"
+  peerDependencies:
+    three: ">=0.157.0"
+  checksum: 10/af80d8acb2e5f3182984e24c5c386c35b7bfc0259989bd3eb9d1e1322c82002cf8184b81f0476f0ab8948baf7a28bbb8e7b4037448ec5c2560bae97c5b41151c
+  languageName: node
+  linkType: hard
+
 "@foxglove/ulog@npm:2.3.2":
   version: 2.3.2
   resolution: "@foxglove/ulog@npm:2.3.2"
@@ -3203,6 +3214,7 @@ __metadata:
     "@foxglove/rosmsg2-serialization": "npm:3.1.2"
     "@foxglove/rostime": "npm:1.1.3"
     "@foxglove/schemas": "npm:2.3.1"
+    "@foxglove/three-text": "npm:0.6.1"
     "@foxglove/ulog": "npm:2.3.2"
     "@foxglove/velodyne-cloud": "npm:1.0.1"
     "@foxglove/wasm-bz2": "npm:0.3.0"
@@ -3218,7 +3230,6 @@ __metadata:
     "@lichtblick/suite": "workspace:*"
     "@lichtblick/test-builders": "npm:1.0.1"
     "@lichtblick/theme": "workspace:*"
-    "@mapbox/tiny-sdf": "npm:2.0.6"
     "@maplibre/maplibre-gl-style-spec": "npm:26.5.1"
     "@mcap/core": "npm:2.4.0"
     "@mui/icons-material": "npm:7.3.11"
