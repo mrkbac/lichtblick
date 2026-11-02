@@ -15,7 +15,8 @@
 //   You may not use this file except in compliance with the License.
 
 import { useLayoutEffect, useState } from "react";
-import { useResizeDetector } from "react-resize-detector";
+
+import { useElementSize } from "@lichtblick/suite-base/hooks/useElementSize";
 
 type Draw = (context: CanvasRenderingContext2D, width: number, height: number) => void;
 
@@ -28,17 +29,7 @@ const AutoSizingCanvas = ({
   draw,
   overrideDevicePixelRatioForTest,
 }: AutoSizingCanvasProps): React.JSX.Element => {
-  // Use a debounce and 0 refresh rate to avoid triggering a resize observation while handling
-  // an existing resize observation.
-  // https://github.com/maslianok/react-resize-detector/issues/45
-  const {
-    width,
-    height,
-    ref: canvasRef,
-  } = useResizeDetector<HTMLCanvasElement>({
-    refreshRate: 0,
-    refreshMode: "debounce",
-  });
+  const { width, height, ref: canvasRef, element: canvas } = useElementSize<HTMLCanvasElement>();
 
   const [pixelRatio, setPixelRatio] = useState(window.devicePixelRatio);
   useLayoutEffect(() => {
@@ -58,7 +49,6 @@ const AutoSizingCanvas = ({
   const actualHeight = ratio * (height ?? 0);
 
   useLayoutEffect(() => {
-    const canvas = canvasRef.current;
     if (!canvas || width == undefined || height == undefined) {
       return;
     }

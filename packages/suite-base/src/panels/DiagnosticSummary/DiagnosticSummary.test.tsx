@@ -20,15 +20,6 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 jest.mock("@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnostics");
 
-jest.mock("react-virtualized-auto-sizer", () => ({
-  __esModule: true,
-  default: ({
-    children,
-  }: {
-    children: (size: { height: number; width: number }) => React.JSX.Element;
-  }) => children({ height: 500, width: 500 }),
-}));
-
 describe("DiagnosticSummary", () => {
   const mockSaveConfig = jest.fn();
   const mockOpenSiblingPanel = jest.fn();

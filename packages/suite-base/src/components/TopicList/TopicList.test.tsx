@@ -41,14 +41,6 @@ jest.mock(
 jest.mock("@lichtblick/suite-base/components/DirectTopicStatsUpdater", () => ({
   DirectTopicStatsUpdater: () => undefined,
 }));
-jest.mock("react-virtualized-auto-sizer", () => ({
-  __esModule: true,
-  default: ({
-    children,
-  }: {
-    children: (size: { width: number; height: number }) => React.ReactNode;
-  }) => <>{children({ width: 800, height: 600 })}</>,
-}));
 // Lightweight stand-ins so renderRow branches execute without full component trees
 jest.mock("./TopicRow", () => ({
   TopicRow: ({

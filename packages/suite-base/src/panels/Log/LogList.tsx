@@ -17,12 +17,11 @@
 import DoubleArrowDownIcon from "@mui/icons-material/KeyboardDoubleArrowDown";
 import { Fab } from "@mui/material";
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
-import { useResizeDetector } from "react-resize-detector";
 import { useLatest } from "react-use";
-import AutoSizer from "react-virtualized-auto-sizer";
 import { List, ListImperativeAPI, RowComponentProps } from "react-window";
 
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
+import { useElementSize } from "@lichtblick/suite-base/hooks/useElementSize";
 import { NormalizedLogMessage } from "@lichtblick/suite-base/panels/Log/types";
 
 import { useStyles } from "./LogList.style";
@@ -90,10 +89,7 @@ function LogList({ items }: LogListProps): React.JSX.Element {
     [],
   );
 
-  const { width: resizedWidth, ref: resizeRootRef } = useResizeDetector({
-    refreshRate: 0,
-    refreshMode: "debounce",
-  });
+  const { width: resizedWidth, ref: resizeRootRef } = useElementSize<HTMLDivElement>();
 
   // Automatically scroll to reveal new items.
   const [autoscrollToEnd, setAutoscrollToEnd] = useState(true);
@@ -139,40 +135,36 @@ function LogList({ items }: LogListProps): React.JSX.Element {
   );
 
   return (
-    <AutoSizer>
-      {({ width, height }) => {
-        return (
-          <div
-            style={{ position: "relative", width, height }}
-            ref={resizeRootRef}
-            data-testid="virtualized-list"
-          >
-            <List<ListItemData>
-              listRef={listRef}
-              style={{ outline: "none", width, height }}
-              rowProps={itemData}
-              rowHeight={getRowHeight}
-              rowCount={items.length}
-              onScroll={onScroll}
-              rowComponent={Row}
-              data-testid="scrollable-list"
-            />
+    <div
+      style={{ position: "relative", width: "100%", height: "100%" }}
+      ref={resizeRootRef}
+      data-testid="virtualized-list"
+    >
+      <List<ListItemData>
+        listRef={listRef}
+        style={{ outline: "none", width: "100%", height: "100%" }}
+        // Rows to render before the first measurement
+        defaultHeight={600}
+        rowProps={itemData}
+        rowHeight={getRowHeight}
+        rowCount={items.length}
+        onScroll={onScroll}
+        rowComponent={Row}
+        data-testid="scrollable-list"
+      />
 
-            {!autoscrollToEnd && (
-              <Fab
-                size="small"
-                title="Scroll to bottom"
-                onClick={onResetView}
-                className={classes.floatingButton}
-                data-testid="scroll-to-bottom-button"
-              >
-                <DoubleArrowDownIcon />
-              </Fab>
-            )}
-          </div>
-        );
-      }}
-    </AutoSizer>
+      {!autoscrollToEnd && (
+        <Fab
+          size="small"
+          title="Scroll to bottom"
+          onClick={onResetView}
+          className={classes.floatingButton}
+          data-testid="scroll-to-bottom-button"
+        >
+          <DoubleArrowDownIcon />
+        </Fab>
+      )}
+    </div>
   );
 }
 

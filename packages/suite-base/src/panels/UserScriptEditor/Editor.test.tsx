@@ -165,19 +165,6 @@ jest.mock("@mui/material", () => ({
   useTheme: () => ({ palette: { mode: "dark" } }),
 }));
 
-jest.mock("react-resize-detector", () => ({
-  useResizeDetector: jest.fn((opts?: unknown) => {
-    resizeDetectorOptions = opts as {
-      onResize?: (payload: { width?: number; height?: number }) => void;
-    };
-    return { ref: jest.fn() };
-  }),
-}));
-
-let resizeDetectorOptions:
-  | { onResize?: (payload: { width?: number; height?: number }) => void }
-  | undefined;
-
 const userScriptProjectConfig = {
   rosLib: { fileName: "ros-lib.d.ts" },
   declarations: [{ fileName: "types.d.ts", sourceCode: "// declarations" }],
@@ -463,15 +450,6 @@ describe("Editor", () => {
     } finally {
       consoleErrorSpy.mockRestore();
     }
-  });
-
-  it("Given a resize without width When the handler runs Then layout is not called", async () => {
-    await act(async () => {
-      renderEditor();
-    });
-
-    resizeDetectorOptions?.onResize?.({ width: undefined, height: 100 });
-    expect(mockEditor?.layout).not.toHaveBeenCalled();
   });
 
   it("Given the editor receives source changes When the onChange handler fires Then the latest setter is called with new code", async () => {

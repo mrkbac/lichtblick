@@ -18,7 +18,6 @@ import { InputBase, MenuItem, Select, Typography } from "@mui/material";
 import { produce } from "immer";
 import * as _ from "lodash-es";
 import { useCallback, useEffect, useMemo } from "react";
-import AutoSizer from "react-virtualized-auto-sizer";
 import { List, RowComponentProps } from "react-window";
 
 import { filterMap } from "@lichtblick/den/collection";
@@ -172,20 +171,14 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
       return ReactNull;
     }
     return (
-      <AutoSizer>
-        {({ height, width }) => (
-          <div style={{ width, height }}>
-            <List<{ data: DiagnosticInfo[] }>
-              style={{ outline: "none", width, height }}
-              rowHeight={30}
-              rowProps={{ data: nodes }}
-              rowCount={nodes.length}
-              overscanCount={10}
-              rowComponent={renderRow}
-            />
-          </div>
-        )}
-      </AutoSizer>
+      <List<{ data: DiagnosticInfo[] }>
+        style={{ outline: "none", width: "100%", height: "100%" }}
+        rowHeight={30}
+        rowProps={{ data: nodes }}
+        rowCount={nodes.length}
+        overscanCount={10}
+        rowComponent={renderRow}
+      />
     );
   }, [
     diagnosticsWithOldMarkedAsStales,

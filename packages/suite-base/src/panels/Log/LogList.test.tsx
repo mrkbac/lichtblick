@@ -30,18 +30,8 @@ jest.mock("@lichtblick/suite-base/hooks", () => ({
   useAppTimeFormat: jest.fn(),
 }));
 
-// Mock AutoSizer to avoid layout issues in tests
-jest.mock("react-virtualized-auto-sizer", () => {
-  return ({
-    children,
-  }: {
-    children: (props: { width: number; height: number }) => React.ReactNode;
-  }) => children({ width: 800, height: 600 });
-});
-
-// Mock react-resize-detector
-jest.mock("react-resize-detector", () => ({
-  useResizeDetector: () => ({
+jest.mock("@lichtblick/suite-base/hooks/useElementSize", () => ({
+  useElementSize: () => ({
     width: 800,
     height: 600,
     ref: jest.fn(),
