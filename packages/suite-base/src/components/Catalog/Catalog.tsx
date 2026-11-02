@@ -360,7 +360,7 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
   );
 
   const closeButton = (
-    <IconButton edge="end" onClick={onClose} title={t("close")}>
+    <IconButton edge="end" onClick={onClose} aria-label={t("close")} title={t("close")}>
       <CloseIcon />
     </IconButton>
   );
@@ -385,6 +385,7 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
             onClick={() => {
               dialogActions.dataSource.open("start");
             }}
+            aria-label={t("back")}
             title={t("back")}
           >
             <ArrowBackIcon />
@@ -422,6 +423,7 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
           onClick={() => {
             dialogActions.dataSource.open("start");
           }}
+          aria-label={t("back")}
           title={t("back")}
         >
           <ArrowBackIcon />
