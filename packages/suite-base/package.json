@@ -52,7 +52,6 @@
     "@lichtblick/test-builders": "1.0.1",
     "@lichtblick/theme": "workspace:*",
     "@lichtblick/three-text": "1.0.0",
-    "@lichtblick/tsconfig": "1.1.2",
     "@mcap/core": "2.4.0",
     "@mui/icons-material": "7.3.11",
     "@mui/material": "7.3.11",
