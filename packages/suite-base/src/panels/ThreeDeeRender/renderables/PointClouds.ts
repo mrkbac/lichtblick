@@ -13,7 +13,10 @@ import * as THREE from "three";
 import { SettingsTreeAction, MessageEvent } from "@lichtblick/suite";
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
 import {
+  createCubeMaterials,
   createGeometry,
+  CubeMaterials,
+  disposeCubeMaterials,
   createInstancePickingMaterial,
   createPickingMaterial,
   DEFAULT_POINT_SETTINGS,
@@ -144,6 +147,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   public override pickable = false; // Picking happens on child renderables
   #pointsHistory: RenderObjectHistory<PointCloudRenderable>;
   #stixelsHistory: RenderObjectHistory<StixelsRenderable>;
+  #cubeMaterials: CubeMaterials;
 
   public constructor(topic: string, renderer: IRenderer, userData: PointCloudHistoryUserData) {
     super(topic, renderer, userData);
@@ -172,6 +176,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       userData.pickingMaterial,
       userData.instancePickingMaterial,
     );
+    this.#cubeMaterials = createCubeMaterials(userData.settings);
+    this.#applyShape(points);
     this.#pointsHistory = new RenderObjectHistory({
       initial: {
         messageTime: userData.messageTime,
@@ -220,6 +226,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     this.userData.pickingMaterial.dispose();
     this.userData.instancePickingMaterial.dispose();
     this.userData.stixelMaterial.dispose();
+    disposeCubeMaterials(this.#cubeMaterials);
     this.#pointsHistory.dispose();
     this.#stixelsHistory.dispose();
     super.dispose();
@@ -256,8 +263,11 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       material.dispose();
       material = pointCloudMaterial(settings);
       this.userData.material = material;
+      disposeCubeMaterials(this.#cubeMaterials);
+      this.#cubeMaterials = createCubeMaterials(settings);
       pointsHistory.forEach((entry) => {
         entry.renderable.updateMaterial(material);
+        this.#applyShape(entry.renderable);
       });
 
       stixelMaterial.dispose();
@@ -268,6 +278,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       });
     } else {
       material.size = settings.pointSize;
+      this.#cubeMaterials.cubeSize.value = settings.cubeSize;
     }
 
     if (settings.colorField === colorFieldComputedPrefix + "distance") {
@@ -337,6 +348,9 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   public startFrame(currentTime: bigint, renderFrameId: string, fixedFrameId: string): void {
     this.#pointsHistory.updateHistoryFromCurrentTime(currentTime);
     this.#pointsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId);
+    this.#pointsHistory.forEach((entry) => {
+      entry.renderable.syncCubes();
+    });
     if (this.userData.settings.stixelsEnabled) {
       this.#stixelsHistory.updateHistoryFromCurrentTime(currentTime);
       this.#stixelsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId);
@@ -377,6 +391,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       this.userData.pickingMaterial,
       this.userData.instancePickingMaterial,
     );
+    this.#applyShape(points);
     pointsHistory.addHistoryEntry({ receiveTime, messageTime, renderable: points });
     this.add(points);
 
@@ -399,6 +414,12 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       stixelsHistory.addHistoryEntry({ receiveTime, messageTime, renderable: stixels });
       this.add(stixels);
     }
+  }
+
+  #applyShape(points: PointCloudRenderable): void {
+    points.setCubeMaterials(
+      this.userData.settings.pointShape === "cube" ? this.#cubeMaterials : undefined,
+    );
   }
 
   #invalidError(message: string): void {
@@ -648,16 +669,30 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       alphaReader,
     } = readers;
 
+    // Hot loops for large clouds: write the typed arrays directly. BufferAttribute.setXYZ/W
+    // re-normalizes every component through a type switch, which dominated this function.
+    const positions = positionAttribute.array as Float32Array;
+    const colors = colorAttribute.array as Uint8Array;
+    const stixelPositions = stixelPositionAttribute.array as Float32Array;
+    const stixelColors = stixelColorAttribute.array as Uint8Array;
+    const stixelsEnabled = settings.stixelsEnabled;
+
     // Update position attribute
     for (let i = 0; i < pointCount; i++) {
       const pointOffset = i * pointStep;
       const x = xReader(view, pointOffset);
       const y = yReader(view, pointOffset);
       const z = zReader(view, pointOffset);
-      positionAttribute.setXYZ(i, x, y, z);
-      if (settings.stixelsEnabled) {
-        stixelPositionAttribute.setXYZ(i * 2, x, y, z);
-        stixelPositionAttribute.setXYZ(i * 2 + 1, x, y, 0);
+      const p = i * 3;
+      positions[p] = x;
+      positions[p + 1] = y;
+      positions[p + 2] = z;
+      if (stixelsEnabled) {
+        const sp = i * 6;
+        stixelPositions[sp] = stixelPositions[sp + 3] = x;
+        stixelPositions[sp + 1] = stixelPositions[sp + 4] = y;
+        stixelPositions[sp + 2] = z;
+        stixelPositions[sp + 5] = 0;
       }
     }
 
@@ -665,15 +700,15 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     if (settings.colorMode === "rgba-fields") {
       for (let i = 0; i < pointCount; i++) {
         const pointOffset = i * pointStep;
-        const r = redReader(view, pointOffset);
-        const g = greenReader(view, pointOffset);
-        const b = blueReader(view, pointOffset);
-        const a = alphaReader(view, pointOffset);
-        colorAttribute.setXYZW(i, r, g, b, a);
-        if (settings.stixelsEnabled) {
-          stixelColorAttribute.setXYZW(i * 2, r, g, b, a);
-          stixelColorAttribute.setXYZW(i * 2 + 1, r, g, b, a);
-        }
+        writeColor(
+          colors,
+          stixelsEnabled ? stixelColors : undefined,
+          i,
+          redReader(view, pointOffset),
+          greenReader(view, pointOffset),
+          blueReader(view, pointOffset),
+          alphaReader(view, pointOffset),
+        );
       }
     } else {
       // Iterate the point cloud data to determine min/max color values (if needed)
@@ -698,17 +733,15 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         const pointOffset = i * pointStep;
         const colorValue = packedColorReader(view, pointOffset);
         colorConverter(tempColor, colorValue);
-        colorAttribute.setXYZW(i, tempColor.r, tempColor.g, tempColor.b, tempColor.a);
-        if (settings.stixelsEnabled) {
-          stixelColorAttribute.setXYZW(i * 2, tempColor.r, tempColor.g, tempColor.b, tempColor.a);
-          stixelColorAttribute.setXYZW(
-            i * 2 + 1,
-            tempColor.r,
-            tempColor.g,
-            tempColor.b,
-            tempColor.a,
-          );
-        }
+        writeColor(
+          colors,
+          stixelsEnabled ? stixelColors : undefined,
+          i,
+          tempColor.r,
+          tempColor.g,
+          tempColor.b,
+          tempColor.a,
+        );
       }
     }
 
@@ -962,6 +995,35 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
     }
 
     renderable.updatePointCloud(pointCloud, originalMessage, settings, receiveTime);
+  }
+}
+
+/** Writes a 0-1 RGBA color as normalized uint8, same as BufferAttribute.setXYZW() */
+function writeColor(
+  colors: Uint8Array,
+  stixelColors: Uint8Array | undefined,
+  i: number,
+  r: number,
+  g: number,
+  b: number,
+  a: number,
+): void {
+  const c = i * 4;
+  const r8 = Math.round(r * 255);
+  const g8 = Math.round(g * 255);
+  const b8 = Math.round(b * 255);
+  const a8 = Math.round(a * 255);
+  colors[c] = r8;
+  colors[c + 1] = g8;
+  colors[c + 2] = b8;
+  colors[c + 3] = a8;
+  if (stixelColors) {
+    // Both stixel vertices get the point's color
+    const s = i * 8;
+    stixelColors[s] = stixelColors[s + 4] = r8;
+    stixelColors[s + 1] = stixelColors[s + 5] = g8;
+    stixelColors[s + 2] = stixelColors[s + 6] = b8;
+    stixelColors[s + 3] = stixelColors[s + 7] = a8;
   }
 }
 

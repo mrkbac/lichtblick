@@ -71,6 +71,14 @@ export const Foxglove_PointCloud_RGBA_Square: StoryObj = {
   render: () => <Foxglove_PointCloud pointShape="square" />,
 };
 
+export const Foxglove_PointCloud_RGBA_Cube: StoryObj = {
+  render: () => <Foxglove_PointCloud pointShape="cube" />,
+};
+
+export const Foxglove_PointCloud_Gradient_Cube: StoryObj = {
+  render: () => <Foxglove_PointCloud pointShape="cube" colorMode="gradient" />,
+};
+
 export const Foxglove_PointCloud_Gradient: StoryObj = {
   render: () => <Foxglove_PointCloud colorMode="gradient" />,
 };
@@ -92,7 +100,7 @@ function Foxglove_PointCloud({
   debugPicking = false,
   includeSettings = false,
 }: {
-  pointShape?: "circle" | "square";
+  pointShape?: "circle" | "square" | "cube";
   colorMode?: "gradient" | "rgba-fields";
   minValue?: number;
   maxValue?: number;
@@ -209,6 +217,7 @@ function Foxglove_PointCloud({
               visible: true,
               pointSize: 10,
               pointShape,
+              cubeSize: 0.4,
               colorMode,
               colorField: "x",
               gradient: ["#17b3f6", "#09e609d5"],

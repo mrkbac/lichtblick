@@ -34,12 +34,18 @@ import { POINTCLOUD_DATATYPES as ROS_POINTCLOUD_DATATYPES } from "../ros";
 export type LayerSettingsPointExtension = BaseSettings &
   ColorModeSettings & {
     pointSize: number;
-    pointShape: "circle" | "square";
+    pointShape: PointShape;
+    /** Edge length in meters when `pointShape` is "cube" */
+    cubeSize: number;
     decayTime: number;
   };
 
+export type PointShape = "circle" | "square" | "cube";
+const ALL_POINT_SHAPES: readonly PointShape[] = ["circle", "square", "cube"];
+
 const DEFAULT_POINT_SIZE = 1.5;
 const DEFAULT_POINT_SHAPE = "circle";
+const DEFAULT_CUBE_SIZE = 0.1;
 const DEFAULT_COLOR_MAP = "turbo";
 const DEFAULT_FLAT_COLOR = { r: 1, g: 1, b: 1, a: 1 };
 const DEFAULT_MIN_COLOR = { r: 100 / 255, g: 47 / 255, b: 105 / 255, a: 1 };
@@ -51,6 +57,7 @@ export const DEFAULT_POINT_SETTINGS: LayerSettingsPointExtension = {
   frameLocked: false,
   pointSize: DEFAULT_POINT_SIZE,
   pointShape: DEFAULT_POINT_SHAPE,
+  cubeSize: DEFAULT_CUBE_SIZE,
   decayTime: 0,
   colorMode: "flat",
   flatColor: rgbaToCssString(DEFAULT_FLAT_COLOR),
@@ -64,12 +71,19 @@ export const DEFAULT_POINT_SETTINGS: LayerSettingsPointExtension = {
 
 export const POINT_CLOUD_REQUIRED_FIELDS = ["x", "y", "z"];
 
+const SHAPE_LABELS = {
+  circle: "threeDee:pointShapeCircle",
+  square: "threeDee:pointShapeSquare",
+  cube: "threeDee:pointShapeCube",
+} as const;
+
 /**
  * Creates settings node for Point cloud and scan topics
  * @param topic - topic to get settings node for
  * @param messageFields - message fields or required fields for the topic
  * @param config - current topic settings
  * @param defaultSettings - (optional) default settings to use
+ * @param shapes - (optional) point shapes offered in the settings
  * @returns  - settings node for the topic
  */
 export function pointSettingsNode(
@@ -77,6 +91,7 @@ export function pointSettingsNode(
   messageFields: string[],
   config: Partial<LayerSettingsPointExtension>,
   defaultSettings: LayerSettingsPointExtension = DEFAULT_POINT_SETTINGS,
+  shapes: readonly PointShape[] = ALL_POINT_SHAPES,
 ): SettingsTreeNode {
   const pointSize = config.pointSize;
   const pointShape = config.pointShape ?? "circle";
@@ -103,24 +118,35 @@ export function pointSettingsNode(
     order: topic.name.toLocaleLowerCase(),
     visible: config.visible ?? defaultSettings.visible,
     fields: {
-      pointSize: {
-        label: t("threeDee:pointSize"),
-        input: "number",
-        step: 1,
-        placeholder: "2",
-        precision: 2,
-        value: pointSize,
-        min: 0,
-      },
       pointShape: {
         label: t("threeDee:pointShape"),
         input: "select",
-        options: [
-          { label: t("threeDee:pointShapeCircle"), value: "circle" },
-          { label: t("threeDee:pointShapeSquare"), value: "square" },
-        ],
+        options: shapes.map((shape) => ({ label: t(SHAPE_LABELS[shape]), value: shape })),
         value: pointShape,
       },
+      ...(pointShape === "cube"
+        ? {
+            cubeSize: {
+              label: t("threeDee:cubeSize"),
+              input: "number",
+              step: 0.05,
+              placeholder: String(defaultSettings.cubeSize),
+              precision: 3,
+              value: config.cubeSize,
+              min: 0,
+            },
+          }
+        : {
+            pointSize: {
+              label: t("threeDee:pointSize"),
+              input: "number",
+              step: 1,
+              placeholder: "2",
+              precision: 2,
+              value: pointSize,
+              min: 0,
+            },
+          }),
       decayTime: {
         label: t("threeDee:decayTime"),
         input: "number",
@@ -203,11 +229,163 @@ export class PointsRenderable<TUserData extends BaseUserData = BaseUserData> ext
 
   public override dispose(): void {
     this.#points.geometry.dispose();
+    this.#cubes?.geometry.dispose();
   }
 
   public updateMaterial(material: Material): void {
     this.#points.material = material;
   }
+
+  #cubes?: THREE.Mesh<THREE.InstancedBufferGeometry, THREE.MeshLambertMaterial>;
+
+  /**
+   * Cube instance attributes alias the point geometry's arrays, so the cloud is only decoded once.
+   * Call before rendering (e.g. in startFrame) so cubes pick up new or resized point data.
+   */
+  public syncCubes(): void {
+    if (this.#cubes?.visible !== true) {
+      return;
+    }
+    const cubes = this.#cubes.geometry;
+    const points = this.geometry;
+    cubes.instanceCount = points.drawRange.count;
+    syncInstanceAttribute(cubes, "instancePosition", points.attributes.position!);
+    syncInstanceAttribute(cubes, "color", points.attributes.color!);
+  }
+
+  /** Render each point as a cube (one instanced draw call) instead of a GL point, or switch back */
+  public setCubeMaterials(materials: CubeMaterials | undefined): void {
+    this.#points.visible = materials == undefined;
+    if (!materials) {
+      if (this.#cubes) {
+        this.#cubes.visible = false;
+      }
+      return;
+    }
+    if (!this.#cubes) {
+      const geometry = new THREE.InstancedBufferGeometry();
+      geometry.index = UNIT_CUBE.index;
+      geometry.setAttribute("position", UNIT_CUBE.attributes.position!);
+      geometry.setAttribute("normal", UNIT_CUBE.attributes.normal!);
+      const cubes = new THREE.Mesh(geometry, materials.material);
+      cubes.frustumCulled = false;
+      cubes.name = `${this.userData.topic}:PointCloud:cubes`;
+      this.#cubes = cubes;
+      this.add(cubes);
+    }
+    this.#cubes.visible = true;
+    this.syncCubes();
+    this.#cubes.material = materials.material;
+    this.#cubes.userData = {
+      pickingMaterial: materials.pickingMaterial,
+      instancePickingMaterial: materials.instancePickingMaterial,
+      pose: this.userData.pose,
+    };
+  }
+}
+
+const UNIT_CUBE = new THREE.BoxGeometry(1, 1, 1);
+
+function syncInstanceAttribute(
+  geometry: THREE.InstancedBufferGeometry,
+  name: string,
+  source: THREE.BufferAttribute,
+): void {
+  let attribute = geometry.getAttribute(name) as THREE.InstancedBufferAttribute | undefined;
+  if (attribute?.array !== source.array) {
+    // DynamicBufferGeometry replaced the array on resize
+    attribute = new THREE.InstancedBufferAttribute(
+      source.array,
+      source.itemSize,
+      source.normalized,
+    );
+    attribute.setUsage(source.usage);
+    geometry.setAttribute(name, attribute);
+  }
+  attribute.version = source.version;
+}
+
+export type CubeMaterials = {
+  material: THREE.MeshLambertMaterial;
+  pickingMaterial: THREE.ShaderMaterial;
+  instancePickingMaterial: THREE.ShaderMaterial;
+  /** Shared by all three materials so size changes don't need a rebuild */
+  cubeSize: THREE.IUniform<number>;
+};
+
+const VS_CUBE_TRANSFORM = /* glsl */ `
+vec3 transformed = position * cubeSize + instancePosition;
+`;
+
+export function createCubeMaterials<T extends LayerSettingsPointExtension>(
+  settings: T,
+): CubeMaterials {
+  const cubeSize = { value: settings.cubeSize };
+  const encoding = pointCloudColorEncoding(settings);
+  const material = new THREE.MeshLambertMaterial({
+    vertexColors: true,
+    transparent: colorHasTransparency(settings),
+    depthWrite: true,
+  });
+  material.customProgramCacheKey = () => `cube-${encoding}`;
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.cubeSize = cubeSize;
+    shader.vertexShader =
+      "uniform float cubeSize;\nattribute vec3 instancePosition;\n" +
+      shader.vertexShader.replace("#include <begin_vertex>", VS_CUBE_TRANSFORM);
+    if (encoding === "srgb") {
+      const SEARCH = "#include <color_fragment>";
+      shader.fragmentShader =
+        FS_SRGB_TO_LINEAR +
+        shader.fragmentShader.replace(
+          SEARCH,
+          SEARCH + "\ndiffuseColor.rgb = sRGBToLinear(diffuseColor.rgb);",
+        );
+    }
+  };
+
+  const vertexShader = (header: string) => /* glsl */ `
+    uniform float cubeSize;
+    attribute vec3 instancePosition;
+    ${header}
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position * cubeSize + instancePosition, 1.0);
+    }
+  `;
+  const pickingMaterial = new THREE.ShaderMaterial({
+    vertexShader: vertexShader("void main() {"),
+    fragmentShader: /* glsl */ `
+      uniform vec4 objectId;
+      void main() {
+        gl_FragColor = objectId;
+      }
+    `,
+    uniforms: { cubeSize, objectId: { value: [NaN, NaN, NaN, NaN] } },
+  });
+  const instancePickingMaterial = new THREE.ShaderMaterial({
+    vertexShader: vertexShader(/* glsl */ `
+      varying vec4 objectId;
+      void main() {
+        objectId = vec4(
+          float((gl_InstanceID >> 24) & 255) / 255.0,
+          float((gl_InstanceID >> 16) & 255) / 255.0,
+          float((gl_InstanceID >> 8) & 255) / 255.0,
+          float(gl_InstanceID & 255) / 255.0);
+    `),
+    fragmentShader: /* glsl */ `
+      varying vec4 objectId;
+      void main() {
+        gl_FragColor = objectId;
+      }
+    `,
+    uniforms: { cubeSize },
+  });
+  return { material, pickingMaterial, instancePickingMaterial, cubeSize };
+}
+
+export function disposeCubeMaterials(materials: CubeMaterials): void {
+  materials.material.dispose();
+  materials.pickingMaterial.dispose();
+  materials.instancePickingMaterial.dispose();
 }
 
 // Fragment shader chunk to convert sRGB to linear RGB
