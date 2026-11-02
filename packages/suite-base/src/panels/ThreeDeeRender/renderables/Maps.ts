@@ -41,6 +41,7 @@ import { normalizeTime } from "../normalizeMessages";
 import { CustomLayerSettings, PRECISION_DISTANCE } from "../settings";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose } from "../transforms";
+import { buildingsGeometry } from "./mapBuildings";
 import {
   DemSource,
   DemTiles,
@@ -180,6 +181,11 @@ class MapRenderable extends Renderable<MapUserData> {
       blendDst: THREE.OneMinusSrcAlphaFactor,
     }),
   );
+  /** The style's fill-extrusion features as real 3D meshes; the draped map only shows roofs. */
+  #buildings = new THREE.Mesh(
+    new THREE.BufferGeometry(),
+    new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0, roughness: 0.9 }),
+  );
   #container?: HTMLDivElement;
   #map?: MapLibreMap;
   #mapPromise?: Promise<MapLibreMap>;
@@ -192,6 +198,8 @@ class MapRenderable extends Renderable<MapUserData> {
   #geometryKey?: string;
   #anchorElevation?: number;
   #demAbort?: AbortController;
+  /** Loaded terrain the buildings stand on, with its exaggeration. */
+  #terrain?: { dem: DemTiles; exaggeration: number };
   #tilesets = new Map<string, Tileset>();
   /** Async loads check this so nothing is created after dispose(). */
   #disposed = false;
@@ -205,6 +213,7 @@ class MapRenderable extends Renderable<MapUserData> {
     super(name, renderer, userData);
     this.#onErrorsChanged = onErrorsChanged;
     this.#mesh.visible = false;
+    this.#mesh.add(this.#buildings);
     this.add(this.#mesh);
   }
 
@@ -227,6 +236,8 @@ class MapRenderable extends Renderable<MapUserData> {
     this.#mesh.material.map?.dispose();
     this.#mesh.material.dispose();
     this.#mesh.geometry.dispose();
+    this.#buildings.material.dispose();
+    this.#buildings.geometry.dispose();
     super.dispose();
   }
 
@@ -440,6 +451,7 @@ class MapRenderable extends Renderable<MapUserData> {
     map.on("idle", () => {
       throttledCopy.cancel();
       copy();
+      this.#updateBuildings();
     });
     this.#container = container;
     this.#map = map;
@@ -489,7 +501,8 @@ class MapRenderable extends Renderable<MapUserData> {
     this.#mesh.geometry.dispose();
     this.#mesh.geometry = geometry;
     this.#demAbort?.abort();
-    this.renderer.queueAnimationFrame();
+    this.#terrain = undefined;
+    this.#updateBuildings();
     if (!terrain || !dem) {
       return;
     }
@@ -531,6 +544,32 @@ class MapRenderable extends Renderable<MapUserData> {
     }
     positions.needsUpdate = true;
     geometry.computeBoundingSphere();
+    this.#terrain = { dem, exaggeration };
+    this.#updateBuildings();
+  }
+
+  /** Rebuild the building meshes from what the offscreen map currently shows. */
+  #updateBuildings(): void {
+    const map = this.#map;
+    const center = this.#center;
+    const extrusions = map
+      ?.getLayersOrder()
+      .filter((id) => map.getLayer(id)?.type === "fill-extrusion");
+    const features =
+      map && extrusions && extrusions.length > 0
+        ? map.queryRenderedFeatures({ layers: extrusions })
+        : [];
+    const terrain = this.#terrain;
+    const anchorElevation = this.#anchorElevation ?? 0;
+    const geometry =
+      center &&
+      buildingsGeometry(features, center, (point) =>
+        terrain
+          ? (sampleElevation(terrain.dem, point) - anchorElevation) * terrain.exaggeration
+          : 0,
+      );
+    this.#buildings.geometry.dispose();
+    this.#buildings.geometry = geometry ?? new THREE.BufferGeometry();
     this.renderer.queueAnimationFrame();
   }
 
