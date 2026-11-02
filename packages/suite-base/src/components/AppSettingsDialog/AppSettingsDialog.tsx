@@ -24,7 +24,7 @@ import {
   Typography,
   useMediaQuery,
 } from "@mui/material";
-import { MouseEvent, SyntheticEvent, useState } from "react";
+import { lazy, MouseEvent, Suspense, SyntheticEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
@@ -33,7 +33,6 @@ import { APP_SETTINGS_ABOUT_ITEMS } from "@lichtblick/suite-base/components/AppS
 import { AppSettingsTab } from "@lichtblick/suite-base/components/AppSettingsDialog/types";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import { ExperimentalFeatureSettings } from "@lichtblick/suite-base/components/ExperimentalFeatureSettings";
-import ExtensionsSettings from "@lichtblick/suite-base/components/ExtensionsSettings";
 import LichtblickLogoText from "@lichtblick/suite-base/components/LichtblickLogoText";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
@@ -55,6 +54,11 @@ import {
   TimeFormat,
   TimezoneSettings,
 } from "./settings";
+
+// Lazy so the extension list (data grid, markdown) stays out of the startup bundle.
+const ExtensionsSettings = lazy(
+  async () => await import("@lichtblick/suite-base/components/ExtensionsSettings"),
+);
 
 const selectWorkspaceInitialActiveTab = (store: WorkspaceContextStore) =>
   store.dialogs.preferences.initialTab;
@@ -89,7 +93,11 @@ export function AppSettingsDialog(
     }
   };
 
-  const extensionSettingsComponent = extensionSettings ?? <ExtensionsSettings />;
+  const extensionSettingsComponent = extensionSettings ?? (
+    <Suspense>
+      <ExtensionsSettings />
+    </Suspense>
+  );
 
   return (
     <Dialog {...props} fullWidth maxWidth="md" data-testid={`AppSettingsDialog--${activeTab}`}>

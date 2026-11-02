@@ -3708,6 +3708,8 @@ __metadata:
     react-window: "npm:2.2.7"
     readable-stream: "npm:4.7.0"
     recharts: "npm:2.15.3"
+    refractor: "npm:4.9.0"
+    rehype-prism-plus: "npm:2.0.0"
     rehype-raw: "npm:7.0.0"
     reselect: "npm:5.1.1"
     sanitize-html: "npm:2.17.7"
@@ -19113,7 +19115,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"refractor@npm:^4.8.0":
+"refractor@npm:4.9.0, refractor@npm:^4.8.0":
   version: 4.9.0
   resolution: "refractor@npm:4.9.0"
   dependencies:

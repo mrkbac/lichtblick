@@ -7,11 +7,10 @@
 
 import CloseIcon from "@mui/icons-material/Close";
 import { Dialog, IconButton } from "@mui/material";
-import { useCallback, useLayoutEffect, useMemo, useRef } from "react";
+import { lazy, Suspense, useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { useMountedState } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
-import Snow from "@lichtblick/suite-base/components/DataSourceDialog/Snow";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
@@ -24,6 +23,11 @@ import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 
 import Connection from "./Connection";
 import Start from "./Start";
+
+// Lazy so three.js stays out of the startup bundle.
+const Snow = lazy(
+  async () => await import("@lichtblick/suite-base/components/DataSourceDialog/Snow"),
+);
 
 export type DataSourceDialogItem = "start" | "file" | "demo" | "remote" | "connection";
 
@@ -95,9 +99,17 @@ export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Elemen
     if (backdropAnimation === false) {
       return;
     } else if (now >= new Date(now.getFullYear(), 11, 25)) {
-      return <Snow effect="snow" />;
+      return (
+        <Suspense>
+          <Snow effect="snow" />
+        </Suspense>
+      );
     } else if (now < new Date(now.getFullYear(), 0, 2)) {
-      return <Snow effect="confetti" />;
+      return (
+        <Suspense>
+          <Snow effect="confetti" />
+        </Suspense>
+      );
     }
     return;
   }, [backdropAnimation]);

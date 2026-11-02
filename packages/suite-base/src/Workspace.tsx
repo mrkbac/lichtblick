@@ -16,7 +16,16 @@
 import { Link, Typography } from "@mui/material";
 import { t } from "i18next";
 import { useSnackbar } from "notistack";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Trans, useTranslation } from "react-i18next";
 
 import Logger from "@lichtblick/log";
@@ -33,7 +42,6 @@ import {
 import DataSourceSidebar from "@lichtblick/suite-base/components/DataSourceSidebar/DataSourceSidebar";
 import DocumentDropListener from "@lichtblick/suite-base/components/DocumentDropListener";
 import { EventsList } from "@lichtblick/suite-base/components/EventsList";
-import ExtensionsSettings from "@lichtblick/suite-base/components/ExtensionsSettings";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import LayoutBrowser from "@lichtblick/suite-base/components/LayoutBrowser";
 import {
@@ -99,6 +107,11 @@ import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
 import { useWorkspaceActions } from "./context/Workspace/useWorkspaceActions";
 import { severityToBadgeColor } from "./utils";
+
+// Lazy so the extension list (data grid, markdown) stays out of the startup bundle.
+const ExtensionsSettings = lazy(
+  async () => await import("@lichtblick/suite-base/components/ExtensionsSettings"),
+);
 
 const log = Logger.getLogger(__filename);
 
@@ -470,7 +483,9 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   function ExtensionsSidebar() {
     return (
       <SidebarContent title="Extensions" disablePadding>
-        <ExtensionsSettings />
+        <Suspense>
+          <ExtensionsSettings />
+        </Suspense>
       </SidebarContent>
     );
   }
