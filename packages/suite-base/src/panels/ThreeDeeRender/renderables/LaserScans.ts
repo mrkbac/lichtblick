@@ -378,10 +378,13 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
       }
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsLaserScan>;
       const messageFields = LASERSCAN_FIELDS;
+      // Cubes aren't supported: the laser scan shader computes positions from ranges on the GPU
       const node: SettingsTreeNodeWithActionHandler = pointSettingsNode(
         topic,
         messageFields,
         config,
+        undefined,
+        ["circle", "square"],
       );
       node.handler = handler;
       node.icon = "Radar";

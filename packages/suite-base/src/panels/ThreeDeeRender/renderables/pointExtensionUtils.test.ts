@@ -98,4 +98,29 @@ describe("pointExtensionUtils", () => {
       expect(colorMode.options).toEqual(expect.not.arrayContaining([RGBA_OPTION]));
     });
   });
+
+  describe("pointShape", () => {
+    const topic: Topic = { name: "/points", schemaName: ROS_POINTCLOUD_DATATYPE };
+
+    it("shows cube size instead of point size for cubes", () => {
+      const node = pointSettingsNode(topic, [], { pointShape: "cube", cubeSize: 0.2 });
+      expect(node.fields!.cubeSize?.value).toBe(0.2);
+      expect(node.fields!.pointSize).toBeUndefined();
+    });
+
+    it("shows point size for flat shapes", () => {
+      const node = pointSettingsNode(topic, [], { pointShape: "square" });
+      expect(node.fields!.pointSize).toBeDefined();
+      expect(node.fields!.cubeSize).toBeUndefined();
+    });
+
+    it("only offers the given shapes", () => {
+      const node = pointSettingsNode(topic, [], {}, undefined, ["circle", "square"]);
+      const pointShape = node.fields!.pointShape as SettingsTreeFieldWithOptions;
+      expect(pointShape.options).toEqual([
+        { label: "Circle", value: "circle" },
+        { label: "Square", value: "square" },
+      ]);
+    });
+  });
 });
