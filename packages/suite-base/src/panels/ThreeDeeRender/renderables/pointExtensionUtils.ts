@@ -264,9 +264,11 @@ export class PointsRenderable<TUserData extends BaseUserData = BaseUserData> ext
     }
     if (!this.#cubes) {
       const geometry = new THREE.InstancedBufferGeometry();
-      geometry.index = UNIT_CUBE.index;
-      geometry.setAttribute("position", UNIT_CUBE.attributes.position!);
-      geometry.setAttribute("normal", UNIT_CUBE.attributes.normal!);
+      // Clone: disposing a geometry deletes its attributes' GL buffers, which must not affect
+      // other cubes sharing them
+      geometry.setIndex(UNIT_CUBE.index!.clone());
+      geometry.setAttribute("position", UNIT_CUBE.attributes.position!.clone());
+      geometry.setAttribute("normal", UNIT_CUBE.attributes.normal!.clone());
       const cubes = new THREE.Mesh(geometry, materials.material);
       cubes.frustumCulled = false;
       cubes.name = `${this.userData.topic}:PointCloud:cubes`;
