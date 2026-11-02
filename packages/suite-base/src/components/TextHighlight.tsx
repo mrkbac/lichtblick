@@ -14,15 +14,13 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import fuzzySort from "fuzzysort";
+import { Fzf } from "fzf";
 import { makeStyles } from "tss-react/mui";
 
 const useStyles = makeStyles()((theme) => ({
-  root: {
-    ".TextHighlight-highlight": {
-      color: theme.palette.primary.main,
-      fontWeight: "bold",
-    },
+  highlight: {
+    color: theme.palette.primary.main,
+    fontWeight: "bold",
   },
 }));
 
@@ -34,21 +32,34 @@ type Props = {
 export default function TextHighlight({ targetStr, searchText = "" }: Props): React.JSX.Element {
   const { classes } = useStyles();
 
-  if (searchText.length === 0) {
+  const positions =
+    searchText.length > 0 ? new Fzf([targetStr]).find(searchText)[0]?.positions : undefined;
+  if (positions == undefined || positions.size === 0) {
     return <>{targetStr}</>;
   }
 
-  const match = fuzzySort.single(searchText, targetStr);
-  const result = match
-    ? match.highlight("<span class='TextHighlight-highlight'>", "</span>")
-    : undefined;
-
+  // Group consecutive characters so each matched run is one element
+  const runs: { text: string; matched: boolean }[] = [];
+  // fzf positions index code points, so iterate code points rather than UTF-16 units
+  for (const [index, char] of Array.from(targetStr).entries()) {
+    const matched = positions.has(index);
+    const last = runs.at(-1);
+    if (last?.matched === matched) {
+      last.text += char;
+    } else {
+      runs.push({ text: char, matched });
+    }
+  }
   return (
-    <span className={classes.root}>
-      {result != undefined && result.length > 0 ? (
-        <span dangerouslySetInnerHTML={{ __html: result }} />
-      ) : (
-        targetStr
+    <span>
+      {runs.map((run, i) =>
+        run.matched ? (
+          <span key={i} className={classes.highlight}>
+            {run.text}
+          </span>
+        ) : (
+          run.text
+        ),
       )}
     </span>
   );

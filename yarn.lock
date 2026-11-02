@@ -3688,7 +3688,6 @@ __metadata:
     eventemitter3: "npm:5.0.4"
     fake-indexeddb: "npm:4.0.2"
     fork-ts-checker-webpack-plugin: "npm:9.1.0"
-    fuzzysort: "npm:3.1.0"
     fzf: "npm:0.5.2"
     gl-matrix: "npm:3.4.4"
     heap-js: "npm:2.7.1"
@@ -12148,13 +12147,6 @@ __metadata:
   version: 1.2.3
   resolution: "functions-have-names@npm:1.2.3"
   checksum: 10/0ddfd3ed1066a55984aaecebf5419fbd9344a5c38dd120ffb0739fac4496758dcf371297440528b115e4367fc46e3abc86a2cc0ff44612181b175ae967a11a05
-  languageName: node
-  linkType: hard
-
-"fuzzysort@npm:3.1.0":
-  version: 3.1.0
-  resolution: "fuzzysort@npm:3.1.0"
-  checksum: 10/6220e62ff00c0855c7e8d38714ed5ba9641e14ca2e2b793229965d7b6d03a14783bf04ecc169033a4429898ccb28b3c77e45ac73abd6d4647920705832b0cb71
   languageName: node
   linkType: hard
 
