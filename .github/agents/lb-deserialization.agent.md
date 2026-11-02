@@ -1,4 +1,5 @@
 ---
+
 description: "Deserialization specialist covering schema parsing and message decoding for protobuf/flatbuffer/ROS/JSON. Use for data format issues, schema resolution, and decoding performance after message bytes are available."
 tools: ["read", "search"]
 ---
@@ -21,14 +22,14 @@ Decoded message objects (ready for panels)
 
 ## Schema Encodings Supported
 
-| Encoding | Schema Format | Deserializer |
-|----------|--------------|--------------|
-| `ros1msg` | ROS 1 message definition text | `@lichtblick/rosmsg-serialization` MessageReader |
-| `ros2msg` | ROS 2 message definition text | `@lichtblick/rosmsg2-serialization` MessageReader |
-| `ros2idl` | OMG IDL text | `@lichtblick/omgidl-serialization` MessageReader |
-| `jsonschema` | JSON Schema object | JSON.parse + postprocessValue (base64 decode) |
-| `protobuf` | FileDescriptorSet binary | `protobufjs` Root.fromDescriptor |
-| `flatbuffer` | Binary reflection schema | `flatbuffers_reflection` Parser |
+| Encoding     | Schema Format                 | Deserializer                                    |
+| ------------ | ----------------------------- | ----------------------------------------------- |
+| `ros1msg`    | ROS 1 message definition text | `@foxglove/rosmsg-serialization` MessageReader  |
+| `ros2msg`    | ROS 2 message definition text | `@foxglove/rosmsg2-serialization` MessageReader |
+| `ros2idl`    | OMG IDL text                  | `@foxglove/omgidl-serialization` MessageReader  |
+| `jsonschema` | JSON Schema object            | JSON.parse + postprocessValue (base64 decode)   |
+| `protobuf`   | FileDescriptorSet binary      | `protobufjs` Root.fromDescriptor                |
+| `flatbuffer` | Binary reflection schema      | `flatbuffers_reflection` Parser                 |
 
 ## Core Entry Point: `parseChannel()`
 
@@ -51,6 +52,7 @@ This is the single function that resolves any channel's schema into a deserializ
 - Produces `IDeserializedIterableSource` (messages are JS objects, not raw bytes)
 
 ## Key Files
+
 - `packages/mcap-support/src/parseChannel.ts` — schema → deserializer dispatch
 - `packages/mcap-support/src/parseProtobufSchema.ts` — Protobuf handling
 - `packages/mcap-support/src/parseFlatbufferSchema.ts` — Flatbuffer handling
@@ -66,6 +68,7 @@ This is the single function that resolves any channel's schema into a deserializ
 - ROS: `MessageReader` pre-compiles field offsets at schema parse time
 
 ## Skills Reference
+
 - MCAP format, chunk structure, and indexed reading: `read_file(".github/skills/mcap-format/SKILL.md")`
 - Worker/Comlink patterns (offloading decode to SharedWorker): `read_file(".github/skills/web-workers/SKILL.md")`
 - Decode throughput profiling or allocation reduction: `read_file(".github/skills/performance/SKILL.md")`

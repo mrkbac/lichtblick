@@ -4,8 +4,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 import * as monacoApi from "monaco-editor/editor/editor.api.js";
+import type { Mock } from "vitest";
 
 import LayoutBuilder from "@lichtblick/suite-base/testing/builders/LayoutBuilder";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
@@ -15,20 +16,20 @@ import { Sidebar } from "./index";
 
 const GOTO_UTILS_PATH = "/utils/pointClouds.ts";
 
-jest.mock("monaco-editor/editor/editor.api.js", () => ({
-  Uri: { parse: jest.fn((value: string) => ({ path: value })) },
-  editor: { getModel: jest.fn() },
+vi.mock("monaco-editor/editor/editor.api.js", () => ({
+  Uri: { parse: vi.fn((value: string) => ({ path: value })) },
+  editor: { getModel: vi.fn() },
 }));
 
-jest.mock("./ScriptsList", () => ({
+vi.mock("./ScriptsList", () => ({
   ScriptsList: () => <div data-testid="scripts-list-panel" />,
 }));
 
-jest.mock("./Templates", () => ({
+vi.mock("./Templates", () => ({
   Templates: () => <div data-testid="templates-panel" />,
 }));
 
-jest.mock("./Utilities", () => ({
+vi.mock("./Utilities", () => ({
   Utilities: ({ gotoUtils }: { gotoUtils: (filePath: string) => void }) => (
     <button
       data-testid="goto-utils"
@@ -39,20 +40,20 @@ jest.mock("./Utilities", () => ({
   ),
 }));
 
-const mockGetModel = monacoApi.editor.getModel as jest.Mock;
+const mockGetModel = monacoApi.editor.getModel as Mock;
 
 function renderSidebar(props: Partial<React.ComponentProps<typeof Sidebar>> = {}) {
-  const setScriptOverride = props.setScriptOverride ?? jest.fn();
+  const setScriptOverride = props.setScriptOverride ?? vi.fn();
 
   render(
     <ThemeProvider isDark={false}>
       <Sidebar
         userScripts={props.userScripts ?? LayoutBuilder.userScripts()}
-        selectScript={props.selectScript ?? jest.fn()}
-        deleteScript={props.deleteScript ?? jest.fn()}
+        selectScript={props.selectScript ?? vi.fn()}
+        deleteScript={props.deleteScript ?? vi.fn()}
         setScriptOverride={setScriptOverride}
-        setUserScripts={props.setUserScripts ?? jest.fn()}
-        addNewScript={props.addNewScript ?? jest.fn()}
+        setUserScripts={props.setUserScripts ?? vi.fn()}
+        addNewScript={props.addNewScript ?? vi.fn()}
         selectedScriptId={props.selectedScriptId}
         selectedScript={props.selectedScript}
         script={props.script}
@@ -65,8 +66,8 @@ function renderSidebar(props: Partial<React.ComponentProps<typeof Sidebar>> = {}
 
 describe("Sidebar", () => {
   afterEach(() => {
-    jest.clearAllMocks();
-    jest.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
     // Reset only this mock's implementation so later tests fall back to Jest's default
     // undefined return value, while keeping the Uri.parse implementation from the mock factory.
     mockGetModel.mockReset();
@@ -132,7 +133,7 @@ describe("Sidebar", () => {
     // Given
     const model = {
       uri: { path: BasicBuilder.string() },
-      getValue: jest.fn().mockReturnValue(BasicBuilder.string()),
+      getValue: vi.fn().mockReturnValue(BasicBuilder.string()),
     };
     mockGetModel.mockReturnValue(model);
     const { setScriptOverride } = renderSidebar();

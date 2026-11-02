@@ -39,7 +39,6 @@ class Ros1LocalBagDataSourceFactory implements IDataSourceFactory {
     const source = new WorkerSerializedIterableSource({
       initWorker: () => {
         return new Worker(
-          // foxglove-depcheck-used: babel-plugin-transform-import-meta
           new URL(
             "@lichtblick/suite-base/players/IterablePlayer/BagIterableSourceWorker.worker",
             import.meta.url,

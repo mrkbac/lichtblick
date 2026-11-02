@@ -29,10 +29,10 @@ function getPrimarySeries(
 }
 
 type MarkerRefs = {
-  verticalBar: React.RefObject<HTMLDivElement>;
-  horizontalBar: React.RefObject<HTMLDivElement>;
-  point: React.RefObject<HTMLDivElement>;
-  label: React.RefObject<HTMLDivElement>;
+  verticalBar: React.RefObject<HTMLDivElement | null>;
+  horizontalBar: React.RefObject<HTMLDivElement | null>;
+  point: React.RefObject<HTMLDivElement | null>;
+  label: React.RefObject<HTMLDivElement | null>;
 };
 
 function setVerticalBarPosition(
@@ -119,8 +119,8 @@ export const DeltaMarkerBars = React.memo(function DeltaMarkerBars({
 }: DeltaMarkerBarsProps): React.JSX.Element {
   const { classes } = useDeltaMarkerBarsStyles();
 
-  const latestXScale = useRef<Scale | undefined>();
-  const latestYScale = useRef<YScale | undefined>();
+  const latestXScale = useRef<Scale | undefined>(undefined);
+  const latestYScale = useRef<YScale | undefined>(undefined);
   const latestMarkerA = useLatest(markerA);
   const latestMarkerB = useLatest(markerB);
 

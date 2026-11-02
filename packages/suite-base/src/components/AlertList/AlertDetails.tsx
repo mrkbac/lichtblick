@@ -16,7 +16,7 @@ export function AlertDetails(
   const { details, tip } = props;
   const { classes } = useStyles();
 
-  const content = useMemo(() => {
+  const content = useMemo((): React.ReactNode => {
     if (details instanceof Error) {
       return details.message;
     } else if (details != undefined && details !== "") {

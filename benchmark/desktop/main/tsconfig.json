@@ -1,8 +1,9 @@
 {
-  "extends": "@lichtblick/tsconfig/base",
+  "extends": "../../../tsconfig.base.json",
   "include": ["./**/*", "../common/**/*", "../../package.json"],
   "compilerOptions": {
     "rootDir": "../../",
-    "noEmit": true
+    "noEmit": true,
+    "types": ["node", "vitest/globals"]
   }
 }

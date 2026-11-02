@@ -5,10 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Meta, StoryFn, StoryObj } from "@storybook/react-webpack5";
+import { Time } from "@foxglove/rostime";
 import { useState } from "react";
+import { Meta, StoryObj } from "storybook-react-rsbuild";
 
-import { Time } from "@lichtblick/rostime";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import AppConfigurationContext from "@lichtblick/suite-base/context/AppConfigurationContext";
@@ -34,7 +34,7 @@ export default {
     time: ABSOLUTE_TIME,
   },
   decorators: [
-    (Story: StoryFn, ctx): React.JSX.Element => {
+    (Story: React.ComponentType, ctx): React.JSX.Element => {
       const {
         args: { timeFormat, timezone, time, ...args },
       } = ctx;

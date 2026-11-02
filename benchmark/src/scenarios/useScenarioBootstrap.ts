@@ -38,7 +38,7 @@ export function useScenarioBootstrap(): void {
 
   const didSelectSourceRef = useRef(false);
   const didAutoStartRef = useRef(false);
-  const pauseTimeoutIdRef = useRef<ReturnType<typeof setTimeout>>();
+  const pauseTimeoutIdRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     if (!scenario || didSelectSourceRef.current) {

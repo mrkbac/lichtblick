@@ -1,11 +1,11 @@
 {
-  "extends": "@lichtblick/tsconfig/base",
+  "extends": "../../tsconfig.base.json",
   "include": ["./src/**/*"],
   "compilerOptions": {
     "rootDir": "./src",
     "outDir": "./dist",
     "jsx": "react-jsx",
-    "types": ["node", "jest"],
-    "lib": ["dom", "es2022"]
+    "types": ["node", "vitest/globals"],
+    "lib": ["dom", "es2025", "esnext.typedarrays"]
   }
 }

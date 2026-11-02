@@ -30,9 +30,9 @@ export function HoverTooltip({
 }: HoverTooltipProperties): React.JSX.Element | ReactNull {
   const { classes } = useStyles();
   const paperRef = useRef<HTMLDivElement>(ReactNull);
-  const graceTimer = useRef<ReturnType<typeof setTimeout>>();
-  const dwellTimer = useRef<ReturnType<typeof setTimeout>>();
-  const leaveTimer = useRef<ReturnType<typeof setTimeout>>();
+  const graceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const dwellTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const leaveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   /** Entities queued during a grace period; applied when the timer expires. */
   const pendingEntities = useRef<HoverEntityInfo[]>([]);
   /**

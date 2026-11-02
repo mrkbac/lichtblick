@@ -74,15 +74,15 @@ ComponentName/
 ## Package Manager
 
 - **Yarn 3.6.3** via Corepack (do not use npm or pnpm)
-- Enable with: `corepack enable`
+- Enable with: `npm install --global corepack && corepack enable` (Node 25+ no longer bundles Corepack)
 
 ### Key Commands
 
 ```bash
 yarn web:serve               # Start web dev server (http://localhost:8080)
-yarn desktop:serve           # Start webpack for Electron
+yarn desktop:serve           # Start Rspack for Electron
 yarn desktop:start           # Launch Electron app (requires desktop:serve)
-yarn test                    # All unit tests (Jest)
+yarn test                    # All unit tests (Vitest)
 yarn test:watch              # Watch mode
 yarn test:coverage           # Unit tests with coverage
 yarn lint                    # ESLint + Prettier
@@ -97,7 +97,7 @@ yarn test:e2e:desktop        # Desktop E2E tests (Playwright + Electron)
 All tests follow the **Given-When-Then (GWT)** pattern. See the
 [test-conventions skill](./skills/test-conventions/SKILL.md) for full rules.
 
-- **Unit tests**: Jest, co-located with source (`.test.ts` / `.test.tsx`)
+- **Unit tests**: Vitest, co-located with source (`.test.ts` / `.test.tsx`)
 - **E2E tests**: Playwright — desktop (Electron) primary, web for distinct behaviors only
 - **Mock builders**: Use builders from `testing/builders/` and component-specific `builders/` directories
 - **Coverage target**: 80%+ on business logic

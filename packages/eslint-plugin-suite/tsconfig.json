@@ -1,10 +1,10 @@
 {
-  "extends": "@lichtblick/tsconfig/base",
+  "extends": "../../tsconfig.base.json",
   "include": ["./**/*.ts"],
   "compilerOptions": {
     "noEmit": true,
     "rootDir": ".",
-    "lib": ["es2022"],
+    "lib": ["es2025", "esnext.typedarrays"],
     "types": ["node"],
     "module": "NodeNext",
     "moduleResolution": "NodeNext"

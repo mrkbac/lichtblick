@@ -15,7 +15,6 @@
 //   You may not use this file except in compliance with the License.
 
 import { ChartDataset, ChartData } from "chart.js";
-import * as R from "ramda";
 import { useEffect, useMemo, useCallback } from "react";
 
 import { iterateObjects, iterateTyped } from "@lichtblick/suite-base/components/Chart/datasets";
@@ -105,10 +104,10 @@ const makeMerge =
     return {
       bounds: mergeBounds(a.bounds, b.bounds),
       data: {
-        datasets: R.zip(a.data.datasets, b.data.datasets).map(
-          ([aSet, bSet]: [Dataset<T>, Dataset<T>]): Dataset<T> => ({
+        datasets: a.data.datasets.slice(0, b.data.datasets.length).map(
+          (aSet, i): Dataset<T> => ({
             ...aSet,
-            data: mergeData(aSet.data, bSet.data),
+            data: mergeData(aSet.data, b.data.datasets[i]!.data),
           }),
         ),
       },

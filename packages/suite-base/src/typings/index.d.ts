@@ -15,6 +15,7 @@
 // declarations available program-wide.
 /// <reference types="foxglove__web" />
 /// <reference types="wicg-file-system-access" />
+/// <reference types="vitest/globals" />
 
 import "./extensions";
 import "./react";

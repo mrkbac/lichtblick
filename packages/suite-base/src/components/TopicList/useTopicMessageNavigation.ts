@@ -24,12 +24,12 @@
  *    - Cache is useful for non-MCAP sources or when topicStats is unavailable
  */
 
+import { Time, compare } from "@foxglove/rostime";
 import { enableMapSet } from "immer";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useImmer } from "use-immer";
 
 import Logger from "@lichtblick/log";
-import { Time, compare } from "@lichtblick/rostime";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { MessagePipelineContext } from "@lichtblick/suite-base/components/MessagePipeline/types";
 import { RESULT_TYPE_MESSAGE_EVENT } from "@lichtblick/suite-base/components/TopicList/constants";

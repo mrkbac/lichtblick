@@ -19,7 +19,7 @@ export function useDecodedMessageRange(
 
   const [messagesByTopic, setMessagesByTopic] = useState<Record<string, MessageEvent[]>>({});
   const accumulatedRef = useRef<Record<string, MessageEvent[]>>({});
-  const flushRef = useRef<ReturnType<typeof setTimeout> | undefined>();
+  const flushRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Never replace .current — only mutate in place. The unmount cleanup captures
   // this reference at mount time and relies on it remaining the same object.

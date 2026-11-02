@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { fromNanoSec } from "@foxglove/rostime";
 import {
   CameraCalibration,
   ImageAnnotations,
@@ -15,7 +16,6 @@ import {
 import * as _ from "lodash-es";
 import { DeepPartial } from "ts-essentials";
 
-import { fromNanoSec } from "@lichtblick/rostime";
 import { MessageEvent } from "@lichtblick/suite";
 import { HUDItemManager } from "@lichtblick/suite-base/panels/ThreeDeeRender/HUDItemManager";
 import {
@@ -212,7 +212,7 @@ describe("MessageHandler: synchronized = false", () => {
       annotations: { annotations: { visible: true } },
     };
     const messageHandler = new MessageHandler(initConfig, hud);
-    const listener = jest.fn();
+    const listener = vi.fn();
 
     messageHandler.addListener(listener);
 
@@ -243,7 +243,7 @@ describe("MessageHandler: synchronized = false", () => {
     const hud = new HUDItemManager(() => {});
     const initConfig = { synchronize: false, imageTopic: "image", calibrationTopic: "calib" };
     const messageHandler = new MessageHandler(initConfig, hud);
-    const listener = jest.fn();
+    const listener = vi.fn();
 
     messageHandler.addListener(listener);
     const image = wrapInMessageEvent<RawImage>("image", "foxglove.RawImage", 0n);
@@ -656,7 +656,7 @@ describe("MessageHandler: synchronized = true", () => {
       annotations: { annotations: { visible: true } },
     };
     const messageHandler = new MessageHandler(initConfig, hud);
-    const listener = jest.fn();
+    const listener = vi.fn();
 
     messageHandler.addListener(listener);
 

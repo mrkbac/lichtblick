@@ -9,6 +9,7 @@
 
 import { act, renderHook } from "@testing-library/react";
 import { createElement, MouseEvent, ReactNode } from "react";
+import type { Mock } from "vitest";
 
 import AnalyticsContext from "@lichtblick/suite-base/context/AnalyticsContext";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
@@ -27,11 +28,11 @@ function makeDomEvent(target: EventTarget | null): MouseEvent {
 }
 
 describe("useInteractionCapture", () => {
-  let logEvent: jest.Mock;
+  let logEvent: Mock;
   let analytics: IAnalytics;
 
   beforeEach(() => {
-    logEvent = jest.fn();
+    logEvent = vi.fn();
     analytics = { logEvent };
   });
 
@@ -180,6 +181,6 @@ describe("useInteractionCapture", () => {
     expect(console.warn).toHaveBeenCalledWith(
       expect.stringContaining('ignoring invalid attribute name "data-testid]:not([foo="bar"'),
     );
-    (console.warn as jest.Mock).mockClear();
+    (console.warn as Mock).mockClear();
   });
 });

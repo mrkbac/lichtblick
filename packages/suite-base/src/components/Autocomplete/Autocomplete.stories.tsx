@@ -14,9 +14,9 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { Meta, StoryFn, StoryObj } from "@storybook/react-webpack5";
-import { fireEvent, within } from "@storybook/testing-library";
 import * as _ from "lodash-es";
+import { fireEvent, within } from "storybook/test";
+import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
 
@@ -30,7 +30,7 @@ export default {
     onSelect: () => {},
   },
   decorators: [
-    (Story: StoryFn): React.JSX.Element => (
+    (Story: React.ComponentType): React.JSX.Element => (
       <Stack padding={2.5}>
         <Story />
       </Stack>
@@ -44,7 +44,7 @@ const clickInput: Story["play"] = async ({ canvasElement }: { canvasElement: HTM
   const canvas = within(canvasElement);
   const input = await canvas.findByTestId("autocomplete-textfield");
 
-  fireEvent.click(input);
+  await fireEvent.click(input);
 };
 
 export const FilteringToO: Story = {

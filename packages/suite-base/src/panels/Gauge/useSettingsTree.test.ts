@@ -9,7 +9,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import { ColorMapConfig, ColorModeConfig, SettingsTreeNodesProps } from "./types";
 import { useSettingsTree } from "./useSettingsTree";
 
-jest.mock("react-i18next", () => ({
+vi.mock("react-i18next", () => ({
   useTranslation: () => ({
     t: (key: string) => key,
   }),

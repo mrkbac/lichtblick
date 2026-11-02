@@ -5,11 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { Time, fromNanoSec, toNanoSec, compare } from "@foxglove/rostime";
 import { McapIndexedReader, McapTypes } from "@mcap/core";
 
 import Logger from "@lichtblick/log";
 import { ParsedChannel, parseChannel } from "@lichtblick/mcap-support";
-import { Time, fromNanoSec, toNanoSec, compare } from "@lichtblick/rostime";
 import { MessageEvent, Metadata } from "@lichtblick/suite";
 import {
   GetBackfillMessagesArgs,
@@ -21,6 +21,7 @@ import {
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import { PlayerAlert, RecordingFileInfo, TopicStats } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Logger.getLogger(__filename);
 
@@ -79,8 +80,8 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       } catch (error) {
         alerts.push({
           severity: "error",
-          message: `Error in topic ${channel.topic} (channel ${channel.id}): ${error.message}`,
-          error,
+          message: `Error in topic ${channel.topic} (channel ${channel.id}): ${toError(error).message}`,
+          error: toError(error),
         });
         continue;
       }
@@ -236,7 +237,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
           connectionId: message.channelId,
           alert: {
             message: `Error decoding message on ${channelInfo.channel.topic}`,
-            error,
+            error: toError(error),
             severity: "error",
           },
         };

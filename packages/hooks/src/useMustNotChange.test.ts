@@ -14,7 +14,7 @@ import { useMustNotChangeImpl } from "./useMustNotChange";
 
 describe("useMustNotChange", () => {
   it("should log an error when value changes", () => {
-    const errorMock = jest.fn();
+    const errorMock = vi.fn();
     Logger.channels().forEach((channel) => {
       if (channel.name().endsWith("useMustNotChange.ts")) {
         channel.error = errorMock;

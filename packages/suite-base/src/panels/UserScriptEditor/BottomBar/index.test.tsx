@@ -4,7 +4,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import type { MockedFunction } from "vitest";
+import "@testing-library/jest-dom/vitest";
 
 import { useUserScriptState } from "@lichtblick/suite-base/context/UserScriptStateContext";
 import { Diagnostic, UserScriptLog } from "@lichtblick/suite-base/players/UserScriptPlayer/types";
@@ -14,22 +15,22 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import BottomBar from "./index";
 
-jest.mock("@lichtblick/suite-base/context/UserScriptStateContext", () => ({
-  useUserScriptState: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/UserScriptStateContext", () => ({
+  useUserScriptState: vi.fn(),
 }));
 
-jest.mock("./DiagnosticsSection", () => ({
+vi.mock("./DiagnosticsSection", () => ({
   __esModule: true,
   default: () => <div data-testid="diagnostics-section" />,
 }));
 
-jest.mock("./LogsSection", () => ({
+vi.mock("./LogsSection", () => ({
   __esModule: true,
   default: () => <div data-testid="logs-section" />,
 }));
 
-const mockClearUserScriptLogs = jest.fn();
-const mockUseUserScriptState = useUserScriptState as jest.MockedFunction<typeof useUserScriptState>;
+const mockClearUserScriptLogs = vi.fn();
+const mockUseUserScriptState = useUserScriptState as MockedFunction<typeof useUserScriptState>;
 
 type SetupProps = {
   diagnostics?: readonly Diagnostic[];
@@ -41,8 +42,8 @@ type SetupProps = {
 };
 
 function setup(props: SetupProps = {}) {
-  const onChangeTab = props.onChangeTab ?? jest.fn();
-  const save = props.save ?? jest.fn();
+  const onChangeTab = props.onChangeTab ?? vi.fn();
+  const save = props.save ?? vi.fn();
   const scriptId = "scriptId" in props ? props.scriptId : BasicBuilder.string();
 
   const utils = render(
@@ -69,8 +70,8 @@ describe("BottomBar", () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
-    jest.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("should render the diagnostics section by default", () => {

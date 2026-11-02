@@ -3,8 +3,8 @@
 
 import { ScaleOptions } from "chart.js";
 import { RefCallback, useEffect, useMemo } from "react";
-import { useResizeDetector } from "react-resize-detector";
 
+import { useElementSize } from "@lichtblick/suite-base/hooks/useElementSize";
 import { DEFAULT_X_END_TIME } from "@lichtblick/suite-base/panels/StateTransitions/hooks/constants";
 import { StateTransitionConfig } from "@lichtblick/suite-base/panels/StateTransitions/types";
 import { Bounds } from "@lichtblick/suite-base/types/Bounds";
@@ -96,14 +96,7 @@ const useChartScalesAndBounds = (
     return fixedBounds;
   }, [config.xAxisRange, currentTimeSinceStart, fixedBounds]);
 
-  // Use a debounce and 0 refresh rate to avoid triggering a resize observation while handling
-  // an existing resize observation.
-  // https://github.com/maslianok/react-resize-detector/issues/45
-  const { width, ref: sizeRef } = useResizeDetector<HTMLDivElement>({
-    handleHeight: false,
-    refreshRate: 0,
-    refreshMode: "debounce",
-  });
+  const { width, ref: sizeRef, element: sizeElement } = useElementSize<HTMLDivElement>();
 
   // Disable the wheel event for the chart wrapper div (which is where we use sizeRef)
   //
@@ -115,7 +108,7 @@ const useChartScalesAndBounds = (
   // This effect registers a wheel event handler for the wrapper div to prevent scrolling. To scroll
   // the panel the user will use the scrollbar.
   useEffect(() => {
-    const el = sizeRef.current;
+    const el = sizeElement;
     const handler = (ev: WheelEvent) => {
       ev.preventDefault();
     };
@@ -124,7 +117,7 @@ const useChartScalesAndBounds = (
     return () => {
       el?.removeEventListener("wheel", handler);
     };
-  }, [sizeRef]);
+  }, [sizeElement]);
 
   return { yScale, xScale, databounds, width, sizeRef };
 };

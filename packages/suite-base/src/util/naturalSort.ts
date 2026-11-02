@@ -14,9 +14,19 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import natsort from "natsort";
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "accent" });
 
-const sortFn = natsort({ insensitive: true });
+const DECIMAL = /^\s*[-+]?(\d+\.?\d*|\.\d+)([eE][-+]?\d+)?\s*$/;
+
+/** Numbers and decimal strings compare by value ("2.09" < "2.1"); everything else naturally. */
+function sortFn(a: string | number, b: string | number): number {
+  const numA = typeof a === "number" ? a : DECIMAL.test(a) ? Number(a) : undefined;
+  const numB = typeof b === "number" ? b : DECIMAL.test(b) ? Number(b) : undefined;
+  if (numA != undefined && numB != undefined) {
+    return numA - numB;
+  }
+  return collator.compare(String(a), String(b));
+}
 
 type StringOrNumberFields<T> =
   T extends Record<string, unknown>

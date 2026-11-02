@@ -14,13 +14,13 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { MessageDefinition } from "@foxglove/message-definition";
+import CommonRosTypes from "@foxglove/rosmsg-msgs-common";
 import { Button, inputBaseClasses, TextField, Tooltip, Typography } from "@mui/material";
 import { useEffect, useMemo } from "react";
 import { makeStyles } from "tss-react/mui";
 import { useDebounce } from "use-debounce";
 
-import { MessageDefinition } from "@lichtblick/message-definition";
-import CommonRosTypes from "@lichtblick/rosmsg-msgs-common";
 import { Immutable } from "@lichtblick/suite";
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import {
@@ -35,6 +35,7 @@ import usePublisher from "@lichtblick/suite-base/hooks/usePublisher";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { useDefaultPanelTitle } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { toError } from "@lichtblick/suite-base/util/toError";
 import { customTypography } from "@lichtblick/theme";
 
 import { defaultConfig, usePublishPanelSettings } from "./settings";
@@ -99,7 +100,7 @@ function parseInput(value: string): { error?: string; parsedObject?: unknown } {
       parsedObject = parsedAny;
     }
   } catch (e) {
-    error = value.length !== 0 ? e.message : "Enter valid message content as JSON";
+    error = value.length !== 0 ? toError(e).message : "Enter valid message content as JSON";
   }
   return { error, parsedObject };
 }

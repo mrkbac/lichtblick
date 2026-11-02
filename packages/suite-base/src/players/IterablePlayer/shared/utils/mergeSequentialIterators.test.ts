@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Time } from "@lichtblick/rostime";
+import { Time } from "@foxglove/rostime";
+import type { Mock } from "vitest";
+
 import {
   IIterableSource,
   IteratorResult,
@@ -33,11 +35,11 @@ function makeMockSource(
 ): IIterableSource<Uint8Array> {
   return {
     sourceType: "serialized",
-    initialize: jest.fn(),
-    getBackfillMessages: jest.fn(),
+    initialize: vi.fn(),
+    getBackfillMessages: vi.fn(),
     getStart: () => start,
     getEnd: () => end,
-    messageIterator: jest.fn().mockImplementation(async function* () {
+    messageIterator: vi.fn().mockImplementation(async function* () {
       yield* messages;
     }),
   } as IIterableSource<Uint8Array>;
@@ -50,15 +52,15 @@ function makeMockSourceWithReturn(
   start: Time | undefined,
   end: Time | undefined,
   messages: IteratorResult<Uint8Array>[],
-  returnFn: jest.Mock,
+  returnFn: Mock,
   error?: Error,
 ): IIterableSource<Uint8Array> {
   return {
     sourceType: "serialized",
-    initialize: jest.fn(),
-    getBackfillMessages: jest.fn(),
+    initialize: vi.fn(),
+    getBackfillMessages: vi.fn(),
     ...(start && end ? { getStart: () => start, getEnd: () => end } : {}),
-    messageIterator: jest.fn().mockImplementation(() => {
+    messageIterator: vi.fn().mockImplementation(() => {
       let index = 0;
       return {
         next: async () => {
@@ -147,7 +149,7 @@ describe("mergeSequentialIterators", () => {
     let source1Done = false;
 
     const originalIterator = source2.messageIterator.bind(source2);
-    source2.messageIterator = jest.fn().mockImplementation((...args: unknown[]) => {
+    source2.messageIterator = vi.fn().mockImplementation((...args: unknown[]) => {
       if (!source1Done) {
         source2IteratorCalledBeforeSource1Done = true;
       }
@@ -208,10 +210,10 @@ describe("mergeSequentialIterators", () => {
   it("handles sources without time info (starts them immediately)", async () => {
     const sourceNoTime = {
       sourceType: "serialized",
-      initialize: jest.fn(),
-      getBackfillMessages: jest.fn(),
+      initialize: vi.fn(),
+      getBackfillMessages: vi.fn(),
       // No getStart or getEnd
-      messageIterator: jest.fn().mockImplementation(async function* () {
+      messageIterator: vi.fn().mockImplementation(async function* () {
         yield makeMessageEvent("topic", 5);
       }),
     } as IIterableSource<Uint8Array>;
@@ -246,13 +248,13 @@ describe("mergeSequentialIterators", () => {
 
     // Spy on messageIterator for source2 and source3 to track activation order
     const orig2 = source2.messageIterator.bind(source2);
-    source2.messageIterator = jest.fn().mockImplementation((...args: unknown[]) => {
+    source2.messageIterator = vi.fn().mockImplementation((...args: unknown[]) => {
       activationOrder.push("source2");
       return orig2(...(args as Parameters<typeof orig2>));
     });
 
     const orig3 = source3.messageIterator.bind(source3);
-    source3.messageIterator = jest.fn().mockImplementation((...args: unknown[]) => {
+    source3.messageIterator = vi.fn().mockImplementation((...args: unknown[]) => {
       activationOrder.push("source3");
       return orig3(...(args as Parameters<typeof orig3>));
     });
@@ -278,13 +280,13 @@ describe("mergeSequentialIterators", () => {
     // source2 must be activated before source3
     expect(activationOrder.indexOf("source2")).toBeLessThan(activationOrder.indexOf("source3"));
     // source3's messageIterator should not have been called before source2's messages appear
-    expect((source3.messageIterator as jest.Mock).mock.invocationCallOrder[0]).toBeGreaterThan(
-      (source2.messageIterator as jest.Mock).mock.invocationCallOrder[0]!,
+    expect((source3.messageIterator as Mock).mock.invocationCallOrder[0]).toBeGreaterThan(
+      (source2.messageIterator as Mock).mock.invocationCallOrder[0]!,
     );
   });
 
   it("cleans up active iterators when consumer breaks early", async () => {
-    const returnFns = [jest.fn(), jest.fn(), jest.fn()];
+    const returnFns = [vi.fn(), vi.fn(), vi.fn()];
 
     // All three sources overlap at time 0, so all will be activated initially
     const source1 = makeMockSourceWithReturn(
@@ -322,7 +324,7 @@ describe("mergeSequentialIterators", () => {
   });
 
   it("calls return() on the currently-yielded iterator when cancelled mid-yield (not just heap-resident ones)", async () => {
-    const returnFns = [jest.fn(), jest.fn(), jest.fn()];
+    const returnFns = [vi.fn(), vi.fn(), vi.fn()];
 
     // All three sources overlap at time 0, so all will be activated initially.
     const source1 = makeMockSourceWithReturn(
@@ -371,8 +373,8 @@ describe("mergeSequentialIterators", () => {
 
   it("cleans up activated iterators when a later source fails during activation", async () => {
     // Given
-    const source1Return = jest.fn();
-    const source2Return = jest.fn();
+    const source1Return = vi.fn();
+    const source2Return = vi.fn();
     const activationError = new Error("source activation failed");
     const source1 = makeMockSourceWithReturn(
       { sec: 0, nsec: 0 },
@@ -405,8 +407,8 @@ describe("mergeSequentialIterators", () => {
 
   it("cleans up previously activated iterators when a later source fails during eager activation of sources without time info", async () => {
     // Given
-    const activatedReturn = jest.fn();
-    const failingReturn = jest.fn();
+    const activatedReturn = vi.fn();
+    const failingReturn = vi.fn();
     const activationError = new Error(BasicBuilder.string());
 
     // Both sources lack time info, so both are activated eagerly, in order, before any seek or
@@ -449,8 +451,8 @@ describe("mergeSequentialIterators", () => {
 
   it("cleans up a successfully activated source without time info when a subsequent timed source fails during activation", async () => {
     // Given
-    const activatedReturn = jest.fn();
-    const failingReturn = jest.fn();
+    const activatedReturn = vi.fn();
+    const failingReturn = vi.fn();
     const activationError = new Error(BasicBuilder.string());
 
     // The source without time info is activated eagerly and succeeds; with no queryStart, the
@@ -490,8 +492,8 @@ describe("mergeSequentialIterators", () => {
 
   it("cleans up previously activated iterators when a later source fails during seek-time activation", async () => {
     // Given
-    const activatedReturn = jest.fn();
-    const failingReturn = jest.fn();
+    const activatedReturn = vi.fn();
+    const failingReturn = vi.fn();
     const activationError = new Error(BasicBuilder.string());
 
     // Both sources' ranges contain the requested queryStart, so both are activated during the
@@ -539,7 +541,7 @@ describe("mergeSequentialIterators", () => {
 
   it("cleans up previously activated iterators when a later source fails while advancing through initial empty sources", async () => {
     // Given
-    const failingReturn = jest.fn();
+    const failingReturn = vi.fn();
     const activationError = new Error(BasicBuilder.string());
 
     // No queryStart is provided, so only the first timed source is activated up front. It and
@@ -619,11 +621,11 @@ describe("mergeSequentialIterators", () => {
     // source4 has 2 messages
     expect(results).toHaveLength(2);
     // source1, source2, source3 should NEVER have had messageIterator called
-    expect(jest.spyOn(source1, "messageIterator")).not.toHaveBeenCalled();
-    expect(jest.spyOn(source2, "messageIterator")).not.toHaveBeenCalled();
-    expect(jest.spyOn(source3, "messageIterator")).not.toHaveBeenCalled();
+    expect(vi.spyOn(source1, "messageIterator")).not.toHaveBeenCalled();
+    expect(vi.spyOn(source2, "messageIterator")).not.toHaveBeenCalled();
+    expect(vi.spyOn(source3, "messageIterator")).not.toHaveBeenCalled();
     // Only source4 should have been activated
-    expect(jest.spyOn(source4, "messageIterator")).toHaveBeenCalledTimes(1);
+    expect(vi.spyOn(source4, "messageIterator")).toHaveBeenCalledTimes(1);
   });
 
   it("skips sources that end before queryStart but activates the containing one", async () => {
@@ -655,10 +657,10 @@ describe("mergeSequentialIterators", () => {
     // source2 + source3 messages (source3 activated lazily when source2 exhausts)
     expect(results).toHaveLength(2);
     // source1 should be skipped entirely — its endTime (10) < queryStart (15)
-    expect(jest.spyOn(source1, "messageIterator")).not.toHaveBeenCalled();
+    expect(vi.spyOn(source1, "messageIterator")).not.toHaveBeenCalled();
     // source2 activated on init, source3 activated lazily
-    expect(jest.spyOn(source2, "messageIterator")).toHaveBeenCalledTimes(1);
-    expect(jest.spyOn(source3, "messageIterator")).toHaveBeenCalledTimes(1);
+    expect(vi.spyOn(source2, "messageIterator")).toHaveBeenCalledTimes(1);
+    expect(vi.spyOn(source3, "messageIterator")).toHaveBeenCalledTimes(1);
   });
 
   it("orders stamp results by their stamp time", async () => {

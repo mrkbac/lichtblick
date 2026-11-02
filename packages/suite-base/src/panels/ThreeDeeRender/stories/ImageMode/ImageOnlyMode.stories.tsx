@@ -12,8 +12,8 @@ import {
   PointsAnnotationType,
   SceneUpdate,
 } from "@foxglove/schemas";
-import { StoryObj } from "@storybook/react-webpack5";
-import { screen, userEvent, within } from "@storybook/testing-library";
+import { screen, userEvent, within } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 import tinycolor from "tinycolor2";
 
 import { MessageEvent } from "@lichtblick/suite";

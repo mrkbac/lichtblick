@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { Configuration, rspack } from "@rspack/core";
 import dotenv from "dotenv";
-import { EsbuildPlugin } from "esbuild-loader";
-import ForkTsCheckerWebpackPlugin from "fork-ts-checker-webpack-plugin";
 import path from "path";
-import { DefinePlugin, Configuration } from "webpack";
+import { TsCheckerRspackPlugin } from "ts-checker-rspack-plugin";
+
+import { swcRule, tsCheckerOptions } from "@lichtblick/suite-base/webpack";
 
 import { WebpackConfigParams } from "./WebpackConfigParams";
 
@@ -19,36 +20,11 @@ export function createCommonWebpackConfig(
     devtool: isDev ? "eval-cheap-module-source-map" : params.prodSourceMap,
 
     module: {
-      rules: [
-        {
-          test: /\.tsx?$/,
-          exclude: /node_modules/,
-          use: {
-            loader: "ts-loader",
-            options: {
-              transpileOnly: true,
-              // https://github.com/TypeStrong/ts-loader#onlycompilebundledfiles
-              // avoid looking at files which are not part of the bundle
-              onlyCompileBundledFiles: true,
-              projectReferences: true,
-            },
-          },
-        },
-      ],
-    },
-
-    optimization: {
-      removeAvailableModules: true,
-      minimizer: [
-        new EsbuildPlugin({
-          target: "es2022",
-          minify: true,
-        }),
-      ],
+      rules: [swcRule({ isDev })],
     },
 
     plugins: [
-      new DefinePlugin({
+      new rspack.DefinePlugin({
         // Should match webpack-defines.d.ts
         ReactNull: null,
         LICHTBLICK_PRODUCT_NAME: JSON.stringify(params.packageJson.productName),
@@ -63,7 +39,7 @@ export function createCommonWebpackConfig(
           ? JSON.stringify(process.env.OTLP_ENDPOINT)
           : undefined,
       }),
-      new ForkTsCheckerWebpackPlugin(),
+      new TsCheckerRspackPlugin({ typescript: tsCheckerOptions() }),
     ],
 
     resolve: {

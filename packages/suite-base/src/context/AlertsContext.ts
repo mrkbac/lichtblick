@@ -6,7 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { createContext } from "react";
-import { StoreApi, useStore } from "zustand";
+import { StoreApi } from "zustand";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 
 import { useGuaranteedContext } from "@lichtblick/hooks";
 import { Immutable } from "@lichtblick/suite";
@@ -70,7 +71,7 @@ AlertsContext.displayName = "AlertsContext";
  */
 export function useAlertsStore<T>(selector: (store: AlertsContextStore) => T): T {
   const context = useGuaranteedContext(AlertsContext);
-  return useStore(context, selector);
+  return useStoreWithEqualityFn(context, selector);
 }
 
 const selectActions = (store: AlertsContextStore) => store.actions;

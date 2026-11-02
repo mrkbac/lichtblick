@@ -17,6 +17,7 @@
 
 import { renderHook } from "@testing-library/react";
 import * as _ from "lodash-es";
+import type { Mock } from "vitest";
 
 import { OperatorType, parseMessagePath } from "@lichtblick/message-path";
 import { messagePathStructures } from "@lichtblick/suite-base/components/MessagePathSyntax/messagePathsForDatatype";
@@ -864,6 +865,6 @@ describe("useDecodeMessagePathsForMessagesByTopic", () => {
 
     expect(console.error).toHaveBeenCalled();
     expect(console.error).toHaveBeenLastCalledWith("Error parsing message path", expect.any(Error));
-    (console.error as jest.Mock).mockReset();
+    (console.error as Mock).mockReset();
   });
 });

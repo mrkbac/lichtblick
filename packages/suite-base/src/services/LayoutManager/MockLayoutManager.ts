@@ -5,29 +5,31 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import type { Mock } from "vitest";
+
 import { ILayoutManager, LayoutFavorites } from "@lichtblick/suite-base/services/ILayoutManager";
 
 export default class MockLayoutManager implements ILayoutManager {
   public supportsSharing = false;
-  public isBusy = jest.fn().mockReturnValue(false);
+  public isBusy: Mock = vi.fn().mockReturnValue(false);
   public isOnline = false;
   public error: Error | undefined = undefined;
   public favorites: LayoutFavorites = { personal: new Set(), shared: new Set() };
 
-  public on = jest.fn();
-  public off = jest.fn();
-  public setError = jest.fn();
-  public setOnline = jest.fn();
-  public getLayouts = jest.fn().mockResolvedValue([]);
-  public getLayout = jest.fn();
-  public saveNewLayout = jest.fn();
-  public updateLayout = jest.fn();
-  public deleteLayout = jest.fn();
-  public overwriteLayout = jest.fn();
-  public revertLayout = jest.fn();
-  public makePersonalCopy = jest.fn();
-  public syncWithRemote = jest.fn();
-  public loadFavorites = jest.fn(async () => await Promise.resolve(this.favorites));
-  public canFavorite = jest.fn().mockReturnValue(false);
-  public setFavorite = jest.fn().mockResolvedValue(undefined);
+  public on: Mock = vi.fn();
+  public off: Mock = vi.fn();
+  public setError: Mock = vi.fn();
+  public setOnline: Mock = vi.fn();
+  public getLayouts: Mock = vi.fn().mockResolvedValue([]);
+  public getLayout: Mock = vi.fn();
+  public saveNewLayout: Mock = vi.fn();
+  public updateLayout: Mock = vi.fn();
+  public deleteLayout: Mock = vi.fn();
+  public overwriteLayout: Mock = vi.fn();
+  public revertLayout: Mock = vi.fn();
+  public makePersonalCopy: Mock = vi.fn();
+  public syncWithRemote: Mock = vi.fn();
+  public loadFavorites: Mock = vi.fn(async () => await Promise.resolve(this.favorites));
+  public canFavorite: Mock = vi.fn().mockReturnValue(false);
+  public setFavorite: Mock = vi.fn().mockResolvedValue(undefined);
 }

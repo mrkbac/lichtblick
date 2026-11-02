@@ -16,6 +16,7 @@
 //   You may not use this file except in compliance with the License.
 
 import { renderHook, waitFor } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import { MessageEvent, Topic } from "@lichtblick/suite-base/players/types";
@@ -262,7 +263,7 @@ describe("useMessageDataItem", () => {
 describe("samplingMode", () => {
   // Given
   const samplingRequest = { mode: "latest-per-render-tick" as const };
-  const setSubscriptions: jest.Mock = jest.fn();
+  const setSubscriptions: Mock = vi.fn();
   const topic = `/${BasicBuilder.string()}`;
   const field = BasicBuilder.string();
   const path = `${topic}.${field}`;

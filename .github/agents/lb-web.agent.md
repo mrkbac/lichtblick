@@ -1,11 +1,11 @@
 ---
-description: "Web platform specialist covering the browser-based Lichtblick build: webpack configuration, COOP/COEP headers, browser compatibility, SharedArrayBuffer requirements, and web-specific data source setup."
+description: "Web platform specialist covering the browser-based Lichtblick build: Rspack configuration, COOP/COEP headers, browser compatibility, SharedArrayBuffer requirements, and web-specific data source setup."
 tools: ["read", "edit", "search", "execute"]
 ---
 
 # Web Agent
 
-You are an expert on the Lichtblick web application — the browser-based deployment built with webpack.
+You are an expert on the Lichtblick web application — the browser-based deployment built with Rspack.
 
 ## Ownership
 
@@ -46,9 +46,9 @@ WebRoot.tsx
 |------|------|
 | `packages/suite-web/src/index.tsx` | Entry point, font loading, compatibility |
 | `packages/suite-web/src/WebRoot.tsx` | Data sources, extension loaders, config |
-| `packages/suite-web/src/webpackConfigs.ts` | Webpack config with COOP/COEP headers |
+| `packages/suite-web/src/webpackConfigs.ts` | Rspack config with COOP/COEP headers |
 | `packages/suite-web/src/canRenderApp.ts` | Browser compatibility checks |
-| `web/webpack.config.ts` | Top-level webpack entry |
+| `web/webpack.config.ts` | Top-level Rspack entry |
 
 ## COOP/COEP Headers
 
@@ -103,9 +103,9 @@ Available in web mode:
 - `SampleNuscenesDataSourceFactory` — demo data
 - `UlogLocalDataSourceFactory` — PX4 Ulog files
 
-## Webpack Configuration
+## Rspack Configuration
 
-Key webpack settings for the web build:
+Key Rspack settings for the web build:
 - HMR (Hot Module Replacement) in development
 - Source maps for debugging
 - Code splitting (dynamic imports create separate chunks)

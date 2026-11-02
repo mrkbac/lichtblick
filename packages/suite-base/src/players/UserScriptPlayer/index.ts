@@ -14,15 +14,14 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { Time, compare } from "@foxglove/rostime";
 import { Mutex } from "async-mutex";
 import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
-import { v4 as uuidv4 } from "uuid";
 
 import { MutexLocked } from "@lichtblick/den/async";
 import { filterMap } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
-import { Time, compare } from "@lichtblick/rostime";
 import { Metadata, ParameterValue } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import {
@@ -62,6 +61,7 @@ import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { UserScript, UserScripts } from "@lichtblick/suite-base/types/panels";
 import Rpc from "@lichtblick/suite-base/util/Rpc";
 import { basicDatatypes } from "@lichtblick/suite-base/util/basicDatatypes";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { DIAGNOSTIC_SEVERITY, ERROR_CODES, MAX_GLOBAL_BUFFER_SIZE, SOURCES } from "./constants";
 import { getPreloadTypes, remapVirtualSubscriptions } from "./subscriptions";
@@ -177,21 +177,19 @@ export default class UserScriptPlayer implements Player {
 
   // exposed as a static to allow testing to mock/replace
   public static CreateTransformWorker = (): SharedWorker => {
-    // foxglove-depcheck-used: babel-plugin-transform-import-meta
     return new SharedWorker(new URL("./transformerWorker/index", import.meta.url), {
       // Although we are using SharedWorkers, we do not actually want to share worker instances
       // between tabs. We achieve this by passing in a unique name.
-      name: uuidv4(),
+      name: randomUUID(),
     });
   };
 
   // exposed as a static to allow testing to mock/replace
   public static CreateRuntimeWorker = (): SharedWorker => {
-    // foxglove-depcheck-used: babel-plugin-transform-import-meta
     return new SharedWorker(new URL("./runtimeWorker/index", import.meta.url), {
       // Although we are using SharedWorkers, we do not actually want to share worker instances
       // between tabs. We achieve this by passing in a unique name.
-      name: uuidv4(),
+      name: randomUUID(),
     });
   };
 

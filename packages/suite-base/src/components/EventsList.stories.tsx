@@ -5,9 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { StoryObj, StoryFn } from "@storybook/react-webpack5";
-import { screen, userEvent } from "@storybook/testing-library";
 import { useEffect } from "react";
+import { screen, userEvent } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import { useEvents } from "@lichtblick/suite-base/context/EventsContext";
@@ -16,7 +16,7 @@ import { makeMockEvents } from "@lichtblick/suite-base/test/mocks/makeMockEvents
 
 import { EventsList } from "./EventsList";
 
-function Wrapper(Child: StoryFn): React.JSX.Element {
+function Wrapper(Child: React.ComponentType): React.JSX.Element {
   return (
     <MockMessagePipelineProvider>
       <EventsProvider>

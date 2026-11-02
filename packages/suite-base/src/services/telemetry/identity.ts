@@ -5,10 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { v4 as uuidv4 } from "uuid";
-
 import { DEVICE_ID_STORAGE_KEY } from "@lichtblick/suite-base/services/telemetry/constants";
 import type { IdentityStorage } from "@lichtblick/suite-base/services/telemetry/types";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 function getDefaultStorage(): IdentityStorage | undefined {
   try {
@@ -28,7 +27,7 @@ export function getDeviceId(storage: IdentityStorage | undefined = getDefaultSto
         return existing;
       }
 
-      const generated = uuidv4();
+      const generated = randomUUID();
       storage.setItem(DEVICE_ID_STORAGE_KEY, generated);
       return generated;
     } catch {
@@ -36,8 +35,8 @@ export function getDeviceId(storage: IdentityStorage | undefined = getDefaultSto
     }
   }
 
-  memoizedDeviceId ??= uuidv4();
+  memoizedDeviceId ??= randomUUID();
   return memoizedDeviceId;
 }
 
-export const sessionId: string = uuidv4();
+export const sessionId: string = randomUUID();

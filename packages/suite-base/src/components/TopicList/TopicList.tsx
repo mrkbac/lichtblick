@@ -10,7 +10,6 @@ import { List, ListItem, ListItemText, PopoverPosition, Skeleton } from "@mui/ma
 import { MouseEvent, useCallback, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLatest } from "react-use";
-import AutoSizer from "react-virtualized-auto-sizer";
 import { List as VirtualList, RowComponentProps, ListImperativeAPI } from "react-window";
 import { useDebounce } from "use-debounce";
 
@@ -213,21 +212,15 @@ export function TopicList(): React.JSX.Element {
         />
         {treeItems.length > 0 ? (
           <div style={{ flex: "1 1 100%" }}>
-            <AutoSizer>
-              {({ width, height }) => (
-                <div style={{ width, height }}>
-                  <VirtualList
-                    listRef={listRef}
-                    style={{ width, height }}
-                    rowCount={treeItems.length}
-                    rowHeight={(index, data) => (data.treeItems[index]?.type === "topic" ? 50 : 28)}
-                    rowProps={itemData}
-                    overscanCount={10}
-                    rowComponent={renderRow}
-                  />
-                </div>
-              )}
-            </AutoSizer>
+            <VirtualList
+              listRef={listRef}
+              style={{ width: "100%", height: "100%" }}
+              rowCount={treeItems.length}
+              rowHeight={(index, data) => (data.treeItems[index]?.type === "topic" ? 50 : 28)}
+              rowProps={itemData}
+              overscanCount={10}
+              rowComponent={renderRow}
+            />
           </div>
         ) : (
           <EmptyState>

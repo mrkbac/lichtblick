@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { renderHook } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import { Time } from "@lichtblick/suite";
 import { useWorkspaceStore } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
@@ -14,23 +15,23 @@ import useBroadcast from "@lichtblick/suite-base/util/broadcast/useBroadcast";
 
 import BroadcastManager from "./BroadcastManager";
 
-jest.mock("@lichtblick/suite-base/context/Workspace/WorkspaceContext", () => ({
-  useWorkspaceStore: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/Workspace/WorkspaceContext", () => ({
+  useWorkspaceStore: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/hooks", () => ({
-  useAppConfigurationValue: jest.fn(),
+vi.mock("@lichtblick/suite-base/hooks", () => ({
+  useAppConfigurationValue: vi.fn(),
 }));
 
 describe("useBroadcast", () => {
-  let play: jest.Mock;
-  let pause: jest.Mock;
-  let seek: jest.Mock;
-  let playUntil: jest.Mock;
+  let play: Mock;
+  let pause: Mock;
+  let seek: Mock;
+  let playUntil: Mock;
 
   const testTime: Time = RosTimeBuilder.time();
 
-  const useWorkspaceStoreMock = useWorkspaceStore as jest.Mock;
+  const useWorkspaceStoreMock = useWorkspaceStore as Mock;
 
   beforeAll(() => {
     // @ts-expect-error MockBroadcastChannel as a minimal implementation
@@ -38,10 +39,10 @@ describe("useBroadcast", () => {
   });
 
   beforeEach(() => {
-    play = jest.fn();
-    pause = jest.fn();
-    seek = jest.fn();
-    playUntil = jest.fn();
+    play = vi.fn();
+    pause = vi.fn();
+    seek = vi.fn();
+    playUntil = vi.fn();
 
     useWorkspaceStoreMock.mockImplementation((selector: any) =>
       selector({ playbackControls: { syncInstances: true } }),
@@ -49,7 +50,7 @@ describe("useBroadcast", () => {
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   const renderUseBroadcast = () => {
@@ -133,7 +134,7 @@ describe("useBroadcast", () => {
     useWorkspaceStoreMock.mockImplementation((selector: any) =>
       selector({ playbackControls: { syncInstances: false } }),
     );
-    const addListenerSpy = jest.spyOn(BroadcastManager.getInstance(), "addListener");
+    const addListenerSpy = vi.spyOn(BroadcastManager.getInstance(), "addListener");
 
     // WHEN
     const { unmount } = renderUseBroadcast();
@@ -167,7 +168,7 @@ describe("useBroadcast", () => {
     useWorkspaceStoreMock.mockImplementation((selector: any) =>
       selector({ playbackControls: { syncInstances: true } }),
     );
-    const setShouldSyncSpy = jest.spyOn(BroadcastManager, "setShouldSync");
+    const setShouldSyncSpy = vi.spyOn(BroadcastManager, "setShouldSync");
 
     // WHEN
     const { rerender } = renderUseBroadcast();

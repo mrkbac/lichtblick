@@ -6,12 +6,12 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 
 import SearchBar from "@lichtblick/suite-base/components/SearchBar/SearchBar";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 describe("SearchBar component", () => {
-  const mockOnChange = jest.fn();
-  const mockOnClear = jest.fn();
+  const mockOnChange = vi.fn();
+  const mockOnClear = vi.fn();
 
   it("renders with default props", () => {
     render(<SearchBar value="" onChange={mockOnChange} />);

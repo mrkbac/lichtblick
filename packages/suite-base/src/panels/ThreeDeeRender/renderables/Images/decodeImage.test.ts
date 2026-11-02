@@ -27,7 +27,7 @@ import { PreparedVideoFrameStatus } from "./types";
 import { Image as RosImage } from "../../ros";
 
 afterEach(() => {
-  jest.restoreAllMocks();
+  vi.restoreAllMocks();
 });
 
 function createMockVideoFrame(override?: Partial<CompressedVideo>): CompressedVideo {
@@ -64,7 +64,7 @@ describe("isCompressedVideoKeyframe", () => {
     const mockVideoFrame = createMockVideoFrame({
       data: new Uint8Array([0x65]), // Mock IDR NAL unit
     });
-    jest.spyOn(H264Parser, "IsKeyframe").mockReturnValue(true);
+    vi.spyOn(H264Parser, "IsKeyframe").mockReturnValue(true);
 
     // WHEN keyframe detection runs
     // THEN it reports a keyframe
@@ -76,7 +76,7 @@ describe("isCompressedVideoKeyframe", () => {
     const mockVideoFrame = createMockVideoFrame({
       data: new Uint8Array([0x41]), // Mock non-IDR NAL unit
     });
-    jest.spyOn(H264Parser, "IsKeyframe").mockReturnValue(false);
+    vi.spyOn(H264Parser, "IsKeyframe").mockReturnValue(false);
 
     // WHEN keyframe detection runs
     // THEN it reports a non-keyframe
@@ -89,7 +89,7 @@ describe("isCompressedVideoKeyframe", () => {
       data: new Uint8Array([0x26]),
       format: "h265",
     });
-    jest.spyOn(H265Parser, "IsKeyframe").mockReturnValue(true);
+    vi.spyOn(H265Parser, "IsKeyframe").mockReturnValue(true);
 
     // WHEN keyframe detection runs
     // THEN the H.265 parser is used and reports a keyframe
@@ -104,7 +104,7 @@ describe("getVideoDecoderConfig", () => {
       data: new Uint8Array([0x67]), // Mock SPS NAL unit
     });
     const mockConfig = { codec: "avc1.42E01E" };
-    jest.spyOn(H264Parser, "ParseDecoderConfig").mockReturnValue(mockConfig);
+    vi.spyOn(H264Parser, "ParseDecoderConfig").mockReturnValue(mockConfig);
 
     // WHEN the decoder config is requested
     // THEN the H.264 parser config is returned
@@ -130,7 +130,7 @@ describe("getVideoDecoderConfig", () => {
       format: "h265",
     });
     const mockConfig = { codec: "hvc1.1.6.L93.B0" };
-    jest.spyOn(H265Parser, "ParseDecoderConfig").mockReturnValue(mockConfig);
+    vi.spyOn(H265Parser, "ParseDecoderConfig").mockReturnValue(mockConfig);
 
     // WHEN the decoder config is requested
     // THEN the H.265 parser config is returned
@@ -148,8 +148,8 @@ describe("decodeCompressedVideoToBitmap", () => {
       status: PreparedVideoFrameStatus.Ok,
     };
     const mockVideoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(true),
-      decode: jest.fn().mockResolvedValue(new ImageBitmap()),
+      isInitialized: vi.fn().mockReturnValue(true),
+      decode: vi.fn().mockResolvedValue(new ImageBitmap()),
     } as unknown as VideoPlayer;
 
     // WHEN the frame is decoded to a bitmap
@@ -175,9 +175,9 @@ describe("decodeCompressedVideoToBitmap", () => {
       type: "delta" as const,
       status: PreparedVideoFrameStatus.Ok,
     };
-    const decode = jest.fn().mockResolvedValue(new ImageBitmap());
+    const decode = vi.fn().mockResolvedValue(new ImageBitmap());
     const mockVideoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(true),
+      isInitialized: vi.fn().mockReturnValue(true),
       decode,
     } as unknown as VideoPlayer;
 
@@ -197,8 +197,8 @@ describe("decodeCompressedVideoToBitmap", () => {
       status: PreparedVideoFrameStatus.Ok,
     };
     const mockVideoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(false),
-      codedSize: jest.fn(),
+      isInitialized: vi.fn().mockReturnValue(false),
+      codedSize: vi.fn(),
     } as unknown as VideoPlayer;
 
     // WHEN the frame is decoded
@@ -221,10 +221,10 @@ describe("decodeCompressedVideoToBitmap", () => {
       codedWidth: 2,
       codedHeight: 2,
       timestamp: 10,
-      close: jest.fn(),
+      close: vi.fn(),
     } as unknown as VideoFrame;
     const originalCreateImageBitmap = self.createImageBitmap;
-    const createImageBitmapSpy = jest.fn().mockResolvedValue(new ImageBitmap());
+    const createImageBitmapSpy = vi.fn().mockResolvedValue(new ImageBitmap());
     self.createImageBitmap = createImageBitmapSpy;
     const preparedFrame = {
       data: mockVideoFrame.data,
@@ -232,8 +232,8 @@ describe("decodeCompressedVideoToBitmap", () => {
       status: PreparedVideoFrameStatus.Ok,
     };
     const mockVideoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(true),
-      decode: jest.fn().mockResolvedValue(undefined),
+      isInitialized: vi.fn().mockReturnValue(true),
+      decode: vi.fn().mockResolvedValue(undefined),
       lastVideoFrame,
     } as unknown as VideoPlayer;
 
@@ -326,8 +326,8 @@ describe("prepareVideoFrame", () => {
     const data = new Uint8Array([0x00, 0x00, 0x00, 0x01, 0x65]);
     const decoderConfig = { codec: "avc1.42E01E" } as VideoDecoderConfig;
     const mockVideoFrame = createMockVideoFrame({ format: "h264", data });
-    jest.spyOn(H264Parser, "ParseDecoderConfig").mockReturnValue(decoderConfig);
-    jest.spyOn(H264Parser, "IsKeyframe").mockReturnValue(true);
+    vi.spyOn(H264Parser, "ParseDecoderConfig").mockReturnValue(decoderConfig);
+    vi.spyOn(H264Parser, "IsKeyframe").mockReturnValue(true);
 
     // WHEN the frame is prepared for decoding
     const preparedFrame = prepareVideoFrame(mockVideoFrame);

@@ -5,13 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { Time } from "@foxglove/rostime";
 import * as _ from "lodash-es";
-import { MutableRefObject } from "react";
-import shallowequal from "shallowequal";
+import { RefObject } from "react";
 import { createStore, StoreApi } from "zustand";
+import { shallow } from "zustand/shallow";
 
 import { Condvar } from "@lichtblick/den/async";
-import { Time } from "@lichtblick/rostime";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 import {
   makeSubscriptionMemoizer,
@@ -97,7 +97,7 @@ export function createMessagePipelineStore({
   promisesToWaitForRef,
   initialPlayer,
 }: {
-  promisesToWaitForRef: MutableRefObject<FramePromise[]>;
+  promisesToWaitForRef: RefObject<FramePromise[]>;
   initialPlayer: Player | undefined;
 }): StoreApi<MessagePipelineInternalState> {
   return createStore((set, get) => ({
@@ -411,7 +411,7 @@ function updatePlayerStateAction(
 
   const capabilities = action.playerState.capabilities;
   const player = prevState.player;
-  if (player && !shallowequal(capabilities, prevState.lastCapabilities)) {
+  if (player && !shallow(capabilities, prevState.lastCapabilities)) {
     newPublicState.startPlayback = capabilities.includes(PLAYER_CAPABILITIES.playbackControl)
       ? player.startPlayback?.bind(player)
       : undefined;

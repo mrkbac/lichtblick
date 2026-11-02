@@ -5,8 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import Logger from "@lichtblick/log";
 import { parseMessagePath, MessagePath, MessagePathStructureItem } from "@lichtblick/message-path";
-import type { Time } from "@lichtblick/rostime";
-import { add as addTime, compare, subtract as subtractTime } from "@lichtblick/rostime";
+import type { Time } from "@foxglove/rostime";
+import { add as addTime, compare, subtract as subtractTime } from "@foxglove/rostime";
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import {
   messagePathStructures,

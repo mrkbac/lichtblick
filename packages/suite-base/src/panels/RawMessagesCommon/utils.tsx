@@ -28,6 +28,7 @@ import {
   ValueLabels,
   ValueLabelsProps,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
+import { isTypedArray } from "@lichtblick/suite-base/types/isTypedArray";
 
 ROS1_COMMON_MSG_PACKAGES.add("turtlesim");
 

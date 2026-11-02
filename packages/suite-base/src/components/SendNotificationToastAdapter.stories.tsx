@@ -14,8 +14,8 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { StoryFn, StoryObj } from "@storybook/react-webpack5";
 import { useEffect } from "react";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import SendNotificationToastAdapter from "@lichtblick/suite-base/components/SendNotificationToastAdapter";
 import StudioToastProvider from "@lichtblick/suite-base/components/StudioToastProvider";
@@ -48,7 +48,7 @@ export default {
     colorScheme: "dark",
   },
   decorators: [
-    (Wrapped: StoryFn): React.JSX.Element => {
+    (Wrapped: React.ComponentType): React.JSX.Element => {
       return (
         <div style={{ padding: 10, height: "300px" }}>
           <StudioToastProvider>

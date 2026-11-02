@@ -6,16 +6,16 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 describe("loadOtelAnalytics", () => {
-  const importOtelAnalytics = jest.fn();
+  const importOtelAnalytics = vi.fn();
 
   beforeEach(() => {
-    jest.resetModules();
+    vi.resetModules();
     importOtelAnalytics.mockReset();
   });
 
   it("resolves the OtelAnalytics implementation and memoizes the dynamic import", async () => {
     // Given
-    jest.doMock("@lichtblick/suite-base/services/telemetry/OtelAnalytics", () => {
+    vi.doMock("@lichtblick/suite-base/services/telemetry/OtelAnalytics", () => {
       importOtelAnalytics();
       return { __esModule: true, default: function MockOtelAnalytics() {} };
     });
@@ -33,7 +33,7 @@ describe("loadOtelAnalytics", () => {
   it("clears the cache and allows retrying after a failed import", async () => {
     // Given
     let shouldFail = true;
-    jest.doMock("@lichtblick/suite-base/services/telemetry/OtelAnalytics", () => {
+    vi.doMock("@lichtblick/suite-base/services/telemetry/OtelAnalytics", () => {
       importOtelAnalytics();
       if (shouldFail) {
         throw new Error("network error");
@@ -43,7 +43,10 @@ describe("loadOtelAnalytics", () => {
     const loadOtelAnalytics = (await import("./loadOtelAnalytics")).default;
 
     // When
-    await expect(loadOtelAnalytics()).rejects.toThrow("network error");
+    // Vitest wraps errors thrown by mock factories; the original error is the cause
+    await expect(loadOtelAnalytics()).rejects.toMatchObject({
+      cause: expect.objectContaining({ message: "network error" }),
+    });
     shouldFail = false;
     const resolved = await loadOtelAnalytics();
 

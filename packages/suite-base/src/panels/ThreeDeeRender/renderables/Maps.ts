@@ -8,7 +8,7 @@ import type { Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 import * as THREE from "three";
 
 import Logger from "@lichtblick/log";
-import { toNanoSec } from "@lichtblick/rostime";
+import { toNanoSec } from "@foxglove/rostime";
 import { MessageEvent, SettingsTreeAction, Time } from "@lichtblick/suite";
 import { loadGeoTiff } from "@lichtblick/suite-base/panels/Map/geotiff";
 import {

@@ -14,8 +14,8 @@ describe("registerMemoryMetricsHandler", () => {
   it("registers a handler on the memory metrics channel that returns app.getAppMetrics()", async () => {
     // Given
     const metrics = [{ type: "Browser", pid: 123 }] as unknown as ProcessMetric[];
-    const getAppMetrics = jest.fn().mockReturnValue(metrics);
-    const handle = jest.fn();
+    const getAppMetrics = vi.fn().mockReturnValue(metrics);
+    const handle = vi.fn();
 
     // When
     registerMemoryMetricsHandler({ handle }, { getAppMetrics });

@@ -24,7 +24,7 @@ const paths: DraggedMessagePath[] = [
 ];
 
 function makeConfig({ canDrop }: { canDrop: boolean }): MessagePathDropConfig {
-  return { getDropStatus: () => ({ canDrop }), handleDrop: jest.fn() };
+  return { getDropStatus: () => ({ canDrop }), handleDrop: vi.fn() };
 }
 
 describe("panelDropRegistry", () => {

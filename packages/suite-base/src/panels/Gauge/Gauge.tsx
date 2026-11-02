@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { useCallback, useEffect, useLayoutEffect, useReducer, useState } from "react";
-import { v4 as uuidv4 } from "uuid";
 
 import { parseMessagePath } from "@lichtblick/message-path";
 import { SettingsTreeAction } from "@lichtblick/suite";
@@ -15,6 +14,7 @@ import { buildConicGradient } from "@lichtblick/suite-base/panels/Gauge/buildCon
 import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Gauge/constants";
 import { stateReducer } from "@lichtblick/suite-base/panels/shared/gaugeAndIndicatorStateReducer";
 import { GaugeAndIndicatorState } from "@lichtblick/suite-base/panels/shared/types";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { settingsActionReducer } from "./settingsActionReducer";
 import { GaugeConfig, GaugeProps } from "./types";
@@ -132,7 +132,7 @@ export function Gauge({ context }: GaugeProps): React.JSX.Element {
     ) + padding;
   const needleThickness = 8;
   const needleExtraLength = 0.05;
-  const [clipPathId] = useState(() => `gauge-clip-path-${uuidv4()}`);
+  const [clipPathId] = useState(() => `gauge-clip-path-${randomUUID()}`);
   return (
     <div className={classes.root}>
       <div className={classes.gaugeContainer}>

@@ -6,7 +6,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { McapBundleAPI } from "./McapBundleAPI";
 
-jest.mock("@lichtblick/suite-base/services/http/HttpService");
+vi.mock("@lichtblick/suite-base/services/http/HttpService");
 
 describe("McapBundleAPI", () => {
   let mcapBundleApi: McapBundleAPI;
@@ -19,7 +19,7 @@ describe("McapBundleAPI", () => {
 
   beforeEach(() => {
     mcapBundleApi = new McapBundleAPI();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("getMcapBundle", () => {
@@ -30,8 +30,8 @@ describe("McapBundleAPI", () => {
         { url: `https://${BasicBuilder.string()}.com/file2.mcap`, metadata: { size: 1024 } },
       ];
 
-      const mockHttpService = jest.mocked(HttpService);
-      const mockGet = jest.fn().mockResolvedValue(createMockHttpResponse({ mcaps: mockMcaps }));
+      const mockHttpService = vi.mocked(HttpService);
+      const mockGet = vi.fn().mockResolvedValue(createMockHttpResponse({ mcaps: mockMcaps }));
       mockHttpService.get = mockGet;
 
       const result = await mcapBundleApi.getMcapBundle(mcapBundleId);
@@ -47,8 +47,8 @@ describe("McapBundleAPI", () => {
     it("should handle empty mcaps list", async () => {
       const mcapBundleId = BasicBuilder.string();
 
-      const mockHttpService = jest.mocked(HttpService);
-      const mockGet = jest.fn().mockResolvedValue(createMockHttpResponse({ mcaps: [] }));
+      const mockHttpService = vi.mocked(HttpService);
+      const mockGet = vi.fn().mockResolvedValue(createMockHttpResponse({ mcaps: [] }));
       mockHttpService.get = mockGet;
 
       const result = await mcapBundleApi.getMcapBundle(mcapBundleId);
@@ -62,8 +62,8 @@ describe("McapBundleAPI", () => {
       const mcapBundleId = BasicBuilder.string();
       const mockError = new Error("HTTP Error: 404 Not Found");
 
-      const mockHttpService = jest.mocked(HttpService);
-      const mockGet = jest.fn().mockRejectedValue(mockError);
+      const mockHttpService = vi.mocked(HttpService);
+      const mockGet = vi.fn().mockRejectedValue(mockError);
       mockHttpService.get = mockGet;
 
       await expect(mcapBundleApi.getMcapBundle(mcapBundleId)).rejects.toThrow(

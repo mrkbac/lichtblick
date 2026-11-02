@@ -5,9 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { StoryFn, StoryObj } from "@storybook/react-webpack5";
-import { screen, userEvent } from "@storybook/testing-library";
 import * as _ from "lodash-es";
+import { screen, userEvent } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import { ExtensionInfo, IExtensionLoader } from "@lichtblick/suite-base";
 import ExtensionMarketplaceContext, {
@@ -69,7 +69,7 @@ const MockExtensionMarketplace: ExtensionMarketplace = {
 Mock markdown rendering for URL [${url}](${url}).`,
 };
 
-function Wrapper(StoryComponent: StoryFn): React.JSX.Element {
+function Wrapper(StoryComponent: React.ComponentType): React.JSX.Element {
   return (
     <WorkspaceContextProvider>
       <ExtensionCatalogProvider loaders={[MockExtensionLoader]}>

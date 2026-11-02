@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Button, Dialog, DialogActions, DialogContent, TextField, Typography } from "@mui/material";
-import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useKeyPressEvent } from "react-use";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -61,7 +61,7 @@ function ModalPrompt({
     }
   };
 
-  const onSubmitAction = (event: FormEvent<HTMLFormElement>) => {
+  const onSubmitAction = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     onConfirmAction();
   };

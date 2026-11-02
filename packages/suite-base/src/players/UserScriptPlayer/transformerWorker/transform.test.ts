@@ -14,7 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-/* eslint-disable jest/no-conditional-expect */
+/* eslint-disable vitest/no-conditional-expect */
 
 import {
   DIAGNOSTIC_SEVERITY,
@@ -181,13 +181,13 @@ describe("pipeline", () => {
   });
 
   describe("compile", () => {
-    it.each([
-      "const x: string = 'hello foxglove'",
-      "const num: number = 1222",
-    ])("can compile", (sourceCode) => {
-      const { diagnostics } = compile({ ...baseNodeData, sourceCode });
-      expect(diagnostics).toHaveLength(0);
-    });
+    it.each(["const x: string = 'hello foxglove'", "const num: number = 1222"])(
+      "can compile",
+      (sourceCode) => {
+        const { diagnostics } = compile({ ...baseNodeData, sourceCode });
+        expect(diagnostics).toHaveLength(0);
+      },
+    );
     it.each([
       "const x: number = Math.max(1, 2);",
       "const x: string[] = [ 1, 2, 3 ].map(num => num.toString());",

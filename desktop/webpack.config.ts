@@ -5,8 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import type { Configuration } from "@rspack/core";
 import path from "node:path";
 
+import { resolveConfigs, type WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
 import { WebpackConfigParams } from "@lichtblick/suite-desktop/src/WebpackConfigParams";
 import { webpackDevServerConfig } from "@lichtblick/suite-desktop/src/webpackDevServerConfig";
 import { webpackMainConfig } from "@lichtblick/suite-desktop/src/webpackMainConfig";
@@ -30,10 +32,11 @@ const params: WebpackConfigParams = {
   preloadEntrypoint: "./index.ts",
 };
 
-export default [
-  webpackDevServerConfig(params),
-  webpackMainConfig(params),
-  webpackPreloadConfig(params),
-  webpackRendererConfig(params),
-  webpackQuicklookConfig(params),
-];
+export default (env: unknown, argv: WebpackArgv): Configuration[] =>
+  resolveConfigs(env, argv, [
+    webpackDevServerConfig(params),
+    webpackMainConfig(params),
+    webpackPreloadConfig(params),
+    webpackRendererConfig(params),
+    webpackQuicklookConfig(params),
+  ]);

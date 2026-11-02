@@ -27,27 +27,22 @@ updates:
         patterns:
           - "electron"
           - "electron-*"
-          - "app-builder-lib"
           - "builder-util"
-      jest:
+      vitest:
         patterns:
-          - "jest"
-          - "jest-*"
-          - "babel-jest"
-          - "@types/jest"
+          - "vitest"
+          - "vite"
+          - "@vitest/*"
+          - "vitest-*"
       webpack:
         patterns:
           - "webpack"
           - "webpack-cli"
           - "webpack-dev-server"
-      babel:
-        patterns:
-          - "@babel/*"
       monaco-editor:
         patterns:
           - "monaco-editor"
           - "monaco-editor-webpack-plugin"
-          - "react-monaco-editor"
 
   - package-ecosystem: "github-actions"
     directory: "/"

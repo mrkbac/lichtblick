@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
 
@@ -14,7 +14,7 @@ import type { HoverEntityInfo } from "./types";
 
 function makeCanvas(bounds?: Partial<DOMRect>): HTMLCanvasElement {
   const canvas = document.createElement("canvas");
-  canvas.getBoundingClientRect = jest.fn(() => ({
+  canvas.getBoundingClientRect = vi.fn(() => ({
     left: 0,
     top: 0,
     right: 300,
@@ -49,7 +49,7 @@ describe("<HoverTooltip />", () => {
   );
 
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
 
     Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
       configurable: true,
@@ -66,7 +66,7 @@ describe("<HoverTooltip />", () => {
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
 
     if (originalOffsetWidth) {
       Object.defineProperty(HTMLElement.prototype, "offsetWidth", originalOffsetWidth);
@@ -152,12 +152,12 @@ describe("<HoverTooltip />", () => {
     expect(view.container.querySelector(".MuiPaper-root")).not.toBeNull();
 
     act(() => {
-      jest.advanceTimersByTime(349);
+      vi.advanceTimersByTime(349);
     });
     expect(view.container.querySelector(".MuiPaper-root")).not.toBeNull();
 
     act(() => {
-      jest.advanceTimersByTime(1);
+      vi.advanceTimersByTime(1);
     });
 
     await waitFor(() => {
@@ -195,19 +195,19 @@ describe("<HoverTooltip />", () => {
 
     // Grace timer should no longer hide it.
     act(() => {
-      jest.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1000);
     });
     expect(view.container.querySelector(".MuiPaper-root")).not.toBeNull();
 
     fireEvent.mouseLeave(paper);
 
     act(() => {
-      jest.advanceTimersByTime(299);
+      vi.advanceTimersByTime(299);
     });
     expect(view.container.querySelector(".MuiPaper-root")).not.toBeNull();
 
     act(() => {
-      jest.advanceTimersByTime(1);
+      vi.advanceTimersByTime(1);
     });
 
     await waitFor(() => {
@@ -295,7 +295,7 @@ describe("<HoverTooltip />", () => {
     // Leaving should not hide when click-pinned.
     fireEvent.mouseLeave(paper);
     act(() => {
-      jest.advanceTimersByTime(2000);
+      vi.advanceTimersByTime(2000);
     });
     expect(view.container.querySelector(".MuiPaper-root")).not.toBeNull();
   });
@@ -390,7 +390,7 @@ describe("<HoverTooltip />", () => {
 
     // Dwell 700 ms → settled mode.
     act(() => {
-      jest.advanceTimersByTime(700);
+      vi.advanceTimersByTime(700);
     });
 
     // Now switch to pedestrian-1 while settled – grace period (350 ms) should delay the update.
@@ -410,14 +410,14 @@ describe("<HoverTooltip />", () => {
 
     // 349 ms in – still in grace.
     act(() => {
-      jest.advanceTimersByTime(349);
+      vi.advanceTimersByTime(349);
     });
     expect(view.getByText("obstacle-front")).toBeInTheDocument();
     expect(view.queryByText("pedestrian-1")).toBeNull();
 
     // 1 ms more – grace ends, pedestrian-1 content appears.
     act(() => {
-      jest.advanceTimersByTime(1);
+      vi.advanceTimersByTime(1);
     });
 
     await waitFor(() => {

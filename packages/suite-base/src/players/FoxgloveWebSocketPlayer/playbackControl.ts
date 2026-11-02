@@ -9,7 +9,7 @@
 // @foxglove/ws-protocol, see rust/foxglove/src/protocol/common/{client,server} in
 // https://github.com/foxglove/foxglove-sdk
 
-import { Time } from "@lichtblick/rostime";
+import { Time } from "@foxglove/rostime";
 
 export const PLAYBACK_CONTROL_CAPABILITY = "playbackControl";
 const CLIENT_PLAYBACK_CONTROL_REQUEST_OPCODE = 0x03;

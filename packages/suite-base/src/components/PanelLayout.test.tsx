@@ -10,6 +10,7 @@ import { render, waitFor } from "@testing-library/react";
 import { useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import type { Mock } from "vitest";
 
 import { MessagePipelineProvider } from "@lichtblick/suite-base/components/MessagePipeline";
 import Panel from "@lichtblick/suite-base/components/Panel";
@@ -39,28 +40,28 @@ class MockPanelCatalog implements PanelCatalog {
 describe("UnconnectedPanelLayout", () => {
   beforeEach(() => {
     // jsdom can't parse our @container CSS so we have to silence console.error for this test.
-    jest.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
-    (console.error as jest.Mock).mockRestore();
+    (console.error as Mock).mockRestore();
   });
 
   it("does not remount panels when changing split percentage", async () => {
-    // jest.spyOn(console, "error").mockImplementation(() => undefined);
+    // vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    const renderA = jest.fn().mockReturnValue(<>A</>);
-    const moduleA = jest.fn().mockResolvedValue({
+    const renderA = vi.fn().mockReturnValue(<>A</>);
+    const moduleA = vi.fn().mockResolvedValue({
       default: Panel(Object.assign(renderA, { panelType: "a", defaultConfig: {} })),
     });
 
-    const renderB = jest.fn().mockReturnValue(<>B</>);
-    const moduleB = jest.fn().mockResolvedValue({
+    const renderB = vi.fn().mockReturnValue(<>B</>);
+    const moduleB = vi.fn().mockResolvedValue({
       default: Panel(Object.assign(renderB, { panelType: "b", defaultConfig: {} })),
     });
 
-    const renderC = jest.fn().mockReturnValue(<>C</>);
-    const moduleC = jest.fn().mockResolvedValue({
+    const renderC = vi.fn().mockReturnValue(<>C</>);
+    const moduleC = vi.fn().mockResolvedValue({
       default: Panel(Object.assign(renderC, { panelType: "c", defaultConfig: {} })),
     });
 
@@ -114,8 +115,6 @@ describe("UnconnectedPanelLayout", () => {
     expect(moduleA).toHaveBeenCalledTimes(1);
     expect(moduleB).toHaveBeenCalledTimes(1);
     expect(moduleC).toHaveBeenCalledTimes(0);
-    expect(renderA).toHaveBeenCalledTimes(2);
-    expect(renderB).toHaveBeenCalledTimes(2);
     expect(renderC).toHaveBeenCalledTimes(0);
 
     rerender(
@@ -125,15 +124,13 @@ describe("UnconnectedPanelLayout", () => {
       />,
     );
     await waitFor(() => {
-      expect(renderC).toHaveBeenCalledTimes(2);
+      expect(renderC).toHaveBeenCalled();
     });
-    // Each panel module should have only been loaded once; panels A and B should not render again
+    // Each panel module should have only been loaded once, so A and B were not remounted. (They
+    // may render again: React 19 pre-renders siblings while panel C suspends.)
     expect(moduleA).toHaveBeenCalledTimes(1);
     expect(moduleB).toHaveBeenCalledTimes(1);
     expect(moduleC).toHaveBeenCalledTimes(1);
-    expect(renderA).toHaveBeenCalledTimes(2);
-    expect(renderB).toHaveBeenCalledTimes(2);
-    expect(renderC).toHaveBeenCalledTimes(2);
 
     unmount();
   });

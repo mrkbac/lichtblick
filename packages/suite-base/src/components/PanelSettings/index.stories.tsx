@@ -14,9 +14,9 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { StoryFn, StoryObj } from "@storybook/react-webpack5";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import { SettingsTreeNodes } from "@lichtblick/suite";
 import { PanelCatalog, PanelInfo } from "@lichtblick/suite-base/context/PanelCatalogContext";
@@ -29,7 +29,7 @@ export default {
   title: "components/PanelSettings",
   component: PanelSettings,
   decorators: [
-    (Story: StoryFn): React.JSX.Element => (
+    (Story: React.ComponentType): React.JSX.Element => (
       <div style={{ margin: 30, height: 400 }}>
         <DndProvider backend={HTML5Backend}>
           <MockCurrentLayoutProvider>

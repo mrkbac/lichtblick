@@ -81,9 +81,10 @@ Clone the repository:
 $ git clone https://github.com/lichtblick-suite/lichtblick.git
 ```
 
-Enable corepack:
+Install and enable Corepack (Node 25+ no longer bundles it):
 
 ```sh
+$ npm install --global corepack
 $ corepack enable
 ```
 
@@ -99,7 +100,7 @@ Launch the development environment:
 
 ```sh
 # To launch the desktop app (run scripts in different terminals):
-$ yarn desktop:serve        # start webpack dev server
+$ yarn desktop:serve        # start the Rspack dev server
 $ yarn desktop:start        # launch electron (make sure the desktop:serve finished to build)
 
 # To launch the web app:

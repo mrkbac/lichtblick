@@ -5,13 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import assert from "assert";
-import * as _ from "lodash-es";
-import { v4 as uuidv4 } from "uuid";
-
-import { debouncePromise } from "@lichtblick/den/async";
-import { filterMap } from "@lichtblick/den/collection";
-import Log from "@lichtblick/log";
 import {
   Time,
   add,
@@ -21,7 +14,13 @@ import {
   fromNanoSec,
   toRFC3339String,
   toString,
-} from "@lichtblick/rostime";
+} from "@foxglove/rostime";
+import assert from "assert";
+import * as _ from "lodash-es";
+
+import { debouncePromise } from "@lichtblick/den/async";
+import { filterMap } from "@lichtblick/den/collection";
+import Log from "@lichtblick/log";
 import { Immutable, MessageEvent, Metadata, ParameterValue } from "@lichtblick/suite";
 import { DeserializedSourceWrapper } from "@lichtblick/suite-base/players/IterablePlayer/DeserializedSourceWrapper";
 import { DeserializingIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/DeserializingIterableSource";
@@ -50,6 +49,8 @@ import { HIGH_FREQUENCY_ALERT } from "@lichtblick/suite-base/players/utils/const
 import { isTopicHighFrequency } from "@lichtblick/suite-base/players/utils/isTopicHighFrequency";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import delay from "@lichtblick/suite-base/util/delay";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { BlockLoader } from "./BlockLoader";
 import { BufferedIterableSource } from "./BufferedIterableSource";
@@ -180,7 +181,7 @@ export class IterablePlayer implements Player {
   #preloadTopics: TopicSelection = new Map();
 
   #progress: Progress = {};
-  #id: string = uuidv4();
+  #id: string = randomUUID();
   #messages: Immutable<MessageEvent[]> = [];
   #receivedBytes: number = 0;
   #hasError = false;
@@ -740,7 +741,7 @@ export class IterablePlayer implements Player {
 
       this.#presence = PlayerPresence.PRESENT;
     } catch (error) {
-      this.#setError(`Error initializing: ${error.message}`, error);
+      this.#setError(`Error initializing: ${toError(error).message}`, toError(error));
     }
     this.#queueEmitState();
 

@@ -8,7 +8,7 @@
 import CancelIcon from "@mui/icons-material/Cancel";
 import SearchIcon from "@mui/icons-material/Search";
 import { IconButton, InputAdornment, TextField } from "@mui/material";
-import fuzzySort from "fuzzysort";
+import { Fzf } from "fzf";
 import * as _ from "lodash-es";
 import { forwardRef, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -134,16 +134,19 @@ export const PanelCatalog = forwardRef<HTMLDivElement, Props>(function PanelCata
 
   const getFilteredPanels = useCallback(
     (panels: PanelInfo[]) => {
-      return searchQuery.length > 0
-        ? fuzzySort
-            .go(searchQuery, panels, {
-              keys: ["title", "description"],
-              // Weigh title matches more heavily than description matches.
-              scoreFn: (a) => Math.max(a[0] ? a[0].score : -1000, a[1] ? a[1].score - 100 : -1000),
-              threshold: -900,
-            })
-            .map((searchResult) => searchResult.obj)
-        : panels;
+      if (searchQuery.length === 0) {
+        return panels;
+      }
+      // Title matches rank above description-only matches
+      const byTitle = new Fzf(panels, {
+        selector: (panel) => panel.title,
+        casing: "case-insensitive",
+      }).find(searchQuery);
+      const byDescription = new Fzf(panels, {
+        selector: (panel) => panel.description ?? "",
+        casing: "case-insensitive",
+      }).find(searchQuery);
+      return [...new Set([...byTitle, ...byDescription].map((result) => result.item))];
     },
     [searchQuery],
   );

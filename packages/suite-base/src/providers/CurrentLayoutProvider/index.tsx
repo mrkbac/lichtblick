@@ -11,8 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getNodeAtPath } from "react-mosaic-component";
 import { useAsync, useAsyncFn, useMountedState } from "react-use";
-import shallowequal from "shallowequal";
-import { v4 as uuidv4 } from "uuid";
+import { shallow } from "zustand/shallow";
 
 import { useShallowMemo } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
@@ -58,6 +57,8 @@ import { LayoutManagerEventTypes } from "@lichtblick/suite-base/services/ILayout
 import { PanelConfig, PlaybackConfig, UserScripts } from "@lichtblick/suite-base/types/panels";
 import { windowAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { IncompatibleLayoutVersionAlert } from "./IncompatibleLayoutVersionAlert";
 
@@ -83,7 +84,7 @@ export default function CurrentLayoutProvider({
 
   const appParameters = useAppParameters();
 
-  const [mosaicId] = useState(() => uuidv4());
+  const [mosaicId] = useState(() => randomUUID());
 
   const layoutStateListeners = useRef(new Set<(_: LayoutState) => void>());
   const addLayoutStateListener = useCallback((listener: (_: LayoutState) => void) => {
@@ -129,7 +130,7 @@ export default function CurrentLayoutProvider({
   const setSelectedPanelIds = useCallback(
     (value: readonly string[] | ((prevState: readonly string[]) => readonly string[])): void => {
       const newValue = typeof value === "function" ? value(selectedPanelIds.current) : value;
-      if (!shallowequal(newValue, selectedPanelIds.current)) {
+      if (!shallow(newValue, selectedPanelIds.current)) {
         selectedPanelIds.current = newValue;
         for (const listener of [...selectedPanelIdsListeners.current]) {
           listener(selectedPanelIds.current);
@@ -186,7 +187,7 @@ export default function CurrentLayoutProvider({
         }
       } catch (error) {
         console.error(error);
-        enqueueSnackbar(`The layout could not be loaded. ${error.toString()}`, {
+        enqueueSnackbar(`The layout could not be loaded. ${toError(error).toString()}`, {
           variant: "error",
         });
         setIncompatibleLayoutVersionError(false);

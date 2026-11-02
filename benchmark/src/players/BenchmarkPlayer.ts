@@ -5,9 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { toRFC3339String } from "@foxglove/rostime";
+
 import { filterMap } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
-import { toRFC3339String } from "@lichtblick/rostime";
 import { MessageEvent } from "@lichtblick/suite";
 import { BlockLoader } from "@lichtblick/suite-base/players/IterablePlayer/BlockLoader";
 import { IDeserializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";

@@ -7,7 +7,6 @@
 
 import EventEmitter from "eventemitter3";
 import * as _ from "lodash-es";
-import { v4 as uuidv4 } from "uuid";
 
 import { MutexLocked } from "@lichtblick/den/async";
 import Logger from "@lichtblick/log";
@@ -37,6 +36,8 @@ import computeLayoutSyncOperations, {
 } from "@lichtblick/suite-base/services/LayoutManager/utils/computeLayoutSyncOperations";
 import { isLayoutEqual } from "@lichtblick/suite-base/services/LayoutManager/utils/isLayoutEqual";
 import { updateOrFetchLayout } from "@lichtblick/suite-base/services/LayoutManager/utils/updateOrFetchLayouts";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { migratePanelsState } from "../migrateLayout";
 import { NamespacedLayoutStorage } from "./NamespacedLayoutStorage";
@@ -249,7 +250,7 @@ export default class LayoutManager implements ILayoutManager {
         throw new Error("Cannot share a layout while offline");
       }
       const newLayout = await this.remote.saveNewLayout({
-        id: uuidv4() as LayoutID,
+        id: randomUUID() as LayoutID,
         name,
         data,
         permission,
@@ -274,7 +275,7 @@ export default class LayoutManager implements ILayoutManager {
     const newLayout = await this.local.runExclusive(
       async (local) =>
         await local.put({
-          id: uuidv4() as LayoutID,
+          id: randomUUID() as LayoutID,
           name,
           from,
           permission,
@@ -490,7 +491,7 @@ export default class LayoutManager implements ILayoutManager {
         throw new Error(`Cannot make a personal copy of layout id ${id} because it does not exist`);
       }
       const newLayout = await local.put({
-        id: uuidv4() as LayoutID,
+        id: randomUUID() as LayoutID,
         name,
         permission: "CREATOR_WRITE",
         baseline: { data: layout.working?.data ?? layout.baseline.data, savedAt: now },
@@ -681,7 +682,7 @@ export default class LayoutManager implements ILayoutManager {
         this.setError(undefined);
       }
     } catch (error) {
-      this.setError(error);
+      this.setError(toError(error));
       throw error;
     } finally {
       this.currentSync = undefined;

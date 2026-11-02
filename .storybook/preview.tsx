@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { GlobalStyles } from "@mui/material";
-import { StoryContext, StoryFn } from "@storybook/react-webpack5";
+import { StoryContext } from "storybook-react-rsbuild";
 import { useMemo, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -166,7 +166,7 @@ function StudioContextProviders({
   );
 }
 
-function WithContextProviders(Child: StoryFn, ctx: StoryContext): React.JSX.Element {
+function WithContextProviders(Child: React.ComponentType, ctx: StoryContext): React.JSX.Element {
   if (
     (ctx.parameters.fileName as string).includes("/packages/suite-base/") ||
     (ctx.parameters.fileName as string).includes("/packages/theme/")
@@ -192,7 +192,7 @@ function WithI18n({
   return <>{children}</>;
 }
 
-function WithI18nUnlessDisabled(Child: StoryFn, ctx: StoryContext): React.JSX.Element {
+function WithI18nUnlessDisabled(Child: React.ComponentType, ctx: StoryContext): React.JSX.Element {
   const { disableI18n = false }: { disableI18n?: boolean } = ctx.parameters;
   if (disableI18n) {
     return <Child />;

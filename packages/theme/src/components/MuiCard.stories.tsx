@@ -17,7 +17,7 @@ import {
   IconButton,
   Typography,
 } from "@mui/material";
-import { Meta, StoryObj } from "@storybook/react-webpack5";
+import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 export default {
   title: "Theme/Data Display/Card",

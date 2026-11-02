@@ -7,6 +7,7 @@
 
 import { McapIndexedReader, McapWriter } from "@mcap/core";
 import { Blob } from "node:buffer";
+import type { Mock, MockedClass, MockedFunction } from "vitest";
 
 import { loadDecompressHandlers, TempBuffer } from "@lichtblick/mcap-support";
 import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
@@ -17,13 +18,13 @@ import { McapIterableSource } from "./McapIterableSource";
 import { RemoteFileReadable } from "./RemoteFileReadable";
 import { HydratedSourcePool } from "../shared/HydratedSourcePool";
 
-jest.mock("./RemoteFileReadable");
+vi.mock("./RemoteFileReadable");
 
-const MockRemoteFileReadable = RemoteFileReadable as jest.MockedClass<typeof RemoteFileReadable>;
+const MockRemoteFileReadable = RemoteFileReadable as MockedClass<typeof RemoteFileReadable>;
 
-jest.mock("@lichtblick/mcap-support", () => ({
-  ...jest.requireActual("@lichtblick/mcap-support"),
-  loadDecompressHandlers: jest.fn(),
+vi.mock("@lichtblick/mcap-support", async () => ({
+  ...(await vi.importActual("@lichtblick/mcap-support")),
+  loadDecompressHandlers: vi.fn(),
 }));
 
 // Helper function to add a message to the writer with customizable parameters
@@ -81,7 +82,7 @@ async function createMcapFile({
 }
 
 describe("McapIterableSource", () => {
-  const mockLoadDecompressHandlers = loadDecompressHandlers as jest.MockedFunction<
+  const mockLoadDecompressHandlers = loadDecompressHandlers as MockedFunction<
     typeof loadDecompressHandlers
   >;
 
@@ -89,13 +90,18 @@ describe("McapIterableSource", () => {
     // Reset and setup mock to return actual decompression handlers
     mockLoadDecompressHandlers.mockReset();
     MockRemoteFileReadable.mockReset();
-    mockLoadDecompressHandlers.mockImplementation(() =>
-      jest.requireActual("@lichtblick/mcap-support").loadDecompressHandlers(),
+    mockLoadDecompressHandlers.mockImplementation(
+      async () =>
+        await (
+          await vi.importActual<typeof import("@lichtblick/mcap-support")>(
+            "@lichtblick/mcap-support",
+          )
+        ).loadDecompressHandlers(),
     );
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("returns an appropriate error message for an empty MCAP file", async () => {
@@ -127,7 +133,7 @@ describe("McapIterableSource", () => {
     const topic = `/${BasicBuilder.string()}`;
     const file = await createMcapFile({ withMessage: true, topic });
     const source = new McapIterableSource({ type: "file", file });
-    const readerInitializeSpy = jest.spyOn(McapIndexedReader, "Initialize");
+    const readerInitializeSpy = vi.spyOn(McapIndexedReader, "Initialize");
 
     // When
     const result = await source.initialize();
@@ -153,24 +159,24 @@ describe("McapIterableSource", () => {
     const urlUnindexedMcap = "https://example.com/unindexed.mcap";
 
     type MockRemoteReadable = {
-      open: jest.Mock<Promise<void>, []>;
-      close: jest.Mock<void, []>;
-      size: jest.Mock<Promise<bigint>, []>;
-      read: jest.Mock<Promise<Uint8Array>, [bigint, bigint]>;
+      open: Mock<(...args: []) => Promise<void>>;
+      close: Mock<(...args: []) => void>;
+      size: Mock<(...args: []) => Promise<bigint>>;
+      read: Mock<(...args: [bigint, bigint]) => Promise<Uint8Array>>;
     };
 
     function mockRemoteFileReadableWith(
       mcapDataOrByUrl: Uint8Array | Record<string, Uint8Array>,
     ): Map<string, MockRemoteReadable[]> {
       const instancesByUrl = new Map<string, MockRemoteReadable[]>();
-      MockRemoteFileReadable.mockImplementation((url: string) => {
+      MockRemoteFileReadable.mockImplementation(function (url: string) {
         const mcapData =
           mcapDataOrByUrl instanceof Uint8Array ? mcapDataOrByUrl : mcapDataOrByUrl[url]!;
         const instance: MockRemoteReadable = {
-          open: jest.fn().mockResolvedValue(undefined),
-          close: jest.fn(),
-          size: jest.fn().mockResolvedValue(BigInt(mcapData.byteLength)),
-          read: jest.fn().mockImplementation(async (offset: bigint, size: bigint) => {
+          open: vi.fn().mockResolvedValue(undefined),
+          close: vi.fn(),
+          size: vi.fn().mockResolvedValue(BigInt(mcapData.byteLength)),
+          read: vi.fn().mockImplementation(async (offset: bigint, size: bigint) => {
             return new Uint8Array(
               mcapData.buffer,
               mcapData.byteOffset + Number(offset),
@@ -310,7 +316,7 @@ describe("McapIterableSource", () => {
       // Given an unindexed MCAP with a message at 3s served via URL
       const mcapData = await buildUnindexedMcap([{ logTime: 3_000_000_000n }]);
       mockRemoteFileReadableWith(mcapData);
-      const mockFetch = jest.fn().mockResolvedValue({
+      const mockFetch = vi.fn().mockResolvedValue({
         body: new Blob([mcapData]).stream(),
         headers: new Headers({ "content-length": String(mcapData.byteLength) }),
       });
@@ -340,7 +346,7 @@ describe("McapIterableSource", () => {
       // Given an unindexed MCAP served via URL where fetch returns no body
       const mcapData = await buildUnindexedMcap([{ logTime: 1_000_000_000n }]);
       mockRemoteFileReadableWith(mcapData);
-      global.fetch = jest.fn().mockResolvedValue({
+      global.fetch = vi.fn().mockResolvedValue({
         body: undefined,
         headers: new Headers({ "content-length": String(mcapData.byteLength) }),
       });
@@ -358,7 +364,7 @@ describe("McapIterableSource", () => {
       // Given an unindexed MCAP served via URL where fetch returns no Content-Length
       const mcapData = await buildUnindexedMcap([{ logTime: 1_000_000_000n }]);
       mockRemoteFileReadableWith(mcapData);
-      global.fetch = jest.fn().mockResolvedValue({
+      global.fetch = vi.fn().mockResolvedValue({
         body: new Blob([mcapData]).stream(),
         headers: new Headers(),
       });
@@ -419,7 +425,7 @@ describe("McapIterableSource", () => {
         const pool = new HydratedSourcePool({ maxCount: 1 });
         const sourceA = new McapIterableSource({ type: "url", url: urlIndexedMcapA, pool });
         const sourceB = new McapIterableSource({ type: "url", url: urlIndexedMcapB, pool });
-        const readerInitializeSpy = jest.spyOn(McapIndexedReader, "Initialize");
+        const readerInitializeSpy = vi.spyOn(McapIndexedReader, "Initialize");
 
         // When initializing A and iterating it while still resident
         await sourceA.initialize();
@@ -476,7 +482,7 @@ describe("McapIterableSource", () => {
         const realInitialize = McapIndexedReader.Initialize.bind(McapIndexedReader);
         let failRehydrateForReadable: MockRemoteReadable | undefined;
         const fatalError = new Error("fatal indexed init");
-        jest.spyOn(McapIndexedReader, "Initialize").mockImplementation(async (args) => {
+        vi.spyOn(McapIndexedReader, "Initialize").mockImplementation(async (args) => {
           if (args.readable === failRehydrateForReadable) {
             failRehydrateForReadable = undefined;
             throw fatalError;
@@ -549,7 +555,7 @@ describe("McapIterableSource", () => {
         // Then both stay resident and nothing is evicted (no re-open needed later)
         expect(pool.size).toBe(2);
         const firstReadable = MockRemoteFileReadable.mock.results[0]!.value as unknown as {
-          close: jest.Mock;
+          close: Mock;
         };
         expect(firstReadable.close).not.toHaveBeenCalled();
       });
@@ -642,11 +648,11 @@ describe("McapIterableSource", () => {
       const source = new McapIterableSource({ type: "file", file });
 
       // Spy on both loadDecompressHandlers and Initialize
-      const loadHandlersSpy = jest.spyOn(
+      const loadHandlersSpy = vi.spyOn(
         await import("@lichtblick/mcap-support"),
         "loadDecompressHandlers",
       );
-      const initializeSpy = jest.spyOn(McapIndexedReader, "Initialize");
+      const initializeSpy = vi.spyOn(McapIndexedReader, "Initialize");
 
       // When
       await source.initialize();
@@ -668,7 +674,7 @@ describe("McapIterableSource", () => {
       const file = await createMcapFile({ withMessage: true, topic });
       const source = new McapIterableSource({ type: "file", file });
 
-      const initializeSpy = jest.spyOn(McapIndexedReader, "Initialize");
+      const initializeSpy = vi.spyOn(McapIndexedReader, "Initialize");
 
       // When
       const result = await source.initialize();
@@ -717,10 +723,12 @@ describe("McapIterableSource", () => {
       const file = await createMcapFile({ withMessage: true });
       const source = new McapIterableSource({ type: "file", file });
 
-      const initializeSpy = jest
+      const initializeSpy = vi
         .spyOn(McapIndexedReader, "Initialize")
         .mockRejectedValue(new Error("Corrupt MCAP file"));
-      const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(function () {
+        return undefined;
+      });
 
       // When / Then
       await expect(source.initialize()).rejects.toThrow("Corrupt MCAP file");
@@ -733,9 +741,9 @@ describe("McapIterableSource", () => {
       const file = await createMcapFile({ withMessage: true });
       const source = new McapIterableSource({ type: "file", file });
 
-      jest
-        .spyOn(McapIndexedReader, "Initialize")
-        .mockRejectedValue(new Error("File is not indexed [library=test]"));
+      vi.spyOn(McapIndexedReader, "Initialize").mockRejectedValue(
+        new Error("File is not indexed [library=test]"),
+      );
 
       // When
       const result = await source.initialize();

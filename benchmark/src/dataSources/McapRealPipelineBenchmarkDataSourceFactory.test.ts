@@ -5,6 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import type { Mock } from "vitest";
+
 import { DataSourceFactoryInitializeArgs } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
 import { DeserializingIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/DeserializingIterableSource";
@@ -13,22 +15,22 @@ import { PlayerMetricsCollectorInterface } from "@lichtblick/suite-base/players/
 
 import { McapRealPipelineBenchmarkDataSourceFactory } from "./McapRealPipelineBenchmarkDataSourceFactory";
 
-jest.mock("@lichtblick/suite-base/players/IterablePlayer", () => ({
-  IterablePlayer: jest.fn(),
+vi.mock("@lichtblick/suite-base/players/IterablePlayer", () => ({
+  IterablePlayer: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/players/IterablePlayer/DeserializingIterableSource", () => ({
-  DeserializingIterableSource: jest.fn(),
+vi.mock("@lichtblick/suite-base/players/IterablePlayer/DeserializingIterableSource", () => ({
+  DeserializingIterableSource: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/players/IterablePlayer/Mcap/McapIterableSource", () => ({
-  McapIterableSource: jest.fn(),
+vi.mock("@lichtblick/suite-base/players/IterablePlayer/Mcap/McapIterableSource", () => ({
+  McapIterableSource: vi.fn(),
 }));
 
 function setupArgs(params?: Record<string, string | undefined>): DataSourceFactoryInitializeArgs {
   return {
     params,
-    metricsCollector: jest.fn() as unknown as PlayerMetricsCollectorInterface,
+    metricsCollector: vi.fn() as unknown as PlayerMetricsCollectorInterface,
   };
 }
 
@@ -40,10 +42,16 @@ describe("McapRealPipelineBenchmarkDataSourceFactory", () => {
   const mockPlayer = { mock: "playerInstance" };
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    (McapIterableSource as jest.Mock).mockImplementation(() => mockMcapSource);
-    (DeserializingIterableSource as jest.Mock).mockImplementation(() => mockDeserializingSource);
-    (IterablePlayer as jest.Mock).mockImplementation(() => mockPlayer);
+    vi.clearAllMocks();
+    (McapIterableSource as Mock).mockImplementation(function () {
+      return mockMcapSource;
+    });
+    (DeserializingIterableSource as Mock).mockImplementation(function () {
+      return mockDeserializingSource;
+    });
+    (IterablePlayer as Mock).mockImplementation(function () {
+      return mockPlayer;
+    });
     factory = new McapRealPipelineBenchmarkDataSourceFactory();
   });
 

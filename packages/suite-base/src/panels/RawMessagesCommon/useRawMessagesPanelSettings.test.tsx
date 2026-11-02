@@ -4,23 +4,24 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { renderHook } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
 import { FONT_SIZE_OPTIONS } from "@lichtblick/suite-base/panels/RawMessagesCommon/constants";
 import { useRawMessagesPanelSettings } from "@lichtblick/suite-base/panels/RawMessagesCommon/useRawMessagesPanelSettings";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 
-jest.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", () => ({
-  usePanelSettingsTreeUpdate: jest.fn(),
+vi.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", () => ({
+  usePanelSettingsTreeUpdate: vi.fn(),
 }));
 
 describe("useRawMessagesPanelSettings", () => {
-  const mockUpdatePanelSettingsTree = jest.fn();
-  const mockSaveConfig = jest.fn();
+  const mockUpdatePanelSettingsTree = vi.fn();
+  const mockSaveConfig = vi.fn();
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    (usePanelSettingsTreeUpdate as jest.Mock).mockReturnValue(mockUpdatePanelSettingsTree);
+    vi.clearAllMocks();
+    (usePanelSettingsTreeUpdate as Mock).mockReturnValue(mockUpdatePanelSettingsTree);
   });
 
   describe("when initializing the hook", () => {

@@ -2,9 +2,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { toSec } from "@foxglove/rostime";
 import { act, renderHook } from "@testing-library/react";
+import type { Mock } from "vitest";
 
-import { toSec } from "@lichtblick/rostime";
 import type { OffscreenCanvasRenderer } from "@lichtblick/suite-base/panels/Plot/OffscreenCanvasRenderer";
 import { PlotCoordinator } from "@lichtblick/suite-base/panels/Plot/PlotCoordinator";
 import { UseDeltaMeasureModeProps } from "@lichtblick/suite-base/panels/Plot/hooks/types";
@@ -22,7 +23,7 @@ describe("useDeltaMeasureMode", () => {
       clientX: BasicBuilder.number(),
       clientY: BasicBuilder.number(),
       currentTarget: {
-        getBoundingClientRect: jest.fn(() => ({
+        getBoundingClientRect: vi.fn(() => ({
           left: overrides.left ?? 0,
           top: overrides.top ?? 0,
         })),
@@ -42,7 +43,7 @@ describe("useDeltaMeasureMode", () => {
     const props: UseDeltaMeasureModeProps = {
       coordinator,
       renderer: {
-        getElementsAtPixel: jest.fn().mockImplementation(async () => [
+        getElementsAtPixel: vi.fn().mockImplementation(async () => [
           PlotBuilder.hoverElement({
             configIndex: 0,
             data: PlotBuilder.datum({ value: BasicBuilder.number() }),
@@ -62,7 +63,9 @@ describe("useDeltaMeasureMode", () => {
     };
   };
 
-  const getXValueAtPixelMock = jest.fn<number, [pixelX: number]>(() => BasicBuilder.number());
+  const getXValueAtPixelMock = vi.fn<(...args: [pixelX: number]) => number>(() =>
+    BasicBuilder.number(),
+  );
 
   const mockCoordinator = {
     getXValueAtPixel: getXValueAtPixelMock,
@@ -190,7 +193,7 @@ describe("useDeltaMeasureMode", () => {
     const error = new Error("renderer lookup failed");
     const { result } = setup({
       coordinator: mockCoordinator,
-      renderer: { getElementsAtPixel: jest.fn().mockRejectedValue(error) },
+      renderer: { getElementsAtPixel: vi.fn().mockRejectedValue(error) },
     });
     act(() => {
       result.current.toggleActive();
@@ -203,7 +206,7 @@ describe("useDeltaMeasureMode", () => {
 
     // Then
     expect(console.error).toHaveBeenCalledWith(error);
-    (console.error as jest.Mock).mockClear();
+    (console.error as Mock).mockClear();
     expect(result.current.markerA).toBeUndefined();
   });
 
@@ -211,7 +214,7 @@ describe("useDeltaMeasureMode", () => {
     // Given
     const { result } = setup({
       coordinator: mockCoordinator,
-      renderer: { getElementsAtPixel: jest.fn().mockResolvedValue([]) },
+      renderer: { getElementsAtPixel: vi.fn().mockResolvedValue([]) },
     });
     act(() => {
       result.current.toggleActive();
@@ -241,7 +244,7 @@ describe("useDeltaMeasureMode", () => {
     ];
     const { result } = setup({
       coordinator: mockCoordinator,
-      renderer: { getElementsAtPixel: jest.fn().mockResolvedValue(elements) },
+      renderer: { getElementsAtPixel: vi.fn().mockResolvedValue(elements) },
     });
     act(() => {
       result.current.toggleActive();
@@ -322,7 +325,7 @@ describe("useDeltaMeasureMode", () => {
     ];
     const { result } = setup({
       coordinator: mockCoordinator,
-      renderer: { getElementsAtPixel: jest.fn().mockResolvedValue(elements) },
+      renderer: { getElementsAtPixel: vi.fn().mockResolvedValue(elements) },
     });
     act(() => {
       result.current.toggleActive();
@@ -349,7 +352,7 @@ describe("useDeltaMeasureMode", () => {
     ];
     const { result } = setup({
       coordinator: mockCoordinator,
-      renderer: { getElementsAtPixel: jest.fn().mockResolvedValue(elements) },
+      renderer: { getElementsAtPixel: vi.fn().mockResolvedValue(elements) },
     });
     act(() => {
       result.current.toggleActive();
@@ -375,7 +378,7 @@ describe("useDeltaMeasureMode", () => {
     ];
     const { result } = setup({
       coordinator: mockCoordinator,
-      renderer: { getElementsAtPixel: jest.fn().mockResolvedValue(elements) },
+      renderer: { getElementsAtPixel: vi.fn().mockResolvedValue(elements) },
     });
     act(() => {
       result.current.toggleActive();

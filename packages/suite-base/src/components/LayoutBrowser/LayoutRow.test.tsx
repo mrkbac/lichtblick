@@ -4,8 +4,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { Mock } from "vitest";
 
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 import { LayoutID } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import * as LayoutManagerContext from "@lichtblick/suite-base/context/LayoutManagerContext";
 import * as useConfirmModule from "@lichtblick/suite-base/hooks/useConfirm";
@@ -17,13 +18,13 @@ import LayoutRow from "./LayoutRow";
 import { ADD_TO_FAVORITES_LABEL, REMOVE_FROM_FAVORITES_LABEL } from "./constants";
 
 // Mocks
-jest.mock("@lichtblick/suite-base/context/LayoutManagerContext", () => ({
-  useLayoutManager: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/LayoutManagerContext", () => ({
+  useLayoutManager: vi.fn(),
 }));
-jest.mock("@lichtblick/suite-base/hooks/useConfirm", () => ({
-  useConfirm: jest.fn(),
+vi.mock("@lichtblick/suite-base/hooks/useConfirm", () => ({
+  useConfirm: vi.fn(),
 }));
-jest.mock("./LayoutRow.style", () => ({
+vi.mock("./LayoutRow.style", () => ({
   StyledListItem: ({ children, secondaryAction }: any) => (
     <div data-testid="styled-list-item">
       {children}
@@ -47,15 +48,15 @@ const mockLayoutManager = {
   isOnline: true,
   supportsSharing: true,
   favorites: noFavorites,
-  on: jest.fn(),
-  off: jest.fn(),
-  canFavorite: jest.fn().mockReturnValue(false),
-  setFavorite: jest.fn().mockResolvedValue(undefined),
+  on: vi.fn(),
+  off: vi.fn(),
+  canFavorite: vi.fn().mockReturnValue(false),
+  setFavorite: vi.fn().mockResolvedValue(undefined),
 };
-const mockConfirm = jest.fn();
+const mockConfirm = vi.fn();
 const mockConfirmModal = <div data-testid="confirm-modal" />;
-(LayoutManagerContext.useLayoutManager as jest.Mock).mockReturnValue(mockLayoutManager);
-(useConfirmModule.useConfirm as jest.Mock).mockReturnValue([mockConfirm, mockConfirmModal]);
+(LayoutManagerContext.useLayoutManager as Mock).mockReturnValue(mockLayoutManager);
+(useConfirmModule.useConfirm as Mock).mockReturnValue([mockConfirm, mockConfirmModal]);
 
 const layoutId = BasicBuilder.string();
 const layoutName = BasicBuilder.string();
@@ -71,22 +72,22 @@ const renderComponent = (props = {}) =>
       anySelectedModifiedLayouts={false}
       multiSelectedIds={[]}
       selected={false}
-      onSelect={jest.fn()}
-      onRename={jest.fn()}
-      onDuplicate={jest.fn()}
-      onDelete={jest.fn()}
-      onShare={jest.fn()}
-      onExport={jest.fn()}
-      onOverwrite={jest.fn()}
-      onRevert={jest.fn()}
-      onMakePersonalCopy={jest.fn()}
+      onSelect={vi.fn()}
+      onRename={vi.fn()}
+      onDuplicate={vi.fn()}
+      onDelete={vi.fn()}
+      onShare={vi.fn()}
+      onExport={vi.fn()}
+      onOverwrite={vi.fn()}
+      onRevert={vi.fn()}
+      onMakePersonalCopy={vi.fn()}
       {...props}
     />,
   );
 
 describe("LayoutRow rendering", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("Given default props, when rendered, then displays the layout name", () => {
@@ -152,7 +153,7 @@ describe("LayoutRow rendering", () => {
   it("when delete menu item is clicked then confirm modal is triggered", async () => {
     // GIVEN
     mockConfirm.mockResolvedValue("ok");
-    const onDelete = jest.fn();
+    const onDelete = vi.fn();
     renderComponent({ onDelete });
     fireEvent.click(screen.getByTestId("layout-actions"));
 
@@ -193,7 +194,7 @@ describe("LayoutRow rendering", () => {
 
   it("Given a layout with modifications, when Revert is clicked and confirmed, then onRevert is called", async () => {
     // GIVEN
-    const onRevert = jest.fn();
+    const onRevert = vi.fn();
     mockConfirm.mockResolvedValue("ok");
     renderComponent({ layout: { ...defaultLayout, working: {}, syncInfo: undefined }, onRevert });
 
@@ -212,7 +213,7 @@ describe("LayoutRow rendering", () => {
 
   it("Given a layout with modifications, when Revert is clicked and cancelled, then onRevert is not called", async () => {
     // GIVEN
-    const onRevert = jest.fn();
+    const onRevert = vi.fn();
     mockConfirm.mockResolvedValue("cancel");
     renderComponent({ layout: { ...defaultLayout, working: {}, syncInfo: undefined }, onRevert });
 
@@ -231,7 +232,7 @@ describe("LayoutRow rendering", () => {
 
   it("Given a layout, when Rename is clicked and input is blurred, then onRename is called with the new name", async () => {
     // GIVEN
-    const onRename = jest.fn();
+    const onRename = vi.fn();
     renderComponent({ onRename });
     fireEvent.click(screen.getByTestId("layout-actions"));
     fireEvent.click(screen.getByTestId("rename-layout"));
@@ -252,7 +253,7 @@ describe("LayoutRow rendering", () => {
 
   it("Given a shared layout, when Duplicate is clicked, then onMakePersonalCopy is called", () => {
     // GIVEN
-    const onMakePersonalCopy = jest.fn();
+    const onMakePersonalCopy = vi.fn();
     const sharedLayout = { ...defaultLayout, permission: "ORG_READ" as const };
     renderComponent({ layout: sharedLayout, onMakePersonalCopy });
     fireEvent.click(screen.getByTestId("layout-actions"));
@@ -266,7 +267,7 @@ describe("LayoutRow rendering", () => {
 
   it("Given a personal layout, when Duplicate is clicked, then onDuplicate is called", () => {
     // GIVEN
-    const onDuplicate = jest.fn();
+    const onDuplicate = vi.fn();
     const personalLayout = {
       ...defaultLayout,
       working: undefined,
@@ -325,7 +326,7 @@ describe("LayoutRow favorites", () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockLayoutManager.isOnline = true;
   });
 

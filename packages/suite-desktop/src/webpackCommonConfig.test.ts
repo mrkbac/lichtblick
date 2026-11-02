@@ -30,30 +30,30 @@ function createTestParams(overrides: Partial<WebpackConfigParams> = {}): Webpack
   };
 }
 
-jest.mock("webpack", () => {
-  const original = jest.requireActual("webpack");
+vi.mock("@rspack/core", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@rspack/core")>();
   return {
     ...original,
-    DefinePlugin: jest.fn().mockImplementation((defs) => ({
-      pluginName: "DefinePlugin",
-      definitions: defs,
-    })),
+    // the configs only use rspack.DefinePlugin
+    rspack: {
+      DefinePlugin: vi.fn().mockImplementation(function (defs) {
+        return {
+          pluginName: "DefinePlugin",
+          definitions: defs,
+        };
+      }),
+    },
   };
 });
 
 // --- mock other heavy plugins ---
-jest.mock("esbuild-loader", () => ({
-  EsbuildPlugin: jest.fn().mockImplementation((opts) => ({
-    pluginName: "EsbuildPlugin",
-    options: opts,
-  })),
+vi.mock("ts-checker-rspack-plugin", () => ({
+  TsCheckerRspackPlugin: vi.fn().mockImplementation(function () {
+    return {
+      pluginName: "TsCheckerRspackPlugin",
+    };
+  }),
 }));
-
-jest.mock("fork-ts-checker-webpack-plugin", () =>
-  jest.fn().mockImplementation(() => ({
-    pluginName: "ForkTsCheckerWebpackPlugin",
-  })),
-);
 
 describe("createCommonWebpackConfig", () => {
   it("should configure development mode with source maps", () => {
@@ -66,10 +66,10 @@ describe("createCommonWebpackConfig", () => {
     // Then
     expect(config.devtool).toBe("eval-cheap-module-source-map");
     expect(config.resolve?.extensions).toContain(".tsx");
-    expect((config.module?.rules?.[0] as any).use.loader).toBe("ts-loader");
+    expect((config.module?.rules?.[0] as any).loader).toBe("builtin:swc-loader");
   });
 
-  it("should configure production mode with esbuild minification", () => {
+  it("should configure production mode with source maps", () => {
     // Given
     const params = createTestParams();
 
@@ -78,8 +78,6 @@ describe("createCommonWebpackConfig", () => {
 
     // Then
     expect(config.devtool).toBe("source-map");
-    expect((config.optimization?.minimizer?.[0] as any).pluginName).toBe("EsbuildPlugin");
-    expect(config.optimization?.removeAvailableModules).toBe(true);
   });
 
   it("should inject DefinePlugin with product metadata", () => {
@@ -100,7 +98,7 @@ describe("createCommonWebpackConfig", () => {
     expect(defs.LICHTBLICK_PRODUCT_HOMEPAGE).toBe(JSON.stringify("https://example.com"));
   });
 
-  it("should include ForkTsCheckerWebpackPlugin", () => {
+  it("should include TsCheckerRspackPlugin", () => {
     // Given
     const params = createTestParams();
 
@@ -109,8 +107,8 @@ describe("createCommonWebpackConfig", () => {
     const plugins = config.plugins as any[];
 
     // Then
-    const hasForkTs = plugins.some((p) => p.pluginName === "ForkTsCheckerWebpackPlugin");
-    expect(hasForkTs).toBe(true);
+    const hasTsChecker = plugins.some((p) => p.pluginName === "TsCheckerRspackPlugin");
+    expect(hasTsChecker).toBe(true);
   });
 
   it("should propagate API_URL, DEV_WORKSPACE and OTLP_ENDPOINT from environment if set", () => {

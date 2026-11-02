@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { render } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { createMuiTheme } from "@lichtblick/theme";

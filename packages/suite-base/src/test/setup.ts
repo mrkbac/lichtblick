@@ -15,7 +15,6 @@
 //   You may not use this file except in compliance with the License.
 
 import React from "react";
-import util from "util";
 
 import setImmediate from "@lichtblick/suite-base/util/setImmediate";
 
@@ -26,8 +25,6 @@ function noOp() {
 }
 
 if (typeof window !== "undefined") {
-  global.TextDecoder = util.TextDecoder as typeof TextDecoder;
-
   if (typeof window.URL.createObjectURL === "undefined") {
     Object.defineProperty(window.URL, "createObjectURL", { value: noOp });
   }
@@ -37,12 +34,10 @@ if (typeof window !== "undefined") {
   (window as { setImmediate?: typeof setImmediate }).setImmediate ??= setImmediate;
 }
 
-global.TextEncoder = util.TextEncoder as unknown as typeof TextEncoder;
-
 // React available everywhere (matches webpack config)
 global.React = React;
 
-// Jest does not include ResizeObserver.
+// jsdom does not include ResizeObserver.
 class ResizeObserverMock {
   #callback: ResizeObserverCallback;
 
@@ -63,3 +58,9 @@ class ResizeObserverMock {
 }
 
 global.ResizeObserver = ResizeObserverMock;
+
+// Testing Library's waitFor advances fake timers only when it finds a global `jest`
+// (https://github.com/testing-library/dom-testing-library/issues/987).
+(globalThis as { jest?: unknown }).jest = {
+  advanceTimersByTime: (ms: number) => vi.advanceTimersByTime(ms),
+};

@@ -6,8 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Stack, Typography as MuiTypography } from "@mui/material";
-import { StoryObj } from "@storybook/react-webpack5";
 import { ReactNode } from "react";
+import { StoryObj } from "storybook-react-rsbuild";
 
 export default {
   title: "Theme/Data Display/Typography",

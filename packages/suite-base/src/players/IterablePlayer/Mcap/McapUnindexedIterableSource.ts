@@ -5,10 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { McapStreamReader, McapTypes } from "@mcap/core";
-import * as _ from "lodash-es";
-
-import { loadDecompressHandlers, parseChannel, ParsedChannel } from "@lichtblick/mcap-support";
 import {
   Time,
   isLessThan,
@@ -19,7 +15,11 @@ import {
   toSec,
   toRFC3339String,
   compare,
-} from "@lichtblick/rostime";
+} from "@foxglove/rostime";
+import { McapStreamReader, McapTypes } from "@mcap/core";
+import * as _ from "lodash-es";
+
+import { loadDecompressHandlers, parseChannel, ParsedChannel } from "@lichtblick/mcap-support";
 import { MessageEvent, Metadata } from "@lichtblick/suite";
 import {
   GetBackfillMessagesArgs,
@@ -31,6 +31,7 @@ import {
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import { PlayerAlert, TopicStats } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 const DURATION_YEAR_SEC = 365 * 24 * 60 * 60;
 
@@ -140,8 +141,8 @@ export class McapUnindexedIterableSource implements ISerializedIterableSource {
             channelIdsWithErrors.add(record.id);
             alerts.push({
               severity: "error",
-              message: `Error in topic ${record.topic} (channel ${record.id}): ${error.message}`,
-              error,
+              message: `Error in topic ${record.topic} (channel ${record.id}): ${toError(error).message}`,
+              error: toError(error),
             });
           }
           break;

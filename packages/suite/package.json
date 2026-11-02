@@ -19,7 +19,7 @@
     "prepack": "tsc -b tsconfig.json"
   },
   "dependencies": {
-    "@lichtblick/message-definition": "1.0.0"
+    "@foxglove/message-definition": "0.5.0"
   },
   "devDependencies": {
     "@lichtblick/tsconfig": "1.1.2",

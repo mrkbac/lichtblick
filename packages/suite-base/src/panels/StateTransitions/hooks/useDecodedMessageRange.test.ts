@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { act, renderHook } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import { MessageEvent, SubscribeMessageRangeArgs } from "@lichtblick/suite";
 import { useDecodeMessagePathsForMessagesByTopic } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
@@ -13,35 +14,35 @@ import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder
 
 import { useDecodedMessageRange } from "./useDecodedMessageRange";
 
-jest.mock("@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems");
-jest.mock("@lichtblick/suite-base/components/PanelExtensionAdapter");
+vi.mock("@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems");
+vi.mock("@lichtblick/suite-base/components/PanelExtensionAdapter");
 
 describe("useDecodedMessageRange", () => {
-  let mockSubscribeMessageRange: jest.Mock;
-  let mockDecodeMessagePathsForMessagesByTopic: jest.Mock;
-  let mockCancel: jest.Mock;
+  let mockSubscribeMessageRange: Mock;
+  let mockDecodeMessagePathsForMessagesByTopic: Mock;
+  let mockCancel: Mock;
 
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.useFakeTimers();
+    vi.clearAllMocks();
+    vi.useFakeTimers();
 
-    mockCancel = jest.fn();
-    mockSubscribeMessageRange = jest.fn().mockReturnValue(mockCancel);
-    mockDecodeMessagePathsForMessagesByTopic = jest.fn().mockReturnValue({});
+    mockCancel = vi.fn();
+    mockSubscribeMessageRange = vi.fn().mockReturnValue(mockCancel);
+    mockDecodeMessagePathsForMessagesByTopic = vi.fn().mockReturnValue({});
 
-    (useSubscribeMessageRange as jest.Mock).mockReturnValue(mockSubscribeMessageRange);
-    (useDecodeMessagePathsForMessagesByTopic as jest.Mock).mockReturnValue(
+    (useSubscribeMessageRange as Mock).mockReturnValue(mockSubscribeMessageRange);
+    (useDecodeMessagePathsForMessagesByTopic as Mock).mockReturnValue(
       mockDecodeMessagePathsForMessagesByTopic,
     );
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   async function simulateBatches(topic: string, batches: MessageEvent[][]): Promise<void> {
     const call = mockSubscribeMessageRange.mock.calls.find(
-      ([args]: [SubscribeMessageRangeArgs]) => args.topic === topic,
+      ([args]) => (args as SubscribeMessageRangeArgs).topic === topic,
     ) as [SubscribeMessageRangeArgs] | undefined;
     if (call == undefined) {
       throw new Error(`No subscription found for topic "${topic}"`);
@@ -107,9 +108,7 @@ describe("useDecodedMessageRange", () => {
   });
 
   it("should handle empty topics", () => {
-    (useDecodeMessagePathsForMessagesByTopic as jest.Mock).mockReturnValue(
-      jest.fn().mockReturnValue({}),
-    );
+    (useDecodeMessagePathsForMessagesByTopic as Mock).mockReturnValue(vi.fn().mockReturnValue({}));
 
     const { result } = renderHook(() => useDecodedMessageRange([], []));
 
@@ -130,7 +129,7 @@ describe("useDecodedMessageRange", () => {
     });
 
     const call = mockSubscribeMessageRange.mock.calls.find(
-      ([args]: [SubscribeMessageRangeArgs]) => args.topic === topic,
+      ([args]) => (args as SubscribeMessageRangeArgs).topic === topic,
     );
     const args: SubscribeMessageRangeArgs = call![0];
 
@@ -204,8 +203,8 @@ describe("useDecodedMessageRange", () => {
       const topicA = PlayerBuilder.topic().name;
       const topicB = PlayerBuilder.topic().name;
 
-      const cancelA = jest.fn();
-      const cancelB = jest.fn();
+      const cancelA = vi.fn();
+      const cancelB = vi.fn();
       mockSubscribeMessageRange.mockReturnValueOnce(cancelA).mockReturnValueOnce(cancelB);
 
       const { rerender } = renderHook(

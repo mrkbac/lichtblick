@@ -6,14 +6,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { useCallback, useEffect, useLayoutEffect, useReducer, useState, useMemo } from "react";
-import {
-  PieChart as RechartsPieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from "recharts";
+import { PieChart as RechartsPieChart, Pie, Tooltip, Legend, ResponsiveContainer } from "recharts";
 
 import { parseMessagePath } from "@lichtblick/message-path";
 import { PanelExtensionContext, SettingsTreeAction } from "@lichtblick/suite";
@@ -31,9 +24,9 @@ type PieChartProps = {
   context: PanelExtensionContext;
 };
 
-export function formatTooltip(value: number, name: string): [string, string] {
-  const formattedValue = typeof value === "number" ? value.toFixed(2) : value;
-  return [`${formattedValue}%`, name];
+export function formatTooltip(value: unknown, name: string | number | undefined): [string, string] {
+  const formattedValue = typeof value === "number" ? value.toFixed(2) : String(value);
+  return [`${formattedValue}%`, String(name ?? "")];
 }
 
 export function PieChart({ context }: PieChartProps): React.JSX.Element {
@@ -82,7 +75,12 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
   );
 
   // Normalize values into percentage format from useChartData
-  const data = useChartData(rawValue, config);
+  const chartData = useChartData(rawValue, config);
+  // recharts reads each slice's color from its `fill` field
+  const data = useMemo(
+    () => chartData.map((entry) => ({ ...entry, fill: entry.color })),
+    [chartData],
+  );
 
   // Dispatch path change on config.path update
   useLayoutEffect(() => {
@@ -163,11 +161,7 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
               animationBegin={500}
               animationDuration={1500}
               animationEasing="ease-in-out"
-            >
-              {data.map((entry) => (
-                <Cell key={entry.name} fill={entry.color} />
-              ))}
-            </Pie>
+            />
             <Tooltip contentStyle={tooltipStyle} formatter={formatTooltip} />
             <Legend />
           </RechartsPieChart>

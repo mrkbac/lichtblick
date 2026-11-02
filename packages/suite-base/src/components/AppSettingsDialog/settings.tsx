@@ -25,7 +25,6 @@ import {
   ToggleButtonGroup,
   ToggleButtonGroupProps,
 } from "@mui/material";
-import moment from "moment-timezone";
 import { MouseEvent, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
@@ -40,7 +39,12 @@ import { Language } from "@lichtblick/suite-base/i18n";
 import { reportError } from "@lichtblick/suite-base/reportError";
 import { LaunchPreferenceValue } from "@lichtblick/suite-base/types/LaunchPreferenceValue";
 import { TimeDisplayMethod } from "@lichtblick/suite-base/types/panels";
-import { formatTime } from "@lichtblick/suite-base/util/formatTime";
+import {
+  formatTime,
+  guessTimezone,
+  timezoneAbbreviation,
+  timezoneOffsetMinutes,
+} from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
 
 const MESSAGE_RATES = [1, 3, 5, 10, 15, 20, 30, 60];
@@ -66,11 +70,10 @@ const useStyles = makeStyles()((theme) => ({
 }));
 
 function formatTimezone(name: string) {
-  const tz = moment.tz(name);
-  const zoneAbbr = tz.zoneAbbr();
-  const offset = tz.utcOffset();
-  const offsetStr =
-    (offset >= 0 ? "+" : "") + moment.duration(offset, "minutes").format("hh:mm", { trim: false });
+  const zoneAbbr = timezoneAbbreviation(name);
+  const offset = timezoneOffsetMinutes(name);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const offsetStr = `${offset < 0 ? "-" : "+"}${pad(Math.floor(Math.abs(offset) / 60))}:${pad(Math.abs(offset) % 60)}`;
   if (name === zoneAbbr) {
     return `${zoneAbbr} (${offsetStr})`;
   }
@@ -126,7 +129,7 @@ export function TimezoneSettings(): React.ReactElement {
   const detectItem: Option = useMemo(
     () => ({
       key: "detect",
-      label: `Detect from system: ${formatTimezone(moment.tz.guess())}`,
+      label: `Detect from system: ${formatTimezone(guessTimezone())}`,
       data: undefined,
     }),
     [],
@@ -146,7 +149,7 @@ export function TimezoneSettings(): React.ReactElement {
 
   const timezoneItems: Option[] = useMemo(
     () =>
-      filterMap(moment.tz.names(), (name) => {
+      filterMap(Intl.supportedValuesOf("timeZone"), (name) => {
         // UTC is always hoisted to the top in fixedItems
         if (name === "UTC") {
           return undefined;
@@ -160,7 +163,14 @@ export function TimezoneSettings(): React.ReactElement {
 
   const selectedItem = useMemo(() => {
     if (timezone != undefined) {
-      return allItems.find((item) => item.data === timezone) ?? detectItem;
+      // Intl lists canonical zone names only; keep showing a saved alias such as US/Pacific
+      return (
+        allItems.find((item) => item.data === timezone) ?? {
+          key: `zone:${timezone}`,
+          label: formatTimezone(timezone),
+          data: timezone,
+        }
+      );
     }
     return detectItem;
   }, [allItems, detectItem, timezone]);
@@ -169,13 +179,13 @@ export function TimezoneSettings(): React.ReactElement {
     <FormControl fullWidth>
       <FormLabel>{t("displayTimestampsIn")}:</FormLabel>
       <Autocomplete
-        options={[...fixedItems, ...timezoneItems]}
+        options={allItems.includes(selectedItem) ? allItems : [...allItems, selectedItem]}
         value={selectedItem}
-        renderOption={(props, option: Option) =>
+        renderOption={({ key: _muiKey, ...props }, option: Option) =>
           option.divider === true ? (
             <Divider key={option.key} />
           ) : (
-            <li {...props} key={option.key}>
+            <li key={option.key} {...props}>
               {option.label}
             </li>
           )

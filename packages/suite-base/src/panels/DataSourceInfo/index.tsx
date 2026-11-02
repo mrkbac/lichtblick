@@ -30,7 +30,7 @@ import {
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import { formatByteSize } from "@lichtblick/den/format";
-import { Time, subtract, toSec } from "@lichtblick/rostime";
+import { Time, subtract, toSec } from "@foxglove/rostime";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import {

@@ -5,9 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { expect } from "@storybook/jest";
-import { StoryContext, StoryFn, StoryObj } from "@storybook/react-webpack5";
-import { userEvent, within } from "@storybook/testing-library";
+import { expect, userEvent, within } from "storybook/test";
+import { StoryContext, StoryObj } from "storybook-react-rsbuild";
 
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import PanelSetup, { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";
@@ -50,7 +49,7 @@ export default {
     colorScheme: "both-column",
   },
   decorators: [
-    (StoryComponent: StoryFn, { parameters }: StoryContext): React.JSX.Element => {
+    (StoryComponent: React.ComponentType, { parameters }: StoryContext): React.JSX.Element => {
       return (
         <PanelSetup fixture={parameters.panelSetup?.fixture}>
           <StoryComponent />
@@ -88,9 +87,9 @@ export const CallServiceEnabledServiceName: StoryObj = {
     const canvas = within(canvasElement);
     const responseTextareas = await canvas.findAllByPlaceholderText("Response");
     const buttons = await canvas.findAllByTestId("call-service-button");
-    buttons.forEach(async (button) => {
+    for (const button of buttons) {
       await userEvent.click(button);
-    });
+    }
     await delay(500);
     for (const textarea of responseTextareas) {
       await expect(textarea).toHaveValue(successResponseJson);
@@ -116,9 +115,9 @@ export const CallServiceEnabledWithCustomButtonSettings: StoryObj = {
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
     const buttons = await canvas.findAllByText("Call that funky service");
-    buttons.forEach(async (button) => {
+    for (const button of buttons) {
       await userEvent.hover(button);
-    });
+    }
   },
 
   parameters: { panelSetup: { fixture: getFixture({ allowCallService: true }) } },
@@ -155,9 +154,9 @@ export const CallingServiceThatDoesNotExist: StoryObj = {
     const canvas = within(canvasElement);
     const responseTextareas = await canvas.findAllByPlaceholderText("Response");
     const buttons = await canvas.findAllByTestId("call-service-button");
-    buttons.forEach(async (button) => {
+    for (const button of buttons) {
       await userEvent.click(button);
-    });
+    }
     await delay(500);
     for (const textarea of responseTextareas) {
       await expect(textarea).toHaveValue(`Service "/non_existing_service" does not exist`);

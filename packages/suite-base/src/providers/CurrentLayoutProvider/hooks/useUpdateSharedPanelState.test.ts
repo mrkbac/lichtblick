@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { renderHook, act } from "@testing-library/react";
-import { MutableRefObject } from "react";
+import { RefObject } from "react";
 
 import { LayoutState, LayoutID } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -15,7 +15,7 @@ describe("useUpdateSharedPanelState", () => {
   const panelType = BasicBuilder.string();
   const keyTest = BasicBuilder.string();
   const valueTest = BasicBuilder.string();
-  const layoutStateRef: MutableRefObject<Readonly<LayoutState>> = {
+  const layoutStateRef: RefObject<Readonly<LayoutState>> = {
     current: {
       sharedPanelState: {},
       selectedLayout: {
@@ -28,10 +28,10 @@ describe("useUpdateSharedPanelState", () => {
     },
   };
 
-  const setLayoutState = jest.fn();
+  const setLayoutState = vi.fn();
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("does not update state if selectedLayout.data is undefined", () => {

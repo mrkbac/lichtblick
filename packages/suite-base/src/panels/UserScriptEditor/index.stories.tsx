@@ -14,9 +14,9 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { StoryObj } from "@storybook/react-webpack5";
-import { fireEvent, screen } from "@storybook/testing-library";
 import { useCallback, useEffect } from "react";
+import { fireEvent, screen } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import NodePlayground from "@lichtblick/suite-base/panels/UserScriptEditor";
@@ -264,7 +264,9 @@ export const EditorShowsNewCodeWhenUserNodesChange: StoryObj = {
   name: "Editor shows new code when userNodes change",
   play: async () => {
     const buttons = await screen.findAllByTestId("node-explorer");
-    buttons.forEach((button) => fireEvent.click(button));
+    for (const button of buttons) {
+      await fireEvent.click(button);
+    }
   },
 };
 
@@ -332,7 +334,9 @@ export const GoBackFromGotoDefinition: StoryObj = {
   name: "go back from goto definition",
   play: async () => {
     const buttons = await screen.findAllByTestId("go-back");
-    buttons.forEach((button) => fireEvent.click(button));
+    for (const button of buttons) {
+      await fireEvent.click(button);
+    }
   },
 };
 
@@ -345,7 +349,9 @@ export const SidebarOpenNodeExplorer: StoryObj = {
   name: "sidebar open - node explorer",
   play: async () => {
     const buttons = await screen.findAllByTestId("node-explorer");
-    buttons.forEach((button) => fireEvent.click(button));
+    for (const button of buttons) {
+      await fireEvent.click(button);
+    }
   },
 };
 
@@ -358,7 +364,9 @@ export const SidebarOpenNodeExplorerSelectedNode: StoryObj = {
   name: "sidebar open - node explorer - selected node",
   play: async () => {
     const buttons = await screen.findAllByTestId("node-explorer");
-    buttons.forEach((button) => fireEvent.click(button));
+    for (const button of buttons) {
+      await fireEvent.click(button);
+    }
   },
 };
 
@@ -371,7 +379,9 @@ export const SidebarOpenUtilsExplorerSelectedUtility: StoryObj = {
   name: "sidebar open - utils explorer - selected utility",
   play: async () => {
     const buttons = await screen.findAllByTestId("utils-explorer");
-    buttons.forEach((button) => fireEvent.click(button));
+    for (const button of buttons) {
+      await fireEvent.click(button);
+    }
   },
 };
 
@@ -384,7 +394,9 @@ export const SidebarOpenTemplatesExplorer: StoryObj = {
   name: "sidebar open - templates explorer",
   play: async () => {
     const buttons = await screen.findAllByTestId("templates-explorer");
-    buttons.forEach((button) => fireEvent.click(button));
+    for (const button of buttons) {
+      await fireEvent.click(button);
+    }
   },
 };
 
@@ -436,7 +448,9 @@ export const BottomBarNoErrorsOpen: StoryObj = {
   name: "BottomBar - no errors - open",
   play: async () => {
     const buttons = await screen.findAllByTestId("np-errors");
-    buttons.forEach((button) => fireEvent.click(button));
+    for (const button of buttons) {
+      await fireEvent.click(button);
+    }
   },
 };
 
@@ -455,7 +469,9 @@ export const BottomBarNoLogsOpen: StoryObj = {
   name: "BottomBar - no logs - open",
   play: async () => {
     const buttons = await screen.findAllByTestId("np-logs");
-    buttons.forEach((button) => fireEvent.click(button));
+    for (const button of buttons) {
+      await fireEvent.click(button);
+    }
   },
 };
 
@@ -565,7 +581,9 @@ export const BottomBarErrorsOpen: StoryObj = {
   name: "BottomBar - errors - open",
   play: async () => {
     const buttons = await screen.findAllByTestId("np-errors");
-    buttons.forEach((button) => fireEvent.click(button));
+    for (const button of buttons) {
+      await fireEvent.click(button);
+    }
   },
 };
 
@@ -601,7 +619,9 @@ export const BottomBarLogsOpen: StoryObj = {
   name: "BottomBar - logs - open",
   play: async () => {
     const buttons = await screen.findAllByTestId("np-logs");
-    buttons.forEach((button) => fireEvent.click(button));
+    for (const button of buttons) {
+      await fireEvent.click(button);
+    }
   },
 };
 
@@ -621,9 +641,13 @@ export const BottomBarClearedLogs: StoryObj = {
   name: "BottomBar - cleared logs",
   play: async () => {
     const buttons = await screen.findAllByTestId("np-logs");
-    buttons.forEach((button) => fireEvent.click(button));
+    for (const button of buttons) {
+      await fireEvent.click(button);
+    }
 
     const clearButtons = await screen.findAllByTestId("np-logs-clear");
-    clearButtons.forEach((button) => fireEvent.click(button));
+    for (const button of clearButtons) {
+      await fireEvent.click(button);
+    }
   },
 };

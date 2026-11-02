@@ -5,9 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import * as Comlink from "@foxglove/comlink";
 import type { Theme } from "@mui/material";
 
-import * as Comlink from "@lichtblick/comlink";
 import { ComlinkWrap } from "@lichtblick/den/worker";
 import { Immutable } from "@lichtblick/suite";
 import { Bounds } from "@lichtblick/suite-base/types/Bounds";
@@ -31,10 +31,7 @@ export class OffscreenCanvasRenderer {
   public constructor(canvas: OffscreenCanvas, theme: Theme) {
     this.#theme = theme;
     this.#canvas = canvas;
-    const worker = new Worker(
-      // foxglove-depcheck-used: babel-plugin-transform-import-meta
-      new URL("./ChartRenderer.worker", import.meta.url),
-    );
+    const worker = new Worker(new URL("./ChartRenderer.worker", import.meta.url));
 
     const { remote, dispose } = ComlinkWrap<Service<Comlink.RemoteObject<ChartRenderer>>>(worker);
 

@@ -16,6 +16,7 @@
 
 import { PromiseTimeoutError, promiseTimeout } from "@lichtblick/den/async";
 import sendNotification from "@lichtblick/suite-base/util/sendNotification";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 export type FramePromise = { name: string; promise: Promise<void> };
 
@@ -36,7 +37,7 @@ export async function pauseFrameForPromises(promises: FramePromise[]): Promise<v
     // An async render task failed to finish in time; some panels may display data from the wrong frame.
     const isTimeoutError = error instanceof PromiseTimeoutError;
     if (!isTimeoutError) {
-      sendNotification("Player ", error, "app", "error");
+      sendNotification("Player ", toError(error), "app", "error");
       return;
     }
   }

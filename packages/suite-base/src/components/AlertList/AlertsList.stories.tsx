@@ -5,11 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { fromDate } from "@foxglove/rostime";
 import { useTheme } from "@mui/material";
-import { StoryFn, StoryObj } from "@storybook/react-webpack5";
 import { useEffect } from "react";
+import { StoryObj } from "storybook-react-rsbuild";
 
-import { fromDate } from "@lichtblick/rostime";
 import { AlertsList } from "@lichtblick/suite-base/components/AlertList/AlertsList";
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import { useAlertsActions } from "@lichtblick/suite-base/context/AlertsContext";
@@ -53,7 +53,7 @@ export default {
   title: "components/AlertsList",
   component: AlertsList,
   decorators: [
-    (Story: StoryFn): React.JSX.Element => {
+    (Story: React.ComponentType): React.JSX.Element => {
       const theme = useTheme();
       return (
         <WorkspaceContextProvider>

@@ -16,7 +16,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-/* eslint-disable jest/no-conditional-expect */
+/* eslint-disable vitest/no-conditional-expect */
 
 import { act, renderHook } from "@testing-library/react";
 import { PropsWithChildren, useCallback, useState } from "react";
@@ -34,12 +34,12 @@ import { MessagePipelineContext, MessagePipelineProvider, useMessagePipeline } f
 import FakePlayer from "./FakePlayer";
 import { MAX_PROMISE_TIMEOUT_TIME_MS } from "./pauseFrameForPromise";
 
-const mockClearAlerts = jest.fn();
+const mockClearAlerts = vi.fn();
 const alertsStore = {
   getState: () => ({ actions: { clearAlerts: mockClearAlerts } }),
 };
 
-jest.setTimeout(MAX_PROMISE_TIMEOUT_TIME_MS * 3);
+vi.setConfig({ testTimeout: MAX_PROMISE_TIMEOUT_TIME_MS * 3 });
 
 // We require two state updates for each player emit() to take effect, for unknown reasons
 async function doubleAct(fn: () => Promise<void>) {
@@ -310,9 +310,9 @@ describe("MessagePipelineProvider/useMessagePipeline", () => {
     act(() => {
       void player.emit();
     });
-    await expect(async () => {
-      await player.emit();
-    }).rejects.toThrow("New playerState was emitted before last playerState was rendered.");
+    await expect(player.emit()).rejects.toThrow(
+      "New playerState was emitted before last playerState was rendered.",
+    );
   });
 
   it("sets subscriptions", async () => {
@@ -769,10 +769,10 @@ describe("MessagePipelineProvider/useMessagePipeline", () => {
 
   it("proxies player methods to player, accounting for capabilities", async () => {
     const player = new FakePlayer();
-    jest.spyOn(player, "startPlayback");
-    jest.spyOn(player, "pausePlayback");
-    jest.spyOn(player, "setPlaybackSpeed");
-    jest.spyOn(player, "seekPlayback");
+    vi.spyOn(player, "startPlayback");
+    vi.spyOn(player, "pausePlayback");
+    vi.spyOn(player, "setPlaybackSpeed");
+    vi.spyOn(player, "seekPlayback");
     const { Hook, Wrapper } = makeTestHook({ player });
     const { result } = renderHook(Hook, {
       wrapper: Wrapper,
@@ -816,7 +816,7 @@ describe("MessagePipelineProvider/useMessagePipeline", () => {
 
   it("closes player on unmount", () => {
     const player = new FakePlayer();
-    jest.spyOn(player, "close");
+    vi.spyOn(player, "close");
     const { Hook, Wrapper } = makeTestHook({ player });
     const { unmount } = renderHook(Hook, {
       wrapper: Wrapper,

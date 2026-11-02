@@ -69,7 +69,7 @@ export function LaunchPreferenceScreen(): ReactElement {
     {
       key: LaunchPreferenceValue.WEB,
       primary: "Web",
-      secondary: "Requires Chrome v76+",
+      secondary: "Requires Chrome v140+",
       onClick: () => void launchInWeb(),
     },
     {

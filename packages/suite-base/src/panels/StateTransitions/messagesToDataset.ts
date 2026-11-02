@@ -5,14 +5,14 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import stringHash from "string-hash";
+import { subtract as subtractTimes, toSec } from "@foxglove/rostime";
 
-import { subtract as subtractTimes, toSec } from "@lichtblick/rostime";
 import {
   MessageAndData,
   MessagePathDataItem,
 } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import { ChartDataset } from "@lichtblick/suite-base/components/TimeBasedChart/types";
+import { hashString } from "@lichtblick/suite-base/util/hashString";
 import { expandedLineColors } from "@lichtblick/suite-base/util/plotColors";
 import { getTimestampForMessageEvent } from "@lichtblick/suite-base/util/time";
 
@@ -131,7 +131,7 @@ export function isValidValue(value: unknown): value is number | string | bigint 
 }
 
 export function getColor(value: ValidQueriedDataValue): string {
-  const valueForColor = typeof value === "string" ? stringHash(value) : Math.round(Number(value));
+  const valueForColor = typeof value === "string" ? hashString(value) : Math.round(Number(value));
   return baseColors[positiveModulo(valueForColor, baseColorsLength)]!;
 }
 

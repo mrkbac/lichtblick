@@ -607,8 +607,7 @@ describe("parseRosPath", () => {
   });
 
   it("uses the cached value instead of parse the path again", () => {
-    jest.mock("nearley");
-    const parserFeedSpy = jest.spyOn(Parser.prototype, "feed");
+    const parserFeedSpy = vi.spyOn(Parser.prototype, "feed");
 
     const path = "/some/topic";
 
@@ -621,7 +620,5 @@ describe("parseRosPath", () => {
 
     // Verify that the Parser constructor was only called once
     expect(parserFeedSpy).toHaveBeenCalledTimes(1);
-
-    jest.unmock("nearley");
   });
 });

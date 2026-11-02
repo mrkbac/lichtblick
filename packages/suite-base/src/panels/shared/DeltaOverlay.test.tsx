@@ -5,7 +5,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import { DeltaOverlay, DeltaOverlayProps } from "./DeltaOverlay";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 
 describe("DeltaOverlay", () => {
   function buildProps(overrides: Partial<DeltaOverlayProps> = {}): DeltaOverlayProps {
@@ -21,8 +21,8 @@ describe("DeltaOverlay", () => {
       yValueB: 20,
       deltaX: 1,
       deltaY: 10,
-      onRemoveMarkerA: jest.fn(),
-      onRemoveMarkerB: jest.fn(),
+      onRemoveMarkerA: vi.fn(),
+      onRemoveMarkerB: vi.fn(),
       ...overrides,
     };
   }
@@ -111,7 +111,7 @@ describe("DeltaOverlay", () => {
 
   it("should call onRemoveMarkerA when the marker A remove button is clicked", () => {
     // Given
-    const onRemoveMarkerA = jest.fn();
+    const onRemoveMarkerA = vi.fn();
     const props = buildProps({ onRemoveMarkerA });
     render(<DeltaOverlay {...props} />);
 
@@ -124,7 +124,7 @@ describe("DeltaOverlay", () => {
 
   it("should call onRemoveMarkerB when the marker B remove button is clicked", () => {
     // Given
-    const onRemoveMarkerB = jest.fn();
+    const onRemoveMarkerB = vi.fn();
     const props = buildProps({ onRemoveMarkerB });
     render(<DeltaOverlay {...props} />);
 
@@ -140,11 +140,11 @@ describe("DeltaOverlay", () => {
     const { container } = render(<DeltaOverlay {...buildProps()} />);
     const overlay = screen.getByTestId("delta-overlay");
     const overlayParent = overlay.parentElement!;
-    const setPointerCapture = jest.fn();
-    const releasePointerCapture = jest.fn();
+    const setPointerCapture = vi.fn();
+    const releasePointerCapture = vi.fn();
     const panel = document.createElement("div");
-    panel.getBoundingClientRect = jest.fn(() => new DOMRect(0, 0, 300, 200));
-    overlay.getBoundingClientRect = jest.fn(() => new DOMRect(0, 0, 100, 50));
+    panel.getBoundingClientRect = vi.fn(() => new DOMRect(0, 0, 300, 200));
+    overlay.getBoundingClientRect = vi.fn(() => new DOMRect(0, 0, 100, 50));
     Object.defineProperty(overlayParent, "offsetParent", { value: panel });
     overlay.setPointerCapture = setPointerCapture;
     overlay.releasePointerCapture = releasePointerCapture;
@@ -178,17 +178,17 @@ describe("DeltaOverlay", () => {
     const overlay = screen.getByTestId("delta-overlay");
     const overlayParent = overlay.parentElement!;
     const panel = document.createElement("div");
-    panel.getBoundingClientRect = jest.fn(() => new DOMRect(0, 0, 300, 200));
+    panel.getBoundingClientRect = vi.fn(() => new DOMRect(0, 0, 300, 200));
     // A real browser's getBoundingClientRect reflects the currently applied transform - mimic that
     // here so this test can catch clamp bounds drifting across moves within the same gesture.
-    overlay.getBoundingClientRect = jest.fn(() => {
+    overlay.getBoundingClientRect = vi.fn(() => {
       const match = /translate\((-?[\d.]+)px, (-?[\d.]+)px\)/.exec(overlay.style.transform);
       const [translateX, translateY] = match ? [Number(match[1]), Number(match[2])] : [0, 0];
       return new DOMRect(translateX, translateY, 100, 50);
     });
     Object.defineProperty(overlayParent, "offsetParent", { value: panel });
-    overlay.setPointerCapture = jest.fn();
-    overlay.releasePointerCapture = jest.fn();
+    overlay.setPointerCapture = vi.fn();
+    overlay.releasePointerCapture = vi.fn();
 
     const dispatchPointerEvent = (type: string, clientX: number, clientY: number): void => {
       const event = new Event(type, { bubbles: true });

@@ -5,25 +5,15 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import ReactRefreshPlugin from "@pmmmwh/react-refresh-webpack-plugin";
-import { CleanWebpackPlugin } from "clean-webpack-plugin";
-import CopyPlugin from "copy-webpack-plugin";
+import { Configuration, DevServer, RspackPluginInstance, rspack } from "@rspack/core";
+import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "path";
-import { Configuration, WebpackPluginInstance } from "webpack";
-import type {
-  ConnectHistoryApiFallbackOptions,
-  Configuration as WebpackDevServerConfiguration,
-} from "webpack-dev-server";
 import { GenerateSW } from "workbox-webpack-plugin";
 
 import type { WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
 import { makeConfig } from "@lichtblick/suite-base/webpack";
 import * as palette from "@lichtblick/theme/src/palette";
-
-export interface WebpackConfiguration extends Configuration {
-  devServer?: WebpackDevServerConfiguration;
-}
 
 export type ConfigParams = {
   /** Directory to find `entrypoint` and `tsconfig.json`. */
@@ -32,16 +22,16 @@ export type ConfigParams = {
   outputPath: string;
   publicPath?: string;
   /** Source map (`devtool`) setting to use for production builds */
-  prodSourceMap: string | false;
+  prodSourceMap: Configuration["devtool"];
   /** Set the app version information */
   version: string;
   /** Needs to be overridden for react-router */
-  historyApiFallback?: ConnectHistoryApiFallbackOptions;
+  historyApiFallback?: DevServer["historyApiFallback"];
   /** Customizations to index.html */
   indexHtmlOptions?: Partial<HtmlWebpackPlugin.Options>;
 };
 
-export const devServerConfig = (params: ConfigParams): WebpackConfiguration => ({
+export const devServerConfig = (params: ConfigParams): Configuration => ({
   // Use empty entry to avoid webpack default fallback to /src
   entry: {},
 
@@ -98,28 +88,31 @@ export const devServerConfig = (params: ConfigParams): WebpackConfiguration => (
                 ) {
                   return false;
                 }
+                // Benign per spec: observers whose callbacks resize content get re-delivered next frame.
+                if (error.message.startsWith("ResizeObserver loop")) {
+                  return false;
+                }
 
                 return true;
               },
             },
     },
   },
-
-  plugins: [new CleanWebpackPlugin()],
 });
 
 export const mainConfig =
   (params: ConfigParams) =>
   (env: unknown, argv: WebpackArgv): Configuration => {
     const isDev = argv.mode === "development";
-    const isServe = argv.env?.WEBPACK_SERVE ?? false;
+    const isServe = argv.env?.RSPACK_SERVE ?? false;
 
     const allowUnusedVariables = isDev;
 
-    const plugins: WebpackPluginInstance[] = [];
+    const plugins: RspackPluginInstance[] = [];
 
+    // "?raw" imports feed source text to the user script type checker and must stay untouched
     if (isServe) {
-      plugins.push(new ReactRefreshPlugin());
+      plugins.push(new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } }));
     }
 
     if (!isDev) {
@@ -160,12 +153,13 @@ export const mainConfig =
         filename: isDev ? "[name].js" : "[name].[contenthash].js",
 
         path: params.outputPath,
+        clean: true,
       },
 
       plugins: [
         ...plugins,
         ...(appWebpackConfig.plugins ?? []),
-        new CopyPlugin({
+        new rspack.CopyRspackPlugin({
           patterns: [{ from: path.resolve(__dirname, "..", "public") }],
         }),
         new HtmlWebpackPlugin({

@@ -9,7 +9,7 @@ import { Button, Chip, Typography } from "@mui/material";
 import { Fragment, useState } from "react";
 
 import { formatByteSize } from "@lichtblick/den/format";
-import { Time, subtract, toSec } from "@lichtblick/rostime";
+import { Time, subtract, toSec } from "@foxglove/rostime";
 import { Immutable } from "@lichtblick/suite";
 import {
   MessagePipelineContext,

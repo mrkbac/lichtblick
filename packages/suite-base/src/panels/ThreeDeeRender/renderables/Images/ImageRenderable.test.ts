@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import * as THREE from "three";
+import type { Mock } from "vitest";
 
 import { PinholeCameraModel } from "@lichtblick/den/image";
 import { H265SliceType, VideoPlayer } from "@lichtblick/den/video";
@@ -18,15 +19,15 @@ import {
 } from "./ImageRenderable";
 import { CompressedVideo } from "./ImageTypes";
 
-const mockAdd = jest.fn();
-const mockAddToTopic = jest.fn();
-const mockRemove = jest.fn();
-const mockRemoveFromTopic = jest.fn();
+const mockAdd = vi.fn();
+const mockAddToTopic = vi.fn();
+const mockRemove = vi.fn();
+const mockRemoveFromTopic = vi.fn();
 
 // Mocked dependencies
 const mockRenderer: IRenderer = {
-  queueAnimationFrame: jest.fn(),
-  normalizeFrameId: jest.fn((id) => id),
+  queueAnimationFrame: vi.fn(),
+  normalizeFrameId: vi.fn((id) => id),
   settings: {
     errors: {
       add: mockAdd,
@@ -75,8 +76,8 @@ function createDecodedVideoFrame(timestamp = 0): VideoFrame {
     timestamp,
     codedWidth: 640,
     codedHeight: 480,
-    close: jest.fn(),
-    clone: jest.fn().mockImplementation(function (this: VideoFrame) {
+    close: vi.fn(),
+    clone: vi.fn().mockImplementation(function (this: VideoFrame) {
       return this;
     }),
   } as unknown as VideoFrame;
@@ -94,7 +95,7 @@ async function decodeAndSettle(
 
 describe("ImageRenderable", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
   it("should instantiate and set settings", () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
@@ -121,7 +122,7 @@ describe("ImageRenderable", () => {
     renderable.userData.texture = new THREE.Texture();
     renderable.userData.material = new THREE.ShaderMaterial();
     renderable.userData.geometry = new THREE.PlaneGeometry();
-    const close = jest.fn();
+    const close = vi.fn();
     renderable.videoPlayer = {
       close,
     } as unknown as ImageRenderable["videoPlayer"];
@@ -187,7 +188,7 @@ describe("ImageRenderable", () => {
 
 describe("ImageRenderable error handling", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
   it("should call renderer error methods on addError", () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, {
@@ -233,26 +234,26 @@ describe("ImageRenderable error handling", () => {
 
   it("should initialize h265 decoding for a keyframe with VPS SPS PPS", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
-    jest.spyOn(renderable, "update").mockImplementation(() => undefined);
-    const init = jest.fn().mockResolvedValue(undefined);
-    const decodeFrames = jest.fn().mockResolvedValue({
+    vi.spyOn(renderable, "update").mockImplementation(() => undefined);
+    const init = vi.fn().mockResolvedValue(undefined);
+    const decodeFrames = vi.fn().mockResolvedValue({
       type: "target",
       frame: createDecodedVideoFrame(),
     });
     renderable.videoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(false),
+      isInitialized: vi.fn().mockReturnValue(false),
       init,
-      decode: jest.fn(),
+      decode: vi.fn(),
       decodeFrames,
-      codedSize: jest.fn(),
-      decoderConfig: jest.fn().mockReturnValue(undefined),
-      resetForSeek: jest.fn(),
+      codedSize: vi.fn(),
+      decoderConfig: vi.fn().mockReturnValue(undefined),
+      resetForSeek: vi.fn(),
       lastImageBitmap: undefined,
       lastVideoFrame: undefined,
     } as unknown as ImageRenderable["videoPlayer"];
 
     const originalCreateImageBitmap = self.createImageBitmap;
-    const createImageBitmapSpy = jest.fn().mockResolvedValue(new ImageBitmap());
+    const createImageBitmapSpy = vi.fn().mockResolvedValue(new ImageBitmap());
     self.createImageBitmap = createImageBitmapSpy;
 
     await decodeAndSettle(renderable, h265Keyframe);
@@ -263,24 +264,24 @@ describe("ImageRenderable error handling", () => {
 
   it("should drop unrecognizable h265 bitstream while waiting for keyframe", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
-    jest.spyOn(renderable, "update").mockImplementation(() => undefined);
-    const decode = jest.fn();
-    const init = jest.fn();
+    vi.spyOn(renderable, "update").mockImplementation(() => undefined);
+    const decode = vi.fn();
+    const init = vi.fn();
     renderable.videoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(false),
+      isInitialized: vi.fn().mockReturnValue(false),
       init,
       decode,
-      decodeFrames: jest.fn(),
-      codedSize: jest.fn(),
-      decoderConfig: jest.fn().mockReturnValue(undefined),
-      resetForSeek: jest.fn(),
+      decodeFrames: vi.fn(),
+      codedSize: vi.fn(),
+      decoderConfig: vi.fn().mockReturnValue(undefined),
+      resetForSeek: vi.fn(),
       lastImageBitmap: undefined,
       lastVideoFrame: undefined,
     } as unknown as ImageRenderable["videoPlayer"];
 
     const originalCreateImageBitmap = self.createImageBitmap;
     const emptyBitmap = new ImageBitmap();
-    self.createImageBitmap = jest.fn().mockResolvedValue(emptyBitmap);
+    self.createImageBitmap = vi.fn().mockResolvedValue(emptyBitmap);
 
     await decodeAndSettle(renderable, new Uint8Array([0x01, 0x02, 0x03]));
 
@@ -294,13 +295,13 @@ describe("ImageRenderable error handling", () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
     const lastImageBitmap = new ImageBitmap();
     renderable.videoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(false),
-      init: jest.fn(),
-      decode: jest.fn(),
-      decodeFrames: jest.fn(),
-      codedSize: jest.fn(),
-      decoderConfig: jest.fn().mockReturnValue(undefined),
-      resetForSeek: jest.fn(),
+      isInitialized: vi.fn().mockReturnValue(false),
+      init: vi.fn(),
+      decode: vi.fn(),
+      decodeFrames: vi.fn(),
+      codedSize: vi.fn(),
+      decoderConfig: vi.fn().mockReturnValue(undefined),
+      resetForSeek: vi.fn(),
       lastImageBitmap,
       lastVideoFrame: undefined,
     } as unknown as ImageRenderable["videoPlayer"];
@@ -314,26 +315,26 @@ describe("ImageRenderable error handling", () => {
 
   it("should wait silently on h265 delta frames before decoder init", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
-    jest.spyOn(renderable, "update").mockImplementation(() => undefined);
-    const init = jest.fn().mockResolvedValue(undefined);
-    const decode = jest.fn().mockResolvedValue(createDecodedVideoFrame());
+    vi.spyOn(renderable, "update").mockImplementation(() => undefined);
+    const init = vi.fn().mockResolvedValue(undefined);
+    const decode = vi.fn().mockResolvedValue(createDecodedVideoFrame());
     renderable.videoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(false),
+      isInitialized: vi.fn().mockReturnValue(false),
       init,
       decode,
-      decodeFrames: jest.fn().mockResolvedValue({
+      decodeFrames: vi.fn().mockResolvedValue({
         type: "target",
         frame: createDecodedVideoFrame(),
       }),
-      codedSize: jest.fn(),
+      codedSize: vi.fn(),
       lastImageBitmap: undefined,
       lastVideoFrame: undefined,
-      decoderConfig: jest.fn().mockReturnValue(undefined),
-      resetForSeek: jest.fn(),
+      decoderConfig: vi.fn().mockReturnValue(undefined),
+      resetForSeek: vi.fn(),
     } as unknown as ImageRenderable["videoPlayer"];
 
     const originalCreateImageBitmap = self.createImageBitmap;
-    self.createImageBitmap = jest.fn().mockResolvedValue(new ImageBitmap());
+    self.createImageBitmap = vi.fn().mockResolvedValue(new ImageBitmap());
 
     // GIVEN — a delta frame arrives before the decoder is initialized
     await decodeAndSettle(renderable, h265DeltaFrame);
@@ -353,25 +354,25 @@ describe("ImageRenderable error handling", () => {
 
   it("should reset the video player when timestamps go backwards", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
-    jest.spyOn(renderable, "update").mockImplementation(() => undefined);
-    const resetForSeek = jest.fn();
+    vi.spyOn(renderable, "update").mockImplementation(() => undefined);
+    const resetForSeek = vi.fn();
     renderable.videoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(false),
-      init: jest.fn().mockResolvedValue(undefined),
-      decode: jest.fn().mockResolvedValue(createDecodedVideoFrame()),
-      decodeFrames: jest.fn().mockResolvedValue({
+      isInitialized: vi.fn().mockReturnValue(false),
+      init: vi.fn().mockResolvedValue(undefined),
+      decode: vi.fn().mockResolvedValue(createDecodedVideoFrame()),
+      decodeFrames: vi.fn().mockResolvedValue({
         type: "target",
         frame: createDecodedVideoFrame(),
       }),
-      codedSize: jest.fn(),
-      decoderConfig: jest.fn().mockReturnValue(undefined),
+      codedSize: vi.fn(),
+      decoderConfig: vi.fn().mockReturnValue(undefined),
       resetForSeek,
       lastImageBitmap: undefined,
       lastVideoFrame: undefined,
     } as unknown as ImageRenderable["videoPlayer"];
 
     const originalCreateImageBitmap = self.createImageBitmap;
-    self.createImageBitmap = jest.fn().mockResolvedValue(new ImageBitmap());
+    self.createImageBitmap = vi.fn().mockResolvedValue(new ImageBitmap());
 
     // GIVEN — a frame has been decoded at t=2s
     await decodeAndSettle(renderable, h265Keyframe, { sec: 2, nsec: 0 });
@@ -388,25 +389,25 @@ describe("ImageRenderable error handling", () => {
 
   it("should ignore small backward timestamp jitter for h265 frames", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
-    jest.spyOn(renderable, "update").mockImplementation(() => undefined);
-    const resetForSeek = jest.fn();
+    vi.spyOn(renderable, "update").mockImplementation(() => undefined);
+    const resetForSeek = vi.fn();
     renderable.videoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(false),
-      init: jest.fn().mockResolvedValue(undefined),
-      decode: jest.fn().mockResolvedValue(createDecodedVideoFrame()),
-      decodeFrames: jest.fn().mockResolvedValue({
+      isInitialized: vi.fn().mockReturnValue(false),
+      init: vi.fn().mockResolvedValue(undefined),
+      decode: vi.fn().mockResolvedValue(createDecodedVideoFrame()),
+      decodeFrames: vi.fn().mockResolvedValue({
         type: "target",
         frame: createDecodedVideoFrame(),
       }),
-      codedSize: jest.fn(),
-      decoderConfig: jest.fn().mockReturnValue(undefined),
+      codedSize: vi.fn(),
+      decoderConfig: vi.fn().mockReturnValue(undefined),
       resetForSeek,
       lastImageBitmap: undefined,
       lastVideoFrame: undefined,
     } as unknown as ImageRenderable["videoPlayer"];
 
     const originalCreateImageBitmap = self.createImageBitmap;
-    self.createImageBitmap = jest.fn().mockResolvedValue(new ImageBitmap());
+    self.createImageBitmap = vi.fn().mockResolvedValue(new ImageBitmap());
 
     // GIVEN — a frame has been decoded at t=2.010s
     await decodeAndSettle(renderable, h265Keyframe, { sec: 2, nsec: 10_000_000 });
@@ -431,23 +432,21 @@ describe("ImageRenderable error handling", () => {
     const decodeOrder: number[] = [];
     const decodeResolvers = new Map<number, () => void>();
 
-    jest.spyOn(renderable, "update").mockImplementation(() => undefined);
-    jest
-      .spyOn(renderable as unknown as { decodeImage: jest.Mock }, "decodeImage")
-      .mockImplementation(
-        async (
-          image: (typeof mockUserData)["image"] & { timestamp: { sec: number; nsec: number } },
-        ) => {
-          const timestampMicros = Number(
-            (BigInt(image.timestamp.sec) * 1000000000n + BigInt(image.timestamp.nsec)) / 1000n,
-          );
-          decodeOrder.push(timestampMicros);
-          await new Promise<void>((resolve) => {
-            decodeResolvers.set(timestampMicros, resolve);
-          });
-          return {} as ImageData;
-        },
-      );
+    vi.spyOn(renderable, "update").mockImplementation(() => undefined);
+    vi.spyOn(renderable as unknown as { decodeImage: Mock }, "decodeImage").mockImplementation(
+      async (
+        image: (typeof mockUserData)["image"] & { timestamp: { sec: number; nsec: number } },
+      ) => {
+        const timestampMicros = Number(
+          (BigInt(image.timestamp.sec) * 1000000000n + BigInt(image.timestamp.nsec)) / 1000n,
+        );
+        decodeOrder.push(timestampMicros);
+        await new Promise<void>((resolve) => {
+          decodeResolvers.set(timestampMicros, resolve);
+        });
+        return {} as ImageData;
+      },
+    );
 
     // Establish a pre-seek baseline at t=5s so the next batch is unambiguously a backward jump.
     renderable.setImage({ ...createH265Frame(h265Keyframe, { sec: 5, nsec: 0 }), format: "h264" });
@@ -488,26 +487,26 @@ describe("ImageRenderable error handling", () => {
 
   it("should decode every pending h265 frame in order", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
-    jest.spyOn(renderable, "update").mockImplementation(() => undefined);
+    vi.spyOn(renderable, "update").mockImplementation(() => undefined);
 
-    const decode = jest
-      .fn<Promise<VideoFrame | undefined>, [Uint8Array, number, "key" | "delta"]>()
+    const decode = vi
+      .fn<(...args: [Uint8Array, number, "key" | "delta"]) => Promise<VideoFrame | undefined>>()
       .mockResolvedValueOnce(createDecodedVideoFrame(0))
       .mockResolvedValueOnce(createDecodedVideoFrame(16666))
       .mockResolvedValueOnce(createDecodedVideoFrame(33333));
     renderable.videoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(true),
-      init: jest.fn().mockResolvedValue(undefined),
+      isInitialized: vi.fn().mockReturnValue(true),
+      init: vi.fn().mockResolvedValue(undefined),
       decode,
-      codedSize: jest.fn(),
-      decoderConfig: jest.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
-      resetForSeek: jest.fn(),
+      codedSize: vi.fn(),
+      decoderConfig: vi.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
+      resetForSeek: vi.fn(),
       lastImageBitmap: undefined,
       lastVideoFrame: undefined,
     } as unknown as ImageRenderable["videoPlayer"];
 
     const originalCreateImageBitmap = self.createImageBitmap;
-    const createImageBitmapSpy = jest.fn().mockResolvedValue(new ImageBitmap());
+    const createImageBitmapSpy = vi.fn().mockResolvedValue(new ImageBitmap());
     self.createImageBitmap = createImageBitmapSpy;
 
     let releaseFirstDecode!: () => void;
@@ -519,9 +518,8 @@ describe("ImageRenderable error handling", () => {
       latestDecoded = resolve;
     });
 
-    jest
-      .spyOn(renderable as unknown as { decodeImage: jest.Mock }, "decodeImage")
-      .mockImplementation(async (image: CompressedVideo, resizeWidth?: number) => {
+    vi.spyOn(renderable as unknown as { decodeImage: Mock }, "decodeImage").mockImplementation(
+      async (image: CompressedVideo, resizeWidth?: number) => {
         if (image.timestamp.sec === 0 && image.timestamp.nsec === 0) {
           await firstDecodeBlocked;
         }
@@ -533,7 +531,8 @@ describe("ImageRenderable error handling", () => {
             ) => Promise<ImageBitmap | ImageData>;
           }
         ).decodeImage.call(renderable, image, resizeWidth);
-      });
+      },
+    );
 
     renderable.setImage(createH265Frame(h265Keyframe, { sec: 0, nsec: 0 }));
     renderable.setImage(createH265Frame(h265DeltaFrame, { sec: 0, nsec: 16666666 }));
@@ -559,26 +558,26 @@ describe("ImageRenderable error handling", () => {
 
   it("should skip duplicate pending h265 frame timestamps", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
-    jest.spyOn(renderable, "update").mockImplementation(() => undefined);
+    vi.spyOn(renderable, "update").mockImplementation(() => undefined);
 
-    const decode = jest
-      .fn<Promise<VideoFrame | undefined>, [Uint8Array, number, "key" | "delta"]>()
+    const decode = vi
+      .fn<(...args: [Uint8Array, number, "key" | "delta"]) => Promise<VideoFrame | undefined>>()
       .mockResolvedValueOnce(createDecodedVideoFrame(0))
       .mockResolvedValueOnce(createDecodedVideoFrame(0))
       .mockResolvedValueOnce(createDecodedVideoFrame(16666));
     renderable.videoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(true),
-      init: jest.fn().mockResolvedValue(undefined),
+      isInitialized: vi.fn().mockReturnValue(true),
+      init: vi.fn().mockResolvedValue(undefined),
       decode,
-      codedSize: jest.fn(),
-      decoderConfig: jest.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
-      resetForSeek: jest.fn(),
+      codedSize: vi.fn(),
+      decoderConfig: vi.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
+      resetForSeek: vi.fn(),
       lastImageBitmap: undefined,
       lastVideoFrame: undefined,
     } as unknown as ImageRenderable["videoPlayer"];
 
     const originalCreateImageBitmap = self.createImageBitmap;
-    self.createImageBitmap = jest.fn().mockResolvedValue(new ImageBitmap());
+    self.createImageBitmap = vi.fn().mockResolvedValue(new ImageBitmap());
 
     // GIVEN — codec is primed so #waitingForVideoKeyframe is cleared
     await decodeAndSettle(renderable, h265Keyframe);
@@ -617,26 +616,26 @@ describe("ImageRenderable error handling", () => {
     // keyframe's backward timestamp, dropping the P-frames the decoder needs. The fix moves
     // that wipe to enqueue time in setImage; this test guards the new flow.
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
-    jest.spyOn(renderable, "update").mockImplementation(() => undefined);
+    vi.spyOn(renderable, "update").mockImplementation(() => undefined);
 
-    const decode = jest
-      .fn<Promise<VideoFrame | undefined>, [Uint8Array, number, "key" | "delta"]>()
+    const decode = vi
+      .fn<(...args: [Uint8Array, number, "key" | "delta"]) => Promise<VideoFrame | undefined>>()
       .mockImplementation(async (_data, timestampMicros) =>
         createDecodedVideoFrame(timestampMicros),
       );
     renderable.videoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(true),
-      init: jest.fn().mockResolvedValue(undefined),
+      isInitialized: vi.fn().mockReturnValue(true),
+      init: vi.fn().mockResolvedValue(undefined),
       decode,
-      codedSize: jest.fn(),
-      decoderConfig: jest.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
-      resetForSeek: jest.fn(),
+      codedSize: vi.fn(),
+      decoderConfig: vi.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
+      resetForSeek: vi.fn(),
       lastImageBitmap: undefined,
       lastVideoFrame: undefined,
     } as unknown as ImageRenderable["videoPlayer"];
 
     const originalCreateImageBitmap = self.createImageBitmap;
-    self.createImageBitmap = jest.fn().mockResolvedValue(new ImageBitmap());
+    self.createImageBitmap = vi.fn().mockResolvedValue(new ImageBitmap());
 
     // Prime #videoFirstMessageTime at T = 0 so the GOP timestamps stay positive, then advance
     // playback to T = 5s so the seek that follows is unambiguously backward.
@@ -683,12 +682,12 @@ describe("ImageRenderable error handling", () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
     const lastImageBitmap = new ImageBitmap();
     renderable.videoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(true),
-      init: jest.fn().mockResolvedValue(undefined),
-      decode: jest.fn().mockResolvedValue(undefined),
-      codedSize: jest.fn(),
-      decoderConfig: jest.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
-      resetForSeek: jest.fn(),
+      isInitialized: vi.fn().mockReturnValue(true),
+      init: vi.fn().mockResolvedValue(undefined),
+      decode: vi.fn().mockResolvedValue(undefined),
+      codedSize: vi.fn(),
+      decoderConfig: vi.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
+      resetForSeek: vi.fn(),
       lastImageBitmap,
       lastVideoFrame: undefined,
     } as unknown as ImageRenderable["videoPlayer"];
@@ -707,14 +706,14 @@ describe("ImageRenderable error handling", () => {
 
   it("should reset the video player when a decode error is reported", () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
-    const resetForSeek = jest.fn();
+    const resetForSeek = vi.fn();
     renderable.videoPlayer = {
       resetForSeek,
     } as unknown as ImageRenderable["videoPlayer"];
 
     // @ts-expect-error handleVideoPlayerError is protected, but ok to use on tests
     renderable.handleVideoPlayerError(new Error("Decoding error"));
-    (console.error as jest.Mock).mockClear();
+    (console.error as Mock).mockClear();
 
     expect(resetForSeek).toHaveBeenCalledTimes(1);
     expect(mockAdd).toHaveBeenCalledWith(
@@ -727,14 +726,14 @@ describe("ImageRenderable error handling", () => {
   it("should skip unsupported h265 B frames", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
     const lastImageBitmap = new ImageBitmap();
-    const decode = jest.fn();
+    const decode = vi.fn();
     renderable.videoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(true),
-      init: jest.fn().mockResolvedValue(undefined),
+      isInitialized: vi.fn().mockReturnValue(true),
+      init: vi.fn().mockResolvedValue(undefined),
       decode,
-      codedSize: jest.fn(),
-      decoderConfig: jest.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
-      resetForSeek: jest.fn(),
+      codedSize: vi.fn(),
+      decoderConfig: vi.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
+      resetForSeek: vi.fn(),
       lastImageBitmap,
       lastVideoFrame: undefined,
     } as unknown as ImageRenderable["videoPlayer"];
@@ -755,19 +754,19 @@ describe("ImageRenderable error handling", () => {
   it("should fall back to an empty bitmap when an h265 B frame arrives without a prior bitmap", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
     renderable.videoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(true),
-      init: jest.fn().mockResolvedValue(undefined),
-      decode: jest.fn(),
-      codedSize: jest.fn(),
-      decoderConfig: jest.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
-      resetForSeek: jest.fn(),
+      isInitialized: vi.fn().mockReturnValue(true),
+      init: vi.fn().mockResolvedValue(undefined),
+      decode: vi.fn(),
+      codedSize: vi.fn(),
+      decoderConfig: vi.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
+      resetForSeek: vi.fn(),
       lastImageBitmap: undefined,
       lastVideoFrame: undefined,
     } as unknown as ImageRenderable["videoPlayer"];
 
     const originalCreateImageBitmap = self.createImageBitmap;
     const fallbackBitmap = new ImageBitmap();
-    self.createImageBitmap = jest.fn().mockResolvedValue(fallbackBitmap);
+    self.createImageBitmap = vi.fn().mockResolvedValue(fallbackBitmap);
 
     // @ts-expect-error decodeImage is protected, but ok to use on tests
     const bitmap = await renderable.decodeImage(
@@ -785,7 +784,7 @@ describe("ImageRenderable error handling", () => {
     // Prime #codec so decodeImage enters the video path (videoPlayer stays undefined)
     renderable.setImage(createH265Frame(h265Keyframe));
 
-    jest.spyOn(VideoPlayer, "IsSupported").mockReturnValue(false);
+    vi.spyOn(VideoPlayer, "IsSupported").mockReturnValue(false);
 
     await expect(
       // @ts-expect-error decodeImage is protected, but ok to use on tests
@@ -795,25 +794,25 @@ describe("ImageRenderable error handling", () => {
 
   it("should decode continuous h265 frames one-by-one after the nearest keyframe", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
-    const decode = jest
-      .fn<Promise<VideoFrame | undefined>, [Uint8Array, number, "key" | "delta"]>()
+    const decode = vi
+      .fn<(...args: [Uint8Array, number, "key" | "delta"]) => Promise<VideoFrame | undefined>>()
       .mockResolvedValueOnce(createDecodedVideoFrame(0))
       .mockResolvedValueOnce(createDecodedVideoFrame(16666))
       .mockResolvedValueOnce(createDecodedVideoFrame(33333));
-    const init = jest.fn().mockResolvedValue(undefined);
+    const init = vi.fn().mockResolvedValue(undefined);
     renderable.videoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(true),
+      isInitialized: vi.fn().mockReturnValue(true),
       init,
       decode,
-      codedSize: jest.fn(),
-      decoderConfig: jest.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
-      resetForSeek: jest.fn(),
+      codedSize: vi.fn(),
+      decoderConfig: vi.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
+      resetForSeek: vi.fn(),
       lastImageBitmap: undefined,
       lastVideoFrame: undefined,
     } as unknown as ImageRenderable["videoPlayer"];
 
     const originalCreateImageBitmap = self.createImageBitmap;
-    const createImageBitmapSpy = jest.fn().mockResolvedValue(new ImageBitmap());
+    const createImageBitmapSpy = vi.fn().mockResolvedValue(new ImageBitmap());
     self.createImageBitmap = createImageBitmapSpy;
 
     // Prime #codec so decodeImage enters the video path
@@ -841,13 +840,13 @@ describe("ImageRenderable error handling", () => {
       expect(data.byteLength).toBeGreaterThan(0);
       data.fill(0);
     };
-    const decode = jest.fn(
+    const decode = vi.fn(
       async (data: Uint8Array, timestampMicros: number): Promise<VideoFrame | undefined> => {
         consumeData(data);
         return createDecodedVideoFrame(timestampMicros);
       },
     );
-    const decodeFrames = jest.fn(async (frames: { data: Uint8Array }[]) => {
+    const decodeFrames = vi.fn(async (frames: { data: Uint8Array }[]) => {
       for (const frame of frames) {
         expect(frame.data.byteLength).toBeGreaterThan(0);
         expect(frame.data.some((value) => value !== 0)).toBe(true);
@@ -855,15 +854,15 @@ describe("ImageRenderable error handling", () => {
       }
       return { type: "target", frame: replayFrame };
     });
-    const init = jest.fn().mockResolvedValue(undefined);
-    const resetForSeek = jest.fn();
+    const init = vi.fn().mockResolvedValue(undefined);
+    const resetForSeek = vi.fn();
     renderable.videoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(true),
+      isInitialized: vi.fn().mockReturnValue(true),
       init,
       decode,
       decodeFrames,
-      codedSize: jest.fn(),
-      decoderConfig: jest.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
+      codedSize: vi.fn(),
+      decoderConfig: vi.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
       resetForSeek,
       lastImageBitmap: undefined,
       lastVideoFrame: undefined,
@@ -871,7 +870,7 @@ describe("ImageRenderable error handling", () => {
 
     const originalCreateImageBitmap = self.createImageBitmap;
     const replayBitmap = new ImageBitmap();
-    self.createImageBitmap = jest.fn().mockResolvedValue(replayBitmap);
+    self.createImageBitmap = vi.fn().mockResolvedValue(replayBitmap);
 
     // Prime #codec so decodeImage enters the video path
     renderable.setImage(createH265Frame(h265Keyframe));
@@ -907,32 +906,32 @@ describe("ImageRenderable error handling", () => {
 
   it("should wait for a new h265 keyframe after a decode error", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
-    jest.spyOn(renderable, "update").mockImplementation(() => undefined);
-    const init = jest.fn().mockResolvedValue(undefined);
-    const decode = jest
-      .fn<Promise<VideoFrame | undefined>, [Uint8Array, number, "key" | "delta"]>()
+    vi.spyOn(renderable, "update").mockImplementation(() => undefined);
+    const init = vi.fn().mockResolvedValue(undefined);
+    const decode = vi
+      .fn<(...args: [Uint8Array, number, "key" | "delta"]) => Promise<VideoFrame | undefined>>()
       .mockResolvedValueOnce(createDecodedVideoFrame(0))
       .mockResolvedValueOnce(createDecodedVideoFrame(33333))
       .mockResolvedValueOnce(createDecodedVideoFrame(66666));
-    const resetForSeek = jest.fn(() => {
+    const resetForSeek = vi.fn(() => {
       if (renderable.videoPlayer) {
         renderable.videoPlayer.lastImageBitmap = undefined;
       }
     });
     const lastImageBitmap = new ImageBitmap();
     renderable.videoPlayer = {
-      isInitialized: jest.fn().mockReturnValue(true),
+      isInitialized: vi.fn().mockReturnValue(true),
       init,
       decode,
-      codedSize: jest.fn(),
-      decoderConfig: jest.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
+      codedSize: vi.fn(),
+      decoderConfig: vi.fn().mockReturnValue({ codec: "hvc1.1.6.L93.B0" }),
       resetForSeek,
       lastImageBitmap,
       lastVideoFrame: undefined,
     } as unknown as ImageRenderable["videoPlayer"];
 
     const originalCreateImageBitmap = self.createImageBitmap;
-    const createImageBitmapSpy = jest.fn().mockImplementation(async () => new ImageBitmap());
+    const createImageBitmapSpy = vi.fn().mockImplementation(async () => new ImageBitmap());
     self.createImageBitmap = createImageBitmapSpy;
 
     // GIVEN — codec is primed via setImage so #codec is initialized
@@ -946,7 +945,7 @@ describe("ImageRenderable error handling", () => {
     // WHEN — a decode error occurs and subsequent frames arrive
     // @ts-expect-error handleVideoPlayerError is protected, but ok to use on tests
     renderable.handleVideoPlayerError(new Error("Decoding error"));
-    (console.error as jest.Mock).mockClear();
+    (console.error as Mock).mockClear();
 
     // @ts-expect-error decodeImage is protected, but ok to use on tests
     const skipped = await renderable.decodeImage(

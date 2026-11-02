@@ -9,7 +9,7 @@ import * as _ from "lodash-es";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { DeepPartial } from "ts-essentials";
 
-import { ros1, ros2humble } from "@lichtblick/rosmsg-msgs-common";
+import { ros1, ros2humble } from "@foxglove/rosmsg-msgs-common";
 import { SettingsTreeAction, Topic } from "@lichtblick/suite";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import Stack from "@lichtblick/suite-base/components/Stack";

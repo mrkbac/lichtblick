@@ -37,7 +37,7 @@ export default function AnalyticsProvider({
   children,
 }: Readonly<PropsWithChildren>): React.JSX.Element {
   const [analytics, setAnalytics] = useState<IAnalytics>(() => NULL_ANALYTICS);
-  const analyticsRef = useRef<OtelAnalytics | undefined>();
+  const analyticsRef = useRef<OtelAnalytics | undefined>(undefined);
 
   useEffect(() => {
     let cancelled = false;

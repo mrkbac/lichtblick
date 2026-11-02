@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock } from "vitest";
 import NoopMetricsCollector from "@lichtblick/suite-base/players/NoopMetricsCollector";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { PlayerState } from "@lichtblick/suite-base/players/types";
@@ -16,8 +17,8 @@ class MockWebSocket {
   public onopen?: (event: unknown) => void;
   public onclose?: (event: unknown) => void;
   public onmessage?: (event: unknown) => void;
-  public close = jest.fn();
-  public send = jest.fn();
+  public close = vi.fn();
+  public send = vi.fn();
 
   public constructor() {
     MockWebSocket.lastInstance = this;
@@ -167,7 +168,7 @@ describe("FoxgloveWebSocketPlayer playback control", () => {
   });
 
   it("does not send playback control to a reconnecting socket that is not open yet", () => {
-    jest.spyOn(console, "error").mockImplementation(() => {}); // connection-failed alert
+    vi.spyOn(console, "error").mockImplementation(() => {}); // connection-failed alert
     const realSetTimeout = global.setTimeout;
     let reopen: (() => void) | undefined;
     global.setTimeout = ((fn: () => void) => {
@@ -186,7 +187,7 @@ describe("FoxgloveWebSocketPlayer playback control", () => {
     player.pausePlayback();
     expect(oldWs.send).not.toHaveBeenCalled();
     expect(newWs.send).not.toHaveBeenCalled();
-    (console.error as jest.Mock).mockRestore();
+    (console.error as Mock).mockRestore();
   });
 
   it("drops playback capabilities when a same-session serverInfo disables playback", async () => {
@@ -225,11 +226,11 @@ describe("FoxgloveWebSocketPlayer playback control", () => {
   });
 
   it("does not send playback control after the socket closed", () => {
-    jest.spyOn(console, "error").mockImplementation(() => {}); // connection-failed alert
+    vi.spyOn(console, "error").mockImplementation(() => {}); // connection-failed alert
     ws.onclose?.({});
     player.pausePlayback();
     expect(ws.send).not.toHaveBeenCalled();
-    (console.error as jest.Mock).mockRestore();
+    (console.error as Mock).mockRestore();
   });
 
   it("drops playback capabilities on reconnect to a server without playbackControl", async () => {

@@ -5,12 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { add, fromSec, toSec } from "@foxglove/rostime";
 import { Tooltip } from "@mui/material";
 import { useMemo } from "react";
-import { useResizeDetector } from "react-resize-detector";
 import { makeStyles } from "tss-react/mui";
 
-import { add, fromSec, toSec } from "@lichtblick/rostime";
 import { RpcScales } from "@lichtblick/suite-base/components/Chart/types";
 import {
   MessagePipelineContext,
@@ -20,6 +19,7 @@ import Stack from "@lichtblick/suite-base/components/Stack";
 import HoverBar from "@lichtblick/suite-base/components/TimeBasedChart/HoverBar";
 import { useHoverValue } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
+import { useElementSize } from "@lichtblick/suite-base/hooks/useElementSize";
 import { customTypography } from "@lichtblick/theme";
 
 const useStyles = makeStyles()((theme) => ({
@@ -68,14 +68,7 @@ export default function PlaybackBarHoverTicks(props: Props): React.JSX.Element {
   const hoverValue = useHoverValue({ componentId, isPlaybackSeconds: true });
   const { formatTime } = useAppTimeFormat();
 
-  // Use a debounce and 0 refresh rate to avoid triggering a resize observation while handling
-  // an existing resize observation.
-  // https://github.com/maslianok/react-resize-detector/issues/45
-  const { width, ref } = useResizeDetector({
-    handleHeight: false,
-    refreshMode: "debounce",
-    refreshRate: 0,
-  });
+  const { width, ref } = useElementSize<HTMLDivElement>();
 
   const hoverTimeDisplay = useMemo(() => {
     if (hoverValue?.type !== "PLAYBACK_SECONDS" || !startTime || hoverValue.value < 0) {

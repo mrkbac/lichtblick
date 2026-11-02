@@ -7,7 +7,7 @@ import { TFunction } from "i18next";
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import { toSec } from "@lichtblick/rostime";
+import { toSec } from "@foxglove/rostime";
 import { Immutable, SettingsTreeAction } from "@lichtblick/suite";
 import {
   useBlocksSubscriptions,

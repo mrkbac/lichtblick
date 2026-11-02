@@ -6,15 +6,15 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { useTheme } from "@mui/material";
-import { StoryObj, StoryFn } from "@storybook/react-webpack5";
 import { useEffect } from "react";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import { PlaybackControlsTooltipContent } from "@lichtblick/suite-base/components/PlaybackControls/PlaybackControlsTooltipContent";
 import { useTimelineInteractionState } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import TimelineInteractionStateProvider from "@lichtblick/suite-base/providers/TimelineInteractionStateProvider";
 
-function Wrapper(Wrapped: StoryFn): React.JSX.Element {
+function Wrapper(Wrapped: React.ComponentType): React.JSX.Element {
   const theme = useTheme();
   return (
     <TimelineInteractionStateProvider>

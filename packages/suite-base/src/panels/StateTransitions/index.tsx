@@ -14,13 +14,13 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { add as addTimes, fromSec } from "@foxglove/rostime";
 import { alpha, useTheme } from "@mui/material";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { parseMessagePath } from "@lichtblick/message-path";
-import { add as addTimes, fromSec } from "@lichtblick/rostime";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import useMessagesByPath from "@lichtblick/suite-base/components/MessagePathSyntax/useMessagesByPath";
 import {

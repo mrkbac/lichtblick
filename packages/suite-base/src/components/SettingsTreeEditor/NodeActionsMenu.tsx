@@ -7,10 +7,10 @@
 
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { Menu, MenuItem, IconButton, ListItemIcon, ListItemText, Divider } from "@mui/material";
-import { nanoid } from "nanoid";
 import { useCallback, useMemo, useState } from "react";
 
 import { NodeActionsMenuProps } from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { icons } from "./icons";
 
@@ -41,7 +41,7 @@ export function NodeActionsMenu({
   const actionsWithUniqueIds = useMemo(() => {
     return actions.map((action) => ({
       ...action,
-      uniqueId: action.type === "divider" ? nanoid() : undefined,
+      uniqueId: action.type === "divider" ? randomUUID() : undefined,
     }));
   }, [actions]);
 

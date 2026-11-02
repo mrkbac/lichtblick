@@ -5,10 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { StoryObj } from "@storybook/react-webpack5";
-import { userEvent } from "@storybook/testing-library";
 import { useCallback } from "react";
-import { v4 as uuid } from "uuid";
+import { userEvent } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import Panel from "@lichtblick/suite-base/components/Panel";
 import {
@@ -17,12 +16,13 @@ import {
 } from "@lichtblick/suite-base/components/PanelContextMenu";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 export default {
   title: "components/PanelContextMenu",
 };
 
-const DUMMY_CLASS = uuid();
+const DUMMY_CLASS = randomUUID();
 
 function DummyPanel(): React.JSX.Element {
   const getItems = useCallback(

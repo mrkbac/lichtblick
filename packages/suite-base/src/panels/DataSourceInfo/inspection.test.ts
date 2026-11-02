@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { fromNanoSec } from "@lichtblick/rostime";
+import { fromNanoSec } from "@foxglove/rostime";
 import { IteratorResult } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 
 import { BUCKET_COUNT, aggregateBuckets, bucketTime, inspectTopic } from "./inspection";
@@ -35,7 +35,7 @@ it("counts inclusive boundaries and aggregates intervals across iterator batches
     start,
     end,
     new AbortController().signal,
-    jest.fn(),
+    vi.fn(),
   );
   expect(result.count).toBe(3);
   expect(result.bytes).toBe(30);
@@ -54,7 +54,7 @@ it("handles empty, single-time, and duplicate-time recordings without inventing 
     start,
     end,
     new AbortController().signal,
-    jest.fn(),
+    vi.fn(),
   );
   expect(empty.first).toBeUndefined();
   expect(empty.largestInterval).toBeUndefined();
@@ -63,7 +63,7 @@ it("handles empty, single-time, and duplicate-time recordings without inventing 
     start,
     start,
     new AbortController().signal,
-    jest.fn(),
+    vi.fn(),
   );
   expect(sameTime.count).toBe(2);
   expect(sameTime.buckets[0]).toBe(2);
@@ -76,14 +76,14 @@ it("excludes messages outside the requested interval", async () => {
     start,
     end,
     new AbortController().signal,
-    jest.fn(),
+    vi.fn(),
   );
   expect(result.count).toBe(1);
 });
 
 it("rejects reversals and source alerts instead of presenting incomplete statistics as complete", async () => {
   await expect(
-    inspectTopic(messages([base + 1n, base]), start, end, new AbortController().signal, jest.fn()),
+    inspectTopic(messages([base + 1n, base]), start, end, new AbortController().signal, vi.fn()),
   ).rejects.toThrow("out of time order");
   async function* alerts(): AsyncIterableIterator<IteratorResult> {
     yield {
@@ -93,13 +93,13 @@ it("rejects reversals and source alerts instead of presenting incomplete statist
     };
   }
   await expect(
-    inspectTopic(alerts(), start, end, new AbortController().signal, jest.fn()),
+    inspectTopic(alerts(), start, end, new AbortController().signal, vi.fn()),
   ).rejects.toThrow("Cannot decode topic");
 });
 
 it("cancels and closes the iterator", async () => {
   const controller = new AbortController();
-  const closed = jest.fn();
+  const closed = vi.fn();
   async function* cancellable(): AsyncIterableIterator<IteratorResult> {
     try {
       controller.abort();
@@ -109,7 +109,7 @@ it("cancels and closes the iterator", async () => {
     }
   }
   await expect(
-    inspectTopic(cancellable(), start, end, controller.signal, jest.fn()),
+    inspectTopic(cancellable(), start, end, controller.signal, vi.fn()),
   ).rejects.toThrow();
   expect(closed).toHaveBeenCalledTimes(1);
 });
@@ -120,14 +120,14 @@ it("aggregates measured topic buckets without modifying the topic results", asyn
     start,
     end,
     new AbortController().signal,
-    jest.fn(),
+    vi.fn(),
   );
   const second = await inspectTopic(
     messages([base, base + 10_000_000_000n]),
     start,
     end,
     new AbortController().signal,
-    jest.fn(),
+    vi.fn(),
   );
   const combined = aggregateBuckets([first, second]);
   expect(combined[0]).toBe(2);
@@ -143,7 +143,7 @@ it("uses exact serialized sizes when the source provides them", async () => {
       }
     }
   }
-  const result = await inspectTopic(exact(), start, end, new AbortController().signal, jest.fn());
+  const result = await inspectTopic(exact(), start, end, new AbortController().signal, vi.fn());
   expect(result.bytes).toBe(3);
   expect(result.estimatedBytes).toBe(false);
 });
@@ -172,7 +172,7 @@ it("measures interleaved topics in one pass with independent timing statistics",
     start,
     end,
     new AbortController().signal,
-    jest.fn(),
+    vi.fn(),
   );
   expect(result.get("/a")?.timing).toEqual({
     minimumHz: 0.5,
@@ -195,7 +195,7 @@ it("bounds median samples while keeping exact jitter and extrema for long record
     start,
     end,
     new AbortController().signal,
-    jest.fn(),
+    vi.fn(),
   );
   expect(result.timing).toEqual({
     minimumHz: 1000,

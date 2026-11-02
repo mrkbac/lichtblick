@@ -7,7 +7,6 @@
 
 /* eslint-disable storybook/story-exports */
 
-import { StoryFn } from "@storybook/react-webpack5";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 
@@ -68,7 +67,7 @@ export default {
   excludeStories: ["StorybookDecorator"],
 };
 
-export function StorybookDecorator(Wrapped: StoryFn): React.JSX.Element {
+export function StorybookDecorator(Wrapped: React.ComponentType): React.JSX.Element {
   return (
     <DndProvider backend={HTML5Backend}>
       <WorkspaceContextProvider>

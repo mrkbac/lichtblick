@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import * as _ from "lodash-es";
-import { useCallback, useMemo } from "react";
-import ReactHoverObserver from "react-hover-observer";
+import { ReactNode, useCallback, useMemo, useState } from "react";
 
 import { MessagePathStructureItem } from "@lichtblick/message-path";
 import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
@@ -20,6 +19,29 @@ import {
   ValueRendererFunction,
 } from "./types";
 import { getConstantNameByKeyPath, getValueLabels } from "./utils";
+
+function HoverArea({
+  className,
+  children,
+}: {
+  className?: string;
+  children: (state: { isHovering: boolean }) => ReactNode;
+}): React.JSX.Element {
+  const [isHovering, setIsHovering] = useState(false);
+  return (
+    <div
+      className={className}
+      onPointerEnter={() => {
+        setIsHovering(true);
+      }}
+      onPointerLeave={() => {
+        setIsHovering(false);
+      }}
+    >
+      {children({ isHovering })}
+    </div>
+  );
+}
 
 /**
  * Hook that provides a value renderer function for rendering message values in the tree.
@@ -42,8 +64,8 @@ export function useValueRenderer({
       itemValue: unknown,
       ...keyPath: (number | string)[]
     ) => (
-      <ReactHoverObserver className={hoverObserverClassName}>
-        {({ isHovering }: { isHovering: boolean }) => {
+      <HoverArea className={hoverObserverClassName}>
+        {({ isHovering }) => {
           const lastKeyPath = _.last(keyPath) as number;
           let valueAction: ValueAction | undefined;
           if (isHovering) {
@@ -93,7 +115,7 @@ export function useValueRenderer({
             />
           );
         }}
-      </ReactHoverObserver>
+      </HoverArea>
     ),
     [hoverObserverClassName, enumMapping, onTopicPathChange, openSiblingPanel],
   );

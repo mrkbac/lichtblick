@@ -14,6 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { Zoom as ZoomPlugin } from "@foxglove/chartjs-plugin-zoom";
 import {
   Chart,
   ChartData,
@@ -29,9 +30,9 @@ import DatalabelPlugin from "chartjs-plugin-datalabels";
 import { type Options as DatalabelsPluginOptions } from "chartjs-plugin-datalabels/types/options";
 import EventEmitter from "eventemitter3";
 
-import { Zoom as ZoomPlugin } from "@lichtblick/chartjs-plugin-zoom";
 import Logger from "@lichtblick/log";
 import {
+  ObjectData,
   RpcElement,
   RpcScales,
   TypedChartData,
@@ -58,14 +59,22 @@ export type InitOpts = {
   fontLoaded: Promise<FontFace>;
 };
 
+/** Pan event sent from the main thread (see listenForPan); `target` carries the bounding rect. */
+export type PanInput = {
+  deltaX: number;
+  deltaY: number;
+  center?: { x: number; y: number };
+  target: unknown;
+};
+
 // allows us to override the chart.ctx instance field which zoom plugin uses for adding event listeners
 type MutableContext<T> = Omit<Chart, "ctx"> & { ctx: T };
 
 type ZoomableChart = Chart & {
   $zoom: {
-    panStartHandler(event: HammerInput): void;
-    panHandler(event: HammerInput): void;
-    panEndHandler(event: HammerInput): void;
+    panStartHandler(event: PanInput): void;
+    panHandler(event: PanInput): void;
+    panEndHandler(event: PanInput): void;
   };
 };
 
@@ -94,7 +103,7 @@ const lastX: InteractionModeFunction = (chart, event, _options, useFinalPosition
   const datasetIndexToLastItem: InteractionItem[] = [];
   Interaction.evaluateInteractionItems(chart, "x", position, (element, datasetIndex, index) => {
     const center = element.getCenterPoint(useFinalPosition);
-    if (center.x <= position.x) {
+    if (center.x != undefined && center.x <= position.x) {
       datasetIndexToLastItem[datasetIndex] = { element, datasetIndex, index };
     }
   });
@@ -207,21 +216,21 @@ export default class ChartJSManager {
     return this.getScales();
   }
 
-  public panstart(event: HammerInput): RpcScales {
+  public panstart(event: PanInput): RpcScales {
     const target = event.target as HTMLElement & { boundingClientRect: DOMRect };
     target.getBoundingClientRect = () => target.boundingClientRect;
     maybeCast<ZoomableChart>(this.#chartInstance)?.$zoom.panStartHandler(event);
     return this.getScales();
   }
 
-  public panmove(event: HammerInput): RpcScales {
+  public panmove(event: PanInput): RpcScales {
     const target = event.target as HTMLElement & { boundingClientRect: DOMRect };
     target.getBoundingClientRect = () => target.boundingClientRect;
     maybeCast<ZoomableChart>(this.#chartInstance)?.$zoom.panHandler(event);
     return this.getScales();
   }
 
-  public panend(event: HammerInput): RpcScales {
+  public panend(event: PanInput): RpcScales {
     const target = event.target as HTMLElement & { boundingClientRect: DOMRect };
     target.getBoundingClientRect = () => target.boundingClientRect;
     maybeCast<ZoomableChart>(this.#chartInstance)?.$zoom.panEndHandler(event);
@@ -346,9 +355,8 @@ export default class ChartJSManager {
     const out = new Array<RpcElement>();
 
     for (const element of elements) {
-      const data = (this.#chartInstance?.data as ChartData<"scatter"> | undefined)?.datasets[
-        element.datasetIndex
-      ]?.data[element.index];
+      const data = (this.#chartInstance?.data as ChartData<"scatter", ObjectData> | undefined)
+        ?.datasets[element.datasetIndex]?.data[element.index];
       if (data == undefined || typeof data === "number") {
         continue;
       }

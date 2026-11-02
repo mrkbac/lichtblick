@@ -19,8 +19,8 @@ import {
   Typography,
   TextField,
 } from "@mui/material";
-import { Meta, StoryObj } from "@storybook/react-webpack5";
 import { Fragment } from "react";
+import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 const options = [{ label: "Small" }, { label: "Medium" }];
 const sizes: TextFieldProps["size"][] = ["small", "medium"];

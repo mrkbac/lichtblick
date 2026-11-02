@@ -17,11 +17,11 @@
 import CloseIcon from "@mui/icons-material/Close";
 import { IconButton, InputBase } from "@mui/material";
 import React, { Ref as ReactRef, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import textMetrics from "text-metrics";
 import { makeStyles } from "tss-react/mui";
 
 import { PANEL_TOOLBAR_MIN_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import { TabActions } from "@lichtblick/suite-base/panels/Tab/TabDndContext";
+import { measureTextWidth } from "@lichtblick/suite-base/util/measureTextWidth";
 import { fontSansSerif } from "@lichtblick/theme";
 
 const MAX_TAB_WIDTH = 120;
@@ -90,14 +90,8 @@ const useStyles = makeStyles<void, "active">()((theme, _params, classes) => ({
   },
 }));
 
-const fontFamily = fontSansSerif;
-const fontSize = "12px";
-
-let textMeasure: undefined | textMetrics.TextMeasure;
-
 function measureText(text: string): number {
-  textMeasure ??= textMetrics.init({ fontFamily, fontSize });
-  return textMeasure.width(text) + 3;
+  return measureTextWidth(text, `12px ${fontSansSerif}`) + 3;
 }
 
 type Props = {

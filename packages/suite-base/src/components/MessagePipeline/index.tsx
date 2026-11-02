@@ -15,7 +15,8 @@ import {
   useMemo,
   useRef,
 } from "react";
-import { StoreApi, useStore } from "zustand";
+import { StoreApi } from "zustand";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 
 import { useGuaranteedContext } from "@lichtblick/hooks";
 import { Immutable } from "@lichtblick/suite";
@@ -65,7 +66,7 @@ export function useMessagePipelineGetter(): () => MessagePipelineContext {
 
 export function useMessagePipeline<T>(selector: (arg0: MessagePipelineContext) => T): T {
   const store = useGuaranteedContext(ContextInternal);
-  return useStore(
+  return useStoreWithEqualityFn(
     store,
     useCallback((state) => selector(state.public), [selector]),
   );
@@ -101,7 +102,7 @@ const selectSubscriptions = (state: MessagePipelineInternalState) => state.publi
 
 export function MessagePipelineProvider({ children, player }: ProviderProps): React.ReactElement {
   const promisesToWaitForRef = useRef<FramePromise[]>([]);
-  const previousPlayerRef = useRef<Player | undefined>();
+  const previousPlayerRef = useRef<Player | undefined>(undefined);
   const alertsStore = useContext(AlertsContext);
   const clearAlerts = useCallback(() => {
     alertsStore?.getState().actions.clearAlerts();
@@ -118,7 +119,7 @@ export function MessagePipelineProvider({ children, player }: ProviderProps): Re
     return createMessagePipelineStore({ promisesToWaitForRef, initialPlayer: player });
   }, [player]);
 
-  const subscriptions = useStore(store, selectSubscriptions);
+  const subscriptions = useStoreWithEqualityFn(store, selectSubscriptions);
 
   // Debounce the subscription updates for players. This batches multiple subscribe calls
   // into one update for the player which avoids fetching data that will be immediately discarded.
@@ -146,7 +147,7 @@ export function MessagePipelineProvider({ children, player }: ProviderProps): Re
   const [messageRate] = useAppConfigurationValue<number>(AppSetting.MESSAGE_RATE);
 
   // Tell listener the layout has completed
-  const renderDone = useStore(store, selectRenderDone);
+  const renderDone = useStoreWithEqualityFn(store, selectRenderDone);
   useLayoutEffect(() => {
     renderDone?.();
   }, [renderDone]);
@@ -263,8 +264,8 @@ function concatAlerts(origState: PlayerState, alerts: PlayerAlert[]): PlayerStat
  * - https://stackoverflow.com/questions/53985411/understanding-javascript-closure-variable-capture-in-v8
  */
 function createPlayerListener(args: {
-  msPerFrameRef: React.MutableRefObject<number>;
-  promisesToWaitForRef: React.MutableRefObject<FramePromise[]>;
+  msPerFrameRef: React.RefObject<number>;
+  promisesToWaitForRef: React.RefObject<FramePromise[]>;
   store: StoreApi<MessagePipelineInternalState>;
   clearAlerts: () => void;
 }): {

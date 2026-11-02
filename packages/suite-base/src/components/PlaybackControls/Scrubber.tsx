@@ -5,20 +5,18 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Fade, PopperProps, Tooltip } from "@mui/material";
-import type { Instance } from "@popperjs/core";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useLatest } from "react-use";
-import { makeStyles } from "tss-react/mui";
-import { v4 as uuidv4 } from "uuid";
-
 import {
   subtract as subtractTimes,
   add as addTimes,
   toSec,
   fromSec,
   Time,
-} from "@lichtblick/rostime";
+} from "@foxglove/rostime";
+import { Fade, PopperProps, Tooltip } from "@mui/material";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useLatest } from "react-use";
+import { makeStyles } from "tss-react/mui";
+
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -30,12 +28,15 @@ import {
 } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import BroadcastManager from "@lichtblick/suite-base/util/broadcast/BroadcastManager";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { EventsOverlay } from "./EventsOverlay";
 import PlaybackBarHoverTicks from "./PlaybackBarHoverTicks";
 import { PlaybackControlsTooltipContent } from "./PlaybackControlsTooltipContent";
 import { ProgressPlot } from "./ProgressPlot";
 import Slider, { HoverOverEvent } from "./Slider";
+
+type PopperInstance = PopperProps["popperRef"] extends React.Ref<infer T> | undefined ? T : never;
 
 const useStyles = makeStyles()((theme) => ({
   marker: {
@@ -73,7 +74,7 @@ export default function Scrubber(props: Props): React.JSX.Element {
   const { onSeek } = props;
   const { classes, cx } = useStyles();
 
-  const [hoverComponentId] = useState<string>(() => uuidv4());
+  const [hoverComponentId] = useState<string>(() => randomUUID());
 
   const startTime = useMessagePipeline(selectStartTime);
   const currentTime = useMessagePipeline(selectCurrentTime);
@@ -158,7 +159,7 @@ export default function Scrubber(props: Props): React.JSX.Element {
 
   const loading = presence === PlayerPresence.INITIALIZING || presence === PlayerPresence.BUFFERING;
 
-  const popperRef = React.useRef<Instance>(ReactNull);
+  const popperRef = React.useRef<PopperInstance>(ReactNull);
 
   const isHovered = hoverInfo != undefined;
   const popperProps: Partial<PopperProps> = useMemo(

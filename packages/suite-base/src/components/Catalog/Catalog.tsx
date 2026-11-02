@@ -24,7 +24,7 @@ import { useAsync } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
 import { formatByteSize } from "@lichtblick/den/format";
-import { subtract, toSec } from "@lichtblick/rostime";
+import { subtract, toSec } from "@foxglove/rostime";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";

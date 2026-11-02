@@ -9,24 +9,23 @@
 // Since we don't use the modules directly in this file, we need to load the types as references
 // so typescript will have the merged declarations.
 /// <reference types="chartjs-plugin-datalabels" />
-/// <reference types="@lichtblick/chartjs-plugin-zoom" />
+/// <reference types="@foxglove/chartjs-plugin-zoom" />
 
+import { type ZoomPluginOptions } from "@foxglove/chartjs-plugin-zoom/types/options";
 import { ChartOptions } from "chart.js";
-import Hammer from "hammerjs";
-import * as R from "ramda";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useMountedState } from "react-use";
 import { assert } from "ts-essentials";
-import { v4 as uuidv4 } from "uuid";
 
-import { type ZoomPluginOptions } from "@lichtblick/chartjs-plugin-zoom/types/options";
 import Logger from "@lichtblick/log";
 import ChartJsMux, {
   ChartUpdateMessage,
 } from "@lichtblick/suite-base/components/Chart/worker/ChartJsMux";
 import Rpc, { createLinkedChannels } from "@lichtblick/suite-base/util/Rpc";
 import WebWorkerManager from "@lichtblick/suite-base/util/WebWorkerManager";
+import { listenForPan } from "@lichtblick/suite-base/util/listenForPan";
 import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuallyBePartial";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { TypedChartData, ChartData, RpcElement, RpcScales } from "./types";
 
@@ -35,7 +34,6 @@ type PartialUpdate = Partial<ChartUpdateMessage>;
 const log = Logger.getLogger(__filename);
 
 function makeChartJSWorker() {
-  // foxglove-depcheck-used: babel-plugin-transform-import-meta
   return new Worker(new URL("./worker/main", import.meta.url));
 }
 
@@ -101,16 +99,16 @@ const supportsOffscreenCanvas =
   typeof HTMLCanvasElement.prototype.transferControlToOffscreen === "function";
 
 function Chart(props: Props): React.JSX.Element {
-  const [id] = useState(() => uuidv4());
+  const [id] = useState(() => randomUUID());
 
   const initialized = useRef(false);
-  const canvasRef = useRef<HTMLCanvasElement>();
+  const canvasRef = useRef<HTMLCanvasElement>(undefined);
   const containerRef = useRef<HTMLDivElement>(ReactNull);
   const isMounted = useMountedState();
 
   // to avoid changing useCallback deps for callbacks which access the scale value
   // at the time they are invoked
-  const currentScalesRef = useRef<RpcScales | undefined>();
+  const currentScalesRef = useRef<RpcScales | undefined>(undefined);
 
   const zoomEnabled =
     (props.options.plugins?.zoom as ZoomPluginOptions | undefined)?.zoom?.enabled ?? false;
@@ -129,8 +127,8 @@ function Chart(props: Props): React.JSX.Element {
     onFinishRender,
   } = props;
 
-  const sendWrapperRef = useRef<RpcSend | undefined>();
-  const rpcSendRef = useRef<RpcSend | undefined>();
+  const sendWrapperRef = useRef<RpcSend | undefined>(undefined);
+  const rpcSendRef = useRef<RpcSend | undefined>(undefined);
 
   const hasPannedSinceMouseDown = useRef(false);
   const queuedUpdates = useRef<PartialUpdate[]>([]);
@@ -263,7 +261,7 @@ function Chart(props: Props): React.JSX.Element {
 
         // We merge all of the pending updates together to do as few renders as
         // possible when we fall behind
-        const coalesced = R.mergeAll(updates);
+        const coalesced = Object.assign({}, ...updates) as (typeof updates)[number];
         onStartRender?.();
         const scales = await send<RpcScales>("update", coalesced);
         maybeUpdateScales(scales);
@@ -377,75 +375,36 @@ function Chart(props: Props): React.JSX.Element {
       return;
     }
 
-    const hammerManager = new Hammer.Manager(container);
     const threshold = props.options.plugins?.zoom?.pan?.threshold ?? 10;
-    hammerManager.add(new Hammer.Pan({ threshold }));
-
-    hammerManager.on("panstart", async (event) => {
-      hasPannedSinceMouseDown.current = true;
-
-      if (!rpcSendRef.current) {
-        return;
-      }
-
-      const boundingRect = event.target.getBoundingClientRect();
-      await rpcSendRef.current<RpcScales>("panstart", {
-        event: {
-          cancelable: false,
-          deltaY: event.deltaY,
-          deltaX: event.deltaX,
-          center: {
-            x: event.center.x,
-            y: event.center.y,
-          },
-          target: {
-            boundingClientRect: boundingRect.toJSON(),
-          },
-        },
-      });
+    const target = () => ({
+      boundingClientRect: container.getBoundingClientRect().toJSON() as DOMRect,
     });
-
-    hammerManager.on("panmove", async (event) => {
-      if (!rpcSendRef.current) {
-        return;
-      }
-
-      const boundingRect = event.target.getBoundingClientRect();
-      const scales = await rpcSendRef.current<RpcScales>("panmove", {
-        event: {
-          cancelable: false,
-          deltaY: event.deltaY,
-          deltaX: event.deltaX,
-          target: {
-            boundingClientRect: boundingRect.toJSON(),
-          },
-        },
-      });
-      maybeUpdateScales(scales, { userInteraction: true });
+    return listenForPan(container, threshold, {
+      onStart: ({ deltaX, deltaY, center }) => {
+        hasPannedSinceMouseDown.current = true;
+        void rpcSendRef.current?.<RpcScales>("panstart", {
+          event: { cancelable: false, deltaY, deltaX, center, target: target() },
+        });
+      },
+      onMove: async ({ deltaX, deltaY }) => {
+        if (!rpcSendRef.current) {
+          return;
+        }
+        const scales = await rpcSendRef.current<RpcScales>("panmove", {
+          event: { cancelable: false, deltaY, deltaX, target: target() },
+        });
+        maybeUpdateScales(scales, { userInteraction: true });
+      },
+      onEnd: async ({ deltaX, deltaY }) => {
+        if (!rpcSendRef.current) {
+          return;
+        }
+        const scales = await rpcSendRef.current<RpcScales>("panend", {
+          event: { cancelable: false, deltaY, deltaX, target: target() },
+        });
+        maybeUpdateScales(scales, { userInteraction: true });
+      },
     });
-
-    hammerManager.on("panend", async (event) => {
-      if (!rpcSendRef.current) {
-        return;
-      }
-
-      const boundingRect = event.target.getBoundingClientRect();
-      const scales = await rpcSendRef.current<RpcScales>("panend", {
-        event: {
-          cancelable: false,
-          deltaY: event.deltaY,
-          deltaX: event.deltaX,
-          target: {
-            boundingClientRect: boundingRect.toJSON(),
-          },
-        },
-      });
-      maybeUpdateScales(scales, { userInteraction: true });
-    });
-
-    return () => {
-      hammerManager.destroy();
-    };
   }, [maybeUpdateScales, panEnabled, props.options.plugins?.zoom?.pan?.threshold]);
 
   const onWheel = useCallback(

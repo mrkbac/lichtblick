@@ -4,6 +4,18 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
+import { MessageDefinition, isMsgDefEqual } from "@foxglove/message-definition";
+import CommonRosTypes from "@foxglove/rosmsg-msgs-common";
+import { MessageWriter as Ros1MessageWriter } from "@foxglove/rosmsg-serialization";
+import { MessageWriter as Ros2MessageWriter } from "@foxglove/rosmsg2-serialization";
+import {
+  fromMillis,
+  fromNanoSec,
+  isGreaterThan,
+  isLessThan,
+  subtract,
+  Time,
+} from "@foxglove/rostime";
 import {
   ChannelId,
   FoxgloveClient,
@@ -19,27 +31,11 @@ import {
   BinaryOpcode,
   IWebSocket,
 } from "@foxglove/ws-protocol";
-import * as base64 from "@protobufjs/base64";
 import * as _ from "lodash-es";
-import { v4 as uuidv4 } from "uuid";
 
 import { debouncePromise } from "@lichtblick/den/async";
 import Log from "@lichtblick/log";
 import { parseChannel } from "@lichtblick/mcap-support";
-import { MessageDefinition, isMsgDefEqual } from "@lichtblick/message-definition";
-import CommonRosTypes from "@lichtblick/rosmsg-msgs-common";
-import { MessageWriter as Ros1MessageWriter } from "@lichtblick/rosmsg-serialization";
-import { MessageWriter as Ros2MessageWriter } from "@lichtblick/rosmsg2-serialization";
-import {
-  compare,
-  fromMillis,
-  fromNanoSec,
-  isGreaterThan,
-  isLessThan,
-  subtract,
-  Time,
-  toNanoSec,
-} from "@lichtblick/rostime";
 import { ParameterValue } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
@@ -60,7 +56,9 @@ import {
 } from "@lichtblick/suite-base/players/types";
 import { HIGH_FREQUENCY_ALERT } from "@lichtblick/suite-base/players/utils/constants";
 import { isTopicHighFrequency } from "@lichtblick/suite-base/players/utils/isTopicHighFrequency";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import rosDatatypesToMessageDefinition from "@lichtblick/suite-base/util/rosDatatypesToMessageDefinition";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { JsonMessageWriter } from "./JsonMessageWriter";
 import WorkerSocketAdapter from "./WorkerSocketAdapter";
@@ -103,7 +101,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #url: string; // WebSocket URL.
   #name: string;
   #client?: FoxgloveClient; // The client when we're connected.
-  #id: string = uuidv4(); // Unique ID for this player session.
+  #id: string = randomUUID(); // Unique ID for this player session.
   #serverCapabilities: string[] = [];
   #playerCapabilities: (typeof PLAYER_CAPABILITIES)[keyof typeof PLAYER_CAPABILITIES][] = [];
   #supportedEncodings?: string[];
@@ -318,7 +316,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         });
       }
 
-      const newSessionId = event.sessionId ?? uuidv4();
+      const newSessionId = event.sessionId ?? randomUUID();
       if (this.#id !== newSessionId) {
         this.#resetSessionState();
       }
@@ -469,19 +467,13 @@ export default class FoxgloveWebSocketPlayer implements Player {
             (channel.schemaEncoding == undefined || channel.schemaEncoding === "protobuf")
           ) {
             schemaEncoding = "protobuf";
-            schemaData = new Uint8Array(base64.length(channel.schema));
-            if (base64.decode(channel.schema, schemaData, 0) !== schemaData.byteLength) {
-              throw new Error(`Failed to decode base64 schema on channel ${channel.id}`);
-            }
+            schemaData = Uint8Array.fromBase64(channel.schema);
           } else if (
             channel.encoding === "flatbuffer" &&
             (channel.schemaEncoding == undefined || channel.schemaEncoding === "flatbuffer")
           ) {
             schemaEncoding = "flatbuffer";
-            schemaData = new Uint8Array(base64.length(channel.schema));
-            if (base64.decode(channel.schema, schemaData, 0) !== schemaData.byteLength) {
-              throw new Error(`Failed to decode base64 schema on channel ${channel.id}`);
-            }
+            schemaData = Uint8Array.fromBase64(channel.schema);
           } else if (
             channel.encoding === "ros1" &&
             (channel.schemaEncoding == undefined || channel.schemaEncoding === "ros1msg")
@@ -510,7 +502,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
           this.#alerts.addAlert(`schema:${channel.topic}`, {
             severity: "error",
             message: `Failed to parse channel schema on ${channel.topic}`,
-            error,
+            error: toError(error),
           });
           this.#emitState();
           continue;
@@ -649,7 +641,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         this.#alerts.addAlert(`message:${chanInfo.channel.topic}`, {
           severity: "error",
           message: `Failed to parse message on ${chanInfo.channel.topic}`,
-          error,
+          error: toError(error),
         });
       }
       this.#emitState();
@@ -835,7 +827,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
           this.#alerts.addAlert(serviceAlertId, {
             severity: "error",
             message: `Failed to parse service ${service.name}`,
-            error,
+            error: toError(error),
           });
         }
       }
@@ -1144,7 +1136,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
           type: isByteArray ? "byte_array" : this.#parameterTypeByName.get(key),
         },
       ],
-      uuidv4(),
+      randomUUID(),
     );
 
     // Pre-actively update our parameter map, such that a change is detected if our update failed

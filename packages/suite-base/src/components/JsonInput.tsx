@@ -21,6 +21,7 @@ import * as _ from "lodash-es";
 import { makeStyles } from "tss-react/mui";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { toError } from "@lichtblick/suite-base/util/toError";
 import { validationErrorToString, ValidationResult } from "@lichtblick/suite-base/util/validators";
 import { customTypography } from "@lichtblick/theme";
 
@@ -91,7 +92,7 @@ function ValidatedInputBase({
         try {
           newVal = parse(newInputVal);
         } catch (e) {
-          newError = e.message;
+          newError = toError(e).message;
         }
       }
 
@@ -126,7 +127,7 @@ function ValidatedInputBase({
       try {
         newVal = stringify(value);
       } catch (e) {
-        newError = `Error stringifying the new value, using "" as default. ${e.message}`;
+        newError = `Error stringifying the new value, using "" as default. ${toError(e).message}`;
       }
       setInputStr(newVal);
       prevIncomingVal.current = value;

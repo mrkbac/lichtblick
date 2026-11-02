@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { renderHook } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import * as PanelAPI from "@lichtblick/suite-base/PanelAPI";
 import * as MessagePathSyntax from "@lichtblick/suite-base/components/MessagePathSyntax/messagePathsForDatatype";
@@ -12,13 +13,13 @@ import { useStructureItemsByPathStore } from "@lichtblick/suite-base/components/
 
 import { useStructureItemsStoreManager } from "./useStructureItemsStoreManager";
 
-jest.mock("@lichtblick/suite-base/PanelAPI");
-jest.mock("@lichtblick/suite-base/components/MessagePathSyntax/messagePathsForDatatype");
-jest.mock("@lichtblick/suite-base/components/MessagePathSyntax/structureAllItemsByPath");
-jest.mock("@lichtblick/suite-base/components/MessagePathSyntax/useStructureItemsByPathStore");
+vi.mock("@lichtblick/suite-base/PanelAPI");
+vi.mock("@lichtblick/suite-base/components/MessagePathSyntax/messagePathsForDatatype");
+vi.mock("@lichtblick/suite-base/components/MessagePathSyntax/structureAllItemsByPath");
+vi.mock("@lichtblick/suite-base/components/MessagePathSyntax/useStructureItemsByPathStore");
 
 describe("useStructureItemsStoreManager", () => {
-  const mockSetAllStructureItemsByPath = jest.fn();
+  const mockSetAllStructureItemsByPath = vi.fn();
   const mockTopics = [{ name: "/camera", datatype: "sensor_msgs/Image" }];
   const mockDatatypes = {
     "sensor_msgs/Image": {
@@ -27,22 +28,22 @@ describe("useStructureItemsStoreManager", () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
-    (useStructureItemsByPathStore as unknown as jest.Mock).mockImplementation((selector) =>
+    (useStructureItemsByPathStore as unknown as Mock).mockImplementation((selector) =>
       selector({ setStructureItemsByPath: mockSetAllStructureItemsByPath }),
     );
 
-    (PanelAPI.useDataSourceInfo as jest.Mock).mockReturnValue({
+    (PanelAPI.useDataSourceInfo as Mock).mockReturnValue({
       datatypes: mockDatatypes,
       topics: mockTopics,
     });
 
-    (MessagePathSyntax.messagePathStructures as jest.Mock).mockReturnValue({
+    (MessagePathSyntax.messagePathStructures as Mock).mockReturnValue({
       "sensor_msgs/Image": [{ path: "header" }],
     });
 
-    (StructureAllItems.structureAllItemsByPath as jest.Mock).mockReturnValue(
+    (StructureAllItems.structureAllItemsByPath as Mock).mockReturnValue(
       new Map([["/camera/header", { path: "/camera/header" }]]),
     );
   });

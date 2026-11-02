@@ -5,8 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import * as R from "ramda";
-
 import { Immutable } from "@lichtblick/suite";
 import { Point } from "@lichtblick/suite-base/components/Chart/datasets";
 
@@ -127,7 +125,7 @@ export function downsampleStates(
     indices.push({
       x: interval.x,
       index: haveMultiple ? undefined : first.index,
-      ...(haveMultiple ? { states: R.uniq(labels.map(({ value }) => value)) } : undefined),
+      ...(haveMultiple ? { states: [...new Set(labels.map(({ value }) => value))] } : undefined),
     });
 
     if (!haveMultiple) {

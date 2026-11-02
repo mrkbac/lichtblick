@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock, Mocked } from "vitest";
+
 import { MessageEvent, TopicSelection } from "@lichtblick/suite-base/players/types";
 import InitializationSourceBuilder from "@lichtblick/suite-base/testing/builders/InitializationSourceBuilder";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
@@ -15,62 +17,66 @@ import { MultiSource } from "./types";
 
 const DEFAULT_READ_AHEAD_BUFFER_BYTES = 1024 * 1024 * 2;
 
-// Capture log.warn so individual tests can assert on it.
-// Variables whose names start with "mock" are hoisted by babel-jest alongside jest.mock(),
-// so mockLogWarn is guaranteed to be defined before the factory executes.
-const mockLogWarn = jest.fn();
-jest.mock("@lichtblick/log", () => ({
-  getLogger: jest.fn(() => ({
-    debug: jest.fn(),
-    info: jest.fn(),
-    // Wrap in an arrow function so mockLogWarn is only read when log.warn() is actually
-    // invoked during a test (after the `const mockLogWarn = jest.fn()` line has executed),
-    // not at module-import time when jest.mock factories are evaluated.
-    warn: (...args: unknown[]) => mockLogWarn(...args),
-    error: jest.fn(),
-  })),
+// Capture log.warn so individual tests can assert on it. The factory below only reads
+// mockLogWarn inside log.warn(), after this module has run.
+const mockLogWarn = vi.fn();
+vi.mock("@lichtblick/log", () => ({
+  default: {
+    getLogger: vi.fn(function () {
+      return {
+        debug: vi.fn(),
+        info: vi.fn(),
+        // Wrap in an arrow function so mockLogWarn is only read when log.warn() is actually
+        // invoked during a test (after the `const mockLogWarn = vi.fn()` line has executed),
+        // not at module-import time when vi.mock factories are evaluated.
+        warn: (...args: unknown[]) => mockLogWarn(...args),
+        error: vi.fn(),
+      };
+    }),
+  },
 }));
 
 // Shared source-constructor mock that tracks concurrent initialize() calls so tests can assert on
 // the effective initialization concurrency.
 function trackInitConcurrency(): {
-  implementation: () => jest.Mocked<IIterableSource>;
+  implementation: () => Mocked<IIterableSource>;
   getMaxInFlight: () => number;
 } {
   let inFlight = 0;
   let maxInFlight = 0;
-  const implementation = () =>
-    ({
-      initialize: jest.fn().mockImplementation(async () => {
+  // A function expression (not an arrow) so the mock can be called with `new`
+  const implementation = function () {
+    return {
+      initialize: vi.fn().mockImplementation(async () => {
         inFlight++;
         maxInFlight = Math.max(maxInFlight, inFlight);
         await delay(1);
         inFlight--;
         return InitializationSourceBuilder.initialization();
       }),
-      messageIterator: jest.fn().mockResolvedValue({ done: true, value: undefined }),
-      getBackfillMessages: jest.fn().mockResolvedValue([]),
-      getStart: jest.fn().mockReturnValue(RosTimeBuilder.time()),
-      getEnd: jest.fn().mockReturnValue(RosTimeBuilder.time()),
-    }) as jest.Mocked<IIterableSource>;
+      messageIterator: vi.fn().mockResolvedValue({ done: true, value: undefined }),
+      getBackfillMessages: vi.fn().mockResolvedValue([]),
+      getStart: vi.fn().mockReturnValue(RosTimeBuilder.time()),
+      getEnd: vi.fn().mockReturnValue(RosTimeBuilder.time()),
+    } as Mocked<IIterableSource>;
+  };
   return { implementation, getMaxInFlight: () => maxInFlight };
 }
 
 describe("MultiIterableSource", () => {
-  let mockSourceConstructor: jest.Mock;
+  let mockSourceConstructor: Mock;
   let dataSource: MultiSource;
   beforeEach(() => {
     mockLogWarn.mockClear();
-    mockSourceConstructor = jest.fn().mockImplementation(
-      () =>
-        ({
-          initialize: jest.fn().mockResolvedValue(InitializationSourceBuilder.initialization()),
-          messageIterator: jest.fn().mockResolvedValue({ done: true, value: undefined }),
-          getBackfillMessages: jest.fn().mockResolvedValue([]),
-          getStart: jest.fn().mockReturnValue(RosTimeBuilder.time()),
-          getEnd: jest.fn().mockReturnValue(RosTimeBuilder.time()),
-        }) as jest.Mocked<IIterableSource>,
-    );
+    mockSourceConstructor = vi.fn().mockImplementation(function () {
+      return {
+        initialize: vi.fn().mockResolvedValue(InitializationSourceBuilder.initialization()),
+        messageIterator: vi.fn().mockResolvedValue({ done: true, value: undefined }),
+        getBackfillMessages: vi.fn().mockResolvedValue([]),
+        getStart: vi.fn().mockReturnValue(RosTimeBuilder.time()),
+        getEnd: vi.fn().mockReturnValue(RosTimeBuilder.time()),
+      } as Mocked<IIterableSource>;
+    });
     dataSource = {
       type: "files",
       files: [new Blob(), new Blob()],
@@ -422,11 +428,13 @@ describe("MultiIterableSource", () => {
   describe("Initialization", () => {
     const mockInitialization = (initialization: Initialization) => {
       const mockSource = {
-        initialize: jest.fn().mockResolvedValue(initialization),
-        getStart: jest.fn().mockReturnValue(initialization.start),
-        getEnd: jest.fn().mockReturnValue(initialization.end),
+        initialize: vi.fn().mockResolvedValue(initialization),
+        getStart: vi.fn().mockReturnValue(initialization.start),
+        getEnd: vi.fn().mockReturnValue(initialization.end),
       };
-      mockSourceConstructor.mockImplementationOnce(() => mockSource);
+      mockSourceConstructor.mockImplementationOnce(function () {
+        return mockSource;
+      });
     };
     it("should merge initializations correctly with no alerts", async () => {
       const multiSource = new MultiIterableSource(dataSource, mockSourceConstructor);
@@ -529,12 +537,12 @@ describe("MultiIterableSource", () => {
   });
 
   describe("getBackfillMessages", () => {
-    const makeSource = (startSec: number, backfill: jest.Mock): IIterableSource<Uint8Array> => ({
-      initialize: jest.fn(),
-      messageIterator: jest.fn(),
+    const makeSource = (startSec: number, backfill: Mock): IIterableSource<Uint8Array> => ({
+      initialize: vi.fn(),
+      messageIterator: vi.fn(),
       getBackfillMessages: backfill,
-      getStart: jest.fn().mockReturnValue({ sec: startSec, nsec: 0 }),
-      getEnd: jest.fn().mockReturnValue({ sec: startSec + 10, nsec: 0 }),
+      getStart: vi.fn().mockReturnValue({ sec: startSec, nsec: 0 }),
+      getEnd: vi.fn().mockReturnValue({ sec: startSec + 10, nsec: 0 }),
     });
 
     const messageOnTopic = (topic: string): MessageEvent<Uint8Array> =>
@@ -545,9 +553,9 @@ describe("MultiIterableSource", () => {
 
     it("should stop querying earlier sources once all requested topics are satisfied", async () => {
       // GIVEN: three time-sequential sources; the nearest (latest start) already has every topic.
-      const farBackfill = jest.fn().mockResolvedValue([]);
-      const midBackfill = jest.fn().mockResolvedValue([]);
-      const nearBackfill = jest.fn().mockResolvedValue([messageOnTopic("a"), messageOnTopic("b")]);
+      const farBackfill = vi.fn().mockResolvedValue([]);
+      const midBackfill = vi.fn().mockResolvedValue([]);
+      const nearBackfill = vi.fn().mockResolvedValue([messageOnTopic("a"), messageOnTopic("b")]);
 
       const multiSource = new MultiIterableSource(dataSource, mockSourceConstructor);
       multiSource["sourceImpl"] = [
@@ -574,9 +582,9 @@ describe("MultiIterableSource", () => {
 
     it("should fall back to earlier sources only for topics missing from nearer ones", async () => {
       // GIVEN: the nearest source has only topic "a"; the middle source has "b".
-      const farBackfill = jest.fn().mockResolvedValue([]);
-      const midBackfill = jest.fn().mockResolvedValue([messageOnTopic("b")]);
-      const nearBackfill = jest.fn().mockResolvedValue([messageOnTopic("a")]);
+      const farBackfill = vi.fn().mockResolvedValue([]);
+      const midBackfill = vi.fn().mockResolvedValue([messageOnTopic("b")]);
+      const nearBackfill = vi.fn().mockResolvedValue([messageOnTopic("a")]);
 
       const multiSource = new MultiIterableSource(dataSource, mockSourceConstructor);
       multiSource["sourceImpl"] = [
@@ -608,7 +616,7 @@ describe("MultiIterableSource", () => {
 
     it("should not query any source when there are no topics to backfill", async () => {
       // GIVEN: a source that would return messages if queried.
-      const backfill = jest.fn().mockResolvedValue([messageOnTopic("a")]);
+      const backfill = vi.fn().mockResolvedValue([messageOnTopic("a")]);
       const multiSource = new MultiIterableSource(dataSource, mockSourceConstructor);
       multiSource["sourceImpl"] = [makeSource(0, backfill)];
 
@@ -628,35 +636,39 @@ describe("MultiIterableSource", () => {
     it("should fallback to {sec:0, nsec:0} when getStart is undefined", async () => {
       // Given two sources: one with getStart returning a time, one without getStart
       const sourceWithStart = {
-        initialize: jest.fn().mockResolvedValue(
+        initialize: vi.fn().mockResolvedValue(
           InitializationSourceBuilder.initialization({
             start: RosTimeBuilder.time({ sec: 5, nsec: 0 }),
             end: RosTimeBuilder.time({ sec: 10, nsec: 0 }),
           }),
         ),
-        messageIterator: jest.fn(),
-        getBackfillMessages: jest.fn().mockResolvedValue([]),
-        getStart: jest.fn().mockReturnValue({ sec: 5, nsec: 0 }),
-        getEnd: jest.fn().mockReturnValue({ sec: 10, nsec: 0 }),
+        messageIterator: vi.fn(),
+        getBackfillMessages: vi.fn().mockResolvedValue([]),
+        getStart: vi.fn().mockReturnValue({ sec: 5, nsec: 0 }),
+        getEnd: vi.fn().mockReturnValue({ sec: 10, nsec: 0 }),
       };
 
       const sourceWithoutStart = {
-        initialize: jest.fn().mockResolvedValue(
+        initialize: vi.fn().mockResolvedValue(
           InitializationSourceBuilder.initialization({
             start: RosTimeBuilder.time({ sec: 0, nsec: 0 }),
             end: RosTimeBuilder.time({ sec: 5, nsec: 0 }),
           }),
         ),
-        messageIterator: jest.fn(),
-        getBackfillMessages: jest.fn().mockResolvedValue([]),
+        messageIterator: vi.fn(),
+        getBackfillMessages: vi.fn().mockResolvedValue([]),
         // getStart is intentionally omitted — triggers the ?? fallback
-        getEnd: jest.fn().mockReturnValue({ sec: 5, nsec: 0 }),
+        getEnd: vi.fn().mockReturnValue({ sec: 5, nsec: 0 }),
       };
 
       // Source with start=5 is created first, source without getStart second
       mockSourceConstructor
-        .mockImplementationOnce(() => sourceWithStart)
-        .mockImplementationOnce(() => sourceWithoutStart);
+        .mockImplementationOnce(function () {
+          return sourceWithStart;
+        })
+        .mockImplementationOnce(function () {
+          return sourceWithoutStart;
+        });
 
       const multiSource = new MultiIterableSource(
         { type: "files", files: [new Blob(), new Blob()] },
@@ -828,15 +840,17 @@ describe("MultiIterableSource", () => {
 
     it("should terminate all sources and tear down the pool", async () => {
       // GIVEN: url sources whose terminate is observable.
-      const terminateSpy = jest.fn().mockResolvedValue(undefined);
-      mockSourceConstructor.mockImplementation(() => ({
-        initialize: jest.fn().mockResolvedValue(InitializationSourceBuilder.initialization()),
-        messageIterator: jest.fn().mockResolvedValue({ done: true, value: undefined }),
-        getBackfillMessages: jest.fn().mockResolvedValue([]),
-        getStart: jest.fn().mockReturnValue(RosTimeBuilder.time()),
-        getEnd: jest.fn().mockReturnValue(RosTimeBuilder.time()),
-        terminate: terminateSpy,
-      }));
+      const terminateSpy = vi.fn().mockResolvedValue(undefined);
+      mockSourceConstructor.mockImplementation(function () {
+        return {
+          initialize: vi.fn().mockResolvedValue(InitializationSourceBuilder.initialization()),
+          messageIterator: vi.fn().mockResolvedValue({ done: true, value: undefined }),
+          getBackfillMessages: vi.fn().mockResolvedValue([]),
+          getStart: vi.fn().mockReturnValue(RosTimeBuilder.time()),
+          getEnd: vi.fn().mockReturnValue(RosTimeBuilder.time()),
+          terminate: terminateSpy,
+        };
+      });
       const multiSource = new MultiIterableSource(
         {
           type: "urls",
@@ -848,7 +862,7 @@ describe("MultiIterableSource", () => {
 
       // Spy on the shared pool captured from the first source construction.
       const pool = mockSourceConstructor.mock.calls[0]![0].pool as HydratedSourcePool;
-      const poolTerminateSpy = jest.spyOn(pool, "terminate");
+      const poolTerminateSpy = vi.spyOn(pool, "terminate");
 
       // WHEN: terminating the multi-source.
       // THEN: it resolves, every source's terminate is called, and the pool is torn down after.

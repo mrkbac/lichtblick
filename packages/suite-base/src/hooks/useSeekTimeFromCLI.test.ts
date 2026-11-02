@@ -5,6 +5,7 @@
 
 import { renderHook } from "@testing-library/react";
 import { enqueueSnackbar } from "notistack";
+import type { Mock } from "vitest";
 
 import { useMessagePipelineGetter } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useAppParameters } from "@lichtblick/suite-base/context/AppParametersContext";
@@ -13,31 +14,31 @@ import { parseTimestampStr } from "@lichtblick/suite-base/util/parseMultipleTime
 
 import useSeekTimeFromCLI from "./useSeekTimeFromCLI";
 
-jest.mock("notistack", () => ({
-  enqueueSnackbar: jest.fn(),
+vi.mock("notistack", () => ({
+  enqueueSnackbar: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/components/MessagePipeline");
-jest.mock("@lichtblick/suite-base/context/AppParametersContext");
-jest.mock("@lichtblick/suite-base/util/parseMultipleTimes");
+vi.mock("@lichtblick/suite-base/components/MessagePipeline");
+vi.mock("@lichtblick/suite-base/context/AppParametersContext");
+vi.mock("@lichtblick/suite-base/util/parseMultipleTimes");
+vi.mock("notistack", () => ({
+  enqueueSnackbar: vi.fn(),
+}));
 
 describe("useSeekTimeFromCLI", () => {
-  const mockSeekPlayback = jest.fn();
-  const mockUseMessagePipelineGetter = useMessagePipelineGetter as jest.Mock;
-  const mockUseAppParameters = useAppParameters as jest.Mock;
-  const mockParseTimestampStr = parseTimestampStr as jest.Mock;
+  const mockSeekPlayback = vi.fn();
+  const mockUseMessagePipelineGetter = useMessagePipelineGetter as Mock;
+  const mockUseAppParameters = useAppParameters as Mock;
+  const mockParseTimestampStr = parseTimestampStr as Mock;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockUseMessagePipelineGetter.mockReturnValue(() => ({
       playerState: { presence: PlayerPresence.PRESENT },
       seekPlayback: mockSeekPlayback,
     }));
     mockUseAppParameters.mockReturnValue({ time: "00:01:00" });
     mockParseTimestampStr.mockReturnValue(60000); // 1 minute in milliseconds
-    jest.mock("notistack", () => ({
-      enqueueSnackbar: jest.fn(),
-    }));
   });
 
   it("should seek playback when time and seekPlayback are defined and player is present", () => {

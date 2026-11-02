@@ -15,7 +15,6 @@
 //   You may not use this file except in compliance with the License.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { v4 as uuidv4 } from "uuid";
 
 import { useShallowMemo } from "@lichtblick/hooks";
 import Log from "@lichtblick/log";
@@ -30,6 +29,7 @@ import {
   SubscribePayload,
   SubscriptionPreloadType,
 } from "@lichtblick/suite-base/players/types";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 const log = Log.getLogger(__filename);
 
@@ -72,7 +72,7 @@ function selectSetSubscriptions(ctx: MessagePipelineContext) {
 }
 
 export function useMessageReducer<T>(props: Params<T>): T {
-  const [id] = useState(() => uuidv4());
+  const [id] = useState(() => randomUUID());
   const { restore, addMessage, addMessages, preloadType = "partial" } = props;
 
   // only one of the add message callbacks should be provided
@@ -136,7 +136,7 @@ export function useMessageReducer<T>(props: Params<T>): T {
         addMessages: typeof addMessages;
       }>
     | undefined
-  >();
+  >(undefined);
 
   return useMessagePipeline(
     useCallback(

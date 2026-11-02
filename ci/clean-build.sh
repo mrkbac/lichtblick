@@ -12,7 +12,6 @@ folders_to_remove=(
     "storybook-static"
     "coverage"
     "desktop/integration-test/coverage"
-    "web/integration-test/coverage"
 )
 
 # Remove the folders

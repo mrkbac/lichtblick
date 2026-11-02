@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Chart, ChartDataset, ScatterDataPoint } from "chart.js";
+import { Chart, ChartDataset } from "chart.js";
 import { TFunction } from "i18next";
-import { MutableRefObject } from "react";
+import { RefObject } from "react";
 
 import { Immutable, SettingsTreeActionUpdatePayload } from "@lichtblick/suite";
 import { PanelContextMenuItem } from "@lichtblick/suite-base/components/PanelContextMenu";
@@ -67,7 +67,7 @@ export type InteractionEvent =
   | PanMoveInteractionEvent
   | PanEndInteractionEvent;
 
-export type Datum = ScatterDataPoint & { value?: OriginalValue };
+export type Datum = { x: number; y: number } & { value?: OriginalValue };
 
 export type Dataset = ChartDataset<"scatter", Datum[]>;
 
@@ -201,7 +201,7 @@ export type UsePlotDataHandling = {
 export type UsePlotInteractionHandlersProps = {
   config: PlotConfig;
   coordinator: PlotCoordinator | undefined;
-  draggingRef: MutableRefObject<boolean>;
+  draggingRef: RefObject<boolean>;
   renderer: OffscreenCanvasRenderer | undefined;
   setActiveTooltip: (data: TooltipStateSetter | undefined) => void;
   shouldSync: boolean;

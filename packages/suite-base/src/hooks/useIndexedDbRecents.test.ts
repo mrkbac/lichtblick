@@ -6,7 +6,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 
 import useIndexedDbRecents, { MAX_RECENTS } from "@lichtblick/suite-base/hooks/useIndexedDbRecents";
 
@@ -47,8 +47,13 @@ describe("useIndexedDbRecents", () => {
         });
       });
 
+      // The hook saves once its initial load finishes; wait for that, then for the write to commit
+      // (fake-indexeddb completes requests on macrotasks)
+      await waitFor(() => {
+        expect(result.current.recents).toHaveLength(1);
+      });
       await act(async () => {
-        await Promise.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 0));
       });
 
       unmount();
@@ -73,8 +78,8 @@ describe("useIndexedDbRecents", () => {
           extra: {
             foo: "bar",
           },
-        },
-      ]);
+        ]);
+      });
 
       unmount();
     }

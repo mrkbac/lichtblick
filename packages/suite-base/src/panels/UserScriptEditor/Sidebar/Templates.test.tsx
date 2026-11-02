@@ -4,14 +4,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 
 import templates from "@lichtblick/suite-base/players/UserScriptPlayer/transformerWorker/typescript/templates";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
 import { Templates } from "./Templates";
 
-jest.mock(
+vi.mock(
   "@lichtblick/suite-base/players/UserScriptPlayer/transformerWorker/typescript/templates",
   () => ({
     __esModule: true,
@@ -23,8 +23,8 @@ jest.mock(
 );
 
 function renderTemplates(props: Partial<React.ComponentProps<typeof Templates>> = {}) {
-  const onClose = props.onClose ?? jest.fn();
-  const addNewNode = props.addNewNode ?? jest.fn();
+  const onClose = props.onClose ?? vi.fn();
+  const addNewNode = props.addNewNode ?? vi.fn();
 
   render(
     <ThemeProvider isDark={false}>
@@ -37,8 +37,8 @@ function renderTemplates(props: Partial<React.ComponentProps<typeof Templates>> 
 
 describe("Templates", () => {
   afterEach(() => {
-    jest.clearAllMocks();
-    jest.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("should render the name and description of each template", () => {

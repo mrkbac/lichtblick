@@ -34,6 +34,18 @@ describe("getAccuracy", () => {
       expect(tilt).toBeCloseTo(0);
     });
 
+    it("handles a singular covariance whose minor eigenvalue rounds below zero", () => {
+      const msg: NavSatFixMsg = {
+        ...position,
+        // det = 0; the minor eigenvalue rounds to -2.2e-16
+        position_covariance: [1.1, Math.sqrt(1.1 * 2.3), 0, Math.sqrt(1.1 * 2.3), 2.3, 0, 0, 0, 0],
+        position_covariance_type: NavSatFixPositionCovarianceType.COVARIANCE_TYPE_KNOWN,
+      };
+      const accuracy = getAccuracy(msg);
+      expect(accuracy?.radii[1]).toBeGreaterThanOrEqual(0);
+      expect(accuracy?.radii[1]).toBeLessThan(1e-6);
+    });
+
     it("returns undefined for invalid input", () => {
       const msg: NavSatFixMsg = {
         ...position,

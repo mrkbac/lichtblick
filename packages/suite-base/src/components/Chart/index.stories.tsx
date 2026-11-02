@@ -13,10 +13,10 @@
 //   This source code is licensed under the Apache License, Version 2.0,
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
-import { StoryObj } from "@storybook/react-webpack5";
 import * as _ from "lodash-es";
 import { useState, useCallback, ComponentProps, useEffect } from "react";
-import TestUtils from "react-dom/test-utils";
+import { fireEvent } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import { useReadySignal } from "@lichtblick/suite-base/stories/ReadySignalContext";
 
@@ -176,7 +176,7 @@ export const AllowsClickingOnDatalabels: StoryObj = {
     const doClick = useCallback(() => {
       if (clickedDatalabel == undefined) {
         const [canvas] = document.getElementsByTagName("canvas");
-        TestUtils.Simulate.click(canvas!.parentElement!, { clientX: 304, clientY: 378 });
+        void fireEvent.click(canvas!.parentElement!, { clientX: 304, clientY: 378 });
       }
     }, [clickedDatalabel]);
 

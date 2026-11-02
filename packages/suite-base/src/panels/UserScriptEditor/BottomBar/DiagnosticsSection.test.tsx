@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { render, screen } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 
 import { DIAGNOSTIC_SEVERITY } from "@lichtblick/suite-base/players/UserScriptPlayer/constants";
 import { Diagnostic } from "@lichtblick/suite-base/players/UserScriptPlayer/types";
@@ -23,8 +23,8 @@ function renderDiagnosticsSection(diagnostics: readonly Diagnostic[]) {
 
 describe("DiagnosticsSection", () => {
   afterEach(() => {
-    jest.clearAllMocks();
-    jest.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("should display an empty message when there are no diagnostics", () => {

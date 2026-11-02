@@ -6,11 +6,11 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { PropsWithChildren, useEffect, useRef, useState } from "react";
-import { useLocalStorage } from "react-use";
 
 import Log from "@lichtblick/log";
 import { SESSION_STORAGE_LOGS_SETTINGS } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import { StudioLogsSettingsContext } from "@lichtblick/suite-base/context/StudioLogsSettingsContext";
+import { useLocalStorage } from "@lichtblick/suite-base/hooks/useLocalStorage";
 
 import { createStudioLogsSettingsStore } from "./store";
 import { LocalStorageSaveState } from "./types";

@@ -16,7 +16,7 @@ describe("isTopicHighFrequency", () => {
   const duration: RosTime = { sec: 30, nsec: 15 };
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("should return false when there aren't topics with high message frequency and return false", () => {
@@ -55,15 +55,16 @@ describe("isTopicHighFrequency", () => {
     expect(result).toBe(true);
   });
 
-  it.each([
-    ...LOG_SCHEMAS,
-  ])("should return false if the schemaName belongs to logs schemas", (schema: string) => {
-    const result = isTopicHighFrequency({
-      topicStats,
-      topic: { name: topicName, schemaName: schema },
-      duration,
-    });
+  it.each([...LOG_SCHEMAS])(
+    "should return false if the schemaName belongs to logs schemas",
+    (schema: string) => {
+      const result = isTopicHighFrequency({
+        topicStats,
+        topic: { name: topicName, schemaName: schema },
+        duration,
+      });
 
-    expect(result).toBe(false);
-  });
+      expect(result).toBe(false);
+    },
+  );
 });

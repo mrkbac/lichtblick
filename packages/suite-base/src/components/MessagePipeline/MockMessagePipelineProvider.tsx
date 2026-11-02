@@ -14,15 +14,15 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { Time, isLessThan } from "@foxglove/rostime";
 import { Immutable } from "immer";
 import * as _ from "lodash-es";
-import { MutableRefObject, useEffect, useMemo, useRef, useState } from "react";
-import shallowequal from "shallowequal";
+import { RefObject, useEffect, useMemo, useRef, useState } from "react";
 import { Writable } from "ts-essentials";
 import { createStore } from "zustand";
+import { shallow } from "zustand/shallow";
 
 import { Condvar } from "@lichtblick/den/async";
-import { Time, isLessThan } from "@lichtblick/rostime";
 import { Metadata, ParameterValue } from "@lichtblick/suite";
 import {
   FramePromise,
@@ -99,7 +99,7 @@ function getPublicState(
   prevState: MockMessagePipelineState | undefined,
   props: MockMessagePipelineProps,
   dispatch: MockMessagePipelineState["dispatch"],
-  promisesToWaitForRef: MutableRefObject<FramePromise[]>,
+  promisesToWaitForRef: RefObject<FramePromise[]>,
 ): Omit<MessagePipelineInternalState["public"], "messageEventsBySubscriberId"> {
   let startTime = prevState?.public.playerState.activeData?.startTime;
   let currentTime = props.currentTime;
@@ -218,7 +218,7 @@ export default function MockMessagePipelineProvider(
   props: React.PropsWithChildren<MockMessagePipelineProps>,
 ): React.ReactElement {
   const promisesToWaitForRef = useRef<FramePromise[]>([]);
-  const startTime = useRef<Time | undefined>();
+  const startTime = useRef<Time | undefined>(undefined);
   let currentTime = props.currentTime;
   if (!currentTime) {
     for (const message of props.messages ?? []) {
@@ -271,7 +271,7 @@ export default function MockMessagePipelineProvider(
         if (action.type === "set-mock-props") {
           set((state) => {
             const actionMockProps = action.mockProps;
-            if (shallowequal(state.mockProps, actionMockProps)) {
+            if (shallow(state.mockProps, actionMockProps)) {
               return state;
             }
             const publicState = getPublicState(

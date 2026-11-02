@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Time } from "@lichtblick/rostime";
+import { Time } from "@foxglove/rostime";
 
 /**
  * How to open a catalog entry. A local folder scan produces "local-file" entries; served catalogs

@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import * as Comlink from "@foxglove/comlink";
 import {
   CategoryScale,
   Chart,
@@ -20,7 +21,6 @@ import {
 } from "chart.js";
 import AnnotationPlugin from "chartjs-plugin-annotation";
 
-import * as Comlink from "@lichtblick/comlink";
 import { loadDefaultFont } from "@lichtblick/suite-base/panels/shared/loadFont";
 
 import { ChartRenderer } from "./ChartRenderer";

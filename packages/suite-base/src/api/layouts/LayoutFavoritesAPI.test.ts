@@ -6,11 +6,11 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { LayoutFavoritesAPI } from "./LayoutFavoritesAPI";
 
-jest.mock("@lichtblick/suite-base/services/http/HttpService");
+vi.mock("@lichtblick/suite-base/services/http/HttpService");
 
 describe("LayoutFavoritesAPI", () => {
   let api: LayoutFavoritesAPI;
-  const mockHttpService = jest.mocked(HttpService);
+  const mockHttpService = vi.mocked(HttpService);
 
   const createMockHttpResponse = <T>(data: T) => ({
     data,
@@ -20,14 +20,14 @@ describe("LayoutFavoritesAPI", () => {
 
   beforeEach(() => {
     api = new LayoutFavoritesAPI();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe("getFavoriteLayoutIds", () => {
     it("should fetch the favorite layout ids of the current user", async () => {
       // Given
       const favoriteLayouts = BasicBuilder.strings();
-      const mockGet = jest.fn().mockResolvedValue(createMockHttpResponse({ favoriteLayouts }));
+      const mockGet = vi.fn().mockResolvedValue(createMockHttpResponse({ favoriteLayouts }));
       mockHttpService.get = mockGet;
 
       // When
@@ -40,7 +40,7 @@ describe("LayoutFavoritesAPI", () => {
 
     it("should propagate HTTP errors", async () => {
       // Given
-      mockHttpService.get = jest.fn().mockRejectedValue(new Error("Network error"));
+      mockHttpService.get = vi.fn().mockRejectedValue(new Error("Network error"));
 
       // When / Then
       await expect(api.getFavoriteLayoutIds()).rejects.toThrow("Network error");
@@ -51,7 +51,7 @@ describe("LayoutFavoritesAPI", () => {
     it("should PUT the layout id", async () => {
       // Given
       const externalId = BasicBuilder.string();
-      const mockPut = jest.fn().mockResolvedValue(createMockHttpResponse(undefined));
+      const mockPut = vi.fn().mockResolvedValue(createMockHttpResponse(undefined));
       mockHttpService.put = mockPut;
 
       // When
@@ -63,7 +63,7 @@ describe("LayoutFavoritesAPI", () => {
 
     it("should encode the layout id in the path", async () => {
       // Given
-      const mockPut = jest.fn().mockResolvedValue(createMockHttpResponse(undefined));
+      const mockPut = vi.fn().mockResolvedValue(createMockHttpResponse(undefined));
       mockHttpService.put = mockPut;
 
       // When
@@ -78,7 +78,7 @@ describe("LayoutFavoritesAPI", () => {
     it("should DELETE the layout id", async () => {
       // Given
       const externalId = BasicBuilder.string();
-      const mockDelete = jest.fn().mockResolvedValue(createMockHttpResponse(undefined));
+      const mockDelete = vi.fn().mockResolvedValue(createMockHttpResponse(undefined));
       mockHttpService.delete = mockDelete;
 
       // When
@@ -90,7 +90,7 @@ describe("LayoutFavoritesAPI", () => {
 
     it("should propagate HTTP errors", async () => {
       // Given
-      mockHttpService.delete = jest.fn().mockRejectedValue(new Error("Delete failed"));
+      mockHttpService.delete = vi.fn().mockRejectedValue(new Error("Delete failed"));
 
       // When / Then
       await expect(api.removeFavoriteLayout(BasicBuilder.string())).rejects.toThrow(

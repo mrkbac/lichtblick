@@ -14,11 +14,11 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import type { ZoomOptions } from "@foxglove/chartjs-plugin-zoom/types/options";
 import { Button, Fade, Tooltip, buttonClasses } from "@mui/material";
 import { ChartOptions, InteractionMode, ScaleOptions } from "chart.js";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
 import * as _ from "lodash-es";
-import * as R from "ramda";
 import React, {
   ComponentProps,
   MouseEvent,
@@ -30,9 +30,7 @@ import React, {
 } from "react";
 import { useMountedState } from "react-use";
 import { makeStyles } from "tss-react/mui";
-import { v4 as uuidv4 } from "uuid";
 
-import type { ZoomOptions } from "@lichtblick/chartjs-plugin-zoom/types/options";
 import { filterMap } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import ChartComponent from "@lichtblick/suite-base/components/Chart/index";
@@ -47,6 +45,7 @@ import {
   useTimelineInteractionState,
 } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import { Bounds } from "@lichtblick/suite-base/types/Bounds";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { fontMonospace } from "@lichtblick/theme";
 
 import HoverBar from "./HoverBar";
@@ -214,11 +213,11 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
 
   React.useEffect(() => {
     setDatasetBounds((oldBounds) => {
-      if (provided != undefined && !R.equals(oldBounds, provided.bounds)) {
+      if (provided != undefined && !_.isEqual(oldBounds, provided.bounds)) {
         return provided.bounds;
       }
 
-      if (typedProvided != undefined && !R.equals(oldBounds, typedProvided.bounds)) {
+      if (typedProvided != undefined && !_.isEqual(oldBounds, typedProvided.bounds)) {
         return typedProvided.bounds;
       }
 
@@ -229,7 +228,7 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
   const bounds = dataBounds ?? datasetBounds;
 
   const { classes, cx, theme } = useStyles();
-  const componentId = useMemo(() => uuidv4(), []);
+  const componentId = useMemo(() => randomUUID(), []);
   const isMounted = useMountedState();
   const canvasContainer = useRef<HTMLDivElement>(ReactNull);
 
@@ -239,8 +238,8 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
     useCallback((messagePipeline) => messagePipeline.pauseFrame, []),
   );
 
-  const resumeFrame = useRef<() => void | undefined>();
-  const requestedResumeFrame = useRef<() => void | undefined>();
+  const resumeFrame = useRef<() => void | undefined>(undefined);
+  const requestedResumeFrame = useRef<() => void | undefined>(undefined);
 
   // when data changes, we pause and wait for onFinishRender to resume
   const onStartRender = useCallback(() => {

@@ -83,7 +83,9 @@ export function TabbedToolbar(props: Props): React.JSX.Element {
           direction="row"
           flex="auto"
           alignItems="center"
-          ref={dropRef}
+          ref={(el) => {
+            dropRef(el);
+          }}
           data-testid="toolbar-droppable"
           style={{ gap: 1 }}
           overflow="hidden"

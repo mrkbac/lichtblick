@@ -15,29 +15,31 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import usePlotDataHandling from "./usePlotDataHandling";
 import { IndexDatasetsBuilder } from "../builders/IndexDatasetsBuilder";
 
-jest.mock("@lichtblick/message-path", () => ({
-  parseMessagePath: jest.fn(),
+vi.mock("@lichtblick/message-path", () => ({
+  parseMessagePath: vi.fn(),
 }));
 
-jest.mock(
+vi.mock(
   "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems",
   () => ({
-    fillInGlobalVariablesInPath: jest.fn(),
+    fillInGlobalVariablesInPath: vi.fn(),
   }),
 );
 
-jest.mock("@lichtblick/suite-base/util/plotColors", () => ({
-  getLineColor: jest.fn(
-    (color: string | undefined, idx: number) => color ?? `default-color-${idx}`,
-  ),
+vi.mock("@lichtblick/suite-base/util/plotColors", () => ({
+  getLineColor: vi.fn(function (color: string | undefined, idx: number) {
+    return color ?? `default-color-${idx}`;
+  }),
 }));
 
-global.Worker = jest.fn().mockImplementation(() => ({
-  addEventListener: jest.fn(),
-  onmessage: undefined,
-  postMessage: jest.fn(),
-  terminate: jest.fn(),
-}));
+global.Worker = vi.fn().mockImplementation(function () {
+  return {
+    addEventListener: vi.fn(),
+    onmessage: undefined,
+    postMessage: vi.fn(),
+    terminate: vi.fn(),
+  };
+});
 
 describe("usePlotDataHandling hook", () => {
   const globalVariables: GlobalVariables = {};
@@ -105,7 +107,7 @@ describe("usePlotDataHandling hook", () => {
   });
 
   it("should throw error when xAxisPath is unsupported", () => {
-    const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(function () {});
     const config = PlotBuilder.config({
       xAxisVal: "unsupportedMode" as any,
       xAxisPath: undefined,

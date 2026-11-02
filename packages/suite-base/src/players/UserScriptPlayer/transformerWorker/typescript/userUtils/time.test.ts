@@ -1,4 +1,4 @@
-import { Time } from "@lichtblick/rostime";
+import { Time } from "@foxglove/rostime";
 
 import { subtractTimes, compare, areSame } from "./time";
 

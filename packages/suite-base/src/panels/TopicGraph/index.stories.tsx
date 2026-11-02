@@ -5,9 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { StoryObj } from "@storybook/react-webpack5";
 import { useEffect, useState } from "react";
 import { useAsync } from "react-use";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import PanelSetup, { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";
 import delay from "@lichtblick/suite-base/util/delay";

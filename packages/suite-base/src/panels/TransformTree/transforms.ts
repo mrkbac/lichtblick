@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Time, toSec } from "@lichtblick/rostime";
+import { Time, toSec } from "@foxglove/rostime";
 import {
   FRAME_TRANSFORMS_DATATYPES,
   FRAME_TRANSFORM_DATATYPES,

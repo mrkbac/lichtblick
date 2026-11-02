@@ -6,7 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { useCallback, useLayoutEffect, useState } from "react";
-import { createStore, useStore } from "zustand";
+import { createStore } from "zustand";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 
 export type OnSelectPayload = {
   index: number;
@@ -62,7 +63,7 @@ export function useMultiSelection<T>(source: readonly T[]): {
     [store],
   );
 
-  const { selectedIndexes } = useStore(store);
+  const { selectedIndexes } = useStoreWithEqualityFn(store);
 
   const getSelectedIndexes = useCallback(() => store.getState().selectedIndexes, [store]);
 

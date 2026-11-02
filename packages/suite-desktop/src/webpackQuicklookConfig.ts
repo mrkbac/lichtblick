@@ -5,24 +5,22 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import ReactRefreshPlugin from "@pmmmwh/react-refresh-webpack-plugin";
-import { EsbuildPlugin } from "esbuild-loader";
-import ForkTsCheckerWebpackPlugin from "fork-ts-checker-webpack-plugin";
+import { Configuration, rspack } from "@rspack/core";
+import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "path";
-import ReactRefreshTypescript from "react-refresh-typescript";
-import { Configuration, ProvidePlugin } from "webpack";
+import { TsCheckerRspackPlugin } from "ts-checker-rspack-plugin";
 
 import type { WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
+import { swcRule, tsCheckerOptions } from "@lichtblick/suite-base/webpack";
 
 import { WebpackConfigParams } from "./WebpackConfigParams";
-import "webpack-dev-server";
 
 export const webpackQuicklookConfig =
   (params: WebpackConfigParams) =>
   (_env: unknown, argv: WebpackArgv): Configuration => {
     const isDev = argv.mode === "development";
-    const isServe = argv.env?.WEBPACK_SERVE ?? false;
+    const isServe = argv.env?.RSPACK_SERVE ?? false;
 
     const allowUnusedVariables = isDev && isServe;
 
@@ -43,42 +41,14 @@ export const webpackQuicklookConfig =
         rules: [
           { test: /\.png$/, type: "asset/inline" },
           { test: /\.wasm$/, type: "asset/inline" },
-          {
-            test: /\.tsx?$/,
-            exclude: /node_modules/,
-            use: {
-              loader: "ts-loader",
-              options: {
-                transpileOnly: true,
-                // https://github.com/TypeStrong/ts-loader#onlycompilebundledfiles
-                // avoid looking at files which are not part of the bundle
-                onlyCompileBundledFiles: true,
-                projectReferences: true,
-                getCustomTransformers: () => ({
-                  before: [
-                    // only include refresh plugin when using webpack server
-                    ...(isServe ? [ReactRefreshTypescript()] : []),
-                  ],
-                }),
-              },
-            },
-          },
-        ],
-      },
-
-      optimization: {
-        removeAvailableModules: true,
-        minimizer: [
-          new EsbuildPlugin({
-            target: "es2022",
-            minify: true,
-          }),
+          swcRule({ isDev, refresh: isServe }),
         ],
       },
 
       plugins: [
-        new ForkTsCheckerWebpackPlugin({
+        new TsCheckerRspackPlugin({
           typescript: {
+            ...tsCheckerOptions(),
             configOverwrite: {
               compilerOptions: {
                 noUnusedLocals: !allowUnusedVariables,
@@ -101,13 +71,15 @@ export const webpackQuicklookConfig =
 </html>
 `,
         }),
-        new ProvidePlugin({
+        new rspack.ProvidePlugin({
           // the buffer module exposes the Buffer class as a property
           Buffer: ["buffer", "Buffer"],
         }),
-        ...(isServe ? [new ReactRefreshPlugin()] : []),
+        ...(isServe ? [new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } })] : []),
       ],
 
+      // webpack mocked these silently for web targets; the wasm decoders reference them
+      node: { __dirname: "mock", __filename: "mock" },
       resolve: {
         extensions: [".js", ".ts", ".tsx", ".json"],
         fallback: {

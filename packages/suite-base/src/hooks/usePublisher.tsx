@@ -15,12 +15,12 @@
 //   You may not use this file except in compliance with the License.
 
 import { useCallback, useEffect, useState } from "react";
-import { v4 as uuidv4 } from "uuid";
 
 import { Immutable } from "@lichtblick/suite";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 type Props = Immutable<{
   topic: string;
@@ -37,7 +37,7 @@ export default function usePublisher({
   datatypes,
   name,
 }: Props): (msg: Record<string, unknown>) => void {
-  const [id] = useState(() => uuidv4());
+  const [id] = useState(() => randomUUID());
   const canPublish = useMessagePipeline((context) =>
     context.playerState.capabilities.includes(PLAYER_CAPABILITIES.advertise),
   );

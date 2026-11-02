@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock, Mocked } from "vitest";
+
 import { LayoutID } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import {
   UserProfile,
@@ -19,28 +21,28 @@ import LayoutBuilder from "@lichtblick/suite-base/testing/builders/LayoutBuilder
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 describe("LayoutManager", () => {
-  let mockLocalStorage: jest.Mocked<ILayoutStorage>;
-  let mockRemoteStorage: jest.Mocked<IRemoteLayoutStorage>;
+  let mockLocalStorage: Mocked<ILayoutStorage>;
+  let mockRemoteStorage: Mocked<IRemoteLayoutStorage>;
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
 
     mockLocalStorage = {
-      list: jest.fn().mockResolvedValue([]),
-      get: jest.fn().mockResolvedValue(undefined),
-      put: jest.fn().mockImplementation(async (_namespace: string, layout) => layout),
-      delete: jest.fn().mockResolvedValue(undefined),
-      importLayouts: jest.fn().mockResolvedValue(undefined),
-      migrateUnnamespacedLayouts: jest.fn().mockResolvedValue(undefined),
+      list: vi.fn().mockResolvedValue([]),
+      get: vi.fn().mockResolvedValue(undefined),
+      put: vi.fn().mockImplementation(async (_namespace: string, layout) => layout),
+      delete: vi.fn().mockResolvedValue(undefined),
+      importLayouts: vi.fn().mockResolvedValue(undefined),
+      migrateUnnamespacedLayouts: vi.fn().mockResolvedValue(undefined),
     };
 
     mockRemoteStorage = {
       workspace: BasicBuilder.string(),
-      getLayouts: jest.fn().mockResolvedValue([]),
-      getLayout: jest.fn().mockResolvedValue(undefined),
-      saveNewLayout: jest.fn(),
-      updateLayout: jest.fn(),
-      deleteLayout: jest.fn().mockResolvedValue(true),
+      getLayouts: vi.fn().mockResolvedValue([]),
+      getLayout: vi.fn().mockResolvedValue(undefined),
+      saveNewLayout: vi.fn(),
+      updateLayout: vi.fn(),
+      deleteLayout: vi.fn().mockResolvedValue(true),
     };
   });
 
@@ -75,7 +77,7 @@ describe("LayoutManager", () => {
         local: mockLocalStorage,
         remote: undefined,
       });
-      const mockOnlineChangeListener = jest.fn();
+      const mockOnlineChangeListener = vi.fn();
       layoutManager.on("onlinechange", mockOnlineChangeListener);
 
       // When
@@ -92,7 +94,7 @@ describe("LayoutManager", () => {
         local: mockLocalStorage,
         remote: undefined,
       });
-      const mockOnlineChangeListener = jest.fn();
+      const mockOnlineChangeListener = vi.fn();
       layoutManager.on("onlinechange", mockOnlineChangeListener);
 
       // When
@@ -111,7 +113,7 @@ describe("LayoutManager", () => {
         local: mockLocalStorage,
         remote: undefined,
       });
-      const mockErrorChangeListener = jest.fn();
+      const mockErrorChangeListener = vi.fn();
       const testError = new Error("Test error");
       layoutManager.on("errorchange", mockErrorChangeListener);
 
@@ -129,7 +131,7 @@ describe("LayoutManager", () => {
         local: mockLocalStorage,
         remote: undefined,
       });
-      const mockErrorChangeListener = jest.fn();
+      const mockErrorChangeListener = vi.fn();
       layoutManager.on("errorchange", mockErrorChangeListener);
 
       // When
@@ -154,7 +156,7 @@ describe("LayoutManager", () => {
       const deletedLayout = LayoutBuilder.layout({
         syncInfo: { status: "locally-deleted", lastRemoteSavedAt: undefined },
       });
-      const listSpy = jest.spyOn(mockLocalStorage, "list");
+      const listSpy = vi.spyOn(mockLocalStorage, "list");
       listSpy.mockResolvedValue([activeLayout, deletedLayout]);
 
       // When
@@ -289,7 +291,7 @@ describe("LayoutManager", () => {
       expect(result?.id).toBe(layoutId);
       expect(result?.name).toBe("Remote Layout");
       expect(mockRemoteStorage.getLayout).toHaveBeenCalledWith(layoutId);
-      expect(jest.spyOn(mockLocalStorage, "put")).toHaveBeenCalled();
+      expect(vi.spyOn(mockLocalStorage, "put")).toHaveBeenCalled();
     });
 
     it("should return undefined when layout does not exist locally or remotely", async () => {
@@ -310,7 +312,7 @@ describe("LayoutManager", () => {
       // Then
       expect(result).toBe(undefined);
       expect(mockRemoteStorage.getLayout).toHaveBeenCalledWith(layoutId);
-      expect(jest.spyOn(mockLocalStorage, "put")).not.toHaveBeenCalled();
+      expect(vi.spyOn(mockLocalStorage, "put")).not.toHaveBeenCalled();
     });
   });
 
@@ -349,7 +351,7 @@ describe("LayoutManager", () => {
         permission,
       });
 
-      const putSpy = jest.spyOn(mockLocalStorage, "put");
+      const putSpy = vi.spyOn(mockLocalStorage, "put");
       putSpy.mockResolvedValue(savedLayout);
       putSpy.mockResolvedValue(savedLayout);
 
@@ -394,7 +396,7 @@ describe("LayoutManager", () => {
       });
 
       mockRemoteStorage.saveNewLayout.mockResolvedValue(savedRemoteLayout);
-      const putSpy = jest.spyOn(mockLocalStorage, "put");
+      const putSpy = vi.spyOn(mockLocalStorage, "put");
       putSpy.mockResolvedValue(savedLocalLayout);
       layoutManager.setOnline({ online: true });
 
@@ -568,7 +570,7 @@ describe("LayoutManager", () => {
       });
 
       // Then
-      expect(jest.spyOn(mockLocalStorage, "put")).toHaveBeenCalledWith(
+      expect(vi.spyOn(mockLocalStorage, "put")).toHaveBeenCalledWith(
         "local",
         expect.objectContaining({
           id: layoutId,
@@ -724,7 +726,7 @@ describe("LayoutManager", () => {
       await layoutManager.deleteLayout({ id: layoutId });
 
       // Then
-      expect(jest.spyOn(mockLocalStorage, "put")).toHaveBeenCalledWith(
+      expect(vi.spyOn(mockLocalStorage, "put")).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
           id: layoutId,
@@ -841,7 +843,7 @@ describe("LayoutManager", () => {
       const result = await layoutManager.overwriteLayout({ id: layoutId });
 
       // Then
-      expect(jest.spyOn(mockLocalStorage, "put")).toHaveBeenCalledWith(
+      expect(vi.spyOn(mockLocalStorage, "put")).toHaveBeenCalledWith(
         "local",
         expect.objectContaining({
           id: layoutId,
@@ -884,7 +886,7 @@ describe("LayoutManager", () => {
       const result = await layoutManager.overwriteLayout({ id: layoutId });
 
       // Then
-      expect(jest.spyOn(mockLocalStorage, "put")).toHaveBeenCalledWith(
+      expect(vi.spyOn(mockLocalStorage, "put")).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
           id: layoutId,
@@ -943,7 +945,7 @@ describe("LayoutManager", () => {
       expect(result.id).toBe(layoutId);
       expect(result.working).toBe(undefined);
       expect(result.baseline).toEqual(existingLayout.baseline);
-      expect(jest.spyOn(mockLocalStorage, "put")).toHaveBeenCalledWith(
+      expect(vi.spyOn(mockLocalStorage, "put")).toHaveBeenCalledWith(
         "local",
         expect.objectContaining({
           id: layoutId,
@@ -1006,7 +1008,7 @@ describe("LayoutManager", () => {
       expect(result.working).toBe(undefined);
       expect(result.syncInfo?.status).toBe("new");
       expect(result.syncInfo?.lastRemoteSavedAt).toBeDefined();
-      expect(jest.spyOn(mockLocalStorage, "put")).toHaveBeenCalledTimes(2);
+      expect(vi.spyOn(mockLocalStorage, "put")).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -1023,7 +1025,7 @@ describe("LayoutManager", () => {
       await manager.syncWithRemote(abortController.signal);
 
       // Then
-      expect(jest.spyOn(mockLocalStorage, "list")).not.toHaveBeenCalled();
+      expect(vi.spyOn(mockLocalStorage, "list")).not.toHaveBeenCalled();
     });
 
     it("should do nothing when there is an ongoing sync", async () => {
@@ -1039,7 +1041,7 @@ describe("LayoutManager", () => {
       await layoutManager.syncWithRemote(abortController.signal);
 
       // Then
-      expect(jest.spyOn(mockLocalStorage, "list")).not.toHaveBeenCalled();
+      expect(vi.spyOn(mockLocalStorage, "list")).not.toHaveBeenCalled();
       expect(mockRemoteStorage.getLayouts).not.toHaveBeenCalled();
     });
 
@@ -1071,8 +1073,8 @@ describe("LayoutManager", () => {
       const testError = new Error("Previous error");
       const abortController = new AbortController();
 
-      jest.spyOn(mockLocalStorage, "list").mockResolvedValue([]);
-      jest.spyOn(mockRemoteStorage, "getLayouts").mockResolvedValue([]);
+      vi.spyOn(mockLocalStorage, "list").mockResolvedValue([]);
+      vi.spyOn(mockRemoteStorage, "getLayouts").mockResolvedValue([]);
       layoutManager.setOnline({ online: true });
       layoutManager.setError(testError);
 
@@ -1104,7 +1106,7 @@ describe("LayoutManager", () => {
         local: mockLocalStorage,
         remote: undefined,
       });
-      const mockListener = jest.fn();
+      const mockListener = vi.fn();
 
       // When
       layoutManager.on("onlinechange", mockListener);
@@ -1122,8 +1124,8 @@ describe("LayoutManager", () => {
       let profile = initial;
       return {
         profile: () => profile,
-        getUserProfile: jest.fn(async () => profile),
-        setUserProfile: jest.fn(
+        getUserProfile: vi.fn(async () => profile),
+        setUserProfile: vi.fn(
           async (update: UserProfile | ((profile: UserProfile) => UserProfile)) => {
             profile = typeof update === "function" ? update(profile) : update;
           },
@@ -1131,11 +1133,11 @@ describe("LayoutManager", () => {
       };
     }
 
-    function makeRemoteFavorites(ids: string[] = []): jest.Mocked<IRemoteLayoutFavoritesStorage> {
+    function makeRemoteFavorites(ids: string[] = []): Mocked<IRemoteLayoutFavoritesStorage> {
       return {
-        getFavoriteLayoutIds: jest.fn().mockResolvedValue(ids),
-        addFavoriteLayout: jest.fn().mockResolvedValue(undefined),
-        removeFavoriteLayout: jest.fn().mockResolvedValue(undefined),
+        getFavoriteLayoutIds: vi.fn().mockResolvedValue(ids),
+        addFavoriteLayout: vi.fn().mockResolvedValue(undefined),
+        removeFavoriteLayout: vi.fn().mockResolvedValue(undefined),
       };
     }
 
@@ -1250,7 +1252,7 @@ describe("LayoutManager", () => {
           expect.stringContaining("Failed to load remote favorite layouts"),
           expect.any(Error),
         );
-        (console.error as jest.Mock).mockClear();
+        (console.error as Mock).mockClear();
       });
 
       it("should ignore an older load that finishes after a newer one", async () => {
@@ -1293,7 +1295,7 @@ describe("LayoutManager", () => {
 
         // Then the older favorites are applied
         expect([...layoutManager.favorites.shared]).toEqual(["old"]);
-        (console.error as jest.Mock).mockClear();
+        (console.error as Mock).mockClear();
       });
 
       it("should emit favoriteschange when favorites are loaded", async () => {
@@ -1301,7 +1303,7 @@ describe("LayoutManager", () => {
         const layoutManager = makeLayoutManager({
           userProfile: makeUserProfileStorage({ favoriteLayoutIds: [personalLayout().id] }),
         });
-        const listener = jest.fn();
+        const listener = vi.fn();
         layoutManager.on("favoriteschange", listener);
 
         // When
@@ -1556,7 +1558,7 @@ describe("LayoutManager", () => {
       it("should emit favoriteschange before the change is saved", () => {
         // Given
         const layoutManager = makeLayoutManager({ remoteFavorites: makeRemoteFavorites() });
-        const listener = jest.fn();
+        const listener = vi.fn();
         layoutManager.on("favoriteschange", listener);
 
         // When

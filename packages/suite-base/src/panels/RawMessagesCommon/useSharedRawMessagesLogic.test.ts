@@ -2,9 +2,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock } from "vitest";
 import { renderHook, act, waitFor } from "@testing-library/react";
 
-import type { Time } from "@lichtblick/rostime";
+import type { Time } from "@foxglove/rostime";
 
 import type { SharedConfig, UseSharedRawMessagesLogicProps } from "./types";
 import { useSharedRawMessagesLogic } from "./useSharedRawMessagesLogic";
@@ -17,30 +18,30 @@ let mockTopics: { name: string; schemaName: string }[] = [];
 let mockMatches: { messageEvent: ReturnType<typeof messageAt>; queriedData: unknown[] }[] = [];
 const mockPipeline = {
   playerState: { activeData: { currentTime: at(5) as Time | undefined, topicStats: new Map() } },
-  seekPlayback: jest.fn() as jest.Mock | undefined,
-  pausePlayback: jest.fn(),
-  getBatchIterator: jest.fn(),
-  getMessageAtTime: jest.fn(),
+  seekPlayback: vi.fn() as Mock | undefined,
+  pausePlayback: vi.fn(),
+  getBatchIterator: vi.fn(),
+  getMessageAtTime: vi.fn(),
 };
 
 // Minimal mocks for deps the hook uses
-jest.mock("@lichtblick/suite-base/PanelAPI", () => ({
+vi.mock("@lichtblick/suite-base/PanelAPI", () => ({
   useDataSourceInfo: () => ({ topics: mockTopics, datatypes: new Map() }),
 }));
-jest.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
+vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   useMessagePipeline: (selector: (ctx: typeof mockPipeline) => unknown) => selector(mockPipeline),
 }));
-jest.mock(
+vi.mock(
   "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems",
   () => {
     const getItems = () => [{ value: {}, path: "" }];
     return { useCachedGetMessagePathDataItems: () => getItems };
   },
 );
-jest.mock("@lichtblick/suite-base/components/PanelContext", () => ({
-  usePanelContext: () => ({ setMessagePathDropConfig: jest.fn() }),
+vi.mock("@lichtblick/suite-base/components/PanelContext", () => ({
+  usePanelContext: () => ({ setMessagePathDropConfig: vi.fn() }),
 }));
-jest.mock("@lichtblick/suite-base/components/MessagePathSyntax/useMessageDataItem", () => ({
+vi.mock("@lichtblick/suite-base/components/MessagePathSyntax/useMessageDataItem", () => ({
   useMessageDataItem: () => mockMatches,
 }));
 
@@ -60,21 +61,21 @@ const setup = (inputOverride?: {
       ...defaultConfig,
       ...inputOverride?.config,
     },
-    saveConfig: inputOverride?.saveConfig ?? jest.fn(),
+    saveConfig: inputOverride?.saveConfig ?? vi.fn(),
   };
 
   return {
     ...renderHook(() => useSharedRawMessagesLogic(input)),
     input,
-    saveConfig: input.saveConfig as jest.Mock,
+    saveConfig: input.saveConfig as Mock,
   };
 };
 describe("given useSharedRawMessagesLogic", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockTopics = [];
     mockMatches = [];
-    mockPipeline.seekPlayback = jest.fn();
+    mockPipeline.seekPlayback = vi.fn();
     mockPipeline.playerState.activeData.currentTime = at(5);
   });
   describe("when toggling diff", () => {

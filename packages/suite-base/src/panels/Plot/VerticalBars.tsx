@@ -5,10 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { toSec } from "@foxglove/rostime";
 import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { useLatest } from "react-use";
 
-import { toSec } from "@lichtblick/rostime";
 import { useMessagePipelineSubscribe } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useHoverValue } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import { getPixelForXValue } from "@lichtblick/suite-base/panels/Plot/utils/getPixelForXValue";
@@ -36,8 +36,8 @@ export const VerticalBars = React.memo(function VerticalBars({
     isPlaybackSeconds: xAxisIsPlaybackTime,
   });
   const latestHoverValue = useLatest(hoverValue);
-  const latestCurrentTimeSinceStart = useRef<number | undefined>();
-  const latestXScale = useRef<Scale | undefined>();
+  const latestCurrentTimeSinceStart = useRef<number | undefined>(undefined);
+  const latestXScale = useRef<Scale | undefined>(undefined);
 
   const currentTimeBarRef = useRef<HTMLDivElement>(ReactNull);
   const hoverBarRef = useRef<HTMLDivElement>(ReactNull);

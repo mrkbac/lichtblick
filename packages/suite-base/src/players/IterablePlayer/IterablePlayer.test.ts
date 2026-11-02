@@ -6,10 +6,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { fromSec } from "@foxglove/rostime";
 import * as _ from "lodash-es";
+import type { Mock, MockInstance } from "vitest";
 
 import { signal } from "@lichtblick/den/async";
-import { fromSec } from "@lichtblick/rostime";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import {
   InternalSubscribePayload,
@@ -129,9 +130,9 @@ class PlayerStateStore {
 }
 
 describe("IterablePlayer", () => {
-  let mockDateNow: jest.SpyInstance<number, []>;
+  let mockDateNow: MockInstance<(...args: []) => number>;
   beforeEach(() => {
-    mockDateNow = jest.spyOn(Date, "now").mockReturnValue(0);
+    mockDateNow = vi.spyOn(Date, "now").mockReturnValue(0);
   });
   afterEach(async () => {
     mockDateNow.mockRestore();
@@ -218,7 +219,7 @@ describe("IterablePlayer", () => {
       topic,
       receiveTime: { sec: 0, nsec: 1 },
     });
-    const getBackfillMessagesSpy = jest
+    const getBackfillMessagesSpy = vi
       .spyOn(source, "getBackfillMessages")
       .mockResolvedValue([backfillMessage]);
     const player = new IterablePlayer({
@@ -257,7 +258,7 @@ describe("IterablePlayer", () => {
     // GIVEN - a player whose asynchronous initialization has not completed
     const source = new TestSource();
     const sentinelMessage = messageEvent({ topic: "sentinel" });
-    jest.spyOn(source, "getBackfillMessages").mockResolvedValue([sentinelMessage]);
+    vi.spyOn(source, "getBackfillMessages").mockResolvedValue([sentinelMessage]);
     const player = new IterablePlayer({
       source,
       enablePreload: false,
@@ -456,7 +457,7 @@ describe("IterablePlayer", () => {
       const source = new TestSource();
       source.getBackfillMessages = async () => [raw];
 
-      const expandBackfill = jest.fn(async (messages: MessageEvent[]) => [extra, ...messages]);
+      const expandBackfill = vi.fn(async (messages: MessageEvent[]) => [extra, ...messages]);
 
       const player = new IterablePlayer({
         source,
@@ -534,9 +535,9 @@ describe("IterablePlayer", () => {
 
     // replace the message iterator with our own implementation
     source.getBackfillMessages = async function () {
-      mockDateNow = jest.spyOn(Date, "now").mockReturnValue(1);
+      mockDateNow = vi.spyOn(Date, "now").mockReturnValue(1);
       await new Promise((resolve) => setTimeout(resolve, 1000));
-      mockDateNow = jest.spyOn(Date, "now").mockReturnValue(2);
+      mockDateNow = vi.spyOn(Date, "now").mockReturnValue(2);
       return [];
     };
 
@@ -846,7 +847,7 @@ describe("IterablePlayer", () => {
         tip: "Topic A has messages with multiple datatypes: B, C. This may result in errors during visualization.",
       },
     ]);
-    (console.warn as jest.Mock).mockClear();
+    (console.warn as Mock).mockClear();
   });
 
   it("supports seek request during initialization", async () => {
@@ -965,11 +966,11 @@ describe("IterablePlayer", () => {
     player.close();
     await player.isClosed;
 
-    (console.warn as jest.Mock).mockClear();
+    (console.warn as Mock).mockClear();
   });
 
   it("should only call isTopicHighFrequency once even with multiple high frequency topics", async () => {
-    const isTopicHighFrequencySpy = jest.spyOn(highFrequencyUtils, "isTopicHighFrequency");
+    const isTopicHighFrequencySpy = vi.spyOn(highFrequencyUtils, "isTopicHighFrequency");
 
     class MultiHighFreqTopicsSource implements IDeserializedIterableSource {
       public readonly sourceType = "deserialized";
@@ -1036,7 +1037,7 @@ describe("IterablePlayer", () => {
 
     isTopicHighFrequencySpy.mockRestore();
 
-    (console.warn as jest.Mock).mockClear();
+    (console.warn as Mock).mockClear();
   });
 
   it("should start a new iterator mid-tick when old iterator finishes", async () => {
@@ -1139,7 +1140,7 @@ describe("IterablePlayer", () => {
       sourceId: "test",
     });
 
-    const messageIteratorSpy = jest.spyOn(source, "messageIterator");
+    const messageIteratorSpy = vi.spyOn(source, "messageIterator");
 
     const store = new PlayerStateStore(4);
     player.setSubscriptions([{ topic }]);
@@ -1188,7 +1189,7 @@ describe("IterablePlayer", () => {
       sourceId: "test",
     });
 
-    const messageIteratorSpy = jest.spyOn(source, "messageIterator");
+    const messageIteratorSpy = vi.spyOn(source, "messageIterator");
     player.setSubscriptions([
       {
         topic,
@@ -1219,7 +1220,7 @@ describe("IterablePlayer", () => {
       sourceId: "test",
     });
 
-    const messageIteratorSpy = jest.spyOn(source, "messageIterator");
+    const messageIteratorSpy = vi.spyOn(source, "messageIterator");
     player.setSubscriptions([
       {
         topic,
@@ -1255,7 +1256,7 @@ describe("IterablePlayer", () => {
       sourceId: "test",
     });
 
-    const messageIteratorSpy = jest.spyOn(source, "messageIterator");
+    const messageIteratorSpy = vi.spyOn(source, "messageIterator");
 
     const store = new PlayerStateStore(3);
     player.setListener(async (state) => {
@@ -1316,7 +1317,7 @@ describe("IterablePlayer", () => {
   describe("getBatchIterator", () => {
     it("inspects multiple serialized topics in one source iterator without decoding payloads", async () => {
       const baseSource = new TestSource();
-      const rawIterator = jest.fn(async function* (
+      const rawIterator = vi.fn(async function* (
         args: MessageIteratorArgs,
       ): AsyncIterableIterator<IteratorResult<Uint8Array>> {
         if (args.consumptionType !== "full") {
@@ -1393,7 +1394,7 @@ describe("IterablePlayer", () => {
       const source = new TestSource();
 
       // Mock the messageIterator method to track calls
-      const mockMessageIterator = jest.fn().mockImplementation(async function* () {
+      const mockMessageIterator = vi.fn().mockImplementation(async function* () {
         yield {
           type: "message-event",
           msgEvent: messageEvent({
@@ -1442,7 +1443,7 @@ describe("IterablePlayer", () => {
     it("should handle multiple topics correctly", async () => {
       const source = new TestSource();
 
-      const mockMessageIterator = jest.fn().mockImplementation(async function* () {
+      const mockMessageIterator = vi.fn().mockImplementation(async function* () {
         yield {
           type: "message-event",
           msgEvent: messageEvent({
@@ -1503,7 +1504,7 @@ describe("IterablePlayer", () => {
     it("should handle iterator that yields different result types", async () => {
       const source = new TestSource();
 
-      const mockMessageIterator = jest.fn().mockImplementation(async function* () {
+      const mockMessageIterator = vi.fn().mockImplementation(async function* () {
         yield {
           type: "message-event",
           msgEvent: messageEvent({
@@ -1557,7 +1558,7 @@ describe("IterablePlayer", () => {
     it("should handle empty iterator", async () => {
       const source = new TestSource();
 
-      const mockMessageIterator = jest.fn().mockImplementation(async function* () {
+      const mockMessageIterator = vi.fn().mockImplementation(async function* () {
         // Empty iterator
       });
 
@@ -1586,7 +1587,7 @@ describe("IterablePlayer", () => {
     it("should handle iterator errors gracefully", async () => {
       const source = new TestSource();
 
-      const mockMessageIterator = jest.fn().mockImplementation(async function* () {
+      const mockMessageIterator = vi.fn().mockImplementation(async function* () {
         yield {
           type: "message-event",
           msgEvent: messageEvent({
@@ -1630,7 +1631,7 @@ describe("IterablePlayer", () => {
     it("should use full consumption type", async () => {
       const source = new TestSource();
 
-      const mockMessageIterator = jest.fn().mockImplementation(async function* () {
+      const mockMessageIterator = vi.fn().mockImplementation(async function* () {
         yield {
           type: "message-event",
           msgEvent: messageEvent({

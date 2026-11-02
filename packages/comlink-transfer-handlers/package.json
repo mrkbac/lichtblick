@@ -20,7 +20,7 @@
     "prepack": "tsc -b"
   },
   "devDependencies": {
-    "@lichtblick/comlink": "1.0.3",
+    "@foxglove/comlink": "4.4.3",
     "@lichtblick/tsconfig": "1.1.2",
     "typescript": "6.0.3"
   }

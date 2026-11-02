@@ -14,18 +14,22 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import type { Mock } from "vitest";
+
 import * as formatTime from "./formatTime";
 
 describe("formatTime.format", () => {
   it("formats date and time based on provided timezone", () => {
-    expect(formatTime.format({ sec: 1, nsec: 0 }, "Asia/Bangkok")).toBe(
-      "1970-01-01 7:00:01.000 AM +07",
+    // Zone names come from the runtime's ICU data, so only their shape is checked
+    const zone = String.raw`(GMT[+-]\d{1,2}(:\d{2})?|[A-Z]{2,5})`;
+    expect(formatTime.format({ sec: 1, nsec: 0 }, "Asia/Bangkok")).toMatch(
+      new RegExp(`^1970-01-01 7:00:01\\.000 AM ${zone}$`),
     );
-    expect(formatTime.format({ sec: 1, nsec: 1 }, "Australia/Currie")).toBe(
-      "1970-01-01 11:00:01.000 AM AEDT",
+    expect(formatTime.format({ sec: 1, nsec: 1 }, "Australia/Currie")).toMatch(
+      new RegExp(`^1970-01-01 11:00:01\\.000 AM ${zone}$`),
     );
-    expect(formatTime.format({ sec: 1000000, nsec: 0 }, "Pacific/Midway")).toBe(
-      "1970-01-12 2:46:40.000 AM SST",
+    expect(formatTime.format({ sec: 1000000, nsec: 0 }, "Pacific/Midway")).toMatch(
+      new RegExp(`^1970-01-12 2:46:40\\.000 AM ${zone}$`),
     );
     expect(formatTime.format({ sec: 1100000, nsec: 1000000000 }, "America/Los_Angeles")).toBe(
       "1970-01-13 9:33:21.000 AM PST",
@@ -48,7 +52,7 @@ describe("formatTime.formatDate", () => {
     expect(formatTime.formatDate({ sec: 0, nsec: -1 }, "UTC")).toBe("(invalid negative time)");
     expect(console.error).toHaveBeenCalledTimes(2);
     expect(console.error).toHaveBeenCalledWith("Times are not allowed to be negative");
-    (console.error as jest.Mock).mockClear();
+    (console.error as Mock).mockClear();
   });
 });
 
@@ -96,7 +100,7 @@ describe("formatTime.formatTime", () => {
     expect(formatTime.formatTime({ sec: 0, nsec: -1 }, "UTC")).toBe("(invalid negative time)");
     expect(console.error).toHaveBeenCalledTimes(2);
     expect(console.error).toHaveBeenCalledWith("Times are not allowed to be negative");
-    (console.error as jest.Mock).mockClear();
+    (console.error as Mock).mockClear();
   });
 });
 
@@ -105,6 +109,12 @@ describe("formatTime.parseTimeStr", () => {
     expect(formatTime.parseTimeStr("")).toEqual(undefined);
     expect(formatTime.parseTimeStr("018-07")).toEqual(undefined);
     expect(formatTime.parseTimeStr("0")).toEqual(undefined);
+  });
+
+  it("rejects out-of-range fields instead of rolling them over", () => {
+    expect(formatTime.parseTimeStr("2018-02-31 1:00:00.000 PM", "UTC")).toBeUndefined();
+    expect(formatTime.parseTimeStr("2018-13-01 1:00:00.000 PM", "UTC")).toBeUndefined();
+    expect(formatTime.parseTimeStr("2018-01-01 25:00:00", "UTC")).toBeUndefined();
   });
 
   it("returns the correct time with no time zone specified", () => {

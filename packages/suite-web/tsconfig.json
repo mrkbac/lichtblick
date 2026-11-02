@@ -1,13 +1,19 @@
 {
-  "extends": "@lichtblick/tsconfig/base",
+  "extends": "../../tsconfig.base.json",
   "include": ["**/*"],
   "compilerOptions": {
     "jsx": "react-jsx",
-    "lib": ["dom", "dom.iterable", "es2022", "webworker", "ESNext.Disposable"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "es2025",
+      "esnext.typedarrays",
+      "webworker",
+      "ESNext.Disposable"
+    ],
     "noEmit": true,
     "experimentalDecorators": true,
-    "useUnknownInCatchVariables": false,
-    "types": ["node", "jest"],
+    "types": ["node", "vitest/globals"],
     "paths": {
       "@lichtblick/suite-base/*": ["../suite-base/src/*"]
     }

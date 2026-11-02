@@ -5,8 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { StoryObj } from "@storybook/react-webpack5";
-import { fireEvent, screen } from "@storybook/testing-library";
+import { fireEvent, screen } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import {
   ShareJsonModal,
@@ -44,6 +44,6 @@ export const SubmittingInvalidLayout: StoryObj = {
   parameters: { colorScheme: "dark" },
   play: async () => {
     const textarea = await screen.findByTestId("share-json-input");
-    fireEvent.change(textarea, { target: { value: "{" } });
+    await fireEvent.change(textarea, { target: { value: "{" } });
   },
 };

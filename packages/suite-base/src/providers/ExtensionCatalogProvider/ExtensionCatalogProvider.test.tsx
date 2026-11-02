@@ -7,6 +7,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 import { act, render, renderHook, waitFor } from "@testing-library/react";
 import { useEffect } from "react";
+import type { Mock } from "vitest";
 
 import { ExtensionPanelRegistration, PanelSettings } from "@lichtblick/suite";
 import { useConfigById } from "@lichtblick/suite-base/PanelAPI";
@@ -32,15 +33,15 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import ExtensionCatalogProvider from "./ExtensionCatalogProvider";
 
-jest.mock("@lichtblick/suite-base/util/isDesktopApp", () => jest.fn());
+vi.mock("@lichtblick/suite-base/util/isDesktopApp", () => ({ default: vi.fn() }));
 
 describe("ExtensionCatalogProvider", () => {
   beforeEach(() => {
-    jest.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
-    (console.error as jest.Mock).mockRestore();
+    (console.error as Mock).mockRestore();
   });
 
   // Helper functions for test initialization
@@ -53,11 +54,11 @@ describe("ExtensionCatalogProvider", () => {
     },
   ): IExtensionLoader {
     return {
-      getExtension: jest.fn(),
-      getExtensions: jest.fn().mockResolvedValue([]),
-      loadExtension: jest.fn().mockResolvedValue({ raw: defaultSource }),
-      installExtension: jest.fn(),
-      uninstallExtension: jest.fn(),
+      getExtension: vi.fn(),
+      getExtensions: vi.fn().mockResolvedValue([]),
+      loadExtension: vi.fn().mockResolvedValue({ raw: defaultSource }),
+      installExtension: vi.fn(),
+      uninstallExtension: vi.fn(),
       ...overrides,
     };
   }
@@ -66,16 +67,16 @@ describe("ExtensionCatalogProvider", () => {
     extension: ExtensionInfo,
     options?: {
       source?: string;
-      loadExtensionMock?: jest.Mock;
+      loadExtensionMock?: Mock;
     },
   ): IExtensionLoader {
     return createMockLoader({
       type: "browser",
       namespace: "local",
-      getExtensions: jest.fn().mockResolvedValue([extension]),
+      getExtensions: vi.fn().mockResolvedValue([extension]),
       loadExtension:
         options?.loadExtensionMock ??
-        jest.fn().mockResolvedValue({ raw: options?.source ?? defaultSource }),
+        vi.fn().mockResolvedValue({ raw: options?.source ?? defaultSource }),
     });
   }
 
@@ -83,18 +84,18 @@ describe("ExtensionCatalogProvider", () => {
     cachedExtension: ExtensionInfo | undefined,
     options?: {
       source?: string;
-      loadExtensionMock?: jest.Mock;
-      installExtensionMock?: jest.Mock;
+      loadExtensionMock?: Mock;
+      installExtensionMock?: Mock;
     },
   ): IExtensionLoader {
     return createMockLoader({
       type: "browser",
       namespace: "org",
-      getExtension: jest.fn().mockResolvedValue(cachedExtension),
+      getExtension: vi.fn().mockResolvedValue(cachedExtension),
       loadExtension:
         options?.loadExtensionMock ??
-        jest.fn().mockResolvedValue({ raw: options?.source ?? defaultSource }),
-      installExtension: options?.installExtensionMock ?? jest.fn(),
+        vi.fn().mockResolvedValue({ raw: options?.source ?? defaultSource }),
+      installExtension: options?.installExtensionMock ?? vi.fn(),
     });
   }
 
@@ -103,7 +104,7 @@ describe("ExtensionCatalogProvider", () => {
     options?: {
       source?: string;
       buffer?: Uint8Array;
-      loadExtensionMock?: jest.Mock;
+      loadExtensionMock?: Mock;
     },
   ): IExtensionLoader {
     const loadResponse: LoadedExtension = {
@@ -114,8 +115,8 @@ describe("ExtensionCatalogProvider", () => {
     return createMockLoader({
       type: "server",
       namespace: "org",
-      getExtensions: jest.fn().mockResolvedValue([remoteExtension]),
-      loadExtension: options?.loadExtensionMock ?? jest.fn().mockResolvedValue(loadResponse),
+      getExtensions: vi.fn().mockResolvedValue([remoteExtension]),
+      loadExtension: options?.loadExtensionMock ?? vi.fn().mockResolvedValue(loadResponse),
     });
   }
 
@@ -124,17 +125,17 @@ describe("ExtensionCatalogProvider", () => {
     const extensionInfo: ExtensionInfo = ExtensionBuilder.extensionInfo({ namespace });
     const extensions: ExtensionInfo[] = [extensionInfo];
 
-    const loadExtension = jest.fn().mockResolvedValue({
+    const loadExtension = vi.fn().mockResolvedValue({
       raw: `module.exports = { activate: function() { return 1; } }`,
     });
     const loaderDefault: IExtensionLoader = {
       type: extensionInfo.namespace === "local" ? "browser" : "server",
       namespace: extensionInfo.namespace!,
-      getExtension: jest.fn().mockResolvedValue(extensionInfo),
-      getExtensions: jest.fn().mockResolvedValue(extensions),
-      installExtension: jest.fn().mockResolvedValue(extensionInfo),
+      getExtension: vi.fn().mockResolvedValue(extensionInfo),
+      getExtensions: vi.fn().mockResolvedValue(extensions),
+      installExtension: vi.fn().mockResolvedValue(extensionInfo),
       loadExtension,
-      uninstallExtension: jest.fn(),
+      uninstallExtension: vi.fn(),
     };
     const loaders = loadersOverride ?? [loaderDefault];
 
@@ -168,26 +169,26 @@ describe("ExtensionCatalogProvider", () => {
     const source2 = `module.exports = { activate: function() { return 2; } }`;
     const extension1 = ExtensionBuilder.extensionInfo({ namespace: "local" });
     const extension2 = ExtensionBuilder.extensionInfo({ namespace: "local" });
-    const loadExtension1 = jest.fn().mockResolvedValue({ raw: source1 });
-    const loadExtension2 = jest.fn().mockResolvedValue({ raw: source2 });
+    const loadExtension1 = vi.fn().mockResolvedValue({ raw: source1 });
+    const loadExtension2 = vi.fn().mockResolvedValue({ raw: source2 });
 
     const loader1: IExtensionLoader = {
       type: "browser",
       namespace: extension1.namespace!,
-      getExtension: jest.fn(),
-      getExtensions: jest.fn().mockResolvedValue([extension1]),
+      getExtension: vi.fn(),
+      getExtensions: vi.fn().mockResolvedValue([extension1]),
       loadExtension: loadExtension1,
-      installExtension: jest.fn(),
-      uninstallExtension: jest.fn(),
+      installExtension: vi.fn(),
+      uninstallExtension: vi.fn(),
     };
     const loader2: IExtensionLoader = {
       type: "browser",
       namespace: extension2.namespace!,
-      getExtension: jest.fn(),
-      getExtensions: jest.fn().mockResolvedValue([extension2]),
+      getExtension: vi.fn(),
+      getExtensions: vi.fn().mockResolvedValue([extension2]),
       loadExtension: loadExtension2,
-      installExtension: jest.fn(),
-      uninstallExtension: jest.fn(),
+      installExtension: vi.fn(),
+      uninstallExtension: vi.fn(),
     };
     const { result } = await setup({ loadersOverride: [loader1, loader2] });
 
@@ -212,16 +213,16 @@ describe("ExtensionCatalogProvider", () => {
             }
         }
     `;
-    const loadExtension = jest.fn().mockResolvedValue({ raw: source });
+    const loadExtension = vi.fn().mockResolvedValue({ raw: source });
     const extension = ExtensionBuilder.extensionInfo({ namespace: "local" });
     const loader: IExtensionLoader = {
       type: "browser",
       namespace: extension.namespace!,
-      getExtension: jest.fn(),
-      getExtensions: jest.fn().mockResolvedValue([extension]),
+      getExtension: vi.fn(),
+      getExtensions: vi.fn().mockResolvedValue([extension]),
       loadExtension,
-      installExtension: jest.fn(),
-      uninstallExtension: jest.fn(),
+      installExtension: vi.fn(),
+      uninstallExtension: vi.fn(),
     };
 
     const { result } = await setup({ loadersOverride: [loader] });
@@ -261,16 +262,16 @@ describe("ExtensionCatalogProvider", () => {
       };
     `;
 
-    const loadExtension = jest.fn().mockResolvedValue({ raw: source });
+    const loadExtension = vi.fn().mockResolvedValue({ raw: source });
     const extension = ExtensionBuilder.extensionInfo({ namespace: "local" });
     const loader: IExtensionLoader = {
       type: "browser",
       namespace: extension.namespace!,
-      getExtension: jest.fn(),
-      getExtensions: jest.fn().mockResolvedValue([extension]),
+      getExtension: vi.fn(),
+      getExtensions: vi.fn().mockResolvedValue([extension]),
       loadExtension,
-      installExtension: jest.fn(),
-      uninstallExtension: jest.fn(),
+      installExtension: vi.fn(),
+      uninstallExtension: vi.fn(),
     };
 
     const { result } = await setup({ loadersOverride: [loader] });
@@ -327,15 +328,15 @@ describe("ExtensionCatalogProvider", () => {
         }
     `;
     const extension = ExtensionBuilder.extensionInfo({ namespace: "local" });
-    const loadExtension = jest.fn().mockResolvedValue({ raw: source });
+    const loadExtension = vi.fn().mockResolvedValue({ raw: source });
     const loader: IExtensionLoader = {
       type: "browser",
       namespace: extension.namespace!,
-      getExtension: jest.fn(),
-      getExtensions: jest.fn().mockResolvedValue([extension]),
-      installExtension: jest.fn(),
+      getExtension: vi.fn(),
+      getExtensions: vi.fn().mockResolvedValue([extension]),
+      installExtension: vi.fn(),
       loadExtension,
-      uninstallExtension: jest.fn(),
+      uninstallExtension: vi.fn(),
     };
 
     const { result } = await setup({ loadersOverride: [loader] });
@@ -364,16 +365,16 @@ describe("ExtensionCatalogProvider", () => {
             }
         }
     `;
-    const loadExtension = jest.fn().mockResolvedValue({ raw: source });
+    const loadExtension = vi.fn().mockResolvedValue({ raw: source });
     const extension = ExtensionBuilder.extensionInfo({ namespace: "local" });
     const loader: IExtensionLoader = {
       type: "browser",
       namespace: extension.namespace!,
-      getExtension: jest.fn(),
-      getExtensions: jest.fn().mockResolvedValue([extension]),
+      getExtension: vi.fn(),
+      getExtensions: vi.fn().mockResolvedValue([extension]),
       loadExtension,
-      installExtension: jest.fn(),
-      uninstallExtension: jest.fn(),
+      installExtension: vi.fn(),
+      uninstallExtension: vi.fn(),
     };
 
     const { result } = renderHook(() => useExtensionCatalog((state) => state), {
@@ -406,16 +407,16 @@ describe("ExtensionCatalogProvider", () => {
       };
     `;
 
-    const loadExtension = jest.fn().mockResolvedValue({ raw: source });
+    const loadExtension = vi.fn().mockResolvedValue({ raw: source });
     const extension = ExtensionBuilder.extensionInfo({ namespace: "local" });
     const loader: IExtensionLoader = {
       type: "browser",
       namespace: extension.namespace!,
-      getExtension: jest.fn(),
-      getExtensions: jest.fn().mockResolvedValue([extension]),
+      getExtension: vi.fn(),
+      getExtensions: vi.fn().mockResolvedValue([extension]),
       loadExtension,
-      installExtension: jest.fn(),
-      uninstallExtension: jest.fn(),
+      installExtension: vi.fn(),
+      uninstallExtension: vi.fn(),
     };
 
     const { result } = renderHook(() => useExtensionCatalog((state) => state), {
@@ -453,16 +454,16 @@ describe("ExtensionCatalogProvider", () => {
             }
         }
     `;
-    const loadExtension = jest.fn().mockResolvedValue({ raw: source });
+    const loadExtension = vi.fn().mockResolvedValue({ raw: source });
     const extension = ExtensionBuilder.extensionInfo({ namespace: "local" });
     const loader: IExtensionLoader = {
       type: "browser",
       namespace: extension.namespace!,
-      getExtension: jest.fn(),
-      getExtensions: jest.fn().mockResolvedValue([extension]),
+      getExtension: vi.fn(),
+      getExtensions: vi.fn().mockResolvedValue([extension]),
       loadExtension,
-      installExtension: jest.fn(),
-      uninstallExtension: jest.fn(),
+      installExtension: vi.fn(),
+      uninstallExtension: vi.fn(),
     };
 
     const { result } = renderHook(() => useExtensionCatalog((state) => state), {
@@ -488,9 +489,9 @@ describe("ExtensionCatalogProvider", () => {
   });
 
   it("should register a default config", async () => {
-    jest.spyOn(console, "error").mockImplementation(() => {});
+    vi.spyOn(console, "error").mockImplementation(() => {});
 
-    function getDummyPanel(updatedConfig: jest.Mock, childId: string) {
+    function getDummyPanel(updatedConfig: Mock, childId: string) {
       function DummyComponent(): ReactNull {
         const [config] = useConfigById(childId);
 
@@ -502,7 +503,7 @@ describe("ExtensionCatalogProvider", () => {
       return Panel(DummyComponent);
     }
 
-    const updatedConfig = jest.fn();
+    const updatedConfig = vi.fn();
     const childId = "Dummy!1my2ydk";
     const DummyPanel = getDummyPanel(updatedConfig, childId);
     const generatePanelSettings = <T,>(obj: PanelSettings<T>) => obj as PanelSettings<unknown>;
@@ -549,7 +550,7 @@ describe("ExtensionCatalogProvider", () => {
       { someString: "hello world", topics: { myTopic: { test: true } } },
     ]);
 
-    (console.error as jest.Mock).mockRestore();
+    (console.error as Mock).mockRestore();
   });
 
   describe("isExtensionInstalled", () => {
@@ -612,11 +613,11 @@ describe("ExtensionCatalogProvider", () => {
 
     it("should return a failure result when all loaders fail to install the extension", async () => {
       // Given: a loader whose installExtension always rejects
-      (isDesktopApp as jest.Mock).mockReturnValue(false);
+      (isDesktopApp as Mock).mockReturnValue(false);
       const loader = createMockLoader({
         namespace: "local",
         type: "browser",
-        installExtension: jest.fn().mockRejectedValue(new Error("install failed")),
+        installExtension: vi.fn().mockRejectedValue(new Error("install failed")),
       });
       const { result } = await setup({ loadersOverride: [loader] });
       const extensionData: ExtensionData[] = [{ buffer: new Uint8Array() }];
@@ -687,56 +688,54 @@ describe("ExtensionCatalogProvider", () => {
         namespace: "org" as Namespace,
         useExternalId: true,
       },
-    ])("should call uninstallExtension with correct parameter for $description", async ({
-      isDesktop,
-      loaderType,
-      namespace,
-      useExternalId,
-    }) => {
-      (isDesktopApp as jest.Mock).mockReturnValue(isDesktop);
+    ])(
+      "should call uninstallExtension with correct parameter for $description",
+      async ({ isDesktop, loaderType, namespace, useExternalId }) => {
+        (isDesktopApp as Mock).mockReturnValue(isDesktop);
 
-      const externalId = useExternalId ? BasicBuilder.string() : undefined;
-      const extensionInfo = ExtensionBuilder.extensionInfo({
-        namespace,
-        ...(externalId && { externalId }),
-      });
-      const uninstallFn = jest.fn().mockResolvedValue(undefined);
-      const loader: IExtensionLoader = {
-        type: loaderType,
-        namespace,
-        getExtension: jest.fn(),
-        getExtensions: jest.fn().mockResolvedValue([extensionInfo]),
-        installExtension: jest.fn().mockResolvedValue(extensionInfo),
-        loadExtension: jest.fn(),
-        uninstallExtension: uninstallFn,
-      };
+        const externalId = useExternalId ? BasicBuilder.string() : undefined;
+        const extensionInfo = ExtensionBuilder.extensionInfo({
+          namespace,
+          ...(externalId && { externalId }),
+        });
+        const uninstallFn = vi.fn().mockResolvedValue(undefined);
+        const loader: IExtensionLoader = {
+          type: loaderType,
+          namespace,
+          getExtension: vi.fn(),
+          getExtensions: vi.fn().mockResolvedValue([extensionInfo]),
+          installExtension: vi.fn().mockResolvedValue(extensionInfo),
+          loadExtension: vi.fn(),
+          uninstallExtension: uninstallFn,
+        };
 
-      const { result } = await setup({ loadersOverride: [loader] });
+        const { result } = await setup({ loadersOverride: [loader] });
 
-      await waitFor(() => {
-        expect(result.current.installedExtensions).toHaveLength(1);
-      });
+        await waitFor(() => {
+          expect(result.current.installedExtensions).toHaveLength(1);
+        });
 
-      await act(async () => {
-        await result.current.uninstallExtension(namespace, extensionInfo.id);
-      });
+        await act(async () => {
+          await result.current.uninstallExtension(namespace, extensionInfo.id);
+        });
 
-      expect(uninstallFn).toHaveBeenCalledWith(useExternalId ? externalId : extensionInfo.id);
-    });
+        expect(uninstallFn).toHaveBeenCalledWith(useExternalId ? externalId : extensionInfo.id);
+      },
+    );
 
     it("should log a warning and still remove extension data from state when uninstallExtension throws", async () => {
-      (isDesktopApp as jest.Mock).mockReturnValue(false);
-      jest.spyOn(console, "warn").mockImplementation(() => {});
+      (isDesktopApp as Mock).mockReturnValue(false);
+      vi.spyOn(console, "warn").mockImplementation(() => {});
 
       const extensionInfo = ExtensionBuilder.extensionInfo({ namespace: "local" });
-      const uninstallFn = jest.fn().mockRejectedValue(new Error("Uninstall failed"));
+      const uninstallFn = vi.fn().mockRejectedValue(new Error("Uninstall failed"));
       const loader: IExtensionLoader = {
         type: "browser",
         namespace: "local",
-        getExtension: jest.fn(),
-        getExtensions: jest.fn().mockResolvedValue([extensionInfo]),
-        installExtension: jest.fn().mockResolvedValue(extensionInfo),
-        loadExtension: jest.fn(),
+        getExtension: vi.fn(),
+        getExtensions: vi.fn().mockResolvedValue([extensionInfo]),
+        installExtension: vi.fn().mockResolvedValue(extensionInfo),
+        loadExtension: vi.fn(),
         uninstallExtension: uninstallFn,
       };
 
@@ -754,11 +753,11 @@ describe("ExtensionCatalogProvider", () => {
       expect(result.current.installedExtensions).toHaveLength(0);
       expect(result.current.isExtensionInstalled(extensionInfo.id)).toBe(false);
 
-      (console.warn as jest.Mock).mockRestore();
+      (console.warn as Mock).mockRestore();
     });
 
     it("should only remove the org entry when the same extension is installed in both local and org", async () => {
-      (isDesktopApp as jest.Mock).mockReturnValue(false);
+      (isDesktopApp as Mock).mockReturnValue(false);
 
       const sharedId = BasicBuilder.string();
       const localExtension = ExtensionBuilder.extensionInfo({ id: sharedId, namespace: "local" });
@@ -788,7 +787,7 @@ describe("ExtensionCatalogProvider", () => {
     });
 
     it("should remove contribution points only when the last namespace copy is uninstalled", async () => {
-      (isDesktopApp as jest.Mock).mockReturnValue(false);
+      (isDesktopApp as Mock).mockReturnValue(false);
 
       const sharedId = BasicBuilder.string();
       const panelName = BasicBuilder.string();
@@ -835,12 +834,12 @@ describe("ExtensionCatalogProvider", () => {
 
     it("should do nothing when the extension id is not found in installedExtensions", async () => {
       // Given: a loader with no extensions, so installedExtensions is empty after mount
-      (isDesktopApp as jest.Mock).mockReturnValue(false);
-      const uninstallFn = jest.fn();
+      (isDesktopApp as Mock).mockReturnValue(false);
+      const uninstallFn = vi.fn();
       const loader = createMockLoader({
         namespace: "local",
         type: "browser",
-        getExtensions: jest.fn().mockResolvedValue([]),
+        getExtensions: vi.fn().mockResolvedValue([]),
         uninstallExtension: uninstallFn,
       });
       const { result } = await setup({ loadersOverride: [loader] });
@@ -864,12 +863,12 @@ describe("ExtensionCatalogProvider", () => {
       const messageConverter: InstalledMessageConverter = {
         fromSchemaName: BasicBuilder.string(),
         toSchemaName: BasicBuilder.string(),
-        converter: jest.fn(),
+        converter: vi.fn(),
         extensionId: extensionInfo.id,
         extensionNamespace: extensionInfo.namespace,
       };
       const topicAliasFunctions: TopicAliasFunctions = [
-        { extensionId: extensionInfo.id, aliasFunction: jest.fn() },
+        { extensionId: extensionInfo.id, aliasFunction: vi.fn() },
       ];
       const contributionPoints: ContributionPoints = {
         messageConverters: [messageConverter],
@@ -879,8 +878,8 @@ describe("ExtensionCatalogProvider", () => {
           panelA: {
             schemaA: {
               defaultConfig: {},
-              handler: jest.fn(),
-              settings: jest.fn(),
+              handler: vi.fn(),
+              settings: vi.fn(),
             },
           },
         },
@@ -1016,8 +1015,8 @@ describe("ExtensionCatalogProvider", () => {
       // Given
       const bytes = new Uint8Array([BasicBuilder.number(), BasicBuilder.number()]);
       const url = BasicBuilder.string();
-      global.fetch = jest.fn().mockResolvedValue({
-        arrayBuffer: jest.fn().mockResolvedValue(bytes.buffer),
+      global.fetch = vi.fn().mockResolvedValue({
+        arrayBuffer: vi.fn().mockResolvedValue(bytes.buffer),
       });
       const { result } = await setup();
 
@@ -1037,7 +1036,7 @@ describe("ExtensionCatalogProvider", () => {
     it("should reload all extensions from loaders", async () => {
       // Given
       const extension = ExtensionBuilder.extensionInfo({ namespace: "local" });
-      const loadExtensionMock = jest.fn().mockResolvedValue({ raw: defaultSource });
+      const loadExtensionMock = vi.fn().mockResolvedValue({ raw: defaultSource });
       const loader = createLocalLoader(extension, { loadExtensionMock });
       const { result } = await setup({ loadersOverride: [loader] });
       loadExtensionMock.mockClear();
@@ -1054,7 +1053,7 @@ describe("ExtensionCatalogProvider", () => {
 
     it("should skip a duplicate camera model and log a warning when the same name is already registered", async () => {
       // Given: two extensions that both register a camera model with the same name
-      jest.spyOn(console, "warn").mockImplementation(() => {});
+      vi.spyOn(console, "warn").mockImplementation(() => {});
       const cameraModelName = BasicBuilder.string();
       const source = `
         module.exports = {
@@ -1071,8 +1070,8 @@ describe("ExtensionCatalogProvider", () => {
       const loader = createMockLoader({
         namespace: "local",
         type: "browser",
-        getExtensions: jest.fn().mockResolvedValue([extension1, extension2]),
-        loadExtension: jest.fn().mockResolvedValue({ raw: source }),
+        getExtensions: vi.fn().mockResolvedValue([extension1, extension2]),
+        loadExtension: vi.fn().mockResolvedValue({ raw: source }),
       });
 
       // When: mount triggers refreshAllExtensions
@@ -1082,7 +1081,7 @@ describe("ExtensionCatalogProvider", () => {
       expect(result.current.installedCameraModels.size).toBe(1);
       expect(result.current.installedCameraModels.has(cameraModelName)).toBe(true);
 
-      (console.warn as jest.Mock).mockRestore();
+      (console.warn as Mock).mockRestore();
     });
 
     it("should continue loading other extensions when a loader getExtensions throws", async () => {
@@ -1090,7 +1089,7 @@ describe("ExtensionCatalogProvider", () => {
       const loader = createMockLoader({
         namespace: "local",
         type: "browser",
-        getExtensions: jest.fn().mockRejectedValue(new Error("getExtensions failed")),
+        getExtensions: vi.fn().mockRejectedValue(new Error("getExtensions failed")),
       });
 
       // When: mount triggers refreshAllExtensions
@@ -1109,9 +1108,9 @@ describe("ExtensionCatalogProvider", () => {
       remoteVersion?: string;
       buffer?: Uint8Array;
       cachedExtension?: ExtensionInfo | undefined;
-      loadCachedMock?: jest.Mock;
-      loadRemoteMock?: jest.Mock;
-      installMock?: jest.Mock;
+      loadCachedMock?: Mock;
+      loadRemoteMock?: Mock;
+      installMock?: Mock;
     }) {
       const extensionId = overrides?.extensionId ?? BasicBuilder.string();
       const externalId = overrides?.externalId ?? BasicBuilder.string();
@@ -1130,14 +1129,14 @@ describe("ExtensionCatalogProvider", () => {
         (cachedVersion ? { ...remoteExtension, version: cachedVersion } : undefined);
 
       const loadCachedMock =
-        overrides?.loadCachedMock ?? jest.fn().mockResolvedValue({ raw: defaultSource });
+        overrides?.loadCachedMock ?? vi.fn().mockResolvedValue({ raw: defaultSource });
       const loadRemoteMock =
         overrides?.loadRemoteMock ??
-        jest.fn().mockResolvedValue({
+        vi.fn().mockResolvedValue({
           raw: defaultSource,
           ...(overrides?.buffer && { buffer: overrides.buffer }),
         });
-      const cacheInstallMock = overrides?.installMock ?? jest.fn();
+      const cacheInstallMock = overrides?.installMock ?? vi.fn();
 
       const cacheLoader = createOrgCacheLoader(cachedExtension, {
         loadExtensionMock: loadCachedMock,
@@ -1164,7 +1163,7 @@ describe("ExtensionCatalogProvider", () => {
     it("should load from local loader", async () => {
       // Given
       const extension = ExtensionBuilder.extensionInfo({ namespace: "local" });
-      const loadExtensionMock = jest.fn().mockResolvedValue({ raw: defaultSource });
+      const loadExtensionMock = vi.fn().mockResolvedValue({ raw: defaultSource });
       const loader = createLocalLoader(extension, { loadExtensionMock });
 
       // When
@@ -1308,8 +1307,9 @@ describe("ExtensionCatalogProvider", () => {
         resolveGetExtensions = resolve;
       });
       let shouldThrowOnPerfNow = false;
-      const performanceNowSpy = jest.spyOn(performance, "now").mockImplementation(() => {
-        if (shouldThrowOnPerfNow) {
+      const performanceNowSpy = vi.spyOn(performance, "now").mockImplementation(() => {
+        // React calls performance.now too; only fail the call made by refreshAllExtensions
+        if (shouldThrowOnPerfNow && new Error().stack?.includes("refreshAllExtensions") === true) {
           shouldThrowOnPerfNow = false; // only throw once
           throw new Error("test error");
         }
@@ -1318,7 +1318,7 @@ describe("ExtensionCatalogProvider", () => {
       const loader = createMockLoader({
         namespace: "local",
         type: "browser",
-        getExtensions: jest.fn().mockReturnValue(pendingGetExtensions),
+        getExtensions: vi.fn().mockReturnValue(pendingGetExtensions),
       });
 
       const { result } = renderHook(() => useExtensionCatalog((state) => state), {

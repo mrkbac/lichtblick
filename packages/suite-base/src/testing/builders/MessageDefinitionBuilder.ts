@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { MessageDefinition, MessageDefinitionField } from "@lichtblick/message-definition";
+import { MessageDefinition, MessageDefinitionField } from "@foxglove/message-definition";
+
 import { BasicBuilder, defaults } from "@lichtblick/test-builders";
 
 export default class MessageDefinitionBuilder {

@@ -21,6 +21,17 @@ describe("naturalSort", () => {
     expect(["c", "B", "a"].sort(naturalSort())).toEqual(["a", "B", "c"]);
   });
 
+  it("sorts numbers and decimal strings by value", () => {
+    expect(["2.1", "10", "2.09", "file2", "file10", 3].sort(naturalSort())).toEqual([
+      "2.09",
+      "2.1",
+      3,
+      "10",
+      "file2",
+      "file10",
+    ]);
+  });
+
   it("can sort using a key", () => {
     expect([{ name: "c" }, { name: "B" }, { name: "a" }].sort(naturalSort("name"))).toEqual([
       { name: "a" },

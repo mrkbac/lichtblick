@@ -5,8 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import * as R from "ramda";
-
 import { Immutable } from "@lichtblick/suite";
 import { mergeSubscriptions } from "@lichtblick/suite-base/components/MessagePipeline/subscriptions";
 import { SubscribePayload } from "@lichtblick/suite-base/players/types";
@@ -22,22 +20,17 @@ type SubscriberInputs = [SubscribePayload, readonly string[] | undefined];
 export function getPreloadTypes(
   subscriptions: SubscribePayload[],
 ): Record<string, SubscribePayload> {
-  return R.pipe(
-    // Gather all of the payloads into subscriptions for the same topic
-    R.groupBy((v: SubscribePayload) => v.topic),
-    // Consolidate subscriptions to the same topic down to a single payload
-    // and ignore `fields`
-    R.mapObjIndexed((payloads: SubscribePayload[] | undefined, topic): SubscribePayload => {
-      // If at least one preloadType is explicitly "full", we need "full",
-      // but default to "partial"
-      const hasFull = (payloads ?? []).some((v: SubscribePayload) => v.preloadType === "full");
-
-      return {
-        topic,
-        preloadType: hasFull ? "full" : "partial",
-      };
-    }),
-  )(subscriptions);
+  // Consolidate subscriptions to the same topic down to a single payload and ignore `fields`
+  const result: Record<string, SubscribePayload> = {};
+  for (const { topic, preloadType } of subscriptions) {
+    // If at least one preloadType is explicitly "full", we need "full", but default to "partial"
+    result[topic] = {
+      topic,
+      preloadType:
+        preloadType === "full" || result[topic]?.preloadType === "full" ? "full" : "partial",
+    };
+  }
+  return result;
 }
 
 /**
@@ -50,13 +43,12 @@ export function remapVirtualSubscriptions(
   inputsByOutputTopic: Map<string, readonly string[]>,
 ): Immutable<SubscribePayload[]> {
   // Pair all subscriptions with their user script input topics (if any)
-  const payloadInputsPairs = R.pipe(
-    R.map((v: SubscribePayload): SubscriberInputs => [v, inputsByOutputTopic.get(v.topic)]),
-    R.filter(([, topics]: SubscriberInputs) => topics?.length !== 0),
-  )(subscriptions);
+  const payloadInputsPairs = subscriptions
+    .map((v): SubscriberInputs => [v, inputsByOutputTopic.get(v.topic)])
+    .filter(([, topics]) => topics?.length !== 0);
 
-  return R.pipe(
-    R.chain(([subscription, topics]: SubscriberInputs): SubscribePayload[] => {
+  return mergeSubscriptions(
+    payloadInputsPairs.flatMap(([subscription, topics]): SubscribePayload[] => {
       const preloadType = subscription.preloadType ?? "partial";
 
       // Leave the subscription unmodified if it is not a user script topic
@@ -72,6 +64,5 @@ export function remapVirtualSubscriptions(
         preloadType,
       }));
     }),
-    mergeSubscriptions,
-  )(payloadInputsPairs);
+  );
 }

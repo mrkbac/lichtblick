@@ -6,8 +6,9 @@
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useTranslation } from "react-i18next";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 import { AsyncState } from "react-use/lib/useAsyncFn";
+import type { Mock } from "vitest";
 
 import useExtensionSettings from "@lichtblick/suite-base/components/ExtensionsSettings/hooks/useExtensionSettings";
 import { UseExtensionSettingsHook } from "@lichtblick/suite-base/components/ExtensionsSettings/types";
@@ -16,14 +17,14 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import ExtensionsSettings from "./index";
 
-jest.mock("@lichtblick/suite-base/context/ExtensionCatalogContext", () => ({
-  useExtensionCatalog: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/ExtensionCatalogContext", () => ({
+  useExtensionCatalog: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/components/ExtensionsSettings/hooks/useExtensionSettings");
-jest.mock("react-i18next");
+vi.mock("@lichtblick/suite-base/components/ExtensionsSettings/hooks/useExtensionSettings");
+vi.mock("react-i18next");
 
-jest.mock("@lichtblick/suite-base/components/ExtensionDetails", () => ({
+vi.mock("@lichtblick/suite-base/components/ExtensionDetails", () => ({
   ExtensionDetails: ({ extension, onClose }: any) => {
     return (
       <div data-testid="mock-extension-details">
@@ -37,11 +38,11 @@ jest.mock("@lichtblick/suite-base/components/ExtensionDetails", () => ({
 }));
 
 describe("ExtensionsSettings", () => {
-  const mockSetUndebouncedFilterText = jest.fn();
-  const mockRefreshMarketplaceEntries = jest.fn();
+  const mockSetUndebouncedFilterText = vi.fn();
+  const mockRefreshMarketplaceEntries = vi.fn();
 
   function setUpHook(props?: Partial<UseExtensionSettingsHook>) {
-    (useExtensionSettings as jest.Mock).mockReturnValue({
+    (useExtensionSettings as Mock).mockReturnValue({
       setUndebouncedFilterText: mockSetUndebouncedFilterText,
       marketplaceEntries: { error: undefined },
       refreshMarketplaceEntries: mockRefreshMarketplaceEntries,
@@ -71,10 +72,10 @@ describe("ExtensionsSettings", () => {
   }
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     setUpHook();
 
-    (useTranslation as jest.Mock).mockReturnValue({
+    (useTranslation as Mock).mockReturnValue({
       t: (key: string) => key,
     });
   });

@@ -10,6 +10,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { SnackbarProvider, useSnackbar } from "notistack";
 import { useEffect } from "react";
+import type { Mock } from "vitest";
 
 import { Condvar } from "@lichtblick/den/async";
 import { CurrentLayoutSyncAdapter } from "@lichtblick/suite-base/components/CurrentLayoutSyncAdapter";
@@ -36,10 +37,10 @@ import {
 import { ILayoutManager, LayoutFavorites } from "@lichtblick/suite-base/services/ILayoutManager";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-jest.mock("notistack", () => ({
-  ...jest.requireActual("notistack"),
-  useSnackbar: jest.fn().mockReturnValue({
-    enqueueSnackbar: jest.fn(),
+vi.mock("notistack", async () => ({
+  ...(await vi.importActual("notistack")),
+  useSnackbar: vi.fn().mockReturnValue({
+    enqueueSnackbar: vi.fn(),
   }),
 }));
 
@@ -64,31 +65,31 @@ function makeMockLayoutManager() {
   return {
     supportsSharing: false,
     supportsSyncing: false,
-    isBusy: jest.fn().mockReturnValue(false),
+    isBusy: vi.fn().mockReturnValue(false),
     isOnline: false,
     error: undefined,
     favorites,
-    on: jest.fn(),
-    off: jest.fn(),
-    setError: jest.fn(),
-    setOnline: jest.fn(),
-    getLayouts: jest.fn(),
-    getLayout: jest.fn(),
-    saveNewLayout: jest.fn().mockImplementation(mockThrow("saveNewLayout")),
-    updateLayout: jest.fn().mockImplementation(mockThrow("updateLayout")),
-    deleteLayout: jest.fn().mockImplementation(mockThrow("deleteLayout")),
-    overwriteLayout: jest.fn().mockImplementation(mockThrow("overwriteLayout")),
-    revertLayout: jest.fn().mockImplementation(mockThrow("revertLayout")),
-    makePersonalCopy: jest.fn().mockImplementation(mockThrow("makePersonalCopy")),
-    loadFavorites: jest.fn().mockResolvedValue(favorites),
-    canFavorite: jest.fn().mockReturnValue(false),
-    setFavorite: jest.fn().mockImplementation(mockThrow("setFavorite")),
+    on: vi.fn(),
+    off: vi.fn(),
+    setError: vi.fn(),
+    setOnline: vi.fn(),
+    getLayouts: vi.fn(),
+    getLayout: vi.fn(),
+    saveNewLayout: vi.fn().mockImplementation(mockThrow("saveNewLayout")),
+    updateLayout: vi.fn().mockImplementation(mockThrow("updateLayout")),
+    deleteLayout: vi.fn().mockImplementation(mockThrow("deleteLayout")),
+    overwriteLayout: vi.fn().mockImplementation(mockThrow("overwriteLayout")),
+    revertLayout: vi.fn().mockImplementation(mockThrow("revertLayout")),
+    makePersonalCopy: vi.fn().mockImplementation(mockThrow("makePersonalCopy")),
+    loadFavorites: vi.fn().mockResolvedValue(favorites),
+    canFavorite: vi.fn().mockReturnValue(false),
+    setFavorite: vi.fn().mockImplementation(mockThrow("setFavorite")),
   };
 }
 function makeMockUserProfile() {
   return {
-    getUserProfile: jest.fn().mockImplementation(mockThrow("getUserProfile")),
-    setUserProfile: jest.fn().mockImplementation(mockThrow("setUserProfile")),
+    getUserProfile: vi.fn().mockImplementation(mockThrow("getUserProfile")),
+    setUserProfile: vi.fn().mockImplementation(mockThrow("setUserProfile")),
   };
 }
 
@@ -157,8 +158,8 @@ describe("CurrentLayoutProvider", () => {
   });
 
   afterEach(() => {
-    (console.warn as jest.Mock).mockClear();
-    jest.clearAllMocks();
+    (console.warn as Mock).mockClear();
+    vi.clearAllMocks();
   });
 
   it("uses currentLayoutId from UserProfile to load from LayoutStorage", async () => {
@@ -641,13 +642,13 @@ describe("CurrentLayoutProvider", () => {
     }
 
     beforeEach(() => {
-      jest.useFakeTimers();
-      jest.spyOn(console, "warn").mockImplementation(() => {});
+      vi.useFakeTimers();
+      vi.spyOn(console, "warn").mockImplementation(() => {});
     });
 
     afterEach(() => {
-      jest.useRealTimers();
-      (console.warn as jest.Mock).mockRestore();
+      vi.useRealTimers();
+      (console.warn as Mock).mockRestore();
     });
 
     it("should resolve immediately if layoutManager is not busy", async () => {
@@ -677,7 +678,7 @@ describe("CurrentLayoutProvider", () => {
       });
 
       await act(async () => {
-        await jest.advanceTimersByTimeAsync(busyCount * BUSY_POLLING_INTERVAL_MS);
+        await vi.advanceTimersByTimeAsync(busyCount * BUSY_POLLING_INTERVAL_MS);
         await result.current.childMounted;
       });
 
@@ -714,7 +715,7 @@ describe("CurrentLayoutProvider", () => {
       // When the favorites timeout elapses
       const { all } = renderTest({ mockLayoutManager, mockUserProfile });
       await act(async () => {
-        await jest.advanceTimersByTimeAsync(FAVORITES_TIMEOUT_MS + 100);
+        await vi.advanceTimersByTimeAsync(FAVORITES_TIMEOUT_MS + 100);
       });
 
       // Then the loaded favorite is selected and the delay is logged
@@ -735,7 +736,7 @@ describe("CurrentLayoutProvider", () => {
       });
 
       await act(async () => {
-        await jest.advanceTimersByTimeAsync(BUSY_POLLING_TIMEOUT_MS + 100);
+        await vi.advanceTimersByTimeAsync(BUSY_POLLING_TIMEOUT_MS + 100);
         await result.current.childMounted;
       });
 

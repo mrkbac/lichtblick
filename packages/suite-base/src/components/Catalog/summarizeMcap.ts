@@ -3,7 +3,7 @@
 
 import { McapIndexedReader } from "@mcap/core";
 
-import { fromNanoSec } from "@lichtblick/rostime";
+import { fromNanoSec } from "@foxglove/rostime";
 import { BlobReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/BlobReadable";
 
 import { CatalogSummary, CatalogTopic } from "./types";

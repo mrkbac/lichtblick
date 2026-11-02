@@ -16,10 +16,10 @@
 
 import { Database20Filled } from "@fluentui/react-icons";
 import { useTheme } from "@mui/material";
-import { StoryObj, StoryFn } from "@storybook/react-webpack5";
-import { fireEvent, screen } from "@storybook/testing-library";
 import { PropsWithChildren } from "react";
 import { Mosaic, MosaicWindow } from "react-mosaic-component";
+import { fireEvent, screen } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
@@ -73,7 +73,7 @@ function MosaicWrapper(
 export default {
   title: "components/PanelToolbar",
   decorators: [
-    (Story: StoryFn): React.JSX.Element => {
+    (Story: React.ComponentType): React.JSX.Element => {
       // Provide all stories with PanelContext and current layout
       return (
         <MockCurrentLayoutProvider>
@@ -149,7 +149,7 @@ export const MenuOnlyPanel: PanelToolbarStoryObj = {
   name: "menu (only panel)",
   parameters: { colorScheme: "dark" },
   play: async () => {
-    fireEvent.click(await screen.findByTestId("panel-menu"));
+    await fireEvent.click(await screen.findByTestId("panel-menu"));
   },
 };
 
@@ -164,7 +164,7 @@ export const MenuLight: PanelToolbarStoryObj = {
   name: "menu light",
   parameters: { colorScheme: "light" },
   play: async () => {
-    fireEvent.click(await screen.findByTestId("panel-menu"));
+    await fireEvent.click(await screen.findByTestId("panel-menu"));
   },
 };
 
@@ -180,7 +180,7 @@ export const MenuWithSiblingPanel: PanelToolbarStoryObj = {
   args: { layout: { direction: "row", first: "dummy", second: "Sibling" } },
   parameters: { colorScheme: "dark" },
   play: async () => {
-    fireEvent.click(await screen.findByTestId("panel-menu"));
+    await fireEvent.click(await screen.findByTestId("panel-menu"));
   },
 };
 
@@ -196,7 +196,7 @@ export const MenuForTabPanel: PanelToolbarStoryObj = {
   args: { layout: { direction: "row", first: "Tab", second: "Sibling" } },
   parameters: { colorScheme: "dark" },
   play: async () => {
-    fireEvent.click(await screen.findByTestId("panel-menu"));
+    await fireEvent.click(await screen.findByTestId("panel-menu"));
   },
 };
 
@@ -212,7 +212,7 @@ export const NoToolbars: PanelToolbarStoryObj = {
   name: "no toolbars",
   parameters: { colorScheme: "dark" },
   play: async () => {
-    fireEvent.click(await screen.findByTestId("panel-menu"));
+    await fireEvent.click(await screen.findByTestId("panel-menu"));
   },
 };
 

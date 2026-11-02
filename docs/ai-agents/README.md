@@ -35,7 +35,7 @@ Located in `.github/agents/`. Each file uses YAML frontmatter with `description`
 | Agent        | Description                                                                                                                                                                                               |
 | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `lb-desktop` | Desktop/Electron platform specialist covering the main process, preload scripts, IPC communication, BrowserWindow management, native menus, and file system access.                                       |
-| `lb-web`     | Web platform specialist covering the browser-based Lichtblick build: webpack configuration, COOP/COEP headers, browser compatibility, SharedArrayBuffer requirements, and web-specific data source setup. |
+| `lb-web`     | Web platform specialist covering the browser-based Lichtblick build: Rspack configuration, COOP/COEP headers, browser compatibility, SharedArrayBuffer requirements, and web-specific data source setup. |
 
 ### Core Infrastructure
 

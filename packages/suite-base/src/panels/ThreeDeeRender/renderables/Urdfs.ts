@@ -5,11 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { toNanoSec } from "@foxglove/rostime";
 import { vec3 } from "gl-matrix";
 import i18next from "i18next";
 import * as _ from "lodash-es";
 import * as THREE from "three";
-import { v4 as uuidv4 } from "uuid";
 
 import { filterMap } from "@lichtblick/den/collection";
 import {
@@ -20,7 +20,6 @@ import {
   UrdfJoint,
 } from "@lichtblick/den/urdf";
 import Logger from "@lichtblick/log";
-import { toNanoSec } from "@lichtblick/rostime";
 import {
   SettingsTreeAction,
   SettingsTreeChildren,
@@ -31,6 +30,7 @@ import { makeRgba, stringToRgba } from "@lichtblick/suite-base/panels/ThreeDeeRe
 import { eulerToQuaternion } from "@lichtblick/suite-base/util/geometry";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { isValidUrl } from "@lichtblick/suite-base/util/isValidURL";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { RenderableCube } from "./markers/RenderableCube";
 import { RenderableCylinder } from "./markers/RenderableCylinder";
@@ -555,7 +555,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
         this.updateSettingsTree();
         this.renderer.updateCustomLayersCount();
       } else if (action.payload.id === "duplicate") {
-        const newInstanceId = uuidv4();
+        const newInstanceId = randomUUID();
         const config = {
           ...this.renderer.config.layers[instanceId],
           instanceId: newInstanceId,

@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 
 import { UserScriptLog } from "@lichtblick/suite-base/players/UserScriptPlayer/types";
 import UserScriptBuilder from "@lichtblick/suite-base/testing/builders/UserScriptBuilder";
@@ -13,7 +13,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import LogsSection from "./LogsSection";
 
-jest.mock("react-json-tree", () => ({
+vi.mock("react-json-tree", () => ({
   JSONTree: ({ data }: { data: unknown }) => (
     <div data-testid="json-tree">{JSON.stringify(data)}</div>
   ),
@@ -49,8 +49,8 @@ function defineScrollMetrics(
 
 describe("LogsSection", () => {
   afterEach(() => {
-    jest.clearAllMocks();
-    jest.restoreAllMocks();
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
   it("should display the empty state message when there are no logs", () => {

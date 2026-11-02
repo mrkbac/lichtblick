@@ -11,7 +11,7 @@ import {
   TabDesktopMultiple20Regular,
   TableSimple20Regular,
 } from "@fluentui/react-icons";
-import { Meta, StoryFn, StoryObj } from "@storybook/react-webpack5";
+import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
 
@@ -70,7 +70,7 @@ export const SelectedPanelActions: Story = {
     colorScheme: "both-column",
   },
   decorators: [
-    (Story: StoryFn): React.JSX.Element => (
+    (Story: React.ComponentType): React.JSX.Element => (
       <Stack fullHeight gap={1}>
         <Story />
         <div
@@ -103,7 +103,7 @@ export const QuickActions: Story = {
     colorScheme: "both-column",
   },
   decorators: [
-    (Story: StoryFn): React.JSX.Element => (
+    (Story: React.ComponentType): React.JSX.Element => (
       <Stack fullHeight gap={1}>
         <Story />
         <div

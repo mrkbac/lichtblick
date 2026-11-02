@@ -6,7 +6,7 @@ import { createMeasureModeEscapeHandler } from "./measureModeEscapeHandler";
 describe("createMeasureModeEscapeHandler", () => {
   it("toggles measure mode off and returns nothing when active", () => {
     // Given
-    const toggleActive = jest.fn();
+    const toggleActive = vi.fn();
     const handler = createMeasureModeEscapeHandler({ active: true, toggleActive });
 
     // When
@@ -19,7 +19,7 @@ describe("createMeasureModeEscapeHandler", () => {
 
   it("does not toggle and returns false when not active", () => {
     // Given
-    const toggleActive = jest.fn();
+    const toggleActive = vi.fn();
     const handler = createMeasureModeEscapeHandler({ active: false, toggleActive });
 
     // When

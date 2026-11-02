@@ -3,9 +3,11 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import "@testing-library/jest-dom";
+import type { Mock } from "vitest";
+import "@testing-library/jest-dom/vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { useTranslation } from "react-i18next";
+import type { Mock } from "vitest";
 
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
@@ -17,19 +19,19 @@ import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/us
 
 import Start from "./Start";
 
-jest.mock("react-i18next", () => ({
-  useTranslation: jest.fn(),
+vi.mock("react-i18next", () => ({
+  useTranslation: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/context/PlayerSelectionContext", () => ({
-  usePlayerSelection: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/PlayerSelectionContext", () => ({
+  usePlayerSelection: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => ({
-  useWorkspaceActions: jest.fn(),
+vi.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => ({
+  useWorkspaceActions: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/components/DataSourceDialog/SidebarItems", () => ({
+vi.mock("@lichtblick/suite-base/components/DataSourceDialog/SidebarItems", () => ({
   __esModule: true,
   default: () => <div />,
 }));
@@ -48,12 +50,12 @@ const wsSource = {
 } as unknown as IDataSourceFactory;
 
 describe("Start Component", () => {
-  const mockSelectRecent = jest.fn();
-  const mockSelectSource = jest.fn();
-  const mockRemoveRecent = jest.fn();
-  const mockTogglePinRecent = jest.fn();
-  const mockClearRecents = jest.fn();
-  const mockOpenDialog = jest.fn();
+  const mockSelectRecent = vi.fn();
+  const mockSelectSource = vi.fn();
+  const mockRemoveRecent = vi.fn();
+  const mockTogglePinRecent = vi.fn();
+  const mockClearRecents = vi.fn();
+  const mockOpenDialog = vi.fn();
 
   const mockRecentSources: RecentSource[] = [
     {
@@ -66,7 +68,7 @@ describe("Start Component", () => {
   ];
 
   const setup = (recentSources: RecentSource[] = mockRecentSources) => {
-    (usePlayerSelection as jest.Mock).mockReturnValue({
+    (usePlayerSelection as Mock).mockReturnValue({
       recentSources,
       availableSources: [wsSource],
       selectRecent: mockSelectRecent,
@@ -85,18 +87,18 @@ describe("Start Component", () => {
   };
 
   beforeEach(() => {
-    (useTranslation as jest.Mock).mockReturnValue({
+    (useTranslation as Mock).mockReturnValue({
       t: (key: string, options?: { version?: string }) =>
         key === "version" && options ? `v${options.version}` : key,
       i18n: { language: "en" },
     });
-    (useWorkspaceActions as jest.Mock).mockReturnValue({
+    (useWorkspaceActions as Mock).mockReturnValue({
       dialogActions: { dataSource: { open: mockOpenDialog } },
     });
   });
 
   afterEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   it("lists recents by file name and opens them", () => {

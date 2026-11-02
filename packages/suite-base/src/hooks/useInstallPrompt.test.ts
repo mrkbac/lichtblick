@@ -12,7 +12,7 @@ describe("useInstallPrompt", () => {
     const { result } = renderHook(() => useInstallPrompt());
     expect(result.current).toBeUndefined();
 
-    const prompt = jest.fn().mockResolvedValue({ outcome: "accepted" });
+    const prompt = vi.fn().mockResolvedValue({ outcome: "accepted" });
     act(() => {
       window.dispatchEvent(Object.assign(new Event("beforeinstallprompt"), { prompt }));
     });

@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { Time, fromNanoSec, isLessThan, toNanoSec } from "@foxglove/rostime";
 import type { FrameTransform, FrameTransforms, SceneUpdate } from "@foxglove/schemas";
 import EventEmitter from "eventemitter3";
 import { quat, vec3 } from "gl-matrix";
@@ -12,12 +13,10 @@ import i18next from "i18next";
 import { produce } from "immer";
 import * as THREE from "three";
 import { DeepPartial, assert } from "ts-essentials";
-import { v4 as uuidv4 } from "uuid";
 
 import { ObjectPool } from "@lichtblick/den/collection";
 import { CameraModelsMap } from "@lichtblick/den/image/types";
 import Logger from "@lichtblick/log";
-import { Time, fromNanoSec, isLessThan, toNanoSec } from "@lichtblick/rostime";
 import {
   Immutable,
   MessageEvent,
@@ -43,6 +42,7 @@ import {
 import { LayerErrors } from "@lichtblick/suite-base/panels/ThreeDeeRender/LayerErrors";
 import { ICameraHandler } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ICameraHandler";
 import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { palette, fontMonospace } from "@lichtblick/theme";
 
 import {
@@ -879,7 +879,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     const handler = options.handler;
     // A unique id is assigned to each action to deduplicate selection events
     // The layerId is used to map selection events back to their handlers
-    const instanceId = uuidv4();
+    const instanceId = randomUUID();
     const action: SettingsTreeNodeActionItem = {
       type: "action",
       id: `${options.layerId}-${instanceId}`,

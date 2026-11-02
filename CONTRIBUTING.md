@@ -38,7 +38,7 @@ Before contributing, ensure you have the following installed:
 | Tool                                             | Version                | Notes                                                |
 | ------------------------------------------------ | ---------------------- | ---------------------------------------------------- |
 | [Node.js](https://nodejs.org/)                   | >= 20                  | LTS recommended                                      |
-| [Corepack](https://nodejs.org/api/corepack.html) | (bundled with Node.js) | Must be enabled: `corepack enable`                   |
+| [Corepack](https://github.com/nodejs/corepack) | latest | `npm install --global corepack && corepack enable` |
 | [Yarn](https://yarnpkg.com/)                     | 3.6.3                  | Managed via Corepack — do **not** install separately |
 | [Git](https://git-scm.com/)                      | Latest                 | Required for version control                         |
 
@@ -80,6 +80,7 @@ cd lichtblick
 1. **Enable Corepack** and install dependencies:
 
    ```sh
+   npm install --global corepack # Node 25+ no longer bundles Corepack
    corepack enable
    yarn install
    ```
@@ -88,7 +89,7 @@ cd lichtblick
 
    ```sh
    # Desktop app (run in separate terminals):
-   yarn desktop:serve        # Start webpack dev server
+   yarn desktop:serve        # Start the Rspack dev server
    yarn desktop:start        # Launch Electron (wait for desktop:serve to finish)
 
    # Web app:
@@ -121,10 +122,10 @@ yarn test:e2e:desktop
 yarn test:e2e:web
 ```
 
-### Advanced: remote webpack + Electron
+### Advanced: remote Rspack + Electron
 
 ```sh
-# Running webpack and Electron on different machines on the same network
+# Running Rspack and Electron on different machines on the same network
 yarn desktop:serve --host 192.168.xxx.yyy
 yarn dlx electron@22.1.0 .webpack
 ```
@@ -244,7 +245,7 @@ Before pushing, ensure your changes pass all checks:
 ```sh
 yarn format                 # Formatting (Biome)
 yarn lint                   # Linting (ESLint)
-yarn test                   # Unit tests (Jest)
+yarn test                   # Unit tests (Vitest)
 yarn run tsc --noEmit       # TypeScript type checking
 ```
 
@@ -368,7 +369,7 @@ The project uses a **Builder pattern** to streamline the creation of test data a
 - **Entity builders** generate consistent domain-specific mock data.
 - Component-specific builders live in the component's own `builders/` directory (see [Component Structure](#component-structure)).
 
-### Unit Tests (Jest)
+### Unit Tests (Vitest)
 
 - All new features and bug fixes should be covered by unit tests.
 - Tests are located alongside source files with the `.test.ts` / `.test.tsx` extension.

@@ -5,15 +5,15 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { Sockets } from "@foxglove/electron-socket/renderer";
+import { MessageDefinition } from "@foxglove/message-definition";
+import { RosNode, TcpSocket } from "@foxglove/ros1";
+import { Time, fromMillis, isGreaterThan, toSec } from "@foxglove/rostime";
+import { HttpServer } from "@foxglove/xmlrpc";
 import * as _ from "lodash-es";
-import { v4 as uuidv4 } from "uuid";
 
 import { debouncePromise } from "@lichtblick/den/async";
-import { Sockets } from "@lichtblick/electron-socket/renderer";
 import Logger from "@lichtblick/log";
-import { MessageDefinition } from "@lichtblick/message-definition";
-import { RosNode, TcpSocket } from "@lichtblick/ros1";
-import { Time, fromMillis, isGreaterThan, toSec } from "@lichtblick/rostime";
 import { ParameterValue } from "@lichtblick/suite";
 import OsContextSingleton from "@lichtblick/suite-base/OsContextSingleton";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
@@ -33,8 +33,9 @@ import {
   TopicWithSchemaName,
 } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import rosDatatypesToMessageDefinition from "@lichtblick/suite-base/util/rosDatatypesToMessageDefinition";
-import { HttpServer } from "@lichtblick/xmlrpc";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Logger.getLogger(__filename);
 const rosLog = Logger.getLogger("ROS1");
@@ -60,12 +61,12 @@ type Ros1PlayerOpts = {
   sourceId: string;
 };
 
-// Connects to `rosmaster` instance using `@lichtblick/ros1`
+// Connects to `rosmaster` instance using `@foxglove/ros1`
 export default class Ros1Player implements Player {
   #url: string; // rosmaster URL.
   #hostname?: string; // ROS_HOSTNAME
   #rosNode?: RosNode; // Our ROS node when we're connected.
-  #id: string = uuidv4(); // Unique ID for this player.
+  #id: string = randomUUID(); // Unique ID for this player.
   #listener?: (arg0: PlayerState) => Promise<void>; // Listener for _emitState().
   #closed: boolean = false; // Whether the player has been completely closed using close().
   #providerTopics?: TopicWithSchemaName[]; // Topics as advertised by rosmaster.
@@ -253,7 +254,7 @@ export default class Ros1Player implements Player {
             severity: "warn",
             message: "ROS parameter fetch failed",
             tip: `Ensure that roscore is running and accessible at: ${this.#url}`,
-            error,
+            error: toError(error),
           },
           { skipEmit: true },
         );
@@ -273,7 +274,7 @@ export default class Ros1Player implements Player {
           severity: "error",
           message: "ROS connection failed",
           tip: `Ensure that roscore is running and accessible at: ${this.#url}`,
-          error,
+          error: toError(error),
         },
         { skipEmit: false },
       );
@@ -659,7 +660,7 @@ export default class Ros1Player implements Player {
 stale graph may result in missing topics you expect. Ensure that roscore is reachable at ${
             this.#url
           }.`,
-          error,
+          error: toError(error),
         },
         { skipEmit: true },
       );

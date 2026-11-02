@@ -1,7 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Time } from "@lichtblick/rostime";
+import { Time } from "@foxglove/rostime";
+
 import { IIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 
 import {
@@ -13,9 +14,9 @@ import {
 function makeSource(start?: Time, end?: Time): IIterableSource {
   return {
     sourceType: "deserialized",
-    initialize: jest.fn(),
-    messageIterator: jest.fn(),
-    getBackfillMessages: jest.fn(),
+    initialize: vi.fn(),
+    messageIterator: vi.fn(),
+    getBackfillMessages: vi.fn(),
     getStart: start ? () => start : undefined,
     getEnd: end ? () => end : undefined,
   } as unknown as IIterableSource;

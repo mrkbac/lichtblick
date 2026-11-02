@@ -13,17 +13,17 @@ import McapLocalDataSourceFactory from "./McapLocalDataSourceFactory";
 const MCAP_LOCAL_FILE_ID = "mcap-local-file";
 
 // Worker mock to avoid real execution in tests
-global.Worker = jest.fn().mockImplementation(() => ({
-  postMessage: jest.fn(),
-  terminate: jest.fn(),
+global.Worker = vi.fn().mockImplementation(() => ({
+  postMessage: vi.fn(),
+  terminate: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/players/IterablePlayer", () => ({
-  IterablePlayer: jest.fn(),
+vi.mock("@lichtblick/suite-base/players/IterablePlayer", () => ({
+  IterablePlayer: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource", () => ({
-  WorkerSerializedIterableSource: jest.fn(),
+vi.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource", () => ({
+  WorkerSerializedIterableSource: vi.fn(),
 }));
 
 describe("McapLocalDataSourceFactory", () => {
@@ -31,7 +31,7 @@ describe("McapLocalDataSourceFactory", () => {
 
   beforeEach(() => {
     factory = new McapLocalDataSourceFactory();
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   function buildMcapFile(): File {
@@ -44,7 +44,7 @@ describe("McapLocalDataSourceFactory", () => {
     const args: DataSourceFactoryInitializeArgs = {
       file,
       files,
-      metricsCollector: jest.fn(),
+      metricsCollector: vi.fn(),
     } as unknown as DataSourceFactoryInitializeArgs;
 
     return {

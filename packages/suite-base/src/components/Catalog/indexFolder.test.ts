@@ -6,8 +6,8 @@ import "fake-indexeddb/auto";
 import { FolderFile, indexFiles, listInputFiles } from "./indexFolder";
 import { summarizeMcap } from "./summarizeMcap";
 
-jest.mock("./summarizeMcap");
-const summarize = jest.mocked(summarizeMcap);
+vi.mock("./summarizeMcap");
+const summarize = vi.mocked(summarizeMcap);
 
 // The cache is keyed by name, size and modification time, so every test uses its own mtime.
 let mtime = 1;

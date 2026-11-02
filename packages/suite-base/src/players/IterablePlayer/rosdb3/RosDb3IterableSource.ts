@@ -5,10 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { MessageDefinition } from "@lichtblick/message-definition";
+import { MessageDefinition } from "@foxglove/message-definition";
+import { stringify } from "@foxglove/rosmsg";
+import { Time, add as addTime } from "@foxglove/rostime";
+
 import { ROS2_TO_DEFINITIONS, Rosbag2, SqliteSqljs } from "@lichtblick/rosbag2-web";
-import { stringify } from "@lichtblick/rosmsg";
-import { Time, add as addTime } from "@lichtblick/rostime";
 import { MessageEvent } from "@lichtblick/suite";
 import { PlayerAlert, TopicStats } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
@@ -46,7 +47,6 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
 
   public async initialize(): Promise<Initialization> {
     const res = await fetch(
-      // foxglove-depcheck-used: babel-plugin-transform-import-meta
       new URL("@foxglove/sql.js/dist/sql-wasm.wasm", import.meta.url).toString(),
     );
     const sqlWasm = await (await res.blob()).arrayBuffer();

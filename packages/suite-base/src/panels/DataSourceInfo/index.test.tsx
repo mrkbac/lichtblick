@@ -9,7 +9,7 @@
 import "@testing-library/jest-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { fromNanoSec } from "@lichtblick/rostime";
+import { fromNanoSec } from "@foxglove/rostime";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -20,19 +20,19 @@ import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 
 import { RecordingInspector } from "./index";
 
-jest.mock("@lichtblick/suite-base/components/PanelToolbar", () => ({
+vi.mock("@lichtblick/suite-base/components/PanelToolbar", () => ({
   __esModule: true,
   default: () => <div />,
 }));
-jest.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
-  ...jest.requireActual("@lichtblick/suite-base/components/MessagePipeline"),
-  useMessagePipeline: jest.fn(),
+vi.mock("@lichtblick/suite-base/components/MessagePipeline", async () => ({
+  ...await vi.importActual("@lichtblick/suite-base/components/MessagePipeline"),
+  useMessagePipeline: vi.fn(),
 }));
-const actualUseMessagePipeline = jest.requireActual<
+const actualUseMessagePipeline = vi.requireActual<
   typeof import("@lichtblick/suite-base/components/MessagePipeline")
 >("@lichtblick/suite-base/components/MessagePipeline").useMessagePipeline;
-const seek = jest.fn();
-const pause = jest.fn();
+const seek = vi.fn();
+const pause = vi.fn();
 
 async function* iterator(): AsyncIterableIterator<IteratorResult> {
   for (const sec of [0, 1, 9, 10]) {
@@ -147,9 +147,9 @@ it("keeps low-level chunk and file-offset details out of the panel", () => {
 });
 
 it("uses a shared scan, displays timing details, and reuses completed results", async () => {
-  const shared = jest.fn(() => iterator());
-  const decoded = jest.fn(() => iterator());
-  jest.mocked(useMessagePipeline).mockImplementation((selector) =>
+  const shared = vi.fn(() => iterator());
+  const decoded = vi.fn(() => iterator());
+  vi.mocked(useMessagePipeline).mockImplementation((selector) =>
     actualUseMessagePipeline((ctx: MessagePipelineContext) =>
       selector({
         ...ctx,
@@ -190,7 +190,7 @@ it("uses a shared scan, displays timing details, and reuses completed results", 
 });
 
 it("keeps namespace totals visible when collapsed and sorts folders by their combined counts", () => {
-  jest.mocked(useMessagePipeline).mockImplementation(actualUseMessagePipeline);
+  vi.mocked(useMessagePipeline).mockImplementation(actualUseMessagePipeline);
   render(
     <MockMessagePipelineProvider
       startTime={{ sec: 0, nsec: 0 }}

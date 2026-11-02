@@ -5,9 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import * as Comlink from "@foxglove/comlink";
 import { RawImage } from "@foxglove/schemas";
 
-import * as Comlink from "@lichtblick/comlink";
 import { ComlinkWrap } from "@lichtblick/den/worker";
 
 import type { RawImageOptions } from "./decodeImage";
@@ -29,10 +29,7 @@ export class WorkerImageDecoder {
 
   public constructor() {
     const { remote, dispose } = ComlinkWrap<WorkerService>(
-      new Worker(
-        // foxglove-depcheck-used: babel-plugin-transform-import-meta
-        new URL("./WorkerImageDecoder.worker", import.meta.url),
-      ),
+      new Worker(new URL("./WorkerImageDecoder.worker", import.meta.url)),
     );
     this.#remote = remote;
     this.#dispose = dispose;

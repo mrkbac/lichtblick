@@ -15,7 +15,7 @@
 //   You may not use this file except in compliance with the License.
 
 import { useTheme } from "@mui/material";
-import { StoryFn, StoryObj } from "@storybook/react-webpack5";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import { InteractionContextMenu } from "./InteractionContextMenu";
 
@@ -71,7 +71,7 @@ export default {
   title: "panels/ThreeDeeRender/Interactions/InteractionContextMenu",
   component: InteractionContextMenu,
   decorators: [
-    (Story: StoryFn): React.JSX.Element => {
+    (Story: React.ComponentType): React.JSX.Element => {
       const theme = useTheme();
 
       return (

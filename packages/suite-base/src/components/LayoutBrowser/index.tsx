@@ -18,7 +18,6 @@ import {
   ListItemText,
 } from "@mui/material";
 import * as _ from "lodash-es";
-import moment from "moment";
 import { useSnackbar } from "notistack";
 import { useCallback, useEffect, useLayoutEffect, useMemo } from "react";
 import useAsyncFn from "react-use/lib/useAsyncFn";
@@ -227,9 +226,8 @@ export default function LayoutBrowser({
   }, [setSharedSectionExpanded]);
 
   const createNewLayout = useCallbackWithToast(async () => {
-    const name = `Unnamed layout ${moment(currentDateForStorybook).format("l")} at ${moment(
-      currentDateForStorybook,
-    ).format("LT")}`;
+    const now = currentDateForStorybook ?? new Date();
+    const name = `Unnamed layout ${now.toLocaleDateString("en-US")} at ${now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
     const layoutData: Omit<LayoutData, "name" | "id"> = {
       configById: {},
       globalVariables: {},

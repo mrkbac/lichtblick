@@ -21,7 +21,6 @@ import {
   Typography,
 } from "@mui/material";
 import { useCallback } from "react";
-import { v4 as uuid } from "uuid";
 
 import { Immutable, SettingsTreeAction, SettingsTreeField } from "@lichtblick/suite";
 import MessagePathInput from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput";
@@ -30,13 +29,14 @@ import { LegendControls } from "@lichtblick/suite-base/components/SettingsTreeEd
 import { FieldEditorProps } from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { ColorGradientInput, ColorPickerInput, NumberInput, Vec2Input, Vec3Input } from "./inputs";
 
 /** Used to allow both undefined and empty string in select inputs. */
-const UNDEFINED_SENTINEL_VALUE = uuid();
+const UNDEFINED_SENTINEL_VALUE = randomUUID();
 /** Used to avoid MUI errors when an invalid option is selected */
-const INVALID_SENTINEL_VALUE = uuid();
+const INVALID_SENTINEL_VALUE = randomUUID();
 
 function FieldInput({
   actionHandler,
@@ -70,8 +70,8 @@ function FieldInput({
           value={field.value}
           disabled={field.disabled}
           readOnly={field.readonly}
-          renderOption={(props, option, { selected }) => (
-            <MenuItem selected={selected} {...props}>
+          renderOption={({ key, ...props }, option, { selected }) => (
+            <MenuItem key={key} selected={selected} {...props}>
               {option}
             </MenuItem>
           )}

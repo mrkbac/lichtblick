@@ -15,10 +15,9 @@
 //   You may not use this file except in compliance with the License.
 
 import { ChartData } from "chart.js";
-import * as R from "ramda";
 
 import { findIndices } from "../datasets";
-import { TypedChartData, TypedData } from "../types";
+import { TypedChartData } from "../types";
 
 type TypedDataSet = TypedChartData["datasets"][0];
 type NormalDataSet = ChartData<"scatter">["datasets"][0];
@@ -26,10 +25,7 @@ type NormalDataSet = ChartData<"scatter">["datasets"][0];
 function proxyDataset(dataset: TypedDataSet): NormalDataSet {
   const { data } = dataset;
 
-  const length = R.pipe(
-    R.map((v: TypedData) => v.x.length),
-    R.sum,
-  )(data);
+  const length = data.reduce((sum, v) => sum + v.x.length, 0);
 
   return {
     ...dataset,

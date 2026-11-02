@@ -4,24 +4,20 @@
 
 import { Chart } from "chart.js";
 
-jest.mock("chart.js", () => ({
-  Chart: {
-    register: jest.fn(),
-  },
-  Interaction: {
-    modes: {},
-  },
+vi.mock("chart.js", async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  Chart: { register: vi.fn() },
 }));
+vi.mock("@foxglove/comlink", () => ({ expose: vi.fn(), proxy: vi.fn() }));
+vi.mock("@lichtblick/suite-base/panels/shared/loadFont", () => ({
+  loadDefaultFont: vi.fn(async () => undefined),
+}));
+vi.mock("./ChartRenderer", () => ({ ChartRenderer: vi.fn() }));
 
-describe("ChartJSManager", () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
+describe("ChartRenderer.worker", () => {
+  it("registers the Chart.js components the plot needs", async () => {
+    await import("./ChartRenderer.worker");
 
-  it("should register required Chart.js components", async () => {
-    await import("@lichtblick/suite-base/components/Chart/worker/ChartJSManager");
-
-    const registerSpy = jest.spyOn(Chart, "register");
-    expect(registerSpy).toHaveBeenCalled();
+    expect(Chart.register).toHaveBeenCalled();
   });
 });

@@ -5,14 +5,14 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { StoryFn, StoryObj } from "@storybook/react-webpack5";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import MockCurrentLayoutProvider from "@lichtblick/suite-base/providers/CurrentLayoutProvider/MockCurrentLayoutProvider";
 import WorkspaceContextProvider from "@lichtblick/suite-base/providers/WorkspaceContextProvider";
 
 import { DataSourceDialog } from "./DataSourceDialog";
 
-const Wrapper = (Story: StoryFn): React.JSX.Element => {
+const Wrapper = (Story: React.ComponentType): React.JSX.Element => {
   return (
     <MockCurrentLayoutProvider>
       <WorkspaceContextProvider

@@ -24,7 +24,6 @@ import { Player } from "@lichtblick/suite-base/players/types";
 const initWorkers: Record<string, () => Worker> = {
   ".bag": () => {
     return new Worker(
-      // foxglove-depcheck-used: babel-plugin-transform-import-meta
       new URL(
         "@lichtblick/suite-base/players/IterablePlayer/BagIterableSourceWorker.worker",
         import.meta.url,
@@ -33,7 +32,6 @@ const initWorkers: Record<string, () => Worker> = {
   },
   ".mcap": () => {
     return new Worker(
-      // foxglove-depcheck-used: babel-plugin-transform-import-meta
       new URL(
         "@lichtblick/suite-base/players/IterablePlayer/Mcap/McapIterableSourceWorker.worker",
         import.meta.url,

@@ -5,6 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import type { Mock } from "vitest";
+
 import FakePlayer from "@lichtblick/suite-base/components/MessagePipeline/FakePlayer";
 import { PlayerAlert, PlayerState, Topic } from "@lichtblick/suite-base/players/types";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -84,7 +86,7 @@ describe("TopicAliasingPlayer", () => {
     ];
     const player = new TopicAliasingPlayer(fakePlayer);
     player.setAliasFunctions(mappers);
-    const listener = jest.fn();
+    const listener = vi.fn();
     player.setListener(listener);
     await fakePlayer.emit(
       mockPlayerState(undefined, {
@@ -176,7 +178,7 @@ describe("TopicAliasingPlayer", () => {
 
     const player = new TopicAliasingPlayer(fakePlayer);
     player.setAliasFunctions(mappers);
-    const listener = jest.fn();
+    const listener = vi.fn();
     player.setListener(listener);
 
     const topics: Topic[] = [
@@ -230,10 +232,10 @@ describe("TopicAliasingPlayer", () => {
   it("should pass through backfill lookups without alias translation when requested", async () => {
     // GIVEN - a player whose underlying source can answer backfill lookups directly
     const fakePlayer = new FakePlayer() as FakePlayer & {
-      getBackfillMessages: jest.Mock;
+      getBackfillMessages: Mock;
     };
     const backfillMessage = mockMessage(BasicBuilder.string(), { topic: "/original_topic_1" });
-    const getBackfillMessagesSpy = jest.fn().mockResolvedValue([backfillMessage]);
+    const getBackfillMessagesSpy = vi.fn().mockResolvedValue([backfillMessage]);
     fakePlayer.getBackfillMessages = getBackfillMessagesSpy;
     const player = new TopicAliasingPlayer(fakePlayer);
     const topic = BasicBuilder.string();
@@ -282,7 +284,7 @@ describe("TopicAliasingPlayer", () => {
     player.setGlobalVariables({
       foo: "/bar",
     });
-    const listener = jest.fn();
+    const listener = vi.fn();
     player.setListener(listener);
     await fakePlayer.emit(
       mockPlayerState(undefined, {
@@ -324,7 +326,7 @@ describe("TopicAliasingPlayer", () => {
     ];
     const player = new TopicAliasingPlayer(fakePlayer);
     player.setAliasFunctions(mappers);
-    const listener = jest.fn();
+    const listener = vi.fn();
     player.setListener(listener);
     await fakePlayer.emit(
       mockPlayerState(undefined, {

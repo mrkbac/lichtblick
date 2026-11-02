@@ -3,19 +3,20 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock } from "vitest";
 import { checkForServiceWorkerUpdate } from "./useServiceWorkerUpdatePrompt";
 
-type FakeWorker = EventTarget & { state: string; postMessage: jest.Mock };
+type FakeWorker = EventTarget & { state: string; postMessage: Mock };
 
 const fakeWorker = (state: string): FakeWorker =>
-  Object.assign(new EventTarget(), { state, postMessage: jest.fn() });
+  Object.assign(new EventTarget(), { state, postMessage: vi.fn() });
 
 // `update()` finds a new worker in `installing`, which then moves to `finalState`
 function mockRegistration(finalState: string | undefined) {
   const registration = {
     installing: undefined as FakeWorker | undefined,
     waiting: undefined as FakeWorker | undefined,
-    update: jest.fn(async () => {
+    update: vi.fn(async () => {
       if (finalState == undefined) {
         return;
       }

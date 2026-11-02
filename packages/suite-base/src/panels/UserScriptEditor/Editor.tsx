@@ -23,8 +23,6 @@ import * as monacoApi from "monaco-editor/editor/editor.api.js";
 import { StandaloneServices } from "monaco-editor/editor/standalone/browser/standaloneServices";
 import * as path from "path";
 import React, { Suspense, ReactElement, useCallback, useEffect, useRef } from "react";
-import MonacoEditor, { EditorDidMount, EditorWillMount } from "react-monaco-editor";
-import { ResizePayload, useResizeDetector } from "react-resize-detector";
 import { useLatest } from "react-use";
 import { ModuleResolutionKind } from "typescript";
 
@@ -36,6 +34,7 @@ import inScreenshotTests from "@lichtblick/suite-base/stories/inScreenshotTests"
 import { DEFAULT_STUDIO_SCRIPT_PREFIX } from "@lichtblick/suite-base/util/constants";
 import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuallyBePartial";
 
+import MonacoEditor, { EditorDidMount, EditorWillMount } from "./MonacoEditor";
 import { themes } from "./theme";
 
 const codeEditorService = StandaloneServices.get(ICodeEditorService);
@@ -193,6 +192,8 @@ const Editor = ({
 
   const options = React.useMemo<monacoApi.editor.IStandaloneEditorConstructionOptions>(() => {
     return {
+      // Uses a ResizeObserver to follow the panel size
+      automaticLayout: true,
       wordWrap: "on",
       minimap: {
         enabled: false,
@@ -331,24 +332,6 @@ const Editor = ({
     [latestSetScriptCode],
   );
 
-  const onResize = useCallback(({ width, height }: ResizePayload) => {
-    if (width == undefined) {
-      return;
-    }
-    editorRef.current?.layout({ width, height });
-  }, []);
-
-  // monaco editor builtin auto layout uses an interval to adjust size to the parent component
-  // instead we use a resize observer and tell the editor to update the layout
-  // Use a debounce and 0 refresh rate to avoid triggering a resize observation while handling
-  // an existing resize observation.
-  // https://github.com/maslianok/react-resize-detector/issues/45
-  const { ref: sizeRef } = useResizeDetector({
-    refreshRate: 0,
-    refreshMode: "debounce",
-    onResize,
-  });
-
   if (!script) {
     // No script to load
     return ReactNull;
@@ -358,7 +341,7 @@ const Editor = ({
   // Without it, TypeScript or Monaco-related errors (e.g., type mismatches or input availability issues)
   // may not appear in the "Problems" tab. Do not remove this wrapper.
   return (
-    <div ref={sizeRef} style={{ width: "100%", height: "100%" }}>
+    <div style={{ width: "100%", height: "100%" }}>
       <ErrorBoundary>
         <Suspense fallback={<p>Loading user script editor</p>}>
           <MonacoEditor

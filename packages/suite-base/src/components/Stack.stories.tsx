@@ -6,8 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { useTheme } from "@mui/material";
-import { StoryObj } from "@storybook/react-webpack5";
 import { PropsWithChildren } from "react";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import Stack, { StackProps } from "./Stack";
 

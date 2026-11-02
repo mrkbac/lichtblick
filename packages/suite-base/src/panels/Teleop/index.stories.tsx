@@ -5,8 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { StoryFn, StoryContext, StoryObj } from "@storybook/react-webpack5";
 import { action } from "storybook/actions";
+import { StoryContext, StoryObj } from "storybook-react-rsbuild";
 
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
@@ -17,7 +17,7 @@ export default {
   title: "panels/Teleop",
   component: TeleopPanel,
   decorators: [
-    (StoryComponent: StoryFn, context: StoryContext): React.JSX.Element => {
+    (StoryComponent: React.ComponentType, context: StoryContext): React.JSX.Element => {
       return (
         <PanelSetup
           fixture={{ capabilities: [PLAYER_CAPABILITIES.advertise], publish: action("publish") }}

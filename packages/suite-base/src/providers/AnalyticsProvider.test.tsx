@@ -7,8 +7,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { Mock, MockedFunction } from "vitest";
 
 import Log from "@lichtblick/log";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
@@ -19,44 +20,44 @@ import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
 import AnalyticsProvider from "./AnalyticsProvider";
 
-const mockLogEvent = jest.fn();
-const mockFlush = jest.fn().mockResolvedValue(undefined);
-const mockShutdown = jest.fn().mockResolvedValue(undefined);
+const mockLogEvent = vi.fn();
+const mockFlush = vi.fn().mockResolvedValue(undefined);
+const mockShutdown = vi.fn().mockResolvedValue(undefined);
 const mockOtelAnalyticsInstance = {
   logEvent: mockLogEvent,
   flush: mockFlush,
   shutdown: mockShutdown,
 };
-const mockOtelAnalytics = jest.fn((_options: unknown) => mockOtelAnalyticsInstance);
+const mockOtelAnalytics = vi.fn((_options: unknown) => mockOtelAnalyticsInstance);
 
-jest.mock("@lichtblick/log", () => ({
+vi.mock("@lichtblick/log", () => ({
   __esModule: true,
   default: (() => {
     const logger = {
-      debug: jest.fn(),
-      info: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
+      debug: vi.fn(),
+      info: vi.fn(),
+      warn: vi.fn(),
+      error: vi.fn(),
     };
     return {
-      getLogger: jest.fn(() => logger),
+      getLogger: vi.fn(() => logger),
     };
   })(),
 }));
 
-jest.mock("@lichtblick/suite-base/constants/config", () => ({
+vi.mock("@lichtblick/suite-base/constants/config", () => ({
   APP_CONFIG: {
     version: "1.2.3",
     otlpEndpoint: undefined,
   },
 }));
 
-jest.mock("@lichtblick/suite-base/util/isDesktopApp", () => ({
+vi.mock("@lichtblick/suite-base/util/isDesktopApp", () => ({
   __esModule: true,
-  default: jest.fn(),
+  default: vi.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/services/telemetry/OtelAnalytics", () => ({
+vi.mock("@lichtblick/suite-base/services/telemetry/OtelAnalytics", () => ({
   __esModule: true,
   default: function MockOtelAnalytics(options: unknown) {
     return mockOtelAnalytics(options);
@@ -82,24 +83,24 @@ function AnalyticsConsumer(): React.JSX.Element {
 }
 
 type MockLogger = {
-  debug: jest.Mock;
-  info: jest.Mock;
-  warn: jest.Mock;
-  error: jest.Mock;
+  debug: Mock;
+  info: Mock;
+  warn: Mock;
+  error: Mock;
 };
 
 type MockLogModule = {
-  getLogger: jest.MockedFunction<(name: string) => MockLogger>;
+  getLogger: MockedFunction<(name: string) => MockLogger>;
 };
 
 describe("AnalyticsProvider", () => {
   const mockAppConfig = APP_CONFIG as { version: string; otlpEndpoint: string | undefined };
   const mockLog = Log as unknown as MockLogModule;
-  const mockIsDesktopApp = isDesktopApp as jest.MockedFunction<typeof isDesktopApp>;
+  const mockIsDesktopApp = isDesktopApp as MockedFunction<typeof isDesktopApp>;
   const getMockLogger = (): MockLogger => mockLog.getLogger("test");
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockAppConfig.version = "1.2.3";
     mockAppConfig.otlpEndpoint = undefined;
     mockIsDesktopApp.mockReturnValue(false);

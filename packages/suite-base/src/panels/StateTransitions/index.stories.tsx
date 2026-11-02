@@ -14,10 +14,10 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { StoryObj } from "@storybook/react-webpack5";
-import { fireEvent, screen, userEvent } from "@storybook/testing-library";
 import { produce } from "immer";
 import { useCallback } from "react";
+import { fireEvent, screen, userEvent } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { BlockCache } from "@lichtblick/suite-base/players/types";
@@ -284,13 +284,13 @@ export const DeltaMeasureMode: StoryObj = {
 
     // Placing markers here is synchronous (no worker round-trip), but the chart still needs a
     // render tick to pick up the new annotations/overlay.
-    fireEvent.click(target, {
+    await fireEvent.click(target, {
       clientX: rect.left + rect.width * 0.25,
       clientY: rect.top + rect.height / 2,
     });
     await delay(100);
 
-    fireEvent.click(target, {
+    await fireEvent.click(target, {
       clientX: rect.left + rect.width * 0.75,
       clientY: rect.top + rect.height / 2,
     });

@@ -11,45 +11,45 @@ import { AppEvent } from "../IAnalytics";
 import type RateLimiter from "./rateLimiter";
 
 const mockSeverityNumber = { INFO: "INFO" } as const;
-const mockGetDeviceId = jest.fn(() => "device-id");
+const mockGetDeviceId = vi.fn(() => "device-id");
 const mockSessionId = "session-id";
-const mockEmit = jest.fn();
-const mockSpanEnd = jest.fn();
-const mockStartSpan = jest.fn(() => ({ end: mockSpanEnd }));
-const mockGetLogger = jest.fn(() => ({ emit: mockEmit }));
-const mockGetTracer = jest.fn(() => ({ startSpan: mockStartSpan }));
-const mockForceFlush = jest.fn().mockResolvedValue(undefined);
-const mockShutdown = jest.fn().mockResolvedValue(undefined);
-const mockTracerForceFlush = jest.fn().mockResolvedValue(undefined);
-const mockTracerShutdown = jest.fn().mockResolvedValue(undefined);
-const mockLoggerProvider = jest.fn().mockImplementation(() => ({
+const mockEmit = vi.fn();
+const mockSpanEnd = vi.fn();
+const mockStartSpan = vi.fn(() => ({ end: mockSpanEnd }));
+const mockGetLogger = vi.fn(() => ({ emit: mockEmit }));
+const mockGetTracer = vi.fn(() => ({ startSpan: mockStartSpan }));
+const mockForceFlush = vi.fn().mockResolvedValue(undefined);
+const mockShutdown = vi.fn().mockResolvedValue(undefined);
+const mockTracerForceFlush = vi.fn().mockResolvedValue(undefined);
+const mockTracerShutdown = vi.fn().mockResolvedValue(undefined);
+const mockLoggerProvider = vi.fn().mockImplementation(() => ({
   getLogger: mockGetLogger,
   forceFlush: mockForceFlush,
   shutdown: mockShutdown,
 }));
-const mockTracerProvider = jest.fn().mockImplementation(() => ({
+const mockTracerProvider = vi.fn().mockImplementation(() => ({
   getTracer: mockGetTracer,
   forceFlush: mockTracerForceFlush,
   shutdown: mockTracerShutdown,
 }));
-const mockBatchLogRecordProcessor = jest.fn().mockImplementation((options) => options);
-const mockBatchSpanProcessor = jest.fn().mockImplementation((exporter) => ({ exporter }));
-const mockOTLPLogExporter = jest.fn().mockImplementation((options) => ({ options }));
-const mockOTLPTraceExporter = jest.fn().mockImplementation((options) => ({ options }));
-const mockResourceFromAttributes = jest.fn().mockImplementation((attributes) => ({ attributes }));
-const mockSetLogger = jest.fn();
-const mockDiagConsoleLogger = jest.fn().mockImplementation(() => ({ name: "diag-logger" }));
-const mockSetGlobalLoggerProvider = jest.fn().mockImplementation((provider) => provider);
-const mockSetGlobalTracerProvider = jest.fn().mockImplementation((provider) => provider);
-const mockDiagWarn = jest.fn();
+const mockBatchLogRecordProcessor = vi.fn().mockImplementation((options) => options);
+const mockBatchSpanProcessor = vi.fn().mockImplementation((exporter) => ({ exporter }));
+const mockOTLPLogExporter = vi.fn().mockImplementation((options) => ({ options }));
+const mockOTLPTraceExporter = vi.fn().mockImplementation((options) => ({ options }));
+const mockResourceFromAttributes = vi.fn().mockImplementation((attributes) => ({ attributes }));
+const mockSetLogger = vi.fn();
+const mockDiagConsoleLogger = vi.fn().mockImplementation(() => ({ name: "diag-logger" }));
+const mockSetGlobalLoggerProvider = vi.fn().mockImplementation((provider) => provider);
+const mockSetGlobalTracerProvider = vi.fn().mockImplementation((provider) => provider);
+const mockDiagWarn = vi.fn();
 
-jest.mock("./identity", () => ({
+vi.mock("./identity", () => ({
   __esModule: true,
   getDeviceId: mockGetDeviceId,
   sessionId: mockSessionId,
 }));
 
-jest.mock("@opentelemetry/api", () => ({
+vi.mock("@opentelemetry/api", () => ({
   diag: {
     setLogger: (...args: unknown[]) => mockSetLogger(...args),
     warn: (...args: unknown[]) => mockDiagWarn(...args),
@@ -65,30 +65,30 @@ jest.mock("@opentelemetry/api", () => ({
   },
 }));
 
-jest.mock("@opentelemetry/api-logs", () => ({
+vi.mock("@opentelemetry/api-logs", () => ({
   SeverityNumber: mockSeverityNumber,
   logs: {
     setGlobalLoggerProvider: (...args: unknown[]) => mockSetGlobalLoggerProvider(...args),
   },
 }));
 
-jest.mock("@opentelemetry/resources", () => ({
+vi.mock("@opentelemetry/resources", () => ({
   resourceFromAttributes: (...args: unknown[]) => mockResourceFromAttributes(...args),
 }));
 
-jest.mock("@opentelemetry/exporter-logs-otlp-http", () => ({
+vi.mock("@opentelemetry/exporter-logs-otlp-http", () => ({
   OTLPLogExporter: function MockOTLPLogExporter(options: unknown) {
     return mockOTLPLogExporter(options);
   },
 }));
 
-jest.mock("@opentelemetry/exporter-trace-otlp-http", () => ({
+vi.mock("@opentelemetry/exporter-trace-otlp-http", () => ({
   OTLPTraceExporter: function MockOTLPTraceExporter(options: unknown) {
     return mockOTLPTraceExporter(options);
   },
 }));
 
-jest.mock("@opentelemetry/sdk-logs", () => ({
+vi.mock("@opentelemetry/sdk-logs", () => ({
   BatchLogRecordProcessor: function MockBatchLogRecordProcessor(options: unknown) {
     return mockBatchLogRecordProcessor(options);
   },
@@ -97,7 +97,7 @@ jest.mock("@opentelemetry/sdk-logs", () => ({
   },
 }));
 
-jest.mock("@opentelemetry/sdk-trace-web", () => ({
+vi.mock("@opentelemetry/sdk-trace-web", () => ({
   BatchSpanProcessor: function MockBatchSpanProcessor(exporter: unknown) {
     return mockBatchSpanProcessor(exporter);
   },
@@ -119,8 +119,8 @@ function deferredPromise<T>() {
 
 describe("OtelAnalytics", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
-    jest.resetModules();
+    vi.clearAllMocks();
+    vi.resetModules();
   });
 
   it("configures a logger provider with the expected resource attributes", async () => {
@@ -193,7 +193,7 @@ describe("OtelAnalytics", () => {
   it("emits one OpenTelemetry log record for each app event when rate limiting allows it", async () => {
     // Given
     const { default: OtelAnalytics } = await import("./OtelAnalytics");
-    const allow = jest.fn(() => true);
+    const allow = vi.fn(() => true);
     const rateLimiter = {
       allow,
     } as unknown as RateLimiter;
@@ -236,7 +236,7 @@ describe("OtelAnalytics", () => {
   it("drops attributes with mixed-type arrays instead of forwarding them", async () => {
     // Given
     const { default: OtelAnalytics } = await import("./OtelAnalytics");
-    const allow = jest.fn(() => true);
+    const allow = vi.fn(() => true);
     const rateLimiter = {
       allow,
     } as unknown as RateLimiter;
@@ -268,7 +268,7 @@ describe("OtelAnalytics", () => {
   it("drops events silently when rate limiting blocks them", async () => {
     // Given
     const { default: OtelAnalytics } = await import("./OtelAnalytics");
-    const allow = jest.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+    const allow = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
     const rateLimiter = {
       allow,
     } as unknown as RateLimiter;
@@ -341,7 +341,7 @@ describe("OtelAnalytics", () => {
 
     // When
     const flushPromise = analytics.flush();
-    const onSettled = jest.fn();
+    const onSettled = vi.fn();
     void flushPromise.then(
       () => {
         onSettled("resolved");
@@ -401,7 +401,7 @@ describe("OtelAnalytics", () => {
 
     // When
     const shutdownPromise = analytics.shutdown();
-    const onSettled = jest.fn();
+    const onSettled = vi.fn();
     void shutdownPromise.then(
       () => {
         onSettled("resolved");

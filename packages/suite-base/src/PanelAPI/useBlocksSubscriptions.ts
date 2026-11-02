@@ -16,7 +16,6 @@
 
 import memoizeWeak from "memoize-weak";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { v4 as uuidv4 } from "uuid";
 
 import { Immutable } from "@lichtblick/suite";
 import {
@@ -28,6 +27,7 @@ import {
   MessageBlock as PlayerMessageBlock,
   SubscribePayload,
 } from "@lichtblick/suite-base/players/types";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 export type MessageBlock = Immutable<{
   [topicName: string]: MessageEvent[];
@@ -64,7 +64,7 @@ const filterBlockByTopics = memoizeWeak(
 );
 
 const useSubscriptionsForBlocks = (subscriptions: Immutable<SubscribePayload[]>) => {
-  const [id] = useState(() => uuidv4());
+  const [id] = useState(() => randomUUID());
 
   const setSubscriptions = useMessagePipeline(
     useCallback(

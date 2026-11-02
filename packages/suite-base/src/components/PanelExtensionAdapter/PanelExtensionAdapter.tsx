@@ -5,15 +5,14 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { fromSec, toSec } from "@foxglove/rostime";
 import { useTheme } from "@mui/material";
 import { produce } from "immer";
 import { CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useLatest } from "react-use";
-import { v4 as uuid } from "uuid";
 
 import { useSynchronousMountedState, useValueChangedDebugLog } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
-import { fromSec, toSec } from "@lichtblick/rostime";
 import {
   AppSettingValue,
   ExtensionPanelRegistration,
@@ -66,6 +65,7 @@ import {
 import { PanelConfig, SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { assertNever } from "@lichtblick/suite-base/util/assertNever";
 import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { PanelConfigVersionError } from "./PanelConfigVersionError";
 import { RenderStateConfig, initRenderStateBuilder } from "./renderState";
@@ -169,7 +169,7 @@ function PanelExtensionAdapter(
 
   const { openSiblingPanel, setMessagePathDropConfig, type: panelName } = usePanelContext();
 
-  const [panelId] = useState(() => uuid());
+  const [panelId] = useState(() => randomUUID());
   const isMounted = useSynchronousMountedState();
   const [error, setError] = useState<Error | undefined>();
   const [forceConversion, setForceConversion] = useState(new Set<string>());

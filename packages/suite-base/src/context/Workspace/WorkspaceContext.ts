@@ -6,7 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { createContext } from "react";
-import { StoreApi, useStore } from "zustand";
+import { StoreApi } from "zustand";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 
 import { useGuaranteedContext } from "@lichtblick/hooks";
 import { AppSettingsTab } from "@lichtblick/suite-base/components/AppSettingsDialog/types";
@@ -101,5 +102,5 @@ export const WorkspaceStoreSelectors = {
  */
 export function useWorkspaceStore<T>(selector: (store: WorkspaceContextStore) => T): T {
   const context = useGuaranteedContext(WorkspaceContext);
-  return useStore(context, selector);
+  return useStoreWithEqualityFn(context, selector);
 }

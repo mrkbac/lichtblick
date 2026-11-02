@@ -10,18 +10,18 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import { useLayoutBrowserReducer } from "./reducer";
 
 // Mock lodash-es functions
-jest.mock("lodash-es", () => ({
-  ...jest.requireActual("lodash-es"),
-  xor: jest.fn((arr1, arr2) =>
+vi.mock("lodash-es", async () => ({
+  ...(await vi.importActual("lodash-es")),
+  xor: vi.fn((arr1, arr2) =>
     // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
     arr1.filter((x: any) => !arr2.includes(x)).concat(arr2.filter((x: any) => !arr1.includes(x))),
   ),
-  compact: jest.fn((arr) => arr.filter(Boolean)),
+  compact: vi.fn((arr) => arr.filter(Boolean)),
 }));
 
 describe("LayoutBrowser reducer", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   /**

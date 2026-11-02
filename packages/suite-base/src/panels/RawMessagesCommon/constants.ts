@@ -1,6 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
-import { ros1 } from "@lichtblick/rosmsg-msgs-common";
+import { ros1 } from "@foxglove/rosmsg-msgs-common";
 
 // Strings longer than this many characters will start off collapsed.
 export const COLLAPSE_TEXT_OVER_LENGTH = 512;

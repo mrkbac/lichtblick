@@ -5,7 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import * as Comlink from "@lichtblick/comlink";
+import * as Comlink from "@foxglove/comlink";
+
 import { ComlinkWrap } from "@lichtblick/den/worker";
 import { MessagePath } from "@lichtblick/message-path";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
@@ -60,10 +61,7 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
   }
 
   public constructor() {
-    const worker = new Worker(
-      // foxglove-depcheck-used: babel-plugin-transform-import-meta
-      new URL("./CustomDatasetsBuilderImpl.worker", import.meta.url),
-    );
+    const worker = new Worker(new URL("./CustomDatasetsBuilderImpl.worker", import.meta.url));
     const { remote, dispose } =
       ComlinkWrap<Comlink.RemoteObject<CustomDatasetsBuilderImpl>>(worker);
 

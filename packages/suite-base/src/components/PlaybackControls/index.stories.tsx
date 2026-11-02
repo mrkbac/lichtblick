@@ -14,9 +14,9 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { StoryObj, StoryFn } from "@storybook/react-webpack5";
 import { useEffect, useLayoutEffect } from "react";
 import { action } from "storybook/actions";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import AppConfigurationContext, {
@@ -111,7 +111,7 @@ function Wrapper({
 export default {
   title: "components/PlaybackControls",
   decorators: [
-    (Wrapped: StoryFn): React.JSX.Element => (
+    (Wrapped: React.ComponentType): React.JSX.Element => (
       <AppConfigurationContext.Provider value={mockAppConfiguration}>
         <WorkspaceContextProvider>
           <MockCurrentLayoutProvider>

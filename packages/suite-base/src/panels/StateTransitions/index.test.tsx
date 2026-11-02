@@ -3,9 +3,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import "@testing-library/jest-dom";
+import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
+import type { Mock } from "vitest";
 
 import { MessageDataItemsByPath } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import useMessagesByPath from "@lichtblick/suite-base/components/MessagePathSyntax/useMessagesByPath";
@@ -13,17 +14,24 @@ import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/Message
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { useDecodedMessageRange } from "./hooks/useDecodedMessageRange";
+import StateTransitionsPanelWithHoc from "./index";
 import { StateTransitionConfig } from "./types";
 
-jest.mock("@lichtblick/suite-base/components/Panel", () => ({
+vi.mock("@lichtblick/suite-base/components/Panel", () => ({
   __esModule: true,
   default: (Component: React.ComponentType) =>
     Object.assign(Component, { panelType: "StateTransitions", defaultConfig: {} }),
 }));
 
-jest.mock("@lichtblick/suite-base/components/MessagePathSyntax/useMessagesByPath");
-jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useDecodedMessageRange");
-jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsTime", () => ({
+vi.mock("@lichtblick/suite-base/components/MessagePathSyntax/useMessagesByPath");
+
+// The Panel HOC is mocked to return the inner component, which takes config and saveConfig directly
+const StateTransitionsPanel = StateTransitionsPanelWithHoc as unknown as React.ComponentType<{
+  config: StateTransitionConfig;
+  saveConfig: (config: Partial<StateTransitionConfig>) => void;
+}>;
+vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useDecodedMessageRange");
+vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsTime", () => ({
   __esModule: true,
   default: () => ({
     startTime: { sec: 0, nsec: 0 },
@@ -31,7 +39,7 @@ jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransiti
     endTimeSinceStart: 10,
   }),
 }));
-jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsData", () => ({
+vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsData", () => ({
   __esModule: true,
   // One point at x=1 so the mocked chart's click (below) lands on real data.
   default: () => ({
@@ -40,7 +48,7 @@ jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransiti
     minY: 0,
   }),
 }));
-jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useChartScalesAndBounds", () => ({
+vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useChartScalesAndBounds", () => ({
   __esModule: true,
   default: () => ({
     yScale: {},
@@ -50,23 +58,23 @@ jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useChartScalesAn
     sizeRef: { current: undefined },
   }),
 }));
-jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useMessagePathDropConfig");
-jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/usePanelSettings");
-jest.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
+vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useMessagePathDropConfig");
+vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/usePanelSettings");
+vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   useMessagePipeline: (selector: (ctx: unknown) => unknown) =>
     selector({ playerState: { presence: "PRESENT" } }),
   useMessagePipelineGetter: () => () => ({
-    seekPlayback: jest.fn(),
+    seekPlayback: vi.fn(),
     playerState: { activeData: { startTime: { sec: 0, nsec: 0 } } },
   }),
 }));
-jest.mock("@lichtblick/suite-base/components/PanelToolbar", () => ({
+vi.mock("@lichtblick/suite-base/components/PanelToolbar", () => ({
   __esModule: true,
   default: ({ additionalIcons }: { additionalIcons: React.ReactNode }) => (
     <div data-testid="panel-toolbar">{additionalIcons}</div>
   ),
 }));
-jest.mock("@lichtblick/suite-base/components/TimeBasedChart", () => ({
+vi.mock("@lichtblick/suite-base/components/TimeBasedChart", () => ({
   __esModule: true,
   default: ({
     annotations,
@@ -84,15 +92,15 @@ jest.mock("@lichtblick/suite-base/components/TimeBasedChart", () => ({
     />
   ),
 }));
-jest.mock("@lichtblick/suite-base/panels/StateTransitions/PathLegend", () => ({
+vi.mock("@lichtblick/suite-base/panels/StateTransitions/PathLegend", () => ({
   PathLegend: () => <div data-testid="path-legend" />,
 }));
-jest.mock("@lichtblick/suite-base/panels/StateTransitions/StateTransitions.style", () => ({
+vi.mock("@lichtblick/suite-base/panels/StateTransitions/StateTransitions.style", () => ({
   useStateTransitionsStyles: () => ({ classes: { chartWrapper: "chartWrapper" } }),
 }));
 
-const mockUseMessagesByPath = useMessagesByPath as jest.Mock;
-const mockUseDecodedMessageRange = useDecodedMessageRange as jest.Mock;
+const mockUseMessagesByPath = useMessagesByPath as Mock;
+const mockUseDecodedMessageRange = useDecodedMessageRange as Mock;
 
 function buildMessageAndData(path: string) {
   const topic = path.split(".")[0]!;
@@ -109,20 +117,17 @@ describe("StateTransitions", () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
     mockUseDecodedMessageRange.mockReturnValue([{}]);
     mockUseMessagesByPath.mockReturnValue({});
   });
 
   function renderPanel(config: Partial<StateTransitionConfig> = {}) {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const StateTransitionsPanel = require("./index").default;
-    const saveConfig = jest.fn();
+    const saveConfig = vi.fn();
     return {
       ...render(
         <StateTransitionsPanel config={{ ...defaultConfig, ...config }} saveConfig={saveConfig} />,
       ),
-      StateTransitionsPanel,
     };
   }
 
@@ -150,7 +155,7 @@ describe("StateTransitions", () => {
   it("should remove marker annotations when a path timestamp source changes", () => {
     // Given
     const topic = BasicBuilder.string();
-    const { rerender, StateTransitionsPanel } = renderPanel({
+    const { rerender } = renderPanel({
       paths: [{ value: topic, timestampMethod: "receiveTime" }],
     });
     fireEvent.click(screen.getByTestId("state-transitions-measure-mode-toggle"));
@@ -164,7 +169,7 @@ describe("StateTransitions", () => {
           ...defaultConfig,
           paths: [{ value: topic, timestampMethod: "headerStamp" }],
         }}
-        saveConfig={jest.fn()}
+        saveConfig={vi.fn()}
       />,
     );
 

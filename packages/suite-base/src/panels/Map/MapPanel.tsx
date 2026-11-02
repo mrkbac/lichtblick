@@ -27,7 +27,7 @@ import { useDebounce } from "use-debounce";
 import { filterMap } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
-import { toSec } from "@lichtblick/rostime";
+import { toSec } from "@foxglove/rostime";
 import { MessageEvent, PanelExtensionContext, SettingsTreeAction, Topic } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";

@@ -1,21 +1,22 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock } from "vitest";
 import { EventEmitter } from "events";
 
 const mockNativeTheme = Object.assign(new EventEmitter(), { shouldUseDarkColors: false });
-const mockWindows: (EventEmitter & { setBackgroundColor: jest.Mock })[] = [];
+const mockWindows: (EventEmitter & { setBackgroundColor: Mock })[] = [];
 
-jest.mock("electron", () => {
+vi.mock("electron", () => {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { EventEmitter: Emitter } = require("events") as typeof import("events");
   class MockBrowserWindow extends Emitter {
-    public webContents = { id: mockWindows.length, on: jest.fn(),
-      once: jest.fn(),
-      setWindowOpenHandler: jest.fn(),
+    public webContents = { id: mockWindows.length, on: vi.fn(),
+      once: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
     };
-    public setBackgroundColor = jest.fn();
-    public setTitleBarOverlay = jest.fn();
+    public setBackgroundColor = vi.fn();
+    public setTitleBarOverlay = vi.fn();
     public constructor() {
       super();
       mockWindows.push(this);
@@ -24,31 +25,31 @@ jest.mock("electron", () => {
   return {
     app: { getAppPath: () => "/app", name: "Lichtblick" },
     BrowserWindow: MockBrowserWindow,
-    Menu: { buildFromTemplate: jest.fn(() => ({})), getApplicationMenu: jest.fn() },
-    MenuItem: jest.fn(),
+    Menu: { buildFromTemplate: vi.fn(() => ({})), getApplicationMenu: vi.fn() },
+    MenuItem: vi.fn(),
     nativeTheme: mockNativeTheme,
-    shell: { openExternal: jest.fn() },
-    systemPreferences: { getUserDefault: jest.fn() },
+    shell: { openExternal: vi.fn() },
+    systemPreferences: { getUserDefault: vi.fn() },
   };
 });
-jest.mock("@lichtblick/log", () => ({ getLogger: () => ({ info: jest.fn() }) }));
-jest.mock("@lichtblick/suite-base/src/i18n", () => ({
-  sharedI18nObject: { on: jest.fn(), t: (key: string) => key },
+vi.mock("@lichtblick/log", () => ({ getLogger: () => ({ info: vi.fn() }) }));
+vi.mock("@lichtblick/suite-base/src/i18n", () => ({
+  sharedI18nObject: { on: vi.fn(), t: (key: string) => key },
 }));
-jest.mock("@lichtblick/theme", () => ({
+vi.mock("@lichtblick/theme", () => ({
   palette: {
     light: { background: { default: "#fff" }, appBar: {} },
     dark: { background: { default: "#000" }, appBar: {} },
   },
 }));
-jest.mock("../common/webpackDefines", () => ({ LICHTBLICK_PRODUCT_NAME: "Lichtblick" }));
-jest.mock("./StudioAppUpdater", () => ({
-  Instance: () => ({ checkNow: jest.fn(), canCheckForUpdates: () => false }),
+vi.mock("../common/webpackDefines", () => ({ LICHTBLICK_PRODUCT_NAME: "Lichtblick" }));
+vi.mock("./StudioAppUpdater", () => ({
+  Instance: () => ({ checkNow: vi.fn(), canCheckForUpdates: () => false }),
 }));
-jest.mock("./telemetry", () => ({
+vi.mock("./telemetry", () => ({
   getTelemetrySettings: () => ({ crashReportingEnabled: false, telemetryEnabled: false }),
 }));
-jest.mock("./getDevModeIcon", () => () => undefined);
+vi.mock("./getDevModeIcon", () => () => undefined);
 
 (global as unknown as { MAIN_WINDOW_WEBPACK_ENTRY: string }).MAIN_WINDOW_WEBPACK_ENTRY = "file://";
 

@@ -9,10 +9,10 @@ import { set as idbSet, get as idbGet, createStore as idbCreateStore } from "idb
 import * as _ from "lodash-es";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAsync } from "react-use";
-import { v4 as uuid } from "uuid";
 
 import Logger from "@lichtblick/log";
 import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 const log = Logger.getLogger(__filename);
 
@@ -160,7 +160,7 @@ function useIndexedDbRecents(): IRecentsStore {
       const existing = newRecentsRef.current.find((recent) => isSameRecent(recent, record));
       const fullRecord: RecentRecord = {
         ...record,
-        id: existing?.id ?? uuid(),
+        id: existing?.id ?? randomUUID(),
         pinned: existing?.pinned,
         lastOpened: Date.now(),
       };

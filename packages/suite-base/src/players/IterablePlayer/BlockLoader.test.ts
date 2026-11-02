@@ -43,7 +43,7 @@ class TestSource implements IDeserializedIterableSource {
   }
 }
 
-const consoleErrorMock = console.error as ReturnType<typeof jest.fn>;
+const consoleErrorMock = console.error as ReturnType<typeof vi.fn>;
 
 describe("BlockLoader", () => {
   it("should make an empty block loader", async () => {
@@ -233,6 +233,8 @@ describe("BlockLoader", () => {
                 needTopics: new Map(),
                 sizeInBytes: 2,
               },
+              // the second block is never loaded because the cache is full
+              undefined,
             ],
             startTime: { sec: 0, nsec: 0 },
           },
@@ -299,7 +301,7 @@ describe("BlockLoader", () => {
       progress: async (progress) => {
         count++;
         if (count === 2) {
-          // eslint-disable-next-line jest/no-conditional-expect
+          // eslint-disable-next-line vitest/no-conditional-expect
           expect(progress).toEqual({
             fullyLoadedFractionRanges: [
               {
@@ -343,7 +345,7 @@ describe("BlockLoader", () => {
       progress: async (progress) => {
         count += 1;
         if (count === 2) {
-          // eslint-disable-next-line jest/no-conditional-expect
+          // eslint-disable-next-line vitest/no-conditional-expect
           expect(progress).toEqual({
             fullyLoadedFractionRanges: [
               {
@@ -426,7 +428,7 @@ describe("BlockLoader", () => {
         }
 
         if (count === 2) {
-          // eslint-disable-next-line jest/no-conditional-expect
+          // eslint-disable-next-line vitest/no-conditional-expect
           expect(progress).toEqual({
             fullyLoadedFractionRanges: [
               {
@@ -531,6 +533,8 @@ describe("BlockLoader", () => {
                 needTopics: new Map(),
                 sizeInBytes: 50,
               },
+              // the second block is never loaded because the cache is full
+              undefined,
             ],
             startTime: { sec: 0, nsec: 0 },
           },
@@ -557,7 +561,7 @@ describe("BlockLoader", () => {
         }
 
         if (count === maxBlockCount) {
-          // eslint-disable-next-line jest/no-conditional-expect
+          // eslint-disable-next-line vitest/no-conditional-expect
           expect(progress).toEqual({
             fullyLoadedFractionRanges: [
               {

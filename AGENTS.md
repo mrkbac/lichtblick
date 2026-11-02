@@ -8,6 +8,7 @@ This file helps AI coding agents work effectively in the Lichtblick monorepo.
 - Enable Corepack and install dependencies with Yarn 3.6.3:
 
 ```sh
+npm install --global corepack # Node 25+ no longer bundles Corepack
 corepack enable
 yarn install
 ```
@@ -72,7 +73,7 @@ E2E tests:
 
 - Add or update tests with code changes.
 - Prefer targeted test runs while iterating; run broader suites before finishing.
-- Unit tests use Jest and are typically colocated with source files (`*.test.ts` / `*.test.tsx`).
+- Unit tests use Vitest and are typically colocated with source files (`*.test.ts` / `*.test.tsx`).
 - E2E tests use Playwright and follow `{feature-name}.{platform}.spec.ts`.
 
 ## Agent Guardrails

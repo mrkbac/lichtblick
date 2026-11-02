@@ -5,12 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { Time } from "@foxglove/rostime";
 import { createContext } from "react";
 import { AsyncState } from "react-use/lib/useAsyncFn";
-import { StoreApi, useStore } from "zustand";
+import { StoreApi } from "zustand";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 
 import { useGuaranteedContext } from "@lichtblick/hooks";
-import { Time } from "@lichtblick/rostime";
 import { Immutable } from "@lichtblick/suite";
 
 /**
@@ -90,5 +91,5 @@ export const EventsContext = createContext<undefined | StoreApi<EventsStore>>(un
 
 export function useEvents<T>(selector: (store: EventsStore) => T): T {
   const context = useGuaranteedContext(EventsContext);
-  return useStore(context, selector);
+  return useStoreWithEqualityFn(context, selector);
 }

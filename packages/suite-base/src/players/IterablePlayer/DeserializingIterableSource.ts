@@ -5,10 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { compare } from "@foxglove/rostime";
+
 import { pickFields } from "@lichtblick/den/records";
 import Logger from "@lichtblick/log";
 import { parseChannel } from "@lichtblick/mcap-support";
-import { compare } from "@lichtblick/rostime";
 import { MessageEvent } from "@lichtblick/suite";
 import {
   MessageIteratorArgs,
@@ -20,6 +21,7 @@ import {
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import { estimateObjectSize } from "@lichtblick/suite-base/players/messageMemoryEstimation";
 import { SubscribePayload } from "@lichtblick/suite-base/players/types";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Logger.getLogger(__filename);
 
@@ -150,8 +152,8 @@ export class DeserializingIterableSource implements IDeserializedIterableSource 
           // This should in practice never happen as the underlying source filters out invalid topics
           alerts.push({
             severity: "error",
-            message: `Error in topic ${topic}: ${error.message}`,
-            error,
+            message: `Error in topic ${topic}: ${toError(error).message}`,
+            error: toError(error),
           });
         }
       }

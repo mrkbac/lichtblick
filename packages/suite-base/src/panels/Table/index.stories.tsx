@@ -5,8 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { StoryObj } from "@storybook/react-webpack5";
-import { fireEvent, userEvent, within } from "@storybook/testing-library";
+import { fireEvent, userEvent, within } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import Table from "@lichtblick/suite-base/panels/Table";
 import { mockMessage } from "@lichtblick/suite-base/players/TopicAliasingPlayer/mocks";
@@ -139,7 +139,7 @@ export const ExpandRows: StoryObj = {
     const canvas = within(canvasElement);
     const [target] = await canvas.findAllByTestId("expand-row-0");
 
-    fireEvent.click(target!);
+    await fireEvent.click(target!);
   },
 };
 
@@ -154,7 +154,7 @@ export const ExpandCellsWithNestedObjects: StoryObj = {
     const canvas = within(canvasElement);
     const [target] = await canvas.findAllByTestId("expand-cell-obj-0");
 
-    fireEvent.click(target!);
+    await fireEvent.click(target!);
   },
 };
 
@@ -169,7 +169,7 @@ export const ExpandCellsWithNestedArrays: StoryObj = {
     const canvas = within(canvasElement);
     const [target] = await canvas.findAllByTestId("expand-cell-arr-0");
 
-    fireEvent.click(target!);
+    await fireEvent.click(target!);
   },
 };
 
@@ -184,10 +184,10 @@ export const ExpandNestedCells: StoryObj = {
     const canvas = within(canvasElement);
 
     const [targetRow] = await canvas.findAllByTestId("expand-row-0");
-    fireEvent.click(targetRow!);
+    await fireEvent.click(targetRow!);
 
     const nestedRows = await canvas.findAllByTestId("expand-row-0");
-    fireEvent.click(nestedRows[2]!);
+    await fireEvent.click(nestedRows[2]!);
   },
 };
 
@@ -202,10 +202,10 @@ export const ExpandMultipleRows: StoryObj = {
     const canvas = within(canvasElement);
 
     const [row1] = await canvas.findAllByTestId("expand-row-0");
-    fireEvent.click(row1!);
+    await fireEvent.click(row1!);
 
     const [row2] = await canvas.findAllByTestId("expand-row-1");
-    fireEvent.click(row2!);
+    await fireEvent.click(row2!);
   },
 };
 

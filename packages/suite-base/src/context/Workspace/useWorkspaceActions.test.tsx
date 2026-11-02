@@ -9,12 +9,12 @@ import { StoreApi, createStore } from "zustand";
 import { WorkspaceContext, WorkspaceContextStore } from "./WorkspaceContext";
 import { useWorkspaceActions } from "./useWorkspaceActions";
 
-jest.mock("@lichtblick/suite-base/context/PlayerSelectionContext", () => ({
-  usePlayerSelection: jest.fn().mockReturnValue({ availableSources: [] }),
+vi.mock("@lichtblick/suite-base/context/PlayerSelectionContext", () => ({
+  usePlayerSelection: vi.fn().mockReturnValue({ availableSources: [] }),
 }));
 
-jest.mock("./useOpenFile", () => ({
-  useOpenFile: jest.fn().mockReturnValue(jest.fn()),
+vi.mock("./useOpenFile", () => ({
+  useOpenFile: vi.fn().mockReturnValue(vi.fn()),
 }));
 
 function makeInitialState(): WorkspaceContextStore {
