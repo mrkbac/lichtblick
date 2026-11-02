@@ -1,79 +1,38 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import tinycolor from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 
 export const useStyles = makeStyles()((theme) => ({
+  page: {
+    height: "100%",
+    width: "100%",
+    maxWidth: 1600,
+    margin: "0 auto",
+    overflow: "auto",
+    gap: theme.spacing(3),
+    padding: theme.spacing(4, 6, 1),
+
+    [theme.breakpoints.down("md")]: {
+      padding: theme.spacing(3, 2, 1),
+    },
+  },
+  header: {
+    display: "flex",
+    alignItems: "center",
+    // Room for the dialog's close button
+    paddingRight: theme.spacing(6),
+  },
   logo: {
-    width: 212,
+    width: 180,
     height: "auto",
     marginLeft: theme.spacing(-1),
   },
-  grid: {
-    [theme.breakpoints.up("md")]: {
-      display: "grid",
-      gridTemplateAreas: `
-          "header spacer"
-          "content sidebar"
-        `,
-      gridTemplateRows: `content auto`,
-      gridTemplateColumns: `1fr 375px`,
-    },
-  },
-  version: {
-    position: "absolute",
-    right: theme.spacing(1),
-    bottom: theme.spacing(0.5),
-    color: theme.palette.text.secondary,
-  },
-  header: {
-    padding: theme.spacing(6),
-    gridArea: "header",
-
-    [theme.breakpoints.down("md")]: {
-      padding: theme.spacing(4),
-    },
-    [`@media (max-height: ${theme.breakpoints.values.sm})`]: {
-      display: "none",
-    },
-  },
-  content: {
-    padding: theme.spacing(0, 6, 6),
-    overflow: "hidden",
-    gridArea: "content",
-
-    [theme.breakpoints.down("md")]: {
-      padding: theme.spacing(0, 4, 4),
-    },
-    [`@media (max-height: ${theme.breakpoints.values.sm})`]: {
-      paddingTop: theme.spacing(6),
-    },
-  },
-  spacer: {
-    gridArea: "spacer",
-    backgroundColor: tinycolor(theme.palette.text.primary).setAlpha(0.04).toRgbString(),
-
-    [`@media (max-height: ${theme.breakpoints.values.sm})`]: {
-      display: "none",
-    },
-  },
-  sidebar: {
-    gridArea: "sidebar",
-    backgroundColor: tinycolor(theme.palette.text.primary).setAlpha(0.04).toRgbString(),
-    padding: theme.spacing(0, 5, 5),
-
-    [theme.breakpoints.down("md")]: {
-      padding: theme.spacing(4),
-    },
-    [`@media (max-height: ${theme.breakpoints.values.sm})`]: {
-      paddingTop: theme.spacing(6),
-    },
-  },
-  button: {
-    whiteSpace: "nowrap",
-    textOverflow: "ellipsis",
-    overflow: "hidden",
+  recents: {
+    flex: "none",
+    // Leave the rest of the page to the catalog
+    maxHeight: "40%",
+    minHeight: 0,
   },
   recentList: {
     overflowY: "auto",
@@ -86,5 +45,16 @@ export const useStyles = makeStyles()((theme) => ({
     // Show pin/remove actions on hover; pinned items always show their pin
     "& .recent-action": { opacity: 0 },
     "&:hover .recent-action, &:focus-within .recent-action": { opacity: 1 },
+  },
+  footer: {
+    display: "flex",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: theme.spacing(1),
+    borderTop: `1px solid ${theme.palette.divider}`,
+    paddingTop: theme.spacing(0.5),
+  },
+  spacer: {
+    flex: "auto",
   },
 }));

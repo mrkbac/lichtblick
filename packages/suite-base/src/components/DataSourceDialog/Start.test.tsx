@@ -7,6 +7,8 @@ import "@testing-library/jest-dom";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { useTranslation } from "react-i18next";
 
+import { CatalogRecording } from "@lichtblick/suite-base/components/Catalog/types";
+import { useCatalogFolder } from "@lichtblick/suite-base/components/Catalog/useCatalogFolder";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
   IDataSourceFactory,
@@ -29,9 +31,22 @@ jest.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => 
   useWorkspaceActions: jest.fn(),
 }));
 
-jest.mock("@lichtblick/suite-base/components/DataSourceDialog/SidebarItems", () => ({
+jest.mock("@lichtblick/suite-base/components/DataSourceDialog/DontShowThisAgainCheckbox", () => ({
   __esModule: true,
   default: () => <div />,
+}));
+
+jest.mock("@lichtblick/suite-base/components/Catalog/Catalog", () => ({
+  __esModule: true,
+  default: ({ query }: { query: string }) => <div data-testid="catalog">{query}</div>,
+}));
+
+jest.mock("@lichtblick/suite-base/components/Catalog/useCatalogFolder", () => ({
+  useCatalogFolder: jest.fn(),
+}));
+
+jest.mock("@lichtblick/suite-base/context/AnalyticsContext", () => ({
+  useAnalytics: () => ({ logEvent: jest.fn() }),
 }));
 
 const wsSource = {
@@ -65,7 +80,17 @@ describe("Start Component", () => {
     { id: "recent-2", title: "local.bag", type: "file", pinned: true },
   ];
 
+  const catalogRecording: CatalogRecording = {
+    id: "local.bag",
+    name: "local.bag",
+    source: { type: "local-file", path: "local.bag" },
+    start: { sec: 0, nsec: 0 },
+    end: { sec: 90, nsec: 0 },
+    topics: [{ name: "/camera", schema: "sensor_msgs/Image" }],
+  };
+
   const setup = (recentSources: RecentSource[] = mockRecentSources) => {
+    (useCatalogFolder as jest.Mock).mockReturnValue({ recordings: [catalogRecording] });
     (usePlayerSelection as jest.Mock).mockReturnValue({
       recentSources,
       availableSources: [wsSource],
@@ -86,8 +111,12 @@ describe("Start Component", () => {
 
   beforeEach(() => {
     (useTranslation as jest.Mock).mockReturnValue({
-      t: (key: string, options?: { version?: string }) =>
-        key === "version" && options ? `v${options.version}` : key,
+      t: (key: string, options?: { version?: string; count?: number }) =>
+        key === "version" && options
+          ? `v${options.version}`
+          : options?.count != undefined
+            ? `${key} ${options.count}`
+            : key,
       i18n: { language: "en" },
     });
     (useWorkspaceActions as jest.Mock).mockReturnValue({
@@ -172,9 +201,54 @@ describe("Start Component", () => {
       })),
     );
 
+    expect(screen.getByText("file-4.mcap")).toBeInTheDocument();
     expect(screen.queryByText("file-11.mcap")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByText("showAllRecents"));
+    fireEvent.click(screen.getByText("showAllRecents 12"));
     expect(screen.getByText("file-11.mcap")).toBeInTheDocument();
+  });
+
+  it("shows the catalog summary of a recent file", () => {
+    setup();
+
+    expect(screen.getByText(/1:30.* · topicCount 1/)).toBeInTheDocument();
+  });
+
+  it("searches recents by name and by catalog topics, and passes the query to the catalog", () => {
+    setup();
+    const search = screen.getByPlaceholderText("searchPlaceholder");
+
+    fireEvent.change(search, { target: { value: "example" } });
+    expect(screen.getByText("example.mcap")).toBeInTheDocument();
+    expect(screen.queryByText("local.bag")).not.toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: "topic:/camera" } });
+    expect(screen.queryByText("example.mcap")).not.toBeInTheDocument();
+    expect(screen.getByText("local.bag")).toBeInTheDocument();
+    expect(screen.getByTestId("catalog")).toHaveTextContent("topic:/camera");
+
+    fireEvent.change(search, { target: { value: "nothing-matches" } });
+    expect(screen.getByText("noRecentMatches")).toBeInTheDocument();
+  });
+
+  it("filters by source kind and hides the catalog for remote sources", () => {
+    setup();
+
+    fireEvent.click(screen.getByText("kindFile"));
+    expect(screen.queryByText("example.mcap")).not.toBeInTheDocument();
+    expect(screen.getByTestId("catalog")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("kindLive"));
+    expect(screen.getByText("example.mcap")).toBeInTheDocument();
+    expect(screen.queryByText("local.bag")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("catalog")).not.toBeInTheDocument();
+  });
+
+  it("opens sample data from the footer", () => {
+    setup();
+
+    fireEvent.click(screen.getByText("exploreSampleData"));
+
+    expect(mockOpenDialog).toHaveBeenCalledWith("demo");
   });
 
   it("does not render recent sources section if there are no recent sources", () => {

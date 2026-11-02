@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 export const catalog = {
-  back: "Back",
   catalog: "Catalog",
-  close: "Close",
+  changeFolder: "Change folder…",
   closeDetails: "Close details",
   duration: "Duration",
   emptyDescription:
@@ -15,6 +14,7 @@ export const catalog = {
   indexing: "Indexing {{done}} / {{total}}",
   messages: "Messages",
   name: "Name",
+  openedAgo: "Opened {{ago}}",
   noTopicMatches: "No topics match this search.",
   noTopics: "Topics are unknown because this file has no summary.",
   noMatches: "No recordings match this search.",
@@ -29,9 +29,6 @@ export const catalog = {
   reopenFolder: "Reopen {{name}}",
   rescan: "Rescan",
   rescanDescription: "Look for new files and retry files that failed",
-  searchHelp:
-    "Filters: topic:/camera schema:Image path:2026/ since:2026-10-01 until:2026-10-31 duration>5m size<2GB status:error|nosummary|ok",
-  searchPlaceholder: "Search recordings…",
   searchTopics: "Search {{count}} topics…",
   shownCount: "{{shown}} of {{total}} shown",
   size: "Size",
