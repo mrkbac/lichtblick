@@ -21,6 +21,8 @@ export const openDialog = {
   newToLichtblickDescription:
     "Start by exploring a sample dataset or checking out our documentation.",
   openAGitHubIssue: "Open a GitHub issue",
+  openCatalog: "Open folder catalog",
+  openCatalogDescription: "Browse and search every recording in a folder.",
   openConnection: "Open connection",
   openConnectionDescription: "Connect to a live robot or server.",
   openDataSource: "Open data source",
