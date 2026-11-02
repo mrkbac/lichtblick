@@ -32,6 +32,7 @@ import type { RosObject, RosValue } from "@lichtblick/suite-base/players/types";
 
 import {
   autoSelectColorSettings,
+  ColorConverter,
   colorHasTransparency,
   getColorConverter,
   colorFieldComputedPrefix,
@@ -67,6 +68,8 @@ type PointCloudFieldReaders = {
   greenReader: FieldReader;
   blueReader: FieldReader;
   alphaReader: FieldReader;
+  /** Byte offsets of x/y/z when all three are 4-byte aligned float32, enabling a typed-array fast path */
+  float32XyzOffsets: [number, number, number] | undefined;
 };
 
 type LayerSettingsPointClouds = LayerSettingsPointExtension & {
@@ -91,8 +94,6 @@ type PointCloudHistoryUserData = BaseUserData & {
   stixelMaterial: THREE.LineBasicMaterial;
 };
 
-const NEEDS_MIN_MAX = ["gradient", "colormap"];
-
 const ALL_POINTCLOUD_DATATYPES = new Set<string>([
   ...FOXGLOVE_POINTCLOUD_DATATYPES,
   ...ROS_POINTCLOUD_DATATYPES,
@@ -101,7 +102,6 @@ const ALL_POINTCLOUD_DATATYPES = new Set<string>([
 const INVALID_POINTCLOUD = "INVALID_POINTCLOUD";
 
 const tempColor = { r: 0, g: 0, b: 0, a: 0 };
-const tempMinMaxColor: THREE.Vector2Tuple = [0, 0];
 const tempFieldReaders: PointCloudFieldReaders = {
   xReader: zeroReader,
   yReader: zeroReader,
@@ -111,6 +111,7 @@ const tempFieldReaders: PointCloudFieldReaders = {
   greenReader: zeroReader,
   blueReader: zeroReader,
   alphaReader: zeroReader,
+  float32XyzOffsets: undefined,
 };
 
 type PointCloudUserData = BaseUserData & {
@@ -119,6 +120,9 @@ type PointCloudUserData = BaseUserData & {
 };
 
 class PointCloudRenderable extends PointsRenderable<PointCloudUserData> {
+  /** What the geometry buffers currently hold, to skip re-decoding unchanged data */
+  public decoded: { pointCloud: PointCloud | PointCloud2; key: string } | undefined;
+
   public override details(): Record<string, RosValue> {
     return this.userData.originalMessage ?? {};
   }
@@ -332,6 +336,26 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     }
     const stixelPositionAttribute = latestStixelEntry.renderable.geometry.attributes.position!;
     const stixelColorAttribute = latestStixelEntry.renderable.geometry.attributes.color!;
+    // Settings changes that don't affect the buffers (point size, shape, decay, ...) re-submit the
+    // same message; skip the full decode for those
+    const decodeKey = JSON.stringify([
+      settings.colorMode,
+      settings.colorField,
+      settings.colorFieldComputed,
+      settings.colorMap,
+      settings.flatColor,
+      settings.gradient,
+      settings.explicitAlpha,
+      settings.minValue,
+      settings.maxValue,
+      settings.stixelsEnabled,
+    ])!;
+    const decoded = latestPoints.decoded;
+    if (decoded?.pointCloud === pointCloud && decoded.key === decodeKey) {
+      return;
+    }
+    latestPoints.decoded = { pointCloud, key: decodeKey };
+
     // Iterate the point cloud data to update position and color attributes
     this.#updatePointCloudBuffers(
       pointCloud,
@@ -426,6 +450,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     this.renderer.settings.errors.addToTopic(this.userData.topic, INVALID_POINTCLOUD, message);
     const lastEntry = this.#pointsHistory.latest();
     lastEntry.renderable.geometry.resize(0);
+    lastEntry.renderable.decoded = undefined;
   }
 
   #validatePointCloud(pointCloud: PointCloud | PointCloud2): boolean {
@@ -502,6 +527,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     let greenReader: FieldReader | undefined;
     let blueReader: FieldReader | undefined;
     let alphaReader: FieldReader | undefined;
+    const float32Offsets = new Map<string, number>();
 
     const stride = getStride(pointCloud);
 
@@ -524,6 +550,12 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
         const message = `PointCloud field "${field.name}" has invalid offset ${field.offset}. Must be >= 0`;
         this.#invalidError(message);
         return false;
+      }
+
+      if (type === PointFieldType.FLOAT32 && field.offset % 4 === 0) {
+        float32Offsets.set(field.name, field.offset);
+      } else {
+        float32Offsets.delete(field.name);
       }
 
       if (field.name === "x") {
@@ -586,11 +618,11 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
 
     if (settings.colorFieldComputed === "distance") {
       packedColorReader = (view: DataView, pointOffset: number) => {
-        return Math.hypot(
-          xReader?.(view, pointOffset) ?? 0,
-          yReader?.(view, pointOffset) ?? 0,
-          zReader?.(view, pointOffset) ?? 0,
-        );
+        const x = xReader?.(view, pointOffset) ?? 0;
+        const y = yReader?.(view, pointOffset) ?? 0;
+        const z = zReader?.(view, pointOffset) ?? 0;
+        // Math.hypot is several times slower and the overflow safety it buys is irrelevant here
+        return Math.sqrt(x * x + y * y + z * z);
       };
     }
     if (minBytesPerPoint > stride) {
@@ -614,35 +646,18 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     output.greenReader = greenReader ?? zeroReader;
     output.blueReader = blueReader ?? zeroReader;
     output.alphaReader = alphaReader ?? zeroReader;
+    const xOffset = float32Offsets.get("x");
+    const yOffset = float32Offsets.get("y");
+    const zOffset = float32Offsets.get("z");
+    output.float32XyzOffsets =
+      xOffset != undefined &&
+      yOffset != undefined &&
+      zOffset != undefined &&
+      stride % 4 === 0 &&
+      pointCloud.data.byteOffset % 4 === 0
+        ? [xOffset, yOffset, zOffset]
+        : undefined;
     return true;
-  }
-
-  #minMaxColorValues(
-    output: THREE.Vector2Tuple,
-    colorReader: FieldReader,
-    view: DataView,
-    pointCount: number,
-    pointStep: number,
-    settings: LayerSettingsPointClouds,
-  ): void {
-    let minColorValue = settings.minValue ?? Number.POSITIVE_INFINITY;
-    let maxColorValue = settings.maxValue ?? Number.NEGATIVE_INFINITY;
-    if (
-      NEEDS_MIN_MAX.includes(settings.colorMode) &&
-      (settings.minValue == undefined || settings.maxValue == undefined)
-    ) {
-      for (let i = 0; i < pointCount; i++) {
-        const pointOffset = i * pointStep;
-        const colorValue = colorReader(view, pointOffset);
-        minColorValue = Math.min(minColorValue, colorValue);
-        maxColorValue = Math.max(maxColorValue, colorValue);
-      }
-      minColorValue = settings.minValue ?? minColorValue;
-      maxColorValue = settings.maxValue ?? maxColorValue;
-    }
-
-    output[0] = minColorValue;
-    output[1] = maxColorValue;
   }
 
   #updatePointCloudBuffers(
@@ -667,42 +682,54 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       greenReader,
       blueReader,
       alphaReader,
+      float32XyzOffsets,
     } = readers;
 
     // Hot loops for large clouds: write the typed arrays directly. BufferAttribute.setXYZ/W
-    // re-normalizes every component through a type switch, which dominated this function.
+    // re-normalizes every component through a type switch.
     const positions = positionAttribute.array as Float32Array;
     const colors = colorAttribute.array as Uint8Array;
-    const stixelPositions = stixelPositionAttribute.array as Float32Array;
-    const stixelColors = stixelColorAttribute.array as Uint8Array;
     const stixelsEnabled = settings.stixelsEnabled;
 
     // Update position attribute
-    for (let i = 0; i < pointCount; i++) {
-      const pointOffset = i * pointStep;
-      const x = xReader(view, pointOffset);
-      const y = yReader(view, pointOffset);
-      const z = zReader(view, pointOffset);
-      const p = i * 3;
-      positions[p] = x;
-      positions[p + 1] = y;
-      positions[p + 2] = z;
-      if (stixelsEnabled) {
-        const sp = i * 6;
-        stixelPositions[sp] = stixelPositions[sp + 3] = x;
-        stixelPositions[sp + 1] = stixelPositions[sp + 4] = y;
-        stixelPositions[sp + 2] = z;
+    if (float32XyzOffsets) {
+      // Aligned float32 x/y/z (nearly every lidar): index a Float32Array instead of three DataView
+      // reader calls per point
+      const floats = new Float32Array(data.buffer, data.byteOffset, data.byteLength >> 2);
+      const floatStride = pointStep >> 2;
+      const ox = float32XyzOffsets[0] >> 2;
+      const oy = float32XyzOffsets[1] >> 2;
+      const oz = float32XyzOffsets[2] >> 2;
+      for (let i = 0, p = 0, f = 0; i < pointCount; i++, p += 3, f += floatStride) {
+        positions[p] = floats[f + ox]!;
+        positions[p + 1] = floats[f + oy]!;
+        positions[p + 2] = floats[f + oz]!;
+      }
+    } else {
+      for (let i = 0, p = 0; i < pointCount; i++, p += 3) {
+        const pointOffset = i * pointStep;
+        positions[p] = xReader(view, pointOffset);
+        positions[p + 1] = yReader(view, pointOffset);
+        positions[p + 2] = zReader(view, pointOffset);
+      }
+    }
+    if (stixelsEnabled) {
+      const stixelPositions = stixelPositionAttribute.array as Float32Array;
+      for (let i = 0, p = 0, sp = 0; i < pointCount; i++, p += 3, sp += 6) {
+        stixelPositions[sp] = stixelPositions[sp + 3] = positions[p]!;
+        stixelPositions[sp + 1] = stixelPositions[sp + 4] = positions[p + 1]!;
+        stixelPositions[sp + 2] = positions[p + 2]!;
         stixelPositions[sp + 5] = 0;
       }
     }
 
     // Update color attribute
-    if (settings.colorMode === "rgba-fields") {
+    const colorMode = settings.colorMode;
+    if (colorMode === "rgba-fields") {
       for (let i = 0; i < pointCount; i++) {
         const pointOffset = i * pointStep;
         writeColor(
           colors,
-          stixelsEnabled ? stixelColors : undefined,
           i,
           redReader(view, pointOffset),
           greenReader(view, pointOffset),
@@ -710,38 +737,82 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
           alphaReader(view, pointOffset),
         );
       }
+    } else if (colorMode === "rgb" || colorMode === "rgba") {
+      // 0xaarrggbb, same as getColorBgra() but straight to bytes
+      const explicitAlpha = Math.round(settings.explicitAlpha * 255);
+      for (let i = 0, c = 0; i < pointCount; i++, c += 4) {
+        const num = packedColorReader(view, i * pointStep) >>> 0;
+        colors[c] = (num >>> 16) & 0xff;
+        colors[c + 1] = (num >>> 8) & 0xff;
+        colors[c + 2] = num & 0xff;
+        colors[c + 3] = colorMode === "rgba" ? num >>> 24 : explicitAlpha;
+      }
+    } else if (colorMode === "flat") {
+      if (pointCount > 0) {
+        getColorConverter({ ...settings, colorMode }, 0, 0)(tempColor, 0);
+        writeColor(colors, 0, tempColor.r, tempColor.g, tempColor.b, tempColor.a);
+        const colors32 = new Uint32Array(colors.buffer, colors.byteOffset, pointCount);
+        colors32.fill(colors32[0]!);
+      }
     } else {
-      // Iterate the point cloud data to determine min/max color values (if needed)
-      this.#minMaxColorValues(
-        tempMinMaxColor,
-        packedColorReader,
-        view,
-        pointCount,
-        pointStep,
-        settings,
-      );
-      const [minColorValue, maxColorValue] = tempMinMaxColor;
+      // Read each color value once, tracking the auto min/max in the same pass. Comparisons
+      // (unlike Math.min/max) skip NaN, so one invalid point can't turn the whole cloud black.
+      const values = colorValueScratch(pointCount);
+      let minColorValue = Number.POSITIVE_INFINITY;
+      let maxColorValue = Number.NEGATIVE_INFINITY;
+      for (let i = 0; i < pointCount; i++) {
+        const value = packedColorReader(view, i * pointStep);
+        values[i] = value;
+        if (value < minColorValue) {
+          minColorValue = value;
+        }
+        if (value > maxColorValue) {
+          maxColorValue = value;
+        }
+      }
+      minColorValue = settings.minValue ?? minColorValue;
+      maxColorValue = settings.maxValue ?? maxColorValue;
 
-      // Build a method to convert raw color field values to RGBA
+      // gradient/colormap only depend on the clamped fraction (value - min) / delta, so sample
+      // the converter once into an RGBA8 table instead of running it per point
       const colorConverter = getColorConverter(
-        settings as typeof settings & { colorMode: typeof settings.colorMode },
+        { ...settings, colorMode },
         minColorValue,
         maxColorValue,
       );
-
+      const lut32 = new Uint32Array(
+        buildColorLut(colorConverter, minColorValue, maxColorValue).buffer,
+      );
+      const colors32 = new Uint32Array(colors.buffer, colors.byteOffset, pointCount);
+      const valueDelta = Math.max(maxColorValue - minColorValue, Number.EPSILON);
+      const scale = (COLOR_LUT_SIZE - 1) / valueDelta;
       for (let i = 0; i < pointCount; i++) {
-        const pointOffset = i * pointStep;
-        const colorValue = packedColorReader(view, pointOffset);
-        colorConverter(tempColor, colorValue);
-        writeColor(
-          colors,
-          stixelsEnabled ? stixelColors : undefined,
-          i,
-          tempColor.r,
-          tempColor.g,
-          tempColor.b,
-          tempColor.a,
-        );
+        const colorValue = values[i]!;
+        const index = Math.round((colorValue - minColorValue) * scale);
+        if (index >= 0 && index < COLOR_LUT_SIZE) {
+          colors32[i] = lut32[index]!;
+        } else if (index < 0) {
+          colors32[i] = lut32[0]!;
+        } else if (index >= COLOR_LUT_SIZE) {
+          colors32[i] = lut32[COLOR_LUT_SIZE - 1]!;
+        } else {
+          // NaN: keep whatever the converter makes of it
+          colorConverter(tempColor, colorValue);
+          writeColor(colors, i, tempColor.r, tempColor.g, tempColor.b, tempColor.a);
+        }
+      }
+    }
+
+    if (stixelsEnabled) {
+      // Both stixel vertices get the point's color
+      const colors32 = new Uint32Array(colors.buffer, colors.byteOffset, pointCount);
+      const stixelColors32 = new Uint32Array(
+        (stixelColorAttribute.array as Uint8Array).buffer,
+        0,
+        pointCount * 2,
+      );
+      for (let i = 0; i < pointCount; i++) {
+        stixelColors32[i * 2] = stixelColors32[i * 2 + 1] = colors32[i]!;
       }
     }
 
@@ -1001,7 +1072,6 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
 /** Writes a 0-1 RGBA color as normalized uint8, same as BufferAttribute.setXYZW() */
 function writeColor(
   colors: Uint8Array,
-  stixelColors: Uint8Array | undefined,
   i: number,
   r: number,
   g: number,
@@ -1009,22 +1079,33 @@ function writeColor(
   a: number,
 ): void {
   const c = i * 4;
-  const r8 = Math.round(r * 255);
-  const g8 = Math.round(g * 255);
-  const b8 = Math.round(b * 255);
-  const a8 = Math.round(a * 255);
-  colors[c] = r8;
-  colors[c + 1] = g8;
-  colors[c + 2] = b8;
-  colors[c + 3] = a8;
-  if (stixelColors) {
-    // Both stixel vertices get the point's color
-    const s = i * 8;
-    stixelColors[s] = stixelColors[s + 4] = r8;
-    stixelColors[s + 1] = stixelColors[s + 5] = g8;
-    stixelColors[s + 2] = stixelColors[s + 6] = b8;
-    stixelColors[s + 3] = stixelColors[s + 7] = a8;
+  colors[c] = Math.round(r * 255);
+  colors[c + 1] = Math.round(g * 255);
+  colors[c + 2] = Math.round(b * 255);
+  colors[c + 3] = Math.round(a * 255);
+}
+
+let colorValueScratchArray = new Float64Array(0);
+/** Reused per-point color value buffer; only valid until the next call */
+function colorValueScratch(pointCount: number): Float64Array {
+  if (colorValueScratchArray.length < pointCount) {
+    colorValueScratchArray = new Float64Array(pointCount);
   }
+  return colorValueScratchArray;
+}
+
+// Large enough that neighboring entries differ by at most one 8-bit step
+const COLOR_LUT_SIZE = 4096;
+
+/** Samples `converter` over [min, max] into a COLOR_LUT_SIZE x RGBA8 table */
+function buildColorLut(converter: ColorConverter, minValue: number, maxValue: number): Uint8Array {
+  const lut = new Uint8Array(COLOR_LUT_SIZE * 4);
+  const valueDelta = Math.max(maxValue - minValue, Number.EPSILON);
+  for (let i = 0; i < COLOR_LUT_SIZE; i++) {
+    converter(tempColor, minValue + (i / (COLOR_LUT_SIZE - 1)) * valueDelta);
+    writeColor(lut, i, tempColor.r, tempColor.g, tempColor.b, tempColor.a);
+  }
+  return lut;
 }
 
 function pointFieldTypeName(type: PointFieldType): string {
