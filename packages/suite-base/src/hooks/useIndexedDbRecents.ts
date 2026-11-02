@@ -19,6 +19,9 @@ const log = Logger.getLogger(__filename);
 const IDB_KEY = "recents";
 const IDB_STORE = idbCreateStore(`${KEY_WORKSPACE_PREFIX}lichtblick-recents`, "recents");
 
+// Maximum number of unpinned recents to keep
+export const MAX_RECENTS = 100;
+
 type RecentRecordCommon = {
   // Record id - use IndexedDbRecentsStore.GenerateRecordId() to generate
   id: string;
@@ -31,6 +34,12 @@ type RecentRecordCommon = {
 
   // Optional label for the recent record
   label?: string;
+
+  // Epoch milliseconds of the last time this record was opened
+  lastOpened?: number;
+
+  // Pinned records are listed first and never evicted
+  pinned?: boolean;
 };
 
 type RecentConnectionRecord = RecentRecordCommon & {
@@ -57,11 +66,29 @@ interface IRecentsStore {
   // Recent records
   recents: RecentRecord[];
 
-  // Add a new recent
-  addRecent: (newRecent: UnsavedRecentRecord) => void;
+  // Add a new recent (or move an existing matching one to the top). Returns the record id.
+  addRecent: (newRecent: UnsavedRecentRecord) => string;
+
+  removeRecent: (id: string) => void;
+
+  togglePinRecent: (id: string) => void;
+
+  // Remove all records that are not pinned
+  clearRecents: () => void;
 
   // Save changes
   save: () => Promise<void>;
+}
+
+function isSameRecent(a: UnsavedRecentRecord, b: UnsavedRecentRecord): boolean {
+  if (a.type !== b.type || a.sourceId !== b.sourceId) {
+    return false;
+  }
+  // Connections are identified by their arguments, files by name
+  if (a.type === "connection" && b.type === "connection") {
+    return _.isEqual(a.extra, b.extra);
+  }
+  return a.title === b.title;
 }
 
 function useIndexedDbRecents(): IRecentsStore {
@@ -81,45 +108,12 @@ function useIndexedDbRecents(): IRecentsStore {
       return;
     }
 
-    // The new recent appears at the start of the list
-    const recentsToSave: RecentRecord[] = [];
-
-    // For every ref in newRecentsRef, we need to eliminate any potential duplicates already in
-    // recentsToSave
-    for (const newRecent of newRecentsRef.current) {
-      let exists = false;
-      for (const savedRecent of recentsToSave) {
-        if (exists) {
-          continue;
-        }
-
-        // Filter file recents to ignore any previous recent that match this record.
-        // This happens if we want to add a file to recents that we already have
-        if (
-          savedRecent.type === "file" &&
-          newRecent.type === savedRecent.type &&
-          newRecent.sourceId === savedRecent.sourceId &&
-          newRecent.title === savedRecent.title
-        ) {
-          exists = true;
-        }
-
-        // Filter connection recents which match the same sourceId and extra args
-        if (
-          savedRecent.type === "connection" &&
-          newRecent.type === savedRecent.type &&
-          savedRecent.sourceId === newRecent.sourceId &&
-          _.isEqual(newRecent.extra, savedRecent.extra)
-        ) {
-          exists = true;
-        }
-      }
-
-      // Max 5 entries
-      if (!exists && recentsToSave.length < 5) {
-        recentsToSave.push(newRecent);
-      }
-    }
+    // Records are kept newest first; drop older duplicates and evict beyond MAX_RECENTS
+    let unpinnedCount = 0;
+    const recentsToSave = _.uniqWith(newRecentsRef.current, isSameRecent).filter(
+      (recent) => recent.pinned === true || ++unpinnedCount <= MAX_RECENTS,
+    );
+    newRecentsRef.current = recentsToSave;
 
     setRecents(recentsToSave);
     idbSet(IDB_KEY, recentsToSave, IDB_STORE).catch((err: unknown) => {
@@ -157,23 +151,55 @@ function useIndexedDbRecents(): IRecentsStore {
 
   const addRecent = useCallback(
     (record: UnsavedRecentRecord) => {
+      // Re-opening an existing record keeps its id and pin
+      const existing = newRecentsRef.current.find((recent) => isSameRecent(recent, record));
       const fullRecord: RecentRecord = {
-        id: uuid(),
         ...record,
+        id: existing?.id ?? uuid(),
+        pinned: existing?.pinned,
+        lastOpened: Date.now(),
       };
       newRecentsRef.current.unshift(fullRecord);
+      void save();
+      return fullRecord.id;
+    },
+    [save],
+  );
+
+  const removeRecent = useCallback(
+    (id: string) => {
+      newRecentsRef.current = newRecentsRef.current.filter((recent) => recent.id !== id);
       void save();
     },
     [save],
   );
 
-  return useMemo<IRecentsStore>(() => {
-    return {
+  const togglePinRecent = useCallback(
+    (id: string) => {
+      newRecentsRef.current = newRecentsRef.current.map((recent) =>
+        recent.id === id ? { ...recent, pinned: recent.pinned !== true } : recent,
+      );
+      void save();
+    },
+    [save],
+  );
+
+  const clearRecents = useCallback(() => {
+    newRecentsRef.current = newRecentsRef.current.filter((recent) => recent.pinned === true);
+    void save();
+  }, [save]);
+
+  return useMemo<IRecentsStore>(
+    () => ({
       recents,
       addRecent,
+      removeRecent,
+      togglePinRecent,
+      clearRecents,
       save,
-    };
-  }, [addRecent, recents, save]);
+    }),
+    [addRecent, clearRecents, recents, removeRecent, save, togglePinRecent],
+  );
 }
 
 export default useIndexedDbRecents;

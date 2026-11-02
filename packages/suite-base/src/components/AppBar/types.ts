@@ -17,6 +17,7 @@ export type AppBarMenuItem =
       label: ReactNode;
       key: string;
       disabled?: boolean;
+      selected?: boolean;
       shortcut?: string;
       onClick?: MouseEventHandler<HTMLElement>;
       external?: boolean;

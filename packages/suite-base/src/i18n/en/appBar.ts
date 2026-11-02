@@ -27,6 +27,8 @@ export const appBar = {
   openDataSources: "Open data sources",
   openLocalFiles: "Open local file(s)…",
   recentDataSources: "Recent data sources",
+  allRecentDataSources: "All recent data sources…",
+  clearRecentDataSources: "Clear unpinned recent data sources",
   recentlyViewed: "Recently viewed",
   settings: "Visualization settings",
   showLeftSidebar: "Show left sidebar",

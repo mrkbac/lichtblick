@@ -75,27 +75,16 @@ export const useStyles = makeStyles()((theme) => ({
     textOverflow: "ellipsis",
     overflow: "hidden",
   },
-  connectionButton: {
-    textAlign: "left",
-    justifyContent: "flex-start",
-    padding: theme.spacing(2, 3),
-    gap: theme.spacing(1.5),
-    borderColor: theme.palette.divider,
-
-    ".MuiButton-startIcon .MuiSvgIcon-fontSizeLarge": {
-      fontSize: 28,
-    },
+  recentList: {
+    overflowY: "auto",
+    marginInline: theme.spacing(-1),
   },
-  recentListItemButton: {
-    overflow: "hidden",
-    color: theme.palette.primary.main,
-
-    "&:hover": {
-      backgroundColor: "transparent",
-      color: theme.palette.primary[theme.palette.mode === "dark" ? "light" : "dark"],
-    },
+  showAllRecents: {
+    alignSelf: "flex-start",
   },
-  recentSourceSecondary: {
-    color: "inherit",
+  recentListItem: {
+    // Show pin/remove actions on hover; pinned items always show their pin
+    "& .recent-action": { opacity: 0 },
+    "&:hover .recent-action, &:focus-within .recent-action": { opacity: 1 },
   },
 }));

@@ -5,61 +5,43 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { List, ListItem, ListItemButton, SvgIcon, Typography } from "@mui/material";
-import { useMemo } from "react";
+import { Dismiss16Regular, Pin16Filled, Pin16Regular } from "@fluentui/react-icons";
+import {
+  Button,
+  IconButton,
+  List,
+  ListItem,
+  ListItemButton,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import DataSourceOption from "@lichtblick/suite-base/components/DataSourceDialog/DataSourceOption";
+import { OpenUrlInput } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
 import SidebarItems from "@lichtblick/suite-base/components/DataSourceDialog/SidebarItems";
 import { useStyles } from "@lichtblick/suite-base/components/DataSourceDialog/index.style";
 import LichtblickLogoText from "@lichtblick/suite-base/components/LichtblickLogoText";
+import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import TextMiddleTruncate from "@lichtblick/suite-base/components/TextMiddleTruncate";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
-import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
-import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
+
+// Number of recents listed before "Show all"
+const RECENTS_PREVIEW_COUNT = 10;
 
 export default function Start(): React.JSX.Element {
-  const { recentSources, selectRecent } = usePlayerSelection();
+  const { recentSources, selectRecent, removeRecent, togglePinRecent, clearRecents } =
+    usePlayerSelection();
   const { classes } = useStyles();
-  const analytics = useAnalytics();
   const { t } = useTranslation("openDialog");
   const { dialogActions } = useWorkspaceActions();
+  const [showAllRecents, setShowAllRecents] = useState(false);
 
-  const startItems = useMemo(() => {
-    return [
-      {
-        key: "open-local-file",
-        text: t("openLocalFiles"),
-        secondaryText: t("openLocalFileDescription"),
-        icon: (
-          <SvgIcon fontSize="large" color="primary" viewBox="0 0 2048 2048">
-            <path d="M1955 1533l-163-162v677h-128v-677l-163 162-90-90 317-317 317 317-90 90zM256 1920h1280v128H128V0h1115l549 549v475h-128V640h-512V128H256v1792zM1280 512h293l-293-293v293z" />
-          </SvgIcon>
-        ),
-        onClick: () => {
-          dialogActions.dataSource.open("file");
-          analytics.logEvent(AppEvent.DIALOG_SELECT_VIEW, { type: "local" });
-        },
-      },
-      {
-        key: "open-connection",
-        text: t("openConnection"),
-        secondaryText: t("openConnectionDescription"),
-        icon: (
-          <SvgIcon fontSize="large" color="primary" viewBox="0 0 2048 2048">
-            <path d="M1408 256h640v640h-640V640h-120l-449 896H640v256H0v-640h640v256h120l449-896h199V256zM512 1664v-384H128v384h384zm1408-896V384h-384v384h384z" />
-          </SvgIcon>
-        ),
-        onClick: () => {
-          dialogActions.dataSource.open("connection");
-          analytics.logEvent(AppEvent.DIALOG_SELECT_VIEW, { type: "live" });
-        },
-      },
-    ];
-  }, [analytics, dialogActions.dataSource, t]);
+  const visibleRecents = showAllRecents
+    ? recentSources
+    : recentSources.slice(0, RECENTS_PREVIEW_COUNT);
 
   return (
     <Stack className={classes.grid}>
@@ -67,45 +49,85 @@ export default function Start(): React.JSX.Element {
         <LichtblickLogoText color="primary" className={classes.logo} />
       </header>
       <Stack className={classes.content}>
-        <Stack gap={4}>
+        <Stack gap={4} flex="auto" overflow="hidden">
           <Stack gap={1}>
             <Typography variant="h5" gutterBottom>
               {t("openDataSource")}
             </Typography>
-            {startItems.map((item) => (
-              <DataSourceOption
-                key={item.key}
-                text={item.text}
-                secondaryText={item.secondaryText}
-                icon={item.icon}
-                onClick={item.onClick}
-                target="_blank"
-              />
-            ))}
+            <OpenUrlInput />
           </Stack>
           {recentSources.length > 0 && (
-            <Stack gap={1}>
-              <Typography variant="h5" gutterBottom>
-                {t("recentDataSources")}
-              </Typography>
-              <List disablePadding>
-                {recentSources.slice(0, 5).map((recent) => (
-                  <ListItem disablePadding key={recent.id} id={recent.id}>
-                    <ListItemButton
-                      disableGutters
-                      onClick={() => {
-                        selectRecent(recent.id);
-                      }}
-                      className={classes.recentListItemButton}
+            <Stack gap={1} overflow="hidden">
+              <Stack direction="row" alignItems="center" justifyContent="space-between">
+                <Typography variant="h5">{t("recentDataSources")}</Typography>
+                {recentSources.some((recent) => recent.pinned !== true) && (
+                  <Button size="small" color="inherit" onClick={clearRecents}>
+                    {t("clearRecents")}
+                  </Button>
+                )}
+              </Stack>
+              <List disablePadding dense className={classes.recentList}>
+                {visibleRecents.map((recent) => {
+                  const pinned = recent.pinned === true;
+                  return (
+                    <ListItem
+                      disablePadding
+                      key={recent.id}
+                      id={recent.id}
+                      className={classes.recentListItem}
+                      secondaryAction={
+                        <>
+                          <Tooltip title={pinned ? t("unpin") : t("pin")}>
+                            <IconButton
+                              size="small"
+                              aria-label={pinned ? t("unpin") : t("pin")}
+                              className={pinned ? undefined : "recent-action"}
+                              onClick={() => {
+                                togglePinRecent(recent.id);
+                              }}
+                            >
+                              {pinned ? <Pin16Filled /> : <Pin16Regular />}
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title={t("removeRecent")}>
+                            <IconButton
+                              size="small"
+                              edge="end"
+                              aria-label={t("removeRecent")}
+                              className="recent-action"
+                              onClick={() => {
+                                removeRecent(recent.id);
+                              }}
+                            >
+                              <Dismiss16Regular />
+                            </IconButton>
+                          </Tooltip>
+                        </>
+                      }
                     >
-                      <TextMiddleTruncate
-                        className={classes.recentSourceSecondary}
-                        text={recent.title}
-                      />
-                    </ListItemButton>
-                  </ListItem>
-                ))}
+                      <ListItemButton
+                        selected={recent.current === true}
+                        onClick={() => {
+                          selectRecent(recent.id);
+                        }}
+                      >
+                        <RecentSourceLabel recent={recent} hidePinIndicator />
+                      </ListItemButton>
+                    </ListItem>
+                  );
+                })}
               </List>
+              {!showAllRecents && recentSources.length > RECENTS_PREVIEW_COUNT && (
+                <Button
+                  size="small"
+                  className={classes.showAllRecents}
+                  onClick={() => {
+                    setShowAllRecents(true);
+                  }}
+                >
+                  {t("showAllRecents", { count: recentSources.length })}
+                </Button>
+              )}
             </Stack>
           )}
         </Stack>
