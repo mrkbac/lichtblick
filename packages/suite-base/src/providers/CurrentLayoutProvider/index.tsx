@@ -98,6 +98,16 @@ export default function CurrentLayoutProvider({
   });
   const layoutStateRef = useRef(layoutState);
   const [incompatibleLayoutVersionError, setIncompatibleLayoutVersionError] = useState(false);
+
+  // Lets a host page (the web app's workspace tabs) see which layout this workspace has open.
+  const selectedLayoutId = layoutState.selectedLayout?.id;
+  useEffect(() => {
+    if (selectedLayoutId == undefined) {
+      delete document.documentElement.dataset.layoutId;
+    } else {
+      document.documentElement.dataset.layoutId = selectedLayoutId;
+    }
+  }, [selectedLayoutId]);
   const setLayoutState = useCallback((newState: LayoutState) => {
     const layoutVersion = newState.selectedLayout?.data?.version;
     if (layoutVersion != undefined && layoutVersion > MAX_SUPPORTED_LAYOUT_VERSION) {

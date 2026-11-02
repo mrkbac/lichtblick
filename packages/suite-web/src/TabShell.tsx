@@ -7,7 +7,6 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import {
   KEY_WORKSPACE_PREFIX,
   LOCAL_STORAGE_APP_CONFIGURATION,
-  LOCAL_STORAGE_PROFILE_DATA,
 } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import { palette } from "@lichtblick/theme";
 
@@ -247,37 +246,18 @@ export function TabShell(): React.JSX.Element {
       });
       syncTitle();
 
-      // Remember which layout the tab picks, so a reload restores each tab's own layout.
-      const parseLayoutId = (profile: string | null) => {
-        try {
-          return (JSON.parse(profile ?? "{}") as { currentLayoutId?: string }).currentLayoutId;
-        } catch {
-          return undefined;
+      // Remember the layout the tab actually opened, so a reload restores each tab's own layout.
+      // The app publishes it on <html data-layout-id>.
+      const syncLayout = () => {
+        const layoutId = doc.documentElement.dataset.layoutId;
+        if (layoutId != undefined) {
+          updateTab(id, { layoutId });
         }
       };
-      // A tab may pick its first layout (the remembered one) before this runs.
-      // A layout named in the tab's URL is selected without being remembered, so it comes first.
-      const rememberedLayoutId =
-        new URL(win.location.href).searchParams.get("layoutId") ??
-        parseLayoutId(localStorage.getItem(LOCAL_STORAGE_PROFILE_DATA));
-      setState((state) => ({
-        ...state,
-        tabs: state.tabs.map((tab) =>
-          tab.id === id && tab.layoutId == undefined
-            ? { ...tab, layoutId: rememberedLayoutId }
-            : tab,
-        ),
-      }));
-      // The tab's own Storage prototype, so other tabs and this page are unaffected.
-      const storage = Object.getPrototypeOf(win.localStorage) as Storage;
-      // eslint-disable-next-line @typescript-eslint/unbound-method
-      const setItem = storage.setItem;
-      storage.setItem = function (this: Storage, key: string, value: string) {
-        setItem.call(this, key, value);
-        if (key === LOCAL_STORAGE_PROFILE_DATA) {
-          updateTab(id, { layoutId: parseLayoutId(value) });
-        }
-      };
+      new MutationObserver(syncLayout).observe(doc.documentElement, {
+        attributeFilter: ["data-layout-id"],
+      });
+      syncLayout();
 
       win.addEventListener(
         "keydown",
