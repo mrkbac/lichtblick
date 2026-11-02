@@ -38,7 +38,7 @@ import { loadDefaultFont } from "@lichtblick/suite-base/panels/shared/loadFont";
 import Rpc from "@lichtblick/suite-base/util/Rpc";
 import { setupWorker } from "@lichtblick/suite-base/util/RpcWorkerUtils";
 
-import ChartJSManager, { InitOpts } from "./ChartJSManager";
+import ChartJSManager, { InitOpts, PanInput } from "./ChartJSManager";
 import { TypedChartData } from "../types";
 
 type RpcEvent<EventType> = { id: string; event: EventType };
@@ -136,13 +136,11 @@ export default class ChartJsMux {
     rpc.receive("mouseup", (args: RpcEvent<MouseEvent>) =>
       this.#getChart(args.id).mouseup(args.event),
     );
-    rpc.receive("panstart", (args: RpcEvent<HammerInput>) =>
+    rpc.receive("panstart", (args: RpcEvent<PanInput>) =>
       this.#getChart(args.id).panstart(args.event),
     );
-    rpc.receive("panend", (args: RpcEvent<HammerInput>) =>
-      this.#getChart(args.id).panend(args.event),
-    );
-    rpc.receive("panmove", (args: RpcEvent<HammerInput>) =>
+    rpc.receive("panend", (args: RpcEvent<PanInput>) => this.#getChart(args.id).panend(args.event));
+    rpc.receive("panmove", (args: RpcEvent<PanInput>) =>
       this.#getChart(args.id).panmove(args.event),
     );
 

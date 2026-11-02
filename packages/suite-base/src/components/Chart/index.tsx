@@ -13,7 +13,6 @@
 
 import { type ZoomPluginOptions } from "@foxglove/chartjs-plugin-zoom/types/options";
 import { ChartOptions } from "chart.js";
-import Hammer from "hammerjs";
 import * as R from "ramda";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useMountedState } from "react-use";
@@ -25,6 +24,7 @@ import ChartJsMux, {
 } from "@lichtblick/suite-base/components/Chart/worker/ChartJsMux";
 import Rpc, { createLinkedChannels } from "@lichtblick/suite-base/util/Rpc";
 import WebWorkerManager from "@lichtblick/suite-base/util/WebWorkerManager";
+import { listenForPan } from "@lichtblick/suite-base/util/listenForPan";
 import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuallyBePartial";
 
 import { TypedChartData, ChartData, RpcElement, RpcScales } from "./types";
@@ -376,75 +376,36 @@ function Chart(props: Props): React.JSX.Element {
       return;
     }
 
-    const hammerManager = new Hammer.Manager(container);
     const threshold = props.options.plugins?.zoom?.pan?.threshold ?? 10;
-    hammerManager.add(new Hammer.Pan({ threshold }));
-
-    hammerManager.on("panstart", async (event) => {
-      hasPannedSinceMouseDown.current = true;
-
-      if (!rpcSendRef.current) {
-        return;
-      }
-
-      const boundingRect = event.target.getBoundingClientRect();
-      await rpcSendRef.current<RpcScales>("panstart", {
-        event: {
-          cancelable: false,
-          deltaY: event.deltaY,
-          deltaX: event.deltaX,
-          center: {
-            x: event.center.x,
-            y: event.center.y,
-          },
-          target: {
-            boundingClientRect: boundingRect.toJSON(),
-          },
-        },
-      });
+    const target = () => ({
+      boundingClientRect: container.getBoundingClientRect().toJSON() as DOMRect,
     });
-
-    hammerManager.on("panmove", async (event) => {
-      if (!rpcSendRef.current) {
-        return;
-      }
-
-      const boundingRect = event.target.getBoundingClientRect();
-      const scales = await rpcSendRef.current<RpcScales>("panmove", {
-        event: {
-          cancelable: false,
-          deltaY: event.deltaY,
-          deltaX: event.deltaX,
-          target: {
-            boundingClientRect: boundingRect.toJSON(),
-          },
-        },
-      });
-      maybeUpdateScales(scales, { userInteraction: true });
+    return listenForPan(container, threshold, {
+      onStart: ({ deltaX, deltaY, center }) => {
+        hasPannedSinceMouseDown.current = true;
+        void rpcSendRef.current?.<RpcScales>("panstart", {
+          event: { cancelable: false, deltaY, deltaX, center, target: target() },
+        });
+      },
+      onMove: async ({ deltaX, deltaY }) => {
+        if (!rpcSendRef.current) {
+          return;
+        }
+        const scales = await rpcSendRef.current<RpcScales>("panmove", {
+          event: { cancelable: false, deltaY, deltaX, target: target() },
+        });
+        maybeUpdateScales(scales, { userInteraction: true });
+      },
+      onEnd: async ({ deltaX, deltaY }) => {
+        if (!rpcSendRef.current) {
+          return;
+        }
+        const scales = await rpcSendRef.current<RpcScales>("panend", {
+          event: { cancelable: false, deltaY, deltaX, target: target() },
+        });
+        maybeUpdateScales(scales, { userInteraction: true });
+      },
     });
-
-    hammerManager.on("panend", async (event) => {
-      if (!rpcSendRef.current) {
-        return;
-      }
-
-      const boundingRect = event.target.getBoundingClientRect();
-      const scales = await rpcSendRef.current<RpcScales>("panend", {
-        event: {
-          cancelable: false,
-          deltaY: event.deltaY,
-          deltaX: event.deltaX,
-          target: {
-            boundingClientRect: boundingRect.toJSON(),
-          },
-        },
-      });
-      maybeUpdateScales(scales, { userInteraction: true });
-    });
-
-    return () => {
-      hammerManager.destroy();
-    };
   }, [maybeUpdateScales, panEnabled, props.options.plugins?.zoom?.pan?.threshold]);
 
   const onWheel = useCallback(

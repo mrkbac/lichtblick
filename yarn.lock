@@ -3663,7 +3663,6 @@ __metadata:
     "@types/base16": "npm:^1.0.5"
     "@types/foxglove__roslibjs": "workspace:*"
     "@types/geojson": "npm:7946.0.16"
-    "@types/hammerjs": "npm:2.0.46"
     "@types/leaflet": "npm:1.9.20"
     "@types/memoize-weak": "workspace:*"
     "@types/nearley": "npm:2.11.5"
@@ -3699,7 +3698,6 @@ __metadata:
     fuzzysort: "npm:3.1.0"
     fzf: "npm:0.5.2"
     gl-matrix: "npm:3.4.4"
-    hammerjs: "npm:2.0.8"
     heap-js: "npm:2.7.1"
     i18next: "npm:26.7.1"
     i18next-browser-languagedetector: "npm:8.3.0"
@@ -6261,13 +6259,6 @@ __metadata:
     "@types/minimatch": "npm:*"
     "@types/node": "npm:*"
   checksum: 10/6ae717fedfdfdad25f3d5a568323926c64f52ef35897bcac8aca8e19bc50c0bd84630bbd063e5d52078b2137d8e7d3c26eabebd1a2f03ff350fff8a91e79fc19
-  languageName: node
-  linkType: hard
-
-"@types/hammerjs@npm:2.0.46":
-  version: 2.0.46
-  resolution: "@types/hammerjs@npm:2.0.46"
-  checksum: 10/1b6502d668f45ca49fb488c01f7938d3aa75e989d70c64801c8feded7d659ca1a118f745c1b604d220efe344c93231767d5cc68c05e00e069c14539b6143cfd9
   languageName: node
   linkType: hard
 
@@ -12590,7 +12581,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"hammerjs@npm:2.0.8, hammerjs@npm:^2.0.8":
+"hammerjs@npm:^2.0.8":
   version: 2.0.8
   resolution: "hammerjs@npm:2.0.8"
   checksum: 10/9155d056f252ef35e8ca258dbb5ee2c9d8794f6805d083da7d1d9763d185e3e149459ecc2b36ccce584e3cd5f099fd9fa55056e3bcc7724046390f2e5ae25815

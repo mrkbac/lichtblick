@@ -59,14 +59,22 @@ export type InitOpts = {
   fontLoaded: Promise<FontFace>;
 };
 
+/** Pan event sent from the main thread (see listenForPan); `target` carries the bounding rect. */
+export type PanInput = {
+  deltaX: number;
+  deltaY: number;
+  center?: { x: number; y: number };
+  target: unknown;
+};
+
 // allows us to override the chart.ctx instance field which zoom plugin uses for adding event listeners
 type MutableContext<T> = Omit<Chart, "ctx"> & { ctx: T };
 
 type ZoomableChart = Chart & {
   $zoom: {
-    panStartHandler(event: HammerInput): void;
-    panHandler(event: HammerInput): void;
-    panEndHandler(event: HammerInput): void;
+    panStartHandler(event: PanInput): void;
+    panHandler(event: PanInput): void;
+    panEndHandler(event: PanInput): void;
   };
 };
 
@@ -208,21 +216,21 @@ export default class ChartJSManager {
     return this.getScales();
   }
 
-  public panstart(event: HammerInput): RpcScales {
+  public panstart(event: PanInput): RpcScales {
     const target = event.target as HTMLElement & { boundingClientRect: DOMRect };
     target.getBoundingClientRect = () => target.boundingClientRect;
     maybeCast<ZoomableChart>(this.#chartInstance)?.$zoom.panStartHandler(event);
     return this.getScales();
   }
 
-  public panmove(event: HammerInput): RpcScales {
+  public panmove(event: PanInput): RpcScales {
     const target = event.target as HTMLElement & { boundingClientRect: DOMRect };
     target.getBoundingClientRect = () => target.boundingClientRect;
     maybeCast<ZoomableChart>(this.#chartInstance)?.$zoom.panHandler(event);
     return this.getScales();
   }
 
-  public panend(event: HammerInput): RpcScales {
+  public panend(event: PanInput): RpcScales {
     const target = event.target as HTMLElement & { boundingClientRect: DOMRect };
     target.getBoundingClientRect = () => target.boundingClientRect;
     maybeCast<ZoomableChart>(this.#chartInstance)?.$zoom.panEndHandler(event);

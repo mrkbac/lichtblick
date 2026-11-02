@@ -2,187 +2,94 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 import { renderHook } from "@testing-library/react";
-import Hammer from "hammerjs";
-import { act } from "react";
 
 import { PlotCoordinator } from "@lichtblick/suite-base/panels/Plot/PlotCoordinator";
-import { BasicBuilder } from "@lichtblick/test-builders";
 
 import usePanning from "./usePanning";
 
-const mockHammerManager = {
-  add: jest.fn(),
-  on: jest.fn(),
-  destroy: jest.fn(),
-};
-
-jest.mock("hammerjs");
-Hammer.Manager = jest.fn().mockImplementation(() => mockHammerManager);
-
-type UsePanningProps = {
-  canvasDiv?: HTMLDivElement | ReactNull;
-  coodinator?: PlotCoordinator | undefined;
-};
+// jsdom has no PointerEvent; a MouseEvent with a pointer event type reaches the same listeners.
+function pointer(target: HTMLElement, type: string, clientX: number, clientY: number): void {
+  const event = new MouseEvent(type, { clientX, clientY, button: 0, bubbles: true });
+  Object.defineProperty(event, "pointerId", { value: 1 });
+  target.dispatchEvent(event);
+}
 
 describe("usePanning", () => {
-  const eventType = {
-    panEnd: "panend",
-    panMove: "panmove",
-    panStart: "panstart",
-  };
+  const boundingClientRect = { x: 0, y: 0, width: 800, height: 600 };
 
-  const triggerEvent = (hammerEventType: string, mockEvent: any) => {
-    const handler = mockHammerManager.on.mock.calls.find(([event]) => event === hammerEventType)[1];
-    act(() => {
-      handler(mockEvent);
-    });
-  };
-
-  const setup = (override: UsePanningProps = {}) => {
-    const canvasWidth = "800";
-    const canvasHeight = "600";
-
-    let canvasDiv: HTMLDivElement | ReactNull = ReactNull;
-    if (!Object.hasOwn(override, "canvasDiv")) {
-      canvasDiv = document.createElement("div");
-      canvasDiv.style.position = "relative";
-      canvasDiv.style.width = `${canvasWidth}px`;
-      canvasDiv.style.height = `${canvasHeight}px`;
-      document.body.appendChild(canvasDiv);
+  function setup({ withCanvas = true, withCoordinator = true } = {}) {
+    const canvasDiv = withCanvas ? document.createElement("div") : ReactNull;
+    if (canvasDiv) {
+      canvasDiv.getBoundingClientRect = () => ({ toJSON: () => boundingClientRect }) as DOMRect;
     }
-
-    let coordinator: PlotCoordinator | undefined = undefined;
-    let addInteractionEventSpy: jest.SpyInstance | undefined = undefined;
-    if (!Object.hasOwn(override, "coodinator")) {
-      coordinator = {
-        addInteractionEvent: jest.fn(),
-      } as unknown as PlotCoordinator;
-      addInteractionEventSpy = jest.spyOn(coordinator, "addInteractionEvent");
-    }
-
-    const draggingRef: React.MutableRefObject<boolean> = { current: false };
-
-    const event: any = {
-      deltaX: BasicBuilder.number(),
-      deltaY: BasicBuilder.number(),
-      target: {
-        getBoundingClientRect: jest.fn().mockReturnValue({
-          toJSON: () => ({ x: 0, y: 0, width: `${canvasWidth}px`, height: `${canvasHeight}px` }),
-        }),
-      },
-    };
-
-    return {
-      ...renderHook(() => {
-        usePanning(canvasDiv, coordinator, draggingRef);
-      }),
-      addInteractionEventSpy,
-      canvasDiv,
-      coordinator,
-      draggingRef,
-      event,
-    };
-  };
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it("should initialize Hammer Manager and set up event listeners", () => {
-    const { canvasDiv } = setup();
-
-    expect(Hammer.Manager).toHaveBeenCalledWith(canvasDiv);
-    expect(mockHammerManager.add).toHaveBeenCalledWith(expect.any(Hammer.Pan));
-    expect(mockHammerManager.on).toHaveBeenCalledWith(eventType.panStart, expect.any(Function));
-    expect(mockHammerManager.on).toHaveBeenCalledWith(eventType.panMove, expect.any(Function));
-    expect(mockHammerManager.on).toHaveBeenCalledWith(eventType.panEnd, expect.any(Function));
-  });
-
-  it("should call coordinator.addInteractionEvent on panstart", () => {
-    const { event, canvasDiv, addInteractionEventSpy, draggingRef } = setup();
-    event.deltaX = BasicBuilder.number();
-    event.deltaY = BasicBuilder.number();
-    event.center = { x: BasicBuilder.number(), y: BasicBuilder.number() };
-
-    triggerEvent(eventType.panStart, event);
-
-    expect(draggingRef.current).toBe(true);
-    expect(addInteractionEventSpy).toHaveBeenCalledWith({
-      type: eventType.panStart,
-      cancelable: false,
-      deltaX: event.deltaX,
-      deltaY: event.deltaY,
-      center: event.center,
-      boundingClientRect: {
-        x: 0,
-        y: 0,
-        width: canvasDiv!.style.width,
-        height: canvasDiv!.style.height,
-      },
+    const addInteractionEvent = jest.fn();
+    const coordinator = withCoordinator
+      ? ({ addInteractionEvent } as unknown as PlotCoordinator)
+      : undefined;
+    const draggingRef = { current: false };
+    const hook = renderHook(() => {
+      usePanning(canvasDiv, coordinator, draggingRef);
     });
-  });
+    return { ...hook, canvasDiv: canvasDiv!, addInteractionEvent, draggingRef };
+  }
 
-  it("should call coordinator.addInteractionEvent on panmove", () => {
-    const { canvasDiv, event, addInteractionEventSpy } = setup();
+  it("ignores moves below the threshold", () => {
+    const { canvasDiv, addInteractionEvent, draggingRef } = setup();
 
-    triggerEvent(eventType.panMove, event);
+    pointer(canvasDiv, "pointerdown", 100, 100);
+    pointer(canvasDiv, "pointermove", 105, 105);
+    pointer(canvasDiv, "pointerup", 105, 105);
 
-    expect(addInteractionEventSpy).toHaveBeenCalledWith({
-      type: eventType.panMove,
-      cancelable: false,
-      deltaY: event.deltaY,
-      deltaX: event.deltaX,
-      boundingClientRect: {
-        x: 0,
-        y: 0,
-        width: canvasDiv!.style.width,
-        height: canvasDiv!.style.height,
-      },
-    });
-  });
-
-  it("should call coordinator.addInteractionEvent on panend and reset draggingRef", () => {
-    const { canvasDiv, event, addInteractionEventSpy, draggingRef } = setup();
-
-    triggerEvent(eventType.panEnd, event);
-
-    expect(addInteractionEventSpy).toHaveBeenCalledWith({
-      type: eventType.panEnd,
-      cancelable: false,
-      deltaY: event.deltaY,
-      deltaX: event.deltaX,
-      boundingClientRect: {
-        x: 0,
-        y: 0,
-        width: canvasDiv!.style.width,
-        height: canvasDiv!.style.height,
-      },
-    });
-
-    jest.useFakeTimers();
+    expect(addInteractionEvent).not.toHaveBeenCalled();
     expect(draggingRef.current).toBe(false);
   });
 
-  it("should clean up Hammer Manager on unmount", () => {
-    const { unmount } = setup();
+  it("reports panstart, panmove and panend with deltas from the pointerdown position", () => {
+    jest.useFakeTimers();
+    const { canvasDiv, addInteractionEvent, draggingRef } = setup();
+
+    pointer(canvasDiv, "pointerdown", 100, 100);
+    pointer(canvasDiv, "pointermove", 120, 90);
+    expect(draggingRef.current).toBe(true);
+    pointer(canvasDiv, "pointermove", 130, 80);
+    pointer(canvasDiv, "pointerup", 140, 70);
+
+    expect(addInteractionEvent.mock.calls.map(([event]) => event)).toEqual([
+      {
+        type: "panstart",
+        cancelable: false,
+        deltaX: 20,
+        deltaY: -10,
+        center: { x: 120, y: 90 },
+        boundingClientRect,
+      },
+      { type: "panmove", cancelable: false, deltaX: 30, deltaY: -20, boundingClientRect },
+      { type: "panend", cancelable: false, deltaX: 40, deltaY: -30, boundingClientRect },
+    ]);
+
+    // Reset after the click handler had a chance to see the drag
+    expect(draggingRef.current).toBe(true);
+    jest.runAllTimers();
+    expect(draggingRef.current).toBe(false);
+    jest.useRealTimers();
+  });
+
+  it("stops listening on unmount", () => {
+    const { canvasDiv, addInteractionEvent, unmount } = setup();
 
     unmount();
+    pointer(canvasDiv, "pointerdown", 100, 100);
+    pointer(canvasDiv, "pointermove", 200, 200);
 
-    expect(mockHammerManager.destroy).toHaveBeenCalled();
+    expect(addInteractionEvent).not.toHaveBeenCalled();
+    expect(canvasDiv.style.touchAction).not.toBe("none");
   });
 
-  it("should do nothing if canvasDiv is not provided", () => {
-    const { result, addInteractionEventSpy } = setup({ canvasDiv: undefined });
-
-    expect(result.current).toBeUndefined();
-    expect(Hammer.Manager).not.toHaveBeenCalled();
-    expect(addInteractionEventSpy).not.toHaveBeenCalled();
-  });
-
-  it("should do nothing if coordinator is not provided", () => {
-    const { result } = setup({ coodinator: undefined });
-
-    expect(result.current).toBeUndefined();
-    expect(Hammer.Manager).not.toHaveBeenCalled();
+  it("does nothing without a canvas or a coordinator", () => {
+    expect(() => setup({ withCanvas: false })).not.toThrow();
+    const { canvasDiv, addInteractionEvent } = setup({ withCoordinator: false });
+    pointer(canvasDiv, "pointerdown", 100, 100);
+    pointer(canvasDiv, "pointermove", 200, 200);
+    expect(addInteractionEvent).not.toHaveBeenCalled();
   });
 });
