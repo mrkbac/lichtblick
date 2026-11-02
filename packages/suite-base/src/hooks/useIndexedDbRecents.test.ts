@@ -17,12 +17,6 @@ const connection = (url: string) => ({
   extra: { url },
 });
 
-async function flush() {
-  await act(async () => {
-    await Promise.resolve();
-  });
-}
-
 describe("useIndexedDbRecents", () => {
   it("empty recents on mount", () => {
     const { result, unmount } = renderHook(() => useIndexedDbRecents());
@@ -87,7 +81,9 @@ describe("useIndexedDbRecents", () => {
 
   it("moves a re-opened recent to the top, keeping its id and pin", async () => {
     const { result, unmount } = renderHook(() => useIndexedDbRecents());
-    await flush();
+    await waitFor(() => {
+      expect(result.current.recentsLoaded).toBe(true);
+    });
     act(() => {
       result.current.clearRecents();
     });
@@ -124,7 +120,9 @@ describe("useIndexedDbRecents", () => {
 
   it("evicts unpinned recents beyond the limit", async () => {
     const { result, unmount } = renderHook(() => useIndexedDbRecents());
-    await flush();
+    await waitFor(() => {
+      expect(result.current.recentsLoaded).toBe(true);
+    });
     act(() => {
       result.current.clearRecents();
     });

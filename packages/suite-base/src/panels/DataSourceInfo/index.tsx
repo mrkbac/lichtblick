@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { Time, subtract, toSec } from "@foxglove/rostime";
 import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 import ArrowUpwardIcon from "@mui/icons-material/ArrowUpward";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
@@ -30,7 +31,6 @@ import {
 import { Fragment, useEffect, useRef, useState } from "react";
 
 import { formatByteSize } from "@lichtblick/den/format";
-import { Time, subtract, toSec } from "@foxglove/rostime";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import {
@@ -125,7 +125,7 @@ export function RecordingInspector(): React.JSX.Element {
   const [scanning, setScanning] = useState<string>();
   const [progress, setProgress] = useState("");
   const [error, setError] = useState<string>();
-  const controller = useRef<AbortController>();
+  const controller = useRef<AbortController>(undefined);
   const metadata = getMetadata();
   const isRecording = capabilities.includes(PLAYER_CAPABILITIES.playbackControl);
   const schemas = [

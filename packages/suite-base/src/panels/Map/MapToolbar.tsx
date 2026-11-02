@@ -14,7 +14,7 @@ import type { FeatureCollection } from "geojson";
 import { Marker } from "maplibre-gl";
 import type { Map as MapLibreMap, MapMouseEvent, PointLike } from "maplibre-gl";
 import {
-  MutableRefObject,
+  RefObject,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -125,7 +125,7 @@ type Props = {
   showCoordinates: boolean;
   setMeasureData: (data: FeatureCollection) => void;
   /** Set while a measure tool is active, so the panel ignores clicks on data. */
-  measuringRef: MutableRefObject<boolean>;
+  measuringRef: RefObject<boolean>;
   onFitToData: (() => void) | undefined;
 };
 

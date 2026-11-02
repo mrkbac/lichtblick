@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import type { Mock } from "vitest";
+
 import { checkForServiceWorkerUpdate } from "./useServiceWorkerUpdatePrompt";
 
 type FakeWorker = EventTarget & { state: string; postMessage: Mock };

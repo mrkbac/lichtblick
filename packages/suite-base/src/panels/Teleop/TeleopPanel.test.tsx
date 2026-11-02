@@ -854,7 +854,7 @@ describe("TeleopPanel", () => {
         initialState: { topic: "/cmd", messageType: "TwistStamped" },
       });
       render(<TeleopPanel context={context} />);
-      const [, schemaName, options] = advertise.mock.calls[0];
+      const [, schemaName, options] = advertise.mock.calls[0]!;
       expect(schemaName).toBe("geometry_msgs/msg/TwistStamped");
       // ROS 2 headers have no seq field
       expect(options.datatypes.get(schemaName).definitions[0].name).toBe("header");

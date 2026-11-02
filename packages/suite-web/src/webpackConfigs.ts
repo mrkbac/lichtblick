@@ -127,7 +127,7 @@ export const mainConfig =
           navigateFallback: "index.html",
           maximumFileSizeToCacheInBytes: 100 * 1024 * 1024,
           cleanupOutdatedCaches: true,
-        }),
+        }) as unknown as RspackPluginInstance,
       );
     }
 

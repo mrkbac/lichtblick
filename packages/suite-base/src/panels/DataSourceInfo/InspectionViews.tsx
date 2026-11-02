@@ -5,11 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { Time, subtract, toSec } from "@foxglove/rostime";
 import { Button, Chip, Typography } from "@mui/material";
 import { Fragment, useState } from "react";
 
 import { formatByteSize } from "@lichtblick/den/format";
-import { Time, subtract, toSec } from "@foxglove/rostime";
 import { Immutable } from "@lichtblick/suite";
 import {
   MessagePipelineContext,

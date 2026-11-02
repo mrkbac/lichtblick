@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { toSec } from "@foxglove/rostime";
 import { Chip, alpha } from "@mui/material";
 import type { FeatureCollection, Position } from "geojson";
 import * as _ from "lodash-es";
@@ -27,7 +28,6 @@ import { useDebounce } from "use-debounce";
 import { filterMap } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
-import { toSec } from "@foxglove/rostime";
 import { MessageEvent, PanelExtensionContext, SettingsTreeAction, Topic } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
@@ -215,7 +215,7 @@ const useStyles = makeStyles()((theme) => ({
 /** Themed container; rendered inside ThemeProvider so it follows the panel's color scheme. */
 function MapFrame(
   props: React.PropsWithChildren<{
-    containerRef: React.RefObject<HTMLDivElement>;
+    containerRef: React.RefObject<HTMLDivElement | null>;
   }>,
 ): React.JSX.Element {
   const { classes } = useStyles();
@@ -455,7 +455,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
 
   // Batch incoming messages so long recordings don't re-render once per range batch.
   const pendingTrack = useRef<NavMessage[]>([]);
-  const flushTimer = useRef<ReturnType<typeof setTimeout>>();
+  const flushTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const appendTrack = useCallback((messages: NavMessage[], cap?: number) => {
     pendingTrack.current.push(...messages);
     // Live trails (capped) rebuild less often: each flush redraws the whole retained trail.
@@ -508,7 +508,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
 
   // Batched and (for live sources) capped like the track: each flush recolors the whole track.
   const pendingSamples = useRef(new Map<string, Sample[]>());
-  const sampleTimer = useRef<ReturnType<typeof setTimeout>>();
+  const sampleTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const appendPathSamples = useCallback(
     (
       messages: readonly MessageEvent[],
@@ -1138,7 +1138,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
 
   // First data without a saved view: frame it, re-fitting while the recording streams in,
   // until the user takes over or loading settles.
-  const firstDataAtRef = useRef<number>();
+  const firstDataAtRef = useRef<number>(undefined);
   const dataSize = visibleTrack.length + currentMessages.length + geoMessages.length;
   useEffect(() => {
     if (!map || dataSize === 0 || didInitialFitRef.current) {

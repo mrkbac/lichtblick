@@ -7,9 +7,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import "@testing-library/jest-dom/vitest";
+import { fromNanoSec } from "@foxglove/rostime";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
-import { fromNanoSec } from "@foxglove/rostime";
 import {
   MessagePipelineContext,
   useMessagePipeline,

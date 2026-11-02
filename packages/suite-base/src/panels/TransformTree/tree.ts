@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { toSec } from "@foxglove/rostime";
+
 import { Immutable } from "@lichtblick/suite";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 

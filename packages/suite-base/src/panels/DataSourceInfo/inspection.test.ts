@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { fromNanoSec } from "@foxglove/rostime";
+
 import { IteratorResult } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 
 import { BUCKET_COUNT, aggregateBuckets, bucketTime, inspectTopic } from "./inspection";

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import type { Mock } from "vitest";
+
 import NoopMetricsCollector from "@lichtblick/suite-base/players/NoopMetricsCollector";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { PlayerState } from "@lichtblick/suite-base/players/types";

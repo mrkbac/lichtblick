@@ -28,14 +28,9 @@ export function disposeMeshesRecursive(object: THREE.Object3D): void {
   object.traverse((child) => {
     if (child instanceof THREE.Mesh) {
       child.geometry.dispose();
-      if (Array.isArray(child.material)) {
-        for (const material of child.material) {
-          if (material instanceof THREE.Material) {
-            disposeMaterial(material);
-          }
-        }
-      } else if (child.material instanceof THREE.Material) {
-        disposeMaterial(child.material);
+      const materials: THREE.Material[] = [child.material].flat();
+      for (const material of materials) {
+        disposeMaterial(material);
       }
     }
   });

@@ -110,8 +110,8 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
         : {},
     [data, diffData, diffEnabled, showFullMessageForDiff],
   );
-  const shownRef = useRef<{ event: unknown; data: unknown; topicPath: string }>();
-  const previousDataRef = useRef<unknown>();
+  const shownRef = useRef<{ event: unknown; data: unknown; topicPath: string }>(undefined);
+  const previousDataRef = useRef<unknown>(undefined);
   if (shownRef.current?.event !== baseItem?.messageEvent) {
     previousDataRef.current =
       shownRef.current?.topicPath === topicPath ? shownRef.current.data : undefined;

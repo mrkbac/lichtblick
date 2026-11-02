@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { ChevronDown12Filled, ChevronRight12Filled, Warning16Filled } from "@fluentui/react-icons";
+import { toSec } from "@foxglove/rostime";
 import { Tooltip } from "@mui/material";
 import { TFunction } from "i18next";
 import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import { toSec } from "@foxglove/rostime";
 import { Immutable, SettingsTreeAction } from "@lichtblick/suite";
 import {
   useBlocksSubscriptions,

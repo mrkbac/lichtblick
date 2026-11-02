@@ -32,15 +32,6 @@ import { isTypedArray } from "@lichtblick/suite-base/types/isTypedArray";
 
 ROS1_COMMON_MSG_PACKAGES.add("turtlesim");
 
-function isTypedArray(obj: unknown): boolean {
-  const isTyped =
-    obj != undefined &&
-    typeof obj === "object" &&
-    ArrayBuffer.isView(obj) &&
-    !(obj instanceof DataView);
-  return isTyped;
-}
-
 // ponytail: "expand all" leaves big arrays (point clouds, images) collapsed so a message with
 // millions of elements stays responsive; they can still be expanded one by one.
 const EXPAND_ALL_MAX_ARRAY_LENGTH = 500;

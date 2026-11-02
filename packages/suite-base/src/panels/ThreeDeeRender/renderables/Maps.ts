@@ -2,13 +2,13 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import type { TilesRenderer } from "3d-tiles-renderer";
+import { toNanoSec } from "@foxglove/rostime";
 import { t } from "i18next";
 import * as _ from "lodash-es";
 import type { Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
 import * as THREE from "three";
 
 import Logger from "@lichtblick/log";
-import { toNanoSec } from "@foxglove/rostime";
 import { MessageEvent, SettingsTreeAction, Time } from "@lichtblick/suite";
 import { loadGeoTiff } from "@lichtblick/suite-base/panels/Map/geotiff";
 import {

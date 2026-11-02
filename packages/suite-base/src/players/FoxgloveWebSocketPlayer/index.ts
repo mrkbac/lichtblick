@@ -9,12 +9,14 @@ import CommonRosTypes from "@foxglove/rosmsg-msgs-common";
 import { MessageWriter as Ros1MessageWriter } from "@foxglove/rosmsg-serialization";
 import { MessageWriter as Ros2MessageWriter } from "@foxglove/rosmsg2-serialization";
 import {
+  compare,
   fromMillis,
   fromNanoSec,
   isGreaterThan,
   isLessThan,
   subtract,
   Time,
+  toNanoSec,
 } from "@foxglove/rostime";
 import {
   ChannelId,
@@ -1412,7 +1414,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         play: this.#isPlaying,
         speed: this.#speed,
         seekTimeNs,
-        requestId: uuidv4(),
+        requestId: randomUUID(),
       }),
     );
     this.#emitState();
