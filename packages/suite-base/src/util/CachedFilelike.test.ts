@@ -376,6 +376,101 @@ describe("CachedFilelike", () => {
     }, 1000);
   });
 
+  describe("read ordering", () => {
+    // A reader whose streams only deliver data when the test pushes it.
+    function manualFileReader(size: number) {
+      const streams: {
+        offset: number;
+        destroyed: boolean;
+        onData?: (chunk: Uint8Array) => void;
+      }[] = [];
+      const fileReader: FileReader = {
+        open: async () => ({ size }),
+        fetch: (offset: number): FileStream => {
+          const stream: (typeof streams)[number] = { offset, destroyed: false };
+          streams.push(stream);
+          return {
+            on: (
+              type: "data" | "error" | "end",
+              callback: ((_: Uint8Array) => void) & ((_: Error) => void) & (() => void),
+            ) => {
+              if (type === "data") {
+                stream.onData = callback;
+              }
+            },
+            destroy: () => {
+              stream.destroyed = true;
+            },
+          };
+        },
+      };
+      const push = (bytes: number) => {
+        streams[0]!.onData!(new Uint8Array(bytes));
+      };
+      return { fileReader, streams, push };
+    }
+
+    it("keeps the main connection and fetches a far read separately while it is in use", async () => {
+      // GIVEN: a main connection that is serving reads near the start of a large file
+      const { fileReader, streams, push } = manualFileReader(200 * MEBIBYTE);
+      const cachedFileReader = new CachedFilelike({
+        fileReader,
+        cacheSizeInBytes: 100 * MEBIBYTE,
+        log,
+      });
+      const near = cachedFileReader.read(0, MEBIBYTE);
+      await delay(0);
+      push(MEBIBYTE);
+      await near;
+
+      // WHEN: a far read arrives
+      const far = cachedFileReader.read(150 * MEBIBYTE, MEBIBYTE);
+      await delay(0);
+
+      // THEN: it gets its own fetch and the main connection is not destroyed
+      expect(streams.map((stream) => [stream.offset, stream.destroyed])).toEqual([
+        [0, false],
+        [150 * MEBIBYTE, false],
+      ]);
+      streams[1]!.onData!(new Uint8Array(MEBIBYTE));
+      await expect(far).resolves.toHaveLength(MEBIBYTE);
+
+      // and the main connection keeps serving nearby reads
+      const nearAgain = cachedFileReader.read(MEBIBYTE, MEBIBYTE);
+      await delay(0);
+      streams[0]!.onData!(new Uint8Array(MEBIBYTE));
+      await expect(nearAgain).resolves.toHaveLength(MEBIBYTE);
+      expect(streams).toHaveLength(2);
+    });
+
+    it("moves the main connection to a far read once it is idle", async () => {
+      // GIVEN: a main connection that last served a read a while ago
+      const { fileReader, streams, push } = manualFileReader(200 * MEBIBYTE);
+      const cachedFileReader = new CachedFilelike({
+        fileReader,
+        cacheSizeInBytes: 100 * MEBIBYTE,
+        log,
+      });
+      const now = vi.spyOn(Date, "now").mockReturnValue(0);
+      const near = cachedFileReader.read(0, MEBIBYTE);
+      await delay(0);
+      push(MEBIBYTE);
+      await near;
+      now.mockReturnValue(10_000);
+
+      // WHEN: a far read arrives (e.g. after a seek)
+      void cachedFileReader.read(150 * MEBIBYTE, MEBIBYTE);
+      await delay(0);
+
+      // THEN: the main connection moves there
+      expect(streams.map((stream) => [stream.offset, stream.destroyed])).toEqual([
+        [0, true],
+        [150 * MEBIBYTE, false],
+      ]);
+      now.mockRestore();
+    });
+  });
+
   describe("#close", () => {
     it("rejects reads after close()", async () => {
       // GIVEN: an opened reader.

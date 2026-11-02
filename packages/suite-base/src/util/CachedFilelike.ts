@@ -24,15 +24,31 @@ import { getNewConnection } from "./getNewConnection";
 import { Range } from "./ranges";
 
 // CachedFilelike is a streamed Filelike backed by a VirtualLRUBuffer.
-// It serves requested byte ranges from an in-memory LRU cache, keeps at most one underlying fetch
-// active, and optionally uses bounded read-ahead/reconnect behavior for remote readers.
+// It serves requested byte ranges from an in-memory LRU cache through one main streaming fetch (plus
+// one-off fetches for reads far from it), and optionally uses bounded read-ahead/reconnect
+// behavior for remote readers.
 
 const LOGGING_INTERVAL_IN_BYTES = 1024 * 1024 * 300; // Log every 300MiB to avoid cluttering the logs too much.
 const CACHE_BLOCK_SIZE = 1024 * 1024 * 10; // 10MiB blocks.
 // Don't start a new connection if we're 5MiB away from downloading the requested byte.
 const CLOSE_ENOUGH_BYTES_TO_NOT_START_NEW_CONNECTION = 1024 * 1024 * 5;
+// The main connection counts as in use while it served a read within this time. Readers issue their
+// next read a few milliseconds after the previous one resolves, so this only needs to bridge that gap.
+const MAIN_CONNECTION_IDLE_MS = 500;
+// One-off fetches for reads the main connection won't reach share the bandwidth with it. Allowing
+// only one keeps most of the bandwidth for the main connection, which playback usually depends on.
+const MAX_SIDE_FETCHES = 1;
 
 const log = Logger.getLogger(__filename);
+
+type ReadRequest = {
+  range: Range;
+  resolve: (_: Uint8Array) => void;
+  reject: (_: Error) => void;
+  requestTime: number;
+  // Set while the read is served by its own one-off fetch instead of the main connection.
+  sideFetch?: boolean;
+};
 
 export default class CachedFilelike implements Filelike {
   #fileReader: FileReader;
@@ -53,12 +69,11 @@ export default class CachedFilelike implements Filelike {
   #currentConnection: { stream: FileStream; remainingRange: Range } | undefined;
 
   // A list of read requests and associated ranges for all read requests, in order.
-  #readRequests: {
-    range: Range;
-    resolve: (_: Uint8Array) => void;
-    reject: (_: Error) => void;
-    requestTime: number;
-  }[] = [];
+  #readRequests: ReadRequest[] = [];
+
+  // When a read was last resolved while the main connection was open.
+  #lastMainServeTime = 0;
+  #sideFetchCount = 0;
 
   // The range.end of the last read request that we resolved. Useful for reading ahead a bit.
   #lastResolvedCallbackEnd?: number;
@@ -264,36 +279,75 @@ export default class CachedFilelike implements Filelike {
       return;
     }
 
-    this.#readRequests = this.#readRequests.filter(({ range, resolve }) => {
-      if (!this.#virtualBuffer.hasData(range.start, range.end)) {
+    this.#readRequests = this.#readRequests.filter(({ range, resolve, sideFetch }) => {
+      if (sideFetch === true || !this.#virtualBuffer.hasData(range.start, range.end)) {
         return true;
       }
 
       this.#lastResolvedCallbackEnd = range.end;
+      if (this.#currentConnection) {
+        this.#lastMainServeTime = Date.now();
+      }
       const buffer = this.#virtualBuffer.slice(range.start, range.end);
 
       resolve(buffer);
       return false;
     });
 
-    const size = this.size();
+    const connectionFor = (readRequestRange: Range | undefined) =>
+      getNewConnection({
+        currentRemainingRange: this.#currentConnection?.remainingRange,
+        readRequestRange,
+        downloadedRanges: this.#virtualBuffer.getRangesWithData(),
+        lastResolvedCallbackEnd: this.#lastResolvedCallbackEnd,
+        maxRequestSize: this.#cacheSizeInBytes,
+        fileSize: this.size(),
+        continueDownloadingThreshold: CLOSE_ENOUGH_BYTES_TO_NOT_START_NEW_CONNECTION,
+        readAheadEnabled: this.#readAheadEnabled,
+        readAheadBufferBytes: this.#readAheadBufferBytes,
+      });
+    const waiting = this.#readRequests.filter(({ sideFetch }) => sideFetch !== true);
 
-    const newConnection = getNewConnection({
-      currentRemainingRange: this.#currentConnection
-        ? this.#currentConnection.remainingRange
-        : undefined,
-      readRequestRange: this.#readRequests[0] ? this.#readRequests[0].range : undefined,
-      downloadedRanges: this.#virtualBuffer.getRangesWithData(),
-      lastResolvedCallbackEnd: this.#lastResolvedCallbackEnd,
-      maxRequestSize: this.#cacheSizeInBytes,
-      fileSize: size,
-      continueDownloadingThreshold: CLOSE_ENOUGH_BYTES_TO_NOT_START_NEW_CONNECTION,
-      readAheadEnabled: this.#readAheadEnabled,
-      readAheadBufferBytes: this.#readAheadBufferBytes,
-    });
+    // Several readers (playback plus per-topic range iterators) can read at offsets far apart.
+    // Moving the single connection to every far read tears down the stream the nearby readers are
+    // using, and they then wait behind each hop. While the main connection is in use, serve reads
+    // it won't reach with their own fetch instead.
+    if (this.#currentConnection && Date.now() - this.#lastMainServeTime < MAIN_CONNECTION_IDLE_MS) {
+      for (const request of waiting) {
+        if (this.#sideFetchCount >= MAX_SIDE_FETCHES) {
+          break;
+        }
+        if (connectionFor(request.range)) {
+          this.#startSideFetch(request);
+        }
+      }
+      return;
+    }
+
+    const newConnection = connectionFor(waiting[0]?.range);
     if (newConnection) {
       this.#setConnection(newConnection);
     }
+  }
+
+  #startSideFetch(request: ReadRequest): void {
+    request.sideFetch = true;
+    this.#sideFetchCount++;
+    this.#readUncached(request.range)
+      .then((data) => {
+        this.#virtualBuffer.copyFrom(Buffer.from(data), request.range.start);
+        this.#readRequests = this.#readRequests.filter((other) => other !== request);
+        request.resolve(data);
+      })
+      .catch((error: unknown) => {
+        // Leave the read to the main connection, which has its own retry handling.
+        this.#log.info(`Side fetch @ ${rangeToString(request.range)} failed: ${String(error)}`);
+        request.sideFetch = false;
+      })
+      .finally(() => {
+        this.#sideFetchCount--;
+        this.#updateState();
+      });
   }
 
   // Replace the current connection with a new one, spanning a certain range.
