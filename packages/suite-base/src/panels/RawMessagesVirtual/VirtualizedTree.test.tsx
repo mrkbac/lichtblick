@@ -138,7 +138,7 @@ describe("VirtualizedTree", () => {
 
       // Then
       const containerDiv = container.firstChild as HTMLElement;
-      expect(containerDiv).toHaveStyle({ fontSize: "inherit" });
+      expect(containerDiv.style.fontSize).toBe("inherit");
     });
   });
 
