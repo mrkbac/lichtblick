@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { LabelPool } from "@foxglove/three-text";
 import * as THREE from "three";
 
 import { ICameraModel } from "@lichtblick/suite";
@@ -14,7 +15,6 @@ import { RenderableLineAnnotation } from "./RenderableLineAnnotation";
 import { RenderablePointsAnnotation } from "./RenderablePointsAnnotation";
 import { RenderableTextAnnotation } from "./RenderableTextAnnotation";
 import { Annotation as NormalizedAnnotation } from "./types";
-import { LabelPool } from "../../../text";
 
 /**
  * Holds renderables for all the 2D image annotations on a single topic.

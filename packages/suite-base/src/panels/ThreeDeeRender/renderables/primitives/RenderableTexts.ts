@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { SceneEntity, TextPrimitive } from "@foxglove/schemas";
+import { Label, LabelPool } from "@foxglove/three-text";
 
 import { toNanoSec } from "@lichtblick/rostime";
 
@@ -13,7 +14,6 @@ import { RenderablePrimitive } from "./RenderablePrimitive";
 import type { IRenderer } from "../../IRenderer";
 import { getLuminance, makeRgba, SRGBToLinear, stringToRgba } from "../../color";
 import { LayerSettingsEntity } from "../../settings";
-import { Label, LabelPool } from "../../text";
 
 const tempRgba = makeRgba();
 

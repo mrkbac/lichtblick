@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { ImageAnnotations as FoxgloveImageAnnotations } from "@foxglove/schemas";
+import { LabelPool } from "@foxglove/three-text";
 import { t } from "i18next";
 import * as THREE from "three";
 import { Opaque } from "ts-essentials";
@@ -31,7 +32,6 @@ import { AnyRendererSubscription, ImageModeConfig } from "../../../IRenderer";
 import { SettingsTreeEntry } from "../../../SettingsManager";
 import { IMAGE_ANNOTATIONS_DATATYPES } from "../../../foxglove";
 import { IMAGE_MARKER_ARRAY_DATATYPES, IMAGE_MARKER_DATATYPES } from "../../../ros";
-import { LabelPool } from "../../../text";
 import { topicIsConvertibleToSchema } from "../../../topicIsConvertibleToSchema";
 import { sortPrefixMatchesToFront } from "../../Images/topicPrefixMatching";
 import { IMessageHandler, MessageRenderState } from "../MessageHandler";

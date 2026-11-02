@@ -460,6 +460,7 @@ export function MapToolbar(props: Props): React.JSX.Element {
     let suppressClick = false;
 
     const onMouseDown = (event: MapMouseEvent) => {
+      suppressClick = false; // a drag past clickTolerance fires no click, so a set flag is stale
       const handle = event.originalEvent.button === 0 ? pickHandle(event) : undefined;
       if (!handle) {
         return;

@@ -5,6 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { Label, LabelPool } from "@foxglove/three-text";
+
 import { ICameraModel } from "@lichtblick/suite";
 import { RosObject, RosValue } from "@lichtblick/suite-base/players/types";
 
@@ -13,7 +15,6 @@ import { getAnnotationAtPath } from "./normalizeAnnotations";
 import { TextAnnotation as NormalizedTextAnnotation } from "./types";
 import { BaseUserData, Renderable } from "../../../Renderable";
 import { SRGBToLinear, getLuminance } from "../../../color";
-import { Label, LabelPool } from "../../../text";
 
 /**
  * Handles rendering of 2D text annotations.

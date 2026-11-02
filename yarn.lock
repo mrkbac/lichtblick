@@ -2492,6 +2492,17 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@foxglove/three-text@npm:0.6.1":
+  version: 0.6.1
+  resolution: "@foxglove/three-text@npm:0.6.1"
+  dependencies:
+    "@mapbox/tiny-sdf": "npm:2.0.6"
+  peerDependencies:
+    three: ">=0.157.0"
+  checksum: 10/af80d8acb2e5f3182984e24c5c386c35b7bfc0259989bd3eb9d1e1322c82002cf8184b81f0476f0ab8948baf7a28bbb8e7b4037448ec5c2560bae97c5b41151c
+  languageName: node
+  linkType: hard
+
 "@foxglove/ws-protocol@npm:0.8.0":
   version: 0.8.0
   resolution: "@foxglove/ws-protocol@npm:0.8.0"
@@ -3592,6 +3603,7 @@ __metadata:
     "@emotion/styled": "npm:11.14.1"
     "@fluentui/react-icons": "npm:2.0.308"
     "@foxglove/schemas": "npm:1.13.0"
+    "@foxglove/three-text": "npm:0.6.1"
     "@foxglove/ws-protocol": "npm:0.8.0"
     "@lichtblick/avl": "npm:1.0.0"
     "@lichtblick/chartjs-plugin-zoom": "npm:1.0.0"
@@ -3624,7 +3636,6 @@ __metadata:
     "@lichtblick/wasm-bz2": "npm:1.0.0"
     "@lichtblick/wasm-lz4": "npm:1.0.0"
     "@lichtblick/xmlrpc": "npm:1.0.0"
-    "@mapbox/tiny-sdf": "npm:2.0.6"
     "@maplibre/maplibre-gl-style-spec": "npm:26.5.1"
     "@mcap/core": "npm:2.2.0"
     "@mui/icons-material": "npm:7.3.8"
