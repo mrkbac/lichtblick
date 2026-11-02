@@ -14,8 +14,8 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { StoryObj } from "@storybook/react-webpack5";
 import { fireEvent, screen } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import TextMiddleTruncate from "./TextMiddleTruncate";
 

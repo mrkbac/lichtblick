@@ -5,9 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { Configuration, rspack } from "@rspack/core";
 import dotenv from "dotenv";
 import path from "path";
-import { Configuration, DefinePlugin, ResolveOptions } from "webpack";
 
 import { WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
 
@@ -20,11 +20,11 @@ dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 export const webpackMainConfig =
   (params: WebpackConfigParams) =>
   (_: unknown, argv: WebpackArgv): Configuration => {
-    const isServe = argv.env?.WEBPACK_SERVE ?? false;
+    const isServe = argv.env?.RSPACK_SERVE ?? false;
 
     const isDev = argv.mode === "development";
 
-    const resolve: ResolveOptions = {
+    const resolve: NonNullable<Configuration["resolve"]> = {
       extensions: [".js", ".ts", ".tsx", ".json"],
     };
 
@@ -55,7 +55,7 @@ export const webpackMainConfig =
       },
       plugins: [
         ...(common.plugins ?? []),
-        new DefinePlugin({
+        new rspack.DefinePlugin({
           MAIN_WINDOW_WEBPACK_ENTRY: rendererEntry,
         }),
       ],

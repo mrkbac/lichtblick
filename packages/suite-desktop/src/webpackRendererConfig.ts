@@ -5,11 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import ReactRefreshPlugin from "@pmmmwh/react-refresh-webpack-plugin";
-import { EsbuildPlugin } from "esbuild-loader";
+import { Configuration, RspackPluginInstance } from "@rspack/core";
+import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "path";
-import { Configuration, WebpackPluginInstance } from "webpack";
 
 import type { WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
 import { makeConfig } from "@lichtblick/suite-base/webpack";
@@ -21,14 +20,14 @@ export const webpackRendererConfig =
   (params: WebpackConfigParams) =>
   (env: unknown, argv: WebpackArgv): Configuration => {
     const isDev = argv.mode === "development";
-    const isServe = argv.env?.WEBPACK_SERVE ?? false;
+    const isServe = argv.env?.RSPACK_SERVE ?? false;
 
     const allowUnusedVariables = isDev;
 
-    const plugins: WebpackPluginInstance[] = [];
+    const plugins: RspackPluginInstance[] = [];
 
     if (isServe) {
-      plugins.push(new ReactRefreshPlugin());
+      plugins.push(new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } }));
     }
 
     const appWebpackConfig = makeConfig(env, argv, {
@@ -50,16 +49,6 @@ export const webpackRendererConfig =
       output: {
         publicPath: isServe ? "/renderer/" : "",
         path: path.join(params.outputPath, "renderer"),
-      },
-
-      optimization: {
-        removeAvailableModules: true,
-        minimizer: [
-          new EsbuildPlugin({
-            target: "es2022",
-            minify: true,
-          }),
-        ],
       },
 
       plugins: [

@@ -13,10 +13,10 @@ import {
   PointsAnnotationType,
   RawImage,
 } from "@foxglove/schemas";
-import { Meta, StoryObj } from "@storybook/react-webpack5";
 import { useCallback, useMemo, useState } from "react";
 import { useAsync } from "react-use";
 import { fireEvent, screen, userEvent, waitFor } from "storybook/test";
+import { Meta, StoryObj } from "storybook-react-rsbuild";
 import tinycolor from "tinycolor2";
 
 import { MessageEvent } from "@lichtblick/suite";

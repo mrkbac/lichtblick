@@ -15,8 +15,8 @@
 //   You may not use this file except in compliance with the License.
 
 import { useTheme } from "@mui/material";
-import { StoryFn, StoryObj } from "@storybook/react-webpack5";
 import { PropsWithChildren } from "react";
+import { StoryFn, StoryObj } from "storybook-react-rsbuild";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";

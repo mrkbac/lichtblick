@@ -6,8 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time } from "@foxglove/rostime";
-import { Meta, StoryFn, StoryObj } from "@storybook/react-webpack5";
 import { useState } from "react";
+import { Meta, StoryFn, StoryObj } from "storybook-react-rsbuild";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";

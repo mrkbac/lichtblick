@@ -89,7 +89,7 @@ cd lichtblick
 
    ```sh
    # Desktop app (run in separate terminals):
-   yarn desktop:serve        # Start webpack dev server
+   yarn desktop:serve        # Start the Rspack dev server
    yarn desktop:start        # Launch Electron (wait for desktop:serve to finish)
 
    # Web app:
@@ -122,10 +122,10 @@ yarn test:e2e:desktop
 yarn test:e2e:web
 ```
 
-### Advanced: remote webpack + Electron
+### Advanced: remote Rspack + Electron
 
 ```sh
-# Running webpack and Electron on different machines on the same network
+# Running Rspack and Electron on different machines on the same network
 yarn desktop:serve --host 192.168.xxx.yyy
 yarn dlx electron@22.1.0 .webpack
 ```

@@ -5,10 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Meta, StoryObj } from "@storybook/react-webpack5";
 import { action } from "storybook/actions";
 import { expect } from "storybook/test";
 import { userEvent, within } from "storybook/test";
+import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import Publish from "@lichtblick/suite-base/panels/Publish";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";

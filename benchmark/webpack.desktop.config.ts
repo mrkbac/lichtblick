@@ -5,13 +5,12 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { CleanWebpackPlugin } from "clean-webpack-plugin";
+import { Configuration } from "@rspack/core";
 import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "node:path";
-import { Configuration } from "webpack";
 
-import type { WebpackArgv } from "../packages/suite-base/WebpackArgv";
-import { makeConfig } from "../packages/suite-base/webpack";
+import { resolveConfigs, type WebpackArgv } from "../packages/suite-base/WebpackArgv";
+import { makeConfig, swcRule } from "../packages/suite-base/webpack";
 
 // This is a standalone Electron shell for the benchmark app, separate from the production
 // `desktop/` shell. It intentionally does not depend on `@lichtblick/suite-desktop` (auto-update,
@@ -31,9 +30,9 @@ const rootConfig = (_env: unknown, _argv: WebpackArgv): Configuration => ({
   output: {
     publicPath: "",
     path: outputPath,
+    clean: true,
   },
   plugins: [
-    new CleanWebpackPlugin(),
     new HtmlWebpackPlugin({
       filename: "package.json",
       templateContent: JSON.stringify({
@@ -63,16 +62,7 @@ const mainConfig = (_env: unknown, argv: WebpackArgv): Configuration => {
       extensions: [".js", ".ts", ".tsx", ".json"],
     },
     module: {
-      rules: [
-        {
-          test: /\.tsx?$/,
-          exclude: /node_modules/,
-          use: {
-            loader: "ts-loader",
-            options: { transpileOnly: true, onlyCompileBundledFiles: true },
-          },
-        },
-      ],
+      rules: [swcRule({ isDev })],
     },
   };
 };
@@ -96,16 +86,7 @@ const preloadConfig = (_env: unknown, argv: WebpackArgv): Configuration => {
       extensions: [".js", ".ts", ".tsx", ".json"],
     },
     module: {
-      rules: [
-        {
-          test: /\.tsx?$/,
-          exclude: /node_modules/,
-          use: {
-            loader: "ts-loader",
-            options: { transpileOnly: true, onlyCompileBundledFiles: true },
-          },
-        },
-      ],
+      rules: [swcRule({ isDev })],
     },
   };
 };
@@ -159,4 +140,5 @@ const rendererConfig = (env: unknown, argv: WebpackArgv): Configuration => {
   };
 };
 
-export default [rootConfig, mainConfig, preloadConfig, rendererConfig];
+export default (env: unknown, argv: WebpackArgv): Configuration[] =>
+  resolveConfigs(env, argv, [rootConfig, mainConfig, preloadConfig, rendererConfig]);

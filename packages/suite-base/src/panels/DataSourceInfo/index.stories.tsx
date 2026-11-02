@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { fromDate } from "@foxglove/rostime";
-import { StoryObj } from "@storybook/react-webpack5";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import DataSourceInfoPanel from "@lichtblick/suite-base/panels/DataSourceInfo";

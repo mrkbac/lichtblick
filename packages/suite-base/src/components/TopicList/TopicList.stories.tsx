@@ -6,11 +6,11 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { ros2humble } from "@foxglove/rosmsg-msgs-common";
-import { Meta, StoryObj } from "@storybook/react-webpack5";
 import * as _ from "lodash-es";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { fireEvent, userEvent, waitFor, within } from "storybook/test";
+import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";

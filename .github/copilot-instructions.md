@@ -80,7 +80,7 @@ ComponentName/
 
 ```bash
 yarn web:serve               # Start web dev server (http://localhost:8080)
-yarn desktop:serve           # Start webpack for Electron
+yarn desktop:serve           # Start Rspack for Electron
 yarn desktop:start           # Launch Electron app (requires desktop:serve)
 yarn test                    # All unit tests (Vitest)
 yarn test:watch              # Watch mode

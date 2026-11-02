@@ -6,9 +6,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { PopoverPosition, PopoverReference } from "@mui/material";
-import { Meta, StoryObj } from "@storybook/react-webpack5";
 import * as _ from "lodash-es";
 import { userEvent, within } from "storybook/test";
+import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import PlayerSelectionContext, {
   PlayerSelection,

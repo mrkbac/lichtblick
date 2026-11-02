@@ -7,8 +7,8 @@
 
 import { fromSec } from "@foxglove/rostime";
 import type { FrameTransforms } from "@foxglove/schemas";
-import { StoryObj } from "@storybook/react-webpack5";
 import { screen, userEvent } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { Topic } from "@lichtblick/suite-base/players/types";

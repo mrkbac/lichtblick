@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { fromSec } from "@foxglove/rostime";
-import { StoryObj } from "@storybook/react-webpack5";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { Topic } from "@lichtblick/suite-base/players/types";

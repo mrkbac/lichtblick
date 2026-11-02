@@ -15,9 +15,9 @@
 //   You may not use this file except in compliance with the License.
 
 import { useTheme } from "@mui/material";
-import { StoryObj, Meta } from "@storybook/react-webpack5";
 import { expect } from "storybook/test";
 import { fireEvent, within } from "storybook/test";
+import { StoryObj, Meta } from "storybook-react-rsbuild";
 
 import Panel from "@lichtblick/suite-base/components/Panel";
 import { PanelCatalog as PanelCatalogComponent } from "@lichtblick/suite-base/components/PanelCatalog";

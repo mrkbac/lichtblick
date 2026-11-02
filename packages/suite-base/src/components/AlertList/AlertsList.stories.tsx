@@ -7,8 +7,8 @@
 
 import { fromDate } from "@foxglove/rostime";
 import { useTheme } from "@mui/material";
-import { StoryFn, StoryObj } from "@storybook/react-webpack5";
 import { useEffect } from "react";
+import { StoryFn, StoryObj } from "storybook-react-rsbuild";
 
 import { AlertsList } from "@lichtblick/suite-base/components/AlertList/AlertsList";
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";

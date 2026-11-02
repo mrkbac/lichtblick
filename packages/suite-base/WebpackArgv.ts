@@ -8,11 +8,26 @@
 type WebpackArgv = {
   mode?: string;
   env?: {
-    WEBPACK_SERVE?: boolean;
+    RSPACK_SERVE?: boolean;
     WEBPACK_BUNDLE?: boolean;
     WEBPACK_BUILD?: boolean;
   };
   host?: string;
 };
 
+type ConfigFactory<C> = C | ((env: unknown, argv: WebpackArgv) => C);
+
+/**
+ * webpack-cli called functions inside an exported config array; the Rspack CLI only calls a
+ * top-level function. Export `(env, argv) => resolveConfigs(env, argv, [...])` instead.
+ */
+function resolveConfigs<C>(env: unknown, argv: WebpackArgv, configs: ConfigFactory<C>[]): C[] {
+  return configs.map((config) =>
+    typeof config === "function"
+      ? (config as (env: unknown, argv: WebpackArgv) => C)(env, argv)
+      : config,
+  );
+}
+
 export type { WebpackArgv };
+export { resolveConfigs };

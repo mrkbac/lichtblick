@@ -5,11 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { StoryObj } from "@storybook/react-webpack5";
 import { PropsWithChildren, useEffect, useState } from "react";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { screen, userEvent } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { SidebarItem } from "@lichtblick/suite-base/components/Sidebars/types";

@@ -6,9 +6,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { FrameTransform, PoseInFrame } from "@foxglove/schemas";
-import { StoryObj } from "@storybook/react-webpack5";
 import { quat } from "gl-matrix";
 import { userEvent, screen } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { Topic } from "@lichtblick/suite-base/players/types";

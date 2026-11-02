@@ -5,19 +5,45 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { Configuration, RuleSetRule, rspack } from "@rspack/core";
 import dotenv from "dotenv";
-import { EsbuildPlugin } from "esbuild-loader";
-import ForkTsCheckerWebpackPlugin from "fork-ts-checker-webpack-plugin";
 import MonacoWebpackPlugin from "monaco-editor-webpack-plugin";
 import { createRequire as _nodeCreateRequire } from "node:module";
 import { fileURLToPath as _nodeFileURLToPath, pathToFileURL as _nodePathToFileURL } from "node:url";
-import ReactRefreshTypescript from "react-refresh-typescript";
-import ts from "typescript";
-import webpack, { Configuration } from "webpack";
-
-import { createTssReactNameTransformer } from "@lichtblick/typescript-transformers";
+import { TsCheckerRspackPlugin } from "ts-checker-rspack-plugin";
 
 import { WebpackArgv } from "./WebpackArgv";
+
+/**
+ * Transpiles TypeScript/TSX with Rspack's built-in SWC loader (type checking runs separately in
+ * TsCheckerRspackPlugin). `refresh` enables React Fast Refresh for the dev server.
+ */
+export function swcRule({
+  isDev,
+  refresh = false,
+}: {
+  isDev: boolean;
+  refresh?: boolean;
+}): RuleSetRule {
+  return {
+    test: /\.tsx?$/,
+    exclude: /node_modules/,
+    loader: "builtin:swc-loader",
+    options: {
+      jsc: {
+        parser: { syntax: "typescript", tsx: true, decorators: true },
+        target: "es2022",
+        transform: {
+          // matches experimentalDecorators / emitDecoratorMetadata in tsconfig
+          legacyDecorator: true,
+          decoratorMetadata: true,
+          react: { runtime: "automatic", development: isDev, refresh },
+        },
+      },
+    },
+    type: "javascript/auto",
+  };
+}
 
 // In CJS (ts-node / webpack-cli), __dirname is injected by Node's module wrapper.
 // In ESM (Storybook 10+), __dirname is undefined; callers must provide `packageDir`.
@@ -76,17 +102,14 @@ export function makeConfig(
   _: unknown,
   argv: WebpackArgv,
   options: Options,
-): Pick<
-  Configuration,
-  "resolve" | "module" | "optimization" | "plugins" | "node" | "ignoreWarnings"
-> {
+): Pick<Configuration, "resolve" | "module" | "plugins" | "node" | "ignoreWarnings"> {
   initModuleLocals(options.packageDir);
   // After initModuleLocals, currentDirHref and localRequireInstance are guaranteed to be set.
   const dirHref = currentDirHref!;
   const localRequire = localRequireInstance!;
 
   const isDev = argv.mode === "development";
-  const isServe = argv.env?.WEBPACK_SERVE ?? false;
+  const isServe = argv.env?.RSPACK_SERVE ?? false;
 
   const { allowUnusedVariables = isDev && isServe, version, tsconfigPath } = options;
 
@@ -142,38 +165,18 @@ export function makeConfig(
           test: /\.wasm$/,
           type: "asset/resource",
         },
-        {
-          test: /\.tsx?$/,
-          exclude: /node_modules/,
-          resourceQuery: { not: [/raw/] },
-          use: [
-            {
-              loader: "ts-loader", // foxglove-depcheck-used: ts-loader
-              options: {
-                transpileOnly: true,
-                // https://github.com/TypeStrong/ts-loader#onlycompilebundledfiles
-                // avoid looking at files which are not part of the bundle
-                onlyCompileBundledFiles: true,
-                projectReferences: true,
-                // Note: configFile should not be overridden, it needs to differ between web,
-                // desktop, etc. so that files specific to each build (not just shared files) are
-                // also type-checked. The default behavior is to find it from the webpack `context`
-                // directory.
-                compilerOptions: {
-                  sourceMap: true,
-                  jsx: isDev ? "react-jsxdev" : "react-jsx",
-                },
-                getCustomTransformers: (program: ts.Program) => ({
-                  before: [
-                    // only include refresh plugin when using webpack server
-                    isServe && ReactRefreshTypescript(),
-                    isDev && createTssReactNameTransformer(program),
-                  ].filter(Boolean),
-                }),
+        { ...swcRule({ isDev, refresh: isServe }), resourceQuery: { not: [/raw/] } },
+        // Name tss-react classes after their file in dev builds
+        ...(isDev
+          ? [
+              {
+                test: /\.tsx?$/,
+                exclude: /node_modules/,
+                resourceQuery: { not: [/raw/] },
+                loader: _nodeFileURLToPath(new URL("loaders/tssReactNameLoader.cjs", dirHref)),
               },
-            },
-          ],
-        },
+            ]
+          : []),
         {
           // "?raw" imports are used to load the original un-modified source
           // https://webpack.js.org/guides/asset-modules/#replacing-inline-loader-syntax
@@ -209,11 +212,6 @@ export function makeConfig(
           test: /\.css$/,
           loader: "css-loader", // foxglove-depcheck-used: css-loader
           options: { sourceMap: true },
-        },
-        {
-          test: /\.css$/,
-          loader: "esbuild-loader", // foxglove-depcheck-used: esbuild-loader
-          options: { loader: "css", minify: !isDev },
         },
         { test: /\.woff2?$/, type: "asset/inline" },
         { test: /\.(glb|bag|ttf|bin)$/, type: "asset/resource" },
@@ -260,18 +258,8 @@ export function makeConfig(
         },
       ],
     },
-    optimization: {
-      removeAvailableModules: true,
-
-      minimizer: [
-        new EsbuildPlugin({
-          target: "es2022",
-          minify: true,
-        }),
-      ],
-    },
     plugins: [
-      new webpack.ProvidePlugin({
+      new rspack.ProvidePlugin({
         // since we avoid "import React from 'react'" we shim here when used globally
         React: "react",
         // the buffer module exposes the Buffer class as a property
@@ -279,7 +267,7 @@ export function makeConfig(
         process: ["@lichtblick/suite-base/util/process", "default"],
         setImmediate: ["@lichtblick/suite-base/util/setImmediate", "default"],
       }),
-      new webpack.DefinePlugin({
+      new rspack.DefinePlugin({
         // Should match webpack-defines.d.ts
         ReactNull: null,
         LICHTBLICK_SUITE_VERSION: JSON.stringify(version),
@@ -287,11 +275,6 @@ export function makeConfig(
         DEV_WORKSPACE: JSON.stringify(process.env.DEV_WORKSPACE),
         OTLP_ENDPOINT: JSON.stringify(process.env.OTLP_ENDPOINT),
         ...buildEnvVars(),
-      }),
-      // https://webpack.js.org/plugins/ignore-plugin/#example-of-ignoring-moment-locales
-      new webpack.IgnorePlugin({
-        resourceRegExp: /^\.[\\/]locale$/,
-        contextRegExp: /moment$/,
       }),
       new MonacoWebpackPlugin({
         // available options: https://github.com/Microsoft/monaco-editor-webpack-plugin#options
@@ -301,7 +284,7 @@ export function makeConfig(
         // downstream users of the suite-base package.
         filename: "[name].worker.[contenthash].js",
       }),
-      new ForkTsCheckerWebpackPlugin({
+      new TsCheckerRspackPlugin({
         typescript: {
           configFile: tsconfigPath,
           configOverwrite: {

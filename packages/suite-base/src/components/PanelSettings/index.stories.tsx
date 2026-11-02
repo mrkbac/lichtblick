@@ -14,9 +14,9 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { StoryFn, StoryObj } from "@storybook/react-webpack5";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import { StoryFn, StoryObj } from "storybook-react-rsbuild";
 
 import { SettingsTreeNodes } from "@lichtblick/suite";
 import { PanelCatalog, PanelInfo } from "@lichtblick/suite-base/context/PanelCatalogContext";

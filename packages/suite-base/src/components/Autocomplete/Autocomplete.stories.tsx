@@ -14,9 +14,9 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { Meta, StoryFn, StoryObj } from "@storybook/react-webpack5";
 import * as _ from "lodash-es";
 import { fireEvent, within } from "storybook/test";
+import { Meta, StoryFn, StoryObj } from "storybook-react-rsbuild";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
 

@@ -49,6 +49,11 @@ function testAssets(): Plugin {
 const suiteBaseAlias = [
   { find: /^.*\.svg$/, replacement: path.join(suiteBaseSrc, "test/mocks/MockSvg.tsx") },
   { find: /^.*\.(glb|md|png)$/, replacement: path.join(suiteBaseSrc, "test/mocks/fileMock.ts") },
+  // build config modules live at the package root, everything else in src/
+  {
+    find: /^@lichtblick\/suite-base\/(webpack|WebpackArgv)$/,
+    replacement: path.join(root, "packages/suite-base/$1.ts"),
+  },
   { find: /^@lichtblick\/suite-base\/(?:src\/)?(.*)$/, replacement: `${suiteBaseSrc}/$1` },
 ];
 
@@ -106,7 +111,7 @@ export default defineConfig({
       ...["den", "eslint-plugin-suite"].map((name) =>
         project(name, { root: `packages/${name}`, include: ["**/*.test.{ts,tsx}"] }),
       ),
-      ...["mcap-support", "message-path", "typescript-transformers"].map((name) =>
+      ...["mcap-support", "message-path"].map((name) =>
         project(name, { root: `packages/${name}`, include: ["src/**/*.test.{ts,tsx}"] }),
       ),
       project("benchmark", {

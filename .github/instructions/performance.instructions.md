@@ -51,7 +51,7 @@ These rules apply to ALL TypeScript and TSX code in the Lichtblick monorepo. Vio
 
 - Use `React.lazy()` + `Suspense` for heavy panels and rarely-used views
 - Lazy-load 3rd-party integrations (chart libraries, editors, maps) on demand
-- Route-level code splitting is handled by webpack — keep panel entry points dynamic-importable
+- Route-level code splitting is handled by Rspack — keep panel entry points dynamic-importable
 
 ### State Colocation
 

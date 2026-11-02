@@ -14,9 +14,9 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { StoryObj } from "@storybook/react-webpack5";
 import { useCallback, useEffect } from "react";
 import { fireEvent, screen } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import NodePlayground from "@lichtblick/suite-base/panels/UserScriptEditor";

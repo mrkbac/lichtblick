@@ -15,9 +15,9 @@
 //   You may not use this file except in compliance with the License.
 
 import { Stack } from "@mui/material";
-import { StoryObj } from "@storybook/react-webpack5";
 import { useState } from "react";
 import { fireEvent, screen, userEvent, waitFor, within } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import { Topic } from "@lichtblick/suite-base/players/types";
 import PanelSetup, { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";

@@ -5,8 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import type { Configuration } from "@rspack/core";
 import path from "path";
 
+import { resolveConfigs, type WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
 import {
   ConfigParams,
   devServerConfig,
@@ -23,5 +25,5 @@ const params: ConfigParams = {
   version: packageJson.version,
 };
 
-// foxglove-depcheck-used: webpack-dev-server
-export default [devServerConfig(params), mainConfig(params)];
+export default (env: unknown, argv: WebpackArgv): Configuration[] =>
+  resolveConfigs(env, argv, [devServerConfig(params), mainConfig(params)]);

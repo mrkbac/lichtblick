@@ -7,8 +7,8 @@
 
 import { Time } from "@foxglove/rostime";
 import { Stack } from "@mui/material";
-import { StoryObj } from "@storybook/react-webpack5";
 import { PropsWithChildren, useState } from "react";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import Timestamp from "@lichtblick/suite-base/components/Timestamp";

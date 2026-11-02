@@ -7,8 +7,8 @@
 
 /* eslint-disable filenames/match-exported */
 
-import { StorybookConfig } from "@storybook/react-webpack5";
-import { Configuration } from "webpack";
+import { mergeRsbuildConfig } from "@rsbuild/core";
+import { StorybookConfig } from "storybook-react-rsbuild";
 
 import { makeConfig } from "../packages/suite-base/webpack";
 
@@ -16,59 +16,43 @@ const storybookConfig: StorybookConfig = {
   // Workaround for https://github.com/storybookjs/storybook/issues/19446
   stories: ["../packages/**/!(node_modules)**/*.stories.tsx"],
   framework: {
-    name: "@storybook/react-webpack5",
+    name: "storybook-react-rsbuild",
     options: {},
   },
-  // Carefully merge our main webpack config with the Storybook default config.
-  // For the most part, our webpack config has already been designed to handle
-  // all the imports and edge cases we need to support. However, at least some of
-  // Storybook's config is required, for instance the HtmlWebpackPlugin that they
-  // use to generate the main iframe page.
-  webpackFinal: (config: Configuration): Configuration => {
-    const studioWebpackConfig = makeConfig(
-      undefined,
-      { mode: config.mode },
-      {
-        allowUnusedVariables: true,
-        version: "0.0.0-storybook",
-        // We are only setting the configFile from Storybook as it is required to properly resolve
-        // some assumptions made while traversing the dependency tree in Chromatic.
-        tsconfigPath: new URL("tsconfig.json", import.meta.url).pathname,
-        // Required in ESM context (Storybook) where __dirname is not available in webpack.ts.
-        packageDir: new URL("../packages/suite-base", import.meta.url).pathname,
-      },
-    );
-    return {
-      ...config,
-      // context is required for ForkTsCheckerWebpackPlugin to find .storybook/tsconfig.json
-      optimization: {
-        ...config.optimization,
-        minimize: false, // disabling minification improves build performance
-      },
-
-      resolve: {
-        ...studioWebpackConfig.resolve,
-        fallback: {
-          ...(typeof studioWebpackConfig.resolve?.fallback === "object" &&
-          !Array.isArray(studioWebpackConfig.resolve.fallback)
-            ? studioWebpackConfig.resolve.fallback
-            : {}),
-          ...(config.resolve?.fallback &&
-          typeof config.resolve.fallback === "object" &&
-          !Array.isArray(config.resolve.fallback)
-            ? config.resolve.fallback
-            : {}),
+  // Prop tables aren't used and docgen slows the build down
+  typescript: { reactDocgen: false },
+  // Our app config already handles every import and edge case we need, so its module rules
+  // replace the framework defaults. Storybook's own plugins (e.g. the iframe HTML) are kept.
+  rsbuildFinal: (config) =>
+    mergeRsbuildConfig(config, {
+      tools: {
+        rspack: (rspackConfig) => {
+          const studioConfig = makeConfig(
+            undefined,
+            { mode: rspackConfig.mode },
+            {
+              allowUnusedVariables: true,
+              version: "0.0.0-storybook",
+              tsconfigPath: new URL("tsconfig.json", import.meta.url).pathname,
+              // Required in ESM context (Storybook) where __dirname is not available in webpack.ts.
+              packageDir: new URL("../packages/suite-base", import.meta.url).pathname,
+            },
+          );
+          return {
+            ...rspackConfig,
+            optimization: { ...rspackConfig.optimization, minimize: false },
+            resolve: {
+              ...studioConfig.resolve,
+              fallback: { ...studioConfig.resolve?.fallback, ...rspackConfig.resolve?.fallback },
+            },
+            module: studioConfig.module,
+            plugins: [...(rspackConfig.plugins ?? []), ...(studioConfig.plugins ?? [])],
+            node: studioConfig.node,
+            ignoreWarnings: studioConfig.ignoreWarnings,
+          };
         },
       },
-      module: studioWebpackConfig.module,
-      plugins: [
-        ...(config.plugins ?? []).filter((plugin) => plugin?.constructor.name !== "DocgenPlugin"),
-        ...(studioWebpackConfig.plugins ?? []),
-      ],
-      node: studioWebpackConfig.node,
-      ignoreWarnings: studioWebpackConfig.ignoreWarnings,
-    };
-  },
+    }),
 };
 
 export default storybookConfig;

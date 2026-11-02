@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { GlobalStyles } from "@mui/material";
-import { StoryContext, StoryFn } from "@storybook/react-webpack5";
+import { StoryContext, StoryFn } from "storybook-react-rsbuild";
 import { useMemo, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 

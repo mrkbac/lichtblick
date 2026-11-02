@@ -7,9 +7,9 @@
 
 /* eslint-disable storybook/story-exports */
 
-import { StoryFn } from "@storybook/react-webpack5";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
+import { StoryFn } from "storybook-react-rsbuild";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import Panel from "@lichtblick/suite-base/components/Panel";

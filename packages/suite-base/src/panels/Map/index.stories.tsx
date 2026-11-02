@@ -5,11 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { StoryFn, StoryContext, StoryObj } from "@storybook/react-webpack5";
 import * as _ from "lodash-es";
 import { useState } from "react";
 import { useTimeoutFn } from "react-use";
 import { userEvent } from "storybook/test";
+import { StoryFn, StoryContext, StoryObj } from "storybook-react-rsbuild";
 
 import {
   NavSatFixMsg,

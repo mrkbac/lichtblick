@@ -14,10 +14,10 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { StoryObj } from "@storybook/react-webpack5";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { fireEvent, screen } from "storybook/test";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";

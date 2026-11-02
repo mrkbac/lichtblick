@@ -32,16 +32,19 @@ function createTestParams(overrides: Partial<WebpackConfigParams> = {}): Webpack
   };
 }
 
-vi.mock("webpack", async () => {
-  const original = await vi.importActual("webpack");
+vi.mock("@rspack/core", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@rspack/core")>();
   return {
     ...original,
-    DefinePlugin: vi.fn().mockImplementation(function (defs) {
-      return {
-        pluginName: "DefinePlugin",
-        definitions: defs,
-      };
-    }),
+    // the configs only use rspack.DefinePlugin
+    rspack: {
+      DefinePlugin: vi.fn().mockImplementation(function (defs) {
+        return {
+          pluginName: "DefinePlugin",
+          definitions: defs,
+        };
+      }),
+    },
   };
 });
 
@@ -94,8 +97,6 @@ describe("webpackMainConfig", () => {
 
       // Then
       expect(config.devtool).toBe("source-map");
-      expect(config.optimization?.minimizer).toBeDefined();
-      expect(config.optimization?.removeAvailableModules).toBe(true);
     });
 
     it("should stub out electron-devtools-installer in production", () => {

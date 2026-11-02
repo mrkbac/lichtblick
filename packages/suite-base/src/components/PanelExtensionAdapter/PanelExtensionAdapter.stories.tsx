@@ -6,9 +6,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { toSec } from "@foxglove/rostime";
-import { StoryObj } from "@storybook/react-webpack5";
 import { ReactElement, useLayoutEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import {
   Immutable,

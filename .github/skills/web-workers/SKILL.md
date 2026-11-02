@@ -16,7 +16,7 @@ All Worker communication in Lichtblick uses Comlink with the `ComlinkWrap` utili
 import { ComlinkWrap } from "@lichtblick/den/worker";
 
 const worker = new Worker(
-  new URL("./MyWorker.worker", import.meta.url), // webpack-compatible URL
+  new URL("./MyWorker.worker", import.meta.url), // bundler-resolved worker URL
 );
 
 const { remote, dispose } = ComlinkWrap<MyWorkerAPI>(worker);
@@ -97,16 +97,16 @@ await remote.processData(Comlink.transfer(buffer, [buffer.buffer]));
 // After transfer: buffer.byteLength === 0 (detached)
 ```
 
-## Worker URL Pattern (Webpack)
+## Worker URL Pattern (Rspack)
 
-All Worker URLs use the `import.meta.url` pattern for webpack compatibility:
+All Worker URLs use the `import.meta.url` pattern for Rspack compatibility:
 
 ```typescript
 new Worker(new URL("./MyWorker.worker", import.meta.url));
 ```
 
-- File must be named `*.worker.ts` (webpack recognizes this pattern)
-- webpack resolves `new URL("...", import.meta.url)` to the worker chunk
+- File must be named `*.worker.ts` (Rspack recognizes this pattern)
+- Rspack resolves `new URL("...", import.meta.url)` to the worker chunk
 - Each Worker file is bundled as a separate chunk
 
 ## SharedWorker Pattern

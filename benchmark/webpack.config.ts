@@ -5,21 +5,15 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import ReactRefreshPlugin from "@pmmmwh/react-refresh-webpack-plugin";
-import { CleanWebpackPlugin } from "clean-webpack-plugin";
+import { Configuration, RspackPluginInstance } from "@rspack/core";
+import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "node:path";
-import { Configuration, WebpackPluginInstance } from "webpack";
-import type { Configuration as WebpackDevServerConfiguration } from "webpack-dev-server";
 
-import type { WebpackArgv } from "../packages/suite-base/WebpackArgv";
+import { resolveConfigs, type WebpackArgv } from "../packages/suite-base/WebpackArgv";
 import { makeConfig } from "../packages/suite-base/webpack";
 
-interface WebpackConfiguration extends Configuration {
-  devServer?: WebpackDevServerConfiguration;
-}
-
-const devServerConfig: WebpackConfiguration = {
+const devServerConfig: Configuration = {
   // Use empty entry to avoid webpack default fallback to /src
   entry: {},
 
@@ -46,20 +40,18 @@ const devServerConfig: WebpackConfiguration = {
       "cross-origin-embedder-policy": "credentialless",
     },
   },
-
-  plugins: [new CleanWebpackPlugin()],
 };
 
 const mainConfig = (env: unknown, argv: WebpackArgv): Configuration => {
   const isDev = argv.mode === "development";
-  const isServe = argv.env?.WEBPACK_SERVE ?? false;
+  const isServe = argv.env?.RSPACK_SERVE ?? false;
 
   const allowUnusedVariables = isDev;
 
-  const plugins: WebpackPluginInstance[] = [];
+  const plugins: RspackPluginInstance[] = [];
 
   if (isServe) {
-    plugins.push(new ReactRefreshPlugin());
+    plugins.push(new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } }));
   }
 
   const appWebpackConfig = makeConfig(env, argv, {
@@ -82,8 +74,8 @@ const mainConfig = (env: unknown, argv: WebpackArgv): Configuration => {
 
       // Output filenames should include content hashes in order to cache bust when new versions are available
       filename: isDev ? "[name].js" : "[name].[contenthash].js",
-
       path: path.resolve(__dirname, ".webpack"),
+      clean: true,
     },
 
     plugins: [
@@ -112,4 +104,5 @@ const mainConfig = (env: unknown, argv: WebpackArgv): Configuration => {
   return config;
 };
 
-export default [devServerConfig, mainConfig];
+export default (env: unknown, argv: WebpackArgv): Configuration[] =>
+  resolveConfigs(env, argv, [devServerConfig, mainConfig]);
