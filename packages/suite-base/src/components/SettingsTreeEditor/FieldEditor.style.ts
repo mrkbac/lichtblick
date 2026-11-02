@@ -32,6 +32,10 @@ export const useStyles = makeStyles<void, "error">()((theme, _params, classes) =
     maxWidth: "100%",
     overflow: "hidden",
     marginRight: theme.spacing(0.5),
+    // The slider's value label sits above the thumb and would be clipped.
+    "&:has(.MuiSlider-root)": {
+      overflow: "visible",
+    },
     [`&.${classes.error} .MuiInputBase-root, .MuiInputBase-root.${classes.error}`]: {
       outline: `1px ${theme.palette.error.main} solid`,
       outlineOffset: -1,
