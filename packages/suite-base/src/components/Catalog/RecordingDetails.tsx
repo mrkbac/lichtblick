@@ -81,7 +81,12 @@ export function RecordingDetails({
         <Typography variant="h5" noWrap className={classes.name}>
           {recording.name}
         </Typography>
-        <IconButton size="small" onClick={onClose} title={t("closeDetails")}>
+        <IconButton
+          size="small"
+          onClick={onClose}
+          aria-label={t("closeDetails")}
+          title={t("closeDetails")}
+        >
           <CloseIcon fontSize="small" />
         </IconButton>
       </Stack>
