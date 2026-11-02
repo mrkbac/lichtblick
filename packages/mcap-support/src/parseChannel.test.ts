@@ -85,6 +85,21 @@ describe("parseChannel", () => {
     expect((globalThis as { injected?: number }).injected).toBeUndefined();
   });
 
+  it("rejects ros1 type names injected through a MSG header", () => {
+    const evil = "foo_msgs/X(){}};globalThis.injected=1;class Y{static Z";
+    expect(() =>
+      parseChannel({
+        messageEncoding: "ros1",
+        schema: {
+          name: "foo_msgs/Bar",
+          encoding: "ros1msg",
+          data: new TextEncoder().encode(`int32 x\n===\nMSG: ${evil}\nint32 y`),
+        },
+      }),
+    ).toThrow("Invalid message definition type name");
+    expect((globalThis as { injected?: number }).injected).toBeUndefined();
+  });
+
   it("works with ros2", () => {
     const channel = parseChannel({
       messageEncoding: "cdr",
