@@ -100,7 +100,9 @@ export default function CurrentLayoutProvider({
   const [incompatibleLayoutVersionError, setIncompatibleLayoutVersionError] = useState(false);
 
   // Lets a host page (the web app's workspace tabs) see which layout this workspace has open.
-  const selectedLayoutId = layoutState.selectedLayout?.id;
+  // Only once it has loaded, so a layout that fails to open is never reported.
+  const selectedLayoutId =
+    layoutState.selectedLayout?.data != undefined ? layoutState.selectedLayout.id : undefined;
   useEffect(() => {
     if (selectedLayoutId == undefined) {
       delete document.documentElement.dataset.layoutId;
