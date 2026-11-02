@@ -78,8 +78,8 @@ describe("useIndexedDbRecents", () => {
           extra: {
             foo: "bar",
           },
-        ]);
-      });
+        },
+      ]);
 
       unmount();
     }
