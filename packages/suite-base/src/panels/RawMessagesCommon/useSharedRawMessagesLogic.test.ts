@@ -6,7 +6,6 @@ import type { Time } from "@foxglove/rostime";
 import { renderHook, act, waitFor } from "@testing-library/react";
 import type { Mock } from "vitest";
 
-
 import type { SharedConfig, UseSharedRawMessagesLogicProps } from "./types";
 import { useSharedRawMessagesLogic } from "./useSharedRawMessagesLogic";
 

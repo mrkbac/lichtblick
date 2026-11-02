@@ -82,6 +82,8 @@ export function decodePlaybackState(buffer: ArrayBuffer): PlaybackState {
     currentTimeNs: view.getBigUint64(2, true),
     speed: view.getFloat32(10, true),
     didSeek: view.getUint8(14) !== 0,
-    requestId: textDecoder.decode(new Uint8Array(buffer, PLAYBACK_STATE_HEADER_LENGTH, requestIdLength)),
+    requestId: textDecoder.decode(
+      new Uint8Array(buffer, PLAYBACK_STATE_HEADER_LENGTH, requestIdLength),
+    ),
   };
 }

@@ -50,13 +50,7 @@ it("counts inclusive boundaries and aggregates intervals across iterator batches
 });
 
 it("handles empty, single-time, and duplicate-time recordings without inventing a rate or gap", async () => {
-  const empty = await inspectTopic(
-    messages([]),
-    start,
-    end,
-    new AbortController().signal,
-    vi.fn(),
-  );
+  const empty = await inspectTopic(messages([]), start, end, new AbortController().signal, vi.fn());
   expect(empty.first).toBeUndefined();
   expect(empty.largestInterval).toBeUndefined();
   const sameTime = await inspectTopic(

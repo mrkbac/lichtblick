@@ -8,7 +8,6 @@
 import { toNanoSec } from "@foxglove/rostime";
 import { SceneEntity, TextPrimitive } from "@foxglove/schemas";
 
-
 import { RenderablePrimitive } from "./RenderablePrimitive";
 import type { IRenderer } from "../../IRenderer";
 import { getLuminance, makeRgba, SRGBToLinear, stringToRgba } from "../../color";

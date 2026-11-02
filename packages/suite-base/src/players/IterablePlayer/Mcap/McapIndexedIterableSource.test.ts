@@ -274,7 +274,9 @@ describe("McapIndexedIterableSource", () => {
       });
     }
     await writer.end();
-    const readable = new BlobReadable(new Blob([buffer.get().slice()]) as unknown as globalThis.Blob);
+    const readable = new BlobReadable(
+      new Blob([buffer.get().slice()]) as unknown as globalThis.Blob,
+    );
     const reader = await McapIndexedReader.Initialize({
       readable,
       decompressHandlers: await loadDecompressHandlers(),

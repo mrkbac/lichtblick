@@ -25,7 +25,7 @@ vi.mock("@lichtblick/suite-base/components/PanelToolbar", () => ({
   default: () => <div />,
 }));
 vi.mock("@lichtblick/suite-base/components/MessagePipeline", async () => ({
-  ...await vi.importActual("@lichtblick/suite-base/components/MessagePipeline"),
+  ...(await vi.importActual("@lichtblick/suite-base/components/MessagePipeline")),
   useMessagePipeline: vi.fn(),
 }));
 const { useMessagePipeline: actualUseMessagePipeline } = await vi.importActual<
@@ -50,12 +50,11 @@ async function* iterator(): AsyncIterableIterator<IteratorResult> {
 }
 
 function setup({ live = false }: { live?: boolean } = {}) {
-  vi    .mocked(useMessagePipeline)
-    .mockImplementation((selector) =>
-      actualUseMessagePipeline((ctx: MessagePipelineContext) =>
-        selector({ ...ctx, getBatchIterator: () => iterator() }),
-      ),
-    );
+  vi.mocked(useMessagePipeline).mockImplementation((selector) =>
+    actualUseMessagePipeline((ctx: MessagePipelineContext) =>
+      selector({ ...ctx, getBatchIterator: () => iterator() }),
+    ),
+  );
   return render(
     <MockMessagePipelineProvider
       name="example.mcap"

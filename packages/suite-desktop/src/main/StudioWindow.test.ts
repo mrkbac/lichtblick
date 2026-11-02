@@ -15,7 +15,9 @@ const { mockNativeTheme, mockWindows } = await vi.hoisted(async () => {
 vi.mock("electron", async () => {
   const { EventEmitter: Emitter } = await import("events");
   class MockBrowserWindow extends Emitter {
-    public webContents = { id: mockWindows.length, on: vi.fn(),
+    public webContents = {
+      id: mockWindows.length,
+      on: vi.fn(),
       once: vi.fn(),
       setWindowOpenHandler: vi.fn(),
     };

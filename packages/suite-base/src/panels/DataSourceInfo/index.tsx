@@ -661,8 +661,7 @@ export function RecordingInspector(): React.JSX.Element {
                               ) : (
                                 <KeyboardArrowDownIcon fontSize="small" />
                               )}
-                              <span>{row.path}</span>
-                              {" "}
+                              <span>{row.path}</span>{" "}
                               <Typography variant="caption" color="text.secondary">
                                 {row.count} {row.count === 1 ? "topic" : "topics"}
                               </Typography>
