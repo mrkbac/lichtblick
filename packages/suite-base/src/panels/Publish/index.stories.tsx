@@ -6,8 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { action } from "storybook/actions";
-import { expect } from "storybook/test";
-import { userEvent, within } from "storybook/test";
+import { expect, userEvent, within } from "storybook/test";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import Publish from "@lichtblick/suite-base/panels/Publish";

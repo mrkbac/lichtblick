@@ -3,7 +3,7 @@
 
 import { Chart, ChartDataset } from "chart.js";
 import { TFunction } from "i18next";
-import { MutableRefObject } from "react";
+import { RefObject } from "react";
 
 import { Immutable, SettingsTreeActionUpdatePayload } from "@lichtblick/suite";
 import { PanelContextMenuItem } from "@lichtblick/suite-base/components/PanelContextMenu";
@@ -201,7 +201,7 @@ export type UsePlotDataHandling = {
 export type UsePlotInteractionHandlersProps = {
   config: PlotConfig;
   coordinator: PlotCoordinator | undefined;
-  draggingRef: MutableRefObject<boolean>;
+  draggingRef: RefObject<boolean>;
   renderer: OffscreenCanvasRenderer | undefined;
   setActiveTooltip: (data: TooltipStateSetter | undefined) => void;
   shouldSync: boolean;

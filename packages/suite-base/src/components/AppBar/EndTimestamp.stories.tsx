@@ -7,7 +7,7 @@
 
 import { Time } from "@foxglove/rostime";
 import { useState } from "react";
-import { Meta, StoryFn, StoryObj } from "storybook-react-rsbuild";
+import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
@@ -34,7 +34,7 @@ export default {
     time: ABSOLUTE_TIME,
   },
   decorators: [
-    (Story: StoryFn, ctx): React.JSX.Element => {
+    (Story: React.ComponentType, ctx): React.JSX.Element => {
       const {
         args: { timeFormat, timezone, time, ...args },
       } = ctx;

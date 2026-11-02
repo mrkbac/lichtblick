@@ -7,7 +7,7 @@
 
 import { useMemo, useState } from "react";
 import { fireEvent, screen, userEvent, within } from "storybook/test";
-import { StoryObj, StoryContext, StoryFn } from "storybook-react-rsbuild";
+import { StoryObj, StoryContext } from "storybook-react-rsbuild";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import AppConfigurationContext from "@lichtblick/suite-base/context/AppConfigurationContext";
@@ -115,7 +115,7 @@ async function selectAllAction() {
   }
 }
 
-function WithSetup(Child: StoryFn, ctx: StoryContext): React.JSX.Element {
+function WithSetup(Child: React.ComponentType, ctx: StoryContext): React.JSX.Element {
   const storage = useMemo(
     () =>
       new MockLayoutStorage(

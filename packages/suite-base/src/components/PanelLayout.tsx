@@ -48,6 +48,10 @@ import { UnknownPanel } from "./UnknownPanel";
 import "react-mosaic-component/react-mosaic-component.css";
 import { useInstallingExtensionsStore } from "../hooks/useInstallingExtensionsStore";
 
+// The mosaic toolbar is hidden (panels render their own), so skip its default buttons. A constant
+// keeps MosaicWindow's PureComponent check from re-rendering panels.
+const NO_TOOLBAR_CONTROLS = <></>;
+
 type Props = {
   layout?: MosaicNode<string>;
   onChange: (panels: MosaicNode<string> | undefined) => void;
@@ -76,7 +80,13 @@ function TabMosaicWrapper({ tabId, children }: PropsWithChildren<{ tabId?: strin
     },
   });
   return (
-    <div className={cx(classes.hideTopLevelDropTargets, "mosaic-tile")} ref={drop}>
+    <div
+      className={cx(classes.hideTopLevelDropTargets, "mosaic-tile")}
+      ref={(el) => {
+        // react-dnd connectors return a value, which React 19 ref callbacks treat as cleanup
+        drop(el);
+      }}
+    >
       {children}
     </div>
   );
@@ -132,7 +142,8 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
           key={id}
           path={path}
           createNode={createTile}
-          renderPreview={() => undefined as unknown as React.JSX.Element}
+          renderPreview={() => undefined}
+          toolbarControls={NO_TOOLBAR_CONTROLS}
         >
           <Suspense
             fallback={

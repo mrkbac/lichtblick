@@ -7,7 +7,7 @@
 
 import { useSnackbar } from "notistack";
 import { useEffect } from "react";
-import { StoryFn, StoryObj } from "storybook-react-rsbuild";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import StudioToastProvider from "@lichtblick/suite-base/components/StudioToastProvider";
 
@@ -21,7 +21,7 @@ export default {
     colorScheme: "dark",
   },
   decorators: [
-    (Wrapped: StoryFn): React.JSX.Element => {
+    (Wrapped: React.ComponentType): React.JSX.Element => {
       return (
         <StudioToastProvider>
           <Wrapped />

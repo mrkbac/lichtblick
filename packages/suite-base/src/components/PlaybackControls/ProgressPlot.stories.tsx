@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { useTheme } from "@mui/material";
-import { StoryFn, StoryObj } from "storybook-react-rsbuild";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import { ProgressPlot } from "./ProgressPlot";
 
@@ -14,7 +14,7 @@ export default {
   title: "components/PlaybackControls/ProgressPlot",
   component: ProgressPlot,
   decorators: [
-    (Story: StoryFn): React.JSX.Element => {
+    (Story: React.ComponentType): React.JSX.Element => {
       const theme = useTheme();
 
       return (

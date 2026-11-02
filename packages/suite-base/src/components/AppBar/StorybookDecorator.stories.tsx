@@ -9,7 +9,6 @@
 
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
-import { StoryFn } from "storybook-react-rsbuild";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import Panel from "@lichtblick/suite-base/components/Panel";
@@ -68,7 +67,7 @@ export default {
   excludeStories: ["StorybookDecorator"],
 };
 
-export function StorybookDecorator(Wrapped: StoryFn): React.JSX.Element {
+export function StorybookDecorator(Wrapped: React.ComponentType): React.JSX.Element {
   return (
     <DndProvider backend={HTML5Backend}>
       <WorkspaceContextProvider>

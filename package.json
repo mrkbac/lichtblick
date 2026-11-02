@@ -95,7 +95,7 @@
   "resolutions": {
     "@types/node": "20.10.0",
     "react-dnd": "patch:react-dnd@npm:16.0.1#./patches/react-dnd.patch",
-    "@types/react": "18.3.12",
+    "@types/react": "19.3.0",
     "esbuild": "0.28.1",
     "dompurify": "3.4.17",
     "js-yaml": "4.3.2",
@@ -133,7 +133,7 @@
     "@lichtblick/eslint-plugin": "2.0.8",
     "@lichtblick/eslint-plugin-suite": "workspace:*",
     "@lichtblick/tsconfig": "1.1.2",
-    "@mui/material": "7.2.0",
+    "@mui/material": "7.3.11",
     "@octokit/rest": "22.0.1",
     "@playwright/mcp": "0.0.84",
     "@playwright/test": "1.64.1",

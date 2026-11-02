@@ -153,7 +153,7 @@ export default React.memo(function LayoutRow({
   }, [layout, onExport]);
 
   const onSubmit = useCallback(
-    (event: React.FormEvent) => {
+    (event: React.SyntheticEvent) => {
       event.preventDefault();
       if (!editingName) {
         return;

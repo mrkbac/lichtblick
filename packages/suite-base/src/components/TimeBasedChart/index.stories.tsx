@@ -14,8 +14,8 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 import { useCallback, useEffect, useRef, useState } from "react";
-import TestUtils from "react-dom/test-utils";
 import { useAsync } from "react-use";
+import { fireEvent } from "storybook/test";
 import { StoryObj } from "storybook-react-rsbuild";
 import { useImmer } from "use-immer";
 
@@ -178,9 +178,9 @@ export const CleansUpTooltipOnUnmount: StoryObj = {
       // wait for chart to render before triggering tooltip
       let tooltip: Element | undefined;
 
-      TestUtils.Simulate.mouseEnter(canvas!.parentElement!);
+      await fireEvent.mouseEnter(canvas!.parentElement!);
       for (let i = 0; !tooltip && i < 20; i++) {
-        TestUtils.Simulate.mouseMove(canvas!.parentElement!, {
+        await fireEvent.mouseMove(canvas!.parentElement!, {
           clientX: 70 + left,
           clientY: 296 + top,
         });

@@ -205,9 +205,13 @@ export default function ExtensionList({
               selectExtension({ installed: isInstalled, entry: extension });
             }}
             onRowSelectionModelChange={(newSelection) => {
-              setSelectedExtensionIds(newSelection as string[]);
+              // "exclude" means every row except the listed ids (select-all)
+              const ids = entries
+                .map((entry) => entry.id)
+                .filter((id) => newSelection.ids.has(id) === (newSelection.type === "include"));
+              setSelectedExtensionIds(ids);
             }}
-            rowSelectionModel={selectedExtensionIds}
+            rowSelectionModel={{ type: "include", ids: new Set(selectedExtensionIds) }}
             data-testid="extension-list-entry"
           />
         </div>

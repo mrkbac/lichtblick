@@ -332,7 +332,7 @@ function TopicGraph() {
     showServices,
   ]);
 
-  const graph = useRef<GraphMutation>();
+  const graph = useRef<GraphMutation>(undefined);
 
   const onZoomFit = useCallback(() => {
     graph.current?.fit();

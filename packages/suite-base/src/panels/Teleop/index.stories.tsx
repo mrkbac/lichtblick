@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { action } from "storybook/actions";
-import { StoryFn, StoryContext, StoryObj } from "storybook-react-rsbuild";
+import { StoryContext, StoryObj } from "storybook-react-rsbuild";
 
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
@@ -17,7 +17,7 @@ export default {
   title: "panels/Teleop",
   component: TeleopPanel,
   decorators: [
-    (StoryComponent: StoryFn, context: StoryContext): React.JSX.Element => {
+    (StoryComponent: React.ComponentType, context: StoryContext): React.JSX.Element => {
       return (
         <PanelSetup
           fixture={{ capabilities: [PLAYER_CAPABILITIES.advertise], publish: action("publish") }}

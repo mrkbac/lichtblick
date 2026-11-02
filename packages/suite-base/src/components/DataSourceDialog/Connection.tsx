@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Alert, Link, Tab, Tabs, Typography, useMediaQuery, useTheme } from "@mui/material";
-import { useState, useMemo, useCallback, useLayoutEffect, FormEvent } from "react";
+import { useState, useMemo, useCallback, useLayoutEffect, SyntheticEvent } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { BuiltinIcon } from "@lichtblick/suite-base/components/BuiltinIcon";
@@ -170,7 +170,7 @@ export default function Connection(): React.JSX.Element {
   const disableOpen = selectedSource?.disabledReason != undefined || fieldErrors.size > 0;
 
   const onSubmit = useCallback(
-    (event: FormEvent) => {
+    (event: SyntheticEvent) => {
       event.preventDefault();
       if (!disableOpen) {
         onOpen();

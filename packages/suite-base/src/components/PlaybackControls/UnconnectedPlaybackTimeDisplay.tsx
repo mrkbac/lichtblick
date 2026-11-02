@@ -216,7 +216,7 @@ export function UnconnectedPlaybackTimeDisplay({
   const [hasError, setHasError] = useState<boolean>(false);
 
   const onSubmit = useCallback(
-    (e: React.FormEvent) => {
+    (e: React.SyntheticEvent) => {
       e.preventDefault();
 
       if (inputText == undefined || inputText.length === 0) {

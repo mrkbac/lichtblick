@@ -8,7 +8,7 @@
 import { fromDate } from "@foxglove/rostime";
 import { useTheme } from "@mui/material";
 import { useEffect } from "react";
-import { StoryFn, StoryObj } from "storybook-react-rsbuild";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import { AlertsList } from "@lichtblick/suite-base/components/AlertList/AlertsList";
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
@@ -53,7 +53,7 @@ export default {
   title: "components/AlertsList",
   component: AlertsList,
   decorators: [
-    (Story: StoryFn): React.JSX.Element => {
+    (Story: React.ComponentType): React.JSX.Element => {
       const theme = useTheme();
       return (
         <WorkspaceContextProvider>

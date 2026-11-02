@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import Cytoscape from "cytoscape";
-import { MutableRefObject, createRef } from "react";
+import { RefObject, createRef } from "react";
 
 import { GraphMutation } from "@lichtblick/suite-base/panels/TopicGraph/Graph";
 import { BasicBuilder, defaults } from "@lichtblick/test-builders";
@@ -11,7 +11,7 @@ type GraphProps = {
   style: Cytoscape.StylesheetStyle[];
   elements: cytoscape.ElementDefinition[];
   rankDir: string;
-  graphRef: MutableRefObject<GraphMutation | undefined>;
+  graphRef: RefObject<GraphMutation | undefined>;
 };
 
 export default class GraphBuilder {
@@ -45,7 +45,7 @@ export default class GraphBuilder {
       style: GraphBuilder.stylesheetStyles(),
       elements: GraphBuilder.elements(),
       rankDir: BasicBuilder.sample(["TB", "LR"]),
-      graphRef: createRef() as MutableRefObject<GraphMutation | undefined>,
+      graphRef: createRef() as RefObject<GraphMutation | undefined>,
     });
   }
 }

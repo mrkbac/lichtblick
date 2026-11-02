@@ -238,8 +238,8 @@ export default function TimeBasedChart(props: Props): React.JSX.Element {
     useCallback((messagePipeline) => messagePipeline.pauseFrame, []),
   );
 
-  const resumeFrame = useRef<() => void | undefined>();
-  const requestedResumeFrame = useRef<() => void | undefined>();
+  const resumeFrame = useRef<() => void | undefined>(undefined);
+  const requestedResumeFrame = useRef<() => void | undefined>(undefined);
 
   // when data changes, we pause and wait for onFinishRender to resume
   const onStartRender = useCallback(() => {

@@ -20,7 +20,7 @@
   "include": ["**/*", "**/.storybook/**/*"],
   "compilerOptions": {
     "jsx": "react-jsx",
-    "lib": ["dom", "dom.iterable", "es2022", "esnext.disposable"],
+    "lib": ["dom", "dom.iterable", "es2025", "esnext.typedarrays", "esnext.disposable"],
     "paths": {
       "@lichtblick/suite-base/*": ["./packages/suite-base/src/*"]
     }

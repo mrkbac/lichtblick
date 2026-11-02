@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { screen, userEvent } from "storybook/test";
-import { StoryObj, StoryFn, Meta } from "storybook-react-rsbuild";
+import { StoryObj, Meta } from "storybook-react-rsbuild";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import EventsProvider from "@lichtblick/suite-base/providers/EventsProvider";
@@ -18,7 +18,7 @@ export default {
   title: "components/CreateEventDialog",
   args: { onClose: () => {} },
   decorators: [
-    (Wrapped: StoryFn): React.JSX.Element => {
+    (Wrapped: React.ComponentType): React.JSX.Element => {
       return (
         <EventsProvider>
           <MockMessagePipelineProvider>

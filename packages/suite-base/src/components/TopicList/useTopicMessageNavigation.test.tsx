@@ -650,6 +650,10 @@ describe("useTopicMessageNavigation", () => {
       await waitFor(() => {
         expect(getBatchIterator).toHaveBeenCalledTimes(1);
       });
+      // The iterator was requested; let its async drain and the cache update land.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
 
       // When
       await act(async () => {

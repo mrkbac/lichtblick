@@ -16,7 +16,7 @@
 
 import * as _ from "lodash-es";
 import { fireEvent, within } from "storybook/test";
-import { Meta, StoryFn, StoryObj } from "storybook-react-rsbuild";
+import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
 
@@ -30,7 +30,7 @@ export default {
     onSelect: () => {},
   },
   decorators: [
-    (Story: StoryFn): React.JSX.Element => (
+    (Story: React.ComponentType): React.JSX.Element => (
       <Stack padding={2.5}>
         <Story />
       </Stack>

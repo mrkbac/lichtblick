@@ -69,6 +69,8 @@ import { SavedProps, UserScripts } from "@lichtblick/suite-base/types/panels";
 
 import "react-mosaic-component/react-mosaic-component.css";
 
+const NO_TOOLBAR_CONTROLS = <></>;
+
 function noop() {}
 
 type Frame = {
@@ -144,7 +146,12 @@ const MosaicWrapper = ({ children }: { children: React.ReactNode }): React.JSX.E
         initialValue="mock"
         renderTile={(_id, path) => {
           return (
-            <MosaicWindow title="" path={path} renderPreview={() => <div />}>
+            <MosaicWindow
+              title=""
+              path={path}
+              renderPreview={() => <div />}
+              toolbarControls={NO_TOOLBAR_CONTROLS}
+            >
               {children}
             </MosaicWindow>
           );

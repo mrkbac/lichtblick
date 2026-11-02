@@ -1308,7 +1308,8 @@ describe("ExtensionCatalogProvider", () => {
       });
       let shouldThrowOnPerfNow = false;
       const performanceNowSpy = vi.spyOn(performance, "now").mockImplementation(() => {
-        if (shouldThrowOnPerfNow) {
+        // React calls performance.now too; only fail the call made by refreshAllExtensions
+        if (shouldThrowOnPerfNow && new Error().stack?.includes("refreshAllExtensions") === true) {
           shouldThrowOnPerfNow = false; // only throw once
           throw new Error("test error");
         }

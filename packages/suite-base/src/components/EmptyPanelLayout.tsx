@@ -83,7 +83,9 @@ export const EmptyPanelLayout = ({ tabId }: Props): React.JSX.Element => {
 
   return (
     <div
-      ref={drop}
+      ref={(el) => {
+        drop(el);
+      }}
       data-testid="empty-drop-target"
       className={cx(classes.dropTarget, { [classes.isOver]: isOver })}
     >

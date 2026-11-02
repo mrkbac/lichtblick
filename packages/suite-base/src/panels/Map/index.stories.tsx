@@ -9,7 +9,7 @@ import * as _ from "lodash-es";
 import { useState } from "react";
 import { useTimeoutFn } from "react-use";
 import { userEvent } from "storybook/test";
-import { StoryFn, StoryContext, StoryObj } from "storybook-react-rsbuild";
+import { StoryContext, StoryObj } from "storybook-react-rsbuild";
 
 import {
   NavSatFixMsg,
@@ -102,7 +102,10 @@ function makeGeoJsonMessage({
   };
 }
 
-const Wrapper = (StoryComponent: StoryFn, { parameters }: StoryContext): React.JSX.Element => {
+const Wrapper = (
+  StoryComponent: React.ComponentType,
+  { parameters }: StoryContext,
+): React.JSX.Element => {
   return (
     <PanelSetup
       fixture={parameters.panelSetup?.fixture}

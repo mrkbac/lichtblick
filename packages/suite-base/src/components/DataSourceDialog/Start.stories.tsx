@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { ReactNode } from "react";
-import { StoryFn, StoryObj } from "storybook-react-rsbuild";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import BaseUserContext, {
   CurrentUser,
@@ -20,7 +20,7 @@ import WorkspaceContextProvider from "@lichtblick/suite-base/providers/Workspace
 
 import { DataSourceDialog } from "./DataSourceDialog";
 
-const Wrapper = (Story: StoryFn): React.JSX.Element => {
+const Wrapper = (Story: React.ComponentType): React.JSX.Element => {
   return (
     <MockCurrentLayoutProvider>
       <WorkspaceContextProvider

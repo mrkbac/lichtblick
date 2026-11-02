@@ -18,7 +18,7 @@ function ObjectSummary({ value }: ObjectSummaryProps): React.JSX.Element | React
   const { classes } = useStyles();
   const getItemString = useGetItemStringWithTimezone();
 
-  const summary = useMemo(() => {
+  const summary = useMemo((): React.ReactNode => {
     if (typeof value !== "object" || value == undefined) {
       return ReactNull;
     }

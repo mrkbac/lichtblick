@@ -16,7 +16,7 @@
 
 import { useTheme } from "@mui/material";
 import { PropsWithChildren } from "react";
-import { StoryFn, StoryObj } from "storybook-react-rsbuild";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
@@ -232,7 +232,7 @@ export default {
   },
   excludeStories: ["POINT_CLOUD_MESSAGE", "POINT_CLOUD_WITH_ADDITIONAL_FIELDS"],
   decorators: [
-    (Story: StoryFn): React.JSX.Element => {
+    (Story: React.ComponentType): React.JSX.Element => {
       const theme = useTheme();
 
       return (

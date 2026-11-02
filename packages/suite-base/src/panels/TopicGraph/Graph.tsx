@@ -7,7 +7,7 @@
 
 import Cytoscape from "cytoscape";
 import CytoscapeDagre from "cytoscape-dagre";
-import { MutableRefObject, useEffect, useRef } from "react";
+import { RefObject, useEffect, useRef } from "react";
 
 Cytoscape.use(CytoscapeDagre); // eslint-disable-line react-hooks/rules-of-hooks -- Cytoscape plugin registration, not a React hook
 Cytoscape.warnings(false);
@@ -29,11 +29,11 @@ type Props = {
   style: Cytoscape.StylesheetStyle[];
   elements: cytoscape.ElementDefinition[];
   rankDir: string;
-  graphRef: MutableRefObject<GraphMutation | undefined>;
+  graphRef: RefObject<GraphMutation | undefined>;
 };
 
 export default function Graph(props: Props): React.JSX.Element {
-  const cy = useRef<Cytoscape.Core>();
+  const cy = useRef<Cytoscape.Core>(undefined);
   const graphRef = useRef<HTMLDivElement>(ReactNull);
 
   // indicates that a user has manually panned/zoomed the viewport

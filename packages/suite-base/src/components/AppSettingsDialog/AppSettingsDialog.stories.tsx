@@ -7,7 +7,7 @@
 
 import * as _ from "lodash-es";
 import { screen, userEvent } from "storybook/test";
-import { StoryFn, StoryObj } from "storybook-react-rsbuild";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import { ExtensionInfo, IExtensionLoader } from "@lichtblick/suite-base";
 import ExtensionMarketplaceContext, {
@@ -69,7 +69,7 @@ const MockExtensionMarketplace: ExtensionMarketplace = {
 Mock markdown rendering for URL [${url}](${url}).`,
 };
 
-function Wrapper(StoryComponent: StoryFn): React.JSX.Element {
+function Wrapper(StoryComponent: React.ComponentType): React.JSX.Element {
   return (
     <WorkspaceContextProvider>
       <ExtensionCatalogProvider loaders={[MockExtensionLoader]}>

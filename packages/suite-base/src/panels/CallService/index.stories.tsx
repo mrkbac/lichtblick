@@ -5,9 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { expect } from "storybook/test";
-import { userEvent, within } from "storybook/test";
-import { StoryContext, StoryFn, StoryObj } from "storybook-react-rsbuild";
+import { expect, userEvent, within } from "storybook/test";
+import { StoryContext, StoryObj } from "storybook-react-rsbuild";
 
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import PanelSetup, { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";
@@ -50,7 +49,7 @@ export default {
     colorScheme: "both-column",
   },
   decorators: [
-    (StoryComponent: StoryFn, { parameters }: StoryContext): React.JSX.Element => {
+    (StoryComponent: React.ComponentType, { parameters }: StoryContext): React.JSX.Element => {
       return (
         <PanelSetup fixture={parameters.panelSetup?.fixture}>
           <StoryComponent />

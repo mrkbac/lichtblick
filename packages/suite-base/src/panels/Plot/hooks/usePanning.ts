@@ -9,7 +9,7 @@ import { listenForPan } from "@lichtblick/suite-base/util/listenForPan";
 const usePanning = (
   canvasDiv: HTMLDivElement | ReactNull,
   coordinator: PlotCoordinator | undefined,
-  draggingRef: React.MutableRefObject<boolean>,
+  draggingRef: React.RefObject<boolean>,
 ): void => {
   useEffect(() => {
     if (!canvasDiv || !coordinator) {

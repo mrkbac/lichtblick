@@ -77,7 +77,7 @@ export const DeltaOverlay = React.memo(function DeltaOverlay(
     maxX: number;
     minY: number;
     maxY: number;
-  }>();
+  }>(undefined);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const positionRef = useRef(position);
 

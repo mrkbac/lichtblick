@@ -9,7 +9,7 @@ import { useTheme } from "@mui/material";
 import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { userEvent } from "storybook/test";
-import { Meta, StoryFn, StoryObj } from "storybook-react-rsbuild";
+import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import Panel from "@lichtblick/suite-base/components/Panel";
 import { PanelCatalog as PanelCatalogComponent } from "@lichtblick/suite-base/components/PanelCatalog";
@@ -68,7 +68,7 @@ export default {
   component: ({ mode }) => <PanelCatalogComponent mode={mode} onPanelSelect={() => {}} />,
   parameters: { colorScheme: "dark" },
   decorators: [
-    (Wrapped: StoryFn): React.JSX.Element => {
+    (Wrapped: React.ComponentType): React.JSX.Element => {
       const theme = useTheme();
       return (
         <DndProvider backend={HTML5Backend}>

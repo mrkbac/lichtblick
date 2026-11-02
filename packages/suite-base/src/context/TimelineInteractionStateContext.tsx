@@ -15,7 +15,8 @@
 //   You may not use this file except in compliance with the License.
 
 import { createContext, useCallback } from "react";
-import { StoreApi, useStore } from "zustand";
+import { StoreApi } from "zustand";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 
 import { useGuaranteedContext } from "@lichtblick/hooks";
 import { Immutable } from "@lichtblick/suite";
@@ -137,5 +138,5 @@ export function useTimelineInteractionState<T>(
   selector: (store: TimelineInteractionStateStore) => T,
 ): T {
   const context = useGuaranteedContext(TimelineInteractionStateContext);
-  return useStore(context, selector);
+  return useStoreWithEqualityFn(context, selector);
 }

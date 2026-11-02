@@ -7,7 +7,7 @@
 
 import { Time } from "@foxglove/rostime";
 import * as _ from "lodash-es";
-import { MutableRefObject } from "react";
+import { RefObject } from "react";
 import { createStore, StoreApi } from "zustand";
 import { shallow } from "zustand/shallow";
 
@@ -97,7 +97,7 @@ export function createMessagePipelineStore({
   promisesToWaitForRef,
   initialPlayer,
 }: {
-  promisesToWaitForRef: MutableRefObject<FramePromise[]>;
+  promisesToWaitForRef: RefObject<FramePromise[]>;
   initialPlayer: Player | undefined;
 }): StoreApi<MessagePipelineInternalState> {
   return createStore((set, get) => ({

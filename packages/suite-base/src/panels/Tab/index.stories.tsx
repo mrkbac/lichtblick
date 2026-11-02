@@ -15,8 +15,7 @@
 //   You may not use this file except in compliance with the License.
 
 import { useTheme } from "@mui/material";
-import { expect } from "storybook/test";
-import { fireEvent, within } from "storybook/test";
+import { expect, fireEvent, within } from "storybook/test";
 import { StoryObj, Meta } from "storybook-react-rsbuild";
 
 import Panel from "@lichtblick/suite-base/components/Panel";

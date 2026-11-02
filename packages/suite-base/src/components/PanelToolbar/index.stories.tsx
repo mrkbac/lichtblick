@@ -19,7 +19,7 @@ import { useTheme } from "@mui/material";
 import { PropsWithChildren } from "react";
 import { Mosaic, MosaicWindow } from "react-mosaic-component";
 import { fireEvent, screen } from "storybook/test";
-import { StoryObj, StoryFn } from "storybook-react-rsbuild";
+import { StoryObj } from "storybook-react-rsbuild";
 
 import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
@@ -73,7 +73,7 @@ function MosaicWrapper(
 export default {
   title: "components/PanelToolbar",
   decorators: [
-    (Story: StoryFn): React.JSX.Element => {
+    (Story: React.ComponentType): React.JSX.Element => {
       // Provide all stories with PanelContext and current layout
       return (
         <MockCurrentLayoutProvider>

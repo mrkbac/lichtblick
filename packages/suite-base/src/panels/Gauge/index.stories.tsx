@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { StoryFn, StoryContext, StoryObj } from "storybook-react-rsbuild";
+import { StoryContext, StoryObj } from "storybook-react-rsbuild";
 
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
 
@@ -15,7 +15,7 @@ export default {
   title: "panels/Gauge",
   component: GaugePanel,
   decorators: [
-    (StoryComponent: StoryFn, { parameters }: StoryContext): React.JSX.Element => {
+    (StoryComponent: React.ComponentType, { parameters }: StoryContext): React.JSX.Element => {
       return (
         <PanelSetup fixture={parameters.panelSetup?.fixture}>
           <StoryComponent />

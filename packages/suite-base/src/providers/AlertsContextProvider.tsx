@@ -8,7 +8,8 @@
 import { Immutable } from "immer";
 import * as _ from "lodash-es";
 import { ReactNode, useState } from "react";
-import { StoreApi, create } from "zustand";
+import { StoreApi } from "zustand";
+import { createWithEqualityFn } from "zustand/traditional";
 
 import {
   AlertsContext,
@@ -18,7 +19,7 @@ import {
 } from "@lichtblick/suite-base/context/AlertsContext";
 
 function createAlertsStore(): StoreApi<AlertsContextStore> {
-  return create<AlertsContextStore>((set, get) => {
+  return createWithEqualityFn<AlertsContextStore>((set, get) => {
     return {
       alerts: [],
       dismissedPlayerAlertKeys: new Set<string>(),

@@ -220,7 +220,7 @@ function RawMessages(props: PropsRawMessages) {
               hideRoot
               invertTheme={false}
               getItemString={getItemString}
-              valueRenderer={(valueAsString: string, value, ...keyPath) => {
+              valueRenderer={(valueAsString: string, value, ...keyPath): React.ReactNode => {
                 if (diffEnabled) {
                   return renderDiffLabel(valueAsString, value);
                 }

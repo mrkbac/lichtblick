@@ -6,7 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { useContext, useEffect, useLayoutEffect, useState } from "react";
-import { StoreApi, createStore, useStore } from "zustand";
+import { StoreApi, createStore } from "zustand";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 
 import { useMustNotChange } from "@lichtblick/hooks";
 import AnalyticsContext from "@lichtblick/suite-base/context/AnalyticsContext";
@@ -50,6 +51,6 @@ export function ForwardAnalyticsContextProvider({
     });
     return unsubscribe;
   }, [forwardedAnalytics, store]);
-  const { value } = useStore(store);
+  const { value } = useStoreWithEqualityFn(store);
   return <AnalyticsContext.Provider value={value}>{children}</AnalyticsContext.Provider>;
 }

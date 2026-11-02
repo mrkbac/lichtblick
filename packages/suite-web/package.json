@@ -12,13 +12,13 @@
     "@lichtblick/test-builders": "1.0.1",
     "@lichtblick/theme": "workspace:*",
     "@lichtblick/tsconfig": "1.1.2",
-    "@mui/material": "7.2.0",
+    "@mui/material": "7.3.11",
     "@rspack/core": "2.3.0",
     "@rspack/plugin-react-refresh": "2.0.2",
     "@testing-library/react": "16.3.3",
     "html-webpack-plugin": "5.6.8",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "storybook-react-rsbuild": "3.6.1",
     "tss-react": "4.9.21"
   }

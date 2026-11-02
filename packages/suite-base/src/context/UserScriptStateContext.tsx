@@ -6,7 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { createContext, useState } from "react";
-import { StoreApi, createStore, useStore } from "zustand";
+import { StoreApi, createStore } from "zustand";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 
 import { useGuaranteedContext } from "@lichtblick/hooks";
 import { generateEmptyTypesLib } from "@lichtblick/suite-base/players/UserScriptPlayer/transformerWorker/generateTypesLib";
@@ -113,5 +114,5 @@ export function UserScriptStateProvider({ children }: React.PropsWithChildren): 
 
 export function useUserScriptState<T>(selector: (arg: UserScriptStore) => T): T {
   const store = useGuaranteedContext(UserScriptStateContext, "UserScriptStateContext");
-  return useStore(store, selector);
+  return useStoreWithEqualityFn(store, selector);
 }

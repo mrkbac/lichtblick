@@ -15,21 +15,12 @@ export const MuiDataGrid: OverrideComponentReturn<"MuiDataGrid"> = {
       baseSwitch: Checkbox,
     },
     slotProps: {
-      panel: {
-        popperOptions: {
-          placement: "bottom-end",
-        },
-      },
       baseTextField: {
-        variant: "outlined",
         size: "small",
         label: undefined,
       },
       baseSwitch: {
         size: "medium",
-        sx: {
-          padding: 0.5,
-        },
       },
     },
   },
@@ -42,7 +33,7 @@ export const MuiDataGrid: OverrideComponentReturn<"MuiDataGrid"> = {
         outline: "none",
       },
     },
-    columnsPanel: {
+    columnsManagement: {
       padding: 0,
     },
     columnHeader: {

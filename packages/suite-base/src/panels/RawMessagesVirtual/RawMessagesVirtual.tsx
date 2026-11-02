@@ -149,7 +149,7 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
   const hideWrappingArrayRef = useRef(false);
 
   const memoizedRenderValue = useCallback(
-    (node: TreeNode, data: unknown) => {
+    (node: TreeNode, data: unknown): React.ReactNode => {
       const valueString = getValueString(node.value);
 
       if (diffEnabled) {
@@ -249,7 +249,7 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
             expandedNodes={expandedNodesSet}
             onToggleExpand={handleToggleExpand}
             fontSize={fontSize}
-            renderValue={(node: TreeNode) => memoizedRenderValue(node, data)}
+            renderValue={(node: TreeNode): React.ReactNode => memoizedRenderValue(node, data)}
           />
         </>
       );

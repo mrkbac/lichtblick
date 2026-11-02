@@ -6,7 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { createContext } from "react";
-import { StoreApi, useStore } from "zustand";
+import { StoreApi } from "zustand";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 
 import { useGuaranteedContext } from "@lichtblick/hooks";
 import { LogLevel } from "@lichtblick/log";
@@ -37,7 +38,7 @@ const StudioLogsSettingsContext = createContext<undefined | StoreApi<IStudioLogs
 
 function useStudioLogsSettings(): IStudioLogsSettings {
   const context = useGuaranteedContext(StudioLogsSettingsContext);
-  return useStore(context);
+  return useStoreWithEqualityFn(context);
 }
 
 export { StudioLogsSettingsContext, useStudioLogsSettings };

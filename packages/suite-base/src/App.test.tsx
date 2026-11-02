@@ -160,13 +160,10 @@ describe("App Component", () => {
     });
 
     // Ensure Workspace receives the correct props by spying on Workspace
-    expect(Workspace).toHaveBeenCalledWith(
-      {
-        deepLinks: mockDeepLinks,
-        onAppBarDoubleClick: mockOnAppBarDoubleClick,
-      },
-      {},
-    );
+    expect(vi.mocked(Workspace).mock.calls[0]![0]).toMatchObject({
+      deepLinks: mockDeepLinks,
+      onAppBarDoubleClick: mockOnAppBarDoubleClick,
+    });
   });
 });
 
