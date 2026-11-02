@@ -87,6 +87,10 @@ export const devServerConfig = (params: ConfigParams): Configuration => ({
                 ) {
                   return false;
                 }
+                // Benign per spec: observers whose callbacks resize content get re-delivered next frame.
+                if (error.message.startsWith("ResizeObserver loop")) {
+                  return false;
+                }
 
                 return true;
               },
