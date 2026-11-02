@@ -12,7 +12,6 @@ import { useMountedState } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
 import { APP_BAR_HEIGHT } from "@lichtblick/suite-base/components/AppBar/constants";
-import Catalog from "@lichtblick/suite-base/components/Catalog/Catalog";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
@@ -31,7 +30,7 @@ const Snow = lazy(
   async () => await import("@lichtblick/suite-base/components/DataSourceDialog/Snow"),
 );
 
-export type DataSourceDialogItem = "start" | "file" | "demo" | "remote" | "connection" | "catalog";
+export type DataSourceDialogItem = "start" | "file" | "demo" | "remote" | "connection";
 
 type DataSourceDialogProps = {
   backdropAnimation?: boolean;
@@ -138,18 +137,16 @@ export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Elemen
           title: "Open new connection",
           component: <Connection />,
         };
-      case "catalog":
-        return {
-          title: "Catalog",
-          component: <Catalog onClose={onModalClose} />,
-        };
       default:
         return {
           title: "Get started",
           component: <Start />,
         };
     }
-  }, [activeView, onModalClose]);
+  }, [activeView]);
+
+  // The start page fills the window; connection forms stay a small dialog.
+  const fullScreen = activeView !== "connection";
 
   return (
     <Dialog
@@ -157,32 +154,25 @@ export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Elemen
       open
       onClose={onModalClose}
       fullWidth
-      fullScreen={activeView === "catalog"}
-      className={activeView === "catalog" ? classes.belowAppBar : undefined}
+      fullScreen={fullScreen}
+      className={fullScreen ? classes.belowAppBar : undefined}
       maxWidth="lg"
       slotProps={{
         backdrop: {
           children: backdrop,
-          className: activeView === "catalog" ? classes.belowAppBar : undefined,
+          className: fullScreen ? classes.belowAppBar : undefined,
         },
         paper: {
           square: false,
           elevation: 4,
-          className: activeView === "catalog" ? classes.fullScreenPaper : classes.paper,
+          className: fullScreen ? classes.fullScreenPaper : classes.paper,
         },
       }}
     >
-      {activeView !== "catalog" && (
-        <IconButton className={classes.closeButton} onClick={onModalClose} edge="end">
-          <CloseIcon data-testid="CloseIcon" />
-        </IconButton>
-      )}
-      <Stack
-        flexGrow={1}
-        fullHeight
-        justifyContent="space-between"
-        overflow={activeView === "connection" || activeView === "catalog" ? "hidden" : undefined}
-      >
+      <IconButton className={classes.closeButton} onClick={onModalClose} edge="end">
+        <CloseIcon data-testid="CloseIcon" />
+      </IconButton>
+      <Stack flexGrow={1} fullHeight justifyContent="space-between" overflow="hidden">
         {view.component}
       </Stack>
     </Dialog>

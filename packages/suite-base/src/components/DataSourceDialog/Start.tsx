@@ -6,139 +6,280 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Dismiss16Regular, Pin16Filled, Pin16Regular } from "@fluentui/react-icons";
+import { subtract } from "@foxglove/rostime";
 import {
   Button,
   IconButton,
   List,
   ListItem,
   ListItemButton,
+  TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import Catalog from "@lichtblick/suite-base/components/Catalog/Catalog";
+import { filterRecordings } from "@lichtblick/suite-base/components/Catalog/search";
+import { CatalogRecording } from "@lichtblick/suite-base/components/Catalog/types";
+import { useCatalogFolder } from "@lichtblick/suite-base/components/Catalog/useCatalogFolder";
+import DontShowThisAgainCheckbox from "@lichtblick/suite-base/components/DataSourceDialog/DontShowThisAgainCheckbox";
 import { OpenUrlInput } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
-import SidebarItems from "@lichtblick/suite-base/components/DataSourceDialog/SidebarItems";
 import { useStyles } from "@lichtblick/suite-base/components/DataSourceDialog/index.style";
 import LichtblickLogoText from "@lichtblick/suite-base/components/LichtblickLogoText";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
-import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
+import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
+import {
+  RecentSource,
+  usePlayerSelection,
+} from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
+import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
+import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
+import { splitRecentTitle } from "@lichtblick/suite-base/util/recentSources";
 
-// Number of recents listed before "Show all"
-const RECENTS_PREVIEW_COUNT = 10;
+// Number of recents listed before "Show all", unless searching
+const RECENTS_PREVIEW_COUNT = 5;
 
+type Kind = "all" | "file" | "remote" | "live";
+
+function recentKind(recent: RecentSource): Exclude<Kind, "all"> {
+  if (recent.type === "file") {
+    return "file";
+  }
+  return recent.sourceId === "remote-file" ? "remote" : "live";
+}
+
+/** Local file recents carry the file name as title, as do catalog recordings. */
+function catalogMatch(
+  recent: RecentSource,
+  catalogByName: ReadonlyMap<string, CatalogRecording>,
+): CatalogRecording | undefined {
+  return recent.type === "file" ? catalogByName.get(recent.title) : undefined;
+}
+
+/**
+ * The start page: open anything (URL, files, folder), and search recent sources and the
+ * recordings of a local folder in one place.
+ */
 export default function Start(): React.JSX.Element {
   const { recentSources, selectRecent, removeRecent, togglePinRecent, clearRecents } =
     usePlayerSelection();
   const { classes } = useStyles();
   const { t } = useTranslation("openDialog");
   const { dialogActions } = useWorkspaceActions();
+  const analytics = useAnalytics();
+  const folder = useCatalogFolder();
+
+  const [query, setQuery] = useState("");
+  const [kind, setKind] = useState<Kind>("all");
   const [showAllRecents, setShowAllRecents] = useState(false);
 
-  const visibleRecents = showAllRecents
-    ? recentSources
-    : recentSources.slice(0, RECENTS_PREVIEW_COUNT);
+  const catalogByName = useMemo(
+    // ponytail: matches by file name only; the first recording wins when names repeat
+    () => new Map(folder.recordings.map((r) => [r.name, r])),
+    [folder.recordings],
+  );
+
+  const lastOpenedByName = useMemo(
+    () =>
+      new Map(
+        recentSources.flatMap((recent) =>
+          recent.type === "file" && recent.lastOpened != undefined
+            ? [[recent.title, recent.lastOpened] as const]
+            : [],
+        ),
+      ),
+    [recentSources],
+  );
+
+  // Search recents with the catalog's query language; a recent that is in the catalog matches
+  // on its topics, duration and so on too.
+  const filteredRecents = useMemo(() => {
+    const byKind = recentSources.filter((recent) => kind === "all" || recentKind(recent) === kind);
+    if (query.trim() === "") {
+      return byKind;
+    }
+    const asRecordings = byKind.map(
+      (recent): CatalogRecording => ({
+        ...catalogMatch(recent, catalogByName),
+        id: recent.id,
+        name: splitRecentTitle(recent.title).primary,
+        source: { type: "remote-file", url: recent.title },
+      }),
+    );
+    const matches = new Set(filterRecordings(asRecordings, query).map((r) => r.id));
+    return byKind.filter((recent) => matches.has(recent.id));
+  }, [recentSources, kind, query, catalogByName]);
+
+  const searching = query.trim() !== "" || kind !== "all";
+  const visibleRecents =
+    showAllRecents || searching ? filteredRecents : filteredRecents.slice(0, RECENTS_PREVIEW_COUNT);
+  const showCatalog = kind === "all" || kind === "file";
 
   return (
-    <Stack className={classes.grid}>
+    <Stack className={classes.page}>
       <header className={classes.header}>
         <LichtblickLogoText color="primary" className={classes.logo} />
       </header>
-      <Stack className={classes.content}>
-        <Stack gap={4} flex="auto" overflow="hidden">
-          <Stack gap={1}>
-            <Typography variant="h5" gutterBottom>
-              {t("openDataSource")}
+
+      <Stack gap={1}>
+        <Typography variant="h5">{t("openDataSource")}</Typography>
+        <OpenUrlInput />
+      </Stack>
+
+      <Stack direction="row" gap={2} alignItems="flex-start">
+        <TextField
+          fullWidth
+          size="small"
+          type="search"
+          value={query}
+          placeholder={t("searchPlaceholder")}
+          helperText={t("searchHelp")}
+          onChange={(event) => {
+            setQuery(event.target.value);
+          }}
+        />
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={kind}
+          onChange={(_event, value: Kind | null) => {
+            setKind(value ?? "all");
+          }}
+          aria-label={t("sourceKind")}
+        >
+          <ToggleButton value="all">{t("kindAll")}</ToggleButton>
+          <ToggleButton value="file">{t("kindFile")}</ToggleButton>
+          <ToggleButton value="remote">{t("kindRemote")}</ToggleButton>
+          <ToggleButton value="live">{t("kindLive")}</ToggleButton>
+        </ToggleButtonGroup>
+      </Stack>
+
+      {(filteredRecents.length > 0 || (searching && recentSources.length > 0)) && (
+        <Stack gap={0.5} className={classes.recents}>
+          <Stack direction="row" alignItems="center" gap={1}>
+            <Typography variant="h5" flex="auto">
+              {t("recentDataSources")}
             </Typography>
-            <OpenUrlInput />
+            {recentSources.some((recent) => recent.pinned !== true) && (
+              <Button size="small" color="inherit" onClick={clearRecents}>
+                {t("clearRecents")}
+              </Button>
+            )}
           </Stack>
-          {recentSources.length > 0 && (
-            <Stack gap={1} overflow="hidden">
-              <Stack direction="row" alignItems="center" justifyContent="space-between">
-                <Typography variant="h5">{t("recentDataSources")}</Typography>
-                {recentSources.some((recent) => recent.pinned !== true) && (
-                  <Button size="small" color="inherit" onClick={clearRecents}>
-                    {t("clearRecents")}
-                  </Button>
-                )}
-              </Stack>
-              <List disablePadding dense className={classes.recentList}>
-                {visibleRecents.map((recent) => {
-                  const pinned = recent.pinned === true;
-                  return (
-                    <ListItem
-                      disablePadding
-                      key={recent.id}
-                      id={recent.id}
-                      className={classes.recentListItem}
-                      secondaryAction={
-                        <>
-                          <Tooltip title={pinned ? t("unpin") : t("pin")}>
-                            <IconButton
-                              size="small"
-                              aria-label={pinned ? t("unpin") : t("pin")}
-                              className={pinned ? undefined : "recent-action"}
-                              onClick={() => {
-                                togglePinRecent(recent.id);
-                              }}
-                            >
-                              {pinned ? <Pin16Filled /> : <Pin16Regular />}
-                            </IconButton>
-                          </Tooltip>
-                          <Tooltip title={t("removeRecent")}>
-                            <IconButton
-                              size="small"
-                              edge="end"
-                              aria-label={t("removeRecent")}
-                              className="recent-action"
-                              onClick={() => {
-                                removeRecent(recent.id);
-                              }}
-                            >
-                              <Dismiss16Regular />
-                            </IconButton>
-                          </Tooltip>
-                        </>
-                      }
-                    >
-                      <ListItemButton
-                        selected={recent.current === true}
-                        onClick={() => {
-                          selectRecent(recent.id);
-                        }}
-                      >
-                        <RecentSourceLabel recent={recent} hidePinIndicator />
-                      </ListItemButton>
-                    </ListItem>
-                  );
-                })}
-              </List>
-              {!showAllRecents && recentSources.length > RECENTS_PREVIEW_COUNT && (
-                <Button
-                  size="small"
-                  className={classes.showAllRecents}
-                  onClick={() => {
-                    setShowAllRecents(true);
-                  }}
+          {filteredRecents.length === 0 && (
+            <Typography variant="body2" color="text.secondary">
+              {t("noRecentMatches")}
+            </Typography>
+          )}
+          <List disablePadding dense className={classes.recentList}>
+            {visibleRecents.map((recent) => {
+              const pinned = recent.pinned === true;
+              const match = catalogMatch(recent, catalogByName);
+              const summary = [
+                match?.start && match.end ? formatDuration(subtract(match.end, match.start)) : "",
+                match?.topics ? t("topicCount", { count: match.topics.length }) : "",
+              ]
+                .filter(Boolean)
+                .join(" · ");
+              return (
+                <ListItem
+                  disablePadding
+                  key={recent.id}
+                  id={recent.id}
+                  className={classes.recentListItem}
+                  secondaryAction={
+                    <>
+                      <Tooltip title={pinned ? t("unpin") : t("pin")}>
+                        <IconButton
+                          size="small"
+                          aria-label={pinned ? t("unpin") : t("pin")}
+                          className={pinned ? undefined : "recent-action"}
+                          onClick={() => {
+                            togglePinRecent(recent.id);
+                          }}
+                        >
+                          {pinned ? <Pin16Filled /> : <Pin16Regular />}
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={t("removeRecent")}>
+                        <IconButton
+                          size="small"
+                          edge="end"
+                          aria-label={t("removeRecent")}
+                          className="recent-action"
+                          onClick={() => {
+                            removeRecent(recent.id);
+                          }}
+                        >
+                          <Dismiss16Regular />
+                        </IconButton>
+                      </Tooltip>
+                    </>
+                  }
                 >
-                  {t("showAllRecents", { count: recentSources.length })}
-                </Button>
-              )}
-            </Stack>
+                  <ListItemButton
+                    selected={recent.current === true}
+                    onClick={() => {
+                      selectRecent(recent.id);
+                    }}
+                  >
+                    <RecentSourceLabel recent={recent} hidePinIndicator />
+                    {summary !== "" && (
+                      <Typography variant="caption" color="text.secondary" noWrap>
+                        {summary}
+                      </Typography>
+                    )}
+                  </ListItemButton>
+                </ListItem>
+              );
+            })}
+          </List>
+          {visibleRecents.length < filteredRecents.length && (
+            <Button
+              size="small"
+              className={classes.showAllRecents}
+              onClick={() => {
+                setShowAllRecents(true);
+              }}
+            >
+              {t("showAllRecents", { count: filteredRecents.length })}
+            </Button>
           )}
         </Stack>
-      </Stack>
-      <div className={classes.spacer} />
-      <Stack gap={4} className={classes.sidebar}>
-        <SidebarItems onSelectView={dialogActions.dataSource.open} />
-      </Stack>
-      <Typography variant="caption" className={classes.version}>
-        {t("version", { version: APP_CONFIG.version })}
-      </Typography>
+      )}
+
+      {showCatalog && <Catalog folder={folder} query={query} lastOpenedByName={lastOpenedByName} />}
+
+      <footer className={classes.footer}>
+        <Typography variant="body2" color="text.secondary">
+          {t("newToLichtblick")}
+        </Typography>
+        <Button
+          size="small"
+          onClick={() => {
+            dialogActions.dataSource.open("demo");
+            analytics.logEvent(AppEvent.DIALOG_SELECT_VIEW, { type: "demo" });
+          }}
+        >
+          {t("exploreSampleData")}
+        </Button>
+        <Button size="small" href={LICHTBLICK_DOCUMENTATION_LINK} target="_blank" rel="noopener">
+          {t("viewDocumentation")}
+        </Button>
+        <div className={classes.spacer} />
+        <DontShowThisAgainCheckbox />
+        <Typography variant="caption" color="text.secondary">
+          {t("version", { version: APP_CONFIG.version })}
+        </Typography>
+      </footer>
     </Stack>
   );
 }

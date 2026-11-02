@@ -2,8 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { subtract, toSec } from "@foxglove/rostime";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import CloseIcon from "@mui/icons-material/Close";
 import FolderOpenOutlinedIcon from "@mui/icons-material/FolderOpenOutlined";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import {
@@ -11,38 +9,27 @@ import {
   Button,
   ButtonBase,
   Chip,
-  IconButton,
   LinearProgress,
   TableSortLabel,
-  TextField,
   Tooltip,
   Typography,
 } from "@mui/material";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import * as _ from "lodash-es";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useAsync } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { format, formatDuration } from "@lichtblick/suite-base/util/formatTime";
+import { formatTimeAgo } from "@lichtblick/suite-base/util/recentSources";
 import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
 
 import { RecordingDetails } from "./RecordingDetails";
-import {
-  FolderFile,
-  indexFiles,
-  listDirectory,
-  listInputFiles,
-  loadLastFolder,
-  saveLastFolder,
-} from "./indexFolder";
 import { filterRecordings } from "./search";
 import { CatalogRecording } from "./types";
+import { CatalogFolder } from "./useCatalogFolder";
 
 const ROW_HEIGHT = 52;
 const THUMB_WIDTH = 72;
@@ -75,9 +62,9 @@ function sortRecordings(
 
 const useStyles = makeStyles()((theme) => ({
   root: {
-    height: "100%",
-    padding: theme.spacing(3, 4, 0),
-    gap: theme.spacing(2),
+    flex: 1,
+    minHeight: 0,
+    gap: theme.spacing(1),
   },
   header: {
     display: "flex",
@@ -144,7 +131,7 @@ const useStyles = makeStyles()((theme) => ({
     borderRadius: theme.shape.borderRadius,
   },
   emptyIcon: {
-    fontSize: 64,
+    fontSize: 48,
   },
   progress: {
     flex: 1,
@@ -157,9 +144,10 @@ const useStyles = makeStyles()((theme) => ({
     alignItems: "center",
     justifyContent: "center",
     textAlign: "center",
-    gap: theme.spacing(2),
+    gap: theme.spacing(1.5),
     maxWidth: 520,
     margin: "0 auto",
+    padding: theme.spacing(4, 0),
   },
 }));
 
@@ -170,163 +158,26 @@ function formatStart(r: CatalogRecording): string {
   return isAbsoluteTime(r.start) ? format(r.start) : formatTimeRaw(r.start);
 }
 
-export default function Catalog({ onClose }: { onClose: () => void }): React.JSX.Element {
-  const { classes, cx } = useStyles();
-  const { t } = useTranslation("catalog");
-  const { selectSource } = usePlayerSelection();
-  const { dialogActions } = useWorkspaceActions();
+type Props = {
+  folder: CatalogFolder;
+  /** Search query, see `filterRecordings`. */
+  query: string;
+  /** When each file name was last opened, from the recent sources. */
+  lastOpenedByName: ReadonlyMap<string, number>;
+};
 
-  const [folderName, setFolderName] = useState<string>();
-  const [relist, setRelist] = useState<() => Promise<FolderFile[]>>();
-  const [files, setFiles] = useState<FolderFile[]>([]);
-  const [recordings, setRecordings] = useState<CatalogRecording[]>([]);
-  const [progress, setProgress] = useState<{ done: number; total: number }>();
-  const [error, setError] = useState<string>();
-  const [query, setQuery] = useState("");
+/** The catalog section of the start page: every recording in a local folder. */
+export default function Catalog({ folder, query, lastOpenedByName }: Props): React.JSX.Element {
+  const { classes, cx } = useStyles();
+  const { t, i18n } = useTranslation("catalog");
+  const { recordings, progress, error, open } = folder;
+
   const [selectedId, setSelectedId] = useState<string>();
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({
     key: "start",
     desc: true,
   });
-  const scanIdRef = useRef(0);
-  const inputRef = useRef<HTMLInputElement>(ReactNull);
   const scrollRef = useRef<HTMLDivElement>(ReactNull);
-
-  const { value: lastFolder } = useAsync(loadLastFolder, []);
-
-  const scan = useCallback(
-    async (
-      name: string,
-      list: () => Promise<FolderFile[]>,
-      { retryErrors = false }: { retryErrors?: boolean } = {},
-    ) => {
-      const scanId = ++scanIdRef.current;
-      const isStale = () => scanId !== scanIdRef.current;
-      setFolderName(name);
-      setRelist(() => list);
-      setError(undefined);
-      try {
-        const folderFiles = await list();
-        if (isStale()) {
-          return;
-        }
-        setFiles(folderFiles);
-        setRecordings([]);
-        setProgress({ done: 0, total: folderFiles.length });
-        const ready: CatalogRecording[] = [];
-        const flush = _.throttle(() => {
-          if (!isStale()) {
-            setRecordings([...ready]);
-            setProgress({ done: ready.length, total: folderFiles.length });
-          }
-        }, 250);
-        const results = await indexFiles(folderFiles, {
-          retryErrors,
-          isCancelled: isStale,
-          onRecording: (recording) => {
-            ready.push(recording);
-            flush();
-          },
-        });
-        flush.cancel();
-        if (!isStale()) {
-          setRecordings(results);
-          setProgress(undefined);
-        }
-      } catch (err: unknown) {
-        if (!isStale()) {
-          setError(String(err));
-          setProgress(undefined);
-        }
-      }
-    },
-    [],
-  );
-
-  const openDirectory = useCallback(
-    async (dir: FileSystemDirectoryHandle) => {
-      await scan(dir.name, async () => await listDirectory(dir));
-    },
-    [scan],
-  );
-
-  // Reopen the last folder without a click when the browser still grants access, e.g. when
-  // coming back to the catalog after opening a recording.
-  useEffect(() => {
-    if (!lastFolder) {
-      return;
-    }
-    void (async () => {
-      if ((await lastFolder.queryPermission({ mode: "read" })) === "granted") {
-        await openDirectory(lastFolder);
-      }
-    })();
-  }, [lastFolder, openDirectory]);
-
-  const pickFolder = useCallback(async () => {
-    if (!("showDirectoryPicker" in window)) {
-      inputRef.current?.click();
-      return;
-    }
-    let dir: FileSystemDirectoryHandle;
-    try {
-      dir = await window.showDirectoryPicker({ mode: "read" });
-    } catch (err: unknown) {
-      if (!(err instanceof DOMException && err.name === "AbortError")) {
-        setError(String(err));
-      }
-      return;
-    }
-    // Remembering the folder is a convenience; open it even if that fails.
-    await saveLastFolder(dir).catch((err: unknown) => {
-      console.warn("Failed to remember the catalog folder", err);
-    });
-    await openDirectory(dir);
-  }, [openDirectory]);
-
-  const reopenLastFolder = useCallback(async () => {
-    if (lastFolder && (await lastFolder.requestPermission({ mode: "read" })) === "granted") {
-      await openDirectory(lastFolder);
-    }
-  }, [lastFolder, openDirectory]);
-
-  const onInputFiles = useCallback(
-    async (event: React.ChangeEvent<HTMLInputElement>) => {
-      const fileList = [...(event.target.files ?? [])];
-      const name = fileList[0]?.webkitRelativePath.split("/")[0] ?? "";
-      await scan(name, async () => listInputFiles(fileList));
-    },
-    [scan],
-  );
-
-  const open = useCallback(
-    async (recording: CatalogRecording) => {
-      const { source } = recording;
-      switch (source.type) {
-        case "local-file": {
-          const file = files.find((f) => f.path === source.path);
-          if (!file) {
-            return;
-          }
-          selectSource(
-            "mcap-local-file",
-            file.handle
-              ? { type: "file", handles: [file.handle] }
-              : { type: "file", files: [await file.getFile()] },
-          );
-          break;
-        }
-        case "remote-file":
-        case "foxglove-websocket":
-          selectSource(source.type, {
-            type: "connection",
-            params: { url: source.url },
-          });
-          break;
-      }
-    },
-    [files, selectSource],
-  );
 
   const shown = useMemo(
     () => sortRecordings(filterRecordings(recordings, query), sort),
@@ -359,59 +210,25 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
     </TableSortLabel>
   );
 
-  const closeButton = (
-    <IconButton edge="end" onClick={onClose} aria-label={t("close")} title={t("close")}>
-      <CloseIcon />
-    </IconButton>
-  );
-
-  const folderInput = (
-    <input
-      ref={inputRef}
-      type="file"
-      hidden
-      multiple
-      // @ts-expect-error webkitdirectory is not in React's input attributes
-      webkitdirectory=""
-      onChange={onInputFiles}
-    />
-  );
-
-  if (folderName == undefined) {
+  if (folder.name == undefined) {
     return (
-      <Stack className={classes.root}>
-        <div className={classes.header}>
-          <IconButton
-            onClick={() => {
-              dialogActions.dataSource.open("start");
-            }}
-            aria-label={t("back")}
-            title={t("back")}
-          >
-            <ArrowBackIcon />
-          </IconButton>
-          <Typography variant="h3" className={classes.title}>
-            {t("catalog")}
-          </Typography>
-          {closeButton}
-        </div>
-        <Stack className={classes.empty}>
-          <FolderOpenOutlinedIcon color="primary" className={classes.emptyIcon} />
-          <Typography variant="h4">{t("emptyTitle")}</Typography>
-          <Typography color="text.secondary">{t("emptyDescription")}</Typography>
-          <Stack direction="row" gap={1}>
-            <Button variant="contained" onClick={() => void pickFolder()}>
-              {t("openFolder")}
+      <Stack className={classes.empty}>
+        <FolderOpenOutlinedIcon color="primary" className={classes.emptyIcon} />
+        <Typography variant="h5">{t("emptyTitle")}</Typography>
+        <Typography variant="body2" color="text.secondary">
+          {t("emptyDescription")}
+        </Typography>
+        <Stack direction="row" gap={1}>
+          <Button variant="contained" onClick={() => void folder.pickFolder()}>
+            {t("openFolder")}
+          </Button>
+          {folder.lastFolder && (
+            <Button variant="outlined" onClick={() => void folder.reopenLastFolder()}>
+              {t("reopenFolder", { name: folder.lastFolder.name })}
             </Button>
-            {lastFolder && (
-              <Button variant="outlined" onClick={() => void reopenLastFolder()}>
-                {t("reopenFolder", { name: lastFolder.name })}
-              </Button>
-            )}
-          </Stack>
-          {error && <Alert severity="error">{error}</Alert>}
+          )}
         </Stack>
-        {folderInput}
+        {error && <Alert severity="error">{error}</Alert>}
       </Stack>
     );
   }
@@ -419,49 +236,29 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
   return (
     <Stack className={classes.root}>
       <div className={classes.header}>
-        <IconButton
-          onClick={() => {
-            dialogActions.dataSource.open("start");
-          }}
-          aria-label={t("back")}
-          title={t("back")}
-        >
-          <ArrowBackIcon />
-        </IconButton>
-        <Typography variant="h3" noWrap className={classes.title}>
-          {folderName}
+        <Typography variant="h5" noWrap>
+          {t("catalog")}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" noWrap className={classes.title}>
+          {folder.name}
         </Typography>
         <Tooltip title={t("rescanDescription")}>
           <span>
             <Button
+              size="small"
+              color="inherit"
               startIcon={<RefreshIcon />}
-              disabled={progress != undefined || relist == undefined}
-              onClick={() => relist && void scan(folderName, relist, { retryErrors: true })}
+              disabled={progress != undefined || folder.rescan == undefined}
+              onClick={() => void folder.rescan?.()}
             >
               {t("rescan")}
             </Button>
           </span>
         </Tooltip>
-        <Button variant="outlined" onClick={() => void pickFolder()}>
-          {t("openFolder")}
+        <Button size="small" color="inherit" onClick={() => void folder.pickFolder()}>
+          {t("changeFolder")}
         </Button>
-        {closeButton}
       </div>
-      <Stack gap={0.5}>
-        <TextField
-          autoFocus
-          fullWidth
-          size="small"
-          value={query}
-          placeholder={t("searchPlaceholder")}
-          onChange={(event) => {
-            setQuery(event.target.value);
-          }}
-        />
-        <Typography variant="caption" color="text.secondary">
-          {t("searchHelp")}
-        </Typography>
-      </Stack>
       {error && <Alert severity="error">{error}</Alert>}
       <Stack direction="row" alignItems="center" gap={2}>
         <Typography variant="body2" color="text.secondary">
@@ -511,6 +308,17 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
               {virtualizer.getVirtualItems().map((item) => {
                 const r = shown[item.index]!;
                 const path = r.source.type === "local-file" ? r.source.path : r.source.url;
+                const lastOpened = lastOpenedByName.get(r.name);
+                const caption = [
+                  lastOpened != undefined
+                    ? t("openedAgo", {
+                        ago: formatTimeAgo(lastOpened, Date.now(), i18n.language),
+                      })
+                    : undefined,
+                  path !== r.name ? path : undefined,
+                ]
+                  .filter(Boolean)
+                  .join(" · ");
                 return (
                   <ButtonBase
                     key={r.id}
@@ -554,9 +362,9 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
                           </Tooltip>
                         )}
                       </Stack>
-                      {path !== r.name && (
+                      {caption !== "" && (
                         <Typography variant="caption" color="text.secondary" noWrap>
-                          {path}
+                          {caption}
                         </Typography>
                       )}
                     </Stack>
@@ -603,7 +411,6 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
           />
         )}
       </Stack>
-      {folderInput}
     </Stack>
   );
 }
