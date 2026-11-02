@@ -500,6 +500,8 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       }),
     );
     return () => {
+      clearTimeout(flushTimer.current);
+      flushTimer.current = undefined;
       for (const unsubscribe of unsubscribes) {
         unsubscribe();
       }
@@ -578,6 +580,8 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       }),
     );
     return () => {
+      clearTimeout(sampleTimer.current);
+      sampleTimer.current = undefined;
       for (const unsubscribe of unsubscribes) {
         unsubscribe();
       }
