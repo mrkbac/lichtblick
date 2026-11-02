@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import fs, { Dirent, Stats } from "fs";
+import fs, { Stats } from "fs";
 import mockFs from "mock-fs";
 import { DirectoryItems } from "mock-fs/lib/filesystem";
 import os from "os";
@@ -208,10 +208,7 @@ describe("resolveSourcePaths", () => {
     vi.spyOn(fs, "statSync").mockReturnValueOnce({
       isDirectory: () => true,
     } as Stats);
-    vi.spyOn(fs, "readdirSync").mockReturnValueOnce([
-      file1.name,
-      file3.name,
-    ] as unknown as Dirent[]);
+    vi.spyOn(fs, "readdirSync").mockReturnValueOnce([file1.name, file3.name] as never);
 
     setup({
       [path]: {
