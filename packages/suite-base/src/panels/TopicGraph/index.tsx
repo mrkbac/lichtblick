@@ -30,7 +30,6 @@ import {
 } from "@mui/material";
 import Cytoscape from "cytoscape";
 import { useCallback, useMemo, useRef, useState } from "react";
-import textMetrics from "text-metrics";
 import { makeStyles } from "tss-react/mui";
 
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
@@ -39,6 +38,7 @@ import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePip
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import { PANEL_TOOLBAR_MIN_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
+import { measureTextWidth } from "@lichtblick/suite-base/util/measureTextWidth";
 
 import Graph, { GraphMutation } from "./Graph";
 
@@ -186,15 +186,6 @@ function TopicGraph() {
   const [showServices, setShowServices] = useState<boolean>(true);
   const [topicVisibility, setTopicVisibility] = useState<TopicVisibility>("all");
 
-  const textMeasure = useMemo(
-    () =>
-      textMetrics.init({
-        fontFamily: "Arial",
-        fontSize: "16px",
-      }),
-    [],
-  );
-
   const topicPassesConditions = useCallback(
     ({
       topicIdWithSubscriptions,
@@ -249,7 +240,7 @@ function TopicGraph() {
     }
 
     for (const node of nodeIds) {
-      const widthPx = Math.min(LABEL_MAX_WIDTH, textMeasure.width(node));
+      const widthPx = Math.min(LABEL_MAX_WIDTH, measureTextWidth(node, "16px Arial"));
       output.push({
         style: { width: `${widthPx}px` },
         data: { id: `n:${node}`, label: node, type: "node" },
@@ -267,7 +258,7 @@ function TopicGraph() {
     }
     if (showServices) {
       for (const service of serviceIds) {
-        const widthPx = Math.min(LABEL_MAX_WIDTH, textMeasure.width(service));
+        const widthPx = Math.min(LABEL_MAX_WIDTH, measureTextWidth(service, "16px Arial"));
         output.push({
           style: { width: `${widthPx}px` },
           data: { id: `s:${service}`, label: service, type: "service" },
@@ -333,7 +324,6 @@ function TopicGraph() {
 
     return output;
   }, [
-    textMeasure,
     publishedTopics,
     subscribedTopics,
     services,
