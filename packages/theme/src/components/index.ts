@@ -46,6 +46,7 @@ export * from "./MuiPaper";
 export * from "./MuiPopover";
 export * from "./MuiRadio";
 export * from "./MuiSelect";
+export * from "./MuiSlider";
 export * from "./MuiTab";
 export * from "./MuiTableCell";
 export * from "./MuiTableRow";
