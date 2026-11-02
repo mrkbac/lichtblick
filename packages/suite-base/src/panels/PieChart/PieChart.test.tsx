@@ -67,7 +67,6 @@ describe("PieChart", () => {
 
   it("formats tooltip correctly", () => {
     expect(formatTooltip(10, "Value")).toEqual(["10.00%", "Value"]);
-    // @ts-expect-error intentionally passing string for test purposes
     expect(formatTooltip("N/A", "Value")).toEqual(["N/A%", "Value"]);
   });
 });

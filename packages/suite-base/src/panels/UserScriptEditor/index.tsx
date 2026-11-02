@@ -27,9 +27,9 @@ import {
 } from "@mui/material";
 import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  ImperativePanelHandle,
-  PanelGroup,
-  PanelResizeHandle,
+  Group as PanelGroup,
+  PanelImperativeHandle,
+  Separator as PanelResizeHandle,
   Panel as ResizablePanel,
 } from "react-resizable-panels";
 import tc from "tinycolor2";
@@ -351,7 +351,7 @@ function UserScriptEditor(props: Props) {
     };
   }, []);
 
-  const bottomBarRef = useRef<ImperativePanelHandle>(ReactNull);
+  const bottomBarRef = useRef<PanelImperativeHandle>(ReactNull);
 
   const onChangeBottomBarTab = useCallback(() => {
     bottomBarRef.current?.expand();
@@ -403,7 +403,7 @@ function UserScriptEditor(props: Props) {
             </Stack>
           )}
 
-          <PanelGroup direction="vertical">
+          <PanelGroup orientation="vertical">
             {selectedNodeId == undefined && <WelcomeScreen addNewNode={addNewNode} />}
             <ResizablePanel>
               <Suspense
@@ -441,9 +441,10 @@ function UserScriptEditor(props: Props) {
             <ResizablePanel
               collapsible
               collapsedSize={0}
-              defaultSize={30}
+              // strings are percentages, numbers pixels
+              defaultSize="30"
               style={{ minHeight: "38px" }}
-              ref={bottomBarRef}
+              panelRef={bottomBarRef}
             >
               <BottomBar
                 diagnostics={selectedNodeDiagnostics}
