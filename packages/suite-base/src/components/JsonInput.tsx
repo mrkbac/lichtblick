@@ -16,14 +16,23 @@
 
 import ErrorIcon from "@mui/icons-material/Error";
 import { Typography } from "@mui/material";
-import CodeEditor from "@uiw/react-textarea-code-editor";
+import CodeEditor from "@uiw/react-textarea-code-editor/nohighlight";
 import * as _ from "lodash-es";
+import json from "refractor/lang/json.js";
+import { refractor } from "refractor/lib/core.js";
+import rehypePrismGenerator from "rehype-prism-plus/generator";
 import { makeStyles } from "tss-react/mui";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { toError } from "@lichtblick/suite-base/util/toError";
 import { validationErrorToString, ValidationResult } from "@lichtblick/suite-base/util/validators";
 import { customTypography } from "@lichtblick/theme";
+
+// Only JSON is highlighted; the default editor entry bundles every Prism language.
+refractor.register(json);
+const rehypePlugins: React.ComponentProps<typeof CodeEditor>["rehypePlugins"] = [
+  [rehypePrismGenerator(refractor), { ignoreMissing: true }],
+];
 
 const { useState, useCallback, useRef, useLayoutEffect, useEffect } = React;
 
@@ -181,6 +190,7 @@ function ValidatedInputBase({
         value={inputStr}
         onChange={handleChange}
         language="json"
+        rehypePlugins={rehypePlugins}
         onBlur={() => {
           setIsEditing(false);
         }}
