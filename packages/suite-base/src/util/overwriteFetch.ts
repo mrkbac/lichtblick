@@ -25,14 +25,11 @@ export default function overwriteFetch(): void {
     // Use this replacement error instead of the original one, because this one will have the correct stack trace.
     // eslint-disable-next-line @typescript-eslint/no-base-to-string
     const replacementError = new TypeError(`Failed to fetch: ${input}`);
-    // Since both node types and dom types are in scope here, the input types for `fetch` conflict.
-    return await originalFetch(input as Parameters<typeof originalFetch>[0], init).catch(
-      (error: unknown) => {
-        if ((error as Error).message === "Failed to fetch") {
-          throw replacementError;
-        }
-        throw error;
-      },
-    );
+    return await originalFetch(input, init).catch((error: unknown) => {
+      if ((error as Error).message === "Failed to fetch") {
+        throw replacementError;
+      }
+      throw error;
+    });
   };
 }

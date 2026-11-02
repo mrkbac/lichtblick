@@ -63,7 +63,7 @@ export function swcRule({
 declare var __dirname: string | undefined;
 
 let currentDirHref: string | undefined;
-let localRequireInstance: NodeRequire | undefined;
+let localRequireInstance: NodeJS.Require | undefined;
 
 function initModuleLocals(packageDir: string | undefined): void {
   if (currentDirHref != undefined) {
