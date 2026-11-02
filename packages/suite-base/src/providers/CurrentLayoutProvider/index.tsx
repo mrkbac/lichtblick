@@ -98,6 +98,18 @@ export default function CurrentLayoutProvider({
   });
   const layoutStateRef = useRef(layoutState);
   const [incompatibleLayoutVersionError, setIncompatibleLayoutVersionError] = useState(false);
+
+  // Lets a host page (the web app's workspace tabs) see which layout this workspace has open.
+  // Only once it has loaded, so a layout that fails to open is never reported.
+  const selectedLayoutId =
+    layoutState.selectedLayout?.data != undefined ? layoutState.selectedLayout.id : undefined;
+  useEffect(() => {
+    if (selectedLayoutId == undefined) {
+      delete document.documentElement.dataset.layoutId;
+    } else {
+      document.documentElement.dataset.layoutId = selectedLayoutId;
+    }
+  }, [selectedLayoutId]);
   const setLayoutState = useCallback((newState: LayoutState) => {
     const layoutVersion = newState.selectedLayout?.data?.version;
     if (layoutVersion != undefined && layoutVersion > MAX_SUPPORTED_LAYOUT_VERSION) {
@@ -281,8 +293,16 @@ export default function CurrentLayoutProvider({
 
   // Load initial state by re-selecting the last selected layout from the UserProfile.
   useAsync(async () => {
-    // Don't restore the layout if there's one specified in the app state url.
-    if (windowAppURLState()?.layoutId) {
+    // A layout given in the url wins for this session only, without becoming the remembered one.
+    const urlLayoutId = windowAppURLState()?.layoutId;
+    // A layout that can't be looked up (unknown, or a remote lookup failing) falls back to the
+    // remembered one below.
+    const urlLayout =
+      urlLayoutId != undefined
+        ? await layoutManager.getLayout(urlLayoutId).catch(() => undefined)
+        : undefined;
+    if (urlLayout != undefined) {
+      await setSelectedLayoutId(urlLayout.id, { saveToProfile: false });
       return;
     }
 

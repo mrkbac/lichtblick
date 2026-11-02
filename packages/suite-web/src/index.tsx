@@ -57,6 +57,14 @@ export async function main(getParams: () => Promise<MainParams> = async () => ({
     />
   );
 
+  // The top-level page only hosts the tab strip; every tab runs the app in an iframe.
+  // Automated browsers get the app directly so tests can reach it without entering a frame.
+  if (canRender && window.top === window.self && !navigator.webdriver) {
+    const { TabShell } = await import("./TabShell");
+    createRoot(rootEl).render(<TabShell />);
+    return;
+  }
+
   if (!canRender) {
     const root = createRoot(rootEl);
     root.render(

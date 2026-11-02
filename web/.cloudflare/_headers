@@ -3,7 +3,7 @@
 
 # Apply to all pages
 /*
-    X-Frame-Options: DENY
+    X-Frame-Options: SAMEORIGIN
     X-Content-Type-Options: nosniff
     Referrer-Policy: origin
     Content-Security-Policy: base-uri 'self'
