@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { LabelPool } from "@foxglove/three-text";
 import EventEmitter from "eventemitter3";
 import * as THREE from "three";
 
@@ -45,7 +46,6 @@ import { ColorModeSettings } from "./renderables/colorMode";
 import { MarkerPool } from "./renderables/markers/MarkerPool";
 import { Quaternion, Vector3 } from "./ros";
 import { BaseSettings, CustomLayerSettings, SelectEntry } from "./settings";
-import { LabelPool } from "./text";
 import { AddTransformResult, TransformTree } from "./transforms";
 import { InterfaceMode } from "./types";
 

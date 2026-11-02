@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { Label } from "@foxglove/three-text";
 import { t } from "i18next";
 import * as _ from "lodash-es";
 import * as THREE from "three";
@@ -26,7 +27,6 @@ import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { getLuminance, stringToRgb } from "../color";
 import { BaseSettings, fieldSize, PRECISION_DEGREES, PRECISION_DISTANCE } from "../settings";
-import { Label } from "../text";
 import { CoordinateFrame, Duration, makePose, MAX_DURATION, Transform } from "../transforms";
 import { Axis, AXIS_LENGTH } from "./Axis";
 import { DEFAULT_LABEL_SCALE_FACTOR } from "./SceneSettings";
