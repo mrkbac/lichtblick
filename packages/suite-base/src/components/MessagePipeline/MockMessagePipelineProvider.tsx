@@ -18,9 +18,9 @@ import { Time, isLessThan } from "@foxglove/rostime";
 import { Immutable } from "immer";
 import * as _ from "lodash-es";
 import { MutableRefObject, useEffect, useMemo, useRef, useState } from "react";
-import shallowequal from "shallowequal";
 import { Writable } from "ts-essentials";
 import { createStore } from "zustand";
+import { shallow } from "zustand/shallow";
 
 import { Condvar } from "@lichtblick/den/async";
 import { Metadata, ParameterValue } from "@lichtblick/suite";
@@ -271,7 +271,7 @@ export default function MockMessagePipelineProvider(
         if (action.type === "set-mock-props") {
           set((state) => {
             const actionMockProps = action.mockProps;
-            if (shallowequal(state.mockProps, actionMockProps)) {
+            if (shallow(state.mockProps, actionMockProps)) {
               return state;
             }
             const publicState = getPublicState(

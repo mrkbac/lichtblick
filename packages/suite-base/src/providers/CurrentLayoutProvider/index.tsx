@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getNodeAtPath } from "react-mosaic-component";
 import { useAsync, useAsyncFn, useMountedState } from "react-use";
-import shallowequal from "shallowequal";
+import { shallow } from "zustand/shallow";
 
 import { useShallowMemo } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
@@ -128,7 +128,7 @@ export default function CurrentLayoutProvider({
   const setSelectedPanelIds = useCallback(
     (value: readonly string[] | ((prevState: readonly string[]) => readonly string[])): void => {
       const newValue = typeof value === "function" ? value(selectedPanelIds.current) : value;
-      if (!shallowequal(newValue, selectedPanelIds.current)) {
+      if (!shallow(newValue, selectedPanelIds.current)) {
         selectedPanelIds.current = newValue;
         for (const listener of [...selectedPanelIdsListeners.current]) {
           listener(selectedPanelIds.current);

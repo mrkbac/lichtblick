@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import moize from "moize";
+import * as _ from "lodash-es";
 import * as R from "ramda";
 
 import { Immutable } from "@lichtblick/suite";
@@ -19,7 +19,16 @@ import { InternalSubscribePayload, SubscribePayload } from "@lichtblick/suite-ba
  * Note that this has unlimited cache size so it should be managed by some containing scope.
  */
 export function makeSubscriptionMemoizer(): (val: SubscribePayload) => SubscribePayload {
-  return moize((val: SubscribePayload) => val, { isDeepEqual: true, maxSize: Infinity });
+  // ponytail: linear scan over every distinct payload seen; fine for the handful of subscriptions per panel
+  const seen: SubscribePayload[] = [];
+  return (val) => {
+    const existing = seen.find((item) => _.isEqual(item, val));
+    if (existing) {
+      return existing;
+    }
+    seen.push(val);
+    return val;
+  };
 }
 
 /**

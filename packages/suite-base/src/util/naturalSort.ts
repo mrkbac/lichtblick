@@ -14,9 +14,13 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import natsort from "natsort";
+const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: "accent" });
 
-const sortFn = natsort({ insensitive: true });
+function sortFn(a: string | number, b: string | number): number {
+  return typeof a === "number" && typeof b === "number"
+    ? a - b
+    : collator.compare(String(a), String(b));
+}
 
 type StringOrNumberFields<T> =
   T extends Record<string, unknown>

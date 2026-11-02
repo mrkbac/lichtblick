@@ -8,8 +8,8 @@
 import { Time } from "@foxglove/rostime";
 import * as _ from "lodash-es";
 import { MutableRefObject } from "react";
-import shallowequal from "shallowequal";
 import { createStore, StoreApi } from "zustand";
+import { shallow } from "zustand/shallow";
 
 import { Condvar } from "@lichtblick/den/async";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
@@ -408,7 +408,7 @@ function updatePlayerStateAction(
 
   const capabilities = action.playerState.capabilities;
   const player = prevState.player;
-  if (player && !shallowequal(capabilities, prevState.lastCapabilities)) {
+  if (player && !shallow(capabilities, prevState.lastCapabilities)) {
     newPublicState.startPlayback = capabilities.includes(PLAYER_CAPABILITIES.playbackControl)
       ? player.startPlayback?.bind(player)
       : undefined;
