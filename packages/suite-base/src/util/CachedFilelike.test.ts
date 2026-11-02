@@ -491,6 +491,45 @@ describe("CachedFilelike", () => {
 
       // THEN: the read is left to the main connection instead of starting another side fetch
       expect(streams).toHaveLength(2);
+
+      // and once the main connection counts as idle, it moves to the read
+      now.mockReturnValue(10_000);
+      await delay(600);
+      expect(streams.map((stream) => [stream.offset, stream.destroyed])).toEqual([
+        [0, true],
+        [150 * MEBIBYTE, true],
+        [150 * MEBIBYTE, false],
+      ]);
+      now.mockRestore();
+    });
+
+    it("resolves a side-fetched read as soon as the main connection delivers its range", async () => {
+      // GIVEN: a read beyond the reconnect threshold but inside the main connection's range,
+      // served by a side fetch
+      const now = jest.spyOn(Date, "now").mockReturnValue(0);
+      const { fileReader, streams, push } = manualFileReader(200 * MEBIBYTE);
+      const cachedFileReader = new CachedFilelike({
+        fileReader,
+        cacheSizeInBytes: 100 * MEBIBYTE,
+        log,
+      });
+      const near = cachedFileReader.read(0, MEBIBYTE);
+      await delay(0);
+      push(MEBIBYTE);
+      await near;
+      let resolved = false;
+      void cachedFileReader.read(20 * MEBIBYTE, MEBIBYTE).then(() => {
+        resolved = true;
+      });
+      await delay(0);
+      expect(streams.map((stream) => stream.offset)).toEqual([0, 20 * MEBIBYTE]);
+
+      // WHEN: the main connection delivers that range first
+      push(20 * MEBIBYTE);
+      await delay(0);
+
+      // THEN: the read resolves without waiting for the side fetch
+      expect(resolved).toBe(true);
       now.mockRestore();
     });
 
