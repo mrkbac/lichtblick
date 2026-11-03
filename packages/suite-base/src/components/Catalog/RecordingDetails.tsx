@@ -22,6 +22,8 @@ const useStyles = makeStyles()((theme) => ({
     borderLeft: `1px solid ${theme.palette.divider}`,
     padding: theme.spacing(0, 0, 0, 2),
     gap: theme.spacing(1.5),
+    // In a short window the preview leaves little room; scroll the pane rather than overflow it.
+    overflowY: "auto",
   },
   name: {
     flex: 1,
@@ -30,7 +32,7 @@ const useStyles = makeStyles()((theme) => ({
   topics: {
     flex: 1,
     overflow: "auto",
-    minHeight: 0,
+    minHeight: 160,
   },
   topic: {
     display: "grid",
