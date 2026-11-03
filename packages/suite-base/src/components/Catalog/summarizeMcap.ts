@@ -8,6 +8,7 @@ import { fromNanoSec } from "@lichtblick/rostime";
 import { BlobReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/BlobReadable";
 
 import { readMiddleFrame, renderThumbnail } from "./thumbnail";
+import { readTracks } from "./track";
 import { CatalogSummary, CatalogTopic } from "./types";
 
 const SANE_START_NS = 946_684_800n * 1_000_000_000n; // 2000-01-01
@@ -82,8 +83,17 @@ export async function summarizeMcap(file: Blob, nowMs = Date.now()): Promise<Cat
     console.warn("Catalog thumbnail failed", err);
   }
 
+  // Like the thumbnail, the tracks are optional extras.
+  let tracks: CatalogSummary["tracks"];
+  try {
+    tracks = await readTracks(reader);
+  } catch (err: unknown) {
+    console.warn("Catalog GPS track failed", err);
+  }
+
   return {
     thumbnail,
+    tracks: tracks && tracks.length > 0 ? tracks : undefined,
     start: start == undefined ? undefined : fromNanoSec(start),
     end: end == undefined ? undefined : fromNanoSec(end),
     messages: reader.statistics == undefined ? undefined : Number(reader.statistics.messageCount),

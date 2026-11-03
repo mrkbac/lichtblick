@@ -24,7 +24,7 @@ const LAST_FOLDER_KEY = "last";
 
 const CONCURRENCY = 4;
 // Bump when CatalogSummary gains fields, so cached summaries are read again.
-const CACHE_VERSION = 2;
+const CACHE_VERSION = 3;
 
 function isMcap(name: string): boolean {
   return name.toLowerCase().endsWith(".mcap");
