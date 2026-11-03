@@ -43,7 +43,7 @@ describe("ThemeProvider theme-color", () => {
   });
 
   it("keeps the app bar color for a dialog that starts below the app bar", () => {
-    const rect = jest
+    const rect = vi
       .spyOn(HTMLElement.prototype, "getBoundingClientRect")
       .mockReturnValue({ top: 44 } as DOMRect);
     // The dialog is in the DOM when the theme-color is first set.
