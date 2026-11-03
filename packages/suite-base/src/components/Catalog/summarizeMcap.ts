@@ -86,8 +86,8 @@ export async function summarizeMcap(
     const samples = await sampleRecording(reader);
     tracks = samples.tracks;
     previews = await renderPreviews(samples.frames, start);
-    // The middle frame of the first camera tends to show more than the first frame.
-    const frames = previews[Object.keys(previews).sort()[0] ?? ""];
+    // Cameras come busiest first; the middle frame of the first tends to show more than its first.
+    const frames = previews[Object.keys(previews)[0] ?? ""];
     thumbnail = frames?.[Math.floor(frames.length / 2)]?.url;
   } catch (err: unknown) {
     console.warn("Catalog sampling failed", err);
@@ -95,8 +95,7 @@ export async function summarizeMcap(
 
   return {
     previews: previews && Object.keys(previews).length > 0 ? previews : undefined,
-    previewTopics:
-      previews && Object.keys(previews).length > 0 ? Object.keys(previews).sort() : undefined,
+    previewTopics: previews && Object.keys(previews).length > 0 ? Object.keys(previews) : undefined,
     thumbnail,
     tracks: tracks && tracks.length > 0 ? tracks : undefined,
     start: start == undefined ? undefined : fromNanoSec(start),

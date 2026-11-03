@@ -33,11 +33,17 @@ import { subtract, toSec } from "@lichtblick/rostime";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
-import { format, formatDuration } from "@lichtblick/suite-base/util/formatTime";
-import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
+import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
 
 import { AnimatedThumbnail } from "./AnimatedThumbnail";
+import { QuickFilters } from "./QuickFilters";
 import { RecordingDetails } from "./RecordingDetails";
+import {
+  RecordingThumbnail,
+  THUMB_WIDTH,
+  formatStart,
+  recordingCaption,
+} from "./RecordingThumbnail";
 import {
   FolderFile,
   indexFiles,
@@ -55,7 +61,6 @@ import { CatalogRecording } from "./types";
 const CatalogMap = lazy(async () => await import("./CatalogMap"));
 
 const ROW_HEIGHT = 52;
-const THUMB_WIDTH = 72;
 const COLUMNS = `${THUMB_WIDTH}px minmax(0, 1fr) 210px 120px 100px 120px 80px`;
 // With the details pane open, which lists messages and topics, those columns make room for names.
 const COMPACT_COLUMNS = `${THUMB_WIDTH}px minmax(0, 1fr) 190px 110px 90px`;
@@ -145,20 +150,6 @@ const useStyles = makeStyles()((theme) => ({
     textAlign: "right",
     fontFeatureSettings: `"tnum"`,
   },
-  thumbnail: {
-    width: THUMB_WIDTH,
-    height: (THUMB_WIDTH * 9) / 16,
-    borderRadius: theme.shape.borderRadius,
-    backgroundColor: theme.palette.action.hover,
-  },
-  preview: {
-    width: 480,
-    aspectRatio: "16 / 9",
-  },
-  previewTooltip: {
-    maxWidth: "none",
-    padding: theme.spacing(0.5),
-  },
   grid: {
     flex: 1,
     minWidth: 0,
@@ -210,13 +201,6 @@ const useStyles = makeStyles()((theme) => ({
     margin: "0 auto",
   },
 }));
-
-function formatStart(r: CatalogRecording): string {
-  if (!r.start) {
-    return "–";
-  }
-  return isAbsoluteTime(r.start) ? format(r.start) : formatTimeRaw(r.start);
-}
 
 export default function Catalog({ onClose }: { onClose: () => void }): React.JSX.Element {
   const { classes, cx } = useStyles();
@@ -530,6 +514,7 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
           {t("searchHelp")}
         </Typography>
       </Stack>
+      <QuickFilters recordings={recordings} query={query} onQueryChange={setQuery} />
       {error && <Alert severity="error">{error}</Alert>}
       <Stack direction="row" alignItems="center" gap={2}>
         <Typography variant="body2" color="text.secondary">
@@ -638,13 +623,7 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
                   )}
                 </Stack>
                 <Typography variant="caption" color="text.secondary" noWrap>
-                  {[
-                    formatStart(r),
-                    r.start && r.end ? formatDuration(subtract(r.end, r.start)) : undefined,
-                    r.size != undefined ? formatByteSize(r.size) : undefined,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
+                  {recordingCaption(r)}
                 </Typography>
               </ButtonBase>
             ))}
@@ -688,19 +667,7 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
                       }}
                       onDoubleClick={() => void open(r)}
                     >
-                      {r.thumbnail != undefined ? (
-                        <Tooltip
-                          placement="right"
-                          slotProps={{ tooltip: { className: classes.previewTooltip } }}
-                          title={<AnimatedThumbnail recording={r} className={classes.preview} />}
-                        >
-                          <div>
-                            <AnimatedThumbnail recording={r} className={classes.thumbnail} />
-                          </div>
-                        </Tooltip>
-                      ) : (
-                        <span className={classes.thumbnail} />
-                      )}
+                      <RecordingThumbnail recording={r} />
                       <Stack style={{ minWidth: 0 }}>
                         <Stack direction="row" alignItems="center" gap={1} style={{ minWidth: 0 }}>
                           <Typography variant="body2" noWrap>
