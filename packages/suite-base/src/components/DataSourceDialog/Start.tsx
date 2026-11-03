@@ -12,8 +12,6 @@ import {
   List,
   ListItem,
   ListItemButton,
-  Tab,
-  Tabs,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
@@ -22,15 +20,17 @@ import {
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { subtract } from "@lichtblick/rostime";
 import Catalog from "@lichtblick/suite-base/components/Catalog/Catalog";
+import {
+  RecordingThumbnail,
+  recordingCaption,
+} from "@lichtblick/suite-base/components/Catalog/RecordingThumbnail";
 import { filterRecordings } from "@lichtblick/suite-base/components/Catalog/search";
 import { CatalogRecording } from "@lichtblick/suite-base/components/Catalog/types";
 import { useCatalogFolder } from "@lichtblick/suite-base/components/Catalog/useCatalogFolder";
 import DontShowThisAgainCheckbox from "@lichtblick/suite-base/components/DataSourceDialog/DontShowThisAgainCheckbox";
 import { OpenUrlInput } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
 import { useStyles } from "@lichtblick/suite-base/components/DataSourceDialog/index.style";
-import LichtblickLogoText from "@lichtblick/suite-base/components/LichtblickLogoText";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
@@ -42,7 +42,6 @@ import {
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
-import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
 import { splitRecentTitle } from "@lichtblick/suite-base/util/recentSources";
 
 // Number of recents listed on the All tab, unless searching
@@ -50,6 +49,7 @@ const RECENTS_PREVIEW_COUNT = 5;
 
 type View = "all" | "catalog" | "recent";
 type Kind = "all" | "file" | "remote" | "live";
+type CatalogView = "list" | "grid" | "map";
 
 function recentKind(recent: RecentSource): Exclude<Kind, "all"> {
   if (recent.type === "file") {
@@ -81,7 +81,10 @@ export default function Start(): React.JSX.Element {
 
   const [query, setQuery] = useState("");
   const [view, setView] = useState<View>("all");
-  const [kind, setKind] = useState<Kind>("all");
+  const [kindFilter, setKind] = useState<Kind>("all");
+  // The kind filter belongs to the Recent tab; All shows every kind.
+  const kind = view === "recent" ? kindFilter : "all";
+  const [catalogView, setCatalogView] = useState<CatalogView>("list");
 
   const catalogByName = useMemo(
     // ponytail: matches by file name only; the first recording wins when names repeat
@@ -147,10 +150,6 @@ export default function Start(): React.JSX.Element {
 
   return (
     <Stack className={classes.page}>
-      <header className={classes.header}>
-        <LichtblickLogoText color="primary" className={classes.logo} />
-      </header>
-
       <OpenUrlInput
         value={query}
         onChange={setQuery}
@@ -158,20 +157,42 @@ export default function Start(): React.JSX.Element {
         onOpenTopMatch={openTopMatch}
       />
 
-      <Stack direction="row" gap={2} alignItems="flex-start" flexWrap="wrap">
-        <Tabs
+      {/* What to show on the left; the controls for that view on the right. */}
+      <div className={classes.tabRow}>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
           value={view}
-          onChange={(_event, value: View) => {
-            setView(value);
+          onChange={(_event, value: View | null) => {
+            if (value) {
+              setView(value);
+            }
           }}
           aria-label={t("view")}
         >
-          <Tab value="all" label={t("tabAll")} />
-          <Tab value="catalog" label={t("tabCatalog")} />
-          <Tab value="recent" label={t("tabRecent")} />
-        </Tabs>
+          <ToggleButton value="all">{t("tabAll")}</ToggleButton>
+          <ToggleButton value="catalog">{t("tabCatalog")}</ToggleButton>
+          <ToggleButton value="recent">{t("tabRecent")}</ToggleButton>
+        </ToggleButtonGroup>
         <div className={classes.spacer} />
-        {view !== "catalog" && (
+        {view === "catalog" && folder.name != undefined && (
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={catalogView}
+            onChange={(_event, value: CatalogView | null) => {
+              if (value) {
+                setCatalogView(value);
+              }
+            }}
+            aria-label={t("catalogView")}
+          >
+            <ToggleButton value="list">{t("catalogList")}</ToggleButton>
+            <ToggleButton value="grid">{t("catalogGrid")}</ToggleButton>
+            <ToggleButton value="map">{t("catalogMap")}</ToggleButton>
+          </ToggleButtonGroup>
+        )}
+        {view === "recent" && (
           <ToggleButtonGroup
             exclusive
             size="small"
@@ -187,12 +208,18 @@ export default function Start(): React.JSX.Element {
             <ToggleButton value="live">{t("kindLive")}</ToggleButton>
           </ToggleButtonGroup>
         )}
-      </Stack>
+      </div>
+
+      {view === "recent" && recentSources.length === 0 && (
+        <Typography variant="body2" color="text.secondary">
+          {t("noRecents")}
+        </Typography>
+      )}
 
       {showRecents && (
         <Stack gap={0.5} className={view === "recent" ? classes.recentsFull : classes.recents}>
           <Stack direction="row" alignItems="center" gap={1}>
-            <Typography variant="h5" flex="auto">
+            <Typography variant="subtitle2" flex="auto">
               {t("recentDataSources")}
             </Typography>
             {recentSources.some((recent) => recent.pinned !== true) && (
@@ -210,8 +237,9 @@ export default function Start(): React.JSX.Element {
             {visibleRecents.map((recent) => {
               const pinned = recent.pinned === true;
               const match = catalogMatch(recent, catalogByName);
+              // A recent the catalog knows reads like a catalog row: start, duration and size.
               const summary = [
-                match?.start && match.end ? formatDuration(subtract(match.end, match.start)) : "",
+                match ? recordingCaption(match) : "",
                 match?.topics ? t("topicCount", { count: match.topics.length }) : "",
               ]
                 .filter(Boolean)
@@ -254,10 +282,12 @@ export default function Start(): React.JSX.Element {
                 >
                   <ListItemButton
                     selected={recent.current === true}
+                    style={{ gap: 12 }}
                     onClick={() => {
                       selectRecent(recent.id);
                     }}
                   >
+                    {match && <RecordingThumbnail recording={match} />}
                     <RecentSourceLabel recent={recent} hidePinIndicator />
                     {summary !== "" && (
                       <Typography variant="caption" color="text.secondary" noWrap>
@@ -283,7 +313,15 @@ export default function Start(): React.JSX.Element {
         </Stack>
       )}
 
-      {showCatalog && <Catalog folder={folder} query={query} lastOpenedByName={lastOpenedByName} />}
+      {showCatalog && (
+        <Catalog
+          folder={folder}
+          query={query}
+          lastOpenedByName={lastOpenedByName}
+          onQueryChange={setQuery}
+          view={view === "catalog" ? catalogView : "list"}
+        />
+      )}
 
       <footer className={classes.footer}>
         <Typography variant="body2" color="text.secondary">

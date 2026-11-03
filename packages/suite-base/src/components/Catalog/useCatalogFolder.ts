@@ -11,6 +11,7 @@ import {
   FolderFile,
   indexFiles,
   listDirectory,
+  listEntry,
   listInputFiles,
   loadLastFolder,
   loadPreview,
@@ -34,7 +35,22 @@ export type CatalogFolder = {
   open: (recording: CatalogRecording) => Promise<void>;
   /** Preview frames of one of a recording's image topics. */
   loadPreview: (recording: CatalogRecording, topic: string) => Promise<PreviewFrame[]>;
+  /**
+   * Open a folder dropped from the file manager. Returns whether the drop held one, synchronously,
+   * so the caller can stop the drop from also opening its files.
+   */
+  dropFolder: (dataTransfer: DataTransfer) => boolean;
+  /** The browser refused to read the picked folder; `pickFolderWithInput` may still work. */
+  accessDenied: boolean;
+  /** Pick a folder with the classic upload dialog, which works where folder handles don't. */
+  pickFolderWithInput: () => void;
 };
+
+function isAccessError(err: unknown): boolean {
+  return (
+    err instanceof DOMException && (err.name === "NotAllowedError" || err.name === "SecurityError")
+  );
+}
 
 /** Index a local folder of recordings, reopening the last one when the browser allows it. */
 export function useCatalogFolder(): CatalogFolder {
@@ -46,6 +62,7 @@ export function useCatalogFolder(): CatalogFolder {
   const [recordings, setRecordings] = useState<CatalogRecording[]>([]);
   const [progress, setProgress] = useState<{ done: number; total: number }>();
   const [error, setError] = useState<string>();
+  const [accessDenied, setAccessDenied] = useState(false);
   const scanIdRef = useRef(0);
 
   const { value: lastFolder } = useAsync(loadLastFolder, []);
@@ -61,6 +78,7 @@ export function useCatalogFolder(): CatalogFolder {
       setName(folderName);
       setRelist(() => list);
       setError(undefined);
+      setAccessDenied(false);
       try {
         const folderFiles = await list();
         if (isStale()) {
@@ -91,6 +109,7 @@ export function useCatalogFolder(): CatalogFolder {
         }
       } catch (err: unknown) {
         if (!isStale()) {
+          setAccessDenied(isAccessError(err));
           setError(String(err));
           setProgress(undefined);
         }
@@ -119,19 +138,23 @@ export function useCatalogFolder(): CatalogFolder {
     })();
   }, [lastFolder, openDirectory]);
 
+  const pickFolderWithInput = useCallback(() => {
+    // Browsers without the File System Access API can still upload a whole folder.
+    const input = document.createElement("input");
+    input.type = "file";
+    input.multiple = true;
+    input.webkitdirectory = true;
+    input.onchange = () => {
+      const fileList = [...(input.files ?? [])];
+      const folderName = fileList[0]?.webkitRelativePath.split("/")[0] ?? "";
+      void scan(folderName, async () => listInputFiles(fileList));
+    };
+    input.click();
+  }, [scan]);
+
   const pickFolder = useCallback(async () => {
     if (!("showDirectoryPicker" in window)) {
-      // Browsers without the File System Access API can still upload a whole folder.
-      const input = document.createElement("input");
-      input.type = "file";
-      input.multiple = true;
-      input.webkitdirectory = true;
-      input.onchange = () => {
-        const fileList = [...(input.files ?? [])];
-        const folderName = fileList[0]?.webkitRelativePath.split("/")[0] ?? "";
-        void scan(folderName, async () => listInputFiles(fileList));
-      };
-      input.click();
+      pickFolderWithInput();
       return;
     }
     let dir: FileSystemDirectoryHandle;
@@ -139,6 +162,7 @@ export function useCatalogFolder(): CatalogFolder {
       dir = await window.showDirectoryPicker({ mode: "read" });
     } catch (err: unknown) {
       if (!(err instanceof DOMException && err.name === "AbortError")) {
+        setAccessDenied(isAccessError(err));
         setError(String(err));
       }
       return;
@@ -148,7 +172,41 @@ export function useCatalogFolder(): CatalogFolder {
       console.warn("Failed to remember the catalog folder", err);
     });
     await openDirectory(dir);
-  }, [openDirectory, scan]);
+  }, [openDirectory, pickFolderWithInput]);
+
+  const dropFolder = useCallback(
+    (dataTransfer: DataTransfer) => {
+      const item = [...dataTransfer.items].find((i) => i.webkitGetAsEntry()?.isDirectory === true);
+      const entry = item?.webkitGetAsEntry() as FileSystemDirectoryEntry | null | undefined;
+      if (!item || !entry) {
+        return false;
+      }
+      // Both must be taken while the drop event is dispatched; they are read after.
+      const handle =
+        window.isSecureContext && "getAsFileSystemHandle" in item
+          ? item.getAsFileSystemHandle()
+          : Promise.resolve(ReactNull);
+      void scan(entry.name, async () => {
+        const dir = await handle;
+        if (dir?.kind === "directory") {
+          try {
+            const listed = await listDirectory(dir as FileSystemDirectoryHandle);
+            await saveLastFolder(dir as FileSystemDirectoryHandle).catch((err: unknown) => {
+              console.warn("Failed to remember the catalog folder", err);
+            });
+            return listed;
+          } catch (err: unknown) {
+            if (!isAccessError(err)) {
+              throw err;
+            }
+          }
+        }
+        return await listEntry(entry);
+      });
+      return true;
+    },
+    [scan],
+  );
 
   const reopenLastFolder = useCallback(async () => {
     if (lastFolder && (await lastFolder.requestPermission({ mode: "read" })) === "granted") {
@@ -216,6 +274,9 @@ export function useCatalogFolder(): CatalogFolder {
     progress,
     error,
     pickFolder,
+    pickFolderWithInput,
+    accessDenied,
+    dropFolder,
     reopenLastFolder,
     rescan,
     open,

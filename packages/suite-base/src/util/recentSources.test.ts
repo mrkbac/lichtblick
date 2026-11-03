@@ -1,7 +1,13 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { detectConnection, formatTimeAgo, splitRecentTitle } from "./recentSources";
+import {
+  detectConnection,
+  formatTimeAgo,
+  splitRecentTitle,
+  hostUrl,
+  looksLikeHost,
+} from "./recentSources";
 
 describe("splitRecentTitle", () => {
   it("puts the file name first for URLs pointing at a file", () => {
@@ -56,5 +62,27 @@ describe("detectConnection", () => {
 
   it.each(["", "not a url", "odom", "https://example.com/page"])("rejects %j", (input) => {
     expect(detectConnection(input)).toBeUndefined();
+  });
+});
+
+describe("looksLikeHost", () => {
+  it.each([
+    ["robot.local", true],
+    ["192.168.1.5", true],
+    ["localhost", true],
+    ["drive.mcap", false],
+    ["robot-1", true],
+    ["robot", true],
+    ["-robot", false],
+    ["topic:/camera", false],
+    ["two words", false],
+  ])("%s -> %s", (input, expected) => {
+    expect(looksLikeHost(input)).toBe(expected);
+  });
+
+  it("builds the default URL per source", () => {
+    expect(hostUrl("robot.local", "foxglove-websocket")).toBe("ws://robot.local:8765");
+    expect(hostUrl("robot.local", "rosbridge-websocket")).toBe("ws://robot.local:9090");
+    expect(hostUrl("robot.local", "ros1-socket")).toBe("http://robot.local:11311");
   });
 });
