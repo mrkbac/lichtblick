@@ -19,6 +19,12 @@ export type CatalogTopic = {
 };
 
 /** What reading an MCAP summary yields; cached per file. */
+export type CatalogTrack = {
+  topic: string;
+  /** [longitude, latitude] pairs (GeoJSON order), sampled over the recording. */
+  points: [number, number][];
+};
+
 export type CatalogSummary = {
   /** Message time bounds, ignoring outlier stamps (e.g. 1970 or far future) when possible. */
   start?: Time;
@@ -27,6 +33,10 @@ export type CatalogSummary = {
   topics?: CatalogTopic[];
   /** Image URL (also `data:`) of a frame from the recording. */
   thumbnail?: string;
+  /** Image topics with a cached preview clip, the first one being the thumbnail's. */
+  previewTopics?: string[];
+  /** One per GPS topic. */
+  tracks?: CatalogTrack[];
   /** The file has no summary section, so nothing is known without a full scan. */
   noSummary?: boolean;
   /** Reading the summary failed. */
@@ -38,5 +48,7 @@ export type CatalogRecording = CatalogSummary & {
   id: string;
   name: string;
   source: CatalogSource;
+  /** Where this recording's preview clips are cached locally. */
+  previewKey?: string;
   size?: number;
 };

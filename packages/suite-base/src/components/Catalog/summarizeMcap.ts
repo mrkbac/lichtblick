@@ -7,7 +7,8 @@ import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 import { fromNanoSec } from "@lichtblick/rostime";
 import { BlobReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/BlobReadable";
 
-import { readMiddleFrame, renderThumbnail } from "./thumbnail";
+import { Previews, renderPreviews } from "./preview";
+import { sampleRecording } from "./sampleRecording";
 import { CatalogSummary, CatalogTopic } from "./types";
 
 const SANE_START_NS = 946_684_800n * 1_000_000_000n; // 2000-01-01
@@ -15,9 +16,13 @@ const DAY_NS = 86_400n * 1_000_000_000n;
 
 /**
  * Read the summary section of an MCAP file: topics, message counts and time bounds. Message data is
- * only read for the thumbnail, which needs a single chunk, so this stays fast for large recordings.
+ * only read from a fixed number of sampled chunks (GPS tracks and camera previews), so this stays
+ * fast for large recordings.
  */
-export async function summarizeMcap(file: Blob, nowMs = Date.now()): Promise<CatalogSummary> {
+export async function summarizeMcap(
+  file: Blob,
+  nowMs = Date.now(),
+): Promise<CatalogSummary & { previews?: Previews }> {
   let reader: McapIndexedReader;
   try {
     reader = await McapIndexedReader.Initialize({
@@ -72,18 +77,27 @@ export async function summarizeMcap(file: Blob, nowMs = Date.now()): Promise<Cat
     undefined,
   );
 
-  // A missing thumbnail is fine; a broken image must not hide the rest of the summary.
+  // Thumbnail, previews and GPS tracks are optional extras; failing to read them must not hide the
+  // rest of the summary.
+  let tracks: CatalogSummary["tracks"];
+  let previews: Previews | undefined;
   let thumbnail: string | undefined;
   try {
-    const middle = start != undefined && end != undefined ? start + (end - start) / 2n : undefined;
-    const frame = await readMiddleFrame(reader, middle);
-    thumbnail = frame && (await renderThumbnail(frame));
+    const samples = await sampleRecording(reader);
+    tracks = samples.tracks;
+    previews = await renderPreviews(samples.frames, start);
+    // Cameras come busiest first; the middle frame of the first tends to show more than its first.
+    const frames = previews[Object.keys(previews)[0] ?? ""];
+    thumbnail = frames?.[Math.floor(frames.length / 2)]?.url;
   } catch (err: unknown) {
-    console.warn("Catalog thumbnail failed", err);
+    console.warn("Catalog sampling failed", err);
   }
 
   return {
+    previews: previews && Object.keys(previews).length > 0 ? previews : undefined,
+    previewTopics: previews && Object.keys(previews).length > 0 ? Object.keys(previews) : undefined,
     thumbnail,
+    tracks: tracks && tracks.length > 0 ? tracks : undefined,
     start: start == undefined ? undefined : fromNanoSec(start),
     end: end == undefined ? undefined : fromNanoSec(end),
     messages: reader.statistics == undefined ? undefined : Number(reader.statistics.messageCount),

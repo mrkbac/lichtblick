@@ -26,7 +26,10 @@ const EMPTY_MESSAGE: NavSatFixMsg = {
   latitude: 0,
   longitude: 0,
   altitude: 0,
-  status: { status: NavSatFixStatus.STATUS_FIX, service: NavSatFixService.SERVICE_GPS },
+  status: {
+    status: NavSatFixStatus.STATUS_FIX,
+    service: NavSatFixService.SERVICE_GPS,
+  },
   position_covariance: [1, 0, 0, 0, 1, 0, 0, 0, 1],
   position_covariance_type: NavSatFixPositionCovarianceType.COVARIANCE_TYPE_UNKNOWN,
 };
@@ -458,7 +461,10 @@ export const GeoJSON: StoryObj = {
             message: {
               geojson: JSON.stringify(
                 makeGeoJsonMessage({
-                  center: { lat: GeoCenter.lat - 0.2, lon: GeoCenter.lon - 0.2 },
+                  center: {
+                    lat: GeoCenter.lat - 0.2,
+                    lon: GeoCenter.lon - 0.2,
+                  },
                   key: "/geo",
                 }),
               ),
@@ -474,7 +480,10 @@ export const GeoJSON: StoryObj = {
             message: {
               geojson: JSON.stringify(
                 makeGeoJsonMessage({
-                  center: { lat: GeoCenter.lat - 0.1, lon: GeoCenter.lon - 0.1 },
+                  center: {
+                    lat: GeoCenter.lat - 0.1,
+                    lon: GeoCenter.lon - 0.1,
+                  },
                   key: "/geo2",
                   polyStyle: {
                     color: "#ff00ff",
@@ -505,7 +514,10 @@ export const GeoJSON: StoryObj = {
               message: {
                 geojson: JSON.stringify(
                   makeGeoJsonMessage({
-                    center: { lat: GeoCenter.lat + 0.2, lon: GeoCenter.lon + 0.1 },
+                    center: {
+                      lat: GeoCenter.lat + 0.2,
+                      lon: GeoCenter.lon + 0.1,
+                    },
                     key: "/geo",
                   }),
                 ),
@@ -537,7 +549,8 @@ export const GeoJSON: StoryObj = {
   },
 
   play: async () => {
-    const followSelect = document.querySelectorAll("div[role=button][aria-haspopup=listbox]")[1];
+    // "Follow topic" is the first select in the settings tree.
+    const followSelect = document.querySelectorAll("div[role=button][aria-haspopup=listbox]")[0];
     if (followSelect) {
       await userEvent.click(followSelect);
     }

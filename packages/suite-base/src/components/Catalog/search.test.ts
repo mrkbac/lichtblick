@@ -24,6 +24,7 @@ const recordings: CatalogRecording[] = [
     end: day("2026-10-20T10:01:00Z"),
     size: 100 * 1024 ** 2,
     topics: [{ name: "/lidar", schema: "sensor_msgs/msg/PointCloud2" }],
+    tracks: [{ topic: "/fix", points: [[11, 48]] }],
   },
   {
     id: "c",
@@ -53,6 +54,12 @@ describe("filterRecordings", () => {
     ["status:error", ["c"]],
     ["status:nosummary", ["d"]],
     ["status:ok", ["a", "b"]],
+    ["status:error|nosummary", ["c", "d"]],
+    ["has:image", ["a"]],
+    ["has:pointcloud", ["b"]],
+    ["has:gps", ["b"]],
+    ["has:image|gps", ["a", "b"]],
+    ["has:tf", []],
     ["topic:camera duration<5m", []],
     ["foo:bar", []],
   ])("%j matches %j", (query, expected) => {
