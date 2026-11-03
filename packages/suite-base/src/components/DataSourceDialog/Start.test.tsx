@@ -69,6 +69,7 @@ describe("Start Component", () => {
   const mockTogglePinRecent = jest.fn();
   const mockClearRecents = jest.fn();
   const mockOpenDialog = jest.fn();
+  const mockOpenRecording = jest.fn();
 
   const mockRecentSources: RecentSource[] = [
     {
@@ -90,7 +91,10 @@ describe("Start Component", () => {
   };
 
   const setup = (recentSources: RecentSource[] = mockRecentSources) => {
-    (useCatalogFolder as jest.Mock).mockReturnValue({ recordings: [catalogRecording] });
+    (useCatalogFolder as jest.Mock).mockReturnValue({
+      recordings: [catalogRecording, { ...catalogRecording, id: "drive.mcap", name: "drive.mcap" }],
+      open: mockOpenRecording,
+    });
     (usePlayerSelection as jest.Mock).mockReturnValue({
       recentSources,
       availableSources: [wsSource],
@@ -183,6 +187,31 @@ describe("Start Component", () => {
     expect(screen.getByText("unrecognizedUrl")).toBeInTheDocument();
   });
 
+  it("opens the top search match on Enter, a recent before a catalog recording", () => {
+    setup();
+    const box = screen.getByPlaceholderText("openUrlPlaceholder");
+
+    expect(screen.queryByText("searchHelp")).not.toBeInTheDocument();
+    typeUrl("bag");
+    expect(screen.getByText(/searchHelp/)).toBeInTheDocument();
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(mockSelectRecent).toHaveBeenCalledWith("recent-2");
+
+    typeUrl("drive");
+    fireEvent.keyDown(box, { key: "Enter" });
+    expect(mockOpenRecording).toHaveBeenCalledWith(expect.objectContaining({ name: "drive.mcap" }));
+    expect(mockSelectSource).not.toHaveBeenCalled();
+  });
+
+  it("treats search filters that look like host:port as a search", () => {
+    setup();
+
+    typeUrl("since:2026");
+
+    expect(screen.queryByText("unrecognizedUrl")).not.toBeInTheDocument();
+    expect(screen.getByTestId("catalog")).toHaveTextContent("since:2026");
+  });
+
   it("opens the file and connection dialogs", () => {
     setup();
 
@@ -215,7 +244,7 @@ describe("Start Component", () => {
 
   it("searches recents by name and by catalog topics, and passes the query to the catalog", () => {
     setup();
-    const search = screen.getByPlaceholderText("searchPlaceholder");
+    const search = screen.getByPlaceholderText("openUrlPlaceholder");
 
     fireEvent.change(search, { target: { value: "example" } });
     expect(screen.getByText("example.mcap")).toBeInTheDocument();
