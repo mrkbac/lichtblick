@@ -59,6 +59,36 @@ export function formatTimeAgo(timestamp: number, now: number, locale?: string): 
   return format.format(0, "second");
 }
 
+/** Ports sources listen on by default, for connecting to a bare host. */
+const DEFAULT_PORTS: Record<string, number> = {
+  "foxglove-websocket": 8765,
+  "rosbridge-websocket": 9090,
+  "ros1-socket": 11311,
+};
+
+const RECORDING_NAME = /\.(mcap|bag|db3|ulg|ulog|foxe)$/i;
+
+/**
+ * A bare host name or address that could be a robot, like `robot-1`, `robot.local` or
+ * `192.168.1.5`. File names such as `drive.mcap` are not hosts. Single words qualify too, so
+ * callers should prefer search results when there are any.
+ */
+export function looksLikeHost(input: string): boolean {
+  const s = input.trim();
+  return (
+    !RECORDING_NAME.test(s) &&
+    /^(localhost|\d{1,3}(\.\d{1,3}){3}|[a-z\d]([a-z\d-]*[a-z\d])?(\.[a-z\d]([a-z\d-]*[a-z\d])?)*)$/i.test(
+      s,
+    )
+  );
+}
+
+/** URL for connecting to a bare host with a source, on that source's default port. */
+export function hostUrl(host: string, sourceId: string): string {
+  const port = DEFAULT_PORTS[sourceId] ?? DEFAULT_PORTS["foxglove-websocket"]!;
+  return `${sourceId === "ros1-socket" ? "http" : "ws"}://${host.trim()}:${port}`;
+}
+
 /**
  * Guess which connection data source handles a user-entered URL. A bare `host:port` is treated
  * as a websocket; other bare words (e.g. search text) are not URLs. Returns undefined when the input is not a URL we recognize.

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { toSec } from "@foxglove/rostime";
+
 import * as Foxglove from "@lichtblick/suite-base/panels/ThreeDeeRender/foxglove";
 import * as Ros from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
 import { COMPRESSED_VIDEO_DATATYPES } from "@lichtblick/suite-base/util/foxgloveSchemas";

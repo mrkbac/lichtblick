@@ -52,6 +52,42 @@ export async function listDirectory(
   return files;
 }
 
+/**
+ * Files in a dropped folder, read with the older entries API. Browsers that refuse to read a
+ * directory handle (e.g. some embedded ones) still allow this.
+ */
+export async function listEntry(dir: FileSystemDirectoryEntry, prefix = ""): Promise<FolderFile[]> {
+  const reader = dir.createReader();
+  const entries: FileSystemEntry[] = [];
+  // readEntries returns the entries in batches, then an empty one.
+  for (;;) {
+    const batch = await new Promise<FileSystemEntry[]>((resolve, reject) => {
+      reader.readEntries(resolve, reject);
+    });
+    if (batch.length === 0) {
+      break;
+    }
+    entries.push(...batch);
+  }
+  const files: FolderFile[] = [];
+  for (const entry of entries) {
+    if (entry.isDirectory) {
+      files.push(
+        ...(await listEntry(entry as FileSystemDirectoryEntry, `${prefix}${entry.name}/`)),
+      );
+    } else if (isMcap(entry.name)) {
+      files.push({
+        path: `${prefix}${entry.name}`,
+        getFile: async () =>
+          await new Promise<File>((resolve, reject) => {
+            (entry as FileSystemFileEntry).file(resolve, reject);
+          }),
+      });
+    }
+  }
+  return files;
+}
+
 /** Files from an `<input webkitdirectory>`, for browsers without showDirectoryPicker(). */
 export function listInputFiles(fileList: Iterable<File>): FolderFile[] {
   return [...fileList]

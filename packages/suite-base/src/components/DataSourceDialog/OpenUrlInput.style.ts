@@ -3,23 +3,33 @@
 
 import { makeStyles } from "tss-react/mui";
 
+import { fontMonospace } from "@lichtblick/theme";
+
 export const useStyles = makeStyles()((theme) => ({
   input: {
     flex: "auto",
     minWidth: 0,
+    // Match the buttons' height, which the row stretches to
+    "& .MuiInputBase-root": { height: "100%" },
   },
-  sourceSelect: {
-    fontSize: theme.typography.body2.fontSize,
-    color: theme.palette.primary.main,
+  adornment: {
+    gap: theme.spacing(0.5),
+    maxWidth: "60%",
+  },
+  topMatch: {
+    minWidth: 0,
   },
   button: {
     flex: "none",
     whiteSpace: "nowrap",
   },
-  moreLink: {
-    flex: "none",
-    whiteSpace: "nowrap",
-    // Center on the input's height
-    alignSelf: "center",
+  help: {
+    padding: theme.spacing(0.5),
+  },
+  helpTooltip: {
+    maxWidth: 420,
+  },
+  code: {
+    fontFamily: fontMonospace,
   },
 }));

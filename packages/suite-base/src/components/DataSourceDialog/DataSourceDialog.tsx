@@ -169,9 +169,12 @@ export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Elemen
         },
       }}
     >
-      <IconButton className={classes.closeButton} onClick={onModalClose} edge="end">
-        <CloseIcon data-testid="CloseIcon" />
-      </IconButton>
+      {/* The full-page start screen is left by opening something (or Escape), not a close button. */}
+      {!fullScreen && (
+        <IconButton className={classes.closeButton} onClick={onModalClose} edge="end">
+          <CloseIcon data-testid="CloseIcon" />
+        </IconButton>
+      )}
       <Stack flexGrow={1} fullHeight justifyContent="space-between" overflow="hidden">
         {view.component}
       </Stack>

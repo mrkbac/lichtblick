@@ -192,9 +192,8 @@ describe("Start Component", () => {
     setup();
     const box = screen.getByPlaceholderText("openUrlPlaceholder");
 
-    expect(screen.queryByText("searchHelp")).not.toBeInTheDocument();
     typeUrl("bag");
-    expect(screen.getByText(/searchHelp/)).toBeInTheDocument();
+    expect(screen.getByText(/^enterOpens/)).toBeInTheDocument();
     fireEvent.keyDown(box, { key: "Enter" });
     expect(mockSelectRecent).toHaveBeenCalledWith("recent-2");
 
@@ -217,7 +216,7 @@ describe("Start Component", () => {
     setup();
 
     fireEvent.click(screen.getByText("openLocalFiles"));
-    fireEvent.click(screen.getByText("moreConnectionOptions"));
+    fireEvent.click(screen.getByRole("button", { name: "moreConnectionOptions" }));
 
     expect(mockOpenDialog).toHaveBeenNthCalledWith(1, "file");
     expect(mockOpenDialog).toHaveBeenNthCalledWith(2, "connection");
@@ -260,28 +259,33 @@ describe("Start Component", () => {
     expect(screen.getByText("noRecentMatches")).toBeInTheDocument();
   });
 
-  it("filters by source kind and hides the catalog for remote sources", () => {
+  it("filters recents by source kind on the Recent tab only", () => {
     setup();
+    expect(screen.queryByText("kindFile")).not.toBeInTheDocument();
 
+    fireEvent.click(screen.getByText("tabRecent"));
     fireEvent.click(screen.getByText("kindFile"));
     expect(screen.queryByText("example.mcap")).not.toBeInTheDocument();
-    expect(screen.getByTestId("catalog")).toBeInTheDocument();
+    expect(screen.getByText("local.bag")).toBeInTheDocument();
 
     fireEvent.click(screen.getByText("kindLive"));
     expect(screen.getByText("example.mcap")).toBeInTheDocument();
     expect(screen.queryByText("local.bag")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("catalog")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("tabAll"));
+    expect(screen.getByText("local.bag")).toBeInTheDocument();
+    expect(screen.getByTestId("catalog")).toBeInTheDocument();
   });
 
   it("shows only the catalog or only the recents on their tabs", () => {
     setup();
 
-    fireEvent.click(screen.getByRole("tab", { name: "tabCatalog" }));
+    fireEvent.click(screen.getByText("tabCatalog"));
     expect(screen.getByTestId("catalog")).toBeInTheDocument();
     expect(screen.queryByText("recentDataSources")).not.toBeInTheDocument();
     expect(screen.queryByText("kindFile")).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: "tabRecent" }));
+    fireEvent.click(screen.getByText("tabRecent"));
     expect(screen.getByText("recentDataSources")).toBeInTheDocument();
     expect(screen.queryByTestId("catalog")).not.toBeInTheDocument();
   });

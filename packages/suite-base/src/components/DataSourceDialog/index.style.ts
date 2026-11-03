@@ -10,23 +10,18 @@ export const useStyles = makeStyles()((theme) => ({
     maxWidth: 1600,
     margin: "0 auto",
     overflow: "auto",
-    gap: theme.spacing(3),
-    padding: theme.spacing(4, 6, 1),
+    gap: theme.spacing(1.5),
+    padding: theme.spacing(2, 3, 0.5),
 
     [theme.breakpoints.down("md")]: {
-      padding: theme.spacing(3, 2, 1),
+      padding: theme.spacing(1.5, 1.5, 0.5),
     },
   },
-  header: {
+  tabRow: {
     display: "flex",
     alignItems: "center",
-    // Room for the dialog's close button
-    paddingRight: theme.spacing(6),
-  },
-  logo: {
-    width: 180,
-    height: "auto",
-    marginLeft: theme.spacing(-1),
+    gap: theme.spacing(1),
+    minHeight: 30,
   },
   recents: {
     flex: "none",
@@ -51,6 +46,8 @@ export const useStyles = makeStyles()((theme) => ({
     "&:hover .recent-action, &:focus-within .recent-action": { opacity: 1 },
   },
   footer: {
+    // Stays at the bottom however little the page above shows.
+    marginTop: "auto",
     display: "flex",
     flexWrap: "wrap",
     alignItems: "center",
