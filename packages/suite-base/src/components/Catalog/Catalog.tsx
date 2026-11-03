@@ -43,6 +43,7 @@ import {
   listDirectory,
   listInputFiles,
   loadLastFolder,
+  loadPreview,
   saveLastFolder,
 } from "./indexFolder";
 import { filterRecordings } from "./search";
@@ -359,6 +360,11 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
   );
 
   const selected = recordings.find((r) => r.id === selectedId);
+  const selectedPath = selected?.source.type === "local-file" ? selected.source.path : undefined;
+  const loadSelectedPreview = useMemo(() => {
+    const file = files.find((f) => f.path === selectedPath);
+    return file ? async (topic: string) => await loadPreview(file, topic) : undefined;
+  }, [files, selectedPath]);
   const topicTerm = /(?:^|\s)topic:(\S+)/i.exec(query)?.[1];
 
   const virtualizer = useVirtualizer({
@@ -673,6 +679,7 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
             key={`${selected.id}|${topicTerm ?? ""}`}
             recording={selected}
             initialFilter={topicTerm}
+            loadPreview={loadSelectedPreview}
             onOpen={() => void open(selected)}
             onClose={() => {
               setSelectedId(undefined);

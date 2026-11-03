@@ -1,0 +1,176 @@
+// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
+// SPDX-License-Identifier: MPL-2.0
+
+import PauseIcon from "@mui/icons-material/Pause";
+import PlayArrowIcon from "@mui/icons-material/PlayArrow";
+import { IconButton, LinearProgress, MenuItem, Select, Slider, Typography } from "@mui/material";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { useAsync } from "react-use";
+import { makeStyles } from "tss-react/mui";
+
+import { fromSec } from "@lichtblick/rostime";
+import Stack from "@lichtblick/suite-base/components/Stack";
+import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
+
+import { PreviewFrame } from "./preview";
+import { isCompressedImageSchema } from "./thumbnail";
+import { CatalogRecording } from "./types";
+
+/** Slow enough to follow, fast enough to see motion: 48 frames loop in 8 s. */
+const FPS = 6;
+
+const useStyles = makeStyles()((theme) => ({
+  screen: {
+    position: "relative",
+    aspectRatio: "16 / 9",
+    borderRadius: theme.shape.borderRadius,
+    overflow: "hidden",
+    backgroundColor: theme.palette.action.hover,
+    cursor: "ew-resize",
+  },
+  image: {
+    display: "block",
+    width: "100%",
+    height: "100%",
+    objectFit: "contain",
+  },
+  loading: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  time: {
+    minWidth: 88,
+    textAlign: "right",
+    fontFeatureSettings: `"tnum"`,
+  },
+}));
+
+type Props = {
+  recording: CatalogRecording;
+  /** Reads the preview frames of an image topic; absent when the file can't be read here. */
+  loadPreview?: (topic: string) => Promise<PreviewFrame[]>;
+};
+
+/** A looping low frame rate preview of a recording's camera, scrubbed by hovering. */
+export function PreviewPlayer({ recording, loadPreview }: Props): React.JSX.Element | ReactNull {
+  const { classes } = useStyles();
+  const { t } = useTranslation("catalog");
+  const imageTopics = useMemo(
+    () =>
+      (recording.topics ?? [])
+        .filter((topic) => isCompressedImageSchema(topic.schema))
+        .map((topic) => topic.name)
+        .sort(),
+    [recording.topics],
+  );
+  // Same default as the thumbnail: the first image topic by name.
+  const [topic, setTopic] = useState(imageTopics[0]);
+  const [index, setIndex] = useState(0);
+  const [playing, setPlaying] = useState(true);
+  const [scrubbing, setScrubbing] = useState(false);
+
+  const {
+    value: frames,
+    loading,
+    error,
+  } = useAsync(
+    async () => (loadPreview && topic != undefined ? await loadPreview(topic) : undefined),
+    [loadPreview, topic],
+  );
+
+  useEffect(() => {
+    setIndex(0);
+  }, [frames]);
+
+  useEffect(() => {
+    if (!frames || frames.length < 2 || !playing || scrubbing) {
+      return;
+    }
+    const timer = setInterval(() => {
+      setIndex((i) => (i + 1) % frames.length);
+    }, 1000 / FPS);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [frames, playing, scrubbing]);
+
+  const frame = frames?.[index];
+  const src = frame?.url ?? recording.thumbnail;
+  if (src == undefined && imageTopics.length === 0) {
+    return ReactNull;
+  }
+
+  return (
+    <Stack gap={0.5}>
+      <div
+        className={classes.screen}
+        onMouseMove={(event) => {
+          if (!frames || frames.length === 0) {
+            return;
+          }
+          const rect = event.currentTarget.getBoundingClientRect();
+          const ratio = (event.clientX - rect.left) / rect.width;
+          setScrubbing(true);
+          setIndex(Math.min(frames.length - 1, Math.max(0, Math.floor(ratio * frames.length))));
+        }}
+        onMouseLeave={() => {
+          setScrubbing(false);
+        }}
+      >
+        {src != undefined && <img src={src} alt="" className={classes.image} />}
+        {loading && <LinearProgress className={classes.loading} />}
+      </div>
+      {frames && frames.length > 1 && (
+        <Stack direction="row" alignItems="center" gap={1}>
+          <IconButton
+            size="small"
+            onClick={() => {
+              setPlaying((value) => !value);
+            }}
+            aria-label={playing ? t("pausePreview") : t("playPreview")}
+            title={playing ? t("pausePreview") : t("playPreview")}
+          >
+            {playing ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
+          </IconButton>
+          <Slider
+            size="small"
+            value={index}
+            min={0}
+            max={frames.length - 1}
+            aria-label={t("previewPosition")}
+            onChange={(_event, value) => {
+              setPlaying(false);
+              setIndex(value);
+            }}
+          />
+          <Typography variant="caption" color="text.secondary" className={classes.time}>
+            {frame ? formatDuration(fromSec(frame.offsetSec)) : ""}
+          </Typography>
+        </Stack>
+      )}
+      {imageTopics.length > 1 && (
+        <Select
+          size="small"
+          value={topic ?? ""}
+          onChange={(event) => {
+            setTopic(event.target.value);
+          }}
+        >
+          {imageTopics.map((name) => (
+            <MenuItem key={name} value={name}>
+              {name}
+            </MenuItem>
+          ))}
+        </Select>
+      )}
+      {error && (
+        <Typography variant="caption" color="error">
+          {t("previewFailed", { error: error.message })}
+        </Typography>
+      )}
+    </Stack>
+  );
+}

@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { createStore, get as idbGet, set as idbSet } from "idb-keyval";
+import { createStore, get as idbGet, set as idbSet, setMany as idbSetMany } from "idb-keyval";
 
 import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
 
+import { PreviewFrame, Previews, previewMcap } from "./preview";
 import { summarizeMcap } from "./summarizeMcap";
 import { CatalogRecording, CatalogSummary } from "./types";
 
@@ -20,11 +21,13 @@ export type FolderFile = {
 const DB_NAME = `${KEY_WORKSPACE_PREFIX}lichtblick-catalog`;
 const summaryStore = createStore(DB_NAME, "summaries");
 const folderStore = createStore(`${DB_NAME}-folders`, "folders");
+// Kept apart from the summaries, which are all read on every scan; previews are read one at a time.
+const previewStore = createStore(`${DB_NAME}-previews`, "previews");
 const LAST_FOLDER_KEY = "last";
 
 const CONCURRENCY = 4;
 // Bump when CatalogSummary gains fields, so cached summaries are read again.
-const CACHE_VERSION = 3;
+const CACHE_VERSION = 4;
 
 function isMcap(name: string): boolean {
   return name.toLowerCase().endsWith(".mcap");
@@ -96,13 +99,23 @@ async function indexFile(
     return undefined;
   });
   if (!summary || (summary.error != undefined && retryErrors)) {
+    let previews: Previews = {};
     try {
-      summary = await summarizeMcap(file);
+      const { previews: rendered, ...rest } = await summarizeMcap(file);
+      summary = rest;
+      previews = rendered ?? {};
     } catch (err: unknown) {
       summary = { error: err instanceof Error ? err.message : String(err) };
     }
     await idbSet(key, summary, summaryStore).catch((err: unknown) => {
       console.warn("Catalog cache write failed", err);
+    });
+    // Previews are stored apart so scans, which read every summary, stay light.
+    await idbSetMany(
+      Object.entries(previews).map(([topic, frames]) => [`${key}|${topic}`, frames]),
+      previewStore,
+    ).catch((err: unknown) => {
+      console.warn("Catalog preview cache write failed", err);
     });
   }
   return { ...base, size: file.size, ...summary };
@@ -136,4 +149,22 @@ export async function indexFiles(
     }),
   );
   return results;
+}
+
+/** Preview frames of `topic`: made while indexing, or read now for topics indexing skipped. */
+export async function loadPreview(entry: FolderFile, topic: string): Promise<PreviewFrame[]> {
+  const file = await entry.getFile();
+  const key = `${CACHE_VERSION}|${file.name}|${file.size}|${file.lastModified}|${topic}`;
+  const cached = await idbGet<PreviewFrame[]>(key, previewStore).catch((err: unknown) => {
+    console.warn("Catalog preview cache read failed", err);
+    return undefined;
+  });
+  if (cached) {
+    return cached;
+  }
+  const preview = await previewMcap(file, topic);
+  await idbSet(key, preview, previewStore).catch((err: unknown) => {
+    console.warn("Catalog preview cache write failed", err);
+  });
+  return preview;
 }

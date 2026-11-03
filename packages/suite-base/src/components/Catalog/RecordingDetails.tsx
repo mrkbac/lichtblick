@@ -10,6 +10,8 @@ import { makeStyles } from "tss-react/mui";
 import { toSec } from "@lichtblick/rostime";
 import Stack from "@lichtblick/suite-base/components/Stack";
 
+import { PreviewPlayer } from "./PreviewPlayer";
+import { PreviewFrame } from "./preview";
 import { CatalogRecording } from "./types";
 
 const useStyles = makeStyles()((theme) => ({
@@ -24,11 +26,6 @@ const useStyles = makeStyles()((theme) => ({
   name: {
     flex: 1,
     minWidth: 0,
-  },
-  thumbnail: {
-    display: "block",
-    width: "100%",
-    borderRadius: theme.shape.borderRadius,
   },
   topics: {
     flex: 1,
@@ -51,12 +48,14 @@ const useStyles = makeStyles()((theme) => ({
 export function RecordingDetails({
   recording,
   initialFilter = "",
+  loadPreview,
   onOpen,
   onClose,
 }: {
   recording: CatalogRecording;
   /** E.g. the `topic:` term of the catalog search, so matching topics show first. */
   initialFilter?: string;
+  loadPreview?: (topic: string) => Promise<PreviewFrame[]>;
   onOpen: () => void;
   onClose: () => void;
 }): React.JSX.Element {
@@ -90,9 +89,7 @@ export function RecordingDetails({
           <CloseIcon fontSize="small" />
         </IconButton>
       </Stack>
-      {recording.thumbnail != undefined && (
-        <img src={recording.thumbnail} alt="" className={classes.thumbnail} />
-      )}
+      <PreviewPlayer recording={recording} loadPreview={loadPreview} />
       <Button variant="contained" onClick={onOpen}>
         {t("openRecording")}
       </Button>
