@@ -172,15 +172,6 @@ export function OpenUrlInput(): React.JSX.Element {
         >
           {t("openLocalFiles")}
         </Button>
-        <Button
-          className={classes.button}
-          variant="outlined"
-          onClick={() => {
-            dialogActions.dataSource.open("catalog");
-          }}
-        >
-          {t("openCatalog")}
-        </Button>
         <Link
           component="button"
           variant="body2"
