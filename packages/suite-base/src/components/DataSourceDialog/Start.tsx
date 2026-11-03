@@ -15,7 +15,6 @@ import {
   ListItemButton,
   Tab,
   Tabs,
-  TextField,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
@@ -130,16 +129,34 @@ export default function Start(): React.JSX.Element {
     view !== "catalog" && (filteredRecents.length > 0 || (searching && recentSources.length > 0));
   const showCatalog = view === "catalog" || (view === "all" && (kind === "all" || kind === "file"));
 
+  // Enter in the search box opens the first recent listed, else the first catalog match.
+  // ponytail: the catalog's first match is in folder order, not the catalog's current sort
+  const topRecent = showRecents && query.trim() !== "" ? visibleRecents[0] : undefined;
+  const topRecording =
+    !topRecent && showCatalog && query.trim() !== ""
+      ? filterRecordings(folder.recordings, query)[0]
+      : undefined;
+  const topMatch = topRecent ? splitRecentTitle(topRecent.title).primary : topRecording?.name;
+  const openTopMatch = () => {
+    if (topRecent) {
+      selectRecent(topRecent.id);
+    } else if (topRecording) {
+      void folder.open(topRecording);
+    }
+  };
+
   return (
     <Stack className={classes.page}>
       <header className={classes.header}>
         <LichtblickLogoText color="primary" className={classes.logo} />
       </header>
 
-      <Stack gap={1}>
-        <Typography variant="h5">{t("openDataSource")}</Typography>
-        <OpenUrlInput />
-      </Stack>
+      <OpenUrlInput
+        value={query}
+        onChange={setQuery}
+        topMatch={topMatch}
+        onOpenTopMatch={openTopMatch}
+      />
 
       <Stack direction="row" gap={2} alignItems="flex-start" flexWrap="wrap">
         <Tabs
@@ -153,17 +170,7 @@ export default function Start(): React.JSX.Element {
           <Tab value="catalog" label={t("tabCatalog")} />
           <Tab value="recent" label={t("tabRecent")} />
         </Tabs>
-        <TextField
-          className={classes.search}
-          size="small"
-          type="search"
-          value={query}
-          placeholder={t("searchPlaceholder")}
-          helperText={t("searchHelp")}
-          onChange={(event) => {
-            setQuery(event.target.value);
-          }}
-        />
+        <div className={classes.spacer} />
         {view !== "catalog" && (
           <ToggleButtonGroup
             exclusive
