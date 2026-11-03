@@ -27,7 +27,7 @@ const LAST_FOLDER_KEY = "last";
 
 const CONCURRENCY = 4;
 // Bump when CatalogSummary gains fields, so cached summaries are read again.
-const CACHE_VERSION = 4;
+const CACHE_VERSION = 5;
 
 function isMcap(name: string): boolean {
   return name.toLowerCase().endsWith(".mcap");
@@ -118,7 +118,7 @@ async function indexFile(
       console.warn("Catalog preview cache write failed", err);
     });
   }
-  return { ...base, size: file.size, ...summary };
+  return { ...base, size: file.size, previewKey: key, ...summary };
 }
 
 /**
@@ -167,4 +167,15 @@ export async function loadPreview(entry: FolderFile, topic: string): Promise<Pre
     console.warn("Catalog preview cache write failed", err);
   });
   return preview;
+}
+
+/** The cached clip of a recording's first preview topic, without reading the file. */
+export async function readCachedPreview(
+  recording: CatalogRecording,
+): Promise<PreviewFrame[] | undefined> {
+  const topic = recording.previewTopics?.[0];
+  if (recording.previewKey == undefined || topic == undefined) {
+    return undefined;
+  }
+  return await idbGet<PreviewFrame[]>(`${recording.previewKey}|${topic}`, previewStore);
 }

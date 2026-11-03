@@ -33,6 +33,8 @@ export type CatalogSummary = {
   topics?: CatalogTopic[];
   /** Image URL (also `data:`) of a frame from the recording. */
   thumbnail?: string;
+  /** Image topics with a cached preview clip, the first one being the thumbnail's. */
+  previewTopics?: string[];
   /** One per GPS topic. */
   tracks?: CatalogTrack[];
   /** The file has no summary section, so nothing is known without a full scan. */
@@ -46,5 +48,7 @@ export type CatalogRecording = CatalogSummary & {
   id: string;
   name: string;
   source: CatalogSource;
+  /** Where this recording's preview clips are cached locally. */
+  previewKey?: string;
   size?: number;
 };

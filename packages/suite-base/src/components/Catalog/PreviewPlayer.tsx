@@ -13,12 +13,9 @@ import { fromSec } from "@lichtblick/rostime";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
 
-import { PreviewFrame } from "./preview";
+import { PREVIEW_FPS, PreviewFrame } from "./preview";
 import { isCompressedImageSchema } from "./thumbnail";
 import { CatalogRecording } from "./types";
-
-/** Slow enough to follow, fast enough to see motion: 48 frames loop in 8 s. */
-const FPS = 6;
 
 const useStyles = makeStyles()((theme) => ({
   screen: {
@@ -40,6 +37,10 @@ const useStyles = makeStyles()((theme) => ({
     left: 0,
     right: 0,
     bottom: 0,
+  },
+  // Jump between frames instead of gliding, so the bar shows the clip is a few stills, not video.
+  seek: {
+    "& .MuiSlider-thumb, & .MuiSlider-track": { transition: "none" },
   },
   time: {
     minWidth: 88,
@@ -91,7 +92,7 @@ export function PreviewPlayer({ recording, loadPreview }: Props): React.JSX.Elem
     }
     const timer = setInterval(() => {
       setIndex((i) => (i + 1) % frames.length);
-    }, 1000 / FPS);
+    }, 1000 / PREVIEW_FPS);
     return () => {
       clearInterval(timer);
     };
@@ -136,6 +137,7 @@ export function PreviewPlayer({ recording, loadPreview }: Props): React.JSX.Elem
             {playing ? <PauseIcon fontSize="small" /> : <PlayArrowIcon fontSize="small" />}
           </IconButton>
           <Slider
+            className={classes.seek}
             size="small"
             value={index}
             min={0}

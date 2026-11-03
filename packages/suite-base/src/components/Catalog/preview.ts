@@ -9,6 +9,9 @@ import { BlobReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap
 import { SampledFrame, sampleRecording } from "./sampleRecording";
 import { renderThumbnail } from "./thumbnail";
 
+/** Slow enough to follow, fast enough to see motion: 48 frames loop in 8 s. */
+export const PREVIEW_FPS = 6;
+
 export type PreviewFrame = {
   /** Seconds since the start of the recording. */
   offsetSec: number;

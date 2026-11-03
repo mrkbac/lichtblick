@@ -15,6 +15,7 @@ export const catalog = {
   hz: "{{hz}} Hz",
   inMapArea: "In map area",
   indexing: "Indexing {{done}} / {{total}}",
+  gridView: "Grid",
   listView: "List",
   mapView: "Map",
   messages: "Messages",
