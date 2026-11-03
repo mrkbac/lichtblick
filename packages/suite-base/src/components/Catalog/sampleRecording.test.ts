@@ -6,7 +6,7 @@ import { McapIndexedReader, McapTypes, McapWriter, TempBuffer } from "@mcap/core
 import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 import { BlobReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/BlobReadable";
 
-import { pickChunks, sampleRecording } from "./sampleRecording";
+import { pickChunks, sampleCount, sampleRecording } from "./sampleRecording";
 
 const SEC = 1_000_000_000n;
 
@@ -162,5 +162,14 @@ describe("pickChunks", () => {
   it("takes every chunk when there are fewer than asked for", () => {
     const chunks = [chunk(5, [1]), chunk(1, [1]), chunk(3, [2])];
     expect(pickChunks(chunks, [1, 2], 48).map((c) => c.messageStartTime)).toEqual([1n, 3n, 5n]);
+  });
+});
+
+describe("sampleCount", () => {
+  it("takes one sample per 2 s, between 8 and 120", () => {
+    expect(sampleCount(60)).toBe(30);
+    expect(sampleCount(5)).toBe(8);
+    expect(sampleCount(3600)).toBe(120);
+    expect(sampleCount(Number.NaN)).toBe(8);
   });
 });

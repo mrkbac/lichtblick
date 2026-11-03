@@ -42,6 +42,7 @@ export const catalog = {
   searchTopics: "Search {{count}} topics…",
   shownCount: "{{shown}} of {{total}} shown",
   size: "Size",
+  speedUp: "{{factor}}×",
   start: "Start",
   topics: "Topics",
   withGps_one: "{{count}} of {{total}} with GPS",

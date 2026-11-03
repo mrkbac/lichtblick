@@ -12,11 +12,21 @@ import { isFixSchema, toPoint } from "./track";
 import { CatalogTrack } from "./types";
 
 /**
- * Chunks to sample. Each yields one GPS fix and one frame per camera; reading them means
- * decompressing the chunk, so this, not the recording's size, bounds the cost. 48 frames make an
- * 8 s preview at 6 fps.
+ * One sample per this much recording time, so every clip plays at the same speed-up and the
+ * preview's seek steps mean the same time in every recording. Each sample yields one GPS fix and
+ * one frame per camera and decompresses its chunk, so the bounds below, not the recording's size,
+ * bound the cost.
  */
-export const SAMPLES = 48;
+const SAMPLE_INTERVAL_SEC = 2;
+const MIN_SAMPLES = 8;
+/** Past 4 minutes samples spread out instead, keeping long recordings cheap to index. */
+const MAX_SAMPLES = 120;
+
+/** Samples for a recording of `durationSec`: one per SAMPLE_INTERVAL_SEC, within bounds. */
+export function sampleCount(durationSec: number): number {
+  const count = Math.round(durationSec / SAMPLE_INTERVAL_SEC);
+  return Math.min(MAX_SAMPLES, Math.max(MIN_SAMPLES, Number.isFinite(count) ? count : MIN_SAMPLES));
+}
 /**
  * Cameras sampled while indexing; each multiplies the image decoding. The busiest are taken, which
  * skips low rate copies such as throttled streams. Others are sampled when picked in the preview.
@@ -75,7 +85,7 @@ export function pickChunks(
  */
 export async function sampleRecording(
   reader: McapIndexedReader,
-  { imageTopics, count = SAMPLES }: { imageTopics?: readonly string[]; count?: number } = {},
+  { imageTopics, count }: { imageTopics?: readonly string[]; count?: number } = {},
 ): Promise<Samples> {
   const schemaName = (schemaId: number) => reader.schemasById.get(schemaId)?.name ?? "";
   const all = [...reader.channelsById.values()];
@@ -107,10 +117,16 @@ export async function sampleRecording(
   const points = new Map<string, [number, number][]>([...gpsTopics].map((t) => [t, []]));
   const frames = new Map<string, SampledFrame[]>(cameraTopics.map((t) => [t, []]));
 
+  const channelIds = channels.map((c) => c.id);
+  const relevant = reader.chunkIndexes.filter((chunk) =>
+    channelIds.some((id) => chunk.messageIndexOffsets.has(id)),
+  );
+  const startNs = _.min(relevant.map((chunk) => chunk.messageStartTime)) ?? 0n;
+  const endNs = _.max(relevant.map((chunk) => chunk.messageEndTime)) ?? 0n;
   const chunks = pickChunks(
-    reader.chunkIndexes,
-    channels.map((c) => c.id),
-    count,
+    relevant,
+    channelIds,
+    count ?? sampleCount(Number(endNs - startNs) / 1e9),
   );
   for (const chunk of chunks) {
     const done = new Set<string>();

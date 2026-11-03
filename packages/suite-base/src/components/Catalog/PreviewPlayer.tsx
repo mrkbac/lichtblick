@@ -43,7 +43,7 @@ const useStyles = makeStyles()((theme) => ({
     "& .MuiSlider-thumb, & .MuiSlider-track": { transition: "none" },
   },
   time: {
-    minWidth: 88,
+    minWidth: 120,
     textAlign: "right",
     fontFeatureSettings: `"tnum"`,
   },
@@ -99,6 +99,13 @@ export function PreviewPlayer({ recording, loadPreview }: Props): React.JSX.Elem
   }, [frames, playing, scrubbing]);
 
   const frame = frames?.[index];
+  // Recording time per second of preview: the same for most recordings, larger for long ones
+  // whose frames are spread out.
+  const speedUp =
+    frames && frames.length > 1
+      ? ((frames[frames.length - 1]!.offsetSec - frames[0]!.offsetSec) / (frames.length - 1)) *
+        PREVIEW_FPS
+      : undefined;
   const src = frame?.url ?? recording.thumbnail;
   if (src == undefined && imageTopics.length === 0) {
     return ReactNull;
@@ -150,6 +157,7 @@ export function PreviewPlayer({ recording, loadPreview }: Props): React.JSX.Elem
           />
           <Typography variant="caption" color="text.secondary" className={classes.time}>
             {frame ? formatDuration(fromSec(frame.offsetSec)) : ""}
+            {speedUp != undefined && ` · ${t("speedUp", { factor: Math.round(speedUp) })}`}
           </Typography>
         </Stack>
       )}
