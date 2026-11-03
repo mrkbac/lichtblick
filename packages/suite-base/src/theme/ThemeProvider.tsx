@@ -49,19 +49,37 @@ export default function ThemeProvider({
       document.head.appendChild(meta);
     }
     const appBar = muiTheme.palette.appBar.main ?? "";
-    // An open dialog's backdrop (black at 0.4, see MuiBackdrop) dims the app bar; dim the
-    // title bar controls with it. Dialogs are portaled into <body>, so watching its children
-    // is enough. Menus and popovers use invisible backdrops and leave the color alone.
+    // A dialog's backdrop (black at 0.4, see MuiBackdrop) dims the app bar when it covers it; dim
+    // the title bar controls with it. Only a backdrop reaching the top of the window counts: a
+    // full-page dialog that starts below the app bar leaves the app bar, and so the title bar, as
+    // is. Menus and popovers use invisible backdrops and leave the color alone.
     const dimmed = darken(appBar, 0.4);
     const update = () => {
-      const backdrop = document.querySelector(".MuiBackdrop-root:not(.MuiBackdrop-invisible)");
-      meta.content = backdrop ? dimmed : appBar;
+      const backdrops = document.querySelectorAll(".MuiBackdrop-root:not(.MuiBackdrop-invisible)");
+      const covered = [...backdrops].some((el) => el.getBoundingClientRect().top <= 0);
+      meta.content = covered ? dimmed : appBar;
     };
     update();
-    const observer = new MutationObserver(update);
-    observer.observe(document.body, { childList: true });
+    // Dialogs open, close, and change size or place (e.g. a dialog switching between a popup
+    // and a full page); re-check at most once a frame.
+    let frame: number | undefined;
+    const observer = new MutationObserver(() => {
+      frame ??= requestAnimationFrame(() => {
+        frame = undefined;
+        update();
+      });
+    });
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["class", "style"],
+    });
     return () => {
       observer.disconnect();
+      if (frame != undefined) {
+        cancelAnimationFrame(frame);
+      }
     };
   }, [muiTheme]);
 

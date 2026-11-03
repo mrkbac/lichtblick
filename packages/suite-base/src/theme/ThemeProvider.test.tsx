@@ -41,4 +41,18 @@ describe("ThemeProvider theme-color", () => {
       expect(themeColor()).toBe(appBar);
     });
   });
+
+  it("keeps the app bar color for a dialog that starts below the app bar", () => {
+    const rect = jest
+      .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+      .mockReturnValue({ top: 44 } as DOMRect);
+    // The dialog is in the DOM when the theme-color is first set.
+    render(
+      <ThemeProvider isDark>
+        <Dialog open transitionDuration={0} />
+      </ThemeProvider>,
+    );
+    expect(themeColor()).toBe(appBar);
+    rect.mockRestore();
+  });
 });
