@@ -10,13 +10,17 @@ import {
   ButtonBase,
   Chip,
   LinearProgress,
+  MenuItem,
+  Select,
   TableSortLabel,
+  ToggleButton,
+  ToggleButtonGroup,
   Tooltip,
   Typography,
 } from "@mui/material";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import * as _ from "lodash-es";
-import { useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -28,8 +32,12 @@ import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time"
 
 import { RecordingDetails } from "./RecordingDetails";
 import { filterRecordings } from "./search";
+import { Bounds, boundsIntersect, pickTrack, trackBounds } from "./track";
 import { CatalogRecording } from "./types";
 import { CatalogFolder } from "./useCatalogFolder";
+
+// MapLibre is large; load it only when the map is shown.
+const CatalogMap = lazy(async () => await import("./CatalogMap"));
 
 const ROW_HEIGHT = 52;
 const THUMB_WIDTH = 72;
@@ -136,6 +144,9 @@ const useStyles = makeStyles()((theme) => ({
   progress: {
     flex: 1,
   },
+  spacer: {
+    flex: 1,
+  },
   message: {
     padding: theme.spacing(2),
   },
@@ -173,15 +184,29 @@ export default function Catalog({ folder, query, lastOpenedByName }: Props): Rea
   const { recordings, progress, error, open } = folder;
 
   const [selectedId, setSelectedId] = useState<string>();
+  const [view, setView] = useState<"list" | "map">("list");
+  const [gpsTopic, setGpsTopic] = useState<string>();
+  const [area, setArea] = useState<Bounds>();
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({
     key: "start",
     desc: true,
   });
   const scrollRef = useRef<HTMLDivElement>(ReactNull);
 
-  const shown = useMemo(
-    () => sortRecordings(filterRecordings(recordings, query), sort),
-    [recordings, query, sort],
+  const shown = useMemo(() => {
+    const matching = filterRecordings(recordings, query).filter((r) => {
+      if (!area) {
+        return true;
+      }
+      const bounds = trackBounds(pickTrack(r.tracks, gpsTopic)?.points ?? []);
+      return bounds != undefined && boundsIntersect(bounds, area);
+    });
+    return sortRecordings(matching, sort);
+  }, [recordings, query, sort, area, gpsTopic]);
+
+  const gpsTopics = useMemo(
+    () => _.uniq(recordings.flatMap((r) => r.tracks?.map((track) => track.topic) ?? [])).sort(),
+    [recordings],
   );
 
   const selected = recordings.find((r) => r.id === selectedId);
@@ -262,7 +287,7 @@ export default function Catalog({ folder, query, lastOpenedByName }: Props): Rea
       {error && <Alert severity="error">{error}</Alert>}
       <Stack direction="row" alignItems="center" gap={2}>
         <Typography variant="body2" color="text.secondary">
-          {query.trim() === ""
+          {query.trim() === "" && !area
             ? t("recordingCount", { count: recordings.length })
             : t("shownCount", {
                 shown: shown.length,
@@ -281,124 +306,176 @@ export default function Catalog({ folder, query, lastOpenedByName }: Props): Rea
             />
           </>
         )}
+        {area && (
+          <Chip
+            size="small"
+            label={t("inMapArea")}
+            onDelete={() => {
+              setArea(undefined);
+            }}
+          />
+        )}
+        {!progress && <div className={classes.spacer} />}
+        {view === "map" && gpsTopics.length > 1 && (
+          <Select
+            size="small"
+            value={gpsTopic ?? ""}
+            displayEmpty
+            onChange={(event) => {
+              setGpsTopic(event.target.value === "" ? undefined : event.target.value);
+            }}
+          >
+            <MenuItem value="">{t("gpsTopicAuto")}</MenuItem>
+            {gpsTopics.map((topic) => (
+              <MenuItem key={topic} value={topic}>
+                {topic}
+              </MenuItem>
+            ))}
+          </Select>
+        )}
+        <ToggleButtonGroup
+          size="small"
+          exclusive
+          value={view}
+          onChange={(_event, value: "list" | "map" | null) => {
+            if (value) {
+              setView(value);
+            }
+          }}
+        >
+          <ToggleButton value="list">{t("listView")}</ToggleButton>
+          <ToggleButton value="map">{t("mapView")}</ToggleButton>
+        </ToggleButtonGroup>
       </Stack>
       <Stack direction="row" className={classes.body}>
-        <Stack className={classes.list}>
-          <div className={cx(classes.row, classes.headRow)}>
-            <span />
-            {sortLabel("name", t("name"))}
-            {sortLabel("start", t("start"))}
-            {sortLabel("duration", t("duration"))}
-            {sortLabel("size", t("size"))}
-            {sortLabel("messages", t("messages"))}
-            {sortLabel("topics", t("topics"))}
-          </div>
-          <div ref={scrollRef} className={classes.scroller}>
-            {shown.length === 0 && progress == undefined && (
-              <Typography color="text.secondary" className={classes.message}>
-                {recordings.length === 0 ? t("noRecordings") : t("noMatches")}
-              </Typography>
-            )}
-            <div
-              style={{
-                height: virtualizer.getTotalSize(),
-                position: "relative",
-              }}
-            >
-              {virtualizer.getVirtualItems().map((item) => {
-                const r = shown[item.index]!;
-                const path = r.source.type === "local-file" ? r.source.path : r.source.url;
-                const lastOpened = lastOpenedByName.get(r.name);
-                const caption = [
-                  lastOpened != undefined
-                    ? t("openedAgo", {
-                        ago: formatTimeAgo(lastOpened, Date.now(), i18n.language),
-                      })
-                    : undefined,
-                  path !== r.name ? path : undefined,
-                ]
-                  .filter(Boolean)
-                  .join(" · ");
-                return (
-                  <ButtonBase
-                    key={r.id}
-                    className={cx(classes.row, classes.bodyRow, {
-                      [classes.selectedRow]: r.id === selectedId,
-                    })}
-                    style={{ transform: `translateY(${item.start}px)` }}
-                    onClick={() => {
-                      setSelectedId(r.id);
-                    }}
-                    onDoubleClick={() => void open(r)}
-                  >
-                    {r.thumbnail != undefined ? (
-                      <Tooltip
-                        placement="right"
-                        title={<img src={r.thumbnail} alt="" className={classes.preview} />}
-                      >
-                        <img
-                          src={r.thumbnail}
-                          alt=""
-                          loading="lazy"
-                          className={classes.thumbnail}
-                        />
-                      </Tooltip>
-                    ) : (
-                      <span className={classes.thumbnail} />
-                    )}
-                    <Stack style={{ minWidth: 0 }}>
-                      <Stack direction="row" alignItems="center" gap={1} style={{ minWidth: 0 }}>
-                        <Typography variant="body2" noWrap>
-                          {r.name}
-                        </Typography>
-                        {r.error != undefined && (
-                          <Tooltip title={r.error}>
-                            <Chip size="small" color="error" label={t("error")} />
-                          </Tooltip>
-                        )}
-                        {r.noSummary === true && (
-                          <Tooltip title={t("noSummaryDescription")}>
-                            <Chip size="small" label={t("noSummary")} />
-                          </Tooltip>
+        {view === "map" ? (
+          <Suspense fallback={<div className={classes.list} />}>
+            <CatalogMap
+              recordings={shown}
+              gpsTopic={gpsTopic}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onSearchArea={setArea}
+            />
+          </Suspense>
+        ) : (
+          <Stack className={classes.list}>
+            <div className={cx(classes.row, classes.headRow)}>
+              <span />
+              {sortLabel("name", t("name"))}
+              {sortLabel("start", t("start"))}
+              {sortLabel("duration", t("duration"))}
+              {sortLabel("size", t("size"))}
+              {sortLabel("messages", t("messages"))}
+              {sortLabel("topics", t("topics"))}
+            </div>
+            <div ref={scrollRef} className={classes.scroller}>
+              {shown.length === 0 && progress == undefined && (
+                <Typography color="text.secondary" className={classes.message}>
+                  {recordings.length === 0 ? t("noRecordings") : t("noMatches")}
+                </Typography>
+              )}
+              <div
+                style={{
+                  height: virtualizer.getTotalSize(),
+                  position: "relative",
+                }}
+              >
+                {virtualizer.getVirtualItems().map((item) => {
+                  const r = shown[item.index]!;
+                  const path = r.source.type === "local-file" ? r.source.path : r.source.url;
+                  const lastOpened = lastOpenedByName.get(r.name);
+                  const caption = [
+                    lastOpened != undefined
+                      ? t("openedAgo", {
+                          ago: formatTimeAgo(lastOpened, Date.now(), i18n.language),
+                        })
+                      : undefined,
+                    path !== r.name ? path : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ");
+                  return (
+                    <ButtonBase
+                      key={r.id}
+                      className={cx(classes.row, classes.bodyRow, {
+                        [classes.selectedRow]: r.id === selectedId,
+                      })}
+                      style={{ transform: `translateY(${item.start}px)` }}
+                      onClick={() => {
+                        setSelectedId(r.id);
+                      }}
+                      onDoubleClick={() => void open(r)}
+                    >
+                      {r.thumbnail != undefined ? (
+                        <Tooltip
+                          placement="right"
+                          title={<img src={r.thumbnail} alt="" className={classes.preview} />}
+                        >
+                          <img
+                            src={r.thumbnail}
+                            alt=""
+                            loading="lazy"
+                            className={classes.thumbnail}
+                          />
+                        </Tooltip>
+                      ) : (
+                        <span className={classes.thumbnail} />
+                      )}
+                      <Stack style={{ minWidth: 0 }}>
+                        <Stack direction="row" alignItems="center" gap={1} style={{ minWidth: 0 }}>
+                          <Typography variant="body2" noWrap>
+                            {r.name}
+                          </Typography>
+                          {r.error != undefined && (
+                            <Tooltip title={r.error}>
+                              <Chip size="small" color="error" label={t("error")} />
+                            </Tooltip>
+                          )}
+                          {r.noSummary === true && (
+                            <Tooltip title={t("noSummaryDescription")}>
+                              <Chip size="small" label={t("noSummary")} />
+                            </Tooltip>
+                          )}
+                        </Stack>
+                        {caption !== "" && (
+                          <Typography variant="caption" color="text.secondary" noWrap>
+                            {caption}
+                          </Typography>
                         )}
                       </Stack>
-                      {caption !== "" && (
-                        <Typography variant="caption" color="text.secondary" noWrap>
-                          {caption}
-                        </Typography>
-                      )}
-                    </Stack>
-                    <Typography variant="body2" noWrap>
-                      {formatStart(r)}
-                    </Typography>
-                    <Typography variant="body2" className={classes.numeric}>
-                      {r.start && r.end ? formatDuration(subtract(r.end, r.start)) : "–"}
-                    </Typography>
-                    <Typography variant="body2" className={classes.numeric}>
-                      {r.size != undefined ? formatByteSize(r.size) : "–"}
-                    </Typography>
-                    <Typography variant="body2" className={classes.numeric}>
-                      {r.messages?.toLocaleString() ?? "–"}
-                    </Typography>
-                    <Tooltip
-                      title={r.topics
-                        ?.slice(0, 30)
-                        .map((topic) => topic.name)
-                        .join("\n")}
-                      slotProps={{
-                        tooltip: { sx: { whiteSpace: "pre-line" } },
-                      }}
-                    >
-                      <Typography variant="body2" className={classes.numeric}>
-                        {r.topics?.length ?? "–"}
+                      <Typography variant="body2" noWrap>
+                        {formatStart(r)}
                       </Typography>
-                    </Tooltip>
-                  </ButtonBase>
-                );
-              })}
+                      <Typography variant="body2" className={classes.numeric}>
+                        {r.start && r.end ? formatDuration(subtract(r.end, r.start)) : "–"}
+                      </Typography>
+                      <Typography variant="body2" className={classes.numeric}>
+                        {r.size != undefined ? formatByteSize(r.size) : "–"}
+                      </Typography>
+                      <Typography variant="body2" className={classes.numeric}>
+                        {r.messages?.toLocaleString() ?? "–"}
+                      </Typography>
+                      <Tooltip
+                        title={r.topics
+                          ?.slice(0, 30)
+                          .map((topic) => topic.name)
+                          .join("\n")}
+                        slotProps={{
+                          tooltip: { sx: { whiteSpace: "pre-line" } },
+                        }}
+                      >
+                        <Typography variant="body2" className={classes.numeric}>
+                          {r.topics?.length ?? "–"}
+                        </Typography>
+                      </Tooltip>
+                    </ButtonBase>
+                  );
+                })}
+              </div>
             </div>
-          </div>
-        </Stack>
+          </Stack>
+        )}
         {selected && (
           <RecordingDetails
             key={`${selected.id}|${topicTerm ?? ""}`}
