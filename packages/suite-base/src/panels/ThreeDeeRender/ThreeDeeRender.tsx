@@ -50,6 +50,7 @@ import { SELECTED_ID_VARIABLE } from "./Renderable";
 import { Renderer } from "./Renderer";
 import { RendererContext, useRendererEvent, useRendererProperty } from "./RendererContext";
 import { RendererOverlay } from "./RendererOverlay";
+import { onlyLastByTopicMessage } from "./SceneExtension";
 import { useStyles } from "./ThreeDeeRender.style";
 import { CameraState, DEFAULT_CAMERA_STATE } from "./camera";
 import {
@@ -630,10 +631,13 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         }
       }
       if (shouldSubscribe) {
+        const latestOnly =
+          rendererSubscription.latestOnly?.() ??
+          rendererSubscription.filterQueue === onlyLastByTopicMessage;
         const sampling =
-          rendererSubscription.preload === true
-            ? undefined
-            : { mode: "latest-per-render-tick" as const };
+          rendererSubscription.preload !== true && latestOnly
+            ? { mode: "latest-per-render-tick" as const }
+            : undefined;
         newSubscriptions.push({
           topic: topic.name,
           preload: rendererSubscription.preload,
@@ -670,6 +674,8 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     schemaSubscriptions,
     topicSubscriptions,
     config.imageMode.annotations,
+    // Image sampling depends on synchronization
+    config.imageMode.synchronize,
     // Need to update subscriptions when layers change as URDF layers might subscribe to topics
     // shouldSubscribe values will be re-evaluated
     config.layers,

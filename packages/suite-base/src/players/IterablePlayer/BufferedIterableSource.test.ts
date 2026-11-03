@@ -464,6 +464,46 @@ describe("BufferedIterableSource", () => {
     expect(messageIteratorCount).toEqual(1);
   });
 
+  it("should scale read ahead with playback speed", async () => {
+    const source = new TestSource();
+    const bufferedSource = new BufferedIterableSource(source, {
+      readAheadDuration: { sec: 1, nsec: 0 },
+      minReadAheadDuration: { sec: 0, nsec: 0 },
+    });
+    await bufferedSource.initialize();
+    bufferedSource.setPlaybackSpeed(3);
+
+    const signal = waiter(1);
+    const debounceNotify = _.debounce(() => {
+      signal.notify();
+    }, 500);
+    source.messageIterator = async function* messageIterator(): AsyncIterableIterator<
+      Readonly<IteratorResult>
+    > {
+      for (let i = 0; i < 8; ++i) {
+        debounceNotify();
+        yield {
+          type: "message-event",
+          msgEvent: {
+            topic: "a",
+            receiveTime: { sec: i, nsec: 0 },
+            message: undefined,
+            sizeInBytes: 0,
+            schemaName: "foo",
+          },
+        };
+      }
+    };
+
+    const messageIterator = bufferedSource.messageIterator({ topics: mockTopicSelection("a") });
+    await messageIterator.next();
+    await signal.wait();
+
+    // 3x speed buffers 3s ahead instead of 1s
+    expect(bufferedSource.loadedRanges()).toEqual([{ start: 0, end: 0.3999999999 }]);
+    await bufferedSource.stopProducer();
+  });
+
   it("should buffer minimum duration ahead before messages can be read", async () => {
     const source = new TestSource();
     const bufferedSource = new BufferedIterableSource(source, {
