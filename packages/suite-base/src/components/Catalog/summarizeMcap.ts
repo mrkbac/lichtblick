@@ -95,6 +95,8 @@ export async function summarizeMcap(
 
   return {
     previews: previews && Object.keys(previews).length > 0 ? previews : undefined,
+    previewTopics:
+      previews && Object.keys(previews).length > 0 ? Object.keys(previews).sort() : undefined,
     thumbnail,
     tracks: tracks && tracks.length > 0 ? tracks : undefined,
     start: start == undefined ? undefined : fromNanoSec(start),

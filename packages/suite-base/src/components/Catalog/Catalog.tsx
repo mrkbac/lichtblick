@@ -30,6 +30,7 @@ import { format, formatDuration } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeAgo } from "@lichtblick/suite-base/util/recentSources";
 import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
 
+import { AnimatedThumbnail } from "./AnimatedThumbnail";
 import { RecordingDetails } from "./RecordingDetails";
 import { filterRecordings } from "./search";
 import { Bounds, boundsIntersect, pickTrack, trackBounds } from "./track";
@@ -131,17 +132,47 @@ const useStyles = makeStyles()((theme) => ({
     fontFeatureSettings: `"tnum"`,
   },
   thumbnail: {
-    display: "block",
     width: THUMB_WIDTH,
     height: (THUMB_WIDTH * 9) / 16,
-    objectFit: "cover",
     borderRadius: theme.shape.borderRadius,
     backgroundColor: theme.palette.action.hover,
   },
   preview: {
-    display: "block",
-    width: 240,
-    borderRadius: theme.shape.borderRadius,
+    width: 480,
+    aspectRatio: "16 / 9",
+  },
+  previewTooltip: {
+    maxWidth: "none",
+    padding: theme.spacing(0.5),
+  },
+  grid: {
+    flex: 1,
+    minWidth: 0,
+    overflow: "auto",
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
+    alignContent: "start",
+    gap: theme.spacing(2),
+    paddingRight: theme.spacing(1),
+  },
+  card: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: theme.spacing(0.75),
+    padding: theme.spacing(1),
+    textAlign: "left",
+    borderRadius: theme.spacing(1),
+    border: `1px solid ${theme.palette.divider}`,
+    "&:hover": { backgroundColor: theme.palette.action.hover },
+  },
+  selectedCard: {
+    borderColor: theme.palette.primary.main,
+    backgroundColor: theme.palette.action.selected,
+  },
+  cardThumbnail: {
+    width: "100%",
+    aspectRatio: "16 / 9",
   },
   emptyIcon: {
     fontSize: 48,
@@ -189,7 +220,7 @@ export default function Catalog({ folder, query, lastOpenedByName }: Props): Rea
   const { recordings, progress, error, open } = folder;
 
   const [selectedId, setSelectedId] = useState<string>();
-  const [view, setView] = useState<"list" | "map">("list");
+  const [view, setView] = useState<"list" | "grid" | "map">("list");
   const [gpsTopic, setGpsTopic] = useState<string>();
   const [area, setArea] = useState<Bounds>();
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({
@@ -350,13 +381,14 @@ export default function Catalog({ folder, query, lastOpenedByName }: Props): Rea
           size="small"
           exclusive
           value={view}
-          onChange={(_event, value: "list" | "map" | null) => {
+          onChange={(_event, value: "list" | "grid" | "map" | null) => {
             if (value) {
               setView(value);
             }
           }}
         >
           <ToggleButton value="list">{t("listView")}</ToggleButton>
+          <ToggleButton value="grid">{t("gridView")}</ToggleButton>
           <ToggleButton value="map">{t("mapView")}</ToggleButton>
         </ToggleButtonGroup>
       </Stack>
@@ -371,6 +403,50 @@ export default function Catalog({ folder, query, lastOpenedByName }: Props): Rea
               onSearchArea={setArea}
             />
           </Suspense>
+        ) : view === "grid" ? (
+          <div className={classes.grid}>
+            {shown.length === 0 && progress == undefined && (
+              <Typography color="text.secondary" className={classes.message}>
+                {recordings.length === 0 ? t("noRecordings") : t("noMatches")}
+              </Typography>
+            )}
+            {shown.map((r) => (
+              <ButtonBase
+                key={r.id}
+                className={cx(classes.card, { [classes.selectedCard]: r.id === selectedId })}
+                onClick={() => {
+                  setSelectedId(r.id);
+                }}
+                onDoubleClick={() => void open(r)}
+              >
+                <AnimatedThumbnail recording={r} className={classes.cardThumbnail} scrub />
+                <Stack direction="row" alignItems="center" gap={1} style={{ minWidth: 0 }}>
+                  <Typography variant="body2" noWrap>
+                    {r.name}
+                  </Typography>
+                  {r.error != undefined && (
+                    <Tooltip title={r.error}>
+                      <Chip size="small" color="error" label={t("error")} />
+                    </Tooltip>
+                  )}
+                  {r.noSummary === true && (
+                    <Tooltip title={t("noSummaryDescription")}>
+                      <Chip size="small" label={t("noSummary")} />
+                    </Tooltip>
+                  )}
+                </Stack>
+                <Typography variant="caption" color="text.secondary" noWrap>
+                  {[
+                    formatStart(r),
+                    r.start && r.end ? formatDuration(subtract(r.end, r.start)) : undefined,
+                    r.size != undefined ? formatByteSize(r.size) : undefined,
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </Typography>
+              </ButtonBase>
+            ))}
+          </div>
         ) : (
           <Stack className={classes.list}>
             <div className={cx(classes.row, classes.headRow, { [classes.compactRow]: compact })}>
@@ -424,14 +500,12 @@ export default function Catalog({ folder, query, lastOpenedByName }: Props): Rea
                       {r.thumbnail != undefined ? (
                         <Tooltip
                           placement="right"
-                          title={<img src={r.thumbnail} alt="" className={classes.preview} />}
+                          slotProps={{ tooltip: { className: classes.previewTooltip } }}
+                          title={<AnimatedThumbnail recording={r} className={classes.preview} />}
                         >
-                          <img
-                            src={r.thumbnail}
-                            alt=""
-                            loading="lazy"
-                            className={classes.thumbnail}
-                          />
+                          <div>
+                            <AnimatedThumbnail recording={r} className={classes.thumbnail} />
+                          </div>
                         </Tooltip>
                       ) : (
                         <span className={classes.thumbnail} />
