@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { McapIndexedReader } from "@mcap/core";
-
-import { parseChannel } from "@lichtblick/mcap-support";
 import { COMPRESSED_IMAGE_DATATYPES as FOXGLOVE_COMPRESSED_IMAGE } from "@lichtblick/suite-base/panels/ThreeDeeRender/foxglove";
 import { normalizeByteArray } from "@lichtblick/suite-base/panels/ThreeDeeRender/normalizeMessages";
 import { COMPRESSED_IMAGE_DATATYPES as ROS_COMPRESSED_IMAGE } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
@@ -12,40 +9,15 @@ const THUMBNAIL_WIDTH = 240;
 
 export type CompressedFrame = { data: Uint8Array; format: string };
 
-/**
- * The frame at the middle of the first compressed image topic (by name), which tends to show more
- * than the first frame of a recording.
- */
-export async function readMiddleFrame(
-  reader: McapIndexedReader,
-  middleNs: bigint | undefined,
-): Promise<CompressedFrame | undefined> {
-  const channel = [...reader.channelsById.values()]
-    .filter((c) => {
-      const name = reader.schemasById.get(c.schemaId)?.name ?? "";
-      return ROS_COMPRESSED_IMAGE.has(name) || FOXGLOVE_COMPRESSED_IMAGE.has(name);
-    })
-    .sort((a, b) => a.topic.localeCompare(b.topic))[0];
-  if (!channel) {
-    return undefined;
-  }
-  const schema = reader.schemasById.get(channel.schemaId)!;
-  const { deserialize } = parseChannel({
-    messageEncoding: channel.messageEncoding,
-    schema,
-  });
-  for await (const message of reader.readMessages({
-    topics: [channel.topic],
-    startTime: middleNs,
-  })) {
-    const image = deserialize(message.data) as {
-      data?: unknown;
-      format?: string;
-    };
-    const data = normalizeByteArray(image.data);
-    return data.length > 0 ? { data, format: image.format ?? "" } : undefined;
-  }
-  return undefined;
+export function isCompressedImageSchema(name: string): boolean {
+  return ROS_COMPRESSED_IMAGE.has(name) || FOXGLOVE_COMPRESSED_IMAGE.has(name);
+}
+
+/** The image in a deserialized CompressedImage message, if it has one. */
+export function toFrame(message: unknown): CompressedFrame | undefined {
+  const image = message as { data?: unknown; format?: string };
+  const data = normalizeByteArray(image.data);
+  return data.length > 0 ? { data, format: image.format ?? "" } : undefined;
 }
 
 /** Scale a compressed image down to a small JPEG data URL. */

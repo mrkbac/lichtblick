@@ -13,8 +13,10 @@ import {
   listDirectory,
   listInputFiles,
   loadLastFolder,
+  loadPreview,
   saveLastFolder,
 } from "./indexFolder";
+import { PreviewFrame } from "./preview";
 import { CatalogRecording } from "./types";
 
 export type CatalogFolder = {
@@ -30,6 +32,8 @@ export type CatalogFolder = {
   /** Look for new files and retry failed ones; undefined while no folder is open. */
   rescan?: () => Promise<void>;
   open: (recording: CatalogRecording) => Promise<void>;
+  /** Preview frames of one of a recording's image topics. */
+  loadPreview: (recording: CatalogRecording, topic: string) => Promise<PreviewFrame[]>;
 };
 
 /** Index a local folder of recordings, reopening the last one when the browser allows it. */
@@ -191,7 +195,21 @@ export function useCatalogFolder(): CatalogFolder {
     [files, selectSource],
   );
 
+  const loadRecordingPreview = useCallback(
+    async (recording: CatalogRecording, topic: string) => {
+      const { source } = recording;
+      const file =
+        source.type === "local-file" ? files.find((f) => f.path === source.path) : undefined;
+      if (!file) {
+        throw new Error("Only recordings in the open folder have a preview");
+      }
+      return await loadPreview(file, topic);
+    },
+    [files],
+  );
+
   return {
+    loadPreview: loadRecordingPreview,
     name,
     lastFolder,
     recordings,

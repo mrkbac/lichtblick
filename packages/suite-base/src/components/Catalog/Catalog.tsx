@@ -210,6 +210,13 @@ export default function Catalog({ folder, query, lastOpenedByName }: Props): Rea
   );
 
   const selected = recordings.find((r) => r.id === selectedId);
+  const loadSelectedPreview = useMemo(
+    () =>
+      selected?.source.type === "local-file"
+        ? async (topic: string) => await folder.loadPreview(selected, topic)
+        : undefined,
+    [folder, selected],
+  );
   const topicTerm = /(?:^|\s)topic:(\S+)/i.exec(query)?.[1];
 
   const virtualizer = useVirtualizer({
@@ -481,6 +488,7 @@ export default function Catalog({ folder, query, lastOpenedByName }: Props): Rea
             key={`${selected.id}|${topicTerm ?? ""}`}
             recording={selected}
             initialFilter={topicTerm}
+            loadPreview={loadSelectedPreview}
             onOpen={() => void open(selected)}
             onClose={() => {
               setSelectedId(undefined);
