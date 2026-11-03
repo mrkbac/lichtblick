@@ -83,7 +83,7 @@ Release-cutting requests (creating a release branch, triggering a release, or ve
 | `@lb-panel-raw-messages` | RawMessages panel, JSON tree, message inspection |
 | `@lb-panel-user-scripts` | UserScripts panel, Monaco editor, script execution, diagnostics |
 | `@lb-panel-state-transitions` | StateTransitions panel, discrete state visualization, TimeBasedChart |
-| `@lb-panel-map` | Map panel, Leaflet, GeoJSON, GPS/NavSatFix data |
+| `@lb-panel-map` | Map panel, MapLibre, GeoJSON, GPS/NavSatFix data |
 | `@lb-panel-log` | Log panel, log filtering, virtualized list, autoscroll |
 | `@lb-panels-general` | PanelExtensionAdapter, panel lifecycle, renderState, general panel patterns |
 
