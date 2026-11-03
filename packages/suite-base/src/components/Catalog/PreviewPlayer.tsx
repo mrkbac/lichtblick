@@ -67,8 +67,8 @@ export function PreviewPlayer({ recording, loadPreview }: Props): React.JSX.Elem
         .sort(),
     [recording.topics],
   );
-  // Same default as the thumbnail: the first image topic by name.
-  const [topic, setTopic] = useState(imageTopics[0]);
+  // Same default as the thumbnail: the busiest camera, whose clip is cached.
+  const [topic, setTopic] = useState(recording.previewTopics?.[0] ?? imageTopics[0]);
   const [index, setIndex] = useState(0);
   const [playing, setPlaying] = useState(true);
   const [scrubbing, setScrubbing] = useState(false);

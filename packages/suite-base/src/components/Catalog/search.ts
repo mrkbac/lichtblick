@@ -2,6 +2,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { toSec } from "@foxglove/rostime";
+import * as Foxglove from "@lichtblick/suite-base/panels/ThreeDeeRender/foxglove";
+import * as Ros from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
+import { COMPRESSED_VIDEO_DATATYPES } from "@lichtblick/suite-base/util/foxgloveSchemas";
 
 import { CatalogRecording } from "./types";
 
@@ -40,6 +43,50 @@ function durationSec(recording: CatalogRecording): number | undefined {
     : undefined;
 }
 
+/** `has:` kinds, by the schemas of their topics, so they work whatever the topics are called. */
+const KIND_SCHEMAS: Record<string, readonly ReadonlySet<string>[]> = {
+  image: [
+    Ros.IMAGE_DATATYPES,
+    Ros.COMPRESSED_IMAGE_DATATYPES,
+    Foxglove.RAW_IMAGE_DATATYPES,
+    Foxglove.COMPRESSED_IMAGE_DATATYPES,
+  ],
+  pointcloud: [Ros.POINTCLOUD_DATATYPES, Foxglove.POINTCLOUD_DATATYPES],
+  tf: [Ros.TF_DATATYPES, Foxglove.FRAME_TRANSFORM_DATATYPES, Foxglove.FRAME_TRANSFORMS_DATATYPES],
+  video: [COMPRESSED_VIDEO_DATATYPES],
+};
+
+function hasPredicate(kind: string): Predicate | undefined {
+  if (kind === "gps") {
+    return (r) => (r.tracks?.length ?? 0) > 0;
+  }
+  const schemas = KIND_SCHEMAS[kind];
+  return schemas
+    ? (r) => r.topics?.some((t) => schemas.some((set) => set.has(t.schema))) ?? false
+    : undefined;
+}
+
+function statusPredicate(status: string): Predicate | undefined {
+  switch (status) {
+    case "error":
+      return (r) => r.error != undefined;
+    case "nosummary":
+      return (r) => r.noSummary === true;
+    case "ok":
+      return (r) => r.error == undefined && r.noSummary !== true;
+  }
+  return undefined;
+}
+
+/** `a|b` matches either; every alternative must be valid. */
+function anyOf(needle: string, predicate: (value: string) => Predicate | undefined) {
+  const predicates = needle.split("|").map(predicate);
+  if (predicates.some((p) => p == undefined)) {
+    return undefined;
+  }
+  return (r: CatalogRecording) => predicates.some((p) => p!(r));
+}
+
 function filterPredicate(key: string, op: string, value: string): Predicate | undefined {
   const needle = value.toLowerCase();
   switch (key) {
@@ -68,15 +115,9 @@ function filterPredicate(key: string, op: string, value: string): Predicate | un
       return bytes == undefined ? undefined : (r) => compare(op, r.size, bytes);
     }
     case "status":
-      switch (needle) {
-        case "error":
-          return (r) => r.error != undefined;
-        case "nosummary":
-          return (r) => r.noSummary === true;
-        case "ok":
-          return (r) => r.error == undefined && r.noSummary !== true;
-      }
-      return undefined;
+      return op === ":" ? anyOf(needle, statusPredicate) : undefined;
+    case "has":
+      return op === ":" ? anyOf(needle, hasPredicate) : undefined;
   }
   return undefined;
 }
@@ -84,7 +125,8 @@ function filterPredicate(key: string, op: string, value: string): Predicate | un
 /**
  * Filter recordings with a query of space-separated terms, all of which must match:
  * free text (name or path), `topic:`, `schema:`, `path:`, `since:`/`until:` (dates),
- * `duration>5m`, `size<2GB` and `status:error|nosummary|ok`. Unknown filters match as text.
+ * `duration>5m`, `size<2GB`, `status:error|nosummary|ok` and `has:image|gps|pointcloud|tf|video`
+ * (`|` matches either). Unknown filters match as text.
  */
 export function filterRecordings(
   recordings: readonly CatalogRecording[],
