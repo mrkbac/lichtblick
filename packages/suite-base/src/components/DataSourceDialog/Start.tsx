@@ -12,6 +12,8 @@ import {
   List,
   ListItem,
   ListItemButton,
+  Tab,
+  Tabs,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
@@ -44,9 +46,10 @@ import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
 import { splitRecentTitle } from "@lichtblick/suite-base/util/recentSources";
 
-// Number of recents listed before "Show all", unless searching
+// Number of recents listed on the All tab, unless searching
 const RECENTS_PREVIEW_COUNT = 5;
 
+type View = "all" | "catalog" | "recent";
 type Kind = "all" | "file" | "remote" | "live";
 
 function recentKind(recent: RecentSource): Exclude<Kind, "all"> {
@@ -78,8 +81,8 @@ export default function Start(): React.JSX.Element {
   const folder = useCatalogFolder();
 
   const [query, setQuery] = useState("");
+  const [view, setView] = useState<View>("all");
   const [kind, setKind] = useState<Kind>("all");
-  const [showAllRecents, setShowAllRecents] = useState(false);
 
   const catalogByName = useMemo(
     // ponytail: matches by file name only; the first recording wins when names repeat
@@ -120,8 +123,12 @@ export default function Start(): React.JSX.Element {
 
   const searching = query.trim() !== "" || kind !== "all";
   const visibleRecents =
-    showAllRecents || searching ? filteredRecents : filteredRecents.slice(0, RECENTS_PREVIEW_COUNT);
-  const showCatalog = kind === "all" || kind === "file";
+    view === "recent" || searching
+      ? filteredRecents
+      : filteredRecents.slice(0, RECENTS_PREVIEW_COUNT);
+  const showRecents =
+    view !== "catalog" && (filteredRecents.length > 0 || (searching && recentSources.length > 0));
+  const showCatalog = view === "catalog" || (view === "all" && (kind === "all" || kind === "file"));
 
   return (
     <Stack className={classes.page}>
@@ -134,9 +141,20 @@ export default function Start(): React.JSX.Element {
         <OpenUrlInput />
       </Stack>
 
-      <Stack direction="row" gap={2} alignItems="flex-start">
+      <Stack direction="row" gap={2} alignItems="flex-start" flexWrap="wrap">
+        <Tabs
+          value={view}
+          onChange={(_event, value: View) => {
+            setView(value);
+          }}
+          aria-label={t("view")}
+        >
+          <Tab value="all" label={t("tabAll")} />
+          <Tab value="catalog" label={t("tabCatalog")} />
+          <Tab value="recent" label={t("tabRecent")} />
+        </Tabs>
         <TextField
-          fullWidth
+          className={classes.search}
           size="small"
           type="search"
           value={query}
@@ -146,24 +164,26 @@ export default function Start(): React.JSX.Element {
             setQuery(event.target.value);
           }}
         />
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          value={kind}
-          onChange={(_event, value: Kind | null) => {
-            setKind(value ?? "all");
-          }}
-          aria-label={t("sourceKind")}
-        >
-          <ToggleButton value="all">{t("kindAll")}</ToggleButton>
-          <ToggleButton value="file">{t("kindFile")}</ToggleButton>
-          <ToggleButton value="remote">{t("kindRemote")}</ToggleButton>
-          <ToggleButton value="live">{t("kindLive")}</ToggleButton>
-        </ToggleButtonGroup>
+        {view !== "catalog" && (
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            value={kind}
+            onChange={(_event, value: Kind | null) => {
+              setKind(value ?? "all");
+            }}
+            aria-label={t("sourceKind")}
+          >
+            <ToggleButton value="all">{t("kindAll")}</ToggleButton>
+            <ToggleButton value="file">{t("kindFile")}</ToggleButton>
+            <ToggleButton value="remote">{t("kindRemote")}</ToggleButton>
+            <ToggleButton value="live">{t("kindLive")}</ToggleButton>
+          </ToggleButtonGroup>
+        )}
       </Stack>
 
-      {(filteredRecents.length > 0 || (searching && recentSources.length > 0)) && (
-        <Stack gap={0.5} className={classes.recents}>
+      {showRecents && (
+        <Stack gap={0.5} className={view === "recent" ? classes.recentsFull : classes.recents}>
           <Stack direction="row" alignItems="center" gap={1}>
             <Typography variant="h5" flex="auto">
               {t("recentDataSources")}
@@ -247,7 +267,7 @@ export default function Start(): React.JSX.Element {
               size="small"
               className={classes.showAllRecents}
               onClick={() => {
-                setShowAllRecents(true);
+                setView("recent");
               }}
             >
               {t("showAllRecents", { count: filteredRecents.length })}
