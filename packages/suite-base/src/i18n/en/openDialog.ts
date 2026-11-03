@@ -45,6 +45,10 @@ export const openDialog = {
   searchPlaceholder: "Search recent sources and recordings…",
   searchHelp:
     "Filters: topic:/camera schema:Image path:2026/ since:2026-10-01 until:2026-10-31 duration>5m size<2GB status:error|nosummary|ok",
+  view: "View",
+  tabAll: "All",
+  tabCatalog: "Catalog",
+  tabRecent: "Recent",
   sourceKind: "Source kind",
   kindAll: "All",
   kindFile: "Files",

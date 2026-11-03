@@ -136,6 +136,26 @@ export function OpenUrlInput(): React.JSX.Element {
         >
           {t("open")}
         </Button>
+        <Button
+          className={classes.button}
+          variant="outlined"
+          size="large"
+          onClick={() => {
+            dialogActions.dataSource.open("file");
+          }}
+        >
+          {t("openLocalFiles")}
+        </Button>
+        <Link
+          component="button"
+          variant="body2"
+          className={classes.moreLink}
+          onClick={() => {
+            dialogActions.dataSource.open("connection");
+          }}
+        >
+          {t("moreConnectionOptions")}
+        </Link>
       </Stack>
       {hasInput && (
         <Stack direction="row" gap={0.5} alignItems="center">
@@ -162,26 +182,6 @@ export function OpenUrlInput(): React.JSX.Element {
           </Select>
         </Stack>
       )}
-      <Stack direction="row" gap={2} alignItems="center">
-        <Button
-          className={classes.button}
-          variant="outlined"
-          onClick={() => {
-            dialogActions.dataSource.open("file");
-          }}
-        >
-          {t("openLocalFiles")}
-        </Button>
-        <Link
-          component="button"
-          variant="body2"
-          onClick={() => {
-            dialogActions.dataSource.open("connection");
-          }}
-        >
-          {t("moreConnectionOptions")}
-        </Link>
-      </Stack>
     </Stack>
   );
 }

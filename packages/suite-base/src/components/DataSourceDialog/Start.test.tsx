@@ -244,6 +244,19 @@ describe("Start Component", () => {
     expect(screen.queryByTestId("catalog")).not.toBeInTheDocument();
   });
 
+  it("shows only the catalog or only the recents on their tabs", () => {
+    setup();
+
+    fireEvent.click(screen.getByRole("tab", { name: "tabCatalog" }));
+    expect(screen.getByTestId("catalog")).toBeInTheDocument();
+    expect(screen.queryByText("recentDataSources")).not.toBeInTheDocument();
+    expect(screen.queryByText("kindFile")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("tab", { name: "tabRecent" }));
+    expect(screen.getByText("recentDataSources")).toBeInTheDocument();
+    expect(screen.queryByTestId("catalog")).not.toBeInTheDocument();
+  });
+
   it("opens sample data from the footer", () => {
     setup();
 

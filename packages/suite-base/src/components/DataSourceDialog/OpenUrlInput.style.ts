@@ -16,4 +16,10 @@ export const useStyles = makeStyles()((theme) => ({
     flex: "none",
     whiteSpace: "nowrap",
   },
+  moreLink: {
+    flex: "none",
+    whiteSpace: "nowrap",
+    // Center on the input's height
+    alignSelf: "center",
+  },
 }));

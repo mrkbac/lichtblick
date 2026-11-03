@@ -34,6 +34,13 @@ export const useStyles = makeStyles()((theme) => ({
     maxHeight: "40%",
     minHeight: 0,
   },
+  recentsFull: {
+    flex: 1,
+    minHeight: 0,
+  },
+  search: {
+    flex: "1 1 320px",
+  },
   recentList: {
     overflowY: "auto",
     marginInline: theme.spacing(-1),
