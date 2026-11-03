@@ -47,6 +47,8 @@ import { CatalogRecording } from "./types";
 const ROW_HEIGHT = 52;
 const THUMB_WIDTH = 72;
 const COLUMNS = `${THUMB_WIDTH}px minmax(0, 1fr) 210px 120px 100px 120px 80px`;
+// With the details pane open, which lists messages and topics, those columns make room for names.
+const COMPACT_COLUMNS = `${THUMB_WIDTH}px minmax(0, 1fr) 190px 110px 90px`;
 
 type SortKey = "name" | "start" | "duration" | "size" | "messages" | "topics";
 
@@ -96,6 +98,9 @@ const useStyles = makeStyles()((theme) => ({
     padding: theme.spacing(0, 1.5),
     width: "100%",
     textAlign: "left",
+  },
+  compactRow: {
+    gridTemplateColumns: COMPACT_COLUMNS,
   },
   headRow: {
     borderBottom: `1px solid ${theme.palette.divider}`,
@@ -334,6 +339,7 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
   );
 
   const selected = recordings.find((r) => r.id === selectedId);
+  const compact = selected != undefined;
   const topicTerm = /(?:^|\s)topic:(\S+)/i.exec(query)?.[1];
 
   const virtualizer = useVirtualizer({
@@ -487,14 +493,14 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
       </Stack>
       <Stack direction="row" className={classes.body}>
         <Stack className={classes.list}>
-          <div className={cx(classes.row, classes.headRow)}>
+          <div className={cx(classes.row, classes.headRow, { [classes.compactRow]: compact })}>
             <span />
             {sortLabel("name", t("name"))}
             {sortLabel("start", t("start"))}
             {sortLabel("duration", t("duration"))}
             {sortLabel("size", t("size"))}
-            {sortLabel("messages", t("messages"))}
-            {sortLabel("topics", t("topics"))}
+            {!compact && sortLabel("messages", t("messages"))}
+            {!compact && sortLabel("topics", t("topics"))}
           </div>
           <div ref={scrollRef} className={classes.scroller}>
             {shown.length === 0 && progress == undefined && (
@@ -515,6 +521,7 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
                   <ButtonBase
                     key={r.id}
                     className={cx(classes.row, classes.bodyRow, {
+                      [classes.compactRow]: compact,
                       [classes.selectedRow]: r.id === selectedId,
                     })}
                     style={{ transform: `translateY(${item.start}px)` }}
@@ -569,22 +576,26 @@ export default function Catalog({ onClose }: { onClose: () => void }): React.JSX
                     <Typography variant="body2" className={classes.numeric}>
                       {r.size != undefined ? formatByteSize(r.size) : "–"}
                     </Typography>
-                    <Typography variant="body2" className={classes.numeric}>
-                      {r.messages?.toLocaleString() ?? "–"}
-                    </Typography>
-                    <Tooltip
-                      title={r.topics
-                        ?.slice(0, 30)
-                        .map((topic) => topic.name)
-                        .join("\n")}
-                      slotProps={{
-                        tooltip: { sx: { whiteSpace: "pre-line" } },
-                      }}
-                    >
-                      <Typography variant="body2" className={classes.numeric}>
-                        {r.topics?.length ?? "–"}
-                      </Typography>
-                    </Tooltip>
+                    {!compact && (
+                      <>
+                        <Typography variant="body2" className={classes.numeric}>
+                          {r.messages?.toLocaleString() ?? "–"}
+                        </Typography>
+                        <Tooltip
+                          title={r.topics
+                            ?.slice(0, 30)
+                            .map((topic) => topic.name)
+                            .join("\n")}
+                          slotProps={{
+                            tooltip: { sx: { whiteSpace: "pre-line" } },
+                          }}
+                        >
+                          <Typography variant="body2" className={classes.numeric}>
+                            {r.topics?.length ?? "–"}
+                          </Typography>
+                        </Tooltip>
+                      </>
+                    )}
                   </ButtonBase>
                 );
               })}
