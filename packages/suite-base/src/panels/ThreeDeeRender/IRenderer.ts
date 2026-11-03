@@ -209,6 +209,11 @@ export type RendererSubscription<T = unknown> = {
   queue?: MessageEvent<T>[] | undefined;
   /** Optional callback to be called on `queue` to filter. Returns new queue. */
   filterQueue?: (queue: MessageEvent<T>[]) => MessageEvent<T>[];
+  /**
+   * True when only the latest message per frame is used, so the player may skip decoding the
+   * others. Defaults to true when `filterQueue` is `onlyLastByTopicMessage`.
+   */
+  latestOnly?: () => boolean;
 };
 
 export type AnyRendererSubscription = Immutable<

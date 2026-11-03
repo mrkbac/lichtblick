@@ -10,7 +10,7 @@ import EventEmitter from "eventemitter3";
 import { Condvar } from "@lichtblick/den/async";
 import { VecQueue } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
-import { add as addTime, compare, clampTime } from "@lichtblick/rostime";
+import { add as addTime, compare, clampTime, fromNanoSec, toNanoSec } from "@lichtblick/rostime";
 import { Time, MessageEvent } from "@lichtblick/suite";
 import { Range } from "@lichtblick/suite-base/util/ranges";
 
@@ -27,6 +27,8 @@ const log = Log.getLogger(__filename);
 
 const DEFAULT_READ_AHEAD_DURATION = { sec: 10, nsec: 0 };
 const DEFAULT_MIN_READ_AHEAD_DURATION = { sec: 1, nsec: 0 };
+// ponytail: caps the min read-ahead scale so a burst never exceeds ~5x the base before playback resumes
+const MAX_MIN_READ_AHEAD_SCALE = 5;
 
 type Options = {
   // How far ahead to buffer
@@ -82,6 +84,10 @@ class BufferedIterableSource<MessageType = unknown>
   // The minimum duration to buffer before playback resumes
   #minReadAheadDuration: Time;
 
+  // Unscaled durations, see setPlaybackSpeed
+  #baseReadAheadDuration: Time;
+  #baseMinReadAheadDuration: Time;
+
   public constructor(source: IIterableSource<MessageType>, opt?: Options) {
     super();
 
@@ -94,6 +100,8 @@ class BufferedIterableSource<MessageType = unknown>
     if (compare(this.#readAheadDuration, this.#minReadAheadDuration) < 0) {
       throw new Error("Invariant: readAheadDuration < minReadAheadDuration");
     }
+    this.#baseReadAheadDuration = this.#readAheadDuration;
+    this.#baseMinReadAheadDuration = this.#minReadAheadDuration;
 
     // pass-through the range change event
     this.#source.on("loadedRangesChange", () => this.emit("loadedRangesChange"));
@@ -222,6 +230,27 @@ class BufferedIterableSource<MessageType = unknown>
     this.#writeSignal.notifyAll();
     await this.#producer;
     this.#producer = undefined;
+  }
+
+  /**
+   * Scale the read-ahead with playback speed so faster playback buffers the same wall-clock
+   * time ahead and resumes in larger chunks instead of stalling every few frames.
+   */
+  public setPlaybackSpeed(speed: number): void {
+    const scale = Math.max(1, speed);
+    this.#readAheadDuration = fromNanoSec(
+      BigInt(Math.round(Number(toNanoSec(this.#baseReadAheadDuration)) * scale)),
+    );
+    this.#minReadAheadDuration = fromNanoSec(
+      BigInt(
+        Math.round(
+          Number(toNanoSec(this.#baseMinReadAheadDuration)) *
+            Math.min(scale, MAX_MIN_READ_AHEAD_SCALE),
+        ),
+      ),
+    );
+    // Wake a producer waiting on the old readUntil so it picks up the new duration
+    this.#writeSignal.notifyAll();
   }
 
   public loadedRanges(): Range[] {

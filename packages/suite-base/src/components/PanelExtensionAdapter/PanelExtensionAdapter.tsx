@@ -538,9 +538,8 @@ function PanelExtensionAdapter(
             return { topic: item.topic, preloadType };
           }
 
-          // Sampling is only allowed if the converter explicitly declares it supports
-          // latest-per-render-tick sampling.
-          // Native/direct paths are denied by default.
+          // Native/direct paths are sampled when the panel asks for it. Converted paths are only
+          // sampled if the converter explicitly declares it supports latest-per-render-tick.
           // If allowed, we set both the sampling request and the internal authorization bit.
           // MessagePipeline merge logic strips sampling requests unless authorization is present.
           const converter = getConverterForSubscription(
@@ -552,9 +551,7 @@ function PanelExtensionAdapter(
           const isNativePath =
             item.convertTo == undefined ||
             (topicSchemaName != undefined && topicSchemaName === item.convertTo);
-          const samplingAllowed = isNativePath
-            ? false
-            : converter?.supportsLatestPerRenderTick === true;
+          const samplingAllowed = isNativePath || converter?.supportsLatestPerRenderTick === true;
 
           return {
             topic: item.topic,

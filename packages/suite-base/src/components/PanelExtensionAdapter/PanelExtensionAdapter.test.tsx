@@ -633,7 +633,7 @@ describe("PanelExtensionAdapter", () => {
     await sig;
   });
 
-  it("should disable sampling for native subscriptions by default", async () => {
+  it("should apply sampling for native subscriptions", async () => {
     const sig = signal();
     const initPanel = (context: PanelExtensionContext) => {
       context.subscribe([{ topic: "/test", sampling: { mode: "latest-per-render-tick" } }]);
@@ -649,7 +649,14 @@ describe("PanelExtensionAdapter", () => {
                 if (payload.length === 0) {
                   return;
                 }
-                expect(payload).toEqual([{ topic: "/test", preloadType: "partial" }]);
+                expect(payload).toEqual([
+                  {
+                    topic: "/test",
+                    preloadType: "partial",
+                    samplingRequest: { mode: "latest-per-render-tick" },
+                    samplingAuthorized: true,
+                  },
+                ]);
                 sig.resolve();
               },
             }}
@@ -664,7 +671,7 @@ describe("PanelExtensionAdapter", () => {
     await sig;
   });
 
-  it("should disable sampling when convertTo resolves to the native topic schema", async () => {
+  it("should apply sampling when convertTo resolves to the native topic schema", async () => {
     const sig = signal();
     const initPanel = (context: PanelExtensionContext) => {
       context.subscribe([
@@ -682,7 +689,14 @@ describe("PanelExtensionAdapter", () => {
                 if (payload.length === 0) {
                   return;
                 }
-                expect(payload).toEqual([{ topic: "/test", preloadType: "partial" }]);
+                expect(payload).toEqual([
+                  {
+                    topic: "/test",
+                    preloadType: "partial",
+                    samplingRequest: { mode: "latest-per-render-tick" },
+                    samplingAuthorized: true,
+                  },
+                ]);
                 sig.resolve();
               },
             }}

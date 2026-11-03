@@ -242,6 +242,7 @@ export class ImageMode
           handler: this.messageHandler.handleRosRawImage,
           shouldSubscribe: this.imageShouldSubscribe,
           filterQueue: this.#filterMessageQueue.bind(this),
+          latestOnly: this.#latestOnly,
         },
       },
       {
@@ -251,6 +252,7 @@ export class ImageMode
           handler: this.messageHandler.handleRosCompressedImage,
           shouldSubscribe: this.imageShouldSubscribe,
           filterQueue: this.#filterMessageQueue.bind(this),
+          latestOnly: this.#latestOnly,
         },
       },
       {
@@ -260,6 +262,7 @@ export class ImageMode
           handler: this.messageHandler.handleRawImage,
           shouldSubscribe: this.imageShouldSubscribe,
           filterQueue: this.#filterMessageQueue.bind(this),
+          latestOnly: this.#latestOnly,
         },
       },
       {
@@ -269,6 +272,7 @@ export class ImageMode
           handler: this.messageHandler.handleCompressedImage,
           shouldSubscribe: this.imageShouldSubscribe,
           filterQueue: this.#filterMessageQueue.bind(this),
+          latestOnly: this.#latestOnly,
         },
       },
       {
@@ -283,6 +287,9 @@ export class ImageMode
     ];
     return subscriptions.concat(this.#annotations.getSubscriptions());
   }
+
+  // Matches #filterMessageQueue: without synchronization only the latest image is shown
+  #latestOnly = (): boolean => !this.getImageModeSettings().synchronize;
 
   #filterMessageQueue<T>(msgs: MessageEvent<T>[]): MessageEvent<T>[] {
     // only take multiple images in if synchronization is enabled

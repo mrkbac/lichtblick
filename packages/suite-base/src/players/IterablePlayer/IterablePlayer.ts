@@ -327,6 +327,7 @@ export class IterablePlayer implements Player {
   public setPlaybackSpeed(speed: number): void {
     this.#lastRangeMillis = undefined;
     this.#speed = speed;
+    this.#bufferImpl.setPlaybackSpeed(speed);
 
     // Queue event state update to update speed in player state to UI
     this.#queueEmitState();
@@ -1034,10 +1035,10 @@ export class IterablePlayer implements Player {
         : 20;
     this.#lastTickMillis = tickTime;
 
-    // Read at most 300ms worth of messages, otherwise things can get out of control if rendering
-    // is very slow. Also, smooth over the range that we request, so that a single slow frame won't
+    // Read at most 300ms of wall time worth of messages, otherwise things can get out of control if
+    // rendering is very slow. Also, smooth over the range that we request, so that a single slow frame won't
     // cause the next frame to also be unnecessarily slow by increasing the frame size.
-    let rangeMillis = Math.min(durationMillis * this.#speed, 300);
+    let rangeMillis = Math.min(durationMillis, 300) * this.#speed;
     if (this.#lastRangeMillis != undefined) {
       rangeMillis = this.#lastRangeMillis * 0.9 + rangeMillis * 0.1;
     }
