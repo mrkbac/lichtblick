@@ -60,24 +60,15 @@ export class HttpService {
 
     let response: Response;
 
-    try {
-      if (timeout != undefined) {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => {
-          controller.abort();
-        }, timeout);
+    if (timeout != undefined) {
+      const timeoutSignal = AbortSignal.timeout(timeout);
+      requestOptions.signal = fetchOptions.signal
+        ? AbortSignal.any([fetchOptions.signal, timeoutSignal])
+        : timeoutSignal;
+    }
 
-        try {
-          response = await fetch(url, {
-            ...requestOptions,
-            signal: controller.signal,
-          });
-        } finally {
-          clearTimeout(timeoutId);
-        }
-      } else {
-        response = await fetch(url, requestOptions);
-      }
+    try {
+      response = await fetch(url, requestOptions);
     } catch (error) {
       if (error instanceof Error) {
         throw new HttpError(`Network error: ${error.message}`, 0, "Network Error");
