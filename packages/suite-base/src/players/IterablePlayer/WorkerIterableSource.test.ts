@@ -5,7 +5,7 @@ import type { Mock, MockedFunction } from "vitest";
 
 import { ComlinkWrap } from "@lichtblick/den/worker";
 
-import { WorkerSerializedIterableSource } from "./WorkerSerializedIterableSource";
+import { WorkerSerializedIterableSource } from "./WorkerIterableSource";
 
 vi.mock("@lichtblick/den/worker", () => ({
   ComlinkWrap: vi.fn(),

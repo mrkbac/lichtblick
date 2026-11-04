@@ -11,19 +11,19 @@ import { Time } from "@lichtblick/suite";
 import type { IMessageCursor, IteratorResult } from "./IIterableSource";
 
 /**
- * Wraps a IMessageCursor<Uint8Array> and returns message-events with calls to Comlink.transfer.
+ * Wraps a IMessageCursor and returns message-events with calls to Comlink.transfer.
  * This allows ArrayBuffers to be transferred rather than being structureClone'd which is significantly faster.
  * This class must only be used for worker communication because otherwise Comlink's interal transfer buffer
  * will never be emptied leading to an OOM.
  */
-class ComlinkTransferIteratorCursor implements IMessageCursor<Uint8Array> {
-  #cursor: IMessageCursor<Uint8Array>;
+class ComlinkTransferIteratorCursor<MessageType = Uint8Array> implements IMessageCursor<MessageType> {
+  #cursor: IMessageCursor<MessageType>;
 
-  public constructor(cursor: IMessageCursor<Uint8Array>) {
+  public constructor(cursor: IMessageCursor<MessageType>) {
     this.#cursor = cursor;
   }
 
-  public async next(): ReturnType<IMessageCursor<Uint8Array>["next"]> {
+  public async next(): ReturnType<IMessageCursor<MessageType>["next"]> {
     const next = await this.#cursor.next();
     if (next == undefined) {
       return next;
@@ -36,7 +36,7 @@ class ComlinkTransferIteratorCursor implements IMessageCursor<Uint8Array> {
     return next;
   }
 
-  public async nextBatch(durationMs: number): Promise<IteratorResult<Uint8Array>[] | undefined> {
+  public async nextBatch(durationMs: number): Promise<IteratorResult<MessageType>[] | undefined> {
     const batch = await this.#cursor.nextBatch(durationMs);
     if (batch == undefined) {
       return batch;
@@ -54,11 +54,11 @@ class ComlinkTransferIteratorCursor implements IMessageCursor<Uint8Array> {
     return Comlink.transfer(batch, transferables);
   }
 
-  public async readUntil(end: Time): ReturnType<IMessageCursor<Uint8Array>["readUntil"]> {
+  public async readUntil(end: Time): ReturnType<IMessageCursor<MessageType>["readUntil"]> {
     return await this.#cursor.readUntil(end);
   }
 
-  public async end(): ReturnType<IMessageCursor<Uint8Array>["end"]> {
+  public async end(): ReturnType<IMessageCursor<MessageType>["end"]> {
     await this.#cursor.end();
   }
 }

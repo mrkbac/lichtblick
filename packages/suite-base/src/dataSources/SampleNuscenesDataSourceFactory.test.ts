@@ -12,14 +12,14 @@ import {
   SAMPLE_NUSCENES_DATA_SOURCE_URL,
 } from "@lichtblick/suite-base/dataSources/constants";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
-import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource";
+import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
 import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
 
 vi.mock("@lichtblick/suite-base/players/IterablePlayer", () => ({
   IterablePlayer: vi.fn(),
 }));
 
-vi.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource", () => ({
+vi.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource", () => ({
   WorkerSerializedIterableSource: vi.fn(),
 }));
 
