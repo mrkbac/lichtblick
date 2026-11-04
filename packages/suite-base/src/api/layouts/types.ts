@@ -123,4 +123,6 @@ export type FavoriteLayoutsResponse = {
 export type SaveNewLayoutParams = Pick<Layout, "id" | "name" | "permission"> & {
   /** New layout data */
   data: LayoutData;
+  /** Organization to save a shared layout in (organization API only). */
+  organizationId?: string;
 };
