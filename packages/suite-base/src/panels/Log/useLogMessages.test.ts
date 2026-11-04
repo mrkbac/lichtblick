@@ -48,10 +48,11 @@ describe("mergeByReceiveTime", () => {
 describe("useLogMessages", () => {
   let ctx: { playerState: { playerId: string; presence: PlayerPresence } };
   let rangeIterators: Map<string, (batch: MessageEvent[] | "done") => void>;
-  const cancel = jest.fn();
+  let cancelByTopic: Map<string, jest.Mock>;
 
   beforeEach(() => {
     jest.useFakeTimers();
+    cancelByTopic = new Map();
     ctx = { playerState: { playerId: "p1", presence: PlayerPresence.PRESENT } };
     rangeIterators = new Map();
     (useMessagePipeline as jest.Mock).mockImplementation((selector: (c: typeof ctx) => unknown) =>
@@ -92,6 +93,8 @@ describe("useLogMessages", () => {
           }
         })(),
       );
+      const cancel = jest.fn();
+      cancelByTopic.set(topic, cancel);
       return cancel;
     });
     (useSubscribeMessageRange as jest.Mock).mockReturnValue(subscribe);
@@ -154,7 +157,8 @@ describe("useLogMessages", () => {
 
     rerender({ topics: ["/a"] });
 
-    expect(cancel).toHaveBeenCalled();
+    expect(cancelByTopic.get("/b")).toHaveBeenCalledTimes(1);
+    expect(cancelByTopic.get("/a")).not.toHaveBeenCalled();
     expect(result.current.items).toEqual([]);
   });
 

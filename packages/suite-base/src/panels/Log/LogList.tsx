@@ -25,6 +25,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { useResizeDetector } from "react-resize-detector";
 import AutoSizer from "react-virtualized-auto-sizer";
 import { List, ListImperativeAPI, RowComponentProps } from "react-window";
@@ -107,6 +108,7 @@ function Row(props: RowComponentProps<ListItemData>): React.JSX.Element {
  */
 function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): React.JSX.Element {
   const { classes } = useStyles();
+  const { t } = useTranslation("log");
   const { timeFormat, timeZone } = useAppTimeFormat();
   const listRef = useRef<ListImperativeAPI>(ReactNull);
   const { width, ref: resizeRef } = useResizeDetector({ refreshRate: 0, refreshMode: "debounce" });
@@ -250,7 +252,7 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
           {!following && (
             <Fab
               size="small"
-              title="Follow playhead"
+              title={t("followPlayhead")}
               onClick={follow}
               className={classes.floatingButton}
               data-testid="scroll-to-bottom-button"

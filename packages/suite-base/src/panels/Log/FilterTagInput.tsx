@@ -8,6 +8,7 @@
 import { Dismiss12Filled } from "@fluentui/react-icons";
 import { TextField, inputBaseClasses } from "@mui/material";
 import Autocomplete, { autocompleteClasses } from "@mui/material/Autocomplete";
+import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 const useStyles = makeStyles()((theme) => ({
@@ -41,6 +42,7 @@ export function FilterTagInput({
   error?: string;
 }): React.JSX.Element {
   const { classes } = useStyles();
+  const { t } = useTranslation("log");
 
   return (
     <Autocomplete
@@ -66,7 +68,7 @@ export function FilterTagInput({
           {...params}
           size="small"
           className={classes.input}
-          placeholder="Search (-term to exclude)"
+          placeholder={t("searchPlaceholder")}
           error={error != undefined}
           title={error}
         />

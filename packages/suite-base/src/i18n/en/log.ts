@@ -7,11 +7,14 @@
 
 export const log = {
   copyLogs: "Copy Logs",
+  copyMessage: "Copy log message",
+  followPlayhead: "Follow playhead",
   hideAll: "Hide all",
   logsCopied: "Logs copied",
   minLogLevel: "Log level",
   nameFilter: "Namespaces",
   nothingToCopy: "Nothing to copy",
+  searchPlaceholder: "Search (-term to exclude)",
   showAll: "Show all",
   invalidRegex: "Invalid regular expression: {{terms}}",
   matchCase: "Match case",

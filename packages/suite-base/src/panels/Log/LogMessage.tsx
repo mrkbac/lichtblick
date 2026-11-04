@@ -16,6 +16,7 @@
 
 import { Copy16Regular } from "@fluentui/react-icons";
 import * as _ from "lodash-es";
+import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import useLogStyles from "@lichtblick/suite-base/panels/Log/useLogStyles";
@@ -93,6 +94,7 @@ export default React.memo(function LogMessage(props: {
 
   const { classes, cx } = useStyles();
   const { classes: logClasses } = useLogStyles();
+  const { t } = useTranslation("log");
 
   const strLevel = LevelToString(msg.level);
   const stamp = msg.stamp;
@@ -150,8 +152,8 @@ export default React.memo(function LogMessage(props: {
         <button
           type="button"
           className={cx(classes.copyButton, "copy-button")}
-          title="Copy"
-          aria-label="Copy log message"
+          title={t("copyMessage")}
+          aria-label={t("copyMessage")}
           onClick={(event) => {
             event.stopPropagation();
             onCopy(msg);
