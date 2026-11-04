@@ -9,6 +9,8 @@ import AddIcon from "@mui/icons-material/Add";
 import CloudOffIcon from "@mui/icons-material/CloudOff";
 import FileOpenOutlinedIcon from "@mui/icons-material/FileOpenOutlined";
 import {
+  Alert,
+  Button,
   CircularProgress,
   Divider,
   IconButton,
@@ -363,7 +365,12 @@ export default function LayoutBrowser({
           </Stack>
         ),
         (!state.online || state.error != undefined) && (
-          <IconButton color="primary" key="offline" disabled title="Offline">
+          <IconButton
+            color="primary"
+            key="offline"
+            disabled
+            title={state.error != undefined ? "Layouts are not synced" : "Offline"}
+          >
             <CloudOffIcon />
           </IconButton>
         ),
@@ -390,6 +397,33 @@ export default function LayoutBrowser({
     >
       {promptModal}
       {shareDialog}
+      {state.error != undefined && (
+        <Alert severity="error" data-testid="layout-sync-error">
+          Layouts are not synced: {state.error.message}. Shared layouts may not be saved on the
+          server; don’t rely on them surviving a reload until this is resolved.
+        </Alert>
+      )}
+      {organization.status === "unauthenticated" && (
+        <Alert
+          severity="warning"
+          data-testid="layout-logged-out"
+          action={
+            organization.login && (
+              <Button color="inherit" size="small" onClick={() => void organization.login?.()}>
+                Log in
+              </Button>
+            )
+          }
+        >
+          You are logged out. Your organizations’ layouts are hidden until you log in.
+        </Alert>
+      )}
+      {organization.status === "unavailable" && (
+        <Alert severity="warning" data-testid="layout-server-unavailable">
+          The organization server can’t be reached: {organization.error.message}. Your
+          organizations’ layouts are hidden until it is back.
+        </Alert>
+      )}
       {confirmModal}
       <Stack
         fullHeight
