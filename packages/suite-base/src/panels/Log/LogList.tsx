@@ -149,8 +149,11 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
     const before = list.element?.scrollTop;
     list.scrollToRow({ index, align: "smart" });
     const after = list.element?.scrollTop;
-    // Without movement there is no scroll event, so a stale value would swallow a user scroll
-    programmaticScrollTop.current = after !== before ? after : undefined;
+    // Only a real move dispatches a scroll event that clears the marker; recording a no-op would
+    // leave a stale marker, and clearing it would drop a still-pending earlier event.
+    if (after !== before) {
+      programmaticScrollTop.current = after;
+    }
   }, []);
 
   useEffect(() => {
