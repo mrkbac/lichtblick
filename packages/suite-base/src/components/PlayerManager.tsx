@@ -66,7 +66,6 @@ import { Player } from "@lichtblick/suite-base/players/types";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { UserScripts } from "@lichtblick/suite-base/types/panels";
 import { updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
-import { mergeMultipleFileNames } from "@lichtblick/suite-base/util/mergeMultipleFileName";
 
 import { useTrustedUserScripts } from "./useTrustedUserScripts";
 
@@ -388,7 +387,7 @@ export default function PlayerManager(
               if (handles) {
                 const lastFile: LastFileSource = {
                   sourceId: foundSource.id,
-                  title: mergeMultipleFileNames(handles.map((h) => h.name)),
+                  title: handles.map((h) => h.name).join(", "),
                 };
                 setCurrentRecentId(addRecent({ type: "file", ...lastFile, handles }));
                 writeLastFile(lastFile);
