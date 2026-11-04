@@ -5,9 +5,11 @@ import { Checkmark20Regular, Edit20Regular } from "@fluentui/react-icons";
 import { Button, Typography } from "@mui/material";
 import {
   ChangeEvent,
+  createContext,
   KeyboardEvent,
   MouseEvent,
   useCallback,
+  useContext,
   useEffect,
   useMemo,
   useState,
@@ -28,6 +30,27 @@ import { customTypography } from "@lichtblick/theme";
 import { useNotesSettings } from "./settings";
 import { toggleTask } from "./toggleTask";
 import { NotesConfig } from "./types";
+
+type HastNode = { type: string; tagName?: string; value?: string; children?: HastNode[] };
+
+/** Visible text of a list item, without its nested lists: the accessible name of its task box. */
+function itemText(node: HastNode): string {
+  if (node.type === "text") {
+    return node.value ?? "";
+  }
+  if (node.tagName === "ul" || node.tagName === "ol") {
+    return "";
+  }
+  return (node.children ?? []).map(itemText).join("");
+}
+
+/** Passes each task item's text down to its checkbox. */
+const TaskLabelContext = createContext<string | undefined>(undefined);
+
+function TaskCheckbox(props: React.InputHTMLAttributes<HTMLInputElement>): React.JSX.Element {
+  const label = useContext(TaskLabelContext);
+  return <input {...props} disabled={undefined} readOnly aria-label={label} />;
+}
 
 /** Each save writes the layout, so batch keystrokes. */
 export const SAVE_DEBOUNCE_MS = 500;
@@ -124,7 +147,7 @@ export function Notes({ config, saveConfig }: Props): React.JSX.Element {
   // Task-list checkboxes are clickable in view mode and write back to the Markdown.
   const components = useMemo<Options["components"]>(
     () => ({
-      input: ({ node: _node, disabled: _disabled, ...props }) => <input {...props} readOnly />,
+      input: ({ node: _node, ...props }) => <TaskCheckbox {...props} />,
       li: ({ node, children, ...props }) => {
         const offset = node?.position?.start.offset;
         return (
@@ -139,7 +162,9 @@ export function Notes({ config, saveConfig }: Props): React.JSX.Element {
               saveConfig({ text: toggleTask(config.text, offset) });
             }}
           >
-            {children}
+            <TaskLabelContext.Provider value={node ? itemText(node).trim() : undefined}>
+              {children}
+            </TaskLabelContext.Provider>
           </li>
         );
       },

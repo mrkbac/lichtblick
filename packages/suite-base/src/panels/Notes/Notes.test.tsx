@@ -111,4 +111,12 @@ describe("Notes", () => {
     fireEvent.click(screen.getAllByRole("checkbox")[1]!);
     expect(saveConfig).toHaveBeenCalledWith({ text: "- [ ] one\n- [x] two" });
   });
+
+  it("toggles only the nested task checkbox, named by its own text", () => {
+    const { saveConfig } = setup({ text: "- [ ] a\n  - [ ] b" });
+    fireEvent.click(screen.getByRole("checkbox", { name: "b" }));
+    expect(saveConfig).toHaveBeenCalledTimes(1);
+    expect(saveConfig).toHaveBeenCalledWith({ text: "- [ ] a\n  - [x] b" });
+    expect(screen.getByRole("checkbox", { name: "a" })).toBeInTheDocument();
+  });
 });
