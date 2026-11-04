@@ -132,7 +132,6 @@ describe("StateTransitions", () => {
       ...render(
         <StateTransitionsPanel config={{ ...defaultConfig, ...config }} saveConfig={saveConfig} />,
       ),
-      StateTransitionsPanel,
     };
   }
 
@@ -160,7 +159,7 @@ describe("StateTransitions", () => {
   it("should remove marker annotations when a path timestamp source changes", () => {
     // Given
     const topic = BasicBuilder.string();
-    const { rerender, StateTransitionsPanel } = renderPanel({
+    const { rerender } = renderPanel({
       paths: [{ value: topic, timestampMethod: "receiveTime" }],
     });
     fireEvent.click(screen.getByTestId("state-transitions-measure-mode-toggle"));
