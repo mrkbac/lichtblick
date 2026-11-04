@@ -19,7 +19,7 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import Stack from "@lichtblick/suite-base/components/Stack";
 
-const HANDLE_WIDTH = 10;
+const HANDLE_WIDTH = 8;
 
 const useStyles = makeStyles()((theme) => ({
   overlay: {
@@ -99,12 +99,14 @@ export function formatSeconds(ns: bigint): string {
 export function TrimRangeOverlay(): React.JSX.Element | ReactNull {
   const { classes, cx } = useStyles();
   const { t } = useTranslation("exportRecording");
-  const active = useTrimStore((state) => state.active);
+  const editing = useTrimStore((state) => state.editing);
   const setRange = useTrimStore((state) => state.setRange);
-  const { bounds, start, end } = useTrimRange();
+  const bounds = useRecordingBounds();
+  const start = useTrimStore((state) => state.start);
+  const end = useTrimStore((state) => state.end);
   const rootRef = useRef<HTMLDivElement>(ReactNull);
 
-  if (!active || !bounds || start == undefined || end == undefined) {
+  if (!bounds || start == undefined || end == undefined) {
     return ReactNull;
   }
   const duration = Math.max(1, Number(bounds.end - bounds.start));
@@ -165,16 +167,20 @@ export function TrimRangeOverlay(): React.JSX.Element | ReactNull {
         className={classes.band}
         style={{ left: `${startPercent}%`, width: `${endPercent - startPercent}%` }}
       />
-      <div
-        className={cx(classes.handle, classes.handleStart)}
-        style={{ left: `${startPercent}%` }}
-        {...handleProps("start")}
-      />
-      <div
-        className={cx(classes.handle, classes.handleEnd)}
-        style={{ left: `${endPercent}%` }}
-        {...handleProps("end")}
-      />
+      {editing && (
+        <>
+          <div
+            className={cx(classes.handle, classes.handleStart)}
+            style={{ left: `${startPercent}%` }}
+            {...handleProps("start")}
+          />
+          <div
+            className={cx(classes.handle, classes.handleEnd)}
+            style={{ left: `${endPercent}%` }}
+            {...handleProps("end")}
+          />
+        </>
+      )}
     </div>
   );
 }
@@ -183,14 +189,14 @@ export function TrimRangeOverlay(): React.JSX.Element | ReactNull {
 export function TrimBar(): React.JSX.Element | ReactNull {
   const { classes } = useStyles();
   const { t } = useTranslation("exportRecording");
-  const active = useTrimStore((state) => state.active);
+  const editing = useTrimStore((state) => state.editing);
   const setRange = useTrimStore((state) => state.setRange);
-  const exit = useTrimStore((state) => state.exit);
+  const clear = useTrimStore((state) => state.clear);
   const openExport = useTrimStore((state) => state.openExport);
   const currentTime = useMessagePipeline(selectCurrentTime);
   const { bounds, start, end } = useTrimRange();
 
-  if (!active || !bounds || start == undefined || end == undefined) {
+  if (!editing || !bounds || start == undefined || end == undefined) {
     return ReactNull;
   }
   const playhead = currentTime ? toNanoSec(currentTime) : undefined;
@@ -240,7 +246,7 @@ export function TrimBar(): React.JSX.Element | ReactNull {
       >
         {t("exportEllipsis")}
       </Button>
-      <IconButton size="small" aria-label={t("exitTrim")} title={t("exitTrim")} onClick={exit}>
+      <IconButton size="small" aria-label={t("removeCut")} title={t("removeCut")} onClick={clear}>
         <Dismiss16Regular />
       </IconButton>
     </Stack>
@@ -249,11 +255,11 @@ export function TrimBar(): React.JSX.Element | ReactNull {
 
 /** Keyboard handlers for setting in and out points at the playhead while trimming. */
 export function useTrimKeyHandlers(): Record<string, () => void> {
-  const active = useTrimStore((state) => state.active);
+  const editing = useTrimStore((state) => state.editing);
   const setRange = useTrimStore((state) => state.setRange);
   const currentTime = useMessagePipeline(selectCurrentTime);
   const { start, end } = useTrimRange();
-  if (!active || !currentTime || start == undefined || end == undefined) {
+  if (!editing || !currentTime || start == undefined || end == undefined) {
     return {};
   }
   const playhead = toNanoSec(currentTime);

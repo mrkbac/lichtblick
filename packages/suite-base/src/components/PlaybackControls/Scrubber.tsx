@@ -46,6 +46,8 @@ const useStyles = makeStyles()((theme) => ({
     borderRadius: 1,
     width: 2,
     transform: "translate(-50%, 0)",
+    // Above the cut handles, so the playhead stays visible at the cut's edges.
+    zIndex: 2,
   },
   track: {
     position: "absolute",

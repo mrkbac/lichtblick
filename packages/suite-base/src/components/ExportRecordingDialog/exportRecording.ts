@@ -57,6 +57,7 @@ export function createChunkWorkerPool(): Required<
 
 export type TopicRow = {
   topic: string;
+  channelIds: number[];
   schemaName: string;
   messageCount: number;
 };
@@ -73,9 +74,11 @@ export function getTopicRows(reader: McapIndexedReader): TopicRow[] {
   for (const channel of reader.channelsById.values()) {
     const row = rows.get(channel.topic) ?? {
       topic: channel.topic,
+      channelIds: [],
       schemaName: reader.schemasById.get(channel.schemaId)?.name ?? "",
       messageCount: 0,
     };
+    row.channelIds.push(channel.id);
     row.messageCount += Number(reader.statistics?.channelMessageCounts.get(channel.id) ?? 0n);
     rows.set(channel.topic, row);
   }

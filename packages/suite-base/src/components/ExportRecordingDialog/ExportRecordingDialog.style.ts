@@ -7,10 +7,21 @@
 
 import { makeStyles } from "tss-react/mui";
 
-export const useStyles = makeStyles()({
+export const useStyles = makeStyles()((theme) => ({
   grow: { flex: 1 },
   table: { maxHeight: 360 },
   wrap: { wordBreak: "break-all" },
   everyNth: { width: 64 },
-  compression: { minWidth: 140 },
-});
+  compression: { minWidth: 120 },
+  timeField: { width: 190 },
+  count: { whiteSpace: "nowrap" },
+  countTotal: { color: theme.palette.text.secondary },
+  inactive: {
+    "& .MuiTableCell-root": { color: theme.palette.text.disabled },
+  },
+  actions: {
+    gap: theme.spacing(1),
+    padding: theme.spacing(1, 3, 2),
+    flexWrap: "wrap",
+  },
+}));

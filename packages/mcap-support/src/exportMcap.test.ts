@@ -9,7 +9,7 @@ import { McapIndexedReader, McapWriter } from "@mcap/core";
 
 import { TempBuffer } from "./TempBuffer";
 import { loadDecompressHandlers } from "./decompressHandlers";
-import { ExportMcapOptions, exportMcap } from "./exportMcap";
+import { ExportMcapOptions, countTimesInRange, exportMcap, readMessageTimes } from "./exportMcap";
 
 type Input = { reader: McapIndexedReader; buffer: TempBuffer };
 
@@ -162,5 +162,21 @@ describe("exportMcap", () => {
         signal: controller.signal,
       }),
     ).rejects.toThrow();
+  });
+});
+
+describe("readMessageTimes", () => {
+  it("counts messages per channel in a range from the message indexes", async () => {
+    const { reader, buffer } = await makeInput({ chunkSize: 100 });
+    const times = (await readMessageTimes(reader, buffer))!;
+    expect(times.size).toBe(3);
+    expect(countTimesInRange(times.get(0)!, 2n, 6n)).toBe(5);
+    expect(countTimesInRange(times.get(0)!, 10n, 20n)).toBe(0);
+    expect(countTimesInRange(times.get(0)!, 0n, 9n)).toBe(10);
+  });
+
+  it("returns undefined without message indexes", async () => {
+    const { reader, buffer } = await makeInput({ chunkSize: 100, useMessageIndex: false });
+    expect(await readMessageTimes(reader, buffer)).toBeUndefined();
   });
 });

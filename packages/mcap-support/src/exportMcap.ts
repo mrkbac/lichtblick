@@ -561,3 +561,62 @@ export async function exportMcap(
   onProgress?.(1);
   return { messageCount };
 }
+
+/**
+ * Log times of every message per channel, sorted, read from the chunks' message indexes without
+ * decompressing anything. Undefined if some chunk has no message index.
+ */
+export async function readMessageTimes(
+  reader: McapIndexedReader,
+  readable: McapTypes.IReadable,
+): Promise<Map<number, BigUint64Array> | undefined> {
+  const perChannel = new Map<number, bigint[]>();
+  for (const chunk of reader.chunkIndexes) {
+    if (chunk.messageIndexOffsets.size === 0) {
+      return undefined;
+    }
+    const bytes = await readable.read(
+      chunk.chunkStartOffset + chunk.chunkLength,
+      chunk.messageIndexLength,
+    );
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    for (let offset = 0; offset + RECORD_PREFIX <= bytes.byteLength; ) {
+      const opcode = view.getUint8(offset);
+      const recordLength = RECORD_PREFIX + Number(view.getBigUint64(offset + 1, true));
+      if (opcode === Opcode.MESSAGE_INDEX) {
+        const channelId = view.getUint16(offset + RECORD_PREFIX, true);
+        const entriesLength = view.getUint32(offset + RECORD_PREFIX + 2, true);
+        const entriesStart = offset + RECORD_PREFIX + 2 + 4;
+        let times = perChannel.get(channelId);
+        if (!times) {
+          times = [];
+          perChannel.set(channelId, times);
+        }
+        for (let entry = 0; entry < entriesLength; entry += MESSAGE_INDEX_ENTRY) {
+          times.push(view.getBigUint64(entriesStart + entry, true));
+        }
+      }
+      offset += recordLength;
+    }
+  }
+  return new Map([...perChannel].map(([id, times]) => [id, BigUint64Array.from(times).sort()]));
+}
+
+/** Number of sorted `times` in [start, end]. */
+export function countTimesInRange(times: BigUint64Array, start: bigint, end: bigint): number {
+  /** Index of the first time for which `isAfter` holds. */
+  const partition = (isAfter: (time: bigint) => boolean) => {
+    let lo = 0;
+    let hi = times.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+      if (isAfter(times[mid]!)) {
+        hi = mid;
+      } else {
+        lo = mid + 1;
+      }
+    }
+    return lo;
+  };
+  return partition((time) => time > end) - partition((time) => time >= start);
+}

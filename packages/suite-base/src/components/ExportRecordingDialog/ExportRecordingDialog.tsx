@@ -35,7 +35,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAsync } from "react-use";
 
-import { ExportCompression, exportMcap, loadDecompressHandlers } from "@lichtblick/mcap-support";
+import {
+  ExportCompression,
+  countTimesInRange,
+  exportMcap,
+  loadDecompressHandlers,
+  readMessageTimes,
+} from "@lichtblick/mcap-support";
 import { toNanoSec } from "@lichtblick/rostime";
 import {
   MessagePipelineContext,
@@ -53,6 +59,7 @@ import {
   openExportOutput,
   toExportTopics,
 } from "./exportRecording";
+import { parseTimeInput } from "./parseTimeInput";
 import { useTrimStore } from "./trimStore";
 
 const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
@@ -162,14 +169,16 @@ function ExportForm({
     [pool],
   );
 
-  /** Commits a range field typed as seconds from the recording start. */
-  const commitSeconds = (which: "start" | "end", text: string) => {
-    const seconds = Number(text);
-    if (text.trim() === "" || !Number.isFinite(seconds)) {
+  /** Commits a range field. See {@link parseTimeInput} for what can be typed or pasted. */
+  const commitTime = (which: "start" | "end", text: string) => {
+    const parsed = parseTimeInput(text, recordingStart, recordingEnd);
+    if (parsed == undefined) {
       setRangeFieldKey((key) => key + 1);
       return;
     }
-    const ns = clampNs(recordingStart + BigInt(Math.round(seconds * NS_PER_SEC)));
+    commitNs(which, clampNs(parsed));
+  };
+  const commitNs = (which: "start" | "end", ns: bigint) => {
     if (which === "start") {
       setRange(ns, ns > endNs ? ns : endNs);
     } else {
@@ -177,11 +186,43 @@ function ExportForm({
     }
   };
 
+  // Exact counts come from the message indexes; until they're read (or if a chunk has none),
+  // estimate from the share of the recording's duration.
+  const messageTimes = useAsync(
+    async () => await readMessageTimes(reader, readable),
+    [reader, readable],
+  ).value;
+  const exactCounts = messageTimes != undefined;
+  const rangeShare = Number(endNs - startNs) / Math.max(1, Number(recordingEnd - recordingStart));
+  const inRangeCounts = useMemo(
+    () =>
+      new Map(
+        rows.map((row) => [
+          row.topic,
+          messageTimes
+            ? row.channelIds.reduce((sum, id) => {
+                const times = messageTimes.get(id);
+                return sum + (times ? countTimesInRange(times, startNs, endNs) : 0);
+              }, 0)
+            : Math.round(row.messageCount * rangeShare),
+        ]),
+      ),
+    [rows, messageTimes, startNs, endNs, rangeShare],
+  );
+  const exportedCount = (topic: string) => {
+    const edit = edits.get(topic)!;
+    return edit.keep ? Math.ceil(inRangeCounts.get(topic)! / edit.everyNth) : 0;
+  };
+  const totalExported = rows.reduce((sum, row) => sum + exportedCount(row.topic), 0);
+  const totalMessages = rows.reduce((sum, row) => sum + row.messageCount, 0);
+
   const topics = useMemo(() => toExportTopics(edits), [edits]);
   const duplicates = useMemo(() => findDuplicateOutputTopics(topics), [topics]);
   const visibleRows = rows.filter((row) => row.topic.toLowerCase().includes(filter.toLowerCase()));
   const exporting = busy;
-  const canExport = topics.size > 0 && duplicates.size === 0 && !busy;
+  // With exact counts, don't offer to write an empty file.
+  const canExport =
+    topics.size > 0 && duplicates.size === 0 && !busy && (!exactCounts || totalExported > 0);
 
   const updateEdit = (topic: string, change: Partial<TopicEdit>) => {
     setEdits((prev) => new Map(prev).set(topic, { ...prev.get(topic)!, ...change }));
@@ -249,55 +290,59 @@ function ExportForm({
     <>
       <DialogContent>
         <Stack gap={2}>
-          <Typography variant="subtitle2">
-            {t("timeRange", {
-              duration: toSecondsText(endNs - startNs),
-              total: toSecondsText(recordingEnd - recordingStart),
-            })}
-          </Typography>
-          <Stack direction="row" gap={2}>
+          <Stack direction="row" gap={1.5} alignItems="center">
             {(["start", "end"] as const).map((which) => (
-              <TextField
-                // Uncontrolled, so typing doesn't move the timeline until the value is committed.
-                key={`${which}-${which === "start" ? startNs : endNs}-${rangeFieldKey}`}
-                label={t(which)}
-                type="number"
-                size="small"
-                defaultValue={toSecondsText((which === "start" ? startNs : endNs) - recordingStart)}
-                disabled={exporting}
-                onBlur={(event) => {
-                  commitSeconds(which, event.target.value);
-                }}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    commitSeconds(which, (event.target as HTMLInputElement).value);
-                  }
-                }}
-                slotProps={{
-                  htmlInput: { step: 0.1 },
-                  input: {
-                    endAdornment: (
-                      <InputAdornment position="end">
-                        <Tooltip title={t("setToPlayhead")}>
-                          <span>
-                            <IconButton
-                              size="small"
-                              aria-label={t("setToPlayhead")}
-                              disabled={playheadNs == undefined || exporting}
-                              onClick={() => {
-                                commitSeconds(which, toSecondsText(playheadNs! - recordingStart));
-                              }}
-                            >
-                              <MyLocationIcon fontSize="small" />
-                            </IconButton>
-                          </span>
-                        </Tooltip>
-                      </InputAdornment>
-                    ),
-                  },
-                }}
-              />
+              <Tooltip key={which} title={t("timeInputHelp")} placement="top" enterDelay={600}>
+                <TextField
+                  // Uncontrolled, so typing doesn't move the timeline until the value is committed.
+                  key={`${which}-${which === "start" ? startNs : endNs}-${rangeFieldKey}`}
+                  label={t(which)}
+                  size="small"
+                  className={classes.timeField}
+                  defaultValue={toSecondsText(
+                    (which === "start" ? startNs : endNs) - recordingStart,
+                  )}
+                  disabled={exporting}
+                  onBlur={(event) => {
+                    commitTime(which, event.target.value);
+                  }}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      commitTime(which, (event.target as HTMLInputElement).value);
+                    }
+                  }}
+                  slotProps={{
+                    input: {
+                      startAdornment: <InputAdornment position="start">s</InputAdornment>,
+                      endAdornment: (
+                        <InputAdornment position="end">
+                          <Tooltip title={t("setToPlayhead")}>
+                            <span>
+                              <IconButton
+                                size="small"
+                                aria-label={t("setToPlayhead")}
+                                disabled={playheadNs == undefined || exporting}
+                                onClick={() => {
+                                  commitNs(which, playheadNs!);
+                                }}
+                              >
+                                <MyLocationIcon fontSize="small" />
+                              </IconButton>
+                            </span>
+                          </Tooltip>
+                        </InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+              </Tooltip>
             ))}
+            <Typography variant="body2" color="text.secondary" noWrap>
+              {t("rangeSummary", {
+                duration: toSecondsText(endNs - startNs),
+                total: toSecondsText(recordingEnd - recordingStart),
+              })}
+            </Typography>
           </Stack>
 
           <Stack direction="row" gap={1} alignItems="center">
@@ -330,6 +375,11 @@ function ExportForm({
             </Button>
             <Typography variant="body2" color="text.secondary" noWrap>
               {t("topicsSelected", { selected: topics.size, total: rows.length })}
+              {" · "}
+              {t(exactCounts ? "messagesSummary" : "messagesSummaryApprox", {
+                exported: totalExported.toLocaleString(),
+                total: totalMessages.toLocaleString(),
+              })}
             </Typography>
           </Stack>
 
@@ -349,8 +399,14 @@ function ExportForm({
                 {visibleRows.map((row) => {
                   const edit = edits.get(row.topic)!;
                   const output = edit.rename.trim() || row.topic;
+                  const inRange = inRangeCounts.get(row.topic)!;
+                  const exported = exportedCount(row.topic);
                   return (
-                    <TableRow key={row.topic} hover>
+                    <TableRow
+                      key={row.topic}
+                      hover
+                      className={exported === 0 ? classes.inactive : undefined}
+                    >
                       <TableCell padding="checkbox">
                         <Checkbox
                           size="small"
@@ -364,7 +420,27 @@ function ExportForm({
                       </TableCell>
                       <TableCell className={classes.wrap}>{row.topic}</TableCell>
                       <TableCell className={classes.wrap}>{row.schemaName}</TableCell>
-                      <TableCell align="right">{row.messageCount.toLocaleString()}</TableCell>
+                      <TableCell align="right" className={classes.count}>
+                        {edit.keep && inRange === 0 ? (
+                          t("noneInRange")
+                        ) : (
+                          <Tooltip
+                            title={t("countTooltip", {
+                              inRange: inRange.toLocaleString(),
+                              total: row.messageCount.toLocaleString(),
+                            })}
+                          >
+                            <span>
+                              {exactCounts ? "" : "≈ "}
+                              {exported.toLocaleString()}
+                              <span className={classes.countTotal}>
+                                {" / "}
+                                {row.messageCount.toLocaleString()}
+                              </span>
+                            </span>
+                          </Tooltip>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <TextField
                           size="small"
@@ -407,47 +483,6 @@ function ExportForm({
             </Alert>
           )}
 
-          <Stack direction="row" gap={2} alignItems="center" flexWrap="wrap">
-            <TextField
-              select
-              size="small"
-              label={t("compression")}
-              value={compression}
-              disabled={exporting}
-              onChange={(event) => {
-                setCompression(event.target.value as ExportCompression);
-              }}
-              className={classes.compression}
-            >
-              <MenuItem value="zstd">zstd</MenuItem>
-              <MenuItem value="none">{t("compressionNone")}</MenuItem>
-            </TextField>
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={includeAttachments}
-                  disabled={exporting}
-                  onChange={(_, checked) => {
-                    setIncludeAttachments(checked);
-                  }}
-                />
-              }
-              label={t("includeAttachments")}
-            />
-            <FormControlLabel
-              control={
-                <Checkbox
-                  checked={includeMetadata}
-                  disabled={exporting}
-                  onChange={(_, checked) => {
-                    setIncludeMetadata(checked);
-                  }}
-                />
-              }
-              label={t("includeMetadata")}
-            />
-          </Stack>
-
           <ExportProgress progressRef={progressRef} running={busy} />
           {result?.messageCount != undefined && (
             <Alert severity="success">{t("done", { count: result.messageCount })}</Alert>
@@ -455,7 +490,46 @@ function ExportForm({
           {result?.error != undefined && <Alert severity="error">{result.error}</Alert>}
         </Stack>
       </DialogContent>
-      <DialogActions>
+      <DialogActions className={classes.actions}>
+        <TextField
+          select
+          size="small"
+          label={t("compression")}
+          value={compression}
+          disabled={exporting}
+          onChange={(event) => {
+            setCompression(event.target.value as ExportCompression);
+          }}
+          className={classes.compression}
+        >
+          <MenuItem value="zstd">zstd</MenuItem>
+          <MenuItem value="none">{t("compressionNone")}</MenuItem>
+        </TextField>
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={includeAttachments}
+              disabled={exporting}
+              onChange={(_, checked) => {
+                setIncludeAttachments(checked);
+              }}
+            />
+          }
+          label={t("includeAttachments")}
+        />
+        <FormControlLabel
+          control={
+            <Checkbox
+              checked={includeMetadata}
+              disabled={exporting}
+              onChange={(_, checked) => {
+                setIncludeMetadata(checked);
+              }}
+            />
+          }
+          label={t("includeMetadata")}
+        />
+        <div className={classes.grow} />
         <Button onClick={handleClose}>{exporting ? t("cancel") : t("close")}</Button>
         <Button
           variant="contained"
