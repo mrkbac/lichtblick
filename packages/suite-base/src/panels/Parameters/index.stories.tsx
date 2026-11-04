@@ -144,7 +144,9 @@ const NamespacedParameters = () => {
       })}
     >
       <Parameters
-        overrideConfig={{ snapshots: [{ name: "baseline", yaml: parametersToYaml(snapshot) }] }}
+        overrideConfig={{
+          snapshots: [{ name: "baseline", yaml: parametersToYaml(snapshot) }],
+        }}
       />
     </PanelSetup>
   );

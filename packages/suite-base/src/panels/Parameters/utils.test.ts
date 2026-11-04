@@ -108,6 +108,15 @@ describe("buildRows", () => {
     ]);
   });
 
+  it("keeps a parameter that is also a namespace inside a merged chain", () => {
+    expect(rowsText(buildRows(["/a/b", "/a/b/c"], { tree: true, collapsed: new Set() }))).toEqual([
+      "a/ (2)",
+      "  b",
+      "  b/ (1)",
+      "    c",
+    ]);
+  });
+
   it("returns a sorted flat list", () => {
     expect(rowsText(buildRows(["b", "a/x"], { tree: false, collapsed: new Set() }))).toEqual([
       "a/x",

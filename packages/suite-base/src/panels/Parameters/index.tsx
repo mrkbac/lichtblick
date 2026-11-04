@@ -137,6 +137,14 @@ function useChangedParameters(
 ): ReadonlySet<string> {
   const [changed, setChanged] = useState<ReadonlySet<string>>(EMPTY_SET);
   const previous = useRef(parameters);
+  const timer = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(
+    () => () => {
+      clearTimeout(timer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     const prev = previous.current;
@@ -154,12 +162,11 @@ function useChangedParameters(
       return;
     }
     setChanged(names);
-    const timer = setTimeout(() => {
+    // Kept in a ref so updates without changes don't cancel the reset
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
       setChanged(EMPTY_SET);
     }, HIGHLIGHT_MS);
-    return () => {
-      clearTimeout(timer);
-    };
   }, [parameters]);
 
   return changed;
@@ -212,7 +219,8 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
     () =>
       allNames.filter(
         (name) =>
-          (typeof matcher === "function" ? matcher(name) : true) &&
+          typeof matcher === "function" &&
+          matcher(name) &&
           (!onlyDiffs || diff == undefined || diff.has(name)),
       ),
     [allNames, matcher, onlyDiffs, diff],
@@ -231,7 +239,11 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
     count: rows.length,
     getScrollElement: () => listRef.current,
     estimateSize: () => 29,
-    getItemKey: (index) => rows[index]?.key ?? index,
+    // A name can be both a parameter and a namespace, so include the kind
+    getItemKey: (index) => {
+      const row = rows[index];
+      return row ? `${row.kind}:${row.key}` : index;
+    },
     overscan: 10,
     useAnimationFrameWithResizeObserver: true,
   });

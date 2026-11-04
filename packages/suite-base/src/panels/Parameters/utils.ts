@@ -158,7 +158,8 @@ export function buildRows(
       let group = child;
       while (group.param == undefined && group.children.size === 1) {
         const [onlyKey, only] = group.children.entries().next().value!;
-        if (only.children.size === 0) {
+        // Stop at leaves and at nodes that are also parameters, so their param row is emitted
+        if (only.children.size === 0 || only.param != undefined) {
           break;
         }
         groupKey = onlyKey;

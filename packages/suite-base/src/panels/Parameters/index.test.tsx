@@ -89,6 +89,13 @@ describe("Parameters panel", () => {
     expect(screen.getByText("exposure")).toBeInTheDocument();
   });
 
+  it("shows an error for an invalid regex", async () => {
+    setup();
+    await userEvent.click(screen.getByRole("button", { name: "Use regular expression" }));
+    await userEvent.type(screen.getByLabelText("Filter parameters"), "[[(");
+    expect(screen.getByText(/Invalid regex/)).toBeInTheDocument();
+  });
+
   it("collapses namespaces", async () => {
     setup();
     await userEvent.click(screen.getByText("arm"));
