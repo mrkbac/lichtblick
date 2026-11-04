@@ -81,7 +81,7 @@ import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
 
 import { ImageModeCamera } from "./ImageModeCamera";
-import { IMessageHandler, MessageHandler, MessageRenderState } from "./MessageHandler";
+import { MessageHandler, MessageRenderState } from "./MessageHandler";
 import { ImageAnnotations } from "./annotations/ImageAnnotations";
 import type {
   AnyRendererSubscription,
@@ -122,7 +122,7 @@ export class ImageMode
   #imageIsCompressedDepth = false;
   #removeImageTimeout: ReturnType<typeof setTimeout> | undefined;
 
-  protected readonly messageHandler: IMessageHandler;
+  protected readonly messageHandler: MessageHandler;
 
   protected readonly supportedImageSchemas = ALL_SUPPORTED_IMAGE_SCHEMAS;
 
@@ -147,7 +147,7 @@ export class ImageMode
     this.#camera.setFlipHorizontal(config.flipHorizontal);
     this.#camera.setFlipVertical(config.flipVertical);
 
-    this.messageHandler = this.initMessageHandler(config);
+    this.messageHandler = new MessageHandler(config, this.hud);
     this.messageHandler.addListener(this.#updateFromMessageState);
 
     renderer.settings.errors.on("update", this.#handleErrorChange);
@@ -210,10 +210,6 @@ export class ImageMode
 
     this.renderer.on("topicsChanged", this.#handleTopicsChanged);
     this.#handleTopicsChanged();
-  }
-
-  protected initMessageHandler(config: Immutable<ConfigWithDefaults>): IMessageHandler {
-    return new MessageHandler(config, this.hud);
   }
 
   public hasModifiedView(): boolean {
