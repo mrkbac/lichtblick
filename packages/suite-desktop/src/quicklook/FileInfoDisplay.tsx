@@ -11,10 +11,10 @@ import { Time, toDate } from "@foxglove/rostime";
 import { useEffect, useMemo } from "react";
 import { makeStyles } from "tss-react/mui";
 
+import { formatByteSize } from "@lichtblick/den/format";
 import Logger from "@lichtblick/log";
 
 import Flash from "./Flash";
-import formatByteSize from "./formatByteSize";
 import { BODY_PADDING, NARROW_MAX_WIDTH, NARROW_MIN_WIDTH } from "./styleConstants";
 import { FileInfo, TopicInfo } from "./types";
 import bagIcon from "../../resources/icon/BagIcon.png";
