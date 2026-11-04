@@ -11,6 +11,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTranslation } from "react-i18next";
 import { useResizeDetector } from "react-resize-detector";
 import { makeStyles } from "tss-react/mui";
 
@@ -162,6 +163,7 @@ function Tile({
 
 export function CameraGrid({ context }: { context: PanelExtensionContext }): React.JSX.Element {
   const { classes } = useStyles();
+  const { t } = useTranslation("cameraGrid");
   const [config, setConfig] = useState<CameraGridConfig>(() => ({
     ...DEFAULT_CONFIG,
     ...(context.initialState as Partial<CameraGridConfig> | undefined),
@@ -169,7 +171,7 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
   const [topics, setTopics] = useState<Immutable<Topic[]>>();
   const [maximizedTopic, setMaximizedTopic] = useState<string>();
   const [aspectVersion, bumpAspectVersion] = useReducer((n: number) => n + 1, 0);
-  const [renderer] = useState(() => new GridRenderer(bumpAspectVersion));
+  const [renderer] = useState(() => new GridRenderer(bumpAspectVersion, t("waitingForImages")));
 
   const imageTopics = useMemo(() => imageTopicNames(topics), [topics]);
   const visibleTiles = useMemo(() => config.tiles.filter((tile) => tile.visible), [config.tiles]);
@@ -219,9 +221,9 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
   useEffect(() => {
     context.updatePanelSettingsEditor({
       actionHandler,
-      nodes: buildSettingsTree(config, imageTopics),
+      nodes: buildSettingsTree(config, imageTopics, t),
     });
-  }, [context, actionHandler, config, imageTopics]);
+  }, [context, actionHandler, config, imageTopics, t]);
 
   const maximizedTile = visibleTiles.find((tile) => tile.topic === maximizedTopic);
   const shownTiles = useMemo(
@@ -270,21 +272,21 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
       <div className={classes.root}>
         <div className={classes.empty}>
           {config.tiles.length > 0 ? (
-            <Typography color="text.secondary">All cameras are hidden.</Typography>
+            <Typography color="text.secondary">{t("allCamerasHidden")}</Typography>
           ) : imageTopics.length > 0 ? (
             <>
-              <Typography color="text.secondary">Show many camera topics side by side.</Typography>
+              <Typography color="text.secondary">{t("emptyIntro")}</Typography>
               <Button
                 variant="contained"
                 onClick={() => {
                   setConfig((prev) => addAllTopics(prev, imageTopics));
                 }}
               >
-                Add all image topics ({imageTopics.length})
+                {t("addAllImageTopicsCount", { count: imageTopics.length })}
               </Button>
             </>
           ) : (
-            <Typography color="text.secondary">Waiting for image topics…</Typography>
+            <Typography color="text.secondary">{t("waitingForImageTopics")}</Typography>
           )}
         </div>
       </div>

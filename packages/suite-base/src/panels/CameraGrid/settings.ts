@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { TFunction } from "i18next";
 import { produce } from "immer";
 
 import { SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
@@ -21,6 +22,7 @@ export function addAllTopics(config: CameraGridConfig, imageTopics: string[]): C
 export function buildSettingsTree(
   config: CameraGridConfig,
   imageTopics: string[],
+  t: TFunction<"cameraGrid">,
 ): SettingsTreeNodes {
   const shown = new Set(config.tiles.map((tile) => tile.topic));
   const addable = imageTopics.filter((topic) => !shown.has(topic));
@@ -35,79 +37,94 @@ export function buildSettingsTree(
       defaultExpansionState: "collapsed",
       actions: [
         ...(index > 0
-          ? [{ type: "action" as const, id: "move-up", label: "Move up", icon: "MoveUp" as const }]
+          ? [
+              {
+                type: "action" as const,
+                id: "move-up",
+                label: t("moveUp"),
+                icon: "MoveUp" as const,
+              },
+            ]
           : []),
         ...(index < config.tiles.length - 1
           ? [
               {
                 type: "action" as const,
                 id: "move-down",
-                label: "Move down",
+                label: t("moveDown"),
                 icon: "MoveDown" as const,
               },
             ]
           : []),
-        { type: "action", id: "remove", label: "Remove", icon: "Delete", display: "inline" },
+        { type: "action", id: "remove", label: t("remove"), icon: "Delete", display: "inline" },
       ],
       fields: {
-        topic: { label: "Topic", input: "select", value: tile.topic, options: topicOptions },
+        topic: { label: t("topic"), input: "select", value: tile.topic, options: topicOptions },
         fit: {
-          label: "Scaling",
+          label: t("scaling"),
           input: "toggle",
           value: tile.fit,
           options: [
-            { label: "Fit", value: "fit" },
-            { label: "Fill", value: "fill" },
+            { label: t("scalingFit"), value: "fit" },
+            { label: t("scalingFill"), value: "fill" },
           ],
         },
         rotation: {
-          label: "Rotation",
+          label: t("rotation"),
           input: "select",
           value: tile.rotation,
           options: ROTATION_OPTIONS,
         },
-        flipHorizontal: { label: "Flip horizontal", input: "boolean", value: tile.flipHorizontal },
-        flipVertical: { label: "Flip vertical", input: "boolean", value: tile.flipVertical },
+        flipHorizontal: {
+          label: t("flipHorizontal"),
+          input: "boolean",
+          value: tile.flipHorizontal,
+        },
+        flipVertical: { label: t("flipVertical"), input: "boolean", value: tile.flipVertical },
       },
     };
   });
 
   return {
     general: {
-      label: "General",
+      label: t("general"),
       actions: [
         {
           type: "action",
           id: ADD_ALL_ACTION,
-          label: "Add all image topics",
+          label: t("addAllImageTopics"),
           icon: "Grid",
           display: "inline",
         },
-        { type: "action", id: "remove-all", label: "Remove all" },
+        { type: "action", id: "remove-all", label: t("removeAll") },
       ],
       fields: {
         add: {
-          label: "Add camera",
+          label: t("addCamera"),
           input: "select",
           value: undefined,
-          tooltip: "Pick an image topic to add it to the grid",
+          tooltip: t("addCameraTooltip"),
           disabled: addable.length === 0,
           options: addable.map((topic) => ({ label: topic, value: topic })),
         },
         columns: {
-          label: "Columns",
+          label: t("columns"),
           input: "number",
           min: 1,
           step: 1,
           precision: 0,
-          placeholder: "Auto",
+          placeholder: t("columnsAuto"),
           value: config.columns,
         },
-        showLabels: { label: "Show topic", input: "boolean", value: config.showLabels },
-        showTimestamps: { label: "Show timestamp", input: "boolean", value: config.showTimestamps },
+        showLabels: { label: t("showTopic"), input: "boolean", value: config.showLabels },
+        showTimestamps: {
+          label: t("showTimestamp"),
+          input: "boolean",
+          value: config.showTimestamps,
+        },
       },
     },
-    topics: { label: "Cameras", children: tiles },
+    topics: { label: t("cameras"), children: tiles },
   };
 }
 

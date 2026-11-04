@@ -44,9 +44,12 @@ export class GridRenderer {
   #worker?: WorkerImageDecoder;
   #resizeObserver?: ResizeObserver;
   #onAspectChange: () => void;
+  #waitingText: string;
 
-  public constructor(onAspectChange: () => void) {
+  /** `waitingText` is shown on a tile until its first image is drawn. */
+  public constructor(onAspectChange: () => void, waitingText: string) {
     this.#onAspectChange = onAspectChange;
+    this.#waitingText = waitingText;
   }
 
   public setFrame(messages: Immutable<MessageEvent[]>): void {
@@ -91,7 +94,7 @@ export class GridRenderer {
     tile.elements = elements;
     tile.config = config;
     tile.drawn = undefined;
-    this.#showStatus(tile, "Waiting for images…");
+    this.#showStatus(tile, this.#waitingText);
     this.#resizeObserver ??= new ResizeObserver((entries) => {
       this.#handleResize(entries);
     });
@@ -147,21 +150,38 @@ export class GridRenderer {
     }
   }
 
+  /** Decodes and draws the tile's newest frame, repeating until no newer frame has arrived. */
   async #update(tile: TileState): Promise<void> {
-    const { latest: event, elements } = tile;
-    // Skip tiles that are busy, unmounted, up to date, or hidden (zero size, e.g. inactive tab).
-    if (
-      tile.decoding ||
-      !elements ||
-      !event ||
-      event === tile.drawn ||
-      elements.canvas.width === 0 ||
-      elements.canvas.height === 0
-    ) {
+    if (tile.decoding) {
       return;
     }
-
     tile.decoding = true;
+    try {
+      // A loop rather than recursion, so continuous playback doesn't build an ever-growing promise chain.
+      for (;;) {
+        const { latest: event, elements } = tile;
+        // Stop when unmounted, up to date, or hidden (zero size, e.g. inactive tab).
+        if (
+          !elements ||
+          !event ||
+          event === tile.drawn ||
+          elements.canvas.width === 0 ||
+          elements.canvas.height === 0
+        ) {
+          return;
+        }
+        await this.#decodeAndDraw(tile, event, elements);
+      }
+    } finally {
+      tile.decoding = false;
+    }
+  }
+
+  async #decodeAndDraw(
+    tile: TileState,
+    event: Immutable<MessageEvent>,
+    elements: TileElements,
+  ): Promise<void> {
     try {
       const { bitmap, stamp } = await this.#decode(event);
       if (tile.elements === elements) {
@@ -185,11 +205,7 @@ export class GridRenderer {
         tile.drawn = event;
         this.#showStatus(tile, error instanceof Error ? error.message : String(error));
       }
-    } finally {
-      tile.decoding = false;
     }
-    // Decode whatever arrived while we were busy.
-    await this.#update(tile);
   }
 
   async #decode(event: Immutable<MessageEvent>): Promise<{ bitmap: ImageBitmap; stamp: Time }> {
