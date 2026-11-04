@@ -16,6 +16,10 @@ import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import LayoutStorageContext from "@lichtblick/suite-base/context/LayoutStorageContext";
 import NativeAppMenuContext from "@lichtblick/suite-base/context/NativeAppMenuContext";
 import NativeWindowContext from "@lichtblick/suite-base/context/NativeWindowContext";
+import {
+  OrganizationProvider,
+  useOrganizationSession,
+} from "@lichtblick/suite-base/context/OrganizationContext";
 import { RemoteLayoutFavoritesStorageContext } from "@lichtblick/suite-base/context/RemoteLayoutFavoritesStorageContext";
 import { RemoteLayoutStorageContext } from "@lichtblick/suite-base/context/RemoteLayoutStorageContext";
 import { useSharedRootContext } from "@lichtblick/suite-base/context/SharedRootContext";
@@ -102,16 +106,24 @@ export function StudioApp(): React.JSX.Element {
   const url = new URL(window.location.href);
   const workspace = url.searchParams.get("workspace");
 
-  const remoteLayoutStorage = useMemo(() => {
+  // `?workspace=` keeps the workspace API; otherwise API_URL serves the organization API.
+  const organization = useOrganizationSession(workspace ? undefined : APP_CONFIG.apiUrl);
+  providers.unshift(<OrganizationProvider value={organization} />);
+
+  const workspaceLayoutStorage = useMemo(() => {
     if (workspace && APP_CONFIG.apiUrl) {
       return new LayoutsAPI(workspace);
     }
     return undefined;
   }, [workspace]);
 
+  const organizationStorage =
+    organization.status === "authenticated" ? organization.storage : undefined;
+  const remoteLayoutStorage = organizationStorage ?? workspaceLayoutStorage;
+
   const remoteLayoutFavoritesStorage = useMemo(
-    () => (remoteLayoutStorage ? new LayoutFavoritesAPI() : undefined),
-    [remoteLayoutStorage],
+    () => organizationStorage ?? (workspaceLayoutStorage ? new LayoutFavoritesAPI() : undefined),
+    [organizationStorage, workspaceLayoutStorage],
   );
 
   if (remoteLayoutStorage) {

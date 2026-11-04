@@ -114,6 +114,7 @@
     "nearley": "2.20.1",
     "nearley-loader": "2.0.0",
     "notistack": "3.0.2",
+    "openapi-fetch": "0.17.0",
     "path-browserify": "1.0.1",
     "prettier": "3.9.10",
     "react": "19.3.1",

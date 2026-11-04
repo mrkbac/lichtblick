@@ -42,6 +42,7 @@ export default [
       "packages/**/wasm/*.js",
       "storybook-static/**",
       "**/coverage/**",
+      "**/*.gen.ts",
     ],
   },
 

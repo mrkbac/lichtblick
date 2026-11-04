@@ -24,6 +24,8 @@ export type RemoteLayout = {
   data: LayoutData;
   savedAt: ISO8601Timestamp | undefined;
   externalId: string;
+  /** Organization that owns this layout (organization API only). */
+  organizationId?: string;
 };
 export interface IRemoteLayoutStorage {
   /**
