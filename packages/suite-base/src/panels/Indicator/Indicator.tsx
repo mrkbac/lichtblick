@@ -38,12 +38,7 @@ import {
 } from "./alerts";
 import { getMatchingRule } from "./getMatchingRule";
 import { settingsActionReducer, useSettingsTree } from "./settings";
-import {
-  IndicatorAlertSound,
-  IndicatorConfig,
-  IndicatorProps,
-  RawValueIndicator,
-} from "./types";
+import { IndicatorAlertSound, IndicatorConfig, IndicatorProps, RawValueIndicator } from "./types";
 
 export function Indicator({ context }: IndicatorProps): React.JSX.Element {
   // panel extensions must notify when they've completed rendering
