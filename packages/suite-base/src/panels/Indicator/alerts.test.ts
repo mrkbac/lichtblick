@@ -11,7 +11,7 @@ const rules: IndicatorRule[] = [
 ];
 
 function snap(ruleIndex: number | undefined, overrides: Partial<AlertSnapshot> = {}) {
-  return { ruleIndex, rules, seekCount: 0, ...overrides };
+  return { ruleIndex, rules, path: "/a.data", seekCount: 0, ...overrides };
 }
 
 describe("getAlertRule", () => {
@@ -40,8 +40,9 @@ describe("getAlertRule", () => {
     expect(getAlertRule(snap(2, { seekCount: 1 }), snap(0, { seekCount: 1 }))).toBe(rules[0]);
   });
 
-  it("does not alert when the rules were edited", () => {
+  it("does not alert when the rules or the path were edited", () => {
     expect(getAlertRule(snap(2), snap(0, { rules: [...rules] }))).toBeUndefined();
+    expect(getAlertRule(snap(2), snap(0, { path: "/b.data" }))).toBeUndefined();
   });
 });
 

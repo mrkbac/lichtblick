@@ -8,6 +8,7 @@ export type AlertSnapshot = {
   /** Index of the matching rule, `-1` for the fallback, `undefined` when there is no data. */
   ruleIndex: number | undefined;
   rules: readonly IndicatorRule[];
+  path: string;
   /** Incremented on every seek so the first render after a seek only sets a new baseline. */
   seekCount: number;
 };
@@ -27,6 +28,7 @@ export function getAlertRule(
 ): IndicatorRule | undefined {
   if (
     prev?.rules !== next.rules ||
+    prev.path !== next.path ||
     prev.seekCount !== next.seekCount ||
     prev.ruleIndex == undefined ||
     next.ruleIndex == undefined ||
@@ -93,9 +95,14 @@ export function requestNotificationPermission(): void {
   }
 }
 
-export function showAlertNotification(title: string, body: string): void {
+/** `tag` should identify the panel so its notifications replace each other instead of stacking. */
+export function showAlertNotification(title: string, body: string, tag: string): void {
   if (typeof Notification !== "undefined" && Notification.permission === "granted") {
-    // `tag` replaces the previous notification of the same panel instead of stacking them
-    new Notification(title, { body, tag: `indicator:${title}` });
+    try {
+      new Notification(title, { body, tag });
+    } catch (error: unknown) {
+      // e.g. Chrome on Android only allows notifications from a service worker
+      console.warn("Indicator notification failed", error);
+    }
   }
 }
