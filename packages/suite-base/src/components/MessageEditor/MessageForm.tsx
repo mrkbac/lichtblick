@@ -6,7 +6,16 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import DeleteIcon from "@mui/icons-material/DeleteOutline";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { Autocomplete, Checkbox, IconButton, TextField, Tooltip, Typography } from "@mui/material";
-import { ReactNode, useState } from "react";
+import {
+  ReactNode,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { MessageDefinitionField } from "@lichtblick/message-definition";
@@ -121,7 +130,14 @@ type MessageFormProps = {
   schemaName: string;
   value: MessageObject;
   onChange: (value: MessageObject) => void;
+  /** Called with the number of fields holding invalid input that is not reflected in `value` */
+  onInvalidFieldsChange?: (count: number) => void;
 };
+
+// Lets fields with their own draft text (e.g. JSON inputs) report that the draft is invalid
+const ReportInvalidContext = createContext<(id: string, error: string | undefined) => void>(
+  () => {},
+);
 
 /** Form for editing a message, generated from its message definition. */
 export function MessageForm({
@@ -129,9 +145,38 @@ export function MessageForm({
   schemaName,
   value,
   onChange,
+  onInvalidFieldsChange,
 }: MessageFormProps): React.JSX.Element {
   const { classes } = useStyles();
   const definition = definitionOf(datatypes, schemaName);
+
+  const [invalidIds, setInvalidIds] = useState<ReadonlySet<string>>(new Set());
+  const reportInvalid = useCallback((id: string, error: string | undefined) => {
+    setInvalidIds((old) => {
+      if (old.has(id) === (error != undefined)) {
+        return old;
+      }
+      const ids = new Set(old);
+      if (error != undefined) {
+        ids.add(id);
+      } else {
+        ids.delete(id);
+      }
+      return ids;
+    });
+  }, []);
+  const latestOnInvalidFieldsChange = useRef(onInvalidFieldsChange);
+  latestOnInvalidFieldsChange.current = onInvalidFieldsChange;
+  useEffect(() => {
+    latestOnInvalidFieldsChange.current?.(invalidIds.size);
+  }, [invalidIds.size]);
+  useEffect(
+    () => () => {
+      latestOnInvalidFieldsChange.current?.(0);
+    },
+    [],
+  );
+
   if (!definition || definition.fields.length === 0) {
     return (
       <Typography variant="body2" color="text.secondary">
@@ -140,9 +185,11 @@ export function MessageForm({
     );
   }
   return (
-    <div className={classes.grid}>
-      <Fields datatypes={datatypes} {...definition} value={value} onChange={onChange} />
-    </div>
+    <ReportInvalidContext.Provider value={reportInvalid}>
+      <div className={classes.grid}>
+        <Fields datatypes={datatypes} {...definition} value={value} onChange={onChange} />
+      </div>
+    </ReportInvalidContext.Provider>
   );
 }
 
@@ -474,6 +521,14 @@ function JsonInput(props: {
   const { classes } = useStyles();
   const [draft, setDraft] = useState<string>();
   const [error, setError] = useState<string>();
+  const reportInvalid = useContext(ReportInvalidContext);
+  const id = useId();
+  useEffect(() => {
+    reportInvalid(id, error);
+    return () => {
+      reportInvalid(id, undefined);
+    };
+  }, [error, id, reportInvalid]);
 
   return (
     <TextField

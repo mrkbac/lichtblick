@@ -16,6 +16,7 @@ import Publish from "./index";
 import { PublishConfig } from "./types";
 
 const mockPublish = jest.fn();
+const mockPresence = { current: "PRESENT" };
 
 jest.mock("@lichtblick/suite-base/PanelAPI", () => ({
   useDataSourceInfo: jest.fn(() => ({
@@ -28,7 +29,9 @@ jest.mock("@lichtblick/suite-base/PanelAPI", () => ({
 
 jest.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   ...jest.requireActual("@lichtblick/suite-base/components/MessagePipeline"),
-  useMessagePipeline: jest.fn(() => undefined),
+  useMessagePipeline: jest.fn((selector: (ctx: unknown) => unknown) =>
+    selector({ playerState: { presence: mockPresence.current } }),
+  ),
 }));
 
 jest.mock("@lichtblick/suite-base/hooks/usePublisher", () => ({
@@ -60,6 +63,7 @@ jest.mock("./settings", () => ({
 describe("Publish", () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPresence.current = "PRESENT";
   });
 
   function setup(
@@ -80,7 +84,16 @@ describe("Publish", () => {
       </PanelSetup>
     );
 
-    return { ...render(ui), config };
+    const result = render(ui);
+    // A new config object makes the memoized panel re-render and re-read the pipeline mock
+    const rerenderPanel = () => {
+      result.rerender(
+        <PanelSetup>
+          <Publish overrideConfig={{ ...config }} />
+        </PanelSetup>,
+      );
+    };
+    return { ...result, config, rerenderPanel };
   }
 
   describe("when advancedView is enabled", () => {
@@ -231,6 +244,23 @@ describe("Publish", () => {
 
       // Then
       expect(mockPublish).not.toHaveBeenCalled();
+    });
+
+    it("stops publishing when the data source disconnects", () => {
+      // Given
+      const { rerenderPanel } = startRepeating();
+
+      // When
+      mockPresence.current = "RECONNECTING";
+      rerenderPanel();
+      advance(500);
+      mockPresence.current = "PRESENT";
+      rerenderPanel();
+      advance(500);
+
+      // Then
+      expect(mockPublish).not.toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "10 Hz" })).toBeInTheDocument();
     });
 
     it("stops publishing when the panel unmounts", () => {

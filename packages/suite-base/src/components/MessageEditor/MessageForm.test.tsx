@@ -31,12 +31,19 @@ const datatypes: RosDatatypes = new Map([
 
 function setup(value: Record<string, unknown>) {
   const onChange = jest.fn();
+  const onInvalidFieldsChange = jest.fn();
   render(
     <ThemeProvider isDark={false}>
-      <MessageForm datatypes={datatypes} schemaName="pkg/Goal" value={value} onChange={onChange} />
+      <MessageForm
+        datatypes={datatypes}
+        schemaName="pkg/Goal"
+        value={value}
+        onChange={onChange}
+        onInvalidFieldsChange={onInvalidFieldsChange}
+      />
     </ThemeProvider>,
   );
-  return { onChange };
+  return { onChange, onInvalidFieldsChange };
 }
 
 const base = { mode: 1, label: "a", enabled: false, values: [1, 2], points: [{ x: 1 }] };
@@ -61,6 +68,23 @@ describe("MessageForm", () => {
     expect(onChange).toHaveBeenLastCalledWith({ ...base, values: [3] });
     fireEvent.change(screen.getByLabelText("values"), { target: { value: "{}" } });
     expect(screen.getByText("Expected a JSON array")).toBeInTheDocument();
+  });
+
+  it("reports invalid field drafts that are not in the message yet", () => {
+    // Given
+    const { onInvalidFieldsChange } = setup(base);
+
+    // When
+    fireEvent.change(screen.getByLabelText("values"), { target: { value: "[1," } });
+
+    // Then
+    expect(onInvalidFieldsChange).toHaveBeenLastCalledWith(1);
+
+    // When
+    fireEvent.change(screen.getByLabelText("values"), { target: { value: "[1]" } });
+
+    // Then
+    expect(onInvalidFieldsChange).toHaveBeenLastCalledWith(0);
   });
 
   it("adds and removes complex array items", async () => {
