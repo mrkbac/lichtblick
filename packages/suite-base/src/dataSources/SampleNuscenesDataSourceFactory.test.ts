@@ -55,7 +55,6 @@ describe("SampleNuscenesDataSourceFactory", () => {
 
     expect(IterablePlayer).toHaveBeenCalledWith({
       source: expect.any(Object),
-      isSampleDataSource: true,
       name: SAMPLE_NUSCENES_DATA_SOURCE_NAME,
       metricsCollector: args.metricsCollector,
       urlParams: {},

@@ -124,8 +124,6 @@ type IterablePlayerOptions = {
   // Source identifier used in constructing state urls.
   sourceId: string;
 
-  isSampleDataSource?: boolean;
-
   // Set to _false_ to disable preloading. (default: true)
   enablePreload?: boolean;
 
