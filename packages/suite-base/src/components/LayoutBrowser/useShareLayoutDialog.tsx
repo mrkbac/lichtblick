@@ -30,7 +30,7 @@ export function useShareLayoutDialog(): [
   const [params, setParams] = useState<OpenParams>();
   const [name, setName] = useState("");
   const [organizationId, setOrganizationId] = useState("");
-  const resolveRef = useRef<(result: ShareResult | undefined) => void>();
+  const resolveRef = useRef<((result: ShareResult | undefined) => void) | undefined>(undefined);
 
   const open = useCallback(async (openParams: OpenParams) => {
     setParams(openParams);
