@@ -14,29 +14,33 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { MessageDefinitionField } from "@foxglove/message-definition";
+
 import { Immutable } from "@lichtblick/suite";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
 // Exported for tests
+/** Records a constant field under its value; returns false if the field is not a constant. */
+function collectConstant(
+  constants: Record<string, string>,
+  field: Immutable<MessageDefinitionField>,
+): boolean {
+  if (field.isConstant !== true || field.value == undefined || typeof field.value === "boolean") {
+    return false;
+  }
+  const key = field.value.toString();
+  constants[key] = constants[key] != undefined ? "<multiple constants match>" : field.name;
+  return true;
+}
+
 export const constantsByDatatype = (
   datatypes: Immutable<RosDatatypes>,
 ): Record<string, Record<string, string>> => {
-  type Result = Record<string | number, string>;
-  const results: Record<string, Result> = {};
+  const results: Record<string, Record<string, string>> = {};
   for (const [datatype, value] of datatypes) {
-    const result: Result = (results[datatype] = {});
+    const result: Record<string, string> = (results[datatype] = {});
     for (const field of value.definitions) {
-      if (
-        field.isConstant === true &&
-        field.value != undefined &&
-        typeof field.value !== "boolean"
-      ) {
-        if (result[field.value.toString()] != undefined) {
-          result[field.value.toString()] = "<multiple constants match>";
-        } else {
-          result[field.value.toString()] = field.name;
-        }
-      }
+      collectConstant(result, field);
     }
   }
   return results;
@@ -70,17 +74,8 @@ export const enumValuesByDatatypeAndField = (
         lastType = undefined;
       }
 
-      if (
-        field.isConstant === true &&
-        field.value != undefined &&
-        typeof field.value !== "boolean"
-      ) {
+      if (collectConstant(constants, field)) {
         lastType = field.type;
-        if (constants[field.value.toString()] != undefined) {
-          constants[field.value.toString()] = "<multiple constants match>";
-        } else {
-          constants[field.value.toString()] = field.name;
-        }
         continue;
       }
       // check if current field is annotation of the form: "Foo bar__foxglove_enum"
