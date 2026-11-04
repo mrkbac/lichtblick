@@ -7,7 +7,6 @@
 
 import {
   IDataSourceFactory,
-  DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import {
   SAMPLE_NUSCENES_DATA_SOURCE_DISPLAY_NAME,
@@ -34,9 +33,7 @@ class SampleNuscenesDataSourceFactory implements IDataSourceFactory {
   // 2: tabs that each hold a split layout, showing most panels.
   public sampleLayoutVersion = 2;
 
-  public initialize(
-    args: DataSourceFactoryInitializeArgs,
-  ): ReturnType<IDataSourceFactory["initialize"]> {
+  public initialize(): ReturnType<IDataSourceFactory["initialize"]> {
     const bagUrl = SAMPLE_NUSCENES_DATA_SOURCE_URL;
 
     const source = new WorkerSerializedIterableSource({
@@ -54,7 +51,6 @@ class SampleNuscenesDataSourceFactory implements IDataSourceFactory {
     return new IterablePlayer({
       source,
       name: SAMPLE_NUSCENES_DATA_SOURCE_NAME,
-      metricsCollector: args.metricsCollector,
       // Use blank url params so the data source is set in the url
       urlParams: {},
       sourceId: this.id,

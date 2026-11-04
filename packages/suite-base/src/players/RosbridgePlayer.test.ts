@@ -17,7 +17,6 @@
 import { Time } from "@foxglove/rostime";
 
 import { signal } from "@lichtblick/den/async";
-import NoopMetricsCollector from "@lichtblick/suite-base/players/NoopMetricsCollector";
 import RosbridgePlayer from "@lichtblick/suite-base/players/RosbridgePlayer";
 
 const headerMessage = ({
@@ -146,7 +145,6 @@ describe("RosbridgePlayer", () => {
   beforeEach(() => {
     player = new RosbridgePlayer({
       url: "ws://some-url",
-      metricsCollector: new NoopMetricsCollector(),
       sourceId: "rosbridge-websocket",
     });
   });

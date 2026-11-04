@@ -59,7 +59,6 @@ class McapLocalDataSourceFactory implements IDataSourceFactory {
     });
 
     return new IterablePlayer({
-      metricsCollector: args.metricsCollector,
       source,
       name: mergeMultipleFileNames(files.map((file) => file.name)),
       sourceId: this.id,

@@ -18,7 +18,6 @@ import {
   AdvertiseOptions,
   MessageEvent,
   Player,
-  PlayerMetricsCollectorInterface,
   PlayerPresence,
   PlayerState,
   PlayerAlert,
@@ -69,7 +68,6 @@ const CAPABILITIES: string[] = [];
 
 type VelodynePlayerOpts = {
   port?: number;
-  metricsCollector: PlayerMetricsCollectorInterface;
 };
 
 export default class VelodynePlayer implements Player {
@@ -86,19 +84,16 @@ export default class VelodynePlayer implements Player {
   #start: Time; // The time at which we started playing
   #packets: RawPacket[] = []; // Queue of packets that will form the next parsed message
   #parsedMessages: MessageEvent[] = []; // Queue of messages that we'll send in next _emitState() call
-  #metricsCollector: PlayerMetricsCollectorInterface;
   #presence: PlayerPresence = PlayerPresence.INITIALIZING;
   #emitTimer?: ReturnType<typeof setTimeout>;
 
   // track issues within the player
   #alerts = new PlayerAlertManager();
 
-  public constructor({ port, metricsCollector }: VelodynePlayerOpts) {
+  public constructor({ port }: VelodynePlayerOpts) {
     this.#port = port ?? DEFAULT_VELODYNE_PORT;
     log.info(`initializing VelodynePlayer on port ${this.#port}`);
-    this.#metricsCollector = metricsCollector;
     this.#start = fromMillis(Date.now());
-    this.#metricsCollector.playerConstructed();
     void this.#open();
   }
 
@@ -151,10 +146,6 @@ export default class VelodynePlayer implements Player {
     this.#totalBytesReceived += data.byteLength;
     this.#presence = PlayerPresence.PRESENT;
     this.#alerts.removeAlert(PROBLEM_SOCKET_ERROR);
-
-    if (this.#seq === 0) {
-      // this.#metricsCollector.recordTimeToFirstMsgs();
-    }
 
     const rawPacket = new RawPacket(data);
 
@@ -267,7 +258,6 @@ export default class VelodynePlayer implements Player {
       clearTimeout(this.#emitTimer);
       this.#emitTimer = undefined;
     }
-    // this.#metricsCollector.close();
     this.#totalBytesReceived = 0;
     this.#seq = 0;
     this.#packets = [];

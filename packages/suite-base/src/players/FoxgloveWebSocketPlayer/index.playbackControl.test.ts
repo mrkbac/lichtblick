@@ -3,7 +3,6 @@
 
 import type { Mock } from "vitest";
 
-import NoopMetricsCollector from "@lichtblick/suite-base/players/NoopMetricsCollector";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { PlayerState } from "@lichtblick/suite-base/players/types";
 
@@ -70,7 +69,6 @@ describe("FoxgloveWebSocketPlayer playback control", () => {
     states = [];
     player = new FoxgloveWebSocketPlayer({
       url: "ws://test",
-      metricsCollector: new NoopMetricsCollector(),
       sourceId: "foxglove-websocket",
     });
     player.setListener(async (state) => {

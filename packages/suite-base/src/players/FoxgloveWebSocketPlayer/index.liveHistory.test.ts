@@ -4,7 +4,6 @@
 import { McapIndexedReader, TempBuffer } from "@mcap/core";
 import type { Mock } from "vitest";
 
-import NoopMetricsCollector from "@lichtblick/suite-base/players/NoopMetricsCollector";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { liveHistorySettings } from "@lichtblick/suite-base/players/liveHistory/liveHistorySettings";
 import { PlayerState } from "@lichtblick/suite-base/players/types";
@@ -133,7 +132,6 @@ describe("FoxgloveWebSocketPlayer live history", () => {
     states = [];
     player = new FoxgloveWebSocketPlayer({
       url: "ws://localhost:8765",
-      metricsCollector: new NoopMetricsCollector(),
       sourceId: "foxglove-websocket",
     });
     player.setListener(async (state) => {

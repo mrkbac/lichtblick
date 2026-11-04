@@ -43,7 +43,6 @@ class Ros2LocalBagDataSourceFactory implements IDataSourceFactory {
     });
 
     return new IterablePlayer({
-      metricsCollector: args.metricsCollector,
       source,
       name,
       sourceId: this.id,
