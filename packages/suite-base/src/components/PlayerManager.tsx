@@ -42,7 +42,6 @@ import {
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { ExtensionCatalogContext } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
-import { usePerformance } from "@lichtblick/suite-base/context/PerformanceContext";
 import PlayerSelectionContext, {
   DataSourceArgs,
   IDataSourceFactory,
@@ -128,8 +127,6 @@ export default function PlayerManager(
 ): React.JSX.Element {
   const { children, playerSources } = props;
 
-  const perfRegistry = usePerformance();
-
   useWarnImmediateReRender();
 
   const userScriptActions = useUserScriptState(selectUserScriptActions);
@@ -192,15 +189,11 @@ export default function PlayerManager(
       return undefined;
     }
 
-    const userScriptPlayer = new UserScriptPlayer(
-      topicAliasPlayer,
-      userScriptActions,
-      perfRegistry,
-    );
+    const userScriptPlayer = new UserScriptPlayer(topicAliasPlayer, userScriptActions);
     userScriptPlayer.setGlobalVariables(globalVariablesRef.current);
 
     return userScriptPlayer;
-  }, [globalVariablesRef, topicAliasPlayer, userScriptActions, perfRegistry]);
+  }, [globalVariablesRef, topicAliasPlayer, userScriptActions]);
 
   // During layout switches, selectedLayout.data is briefly undefined (loading: true)
   useLayoutEffect(() => {
