@@ -232,18 +232,25 @@ describe("TimestampDatasetsBuilder", () => {
       ],
     ],
     [
-      "/foo.val.@@timedelta",
+      "/foo.val.@timedelta",
       [
         { x: 1, y: 1, value: 1 },
         { x: 2, y: 1, value: 1 },
       ],
     ],
     [
-      "/foo.val.@mul(2).@@integral",
+      "/foo.val.@mul(2).@integral",
       [
         { x: 0, y: 0, value: 0 },
         { x: 1, y: 1, value: 1 },
         { x: 2, y: 5, value: 5 },
+      ],
+    ],
+    [
+      "/foo.val.@delta.@negative.@mul(10)",
+      [
+        { x: 1, y: -10, value: -10 },
+        { x: 2, y: -20, value: -20 },
       ],
     ],
   ])("applies the cross-message modifier in %s", async (value, data) => {

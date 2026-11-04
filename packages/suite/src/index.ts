@@ -777,7 +777,7 @@ export type SettingsTreeFieldMessagePath = {
   validTypes?: string[];
   /** True if the input should allow math modifiers like @abs. */
   supportsMathModifiers?: boolean;
-  /** True if the input should allow trailing cross-message modifiers like @derivative or @@delta. */
+  /** True if the input should allow a time-series modifier like @derivative or @delta. */
   supportsStreamModifiers?: boolean;
 };
 

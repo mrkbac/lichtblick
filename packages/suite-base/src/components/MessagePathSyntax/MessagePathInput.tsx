@@ -21,8 +21,11 @@ import { filterMap } from "@lichtblick/den/collection";
 import {
   quoteTopicNameIfNeeded,
   parseMessagePath,
+  FLOAT64_STRUCTURE,
   MessagePath,
+  MessagePathModifier,
   MessagePathStructureItem,
+  modifierResultStructure,
   modifierSuggestions,
   PrimitiveType,
   STREAM_MODIFIERS,
@@ -106,6 +109,13 @@ type AutocompleteState = {
   autocompleteRange: { start: number; end: number };
 };
 
+/** The first modifier after a time-series modifier that does not map a number to a number. */
+function getInvalidModifierAfter(rosPath: MessagePath): MessagePathModifier | undefined {
+  return rosPath.modifiersAfter?.find(
+    (modifier) => modifierResultStructure(modifier, FLOAT64_STRUCTURE) !== FLOAT64_STRUCTURE,
+  );
+}
+
 /** Suggest modifier names for an unfinished modifier at the end of the path, e.g. `/topic.x.@ro`. */
 export function getModifierNameAutocomplete(
   path: string,
@@ -113,9 +123,21 @@ export function getModifierNameAutocomplete(
   traversal: StructureTraversalResult | undefined,
   { supportsStreamModifiers }: { supportsStreamModifiers: boolean },
 ): AutocompleteState | undefined {
+  if (rosPath.modifier != undefined) {
+    // Only scalar modifiers may follow a time-series modifier, e.g. `/topic.x.@derivative.@ab`
+    const lastAfter = rosPath.modifiersAfter?.at(-1);
+    if (lastAfter == undefined || getInvalidModifierAfter(rosPath) !== lastAfter) {
+      return undefined;
+    }
+    const start = path.lastIndexOf(".@") + 2;
+    return {
+      autocompleteItems: modifierSuggestions(FLOAT64_STRUCTURE, { streamModifiers: false }),
+      autocompleteFilterText: path.slice(start),
+      autocompleteRange: { start, end: path.length },
+    };
+  }
   const last = rosPath.messagePath.at(-1);
   if (
-    rosPath.modifier != undefined ||
     last?.type !== "modifier" ||
     traversal?.valid !== false ||
     traversal.msgPathPart !== last
@@ -369,6 +391,7 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
     } else if (!topic) {
       return "topicName";
     } else if (
+      getInvalidModifierAfter(rosPath) != undefined ||
       structureTraversalResult?.valid !== true ||
       !validTerminatingStructureItem(structureTraversalResult.structureItem, validTypes)
     ) {
@@ -526,7 +549,9 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
   const usesUnsupportedModifier = rosPath
     ? (!supportsMathModifiers && rosPath.messagePath.some((part) => part.type === "modifier")) ||
       (rosPath.modifier != undefined &&
-        (!supportsStreamModifiers || !STREAM_MODIFIERS.includes(rosPath.modifier)))
+        (!supportsStreamModifiers ||
+          !STREAM_MODIFIERS.includes(rosPath.modifier) ||
+          getInvalidModifierAfter(rosPath) != undefined))
     : !supportsMathModifiers && path.includes(".@");
 
   const hasError =

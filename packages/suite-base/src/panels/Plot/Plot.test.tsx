@@ -37,6 +37,10 @@ jest.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   useMessagePipelineSubscribe: () => mockSubscribeMessagePipeline,
 }));
 
+jest.mock("@lichtblick/suite-base/PanelAPI", () => ({
+  useDataSourceInfo: () => ({ topics: [], datatypes: new Map() }),
+}));
+
 jest.mock("@lichtblick/suite-base/components/PanelContextMenu", () => ({
   PanelContextMenu: jest.fn(() => <div data-testid="panel-context-menu" />),
 }));
@@ -343,6 +347,7 @@ describe("Plot Component", () => {
       config,
       expect.any(String),
       {},
+      expect.any(Function),
     );
     expect(mockCoordinatorInstance.handlePlayerState).toHaveBeenCalledWith({
       source: "subscriber",

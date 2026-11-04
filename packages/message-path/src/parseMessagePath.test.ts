@@ -578,20 +578,52 @@ describe("parseRosPath", () => {
     ]);
   });
 
-  it("moves a trailing cross-message modifier into `modifier`", () => {
-    for (const path of ["/t.a.@abs.@delta", "/t.a.@abs.@@delta"]) {
-      expect(parseMessagePath(path)).toEqual({
-        topicName: "/t",
-        topicNameRepr: "/t",
-        messagePath: [
-          { type: "name", name: "a", repr: "a" },
-          { type: "modifier", name: "abs", args: [], repr: "abs" },
-        ],
-        modifier: "delta",
-      });
-    }
-    // Only at the end of the path
-    expect(parseMessagePath("/t.a.@delta.@abs")?.modifier).toBe(MISSING);
+  it("moves a time-series modifier and the modifiers after it out of `messagePath`", () => {
+    expect(parseMessagePath("/t.a.@abs.@delta")).toEqual({
+      topicName: "/t",
+      topicNameRepr: "/t",
+      messagePath: [
+        { type: "name", name: "a", repr: "a" },
+        { type: "modifier", name: "abs", args: [], repr: "abs" },
+      ],
+      modifier: "delta",
+    });
+    expect(parseMessagePath("/odom.orientation.@rpy.yaw.@derivative.@abs")).toEqual({
+      topicName: "/odom",
+      topicNameRepr: "/odom",
+      messagePath: [
+        { type: "name", name: "orientation", repr: "orientation" },
+        { type: "modifier", name: "rpy", args: [], repr: "rpy" },
+        { type: "name", name: "yaw", repr: "yaw" },
+      ],
+      modifier: "derivative",
+      modifiersAfter: [{ type: "modifier", name: "abs", args: [], repr: "abs" }],
+    });
+  });
+
+  it("allows only one time-series modifier, followed only by modifiers", () => {
+    expect(parseMessagePath("/t.a.@delta.@integral")).toBeUndefined();
+    expect(parseMessagePath("/t.a.@delta.b")).toBeUndefined();
+    expect(parseMessagePath("/t.a.@delta{>0}")).toBeUndefined();
+    expect(parseMessagePath("/t.a.@@delta")).toBeUndefined();
+  });
+
+  it("parses bare enum names in filters", () => {
+    expect(parseMessagePath("/t{status==MOVING}")?.messagePath).toEqual([
+      expect.objectContaining({
+        path: ["status"],
+        operator: "==",
+        value: "MOVING",
+        isEnum: true,
+        repr: "status==MOVING",
+      }),
+    ]);
+    // Quoted strings and booleans are never enum names
+    expect(parseMessagePath('/t{status=="MOVING"}')?.messagePath[0]).not.toHaveProperty("isEnum");
+    expect(parseMessagePath("/t{ok==true}")?.messagePath[0]).toEqual(
+      expect.objectContaining({ value: true }),
+    );
+    expect(parseMessagePath("/t{ok==true}")?.messagePath[0]).not.toHaveProperty("isEnum");
   });
 
   it("returns undefined for invalid strings", () => {
@@ -601,9 +633,8 @@ describe("parseRosPath", () => {
     expect(parseMessagePath("/topic.foo[].bar")).toBeUndefined();
     expect(parseMessagePath("/topic.foo[bar]")).toBeUndefined();
     expect(parseMessagePath("/topic.foo{bar==}")).toBeUndefined();
-    expect(parseMessagePath("/topic.foo{bar==baz}")).toBeUndefined();
     expect(parseMessagePath("/topic.foo.@mul(")).toBeUndefined();
-    expect(parseMessagePath("/topic.foo.@@delta.bar")).toBeUndefined();
+    expect(parseMessagePath("/topic.foo{bar==1abc}")).toBeUndefined();
   });
 
   it("uses the cached value instead of parse the path again", () => {

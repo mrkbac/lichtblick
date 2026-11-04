@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { STREAM_MODIFIERS } from "@lichtblick/message-path";
+import { applyModifier, MessagePathModifier, STREAM_MODIFIERS } from "@lichtblick/message-path";
 import { Immutable, Time } from "@lichtblick/suite";
 import {
   MAX_POINTS,
@@ -94,8 +94,15 @@ function getDerivativeY(
 /** Cross-message modifiers whose first datum has no previous datum to compare against. */
 const NEEDS_PREVIOUS = ["derivative", "delta", "timedelta"];
 
-/** Replace each datum's y with the result of a cross-message modifier like `.@@delta`. */
-function applyStreamModifier(data: IndexedDatum[], modifier: string): void {
+/**
+ * Replace each datum's y with the result of a time-series modifier like `.@delta`, followed by the
+ * scalar modifiers after it.
+ */
+function applyStreamModifier(
+  data: IndexedDatum[],
+  modifier: string,
+  modifiersAfter: Immutable<MessagePathModifier[]>,
+): void {
   let prev: IndexedDatum | undefined;
   let integral = 0;
   for (let i = 0; i < data.length; ++i) {
@@ -121,6 +128,10 @@ function applyStreamModifier(data: IndexedDatum[], modifier: string): void {
           y = integral;
           break;
       }
+    }
+    for (const after of modifiersAfter) {
+      const result = Number.isNaN(y) ? y : applyModifier(y, after);
+      y = typeof result === "number" ? result : Number.NaN;
     }
     data[i] = { ...item, y, value: Number.isNaN(y) ? null : y };
     prev = valid ? item : undefined;
@@ -295,9 +306,9 @@ export class TimestampDatasetsBuilderImpl {
     const allData: IndexedDatum[] = series.full.slice();
     allData.push(...series.current);
 
-    const { modifier } = series.config.parsed;
+    const { modifier, modifiersAfter = [] } = series.config.parsed;
     if (modifier != undefined && STREAM_MODIFIERS.includes(modifier)) {
-      applyStreamModifier(allData, modifier);
+      applyStreamModifier(allData, modifier, modifiersAfter);
     }
 
     return allData;

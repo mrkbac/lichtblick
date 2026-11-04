@@ -132,7 +132,7 @@ describe("modifier autocomplete", () => {
 
   it("suggests modifier names that apply to the value", () => {
     expect(nameAutocomplete("/t.orientation.@r")).toEqual({
-      autocompleteItems: ["norm", "rpy"],
+      autocompleteItems: ["norm", "rpy", "ypr", "yrp"],
       autocompleteFilterText: "r",
       autocompleteRange: { start: 16, end: 17 },
     });
@@ -143,6 +143,13 @@ describe("modifier autocomplete", () => {
     ).toContain("delta");
     // Complete modifiers need no suggestions
     expect(nameAutocomplete("/t.speed.@abs")).toBeUndefined();
+    // Only scalar modifiers follow a time-series modifier
+    const afterDelta = nameAutocomplete("/t.speed.@delta.@ab", { supportsStreamModifiers: true });
+    expect(afterDelta?.autocompleteItems).toContain("abs");
+    expect(afterDelta?.autocompleteItems).not.toContain("length");
+    expect(afterDelta?.autocompleteItems).not.toContain("delta");
+    expect(afterDelta?.autocompleteFilterText).toBe("ab");
+    expect(nameAutocomplete("/t.speed.@delta.@abs")).toBeUndefined();
   });
 
   it("suggests fields of a modifier result", () => {
@@ -224,8 +231,15 @@ describe("MessagePathInput Component", () => {
     ["/t.x.@abs", {}, true],
     ["/t.x.@abs", { supportsMathModifiers: true }, false],
     ["/t.x.@delta", { supportsMathModifiers: true }, true],
-    ["/t.x.@@delta", { supportsMathModifiers: true, supportsStreamModifiers: true }, false],
-    ["/t.x.@@nope", { supportsMathModifiers: true, supportsStreamModifiers: true }, true],
+    ["/t.x.@delta", { supportsMathModifiers: true, supportsStreamModifiers: true }, false],
+    ["/t.x.@@delta", { supportsMathModifiers: true, supportsStreamModifiers: true }, true],
+    [
+      "/t.x.@derivative.@abs.@degrees",
+      { supportsMathModifiers: true, supportsStreamModifiers: true },
+      false,
+    ],
+    ["/t.x.@derivative.@length", { supportsMathModifiers: true, supportsStreamModifiers: true }, true],
+    ["/t.x.@delta.@integral", { supportsMathModifiers: true, supportsStreamModifiers: true }, true],
   ])("flags %s as invalid with %p: %p", (path, props, invalid) => {
     mockTopics = [{ name: "/t", schemaName: "msg" }];
     mockDatatypes = new Map([["msg", { definitions: [{ name: "x", type: "float64" }] }]]);

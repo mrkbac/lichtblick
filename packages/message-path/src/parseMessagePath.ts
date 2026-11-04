@@ -18,7 +18,7 @@ import { Grammar, Parser } from "nearley";
 
 import grammar from "./grammar.ne";
 import { STREAM_MODIFIERS } from "./modifiers";
-import { MessagePath } from "./types";
+import { MessagePath, MessagePathModifier, MessagePathPart } from "./types";
 
 const grammarObj = Grammar.fromCompiled(grammar);
 
@@ -40,6 +40,10 @@ export function quoteFieldNameIfNeeded(name: string): string {
   return `"${name.replace(/[\\"]/g, (char) => `\\${char}`)}"`;
 }
 
+function isStreamModifier(part: MessagePathPart): boolean {
+  return part.type === "modifier" && part.args.length === 0 && STREAM_MODIFIERS.includes(part.name);
+}
+
 const CacheMessagePath: Record<string, MessagePath> = {};
 
 const parseMessagePath = (path: string): MessagePath | undefined => {
@@ -51,17 +55,20 @@ const parseMessagePath = (path: string): MessagePath | undefined => {
   const parser = new Parser(grammarObj);
   try {
     const result: MessagePath | undefined = parser.feed(path).results[0];
-    const last = result?.messagePath.at(-1);
-    // `.@derivative` at the end of a path is a cross-message modifier, like `.@@derivative`
-    if (
-      result &&
-      result.modifier == undefined &&
-      last?.type === "modifier" &&
-      last.args.length === 0 &&
-      STREAM_MODIFIERS.includes(last.name)
-    ) {
-      result.messagePath.pop();
-      result.modifier = last.name;
+    // A time-series modifier like `.@derivative` is computed across messages. At most one is
+    // allowed, and only modifiers may follow it. Inputs check that those are scalar.
+    const parts = result?.messagePath ?? [];
+    const index = parts.findIndex(isStreamModifier);
+    if (result && index !== -1) {
+      const after = parts.slice(index + 1);
+      if (!after.every((part) => part.type === "modifier" && !isStreamModifier(part))) {
+        return undefined;
+      }
+      result.modifier = (parts[index] as MessagePathModifier).name;
+      if (after.length > 0) {
+        result.modifiersAfter = after as MessagePathModifier[];
+      }
+      result.messagePath = parts.slice(0, index);
     }
     if (result) {
       CacheMessagePath[path] = result;

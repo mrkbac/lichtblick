@@ -43,7 +43,7 @@ export type MessagePathsForStructure = {
 export type MessagePathInputBaseProps = {
   /** Allow per-message modifiers like `.@abs` */
   supportsMathModifiers?: boolean;
-  /** Allow trailing cross-message modifiers like `.@derivative` or `.@@delta` */
+  /** Allow a time-series modifier like `.@derivative`, see `MessagePath.modifier` */
   supportsStreamModifiers?: boolean;
   path: string; // A path of the form `/topic.some_field[:]{id==42}.x`
   index?: number; // Optional index field which gets passed to `onChange` (so you don't have to create anonymous functions)
