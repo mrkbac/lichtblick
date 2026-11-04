@@ -12,8 +12,10 @@ import {
 } from "@mui/material";
 import { useCallback, useRef, useState } from "react";
 
-import { Schemas } from "@lichtblick/suite-base/api/organization/client";
+import { Schemas, cleanText } from "@lichtblick/suite-base/api/organization/client";
 import Stack from "@lichtblick/suite-base/components/Stack";
+
+const MAX_NAME_LENGTH = 200;
 
 type ShareResult = { name: string; organizationId: string };
 
@@ -47,7 +49,7 @@ export function useShareLayoutDialog(): [
     setParams(undefined);
   };
 
-  const trimmedName = name.trim();
+  const trimmedName = cleanText(name, MAX_NAME_LENGTH);
   const canShare = trimmedName.length > 0 && organizationId !== "";
 
   const modal = params && (
@@ -74,6 +76,7 @@ export function useShareLayoutDialog(): [
               autoFocus
               label="Layout name"
               value={name}
+              slotProps={{ htmlInput: { maxLength: MAX_NAME_LENGTH } }}
               onChange={(event) => {
                 setName(event.target.value);
               }}
