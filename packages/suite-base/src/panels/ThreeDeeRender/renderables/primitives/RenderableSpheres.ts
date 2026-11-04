@@ -10,7 +10,7 @@ import { SpherePrimitive, SceneEntity } from "@foxglove/schemas";
 import * as THREE from "three";
 
 import { RenderablePrimitive } from "./RenderablePrimitive";
-import type { IRenderer } from "../../IRenderer";
+import type { Renderer } from "../../Renderer";
 import { makeRgba, rgbToThreeColor, stringToRgba } from "../../color";
 import { LayerSettingsEntity } from "../../settings";
 import { MeshStandardMaterialWithInstanceOpacity } from "../materials/MeshStandardMaterialWithInstanceOpacity";
@@ -38,7 +38,7 @@ export class RenderableSpheres extends RenderablePrimitive {
    */
   #maxInstances: number;
 
-  public constructor(renderer: IRenderer) {
+  public constructor(renderer: Renderer) {
     super("", renderer);
 
     // Sphere mesh

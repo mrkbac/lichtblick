@@ -10,7 +10,7 @@ import { SceneEntity, TextPrimitive } from "@foxglove/schemas";
 import { Label, LabelPool } from "@foxglove/three-text";
 
 import { RenderablePrimitive } from "./RenderablePrimitive";
-import type { IRenderer } from "../../IRenderer";
+import type { Renderer } from "../../Renderer";
 import { getLuminance, makeRgba, SRGBToLinear, stringToRgba } from "../../color";
 import { LayerSettingsEntity } from "../../settings";
 
@@ -20,7 +20,7 @@ export class RenderableTexts extends RenderablePrimitive {
   #labelPool: LabelPool;
   #labels: Label[] = [];
 
-  public constructor(renderer: IRenderer) {
+  public constructor(renderer: Renderer) {
     super("", renderer);
 
     this.#labelPool = renderer.labelPool;

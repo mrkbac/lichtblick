@@ -32,13 +32,14 @@ import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { isValidUrl } from "@lichtblick/suite-base/util/isValidURL";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
+import { BaseUserData, Renderable } from "../Renderable";
 import { RenderableCube } from "./markers/RenderableCube";
 import { RenderableCylinder } from "./markers/RenderableCylinder";
 import { RenderableMeshResource } from "./markers/RenderableMeshResource";
 import { RenderableSphere } from "./markers/RenderableSphere";
 import { missingTransformMessage, MISSING_TRANSFORM } from "./transforms";
-import type { AnyRendererSubscription, IRenderer } from "../IRenderer";
-import { BaseUserData, Renderable } from "../Renderable";
+import type { AnyRendererSubscription } from "../IRenderer";
+import type { Renderer } from "../Renderer";
 import { PartialMessageEvent, SceneExtension, onlyLastByTopicMessage } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import {
@@ -191,7 +192,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
   #textDecoder = new TextDecoder();
   #urdfsByTopic = new Map<string, string>();
 
-  public constructor(renderer: IRenderer, name: string = Urdfs.extensionId) {
+  public constructor(renderer: Renderer, name: string = Urdfs.extensionId) {
     super(name, renderer);
 
     renderer.on("parametersChange", this.#handleParametersChange);
@@ -1065,7 +1066,7 @@ function createRenderable(args: {
   robot: UrdfRobot;
   id: number;
   frameId: string;
-  renderer: IRenderer;
+  renderer: Renderer;
   baseUrl?: string;
   fallbackColor?: ColorRGBA;
 }): Renderable {

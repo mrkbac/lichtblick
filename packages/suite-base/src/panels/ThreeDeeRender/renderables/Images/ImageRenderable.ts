@@ -19,8 +19,8 @@ import {
 } from "@lichtblick/den/video";
 import Logger from "@lichtblick/log";
 import { ICameraModel } from "@lichtblick/suite";
-import { IRenderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
 import { BaseUserData, Renderable } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderable";
+import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
 import { stringToRgba } from "@lichtblick/suite-base/panels/ThreeDeeRender/color";
 import {
   clampBrightness,
@@ -181,7 +181,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
   readonly #codecByFormat = new Map<string, VideoCodec | undefined>();
   #codec: VideoCodec | undefined;
 
-  public constructor(topicName: string, renderer: IRenderer, userData: ImageUserData) {
+  public constructor(topicName: string, renderer: Renderer, userData: ImageUserData) {
     super(topicName, renderer, userData);
   }
 

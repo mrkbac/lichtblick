@@ -9,7 +9,7 @@ import * as THREE from "three";
 
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
-import type { IRenderer } from "./IRenderer";
+import type { Renderer } from "./Renderer";
 import type { BaseSettings } from "./settings";
 import type { Pose } from "./transforms";
 
@@ -37,11 +37,11 @@ export type BaseUserData = {
  * properties from `BaseUserData` that allow coordinate frame transforms to
  * automatically be applied and settings tree errors to be displayed.
  *
- * TRenderer may be set to `undefined` to opt out of access to the bloated IRenderer interface.
+ * TRenderer may be set to `undefined` to opt out of access to the bloated Renderer interface.
  */
 export class Renderable<
   TUserData extends BaseUserData = BaseUserData,
-  TRenderer extends IRenderer | undefined = IRenderer,
+  TRenderer extends Renderer | undefined = Renderer,
 > extends THREE.Object3D {
   /** Identifies this class as inheriting from `Renderable` */
   public readonly isRenderable = true;

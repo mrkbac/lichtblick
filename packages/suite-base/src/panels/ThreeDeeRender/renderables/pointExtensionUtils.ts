@@ -10,8 +10,8 @@ import * as THREE from "three";
 
 import { SettingsTreeNode, Topic } from "@lichtblick/suite";
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
-import { IRenderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
 import { BaseUserData, Renderable } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderable";
+import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
 import { rgbaToCssString } from "@lichtblick/suite-base/panels/ThreeDeeRender/color";
 import {
   MISSING_TRANSFORM,
@@ -519,7 +519,7 @@ type HistoryEntry<TRenderable extends DisposableObject> = {
 export class RenderObjectHistory<TRenderable extends DisposableObject> {
   #history: HistoryEntry<TRenderable>[];
   #parentRenderable: Renderable<RenderObjectHistoryUserData>;
-  #renderer: IRenderer;
+  #renderer: Renderer;
 
   public constructor({
     initial,
@@ -527,7 +527,7 @@ export class RenderObjectHistory<TRenderable extends DisposableObject> {
     parentRenderable,
   }: {
     initial: HistoryEntry<TRenderable>;
-    renderer: IRenderer;
+    renderer: Renderer;
     parentRenderable: Renderable<RenderObjectHistoryUserData>;
   }) {
     this.#history = [initial];

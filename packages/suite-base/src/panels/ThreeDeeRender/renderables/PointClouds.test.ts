@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
-import { IRenderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
+import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
 import { PointCloud2, PointFieldType } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
 
 import { createStixelMaterial, PointCloudHistoryRenderable } from "./PointClouds";
@@ -66,7 +66,7 @@ const noop = () => {};
 const renderer = {
   settings: { errors: { add: noop, addToTopic: noop, remove: noop, removeFromTopic: noop } },
   normalizeFrameId: (frameId: string) => frameId,
-} as unknown as IRenderer;
+} as unknown as Renderer;
 
 type Settings = typeof DEFAULT_POINT_SETTINGS & {
   stixelsEnabled: boolean;
