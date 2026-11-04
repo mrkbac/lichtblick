@@ -23,7 +23,6 @@ import type { FileReader, FileStream, ILogger } from "./CachedFilelike.types";
 import VirtualLRUBuffer from "./VirtualLRUBuffer";
 import { getNewConnection } from "./getNewConnection";
 import { Range } from "./ranges";
-import { toError } from "./toError";
 
 // CachedFilelike is a streamed Filelike backed by a VirtualLRUBuffer.
 // It serves requested byte ranges from an in-memory LRU cache through one main streaming fetch (plus

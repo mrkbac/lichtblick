@@ -38,7 +38,7 @@ const mockContext: Partial<PanelExtensionContext> = {
 describe("PieChart", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    (useLegendCount as Mock).mockReturnValue({ legendCount: 10 });
+    (useLegendCount as unknown as Mock).mockReturnValue({ legendCount: 10 });
     (useSettingsTree as Mock).mockReturnValue({
       general: {
         fields: {
