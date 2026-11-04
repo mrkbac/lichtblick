@@ -49,6 +49,8 @@ export const panels = {
   teleop: "Teleop",
   teleopDescription: "Teleoperate a robot over a live connection.",
   topicGraph: "Topic Graph",
+  topicHealth: "Topic Health",
+  topicHealthDescription: "Monitor topic rates against expectations and spot slow or stale topics.",
   topicGraphDescription: "Display a graph of active nodes, topics, and services.",
   userScripts: "User Scripts",
   userScriptsDescription:
