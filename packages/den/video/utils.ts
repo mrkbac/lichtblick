@@ -52,3 +52,25 @@ export function findNextStartCodeEnd(data: Uint8Array, start: number): number {
     data[startCodeStart + 3] === 1;
   return startCodeStart + (is4Byte ? 4 : 3);
 }
+
+/**
+ * Length of the Annex B start code at the beginning of `data` (3 for 0x000001, 4 for 0x00000001),
+ * or undefined if `data` does not start with one (e.g. length-prefixed AVCC/HVCC).
+ */
+export function annexBBoxSize(data: Uint8Array): number | undefined {
+  if (data.length < 4 || data[0] !== 0 || data[1] !== 0) {
+    return undefined;
+  }
+  if (data[2] === 1) {
+    return 3;
+  }
+  if (data[2] === 0 && data[3] === 1) {
+    return 4;
+  }
+  return undefined;
+}
+
+/** Two-digit uppercase hex of a byte, as used in codec strings. */
+export function byteToHex(val: number): string {
+  return ("00" + val.toString(16)).slice(-2).toUpperCase();
+}
