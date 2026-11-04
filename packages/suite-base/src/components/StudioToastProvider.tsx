@@ -20,7 +20,7 @@ import {
   MaterialDesignContent,
   CustomContentProps,
 } from "notistack";
-import { PropsWithChildren, forwardRef } from "react";
+import { PropsWithChildren, Ref } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { APP_BAR_HEIGHT } from "@lichtblick/suite-base/components/AppBar/constants";
@@ -98,11 +98,10 @@ const CloseSnackbarAction = ({ id }: { id: SnackbarKey }) => {
   );
 };
 
-const Snackbar = forwardRef<HTMLDivElement, CustomContentProps>((props, ref) => {
+function Snackbar(props: CustomContentProps & { ref?: Ref<HTMLDivElement> }): React.JSX.Element {
   const { classes } = useStyles();
-  return <MaterialDesignContent ref={ref} {...props} className={classes.root} />;
-});
-Snackbar.displayName = "Snackbar";
+  return <MaterialDesignContent {...props} className={classes.root} />;
+}
 
 export default function StudioToastProvider({ children }: PropsWithChildren): React.JSX.Element {
   const { classes: containerClasses } = useContainerStyles();

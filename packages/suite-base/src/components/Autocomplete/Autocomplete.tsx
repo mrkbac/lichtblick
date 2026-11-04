@@ -65,11 +65,10 @@ const CustomPopper = function (props: PopperProps) {
  * for things like multiple autocompletes that seamlessly transition into each
  * other, e.g. when building more complex strings like in the Plot panel.
  */
-// eslint-disable-next-line @typescript-eslint/no-shadow
-export const Autocomplete = React.forwardRef(function Autocomplete(
-  props: AutocompleteProps,
-  ref: React.ForwardedRef<IAutocomplete>,
+export function Autocomplete(
+  props: AutocompleteProps & { ref?: React.Ref<IAutocomplete> },
 ): React.JSX.Element {
+  const { ref } = props;
   const inputRef = useRef<HTMLInputElement>(ReactNull);
 
   const { classes, cx } = useStyles();
@@ -203,4 +202,4 @@ export const Autocomplete = React.forwardRef(function Autocomplete(
       value={value ?? ReactNull}
     />
   );
-});
+}

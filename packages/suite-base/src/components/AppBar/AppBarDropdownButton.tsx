@@ -7,7 +7,6 @@
 
 import { ChevronDown12Filled } from "@fluentui/react-icons";
 import { ButtonBase, ButtonBaseProps, Typography } from "@mui/material";
-import { forwardRef } from "react";
 import tinycolor2 from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 
@@ -54,7 +53,7 @@ type Props = {
 /**
  * A button that can be used in the app bar to open a dropdown menu.
  */
-const AppBarDropdownButton = forwardRef<HTMLButtonElement, Props>((props, ref) => {
+function AppBarDropdownButton(props: Props): React.JSX.Element {
   const { title, subheader, onClick, selected, ...rest } = props;
   const { classes, cx } = useStyles();
 
@@ -63,7 +62,6 @@ const AppBarDropdownButton = forwardRef<HTMLButtonElement, Props>((props, ref) =
       className={cx(classes.layoutButton, { "Mui-selected": selected })}
       aria-haspopup="true"
       onClick={onClick}
-      ref={ref}
       {...rest}
     >
       <Stack alignItems="flex-start">
@@ -79,8 +77,7 @@ const AppBarDropdownButton = forwardRef<HTMLButtonElement, Props>((props, ref) =
       <ChevronDown12Filled />
     </ButtonBase>
   );
-});
-AppBarDropdownButton.displayName = "AppBarDropdownButton";
+}
 
 // ts-unused-exports:disable-next-line
 export { AppBarDropdownButton };

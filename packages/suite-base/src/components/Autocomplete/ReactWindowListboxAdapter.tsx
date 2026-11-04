@@ -54,12 +54,10 @@ export type ListboxAdapterChild = [
  * From the Autocomplete parent it receives a list of children (which must conform to the
  * ListboxAdapterChild type), and props to apply to the outer listbox element.
  */
-export const ReactWindowListboxAdapter = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLElement>
->(function ListboxComponent(props, ref) {
-  const { children, ...other } = props;
-  const { className, ...rest } = other;
+export function ReactWindowListboxAdapter(
+  props: React.HTMLAttributes<HTMLElement> & { ref?: React.Ref<HTMLDivElement> },
+): React.JSX.Element {
+  const { children, className, ref, ...rest } = props;
 
   const options = children as ListboxAdapterChild[];
 
@@ -93,7 +91,7 @@ export const ReactWindowListboxAdapter = React.forwardRef<
       />
     </div>
   );
-});
+}
 
 /** Render an individual row for the List */
 function FixedSizeListRenderRow(
