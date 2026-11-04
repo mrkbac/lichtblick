@@ -16,14 +16,12 @@
 
 // Entrypoint for chartjs worker
 
-import Rpc from "@lichtblick/suite-base/util/Rpc";
+import * as Comlink from "@foxglove/comlink";
+
 import { inWebWorker } from "@lichtblick/suite-base/util/workers";
 
 import ChartJsMux from "./ChartJsMux";
 
 if (inWebWorker()) {
-  // Since we use a single _web_ target for our bundle, _global_ referrs to the window global
-  // rather than WorkerGlobalScope. We cast to the value we know it actually is.
-  // #FG-64
-  new ChartJsMux(new Rpc(global));
+  Comlink.expose(new ChartJsMux());
 }

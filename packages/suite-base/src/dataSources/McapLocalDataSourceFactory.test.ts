@@ -44,7 +44,7 @@ describe("McapLocalDataSourceFactory", () => {
     const args: DataSourceFactoryInitializeArgs = {
       file,
       files,
-    } as unknown as DataSourceFactoryInitializeArgs;
+    };
 
     return {
       args,
