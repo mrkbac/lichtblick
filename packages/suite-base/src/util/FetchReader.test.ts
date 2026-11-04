@@ -47,7 +47,7 @@ describe("FetchReader", () => {
 
       // Execute the queued fetch
       const queuedFn = mockGlobalRequestQueue.runExclusive.mock.calls[0]![0];
-      await queuedFn();
+      await queuedFn(1);
 
       expect(mockFetch).toHaveBeenCalledWith(url, {
         ...options,
