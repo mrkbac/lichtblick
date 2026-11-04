@@ -1247,6 +1247,58 @@ describe("IterablePlayer", () => {
     await player.isClosed;
   });
 
+  it("skims at high speed and takes larger steps when the source can't keep up", async () => {
+    // A source that needs 100ms per skim update while 50x at 30 updates/s needs one every 33ms
+    class SlowSource extends TestSource {
+      public override async initialize(): Promise<Initialization> {
+        return { ...(await super.initialize()), end: { sec: 10_000, nsec: 0 } };
+      }
+
+      public override async *messageIterator(
+        args: MessageIteratorArgs,
+      ): AsyncIterableIterator<Readonly<IteratorResult>> {
+        const startSec = (args.start?.sec ?? 0) + (args.start?.nsec ?? 0) / 1e9;
+        const stepSec = args.skimInterval
+          ? args.skimInterval.sec + args.skimInterval.nsec / 1e9
+          : 1;
+        for (let t = startSec + stepSec; t < 10_000; t += stepSec) {
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          yield { type: "stamp", stamp: fromSec(t) };
+        }
+      }
+    }
+    // Keeping up is measured against the wall clock
+    mockDateNow.mockRestore();
+    const source = new SlowSource();
+    const iteratorSpy = vi.spyOn(source, "messageIterator");
+    const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+    player.setSubscriptions([{ topic: defaultTopic }]);
+    const present = signal();
+    player.setListener(async (state) => {
+      if (state.presence === PlayerPresence.PRESENT) {
+        present.resolve();
+      }
+    });
+    player.setPlaybackSpeed(50);
+    await present;
+    player.startPlayback();
+
+    await new Promise((resolve) => setTimeout(resolve, 4500));
+
+    const skimSec = iteratorSpy.mock.calls.map(([args]) =>
+      args.skimInterval ? args.skimInterval.sec + args.skimInterval.nsec / 1e9 : undefined,
+    );
+    // Starts at 30 updates per second ...
+    expect(skimSec[0]).toBeCloseTo(50 / 30);
+    // ... and drops to roughly the 10 per second the source delivers
+    const last = skimSec[skimSec.length - 1]!;
+    expect(last).toBeGreaterThanOrEqual(50 / 15);
+    expect(last).toBeLessThanOrEqual(50 / 5);
+
+    player.close();
+    await player.isClosed;
+  }, 10_000);
+
   it("should allow changing subscriptions when player in start-play state", async () => {
     const source = new TestSource();
     const topic = BasicBuilder.string();

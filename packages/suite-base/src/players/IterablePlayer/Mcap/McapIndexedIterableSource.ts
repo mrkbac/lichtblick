@@ -28,6 +28,11 @@ const log = Logger.getLogger(__filename);
 // Skim reads the last 50ms of each window: enough for every fast topic (and every publisher on
 // a shared topic) to show up, while skipping the rest of the window's chunks.
 const SKIM_TAIL_NS = 50_000_000n;
+// How many chunks skimming prefetches ahead of the window it is reading
+const SKIM_PREFETCH_AHEAD_CHUNKS = 24;
+
+export type ByteRange = { offset: bigint; length: bigint };
+
 // Below this many chunks per window, skimming would re-decompress the same chunks; read linearly.
 const SKIM_MIN_CHUNKS_PER_WINDOW = 4n;
 
@@ -44,11 +49,20 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   #start?: Time;
   #end?: Time;
   #avgChunkDurationNs = 0n;
+  #prefetch?: (ranges: ByteRange[]) => void;
 
   public readonly sourceType = "serialized";
 
-  public constructor(reader: McapIndexedReader) {
+  /**
+   * @param options.prefetch Fetches byte ranges ahead of time so the reader later hits a local
+   * copy. Remote sources pass it so skimming can fetch upcoming chunks in parallel.
+   */
+  public constructor(
+    reader: McapIndexedReader,
+    options?: { prefetch?: (ranges: ByteRange[]) => void },
+  ) {
     this.#reader = reader;
+    this.#prefetch = options?.prefetch;
   }
 
   public async initialize(): Promise<Initialization> {
@@ -238,10 +252,42 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     skimNs: bigint,
     topicNames: string[],
   ): AsyncIterableIterator<Readonly<IteratorResult<Uint8Array>>> {
-    for (let windowStart = startNs; windowStart <= endNs; windowStart += skimNs) {
+    const windowBounds = (windowStart: bigint) => {
       const windowEnd = windowStart + skimNs - 1n < endNs ? windowStart + skimNs - 1n : endNs;
       const tailStart =
         windowEnd - SKIM_TAIL_NS > windowStart ? windowEnd - SKIM_TAIL_NS : windowStart;
+      return { windowEnd, tailStart };
+    };
+    const topicSet = new Set(topicNames);
+    // Chunks requested from #prefetch that the reader hasn't reached yet, and the next window to plan
+    const prefetched: McapTypes.ChunkIndex[][] = [];
+    let nextPrefetchWindow = startNs;
+
+    for (let windowStart = startNs; windowStart <= endNs; windowStart += skimNs) {
+      const { windowEnd, tailStart } = windowBounds(windowStart);
+
+      if (this.#prefetch) {
+        prefetched.shift();
+        const ranges: ByteRange[] = [];
+        while (
+          nextPrefetchWindow <= endNs &&
+          prefetched.reduce((n, chunks) => n + chunks.length, 0) < SKIM_PREFETCH_AHEAD_CHUNKS
+        ) {
+          const bounds = windowBounds(nextPrefetchWindow);
+          const chunks = this.#skimChunks(
+            topicSet,
+            nextPrefetchWindow,
+            bounds.windowEnd,
+            bounds.tailStart,
+          );
+          prefetched.push(chunks);
+          ranges.push(...chunks.map(chunkByteRange));
+          nextPrefetchWindow += skimNs;
+        }
+        if (ranges.length > 0) {
+          this.#prefetch(ranges);
+        }
+      }
 
       const messages: McapTypes.Message[] = [];
       const seen = new Set<string>();
@@ -281,22 +327,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     start: bigint,
     end: bigint,
   ): Promise<McapTypes.Message[]> {
-    const latestChunkByTopic = new Map<string, McapTypes.ChunkIndex>();
-    for (const chunk of this.#reader.chunkIndexes) {
-      if (chunk.messageStartTime > end || chunk.messageEndTime < start) {
-        continue;
-      }
-      for (const channelId of chunk.messageIndexOffsets.keys()) {
-        const topic = this.#channelInfoById.get(channelId)?.channel.topic;
-        if (topic == undefined || !topics.has(topic)) {
-          continue;
-        }
-        const prev = latestChunkByTopic.get(topic);
-        if (!prev || chunk.messageEndTime > prev.messageEndTime) {
-          latestChunkByTopic.set(topic, chunk);
-        }
-      }
-    }
+    const latestChunkByTopic = this.#latestChunkByTopic(topics, start, end);
 
     const topicsByChunk = new Map<McapTypes.ChunkIndex, string[]>();
     for (const [topic, chunk] of latestChunkByTopic) {
@@ -325,6 +356,64 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       }
     }
     return messages;
+  }
+
+  /** The chunk holding each topic's latest message in [start, end], from the chunk index alone */
+  #latestChunkByTopic(
+    topics: Set<string>,
+    start: bigint,
+    end: bigint,
+  ): Map<string, McapTypes.ChunkIndex> {
+    const latestChunkByTopic = new Map<string, McapTypes.ChunkIndex>();
+    for (const chunk of this.#reader.chunkIndexes) {
+      if (chunk.messageStartTime > end || chunk.messageEndTime < start) {
+        continue;
+      }
+      for (const channelId of chunk.messageIndexOffsets.keys()) {
+        const topic = this.#channelInfoById.get(channelId)?.channel.topic;
+        if (topic == undefined || !topics.has(topic)) {
+          continue;
+        }
+        const prev = latestChunkByTopic.get(topic);
+        if (!prev || chunk.messageEndTime > prev.messageEndTime) {
+          latestChunkByTopic.set(topic, chunk);
+        }
+      }
+    }
+    return latestChunkByTopic;
+  }
+
+  /**
+   * Chunks a skim window may read: those overlapping its tail, and per topic its latest chunk plus
+   * the chunks holding that topic that overlap it in time, since the topic's latest message can be
+   * in any of them.
+   */
+  #skimChunks(
+    topics: Set<string>,
+    windowStart: bigint,
+    windowEnd: bigint,
+    tailStart: bigint,
+  ): McapTypes.ChunkIndex[] {
+    const chunks = new Set<McapTypes.ChunkIndex>();
+    const latest = this.#latestChunkByTopic(topics, windowStart, windowEnd);
+    for (const chunk of this.#reader.chunkIndexes) {
+      if (chunk.messageStartTime > windowEnd || chunk.messageEndTime < windowStart) {
+        continue;
+      }
+      if (chunk.messageEndTime >= tailStart) {
+        chunks.add(chunk);
+        continue;
+      }
+      for (const channelId of chunk.messageIndexOffsets.keys()) {
+        const topic = this.#channelInfoById.get(channelId)?.channel.topic;
+        const latestChunk = topic != undefined ? latest.get(topic) : undefined;
+        if (latestChunk && chunk.messageEndTime >= latestChunk.messageStartTime) {
+          chunks.add(chunk);
+          break;
+        }
+      }
+    }
+    return [...chunks];
   }
 
   #toResult(message: McapTypes.Message): Readonly<IteratorResult<Uint8Array>> {
@@ -397,4 +486,16 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   public getEnd(): Time | undefined {
     return this.#end;
   }
+}
+
+/** The chunk record and the message indexes that follow it */
+function chunkByteRange(chunk: McapTypes.ChunkIndex): ByteRange {
+  let end = chunk.chunkStartOffset + chunk.chunkLength;
+  if (chunk.messageIndexOffsets.size > 0) {
+    const firstIndex = [...chunk.messageIndexOffsets.values()].reduce((a, b) => (b < a ? b : a));
+    if (firstIndex + chunk.messageIndexLength > end) {
+      end = firstIndex + chunk.messageIndexLength;
+    }
+  }
+  return { offset: chunk.chunkStartOffset, length: end - chunk.chunkStartOffset };
 }
