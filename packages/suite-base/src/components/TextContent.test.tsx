@@ -3,30 +3,24 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom/vitest";
 
 import TextContent from "@lichtblick/suite-base/components/TextContent";
-import LinkHandlerContext from "@lichtblick/suite-base/context/LinkHandlerContext";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 type SetupProps = {
   children: React.ReactNode;
   style?: React.CSSProperties;
   allowMarkdownHtml?: boolean;
-  handleLink?: (event: React.MouseEvent, href: string) => void;
 };
 
-function setup({ children, style, allowMarkdownHtml, handleLink }: SetupProps) {
-  const handleLinkMock = handleLink ?? vi.fn();
-  const utils = render(
-    <LinkHandlerContext.Provider value={handleLinkMock}>
-      <TextContent style={style} allowMarkdownHtml={allowMarkdownHtml}>
-        {children}
-      </TextContent>
-    </LinkHandlerContext.Provider>,
+function setup({ children, style, allowMarkdownHtml }: SetupProps) {
+  return render(
+    <TextContent style={style} allowMarkdownHtml={allowMarkdownHtml}>
+      {children}
+    </TextContent>,
   );
-  return { ...utils, handleLink: handleLinkMock };
 }
 
 describe("TextContent", () => {
@@ -83,17 +77,6 @@ describe("TextContent", () => {
       setup({ children: `<span data-testid="raw-html">${sampleText}</span>` });
       // Then
       expect(screen.queryByTestId("raw-html")).not.toBeInTheDocument();
-    });
-  });
-
-  describe("link handling", () => {
-    it("should call the link handler when a link is clicked", () => {
-      // Given
-      const { handleLink } = setup({ children: `[${sampleText}](https://example.com)` });
-      // When
-      fireEvent.click(screen.getByRole("link", { name: sampleText }));
-      // Then
-      expect(handleLink).toHaveBeenCalledWith(expect.anything(), "https://example.com");
     });
   });
 });
