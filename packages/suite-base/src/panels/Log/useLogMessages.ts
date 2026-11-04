@@ -22,6 +22,10 @@ const EMPTY: readonly string[] = [];
 
 type ByTopic = Record<string, readonly NormalizedLogMessage[]>;
 
+/** Copy the growing per-topic arrays so consumers see new references on every flush. */
+const snapshot = (acc: Record<string, NormalizedLogMessage[]>): ByTopic =>
+  Object.fromEntries(Object.entries(acc).map(([topic, messages]) => [topic, messages.slice()]));
+
 /** Merge arrays that are each sorted by receiveTime into one sorted array. */
 export function mergeByReceiveTime(
   arrays: readonly (readonly NormalizedLogMessage[])[],
@@ -96,7 +100,7 @@ export function useLogMessages(topics: readonly string[]): {
     const acc = accumulatedRef.current;
     const flush = () => {
       flushTimerRef.current = undefined;
-      setRangeByTopic({ ...acc });
+      setRangeByTopic(snapshot(acc));
     };
 
     let added = false;
@@ -123,7 +127,7 @@ export function useLogMessages(topics: readonly string[]): {
           if (cancelled) {
             return;
           }
-          setRangeByTopic({ ...acc });
+          setRangeByTopic(snapshot(acc));
           setLoadingTopics((prev) => {
             const next = new Set(prev);
             next.delete(topic);
@@ -155,7 +159,7 @@ export function useLogMessages(topics: readonly string[]): {
     }
     if (added || removed.length > 0) {
       // Publish new (still empty) range topics right away so they skip the live subscription
-      setRangeByTopic({ ...acc });
+      setRangeByTopic(snapshot(acc));
     }
     // playerId: resubscribe after the reset effect below cleared everything
   }, [topics, ready, subscribeMessageRange, playerId]);

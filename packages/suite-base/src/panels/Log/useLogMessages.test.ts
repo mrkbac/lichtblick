@@ -121,6 +121,27 @@ describe("useLogMessages", () => {
     expect(result.current.loading).toBe(false);
   });
 
+  it("publishes a new items array on every flush for a single topic", async () => {
+    withRange();
+    const { result } = renderHook(() => useLogMessages(SINGLE_TOPIC));
+
+    await act(async () => {
+      rangeIterators.get("/a")!([event(1, "/a")]);
+      await jest.runAllTimersAsync();
+    });
+    const first = result.current.items;
+    expect(first).toHaveLength(1);
+
+    await act(async () => {
+      rangeIterators.get("/a")!([event(2, "/a")]);
+      await jest.runAllTimersAsync();
+    });
+
+    expect(result.current.items).not.toBe(first);
+    expect(result.current.items).toHaveLength(2);
+    expect(first).toHaveLength(1);
+  });
+
   it("cancels topics that are no longer requested", async () => {
     withRange();
     const { rerender, result } = renderHook(({ topics }) => useLogMessages(topics), {
@@ -155,3 +176,4 @@ describe("useLogMessages", () => {
 });
 
 const TOPICS = ["/a", "/b"];
+const SINGLE_TOPIC = ["/a"];

@@ -144,8 +144,11 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
     if (!list || index < 0) {
       return;
     }
+    const before = list.element?.scrollTop;
     list.scrollToRow({ index, align: "smart" });
-    programmaticScrollTop.current = list.element?.scrollTop;
+    const after = list.element?.scrollTop;
+    // Without movement there is no scroll event, so a stale value would swallow a user scroll
+    programmaticScrollTop.current = after !== before ? after : undefined;
   }, []);
 
   useEffect(() => {
