@@ -6,10 +6,10 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { McapTypes } from "@mcap/core";
+import { Semaphore } from "async-mutex";
 
 import BrowserHttpReader from "@lichtblick/suite-base/util/BrowserHttpReader";
 import CachedFilelike from "@lichtblick/suite-base/util/CachedFilelike";
-import { RequestQueue } from "@lichtblick/suite-base/util/RequestQueue";
 
 import { BatchingReadable } from "./BatchingReadable";
 import type { RemoteFileReadableOptions } from "./RemoteFileReadable.types";
@@ -29,7 +29,7 @@ export class RemoteFileReadable {
   readonly #remoteReader: CachedFilelike;
   readonly #batchingReadable: BatchingReadable;
   readonly #url: string;
-  readonly #prefetchQueue = new RequestQueue(PREFETCH_CONCURRENCY);
+  readonly #prefetchQueue = new Semaphore(PREFETCH_CONCURRENCY);
   // Exact-range downloads keyed by start offset, in request order for eviction
   readonly #prefetched = new Map<number, Prefetched>();
   #prefetchedBytes = 0;
@@ -102,7 +102,7 @@ export class RemoteFileReadable {
         continue;
       }
       const data = this.#prefetchQueue
-        .run(async () => await this.#fetchRange(start, end))
+        .runExclusive(async () => await this.#fetchRange(start, end))
         .catch(() => undefined);
       this.#prefetched.set(start, { start, end, data });
       this.#prefetchedBytes += end - start;
