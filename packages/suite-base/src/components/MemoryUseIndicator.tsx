@@ -9,8 +9,6 @@ import { Tooltip, Typography } from "@mui/material";
 import { makeStyles } from "tss-react/mui";
 
 import { useMemoryInfo } from "@lichtblick/hooks";
-import { AppSetting } from "@lichtblick/suite-base/AppSetting";
-import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -39,7 +37,6 @@ function toMB(bytes: number): number {
 function MemoryUseIndicator(): React.JSX.Element {
   const memoryInfo = useMemoryInfo({ refreshIntervalMs: 5000 });
   const { classes, cx } = useStyles();
-  const [enableNewTopNav = true] = useAppConfigurationValue<boolean>(AppSetting.ENABLE_NEW_TOPNAV);
 
   // If we can't load memory info (maybe not supported) then we don't show any indicator
   if (!memoryInfo) {
@@ -51,11 +48,7 @@ function MemoryUseIndicator(): React.JSX.Element {
   const limitMb = toMB(memoryInfo.jsHeapSizeLimit).toLocaleString();
 
   return (
-    <Tooltip
-      arrow={false}
-      title={`Used (MB): ${usedMb} / ${limitMb}`}
-      placement={enableNewTopNav ? "bottom" : "right"}
-    >
+    <Tooltip arrow={false} title={`Used (MB): ${usedMb} / ${limitMb}`} placement="bottom">
       <div className={classes.root}>
         <Typography className={cx(classes.label, classes.text)} variant="caption">
           MEM

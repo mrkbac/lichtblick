@@ -13,11 +13,7 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import Sidebars from "@lichtblick/suite-base/components/Sidebars";
 import { SidebarItem } from "@lichtblick/suite-base/components/Sidebars/types";
-import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
-import {
-  useCurrentUser,
-  useCurrentUserType,
-} from "@lichtblick/suite-base/context/CurrentUserContext";
+import { useCurrentUserType } from "@lichtblick/suite-base/context/CurrentUserContext";
 import { useEvents } from "@lichtblick/suite-base/context/EventsContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
@@ -71,10 +67,6 @@ vi.mock("@lichtblick/suite-base/components/AppBar", () => ({
 vi.mock("@lichtblick/suite-base/components/AlertList/AlertsList", () => ({
   AlertsList: () => undefined,
 }));
-vi.mock("@lichtblick/suite-base/components/AccountSettingsSidebar/AccountSettings", () => ({
-  __esModule: true,
-  default: () => undefined,
-}));
 vi.mock("@lichtblick/suite-base/components/DataSourceDialog", () => ({
   DataSourceDialog: () => undefined,
 }));
@@ -89,10 +81,6 @@ vi.mock("@lichtblick/suite-base/components/DocumentDropListener", () => ({
 vi.mock("@lichtblick/suite-base/components/EventsList", () => ({
   EventsList: () => undefined,
 }));
-vi.mock("@lichtblick/suite-base/components/ExtensionsSettings", () => ({
-  __esModule: true,
-  default: () => undefined,
-}));
 vi.mock("@lichtblick/suite-base/components/KeyListener", () => ({
   __esModule: true,
   default: () => undefined,
@@ -100,9 +88,6 @@ vi.mock("@lichtblick/suite-base/components/KeyListener", () => ({
 vi.mock("@lichtblick/suite-base/components/LayoutBrowser", () => ({
   __esModule: true,
   default: () => undefined,
-}));
-vi.mock("@lichtblick/suite-base/components/PanelCatalog", () => ({
-  PanelCatalog: () => undefined,
 }));
 vi.mock("@lichtblick/suite-base/components/PanelLayout", () => ({
   __esModule: true,
@@ -115,13 +100,6 @@ vi.mock("@lichtblick/suite-base/components/PanelSettings", () => ({
 vi.mock("@lichtblick/suite-base/components/PlaybackControls", () => ({
   __esModule: true,
   default: () => undefined,
-}));
-vi.mock("@lichtblick/suite-base/components/RemountOnValueChange", () => ({
-  __esModule: true,
-  default: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
-vi.mock("@lichtblick/suite-base/components/SidebarContent", () => ({
-  SidebarContent: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
 vi.mock("@lichtblick/suite-base/components/Stack", () => ({
   __esModule: true,
@@ -159,17 +137,7 @@ vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   useMessagePipeline: vi.fn(),
   useMessagePipelineGetter: vi.fn(),
 }));
-vi.mock("@lichtblick/suite-base/context/AppContext", () => ({
-  useAppContext: vi.fn(),
-}));
-vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
-  useCurrentLayoutSelector: vi.fn().mockReturnValue(undefined),
-  useCurrentLayoutActions: vi.fn().mockReturnValue({
-    setSelectedLayoutId: vi.fn(),
-  }),
-}));
 vi.mock("@lichtblick/suite-base/context/CurrentUserContext", () => ({
-  useCurrentUser: vi.fn(),
   useCurrentUserType: vi.fn(),
 }));
 vi.mock("@lichtblick/suite-base/context/EventsContext", () => ({
@@ -187,7 +155,6 @@ vi.mock("@lichtblick/suite-base/context/PlayerSelectionContext", () => ({
 }));
 vi.mock("@lichtblick/suite-base/context/Workspace/WorkspaceContext", () => ({
   useWorkspaceStore: vi.fn(),
-  SidebarItemKeys: [],
 }));
 vi.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => ({
   useWorkspaceActions: vi.fn(),
@@ -198,10 +165,6 @@ vi.mock("@lichtblick/suite-base/hooks", () => ({
 vi.mock("@lichtblick/suite-base/hooks/useAlertCount", () => ({
   __esModule: true,
   default: vi.fn(),
-}));
-vi.mock("@lichtblick/suite-base/hooks/useAddPanel", () => ({
-  __esModule: true,
-  default: vi.fn().mockReturnValue(vi.fn()),
 }));
 vi.mock("@lichtblick/suite-base/hooks/useDefaultWebLaunchPreference", () => ({
   useDefaultWebLaunchPreference: vi.fn(),
@@ -227,20 +190,12 @@ vi.mock("@lichtblick/suite-base/hooks/useSeekTimeFromCLI", () => ({
 vi.mock("@lichtblick/suite-base/panels/Plot/hooks/useStructureItemsStoreManager", () => ({
   useStructureItemsStoreManager: vi.fn(),
 }));
-vi.mock("@lichtblick/suite-base/theme/icons", () => ({
-  __esModule: true,
-  default: {},
-}));
 vi.mock("@lichtblick/suite-base/util/appURLState", () => ({
   parseAppURLState: vi.fn().mockReturnValue(undefined),
 }));
 vi.mock("@lichtblick/suite-base/util/broadcast/useBroadcast", () => ({
   __esModule: true,
   default: vi.fn(),
-}));
-vi.mock("@lichtblick/suite-base/util/isDesktopApp", () => ({
-  __esModule: true,
-  default: vi.fn().mockReturnValue(false),
 }));
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -305,18 +260,11 @@ describe("Workspace - alerts badge in leftSidebarItems", () => {
     });
     (useHandleFiles as Mock).mockReturnValue({ handleFiles: vi.fn() });
     (useAppConfigurationValue as Mock).mockReturnValue([false]);
-    (useCurrentUser as Mock).mockReturnValue({ currentUser: undefined, signIn: undefined });
     (useCurrentUserType as Mock).mockReturnValue("unauthenticated");
     (useEvents as Mock).mockImplementation(
       (selector: (store: { eventsSupported: boolean; selectEvent: Mock }) => unknown) =>
         selector({ eventsSupported: false, selectEvent: vi.fn() }),
     );
-    (useAppContext as Mock).mockReturnValue({
-      PerformanceSidebarComponent: undefined,
-      sidebarItems: [],
-      layoutBrowser: undefined,
-      workspaceStoreCreator: undefined,
-    });
   });
 
   afterEach(() => {
@@ -397,18 +345,11 @@ describe("Workspace - session-based MCAP resolution", () => {
     });
     (useHandleFiles as Mock).mockReturnValue({ handleFiles: vi.fn() });
     (useAppConfigurationValue as Mock).mockReturnValue([false]);
-    (useCurrentUser as Mock).mockReturnValue({ currentUser: undefined, signIn: undefined });
     (useCurrentUserType as Mock).mockReturnValue("unauthenticated");
     (useEvents as Mock).mockImplementation(
       (selector: (store: { eventsSupported: boolean; selectEvent: Mock }) => unknown) =>
         selector({ eventsSupported: false, selectEvent: vi.fn() }),
     );
-    (useAppContext as Mock).mockReturnValue({
-      PerformanceSidebarComponent: undefined,
-      sidebarItems: [],
-      layoutBrowser: undefined,
-      workspaceStoreCreator: undefined,
-    });
   });
 
   it("should fetch session and call selectSource with resolved URLs and metadata", async () => {
@@ -502,18 +443,11 @@ describe("Workspace - fetchLayoutFromUrl", () => {
     });
     (useHandleFiles as Mock).mockReturnValue({ handleFiles: vi.fn() });
     (useAppConfigurationValue as Mock).mockReturnValue([false]);
-    (useCurrentUser as Mock).mockReturnValue({ currentUser: undefined, signIn: undefined });
     (useCurrentUserType as Mock).mockReturnValue("unauthenticated");
     (useEvents as Mock).mockImplementation(
       (selector: (store: { eventsSupported: boolean; selectEvent: Mock }) => unknown) =>
         selector({ eventsSupported: false, selectEvent: vi.fn() }),
     );
-    (useAppContext as Mock).mockReturnValue({
-      PerformanceSidebarComponent: undefined,
-      sidebarItems: [],
-      layoutBrowser: undefined,
-      workspaceStoreCreator: undefined,
-    });
   };
 
   beforeEach(() => {

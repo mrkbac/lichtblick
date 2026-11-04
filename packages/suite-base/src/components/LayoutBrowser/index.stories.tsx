@@ -9,7 +9,6 @@ import { useMemo, useState } from "react";
 import { fireEvent, screen, userEvent, within } from "storybook/test";
 import { StoryObj, StoryContext } from "storybook-react-rsbuild";
 
-import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import AppConfigurationContext from "@lichtblick/suite-base/context/AppConfigurationContext";
 import { LayoutID } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
@@ -135,9 +134,7 @@ function WithSetup(Child: React.ComponentType, ctx: StoryContext): React.JSX.Ele
     }),
     [],
   );
-  const [appConfig] = useState(() =>
-    makeMockAppConfiguration([[AppSetting.ENABLE_NEW_TOPNAV, false]]),
-  );
+  const [appConfig] = useState(() => makeMockAppConfiguration());
 
   return (
     <div style={{ display: "flex", height: "100%", width: 320 }}>

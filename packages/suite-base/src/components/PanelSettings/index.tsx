@@ -11,11 +11,10 @@ import { useTranslation } from "react-i18next";
 import { useUnmount } from "react-use";
 
 import { SettingsTree } from "@lichtblick/suite";
-import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { useConfigById } from "@lichtblick/suite-base/PanelAPI";
+import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import { useMessagePipelineGetter } from "@lichtblick/suite-base/components/MessagePipeline";
 import { ActionMenu } from "@lichtblick/suite-base/components/PanelSettings/ActionMenu";
-import { EmptyWrapper } from "@lichtblick/suite-base/components/PanelSettings/EmptyWrapper";
 import { buildSettingsTree } from "@lichtblick/suite-base/components/PanelSettings/settingsTree";
 import SettingsTreeEditor from "@lichtblick/suite-base/components/SettingsTreeEditor";
 import { ShareJsonModal } from "@lichtblick/suite-base/components/ShareJsonModal";
@@ -32,7 +31,6 @@ import {
   PanelStateStore,
   usePanelStateStore,
 } from "@lichtblick/suite-base/context/PanelStateContext";
-import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
 import { PanelConfig } from "@lichtblick/suite-base/types/panels";
 import { TAB_PANEL_TYPE } from "@lichtblick/suite-base/util/constants";
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
@@ -66,8 +64,6 @@ export default function PanelSettings({
     selectAllPanels,
   } = useSelectedPanels();
   const selectedPanelIds = selectedPanelIdsForTests ?? originalSelectedPanelIds;
-
-  const [enableNewTopNav = true] = useAppConfigurationValue<boolean>(AppSetting.ENABLE_NEW_TOPNAV);
 
   // If no panel is selected and there is only one panel in the layout, select it
   useEffect(() => {
@@ -174,20 +170,19 @@ export default function PanelSettings({
   }, [incrementSequenceNumber, savePanelConfigs, selectedPanelId]);
 
   if (selectedPanelId == undefined) {
-    return <EmptyWrapper enableNewTopNav>{t("selectAPanelToEditItsSettings")}</EmptyWrapper>;
+    return <EmptyState>{t("selectAPanelToEditItsSettings")}</EmptyState>;
   }
 
   if (!config) {
-    return <EmptyWrapper enableNewTopNav>{t("loadingPanelSettings")}</EmptyWrapper>;
+    return <EmptyState>{t("loadingPanelSettings")}</EmptyState>;
   }
 
   const showTitleField = panelInfo != undefined && panelInfo.hasCustomToolbar !== true;
   const title = panelInfo?.title ?? t("unknown");
-  const isSettingTreeDefined = settingsTree != undefined;
 
   return (
     <SidebarContent
-      disablePadding={enableNewTopNav || isSettingTreeDefined}
+      disablePadding
       disableToolbar={disableToolbar}
       title={t("currentSettingsPanelName", { title })}
       trailingItems={[
@@ -204,7 +199,7 @@ export default function PanelSettings({
       {shareModal}
       <Stack gap={2} justifyContent="flex-start" flex="auto">
         <Stack flex="auto">
-          {settingsTree && enableNewTopNav && (
+          {settingsTree && (
             <>
               <Stack
                 paddingLeft={0.75}
@@ -233,12 +228,7 @@ export default function PanelSettings({
               variant="panel"
             />
           ) : (
-            <Stack
-              flex="auto"
-              alignItems="center"
-              justifyContent="center"
-              paddingX={enableNewTopNav ? 1 : 0}
-            >
+            <Stack flex="auto" alignItems="center" justifyContent="center" paddingX={1}>
               <Typography variant="body2" color="text.secondary" align="center">
                 {t("panelDoesNotHaveSettings")}
               </Typography>

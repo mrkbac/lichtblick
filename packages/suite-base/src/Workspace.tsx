@@ -13,26 +13,14 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { Link, Typography } from "@mui/material";
 import { t } from "i18next";
 import { useSnackbar } from "notistack";
-import {
-  lazy,
-  Suspense,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { Trans, useTranslation } from "react-i18next";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 import Logger from "@lichtblick/log";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { useStyles } from "@lichtblick/suite-base/Workspace.style";
 import McapBundleAPI from "@lichtblick/suite-base/api/mcapBundle/McapBundleAPI";
-import AccountSettings from "@lichtblick/suite-base/components/AccountSettingsSidebar/AccountSettings";
 import { AlertsList } from "@lichtblick/suite-base/components/AlertList/AlertsList";
 import { AppBar } from "@lichtblick/suite-base/components/AppBar";
 import { CommandPalette } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
@@ -50,12 +38,9 @@ import {
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
-import { PanelCatalog } from "@lichtblick/suite-base/components/PanelCatalog";
 import PanelLayout from "@lichtblick/suite-base/components/PanelLayout";
 import PanelSettings from "@lichtblick/suite-base/components/PanelSettings";
 import PlaybackControls from "@lichtblick/suite-base/components/PlaybackControls";
-import RemountOnValueChange from "@lichtblick/suite-base/components/RemountOnValueChange";
-import { SidebarContent } from "@lichtblick/suite-base/components/SidebarContent";
 import Sidebars from "@lichtblick/suite-base/components/Sidebars";
 import { SidebarItem } from "@lichtblick/suite-base/components/Sidebars/types";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -68,15 +53,7 @@ import { TopicList } from "@lichtblick/suite-base/components/TopicList";
 import VariablesList from "@lichtblick/suite-base/components/VariablesList";
 import { WorkspaceDialogs } from "@lichtblick/suite-base/components/WorkspaceDialogs";
 import { AllowedFileExtensions } from "@lichtblick/suite-base/constants/allowedFileExtensions";
-import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
-import {
-  LayoutState,
-  useCurrentLayoutSelector,
-} from "@lichtblick/suite-base/context/CurrentLayoutContext";
-import {
-  useCurrentUser,
-  useCurrentUserType,
-} from "@lichtblick/suite-base/context/CurrentUserContext";
+import { useCurrentUserType } from "@lichtblick/suite-base/context/CurrentUserContext";
 import { EventsStore, useEvents } from "@lichtblick/suite-base/context/EventsContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
@@ -84,12 +61,10 @@ import {
   LeftSidebarItemKey,
   RightSidebarItemKey,
   SidebarItemKey,
-  SidebarItemKeys,
   WorkspaceContextStore,
   useWorkspaceStore,
 } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
-import useAddPanel from "@lichtblick/suite-base/hooks/useAddPanel";
 import useAlertCount from "@lichtblick/suite-base/hooks/useAlertCount";
 import { useDefaultWebLaunchPreference } from "@lichtblick/suite-base/hooks/useDefaultWebLaunchPreference";
 import useElectronFilesToOpen from "@lichtblick/suite-base/hooks/useElectronFilesToOpen";
@@ -101,33 +76,14 @@ import { useStructureItemsStoreManager } from "@lichtblick/suite-base/panels/Plo
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { PanelStateContextProvider } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import WorkspaceContextProvider from "@lichtblick/suite-base/providers/WorkspaceContextProvider";
-import ICONS from "@lichtblick/suite-base/theme/icons";
-import { InjectedSidebarItem, Namespace, WorkspaceProps } from "@lichtblick/suite-base/types";
+import { Namespace, WorkspaceProps } from "@lichtblick/suite-base/types";
 import { parseAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import useBroadcast from "@lichtblick/suite-base/util/broadcast/useBroadcast";
-import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
 import { useWorkspaceActions } from "./context/Workspace/useWorkspaceActions";
 import { severityToBadgeColor } from "./utils";
 
-// Lazy so the extension list (data grid, markdown) stays out of the startup bundle.
-const ExtensionsSettings = lazy(
-  async () => await import("@lichtblick/suite-base/components/ExtensionsSettings"),
-);
-
 const log = Logger.getLogger(__filename);
-
-const selectedLayoutIdSelector = (state: LayoutState) => state.selectedLayout?.id;
-
-function isInjectedSidebarItem(
-  item: [string, { iconName?: string; title: string }],
-): item is InjectedSidebarItem {
-  return (
-    SidebarItemKeys.some((itemKey) => itemKey === item[0]) &&
-    item[1].iconName != undefined &&
-    Object.keys(ICONS).includes(item[1].iconName)
-  );
-}
 
 const selectPlayerPresence = ({ playerState }: MessagePipelineContext) => playerState.presence;
 const selectPlayerIsPresent = ({ playerState }: MessagePipelineContext) =>
@@ -151,7 +107,6 @@ const selectWorkspaceRightSidebarOpen = (store: WorkspaceContextStore) => store.
 const selectWorkspaceRightSidebarSize = (store: WorkspaceContextStore) => store.sidebars.right.size;
 
 function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
-  const { PerformanceSidebarComponent } = useAppContext();
   const { classes } = useStyles();
   const containerRef = useRef<HTMLDivElement>(ReactNull);
   const { availableSources, selectSource } = usePlayerSelection();
@@ -209,8 +164,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     return extensions;
   }, [availableSources]);
 
-  // We use playerId to detect when a player changes for RemountOnValueChange below
-  // see comment below above the RemountOnValueChange component
+  // Keys the panel tree below so it remounts when the player changes
   const playerId = useMessagePipeline(selectPlayerId);
 
   const currentUserType = useCurrentUserType();
@@ -221,24 +175,9 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
   const [enableDebugMode = false] = useAppConfigurationValue<boolean>(AppSetting.SHOW_DEBUG_PANELS);
 
-  const { currentUser, signIn } = useCurrentUser();
-
-  const supportsAccountSettings = signIn != undefined;
-
   const [enableStudioLogsSidebar = false] = useAppConfigurationValue<boolean>(
     AppSetting.SHOW_DEBUG_PANELS,
   );
-
-  // Since we can't toggle the title bar on an electron window, keep the setting at its initial
-  // value until the app is reloaded/relaunched.
-  const [currentEnableNewTopNav = true] = useAppConfigurationValue<boolean>(
-    AppSetting.ENABLE_NEW_TOPNAV,
-  );
-
-  const [initialEnableNewTopNav] = useState(currentEnableNewTopNav);
-  const enableNewTopNav = isDesktopApp() ? initialEnableNewTopNav : currentEnableNewTopNav;
-
-  const { sidebarItems: appContextSidebarItems } = useAppContext();
 
   // When a player is activated, hide the open dialog.
   useLayoutEffect(() => {
@@ -312,17 +251,15 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   // open the data source dialog.
   const DataSourceSidebarItem = useMemo(() => {
     return function DataSourceSidebarItemImpl() {
-      return <DataSourceSidebar disableToolbar={enableNewTopNav} />;
+      return <DataSourceSidebar disableToolbar />;
     };
-  }, [enableNewTopNav]);
+  }, []);
 
   const PanelSettingsSidebar = useMemo(() => {
     return function PanelSettingsSidebarImpl() {
       return <PanelSettings disableToolbar />;
     };
   }, []);
-
-  const { layoutBrowser: AppContextLayoutBrowser } = useAppContext();
 
   const [sidebarItems, sidebarBottomItems] = useMemo(() => {
     const topItems = new Map<SidebarItemKey, SidebarItem>([
@@ -340,35 +277,11 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       ],
     ]);
 
-    if (!enableNewTopNav) {
-      topItems.set("layouts", {
-        iconName: "FiveTileGrid",
-        title: "Layouts",
-        component: AppContextLayoutBrowser ?? LayoutBrowser,
-      });
-      topItems.set("add-panel", {
-        iconName: "RectangularClipping",
-        title: "Add panel",
-        component: AddPanel,
-      });
-    }
     topItems.set("panel-settings", {
       iconName: "PanelSettings",
       title: "Panel settings",
       component: PanelSettings,
     });
-    if (!enableNewTopNav) {
-      topItems.set("variables", {
-        iconName: "Variable2",
-        title: "Variables",
-        component: VariablesList,
-      });
-      topItems.set("extensions", {
-        iconName: "AddIn",
-        title: "Extensions",
-        component: ExtensionsSidebar,
-      });
-    }
     if (enableStudioLogsSidebar) {
       topItems.set("logs-settings", {
         iconName: "BacklogList",
@@ -379,38 +292,12 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
     const bottomItems = new Map<SidebarItemKey, SidebarItem>([]);
 
-    if (!enableNewTopNav) {
-      if (supportsAccountSettings) {
-        bottomItems.set("account", {
-          iconName: currentUser != undefined ? "BlockheadFilled" : "Blockhead",
-          title: currentUser != undefined ? `Signed in as ${currentUser.email}` : "Account",
-          component: AccountSettings,
-        });
-      }
-
-      for (const item of appContextSidebarItems ?? []) {
-        if (isInjectedSidebarItem(item)) {
-          bottomItems.set(item[0], item[1]);
-        }
-      }
-
-      bottomItems.set("app-settings", {
-        iconName: "Settings",
-        title: "Settings",
-      });
-    }
-
     return [topItems, bottomItems];
   }, [
     DataSourceSidebarItem,
     alertCount,
     highestSeverity,
-    enableNewTopNav,
     enableStudioLogsSidebar,
-    AppContextLayoutBrowser,
-    supportsAccountSettings,
-    currentUser,
-    appContextSidebarItems,
   ]);
 
   const eventsSupported = useEvents(selectEventsSupported);
@@ -447,12 +334,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       ],
     ]);
     if (enableDebugMode) {
-      if (PerformanceSidebarComponent) {
-        items.set("performance", {
-          title: t("workspace:performance"),
-          component: PerformanceSidebarComponent,
-        });
-      }
       items.set("logs-settings", {
         title: t("workspace:studioLogs"),
         component: StudioLogsSettings,
@@ -465,45 +346,10 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       });
     }
     return items;
-  }, [enableDebugMode, showEventsTab, PerformanceSidebarComponent]);
+  }, [enableDebugMode, showEventsTab]);
 
   const keyboardEventHasModifier = (event: KeyboardEvent) =>
     navigator.userAgent.includes("Mac") ? event.metaKey : event.ctrlKey;
-
-  function AddPanel() {
-    const addPanel = useAddPanel();
-    const { openLayoutBrowser } = useWorkspaceActions();
-    const selectedLayoutId = useCurrentLayoutSelector(selectedLayoutIdSelector);
-    const { t: tAddPanel } = useTranslation("addPanel");
-
-    return (
-      <SidebarContent disablePadding={selectedLayoutId != undefined} title={tAddPanel("addPanel")}>
-        {selectedLayoutId == undefined ? (
-          <Typography color="text.secondary">
-            <Trans
-              t={tAddPanel}
-              i18nKey="noLayoutSelected"
-              components={{
-                selectLayoutLink: <Link onClick={openLayoutBrowser} />,
-              }}
-            />
-          </Typography>
-        ) : (
-          <PanelCatalog mode="list" onPanelSelect={addPanel} />
-        )}
-      </SidebarContent>
-    );
-  }
-
-  function ExtensionsSidebar() {
-    return (
-      <SidebarContent title="Extensions" disablePadding>
-        <Suspense>
-          <ExtensionsSettings />
-        </Suspense>
-      </SidebarContent>
-    );
-  }
 
   const keyDownHandlers = useMemo(() => {
     return {
@@ -778,11 +624,9 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
           setRightSidebarSize={sidebarActions.right.setSize}
         >
           {/* To ensure no stale player state remains, we unmount all panels when players change */}
-          <RemountOnValueChange value={playerId}>
-            <Stack data-testid="workspace-panels">
-              <PanelLayout />
-            </Stack>
-          </RemountOnValueChange>
+          <Stack key={playerId} data-testid="workspace-panels">
+            <PanelLayout />
+          </Stack>
         </Sidebars>
         {play && pause && seek && (
           <div style={{ flexShrink: 0 }} data-testid="playback-controls">
@@ -807,8 +651,6 @@ export default function Workspace(props: WorkspaceProps): React.JSX.Element {
     AppSetting.SHOW_OPEN_DIALOG_ON_STARTUP,
   );
 
-  const { workspaceStoreCreator } = useAppContext();
-
   const isPlayerPresent = useMessagePipeline(selectPlayerIsPresent);
 
   const initialItem: undefined | DataSourceDialogItem =
@@ -831,7 +673,6 @@ export default function Workspace(props: WorkspaceProps): React.JSX.Element {
   return (
     <WorkspaceContextProvider
       initialState={initialState}
-      workspaceStoreCreator={workspaceStoreCreator}
       disablePersistenceForStorybook={props.disablePersistenceForStorybook}
     >
       <WorkspaceContent {...props} />

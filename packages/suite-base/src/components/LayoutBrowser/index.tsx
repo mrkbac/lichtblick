@@ -217,7 +217,6 @@ export default function LayoutBrowser({
     });
   }, [reloadLayouts]);
 
-  const [enableNewTopNav = true] = useAppConfigurationValue<boolean>(AppSetting.ENABLE_NEW_TOPNAV);
   const [hideSignInPrompt = false, setHideSignInPrompt] = useAppConfigurationValue<boolean>(
     AppSetting.HIDE_SIGN_IN_PROMPT,
   );
@@ -336,7 +335,7 @@ export default function LayoutBrowser({
   }, [layouts, state.selectedIds]);
 
   const sectionProps = {
-    disablePadding: enableNewTopNav,
+    disablePadding: true,
     anySelectedModifiedLayouts,
     multiSelectedIds: state.selectedIds,
     selectedId: currentLayoutId,
@@ -355,7 +354,7 @@ export default function LayoutBrowser({
     <SidebarContent
       title="Layouts"
       disablePadding
-      disableToolbar={enableNewTopNav}
+      disableToolbar
       trailingItems={[
         (layouts.loading || state.busy || pendingMultiAction) && (
           <Stack key="loading" alignItems="center" justifyContent="center" padding={1}>
@@ -425,30 +424,26 @@ export default function LayoutBrowser({
       {confirmModal}
       <Stack
         fullHeight
-        gap={enableNewTopNav ? 1 : 2}
+        gap={1}
         style={{ pointerEvents: pendingMultiAction ? "none" : "auto" }}
       >
-        {enableNewTopNav && (
-          <>
-            <List className={classes.actionList} disablePadding>
-              <ListItem disablePadding>
-                <ListItemButton onClick={createNewLayout}>
-                  <ListItemText data-testid="create-new-layout" disableTypography>
-                    Create new layout
-                  </ListItemText>
-                </ListItemButton>
-              </ListItem>
-              <ListItem disablePadding>
-                <ListItemButton onClick={importLayout}>
-                  <ListItemText data-testid="import-layout" disableTypography>
-                    Import from file…
-                  </ListItemText>
-                </ListItemButton>
-              </ListItem>
-            </List>
-            <Divider variant="middle" />
-          </>
-        )}
+        <List className={classes.actionList} disablePadding>
+          <ListItem disablePadding>
+            <ListItemButton onClick={createNewLayout}>
+              <ListItemText data-testid="create-new-layout" disableTypography>
+                Create new layout
+              </ListItemText>
+            </ListItemButton>
+          </ListItem>
+          <ListItem disablePadding>
+            <ListItemButton onClick={importLayout}>
+              <ListItemText data-testid="import-layout" disableTypography>
+                Import from file…
+              </ListItemText>
+            </ListItemButton>
+          </ListItem>
+        </List>
+        <Divider variant="middle" />
         <LayoutSection
           {...sectionProps}
           title={layoutManager.supportsSharing ? (organizations ? "Local" : "Personal") : undefined}
@@ -479,7 +474,6 @@ export default function LayoutBrowser({
             items={sortedLayouts?.shared}
           />
         )}
-        {!enableNewTopNav && <Stack flexGrow={1} />}
         {showSignInPrompt && <SignInPrompt onDismiss={() => void setHideSignInPrompt(true)} />}
       </Stack>
     </SidebarContent>
