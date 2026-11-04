@@ -7,7 +7,7 @@ import type { Mock } from "vitest";
 
 import { DataSourceFactoryInitializeArgs } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
-import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource";
+import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
 import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
 
 import RemoteDataSourceFactory from "./RemoteDataSourceFactory";
@@ -16,7 +16,7 @@ vi.mock("@lichtblick/suite-base/players/IterablePlayer", () => ({
   IterablePlayer: vi.fn(),
 }));
 
-vi.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource", () => ({
+vi.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource", () => ({
   WorkerSerializedIterableSource: vi.fn(),
 }));
 

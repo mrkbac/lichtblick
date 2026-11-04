@@ -3,12 +3,12 @@
 
 import { DataSourceFactoryInitializeArgs } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
-import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource";
+import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import Ros1LocalBagDataSourceFactory from "./Ros1LocalBagDataSourceFactory";
 
-vi.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource");
+vi.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource");
 vi.mock("@lichtblick/suite-base/players/IterablePlayer");
 
 describe("Ros1LocalBagDataSourceFactory", () => {
