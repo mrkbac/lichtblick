@@ -62,6 +62,11 @@ export class Picker {
   #currClearColor = new THREE.Color();
   #pickingTarget: THREE.WebGLRenderTarget;
   #isDebugPass = false;
+  #depthTarget?: THREE.WebGLRenderTarget;
+  #depthReadTarget?: THREE.WebGLRenderTarget;
+  #depthCopyScene?: THREE.Scene;
+  #depthCopyMaterial?: THREE.ShaderMaterial;
+  #depthBits = new DataView(new ArrayBuffer(4));
 
   public constructor(gl: THREE.WebGLRenderer, scene: THREE.Scene) {
     this.#gl = gl;
@@ -86,6 +91,96 @@ export class Picker {
     }
     this.#materialCache.clear();
     this.#pickingTarget.dispose();
+    this.#depthTarget?.depthTexture.dispose();
+    this.#depthTarget?.dispose();
+    this.#depthReadTarget?.dispose();
+    this.#depthCopyMaterial?.dispose();
+    for (const child of this.#depthCopyScene?.children ?? []) {
+      (child as THREE.Mesh).geometry.dispose();
+    }
+  }
+
+  /**
+   * Returns the window-space depth [0, 1) of the nearest pickable surface under the cursor, or
+   * undefined when nothing was hit. Uses the same picking materials as `pick()`, so point sizes,
+   * instancing etc. behave exactly as for object picking.
+   */
+  public pickDepth(
+    x: number,
+    y: number,
+    camera: THREE.OrthographicCamera | THREE.PerspectiveCamera,
+  ): number | undefined {
+    if (!this.#depthTarget || !this.#depthReadTarget || !this.#depthCopyScene) {
+      this.#initDepthPicking();
+    }
+    const depthTarget = this.#depthTarget!;
+    this.#emptyScene.onAfterRender = this.#renderForPicking;
+    this.#camera = camera;
+    const { xInView, yInView } = this.#updateCameraForPickAndGetPickCoordsInView(x, y, {});
+    const originalRenderState = this.#prepareGLRendererForPick(depthTarget);
+    this.#gl.render(this.#emptyScene, camera);
+    this.#resetCameraFromPick({});
+
+    // WebGL2 can't read depth buffers directly, so copy the depth bits into a color target
+    this.#depthCopyMaterial!.uniforms.texel!.value.set(xInView, yInView);
+    this.#gl.setRenderTarget(this.#depthReadTarget!);
+    this.#gl.render(this.#depthCopyScene!, camera);
+    this.#gl.readRenderTargetPixels(this.#depthReadTarget!, 0, 0, 1, 1, this.#pixelBuffer);
+    this.#cleanUpGlRendererFromPick(originalRenderState);
+
+    for (let i = 0; i < 4; i++) {
+      this.#depthBits.setUint8(i, this.#pixelBuffer[i]!);
+    }
+    const depth = this.#depthBits.getFloat32(0);
+    return depth < 1 ? depth : undefined;
+  }
+
+  #initDepthPicking(): void {
+    this.#depthTarget = new THREE.WebGLRenderTarget(PIXEL_WIDTH, PIXEL_WIDTH, {
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+      generateMipmaps: false,
+    });
+    this.#depthTarget.depthTexture = new THREE.DepthTexture(
+      PIXEL_WIDTH,
+      PIXEL_WIDTH,
+      THREE.FloatType,
+    );
+    this.#depthReadTarget = new THREE.WebGLRenderTarget(1, 1, {
+      minFilter: THREE.NearestFilter,
+      magFilter: THREE.NearestFilter,
+      generateMipmaps: false,
+      depthBuffer: false,
+    });
+    this.#depthCopyMaterial = new THREE.ShaderMaterial({
+      vertexShader: /* glsl */ `
+        void main() {
+          gl_Position = vec4(position.xy, 0.0, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        uniform highp sampler2D depthTexture;
+        uniform vec2 texel;
+        void main() {
+          uint bits = floatBitsToUint(texelFetch(depthTexture, ivec2(texel), 0).r);
+          gl_FragColor = vec4(
+            float((bits >> 24) & 255u),
+            float((bits >> 16) & 255u),
+            float((bits >> 8) & 255u),
+            float(bits & 255u)) / 255.0;
+        }
+      `,
+      uniforms: {
+        depthTexture: { value: this.#depthTarget.depthTexture },
+        texel: { value: new THREE.Vector2() },
+      },
+      depthTest: false,
+      depthWrite: false,
+    });
+    const quad = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), this.#depthCopyMaterial);
+    quad.frustumCulled = false;
+    this.#depthCopyScene = new THREE.Scene();
+    this.#depthCopyScene.add(quad);
   }
 
   public pick(
@@ -188,14 +283,14 @@ export class Picker {
     }
   }
 
-  #prepareGLRendererForPick(): {
+  #prepareGLRendererForPick(target: THREE.WebGLRenderTarget = this.#pickingTarget): {
     originalRenderTarget: THREE.WebGLRenderTarget | ReactNull;
     originalAlpha: number;
   } {
     const originalRenderTarget = this.#gl.getRenderTarget();
     const originalAlpha = this.#gl.getClearAlpha();
     this.#gl.getClearColor(this.#currClearColor);
-    this.#gl.setRenderTarget(this.#pickingTarget);
+    this.#gl.setRenderTarget(target);
     this.#gl.setClearColor(WHITE_COLOR, 1);
     this.#gl.clear();
     return { originalRenderTarget, originalAlpha };

@@ -270,6 +270,8 @@ export interface IRenderer extends EventEmitter<RendererEvents> {
   readonly instancedOutlineMaterial: InstancedLineMaterial;
 
   measurementTool: MeasurementTool;
+  /** Nearest pickable surface point under the cursor, in render frame coordinates */
+  pickPoint(cursorCoords: THREE.Vector2, out: THREE.Vector3): boolean;
   publishClickTool: PublishClickTool;
 
   /** only public for testing - prefer to use `getCameraState` instead */

@@ -38,6 +38,7 @@ import { customTypography } from "@lichtblick/theme";
 import { InteractionContextMenu, Interactions, SelectionObject, TabType } from "./Interactions";
 import { HoverTooltip } from "./Interactions/HoverTooltip";
 import type { HoverEntityInfo } from "./Interactions/types";
+import { MeasurePanel } from "./MeasurePanel";
 import type { PickedRenderable } from "./Picker";
 import { Renderable } from "./Renderable";
 import { useRenderer, useRendererEvent } from "./RendererContext";
@@ -480,10 +481,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
                 <span className={classes.threeDeeButton}>3D</span>
               </IconButton>
             </Tooltip>
-            <Tooltip
-              placement="left"
-              title={props.measureActive ? "Cancel measuring" : "Measure distance"}
-            >
+            <Tooltip placement="left" title={props.measureActive ? "Stop measuring" : "Measure"}>
               <IconButton
                 data-testid="measure-button"
                 className={classes.iconButton}
@@ -519,6 +517,9 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
             }
           }}
         />
+      )}
+      {props.interfaceMode === "3d" && props.measureActive && renderer && (
+        <MeasurePanel renderer={renderer} />
       )}
       <HUD renderer={renderer} />
       <HoverTooltip entities={hoveredEntities} position={hoverPosition} canvas={props.canvas} />
