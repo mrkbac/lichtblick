@@ -3,10 +3,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import "@testing-library/jest-dom/vitest";
+import "@testing-library/jest-dom";
 import { fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
-import type { Mock } from "vitest";
 
 import { MessageDataItemsByPath } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import useMessagesByPath from "@lichtblick/suite-base/components/MessagePathSyntax/useMessagesByPath";
@@ -14,41 +13,36 @@ import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/Message
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { useDecodedMessageRange } from "./hooks/useDecodedMessageRange";
-import StateTransitionsPanelWithHoc from "./index";
 import { StateTransitionConfig } from "./types";
 
-vi.mock("@lichtblick/suite-base/components/Panel", () => ({
+jest.mock("@lichtblick/suite-base/components/Panel", () => ({
   __esModule: true,
   default: (Component: React.ComponentType) =>
     Object.assign(Component, { panelType: "StateTransitions", defaultConfig: {} }),
 }));
 
-vi.mock("@lichtblick/suite-base/components/MessagePathSyntax/useMessagesByPath");
-
-// The Panel HOC is mocked to return the inner component, which takes config and saveConfig directly
-const StateTransitionsPanel = StateTransitionsPanelWithHoc as unknown as React.ComponentType<{
-  config: StateTransitionConfig;
-  saveConfig: (config: Partial<StateTransitionConfig>) => void;
-}>;
-vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useDecodedMessageRange");
-vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsTime", () => ({
+jest.mock("@lichtblick/suite-base/components/MessagePathSyntax/useMessagesByPath");
+jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useDecodedMessageRange");
+let mockCurrentTime = 0;
+jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsTime", () => ({
   __esModule: true,
   default: () => ({
     startTime: { sec: 0, nsec: 0 },
-    currentTimeSinceStart: 0,
+    currentTimeSinceStart: mockCurrentTime,
     endTimeSinceStart: 10,
   }),
 }));
-vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsData", () => ({
+jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsData", () => ({
   __esModule: true,
   // One point at x=1 so the mocked chart's click (below) lands on real data.
   default: () => ({
     pathState: [],
     data: { datasets: [{ data: [{ x: 1, y: 0, value: "A" }] }] },
     minY: 0,
+    matchStarts: [1, 5],
   }),
 }));
-vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useChartScalesAndBounds", () => ({
+jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useChartScalesAndBounds", () => ({
   __esModule: true,
   default: () => ({
     yScale: {},
@@ -58,23 +52,24 @@ vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useChartScalesAndB
     sizeRef: { current: undefined },
   }),
 }));
-vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useMessagePathDropConfig");
-vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/usePanelSettings");
-vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
+jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useMessagePathDropConfig");
+jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/usePanelSettings");
+const mockSeekPlayback = jest.fn();
+jest.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   useMessagePipeline: (selector: (ctx: unknown) => unknown) =>
     selector({ playerState: { presence: "PRESENT" } }),
   useMessagePipelineGetter: () => () => ({
-    seekPlayback: vi.fn(),
+    seekPlayback: mockSeekPlayback,
     playerState: { activeData: { startTime: { sec: 0, nsec: 0 } } },
   }),
 }));
-vi.mock("@lichtblick/suite-base/components/PanelToolbar", () => ({
+jest.mock("@lichtblick/suite-base/components/PanelToolbar", () => ({
   __esModule: true,
   default: ({ additionalIcons }: { additionalIcons: React.ReactNode }) => (
     <div data-testid="panel-toolbar">{additionalIcons}</div>
   ),
 }));
-vi.mock("@lichtblick/suite-base/components/TimeBasedChart", () => ({
+jest.mock("@lichtblick/suite-base/components/TimeBasedChart", () => ({
   __esModule: true,
   default: ({
     annotations,
@@ -92,15 +87,15 @@ vi.mock("@lichtblick/suite-base/components/TimeBasedChart", () => ({
     />
   ),
 }));
-vi.mock("@lichtblick/suite-base/panels/StateTransitions/PathLegend", () => ({
+jest.mock("@lichtblick/suite-base/panels/StateTransitions/PathLegend", () => ({
   PathLegend: () => <div data-testid="path-legend" />,
 }));
-vi.mock("@lichtblick/suite-base/panels/StateTransitions/StateTransitions.style", () => ({
+jest.mock("@lichtblick/suite-base/panels/StateTransitions/StateTransitions.style", () => ({
   useStateTransitionsStyles: () => ({ classes: { chartWrapper: "chartWrapper" } }),
 }));
 
-const mockUseMessagesByPath = useMessagesByPath as Mock;
-const mockUseDecodedMessageRange = useDecodedMessageRange as Mock;
+const mockUseMessagesByPath = useMessagesByPath as jest.Mock;
+const mockUseDecodedMessageRange = useDecodedMessageRange as jest.Mock;
 
 function buildMessageAndData(path: string) {
   const topic = path.split(".")[0]!;
@@ -117,17 +112,21 @@ describe("StateTransitions", () => {
   };
 
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
+    mockCurrentTime = 0;
     mockUseDecodedMessageRange.mockReturnValue([{}]);
     mockUseMessagesByPath.mockReturnValue({});
   });
 
   function renderPanel(config: Partial<StateTransitionConfig> = {}) {
-    const saveConfig = vi.fn();
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const StateTransitionsPanel = require("./index").default;
+    const saveConfig = jest.fn();
     return {
       ...render(
         <StateTransitionsPanel config={{ ...defaultConfig, ...config }} saveConfig={saveConfig} />,
       ),
+      StateTransitionsPanel,
     };
   }
 
@@ -155,7 +154,7 @@ describe("StateTransitions", () => {
   it("should remove marker annotations when a path timestamp source changes", () => {
     // Given
     const topic = BasicBuilder.string();
-    const { rerender } = renderPanel({
+    const { rerender, StateTransitionsPanel } = renderPanel({
       paths: [{ value: topic, timestampMethod: "receiveTime" }],
     });
     fireEvent.click(screen.getByTestId("state-transitions-measure-mode-toggle"));
@@ -169,7 +168,7 @@ describe("StateTransitions", () => {
           ...defaultConfig,
           paths: [{ value: topic, timestampMethod: "headerStamp" }],
         }}
-        saveConfig={vi.fn()}
+        saveConfig={jest.fn()}
       />,
     );
 
@@ -220,5 +219,47 @@ describe("StateTransitions", () => {
     });
 
     expect(mockUseMessagesByPath).toHaveBeenCalledWith([]);
+  });
+
+  it.each([undefined, "=> 2"])("hides match navigation for condition %s", (condition) => {
+    renderPanel({ paths: [{ value: "/a.b", condition, timestampMethod: "receiveTime" }] });
+    expect(screen.queryByTestId("state-transitions-match-count")).toBeNull();
+  });
+
+  it("shows the match count and seeks between matches with buttons and N / Shift+N", () => {
+    renderPanel({
+      paths: [{ value: "/a.b", condition: "> 2", timestampMethod: "receiveTime" }],
+    });
+
+    expect(screen.getByTestId("state-transitions-match-count")).toHaveTextContent("0/2");
+    expect(screen.getByTestId("state-transitions-previous-match")).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId("state-transitions-next-match"));
+    expect(mockSeekPlayback).toHaveBeenLastCalledWith({ sec: 1, nsec: 0 });
+
+    fireEvent.keyDown(document, { key: "n" });
+    expect(mockSeekPlayback).toHaveBeenCalledTimes(2);
+    expect(mockSeekPlayback).toHaveBeenLastCalledWith({ sec: 1, nsec: 0 });
+
+    // Nothing before the playhead (t=0), so Shift+N does not seek.
+    fireEvent.keyDown(document, { key: "N", shiftKey: true });
+    expect(mockSeekPlayback).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    [1, "1/2", true, false],
+    [3, "1/2", false, false],
+    [5, "2/2", false, true],
+  ])("at t=%s shows %s with previous/next disabled = %s/%s", (time, count, noPrev, noNext) => {
+    mockCurrentTime = time;
+    renderPanel({ paths: [{ value: "/a.b", condition: "> 2", timestampMethod: "receiveTime" }] });
+
+    expect(screen.getByTestId("state-transitions-match-count")).toHaveTextContent(count);
+    expect(screen.getByTestId("state-transitions-previous-match").hasAttribute("disabled")).toBe(
+      noPrev,
+    );
+    expect(screen.getByTestId("state-transitions-next-match").hasAttribute("disabled")).toBe(
+      noNext,
+    );
   });
 });

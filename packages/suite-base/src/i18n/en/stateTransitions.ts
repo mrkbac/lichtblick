@@ -7,10 +7,14 @@
 
 export const stateTransitions = {
   addSeriesButton: "Click to add a series",
+  conditionErrorMessage: 'Use one comparison, e.g. > 2 or == "ERROR"',
   delta: "Delta",
   labels: {
     addSeries: "Add series",
     axisLabel: "Axis label",
+    condition: "Condition",
+    conditionHelp:
+      'Optional comparison against the value, e.g. > 2, == "ERROR" or != true. The series then shows when it is true.',
     deleteSeries: "Delete series",
     general: "General",
     helpGeneral: "Display a point for every state transition message",
@@ -29,6 +33,8 @@ export const stateTransitions = {
   maxXError: "X max must be greater than X min.",
   measureMode: "Measure delta",
   min: "Min",
+  nextMatch: "Next match (N)",
+  previousMatch: "Previous match (Shift+N)",
   pathErrorMessage: "This path resolves to more than one value",
   secondsRange: "Range (seconds)",
   value: "Value",

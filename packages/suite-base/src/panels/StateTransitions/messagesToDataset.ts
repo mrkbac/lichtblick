@@ -16,11 +16,14 @@ import { hashString } from "@lichtblick/suite-base/util/hashString";
 import { expandedLineColors } from "@lichtblick/suite-base/util/plotColors";
 import { getTimestampForMessageEvent } from "@lichtblick/suite-base/util/time";
 
+import { conditionMatches, parseCondition } from "./condition";
 import positiveModulo from "./positiveModulo";
 import { MessageDatasetArgs, ValidQueriedDataValue } from "./types";
 
 export const baseColors = [...expandedLineColors];
 const baseColorsLength = Object.values(baseColors).length;
+// Muted so the "true" bands of a condition stand out.
+const CONDITION_FALSE_COLOR = "rgba(128, 128, 128, 0.35)";
 
 /**
  * Processes messages into datasets. For performance reasons all values are condensed into a single
@@ -41,6 +44,8 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
     showLine: true,
   };
 
+  const condition = parseCondition(path.condition);
+
   let lastValue: string | number | bigint | boolean | undefined = undefined;
   let lastDatum: ChartDataset["data"][0] | undefined = undefined;
 
@@ -60,12 +65,12 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
         continue;
       }
 
-      const { constantName, value } = queriedData;
+      const { constantName: rawConstantName, value: rawValue } = queriedData;
       const x = toSec(subtractTimes(timestamp, startTime));
 
       // A null value marks a gap: break the line here and start a fresh segment once data resumes.
       // eslint-disable-next-line @lichtblick/strict-equality
-      if (value === null) {
+      if (rawValue === null) {
         if (lastDatum != undefined) {
           dataset.data.push(lastDatum);
         }
@@ -75,11 +80,15 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
         continue;
       }
 
-      if (!isValidValue(value)) {
+      if (!isValidValue(rawValue)) {
         continue;
       }
 
-      const color = getColor(value);
+      // A condition series shows whether the comparison holds instead of the raw value.
+      const value = condition ? conditionMatches(condition, rawValue, rawConstantName) : rawValue;
+      const constantName = condition ? undefined : rawConstantName;
+
+      const color = condition && value === false ? CONDITION_FALSE_COLOR : getColor(value);
       const label = createLabel(constantName, value);
 
       const isNewSegment = lastValue !== value;
