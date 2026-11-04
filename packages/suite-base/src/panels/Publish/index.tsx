@@ -14,15 +14,15 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { MessageDefinition } from "@foxglove/message-definition";
+import CommonRosTypes from "@foxglove/rosmsg-msgs-common";
 import RepeatIcon from "@mui/icons-material/Repeat";
 import StopIcon from "@mui/icons-material/Stop";
 import { Button, Tooltip, Typography } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { makeStyles } from "tss-react/mui";
 import { useDebounce } from "use-debounce";
 
-import { MessageDefinition } from "@foxglove/message-definition";
-import CommonRosTypes from "@foxglove/rosmsg-msgs-common";
+
 import { Immutable } from "@lichtblick/suite";
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import { MessageEditor } from "@lichtblick/suite-base/components/MessageEditor/MessageEditor";
@@ -37,6 +37,7 @@ import Stack from "@lichtblick/suite-base/components/Stack";
 import useCallbackWithToast from "@lichtblick/suite-base/hooks/useCallbackWithToast";
 import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";
 import usePublisher from "@lichtblick/suite-base/hooks/usePublisher";
+import { formatTime, useActionButtonStyles } from "@lichtblick/suite-base/panels/shared/actionButton";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { useDefaultPanelTitle } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
@@ -50,28 +51,6 @@ type Props = {
   saveConfig: SaveConfig<PublishConfig>;
 };
 
-const useStyles = makeStyles<{ buttonColor?: string }>()((theme, { buttonColor }) => {
-  const augmentedButtonColor = buttonColor
-    ? theme.palette.augmentColor({
-        color: { main: buttonColor },
-      })
-    : undefined;
-
-  return {
-    wrapper: {
-      display: "contents",
-    },
-    button: {
-      backgroundColor: augmentedButtonColor?.main,
-      color: augmentedButtonColor?.contrastText,
-
-      "&:hover": {
-        backgroundColor: augmentedButtonColor?.dark,
-      },
-    },
-  };
-});
-
 function selectDataSourceProfile(ctx: MessagePipelineContext) {
   return ctx.playerState.profile;
 }
@@ -80,14 +59,10 @@ function selectPlayerPresence(ctx: MessagePipelineContext) {
   return ctx.playerState.presence;
 }
 
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString(undefined, { hour12: false });
-}
-
 function Publish(props: Props) {
   const { saveConfig, config } = props;
   const { topics, datatypes: dataSourceDatatypes, capabilities } = useDataSourceInfo();
-  const { classes } = useStyles({ buttonColor: config.buttonColor });
+  const { classes } = useActionButtonStyles({ buttonColor: config.buttonColor });
   const [debouncedTopicName] = useDebounce(config.topicName ?? "", 500);
   const dataSourceProfile = useMessagePipeline(selectDataSourceProfile);
   const presence = useMessagePipeline(selectPlayerPresence);
