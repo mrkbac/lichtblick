@@ -7,7 +7,7 @@
 
 import { Divider, Typography } from "@mui/material";
 import * as _ from "lodash-es";
-import { Fragment } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { subtract as subtractTimes, toSec, Time } from "@lichtblick/rostime";
@@ -21,6 +21,8 @@ import {
 } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { customTypography } from "@lichtblick/theme";
+
+import { THUMBNAIL_WIDTH } from "./useScrubPreview";
 
 type PlaybackControlsTooltipItem =
   | { type: "divider" }
@@ -43,6 +45,15 @@ const useStyles = makeStyles()((theme) => ({
     width: "100%",
     flexDirection: "column",
   },
+  thumbnail: {
+    gridColumn: "span 2",
+    justifySelf: "center",
+    display: "block",
+    width: THUMBNAIL_WIDTH,
+    height: "auto",
+    marginBottom: theme.spacing(0.5),
+    borderRadius: theme.shape.borderRadius,
+  },
   itemKey: {
     fontSize: "0.7rem",
     opacity: 0.7,
@@ -54,10 +65,26 @@ const useStyles = makeStyles()((theme) => ({
 const selectHoveredEvents = (store: TimelineInteractionStateStore) => store.eventsAtHoverValue;
 const selectStartTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
 
+function Thumbnail({ bitmap, className }: { bitmap: ImageBitmap; className: string }) {
+  const ref = useRef<HTMLCanvasElement>(ReactNull);
+  useEffect(() => {
+    const canvas = ref.current;
+    // A closed (evicted) bitmap has zero size; keep the last drawn frame instead.
+    if (!canvas || bitmap.width === 0) {
+      return;
+    }
+    canvas.width = bitmap.width;
+    canvas.height = bitmap.height;
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0);
+  }, [bitmap]);
+  return <canvas ref={ref} className={className} data-testid="scrub-preview-thumbnail" />;
+}
+
 export function PlaybackControlsTooltipContent(params: {
   stamp: Time;
+  thumbnail?: ImageBitmap;
 }): ReactNull | React.JSX.Element {
-  const { stamp } = params;
+  const { stamp, thumbnail } = params;
   const { timeFormat, formatTime, formatDate } = useAppTimeFormat();
   const hoveredEvents = useTimelineInteractionState(selectHoveredEvents);
   const startTime = useMessagePipeline(selectStartTime);
@@ -110,6 +137,7 @@ export function PlaybackControlsTooltipContent(params: {
 
   return (
     <div className={classes.tooltipWrapper}>
+      {thumbnail && <Thumbnail bitmap={thumbnail} className={classes.thumbnail} />}
       {tooltipItems.map((item, idx) => {
         if (item.type === "divider") {
           return <Divider key={`divider_${idx}`} className={classes.tooltipDivider} />;

@@ -220,7 +220,7 @@ export function createMessagePipelineStore({
         const player = get().player;
         return player?.getBatchIterator(topic, options);
       },
-      async getMessageAtTime(topic: string, time: Time) {
+      async getMessageAtTime(topic: string, time: Time, abortSignal?: AbortSignal) {
         const player = get().player;
         if (player?.getBackfillMessages == undefined) {
           return undefined;
@@ -228,6 +228,7 @@ export function createMessagePipelineStore({
         const messages = await player.getBackfillMessages({
           topics: new Map([[topic, { topic }]]),
           time,
+          abortSignal,
         });
         return messages.find((msg) => msg.topic === topic);
       },

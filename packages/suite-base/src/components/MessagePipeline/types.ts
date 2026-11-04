@@ -47,5 +47,9 @@ export type MessagePipelineContext = Immutable<{
   // Read the most recent message on `topic` at or before `time`, independent of the current
   // playback position. Resolves to `undefined` if unsupported (e.g. live data sources) or if no
   // matching message exists.
-  getMessageAtTime: (topic: string, time: Time) => Promise<MessageEvent | undefined>;
+  getMessageAtTime: (
+    topic: string,
+    time: Time,
+    abortSignal?: AbortSignal,
+  ) => Promise<MessageEvent | undefined>;
 }>;
