@@ -10,9 +10,7 @@ import { DndProvider } from "react-dnd";
 import { HTML5Backend } from "react-dnd-html5-backend";
 import { StoryObj } from "storybook-react-rsbuild";
 
-import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { SidebarItem } from "@lichtblick/suite-base/components/Sidebars/types";
-import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
 
 import Sidebars from ".";
 
@@ -41,23 +39,13 @@ const BOTTOM_ITEMS = new Map<string, SidebarItem>([
 function Story({
   clickKey,
   defaultSelectedKey,
-  enableAppBar,
   height = 300,
 }: {
   clickKey?: string;
   defaultSelectedKey?: string | undefined;
-  enableAppBar?: boolean;
   height?: number;
 }) {
   const [selectedKey, setSelectedKey] = useState<string | undefined>(defaultSelectedKey);
-  const [, setAppBarEnabled] = useAppConfigurationValue<boolean>(AppSetting.ENABLE_NEW_TOPNAV);
-
-  useEffect(() => {
-    if (enableAppBar === true) {
-      void setAppBarEnabled(true);
-    }
-  }, [enableAppBar, setAppBarEnabled]);
-
   useEffect(() => {
     if (clickKey != undefined) {
       void (async () => {

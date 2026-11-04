@@ -9,11 +9,8 @@ import { useTranslation } from "react-i18next";
 import type { Mock } from "vitest";
 
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
-import { useCurrentUser } from "@lichtblick/suite-base/context/CurrentUserContext";
-import { useEvents } from "@lichtblick/suite-base/context/EventsContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import useAlertCount from "@lichtblick/suite-base/hooks/useAlertCount";
-import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks/useAppConfigurationValue";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 
 import DataSourceSidebar from "./DataSourceSidebar";
@@ -26,14 +23,6 @@ vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   useMessagePipeline: vi.fn(),
 }));
 
-vi.mock("@lichtblick/suite-base/context/CurrentUserContext", () => ({
-  useCurrentUser: vi.fn(),
-}));
-
-vi.mock("@lichtblick/suite-base/context/EventsContext", () => ({
-  useEvents: vi.fn(),
-}));
-
 vi.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => ({
   useWorkspaceActions: vi.fn(),
 }));
@@ -41,10 +30,6 @@ vi.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => ({
 vi.mock("@lichtblick/suite-base/hooks/useAlertCount", () => ({
   __esModule: true,
   default: vi.fn(),
-}));
-
-vi.mock("@lichtblick/suite-base/hooks/useAppConfigurationValue", () => ({
-  useAppConfigurationValue: vi.fn(),
 }));
 
 vi.mock("@lichtblick/suite-base/components/SidebarContent", () => ({
@@ -63,10 +48,6 @@ vi.mock("@lichtblick/suite-base/components/TopicList", () => ({
   TopicList: () => <div data-testid="topic-list" />,
 }));
 
-vi.mock("@lichtblick/suite-base/components/EventsList", () => ({
-  EventsList: () => <div data-testid="events-list" />,
-}));
-
 vi.mock("@lichtblick/suite-base/components/WssErrorModal", () => ({
   __esModule: true,
   default: () => <div data-testid="wss-error-modal" />,
@@ -83,20 +64,14 @@ vi.mock("../DataSourceInfoView", () => ({
 describe("DataSourceSidebar - Alerts tab badge", () => {
   const mockUseMessagePipeline = useMessagePipeline as Mock;
   const mockUseAlertCount = useAlertCount as Mock;
-  const mockUseCurrentUser = useCurrentUser as Mock;
-  const mockUseEvents = useEvents as Mock;
   const mockUseWorkspaceActions = useWorkspaceActions as Mock;
-  const mockUseAppConfigurationValue = useAppConfigurationValue as Mock;
 
   beforeEach(() => {
     (useTranslation as Mock).mockReturnValue({ t: (key: string) => key });
     mockUseMessagePipeline.mockReturnValue(PlayerPresence.PRESENT);
-    mockUseCurrentUser.mockReturnValue({ currentUser: undefined });
-    mockUseEvents.mockReturnValue(undefined);
     mockUseWorkspaceActions.mockReturnValue({
       dialogActions: { dataSource: { open: vi.fn() } },
     });
-    mockUseAppConfigurationValue.mockReturnValue([true]);
   });
 
   afterEach(() => {

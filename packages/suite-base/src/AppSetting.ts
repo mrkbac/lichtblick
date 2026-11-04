@@ -17,7 +17,6 @@ export enum AppSetting {
 
   // ROS
   ROS_PACKAGE_PATH = "ros.ros_package_path",
-  ENABLE_NEW_TOPNAV = "enableNewTopNav",
 
   // Privacy
   TELEMETRY_ENABLED = "telemetry.telemetryEnabled",
@@ -30,7 +29,6 @@ export enum AppSetting {
   HIDE_SIGN_IN_PROMPT = "hideSignInPrompt",
   LAUNCH_PREFERENCE = "launchPreference",
   SHOW_OPEN_DIALOG_ON_STARTUP = "ui.open-dialog-startup",
-  ENABLE_UNIFIED_NAVIGATION = "ui.new-app-menu",
 
   // Dev only
   ENABLE_LAYOUT_DEBUGGING = "enableLayoutDebugging",
