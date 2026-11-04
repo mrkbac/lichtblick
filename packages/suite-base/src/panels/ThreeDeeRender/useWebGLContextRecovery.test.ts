@@ -105,6 +105,20 @@ describe("useWebGLContextRecovery", () => {
     expect(hook.result.current.status).toBe("restoring");
   });
 
+  it("counts a browser restore toward the auto-recreate interval", () => {
+    const { canvas, hook } = setup();
+    loseContext(canvas);
+    act(() => {
+      canvas.dispatchEvent(new Event("webglcontextrestored"));
+    });
+
+    const nextCanvas = document.createElement("canvas");
+    hook.rerender({ target: nextCanvas });
+    loseContext(nextCanvas);
+
+    expect(hook.result.current.status).toBe("paused");
+  });
+
   it("releases the context when the canvas goes away and stops listening", () => {
     const { canvas, hook } = setup();
 

@@ -56,8 +56,12 @@ export function useWebGLContextRecovery(
       }, RESTORE_TIMEOUT_MS);
     };
     // A restored context has lost all GPU resources; a fresh canvas + renderer re-uploads them.
+    // Recreate even when paused: a restore means the browser has room for the context again
+    // (evicted contexts are never restored). Count it toward the interval so a flapping GPU
+    // can't remount in a loop.
     const onRestored = () => {
       clearTimeout(timeout);
+      lastAutoRecreateRef.current = performance.now();
       recreate();
     };
     canvas.addEventListener("webglcontextlost", onLost);
