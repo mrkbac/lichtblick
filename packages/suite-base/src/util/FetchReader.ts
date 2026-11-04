@@ -17,6 +17,7 @@ import { EventEmitter } from "eventemitter3";
 
 import Log from "@lichtblick/log";
 import { globalRequestQueue } from "@lichtblick/suite-base/util/RequestQueue";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Log.getLogger(__filename);
 
@@ -113,12 +114,12 @@ export default class FetchReader extends EventEmitter<EventTypes> {
               this.emit("end");
               return;
             }
-            const err = unk instanceof Error ? unk : new Error(unk as string);
+            const err = toError(unk);
             this.emit("error", err);
           });
       })
       .catch((unk: unknown) => {
-        const err = unk instanceof Error ? unk : new Error(unk as string);
+        const err = toError(unk);
         this.emit("error", err);
       });
   }

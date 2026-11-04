@@ -14,6 +14,7 @@ import { IExtensionLoader } from "@lichtblick/suite-base/services/extension/IExt
 import compareVersions from "@lichtblick/suite-base/services/extension/utils/compareVersions";
 import { Namespace } from "@lichtblick/suite-base/types";
 import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Logger.getLogger(__filename);
 
@@ -158,7 +159,7 @@ export async function tryInstallSingleLoader(
     return {
       loaderType: loader.type,
       success: false,
-      error: error instanceof Error ? error : new Error(String(error)),
+      error: toError(error),
     };
   }
 }

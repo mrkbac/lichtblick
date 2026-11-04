@@ -22,6 +22,7 @@ import type { FileReader, FileStream, ILogger } from "./CachedFilelike.types";
 import VirtualLRUBuffer from "./VirtualLRUBuffer";
 import { getNewConnection } from "./getNewConnection";
 import { Range } from "./ranges";
+import { toError } from "./toError";
 
 // CachedFilelike is a streamed Filelike backed by a VirtualLRUBuffer.
 // It serves requested byte ranges from an in-memory LRU cache through one main streaming fetch (plus
@@ -169,7 +170,7 @@ export default class CachedFilelike implements Filelike {
           this.#updateState();
         })
         .catch((err: unknown) => {
-          reject(err instanceof Error ? err : new Error(String(err)));
+          reject(toError(err));
         });
     });
   }
