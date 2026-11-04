@@ -10,11 +10,19 @@ import { Log as FoxgloveLog } from "@foxglove/schemas";
 import { Time, MessageEvent } from "@lichtblick/suite";
 import { Header } from "@lichtblick/suite-base/types/Messages";
 
+export type VisibilityFilter = Record<string, { visible?: boolean }>;
+
 export type Config = {
   searchTerms: string[];
   minLogLevel: number;
+  /** Legacy single-topic selection; replaced by `topics` once the user toggles a topic */
   topicToRender?: string;
-  nameFilter?: Record<string, { visible?: boolean }>;
+  /** Per-topic visibility. Topics not listed are shown. */
+  topics?: VisibilityFilter;
+  nameFilter?: VisibilityFilter;
+  /** Treat search terms as regular expressions */
+  regex?: boolean;
+  caseSensitive?: boolean;
 };
 
 export enum LogLevel {
@@ -48,6 +56,10 @@ export type Ros2RosgraphMsgs$Log = Readonly<{
 }>;
 
 export type NormalizedLogMessage = {
+  topic: string;
+  /** Time the message was received/recorded; used for seeking and ordering */
+  receiveTime: Time;
+  /** Time from the log message itself */
   stamp: Time;
   level: LogLevel;
   message: string;
@@ -60,7 +72,3 @@ export type LogMessageEvent =
   | MessageEvent<FoxgloveLog>
   | MessageEvent<Ros1RosgraphMsgs$Log>
   | MessageEvent<Ros2RosgraphMsgs$Log>;
-
-export type LogListProps = {
-  items: readonly NormalizedLogMessage[];
-};

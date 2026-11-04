@@ -12,7 +12,7 @@ import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { NormalizedLogMessage } from "@lichtblick/suite-base/panels/Log/types";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
-import LogList from "./LogList";
+import LogList, { LogListProps } from "./LogList";
 
 function createMockLogMessage(
   index: number,
@@ -20,6 +20,8 @@ function createMockLogMessage(
   message?: string,
 ): NormalizedLogMessage {
   return {
+    topic: "/log",
+    receiveTime: { sec: 2000 + index, nsec: 0 },
     stamp: { sec: 1000 + index, nsec: 0 },
     level,
     message: message ?? `Test log message ${index}`,
@@ -69,9 +71,10 @@ describe("LogList Component", () => {
     }
   });
 
-  function setup(items: NormalizedLogMessage[] = []) {
-    const props = {
+  function setup(items: NormalizedLogMessage[] = [], extraProps: Partial<LogListProps> = {}) {
+    const props: LogListProps = {
       items,
+      ...extraProps,
     };
 
     const ui: React.ReactElement = (
@@ -154,9 +157,18 @@ describe("LogList Component", () => {
         scrollHeight,
       }: { scrollTop: number; offsetHeight: number; scrollHeight: number },
     ) {
-      Object.defineProperty(element, "scrollTop", { configurable: true, value: scrollTop });
-      Object.defineProperty(element, "offsetHeight", { configurable: true, value: offsetHeight });
-      Object.defineProperty(element, "scrollHeight", { configurable: true, value: scrollHeight });
+      Object.defineProperty(element, "scrollTop", {
+        configurable: true,
+        value: scrollTop,
+      });
+      Object.defineProperty(element, "offsetHeight", {
+        configurable: true,
+        value: offsetHeight,
+      });
+      Object.defineProperty(element, "scrollHeight", {
+        configurable: true,
+        value: scrollHeight,
+      });
       fireEvent.scroll(element);
     }
 
@@ -167,7 +179,7 @@ describe("LogList Component", () => {
       expect(screen.queryByTestId("scroll-to-bottom-button")).not.toBeInTheDocument();
 
       scrollTo(screen.getByTestId("scrollable-list"), {
-        scrollTop: 0,
+        scrollTop: 10,
         offsetHeight: 100,
         scrollHeight: 1000,
       });
@@ -181,7 +193,7 @@ describe("LogList Component", () => {
 
       const list = screen.getByTestId("scrollable-list");
 
-      scrollTo(list, { scrollTop: 0, offsetHeight: 100, scrollHeight: 1000 });
+      scrollTo(list, { scrollTop: 10, offsetHeight: 100, scrollHeight: 1000 });
       expect(screen.getByTestId("scroll-to-bottom-button")).toBeInTheDocument();
 
       scrollTo(list, { scrollTop: 900, offsetHeight: 100, scrollHeight: 1000 });
@@ -193,7 +205,7 @@ describe("LogList Component", () => {
       const { user } = setup(items);
 
       scrollTo(screen.getByTestId("scrollable-list"), {
-        scrollTop: 0,
+        scrollTop: 10,
         offsetHeight: 100,
         scrollHeight: 1000,
       });
@@ -204,6 +216,47 @@ describe("LogList Component", () => {
       await user.click(button);
 
       expect(screen.queryByTestId("scroll-to-bottom-button")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("playhead and row actions", () => {
+    const items = Array.from({ length: 5 }, (_, i) => createMockLogMessage(i, 2));
+
+    it("seeks to the receive time of a clicked row", async () => {
+      const onSeek = vi.fn();
+      const { user } = setup(items, {
+        onSeek,
+        currentTime: { sec: 2000, nsec: 0 },
+      });
+
+      await user.click(screen.getByText("Test log message 3"));
+
+      expect(onSeek).toHaveBeenCalledWith({ sec: 2003, nsec: 0 });
+    });
+
+    it("copies a row without seeking", async () => {
+      const onSeek = vi.fn();
+      const onCopy = vi.fn();
+      const { user } = setup(items, { onSeek, onCopy });
+
+      await user.click(screen.getAllByLabelText("Copy log message")[1]!);
+
+      expect(onCopy).toHaveBeenCalledWith(items[1]);
+      expect(onSeek).not.toHaveBeenCalled();
+    });
+
+    it("marks the row at the playhead and dims later rows", () => {
+      setup(items, {
+        onSeek: vi.fn(),
+        currentTime: { sec: 2002, nsec: 500 },
+      });
+
+      const row = (text: string) => screen.getByText(text).closest("[aria-posinset]")!.firstChild!;
+      const style = (text: string) => getComputedStyle(row(text) as Element);
+
+      expect(style("Test log message 2").opacity).not.toBe("0.5");
+      expect(style("Test log message 3").opacity).toBe("0.5");
+      expect(style("Test log message 1").opacity).not.toBe("0.5");
     });
   });
 });

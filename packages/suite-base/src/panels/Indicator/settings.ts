@@ -136,6 +136,24 @@ const memoizedCreateRuleNode = memoizeWeak(
           input: "string",
           value: rule.label,
         },
+        alertSound: {
+          label: "Alert sound",
+          input: "select",
+          value: rule.alertSound ?? "none",
+          options: [
+            { label: "None", value: "none" },
+            { label: "Beep", value: "beep" },
+            { label: "Chime", value: "chime" },
+            { label: "Alarm", value: "alarm" },
+          ],
+          help: "Played when this rule starts matching during live data or playback",
+        },
+        alertNotify: {
+          label: "Notify",
+          input: "boolean",
+          value: rule.alertNotify ?? false,
+          help: "Show a browser notification when this rule starts matching",
+        },
       },
     };
   },

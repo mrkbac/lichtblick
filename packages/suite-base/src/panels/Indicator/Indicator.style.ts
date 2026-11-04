@@ -15,6 +15,11 @@ export const useStyles = makeStyles<Partial<{ style: IndicatorStyle; backgroundC
       padding: spacing(1),
       backgroundColor: style === "background" ? backgroundColor : "transparent",
     },
+    muteButton: {
+      position: "absolute",
+      top: spacing(0.5),
+      right: spacing(0.5),
+    },
     stack: {
       flexDirection: "row",
       alignItems: "center",

@@ -11,11 +11,17 @@ export type IndicatorOperator = "=" | "<" | "<=" | ">" | ">=";
 
 export type IndicatorStyle = "bulb" | "background";
 
+export type IndicatorAlertSound = "none" | "beep" | "chime" | "alarm";
+
 export type IndicatorRule = {
   color: string;
   label: string;
   operator: IndicatorOperator;
   rawValue: string;
+  /** Sound played when this rule becomes the matching rule. */
+  alertSound?: IndicatorAlertSound;
+  /** Show a browser notification when this rule becomes the matching rule. */
+  alertNotify?: boolean;
 };
 
 export type RawValueIndicator =
@@ -32,6 +38,8 @@ export type IndicatorConfig = {
   path: string;
   rules: IndicatorRule[];
   style: IndicatorStyle;
+  /** Silences all rule alerts of this panel. */
+  alertsMuted?: boolean;
 };
 
 export type IndicatorProps = {
