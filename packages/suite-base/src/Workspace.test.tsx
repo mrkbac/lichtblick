@@ -104,10 +104,6 @@ vi.mock("@lichtblick/suite-base/components/PlaybackControls", () => ({
   __esModule: true,
   default: () => undefined,
 }));
-vi.mock("@lichtblick/suite-base/components/RemountOnValueChange", () => ({
-  __esModule: true,
-  default: ({ children }: React.PropsWithChildren) => <>{children}</>,
-}));
 vi.mock("@lichtblick/suite-base/components/Stack", () => ({
   __esModule: true,
   default: ({ children }: React.PropsWithChildren) => <>{children}</>,
