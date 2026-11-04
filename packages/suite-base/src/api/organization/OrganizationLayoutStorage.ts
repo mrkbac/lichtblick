@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import Logger from "@lichtblick/log";
 import {
   SaveNewLayoutParams,
   UpdateLayoutRequest,
@@ -23,8 +22,6 @@ import {
   cleanText,
   revisionETag,
 } from "./client";
-
-const log = Logger.getLogger(__filename);
 
 type ApiLayout = Schemas["Layout"];
 type LayoutSummary = Schemas["LayoutSummary"];
@@ -78,13 +75,15 @@ export class OrganizationLayoutStorage
         return await Promise.all(summaries.map(async (summary) => await this.#full(summary)));
       }),
     );
-    return perOrganization.flat().flatMap((layout) => {
+    // The sync deletes local copies of layouts missing from this list, so it must be complete:
+    // any layout that can't be loaded fails the whole sync instead of being left out.
+    return perOrganization.flat().map((layout) => {
       try {
-        return [this.#toRemote(layout)];
+        return this.#toRemote(layout);
       } catch (error) {
-        // Layouts are written by other users: one broken layout must not stop the sync.
-        log.warn(`Skipping invalid layout ${layout.id} from ${layout.organizationId}`, error);
-        return [];
+        throw new Error(
+          `Layout "${cleanText(layout.displayName, 200)}" from the server is invalid: ${String(error)}`,
+        );
       }
     });
   }

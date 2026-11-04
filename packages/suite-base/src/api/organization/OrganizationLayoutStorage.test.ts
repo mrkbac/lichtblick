@@ -142,7 +142,9 @@ describe("OrganizationLayoutStorage", () => {
     expect(saved.externalId).toBe("b");
   });
 
-  it("skips layouts with invalid data and cleans their names", async () => {
+  it("cleans layout names and fails the whole list on invalid data", async () => {
+    // Leaving a layout out would make the sync delete its local copy, so the list must fail.
+    let includeBad = false;
     const { storage } = setup((request) => {
       if (!route(request).startsWith("GET /v1/organizations/mine")) {
         return json(200, { items: [], nextCursor: null });
@@ -152,14 +154,16 @@ describe("OrganizationLayoutStorage", () => {
       if (route(request).endsWith("/layouts")) {
         const { data: _a, ...goodSummary } = good;
         const { data: _b, ...badSummary } = bad;
-        return json(200, { items: [goodSummary, badSummary], nextCursor: null });
+        const items = includeBad ? [goodSummary, badSummary] : [goodSummary];
+        return json(200, { items, nextCursor: null });
       }
       return json(200, route(request).endsWith("/good") ? good : bad);
     });
     const layouts = await storage.getLayouts();
     expect(layouts.map((l) => [l.id, l.name])).toEqual([["good", "Evilgnp.exe"]]);
-    expect(console.warn).toHaveBeenCalledTimes(1);
-    (console.warn as unknown as { mockClear: () => void }).mockClear();
+
+    includeBad = true;
+    await expect(storage.getLayouts()).rejects.toThrow(/is invalid/);
   });
 
   it("encodes path parameters", async () => {
