@@ -37,10 +37,6 @@ export function isAbsoluteTime(time: Time): boolean {
   return time.sec > DURATION_20_YEARS_SEC;
 }
 
-export function formatFrame({ sec, nsec }: Time): string {
-  return `${sec}.${String.prototype.padStart.call(nsec, 9, "0")}`;
-}
-
 export function getTimestampForMessageEvent(
   messageEvent: MessageEvent,
   timestampMethod?: TimestampMethod,
