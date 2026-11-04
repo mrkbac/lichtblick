@@ -7,8 +7,53 @@
 
 import { IWritable, McapIndexedReader } from "@mcap/core";
 
-import { ExportTopicOptions } from "@lichtblick/mcap-support";
+import * as Comlink from "@lichtblick/comlink";
+import { ChunkJob, ExportMcapOptions, ExportTopicOptions } from "@lichtblick/mcap-support";
+import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
+
+import type { ExportChunkWorker } from "./exportChunk.worker";
+
+/** The opened file, if it can be exported: currently a single local MCAP file. */
+export function useExportableFile(): File | undefined {
+  const { selectedFiles } = usePlayerSelection();
+  // ponytail: single file only; merging several open files is a later step.
+  const file = selectedFiles?.length === 1 ? selectedFiles[0] : undefined;
+  return file && /\.mcap$/i.test(file.name) ? file : undefined;
+}
+
+/**
+ * Runs chunk rewrites (decompress, filter, recompress) on all but one core.
+ * Call `terminate` when done.
+ */
+export function createChunkWorkerPool(): Required<
+  Pick<ExportMcapOptions, "processChunk" | "concurrency">
+> & { terminate: () => void } {
+  const size = Math.max(1, Math.min(8, navigator.hardwareConcurrency - 1));
+  const workers = Array.from(
+    { length: size },
+    () => new Worker(new URL("./exportChunk.worker", import.meta.url)),
+  );
+  const remotes = workers.map((worker) => Comlink.wrap<ExportChunkWorker>(worker));
+  // Load each worker's WASM now rather than on its first chunk.
+  remotes.forEach((remote) => {
+    void remote.warmUp();
+  });
+  let next = 0;
+  return {
+    concurrency: size,
+    // Chunks are queued in order and kept at most 2 per worker, so round robin balances well.
+    processChunk: async (job: ChunkJob) => {
+      const remote = remotes[next++ % remotes.length]!;
+      return await remote.rewriteChunk(Comlink.transfer(job, [job.records.buffer]));
+    },
+    terminate: () => {
+      workers.forEach((worker) => {
+        worker.terminate();
+      });
+    },
+  };
+}
 
 export type TopicRow = {
   topic: string;

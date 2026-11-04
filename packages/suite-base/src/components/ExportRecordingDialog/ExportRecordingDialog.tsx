@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { McapIndexedReader } from "@mcap/core";
+import { McapIndexedReader, McapTypes } from "@mcap/core";
 import MyLocationIcon from "@mui/icons-material/MyLocation";
 import {
   Alert,
@@ -31,15 +31,11 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAsync } from "react-use";
 
-import {
-  exportMcap,
-  loadDecompressHandlers,
-  loadZstdCompressChunk,
-} from "@lichtblick/mcap-support";
+import { ExportCompression, exportMcap, loadDecompressHandlers } from "@lichtblick/mcap-support";
 import { toNanoSec } from "@lichtblick/rostime";
 import {
   MessagePipelineContext,
@@ -50,12 +46,14 @@ import { BlobReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap
 import { useStyles } from "./ExportRecordingDialog.style";
 import {
   TopicEdit,
+  createChunkWorkerPool,
   exportFileName,
   findDuplicateOutputTopics,
   getTopicRows,
   openExportOutput,
   toExportTopics,
 } from "./exportRecording";
+import { useTrimStore } from "./trimStore";
 
 const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
 
@@ -78,12 +76,13 @@ type Props = {
 export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Element {
   const { t } = useTranslation("exportRecording");
 
+  const readable = useMemo(() => new BlobReadable(file), [file]);
   const opened = useAsync(async () => {
     return await McapIndexedReader.Initialize({
-      readable: new BlobReadable(file),
+      readable,
       decompressHandlers: await loadDecompressHandlers(),
     });
-  }, [file]);
+  }, [readable]);
   const reader = opened.value;
 
   return (
@@ -105,7 +104,7 @@ export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Eleme
           <Alert severity="error">{opened.error.message}</Alert>
         </DialogContent>
       )}
-      {reader && <ExportForm file={file} reader={reader} onClose={onClose} />}
+      {reader && <ExportForm file={file} reader={reader} readable={readable} onClose={onClose} />}
       {!reader && (
         <DialogActions>
           <Button onClick={onClose}>{t("close")}</Button>
@@ -118,8 +117,9 @@ export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Eleme
 function ExportForm({
   file,
   reader,
+  readable,
   onClose,
-}: Props & { reader: McapIndexedReader }): React.JSX.Element {
+}: Props & { reader: McapIndexedReader; readable: McapTypes.IReadable }): React.JSX.Element {
   const { t } = useTranslation("exportRecording");
   const { classes } = useStyles();
   const currentTime = useMessagePipeline(selectCurrentTime);
@@ -128,38 +128,60 @@ function ExportForm({
   const recordingEnd = reader.statistics?.messageEndTime ?? recordingStart;
   const rows = useMemo(() => getTopicRows(reader), [reader]);
 
-  const [startText, setStartText] = useState("0.000");
-  const [endText, setEndText] = useState(() => toSecondsText(recordingEnd - recordingStart));
+  // The range is shared with the timeline's trim handles.
+  const clampNs = (ns: bigint) =>
+    ns < recordingStart ? recordingStart : ns > recordingEnd ? recordingEnd : ns;
+  const startNs = clampNs(useTrimStore((state) => state.start) ?? recordingStart);
+  const endNs = clampNs(useTrimStore((state) => state.end) ?? recordingEnd);
+  const setRange = useTrimStore((state) => state.setRange);
+  // Bumped to reset a range field after invalid input.
+  const [rangeFieldKey, setRangeFieldKey] = useState(0);
   const [filter, setFilter] = useState("");
   const [edits, setEdits] = useState<ReadonlyMap<string, TopicEdit>>(
     () => new Map(rows.map((row) => [row.topic, { keep: true, rename: "", everyNth: 1 }])),
   );
-  const [compression, setCompression] = useState<"zstd" | "none">("zstd");
+  const [compression, setCompression] = useState<ExportCompression>("zstd");
   const [includeAttachments, setIncludeAttachments] = useState(true);
   const [includeMetadata, setIncludeMetadata] = useState(true);
 
-  const [progress, setProgress] = useState<number | undefined>();
+  const [busy, setBusy] = useState(false);
+  // Progress lives in a ref and is shown by <ExportProgress>, so the form (with its large
+  // topic table) doesn't re-render for every chunk.
+  const progressRef = useRef<number | undefined>();
   const [result, setResult] = useState<{ messageCount?: number; error?: string }>();
   const abortRef = useRef<AbortController | undefined>();
 
-  // Seconds from the recording start, clamped to the recording.
-  const parseSeconds = (text: string): bigint | undefined => {
+  // Start the workers (and their WASM) while the user is still choosing options.
+  const [pool] = useState(createChunkWorkerPool);
+  // Closing the dialog any way (Escape, backdrop) cancels a running export.
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      pool.terminate();
+    },
+    [pool],
+  );
+
+  /** Commits a range field typed as seconds from the recording start. */
+  const commitSeconds = (which: "start" | "end", text: string) => {
     const seconds = Number(text);
     if (text.trim() === "" || !Number.isFinite(seconds)) {
-      return undefined;
+      setRangeFieldKey((key) => key + 1);
+      return;
     }
-    const ns = recordingStart + BigInt(Math.round(seconds * NS_PER_SEC));
-    return ns < recordingStart ? recordingStart : ns > recordingEnd ? recordingEnd : ns;
+    const ns = clampNs(recordingStart + BigInt(Math.round(seconds * NS_PER_SEC)));
+    if (which === "start") {
+      setRange(ns, ns > endNs ? ns : endNs);
+    } else {
+      setRange(ns < startNs ? ns : startNs, ns);
+    }
   };
-  const startNs = parseSeconds(startText);
-  const endNs = parseSeconds(endText);
-  const validRange = startNs != undefined && endNs != undefined && startNs <= endNs;
 
   const topics = useMemo(() => toExportTopics(edits), [edits]);
   const duplicates = useMemo(() => findDuplicateOutputTopics(topics), [topics]);
   const visibleRows = rows.filter((row) => row.topic.toLowerCase().includes(filter.toLowerCase()));
-  const exporting = progress != undefined && result == undefined;
-  const canExport = validRange && topics.size > 0 && duplicates.size === 0 && !exporting;
+  const exporting = busy;
+  const canExport = topics.size > 0 && duplicates.size === 0 && !busy;
 
   const updateEdit = (topic: string, change: Partial<TopicEdit>) => {
     setEdits((prev) => new Map(prev).set(topic, { ...prev.get(topic)!, ...change }));
@@ -173,37 +195,48 @@ function ExportForm({
       return next;
     });
   };
-  const playheadText = currentTime ? toSecondsText(toNanoSec(currentTime) - recordingStart) : "";
+  const playheadNs = currentTime ? clampNs(toNanoSec(currentTime)) : undefined;
 
   const handleExport = async () => {
-    if (startNs == undefined || endNs == undefined) {
-      return;
+    setBusy(true);
+    setResult(undefined);
+    progressRef.current = undefined;
+    let output;
+    try {
+      output = await openExportOutput(exportFileName(file.name));
+    } catch (err) {
+      setResult({ error: String(err) });
     }
-    const output = await openExportOutput(exportFileName(file.name));
     if (!output) {
+      setBusy(false);
       return;
     }
     const controller = new AbortController();
     abortRef.current = controller;
-    setResult(undefined);
-    setProgress(0);
+    progressRef.current = 0;
     try {
-      const { messageCount } = await exportMcap(reader, output.writable, {
+      const { messageCount } = await exportMcap(reader, readable, output.writable, {
         topics,
         startTime: startNs,
         endTime: endNs,
         includeAttachments,
         includeMetadata,
-        compressChunk: compression === "zstd" ? await loadZstdCompressChunk() : undefined,
-        onProgress: setProgress,
+        compression,
+        processChunk: pool.processChunk,
+        concurrency: pool.concurrency,
+        onProgress: (fraction) => {
+          progressRef.current = fraction;
+        },
         signal: controller.signal,
       });
       await output.close();
       setResult({ messageCount });
     } catch (err) {
-      await output.abort();
-      setProgress(undefined);
+      await output.abort().catch(() => {});
+      progressRef.current = undefined;
       setResult({ error: controller.signal.aborted ? undefined : String(err) });
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -217,23 +250,28 @@ function ExportForm({
       <DialogContent>
         <Stack gap={2}>
           <Typography variant="subtitle2">
-            {t("timeRange", { duration: toSecondsText(recordingEnd - recordingStart) })}
+            {t("timeRange", {
+              duration: toSecondsText(endNs - startNs),
+              total: toSecondsText(recordingEnd - recordingStart),
+            })}
           </Typography>
           <Stack direction="row" gap={2}>
-            {[
-              { label: t("start"), value: startText, set: setStartText },
-              { label: t("end"), value: endText, set: setEndText },
-            ].map(({ label, value, set }) => (
+            {(["start", "end"] as const).map((which) => (
               <TextField
-                key={label}
-                label={label}
+                // Uncontrolled, so typing doesn't move the timeline until the value is committed.
+                key={`${which}-${which === "start" ? startNs : endNs}-${rangeFieldKey}`}
+                label={t(which)}
                 type="number"
                 size="small"
-                value={value}
-                error={!validRange}
+                defaultValue={toSecondsText((which === "start" ? startNs : endNs) - recordingStart)}
                 disabled={exporting}
-                onChange={(event) => {
-                  set(event.target.value);
+                onBlur={(event) => {
+                  commitSeconds(which, event.target.value);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    commitSeconds(which, (event.target as HTMLInputElement).value);
+                  }
                 }}
                 slotProps={{
                   htmlInput: { step: 0.1 },
@@ -245,9 +283,9 @@ function ExportForm({
                             <IconButton
                               size="small"
                               aria-label={t("setToPlayhead")}
-                              disabled={!currentTime || exporting}
+                              disabled={playheadNs == undefined || exporting}
                               onClick={() => {
-                                set(playheadText);
+                                commitSeconds(which, toSecondsText(playheadNs! - recordingStart));
                               }}
                             >
                               <MyLocationIcon fontSize="small" />
@@ -261,7 +299,6 @@ function ExportForm({
               />
             ))}
           </Stack>
-          {!validRange && <Alert severity="error">{t("invalidRange")}</Alert>}
 
           <Stack direction="row" gap={1} alignItems="center">
             <TextField
@@ -378,7 +415,7 @@ function ExportForm({
               value={compression}
               disabled={exporting}
               onChange={(event) => {
-                setCompression(event.target.value as "zstd" | "none");
+                setCompression(event.target.value as ExportCompression);
               }}
               className={classes.compression}
             >
@@ -411,9 +448,7 @@ function ExportForm({
             />
           </Stack>
 
-          {progress != undefined && (
-            <LinearProgress variant="determinate" value={Math.min(100, progress * 100)} />
-          )}
+          <ExportProgress progressRef={progressRef} running={busy} />
           {result?.messageCount != undefined && (
             <Alert severity="success">{t("done", { count: result.messageCount })}</Alert>
           )}
@@ -433,5 +468,32 @@ function ExportForm({
         </Button>
       </DialogActions>
     </>
+  );
+}
+
+function ExportProgress({
+  progressRef,
+  running,
+}: {
+  progressRef: React.RefObject<number | undefined>;
+  running: boolean;
+}): React.JSX.Element | ReactNull {
+  const [progress, setProgress] = useState(progressRef.current);
+  useEffect(() => {
+    setProgress(progressRef.current);
+    if (!running) {
+      return;
+    }
+    const interval = setInterval(() => {
+      setProgress(progressRef.current);
+    }, 100);
+    return () => {
+      clearInterval(interval);
+    };
+  }, [progressRef, running]);
+  return progress == undefined ? (
+    ReactNull
+  ) : (
+    <LinearProgress variant="determinate" value={Math.min(100, progress * 100)} />
   );
 }

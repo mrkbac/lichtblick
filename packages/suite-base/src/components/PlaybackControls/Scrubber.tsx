@@ -36,6 +36,7 @@ import PlaybackBarHoverTicks from "./PlaybackBarHoverTicks";
 import { PlaybackControlsTooltipContent } from "./PlaybackControlsTooltipContent";
 import { ProgressPlot } from "./ProgressPlot";
 import Slider, { HoverOverEvent } from "./Slider";
+import { TrimRangeOverlay } from "./TrimRange";
 
 const useStyles = makeStyles()((theme) => ({
   marker: {
@@ -231,6 +232,7 @@ export default function Scrubber(props: Props): React.JSX.Element {
             renderSlider={renderSlider}
           />
         </Stack>
+        <TrimRangeOverlay />
         <EventsOverlay />
         <PlaybackBarHoverTicks componentId={hoverComponentId} />
       </Stack>

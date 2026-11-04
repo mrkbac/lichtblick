@@ -16,6 +16,8 @@
 
 import {
   ArrowRepeatAll20Regular,
+  Cut20Filled,
+  Cut20Regular,
   ArrowRepeatAllOff20Regular,
   Info20Regular,
   Next20Filled,
@@ -35,6 +37,9 @@ import { CreateEventDialog } from "@lichtblick/suite-base/components/CreateEvent
 import { DataSourceInfoView } from "@lichtblick/suite-base/components/DataSourceInfoView";
 import EventIcon from "@lichtblick/suite-base/components/EventIcon";
 import EventOutlinedIcon from "@lichtblick/suite-base/components/EventOutlinedIcon";
+import { ExportRecordingDialog } from "@lichtblick/suite-base/components/ExportRecordingDialog/ExportRecordingDialog";
+import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
+import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import {
@@ -59,6 +64,7 @@ import BroadcastManager from "@lichtblick/suite-base/util/broadcast/BroadcastMan
 import PlaybackTimeDisplay from "./PlaybackTimeDisplay";
 import { RepeatAdapter } from "./RepeatAdapter";
 import Scrubber from "./Scrubber";
+import { TrimBar, useTrimKeyHandlers } from "./TrimRange";
 
 const selectPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
 const selectEventsSupported = (store: EventsStore) => store.eventsSupported;
@@ -88,6 +94,13 @@ export default function PlaybackControls({
   const [createEventDialogOpen, setCreateEventDialogOpen] = useState(false);
   const { currentUserType } = useCurrentUser();
   const eventsSupported = useEvents(selectEventsSupported);
+  const exportableFile = useExportableFile();
+  const trimActive = useTrimStore((state) => state.active);
+  const enterTrim = useTrimStore((state) => state.enter);
+  const exitTrim = useTrimStore((state) => state.exit);
+  const exportOpen = useTrimStore((state) => state.exportOpen);
+  const closeExport = useTrimStore((state) => state.closeExport);
+  const trimKeyHandlers = useTrimKeyHandlers();
 
   const {
     playbackControlActions: { setRepeat },
@@ -136,8 +149,9 @@ export default function PlaybackControls({
       ArrowRight: (ev: KeyboardEvent) => {
         seekForwardAction(ev);
       },
+      ...trimKeyHandlers,
     }),
-    [seekBackwardAction, seekForwardAction, togglePlayPause],
+    [seekBackwardAction, seekForwardAction, togglePlayPause, trimKeyHandlers],
   );
 
   const toggleCreateEventDialog = useCallback(() => {
@@ -155,6 +169,7 @@ export default function PlaybackControls({
         <div className={classes.scrubberWrapper}>
           <Scrubber onSeek={seek} />
         </div>
+        {exportableFile && <TrimBar />}
         <Stack direction="row" alignItems="center" flex={1} gap={1}>
           <Stack direction="row" alignItems="center" flex={1} gap={0.5}>
             {currentUserType !== "unauthenticated" && eventsSupported && (
@@ -189,6 +204,17 @@ export default function PlaybackControls({
                 icon={<Info20Regular />}
               />
             </Tooltip>
+            {exportableFile && (
+              <HoverableIconButton
+                size="small"
+                title={trimActive ? "Stop trimming" : "Trim and export recording"}
+                color={trimActive ? "primary" : "inherit"}
+                icon={trimActive ? <Cut20Filled /> : <Cut20Regular />}
+                activeIcon={<Cut20Filled />}
+                onClick={trimActive ? exitTrim : enterTrim}
+                data-testid="trim-button"
+              />
+            )}
             <PlaybackTimeDisplay onSeek={seek} onPause={pause} />
           </Stack>
           <Stack direction="row" alignItems="center" gap={1}>
@@ -236,6 +262,9 @@ export default function PlaybackControls({
             <PlaybackSpeedControls />
           </Stack>
         </Stack>
+        {exportOpen && exportableFile && (
+          <ExportRecordingDialog file={exportableFile} onClose={closeExport} />
+        )}
         {createEventDialogOpen && eventsSupported && (
           <CreateEventDialog onClose={toggleCreateEventDialog} />
         )}
