@@ -153,7 +153,10 @@ describe("RemoteFileReadable", () => {
 
       expect([...data]).toEqual([11, 12, 13]);
       expect(fetchMock).toHaveBeenCalledTimes(1);
-      expect(fetchMock.mock.calls[0][1].headers).toEqual({ range: "bytes=100-104" });
+      expect(fetchMock).toHaveBeenCalledWith(
+        testUrl,
+        expect.objectContaining({ headers: { range: "bytes=100-104" } }),
+      );
       expect(mockRead).not.toHaveBeenCalled();
     });
 
