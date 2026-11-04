@@ -14,15 +14,19 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { MessageDefinition } from "@foxglove/message-definition";
-import CommonRosTypes from "@foxglove/rosmsg-msgs-common";
-import { Button, inputBaseClasses, TextField, Tooltip, Typography } from "@mui/material";
-import { useEffect, useMemo } from "react";
+import RepeatIcon from "@mui/icons-material/Repeat";
+import StopIcon from "@mui/icons-material/Stop";
+import { Button, Tooltip, Typography } from "@mui/material";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 import { useDebounce } from "use-debounce";
 
+import { MessageDefinition } from "@lichtblick/message-definition";
+import CommonRosTypes from "@lichtblick/rosmsg-msgs-common";
 import { Immutable } from "@lichtblick/suite";
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
+import { MessageEditor } from "@lichtblick/suite-base/components/MessageEditor/MessageEditor";
+import { parseMessageJson } from "@lichtblick/suite-base/components/MessageEditor/messageJson";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -31,12 +35,11 @@ import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import useCallbackWithToast from "@lichtblick/suite-base/hooks/useCallbackWithToast";
+import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";
 import usePublisher from "@lichtblick/suite-base/hooks/usePublisher";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { useDefaultPanelTitle } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
-import { toError } from "@lichtblick/suite-base/util/toError";
-import { customTypography } from "@lichtblick/theme";
 
 import { defaultConfig, usePublishPanelSettings } from "./settings";
 import { PublishConfig } from "./types";
@@ -54,6 +57,9 @@ const useStyles = makeStyles<{ buttonColor?: string }>()((theme, { buttonColor }
     : undefined;
 
   return {
+    wrapper: {
+      display: "contents",
+    },
     button: {
       backgroundColor: augmentedButtonColor?.main,
       color: augmentedButtonColor?.contrastText,
@@ -62,51 +68,15 @@ const useStyles = makeStyles<{ buttonColor?: string }>()((theme, { buttonColor }
         backgroundColor: augmentedButtonColor?.dark,
       },
     },
-    textarea: {
-      height: "100%",
-
-      [`.${inputBaseClasses.root}`]: {
-        width: "100%",
-        height: "100%",
-        textAlign: "left",
-        backgroundColor: theme.palette.background.paper,
-        overflow: "hidden",
-        padding: theme.spacing(1, 0.5),
-
-        [`.${inputBaseClasses.input}`]: {
-          height: "100% !important",
-          lineHeight: 1.4,
-          fontFamily: customTypography.fontMonospace,
-          overflow: "auto !important",
-          resize: "none",
-        },
-      },
-    },
   };
 });
 
-function parseInput(value: string): { error?: string; parsedObject?: unknown } {
-  let parsedObject;
-  let error = undefined;
-  try {
-    const parsedAny: unknown = JSON.parse(value);
-    if (Array.isArray(parsedAny)) {
-      error = "Message content must be an object, not an array";
-    } else if (parsedAny == null) {
-      error = "Message content must be an object, not null";
-    } else if (typeof parsedAny !== "object") {
-      error = `Message content must be an object, not ‘${typeof parsedAny}’`;
-    } else {
-      parsedObject = parsedAny;
-    }
-  } catch (e) {
-    error = value.length !== 0 ? toError(e).message : "Enter valid message content as JSON";
-  }
-  return { error, parsedObject };
-}
-
 function selectDataSourceProfile(ctx: MessagePipelineContext) {
   return ctx.playerState.profile;
+}
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString(undefined, { hour12: false });
 }
 
 function Publish(props: Props) {
@@ -115,12 +85,16 @@ function Publish(props: Props) {
   const { classes } = useStyles({ buttonColor: config.buttonColor });
   const [debouncedTopicName] = useDebounce(config.topicName ?? "", 500);
   const dataSourceProfile = useMessagePipeline(selectDataSourceProfile);
+  const [confirm, confirmModal] = useConfirm();
+  const [repeating, setRepeating] = useState(false);
+  const [lastPublished, setLastPublished] = useState<Date>();
 
   const datatypes = useMemo(() => {
-    // Add common ROS datatypes, depending on the data source profile.
+    // Add common ROS datatypes, depending on the data source profile. Humble definitions match
+    // all current ROS 2 distributions.
     const commonTypes: Record<string, MessageDefinition> | undefined = {
       ros1: CommonRosTypes.ros1,
-      ros2: CommonRosTypes.ros2galactic,
+      ros2: CommonRosTypes.ros2humble,
     }[dataSourceProfile ?? ""];
 
     if (commonTypes == undefined) {
@@ -141,17 +115,69 @@ function Publish(props: Props) {
     datatypes,
   });
 
-  const { error, parsedObject } = useMemo(() => parseInput(config.value ?? ""), [config.value]);
+  const parsed = useMemo(() => parseMessageJson(config.value ?? ""), [config.value]);
 
-  usePublishPanelSettings(config, saveConfig, topics, datatypes);
+  const confirmReplace = useCallback(
+    async (schemaName: string) =>
+      (await confirm({
+        title: "Replace message?",
+        prompt: `The message was edited. Replace it with an empty ${schemaName} template?`,
+        ok: "Replace",
+        cancel: "Keep message",
+      })) === "ok",
+    [confirm],
+  );
+
+  usePublishPanelSettings(config, saveConfig, topics, datatypes, confirmReplace);
+
+  const canAdvertise = capabilities.includes(PLAYER_CAPABILITIES.advertise);
+  const isConfigured = Boolean(config.topicName && config.datatype);
+  const canPublish = canAdvertise && isConfigured && parsed.value != undefined;
 
   const onPublishClicked = useCallbackWithToast(() => {
-    if (config.topicName != undefined && parsedObject != undefined) {
-      publish(parsedObject as Record<string, unknown>);
-    } else {
-      throw new Error(`called _publish() when input was invalid`);
+    if (!canPublish) {
+      // Reached through the keyboard shortcut; the button is disabled in this state
+      throw new Error(parsed.error ?? "Configure a topic and message schema before publishing");
     }
-  }, [config.topicName, parsedObject, publish]);
+    publish(parsed.value);
+    setLastPublished(new Date());
+  }, [canPublish, parsed, publish]);
+
+  // Repeated publishing always sends the latest valid message, so edits apply while it runs.
+  const latestMessage = useRef(parsed.value);
+  useEffect(() => {
+    if (parsed.value != undefined) {
+      latestMessage.current = parsed.value;
+    }
+  }, [parsed.value]);
+  const publishRepeated = useCallbackWithToast(() => {
+    if (!latestMessage.current) {
+      return;
+    }
+    try {
+      publish(latestMessage.current);
+    } catch (err) {
+      setRepeating(false);
+      throw err;
+    }
+  }, [publish]);
+  const rate = config.publishRate ?? defaultConfig.publishRate ?? 1;
+  const canRepeat = canAdvertise && isConfigured && rate > 0;
+  useEffect(() => {
+    // Stop when the data source disconnects or the topic is cleared
+    if (repeating && !canRepeat) {
+      setRepeating(false);
+    }
+  }, [canRepeat, repeating]);
+  useEffect(() => {
+    if (!repeating || !canRepeat) {
+      return;
+    }
+    const interval = setInterval(() => void publishRepeated(), 1000 / rate);
+    return () => {
+      clearInterval(interval);
+    };
+  }, [canRepeat, publishRepeated, rate, repeating]);
 
   const [, setDefaultPanelTitle] = useDefaultPanelTitle();
 
@@ -163,75 +189,112 @@ function Publish(props: Props) {
     }
   }, [config.topicName, setDefaultPanelTitle]);
 
-  const canPublish = Boolean(
-    capabilities.includes(PLAYER_CAPABILITIES.advertise) &&
-      config.value &&
-      config.topicName &&
-      config.datatype &&
-      parsedObject != undefined,
-  );
-
-  const statusMessage = useMemo(() => {
-    if (!capabilities.includes(PLAYER_CAPABILITIES.advertise)) {
-      return "Connect to a data source that supports publishing";
-    }
-    if (!config.topicName || !config.datatype) {
-      return "Configure a topic and message schema in the panel settings";
-    }
-    return undefined;
-  }, [capabilities, config.datatype, config.topicName]);
+  let statusMessage: string | undefined;
+  if (!canAdvertise) {
+    statusMessage = "Connect to a data source that supports publishing";
+  } else if (!isConfigured) {
+    statusMessage = "Configure a topic and message schema in the panel settings";
+  } else if (repeating) {
+    statusMessage = `Publishing at ${rate} Hz`;
+  } else if (lastPublished) {
+    statusMessage = `Published at ${formatTime(lastPublished)}`;
+  }
+  const error = config.advancedView ? parsed.error : undefined;
 
   return (
-    <Stack fullHeight>
-      <PanelToolbar />
-      <Stack flex="auto" gap={1} padding={1.5} position="relative">
-        {config.advancedView && (
-          <Stack flexGrow="1">
-            <TextField
-              variant="outlined"
-              className={classes.textarea}
-              multiline
-              size="small"
-              placeholder="Enter message content as JSON"
-              value={config.value}
-              onChange={(event) => {
-                saveConfig({ value: event.target.value });
+    // `display: contents` keeps the layout while catching the publish shortcut from any input
+    <div
+      className={classes.wrapper}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault();
+          void onPublishClicked();
+        }
+      }}
+    >
+      <Stack fullHeight>
+        <PanelToolbar />
+        <Stack flex="auto" gap={1} padding={1.5} position="relative" overflow="hidden">
+          {config.advancedView && (
+            <MessageEditor
+              datatypes={datatypes}
+              schemaName={config.datatype}
+              value={config.value ?? ""}
+              parsed={parsed}
+              onChange={(value) => {
+                saveConfig({ value });
               }}
-              error={error != undefined}
+              mode={config.editorMode ?? "form"}
+              onModeChange={(editorMode) => {
+                saveConfig({ editorMode });
+              }}
+              presets={config.presets ?? []}
+              onPresetsChange={(presets) => {
+                saveConfig({ presets });
+              }}
             />
-          </Stack>
-        )}
-        <Stack
-          direction={config.advancedView ? "row" : "column-reverse"}
-          justifyContent={config.advancedView ? "flex-end" : "center"}
-          alignItems="center"
-          overflow="hidden"
-          flexGrow={0}
-          gap={1.5}
-        >
-          {(error != undefined || statusMessage != undefined) && (
-            <Typography variant="caption" noWrap color={error ? "error" : undefined}>
-              {error ?? statusMessage}
-            </Typography>
           )}
-          <Tooltip
-            placement={config.advancedView ? "left" : undefined}
-            title={config.buttonTooltip}
+          <Stack
+            direction={config.advancedView ? "row" : "column-reverse"}
+            justifyContent={config.advancedView ? "flex-end" : "center"}
+            alignItems="center"
+            overflow="hidden"
+            flex={config.advancedView ? "none" : "auto"}
+            gap={1.5}
           >
-            <span>
-              <Button
-                className={classes.button}
-                variant="contained"
-                disabled={!canPublish}
-                onClick={onPublishClicked}
+            {(error != undefined || statusMessage != undefined) && (
+              <Typography
+                variant="caption"
+                noWrap
+                title={error ?? statusMessage}
+                color={error ? "error" : "text.secondary"}
               >
-                {config.buttonText}
-              </Button>
-            </span>
-          </Tooltip>
+                {error ?? statusMessage}
+              </Typography>
+            )}
+            {config.advancedView && (
+              <Tooltip title={repeating ? "Stop publishing" : `Publish repeatedly at ${rate} Hz`}>
+                <span>
+                  <Button
+                    variant="outlined"
+                    color={repeating ? "error" : "inherit"}
+                    disabled={!repeating && !canPublish}
+                    startIcon={repeating ? <StopIcon /> : <RepeatIcon />}
+                    onClick={() => {
+                      setRepeating(!repeating);
+                    }}
+                  >
+                    {repeating ? "Stop" : `${rate} Hz`}
+                  </Button>
+                </span>
+              </Tooltip>
+            )}
+            <Tooltip
+              placement={config.advancedView ? "left" : undefined}
+              title={
+                (config.buttonTooltip ?? "") !== ""
+                  ? config.buttonTooltip
+                  : canPublish
+                    ? "Ctrl/Cmd+Enter"
+                    : ""
+              }
+            >
+              <span>
+                <Button
+                  className={classes.button}
+                  variant="contained"
+                  disabled={!canPublish}
+                  onClick={onPublishClicked}
+                >
+                  {config.buttonText}
+                </Button>
+              </span>
+            </Tooltip>
+          </Stack>
         </Stack>
+        {confirmModal}
       </Stack>
-    </Stack>
+    </div>
   );
 }
 

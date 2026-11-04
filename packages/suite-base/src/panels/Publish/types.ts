@@ -5,6 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import {
+  MessageEditorMode,
+  MessagePreset,
+} from "@lichtblick/suite-base/components/MessageEditor/MessageEditor";
+
 export type PublishConfig = {
   topicName?: string;
   datatype?: string;
@@ -13,4 +18,8 @@ export type PublishConfig = {
   buttonColor?: string;
   advancedView: boolean;
   value?: string;
+  editorMode?: MessageEditorMode;
+  presets?: MessagePreset[];
+  /** Rate in Hz used when publishing repeatedly */
+  publishRate?: number;
 };

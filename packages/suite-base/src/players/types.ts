@@ -221,9 +221,20 @@ export type PlayerStateActiveData = {
   // A map of service names to service provider IDs that provide each service.
   services?: Map<string, Set<string>>;
 
+  // A map of service names to their request/response schema names, for services whose types are
+  // known. The schema definitions are included in `datatypes`.
+  serviceTypes?: Map<string, ServiceTypeInfo>;
+
   // A map of parameter names to parameter values, used to describe remote parameters such as
   // rosparams.
   parameters?: Map<string, ParameterValue>;
+};
+
+export type ServiceTypeInfo = {
+  // Service type name, e.g. "std_srvs/srv/SetBool".
+  type: string;
+  requestSchemaName?: string;
+  responseSchemaName?: string;
 };
 
 // Represents a ROS topic, though the actual data does not need to come from a ROS system.

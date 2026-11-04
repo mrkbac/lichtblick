@@ -52,6 +52,7 @@ import {
   PlayerAlert,
   PlayerState,
   PublishPayload,
+  ServiceTypeInfo,
   SubscribePayload,
   Topic,
   TopicStats,
@@ -158,6 +159,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #publishedTopics?: Map<string, Set<string>>;
   #subscribedTopics?: Map<string, Set<string>>;
   #advertisedServices?: Map<string, Set<string>>;
+  #serviceTypes = new Map<string, ServiceTypeInfo>();
   #nextServiceCallId = 0;
   #nextAssetRequestId = 0;
   #fetchAssetRequests = new Map<number, (response: FetchAssetResponse) => void>();
@@ -252,6 +254,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#publishedTopics = undefined;
       this.#subscribedTopics = undefined;
       this.#advertisedServices = undefined;
+      this.#serviceTypes = new Map();
       this.#datatypes = new Map();
       this.#parameters = new Map();
       this.#ishighFrequencyMessage = false;
@@ -724,6 +727,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         defaultSchemaEncoding = "ros2msg";
       }
 
+      const serviceTypes = new Map(this.#serviceTypes);
       for (const service of services) {
         const serviceAlertId = `service:${service.id}`;
         // If not explicitly given, derive request / response type name from the service type
@@ -809,6 +813,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
             requestMessageWriter,
           };
           this.#servicesByName.set(service.name, resolvedService);
+          serviceTypes.set(service.name, {
+            type: service.type,
+            requestSchemaName: requestType,
+            responseSchemaName: responseType,
+          });
           this.#alerts.removeAlert(serviceAlertId);
 
           // Issue a warning to users if the service relies on deprecated fields (`requestSchema` or `responseSchema`).
@@ -832,17 +841,21 @@ export default class FoxgloveWebSocketPlayer implements Player {
           });
         }
       }
+      this.#serviceTypes = serviceTypes;
       this.#emitState();
     });
 
     this.#client.on("unadvertiseServices", (serviceIds) => {
       let needsStateUpdate = false;
       for (const serviceId of serviceIds) {
-        const service: ResolvedService | undefined = Object.values(this.#servicesByName).find(
+        const service = [...this.#servicesByName.values()].find(
           (srv) => srv.service.id === serviceId,
         );
         if (service) {
           this.#servicesByName.delete(service.service.name);
+          this.#serviceTypes = new Map(this.#serviceTypes);
+          this.#serviceTypes.delete(service.service.name);
+          needsStateUpdate = true;
         }
         const serviceAlertId = `service:${serviceId}`;
         needsStateUpdate = this.#alerts.removeAlert(serviceAlertId) || needsStateUpdate;
@@ -993,6 +1006,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         publishedTopics: this.#publishedTopics,
         subscribedTopics: this.#subscribedTopics,
         services: this.#advertisedServices,
+        serviceTypes: this.#serviceTypes,
       },
     });
   });

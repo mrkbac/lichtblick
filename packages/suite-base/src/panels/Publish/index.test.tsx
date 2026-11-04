@@ -2,53 +2,53 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import "@testing-library/jest-dom/vitest";
-import { render, screen } from "@testing-library/react";
+import "@testing-library/jest-dom";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import type { Mock } from "vitest";
 
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
 import PublishBuilder from "@lichtblick/suite-base/testing/builders/PublishBuilder";
+import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
 import Publish from "./index";
 import { PublishConfig } from "./types";
 
-const mockPublish = vi.fn();
+const mockPublish = jest.fn();
 
-vi.mock("@lichtblick/suite-base/PanelAPI", () => ({
-  useDataSourceInfo: vi.fn(() => ({
+jest.mock("@lichtblick/suite-base/PanelAPI", () => ({
+  useDataSourceInfo: jest.fn(() => ({
     topics: [],
     datatypes: new Map(),
     capabilities: [],
   })),
-  useConfigById: vi.fn(() => [undefined, vi.fn()]),
+  useConfigById: jest.fn(() => [undefined, jest.fn()]),
 }));
 
-vi.mock("@lichtblick/suite-base/components/MessagePipeline", async () => ({
-  ...(await vi.importActual("@lichtblick/suite-base/components/MessagePipeline")),
-  useMessagePipeline: vi.fn(() => undefined),
+jest.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
+  ...jest.requireActual("@lichtblick/suite-base/components/MessagePipeline"),
+  useMessagePipeline: jest.fn(() => undefined),
 }));
 
-vi.mock("@lichtblick/suite-base/hooks/usePublisher", () => ({
+jest.mock("@lichtblick/suite-base/hooks/usePublisher", () => ({
   __esModule: true,
-  default: vi.fn(() => mockPublish),
+  default: jest.fn(() => mockPublish),
 }));
 
-vi.mock("@lichtblick/suite-base/hooks/useCallbackWithToast", () => ({
+jest.mock("@lichtblick/suite-base/hooks/useCallbackWithToast", () => ({
   __esModule: true,
   default: (fn: unknown) => fn,
 }));
 
-vi.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", async () => ({
-  ...(await vi.importActual("@lichtblick/suite-base/providers/PanelStateContextProvider")),
-  usePanelSettingsTreeUpdate: vi.fn(),
-  useDefaultPanelTitle: vi.fn(() => ["Publish", vi.fn()]),
+jest.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", () => ({
+  ...jest.requireActual("@lichtblick/suite-base/providers/PanelStateContextProvider"),
+  usePanelSettingsTreeUpdate: jest.fn(),
+  useDefaultPanelTitle: jest.fn(() => ["Publish", jest.fn()]),
 }));
 
-vi.mock("./settings", () => ({
-  usePublishPanelSettings: vi.fn(),
+jest.mock("./settings", () => ({
+  usePublishPanelSettings: jest.fn(),
   defaultConfig: {
     buttonText: "Publish",
     buttonTooltip: "",
@@ -59,14 +59,18 @@ vi.mock("./settings", () => ({
 
 describe("Publish", () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    jest.clearAllMocks();
   });
 
-  function setup(configOverride: Partial<PublishConfig> = {}, capabilities: string[] = []) {
+  function setup(
+    configOverride: Partial<PublishConfig> = {},
+    capabilities: string[] = [],
+    datatypes: RosDatatypes = new Map(),
+  ) {
     const config = PublishBuilder.config(configOverride);
-    (useDataSourceInfo as Mock).mockReturnValue({
+    (useDataSourceInfo as jest.Mock).mockReturnValue({
       topics: [],
-      datatypes: new Map(),
+      datatypes,
       capabilities,
     });
 
@@ -85,7 +89,7 @@ describe("Publish", () => {
       setup({ advancedView: true });
 
       // Then
-      expect(screen.getByPlaceholderText("Enter message content as JSON")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("Enter the message as JSON")).toBeInTheDocument();
     });
   });
 
@@ -95,9 +99,7 @@ describe("Publish", () => {
       setup({ advancedView: false });
 
       // Then
-      expect(
-        screen.queryByPlaceholderText("Enter message content as JSON"),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText("Enter the message as JSON")).not.toBeInTheDocument();
     });
   });
 
@@ -153,6 +155,94 @@ describe("Publish", () => {
 
       // Then
       expect(screen.getByText(/unexpected token/i)).toBeInTheDocument();
+    });
+  });
+
+  describe("with a known message schema", () => {
+    const datatypes: RosDatatypes = new Map([
+      ["std_msgs/String", { definitions: [{ name: "data", type: "string" }] }],
+    ]);
+
+    it("edits the message in a form", () => {
+      // Given / When
+      setup({ datatype: "std_msgs/String", value: '{"data": "a"}' }, [], datatypes);
+
+      // Then
+      expect(screen.getByLabelText("data")).toHaveValue("a");
+      expect(screen.queryByPlaceholderText("Enter the message as JSON")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("keyboard shortcut", () => {
+    it("publishes on Ctrl+Enter", () => {
+      // Given
+      setup({ value: '{"data": "hello"}' }, [PLAYER_CAPABILITIES.advertise]);
+
+      // When
+      fireEvent.keyDown(screen.getByPlaceholderText("Enter the message as JSON"), {
+        key: "Enter",
+        ctrlKey: true,
+      });
+
+      // Then
+      expect(mockPublish).toHaveBeenCalledWith({ data: "hello" });
+    });
+  });
+
+  describe("repeated publishing", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    function startRepeating() {
+      const result = setup({ value: '{"data": 1}', publishRate: 10 }, [
+        PLAYER_CAPABILITIES.advertise,
+      ]);
+      fireEvent.click(screen.getByRole("button", { name: "10 Hz" }));
+      return result;
+    }
+
+    function advance(ms: number) {
+      act(() => {
+        jest.advanceTimersByTime(ms);
+      });
+    }
+
+    it("publishes at the configured rate", () => {
+      // Given / When
+      startRepeating();
+      advance(350);
+
+      // Then
+      expect(mockPublish).toHaveBeenCalledTimes(3);
+      expect(screen.getByText("Publishing at 10 Hz")).toBeInTheDocument();
+    });
+
+    it("stops publishing when Stop is clicked", () => {
+      // Given
+      startRepeating();
+
+      // When
+      fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+      advance(500);
+
+      // Then
+      expect(mockPublish).not.toHaveBeenCalled();
+    });
+
+    it("stops publishing when the panel unmounts", () => {
+      // Given
+      const { unmount } = startRepeating();
+
+      // When
+      unmount();
+      advance(500);
+
+      // Then
+      expect(mockPublish).not.toHaveBeenCalled();
     });
   });
 });

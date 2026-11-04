@@ -28,6 +28,10 @@ import { ParameterValue } from "@lichtblick/suite";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import {
+  RosapiTypeDef,
+  rosapiTypeDefsToDatatypes,
+} from "@lichtblick/suite-base/players/rosapiTypeDefs";
+import {
   AdvertiseOptions,
   MessageEvent,
   Player,
@@ -37,6 +41,7 @@ import {
   Topic,
   PlayerPresence,
   PlayerMetricsCollectorInterface,
+  ServiceTypeInfo,
   TopicStats,
   TopicWithSchemaName,
 } from "@lichtblick/suite-base/players/types";
@@ -120,6 +125,9 @@ export default class RosbridgePlayer implements Player {
   #alerts = new PlayerAlertManager();
   #emitTimer?: ReturnType<typeof setTimeout>;
   #serviceTypeCache = new Map<string, Promise<string>>();
+  #serviceDetailsCache = new Map<string, Promise<RosapiTypeDef[]>>();
+  #serviceTypes = new Map<string, ServiceTypeInfo>(); // Request/response schemas by service name.
+  #serviceDatatypes: RosDatatypes = new Map(); // Datatypes of service requests/responses.
   readonly #sourceId: string;
   #rosVersion: 1 | 2 | undefined;
 
@@ -190,6 +198,8 @@ export default class RosbridgePlayer implements Player {
       }
       rosClient.close(); // ensure the underlying worker is cleaned up
       this.#rosClient = undefined;
+      this.#serviceTypeCache.clear();
+      this.#serviceDetailsCache.clear();
 
       this.#alerts.addAlert("rosbridge:connection-failed", {
         severity: "error",
@@ -318,9 +328,11 @@ export default class RosbridgePlayer implements Player {
 
       this.#providerTopics = sortedTopics;
 
-      this.#providerDatatypes = bagConnectionsToDatatypes(datatypeDescriptions, {
-        ros2: this.#rosVersion === 2,
-      });
+      // Topic datatypes take precedence over service datatypes of the same name
+      this.#providerDatatypes = new Map([
+        ...this.#serviceDatatypes,
+        ...bagConnectionsToDatatypes(datatypeDescriptions, { ros2: this.#rosVersion === 2 }),
+      ]);
       this.#messageReadersByDatatype = messageReaders;
 
       // Try subscribing again, since we might now be able to subscribe to some new topics.
@@ -418,6 +430,7 @@ export default class RosbridgePlayer implements Player {
         publishedTopics: this.#publishedTopics,
         subscribedTopics: this.#subscribedTopics,
         services: this.#services,
+        serviceTypes: this.#serviceTypes,
       },
     });
   });
@@ -593,8 +606,96 @@ export default class RosbridgePlayer implements Player {
     });
 
     this.#serviceTypeCache.set(service, serviceTypePromise);
+    serviceTypePromise.catch(() => {
+      if (this.#serviceTypeCache.get(service) === serviceTypePromise) {
+        this.#serviceTypeCache.delete(service);
+      }
+    });
 
     return await serviceTypePromise;
+  }
+
+  async #getServiceDetails(
+    serviceType: string,
+    kind: "request" | "response",
+  ): Promise<RosapiTypeDef[]> {
+    const rosClient = this.#rosClient;
+    if (!rosClient) {
+      throw new Error("Not connected");
+    }
+    const key = `${kind}:${serviceType}`;
+    let promise = this.#serviceDetailsCache.get(key);
+    if (!promise) {
+      promise = new Promise<RosapiTypeDef[]>((resolve, reject) => {
+        const onResult = (result: { typedefs: RosapiTypeDef[] }) => {
+          resolve(result.typedefs);
+        };
+        if (kind === "request") {
+          rosClient.getServiceRequestDetails(serviceType, onResult, reject);
+        } else {
+          rosClient.getServiceResponseDetails(serviceType, onResult, reject);
+        }
+      });
+      this.#serviceDetailsCache.set(key, promise);
+      // Don't cache failures, so the next node graph refresh retries
+      const cached = promise;
+      cached.catch(() => {
+        if (this.#serviceDetailsCache.get(key) === cached) {
+          this.#serviceDetailsCache.delete(key);
+        }
+      });
+    }
+    return await promise;
+  }
+
+  // Look up request/response definitions of services via rosapi, so panels can build request
+  // templates. Lookups are cached; services without rosapi details are left out.
+  // ponytail: one rosapi call per unknown service at once; add a concurrency limit if large graphs
+  // overload rosbridge.
+  async #resolveServiceTypes(): Promise<void> {
+    const services = this.#services;
+    const missing = [...services.keys()].filter((name) => !this.#serviceTypes.has(name));
+    const stale = [...this.#serviceTypes.keys()].some((name) => !services.has(name));
+    if (missing.length === 0 && !stale) {
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      missing.map(async (name) => {
+        const type = await this.#getServiceType(name);
+        const [request, response] = await Promise.all([
+          this.#getServiceDetails(type, "request"),
+          this.#getServiceDetails(type, "response"),
+        ]);
+        return { name, type, request, response };
+      }),
+    );
+    if (this.#services !== services) {
+      return; // graph changed meanwhile; the next refresh resolves again
+    }
+
+    const serviceTypes = new Map([...this.#serviceTypes].filter(([name]) => services.has(name)));
+    const serviceDatatypes = new Map(this.#serviceDatatypes);
+    for (const result of results) {
+      if (result.status !== "fulfilled") {
+        continue;
+      }
+      const { name, type, request, response } = result.value;
+      for (const [datatype, definition] of rosapiTypeDefsToDatatypes([...request, ...response])) {
+        serviceDatatypes.set(datatype, definition);
+      }
+      serviceTypes.set(name, {
+        type,
+        requestSchemaName: request[0]?.type,
+        responseSchemaName: response[0]?.type,
+      });
+    }
+    this.#serviceTypes = serviceTypes;
+    this.#serviceDatatypes = serviceDatatypes;
+    if (this.#providerDatatypes) {
+      this.#providerDatatypes = new Map([...serviceDatatypes, ...this.#providerDatatypes]);
+    }
+    this.#emitState();
   }
 
   public async callService(service: string, request: unknown): Promise<unknown> {
@@ -726,6 +827,7 @@ export default class RosbridgePlayer implements Player {
       this.#services = collateNodeDetails(fulfilled, "services");
 
       this.#emitState();
+      void this.#resolveServiceTypes();
     } catch (error) {
       this.#alerts.addAlert("requestTopics:system-state", {
         severity: "error",

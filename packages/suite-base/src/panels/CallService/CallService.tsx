@@ -5,39 +5,71 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Button, Palette, TextField, Tooltip, Typography, inputBaseClasses } from "@mui/material";
-import { Dispatch, SetStateAction, useCallback, useEffect, useMemo, useState } from "react";
+import ReplayIcon from "@mui/icons-material/Replay";
+import UndoIcon from "@mui/icons-material/Undo";
+import {
+  Button,
+  IconButton,
+  MenuItem,
+  Select,
+  TextField,
+  Tooltip,
+  Typography,
+  inputBaseClasses,
+} from "@mui/material";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
-import Log from "@lichtblick/log";
-import { PanelExtensionContext, SettingsTreeAction } from "@lichtblick/suite";
+import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
+import { MessageEditor } from "@lichtblick/suite-base/components/MessageEditor/MessageEditor";
+import {
+  isEditedMessage,
+  parseMessageJson,
+  sampleMessageJson,
+  stringifyMessage,
+} from "@lichtblick/suite-base/components/MessageEditor/messageJson";
+import {
+  MessagePipelineContext,
+  useMessagePipeline,
+} from "@lichtblick/suite-base/components/MessagePipeline";
+import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { Config } from "@lichtblick/suite-base/panels/CallService/types";
-import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
-import { toError } from "@lichtblick/suite-base/util/toError";
+import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";
+import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { useDefaultPanelTitle } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
+import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { customTypography } from "@lichtblick/theme";
 
-import { defaultConfig, settingsActionReducer, useSettingsTree } from "./settings";
+import { useCallServiceSettings } from "./settings";
+import { Config } from "./types";
 
-const log = Log.getLogger(__dirname);
+const MAX_HISTORY = 20;
 
 type Props = {
-  context: PanelExtensionContext;
+  config: Config;
+  saveConfig: SaveConfig<Config>;
 };
 
-type State = {
-  status: "requesting" | "error" | "success";
-  value: string;
+/** One service call, kept in the panel's history for the session. */
+type CallRecord = {
+  id: number;
+  serviceName: string;
+  request: string;
+  startedAt: Date;
+  status: "requesting" | "success" | "error";
+  latencyMs?: number;
+  response?: string;
 };
 
 const useStyles = makeStyles<{ buttonColor?: string }>()((theme, { buttonColor }) => {
   const augmentedButtonColor = buttonColor
-    ? theme.palette.augmentColor({
-        color: { main: buttonColor },
-      })
+    ? theme.palette.augmentColor({ color: { main: buttonColor } })
     : undefined;
 
   return {
+    wrapper: {
+      display: "contents",
+    },
     button: {
       backgroundColor: augmentedButtonColor?.main,
       color: augmentedButtonColor?.contrastText,
@@ -46,16 +78,19 @@ const useStyles = makeStyles<{ buttonColor?: string }>()((theme, { buttonColor }
         backgroundColor: augmentedButtonColor?.dark,
       },
     },
-    textarea: {
-      height: "100%",
+    history: {
+      minWidth: 0,
+      fontSize: theme.typography.caption.fontSize,
+    },
+    response: {
+      flex: "auto",
+      minHeight: 0,
 
       [`.${inputBaseClasses.root}`]: {
-        backgroundColor: theme.palette.background.paper,
         height: "100%",
-        overflow: "hidden",
+        alignItems: "stretch",
+        backgroundColor: theme.palette.background.paper,
         padding: theme.spacing(1, 0.5),
-        textAlign: "left",
-        width: "100%",
 
         [`.${inputBaseClasses.input}`]: {
           height: "100% !important",
@@ -69,213 +104,318 @@ const useStyles = makeStyles<{ buttonColor?: string }>()((theme, { buttonColor }
   };
 });
 
-function parseInput(value: string): { error?: string; parsedObject?: unknown } {
-  let parsedObject;
-  let error = undefined;
-  try {
-    const parsedAny: unknown = JSON.parse(value);
-    if (Array.isArray(parsedAny)) {
-      error = "Request content must be an object, not an array";
-    } else if (parsedAny == undefined) {
-      error = "Request content must be an object, not null";
-    } else if (typeof parsedAny !== "object") {
-      error = `Request content must be an object, not ‘${typeof parsedAny}’`;
-    } else {
-      parsedObject = parsedAny;
-    }
-  } catch (e) {
-    error = value.length !== 0 ? toError(e).message : "Enter valid request content as JSON";
-  }
-  return { error, parsedObject };
+const selectCallService = (ctx: MessagePipelineContext) => ctx.callService;
+const selectServices = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.services;
+const selectServiceTypes = (ctx: MessagePipelineContext) =>
+  ctx.playerState.activeData?.serviceTypes;
+
+function formatTime(date: Date): string {
+  return date.toLocaleTimeString(undefined, { hour12: false });
 }
 
-// Wrapper component with ThemeProvider so useStyles in the panel receives the right theme.
-export function CallService({ context }: Props): React.JSX.Element {
-  const [colorScheme, setColorScheme] = useState<Palette["mode"]>("light");
-
-  return (
-    <ThemeProvider isDark={colorScheme === "dark"}>
-      <CallServiceContent context={context} setColorScheme={setColorScheme} />
-    </ThemeProvider>
-  );
+function recordLabel(record: CallRecord): string {
+  const status =
+    record.status === "requesting"
+      ? "…"
+      : record.status === "error"
+        ? "failed"
+        : `${record.latencyMs ?? 0} ms`;
+  return `${formatTime(record.startedAt)} · ${record.serviceName} · ${status}`;
 }
 
-function CallServiceContent(
-  props: Props & { setColorScheme: Dispatch<SetStateAction<Palette["mode"]>> },
-): React.JSX.Element {
-  const { context, setColorScheme } = props;
-
-  // panel extensions must notify when they've completed rendering
-  // onRender will setRenderDone to a done callback which we can invoke after we've rendered
-  const [renderDone, setRenderDone] = useState<() => void>(() => () => {});
-  const [state, setState] = useState<State | undefined>();
-  const [services, setServices] = useState<string[]>([]);
-  const [config, setConfig] = useState<Config>(() => ({
-    ...defaultConfig,
-    ...(context.initialState as Partial<Config>),
-  }));
+export function CallService({ config, saveConfig }: Props): React.JSX.Element {
   const { classes } = useStyles({ buttonColor: config.buttonColor });
+  const { datatypes, capabilities } = useDataSourceInfo();
+  const callService = useMessagePipeline(selectCallService);
+  const servicesWithProviders = useMessagePipeline(selectServices);
+  const serviceTypes = useMessagePipeline(selectServiceTypes);
+  const [confirm, confirmModal] = useConfirm();
+  const [history, setHistory] = useState<CallRecord[]>([]);
+  const [selectedId, setSelectedId] = useState<number>();
+  const nextId = useRef(1);
 
+  // Data sources may know services from the node graph, from their types, or both
+  const services = useMemo(
+    () =>
+      [
+        ...new Set([...(servicesWithProviders?.keys() ?? []), ...(serviceTypes?.keys() ?? [])]),
+      ].sort(),
+    [serviceTypes, servicesWithProviders],
+  );
+  const requestSchemaOf = useCallback(
+    (serviceName: string | undefined) =>
+      serviceName != undefined ? serviceTypes?.get(serviceName)?.requestSchemaName : undefined,
+    [serviceTypes],
+  );
+  const requestSchema = requestSchemaOf(config.serviceName);
+
+  const confirmReplace = useCallback(
+    async (schemaName: string) =>
+      (await confirm({
+        title: "Replace request?",
+        prompt: `The request was edited. Replace it with an empty ${schemaName} template?`,
+        ok: "Replace",
+        cancel: "Keep request",
+      })) === "ok",
+    [confirm],
+  );
+
+  useCallServiceSettings({
+    config,
+    saveConfig,
+    services,
+    datatypes,
+    requestSchemaOf,
+    confirmReplace,
+  });
+
+  // The request type may only become known after the service was picked (e.g. once the data source
+  // has looked it up). Fill in the template then, unless the user already typed a request.
+  // Fill once per schema, so clearing the request afterwards doesn't bring the template back.
+  const filledSchema = useRef<string>();
   useEffect(() => {
-    context.saveState(config);
-    context.setDefaultPanelTitle(
-      config.serviceName ? `Call service ${config.serviceName}` : undefined,
+    if (requestSchema == undefined || filledSchema.current === requestSchema) {
+      return;
+    }
+    const template = sampleMessageJson(datatypes, requestSchema);
+    if (template == undefined) {
+      return; // definitions not loaded yet, retry when datatypes change
+    }
+    filledSchema.current = requestSchema;
+    if (!isEditedMessage(config.requestPayload, datatypes, undefined)) {
+      saveConfig({ requestPayload: template });
+    }
+  }, [config.requestPayload, datatypes, requestSchema, saveConfig]);
+
+  const [, setDefaultPanelTitle] = useDefaultPanelTitle();
+  useEffect(() => {
+    setDefaultPanelTitle(
+      config.serviceName ? `Call service ${config.serviceName}` : "Call service",
     );
-  }, [config, context]);
+  }, [config.serviceName, setDefaultPanelTitle]);
 
-  useEffect(() => {
-    context.watch("colorScheme");
-    context.watch("services");
-
-    context.onRender = (renderState, done) => {
-      setRenderDone(() => done);
-      setColorScheme(renderState.colorScheme ?? "light");
-      setServices([...(renderState.services ?? [])]);
-    };
-
-    return () => {
-      context.onRender = undefined;
-    };
-  }, [context, setColorScheme]);
-
-  const { error: requestParseError, parsedObject } = useMemo(
-    () => parseInput(config.requestPayload ?? ""),
+  const parsed = useMemo(
+    () => parseMessageJson(config.requestPayload ?? ""),
     [config.requestPayload],
   );
 
-  const settingsActionHandler = useCallback(
-    (action: SettingsTreeAction) => {
-      setConfig((prevConfig) => settingsActionReducer(prevConfig, action));
-    },
-    [setConfig],
-  );
+  const canCall = capabilities.includes(PLAYER_CAPABILITIES.callServices);
+  let statusMessage: string | undefined;
+  if (!canCall) {
+    statusMessage = "Connect to a data source that supports calling services";
+  } else if (!config.serviceName) {
+    statusMessage = "Configure a service in the panel settings";
+  }
 
-  const settingsTree = useSettingsTree(config, services);
-  useEffect(() => {
-    context.updatePanelSettingsEditor({
-      actionHandler: settingsActionHandler,
-      nodes: settingsTree,
-    });
-  }, [context, settingsActionHandler, settingsTree]);
-
-  const statusMessage = useMemo(() => {
-    if (context.callService == undefined) {
-      return "Connect to a data source that supports calling services";
-    }
-    if (!config.serviceName) {
-      return "Configure a service in the panel settings";
-    }
-    return undefined;
-  }, [context, config.serviceName]);
-
-  const canCallService = Boolean(
-    context.callService != undefined &&
-      config.requestPayload &&
-      config.serviceName &&
-      parsedObject != undefined &&
-      state?.status !== "requesting",
-  );
-
-  const callServiceClicked = useCallback(async () => {
-    if (!context.callService) {
-      setState({ status: "error", value: "The data source does not allow calling services" });
-      return;
-    }
-
-    try {
-      setState({ status: "requesting", value: `Calling ${config.serviceName}...` });
-      const response = await context.callService(
-        config.serviceName!,
-        JSON.parse(config.requestPayload!),
+  const runCall = useCallback(
+    async (serviceName: string, requestText: string) => {
+      const request = parseMessageJson(requestText);
+      const id = nextId.current++;
+      const startedAt = new Date();
+      const update = (patch: Partial<CallRecord>) => {
+        setHistory((old) => old.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+      };
+      setHistory((old) =>
+        [
+          { id, serviceName, request: requestText, startedAt, status: "requesting" as const },
+          ...old,
+        ].slice(0, MAX_HISTORY),
       );
-      setState({
-        status: "success",
-        value:
-          JSON.stringify(
-            response,
-            // handle stringify BigInt correctly
-            (_key, value) => (typeof value === "bigint" ? value.toString() : value),
-            2,
-          ) ?? "",
-      });
-    } catch (err: unknown) {
-      setState({ status: "error", value: (err as Error).message });
-      log.error(err);
-    }
-  }, [context, config.serviceName, config.requestPayload]);
+      setSelectedId(id);
 
-  // Indicate render is complete - the effect runs after the dom is updated
-  useEffect(() => {
-    renderDone();
-  }, [renderDone]);
+      if (request.value == undefined) {
+        update({ status: "error", response: request.error, latencyMs: 0 });
+        return;
+      }
+      const start = performance.now();
+      try {
+        const response = await callService(serviceName, request.value);
+        update({
+          status: "success",
+          response: stringifyMessage(response),
+          latencyMs: Math.round(performance.now() - start),
+        });
+      } catch (err) {
+        update({
+          status: "error",
+          response: (err as Error).message,
+          latencyMs: Math.round(performance.now() - start),
+        });
+      }
+    },
+    [callService],
+  );
+
+  const canSend = canCall && Boolean(config.serviceName) && parsed.value != undefined;
+  const send = () => {
+    if (canSend) {
+      void runCall(config.serviceName!, config.requestPayload!);
+    }
+  };
+
+  const selected = history.find((r) => r.id === selectedId) ?? history[0];
+
+  const requestPane = (
+    <Stack flex="1 1 0" overflow="hidden" gap={0.5}>
+      <Typography variant="overline" lineHeight={1}>
+        Request
+      </Typography>
+      <MessageEditor
+        datatypes={datatypes}
+        schemaName={requestSchema}
+        value={config.requestPayload ?? ""}
+        parsed={parsed}
+        onChange={(requestPayload) => {
+          saveConfig({ requestPayload });
+        }}
+        mode={config.editorMode ?? "form"}
+        onModeChange={(editorMode) => {
+          saveConfig({ editorMode });
+        }}
+        presets={config.presets ?? []}
+        onPresetsChange={(presets) => {
+          saveConfig({ presets });
+        }}
+      />
+      {parsed.error != undefined && (
+        <Typography variant="caption" noWrap color="error" title={parsed.error}>
+          {parsed.error}
+        </Typography>
+      )}
+    </Stack>
+  );
+
+  const responsePane = (
+    <Stack flex="1 1 0" overflow="hidden" gap={0.5}>
+      <Stack direction="row" alignItems="center" gap={0.5}>
+        <Typography variant="overline" lineHeight={1} flex="none">
+          Response
+        </Typography>
+        <Stack flex="auto" />
+        {selected && (
+          <>
+            <Select
+              size="small"
+              variant="standard"
+              disableUnderline
+              SelectDisplayProps={{ "aria-label": "Call history" }}
+              value={selected.id}
+              className={classes.history}
+              onChange={(event) => {
+                setSelectedId(Number(event.target.value));
+              }}
+            >
+              {history.map((record) => (
+                <MenuItem key={record.id} value={record.id} dense>
+                  <Typography
+                    variant="caption"
+                    color={record.status === "error" ? "error" : undefined}
+                  >
+                    {recordLabel(record)}
+                  </Typography>
+                </MenuItem>
+              ))}
+            </Select>
+            <Tooltip title="Copy this call's request into the editor">
+              <IconButton
+                size="small"
+                aria-label="Restore request"
+                onClick={() => {
+                  saveConfig({
+                    serviceName: selected.serviceName,
+                    requestPayload: selected.request,
+                  });
+                }}
+              >
+                <UndoIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Call again with this request">
+              <span>
+                <IconButton
+                  size="small"
+                  aria-label="Re-run call"
+                  disabled={!canCall}
+                  onClick={() => void runCall(selected.serviceName, selected.request)}
+                >
+                  <ReplayIcon fontSize="small" />
+                </IconButton>
+              </span>
+            </Tooltip>
+          </>
+        )}
+      </Stack>
+      <TextField
+        variant="outlined"
+        className={classes.response}
+        multiline
+        size="small"
+        placeholder="Response"
+        value={
+          selected?.status === "requesting"
+            ? `Calling ${selected.serviceName}…`
+            : (selected?.response ?? "")
+        }
+        error={selected?.status === "error"}
+        slotProps={{ htmlInput: { readOnly: true } }}
+      />
+    </Stack>
+  );
 
   return (
-    <Stack flex="auto" gap={1} padding={1.5} position="relative" fullHeight>
-      <Stack gap={1} flexGrow="1" direction={config.layout === "horizontal" ? "row" : "column"}>
-        <Stack flexGrow="1">
-          <Typography variant="caption" noWrap>
-            Request
-          </Typography>
-          <TextField
-            variant="outlined"
-            className={classes.textarea}
-            multiline
-            size="small"
-            placeholder="Enter service request as JSON"
-            value={config.requestPayload}
-            onChange={(event) => {
-              setConfig({ ...config, requestPayload: event.target.value });
-            }}
-            error={requestParseError != undefined}
-          />
-          {requestParseError && (
-            <Typography variant="caption" noWrap color={requestParseError ? "error" : undefined}>
-              {requestParseError}
-            </Typography>
-          )}
-        </Stack>
-        <Stack flexGrow="1">
-          <Typography variant="caption" noWrap>
-            Response
-          </Typography>
-          <TextField
-            variant="outlined"
-            className={classes.textarea}
-            multiline
-            size="small"
-            placeholder="Response"
-            value={state?.value}
-            error={state?.status === "error"}
-          />
-        </Stack>
-      </Stack>
-      <Stack
-        direction="row"
-        justifyContent="flex-end"
-        alignItems="center"
-        overflow="hidden"
-        flexGrow={0}
-        gap={1.5}
-      >
-        {statusMessage && (
-          <Typography variant="caption" noWrap>
-            {statusMessage}
-          </Typography>
-        )}
-        <Tooltip title={config.buttonTooltip}>
-          <span>
-            <Button
-              className={classes.button}
-              variant="contained"
-              disabled={!canCallService}
-              onClick={callServiceClicked}
-              data-testid="call-service-button"
+    // `display: contents` keeps the layout while catching the call shortcut from any input
+    <div
+      className={classes.wrapper}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+          event.preventDefault();
+          send();
+        }
+      }}
+    >
+      <Stack fullHeight>
+        <PanelToolbar />
+        <Stack flex="auto" gap={1} padding={1.5} overflow="hidden">
+          <Stack
+            flex="auto"
+            overflow="hidden"
+            gap={1.5}
+            direction={config.layout === "horizontal" ? "row" : "column"}
+          >
+            {requestPane}
+            {responsePane}
+          </Stack>
+          <Stack direction="row" justifyContent="flex-end" alignItems="center" gap={1.5}>
+            {statusMessage && (
+              <Typography variant="caption" noWrap color="text.secondary">
+                {statusMessage}
+              </Typography>
+            )}
+            <Tooltip
+              title={
+                (config.buttonTooltip ?? "") !== ""
+                  ? config.buttonTooltip
+                  : canSend
+                    ? "Ctrl/Cmd+Enter"
+                    : ""
+              }
             >
-              {config.buttonText ?? `Call service ${config.serviceName ?? ""}`}
-            </Button>
-          </span>
-        </Tooltip>
+              <span>
+                <Button
+                  className={classes.button}
+                  variant="contained"
+                  disabled={!canSend}
+                  onClick={send}
+                  data-testid="call-service-button"
+                >
+                  {config.buttonText ?? `Call service ${config.serviceName ?? ""}`}
+                </Button>
+              </span>
+            </Tooltip>
+          </Stack>
+        </Stack>
       </Stack>
-    </Stack>
+      {confirmModal}
+    </div>
   );
 }
