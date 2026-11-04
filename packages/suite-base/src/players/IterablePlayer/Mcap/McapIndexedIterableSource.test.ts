@@ -233,4 +233,98 @@ describe("McapIndexedIterableSource", () => {
       expect(source.getEnd()).toEqual({ sec: 10, nsec: 0 });
     });
   });
+
+  it("skims only the tail of each window and the latest message of slower topics", async () => {
+    const tempBuffer = new TempBuffer();
+    const writer = new McapWriter({ writable: tempBuffer, startChannelId: 1, chunkSize: 500 });
+    await writer.start({ library: "", profile: "" });
+    for (const topic of ["fast", "slow"]) {
+      await writer.registerChannel({
+        messageEncoding: "json",
+        schemaId: 0,
+        metadata: new Map(),
+        topic,
+      });
+    }
+    for (let ms = 0n; ms < 2000n; ms += 10n) {
+      const logTime = ms * 1_000_000n;
+      await writer.addMessage({
+        channelId: 1,
+        data: new Uint8Array(100),
+        logTime,
+        publishTime: logTime,
+        sequence: 0,
+      });
+      if (ms % 500n === 0n) {
+        await writer.addMessage({
+          channelId: 2,
+          data: new Uint8Array(100),
+          logTime,
+          publishTime: logTime,
+          sequence: 0,
+        });
+      }
+    }
+    await writer.end();
+
+    const blobReadable = new BlobReadable(
+      new Blob([tempBuffer.get()]) as unknown as globalThis.Blob,
+    );
+    let bytesRead = 0;
+    const readable = {
+      size: async () => await blobReadable.size(),
+      read: async (offset: bigint, length: bigint) => {
+        bytesRead += Number(length);
+        return await blobReadable.read(offset, length);
+      },
+    };
+    const reader = await McapIndexedReader.Initialize({
+      readable,
+      decompressHandlers: await loadDecompressHandlers(),
+    });
+    const source = new McapIndexedIterableSource(reader);
+    await source.initialize();
+    const topics = new Map([
+      ["fast", {}],
+      ["slow", {}],
+    ]);
+
+    const read = async (skimInterval?: { sec: number; nsec: number }) => {
+      bytesRead = 0;
+      const out: string[] = [];
+      for await (const result of source.messageIterator({ topics, skimInterval })) {
+        if (result.type === "message-event") {
+          const { topic, receiveTime } = result.msgEvent;
+          out.push(`${topic}@${receiveTime.sec * 1000 + receiveTime.nsec / 1e6}`);
+        } else if (result.type === "stamp") {
+          out.push(`stamp@${result.stamp.sec * 1000 + Math.round(result.stamp.nsec / 1e6)}`);
+        }
+      }
+      return { out, bytesRead };
+    };
+
+    const full = await read();
+    const skim = await read({ sec: 1, nsec: 0 });
+
+    expect(full.out).toHaveLength(204);
+    expect(skim.out).toEqual([
+      "slow@500",
+      "fast@950",
+      "fast@960",
+      "fast@970",
+      "fast@980",
+      "fast@990",
+      "stamp@1000",
+      "slow@1500",
+      // the last window ends at the last message (1990), so its tail starts at 1940
+      "fast@1940",
+      "fast@1950",
+      "fast@1960",
+      "fast@1970",
+      "fast@1980",
+      "fast@1990",
+      "stamp@1990",
+    ]);
+    expect(skim.bytesRead).toBeLessThan(full.bytesRead / 3);
+  });
 });

@@ -67,6 +67,14 @@ export type MessageIteratorArgs = {
    * `partial` indicates that the caller plans to read the iterator but may not read all the messages
    */
   consumptionType?: "full" | "partial";
+
+  /**
+   * Lossy fast-forward for high playback speeds. When set, the source may split the range into
+   * windows of this length and return only the messages near the end of each window plus the
+   * latest message per topic within it, followed by a stamp at the window end. Sources that can't
+   * skip reading cheaply may ignore it and return every message.
+   */
+  skimInterval?: Time;
 };
 
 /**

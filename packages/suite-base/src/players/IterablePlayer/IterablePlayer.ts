@@ -65,6 +65,11 @@ const log = Log.getLogger(__filename);
 // See: https://github.com/foxglove/studio/pull/1733
 const DEFAULT_CACHE_SIZE_BYTES = 1.0e9;
 
+// From this speed on, playback skims: sources read only what is shown, SKIM_UPDATES_PER_SEC
+// times per second, instead of every message.
+const SKIM_MIN_SPEED = 10;
+const SKIM_UPDATES_PER_SEC = 30;
+
 // Amount to wait until panels have had the chance to subscribe to topics before
 // we start playback
 const START_DELAY_MS = 100;
@@ -322,6 +327,16 @@ export class IterablePlayer implements Player {
     } else {
       this.#queueEmitState(); // update isPlaying state to UI
     }
+  }
+
+  // Skim interval of the current playback iterator; the iterator is reset when speed changes it
+  #playbackSkimInterval: Time | undefined;
+
+  #skimInterval(): Time | undefined {
+    if (this.#speed < SKIM_MIN_SPEED) {
+      return undefined;
+    }
+    return fromNanoSec(BigInt(Math.round((this.#speed * 1e9) / SKIM_UPDATES_PER_SEC)));
   }
 
   public setPlaybackSpeed(speed: number): void {
@@ -746,10 +761,12 @@ export class IterablePlayer implements Player {
     this.#lastStamp = undefined;
 
     log.debug("Initializing forward iterator from", next);
+    this.#playbackSkimInterval = this.#skimInterval();
     this.#playbackIterator = this.#bufferedSource.messageIterator({
       topics: this.#allTopics,
       start: next,
       consumptionType: "partial",
+      skimInterval: this.#playbackSkimInterval,
     });
   }
 
@@ -792,10 +809,12 @@ export class IterablePlayer implements Player {
     }
 
     log.debug("Initializing forward iterator from", this.#start);
+    this.#playbackSkimInterval = this.#skimInterval();
     this.#playbackIterator = this.#bufferedSource.messageIterator({
       topics: this.#allTopics,
       start: this.#start,
       consumptionType: "partial",
+      skimInterval: this.#playbackSkimInterval,
     });
 
     this.#lastMessageEvent = undefined;
@@ -1254,8 +1273,11 @@ export class IterablePlayer implements Player {
           },
         };
 
-        // If subscriptions changed, update to the new subscriptions
-        if (this.#allTopics !== allTopics) {
+        // If subscriptions or the skim interval changed, update to the new subscriptions
+        if (
+          this.#allTopics !== allTopics ||
+          !_.isEqual(this.#playbackSkimInterval, this.#skimInterval())
+        ) {
           // Discard any last message event since the new iterator will repeat it
           this.#lastMessageEvent = undefined;
 
