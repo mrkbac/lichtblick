@@ -13,6 +13,7 @@ import { debouncePromise } from "@lichtblick/den/async";
 import Logger from "@lichtblick/log";
 import { ParameterValue } from "@lichtblick/suite";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
+import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import {
   AdvertiseOptions,
   MessageEvent,
@@ -90,8 +91,7 @@ export default class VelodynePlayer implements Player {
   #emitTimer?: ReturnType<typeof setTimeout>;
 
   // track issues within the player
-  #alerts: PlayerAlert[] = [];
-  #alertsById = new Map<string, PlayerAlert>();
+  #alerts = new PlayerAlertManager();
 
   public constructor({ port, metricsCollector }: VelodynePlayerOpts) {
     this.#port = port ?? DEFAULT_VELODYNE_PORT;
@@ -150,7 +150,7 @@ export default class VelodynePlayer implements Player {
 
     this.#totalBytesReceived += data.byteLength;
     this.#presence = PlayerPresence.PRESENT;
-    this.#clearAlert(PROBLEM_SOCKET_ERROR, { skipEmit: true });
+    this.#alerts.removeAlert(PROBLEM_SOCKET_ERROR);
 
     if (this.#seq === 0) {
       // this.#metricsCollector.recordTimeToFirstMsgs();
@@ -197,26 +197,9 @@ export default class VelodynePlayer implements Player {
     }
   };
 
-  #addAlert(
-    id: string,
-    alert: PlayerAlert,
-    { skipEmit = false }: { skipEmit?: boolean } = {},
-  ): void {
-    this.#alertsById.set(id, alert);
-    this.#alerts = Array.from(this.#alertsById.values());
-    if (!skipEmit) {
-      this.#emitState();
-    }
-  }
-
-  #clearAlert(id: string, { skipEmit = false }: { skipEmit?: boolean } = {}): void {
-    if (!this.#alertsById.delete(id)) {
-      return;
-    }
-    this.#alerts = Array.from(this.#alertsById.values());
-    if (!skipEmit) {
-      this.#emitState();
-    }
+  #addAlert(id: string, alert: PlayerAlert): void {
+    this.#alerts.addAlert(id, alert);
+    this.#emitState();
   }
 
   // Potentially performance-sensitive; await can be expensive
@@ -245,7 +228,7 @@ export default class VelodynePlayer implements Player {
       capabilities: CAPABILITIES,
       profile: "velodyne",
       playerId: this.#id,
-      alerts: this.#alerts,
+      alerts: this.#alerts.alerts(),
 
       activeData: {
         messages,
