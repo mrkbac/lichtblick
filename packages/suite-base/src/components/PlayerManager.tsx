@@ -41,6 +41,7 @@ import {
 import { ExtensionCatalogContext } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import PlayerSelectionContext, {
   DataSourceArgs,
+  DataSourceFactoryInitializeArgs,
   IDataSourceFactory,
   PlayerSelection,
   RecentSource,
@@ -53,13 +54,13 @@ import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables
 import useIndexedDbRecents, {
   RecentRecord,
 } from "@lichtblick/suite-base/hooks/useIndexedDbRecents";
-import AnalyticsMetricsCollector from "@lichtblick/suite-base/players/AnalyticsMetricsCollector";
 import {
   TopicAliasFunctions,
   TopicAliasingPlayer,
 } from "@lichtblick/suite-base/players/TopicAliasingPlayer/TopicAliasingPlayer";
 import UserScriptPlayer from "@lichtblick/suite-base/players/UserScriptPlayer";
 import { Player } from "@lichtblick/suite-base/players/types";
+import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { UserScripts } from "@lichtblick/suite-base/types/panels";
 import { mergeMultipleFileNames } from "@lichtblick/suite-base/util/mergeMultipleFileName";
 
@@ -130,7 +131,6 @@ export default function PlayerManager(
   const isMounted = useMountedState();
 
   const analytics = useAnalytics();
-  const metricsCollector = useMemo(() => new AnalyticsMetricsCollector(analytics), [analytics]);
 
   const [basePlayer, setBasePlayer] = useState<Player | undefined>();
 
@@ -221,7 +221,13 @@ export default function PlayerManager(
         return;
       }
 
-      metricsCollector.setProperty("player", sourceId);
+      const initializePlayer = (initArgs: DataSourceFactoryInitializeArgs) => {
+        const newPlayer = foundSource.initialize(initArgs);
+        if (newPlayer) {
+          analytics.logEvent(AppEvent.PLAYER_CONSTRUCTED, { player: sourceId });
+        }
+        return newPlayer;
+      };
       setCurrentRecentId(undefined);
 
       setSelectedSource(foundSource);
@@ -229,9 +235,7 @@ export default function PlayerManager(
 
       // Sample sources don't need args or prompts to initialize
       if (foundSource.type === "sample") {
-        const newPlayer = foundSource.initialize({
-          metricsCollector,
-        });
+        const newPlayer = initializePlayer({});
 
         setBasePlayer(newPlayer);
         writeLastFile(undefined);
@@ -249,8 +253,7 @@ export default function PlayerManager(
       try {
         switch (args.type) {
           case "connection": {
-            const newPlayer = foundSource.initialize({
-              metricsCollector,
+            const newPlayer = initializePlayer({
               params: args.params,
               sourceMetadata: args.sourceMetadata,
             });
@@ -303,10 +306,9 @@ export default function PlayerManager(
             if (files) {
               const multiFile = foundSource.supportsMultiFile === true && files.length > 1;
 
-              const newPlayer = foundSource.initialize({
+              const newPlayer = initializePlayer({
                 file: multiFile ? undefined : files[0],
                 files: multiFile ? files : undefined,
-                metricsCollector,
               });
 
               setBasePlayer(newPlayer);
@@ -333,7 +335,7 @@ export default function PlayerManager(
         enqueueSnackbar((error as Error).message, { variant: "error" });
       }
     },
-    [playerSources, metricsCollector, enqueueSnackbar, isMounted, addRecent],
+    [playerSources, analytics, enqueueSnackbar, isMounted, addRecent],
   );
 
   // Select a recent entry by id

@@ -4,7 +4,6 @@
 import { DataSourceFactoryInitializeArgs } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
 import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource";
-import NoopMetricsCollector from "@lichtblick/suite-base/players/NoopMetricsCollector";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import Ros1LocalBagDataSourceFactory from "./Ros1LocalBagDataSourceFactory";
@@ -13,7 +12,6 @@ vi.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableS
 vi.mock("@lichtblick/suite-base/players/IterablePlayer");
 
 describe("Ros1LocalBagDataSourceFactory", () => {
-  const metricsCollector = new NoopMetricsCollector();
   let factory: Ros1LocalBagDataSourceFactory;
 
   beforeEach(() => {
@@ -31,7 +29,6 @@ describe("Ros1LocalBagDataSourceFactory", () => {
   it("should return undefined if no files are provided", () => {
     const result = factory.initialize({
       files: [],
-      metricsCollector,
     });
 
     expect(result).toBeUndefined();
@@ -40,7 +37,6 @@ describe("Ros1LocalBagDataSourceFactory", () => {
   it("should return undefined if no file is provided", () => {
     const result = factory.initialize({
       file: undefined,
-      metricsCollector,
     });
 
     expect(result).toBeUndefined();
@@ -49,7 +45,6 @@ describe("Ros1LocalBagDataSourceFactory", () => {
   it("should return undefined if undefined file is provided", () => {
     const result = factory.initialize({
       files: [undefined as unknown as File],
-      metricsCollector,
     });
 
     expect(result).toBeUndefined();
@@ -58,11 +53,9 @@ describe("Ros1LocalBagDataSourceFactory", () => {
   it.each([
     {
       file: new File([BasicBuilder.string()], `${BasicBuilder.string()}.bag`),
-      metricsCollector,
     },
     {
       files: [new File([BasicBuilder.string()], `${BasicBuilder.string()}.bag`)],
-      metricsCollector,
     },
   ])("should return an IterablePlayer", (args: DataSourceFactoryInitializeArgs) => {
     const expectedInitArgs = {
@@ -78,7 +71,6 @@ describe("Ros1LocalBagDataSourceFactory", () => {
       initArgs: expectedInitArgs,
     });
     expect(IterablePlayer).toHaveBeenCalledWith({
-      metricsCollector: args.metricsCollector,
       source: expect.any(WorkerSerializedIterableSource),
       name: expectedInitArgs.file?.name,
       sourceId: expect.any(String),

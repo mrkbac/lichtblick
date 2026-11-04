@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { DataSourceFactoryInitializeArgs } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import SampleNuscenesDataSourceFactory from "@lichtblick/suite-base/dataSources/SampleNuscenesDataSourceFactory";
 import {
   SAMPLE_NUSCENES_DATA_SOURCE_DISPLAY_NAME,
@@ -32,20 +31,9 @@ describe("SampleNuscenesDataSourceFactory", () => {
     vi.clearAllMocks();
   });
 
-  function setup() {
-    const args: DataSourceFactoryInitializeArgs = {
-      metricsCollector: vi.fn(),
-    } as unknown as DataSourceFactoryInitializeArgs;
-
-    return { args };
-  }
-
   it("should create a IterablePlayer with the sample nuscenes data source", () => {
-    // Given
-    const { args } = setup();
-
     // When
-    const player = factory.initialize(args);
+    const player = factory.initialize();
 
     // Then
     expect(WorkerSerializedIterableSource).toHaveBeenCalledWith({
@@ -56,7 +44,6 @@ describe("SampleNuscenesDataSourceFactory", () => {
     expect(IterablePlayer).toHaveBeenCalledWith({
       source: expect.any(Object),
       name: SAMPLE_NUSCENES_DATA_SOURCE_NAME,
-      metricsCollector: args.metricsCollector,
       urlParams: {},
       sourceId: SAMPLE_NUSCENES_DATA_SOURCE_ID,
       readAheadDuration: SAMPLE_NUSCENES_DATA_SOURCE_READ_AHEAD_DURATION,
@@ -66,11 +53,8 @@ describe("SampleNuscenesDataSourceFactory", () => {
   });
 
   it("should use the correct sample nuscenes data source URL", () => {
-    // Given
-    const { args } = setup();
-
     // When
-    factory.initialize(args);
+    factory.initialize();
 
     // Then
     expect(WorkerSerializedIterableSource).toHaveBeenCalledWith(

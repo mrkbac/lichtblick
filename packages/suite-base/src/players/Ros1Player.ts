@@ -22,7 +22,6 @@ import {
   AdvertiseOptions,
   MessageEvent,
   Player,
-  PlayerMetricsCollectorInterface,
   PlayerPresence,
   PlayerState,
   PlayerAlert,
@@ -57,7 +56,6 @@ enum Alert {
 type Ros1PlayerOpts = {
   url: string;
   hostname?: string;
-  metricsCollector: PlayerMetricsCollectorInterface;
   sourceId: string;
 };
 
@@ -83,19 +81,16 @@ export default class Ros1Player implements Player {
   #parsedMessages: MessageEvent[] = []; // Queue of messages that we'll send in next _emitState() call.
   #requestTopicsTimeout?: ReturnType<typeof setTimeout>; // setTimeout() handle for _requestTopics().
   #hasReceivedMessage = false;
-  #metricsCollector: PlayerMetricsCollectorInterface;
   #presence: PlayerPresence = PlayerPresence.INITIALIZING;
   #alerts = new PlayerAlertManager();
   #emitTimer?: ReturnType<typeof setTimeout>;
   readonly #sourceId: string;
 
-  public constructor({ url, hostname, metricsCollector, sourceId }: Ros1PlayerOpts) {
+  public constructor({ url, hostname, sourceId }: Ros1PlayerOpts) {
     log.info(`initializing Ros1Player (url=${url}, hostname=${hostname})`);
-    this.#metricsCollector = metricsCollector;
     this.#url = url;
     this.#hostname = hostname;
     this.#start = this.#getCurrentTime();
-    this.#metricsCollector.playerConstructed();
     this.#sourceId = sourceId;
     void this.#open();
   }
@@ -368,7 +363,6 @@ export default class Ros1Player implements Player {
       clearTimeout(this.#emitTimer);
       this.#emitTimer = undefined;
     }
-    // this.#metricsCollector.close();
     this.#hasReceivedMessage = false;
   }
 
@@ -447,7 +441,6 @@ export default class Ros1Player implements Player {
 
     if (external && !this.#hasReceivedMessage) {
       this.#hasReceivedMessage = true;
-      // this.#metricsCollector.recordTimeToFirstMsgs();
     }
 
     const msg: MessageEvent = {

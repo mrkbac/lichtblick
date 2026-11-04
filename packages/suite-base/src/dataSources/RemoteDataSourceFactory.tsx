@@ -118,7 +118,6 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
     return new IterablePlayer({
       source,
       name: urls.join(),
-      metricsCollector: args.metricsCollector,
       urlParams: { urls },
       sourceId: this.id,
       readAheadDuration: { sec: 10, nsec: 0 },

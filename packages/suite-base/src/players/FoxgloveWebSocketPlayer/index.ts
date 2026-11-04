@@ -47,7 +47,6 @@ import {
   AdvertiseOptions,
   MessageEvent,
   Player,
-  PlayerMetricsCollectorInterface,
   PlayerPresence,
   PlayerAlert,
   PlayerState,
@@ -115,7 +114,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #parsedMessages: MessageEvent[] = []; // Queue of messages that we'll send in next _emitState() call.
   #parsedMessagesBytes: number = 0;
   #receivedBytes: number = 0;
-  #metricsCollector: PlayerMetricsCollectorInterface;
   #presence: PlayerPresence = PlayerPresence.INITIALIZING;
   #alerts = new PlayerAlertManager();
   #numTimeSeeks = 0;
@@ -170,17 +168,13 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
   public constructor({
     url,
-    metricsCollector,
     sourceId,
   }: {
     url: string;
-    metricsCollector: PlayerMetricsCollectorInterface;
     sourceId: string;
   }) {
-    this.#metricsCollector = metricsCollector;
     this.#url = url;
     this.#name = url;
-    this.#metricsCollector.playerConstructed();
     this.#sourceId = sourceId;
     this.#urlState = {
       sourceId: this.#sourceId,

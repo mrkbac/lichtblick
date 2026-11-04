@@ -44,7 +44,6 @@ describe("McapLocalDataSourceFactory", () => {
     const args: DataSourceFactoryInitializeArgs = {
       file,
       files,
-      metricsCollector: vi.fn(),
     } as unknown as DataSourceFactoryInitializeArgs;
 
     return {
@@ -63,7 +62,6 @@ describe("McapLocalDataSourceFactory", () => {
       initArgs: { files },
     });
     expect(IterablePlayer).toHaveBeenCalledWith({
-      metricsCollector: args.metricsCollector,
       source: expect.any(Object),
       name: files[0]!.name,
       sourceId: MCAP_LOCAL_FILE_ID,
@@ -84,7 +82,6 @@ describe("McapLocalDataSourceFactory", () => {
       initArgs: { files },
     });
     expect(IterablePlayer).toHaveBeenCalledWith({
-      metricsCollector: args.metricsCollector,
       source: expect.any(Object),
       name: `${files[0]!.name}, ${files[1]!.name}`,
       sourceId: MCAP_LOCAL_FILE_ID,
@@ -137,7 +134,6 @@ describe("McapLocalDataSourceFactory", () => {
       initArgs: { files: [file] },
     });
     expect(IterablePlayer).toHaveBeenCalledWith({
-      metricsCollector: args.metricsCollector,
       source: expect.any(Object),
       name: file.name,
       sourceId: MCAP_LOCAL_FILE_ID,
@@ -159,7 +155,6 @@ describe("McapLocalDataSourceFactory", () => {
       initArgs: { files: [files[0], file] },
     });
     expect(IterablePlayer).toHaveBeenCalledWith({
-      metricsCollector: args.metricsCollector,
       source: expect.any(Object),
       name: `${files[0]?.name}, ${file.name}`,
       sourceId: MCAP_LOCAL_FILE_ID,

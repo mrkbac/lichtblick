@@ -25,7 +25,6 @@ import Log from "@lichtblick/log";
 import { Immutable, MessageEvent, Metadata, ParameterValue } from "@lichtblick/suite";
 import { DeserializingIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/DeserializingIterableSource";
 import { freezeMetadata } from "@lichtblick/suite-base/players/IterablePlayer/freezeMetadata";
-import NoopMetricsCollector from "@lichtblick/suite-base/players/NoopMetricsCollector";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import { subtractTimes } from "@lichtblick/suite-base/players/UserScriptPlayer/transformerWorker/typescript/userUtils/time";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
@@ -33,7 +32,6 @@ import { applySamplingGuardToSubscriptions } from "@lichtblick/suite-base/player
 import {
   AdvertiseOptions,
   Player,
-  PlayerMetricsCollectorInterface,
   PlayerPresence,
   PlayerState,
   PlayerStateActiveData,
@@ -114,7 +112,6 @@ type ExpandBackfill = (
 ) => Promise<MessageEvent[]>;
 
 type IterablePlayerOptions = {
-  metricsCollector?: PlayerMetricsCollectorInterface;
 
   source: IDeserializedIterableSource | ISerializedIterableSource;
 
@@ -183,7 +180,6 @@ export class IterablePlayer implements Player {
   #capabilities: string[] = [PLAYER_CAPABILITIES.setSpeed, PLAYER_CAPABILITIES.playbackControl];
   #profile: string | undefined;
   #recordingFiles: readonly RecordingFileInfo[] | undefined;
-  #metricsCollector: PlayerMetricsCollectorInterface;
   #subscriptions: SubscribePayload[] = [];
   #allTopics: TopicSelection = new Map();
   #preloadTopics: TopicSelection = new Map();
@@ -238,7 +234,6 @@ export class IterablePlayer implements Player {
 
   public constructor(options: IterablePlayerOptions) {
     const {
-      metricsCollector,
       urlParams,
       source,
       name,
@@ -265,8 +260,6 @@ export class IterablePlayer implements Player {
 
     this.#name = name;
     this.#urlParams = urlParams;
-    this.#metricsCollector = metricsCollector ?? new NoopMetricsCollector();
-    this.#metricsCollector.playerConstructed();
 
     this.#enablePreload = enablePreload ?? true;
     this.#sourceId = sourceId;
