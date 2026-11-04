@@ -10,10 +10,10 @@ import { CommandPalette } from "./CommandPalette";
 import { Command } from "./commands";
 import { useAppCommands } from "./useAppCommands";
 
-jest.mock("./useAppCommands");
+vi.mock("./useAppCommands");
 
-const switchLayout = jest.fn();
-const seek = jest.fn();
+const switchLayout = vi.fn();
+const seek = vi.fn();
 
 const commands: Command[] = [
   {
@@ -24,7 +24,7 @@ const commands: Command[] = [
       { id: "layout.b", title: "Beta", run: () => switchLayout("b") },
     ],
   },
-  { id: "help.docs", title: "Open documentation", run: jest.fn() },
+  { id: "help.docs", title: "Open documentation", run: vi.fn() },
 ];
 
 function openPalette() {
@@ -33,13 +33,13 @@ function openPalette() {
 }
 
 // jsdom has no layout, so it lacks scrollIntoView.
-Element.prototype.scrollIntoView = jest.fn();
+Element.prototype.scrollIntoView = vi.fn();
 
 describe("CommandPalette", () => {
   beforeEach(() => {
     localStorage.clear();
-    jest.clearAllMocks();
-    jest.mocked(useAppCommands).mockReturnValue({
+    vi.clearAllMocks();
+    vi.mocked(useAppCommands).mockReturnValue({
       commands,
       queryCommands: (query) =>
         query === "12.5" ? [{ id: "playback.seek", title: "Seek to 0:12.500", run: seek }] : [],
