@@ -53,23 +53,12 @@ export function useJsonTreeTheme(): Pick<
   const colors = JSON_TREE_THEME_COLORS[mode];
 
   return {
-    dark: {
-      base00: "transparent", // bg
-      base0B: colors.string,
-      base09: colors.number,
-      base07: colors.text,
-      base08: colors.null,
-      base0D: colors.label,
-      base03: text.secondary, // item string expanded
-    },
-    light: {
-      base00: "transparent", // bg
-      base0B: colors.string,
-      base09: colors.number,
-      base07: colors.text,
-      base08: colors.null,
-      base0D: colors.label,
-      base03: text.secondary, // item string expanded
-    },
-  }[mode];
+    base00: "transparent", // bg
+    base0B: colors.string,
+    base09: colors.number,
+    base07: colors.text,
+    base08: colors.null,
+    base0D: colors.label,
+    base03: text.secondary, // item string expanded
+  };
 }
