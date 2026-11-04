@@ -7,12 +7,10 @@
 
 import { ZoomIn20Regular } from "@fluentui/react-icons";
 import { Button, Tooltip, Fade, useTheme } from "@mui/material";
-import * as _ from "lodash-es";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { MessagePath } from "@lichtblick/message-path";
-import { Immutable } from "@lichtblick/suite";
 import * as PanelAPI from "@lichtblick/suite-base/PanelAPI";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import { messagePathStructures } from "@lichtblick/suite-base/components/MessagePathSyntax/messagePathsForDatatype";
@@ -268,9 +266,9 @@ const Plot = (props: PlotProps): React.JSX.Element => {
       height: contentRect.height,
     });
 
-    const isCanvasTarget = (entry: Immutable<ResizeObserverEntry>) => entry.target === canvasDiv;
     const resizeObserver = new ResizeObserver((entries) => {
-      const entry = _.findLast(entries, isCanvasTarget);
+      // Only canvasDiv is observed, so the last entry is its latest size.
+      const entry = entries.at(-1);
       if (entry != undefined) {
         plotCoordinator.setSize({
           width: entry.contentRect.width,

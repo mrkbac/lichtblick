@@ -5,6 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import * as _ from "lodash-es";
+
 import { filterMap } from "@lichtblick/den/collection";
 import { MessagePath } from "@lichtblick/message-path";
 import { Immutable } from "@lichtblick/suite";
@@ -112,7 +114,7 @@ export class CurrentCustomDatasetsBuilder implements IDatasetsBuilder {
   }
 
   public setXPath(path: Immutable<MessagePath> | undefined): void {
-    if (JSON.stringify(path) === JSON.stringify(this.#xParsedPath)) {
+    if (_.isEqual(path, this.#xParsedPath)) {
       return;
     }
 
