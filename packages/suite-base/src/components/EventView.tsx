@@ -10,7 +10,10 @@ import * as _ from "lodash-es";
 import { Fragment } from "react";
 import { makeStyles } from "tss-react/mui";
 
-import { HighlightedText } from "@lichtblick/suite-base/components/HighlightedText";
+import {
+  HighlightChars,
+  substringPositions,
+} from "@lichtblick/suite-base/components/HighlightChars";
 import {
   TimelinePositionedEvent,
   DataSourceEvent,
@@ -140,10 +143,10 @@ function EventViewComponent(params: {
       {fields.map(([key, value]) => (
         <Fragment key={key}>
           <div className={classes.eventMetadata}>
-            <HighlightedText text={key ?? ""} highlight={filter} />
+            <HighlightChars str={key ?? ""} indices={substringPositions(key ?? "", filter)} />
           </div>
           <div className={classes.eventMetadata}>
-            <HighlightedText text={value ?? ""} highlight={filter} />
+            <HighlightChars str={value ?? ""} indices={substringPositions(value ?? "", filter)} />
           </div>
         </Fragment>
       ))}

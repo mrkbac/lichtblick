@@ -13,8 +13,8 @@ import { MosaicDragType, MosaicPath } from "react-mosaic-component";
 import { MosaicDropTargetPosition } from "react-mosaic-component/lib/internalTypes";
 import { makeStyles } from "tss-react/mui";
 
+import { fuzzyPositions, HighlightChars } from "@lichtblick/suite-base/components/HighlightChars";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import TextHighlight from "@lichtblick/suite-base/components/TextHighlight";
 import { PanelInfo } from "@lichtblick/suite-base/context/PanelCatalogContext";
 import { MosaicDropResult, PanelConfig } from "@lichtblick/suite-base/types/panels";
 
@@ -32,6 +32,11 @@ const useStyles = makeStyles<void, "dragIcon">()((theme, _params, classes) => {
       cursor: "grab",
       marginRight: theme.spacing(-1),
       color: theme.palette.text.disabled,
+    },
+    highlight: {
+      backgroundColor: "transparent",
+      color: theme.palette.primary.main,
+      fontWeight: "bold",
     },
   };
 });
@@ -167,7 +172,11 @@ export function PanelListItem(props: Props): React.JSX.Element {
         >
           <ListItemText>
             <span data-testid={`panel-menu-item ${panel.title}`}>
-              <TextHighlight targetStr={targetString} searchText={searchQuery} />
+              <HighlightChars
+                str={targetString}
+                indices={fuzzyPositions(targetString, searchQuery)}
+                highlightClassName={classes.highlight}
+              />
             </span>
           </ListItemText>
 

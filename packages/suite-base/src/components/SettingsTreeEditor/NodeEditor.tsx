@@ -28,7 +28,10 @@ import {
   SettingsTreeNodeActionItem,
   SettingsTreeNodes,
 } from "@lichtblick/suite";
-import { HighlightedText } from "@lichtblick/suite-base/components/HighlightedText";
+import {
+  HighlightChars,
+  substringPositions,
+} from "@lichtblick/suite-base/components/HighlightChars";
 import { useStyles } from "@lichtblick/suite-base/components/SettingsTreeEditor/NodeEditor.style";
 import { SETTINGS_NODE_DRAG_TYPE } from "@lichtblick/suite-base/components/SettingsTreeEditor/constants";
 import {
@@ -450,7 +453,10 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
               fontWeight={indent < 2 ? 600 : 400}
               color={visible ? "text.primary" : "text.disabled"}
             >
-              <HighlightedText text={settings.label ?? t("general")} highlight={filter} />
+              <HighlightChars
+                str={settings.label ?? t("general")}
+                indices={substringPositions(settings.label ?? t("general"), filter)}
+              />
             </Typography>
           )}
         </div>
