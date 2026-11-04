@@ -157,15 +157,11 @@ export default class ChartJsMux {
     }
   }
 
-  public getElementsAtEvent(
-    args: RpcEvent<MouseEvent>,
-  ): RpcElement[] {
+  public getElementsAtEvent(args: RpcEvent<MouseEvent>): RpcElement[] {
     return this.#getChart(args.id).getElementsAtEvent(args);
   }
 
-  public getDatalabelAtEvent(
-    args: RpcEvent<Event>,
-  ): unknown {
+  public getDatalabelAtEvent(args: RpcEvent<Event>): unknown {
     return this.#getChart(args.id).getDatalabelAtEvent(args);
   }
 

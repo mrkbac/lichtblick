@@ -16,7 +16,9 @@ import type { IMessageCursor, IteratorResult } from "./IIterableSource";
  * This class must only be used for worker communication because otherwise Comlink's interal transfer buffer
  * will never be emptied leading to an OOM.
  */
-class ComlinkTransferIteratorCursor<MessageType = Uint8Array> implements IMessageCursor<MessageType> {
+class ComlinkTransferIteratorCursor<MessageType = Uint8Array>
+  implements IMessageCursor<MessageType>
+{
   #cursor: IMessageCursor<MessageType>;
 
   public constructor(cursor: IMessageCursor<MessageType>) {

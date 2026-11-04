@@ -12,9 +12,7 @@ import { WorkerIterableSourceWorker } from "@lichtblick/suite-base/players/Itera
 
 import { BagIterableSource } from "./BagIterableSource";
 
-export function initialize(
-  args: IterableSourceInitializeArgs,
-): WorkerIterableSourceWorker {
+export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSourceWorker {
   if (args.file) {
     const source = new BagIterableSource({ type: "file", file: args.file });
     const wrapped = new WorkerIterableSourceWorker(source);

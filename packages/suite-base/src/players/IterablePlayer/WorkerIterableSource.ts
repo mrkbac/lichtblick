@@ -49,7 +49,9 @@ class WorkerIterableSourceBase<MessageType> implements IIterableSource<MessageTy
 
     const { remote: initializeWorker, dispose } =
       ComlinkWrap<
-        (args: IterableSourceInitializeArgs) => Comlink.Remote<WorkerIterableSourceWorker<MessageType>>
+        (
+          args: IterableSourceInitializeArgs,
+        ) => Comlink.Remote<WorkerIterableSourceWorker<MessageType>>
       >(worker);
 
     this.#disposeRemote = dispose;

@@ -5,9 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  IDataSourceFactory,
-} from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import { IDataSourceFactory } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import {
   SAMPLE_NUSCENES_DATA_SOURCE_DISPLAY_NAME,
   SAMPLE_NUSCENES_DATA_SOURCE_ICON_NAME,

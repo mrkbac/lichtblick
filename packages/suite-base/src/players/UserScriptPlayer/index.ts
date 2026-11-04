@@ -437,11 +437,10 @@ export default class UserScriptPlayer implements Player {
             );
           }
 
-          const { error, userScriptDiagnostics, userScriptLogs } =
-            await rpc.registerScript({
-              projectCode,
-              scriptCode: transpiledCode,
-            });
+          const { error, userScriptDiagnostics, userScriptLogs } = await rpc.registerScript({
+            projectCode,
+            scriptCode: transpiledCode,
+          });
           if (error != undefined) {
             this.#setUserScriptDiagnostics(scriptId, [
               ...userScriptDiagnostics,

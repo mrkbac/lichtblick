@@ -12,9 +12,7 @@ import { WorkerIterableSourceWorker } from "@lichtblick/suite-base/players/Itera
 
 import { RosDb3IterableSource } from "./RosDb3IterableSource";
 
-export function initialize(
-  args: IterableSourceInitializeArgs,
-): WorkerIterableSourceWorker {
+export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSourceWorker {
   const files = args.file ? [args.file] : args.files;
   if (!files) {
     throw new Error("files required");
