@@ -3,10 +3,11 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import "@testing-library/jest-dom/vitest";
+import "@testing-library/jest-dom";
 
-import { act, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 
+import { PanelContextMenuItem } from "@lichtblick/suite-base/components/PanelContextMenu";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
 import { RendererOverlay } from "./RendererOverlay";
@@ -64,7 +65,7 @@ const mockRenderer = {
   setPickingEnabled: vi.fn(),
   setSelectedRenderable: vi.fn(),
   canResetView: vi.fn(() => false),
-  getContextMenuItems: vi.fn(() => []),
+  getContextMenuItems: vi.fn((): PanelContextMenuItem[] => []),
   fixedFrameId: undefined,
 };
 
@@ -317,5 +318,60 @@ describe("<RendererOverlay /> hover wiring", () => {
       expect(mockLastHoverTooltipProps).toBeDefined();
       expect(mockLastHoverTooltipProps.entities).toEqual([]);
     });
+  });
+});
+
+describe("<RendererOverlay /> download image button", () => {
+  function renderOverlay(interfaceMode: "3d" | "image") {
+    return render(
+      <ThemeProvider isDark={false}>
+        <RendererOverlay
+          addPanel={vi.fn() as any}
+          canPublish={false}
+          canvas={ReactNull}
+          enableStats={false}
+          interfaceMode={interfaceMode}
+          measureActive={false}
+          onChangePublishClickType={vi.fn()}
+          onClickMeasure={vi.fn()}
+          onClickPublish={vi.fn()}
+          onShowTopicSettings={vi.fn()}
+          onTogglePerspective={vi.fn()}
+          perspective={false}
+          publishActive={false}
+          publishClickType="point"
+          timezone={undefined}
+        />
+      </ThemeProvider>,
+    );
+  }
+
+  it("triggers the Download image context menu action in image mode", () => {
+    const onclick = vi.fn();
+    mockRenderer.getContextMenuItems.mockReturnValue([
+      { type: "item", label: "Download image", onclick },
+    ]);
+
+    const { getByTestId } = renderOverlay("image");
+    fireEvent.click(getByTestId("download-image-button"));
+
+    expect(onclick).toHaveBeenCalledTimes(1);
+  });
+
+  it("does nothing when the action is disabled", () => {
+    const onclick = vi.fn();
+    mockRenderer.getContextMenuItems.mockReturnValue([
+      { type: "item", label: "Download image", onclick, disabled: true },
+    ]);
+
+    const { getByTestId } = renderOverlay("image");
+    fireEvent.click(getByTestId("download-image-button"));
+
+    expect(onclick).not.toHaveBeenCalled();
+  });
+
+  it("is not shown in 3d mode", () => {
+    const { queryByTestId } = renderOverlay("3d");
+    expect(queryByTestId("download-image-button")).toBeNull();
   });
 });

@@ -1081,7 +1081,7 @@ export class ImageMode
     return [
       {
         type: "item",
-        label: "Download image",
+        label: t3D("downloadImage"),
         onclick: this.#getDownloadImageCallback(),
         disabled: this.imageRenderable?.getDecodedImage() == undefined,
       },
