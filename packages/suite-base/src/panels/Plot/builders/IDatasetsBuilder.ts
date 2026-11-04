@@ -45,6 +45,13 @@ export type SeriesItem = {
   showLine: boolean;
   lineSize: number;
   enabled: boolean;
+  interpolation?: "linear" | "step";
+  /** chart.js scale id: "y" (primary) or "y2" (secondary) */
+  yAxisID?: "y" | "y2";
+  /** Moving-average window in samples (timestamp plots); 0 disables it. */
+  smoothing?: number;
+  /** Own x-value path (path x-axis plots). Must be on the same topic as `parsed`. */
+  xParsed?: MessagePath;
 };
 
 export type Viewport = {
@@ -62,6 +69,8 @@ export type Viewport = {
 
 export type CsvDataset = {
   label: string;
+  /** Index of the series in config.paths */
+  configIndex: number;
   data: CsvDatum[];
 };
 

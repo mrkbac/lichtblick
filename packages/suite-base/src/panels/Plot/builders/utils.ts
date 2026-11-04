@@ -25,10 +25,13 @@ export const MAX_CURRENT_DATUMS_PER_SERIES = 50_000;
  * `setSeries` below for builders that only track the current frame.
  */
 export function buildDatasetStyle(config: Immutable<SeriesItem>): Omit<Dataset, "data"> {
-  const { color, contrastColor, showLine, lineSize } = config;
+  const { color, contrastColor, showLine, lineSize, interpolation, yAxisID } = config;
   return {
     borderColor: color,
     showLine,
+    // "before" draws the horizontal segment first, i.e. holds each value until the next sample.
+    stepped: interpolation === "step" ? "before" : false,
+    yAxisID: yAxisID ?? "y",
     fill: false,
     borderWidth: lineSize,
     pointRadius: lineSize * 1.2,

@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Chart } from "chart.js";
+import { Chart, Scale as ChartScale, Ticks } from "chart.js";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
 import EventEmitter from "eventemitter3";
 
@@ -18,7 +18,7 @@ import {
 } from "@lichtblick/suite-base/components/Chart/worker/eventHandler";
 import { DEFAULT_ANNOTATION } from "@lichtblick/suite-base/panels/Plot/constants";
 import { getChartOptions } from "@lichtblick/suite-base/panels/Plot/utils/getChartOptions";
-import { Bounds } from "@lichtblick/suite-base/types/Bounds";
+import { Bounds, Bounds1D } from "@lichtblick/suite-base/types/Bounds";
 import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
 
 import {
@@ -29,17 +29,34 @@ import {
   HoverElement,
   InteractionEvent,
   MutableContext,
+  PixelRect,
   Scale,
   UpdateAction,
+  WheelInteractionEvent,
   YScale,
   ZoomableChart,
+  ZoomMode,
 } from "./types";
+
+/** A sample further than this from the cursor is reported with its age in the tooltip. */
+const STALE_SAMPLE_PX = 4;
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** Local wall-clock time, HH:MM:SS.mmm */
+export function formatClockTime(seconds: number): string {
+  const date = new Date(seconds * 1000);
+  const ms = String(date.getMilliseconds()).padStart(3, "0");
+  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}.${ms}`;
+}
 
 export class ChartRenderer {
   #chartInstance: ChartType;
   #fakeNodeEvents = new EventEmitter();
   #fakeDocumentEvents = new EventEmitter();
   readonly #titleColor: string;
+  #absoluteStartSec?: number;
+  #equalAxes = false;
 
   public constructor(args: ChartRendererProps) {
     const fakeNode = {
@@ -59,6 +76,17 @@ export class ChartRenderer {
       tickColor: args.tickColor,
       titleColor: args.titleColor,
     });
+
+    const xTicks = chartOptions.scales?.x?.ticks;
+    if (xTicks) {
+      const getStartSec = () => this.#absoluteStartSec;
+      xTicks.callback = function (this: ChartScale, value, index, ticks) {
+        const startSec = getStartSec();
+        return startSec == undefined || typeof value !== "number"
+          ? Ticks.formatters.numeric.call(this, value as number, index, ticks)
+          : formatClockTime(startSec + value);
+      };
+    }
 
     const origZoomStart = ZoomPlugin.start?.bind(ZoomPlugin);
     ZoomPlugin.start = (chartInstance: MutableContext<unknown>, startArgs, pluginOptions) => {
@@ -97,25 +125,45 @@ export class ChartRenderer {
       this.#chartInstance.resize();
     }
 
-    if (action.yBounds) {
-      const scaleOption = this.#chartInstance.options.scales?.y;
-      if (scaleOption && scaleOption.min !== action.yBounds.min) {
-        scaleOption.min = action.yBounds.min;
-      }
-      if (scaleOption && scaleOption.max !== action.yBounds.max) {
-        scaleOption.max = action.yBounds.max;
+    this.#applyBounds("y", action.yBounds);
+    this.#applyBounds("y2", action.y2Bounds);
+    this.#applyBounds("x", action.xBounds);
+
+    if (action.y2Axis) {
+      const y2 = this.#chartInstance.options.scales?.y2;
+      if (y2) {
+        const { display, showLabels, label, showGrid } = action.y2Axis;
+        y2.display = display;
+        if (y2.ticks) {
+          y2.ticks.display = showLabels;
+        }
+        if (y2.grid) {
+          y2.grid.display = showGrid;
+        }
+        y2.title = { display: label.length > 0, text: label, color: this.#titleColor };
       }
     }
 
-    if (action.xBounds) {
-      const scaleOption = this.#chartInstance.options.scales?.x;
-      if (scaleOption && scaleOption.min !== action.xBounds.min) {
-        scaleOption.min = action.xBounds.min;
+    if (action.showXAxisGrid != undefined) {
+      const grid = this.#chartInstance.options.scales?.x?.grid;
+      if (grid) {
+        grid.display = action.showXAxisGrid;
       }
+    }
 
-      if (scaleOption && scaleOption.max !== action.xBounds.max) {
-        scaleOption.max = action.xBounds.max;
+    if (action.showYAxisGrid != undefined) {
+      const grid = this.#chartInstance.options.scales?.y?.grid;
+      if (grid) {
+        grid.display = action.showYAxisGrid;
       }
+    }
+
+    if (action.xTickFormat) {
+      this.#absoluteStartSec = action.xTickFormat.absoluteStartSec;
+    }
+
+    if (action.equalAxes != undefined) {
+      this.#equalAxes = action.equalAxes;
     }
 
     if (action.showYAxisLabels != undefined) {
@@ -173,6 +221,7 @@ export class ChartRenderer {
       const newAnnotations: AnnotationOptions[] = action.referenceLines.map((config) => {
         return {
           ...DEFAULT_ANNOTATION,
+          scaleID: config.scaleID ?? "y",
           borderColor: config.color,
           value: config.value,
         };
@@ -181,10 +230,103 @@ export class ChartRenderer {
       annotation.annotations = newAnnotations;
     }
 
+    this.#render();
+    return this.#getBounds();
+  }
+
+  /**
+   * Zoom to a canvas-pixel rectangle (box zoom). Every scale in `mode` gets the rectangle's range,
+   * so a secondary y-axis zooms along with the primary one.
+   */
+  public zoomToRect(rect: PixelRect, mode: ZoomMode): Bounds | undefined {
+    for (const scale of Object.values(this.#chartInstance.scales)) {
+      const horizontal = scale.isHorizontal();
+      if ((horizontal && mode === "y") || (!horizontal && mode === "x")) {
+        continue;
+      }
+      const options = this.#chartInstance.options.scales?.[scale.id];
+      if (!options) {
+        continue;
+      }
+      const a = scale.getValueForPixel(horizontal ? rect.left : rect.bottom);
+      const b = scale.getValueForPixel(horizontal ? rect.right : rect.top);
+      if (a == undefined || b == undefined || a === b) {
+        continue;
+      }
+      options.min = Math.min(a, b);
+      options.max = Math.max(a, b);
+    }
+    this.#render();
+    return this.#getBounds();
+  }
+
+  #applyBounds(scaleId: "x" | "y" | "y2", bounds: Immutable<Partial<Bounds1D>> | undefined): void {
+    if (!bounds) {
+      return;
+    }
+    const scaleOption = this.#chartInstance.options.scales?.[scaleId];
+    if (!scaleOption) {
+      return;
+    }
+    if (scaleOption.min !== bounds.min) {
+      scaleOption.min = bounds.min;
+    }
+    if (scaleOption.max !== bounds.max) {
+      scaleOption.max = bounds.max;
+    }
+  }
+
+  /**
+   * Update the chart. With equal axes, a second pass widens the axis with fewer units per pixel so
+   * both axes share one scale. The fitted bounds are not kept in the options, so the next update
+   * still fits the data.
+   */
+  #render(): void {
     // NOTE: "none" disables animations - this is important for chart performance because we update
     // the entire data set which does not preserve history for the chart animations
     this.#chartInstance.update("none");
+    if (!this.#equalAxes) {
+      return;
+    }
 
+    const { x, y } = this.#chartInstance.scales;
+    const xOptions = this.#chartInstance.options.scales?.x;
+    const yOptions = this.#chartInstance.options.scales?.y;
+    if (!x || !y || !xOptions || !yOptions || x.width <= 0 || y.height <= 0) {
+      return;
+    }
+    const xPerPx = (x.max - x.min) / x.width;
+    const yPerPx = (y.max - y.min) / y.height;
+    const perPx = Math.max(xPerPx, yPerPx);
+    if (!(perPx > 0) || !Number.isFinite(perPx) || Math.abs(xPerPx - yPerPx) <= perPx * 1e-6) {
+      return;
+    }
+
+    const saved = {
+      xMin: xOptions.min,
+      xMax: xOptions.max,
+      yMin: yOptions.min,
+      yMax: yOptions.max,
+    };
+    const xCenter = (x.min + x.max) / 2;
+    const yCenter = (y.min + y.max) / 2;
+    xOptions.min = xCenter - (perPx * x.width) / 2;
+    xOptions.max = xCenter + (perPx * x.width) / 2;
+    yOptions.min = yCenter - (perPx * y.height) / 2;
+    yOptions.max = yCenter + (perPx * y.height) / 2;
+    this.#chartInstance.update("none");
+
+    // chart.js rebuilds the scale option objects on update, so restore through fresh references.
+    const scales = this.#chartInstance.options.scales;
+    if (scales?.x && scales.y) {
+      scales.x.min = saved.xMin;
+      scales.x.max = saved.xMax;
+      scales.y.min = saved.yMin;
+      scales.y.max = saved.yMax;
+    }
+  }
+
+  #getBounds(): Bounds | undefined {
     // fill our rpc scales - we only support x and y scales for now
     const xScale = this.#chartInstance.scales.x;
     const yScale = this.#chartInstance.scales.y;
@@ -203,6 +345,34 @@ export class ChartRenderer {
         max: yScale.max,
       },
     };
+  }
+
+  /**
+   * For each dataset, the last sample at or before the hovered x. Samples away from the cursor get
+   * `ageSec` so the tooltip can show sparse series ("0.4s ago") instead of dropping them.
+   */
+  public getLatestElementsAtPixel(pixel: { x: number; y: number }): HoverElement[] {
+    const xScale = this.#chartInstance.scales.x;
+    const xValue = xScale?.getValueForPixel(pixel.x);
+    if (!xScale || xValue == undefined) {
+      return [];
+    }
+
+    const out: HoverElement[] = [];
+    this.#chartInstance.data.datasets.forEach((dataset, configIndex) => {
+      // ponytail: linear scan of the (already downsampled) visible data; binary search if it shows
+      // up in profiles. NaN entries are line breaks, so they are skipped.
+      for (let i = dataset.data.length - 1; i >= 0; --i) {
+        const datum = dataset.data[i];
+        if (datum == undefined || !(datum.x <= xValue) || Number.isNaN(datum.y)) {
+          continue;
+        }
+        const stale = pixel.x - xScale.getPixelForValue(datum.x) > STALE_SAMPLE_PX;
+        out.push({ data: datum, configIndex, ageSec: stale ? xValue - datum.x : undefined });
+        return;
+      }
+    });
+    return out;
   }
 
   public getElementsAtPixel(pixel: { x: number; y: number }): HoverElement[] {
@@ -257,10 +427,7 @@ export class ChartRenderer {
 
     // While the chartjs API doesn't indicate update should be called after resize, in practice
     // we've found that performing a resize after an update sometimes results in a blank chart.
-    //
-    // NOTE: "none" disables animations - this is important for chart performance because we update
-    // the entire data set which does not preserve history for the chart animations
-    this.#chartInstance.update("none");
+    this.#render();
     return { x: this.#getXScale(), y: this.#getYScale() };
   }
 
@@ -296,13 +463,15 @@ export class ChartRenderer {
     const { type, boundingClientRect, ...rest } = event;
     switch (type) {
       case "wheel":
-        this.#fakeNodeEvents.emit("wheel", {
-          ...rest,
-          target: {
-            getBoundingClientRect() {
-              return boundingClientRect;
+        this.#withWheelZoomMode(event, () => {
+          this.#fakeNodeEvents.emit("wheel", {
+            ...rest,
+            target: {
+              getBoundingClientRect() {
+                return boundingClientRect;
+              },
             },
-          },
+          });
         });
         break;
       case "panstart":
@@ -323,6 +492,44 @@ export class ChartRenderer {
       case "panend":
         maybeCast<ZoomableChart>(this.#chartInstance)?.$zoom.panEndHandler();
         break;
+    }
+  }
+
+  /**
+   * Run a wheel zoom with the event's zoom mode. Over an axis (outside the chart area) only that
+   * axis zooms.
+   */
+  #withWheelZoomMode(event: Immutable<WheelInteractionEvent>, zoom: () => void): void {
+    // eslint-disable-next-line no-underscore-dangle -- the zoom plugin's resolved options
+    const zoomOptions = maybeCast<ZoomableChart>(this.#chartInstance)?.$zoom._options?.zoom;
+    if (!zoomOptions) {
+      zoom();
+      return;
+    }
+
+    const x = event.clientX - event.boundingClientRect.left;
+    const y = event.clientY - event.boundingClientRect.top;
+    const { chartArea } = this.#chartInstance;
+    const insideChartArea =
+      x >= chartArea.left && x <= chartArea.right && y >= chartArea.top && y <= chartArea.bottom;
+    const axisUnderCursor = insideChartArea
+      ? undefined
+      : Object.values(this.#chartInstance.scales).find(
+          (scale) => x >= scale.left && x <= scale.right && y >= scale.top && y <= scale.bottom,
+        )?.axis;
+
+    const { mode, overScaleMode } = zoomOptions;
+    if (axisUnderCursor === "x" || axisUnderCursor === "y") {
+      zoomOptions.mode = axisUnderCursor;
+      zoomOptions.overScaleMode = axisUnderCursor;
+    } else if (event.zoomMode) {
+      zoomOptions.mode = event.zoomMode;
+    }
+    try {
+      zoom();
+    } finally {
+      zoomOptions.mode = mode;
+      zoomOptions.overScaleMode = overScaleMode;
     }
   }
 

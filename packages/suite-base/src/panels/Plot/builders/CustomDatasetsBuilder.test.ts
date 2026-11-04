@@ -18,7 +18,7 @@ import {
   PlayerStateActiveData,
 } from "@lichtblick/suite-base/players/types";
 
-import { CustomDatasetsBuilder } from "./CustomDatasetsBuilder";
+import { CustomDatasetsBuilder, readXYItems } from "./CustomDatasetsBuilder";
 import { CustomDatasetsBuilderImpl } from "./CustomDatasetsBuilderImpl";
 import { SeriesConfigKey, SeriesItem } from "./IDatasetsBuilder";
 import { PlotPath } from "../utils/config";
@@ -84,6 +84,60 @@ function buildPlayerState(
 }
 
 describe("CustomDatasetsBuilder", () => {
+  const poseMessages = (from: number, to: number) =>
+    _.range(from, to).map((i) => ({
+      topic: "/pose",
+      schemaName: "pose",
+      receiveTime: { sec: i, nsec: 0 },
+      sizeInBytes: 0,
+      message: { x: i, y: i * 10 },
+    }));
+
+  it("plots a series against its own x path from the full message range", async () => {
+    // GIVEN a series with its own x path on the same topic
+    const builder = new CustomDatasetsBuilder();
+    const [series] = buildSeriesItems([{ value: "/pose.y" }]);
+    builder.setSeries([{ ...series!, xParsed: unwrap(parseMessagePath("/pose.x")) }]);
+
+    // WHEN the full range arrives in two batches
+    builder.handleMessageRange(poseMessages(0, 2), { isReset: true });
+    builder.handleMessageRange(poseMessages(2, 4), { isReset: false });
+    const result = await builder.getViewportDatasets({
+      size: { width: 1_000, height: 1_000 },
+      bounds: {},
+    });
+
+    // THEN every message becomes one (x, y) point
+    expect(result.datasetsByConfigIndex[0]?.data.map(({ x, y }) => [x, y])).toEqual([
+      [0, 0],
+      [1, 10],
+      [2, 20],
+      [3, 30],
+    ]);
+  });
+
+  it("reads y series from the x-axis topic's range batches too", async () => {
+    // GIVEN a panel x path on the same topic as the series
+    const builder = new CustomDatasetsBuilder();
+    builder.setXPath(unwrap(parseMessagePath("/pose.x")));
+    builder.setSeries(buildSeriesItems([{ value: "/pose.y" }]));
+
+    // WHEN the full range arrives
+    builder.handleMessageRange(poseMessages(0, 3), { isReset: true });
+    const result = await builder.getViewportDatasets({
+      size: { width: 1_000, height: 1_000 },
+      bounds: {},
+    });
+
+    // THEN the series pairs with the x values from the same batch
+    expect(result.datasetsByConfigIndex[0]?.data.map(({ x, y }) => [x, y])).toEqual([
+      [0, 0],
+      [1, 10],
+      [2, 20],
+    ]);
+    expect(result.pathsWithMismatchedDataLengths.size).toBe(0);
+  });
+
   it("should render a gap by mapping a null value to NaN", async () => {
     const builder = new CustomDatasetsBuilder();
 
@@ -727,5 +781,49 @@ describe("CustomDatasetsBuilder", () => {
         }),
       ],
     });
+  });
+});
+
+describe("readXYItems", () => {
+  const receiveTime = { sec: 1, nsec: 0 };
+  const event = (message: unknown, topic = "/pose"): MessageEvent => ({
+    topic,
+    receiveTime,
+    message,
+    schemaName: "",
+    sizeInBytes: 0,
+  });
+
+  it("pairs x and y values from the same message by index", () => {
+    // GIVEN a message with x and y arrays
+    const events = [event({ xs: [1, 2, 3], ys: [10, 20] })];
+
+    // WHEN reading y against x
+    const items = readXYItems(
+      events,
+      unwrap(parseMessagePath("/pose.ys[:]")),
+      unwrap(parseMessagePath("/pose.xs[:]")),
+    );
+
+    // THEN each y gets the x at its index, and the extra x is dropped
+    expect(items.map(({ x, value }) => [x, value])).toEqual([
+      [1, 10],
+      [2, 20],
+    ]);
+  });
+
+  it("reads nothing when x is on another topic", () => {
+    // GIVEN x and y paths on different topics
+    const events = [event({ x: 1, y: 2 })];
+
+    // WHEN reading y against x
+    const items = readXYItems(
+      events,
+      unwrap(parseMessagePath("/pose.y")),
+      unwrap(parseMessagePath("/other.x")),
+    );
+
+    // THEN there is nothing to pair
+    expect(items).toEqual([]);
   });
 });

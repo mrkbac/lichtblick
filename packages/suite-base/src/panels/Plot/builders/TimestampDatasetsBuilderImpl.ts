@@ -71,7 +71,7 @@ export type UpdateDataAction =
   | UpdateSeriesFullAction;
 
 const compareDatum = (a: Datum, b: Datum) => a.x - b.x;
-type IndexedDatum = Datum & { index: number };
+export type IndexedDatum = Datum & { index: number };
 
 function getDerivativeY(
   item: IndexedDatum,
@@ -88,6 +88,59 @@ function getDerivativeY(
     return Number.NaN;
   }
   return (item.y - prevY) / (item.x - prevX);
+}
+
+/** Replace y with the derivative over the previous sample, in place. */
+function applyDerivative(allData: IndexedDatum[]): void {
+  let prevX: number | undefined;
+  let prevY: number | undefined;
+  for (let i = 0; i < allData.length; ++i) {
+    const item = allData[i]!;
+    if (i > 0) {
+      const newY = getDerivativeY(item, prevX, prevY);
+      allData[i] = {
+        ...item,
+        y: newY,
+        value: Number.isNaN(newY) ? null : newY,
+      };
+    }
+
+    if (Number.isNaN(item.x) || Number.isNaN(item.y)) {
+      prevX = undefined;
+      prevY = undefined;
+    } else {
+      prevX = item.x;
+      prevY = item.y;
+    }
+  }
+}
+
+/**
+ * Trailing moving average over `windowSize` samples, in place. A NaN sample (line break) restarts the
+ * window. Tooltips and CSV show the smoothed value, like they do for derivatives.
+ */
+export function applyMovingAverage(allData: IndexedDatum[], windowSize: number): void {
+  let sum = 0;
+  let count = 0;
+  let windowStart = 0;
+  const raw = allData.map((item) => item.y);
+  for (let i = 0; i < allData.length; ++i) {
+    const y = raw[i]!;
+    if (Number.isNaN(y)) {
+      sum = 0;
+      count = 0;
+      windowStart = i + 1;
+      continue;
+    }
+    sum += y;
+    count += 1;
+    if (count > windowSize) {
+      sum -= raw[windowStart]!;
+      windowStart += 1;
+      count -= 1;
+    }
+    allData[i] = { ...allData[i]!, y: sum / count, value: sum / count };
+  }
 }
 
 export class TimestampDatasetsBuilderImpl {
@@ -247,6 +300,7 @@ export class TimestampDatasetsBuilderImpl {
 
       datasets.push({
         label: series.config.messagePath,
+        configIndex: series.config.configIndex,
         data: this.#getData(series),
       });
     }
@@ -258,32 +312,13 @@ export class TimestampDatasetsBuilderImpl {
     const allData: IndexedDatum[] = series.full.slice();
     allData.push(...series.current);
 
-    if (series.config.parsed.modifier !== "derivative") {
-      return allData;
+    if (series.config.parsed.modifier === "derivative") {
+      applyDerivative(allData);
     }
-
-    let prevX: number | undefined;
-    let prevY: number | undefined;
-    for (let i = 0; i < allData.length; ++i) {
-      const item = allData[i]!;
-      if (i > 0) {
-        const newY = getDerivativeY(item, prevX, prevY);
-        allData[i] = {
-          ...item,
-          y: newY,
-          value: Number.isNaN(newY) ? null : newY,
-        };
-      }
-
-      if (Number.isNaN(item.x) || Number.isNaN(item.y)) {
-        prevX = undefined;
-        prevY = undefined;
-      } else {
-        prevX = item.x;
-        prevY = item.y;
-      }
+    const smoothing = Math.round(series.config.smoothing ?? 0);
+    if (smoothing > 1) {
+      applyMovingAverage(allData, smoothing);
     }
-
     return allData;
   }
 

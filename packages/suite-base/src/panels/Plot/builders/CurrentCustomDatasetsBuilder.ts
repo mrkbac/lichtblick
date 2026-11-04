@@ -154,6 +154,7 @@ export class CurrentCustomDatasetsBuilder implements IDatasetsBuilder {
 
       datasets.push({
         label: series.messagePath,
+        configIndex: series.configIndex,
         data: series.dataset.data,
       });
     }

@@ -19,6 +19,7 @@ import {
   ElementAtPixelArgs,
   UseHoverHandlersHook as UsePlotInteractionHandlers,
   UsePlotInteractionHandlersProps,
+  ZoomMode,
 } from "@lichtblick/suite-base/panels/Plot/types";
 import { downloadCSV } from "@lichtblick/suite-base/panels/Plot/utils/csv";
 import { PANEL_TITLE_CONFIG_KEY } from "@lichtblick/suite-base/util/layout";
@@ -47,10 +48,13 @@ const usePlotInteractionHandlers = ({
 
   const buildTooltip = useMemo(() => {
     return debouncePromise(async (args: ElementAtPixelArgs) => {
-      const elements = await renderer?.getElementsAtPixel({
-        x: args.canvasX,
-        y: args.canvasY,
-      });
+      const pixel = { x: args.canvasX, y: args.canvasY };
+      // Time plots show every series' value at the hovered time, including sparse series whose last
+      // sample is earlier. Other plots show the points under the cursor.
+      const elements =
+        xAxisMode === "timestamp"
+          ? await renderer?.getLatestElementsAtPixel(pixel)
+          : await renderer?.getElementsAtPixel(pixel);
 
       if (!isMounted()) {
         return;
@@ -72,6 +76,7 @@ const usePlotInteractionHandlers = ({
         tooltipItems.push({
           configIndex: element.configIndex,
           value: tooltipValue,
+          ageSec: element.ageSec,
         });
       }
 
@@ -81,7 +86,7 @@ const usePlotInteractionHandlers = ({
         data: tooltipItems,
       });
     });
-  }, [renderer, isMounted, setActiveTooltip]);
+  }, [renderer, isMounted, setActiveTooltip, xAxisMode]);
 
   // Extract the bounding client rect from currentTarget before calling the debounced function
   // because react re-uses the SyntheticEvent objects.
@@ -128,8 +133,10 @@ const usePlotInteractionHandlers = ({
       const boundingRect = event.currentTarget.getBoundingClientRect();
       coordinator.addInteractionEvent({
         type: "wheel",
+        zoomMode: zoomModeForModifiers(event),
         cancelable: false,
-        deltaY: event.deltaY,
+        // Shift+wheel scrolls horizontally on some platforms, so the delta can arrive as deltaX.
+        deltaY: event.deltaY !== 0 ? event.deltaY : event.deltaX,
         deltaX: event.deltaX,
         clientX: event.clientX,
         clientY: event.clientY,
@@ -188,6 +195,8 @@ const usePlotInteractionHandlers = ({
     setFocusedPath(["paths", String(index)]);
   }, []);
 
+  const isHovered = useCallback(() => mousePresentRef.current, []);
+
   const { keyDownHandlers, keyUpHandlers } = useMemo(() => {
     return {
       keyDownHandlers: {
@@ -197,17 +206,25 @@ const usePlotInteractionHandlers = ({
         b: () => {
           coordinator?.setZoomMode("xy");
         },
+        // Reset the hovered plot. Other keys and plots keep the event.
+        r: () => {
+          if (!mousePresentRef.current) {
+            return false;
+          }
+          onResetView();
+          return true;
+        },
       },
       keyUpHandlers: {
         v: () => {
-          coordinator?.setZoomMode("x");
+          coordinator?.resetZoomMode();
         },
         b: () => {
-          coordinator?.setZoomMode("x");
+          coordinator?.resetZoomMode();
         },
       },
     };
-  }, [coordinator]);
+  }, [coordinator, onResetView]);
 
   const onDownloadCsvClick = useCallback(() => {
     void (async () => {
@@ -246,7 +263,25 @@ const usePlotInteractionHandlers = ({
     keyDownHandlers,
     keyUpHandlers,
     getPanelContextMenuItems,
+    isHovered,
   };
 };
+
+/** Shift zooms y, Alt/Option zooms x, both zoom both; no modifier keeps the plot's mode. */
+export function zoomModeForModifiers(event: {
+  shiftKey: boolean;
+  altKey: boolean;
+}): ZoomMode | undefined {
+  if (event.shiftKey && event.altKey) {
+    return "xy";
+  }
+  if (event.shiftKey) {
+    return "y";
+  }
+  if (event.altKey) {
+    return "x";
+  }
+  return undefined;
+}
 
 export default usePlotInteractionHandlers;

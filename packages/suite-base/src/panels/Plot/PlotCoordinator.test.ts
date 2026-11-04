@@ -224,6 +224,78 @@ describe("PlotCoordinator", () => {
         );
       });
 
+      it("should keep the playhead in the middle of the window when centered", async () => {
+        // GIVEN a timestamp plot with a centered 4 s window
+        plotCoordinator.handleConfig(
+          PlotBuilder.config({
+            xAxisVal: "timestamp",
+            timeWindow: "sliding",
+            followingViewWidth: 4,
+            playheadPosition: "center",
+            paths: [],
+          }),
+          "light",
+          {},
+        );
+        const update = jest.spyOn(renderer, "update");
+
+        // WHEN playback reaches 5 s
+        plotCoordinator.handlePlayerState(at(5));
+        await settle();
+
+        // THEN the window runs from 3 s to 7 s
+        expect(update).toHaveBeenLastCalledWith(
+          expect.objectContaining({ xBounds: { min: 3, max: 7 } }),
+        );
+      });
+
+      it("should use a 10 s window for a sliding time window without a size", async () => {
+        // GIVEN a sliding time window without a size
+        plotCoordinator.handleConfig(
+          {
+            ...PlotBuilder.config({ xAxisVal: "timestamp", timeWindow: "sliding", paths: [] }),
+            followingViewWidth: undefined,
+          },
+          "light",
+          {},
+        );
+        const update = jest.spyOn(renderer, "update");
+
+        // WHEN playback reaches 12 s
+        plotCoordinator.handlePlayerState(at(12));
+        await settle();
+
+        // THEN the window shows the last 10 s
+        expect(update).toHaveBeenLastCalledWith(
+          expect.objectContaining({ xBounds: { min: 2, max: 12 } }),
+        );
+      });
+
+      it("should ignore x min/max outside of a fixed time window", async () => {
+        // GIVEN an automatic time window on a layout that still has x bounds
+        plotCoordinator.handleConfig(
+          PlotBuilder.config({
+            xAxisVal: "timestamp",
+            timeWindow: "automatic",
+            minXValue: 100,
+            maxXValue: 200,
+            paths: [],
+          }),
+          "light",
+          {},
+        );
+        const update = jest.spyOn(renderer, "update");
+
+        // WHEN the plot renders
+        plotCoordinator.handlePlayerState(at(5));
+        await settle();
+
+        // THEN the x-axis spans the dataset range (0 s to 15 s), not the stored bounds
+        expect(update).toHaveBeenLastCalledWith(
+          expect.objectContaining({ xBounds: { min: 0, max: 15 } }),
+        );
+      });
+
       it("should not render again when the playback time has not changed", async () => {
         // GIVEN a timestamp plot following the last 4 s, rendered at 5 s
         plotCoordinator.handleConfig(
@@ -699,7 +771,8 @@ describe("PlotCoordinator", () => {
     });
 
     it("should update configBounds correctly", () => {
-      const config = PlotBuilder.config();
+      // x min/max apply to every non-time x-axis (time plots only use them in a fixed time window)
+      const config = PlotBuilder.config({ xAxisVal: "index" });
 
       plotCoordinator.handleConfig(config, "light", {});
 

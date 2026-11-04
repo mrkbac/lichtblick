@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { isReferenceLinePlotPathType } from "./config";
+import { getTimeWindow, isReferenceLinePlotPathType, PlotConfig } from "./config";
 
 describe("isReferenceLinePlotPathType", () => {
   it.each(["0", "1.2", "1e6"])("returns true for '%s'", (value) => {
@@ -25,5 +25,27 @@ describe("isReferenceLinePlotPathType", () => {
     expect(
       isReferenceLinePlotPathType({ value, enabled: true, timestampMethod: "receiveTime" }),
     ).toBe(false);
+  });
+});
+
+describe("getTimeWindow", () => {
+  const base = { paths: [] } as unknown as PlotConfig;
+
+  it("uses the configured time window", () => {
+    expect(getTimeWindow({ ...base, timeWindow: "automatic", followingViewWidth: 5 })).toBe(
+      "automatic",
+    );
+  });
+
+  it("derives sliding from a follow width on older layouts", () => {
+    expect(getTimeWindow({ ...base, followingViewWidth: 5, minXValue: 1 })).toBe("sliding");
+  });
+
+  it("derives fixed from x bounds on older layouts", () => {
+    expect(getTimeWindow({ ...base, maxXValue: 5 })).toBe("fixed");
+  });
+
+  it("is automatic without any range settings", () => {
+    expect(getTimeWindow(base)).toBe("automatic");
   });
 });

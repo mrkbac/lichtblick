@@ -105,13 +105,16 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
       const { actions: seriesActions, datasetsChanged: seriesChanged } = buildCurrentSeriesActions(
         this.#series,
         { didSeek, hasRangeSource: this.#hasRangeSource },
-        (config) => {
-          const mathFn = config.parsed.modifier ? mathFunctions[config.parsed.modifier] : undefined;
-          return readMessagePathItems(msgEvents, config.parsed, mathFn);
-        },
+        (config) => readSeriesItems(msgEvents, config),
       );
       this.#pendingDispatch.push(...(seriesActions as UpdateDataAction[]));
       datasetsChanged ||= seriesChanged;
+    }
+
+    // Series with their own x path have x values outside the panel's x path bounds, so let the
+    // chart fit the x-axis to all datasets.
+    if (this.#series.some((series) => series.config.xParsed != undefined)) {
+      return { range: undefined, datasetsChanged };
     }
 
     if (!this.#xCurrentBounds) {
@@ -158,13 +161,12 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
           this.#pendingDispatch.push({ type: "append-full-x", items: pathItems });
         }
       }
-      return;
+      // Series on the x-axis topic read the same batch below.
     }
 
-    const actions = buildFullSeriesActions(this.#series, topic, options, (config) => {
-      const mathFn = config.parsed.modifier ? mathFunctions[config.parsed.modifier] : undefined;
-      return readMessagePathItems(messages, config.parsed, mathFn);
-    });
+    const actions = buildFullSeriesActions(this.#series, topic, options, (config) =>
+      readSeriesItems(messages, config),
+    );
     this.#pendingDispatch.push(...(actions as UpdateDataAction[]));
   }
 
@@ -212,12 +214,63 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
   }
 }
 
+function getMathFunction(path: Immutable<MessagePath>): MathFunction | undefined {
+  return path.modifier ? mathFunctions[path.modifier] : undefined;
+}
+
+/** Y values of a series; a series with its own x path also gets its x values (see readXYItems). */
+function readSeriesItems(
+  events: Immutable<MessageEvent[]>,
+  config: Immutable<SeriesItem>,
+): ValueItem[] {
+  return config.xParsed
+    ? readXYItems(events, config.parsed, config.xParsed)
+    : readMessagePathItems(events, config.parsed, getMathFunction(config.parsed));
+}
+
+/**
+ * Pairs x and y values read from the same message, by their index in that message. The x path must
+ * be on the same topic as the y path; values from other topics have no message to pair with.
+ */
+export function readXYItems(
+  events: Immutable<MessageEvent[]>,
+  yPath: Immutable<MessagePath>,
+  xPath: Immutable<MessagePath>,
+): ValueItem[] {
+  const out: ValueItem[] = [];
+  if (xPath.topicName !== yPath.topicName) {
+    return out;
+  }
+  const yMathFn = getMathFunction(yPath);
+  const xMathFn = getMathFunction(xPath);
+  for (const event of events) {
+    if (event.topic !== yPath.topicName) {
+      continue;
+    }
+    const yItems = simpleGetMessagePathDataItems(event, yPath);
+    const xItems = simpleGetMessagePathDataItems(event, xPath);
+    for (let i = 0; i < yItems.length && i < xItems.length; ++i) {
+      const yDatum = resolveChartDatum(yItems[i], yMathFn);
+      const xDatum = resolveChartDatum(xItems[i], xMathFn);
+      if (!yDatum || !xDatum) {
+        continue;
+      }
+      out.push({
+        x: xDatum.y,
+        value: yDatum.y,
+        originalValue: yDatum.value,
+        receiveTime: event.receiveTime,
+      });
+    }
+  }
+  return out;
+}
+
 function parseXPathItems(
   messages: Immutable<MessageEvent[]>,
   xParsedPath: Immutable<MessagePath>,
 ): ValueItem[] {
-  const mathFn = xParsedPath.modifier ? mathFunctions[xParsedPath.modifier] : undefined;
-  return readMessagePathItems(messages, xParsedPath, mathFn);
+  return readMessagePathItems(messages, xParsedPath, getMathFunction(xParsedPath));
 }
 
 function readMessagePathItems(

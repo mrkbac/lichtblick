@@ -67,6 +67,24 @@ describe("getChartOptions", () => {
             precision: 3,
           },
         },
+        y2: {
+          type: "linear",
+          display: false,
+          position: "right",
+          grid: {
+            color: mockGridColor,
+            display: false,
+          },
+          ticks: {
+            font: {
+              family: fontMonospace,
+              size: 10,
+            },
+            color: mockTickColor,
+            padding: 0,
+            precision: 3,
+          },
+        },
       },
       plugins: {
         decimation: {

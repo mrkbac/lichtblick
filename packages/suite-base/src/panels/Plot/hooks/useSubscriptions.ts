@@ -56,6 +56,22 @@ const useSubscriptions = (config: PlotConfig, subscriberId: string): void => {
       );
     });
 
+    // A series' own x path is read from the same messages, so its fields must be subscribed too.
+    if (xAxisVal === "custom") {
+      for (const item of paths) {
+        const parsedXPath = item.xValue ? parseMessagePath(item.xValue) : undefined;
+        const xSub =
+          parsedXPath &&
+          pathToSubscribePayload(
+            fillInGlobalVariablesInPath(parsedXPath, globalVariables),
+            preloadType,
+          );
+        if (xSub) {
+          subscriptions.push(xSub);
+        }
+      }
+    }
+
     if ((xAxisVal === "custom" || xAxisVal === "currentCustom") && config.xAxisPath?.value) {
       const parsedPath = parseMessagePath(config.xAxisPath.value);
       if (parsedPath) {

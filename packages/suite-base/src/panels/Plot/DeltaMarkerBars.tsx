@@ -116,6 +116,7 @@ export const DeltaMarkerBars = React.memo(function DeltaMarkerBars({
   markerBLabel,
   onRemoveMarkerA,
   onRemoveMarkerB,
+  children,
 }: DeltaMarkerBarsProps): React.JSX.Element {
   const { classes } = useDeltaMarkerBarsStyles();
 
@@ -247,6 +248,7 @@ export const DeltaMarkerBars = React.memo(function DeltaMarkerBars({
             onRemoveMarkerA={onRemoveMarkerA}
             onRemoveMarkerB={onRemoveMarkerB}
           />
+          {children}
         </div>
       )}
     </>

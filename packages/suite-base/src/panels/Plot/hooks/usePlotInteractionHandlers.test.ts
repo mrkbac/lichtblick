@@ -52,6 +52,7 @@ describe("usePlotInteractionHandlers", () => {
     getCsvData: jest.fn(),
     getXValueAtPixel: jest.fn(() => BasicBuilder.number()),
     resetBounds: jest.fn(),
+    resetZoomMode: jest.fn(),
     setZoomMode: jest.fn(),
   } as unknown as PlotCoordinator;
   const mockSetHoverValue = jest.fn();
@@ -86,6 +87,7 @@ describe("usePlotInteractionHandlers", () => {
       draggingRef: { current: false, ...draggingRef },
       renderer: {
         getElementsAtPixel: jest.fn(),
+        getLatestElementsAtPixel: jest.fn(),
         // eslint-disable-next-line @typescript-eslint/no-misused-spread
         ...renderer,
       },
@@ -164,12 +166,43 @@ describe("usePlotInteractionHandlers", () => {
     it("clears active tooltip if no tooltip items are found", async () => {
       (debouncePromise as jest.Mock).mockImplementationOnce((fn) => fn);
       const { result, props } = setup();
-      (props.renderer?.getElementsAtPixel as jest.Mock).mockReturnValueOnce([]);
+      (props.renderer?.getLatestElementsAtPixel as jest.Mock).mockReturnValueOnce([]);
 
       await triggerMouseMove(result);
 
       expect(props.setActiveTooltip).toHaveBeenCalledWith(undefined);
       expect(props.setActiveTooltip).toHaveBeenCalledTimes(1);
+    });
+
+    it("passes the age of a sparse series' last sample to the tooltip", async () => {
+      const elements = [
+        { ...PlotBuilder.hoverElement({ data: PlotBuilder.datum({ value: 3 }) }), ageSec: 0.4 },
+      ];
+      (debouncePromise as jest.Mock).mockImplementationOnce((fn) => fn);
+      const { result, props } = setup();
+      (props.renderer?.getLatestElementsAtPixel as jest.Mock).mockReturnValueOnce(elements);
+
+      await triggerMouseMove(result);
+
+      expect(props.setActiveTooltip).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: [{ configIndex: elements[0]!.configIndex, value: 3, ageSec: 0.4 }],
+        }),
+      );
+    });
+
+    it("uses the points under the cursor when the x-axis is not time", async () => {
+      const elements = [PlotBuilder.hoverElement({ data: PlotBuilder.datum({ value: 5 }) })];
+      (debouncePromise as jest.Mock).mockImplementationOnce((fn) => fn);
+      const { result, props } = setup({ config: { ...DEFAULT_PLOT_CONFIG, xAxisVal: "index" } });
+      (props.renderer?.getElementsAtPixel as jest.Mock).mockReturnValueOnce(elements);
+
+      await triggerMouseMove(result);
+
+      expect(props.renderer?.getLatestElementsAtPixel).not.toHaveBeenCalled();
+      expect(props.setActiveTooltip).toHaveBeenCalledWith(
+        expect.objectContaining({ data: [{ configIndex: elements[0]!.configIndex, value: 5 }] }),
+      );
     });
 
     it("set active tooltip if tooltip items are found with correct data", async () => {
@@ -178,7 +211,7 @@ describe("usePlotInteractionHandlers", () => {
       ];
       (debouncePromise as jest.Mock).mockImplementationOnce((fn) => fn);
       const { result, props } = setup();
-      (props.renderer?.getElementsAtPixel as jest.Mock).mockReturnValueOnce(elements);
+      (props.renderer?.getLatestElementsAtPixel as jest.Mock).mockReturnValueOnce(elements);
 
       const mouseMoved = await triggerMouseMove(result);
 
@@ -202,7 +235,7 @@ describe("usePlotInteractionHandlers", () => {
       ];
       (debouncePromise as jest.Mock).mockImplementationOnce((fn) => fn);
       const { result, props } = setup();
-      (props.renderer?.getElementsAtPixel as jest.Mock).mockReturnValueOnce(elements);
+      (props.renderer?.getLatestElementsAtPixel as jest.Mock).mockReturnValueOnce(elements);
 
       const mouseMoved = await triggerMouseMove(result);
 
@@ -221,7 +254,7 @@ describe("usePlotInteractionHandlers", () => {
       const elements = PlotBuilder.hoverElements(1);
       (debouncePromise as jest.Mock).mockImplementationOnce((fn) => fn);
       const { result, props } = setup();
-      (props.renderer?.getElementsAtPixel as jest.Mock).mockReturnValueOnce(elements);
+      (props.renderer?.getLatestElementsAtPixel as jest.Mock).mockReturnValueOnce(elements);
 
       const mouseMoved = await triggerMouseMove(result);
 
@@ -242,7 +275,7 @@ describe("usePlotInteractionHandlers", () => {
       ];
       (debouncePromise as jest.Mock).mockImplementationOnce((fn) => fn);
       const { result, props } = setup();
-      (props.renderer?.getElementsAtPixel as jest.Mock).mockReturnValueOnce(elements);
+      (props.renderer?.getLatestElementsAtPixel as jest.Mock).mockReturnValueOnce(elements);
 
       const mouseMoved = await triggerMouseMove(result);
 
@@ -334,7 +367,7 @@ describe("usePlotInteractionHandlers", () => {
         ];
         (debouncePromise as jest.Mock).mockImplementationOnce((fn) => fn);
         const { result, props } = setup({ coordinator: mockCoordinator });
-        (props.renderer?.getElementsAtPixel as jest.Mock).mockReturnValueOnce(elements);
+        (props.renderer?.getLatestElementsAtPixel as jest.Mock).mockReturnValueOnce(elements);
 
         await triggerMouseMove(result);
 
@@ -447,24 +480,24 @@ describe("usePlotInteractionHandlers", () => {
       expect(props.coordinator?.setZoomMode).toHaveBeenCalledWith("xy");
     });
 
-    it("sets zoom mode to 'x' on key up 'v'", () => {
+    it("restores the plot's zoom mode on key up 'v'", () => {
       const { result, props } = setup({ coordinator: mockCoordinator });
 
       act(() => {
         result.current.keyUpHandlers.v();
       });
 
-      expect(props.coordinator?.setZoomMode).toHaveBeenCalledWith("x");
+      expect(props.coordinator?.resetZoomMode).toHaveBeenCalled();
     });
 
-    it("sets zoom mode to 'x' on key up 'b'", () => {
+    it("restores the plot's zoom mode on key up 'b'", () => {
       const { result, props } = setup({ coordinator: mockCoordinator });
 
       act(() => {
         result.current.keyUpHandlers.b();
       });
 
-      expect(props.coordinator?.setZoomMode).toHaveBeenCalledWith("x");
+      expect(props.coordinator?.resetZoomMode).toHaveBeenCalled();
     });
   });
 

@@ -23,6 +23,8 @@ import { Dataset } from "../types";
 import { Datum, OriginalValue } from "../utils/datum";
 
 export type ValueItem = {
+  /** Set when the series has its own x path; otherwise x comes from the panel's x-axis path. */
+  x?: number;
   value: number;
   originalValue: OriginalValue;
   receiveTime: Time;
@@ -181,8 +183,9 @@ export class CustomDatasetsBuilderImpl {
       }
 
       if (
-        this.#xValues.full.length !== series.full.length ||
-        this.#xValues.current.length !== series.current.length
+        !series.config.xParsed &&
+        (this.#xValues.full.length !== series.full.length ||
+          this.#xValues.current.length !== series.current.length)
       ) {
         pathsWithMismatchedDataLengths.add(series.config.messagePath);
       }
@@ -200,6 +203,7 @@ export class CustomDatasetsBuilderImpl {
 
       datasets.push({
         label: series.config.messagePath,
+        configIndex: series.config.configIndex,
         data: this.#pairFullAndCurrentData(series),
       });
     }
@@ -211,6 +215,19 @@ export class CustomDatasetsBuilderImpl {
   // a single, index-ordered array of datums. Shared by getViewportDatasets and getCsvData.
   #pairFullAndCurrentData(series: Series): FullDatum[] {
     const allData: FullDatum[] = [];
+
+    if (series.config.xParsed) {
+      for (const item of [...series.full, ...series.current]) {
+        allData.push({
+          x: item.x ?? NaN,
+          y: item.value,
+          index: allData.length,
+          receiveTime: item.receiveTime,
+          value: item.originalValue,
+        });
+      }
+      return allData;
+    }
 
     for (let idx = 0; idx < series.full.length && idx < this.#xValues.full.length; ++idx) {
       const xValue = this.#xValues.full[idx];

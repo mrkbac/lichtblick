@@ -56,6 +56,25 @@ export const getChartOptions = ({
         precision: 3,
       },
     },
+    // Secondary y-axis, shown once a series is assigned to it.
+    y2: {
+      type: "linear",
+      display: false,
+      position: "right",
+      grid: {
+        color: gridColor,
+        display: false,
+      },
+      ticks: {
+        font: {
+          family: fontMonospace,
+          size: 10,
+        },
+        color: tickColor,
+        padding: 0,
+        precision: 3,
+      },
+    },
   },
   plugins: {
     decimation: {

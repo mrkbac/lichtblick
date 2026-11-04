@@ -158,6 +158,33 @@ describe("useSubscriptions", () => {
       expect(setSubscriptions).toHaveBeenCalledWith(subscriberId, expect.any(Array));
     });
 
+    it("should subscribe to a series' own x path in custom mode", () => {
+      // GIVEN a custom x-axis plot whose series has its own x path
+      (isReferenceLinePlotPathType as jest.Mock).mockImplementation(() => false);
+      (parseMessagePath as jest.Mock).mockImplementation((path: string) => ({
+        path,
+      }));
+      (fillInGlobalVariablesInPath as jest.Mock).mockImplementation((parsed: unknown) => parsed);
+      (pathToSubscribePayload as jest.Mock).mockImplementation((parsed: { path: string }) => ({
+        topic: parsed.path,
+      }));
+
+      // WHEN subscribing
+      const { subscriberId } = setup({
+        config: {
+          paths: [PlotBuilder.path({ value: "/pose.y", xValue: "/pose.x" })],
+          xAxisPath: undefined,
+          xAxisVal: "custom",
+        },
+      });
+
+      // THEN both the y and the x path are subscribed
+      expect(setSubscriptions).toHaveBeenCalledWith(subscriberId, [
+        { topic: "/pose.y" },
+        { topic: "/pose.x" },
+      ]);
+    });
+
     it("should set subscriptions when xAxisVal is currentCustom", () => {
       const parsedPath = BasicBuilder.string();
       const filledInGlobalVarsPath = BasicBuilder.string();

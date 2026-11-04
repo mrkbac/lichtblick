@@ -119,6 +119,8 @@ describe("buildSettingsTree", () => {
       minXValue: 100,
       minYValue: 0,
       paths: [],
+      xAxisVal: "timestamp",
+      timeWindow: "fixed",
     });
 
     const tree = buildSettingsTree(config, t);
