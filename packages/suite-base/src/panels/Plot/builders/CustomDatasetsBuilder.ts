@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as Comlink from "@foxglove/comlink";
+import * as _ from "lodash-es";
 
 import { ComlinkWrap } from "@lichtblick/den/worker";
 import { MessagePath } from "@lichtblick/message-path";
@@ -168,7 +169,7 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
   }
 
   public setXPath(path: Immutable<MessagePath> | undefined): void {
-    if (JSON.stringify(path) === JSON.stringify(this.#xParsedPath)) {
+    if (_.isEqual(path, this.#xParsedPath)) {
       return;
     }
 
