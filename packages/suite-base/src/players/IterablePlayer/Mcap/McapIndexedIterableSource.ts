@@ -25,6 +25,12 @@ import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Logger.getLogger(__filename);
 
+// Skim reads the last 50ms of each window: enough for every fast topic (and every publisher on
+// a shared topic) to show up, while skipping the rest of the window's chunks.
+const SKIM_TAIL_NS = 50_000_000n;
+// Below this many chunks per window, skimming would re-decompress the same chunks; read linearly.
+const SKIM_MIN_CHUNKS_PER_WINDOW = 4n;
+
 export class McapIndexedIterableSource implements ISerializedIterableSource {
   #reader: McapIndexedReader;
   #channelInfoById = new Map<
@@ -37,6 +43,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   >();
   #start?: Time;
   #end?: Time;
+  #avgChunkDurationNs = 0n;
 
   public readonly sourceType = "serialized";
 
@@ -125,6 +132,10 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       }
     }
 
+    if (startTime != undefined && endTime != undefined) {
+      this.#avgChunkDurationNs =
+        (endTime - startTime) / BigInt(Math.max(1, this.#reader.chunkIndexes.length));
+    }
     this.#start = fromNanoSec(startTime ?? 0n);
     this.#end = fromNanoSec(endTime ?? startTime ?? 0n);
 
@@ -201,48 +212,144 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
 
     const topicNames = Array.from(topics.keys());
 
+    const skimNs = args.skimInterval ? toNanoSec(args.skimInterval) : 0n;
+    if (skimNs > SKIM_MIN_CHUNKS_PER_WINDOW * this.#avgChunkDurationNs) {
+      yield* this.#skimMessages(toNanoSec(start), toNanoSec(end), skimNs, topicNames);
+      return;
+    }
+
     for await (const message of this.#reader.readMessages({
       startingAt: toNanoSec(start),
       endingAt: toNanoSec(end),
       topics: topicNames,
       validateCrcs: false,
     })) {
-      const channelInfo = this.#channelInfoById.get(message.channelId);
-      if (!channelInfo) {
-        yield {
-          type: "alert",
-          connectionId: message.channelId,
-          alert: {
-            message: `Received message on channel ${message.channelId} without prior channel info`,
-            severity: "error",
-          },
-        };
+      yield this.#toResult(message);
+    }
+  }
+
+  /**
+   * Lossy fast-forward: per window only read the chunks at its tail, plus a reverse lookup for
+   * topics with no message in the tail, so most chunks are never downloaded or decompressed.
+   */
+  async *#skimMessages(
+    startNs: bigint,
+    endNs: bigint,
+    skimNs: bigint,
+    topicNames: string[],
+  ): AsyncIterableIterator<Readonly<IteratorResult<Uint8Array>>> {
+    for (let windowStart = startNs; windowStart <= endNs; windowStart += skimNs) {
+      const windowEnd = windowStart + skimNs - 1n < endNs ? windowStart + skimNs - 1n : endNs;
+      const tailStart =
+        windowEnd - SKIM_TAIL_NS > windowStart ? windowEnd - SKIM_TAIL_NS : windowStart;
+
+      const messages: McapTypes.Message[] = [];
+      const seen = new Set<string>();
+      for await (const message of this.#reader.readMessages({
+        startingAt: tailStart,
+        endingAt: windowEnd,
+        topics: topicNames,
+        validateCrcs: false,
+      })) {
+        messages.push(message);
+        const topic = this.#channelInfoById.get(message.channelId)?.channel.topic;
+        if (topic != undefined) {
+          seen.add(topic);
+        }
+      }
+
+      const missing = new Set(topicNames.filter((topic) => !seen.has(topic)));
+      if (missing.size > 0 && tailStart > windowStart) {
+        messages.push(...(await this.#latestBefore(missing, windowStart, tailStart - 1n)));
+      }
+
+      messages.sort((a, b) => (a.logTime < b.logTime ? -1 : a.logTime > b.logTime ? 1 : 0));
+      for (const message of messages) {
+        yield this.#toResult(message);
+      }
+      yield { type: "stamp", stamp: fromNanoSec(windowEnd) };
+    }
+  }
+
+  /**
+   * Latest message per topic in [start, end]. The chunk index tells which chunk holds each topic's
+   * latest message, so only those chunks are decompressed (one reverse read per chunk), instead of
+   * scanning back through every chunk until the slowest topic shows up.
+   */
+  async #latestBefore(
+    topics: Set<string>,
+    start: bigint,
+    end: bigint,
+  ): Promise<McapTypes.Message[]> {
+    const latestChunkByTopic = new Map<string, McapTypes.ChunkIndex>();
+    for (const chunk of this.#reader.chunkIndexes) {
+      if (chunk.messageStartTime > end || chunk.messageEndTime < start) {
         continue;
       }
-      try {
-        yield {
-          type: "message-event",
-          msgEvent: {
-            topic: channelInfo.channel.topic,
-            receiveTime: fromNanoSec(message.logTime),
-            publishTime: fromNanoSec(message.publishTime),
-            message: message.data,
-            sizeInBytes: message.data.byteLength,
-            schemaName: channelInfo.schemaName ?? "",
-          },
-        };
-      } catch (error) {
-        yield {
-          type: "alert",
-          connectionId: message.channelId,
-          alert: {
-            message: `Error decoding message on ${channelInfo.channel.topic}`,
-            error: toError(error),
-            severity: "error",
-          },
-        };
+      for (const channelId of chunk.messageIndexOffsets.keys()) {
+        const topic = this.#channelInfoById.get(channelId)?.channel.topic;
+        if (topic == undefined || !topics.has(topic)) {
+          continue;
+        }
+        const prev = latestChunkByTopic.get(topic);
+        if (!prev || chunk.messageEndTime > prev.messageEndTime) {
+          latestChunkByTopic.set(topic, chunk);
+        }
       }
     }
+
+    const topicsByChunk = new Map<McapTypes.ChunkIndex, string[]>();
+    for (const [topic, chunk] of latestChunkByTopic) {
+      topicsByChunk.set(chunk, [...(topicsByChunk.get(chunk) ?? []), topic]);
+    }
+
+    const messages: McapTypes.Message[] = [];
+    for (const [chunk, chunkTopics] of topicsByChunk) {
+      const found = new Set<string>();
+      for await (const message of this.#reader.readMessages({
+        startingAt: chunk.messageStartTime > start ? chunk.messageStartTime : start,
+        endingAt: chunk.messageEndTime < end ? chunk.messageEndTime : end,
+        topics: chunkTopics,
+        reverse: true,
+        validateCrcs: false,
+      })) {
+        const topic = this.#channelInfoById.get(message.channelId)?.channel.topic;
+        if (topic == undefined || found.has(topic)) {
+          continue;
+        }
+        found.add(topic);
+        messages.push(message);
+        if (found.size === chunkTopics.length) {
+          break;
+        }
+      }
+    }
+    return messages;
+  }
+
+  #toResult(message: McapTypes.Message): Readonly<IteratorResult<Uint8Array>> {
+    const channelInfo = this.#channelInfoById.get(message.channelId);
+    if (!channelInfo) {
+      return {
+        type: "alert",
+        connectionId: message.channelId,
+        alert: {
+          message: `Received message on channel ${message.channelId} without prior channel info`,
+          severity: "error",
+        },
+      };
+    }
+    return {
+      type: "message-event",
+      msgEvent: {
+        topic: channelInfo.channel.topic,
+        receiveTime: fromNanoSec(message.logTime),
+        publishTime: fromNanoSec(message.publishTime),
+        message: message.data,
+        sizeInBytes: message.data.byteLength,
+        schemaName: channelInfo.schemaName ?? "",
+      },
+    };
   }
 
   public async getBackfillMessages(

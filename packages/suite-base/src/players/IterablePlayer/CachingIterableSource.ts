@@ -80,6 +80,8 @@ class CachingIterableSource<MessageType = unknown>
 
   // Stores which topics we have been caching. See notes at usage site for why we store this.
   #cachedTopics: TopicSelection = new Map();
+  // Skimmed blocks hold only some messages, so they're dropped when the skim interval changes
+  #cachedSkimInterval: MessageIteratorArgs["skimInterval"];
 
   // The producer loads results into the cache and the consumer reads from the cache.
   #cache: CacheBlock<MessageType>[] = [];
@@ -142,9 +144,13 @@ class CachingIterableSource<MessageType = unknown>
     // When the list of topics we want changes we purge the entire cache and start again.
     //
     // This is heavy-handed but avoids dealing with how to handle disjoint cached ranges across topics.
-    if (!_.isEqual(args.topics, this.#cachedTopics)) {
-      log.debug("topics changed - clearing cache, resetting range");
+    if (
+      !_.isEqual(args.topics, this.#cachedTopics) ||
+      !_.isEqual(args.skimInterval, this.#cachedSkimInterval)
+    ) {
+      log.debug("topics or skim interval changed - clearing cache, resetting range");
       this.#cachedTopics = args.topics;
+      this.#cachedSkimInterval = args.skimInterval;
       this.#cache.length = 0;
       this.#totalSizeBytes = 0;
       this.#recomputeLoadedRangeCache();
@@ -250,6 +256,7 @@ class CachingIterableSource<MessageType = unknown>
         start: sourceReadStart,
         end: sourceReadEnd,
         consumptionType: args.consumptionType,
+        skimInterval: this.#cachedSkimInterval,
       });
 
       // The cache is indexed on time, but iterator results that are problems might not have a time.
@@ -409,6 +416,11 @@ class CachingIterableSource<MessageType = unknown>
     const cacheBlockIndex = this.#cache.findIndex((item) => {
       return compare(item.start, args.time) <= 0 && compare(item.end, args.time) >= 0;
     });
+
+    if (this.#cachedSkimInterval) {
+      // Skimmed blocks may lack the latest message before args.time
+      return await this.#source.getBackfillMessages(args);
+    }
 
     const out: MessageEvent<MessageType>[] = [];
     const needsTopics = new Map(args.topics);
