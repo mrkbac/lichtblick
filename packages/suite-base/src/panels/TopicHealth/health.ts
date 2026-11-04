@@ -92,6 +92,19 @@ export function sampleLiveRates(
   return next;
 }
 
+/** Rate over the whole source for sources that only report message counts. */
+export function averageRate(
+  stat: TopicStats | undefined,
+  start: Time | undefined,
+  end: Time | undefined,
+): number | undefined {
+  if (!stat || stat.numMessages === 0 || !start || !end) {
+    return undefined;
+  }
+  const seconds = toSec(end) - toSec(start);
+  return seconds > 0 ? stat.numMessages / seconds : undefined;
+}
+
 /** Average rate over a recording, or undefined with too few messages. */
 export function recordingRate(stat: TopicStats | undefined): number | undefined {
   if (!stat?.firstMessageTime || !stat.lastMessageTime || stat.numMessages < 2) {

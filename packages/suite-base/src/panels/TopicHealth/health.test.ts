@@ -9,6 +9,7 @@ import { TopicStats } from "@lichtblick/suite-base/players/types";
 
 import {
   HISTORY_LENGTH,
+  averageRate,
   RateSample,
   recordingAge,
   recordingRate,
@@ -69,6 +70,10 @@ describe("recording helpers", () => {
     expect(recordingAge(stat, { sec: 15, nsec: 0 })).toBe(0);
     expect(recordingAge(stat, { sec: 23, nsec: 0 })).toBe(3);
     expect(recordingAge(stat, undefined)).toBeUndefined();
+    expect(averageRate({ numMessages: 40 }, { sec: 0, nsec: 0 }, { sec: 20, nsec: 0 })).toBe(2);
+    expect(
+      averageRate({ numMessages: 0 }, { sec: 0, nsec: 0 }, { sec: 20, nsec: 0 }),
+    ).toBeUndefined();
   });
 });
 

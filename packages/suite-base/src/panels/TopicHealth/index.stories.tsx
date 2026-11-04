@@ -69,3 +69,25 @@ export const Recording: StoryObj = {
     </PanelSetup>
   ),
 };
+
+/** Indexed MCAP sources report only message counts, without first/last times. */
+export const CountsOnly: StoryObj = {
+  render: () => (
+    <PanelSetup
+      fixture={{
+        topics: TOPICS,
+        capabilities: [PLAYER_CAPABILITIES.playbackControl],
+        activeData: {
+          startTime: at(0),
+          endTime: at(20),
+          currentTime: at(15),
+          topicStats: new Map(
+            [...STATS].map(([name, stat]) => [name, { numMessages: stat.numMessages }]),
+          ),
+        },
+      }}
+    >
+      <TopicHealthPanel overrideConfig={{ topics: { "/lidar/rear/points": { expectedHz: 10 } } }} />
+    </PanelSetup>
+  ),
+};

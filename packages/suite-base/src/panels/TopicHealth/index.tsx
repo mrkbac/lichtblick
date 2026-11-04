@@ -52,6 +52,7 @@ import {
   TopicHealthConfig,
   TopicHealthStatus,
   TopicSettings,
+  averageRate,
   recordingAge,
   recordingRate,
   sampleLiveRates,
@@ -374,12 +375,20 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
       const live = snapshot.live.get(topic.name);
       const liveDeepStats = snapshot.deep.get(topic.name);
       const inspection = isRecording ? recorded.get(topic.name) : liveDeepStats?.inspection;
-      const rateHz = isRecording ? recordingRate(stat) : live?.hz;
+      // Indexed MCAP only reports counts, so fall back to the scan, then to the source duration.
+      const scanned = inspection && {
+        numMessages: inspection.count,
+        firstMessageTime: inspection.first,
+        lastMessageTime: inspection.last,
+      };
+      const rateHz = isRecording
+        ? (recordingRate(stat) ?? recordingRate(scanned) ?? averageRate(stat, start, end))
+        : live?.hz;
       // Recordings learn the median rate once scanned, else the average (still catches early ends).
       const learnedHz = isRecording ? (inspection?.timing?.medianHz ?? rateHz) : live?.peakHz;
       const expectedHz = settings?.expectedHz ?? learnedHz;
       const ageSec = isRecording
-        ? recordingAge(stat, snapshot.currentTime)
+        ? (recordingAge(stat, snapshot.currentTime) ?? recordingAge(scanned, snapshot.currentTime))
         : live?.lastMessageMs != undefined
           ? (snapshot.nowMs - live.lastMessageMs) / 1000
           : undefined;
@@ -402,7 +411,7 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
       });
     }
     return result;
-  }, [config, isRecording, recorded, snapshot, topics]);
+  }, [config, end, isRecording, recorded, snapshot, start, topics]);
 
   const counts = useMemo(() => _.countBy([...rows.values()], (row) => row.status), [rows]);
 
@@ -585,7 +594,9 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
                         className={cx(classes.dot, classes[row.status])}
                         title={
                           row.status === "unmeasured"
-                            ? "Not measured: no panel subscribes to this topic. Enable detailed statistics to measure it."
+                            ? isRecording
+                              ? "Not measured: this source has no message counts for the topic. Enable detailed statistics to scan it."
+                              : "Not measured: no panel subscribes to this topic. Enable detailed statistics to measure it."
                             : STATUS_LABELS[row.status]
                         }
                       />

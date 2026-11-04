@@ -13,7 +13,7 @@ import { fireEvent, render, screen } from "@testing-library/react";
 
 import * as stories from "./index.stories";
 
-const { Recording } = composeStories(stories);
+const { Recording, CountsOnly } = composeStories(stories);
 
 describe("TopicHealth", () => {
   it("summarizes recording health and filters by status", async () => {
@@ -35,5 +35,13 @@ describe("TopicHealth", () => {
     });
     expect(screen.getByText("/lidar/front/points")).toBeInTheDocument();
     expect(screen.queryByText("/imu")).not.toBeInTheDocument();
+  });
+
+  it("measures sources that only report message counts", async () => {
+    render(<CountsOnly />);
+    // 121 messages over 20 s is about 6 Hz, below the configured 10 Hz.
+    expect(await screen.findByRole("button", { name: "1 Slow" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "7 OK" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Not measured/ })).not.toBeInTheDocument();
   });
 });
