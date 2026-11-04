@@ -47,13 +47,17 @@ import {
 /** A sample further than this from the cursor is reported with its age in the tooltip. */
 const STALE_SAMPLE_PX = 4;
 
-const pad2 = (n: number) => String(n).padStart(2, "0");
+const clockTimeFormat = new Intl.DateTimeFormat("en-GB", {
+  hourCycle: "h23",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  fractionalSecondDigits: 3,
+});
 
 /** Local wall-clock time, HH:MM:SS.mmm */
 export function formatClockTime(seconds: number): string {
-  const date = new Date(seconds * 1000);
-  const ms = String(date.getMilliseconds()).padStart(3, "0");
-  return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}.${ms}`;
+  return clockTimeFormat.format(seconds * 1000);
 }
 
 type XPadding = { span: number; left: number; right: number };
