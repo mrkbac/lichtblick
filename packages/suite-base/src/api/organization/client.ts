@@ -60,3 +60,15 @@ export class OrganizationApiError extends Error {
 export function revisionETag(revision: number): string {
   return `"${revision}"`;
 }
+
+/** Only `https:` URLs (and `http:` on localhost) from the server are opened. */
+export function isSafeUrl(url: string): boolean {
+  const parsed = URL.parse(url);
+  if (!parsed) {
+    return false;
+  }
+  return (
+    parsed.protocol === "https:" ||
+    (parsed.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname))
+  );
+}

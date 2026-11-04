@@ -34,6 +34,8 @@ export type LayoutSyncInfo = {
 export type Layout = {
   id: LayoutID;
   externalId?: string; // Only for remote
+  /** Organization that owns this shared layout (organization API only). */
+  organizationId?: string;
   name: string;
   from?: string;
   permission: LayoutPermission;

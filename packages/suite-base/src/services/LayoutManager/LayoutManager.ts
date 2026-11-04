@@ -50,6 +50,8 @@ export type SaveNewLayout = {
   data: LayoutData;
   permission: LayoutPermission;
   from?: string;
+  /** Organization to save a shared layout in (organization API only). */
+  organizationId?: string;
 };
 
 function updateIds(
@@ -223,7 +225,9 @@ export default class LayoutManager implements ILayoutManager {
       return await local.put({
         id: remoteLayout.id,
         name: remoteLayout.name,
+        externalId: remoteLayout.externalId,
         permission: remoteLayout.permission,
+        organizationId: remoteLayout.organizationId,
         baseline: { data: remoteLayout.data, savedAt: remoteLayout.savedAt },
         working: undefined,
         syncInfo: layoutPermissionIsShared(remoteLayout.permission)
@@ -239,6 +243,7 @@ export default class LayoutManager implements ILayoutManager {
     data: unmigratedData,
     permission,
     from,
+    organizationId,
   }: SaveNewLayout): Promise<Layout> {
     const data = migratePanelsState(unmigratedData);
     if (layoutPermissionIsShared(permission)) {
@@ -253,12 +258,14 @@ export default class LayoutManager implements ILayoutManager {
         name,
         data,
         permission,
+        organizationId,
       });
       const localLayoutData = {
         id: newLayout.id,
         name: newLayout.name,
         externalId: newLayout.externalId,
         permission: newLayout.permission,
+        organizationId: newLayout.organizationId,
         baseline: { data: newLayout.data, savedAt: newLayout.savedAt },
         working: undefined,
         syncInfo: { status: "tracked" as const, lastRemoteSavedAt: newLayout.savedAt },
@@ -751,6 +758,7 @@ export default class LayoutManager implements ILayoutManager {
               name: remoteLayout.name,
               externalId: remoteLayout.externalId,
               permission: remoteLayout.permission,
+              organizationId: remoteLayout.organizationId,
               baseline: { data: remoteLayout.data, savedAt: remoteLayout.savedAt },
               working: undefined,
               syncInfo: layoutPermissionIsShared(remoteLayout.permission)
@@ -768,6 +776,7 @@ export default class LayoutManager implements ILayoutManager {
               externalId: remoteLayout.externalId,
               name: remoteLayout.name,
               permission: remoteLayout.permission,
+              organizationId: remoteLayout.organizationId,
               baseline: { data: remoteLayout.data, savedAt: remoteLayout.savedAt },
               working: localLayout.working,
               syncInfo: {

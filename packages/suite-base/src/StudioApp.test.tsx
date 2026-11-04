@@ -80,6 +80,11 @@ jest.mock("@lichtblick/suite-base/api/layouts/LayoutsAPI", () => ({
   })),
 }));
 
+jest.mock("@lichtblick/suite-base/context/OrganizationContext", () => ({
+  ...jest.requireActual("@lichtblick/suite-base/context/OrganizationContext"),
+  useOrganizationSession: () => ({ status: "disabled" }),
+}));
+
 // Mock react-dnd
 jest.mock("react-dnd", () => ({
   DndProvider: ({ children }: any) => <div data-testid="dnd-provider">{children}</div>,

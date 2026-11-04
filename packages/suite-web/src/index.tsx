@@ -69,10 +69,20 @@ export async function main(getParams: () => Promise<MainParams> = async () => ({
 
   // Use an async import to delay loading the majority of suite-base code until the CompatibilityBanner
   // can be displayed.
-  const { installDevtoolsFormatters, overwriteFetch, waitForFonts, initI18n, StudioApp } =
-    await import("@lichtblick/suite-base");
+  const {
+    installDevtoolsFormatters,
+    overwriteFetch,
+    waitForFonts,
+    initI18n,
+    StudioApp,
+    completeLoginRedirect,
+  } = await import("@lichtblick/suite-base");
   installDevtoolsFormatters();
   overwriteFetch();
+  // Before anything reads the URL: a login redirect carries a code and restores the original URL.
+  await completeLoginRedirect().catch((error: unknown) => {
+    log.error("Login failed", error);
+  });
   // consider moving waitForFonts into App to display an app loading screen
   await waitForFonts();
   await initI18n();

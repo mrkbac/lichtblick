@@ -289,6 +289,7 @@ export class OrganizationLayoutStorage
     return {
       id: layout.id as LayoutID,
       externalId: layout.id,
+      organizationId: layout.organizationId,
       name: layout.displayName,
       data: layout.data as LayoutData,
       permission: this.canWrite(layout.organizationId) ? "ORG_WRITE" : "ORG_READ",

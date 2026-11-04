@@ -105,6 +105,8 @@ export interface ILayoutManager {
     name: string;
     data: LayoutData;
     permission: LayoutPermission;
+    /** Organization to save a shared layout in (organization API only). */
+    organizationId?: string;
   }): Promise<Layout>;
 
   /**

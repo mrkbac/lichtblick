@@ -20,6 +20,7 @@ import tc from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
+import { isSafeUrl } from "@lichtblick/suite-base/api/organization/client";
 import { LichtblickLogo } from "@lichtblick/suite-base/components/LichtblickLogo";
 import { MemoryUseIndicator } from "@lichtblick/suite-base/components/MemoryUseIndicator";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -28,6 +29,7 @@ import {
   LayoutState,
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
+import { useOrganization } from "@lichtblick/suite-base/context/OrganizationContext";
 import {
   WorkspaceContextStore,
   useWorkspaceStore,
@@ -193,6 +195,9 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
   const [userAnchorEl, setUserAnchorEl] = useState<undefined | HTMLElement>(undefined);
   const [panelAnchorEl, setPanelAnchorEl] = useState<undefined | HTMLElement>(undefined);
 
+  const organization = useOrganization();
+  const user = organization.status === "authenticated" ? organization.session.user : undefined;
+
   const appMenuOpen = Boolean(appMenuEl);
   const userMenuOpen = Boolean(userAnchorEl);
   const panelMenuOpen = Boolean(panelAnchorEl);
@@ -294,7 +299,11 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                   {rightSidebarOpen ? <PanelRight24Filled /> : <PanelRight24Regular />}
                 </AppBarIconButton>
               </Stack>
-              <Tooltip classes={{ tooltip: classes.tooltip }} title="Profile" arrow={false}>
+              <Tooltip
+                classes={{ tooltip: classes.tooltip }}
+                title={user?.displayName ?? "Profile"}
+                arrow={false}
+              >
                 <IconButton
                   className={cx(classes.iconButton, { "Mui-selected": userMenuOpen })}
                   aria-label="User profile menu button"
@@ -309,7 +318,18 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                   }}
                   data-testid="user-button"
                 >
-                  <Avatar className={classes.avatar} variant="rounded" />
+                  <Avatar
+                    className={classes.avatar}
+                    variant="rounded"
+                    src={
+                      user?.avatarUrl != undefined && isSafeUrl(user.avatarUrl)
+                        ? user.avatarUrl
+                        : undefined
+                    }
+                    alt={user?.displayName}
+                  >
+                    {user?.displayName.slice(0, 1).toUpperCase()}
+                  </Avatar>
                 </IconButton>
               </Tooltip>
               {showCustomWindowControls && (

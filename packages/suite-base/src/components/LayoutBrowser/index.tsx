@@ -37,6 +37,7 @@ import {
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
 import { useCurrentUser } from "@lichtblick/suite-base/context/CurrentUserContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
+import { useOrganization } from "@lichtblick/suite-base/context/OrganizationContext";
 import {
   WorkspaceStoreSelectors,
   useWorkspaceStore,
@@ -56,6 +57,7 @@ import { Layout, layoutIsShared } from "@lichtblick/suite-base/services/ILayoutS
 
 import LayoutSection from "./LayoutSection";
 import { useStyles } from "./index.style";
+import { useShareLayoutDialog } from "./useShareLayoutDialog";
 
 const log = Logger.getLogger(__filename);
 
@@ -72,6 +74,12 @@ export default function LayoutBrowser({
   const { enqueueSnackbar } = useSnackbar();
   const layoutManager = useLayoutManager();
   const [prompt, promptModal] = usePrompt();
+  const organization = useOrganization();
+  const organizations =
+    organization.status === "authenticated"
+      ? organization.session.organizations.filter((org) => org.permissions.includes("layouts:read"))
+      : undefined;
+  const [shareDialog, openShareDialog] = useShareLayoutDialog();
   const analytics = useAnalytics();
   const favorites = useLayoutFavorites();
   const isFavorite = useCallback(
@@ -253,19 +261,31 @@ export default function LayoutBrowser({
     analytics,
   ]);
 
-  const onShareLayout = useCallbackWithToast(
-    async (item: Layout) => {
+  const askShareTarget = useCallback(
+    async (item: Layout): Promise<{ name: string; organizationId?: string } | undefined> => {
+      if (organizations) {
+        return await openShareDialog({ initialName: item.name, organizations });
+      }
       const name = await prompt({
         title: "Share a copy with your organization",
         subText: "Shared layouts can be used and changed by other members of your organization.",
         initialValue: item.name,
         label: "Layout name",
       });
-      if (name != undefined) {
+      return name != undefined ? { name } : undefined;
+    },
+    [openShareDialog, organizations, prompt],
+  );
+
+  const onShareLayout = useCallbackWithToast(
+    async (item: Layout) => {
+      const target = await askShareTarget(item);
+      if (target != undefined) {
         const newLayout = await layoutManager.saveNewLayout({
-          name,
+          name: target.name,
           data: item.working?.data ?? item.baseline.data,
           permission: "ORG_WRITE",
+          organizationId: target.organizationId,
         });
         analytics.logEvent(AppEvent.LAYOUT_SHARE, { permission: item.permission });
         if (isFavorite(item)) {
@@ -278,7 +298,14 @@ export default function LayoutBrowser({
         await onSelectLayout(newLayout);
       }
     },
-    [analytics, isFavorite, layoutManager, onSelectLayout, prompt, setSharedSectionExpanded],
+    [
+      analytics,
+      askShareTarget,
+      isFavorite,
+      layoutManager,
+      onSelectLayout,
+      setSharedSectionExpanded,
+    ],
   );
 
   const onMakePersonalCopy = useCallbackWithToast(
@@ -307,6 +334,22 @@ export default function LayoutBrowser({
       .flat()
       .some((layout) => layout.working != undefined && state.selectedIds.includes(layout.id));
   }, [layouts, state.selectedIds]);
+
+  const sectionProps = {
+    disablePadding: enableNewTopNav,
+    anySelectedModifiedLayouts,
+    multiSelectedIds: state.selectedIds,
+    selectedId: currentLayoutId,
+    onSelect: onSelectLayout,
+    onRename: onRenameLayout,
+    onDuplicate: onDuplicateLayout,
+    onDelete: onDeleteLayout,
+    onShare: onShareLayout,
+    onExport: onExportLayout,
+    onOverwrite: onOverwriteLayout,
+    onRevert: onRevertLayout,
+    onMakePersonalCopy,
+  };
 
   return (
     <SidebarContent
@@ -346,6 +389,7 @@ export default function LayoutBrowser({
       ].filter(Boolean)}
     >
       {promptModal}
+      {shareDialog}
       {confirmModal}
       <Stack
         fullHeight
@@ -374,45 +418,33 @@ export default function LayoutBrowser({
           </>
         )}
         <LayoutSection
-          disablePadding={enableNewTopNav}
-          title={layoutManager.supportsSharing ? "Personal" : undefined}
+          {...sectionProps}
+          title={layoutManager.supportsSharing ? (organizations ? "Local" : "Personal") : undefined}
           expanded={personalExpanded}
           onToggleExpanded={togglePersonalExpanded}
           emptyText="Add a new layout to get started with Lichtblick!"
           items={sortedLayouts?.personal}
-          anySelectedModifiedLayouts={anySelectedModifiedLayouts}
-          multiSelectedIds={state.selectedIds}
-          selectedId={currentLayoutId}
-          onSelect={onSelectLayout}
-          onRename={onRenameLayout}
-          onDuplicate={onDuplicateLayout}
-          onDelete={onDeleteLayout}
-          onShare={onShareLayout}
-          onExport={onExportLayout}
-          onOverwrite={onOverwriteLayout}
-          onRevert={onRevertLayout}
-          onMakePersonalCopy={onMakePersonalCopy}
         />
-        {layoutManager.supportsSharing && (
+        {layoutManager.supportsSharing &&
+          organizations?.map((org) => (
+            <LayoutSection
+              key={org.id}
+              {...sectionProps}
+              title={org.displayName}
+              expanded={sharedExpanded}
+              onToggleExpanded={toggleSharedExpanded}
+              emptyText="No layouts yet. Share a layout to collaborate with others."
+              items={sortedLayouts?.shared.filter((layout) => layout.organizationId === org.id)}
+            />
+          ))}
+        {layoutManager.supportsSharing && !organizations && (
           <LayoutSection
-            disablePadding={enableNewTopNav}
+            {...sectionProps}
             title="Organization"
             expanded={sharedExpanded}
             onToggleExpanded={toggleSharedExpanded}
             emptyText="Your organization doesn’t have any shared layouts yet. Share a layout to collaborate with others."
             items={sortedLayouts?.shared}
-            anySelectedModifiedLayouts={anySelectedModifiedLayouts}
-            multiSelectedIds={state.selectedIds}
-            selectedId={currentLayoutId}
-            onSelect={onSelectLayout}
-            onRename={onRenameLayout}
-            onDuplicate={onDuplicateLayout}
-            onDelete={onDeleteLayout}
-            onShare={onShareLayout}
-            onExport={onExportLayout}
-            onOverwrite={onOverwriteLayout}
-            onRevert={onRevertLayout}
-            onMakePersonalCopy={onMakePersonalCopy}
           />
         )}
         {!enableNewTopNav && <Stack flexGrow={1} />}
