@@ -5,10 +5,11 @@ import { TFunction } from "i18next";
 import { produce } from "immer";
 
 import { SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
+import { moveItem, moveUpDownActions } from "@lichtblick/suite-base/panels/utils";
 import { sortPrefixMatchesToFront } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/topicPrefixMatching";
 
 import { tileAnnotationTopics } from "./annotations";
-import { CameraGridConfig, Rotation, TileConfig, makeTile } from "./types";
+import { CameraGridConfig, Rotation, makeTile } from "./types";
 
 export const ADD_ALL_ACTION = "add-all";
 
@@ -47,26 +48,7 @@ export function buildSettingsTree(
       reorderable: true,
       defaultExpansionState: "collapsed",
       actions: [
-        ...(index > 0
-          ? [
-              {
-                type: "action" as const,
-                id: "move-up",
-                label: t("moveUp"),
-                icon: "MoveUp" as const,
-              },
-            ]
-          : []),
-        ...(index < config.tiles.length - 1
-          ? [
-              {
-                type: "action" as const,
-                id: "move-down",
-                label: t("moveDown"),
-                icon: "MoveDown" as const,
-              },
-            ]
-          : []),
+        ...moveUpDownActions(index, config.tiles.length, { up: t("moveUp"), down: t("moveDown") }),
         { type: "action", id: "remove", label: t("remove"), icon: "Delete", display: "inline" },
       ],
       fields: {
@@ -161,13 +143,6 @@ export function buildSettingsTree(
   };
 }
 
-function moveTile(tiles: TileConfig[], from: number, to: number): void {
-  const [tile] = tiles.splice(from, 1);
-  if (tile) {
-    tiles.splice(to, 0, tile);
-  }
-}
-
 export function settingsReducer(
   config: CameraGridConfig,
   action: SettingsTreeAction,
@@ -180,7 +155,7 @@ export function settingsReducer(
     const from = Number(path[1]);
     const to = Number(action.payload.targetPath[1]);
     return produce(config, (draft) => {
-      moveTile(draft.tiles, from, to);
+      moveItem(draft.tiles, from, to);
     });
   }
   if (action.action === "perform-node-action") {
@@ -230,10 +205,10 @@ export function settingsReducer(
           draft.tiles.splice(index, 1);
           break;
         case "move-up":
-          moveTile(draft.tiles, index, index - 1);
+          moveItem(draft.tiles, index, index - 1);
           break;
         case "move-down":
-          moveTile(draft.tiles, index, index + 1);
+          moveItem(draft.tiles, index, index + 1);
           break;
       }
       return;
