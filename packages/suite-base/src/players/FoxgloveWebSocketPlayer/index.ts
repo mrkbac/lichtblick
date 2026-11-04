@@ -73,7 +73,7 @@ import {
   SUPPORTED_SERVICE_ENCODINGS,
   ZERO_TIME,
 } from "./constants";
-import { dataTypeToFullName, statusLevelToAlertSeverity } from "./helpers";
+import { bytesToBase64, dataTypeToFullName, statusLevelToAlertSeverity } from "./helpers";
 import {
   MessageWriter,
   MessageDefinitionMap,
@@ -84,7 +84,6 @@ import {
 
 const log = Log.getLogger(__dirname);
 const textEncoder = new TextEncoder();
-const textDecoder = new TextDecoder();
 
 export default class FoxgloveWebSocketPlayer implements Player {
   readonly #sourceId: string;
@@ -1080,7 +1079,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
     log.debug(`FoxgloveWebSocketPlayer.setParameter(key=${key}, value=${JSON.stringify(value)})`);
     const isByteArray = value instanceof Uint8Array;
-    const paramValueToSent = isByteArray ? btoa(textDecoder.decode(value)) : value;
+    const paramValueToSent = isByteArray ? bytesToBase64(value) : value;
     this.#client.setParameters(
       [
         {

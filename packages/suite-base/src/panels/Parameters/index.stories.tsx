@@ -13,6 +13,7 @@ import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
 
 import Parameters from "./index";
+import { parametersToYaml } from "./utils";
 
 const DEFAULT_PARAMS = new Map<string, ParameterValue>([
   ["undefined", undefined],
@@ -113,4 +114,42 @@ const EditableParameters = () => {
 
 export const WithEditableParameters: StoryObj = {
   render: () => <EditableParameters />,
+};
+
+const NAMESPACED_PARAMS = new Map<string, ParameterValue>([
+  ...DEFAULT_PARAMS,
+  ...Array.from({ length: 2000 }, (_, i): [string, ParameterValue] => [
+    `/robot/joint_${i % 20}/${["kp", "ki", "kd", "limit"][i % 4]}_${i}`,
+    i % 3 === 0 ? i / 7 : i,
+  ]),
+  ["camera_node.exposure.auto", true],
+  ["camera_node.exposure.value", 12.5],
+  ["camera_node.frame_id", "camera"],
+]);
+
+const NamespacedParameters = () => {
+  const [parameters, setParameterValues] = useState(NAMESPACED_PARAMS);
+  const snapshot = new Map(NAMESPACED_PARAMS);
+  snapshot.set("camera_node.exposure.value", 20);
+  snapshot.set("/removed", "old");
+  snapshot.delete("camera_node.frame_id");
+
+  return (
+    <PanelSetup
+      fixture={getFixture({
+        getParameters: true,
+        setParameters: true,
+        parameters,
+        setParameterValues,
+      })}
+    >
+      <Parameters
+        overrideConfig={{ snapshots: [{ name: "baseline", yaml: parametersToYaml(snapshot) }] }}
+      />
+    </PanelSetup>
+  );
+};
+
+export const WithNamespacesAndSnapshot: StoryObj = {
+  render: () => <NamespacedParameters />,
 };

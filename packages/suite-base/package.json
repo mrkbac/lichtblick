@@ -198,6 +198,7 @@
     "uuid": "14.0.0",
     "vm-browserify": "1.1.2",
     "webpack": "5.108.3",
+    "yaml": "2.9.0",
     "zustand": "4.5.7"
   }
 }
