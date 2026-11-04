@@ -158,7 +158,7 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
   // Alert only on transitions into a rule; seeks, rule edits and missing data just reset the baseline.
   const prevSnapshot = useRef<AlertSnapshot>();
   // unique across tabs so panels in different tabs don't replace each other's notifications
-  const [notificationTag] = useState(() => crypto.randomUUID());
+  const [notificationTag] = useState(() => Math.random().toString(36).slice(2));
   useEffect(() => {
     const snapshot: AlertSnapshot = {
       ruleIndex:
