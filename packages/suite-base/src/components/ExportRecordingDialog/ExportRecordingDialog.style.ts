@@ -9,10 +9,15 @@ import { makeStyles } from "tss-react/mui";
 
 export const useStyles = makeStyles()((theme) => ({
   grow: { flex: 1 },
-  table: { maxHeight: 360 },
+  // Tall dialog whose topic table takes the remaining height, so only the table scrolls.
+  paper: { height: "100%" },
+  content: { display: "flex", flexDirection: "column" },
+  fill: { flex: 1, minHeight: 0 },
+  // Vertically centered on the 29px inputs next to it.
+  rangeSummary: { paddingBottom: 6 },
   wrap: { wordBreak: "break-all" },
   everyNth: { width: 64 },
-  compression: { minWidth: 120 },
+  compression: { minWidth: 160 },
   timeField: { width: 190 },
   count: { whiteSpace: "nowrap" },
   countTotal: { color: theme.palette.text.secondary },

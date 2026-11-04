@@ -82,6 +82,7 @@ type Props = {
 
 export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Element {
   const { t } = useTranslation("exportRecording");
+  const { classes } = useStyles();
 
   const readable = useMemo(() => new BlobReadable(file), [file]);
   const opened = useAsync(async () => {
@@ -95,7 +96,13 @@ export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Eleme
   const reader = opened.value?.readable === readable ? opened.value.reader : undefined;
 
   return (
-    <Dialog open onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog
+      open
+      onClose={onClose}
+      maxWidth="lg"
+      fullWidth
+      slotProps={{ paper: { className: classes.paper } }}
+    >
       <DialogTitle>
         {t("title")}
         <Typography variant="body2" color="text.secondary" noWrap>
@@ -194,10 +201,11 @@ function ExportForm({
 
   // Exact counts come from the message indexes; until they're read (or if a chunk has none),
   // estimate from the share of the recording's duration.
-  const messageTimes = useAsync(
+  const messageTimesState = useAsync(
     async () => await readMessageTimes(reader, readable),
     [reader, readable],
-  ).value;
+  );
+  const messageTimes = messageTimesState.value;
   const exactCounts = messageTimes != undefined;
   const rangeShare = Number(endNs - startNs) / Math.max(1, Number(recordingEnd - recordingStart));
   const inRangeCounts = useMemo(
@@ -294,9 +302,10 @@ function ExportForm({
 
   return (
     <>
-      <DialogContent>
-        <Stack gap={2}>
-          <Stack direction="row" gap={1.5} alignItems="center">
+      <DialogContent className={classes.content}>
+        <Stack gap={2} className={classes.fill}>
+          {/* Aligned to the inputs' bottom edge, since this theme draws labels above them. */}
+          <Stack direction="row" gap={1.5} alignItems="flex-end">
             {(["start", "end"] as const).map((which) => (
               <Tooltip key={which} title={t("timeInputHelp")} placement="top" enterDelay={600}>
                 <TextField
@@ -343,7 +352,12 @@ function ExportForm({
                 />
               </Tooltip>
             ))}
-            <Typography variant="body2" color="text.secondary" noWrap>
+            <Typography
+              variant="body2"
+              color="text.secondary"
+              noWrap
+              className={classes.rangeSummary}
+            >
               {t("rangeSummary", {
                 duration: toSecondsText(endNs - startNs),
                 total: toSecondsText(recordingEnd - recordingStart),
@@ -382,14 +396,21 @@ function ExportForm({
             <Typography variant="body2" color="text.secondary" noWrap>
               {t("topicsSelected", { selected: topics.size, total: rows.length })}
               {" · "}
-              {t(exactCounts ? "messagesSummary" : "messagesSummaryApprox", {
-                exported: totalExported.toLocaleString(),
-                total: totalMessages.toLocaleString(),
-              })}
+              {t(
+                exactCounts
+                  ? "messagesSummary"
+                  : messageTimesState.loading
+                    ? "messagesSummaryCounting"
+                    : "messagesSummaryApprox",
+                {
+                  exported: totalExported.toLocaleString(),
+                  total: totalMessages.toLocaleString(),
+                },
+              )}
             </Typography>
           </Stack>
 
-          <TableContainer className={classes.table}>
+          <TableContainer className={classes.fill}>
             <Table size="small" stickyHeader>
               <TableHead>
                 <TableRow>
@@ -500,7 +521,8 @@ function ExportForm({
         <TextField
           select
           size="small"
-          label={t("compression")}
+          // No label: this theme draws labels above inputs, which breaks the footer's line.
+          slotProps={{ htmlInput: { "aria-label": t("compression") } }}
           value={compression}
           disabled={exporting}
           onChange={(event) => {
@@ -508,7 +530,7 @@ function ExportForm({
           }}
           className={classes.compression}
         >
-          <MenuItem value="zstd">zstd</MenuItem>
+          <MenuItem value="zstd">{t("compressionZstd")}</MenuItem>
           <MenuItem value="none">{t("compressionNone")}</MenuItem>
         </TextField>
         <FormControlLabel

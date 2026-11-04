@@ -570,15 +570,29 @@ export async function readMessageTimes(
   reader: McapIndexedReader,
   readable: McapTypes.IReadable,
 ): Promise<Map<number, BigUint64Array> | undefined> {
-  const perChannel = new Map<number, bigint[]>();
-  for (const chunk of reader.chunkIndexes) {
-    if (chunk.messageIndexOffsets.size === 0) {
-      return undefined;
-    }
-    const bytes = await readable.read(
-      chunk.chunkStartOffset + chunk.chunkLength,
-      chunk.messageIndexLength,
+  if (reader.chunkIndexes.some((chunk) => chunk.messageIndexOffsets.size === 0)) {
+    return undefined;
+  }
+  // Many small reads; issue them in parallel batches rather than one at a time.
+  const BATCH = 64;
+  const indexBytes: Uint8Array[] = [];
+  for (let i = 0; i < reader.chunkIndexes.length; i += BATCH) {
+    indexBytes.push(
+      ...(await Promise.all(
+        reader.chunkIndexes
+          .slice(i, i + BATCH)
+          .map(
+            async (chunk) =>
+              await readable.read(
+                chunk.chunkStartOffset + chunk.chunkLength,
+                chunk.messageIndexLength,
+              ),
+          ),
+      )),
     );
+  }
+  const perChannel = new Map<number, bigint[]>();
+  for (const bytes of indexBytes) {
     const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
     for (let offset = 0; offset + RECORD_PREFIX <= bytes.byteLength; ) {
       const opcode = view.getUint8(offset);
