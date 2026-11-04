@@ -16,7 +16,7 @@ import { BasicBuilder, defaults } from "@lichtblick/test-builders";
 class DiagnosticsBuilder {
   public static statusConfig(props: Partial<DiagnosticStatusConfig> = {}): DiagnosticStatusConfig {
     return defaults<DiagnosticStatusConfig>(props, {
-      topicToRender: BasicBuilder.string(),
+      topics: [BasicBuilder.string()],
     });
   }
 
@@ -27,7 +27,7 @@ class DiagnosticsBuilder {
       hardwareIdFilter: BasicBuilder.string(),
       minLevel: BasicBuilder.number(),
       pinnedIds: BasicBuilder.strings(),
-      topicToRender: BasicBuilder.string(),
+      topics: [BasicBuilder.string()],
     });
   }
 
@@ -81,6 +81,8 @@ class DiagnosticsBuilder {
       id: BasicBuilder.string(),
       status: DiagnosticsBuilder.statusMessage(),
       stamp: RosTimeBuilder.time(),
+      receiveTime: RosTimeBuilder.time(),
+      topic: BasicBuilder.string(),
     });
   }
 }

@@ -7,8 +7,10 @@ import "@testing-library/jest-dom/vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 
 import { DiagnosticInfo } from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
-import DiagnosticNodeRow from "@lichtblick/suite-base/panels/DiagnosticSummary/DiagnosticNodeRow";
-import { NodeRowProps } from "@lichtblick/suite-base/panels/DiagnosticSummary/types";
+import DiagnosticNodeRow, {
+  NodeRowProps,
+} from "@lichtblick/suite-base/panels/DiagnosticSummary/DiagnosticNodeRow";
+import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
 import DiagnosticsBuilder from "@lichtblick/suite-base/testing/builders/DiagnosticsBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
@@ -20,6 +22,7 @@ describe("DiagnosticNodeRow", () => {
   let mockProps: NodeRowProps;
 
   beforeEach(() => {
+    vi.clearAllMocks();
     info = DiagnosticsBuilder.info();
     isPinned = BasicBuilder.boolean();
 
@@ -29,7 +32,11 @@ describe("DiagnosticNodeRow", () => {
   it("renders diagnostic node row and triggers onClick", () => {
     const displayName = info.displayName;
 
-    render(<DiagnosticNodeRow {...mockProps} />);
+    render(
+      <PanelSetup>
+        <DiagnosticNodeRow {...mockProps} />
+      </PanelSetup>,
+    );
     const rowButton = screen.getByTestId("diagnostic-row-button");
     fireEvent.click(rowButton);
 
@@ -38,11 +45,39 @@ describe("DiagnosticNodeRow", () => {
   });
 
   it("triggers onClickPin when pin button is clicked", () => {
-    render(<DiagnosticNodeRow {...mockProps} />);
+    render(
+      <PanelSetup>
+        <DiagnosticNodeRow {...mockProps} />
+      </PanelSetup>,
+    );
 
     const pinButton = screen.getByTestId("diagnostic-row-icon");
     fireEvent.click(pinButton);
 
     expect(onClickPin).toHaveBeenCalledWith(info);
+  });
+
+  it("seeks when the timeline is clicked without opening details", () => {
+    const onSeek = vi.fn();
+    render(
+      <PanelSetup>
+        <DiagnosticNodeRow
+          {...mockProps}
+          showHistory
+          onSeek={onSeek}
+          history={{ changes: [{ t: 0, level: 0 }], lastSeen: 10 }}
+          range={{ start: 0, end: 10, current: 5 }}
+        />
+      </PanelSetup>,
+    );
+
+    const timeline = screen.getByTestId("diagnostic-timeline");
+    jest
+      .spyOn(timeline, "getBoundingClientRect")
+      .mockReturnValue({ left: 0, width: 100 } as DOMRect);
+    fireEvent.click(timeline, { clientX: 25 });
+
+    expect(onSeek).toHaveBeenCalledWith(2.5);
+    expect(onClick).not.toHaveBeenCalled();
   });
 });

@@ -1,103 +1,66 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
-import {
-  SettingsTreeField,
-  SettingsTreeFieldNumber,
-  SettingsTreeFieldSelectString,
-  SettingsTreeNodes,
-} from "@lichtblick/suite";
-import { DEFAULT_SETTINGS_TREE_NODE } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
+
+import { TFunction } from "i18next";
+
+import { buildStatusPanelSettingsTree } from "@lichtblick/suite-base/panels/DiagnosticStatus/utils/buildStatusPanelSettingsTree";
+import { DiagnosticTopics } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticTopics";
 import DiagnosticsBuilder from "@lichtblick/suite-base/testing/builders/DiagnosticsBuilder";
-import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { buildSettingsTree } from "./buildSettingsTree";
 
+const t = ((key: string) => key) as unknown as TFunction<"diagnostics">;
+
+const topics: DiagnosticTopics = {
+  available: ["/diagnostics", "/diagnostics_agg"],
+  selected: ["/diagnostics", "/missing"],
+  subscribed: ["/diagnostics"],
+};
+
 describe("buildSettingsTree", () => {
-  it("should build settings tree with valid topicToRender", () => {
-    // Given
-    const topics = BasicBuilder.strings({ count: 2 });
+  it("builds general fields from the config", () => {
     const config = DiagnosticsBuilder.summaryConfig({
-      sortByLevel: BasicBuilder.boolean(),
-      secondsUntilStale: BasicBuilder.number(),
+      sortByLevel: false,
+      secondsUntilStale: 7,
+      showHistory: undefined,
     });
 
-    // When
-    const result: SettingsTreeNodes = buildSettingsTree({
-      availableTopics: topics,
-      config,
-      topicToRender: topics[0]!,
-    });
+    const tree = buildSettingsTree(config, topics, t);
 
-    // Then
-    const { label: defaultLabel, fields: defaultFields } = DEFAULT_SETTINGS_TREE_NODE.general!;
-    const { fields: fieldsResult } = result.general!;
-    expect(result.general?.label).toEqual(defaultLabel);
-    expect(fieldsResult?.topicToRender).toEqual({
-      input: "select",
-      label: defaultFields?.topicToRender!.label,
-      value: topics[0],
-      error: undefined,
-      options: [
-        { label: topics[0], value: topics[0] },
-        { label: topics[1], value: topics[1] },
-      ],
-    });
-    expect(fieldsResult?.sortByLevel).toEqual({
-      input: "boolean",
-      label: defaultFields?.sortByLevel!.label,
-      value: config.sortByLevel,
-    });
-    expect(fieldsResult?.secondsUntilStale).toEqual({
-      input: "number",
-      label: defaultFields?.secondsUntilStale!.label,
-      help: defaultFields?.secondsUntilStale!.help,
-      min: (defaultFields?.secondsUntilStale as SettingsTreeFieldNumber).min,
-      placeholder: (defaultFields?.secondsUntilStale as SettingsTreeFieldNumber).placeholder,
-      precision: (defaultFields?.secondsUntilStale as SettingsTreeFieldNumber).precision,
-      step: (defaultFields?.secondsUntilStale as SettingsTreeFieldNumber).step,
-      value: config.secondsUntilStale,
-    });
+    expect(tree.general?.fields?.sortByLevel?.value).toBe(false);
+    expect(tree.general?.fields?.secondsUntilStale?.value).toBe(7);
+    expect(tree.general?.fields?.showHistory?.value).toBe(true);
   });
 
-  it("should include topicToRender in options and set error if topic is not available", () => {
-    // Given
-    const config = DiagnosticsBuilder.summaryConfig({
-      sortByLevel: BasicBuilder.boolean(),
-      secondsUntilStale: BasicBuilder.number(),
-    });
-    const topics = BasicBuilder.strings({ count: 3 }) as [string, string, string];
+  it("lists every topic with a visibility toggle and flags missing ones", () => {
+    const tree = buildSettingsTree(DiagnosticsBuilder.summaryConfig(), topics, t);
 
-    // When
-    const result: SettingsTreeNodes = buildSettingsTree({
-      availableTopics: [topics[1], topics[2]],
-      config,
-      topicToRender: topics[0],
+    expect(tree.topics?.children).toEqual({
+      "/diagnostics": { label: "/diagnostics", visible: true, error: undefined },
+      "/diagnostics_agg": { label: "/diagnostics_agg", visible: false, error: undefined },
+      "/missing": { label: "/missing", visible: true, error: "topicNotAvailable" },
     });
-
-    // Then
-    const { fields: fieldsResult } = result.general!;
-    expect(fieldsResult?.topicToRender?.error).toEqual(`Topic ${topics[0]} is not available`);
+    expect(tree.topics?.error).toBeUndefined();
   });
 
-  it("should handle empty availableTopics array", () => {
-    // Given
-    const config = DiagnosticsBuilder.summaryConfig({
-      sortByLevel: BasicBuilder.boolean(),
-      secondsUntilStale: BasicBuilder.number(),
-    });
-    const topicToRender = BasicBuilder.string();
+  it("shows an error when there are no diagnostics topics", () => {
+    const tree = buildSettingsTree(
+      DiagnosticsBuilder.summaryConfig(),
+      { available: [], selected: [], subscribed: [] },
+      t,
+    );
+    expect(tree.topics?.error).toBe("noTopics");
+  });
+});
 
-    // When
-    const result: SettingsTreeNodes = buildSettingsTree({
-      availableTopics: [],
-      config,
-      topicToRender,
-    });
+describe("buildStatusPanelSettingsTree", () => {
+  it("builds general fields and the topics node", () => {
+    const config = DiagnosticsBuilder.statusConfig({ numericPrecision: 3, secondsUntilStale: 2 });
 
-    // Then
-    const topicToRenderResult = result.general?.fields?.topicToRender as SettingsTreeField &
-      SettingsTreeFieldSelectString;
-    expect(topicToRenderResult.options).toEqual([{ value: topicToRender, label: topicToRender }]);
-    expect(topicToRenderResult.error).toEqual(`Topic ${topicToRender} is not available`);
+    const tree = buildStatusPanelSettingsTree(config, topics, t);
+
+    expect(tree.general?.fields?.numericPrecision?.value).toBe(3);
+    expect(tree.general?.fields?.secondsUntilStale?.value).toBe(2);
+    expect(Object.keys(tree.topics?.children ?? {})).toHaveLength(3);
   });
 });

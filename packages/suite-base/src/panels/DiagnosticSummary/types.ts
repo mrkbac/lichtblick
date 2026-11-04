@@ -7,20 +7,17 @@ import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 export type DiagnosticSummaryConfig = {
   minLevel: number;
   pinnedIds: DiagnosticId[];
-  topicToRender: string;
+  /** Topics to read; undefined = every DiagnosticArray topic. */
+  topics?: string[];
+  /** Legacy single-topic config from older layouts; read as `topics: [topicToRender]`. */
+  topicToRender?: string;
   hardwareIdFilter: string;
   sortByLevel?: boolean;
   secondsUntilStale?: number;
+  showHistory?: boolean;
 };
 
 export type DiagnosticsById = Map<DiagnosticId, DiagnosticInfo>;
-
-export type NodeRowProps = {
-  info: DiagnosticInfo;
-  isPinned: boolean;
-  onClick: (info: DiagnosticInfo) => void;
-  onClickPin: (info: DiagnosticInfo) => void;
-};
 
 export type DiagnosticSummaryProps = {
   config: DiagnosticSummaryConfig;

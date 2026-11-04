@@ -8,84 +8,47 @@ import { LEVELS } from "@lichtblick/suite-base/panels/DiagnosticSummary/constant
 import { DiagnosticsById } from "@lichtblick/suite-base/panels/DiagnosticSummary/types";
 import { getDiagnosticsWithStales } from "@lichtblick/suite-base/panels/DiagnosticSummary/utils/getDiagnosticsWithStales";
 import DiagnosticsBuilder from "@lichtblick/suite-base/testing/builders/DiagnosticsBuilder";
-import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 describe("getDiagnosticsWithStales", () => {
-  const staleTime = RosTimeBuilder.time({ sec: 100, nsec: 0 });
+  const staleTime: Time = { sec: 100, nsec: 0 };
 
-  const createDiagnosticInfo = (stamp: Time, level = 1): DiagnosticInfo => {
-    return DiagnosticsBuilder.info({
-      stamp,
-      status: {
-        ...DiagnosticsBuilder.statusMessage(),
-        level,
-      },
+  const createDiagnosticInfo = (receiveTime: Time, level: number = LEVELS.WARN): DiagnosticInfo =>
+    DiagnosticsBuilder.info({
+      receiveTime,
+      // header stamp from a broken robot clock must not matter
+      stamp: { sec: 0, nsec: 0 },
+      status: { ...DiagnosticsBuilder.statusMessage(), level },
     });
-  };
 
-  it("should mark diagnostics as STALE when stamp is older than staleTime", () => {
-    // Given
+  it("marks diagnostics received before staleTime as STALE", () => {
     const id = BasicBuilder.string();
-    const oldTime = RosTimeBuilder.time({ sec: 50, nsec: 0 });
-    const diagnostic = createDiagnosticInfo(oldTime, 2);
-    const diagnosticsByName: DiagnosticsById = new Map([[id, diagnostic]]);
-
-    const hardwareId = BasicBuilder.string();
-    const diagnosticsByHardwareId = new Map([[hardwareId, diagnosticsByName]]);
-
-    // When
-    const result = getDiagnosticsWithStales(diagnosticsByHardwareId, staleTime);
-
-    // Then
-    const updatedDiagnostic = result.get(hardwareId)?.get(id);
-    expect(updatedDiagnostic).toBeDefined();
-    expect(updatedDiagnostic?.status.level).toBe(LEVELS.STALE);
-  });
-
-  it("should keep original level when stamp is newer than staleTime", () => {
-    // Given
-    const id = BasicBuilder.string();
-    const recentTime = RosTimeBuilder.time({ sec: 150, nsec: 0 });
-    const diagnostic = createDiagnosticInfo(recentTime, 3);
-    const diagnosticsByName: DiagnosticsById = new Map([[id, diagnostic]]);
-    const hardwareId = BasicBuilder.string();
-    const diagnosticsByHardwareId = new Map([[hardwareId, diagnosticsByName]]);
-
-    // When
-    const result = getDiagnosticsWithStales(diagnosticsByHardwareId, staleTime);
-
-    // Then
-    const updatedDiagnostic = result.get(hardwareId)?.get(id);
-    expect(updatedDiagnostic).toBeDefined();
-    expect(updatedDiagnostic?.status.level).toBe(3);
-  });
-
-  it("should preserve all hardwareId and diagnostic names", () => {
-    // Given
-    const time1 = RosTimeBuilder.time({ sec: 10, nsec: 0 });
-    const time2 = RosTimeBuilder.time({ sec: 200, nsec: 0 });
-    const diagnosticInfo1 = createDiagnosticInfo(time1, 1); // become stale
-    const diagnosticInfo2 = createDiagnosticInfo(time2, 4); // keep level
-
-    const id1 = BasicBuilder.string();
-    const id2 = BasicBuilder.string();
-    const diagnosticById1: DiagnosticsById = new Map([[id1, diagnosticInfo1]]);
-    const diagnosticById2: DiagnosticsById = new Map([[id2, diagnosticInfo2]]);
-
-    const hardwareId1 = BasicBuilder.string();
-    const hardwareId2 = BasicBuilder.string();
-    const diagnostics = new Map([
-      [hardwareId1, diagnosticById1],
-      [hardwareId2, diagnosticById2],
+    const diagnostics: DiagnosticsById = new Map([
+      [id, createDiagnosticInfo({ sec: 50, nsec: 0 }, LEVELS.ERROR)],
     ]);
 
-    // When
     const result = getDiagnosticsWithStales(diagnostics, staleTime);
 
-    // Then
-    expect(result.size).toBe(2);
-    expect(result.get(hardwareId1)?.get(id1)?.status.level).toBe(LEVELS.STALE);
-    expect(result.get(hardwareId2)?.get(id2)?.status.level).toBe(4);
+    expect(result.get(id)?.status.level).toBe(LEVELS.STALE);
+    // input untouched
+    expect(diagnostics.get(id)?.status.level).toBe(LEVELS.ERROR);
+  });
+
+  it("uses receive time, not header stamp, and keeps identity of fresh entries", () => {
+    const id = BasicBuilder.string();
+    const fresh = createDiagnosticInfo({ sec: 150, nsec: 0 }, LEVELS.OK);
+    const diagnostics: DiagnosticsById = new Map([[id, fresh]]);
+
+    const result = getDiagnosticsWithStales(diagnostics, staleTime);
+
+    expect(result.get(id)).toBe(fresh);
+  });
+
+  it("returns the input when staleness is disabled", () => {
+    const diagnostics: DiagnosticsById = new Map([
+      [BasicBuilder.string(), createDiagnosticInfo({ sec: 1, nsec: 0 })],
+    ]);
+
+    expect(getDiagnosticsWithStales(diagnostics, undefined)).toBe(diagnostics);
   });
 });

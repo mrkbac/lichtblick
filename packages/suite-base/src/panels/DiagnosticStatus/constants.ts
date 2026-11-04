@@ -3,7 +3,7 @@
 
 import { DiagnosticStatusConfig } from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
 
-export const DEFAULT_CONFIG: DiagnosticStatusConfig = { topicToRender: "/diagnostics" };
+export const DEFAULT_CONFIG: DiagnosticStatusConfig = {};
 
 export const MIN_SPLIT_FRACTION = 0.1;
 

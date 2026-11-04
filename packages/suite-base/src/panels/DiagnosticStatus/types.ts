@@ -3,13 +3,16 @@
 import { Time } from "@foxglove/rostime";
 
 import { Header } from "@lichtblick/suite-base/types/Messages";
-import { OpenSiblingPanel, SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
 export type DiagnosticStatusConfig = {
   selectedHardwareId?: string;
   selectedName?: string;
   splitFraction?: number;
-  topicToRender: string;
+  /** Topics to read; undefined = every DiagnosticArray topic. */
+  topics?: string[];
+  /** Legacy single-topic config from older layouts; read as `topics: [topicToRender]`. */
+  topicToRender?: string;
   numericPrecision?: number;
   secondsUntilStale?: number;
 };
@@ -38,7 +41,11 @@ export type DiagnosticStatusMessage = {
 
 export type DiagnosticInfo = {
   status: DiagnosticStatusMessage;
+  /** header.stamp of the message, i.e. the publisher's clock */
   stamp: Time;
+  /** player receive time; used for staleness and history so wrong robot clocks don't matter */
+  receiveTime: Time;
+  topic: string;
   id: DiagnosticId;
   displayName: string;
 };
@@ -48,22 +55,9 @@ export type DiagnosticStatusArrayMsg = {
   status: DiagnosticStatusMessage[];
 };
 
-export type DiagnosticStatusProps = {
-  info: DiagnosticInfo;
-  numericPrecision: number | undefined;
-  onChangeSplitFraction: (arg0: number) => void;
-  openSiblingPanel: OpenSiblingPanel;
-  splitFraction: number | undefined;
-  topicToRender: string;
-};
-
 export type FormattedKeyValue = {
   key: string;
   keyHtml: { __html: string } | undefined;
   value: string;
   valueHtml: { __html: string } | undefined;
 };
-
-type DiagnosticNameSet = Set<string>;
-
-export type UseAvailableDiagnosticResult = Map<string, DiagnosticNameSet>;

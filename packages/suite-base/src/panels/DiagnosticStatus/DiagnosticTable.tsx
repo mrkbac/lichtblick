@@ -16,246 +16,356 @@
 
 import PowerInputIcon from "@mui/icons-material/PowerInput";
 import ShowChartIcon from "@mui/icons-material/ShowChart";
-import {
-  Tooltip,
-  Table,
-  TableBody,
-  TableCell,
-  TableRow,
-  IconButton,
-  Typography,
-} from "@mui/material";
+import { IconButton, Tooltip, Typography } from "@mui/material";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import * as _ from "lodash-es";
-import { ReactElement, useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
-import Stack from "@lichtblick/suite-base/components/Stack";
-import { useStyles } from "@lichtblick/suite-base/panels/DiagnosticStatus/DiagnosticTable.style";
+import CopyButton from "@lichtblick/suite-base/components/CopyButton";
+import {
+  useStyles,
+  VALUE_FLASH_MS,
+} from "@lichtblick/suite-base/panels/DiagnosticStatus/DiagnosticTable.style";
 import { MIN_SPLIT_FRACTION } from "@lichtblick/suite-base/panels/DiagnosticStatus/constants";
 import {
-  DiagnosticStatusProps,
+  DiagnosticInfo,
   FormattedKeyValue,
 } from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
 import { getFormattedKeyValues } from "@lichtblick/suite-base/panels/DiagnosticStatus/utils/getFormattedKeyValues";
 import { isFloatOrInteger } from "@lichtblick/suite-base/panels/DiagnosticStatus/utils/isFloaterOrInteger";
+import { useLevelSince } from "@lichtblick/suite-base/panels/DiagnosticSummary/DiagnosticNodeRow";
+import DiagnosticTimeline from "@lichtblick/suite-base/panels/DiagnosticSummary/DiagnosticTimeline";
 import { MESSAGE_COLORS } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
+import { TimelineRange } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticsPanelData";
+import { HistoryById } from "@lichtblick/suite-base/panels/DiagnosticSummary/utils/history";
 import { openSiblingPlotPanel } from "@lichtblick/suite-base/panels/Plot/utils/openSiblingPlotPanel";
 import { openSiblingStateTransitionsPanel } from "@lichtblick/suite-base/panels/StateTransitions/openSiblingStateTransitionsPanel";
+import { OpenSiblingPanel } from "@lichtblick/suite-base/types/panels";
 
-// component to display a single diagnostic status
-export default function DiagnosticTable({
-  info,
-  numericPrecision,
-  onChangeSplitFraction,
-  openSiblingPanel,
-  splitFraction = 0.5,
-  topicToRender,
-}: DiagnosticStatusProps): React.JSX.Element {
-  const { classes } = useStyles();
-  const tableRef = useRef<HTMLTableElement>(ReactNull);
+type Row =
+  | { kind: "header" | "message"; key: string; info: DiagnosticInfo }
+  | { kind: "value"; key: string; info: DiagnosticInfo; kv: FormattedKeyValue };
 
-  const resizeMouseDown = useCallback((event: React.MouseEvent) => {
-    setResizing(true);
-    event.preventDefault();
-  }, []);
-  const resizeMouseUp = useCallback(() => {
-    setResizing(false);
-  }, []);
+/** Last value of a key and when it last changed (performance.now()). */
+type ValueChange = { value: string; previous?: string; changedAt: number };
+
+export type DiagnosticTableProps = {
+  /** Statuses to show, in display order. */
+  infos: readonly DiagnosticInfo[];
+  history: HistoryById;
+  range: TimelineRange | undefined;
+  staleSec: number;
+  onSeek?: (seconds: number) => void;
+  numericPrecision: number | undefined;
+  splitFraction: number | undefined;
+  onChangeSplitFraction: (splitFraction: number) => void;
+  openSiblingPanel: OpenSiblingPanel;
+};
+
+const statusPath = (info: DiagnosticInfo) =>
+  `${info.topic}.status[:]{hardware_id=="${info.status.hardware_id}"}{name=="${info.status.name}"}`;
+
+export function formatValue(value: string, numericPrecision: number | undefined): string {
+  return numericPrecision != undefined && isFloatOrInteger(value)
+    ? parseFloat(value).toFixed(numericPrecision)
+    : value;
+}
+
+/** Key/value rows of one or more statuses in a single virtualized list, so huge tables stay fast. */
+export default function DiagnosticTable(props: DiagnosticTableProps): React.JSX.Element {
+  const {
+    infos,
+    history,
+    range,
+    staleSec,
+    onSeek,
+    numericPrecision,
+    splitFraction = 0.5,
+    onChangeSplitFraction,
+    openSiblingPanel,
+  } = props;
+  const { classes, cx } = useStyles();
+  const { t } = useTranslation("diagnostics");
+  const rootRef = useRef<HTMLDivElement>(ReactNull);
+  const scrollRef = useRef<HTMLDivElement>(ReactNull);
+
+  // Track value changes across messages to highlight what just changed.
+  const changesRef = useRef(new Map<string, ValueChange>());
+  const rows = useMemo(() => {
+    const now = performance.now();
+    const changes = changesRef.current;
+    const out: Row[] = [];
+    for (const info of infos) {
+      out.push({ kind: "header", key: `${info.id}|h`, info });
+      out.push({ kind: "message", key: `${info.id}|m`, info });
+      getFormattedKeyValues(info.status).forEach((kv, index) => {
+        const key = `${info.id}|v|${index}|${kv.key}`;
+        const prev = changes.get(key);
+        if (!prev) {
+          changes.set(key, { value: kv.value, changedAt: -Infinity });
+        } else if (prev.value !== kv.value) {
+          changes.set(key, { value: kv.value, previous: prev.value, changedAt: now });
+        }
+        out.push({ kind: "value", key, info, kv });
+      });
+    }
+    return out;
+  }, [infos]);
+
+  const virtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 26,
+    overscan: 10,
+    getItemKey: (index) => rows[index]!.key,
+    measureElement: (element) => element.getBoundingClientRect().height,
+  });
+
+  const [resizing, setResizing] = useState(false);
   const resizeMouseMove = useCallback(
     (event: MouseEvent) => {
-      if (!tableRef.current) {
+      if (!rootRef.current) {
         return;
       }
-
-      const { left, right } = tableRef.current.getBoundingClientRect();
-      const newSplitFraction = _.clamp(
-        (event.clientX - left) / (right - left),
-        MIN_SPLIT_FRACTION,
-        1 - MIN_SPLIT_FRACTION,
+      const { left, right } = rootRef.current.getBoundingClientRect();
+      onChangeSplitFraction(
+        _.clamp(
+          (event.clientX - left) / (right - left),
+          MIN_SPLIT_FRACTION,
+          1 - MIN_SPLIT_FRACTION,
+        ),
       );
-      onChangeSplitFraction(newSplitFraction);
     },
     [onChangeSplitFraction],
   );
-
-  const [resizing, setResizing] = useState(false);
   useEffect(() => {
-    if (resizing) {
-      window.addEventListener("mousemove", resizeMouseMove);
-      window.addEventListener("mouseup", resizeMouseUp);
-      return () => {
-        window.removeEventListener("mousemove", resizeMouseMove);
-        window.removeEventListener("mouseup", resizeMouseUp);
-      };
-    } else {
+    if (!resizing) {
       return undefined;
     }
-  }, [resizeMouseMove, resizeMouseUp, resizing]);
+    const stop = () => {
+      setResizing(false);
+    };
+    window.addEventListener("mousemove", resizeMouseMove);
+    window.addEventListener("mouseup", stop);
+    return () => {
+      window.removeEventListener("mousemove", resizeMouseMove);
+      window.removeEventListener("mouseup", stop);
+    };
+  }, [resizeMouseMove, resizing]);
 
-  const renderKeyValueCell = useCallback(
-    (
-      html: { __html: string } | undefined,
-      str: string,
-      openPlotPanelIconElem?: React.ReactNode,
-    ): ReactElement => {
-      if (html) {
-        return <TableCell className={classes.htmlTableCell} dangerouslySetInnerHTML={html} />;
-      }
+  const now = performance.now();
+  const gridTemplateColumns = `${100 * splitFraction}% 1fr`;
 
-      // Apply numeric precision to the value if requested and it can be parsed
-      // as a float
-      let strToRender = str;
-      if (numericPrecision != undefined && isFloatOrInteger(str)) {
-        strToRender = parseFloat(str).toFixed(numericPrecision);
-      }
-
-      return (
-        <TableCell padding="checkbox">
-          <Stack
-            direction="row"
-            gap={1}
-            alignItems="center"
-            flex="auto"
-            justifyContent="space-between"
-          >
-            {strToRender || "\xa0"}
-            {openPlotPanelIconElem}
-          </Stack>
-        </TableCell>
-      );
-    },
-    [classes.htmlTableCell, numericPrecision],
-  );
-
-  const renderKeyValueSections = useCallback((): React.ReactNode => {
-    const formattedKeyVals: FormattedKeyValue[] = getFormattedKeyValues(info.status);
-
-    return formattedKeyVals.map(({ key, value, keyHtml, valueHtml }) => {
-      // We need both `hardware_id` and `name`; one of them is not enough. That's also how we identify
-      // what to show in this very panel; see `selectedHardwareId` AND `selectedName` in the config.
-      const valuePath = `${topicToRender}.status[:]{hardware_id=="${info.status.hardware_id}"}{name=="${info.status.name}"}.values[:]{key=="${key}"}.value`;
-
-      let openPlotPanelIconElem = undefined;
-      if (value.length > 0) {
-        openPlotPanelIconElem = !isNaN(Number(value)) ? (
-          <IconButton
-            className={classes.iconButton}
-            title="Open in Plot panel"
-            color="inherit"
-            size="small"
-            data-testid="open-plot-button"
-            onClick={() => {
-              openSiblingPlotPanel(openSiblingPanel, valuePath);
-            }}
-          >
-            <ShowChartIcon fontSize="inherit" />
-          </IconButton>
-        ) : (
-          <IconButton
-            className={classes.iconButton}
-            title="Open in State Transitions panel"
-            color="inherit"
-            size="small"
-            data-testid="open-state-transitions-button"
-            onClick={() => {
-              openSiblingStateTransitionsPanel(openSiblingPanel, valuePath);
-            }}
-          >
-            <PowerInputIcon fontSize="inherit" />
-          </IconButton>
+  const renderRow = (row: Row): React.ReactNode => {
+    const { info } = row;
+    const color = MESSAGE_COLORS[info.status.level];
+    switch (row.kind) {
+      case "header":
+        return (
+          <HeaderCell
+            info={info}
+            history={history}
+            range={range}
+            staleSec={staleSec}
+            onSeek={onSeek}
+          />
         );
-      }
-      return (
-        <TableRow key={key} hover>
-          {renderKeyValueCell(keyHtml, key)}
-          {renderKeyValueCell(valueHtml, value, openPlotPanelIconElem)}
-        </TableRow>
-      );
-    });
-  }, [classes.iconButton, info.status, openSiblingPanel, renderKeyValueCell, topicToRender]);
-
-  return (
-    <div>
-      <div
-        className={classes.resizeHandle}
-        style={{
-          left: `${100 * splitFraction}%`,
-        }}
-        onMouseDown={resizeMouseDown}
-        data-testid="DiagnosticTable-resizeHandle"
-      />
-      <Table className={classes.table} size="small" ref={tableRef}>
-        <TableBody>
-          {/* Use a dummy row to fix the column widths */}
-          <TableRow style={{ height: 0 }}>
-            <TableCell
-              padding="none"
-              style={{ width: `${100 * splitFraction}%`, borderRight: "none" }}
-            />
-            <TableCell padding="none" style={{ borderLeft: "none" }} />
-          </TableRow>
-          <TableRow className={classes.tableHeaderRow}>
-            <TableCell variant="head" data-testid="DiagnosticTable-display-name" colSpan={2}>
-              <Tooltip
-                arrow
-                title={
-                  <>
-                    <Typography variant="body2">
-                      Hardware ID: <code>{info.status.hardware_id}</code>
-                    </Typography>
-                    <Typography variant="body2">
-                      Name: <code>{info.status.name}</code>
-                    </Typography>
-                  </>
-                }
-              >
-                <Typography
-                  color={MESSAGE_COLORS[info.status.level]}
-                  variant="subtitle1"
-                  fontWeight={800}
-                >
-                  {info.displayName}
-                </Typography>
-              </Tooltip>
-            </TableCell>
-          </TableRow>
-          <TableRow hover>
-            <TableCell colSpan={2} padding="checkbox">
-              <Stack
-                direction="row"
-                flex="auto"
-                alignItems="center"
-                justifyContent="space-between"
-                gap={1}
-              >
-                <Typography
-                  flex="auto"
-                  color={MESSAGE_COLORS[info.status.level]}
-                  variant="inherit"
-                  fontWeight={800}
-                >
-                  {info.status.message}
-                </Typography>
-                <Stack direction="row" alignItems="center" justifyContent="space-between" gap={1}>
+      case "message":
+        return (
+          <div className={cx(classes.cell, classes.fullWidth)}>
+            <Typography
+              className={classes.valueText}
+              color={color}
+              variant="inherit"
+              fontWeight={800}
+            >
+              {info.status.message || "\xa0"}
+            </Typography>
+            <IconButton
+              className={classes.iconButton}
+              title={t("openInStateTransitions")}
+              size="small"
+              onClick={() => {
+                openSiblingStateTransitionsPanel(openSiblingPanel, `${statusPath(info)}.message`);
+              }}
+            >
+              <PowerInputIcon fontSize="inherit" />
+            </IconButton>
+          </div>
+        );
+      case "value": {
+        const { key, value, keyHtml, valueHtml } = row.kv;
+        const change = changesRef.current.get(row.key);
+        const age = change ? now - change.changedAt : Infinity;
+        const valuePath = `${statusPath(info)}.values[:]{key=="${key}"}.value`;
+        const isNumber = value.length > 0 && !isNaN(Number(value));
+        return (
+          <>
+            {keyHtml ? (
+              <div
+                className={cx(classes.cell, classes.keyCell, classes.htmlCell)}
+                dangerouslySetInnerHTML={keyHtml}
+              />
+            ) : (
+              <div className={cx(classes.cell, classes.keyCell)}>{key || "\xa0"}</div>
+            )}
+            <div
+              className={cx(classes.cell, { [classes.flash]: age < VALUE_FLASH_MS })}
+              // Resume the fade where it was if the row re-mounts (e.g. while scrolling).
+              style={age < VALUE_FLASH_MS ? { animationDelay: `-${age}ms` } : undefined}
+              title={
+                change?.previous != undefined
+                  ? t("previousValue", { value: change.previous })
+                  : undefined
+              }
+              data-testid={age < VALUE_FLASH_MS ? "diagnostic-value-changed" : undefined}
+            >
+              {valueHtml ? (
+                <div
+                  className={cx(classes.valueText, classes.htmlCell)}
+                  dangerouslySetInnerHTML={valueHtml}
+                />
+              ) : (
+                <span className={classes.valueText}>
+                  {formatValue(value, numericPrecision) || "\xa0"}
+                </span>
+              )}
+              {value.length > 0 && (
+                <>
+                  <CopyButton
+                    className={classes.iconButton}
+                    size="small"
+                    iconSize="small"
+                    color="inherit"
+                    aria-label={t("copyValue")}
+                    getText={() => value}
+                  />
                   <IconButton
                     className={classes.iconButton}
-                    title="Open in State Transitions panel"
+                    title={isNumber ? t("openInPlot") : t("openInStateTransitions")}
+                    color="inherit"
                     size="small"
+                    data-testid={isNumber ? "open-plot-button" : "open-state-transitions-button"}
                     onClick={() => {
-                      openSiblingStateTransitionsPanel(
-                        openSiblingPanel,
-                        `${topicToRender}.status[:]{hardware_id=="${info.status.hardware_id}"}{name=="${info.status.name}"}.message`,
-                      );
+                      if (isNumber) {
+                        openSiblingPlotPanel(openSiblingPanel, valuePath);
+                      } else {
+                        openSiblingStateTransitionsPanel(openSiblingPanel, valuePath);
+                      }
                     }}
                   >
-                    <PowerInputIcon fontSize="inherit" />
+                    {isNumber ? (
+                      <ShowChartIcon fontSize="inherit" />
+                    ) : (
+                      <PowerInputIcon fontSize="inherit" />
+                    )}
                   </IconButton>
-                </Stack>
-              </Stack>
-            </TableCell>
-          </TableRow>
-          {renderKeyValueSections()}
-        </TableBody>
-      </Table>
+                </>
+              )}
+            </div>
+          </>
+        );
+      }
+    }
+  };
+
+  return (
+    <div className={classes.root} ref={rootRef}>
+      <div
+        className={classes.resizeHandle}
+        style={{ left: `${100 * splitFraction}%` }}
+        onMouseDown={(event) => {
+          setResizing(true);
+          event.preventDefault();
+        }}
+        data-testid="DiagnosticTable-resizeHandle"
+      />
+      <div className={classes.scroller} ref={scrollRef} data-testid="filtered-diagnostics">
+        <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+          {virtualizer.getVirtualItems().map((item) => {
+            const row = rows[item.index]!;
+            return (
+              <div
+                key={item.key}
+                data-index={item.index}
+                ref={virtualizer.measureElement}
+                className={cx(classes.row, { [classes.headerRow]: row.kind === "header" })}
+                style={{ transform: `translateY(${item.start}px)`, gridTemplateColumns }}
+              >
+                {renderRow(row)}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HeaderCell(props: {
+  info: DiagnosticInfo;
+  history: HistoryById;
+  range: TimelineRange | undefined;
+  staleSec: number;
+  onSeek?: (seconds: number) => void;
+}): React.JSX.Element {
+  const { info, history, range, staleSec, onSeek } = props;
+  const { classes, cx } = useStyles();
+  const { t } = useTranslation("diagnostics");
+  const checkHistory = history.get(info.id);
+  const levelSince = useLevelSince(info, checkHistory, range, staleSec);
+
+  return (
+    <div className={cx(classes.cell, classes.fullWidth)} data-testid="DiagnosticTable-header">
+      <Tooltip
+        arrow
+        title={
+          <>
+            <Typography variant="body2">
+              {t("hardwareId")}: <code>{info.status.hardware_id}</code>
+            </Typography>
+            <Typography variant="body2">
+              {t("name")}: <code>{info.status.name}</code>
+            </Typography>
+          </>
+        }
+      >
+        <Typography
+          className={classes.valueText}
+          color={MESSAGE_COLORS[info.status.level]}
+          variant="subtitle1"
+          fontWeight={800}
+          noWrap
+          data-testid="DiagnosticTable-display-name"
+        >
+          {info.displayName}
+        </Typography>
+      </Tooltip>
+      {levelSince && (
+        <Typography variant="caption" color="text.secondary" title={levelSince.title} noWrap>
+          {levelSince.text}
+        </Typography>
+      )}
+      {range && (
+        <DiagnosticTimeline
+          history={checkHistory}
+          start={range.start}
+          end={range.end}
+          current={range.current}
+          staleSec={staleSec}
+          width="35%"
+          onSeek={onSeek}
+        />
+      )}
+      <CopyButton
+        className={classes.iconButton}
+        size="small"
+        iconSize="small"
+        color="inherit"
+        aria-label={t("copyStatus")}
+        getText={() => JSON.stringify(info.status, undefined, 2) ?? ""}
+      />
     </div>
   );
 }

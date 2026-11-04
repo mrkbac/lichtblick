@@ -11,6 +11,7 @@ export * from "./appSettings";
 export * from "./cameraGrid";
 export * from "./catalog";
 export * from "./dataSourceInfo";
+export * from "./diagnostics";
 export * from "./desktopWindow";
 export * from "./exportRecording";
 export * from "./extensionsSettings";

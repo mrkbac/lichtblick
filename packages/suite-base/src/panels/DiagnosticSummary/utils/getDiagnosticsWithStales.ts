@@ -4,29 +4,27 @@
 import { compare, Time } from "@foxglove/rostime";
 
 import { LEVELS } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
-import { UseDiagnosticsResult } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnostics";
 import { DiagnosticsById } from "@lichtblick/suite-base/panels/DiagnosticSummary/types";
 
+/**
+ * Marks diagnostics received before `staleTime` as STALE. Compares receive times (not header
+ * stamps) so a publisher with a wrong or zero clock isn't reported stale. Entries that aren't
+ * stale keep their identity so memoized rows don't re-render.
+ */
 export function getDiagnosticsWithStales(
-  diagnosticsByHardwareId: UseDiagnosticsResult | undefined,
-  staleTime: Time,
-): UseDiagnosticsResult {
-  const ret = new Map<string, DiagnosticsById>();
-
-  if (!diagnosticsByHardwareId) {
-    return ret;
+  diagnostics: DiagnosticsById,
+  staleTime: Time | undefined,
+): DiagnosticsById {
+  if (!staleTime) {
+    return diagnostics;
   }
-
-  for (const [hardwareId, diagnosticsByName] of diagnosticsByHardwareId) {
-    const newDiagnosticsByName: DiagnosticsById = new Map();
-    ret.set(hardwareId, newDiagnosticsByName);
-
-    for (const [name, diagnostic] of diagnosticsByName) {
-      const markStale = compare(diagnostic.stamp, staleTime) < 0;
-      const level = markStale ? LEVELS.STALE : diagnostic.status.level;
-      newDiagnosticsByName.set(name, { ...diagnostic, status: { ...diagnostic.status, level } });
-    }
+  const ret: DiagnosticsById = new Map();
+  for (const [id, diagnostic] of diagnostics) {
+    const stale = compare(diagnostic.receiveTime, staleTime) < 0;
+    ret.set(
+      id,
+      stale ? { ...diagnostic, status: { ...diagnostic.status, level: LEVELS.STALE } } : diagnostic,
+    );
   }
-
   return ret;
 }

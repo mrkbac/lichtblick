@@ -14,59 +14,81 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { useMemo } from "react";
+import { useCallback } from "react";
 
+import { toSec } from "@foxglove/rostime";
 import { useMessageReducer } from "@lichtblick/suite-base/PanelAPI";
 import { DiagnosticStatusArrayMsg } from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
+import { MAX_LIVE_HISTORY_CHANGES } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
 import { DiagnosticsById } from "@lichtblick/suite-base/panels/DiagnosticSummary/types";
+import {
+  appendBounded,
+  changesFor,
+  HistoryById,
+} from "@lichtblick/suite-base/panels/DiagnosticSummary/utils/history";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 import { computeDiagnosticInfo } from "../utils/util";
 
-export type UseDiagnosticsResult = Map<string, DiagnosticsById>;
+export type DiagnosticsState = {
+  /** Latest status per diagnostic id, merged across all subscribed topics. */
+  latest: DiagnosticsById;
+  /** Level history built from the played messages; bounded, used when no full range is available. */
+  history: HistoryById;
+};
 
+const EMPTY_STATE: DiagnosticsState = { latest: new Map(), history: new Map() };
+
+/** Pure reducer: never mutates `prev`, so React and memoized consumers see every change. */
 export function addMessages(
-  prev: UseDiagnosticsResult,
+  prev: DiagnosticsState,
   messageEvents: readonly MessageEvent[],
-): UseDiagnosticsResult {
-  // Mutates the previous value since there might be many diagnostic messages
-  let modified = false;
-  const next = new Map(prev);
+  staleSec: number,
+): DiagnosticsState {
+  let latest: DiagnosticsById | undefined;
+  let history: HistoryById | undefined;
 
   for (const event of messageEvents as MessageEvent<DiagnosticStatusArrayMsg>[]) {
-    const { header, status: statusArray }: DiagnosticStatusArrayMsg = event.message;
+    const { header, status: statusArray } = event.message;
+    const t = toSec(event.receiveTime);
 
     for (const status of statusArray) {
-      const info = computeDiagnosticInfo(status, header.stamp);
-      const diagnosticsByName = next.get(status.hardware_id);
-
-      if (!diagnosticsByName) {
-        next.set(status.hardware_id, new Map([[status.name, info]]));
-        modified = true;
-      } else {
-        diagnosticsByName.set(status.name, info);
-        modified = true;
+      const info = computeDiagnosticInfo(status, header.stamp, event.receiveTime, event.topic);
+      history ??= new Map(prev.history);
+      const before = history.get(info.id);
+      if (before && t < before.lastSeen) {
+        continue; // out-of-order (e.g. same check on two topics); keep latest and history monotonic
       }
+      latest ??= new Map(prev.latest);
+      latest.set(info.id, info);
+      const added = changesFor(before, status.level, t, staleSec);
+      history.set(info.id, {
+        changes:
+          added.length > 0
+            ? appendBounded(before?.changes ?? [], added, MAX_LIVE_HISTORY_CHANGES)
+            : before!.changes,
+        lastSeen: t,
+      });
     }
   }
 
-  // We shallow-copy the buffer when it changes to help users know when to rerender.
-  return modified ? next : prev;
+  return latest ? { latest, history: history ?? prev.history } : prev;
 }
 
-const EmptyMap = () => new Map();
+const restore = (prev?: DiagnosticsState) => prev ?? EMPTY_STATE;
 
-export default function useDiagnostics(topic?: string): UseDiagnosticsResult {
-  const topics = useMemo(() => {
-    if (topic) {
-      return [topic];
-    }
-    return [];
-  }, [topic]);
-
-  return useMessageReducer<UseDiagnosticsResult>({
+export default function useDiagnostics(
+  topics: readonly string[],
+  staleSec: number,
+): DiagnosticsState {
+  const reducer = useCallback(
+    (prev: DiagnosticsState, events: readonly MessageEvent[]) =>
+      addMessages(prev, events, staleSec),
+    [staleSec],
+  );
+  return useMessageReducer<DiagnosticsState>({
     topics,
-    restore: EmptyMap,
-    addMessages,
+    restore,
+    addMessages: reducer,
   });
 }
