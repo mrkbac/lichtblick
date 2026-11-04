@@ -184,6 +184,7 @@ export const initialPaletteState: PaletteState = {
   stack: [{ query: "", selectedIndex: 0 }],
 };
 
+/** Applies keyboard and mouse navigation to the sub-menu stack. */
 export function paletteReducer(state: PaletteState, action: PaletteAction): PaletteState {
   const top = state.stack[state.stack.length - 1]!;
   const replaceTop = (level: PaletteLevel) => ({
@@ -226,6 +227,7 @@ export function paletteReducer(state: PaletteState, action: PaletteAction): Pale
 const RECENT_KEY = `${KEY_WORKSPACE_PREFIX}studio.command-palette.recent`;
 const MAX_RECENT = 30;
 
+/** Reads recently used command ids, most recent first; empty if storage is unavailable. */
 export function loadRecentCommandIds(): string[] {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
@@ -235,6 +237,7 @@ export function loadRecentCommandIds(): string[] {
   }
 }
 
+/** Moves `id` to the front of the recent list and persists it. */
 export function pushRecentCommandId(recent: readonly string[], id: string): string[] {
   const next = [id, ...recent.filter((other) => other !== id)].slice(0, MAX_RECENT);
   try {

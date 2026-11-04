@@ -113,6 +113,7 @@ export function CommandPalette(): React.JSX.Element {
   );
 }
 
+/** The open palette: search input, ranked results and sub-menu breadcrumbs. */
 function CommandPaletteDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("commandPalette");

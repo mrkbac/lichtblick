@@ -122,6 +122,7 @@ const selectPause = (ctx: MessagePipelineContext) => ctx.pausePlayback;
 const selectSeek = (ctx: MessagePipelineContext) => ctx.seekPlayback;
 const selectSetSpeed = (ctx: MessagePipelineContext) => ctx.setPlaybackSpeed;
 
+/** Wraps an async action as a sync callback that logs failures. */
 function catchErrors(action: () => Promise<unknown>): () => void {
   return () => {
     action().catch((err: unknown) => {
@@ -130,6 +131,7 @@ function catchErrors(action: () => Promise<unknown>): () => void {
   };
 }
 
+/** Lists the global keyboard shortcuts as read-only palette entries. */
 function shortcutCommands(t: TFunction<"commandPalette">): Command[] {
   const noop = () => {};
   const entries: [string, string][] = [
