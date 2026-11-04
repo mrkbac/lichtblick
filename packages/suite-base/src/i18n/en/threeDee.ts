@@ -110,6 +110,7 @@ export const threeDee = {
   // Image annotations
   imageAnnotations: "Image annotations",
   resetView: "Reset view",
+  downloadImage: "Download image",
 
   // Images
   cameraInfo: "Camera info",

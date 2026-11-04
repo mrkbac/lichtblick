@@ -53,7 +53,6 @@ import {
   BOTH_TOPICS_DO_NOT_EXIST_HUD_ITEM_ID,
   IMAGE_TOPIC_DOES_NOT_EXIST_HUD_ITEM_ID,
   CALIBRATION_TOPIC_DOES_NOT_EXIST_HUD_ITEM_ID,
-  DOWNLOAD_IMAGE_LABEL,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/constants";
 import {
   ConfigWithDefaults,
@@ -1075,7 +1074,7 @@ export class ImageMode
     return [
       {
         type: "item",
-        label: DOWNLOAD_IMAGE_LABEL,
+        label: t3D("downloadImage"),
         onclick: this.#getDownloadImageCallback(),
         disabled: this.imageRenderable?.getDecodedImage() == undefined,
       },

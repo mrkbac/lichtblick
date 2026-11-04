@@ -47,7 +47,6 @@ import { Renderable } from "./Renderable";
 import { useRenderer, useRendererEvent } from "./RendererContext";
 import { Stats } from "./Stats";
 import { MouseEventObject } from "./camera";
-import { DOWNLOAD_IMAGE_LABEL } from "./renderables/ImageMode/constants";
 import { PublishClickType } from "./renderables/PublishClickTool";
 import { InterfaceMode } from "./types";
 
@@ -448,12 +447,12 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
   // Same action as the "Download image" context menu item, surfaced as a toolbar button
   const onDownloadImage = useCallback(() => {
     const item = getContextMenuItems().find(
-      (menuItem) => menuItem.type === "item" && menuItem.label === DOWNLOAD_IMAGE_LABEL,
+      (menuItem) => menuItem.type === "item" && menuItem.label === t("downloadImage"),
     );
     if (item?.type === "item" && item.disabled !== true) {
       item.onclick();
     }
-  }, [getContextMenuItems]);
+  }, [getContextMenuItems, t]);
 
   const mousePresenceRef = useRef<HTMLDivElement>(ReactNull);
   const mousePresent = usePanelMousePresence(mousePresenceRef);
@@ -477,10 +476,10 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
         }
         {props.interfaceMode === "image" && mousePresent && (
           <Paper square={false} elevation={4} style={{ display: "flex", flexDirection: "column" }}>
-            <Tooltip placement="left" title={DOWNLOAD_IMAGE_LABEL}>
+            <Tooltip placement="left" title={t("downloadImage")}>
               <IconButton
                 data-testid="download-image-button"
-                aria-label={DOWNLOAD_IMAGE_LABEL}
+                aria-label={t("downloadImage")}
                 className={classes.iconButton}
                 size="small"
                 onClick={onDownloadImage}

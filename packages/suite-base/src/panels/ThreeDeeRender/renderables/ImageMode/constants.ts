@@ -132,5 +132,3 @@ export const FRAGMENT_SHADER = `
         gl_FragColor = texColor;
     }
 `;
-
-export const DOWNLOAD_IMAGE_LABEL = "Download image";
