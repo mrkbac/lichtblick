@@ -76,7 +76,7 @@ import {
   SUPPORTED_SERVICE_ENCODINGS,
   ZERO_TIME,
 } from "./constants";
-import { bytesToBase64, dataTypeToFullName, statusLevelToAlertSeverity } from "./helpers";
+import { dataTypeToFullName, statusLevelToAlertSeverity } from "./helpers";
 import {
   decodePlaybackState,
   encodePlaybackControlRequest,
@@ -679,7 +679,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         return param.type === "byte_array"
           ? {
               ...param,
-              value: Uint8Array.from(atob(param.value as string), (c) => c.charCodeAt(0)),
+              value: Uint8Array.fromBase64(param.value as string),
             }
           : param;
       });
@@ -1142,7 +1142,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
     log.debug(`FoxgloveWebSocketPlayer.setParameter(key=${key}, value=${JSON.stringify(value)})`);
     const isByteArray = value instanceof Uint8Array;
-    const paramValueToSent = isByteArray ? bytesToBase64(value) : value;
+    const paramValueToSent = isByteArray ? value.toBase64() : value;
     this.#client.setParameters(
       [
         {
