@@ -5,14 +5,12 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { PropsWithChildren, useEffect, useState } from "react";
+import { PropsWithChildren, useState } from "react";
 import { screen, userEvent } from "storybook/test";
 import { StoryObj } from "storybook-react-rsbuild";
 
-import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { SidebarItem } from "@lichtblick/suite-base/components/Sidebars/types";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
 
 import Sidebars from ".";
 
@@ -72,13 +70,8 @@ function Story({
 }): React.JSX.Element {
   const [selectedRightKey, setSelectedRightKey] = useState<RightKey | undefined>(defaultRightKey);
   const [selectedLeftKey, setSelectedLeftKey] = useState<LeftKey | undefined>(defaultLeftKey);
-  const [, setAppBarEnabled] = useAppConfigurationValue<boolean>(AppSetting.ENABLE_NEW_TOPNAV);
   const [leftSidebarSize, setLeftSidebarSize] = useState<number | undefined>();
   const [rightSidebarSize, setRightSidebarSize] = useState<number | undefined>();
-
-  useEffect(() => {
-    void setAppBarEnabled(true);
-  }, [setAppBarEnabled]);
 
   return (
     <div style={{ height: "100%" }}>
