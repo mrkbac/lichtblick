@@ -5,7 +5,10 @@ import { useMemo } from "react";
 
 import { Time } from "@lichtblick/rostime";
 import { MessageDataItemsByPath } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
-import { ChartDatasets } from "@lichtblick/suite-base/components/TimeBasedChart/types";
+import {
+  ChartDataset,
+  ChartDatasets,
+} from "@lichtblick/suite-base/components/TimeBasedChart/types";
 import {
   ROW_MARGIN,
   ROW_SPACING,
@@ -17,6 +20,15 @@ import {
   PathState,
   StateTransitionPath,
 } from "@lichtblick/suite-base/panels/StateTransitions/types";
+
+/** Collects the x of every segment where a condition series turns true. */
+export function addMatchStarts(dataset: ChartDataset, out: Set<number>): void {
+  for (const datum of dataset.data) {
+    if (datum?.value === true && datum.label != undefined) {
+      out.add(datum.x);
+    }
+  }
+}
 
 function useStateTransitionsData(
   paths: StateTransitionPath[],
@@ -33,12 +45,14 @@ function useStateTransitionsData(
         data: { datasets: [] },
         minY: undefined,
         pathState: [],
+        matchStarts: [],
       };
     }
 
     let outMinY: number | undefined;
     const outDatasets: ChartDatasets = [];
     const outPathState: PathState[] = [];
+    const matchStarts = new Set<number>();
 
     paths.forEach((path, pathIndex) => {
       const y = -(pathIndex + 1) * ROW_SPACING;
@@ -63,6 +77,9 @@ function useStateTransitionsData(
         isArray,
       });
       outDatasets.push(newBlockDataSet);
+      if (path.condition) {
+        addMatchStarts(newBlockDataSet, matchStarts);
+      }
 
       if (items == undefined) {
         return;
@@ -77,12 +94,16 @@ function useStateTransitionsData(
         showPoints,
       });
       outDatasets.push(newPathDataSet);
+      if (path.condition) {
+        addMatchStarts(newPathDataSet, matchStarts);
+      }
     });
 
     return {
       data: { datasets: outDatasets },
       minY: outMinY,
       pathState: outPathState,
+      matchStarts: [...matchStarts].sort((a, b) => a - b),
     };
   }, [decodedBlocks, itemsByPath, paths, startTime, showPoints]);
 }

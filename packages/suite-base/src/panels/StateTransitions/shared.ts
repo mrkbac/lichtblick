@@ -24,7 +24,13 @@ export function stateTransitionPathDisplayName(
   path: Readonly<StateTransitionPath>,
   index: number,
 ): string {
-  return presence(path.label) ?? presence(path.value) ?? `Series ${index + 1}`;
+  const value = presence(path.value);
+  const condition = presence(path.condition);
+  return (
+    presence(path.label) ??
+    (value != undefined && condition != undefined ? `${value} ${condition}` : value) ??
+    `Series ${index + 1}`
+  );
 }
 
 export function datasetContainsArray(dataset: ImmutableDataset): boolean {

@@ -38,6 +38,7 @@ jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransiti
     pathState: [],
     data: { datasets: [{ data: [{ x: 1, y: 0, value: "A" }] }] },
     minY: 0,
+    matchStarts: [1, 5],
   }),
 }));
 jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useChartScalesAndBounds", () => ({
@@ -52,11 +53,12 @@ jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useChartScalesAn
 }));
 jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useMessagePathDropConfig");
 jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/usePanelSettings");
+const mockSeekPlayback = jest.fn();
 jest.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   useMessagePipeline: (selector: (ctx: unknown) => unknown) =>
     selector({ playerState: { presence: "PRESENT" } }),
   useMessagePipelineGetter: () => () => ({
-    seekPlayback: jest.fn(),
+    seekPlayback: mockSeekPlayback,
     playerState: { activeData: { startTime: { sec: 0, nsec: 0 } } },
   }),
 }));
@@ -215,5 +217,30 @@ describe("StateTransitions", () => {
     });
 
     expect(mockUseMessagesByPath).toHaveBeenCalledWith([]);
+  });
+
+  it("hides match navigation without a condition", () => {
+    renderPanel({ paths: [{ value: "/a.b", timestampMethod: "receiveTime" }] });
+    expect(screen.queryByTestId("state-transitions-match-count")).toBeNull();
+  });
+
+  it("shows the match count and seeks between matches with buttons and N / Shift+N", () => {
+    renderPanel({
+      paths: [{ value: "/a.b", condition: "> 2", timestampMethod: "receiveTime" }],
+    });
+
+    expect(screen.getByTestId("state-transitions-match-count")).toHaveTextContent("0/2");
+    expect(screen.getByTestId("state-transitions-previous-match")).toBeDisabled();
+
+    fireEvent.click(screen.getByTestId("state-transitions-next-match"));
+    expect(mockSeekPlayback).toHaveBeenLastCalledWith({ sec: 1, nsec: 0 });
+
+    fireEvent.keyDown(document, { key: "n" });
+    expect(mockSeekPlayback).toHaveBeenCalledTimes(2);
+    expect(mockSeekPlayback).toHaveBeenLastCalledWith({ sec: 1, nsec: 0 });
+
+    // Nothing before the playhead (t=0), so Shift+N does not seek.
+    fireEvent.keyDown(document, { key: "N", shiftKey: true });
+    expect(mockSeekPlayback).toHaveBeenCalledTimes(2);
   });
 });
