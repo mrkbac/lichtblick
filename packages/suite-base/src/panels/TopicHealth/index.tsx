@@ -16,7 +16,7 @@ import * as _ from "lodash-es";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { formatByteSize } from "@lichtblick/den/format";
-import { Time, subtract, toSec } from "@lichtblick/rostime";
+import { Time, subtract, toSec } from "@foxglove/rostime";
 import { MessageEvent, SettingsTreeAction } from "@lichtblick/suite";
 import { useMessageReducer } from "@lichtblick/suite-base/PanelAPI";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
