@@ -9,6 +9,7 @@ import {
   SettingsTreeActionUpdatePayload,
 } from "@lichtblick/suite";
 import LogPanelExport, { createActionHandler } from "@lichtblick/suite-base/panels/Log";
+import { isTopicVisible } from "@lichtblick/suite-base/panels/Log/settings";
 import { Config, LogLevel } from "@lichtblick/suite-base/panels/Log/types";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
@@ -202,7 +203,10 @@ describe("Log Panel actionHandler", () => {
     it.each<{ description: string; action: SettingsTreeAction }>([
       {
         description: "unknown action type",
-        action: { action: "unknown-action", payload: {} } as unknown as SettingsTreeAction,
+        action: {
+          action: "unknown-action",
+          payload: {},
+        } as unknown as SettingsTreeAction,
       },
       {
         description: "perform-node-action with unknown id",
@@ -231,15 +235,27 @@ describe("Log Panel actionHandler", () => {
       const actions: SettingsTreeAction[] = [
         {
           action: "update",
-          payload: { path: ["nameFilter", node1, "visible"], value: true, input: "boolean" },
+          payload: {
+            path: ["nameFilter", node1, "visible"],
+            value: true,
+            input: "boolean",
+          },
         },
         {
           action: "update",
-          payload: { path: ["nameFilter", node2, "visible"], value: false, input: "boolean" },
+          payload: {
+            path: ["nameFilter", node2, "visible"],
+            value: false,
+            input: "boolean",
+          },
         },
         {
           action: "update",
-          payload: { path: ["general", "minLogLevel"], value: LogLevel.WARN, input: "number" },
+          payload: {
+            path: ["general", "minLogLevel"],
+            value: LogLevel.WARN,
+            input: "number",
+          },
         },
       ];
       actions.forEach((action) => {
@@ -268,6 +284,61 @@ describe("Log Panel actionHandler", () => {
 
       expect(saveConfigMock).toHaveBeenCalledTimes(2);
     });
+  });
+});
+
+describe("Log Panel topic selection", () => {
+  const topics = ["/a", "/b", "/c"];
+
+  function apply(action: SettingsTreeAction, config: Config): Config {
+    const saveConfig = jest.fn();
+    createActionHandler(saveConfig, new Set(), topics)(action);
+    return saveConfig.mock.calls[0]?.[0](config);
+  }
+
+  it("shows all topics by default and only the legacy topicToRender for old configs", () => {
+    expect(topics.filter((t) => isTopicVisible({}, t))).toEqual(topics);
+    expect(topics.filter((t) => isTopicVisible({ topicToRender: "/b" }, t))).toEqual(["/b"]);
+    expect(isTopicVisible({ topicToRender: "/b", topics: { "/a": { visible: true } } }, "/a")).toBe(
+      true,
+    );
+  });
+
+  it("migrates topicToRender to per-topic visibility when a topic is toggled", () => {
+    const result = apply(
+      {
+        action: "update",
+        payload: {
+          path: ["topics", "/c", "visible"],
+          value: true,
+          input: "boolean",
+        },
+      },
+      { minLogLevel: 1, searchTerms: [], topicToRender: "/b" },
+    );
+    expect(result.topicToRender).toBeUndefined();
+    expect(result.topics).toEqual({
+      "/a": { visible: false },
+      "/b": { visible: true },
+      "/c": { visible: true },
+    });
+  });
+
+  it.each([
+    ["show-all", true],
+    ["hide-all", false],
+  ])("%s on the topics node toggles every topic", (id, visible) => {
+    const result = apply(
+      { action: "perform-node-action", payload: { id, path: ["topics"] } },
+      {
+        minLogLevel: 1,
+        searchTerms: [],
+        topicToRender: "/b",
+        nameFilter: { n: { visible: false } },
+      },
+    );
+    expect(result.topics).toEqual(Object.fromEntries(topics.map((t) => [t, { visible }])));
+    expect(result.nameFilter).toEqual({ n: { visible: false } });
   });
 });
 
