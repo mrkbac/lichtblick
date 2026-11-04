@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import type { Mock } from "vitest";
-
 import "@testing-library/jest-dom";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -18,6 +17,7 @@ import Publish from "./index";
 import { PublishConfig } from "./types";
 
 const mockPublish = vi.fn();
+const mockPresence = { current: "PRESENT" };
 
 vi.mock("@lichtblick/suite-base/PanelAPI", () => ({
   useDataSourceInfo: vi.fn(() => ({
@@ -30,7 +30,9 @@ vi.mock("@lichtblick/suite-base/PanelAPI", () => ({
 
 vi.mock("@lichtblick/suite-base/components/MessagePipeline", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@lichtblick/suite-base/components/MessagePipeline")>()),
-  useMessagePipeline: vi.fn(() => undefined),
+  useMessagePipeline: vi.fn((selector: (ctx: unknown) => unknown) =>
+    selector({ playerState: { presence: mockPresence.current } }),
+  ),
 }));
 
 vi.mock("@lichtblick/suite-base/hooks/usePublisher", () => ({
@@ -62,6 +64,7 @@ vi.mock("./settings", () => ({
 describe("Publish", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPresence.current = "PRESENT";
   });
 
   function setup(
@@ -82,7 +85,16 @@ describe("Publish", () => {
       </PanelSetup>
     );
 
-    return { ...render(ui), config };
+    const result = render(ui);
+    // A new config object makes the memoized panel re-render and re-read the pipeline mock
+    const rerenderPanel = () => {
+      result.rerender(
+        <PanelSetup>
+          <Publish overrideConfig={{ ...config }} />
+        </PanelSetup>,
+      );
+    };
+    return { ...result, config, rerenderPanel };
   }
 
   describe("when advancedView is enabled", () => {
@@ -233,6 +245,23 @@ describe("Publish", () => {
 
       // Then
       expect(mockPublish).not.toHaveBeenCalled();
+    });
+
+    it("stops publishing when the data source disconnects", () => {
+      // Given
+      const { rerenderPanel } = startRepeating();
+
+      // When
+      mockPresence.current = "RECONNECTING";
+      rerenderPanel();
+      advance(500);
+      mockPresence.current = "PRESENT";
+      rerenderPanel();
+      advance(500);
+
+      // Then
+      expect(mockPublish).not.toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "10 Hz" })).toBeInTheDocument();
     });
 
     it("stops publishing when the panel unmounts", () => {

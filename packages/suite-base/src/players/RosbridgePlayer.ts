@@ -200,6 +200,11 @@ export default class RosbridgePlayer implements Player {
       this.#rosClient = undefined;
       this.#serviceTypeCache.clear();
       this.#serviceDetailsCache.clear();
+      // Services may change type on reconnect. A new #services map also makes in-flight
+      // #resolveServiceTypes calls discard their results.
+      this.#services = new Map();
+      this.#serviceTypes = new Map();
+      this.#serviceDatatypes = new Map();
 
       this.#alerts.addAlert("rosbridge:connection-failed", {
         severity: "error",

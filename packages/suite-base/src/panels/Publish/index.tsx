@@ -38,6 +38,7 @@ import useCallbackWithToast from "@lichtblick/suite-base/hooks/useCallbackWithTo
 import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";
 import usePublisher from "@lichtblick/suite-base/hooks/usePublisher";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { useDefaultPanelTitle } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
@@ -75,6 +76,10 @@ function selectDataSourceProfile(ctx: MessagePipelineContext) {
   return ctx.playerState.profile;
 }
 
+function selectPlayerPresence(ctx: MessagePipelineContext) {
+  return ctx.playerState.presence;
+}
+
 function formatTime(date: Date): string {
   return date.toLocaleTimeString(undefined, { hour12: false });
 }
@@ -85,6 +90,9 @@ function Publish(props: Props) {
   const { classes } = useStyles({ buttonColor: config.buttonColor });
   const [debouncedTopicName] = useDebounce(config.topicName ?? "", 500);
   const dataSourceProfile = useMessagePipeline(selectDataSourceProfile);
+  const presence = useMessagePipeline(selectPlayerPresence);
+  const [invalidFieldCount, setInvalidFieldCount] = useState(0);
+  const formInvalid = invalidFieldCount > 0;
   const [confirm, confirmModal] = useConfirm();
   const [repeating, setRepeating] = useState(false);
   const [lastPublished, setLastPublished] = useState<Date>();
@@ -132,16 +140,21 @@ function Publish(props: Props) {
 
   const canAdvertise = capabilities.includes(PLAYER_CAPABILITIES.advertise);
   const isConfigured = Boolean(config.topicName && config.datatype);
-  const canPublish = canAdvertise && isConfigured && parsed.value != undefined;
+  const canPublish = canAdvertise && isConfigured && parsed.value != undefined && !formInvalid;
 
   const onPublishClicked = useCallbackWithToast(() => {
     if (!canPublish) {
       // Reached through the keyboard shortcut; the button is disabled in this state
-      throw new Error(parsed.error ?? "Configure a topic and message schema before publishing");
+      throw new Error(
+        parsed.error ??
+          (formInvalid
+            ? "Fix the invalid field before publishing"
+            : "Configure a topic and message schema before publishing"),
+      );
     }
     publish(parsed.value);
     setLastPublished(new Date());
-  }, [canPublish, parsed, publish]);
+  }, [canPublish, formInvalid, parsed, publish]);
 
   // Repeated publishing always sends the latest valid message, so edits apply while it runs.
   const latestMessage = useRef(parsed.value);
@@ -162,7 +175,8 @@ function Publish(props: Props) {
     }
   }, [publish]);
   const rate = config.publishRate ?? defaultConfig.publishRate ?? 1;
-  const canRepeat = canAdvertise && isConfigured && rate > 0;
+  // Stops on disconnect: some players keep the advertise capability while reconnecting
+  const canRepeat = canAdvertise && isConfigured && rate > 0 && presence === PlayerPresence.PRESENT;
   useEffect(() => {
     // Stop when the data source disconnects or the topic is cleared
     if (repeating && !canRepeat) {
@@ -199,7 +213,9 @@ function Publish(props: Props) {
   } else if (lastPublished) {
     statusMessage = `Published at ${formatTime(lastPublished)}`;
   }
-  const error = config.advancedView ? parsed.error : undefined;
+  const error = config.advancedView
+    ? (parsed.error ?? (formInvalid ? "Fix the invalid field before publishing" : undefined))
+    : undefined;
 
   return (
     // `display: contents` keeps the layout while catching the publish shortcut from any input
@@ -232,6 +248,7 @@ function Publish(props: Props) {
               onPresetsChange={(presets) => {
                 saveConfig({ presets });
               }}
+              onInvalidFieldsChange={setInvalidFieldCount}
             />
           )}
           <Stack
