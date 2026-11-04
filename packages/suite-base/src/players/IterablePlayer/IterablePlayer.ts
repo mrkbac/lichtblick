@@ -23,7 +23,6 @@ import { debouncePromise } from "@lichtblick/den/async";
 import { filterMap } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
 import { Immutable, MessageEvent, Metadata, ParameterValue } from "@lichtblick/suite";
-import { DeserializedSourceWrapper } from "@lichtblick/suite-base/players/IterablePlayer/DeserializedSourceWrapper";
 import { DeserializingIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/DeserializingIterableSource";
 import { freezeMetadata } from "@lichtblick/suite-base/players/IterablePlayer/freezeMetadata";
 import NoopMetricsCollector from "@lichtblick/suite-base/players/NoopMetricsCollector";
@@ -58,6 +57,7 @@ import { BufferedIterableSource } from "./BufferedIterableSource";
 import {
   GetBackfillMessagesArgs,
   IDeserializedIterableSource,
+  IIterableSource,
   ISerializedIterableSource,
   IteratorResult,
 } from "./IIterableSource";
@@ -209,7 +209,7 @@ export class IterablePlayer implements Player {
   #alertManager = new PlayerAlertManager();
 
   #iterableSource: IDeserializedIterableSource | ISerializedIterableSource;
-  #bufferedSource: IDeserializedIterableSource;
+  #bufferedSource: IIterableSource;
   // Buffering source implementation. We store a reference to it here so we can access buffer information such as loaded ranges & memory size.
   #bufferImpl: BufferedIterableSource;
   readonly #deserializingSource?: DeserializingIterableSource;
@@ -253,7 +253,7 @@ export class IterablePlayer implements Player {
     this.#iterableSource = source;
     if (source.sourceType === "deserialized") {
       this.#bufferImpl = new BufferedIterableSource(source);
-      this.#bufferedSource = new DeserializedSourceWrapper(this.#bufferImpl);
+      this.#bufferedSource = this.#bufferImpl;
     } else {
       const MEGABYTE_IN_BYTES = 1024 * 1024;
       const bufferInterface = new BufferedIterableSource(source, {
