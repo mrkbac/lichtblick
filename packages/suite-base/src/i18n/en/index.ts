@@ -34,4 +34,5 @@ export * from "./stateTransitions";
 export * from "./threeDee";
 export * from "./topicList";
 export * from "./transformTree";
+export * from "./watch";
 export * from "./workspace";
