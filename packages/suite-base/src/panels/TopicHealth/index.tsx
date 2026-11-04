@@ -47,6 +47,7 @@ import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
 import {
   DEFAULT_CONFIG,
+  DEFAULT_TOLERANCE_PERCENT,
   RateSample,
   STATUS_ORDER,
   TopicHealthConfig,
@@ -406,7 +407,7 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
           expectedHz,
           ageSec,
           staleAfterSec: staleAfterSec(settings, expectedHz),
-          tolerancePercent: config.tolerancePercent ?? DEFAULT_CONFIG.tolerancePercent,
+          tolerancePercent: config.tolerancePercent ?? DEFAULT_TOLERANCE_PERCENT,
         }),
       });
     }

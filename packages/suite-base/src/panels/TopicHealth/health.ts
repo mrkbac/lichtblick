@@ -27,8 +27,10 @@ export type TopicHealthConfig = {
   topics: Record<string, TopicSettings>;
 };
 
-export const DEFAULT_CONFIG: TopicHealthConfig & { tolerancePercent: number } = {
-  tolerancePercent: 20,
+export const DEFAULT_TOLERANCE_PERCENT = 20;
+
+export const DEFAULT_CONFIG: TopicHealthConfig = {
+  tolerancePercent: DEFAULT_TOLERANCE_PERCENT,
   topics: {},
 };
 
