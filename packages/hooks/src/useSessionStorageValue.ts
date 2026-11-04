@@ -32,19 +32,16 @@ export function useSessionStorageValue(key: string): SessionStorageValue {
       // events when triggered outside our current tab.
       if (newValue) {
         sessionStorage.setItem(prefixedKey, newValue);
-        window.dispatchEvent(
-          new StorageEvent("storage", { key: prefixedKey, newValue, storageArea: sessionStorage }),
-        );
       } else {
         sessionStorage.removeItem(prefixedKey);
-        window.dispatchEvent(
-          new StorageEvent("storage", {
-            key: prefixedKey,
-            newValue: undefined,
-            storageArea: sessionStorage,
-          }),
-        );
       }
+      window.dispatchEvent(
+        new StorageEvent("storage", {
+          key: prefixedKey,
+          newValue: newValue === "" ? undefined : newValue,
+          storageArea: sessionStorage,
+        }),
+      );
     },
     [prefixedKey],
   );
