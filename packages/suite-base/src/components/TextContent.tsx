@@ -37,7 +37,8 @@ const useStyles = makeStyles()(({ palette, shape, spacing, typography, shadows }
       "h1, h2, h3, h4, h5, h6": {
         color: palette.text.primary,
 
-        "&:first-child": { marginTop: 0 },
+        // Same as :first-child, which Emotion warns about (unsafe for SSR).
+        "&:not(* + *)": { marginTop: 0 },
       },
       h1: {
         fontFamily: typography.h4.fontFamily,

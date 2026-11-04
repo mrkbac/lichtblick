@@ -12,10 +12,10 @@ import {
   useState,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { useResizeDetector } from "react-resize-detector";
 import { makeStyles } from "tss-react/mui";
 
 import { Immutable, PanelExtensionContext, SettingsTreeAction, Topic } from "@lichtblick/suite";
+import { useElementSize } from "@lichtblick/suite-base/hooks/useElementSize";
 import { fontMonospace } from "@lichtblick/theme";
 
 import { GridRenderer } from "./GridRenderer";
@@ -235,10 +235,7 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
     width = 0,
     height = 0,
     ref: gridRef,
-  } = useResizeDetector<HTMLDivElement>({
-    refreshRate: 0,
-    refreshMode: "debounce",
-  });
+  } = useElementSize<HTMLDivElement>();
 
   const aspect = useMemo(() => {
     void aspectVersion; // recompute when the renderer reports new image sizes

@@ -10,17 +10,17 @@ import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { Notes, SAVE_DEBOUNCE_MS } from "./Notes";
 import { NotesConfig } from "./types";
 
-jest.mock("@lichtblick/suite-base/components/PanelToolbar", () => ({
+vi.mock("@lichtblick/suite-base/components/PanelToolbar", () => ({
   __esModule: true,
   default: ({ additionalIcons }: { additionalIcons?: React.ReactNode }) => (
     <div>{additionalIcons}</div>
   ),
 }));
 
-jest.mock("./settings", () => ({ useNotesSettings: jest.fn() }));
+vi.mock("./settings", () => ({ useNotesSettings: vi.fn() }));
 
 function setup(config: NotesConfig = { text: "" }) {
-  const saveConfig = jest.fn();
+  const saveConfig = vi.fn();
   const result = render(
     <ThemeProvider isDark={false}>
       <Notes config={config} saveConfig={saveConfig} />
@@ -35,11 +35,11 @@ function type(text: string) {
 
 describe("Notes", () => {
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it("shows a placeholder inviting edits when empty", () => {
@@ -71,7 +71,7 @@ describe("Notes", () => {
     expect(saveConfig).not.toHaveBeenCalled();
 
     act(() => {
-      jest.advanceTimersByTime(SAVE_DEBOUNCE_MS);
+      vi.advanceTimersByTime(SAVE_DEBOUNCE_MS);
     });
     expect(saveConfig).toHaveBeenCalledTimes(1);
     expect(saveConfig).toHaveBeenCalledWith({ text: "ab" });

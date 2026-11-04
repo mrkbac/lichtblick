@@ -154,7 +154,7 @@ export function Notes({ config, saveConfig }: Props): React.JSX.Element {
           <li
             {...props}
             onChange={(event) => {
-              const target = event.target as HTMLInputElement;
+              const target = event.target as unknown as HTMLInputElement;
               if (offset == undefined || target.type !== "checkbox") {
                 return;
               }
