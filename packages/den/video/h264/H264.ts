@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { findNextStartCode, findNextStartCodeEnd } from "../utils";
+import { annexBBoxSize, findNextStartCode, findNextStartCodeEnd } from "../utils";
 import { SPS as SPSNALU } from "./SPS";
 
 export enum H264NaluType {
@@ -20,59 +20,11 @@ export enum H264NaluType {
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class H264 {
   public static IsAnnexB(data: Uint8Array): boolean {
-    return H264.AnnexBBoxSize(data) != undefined;
-  }
-
-  public static AnnexBBoxSize(data: Uint8Array): number | undefined {
-    // Annex B is a byte stream format where each NALU is prefixed with a start code, typically
-    // 0x000001 or 0x00000001. The type of the NALU is determined by the 5 least significant bits of
-    // the byte that follows the start code.
-    //
-    // AVCC is a length-prefixed format, where each NALU is prefixed by its length (typically 4
-    // bytes). The type of the NALU is determined by the 5 least significant bits of the first byte
-    // of the NALU itself.
-
-    if (data.length < 4) {
-      return undefined;
-    }
-
-    if (data[0] === 0 && data[1] === 0) {
-      if (data[2] === 1) {
-        return 3;
-      } else if (data[2] === 0 && data[3] === 1) {
-        return 4;
-      }
-    }
-
-    return undefined;
+    return annexBBoxSize(data) != undefined;
   }
 
   public static IsKeyframe(data: Uint8Array): boolean {
-    // Determine what type of encoding is used
-    const boxSize = H264.AnnexBBoxSize(data);
-    if (boxSize == undefined) {
-      return false;
-    }
-
-    // Iterate over the NAL units in the H264 Annex B frame, looking for NaluTypes.IDR
-    let i = boxSize;
-    while (i < data.length) {
-      // Annex B NALU type is the 5 least significant bits of the first byte following the start
-      // code
-      const byte = data[i];
-      if (byte == undefined) {
-        break;
-      }
-      const naluType = byte & 0x1f;
-      if (naluType === H264NaluType.IDR) {
-        return true;
-      }
-
-      // Scan for another start code, signifying the beginning of the next NAL unit
-      i = findNextStartCodeEnd(data, i + 1);
-    }
-
-    return false;
+    return H264.GetFirstNALUOfType(data, H264NaluType.IDR) != undefined;
   }
 
   public static GetFirstNALUOfType(
@@ -80,7 +32,7 @@ export class H264 {
     naluType: H264NaluType,
   ): Uint8Array | undefined {
     // Determine what type of encoding is used
-    const boxSize = H264.AnnexBBoxSize(data);
+    const boxSize = annexBBoxSize(data);
     if (boxSize == undefined) {
       return undefined;
     }

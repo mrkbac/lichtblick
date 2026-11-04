@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { H264 } from "./H264";
-import { findNextStartCode, findNextStartCodeEnd } from "../utils";
+import { annexBBoxSize, findNextStartCode, findNextStartCodeEnd } from "../utils";
 
 describe("H264", () => {
   it("findNextStartCode", () => {
@@ -136,9 +136,9 @@ describe("H264", () => {
     const annexB4Bytes = new Uint8Array([0x00, 0x00, 0x00, 0x01, 0x67]);
     const invalidData = new Uint8Array([0x01, 0x67, 0x42]);
 
-    expect(H264.AnnexBBoxSize(annexB3Bytes)).toBe(3);
-    expect(H264.AnnexBBoxSize(annexB4Bytes)).toBe(4);
-    expect(H264.AnnexBBoxSize(invalidData)).toBeUndefined();
+    expect(annexBBoxSize(annexB3Bytes)).toBe(3);
+    expect(annexBBoxSize(annexB4Bytes)).toBe(4);
+    expect(annexBBoxSize(invalidData)).toBeUndefined();
   });
 
   it("IsKeyframe", () => {
