@@ -164,7 +164,10 @@ describe("Publish", () => {
     ]);
 
     it("edits the message in a form", () => {
+      // Given / When
       setup({ datatype: "std_msgs/String", value: '{"data": "a"}' }, [], datatypes);
+
+      // Then
       expect(screen.getByLabelText("data")).toHaveValue("a");
       expect(screen.queryByPlaceholderText("Enter the message as JSON")).not.toBeInTheDocument();
     });
@@ -172,11 +175,16 @@ describe("Publish", () => {
 
   describe("keyboard shortcut", () => {
     it("publishes on Ctrl+Enter", () => {
+      // Given
       setup({ value: '{"data": "hello"}' }, [PLAYER_CAPABILITIES.advertise]);
+
+      // When
       fireEvent.keyDown(screen.getByPlaceholderText("Enter the message as JSON"), {
         key: "Enter",
         ctrlKey: true,
       });
+
+      // Then
       expect(mockPublish).toHaveBeenCalledWith({ data: "hello" });
     });
   });
@@ -189,30 +197,52 @@ describe("Publish", () => {
       jest.useRealTimers();
     });
 
-    it("publishes at the configured rate until stopped or unmounted", () => {
-      const { unmount } = setup({ value: '{"data": 1}', publishRate: 10 }, [
+    function startRepeating() {
+      const result = setup({ value: '{"data": 1}', publishRate: 10 }, [
         PLAYER_CAPABILITIES.advertise,
       ]);
-
       fireEvent.click(screen.getByRole("button", { name: "10 Hz" }));
+      return result;
+    }
+
+    function advance(ms: number) {
       act(() => {
-        jest.advanceTimersByTime(350);
+        jest.advanceTimersByTime(ms);
       });
+    }
+
+    it("publishes at the configured rate", () => {
+      // Given / When
+      startRepeating();
+      advance(350);
+
+      // Then
       expect(mockPublish).toHaveBeenCalledTimes(3);
       expect(screen.getByText("Publishing at 10 Hz")).toBeInTheDocument();
+    });
 
+    it("stops publishing when Stop is clicked", () => {
+      // Given
+      startRepeating();
+
+      // When
       fireEvent.click(screen.getByRole("button", { name: "Stop" }));
-      act(() => {
-        jest.advanceTimersByTime(500);
-      });
-      expect(mockPublish).toHaveBeenCalledTimes(3);
+      advance(500);
 
-      fireEvent.click(screen.getByRole("button", { name: "10 Hz" }));
+      // Then
+      expect(mockPublish).not.toHaveBeenCalled();
+    });
+
+    it("stops publishing when the panel unmounts", () => {
+      // Given
+      const { unmount } = startRepeating();
+
+      // When
       unmount();
-      act(() => {
-        jest.advanceTimersByTime(500);
-      });
-      expect(mockPublish).toHaveBeenCalledTimes(3);
+      advance(500);
+
+      // Then
+      expect(mockPublish).not.toHaveBeenCalled();
     });
   });
 });

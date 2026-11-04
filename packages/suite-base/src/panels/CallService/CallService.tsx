@@ -67,6 +67,9 @@ const useStyles = makeStyles<{ buttonColor?: string }>()((theme, { buttonColor }
     : undefined;
 
   return {
+    wrapper: {
+      display: "contents",
+    },
     button: {
       backgroundColor: augmentedButtonColor?.main,
       color: augmentedButtonColor?.contrastText,
@@ -362,7 +365,7 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
   return (
     // `display: contents` keeps the layout while catching the call shortcut from any input
     <div
-      style={{ display: "contents" }}
+      className={classes.wrapper}
       onKeyDown={(event) => {
         if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
           event.preventDefault();

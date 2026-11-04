@@ -57,6 +57,9 @@ const useStyles = makeStyles<{ buttonColor?: string }>()((theme, { buttonColor }
     : undefined;
 
   return {
+    wrapper: {
+      display: "contents",
+    },
     button: {
       backgroundColor: augmentedButtonColor?.main,
       color: augmentedButtonColor?.contrastText,
@@ -201,7 +204,7 @@ function Publish(props: Props) {
   return (
     // `display: contents` keeps the layout while catching the publish shortcut from any input
     <div
-      style={{ display: "contents" }}
+      className={classes.wrapper}
       onKeyDown={(event) => {
         if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
           event.preventDefault();

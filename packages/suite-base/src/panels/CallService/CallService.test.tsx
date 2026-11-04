@@ -35,8 +35,13 @@ function setup(config: Partial<Config>, callService: jest.Mock) {
 
 describe("CallService", () => {
   it("fills in the request template once the request type is known", async () => {
-    setup({ requestPayload: "{}" }, jest.fn());
-    expect(await screen.findByLabelText("data")).not.toBeChecked();
+    // Given / When
+    setup({ requestPayload: "{}", editorMode: "json" }, jest.fn());
+
+    // Then
+    await waitFor(() => {
+      expect(screen.getByLabelText("Message JSON")).toHaveValue('{\n  "data": false\n}');
+    });
   });
 
   it("does not re-fill the template after the request was cleared", async () => {

@@ -18,7 +18,7 @@ import {
   Typography,
   inputBaseClasses,
 } from "@mui/material";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { Immutable } from "@lichtblick/suite";
@@ -91,7 +91,7 @@ export function MessageEditor(props: Props): React.JSX.Element {
   const { classes } = useStyles();
   const formAvailable = canShowForm(datatypes, schemaName);
   const showForm = mode === "form" && formAvailable && parsed.value != undefined;
-  const template = sampleMessageJson(datatypes, schemaName);
+  const template = useMemo(() => sampleMessageJson(datatypes, schemaName), [datatypes, schemaName]);
 
   let body: React.JSX.Element;
   if (showForm) {
