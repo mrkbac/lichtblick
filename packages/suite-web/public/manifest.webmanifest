@@ -1,14 +1,14 @@
 {
-  "name": "Lichtblick",
-  "short_name": "Lichtblick",
+  "name": "Thimble",
+  "short_name": "Thimble",
   "description": "Visualize and debug robotics data",
   "id": ".",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",
   "display_override": ["window-controls-overlay"],
-  "background_color": "#15151a",
-  "theme_color": "#35363a",
+  "background_color": "#16121A",
+  "theme_color": "#241E29",
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }

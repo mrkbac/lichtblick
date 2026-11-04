@@ -33,8 +33,8 @@ import { APP_SETTINGS_ABOUT_ITEMS } from "@lichtblick/suite-base/components/AppS
 import { AppSettingsTab } from "@lichtblick/suite-base/components/AppSettingsDialog/types";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import { ExperimentalFeatureSettings } from "@lichtblick/suite-base/components/ExperimentalFeatureSettings";
-import LichtblickLogoText from "@lichtblick/suite-base/components/LichtblickLogoText";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import ThimbleLogoText from "@lichtblick/suite-base/components/ThimbleLogoText";
 import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
 import {
   useWorkspaceStore,
@@ -186,12 +186,10 @@ export function AppSettingsDialog(
           >
             <Stack gap={2} alignItems="flex-start">
               <header>
-                <LichtblickLogoText color="primary" className={classes.logo} />
+                <ThimbleLogoText color="primary" className={classes.logo} />
               </header>
               <Stack direction="row" alignItems="center" gap={1}>
-                <Typography variant="body2">
-                  Lichtblick version {LICHTBLICK_SUITE_VERSION}
-                </Typography>
+                <Typography variant="body2">Thimble version {LICHTBLICK_SUITE_VERSION}</Typography>
                 <CopyButton
                   size="small"
                   getText={() => LICHTBLICK_SUITE_VERSION?.toString() ?? ""}
