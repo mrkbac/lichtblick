@@ -58,6 +58,14 @@ vi.mock("@lichtblick/suite-base/services/LayoutManager/LayoutManager", () => ({
   }),
 }));
 vi.mock("use-debounce");
+// jsdom has no layout, so render every autocomplete row
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, index) => ({ index, key: index, start: 0, size: 0 })),
+    getTotalSize: () => 0,
+  }),
+}));
 
 describe("tryToSetDefaultGlobalVar", () => {
   it("correctly returns true/false depending on whether a global variable has a default", () => {
@@ -243,7 +251,11 @@ describe("MessagePathInput Component", () => {
       { supportsMathModifiers: true, supportsStreamModifiers: true },
       false,
     ],
-    ["/t.x.@derivative.@length", { supportsMathModifiers: true, supportsStreamModifiers: true }, true],
+    [
+      "/t.x.@derivative.@length",
+      { supportsMathModifiers: true, supportsStreamModifiers: true },
+      true,
+    ],
     ["/t.x.@delta.@integral", { supportsMathModifiers: true, supportsStreamModifiers: true }, true],
   ])("flags %s as invalid with %p: %p", (path, props, invalid) => {
     mockTopics = [{ name: "/t", schemaName: "msg" }];

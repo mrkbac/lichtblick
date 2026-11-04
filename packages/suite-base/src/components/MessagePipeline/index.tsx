@@ -180,10 +180,7 @@ export function MessagePipelineProvider({ children, player }: ProviderProps): Re
       }
     };
 
-    currentLayoutContext?.addLayoutStateListener(onLayoutStateUpdate);
-    return () => {
-      currentLayoutContext?.removeLayoutStateListener(onLayoutStateUpdate);
-    };
+    return currentLayoutContext?.layoutStore.subscribe(onLayoutStateUpdate);
   }, [currentLayoutContext, player]);
 
   // Session alerts from message converters should not carry over when switching to a new player.

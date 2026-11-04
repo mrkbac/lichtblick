@@ -7,9 +7,9 @@
 
 import { AutocompleteRenderOptionState } from "@mui/material/Autocomplete";
 import MenuItem from "@mui/material/MenuItem";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { FzfResultItem } from "fzf";
-import { useMemo } from "react";
-import { List, RowComponentProps } from "react-window";
+import { useMemo, useRef } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { HighlightChars } from "@lichtblick/suite-base/components/HighlightChars";
@@ -48,20 +48,26 @@ export type ListboxAdapterChild = [
 ];
 
 /**
- * React-window adapter to use a virtualized list as the autocomplete ListboxComponent to support
- * lists with thousands of elements without rendering all of them to the DOM.
+ * Virtualized autocomplete ListboxComponent to support lists with thousands of elements without
+ * rendering all of them to the DOM.
  *
  * From the Autocomplete parent it receives a list of children (which must conform to the
  * ListboxAdapterChild type), and props to apply to the outer listbox element.
  */
-export const ReactWindowListboxAdapter = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLElement>
->(function ListboxComponent(props, ref) {
-  const { children, ...other } = props;
-  const { className, ...rest } = other;
+export function VirtualListboxAdapter(
+  props: React.HTMLAttributes<HTMLElement> & { ref?: React.Ref<HTMLDivElement> },
+): React.JSX.Element {
+  const { children, className, ref, ...rest } = props;
+  const { classes, cx } = useStyles();
+  const scrollRef = useRef<HTMLDivElement>(ReactNull);
 
   const options = children as ListboxAdapterChild[];
+
+  const virtualizer = useVirtualizer({
+    count: options.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => Constants.ROW_HEIGHT,
+  });
 
   const longestChild = useMemo(
     () =>
@@ -78,59 +84,47 @@ export const ReactWindowListboxAdapter = React.forwardRef<
     2 * Constants.LISTBOX_PADDING + Constants.ROW_HEIGHT * Math.min(options.length, 16);
 
   // The hidden div is a trick to cause the parent div to expand to the width of the longest child
-  // in the list. Without this, the parent div would have a width of 0 because the FixedSizeList
+  // in the list. Without this, the parent div would have a width of 0 because the virtual list
   // places items using position absolute which means they do not impact the size of their parent.
   return (
     <div ref={ref} {...rest}>
       <div style={{ visibility: "hidden", height: 0 }}>{longestChild}</div>
-      <List<{ options: ListboxAdapterChild[] }>
-        rowCount={options.length}
-        rowProps={{ options }}
-        rowHeight={Constants.ROW_HEIGHT}
-        rowComponent={FixedSizeListRenderRow}
+      <div
+        ref={scrollRef}
         className={className}
-        style={{ height: totalHeight, width: "100%" }}
-      />
-    </div>
-  );
-});
-
-/** Render an individual row for the List */
-function FixedSizeListRenderRow(
-  props: RowComponentProps<{ options: ListboxAdapterChild[] }>,
-): React.JSX.Element | null {
-  // options is the array of all items, index is the index of the current row (item), and style
-  // is the position style for the specific item
-  const { options, index, style } = props;
-  const { classes, cx } = useStyles();
-
-  const dataSet = options[index];
-  if (!dataSet) {
-    return ReactNull;
-  }
-
-  const inlineStyle = {
-    ...style,
-    top: (style.top as number) + Constants.LISTBOX_PADDING,
-  };
-
-  const [optProps, item, opt] = dataSet;
-  const itemValue = item.item;
-
-  return (
-    <div style={inlineStyle} key={itemValue}>
-      <MenuItem
-        {...optProps}
-        dense
-        component="span"
-        data-highlighted={opt.selected}
-        data-testid="autocomplete-item"
-        className={cx(classes.item, {
-          [classes.itemHighlighted]: opt.selected,
-        })}
+        style={{ height: totalHeight, width: "100%", overflow: "auto", position: "relative" }}
       >
-        <HighlightChars str={itemValue} indices={item.positions} />
-      </MenuItem>
+        <div style={{ height: virtualizer.getTotalSize() }}>
+          {virtualizer.getVirtualItems().map((row) => {
+            const [optProps, item, opt] = options[row.index]!;
+            return (
+              <div
+                key={row.key}
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  width: "100%",
+                  height: row.size,
+                  transform: `translateY(${row.start}px)`,
+                }}
+              >
+                <MenuItem
+                  {...optProps}
+                  dense
+                  component="span"
+                  data-highlighted={opt.selected}
+                  data-testid="autocomplete-item"
+                  className={cx(classes.item, {
+                    [classes.itemHighlighted]: opt.selected,
+                  })}
+                >
+                  <HighlightChars str={item.item} indices={item.positions} />
+                </MenuItem>
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }

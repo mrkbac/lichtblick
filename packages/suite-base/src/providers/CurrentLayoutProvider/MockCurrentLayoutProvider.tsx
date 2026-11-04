@@ -5,7 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { createStore } from "zustand";
 
 import { useShallowMemo } from "@lichtblick/hooks";
 import CurrentLayoutContext, {
@@ -34,37 +35,29 @@ export default function MockCurrentLayoutProvider({
   initialState?: Partial<LayoutData>;
   onAction?: (action: PanelsActions) => void;
 }>): React.JSX.Element {
-  const layoutStateListeners = useRef(new Set<(_: LayoutState) => void>());
-  const addLayoutStateListener = useCallback((listener: (_: LayoutState) => void) => {
-    layoutStateListeners.current.add(listener);
-  }, []);
-  const removeLayoutStateListener = useCallback((listener: (_: LayoutState) => void) => {
-    layoutStateListeners.current.delete(listener);
-  }, []);
-
-  const [layoutState, setLayoutStateInternal] = useState<LayoutState>({
-    selectedLayout: {
-      id: "mock-layout" as LayoutID,
-      data: {
-        configById: {},
-        globalVariables: {},
-        userNodes: {},
-        playbackConfig: defaultPlaybackConfig,
-        ...initialState,
+  const [layoutStore] = useState(() =>
+    createStore<LayoutState>(() => ({
+      selectedLayout: {
+        id: "mock-layout" as LayoutID,
+        data: {
+          configById: {},
+          globalVariables: {},
+          userNodes: {},
+          playbackConfig: defaultPlaybackConfig,
+          ...initialState,
+        },
       },
+    })),
+  );
+  const [selectedPanelIdsStore] = useState(() =>
+    createStore<{ selectedPanelIds: readonly string[] }>(() => ({ selectedPanelIds: [] })),
+  );
+  const setLayoutState = useCallback(
+    (newState: LayoutState) => {
+      layoutStore.setState(newState, true);
     },
-  });
-  const layoutStateRef = useRef(layoutState);
-  const setLayoutState = useCallback((newState: LayoutState) => {
-    setLayoutStateInternal(newState);
-
-    // listeners rely on being able to getCurrentLayoutState() inside effects that may run before we re-render
-    layoutStateRef.current = newState;
-
-    for (const listener of [...layoutStateListeners.current]) {
-      listener(newState);
-    }
-  }, []);
+    [layoutStore],
+  );
 
   const setCurrentLayout = useCallback(
     (newLayout: SelectedLayout | undefined) => {
@@ -83,28 +76,29 @@ export default function MockCurrentLayoutProvider({
   const updateSharedPanelState = useCallback<ICurrentLayout["actions"]["updateSharedPanelState"]>(
     (type, newSharedState) => {
       setLayoutState({
-        ...layoutStateRef.current,
-        sharedPanelState: { ...layoutStateRef.current.sharedPanelState, [type]: newSharedState },
+        ...layoutStore.getState(),
+        sharedPanelState: { ...layoutStore.getState().sharedPanelState, [type]: newSharedState },
       });
     },
-    [setLayoutState],
+    [layoutStore, setLayoutState],
   );
 
   const performAction = useCallback(
     (action: PanelsActions) => {
       onAction?.(action);
+      const state = layoutStore.getState();
       setLayoutState({
-        ...layoutStateRef.current,
+        ...state,
         selectedLayout: {
-          ...layoutStateRef.current.selectedLayout,
-          id: layoutStateRef.current.selectedLayout?.id ?? ("mock-id" as LayoutID),
-          data: layoutStateRef.current.selectedLayout?.data
-            ? panelsReducer(layoutStateRef.current.selectedLayout.data, action)
+          ...state.selectedLayout,
+          id: state.selectedLayout?.id ?? ("mock-id" as LayoutID),
+          data: state.selectedLayout?.data
+            ? panelsReducer(state.selectedLayout.data, action)
             : undefined,
         },
       });
     },
-    [onAction, setLayoutState],
+    [layoutStore, onAction, setLayoutState],
   );
 
   const actions: ICurrentLayout["actions"] = useMemo(
@@ -112,7 +106,7 @@ export default function MockCurrentLayoutProvider({
       setSelectedLayoutId: () => {
         throw new Error("Not implemented in MockCurrentLayoutProvider");
       },
-      getCurrentLayoutState: () => layoutStateRef.current,
+      getCurrentLayoutState: () => layoutStore.getState(),
 
       setCurrentLayout,
       updateSharedPanelState,
@@ -166,14 +160,12 @@ export default function MockCurrentLayoutProvider({
         performAction({ type: "END_DRAG", payload });
       },
     }),
-    [performAction, setCurrentLayout, updateSharedPanelState],
+    [layoutStore, performAction, setCurrentLayout, updateSharedPanelState],
   );
 
   const value: ICurrentLayout = useShallowMemo({
-    addLayoutStateListener,
-    removeLayoutStateListener,
-    addSelectedPanelIdsListener: useCallback(() => {}, []),
-    removeSelectedPanelIdsListener: useCallback(() => {}, []),
+    layoutStore,
+    selectedPanelIdsStore,
     mosaicId: "mockMosaicId",
     getSelectedPanelIds: useCallback(() => [], []),
     setSelectedPanelIds: useCallback(() => {

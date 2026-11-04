@@ -30,7 +30,7 @@ import {
   IAutocomplete,
 } from "@lichtblick/suite-base/components/Autocomplete/types";
 
-import { ListboxAdapterChild, ReactWindowListboxAdapter } from "./ReactWindowListboxAdapter";
+import { ListboxAdapterChild, VirtualListboxAdapter } from "./VirtualListboxAdapter";
 
 function itemToFzfResult<T>(item: T): FzfResultItem<T> {
   return {
@@ -65,11 +65,10 @@ const CustomPopper = function (props: PopperProps) {
  * for things like multiple autocompletes that seamlessly transition into each
  * other, e.g. when building more complex strings like in the Plot panel.
  */
-// eslint-disable-next-line @typescript-eslint/no-shadow
-export const Autocomplete = React.forwardRef(function Autocomplete(
-  props: AutocompleteProps,
-  ref: React.ForwardedRef<IAutocomplete>,
+export function Autocomplete(
+  props: AutocompleteProps & { ref?: React.Ref<IAutocomplete> },
 ): React.JSX.Element {
+  const { ref } = props;
   const inputRef = useRef<HTMLInputElement>(ReactNull);
 
   const { classes, cx } = useStyles();
@@ -168,7 +167,7 @@ export const Autocomplete = React.forwardRef(function Autocomplete(
       slotProps={{
         paper: { elevation: 8 },
         listbox: {
-          component: ReactWindowListboxAdapter,
+          component: VirtualListboxAdapter,
         },
       }}
       slots={{ popper: CustomPopper }}
@@ -191,7 +190,7 @@ export const Autocomplete = React.forwardRef(function Autocomplete(
       )}
       renderOption={(optProps, option: FzfResultItem, state): React.ReactNode => {
         // The return values of renderOption are passed as the _child_ argument to the ListboxComponent.
-        // Our ReactWindowListboxAdapter expects a tuple for each item in the list and will itself manage
+        // Our VirtualListboxAdapter expects a tuple for each item in the list and will itself manage
         // when and which items to render using virtualization.
         //
         // The final as ReactNode cast is to appease the expected return type of renderOption because
@@ -203,4 +202,4 @@ export const Autocomplete = React.forwardRef(function Autocomplete(
       value={value ?? ReactNull}
     />
   );
-});
+}

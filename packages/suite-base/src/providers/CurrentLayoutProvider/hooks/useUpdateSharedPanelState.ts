@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { RefObject, useCallback } from "react";
+import { useCallback } from "react";
 
 import {
   ICurrentLayout,
@@ -14,21 +14,21 @@ type UseUpdateSharedPanelStateReturn = {
 };
 
 const useUpdateSharedPanelState = (
-  layoutStateRef: RefObject<Readonly<LayoutState>>,
+  getLayoutState: () => LayoutState,
   setLayoutState: (state: LayoutState) => void,
 ): UseUpdateSharedPanelStateReturn => {
   const updateSharedPanelState = useCallback<ICurrentLayout["actions"]["updateSharedPanelState"]>(
     (type, newSharedState) => {
-      if (layoutStateRef.current.selectedLayout?.data == undefined) {
+      if (getLayoutState().selectedLayout?.data == undefined) {
         return;
       }
 
       setLayoutState({
-        ...layoutStateRef.current,
-        sharedPanelState: { ...layoutStateRef.current.sharedPanelState, [type]: newSharedState },
+        ...getLayoutState(),
+        sharedPanelState: { ...getLayoutState().sharedPanelState, [type]: newSharedState },
       });
     },
-    [setLayoutState, layoutStateRef],
+    [setLayoutState, getLayoutState],
   );
   return { updateSharedPanelState };
 };

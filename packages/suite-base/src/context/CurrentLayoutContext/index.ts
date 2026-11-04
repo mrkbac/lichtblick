@@ -5,8 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { createContext, useCallback, useLayoutEffect, useReducer, useRef, useState } from "react";
+import { createContext, useCallback } from "react";
 import { getLeaves } from "react-mosaic-component";
+import { StoreApi, useStore } from "zustand";
+import { useStoreWithEqualityFn } from "zustand/traditional";
 
 import {
   selectWithUnstableIdentityWarning,
@@ -71,10 +73,8 @@ export type LayoutState = Readonly<{
  * part of a saved "layout") used by the current workspace.
  */
 export interface ICurrentLayout {
-  addLayoutStateListener: (listener: (_: LayoutState) => void) => void;
-  removeLayoutStateListener: (listener: (_: LayoutState) => void) => void;
-  addSelectedPanelIdsListener: (listener: (_: readonly string[]) => void) => void;
-  removeSelectedPanelIdsListener: (listener: (_: readonly string[]) => void) => void;
+  layoutStore: StoreApi<LayoutState>;
+  selectedPanelIdsStore: StoreApi<{ selectedPanelIds: readonly string[] }>;
 
   /**
    * We use the same mosaicId for all mosaics (at the top level and within tabs) to support
@@ -145,8 +145,7 @@ export function useCurrentLayoutActions(): CurrentLayoutActions {
 }
 
 export function useCurrentLayoutSelector<T>(selector: (layoutState: LayoutState) => T): T {
-  const currentLayout = useGuaranteedContext(CurrentLayoutContext);
-  const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
+  const { layoutStore } = useGuaranteedContext(CurrentLayoutContext);
 
   // Catch locations using unstable function selectors
   useShouldNotChangeOften(selector, () => {
@@ -155,63 +154,22 @@ export function useCurrentLayoutSelector<T>(selector: (layoutState: LayoutState)
     );
   });
 
-  const state = useRef<{ value: T; selector: typeof selector } | undefined>(undefined);
-  if (selector !== state.current?.selector) {
-    state.current = {
-      value: selectWithUnstableIdentityWarning(
-        currentLayout.actions.getCurrentLayoutState(),
-        selector,
-      ),
-      selector,
-    };
-  }
-  useLayoutEffect(() => {
-    let mounted = true;
-    const listener = (layoutState: LayoutState) => {
-      // Note: Our removeLayoutStateListener is is too late if the layout state listeners are already
-      // being invoked. Our component might become unmounted during the state listener invocation
-      if (!mounted) {
-        return;
-      }
-      const newValue = selectWithUnstableIdentityWarning(layoutState, selector);
-      if (newValue === state.current?.value) {
-        return;
-      }
-      state.current = {
-        value: newValue,
-        selector,
-      };
-      forceUpdate();
-    };
-    // Update if necessary, i.e. if the state has changed between render and this effect
-    listener(currentLayout.actions.getCurrentLayoutState());
-    currentLayout.addLayoutStateListener(listener);
-    return () => {
-      mounted = false;
-      currentLayout.removeLayoutStateListener(listener);
-    };
-  }, [currentLayout, selector]);
-
-  return state.current.value;
+  // The with-equality variant only re-runs the selector when the state or the selector changes,
+  // so selectors that return a fresh object for the same state don't loop.
+  const select = useCallback(
+    (state: LayoutState) => selectWithUnstableIdentityWarning(state, selector),
+    [selector],
+  );
+  return useStoreWithEqualityFn(layoutStore, select);
 }
 
-export function useSelectedPanels(): SelectedPanelActions {
-  const currentLayout = useGuaranteedContext(CurrentLayoutContext);
-  const [selectedPanelIds, setSelectedPanelIdsState] = useState(() =>
-    currentLayout.getSelectedPanelIds(),
-  );
-  useLayoutEffect(() => {
-    const listener = (newIds: readonly string[]) => {
-      setSelectedPanelIdsState(newIds);
-    };
-    currentLayout.addSelectedPanelIdsListener(listener);
-    return () => {
-      currentLayout.removeSelectedPanelIdsListener(listener);
-    };
-  }, [currentLayout]);
+const selectSelectedPanelIds = (state: { selectedPanelIds: readonly string[] }) =>
+  state.selectedPanelIds;
 
-  const setSelectedPanelIds = useGuaranteedContext(CurrentLayoutContext).setSelectedPanelIds;
-  const getSelectedPanelIds = useGuaranteedContext(CurrentLayoutContext).getSelectedPanelIds;
+export function useSelectedPanels(): SelectedPanelActions {
+  const { selectedPanelIdsStore, setSelectedPanelIds, getSelectedPanelIds } =
+    useGuaranteedContext(CurrentLayoutContext);
+  const selectedPanelIds = useStore(selectedPanelIdsStore, selectSelectedPanelIds);
   const { getCurrentLayoutState: getCurrentLayout } = useCurrentLayoutActions();
 
   const selectAllPanels = useCallback(() => {

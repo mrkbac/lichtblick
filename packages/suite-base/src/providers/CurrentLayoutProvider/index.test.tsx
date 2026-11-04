@@ -13,7 +13,6 @@ import { useEffect } from "react";
 import type { Mock } from "vitest";
 
 import { Condvar } from "@lichtblick/den/async";
-import { CurrentLayoutSyncAdapter } from "@lichtblick/suite-base/components/CurrentLayoutSyncAdapter";
 import {
   CurrentLayoutActions,
   LayoutData,
@@ -129,10 +128,7 @@ function renderTest({
             <SnackbarProvider>
               <LayoutManagerContext.Provider value={mockLayoutManager}>
                 <UserProfileStorageContext.Provider value={mockUserProfile}>
-                  <CurrentLayoutProvider loaders={[]}>
-                    {children}
-                    <CurrentLayoutSyncAdapter />
-                  </CurrentLayoutProvider>
+                  <CurrentLayoutProvider loaders={[]}>{children}</CurrentLayoutProvider>
                 </UserProfileStorageContext.Provider>
               </LayoutManagerContext.Provider>
             </SnackbarProvider>
@@ -203,6 +199,7 @@ describe("CurrentLayoutProvider", () => {
     expect(mockLayoutManager.getLayouts).toHaveBeenCalled();
     expect(all.map((item) => (item instanceof Error ? undefined : item.layoutState))).toEqual([
       { selectedLayout: undefined },
+      { selectedLayout: { id: "example", loading: true, data: undefined } },
       {
         selectedLayout: {
           loading: false,
@@ -257,6 +254,7 @@ describe("CurrentLayoutProvider", () => {
     expect(mockLayoutManager.getLayouts).toHaveBeenCalled();
     expect(all.map((item) => (item instanceof Error ? undefined : item.layoutState))).toEqual([
       { selectedLayout: undefined },
+      { selectedLayout: { id: "example", loading: true, data: undefined } },
       { selectedLayout: undefined },
     ]);
   });
