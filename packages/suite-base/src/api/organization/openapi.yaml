@@ -1,0 +1,920 @@
+# SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
+# SPDX-License-Identifier: MPL-2.0
+
+openapi: 3.1.0
+
+info:
+  title: Lichtblick Organization API
+  version: 1.0.0
+  summary: Organization-owned layouts, extensions and favorites for Lichtblick.
+  license:
+    name: MPL-2.0
+    identifier: MPL-2.0
+  description: |
+    Source of truth for the API Lichtblick talks to when `API_URL` is configured. Paths
+    are relative to `API_URL`.
+    Client types are generated from this file.
+
+    ## Model
+    - Users belong to any number of organizations. Only organizations own data.
+    - Users have a flat list of permissions per organization (`<resource>:read`,
+      `<resource>:write`). There are no roles or groups.
+    - Users, organizations, membership and permissions are managed outside this API.
+      This API only reads them.
+
+    ## Authentication
+    Every request carries `Authorization: Bearer <access token>`. Cookies are never used.
+
+    Lichtblick gets the token in one of two ways, chosen by the server in the `401`
+    response of `GET /v1/me`:
+    - `oidc` is set: Lichtblick runs the OpenID Connect Authorization Code flow with PKCE
+      against `oidc.issuer`, using `oidc.clientId` and `oidc.scopes`. Logout uses the
+      issuer's `end_session_endpoint`. The redirect URI is the Lichtblick origin, which
+      must be registered with the identity provider.
+    - `oidc` is `null`: Lichtblick is embedded and waits for the host page to hand over
+      a token.
+
+    Without a token, or if `GET /v1/me` is unreachable, Lichtblick works local-only.
+
+    ## Conventions
+    - JSON fields are camelCase, path segments are kebab-case, collections are plural.
+    - Ids are opaque strings. Layout ids are UUIDs chosen by the client.
+    - Timestamps are RFC 3339 in UTC, with up to 9 fractional digits.
+    - Every organization-owned resource has an integer `revision`. Responses carry it as
+      a strong `ETag: "<revision>"`. Changes must send `If-Match: "<revision>"`; a missing
+      header returns `428`, a stale one `412`.
+    - Lists are `{ items, nextCursor }` and accept `cursor` and `limit`. List responses
+      carry an `ETag`; `If-None-Match` returns `304` when nothing changed, including
+      deletions.
+    - Errors are RFC 9457 `application/problem+json`. Clients branch on `type`, never on
+      `title`.
+    - `401` means no valid token, `403` a missing permission, `404` a missing resource or
+      an organization the user is not a member of.
+
+    ## Compatibility
+    Within v1, changes are additive only: new endpoints, new optional fields, new
+    permissions, new enum values. Clients and servers ignore unknown fields, unknown
+    permissions and unknown enum values. A breaking change means a new `/v2` alongside v1.
+
+    New features follow one pattern: a collection at
+    `/v1/organizations/{organizationId}/<resource>` whose items extend
+    `OrganizationResource`, plus `<resource>:read` and `<resource>:write` permissions.
+    Lichtblick shows a feature for an organization only if the user has
+    `<resource>:read` there.
+
+servers:
+  - url: /
+    description: Relative to the `API_URL` build setting.
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: session
+    description: The current user, their organizations and links.
+  - name: layouts
+    description: Organization-owned layouts.
+  - name: favorites
+    description: Per-user favorite layouts across all organizations.
+  - name: extensions
+    description: Organization-owned extensions.
+
+paths:
+  /v1/me:
+    get:
+      tags: [session]
+      operationId: getCurrentSession
+      summary: Get the current user, their organizations and links
+      responses:
+        "200":
+          description: The current session.
+          headers:
+            Cache-Control:
+              $ref: "#/components/headers/CacheControlNoStore"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentSession"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/me/favorite-layouts:
+    get:
+      tags: [favorites]
+      operationId: listFavoriteLayouts
+      summary: List the current user's favorite layouts
+      description: Only layouts the user can still read are returned.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+      responses:
+        "200":
+          description: Favorite layouts.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FavoriteLayoutList"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/me/favorite-layouts/{organizationId}/{layoutId}:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+      - $ref: "#/components/parameters/LayoutId"
+    put:
+      tags: [favorites]
+      operationId: addFavoriteLayout
+      summary: Mark a layout as favorite
+      description: Idempotent. Requires `layouts:read` in the organization.
+      responses:
+        "204":
+          description: The layout is a favorite.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    delete:
+      tags: [favorites]
+      operationId: removeFavoriteLayout
+      summary: Remove a layout from favorites
+      description: Idempotent. Succeeds even if the layout was not a favorite or no longer exists.
+      responses:
+        "204":
+          description: The layout is not a favorite.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/organizations/{organizationId}/layouts:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+    get:
+      tags: [layouts]
+      operationId: listLayouts
+      summary: List an organization's layouts
+      description: Requires `layouts:read`. Items omit `data`; fetch a layout to get it.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Layouts without their data.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ListETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LayoutSummaryList"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    post:
+      tags: [layouts]
+      operationId: createLayout
+      summary: Create a layout
+      description: |
+        Requires `layouts:write`. The client chooses the id so local and remote ids match.
+        If a create is retried after it already succeeded, the `409` response contains the
+        existing layout; when its `createdBy.id` is the current user, the client treats it
+        as success.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LayoutCreate"
+      responses:
+        "201":
+          description: The created layout.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ResourceETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Layout"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          description: A layout with this id already exists.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/LayoutConflictProblem"
+        "413":
+          $ref: "#/components/responses/ContentTooLarge"
+        "422":
+          $ref: "#/components/responses/UnprocessableContent"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/organizations/{organizationId}/layouts/{layoutId}:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+      - $ref: "#/components/parameters/LayoutId"
+    get:
+      tags: [layouts]
+      operationId: getLayout
+      summary: Get a layout with its data
+      description: Requires `layouts:read`.
+      parameters:
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: The layout.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ResourceETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Layout"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    put:
+      tags: [layouts]
+      operationId: replaceLayout
+      summary: Replace a layout's name and data
+      description: |
+        Requires `layouts:write`. Full replacement: `data` is stored exactly as sent, so
+        removed panels stay removed. Renaming sends the current data unchanged.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LayoutWrite"
+      responses:
+        "200":
+          description: The updated layout.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ResourceETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Layout"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/LayoutRevisionMismatch"
+        "413":
+          $ref: "#/components/responses/ContentTooLarge"
+        "422":
+          $ref: "#/components/responses/UnprocessableContent"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    delete:
+      tags: [layouts]
+      operationId: deleteLayout
+      summary: Delete a layout
+      description: Requires `layouts:write`. Also removes it from every user's favorites.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      responses:
+        "204":
+          description: The layout was deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/LayoutRevisionMismatch"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/organizations/{organizationId}/extensions:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+    get:
+      tags: [extensions]
+      operationId: listExtensions
+      summary: List an organization's extensions
+      description: Requires `extensions:read`.
+      parameters:
+        - $ref: "#/components/parameters/Cursor"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/IfNoneMatch"
+      responses:
+        "200":
+          description: Extensions.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ListETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExtensionList"
+        "304":
+          $ref: "#/components/responses/NotModified"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+    post:
+      tags: [extensions]
+      operationId: uploadExtension
+      summary: Upload an extension
+      description: |
+        Requires `extensions:write`. The server reads all metadata from the `package.json`
+        inside the file. If the organization already has an extension with the same
+        `qualifiedName`, it is replaced and `200` is returned; otherwise `201`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  contentMediaType: application/octet-stream
+                  description: The `.foxe` extension package.
+      responses:
+        "200":
+          description: An existing extension was replaced.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ResourceETag"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Extension"
+        "201":
+          description: The extension was created.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ResourceETag"
+            Location:
+              $ref: "#/components/headers/Location"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Extension"
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "413":
+          $ref: "#/components/responses/ContentTooLarge"
+        "422":
+          $ref: "#/components/responses/UnprocessableContent"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/organizations/{organizationId}/extensions/{extensionId}:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+      - $ref: "#/components/parameters/ExtensionId"
+    delete:
+      tags: [extensions]
+      operationId: deleteExtension
+      summary: Delete an extension
+      description: Requires `extensions:write`.
+      parameters:
+        - $ref: "#/components/parameters/IfMatch"
+      responses:
+        "204":
+          description: The extension was deleted.
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "412":
+          $ref: "#/components/responses/PreconditionFailed"
+        "428":
+          $ref: "#/components/responses/PreconditionRequired"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /v1/organizations/{organizationId}/extensions/{extensionId}/content:
+    parameters:
+      - $ref: "#/components/parameters/OrganizationId"
+      - $ref: "#/components/parameters/ExtensionId"
+    get:
+      tags: [extensions]
+      operationId: downloadExtension
+      summary: Download an extension package
+      description: Requires `extensions:read`.
+      responses:
+        "200":
+          description: The `.foxe` package.
+          headers:
+            ETag:
+              $ref: "#/components/headers/ResourceETag"
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                contentMediaType: application/octet-stream
+        "401":
+          $ref: "#/components/responses/Unauthenticated"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: An access token from the identity provider described in the `401` response of `GET /v1/me`.
+
+  parameters:
+    OrganizationId:
+      name: organizationId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Id"
+    LayoutId:
+      name: layoutId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/LayoutId"
+    ExtensionId:
+      name: extensionId
+      in: path
+      required: true
+      schema:
+        $ref: "#/components/schemas/Id"
+    Cursor:
+      name: cursor
+      in: query
+      description: The `nextCursor` of the previous page. Omit for the first page.
+      schema:
+        type: string
+    Limit:
+      name: limit
+      in: query
+      description: Maximum number of items per page.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 200
+        default: 50
+    IfMatch:
+      name: If-Match
+      in: header
+      required: true
+      description: The resource's current `ETag`, e.g. `"3"`.
+      schema:
+        type: string
+        example: '"3"'
+    IfNoneMatch:
+      name: If-None-Match
+      in: header
+      description: A previously received `ETag`. If it still matches, the response is `304`.
+      schema:
+        type: string
+
+  headers:
+    ResourceETag:
+      description: The resource's revision as a strong entity tag, e.g. `"3"`.
+      schema:
+        type: string
+    ListETag:
+      description: Opaque entity tag that changes whenever any item in the list is created, changed or deleted.
+      schema:
+        type: string
+    Location:
+      description: URL of the created resource.
+      schema:
+        type: string
+        format: uri-reference
+    CacheControlNoStore:
+      schema:
+        type: string
+        const: no-store
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+        minimum: 0
+
+  responses:
+    NotModified:
+      description: Nothing changed since the given `ETag`.
+    Unauthenticated:
+      description: No valid access token.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/AuthenticationRequiredProblem"
+    Forbidden:
+      description: The user lacks the permission this operation needs.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    NotFound:
+      description: The resource does not exist, or the user is not a member of the organization.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    PreconditionFailed:
+      description: "`If-Match` does not match the current revision."
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    LayoutRevisionMismatch:
+      description: "`If-Match` does not match the current revision. The body contains the current layout."
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/LayoutConflictProblem"
+    PreconditionRequired:
+      description: The `If-Match` header is missing.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    ContentTooLarge:
+      description: The request body exceeds the server's limit.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    UnprocessableContent:
+      description: The request body is invalid.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+    TooManyRequests:
+      description: Rate limited. The client retries after `Retry-After` seconds.
+      headers:
+        Retry-After:
+          $ref: "#/components/headers/RetryAfter"
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/Problem"
+
+  schemas:
+    Id:
+      type: string
+      minLength: 1
+      description: Opaque identifier.
+
+    LayoutId:
+      type: string
+      format: uuid
+      description: Chosen by the client (UUID v7 recommended).
+
+    Timestamp:
+      type: string
+      format: date-time
+      description: RFC 3339 in UTC, up to 9 fractional digits.
+      example: "2026-11-04T09:30:00.123456789Z"
+
+    HttpsUrl:
+      type: string
+      format: uri
+      description: |
+        Must be `https:`. `http:` is allowed only for `localhost`. Clients ignore any other
+        scheme.
+
+    Permission:
+      type: string
+      pattern: "^[a-z][a-z0-9-]*:(read|write)$"
+      description: |
+        `<resource>:read` or `<resource>:write`. v1 defines `layouts:read`,
+        `layouts:write`, `extensions:read` and `extensions:write`. Write does not imply
+        read. Clients ignore unknown permissions.
+      examples:
+        - layouts:read
+        - extensions:write
+
+    Problem:
+      type: object
+      description: RFC 9457 problem details.
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri-reference
+          description: Stable identifier of the problem kind. Clients branch on this.
+          example: "https://api.example.com/problems/revision-mismatch"
+        title:
+          type: string
+          description: Short human-readable summary. Not for branching.
+        status:
+          type: integer
+          minimum: 100
+          maximum: 599
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri-reference
+
+    AuthenticationRequiredProblem:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required: [oidc]
+          properties:
+            oidc:
+              description: How to log in. `null` means wait for the embedding page to hand over a token.
+              oneOf:
+                - $ref: "#/components/schemas/OidcConfiguration"
+                - type: "null"
+
+    OidcConfiguration:
+      type: object
+      required: [issuer, clientId, scopes]
+      properties:
+        issuer:
+          $ref: "#/components/schemas/HttpsUrl"
+          description: OpenID Connect issuer. Lichtblick reads `<issuer>/.well-known/openid-configuration`.
+        clientId:
+          type: string
+          minLength: 1
+          description: Public client id registered for Lichtblick (no client secret).
+        scopes:
+          type: array
+          items:
+            type: string
+          description: Scopes to request, e.g. `openid`, `profile`, `offline_access`.
+        audience:
+          type: string
+          description: Optional resource/audience parameter some identity providers require.
+
+    UserReference:
+      type: object
+      required: [id, displayName]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        displayName:
+          type: string
+
+    User:
+      allOf:
+        - $ref: "#/components/schemas/UserReference"
+        - type: object
+          properties:
+            email:
+              type: string
+              format: email
+            avatarUrl:
+              $ref: "#/components/schemas/HttpsUrl"
+
+    Organization:
+      type: object
+      required: [id, displayName, permissions]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        displayName:
+          type: string
+        permissions:
+          type: array
+          uniqueItems: true
+          description: The current user's permissions in this organization.
+          items:
+            $ref: "#/components/schemas/Permission"
+
+    Link:
+      type: object
+      description: A menu entry provided by the server, opened in a new tab.
+      required: [id, label, url]
+      properties:
+        id:
+          type: string
+          description: Stable key.
+        label:
+          type: string
+          description: Shown as plain text. Localized by the server using `Accept-Language`.
+        url:
+          $ref: "#/components/schemas/HttpsUrl"
+        organizationId:
+          $ref: "#/components/schemas/Id"
+          description: If set, shown only next to this organization.
+
+    CurrentSession:
+      type: object
+      required: [user, organizations, links]
+      properties:
+        user:
+          $ref: "#/components/schemas/User"
+        organizations:
+          type: array
+          description: Every organization the user belongs to, in display order.
+          items:
+            $ref: "#/components/schemas/Organization"
+        links:
+          type: array
+          description: Already filtered for this user.
+          items:
+            $ref: "#/components/schemas/Link"
+
+    OrganizationResource:
+      type: object
+      description: Fields every organization-owned resource has.
+      required:
+        [
+          id,
+          organizationId,
+          revision,
+          createdAt,
+          updatedAt,
+          createdBy,
+          updatedBy,
+        ]
+      properties:
+        id:
+          $ref: "#/components/schemas/Id"
+        organizationId:
+          $ref: "#/components/schemas/Id"
+        revision:
+          type: integer
+          minimum: 1
+          description: Incremented by the server on every change. Sent as the `ETag`.
+        createdAt:
+          $ref: "#/components/schemas/Timestamp"
+        updatedAt:
+          $ref: "#/components/schemas/Timestamp"
+        createdBy:
+          $ref: "#/components/schemas/UserReference"
+        updatedBy:
+          $ref: "#/components/schemas/UserReference"
+
+    LayoutData:
+      type: object
+      description: The Lichtblick layout JSON. Stored and returned exactly as sent.
+      additionalProperties: true
+
+    LayoutWrite:
+      type: object
+      required: [displayName, data]
+      properties:
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        data:
+          $ref: "#/components/schemas/LayoutData"
+
+    LayoutCreate:
+      allOf:
+        - $ref: "#/components/schemas/LayoutWrite"
+        - type: object
+          required: [id]
+          properties:
+            id:
+              $ref: "#/components/schemas/LayoutId"
+
+    LayoutSummary:
+      allOf:
+        - $ref: "#/components/schemas/OrganizationResource"
+        - type: object
+          required: [displayName]
+          properties:
+            id:
+              $ref: "#/components/schemas/LayoutId"
+            displayName:
+              type: string
+
+    Layout:
+      allOf:
+        - $ref: "#/components/schemas/LayoutSummary"
+        - type: object
+          required: [data]
+          properties:
+            data:
+              $ref: "#/components/schemas/LayoutData"
+
+    LayoutConflictProblem:
+      allOf:
+        - $ref: "#/components/schemas/Problem"
+        - type: object
+          required: [current]
+          properties:
+            current:
+              $ref: "#/components/schemas/Layout"
+
+    LayoutSummaryList:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LayoutSummary"
+        nextCursor:
+          type: [string, "null"]
+
+    FavoriteLayout:
+      type: object
+      required: [organizationId, layoutId]
+      properties:
+        organizationId:
+          $ref: "#/components/schemas/Id"
+        layoutId:
+          $ref: "#/components/schemas/LayoutId"
+
+    FavoriteLayoutList:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/FavoriteLayout"
+        nextCursor:
+          type: [string, "null"]
+
+    Extension:
+      allOf:
+        - $ref: "#/components/schemas/OrganizationResource"
+        - type: object
+          description: Metadata read by the server from the package's `package.json`.
+          required: [qualifiedName, displayName, publisher, version]
+          properties:
+            qualifiedName:
+              type: string
+              description: Unique per organization. Uploading the same name replaces it.
+            displayName:
+              type: string
+            publisher:
+              type: string
+            version:
+              type: string
+            description:
+              type: string
+            license:
+              type: string
+            readme:
+              type: string
+
+    ExtensionList:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Extension"
+        nextCursor:
+          type: [string, "null"]
