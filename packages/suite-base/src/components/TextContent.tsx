@@ -18,6 +18,7 @@ import { Link } from "@mui/material";
 import { CSSProperties, PropsWithChildren, useCallback, useContext } from "react";
 import Markdown, { type Options } from "react-markdown";
 import rehypeRaw from "rehype-raw";
+import remarkGfm from "remark-gfm";
 import { makeStyles } from "tss-react/mui";
 
 import LinkHandlerContext from "@lichtblick/suite-base/context/LinkHandlerContext";
@@ -82,6 +83,16 @@ const useStyles = makeStyles()(({ palette, shape, spacing, typography, shadows }
       },
       li: {
         margin: spacing(0.5, 0),
+      },
+      ".contains-task-list": {
+        listStyle: "none",
+        paddingLeft: spacing(0.5),
+
+        ".contains-task-list": { paddingLeft: spacing(2.5) },
+      },
+      ".task-list-item input": {
+        margin: spacing(0, 0.75, 0, 0),
+        verticalAlign: "middle",
       },
       "b, strong": {
         fontWeight: "700 !important",
@@ -159,12 +170,14 @@ const useStyles = makeStyles()(({ palette, shape, spacing, typography, shadows }
 type Props = {
   style?: CSSProperties;
   allowMarkdownHtml?: boolean;
+  /** Extra element renderers merged over the defaults (e.g. to make task-list checkboxes interactive). */
+  components?: Options["components"];
 };
 
 export default function TextContent(
   props: PropsWithChildren<Props>,
 ): React.ReactElement | ReactNull {
-  const { children, style, allowMarkdownHtml } = props;
+  const { children, style, allowMarkdownHtml, components } = props;
   const { classes } = useStyles();
   const handleLink = useContext(LinkHandlerContext);
 
@@ -193,10 +206,11 @@ export default function TextContent(
     <div className={classes.root} style={style}>
       {typeof children === "string" ? (
         <Markdown
+          remarkPlugins={[remarkGfm]}
           rehypePlugins={
             allowMarkdownHtml === true ? ([rehypeRaw] as Options["rehypePlugins"]) : []
           }
-          components={{ a: linkRenderer }}
+          components={{ a: linkRenderer, ...components }}
         >
           {children}
         </Markdown>
