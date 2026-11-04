@@ -24,10 +24,6 @@ import { filterMap } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
 import { Metadata, ParameterValue } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
-import {
-  IPerformanceRegistry,
-  PerformanceMetricID,
-} from "@lichtblick/suite-base/context/PerformanceContext";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import {
   GetBackfillMessagesArgs,
@@ -119,8 +115,6 @@ type BatchIteratorCacheEntry = {
 
 export default class UserScriptPlayer implements Player {
   #player: Player;
-  #perfRegistry?: IPerformanceRegistry;
-  #totalTimeMetric?: PerformanceMetricID;
 
   // Datatypes and topics are derived from scriptRegistrations, but memoized so they only change when needed
   #memoizedScriptDatatypes: readonly RosDatatypes[] = [];
@@ -193,14 +187,9 @@ export default class UserScriptPlayer implements Player {
     });
   };
 
-  public constructor(
-    player: Player,
-    userScriptActions: UserScriptActions,
-    perfRegistry?: IPerformanceRegistry,
-  ) {
+  public constructor(player: Player, userScriptActions: UserScriptActions) {
     this.#player = player;
     this.#userScriptActions = userScriptActions;
-    this.#perfRegistry = perfRegistry;
     const { setUserScriptDiagnostics, addUserScriptLogs } = userScriptActions;
 
     this.#setUserScriptDiagnostics = (scriptId: string, diagnostics: readonly Diagnostic[]) => {
@@ -802,17 +791,6 @@ export default class UserScriptPlayer implements Player {
         return;
       }
 
-      if (this.#totalTimeMetric == undefined) {
-        this.#totalTimeMetric = this.#perfRegistry?.registerMetric({
-          name: "User scripts (total)",
-          unit: "ms per frame",
-        });
-      }
-      using $timer = this.#totalTimeMetric
-        ? this.#perfRegistry?.scopeTimer(this.#totalTimeMetric)
-        : undefined;
-      void $timer;
-
       const { messages, topics, datatypes } = activeData;
 
       // If we do not have active player data from a previous call, then our
@@ -1005,9 +983,6 @@ export default class UserScriptPlayer implements Player {
       }
     });
     this.#player.close();
-    if (this.#totalTimeMetric != undefined) {
-      this.#perfRegistry?.unregisterMetric(this.#totalTimeMetric);
-    }
     if (this.#transformRpc) {
       void this.#transformRpc.send("close");
     }
