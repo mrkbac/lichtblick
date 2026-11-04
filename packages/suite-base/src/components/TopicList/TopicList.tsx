@@ -7,10 +7,10 @@
 
 import SearchIcon from "@mui/icons-material/Search";
 import { List, ListItem, ListItemText, PopoverPosition, Skeleton } from "@mui/material";
-import { MouseEvent, useCallback, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { CSSProperties, MouseEvent, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLatest } from "react-use";
-import { List as VirtualList, RowComponentProps, ListImperativeAPI } from "react-window";
 import { useDebounce } from "use-debounce";
 
 import { filterMap } from "@lichtblick/den/collection";
@@ -50,7 +50,7 @@ export function TopicList(): React.JSX.Element {
   const playerPresence = useMessagePipeline(selectPlayerPresence);
   const { topics, datatypes } = useDataSourceInfo();
 
-  const listRef = useRef<ListImperativeAPI>(ReactNull);
+  const scrollRef = useRef<HTMLDivElement>(ReactNull);
 
   const treeItems = useTopicListSearch({
     topics,
@@ -58,6 +58,13 @@ export function TopicList(): React.JSX.Element {
     filterText: debouncedFilterText,
   });
   const { selectedIndexes, onSelect, getSelectedIndexes } = useMultiSelection(treeItems);
+
+  const virtualizer = useVirtualizer({
+    count: treeItems.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (index) => (treeItems[index]?.type === "topic" ? 50 : 28),
+    overscan: 10,
+  });
 
   const [contextMenuState, setContextMenuState] = useState<
     { position: PopoverPosition; items: DraggedMessagePath[] } | undefined
@@ -102,58 +109,49 @@ export function TopicList(): React.JSX.Element {
     setContextMenuState(undefined);
   }, []);
 
-  const itemData = useMemo(() => ({ treeItems, selectedIndexes }), [selectedIndexes, treeItems]);
-
-  const renderRow = useCallback(
-    // `treeItems` and `selectedIndexes` come from the `rowProps` we pass to the VirtualList below
-    ({
-      index,
-      style,
-      treeItems: rowTreeItems,
-      selectedIndexes: rowSelectedIndexes,
-    }: RowComponentProps<typeof itemData>): React.JSX.Element | null => {
-      const treeItem = rowTreeItems[index]!;
-      const selected = rowSelectedIndexes.has(index);
-      const onClick = (event: React.MouseEvent) => {
-        event.preventDefault();
-        onSelect({
-          index,
-          modKey: event.metaKey || event.ctrlKey,
-          shiftKey: event.shiftKey,
-        });
-      };
-      switch (treeItem.type) {
-        case "topic":
-          return (
-            <TopicRow
-              style={style}
-              topicResult={treeItem.item}
-              selected={selected}
-              onClick={onClick}
-              onDoubleClick={handleDoubleClick}
-              onContextMenu={(event) => {
-                handleContextMenu(event, index);
-              }}
-            />
-          );
-        case "schema":
-          return (
-            <MessagePathRow
-              style={style}
-              messagePathResult={treeItem.item}
-              selected={selected}
-              onClick={onClick}
-              onDoubleClick={handleDoubleClick}
-              onContextMenu={(event) => {
-                handleContextMenu(event, index);
-              }}
-            />
-          );
-      }
-      return ReactNull;
-    },
-    [handleContextMenu, handleDoubleClick, onSelect],
-  );
+  const renderRow = (index: number, style: CSSProperties): React.JSX.Element | null => {
+    const treeItem = treeItems[index]!;
+    const selected = selectedIndexes.has(index);
+    const onClick = (event: React.MouseEvent) => {
+      event.preventDefault();
+      onSelect({
+        index,
+        modKey: event.metaKey || event.ctrlKey,
+        shiftKey: event.shiftKey,
+      });
+    };
+    switch (treeItem.type) {
+      case "topic":
+        return (
+          <TopicRow
+            key={index}
+            style={style}
+            topicResult={treeItem.item}
+            selected={selected}
+            onClick={onClick}
+            onDoubleClick={handleDoubleClick}
+            onContextMenu={(event) => {
+              handleContextMenu(event, index);
+            }}
+          />
+        );
+      case "schema":
+        return (
+          <MessagePathRow
+            key={index}
+            style={style}
+            messagePathResult={treeItem.item}
+            selected={selected}
+            onClick={onClick}
+            onDoubleClick={handleDoubleClick}
+            onContextMenu={(event) => {
+              handleContextMenu(event, index);
+            }}
+          />
+        );
+    }
+    return ReactNull;
+  };
 
   if (playerPresence === PlayerPresence.NOT_PRESENT) {
     return <EmptyState>{t("noDataSourceSelected")}</EmptyState>;
@@ -212,15 +210,19 @@ export function TopicList(): React.JSX.Element {
         />
         {treeItems.length > 0 ? (
           <div style={{ flex: "1 1 100%" }}>
-            <VirtualList
-              listRef={listRef}
-              style={{ width: "100%", height: "100%" }}
-              rowCount={treeItems.length}
-              rowHeight={(index, data) => (data.treeItems[index]?.type === "topic" ? 50 : 28)}
-              rowProps={itemData}
-              overscanCount={10}
-              rowComponent={renderRow}
-            />
+            <div ref={scrollRef} style={{ width: "100%", height: "100%", overflow: "auto" }}>
+              <div style={{ position: "relative", height: virtualizer.getTotalSize() }}>
+                {virtualizer.getVirtualItems().map((row) =>
+                  renderRow(row.index, {
+                    position: "absolute",
+                    left: 0,
+                    width: "100%",
+                    height: row.size,
+                    transform: `translateY(${row.start}px)`,
+                  }),
+                )}
+              </div>
+            </div>
           </div>
         ) : (
           <EmptyState>

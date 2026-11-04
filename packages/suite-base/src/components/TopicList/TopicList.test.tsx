@@ -23,6 +23,14 @@ vi.mock("@lichtblick/suite-base/PanelAPI", () => ({
 }));
 vi.mock("@lichtblick/suite-base/components/MessagePipeline");
 vi.mock("./useTopicListSearch");
+// jsdom has no layout, so render every row
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, index) => ({ index, start: 0, size: 0 })),
+    getTotalSize: () => 0,
+  }),
+}));
 vi.mock("./useOpenMessagePathsInPanel", () => ({
   useOpenMessagePathsInPanel: () => vi.fn(),
 }));
@@ -93,6 +101,7 @@ const setup = (playerPresence: PlayerPresence) => {
 describe("TopicList Component", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (useTopicListSearch as Mock).mockReturnValue([]);
   });
 
   it("renders EmptyState when playerPresence is NOT_PRESENT", () => {
