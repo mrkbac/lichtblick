@@ -110,6 +110,8 @@ export function useScrubPreview(stamp: Time | undefined): ImageBitmap | undefine
       setBitmap(undefined);
       return;
     }
+    // Keep showing the previous thumbnail until the new one is ready (like video players) to
+    // avoid flicker while scrubbing.
     return requestThumbnail({
       key: timeBucket(stamp, startTime, endTime),
       cache,
@@ -126,7 +128,7 @@ export function useScrubPreview(stamp: Time | undefined): ImageBitmap | undefine
         return await decodeThumbnail(msg, () => (workerRef.current ??= new WorkerImageDecoder()));
       },
     });
-  }, [cache, getPipeline, stamp, topic]);
+  }, [cache, getPipeline, playerId, stamp, topic]);
 
   return bitmap;
 }
