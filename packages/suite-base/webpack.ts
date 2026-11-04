@@ -55,6 +55,30 @@ export function swcRule({
   };
 }
 
+/**
+ * Dev-server overlay filter (`devServer.client.overlay.runtimeErrors`) that hides known false
+ * positives.
+ *
+ * When a webworker is terminated, any pending `importScripts` calls are cancelled by the browser
+ * and bubble up to the page's `window.onerror`, which the dev server overlay listens to. The worker
+ * is gone, so these are noise. A legitimately failing `importScripts` still breaks the worker logic
+ * that depends on it, and the error stays visible in the devtools console.
+ */
+export function isOverlayRuntimeError(error: Error): boolean {
+  if (
+    error.message.startsWith(
+      `Uncaught NetworkError: Failed to execute 'importScripts' on 'WorkerGlobalScope'`,
+    )
+  ) {
+    return false;
+  }
+  // Benign per spec: observers whose callbacks resize content get re-delivered next frame.
+  if (error.message.startsWith("ResizeObserver loop")) {
+    return false;
+  }
+  return true;
+}
+
 // In CJS (ts-node / webpack-cli), __dirname is injected by Node's module wrapper.
 // In ESM (Storybook 10+), __dirname is undefined; callers must provide `packageDir`.
 // We avoid import.meta.url here to stay compatible with "module: commonjs" TypeScript compilation
@@ -153,7 +177,6 @@ export function makeConfig(
 
         // don't inject these things into our web build
         fs: false,
-        pnpapi: false,
 
         // punycode is a dependency for some older webpack v4 browser libs
         // It adds unecessary bloat to the build so we make sure it isn't included
@@ -166,11 +189,6 @@ export function makeConfig(
     },
     module: {
       rules: [
-        // Add support for native node modules
-        {
-          test: /\.node$/,
-          use: "node-loader",
-        },
         {
           test: /\.wasm$/,
           type: "asset/resource",

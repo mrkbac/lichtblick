@@ -145,7 +145,7 @@ class LocalStorageAppConfiguration implements IAppConfiguration {
 2. **4GB V8 limit**: Can't increase in browser — cache eviction must be strict
 3. **WASM startup**: First MCAP open incurs ~100ms WASM initialization
 4. **Service Worker**: Not currently used — potential for offline caching
-5. **CDN deployment**: Static assets via Vercel (`vercel.json` config)
+5. **CDN deployment**: Static assets via Cloudflare Pages (`web/.cloudflare/_headers`)
 
 ## Key Files
 - `packages/suite-web/src/index.tsx`
@@ -153,7 +153,7 @@ class LocalStorageAppConfiguration implements IAppConfiguration {
 - `packages/suite-web/src/webpackConfigs.ts`
 - `packages/suite-web/src/canRenderApp.ts`
 - `web/webpack.config.ts`
-- `vercel.json`
+- `web/.cloudflare/_headers`
 
 ## Skills Reference
 - Worker/Comlink patterns (SharedArrayBuffer, COOP/COEP context): `read_file(".github/skills/web-workers/SKILL.md")`

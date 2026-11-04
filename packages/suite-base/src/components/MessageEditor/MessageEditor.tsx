@@ -47,6 +47,8 @@ type Props = {
   onModeChange: (mode: MessageEditorMode) => void;
   presets: readonly MessagePreset[];
   onPresetsChange: (presets: MessagePreset[]) => void;
+  /** Called with the number of form fields holding invalid input that is not in `value` yet */
+  onInvalidFieldsChange?: (count: number) => void;
 };
 
 const useStyles = makeStyles()((theme) => ({
@@ -103,6 +105,7 @@ export function MessageEditor(props: Props): React.JSX.Element {
         onChange={(newValue) => {
           onChange(stringifyMessage(newValue));
         }}
+        onInvalidFieldsChange={props.onInvalidFieldsChange}
       />
     );
   } else if (mode === "form" && formAvailable) {

@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time, fromNanoSec, isLessThan, isGreaterThan } from "@foxglove/rostime";
-import { McapTypes } from "@mcap/core";
+import { McapStreamReader, McapTypes } from "@mcap/core";
 
 import { TopicInfo, FileInfo } from "./types";
 
@@ -22,7 +22,7 @@ type McapInfo = {
   schemaNamesById: Map<number, string>;
 };
 
-export function processMcapRecord(info: McapInfo, record: McapTypes.TypedMcapRecord): void {
+function processMcapRecord(info: McapInfo, record: McapTypes.TypedMcapRecord): void {
   switch (record.type) {
     case "Chunk":
       info.numChunks++;
@@ -95,20 +95,17 @@ export function processMcapRecord(info: McapInfo, record: McapTypes.TypedMcapRec
   }
 }
 
-interface GenericMcapStreamReader<R> {
-  done(): boolean;
-  bytesRemaining(): number;
-  append(data: Uint8Array): void;
-  nextRecord(): R | undefined;
-}
-
-export default async function getStreamedMcapInfo<R>(
+export default async function getStreamedMcapInfo(
   file: Blob,
-  mcapStreamReader: GenericMcapStreamReader<R>,
-  processRecord: (info: McapInfo, record: R) => void,
+  decompressHandlers: McapTypes.DecompressHandlers,
   fileType: string,
   reportProgress: (progress: number) => void,
 ): Promise<FileInfo> {
+  const mcapStreamReader = new McapStreamReader({
+    includeChunks: true,
+    decompressHandlers,
+    validateCrcs: true,
+  });
   const info: McapInfo = {
     totalMessages: 0n,
     numChunks: 0,
@@ -129,7 +126,7 @@ export default async function getStreamedMcapInfo<R>(
     const buffer = await file.slice(offset, offset + chunkSize).arrayBuffer();
     mcapStreamReader.append(new Uint8Array(buffer));
     for (let record; (record = mcapStreamReader.nextRecord()) != undefined; ) {
-      processRecord(info, record);
+      processMcapRecord(info, record);
     }
     bytesRead += buffer.byteLength;
     reportProgress(bytesRead / file.size);

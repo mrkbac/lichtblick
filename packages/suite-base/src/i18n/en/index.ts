@@ -10,6 +10,7 @@ export * from "./appBar";
 export * from "./appSettings";
 export * from "./cameraGrid";
 export * from "./catalog";
+export * from "./commandPalette";
 export * from "./dataSourceInfo";
 export * from "./diagnostics";
 export * from "./desktopWindow";

@@ -131,6 +131,8 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
   const serviceTypes = useMessagePipeline(selectServiceTypes);
   const [confirm, confirmModal] = useConfirm();
   const [history, setHistory] = useState<CallRecord[]>([]);
+  const [invalidFieldCount, setInvalidFieldCount] = useState(0);
+  const formInvalid = invalidFieldCount > 0;
   const [selectedId, setSelectedId] = useState<number>();
   const nextId = useRef(1);
 
@@ -181,8 +183,10 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
     if (template == undefined) {
       return; // definitions not loaded yet, retry when datatypes change
     }
+    // An untouched template of the previous schema is not a user edit
+    const previousSchema = filledSchema.current;
     filledSchema.current = requestSchema;
-    if (!isEditedMessage(config.requestPayload, datatypes, undefined)) {
+    if (!isEditedMessage(config.requestPayload, datatypes, previousSchema)) {
       saveConfig({ requestPayload: template });
     }
   }, [config.requestPayload, datatypes, requestSchema, saveConfig]);
@@ -246,7 +250,8 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
     [callService],
   );
 
-  const canSend = canCall && Boolean(config.serviceName) && parsed.value != undefined;
+  const canSend =
+    canCall && Boolean(config.serviceName) && parsed.value != undefined && !formInvalid;
   const send = () => {
     if (canSend) {
       void runCall(config.serviceName!, config.requestPayload!);
@@ -276,6 +281,7 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
         onPresetsChange={(presets) => {
           saveConfig({ presets });
         }}
+        onInvalidFieldsChange={setInvalidFieldCount}
       />
       {parsed.error != undefined && (
         <Typography variant="caption" noWrap color="error" title={parsed.error}>
