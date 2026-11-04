@@ -86,7 +86,7 @@ describe("addMessages", () => {
     expect(addMessages(state, [event([], 2)], 5)).toBe(state);
   });
 
-  it("ignores out-of-order messages for the history", () => {
+  it("ignores out-of-order messages for latest and history", () => {
     const status = DiagnosticsBuilder.statusMessage({ level: LEVELS.OK });
     const id = getDiagnosticId(status.hardware_id, status.name);
     const result = addMessages(
@@ -94,6 +94,8 @@ describe("addMessages", () => {
       [event([status], 5), event([{ ...status, level: LEVELS.ERROR }], 3)],
       5,
     );
+    expect(result.latest.get(id)?.status.level).toBe(LEVELS.OK);
+    expect(result.latest.get(id)?.receiveTime).toEqual({ sec: 5, nsec: 0 });
     expect(result.history.get(id)?.lastSeen).toBe(5);
     expect(result.history.get(id)?.changes).toEqual([{ t: 5, level: LEVELS.OK }]);
   });

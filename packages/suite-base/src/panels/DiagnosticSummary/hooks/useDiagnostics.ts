@@ -54,14 +54,13 @@ export function addMessages(
 
     for (const status of statusArray) {
       const info = computeDiagnosticInfo(status, header.stamp, event.receiveTime, event.topic);
-      latest ??= new Map(prev.latest);
-      latest.set(info.id, info);
-
       history ??= new Map(prev.history);
       const before = history.get(info.id);
       if (before && t < before.lastSeen) {
-        continue; // out-of-order (e.g. same check on two topics); keep history monotonic
+        continue; // out-of-order (e.g. same check on two topics); keep latest and history monotonic
       }
+      latest ??= new Map(prev.latest);
+      latest.set(info.id, info);
       const added = changesFor(before, status.level, t, staleSec);
       history.set(info.id, {
         changes:
