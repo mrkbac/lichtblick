@@ -6,19 +6,20 @@ import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 
 import DiagnosticSummary from "@lichtblick/suite-base/panels/DiagnosticSummary";
-import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
-import useDiagnostics, {
-  UseDiagnosticsResult,
-} from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnostics";
+import { DEFAULT_CONFIG, LEVELS } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
 import {
+  DiagnosticsPanelData,
+  useDiagnosticsPanelData,
+} from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticsPanelData";
+import {
+  DiagnosticsById,
   DiagnosticSummaryConfig,
-  DiagnosticSummaryProps,
 } from "@lichtblick/suite-base/panels/DiagnosticSummary/types";
+import { getDiagnosticId } from "@lichtblick/suite-base/panels/DiagnosticSummary/utils/util";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
 import DiagnosticsBuilder from "@lichtblick/suite-base/testing/builders/DiagnosticsBuilder";
-import { BasicBuilder } from "@lichtblick/test-builders";
 
-jest.mock("@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnostics");
+jest.mock("@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticsPanelData");
 
 jest.mock("react-virtualized-auto-sizer", () => ({
   __esModule: true,
@@ -29,79 +30,104 @@ jest.mock("react-virtualized-auto-sizer", () => ({
   }) => children({ height: 500, width: 500 }),
 }));
 
-describe("DiagnosticSummary", () => {
-  const mockSaveConfig = jest.fn();
-  const mockOpenSiblingPanel = jest.fn();
+function mockData(data: Partial<DiagnosticsPanelData>) {
+  const subscribed = ["/diagnostics"];
+  (useDiagnosticsPanelData as jest.Mock).mockReturnValue({
+    topics: { available: subscribed, selected: subscribed, subscribed },
+    diagnostics: new Map(),
+    history: new Map(),
+    staleSec: 5,
+    range: undefined,
+    seek: undefined,
+    ...data,
+  });
+}
 
-  jest.mock("@lichtblick/suite-base/PanelAPI", () => ({
-    useDataSourceInfo: jest.fn(() => ({
-      topics: [],
-    })),
-  }));
-
-  jest.mock("@lichtblick/suite-base/components/PanelContext", () => ({
-    usePanelContext: jest.fn(() => ({
-      openSiblingPanel: mockOpenSiblingPanel,
-    })),
-  }));
-
-  jest.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", () => ({
-    usePanelSettingsTreeUpdate: jest.fn(),
-  }));
-
-  beforeEach(() => {
-    jest.clearAllMocks();
+const info = (hardwareId: string, name: string, level: number = LEVELS.OK) =>
+  DiagnosticsBuilder.info({
+    id: getDiagnosticId(hardwareId, name),
+    displayName: `${hardwareId}: ${name}`,
+    status: DiagnosticsBuilder.statusMessage({ hardware_id: hardwareId, name, level }),
   });
 
-  function setup(overrideConfig: Partial<DiagnosticSummaryConfig> = {}) {
-    const config: DiagnosticSummaryConfig = DiagnosticsBuilder.summaryConfig({
-      ...DEFAULT_CONFIG,
-      ...overrideConfig,
-    });
+const byId = (...infos: ReturnType<typeof info>[]): DiagnosticsById =>
+  new Map(infos.map((i) => [i.id, i]));
 
-    const props: DiagnosticSummaryProps = {
-      config,
-      saveConfig: mockSaveConfig,
-    };
-
-    const ui: React.ReactElement = (
+describe("DiagnosticSummary", () => {
+  function setup(config: Partial<DiagnosticSummaryConfig> = {}) {
+    return render(
       <div style={{ width: 800, height: 500 }}>
         <PanelSetup>
-          <DiagnosticSummary {...props} />
+          <DiagnosticSummary overrideConfig={{ ...DEFAULT_CONFIG, ...config }} />
         </PanelSetup>
-      </div>
+      </div>,
     );
-    return {
-      ...render(ui),
-      ...props,
-    };
   }
 
-  it("renders empty state when no diagnostics are available", () => {
-    const diagnosticResult: UseDiagnosticsResult = new Map();
-    (useDiagnostics as jest.Mock).mockReturnValueOnce(diagnosticResult);
-
-    const { config } = setup();
-
-    expect(screen.getByText(/waiting for messages/i)).toBeInTheDocument();
-    expect(screen.getByText(new RegExp(config.topicToRender, "i"))).toBeInTheDocument();
+  it("waits for messages", () => {
+    mockData({});
+    setup();
+    expect(screen.getByText(/Waiting for diagnostics/i)).toBeInTheDocument();
   });
 
-  it("renders diagnostics and pinned items", () => {
-    const hardwareId = BasicBuilder.string();
-    const diagnosticId = BasicBuilder.string();
-    const diagnosticInfo = DiagnosticsBuilder.info();
-    const diagnosticResult: UseDiagnosticsResult = new Map([
-      [hardwareId, new Map([[diagnosticId, diagnosticInfo]])],
-    ]);
-    (useDiagnostics as jest.Mock).mockReturnValue(diagnosticResult);
+  it("explains when no diagnostics topic exists", () => {
+    mockData({ topics: { available: [], selected: [], subscribed: [] } });
+    setup();
+    expect(screen.getByText(/No diagnostics topics available/i)).toBeInTheDocument();
+  });
 
-    setup({
-      pinnedIds: [`1|${hardwareId}|${diagnosticId}`],
+  it("renders pinned items first, even when the name contains '|'", () => {
+    const pinned = info("motor", "temp | left");
+    const other = info("camera", "fps");
+    mockData({ diagnostics: byId(other, pinned) });
+
+    setup({ pinnedIds: [pinned.id] });
+
+    expect(screen.getByTestId("diagnostic-summary-node-row-0")).toHaveTextContent(
+      pinned.displayName,
+    );
+    expect(screen.getByTestId("diagnostic-summary-node-row-1")).toHaveTextContent(
+      other.displayName,
+    );
+  });
+
+  it("sorts by level, worst first, and filters by min level", () => {
+    const ok = info("a", "ok", LEVELS.OK);
+    const error = info("b", "error", LEVELS.ERROR);
+    const warn = info("c", "warn", LEVELS.WARN);
+    mockData({ diagnostics: byId(ok, error, warn) });
+
+    setup({ minLevel: LEVELS.WARN });
+
+    expect(screen.getByTestId("diagnostic-summary-node-row-0")).toHaveTextContent(
+      error.displayName,
+    );
+    expect(screen.getByTestId("diagnostic-summary-node-row-1")).toHaveTextContent(warn.displayName);
+    expect(screen.queryByTestId("diagnostic-summary-node-row-2")).not.toBeInTheDocument();
+  });
+
+  it("shows how long a check has been in its level and its timeline", () => {
+    const error = info("b", "error", LEVELS.ERROR);
+    mockData({
+      diagnostics: byId(error),
+      history: new Map([
+        [
+          error.id,
+          {
+            changes: [
+              { t: 0, level: LEVELS.OK },
+              { t: 10, level: LEVELS.ERROR },
+            ],
+            lastSeen: 70,
+          },
+        ],
+      ]),
+      range: { start: 0, end: 100, current: 72 },
     });
 
-    expect(screen.getByTestId("diagnostic-summary-node-row-0")).toBeInTheDocument();
-    expect(screen.getByTestId("diagnostic-summary-node-row-1")).toBeInTheDocument();
-    expect(screen.getAllByText(new RegExp(diagnosticInfo.displayName, "i")).length).toBe(2);
+    setup();
+
+    expect(screen.getByTestId("diagnostic-row-level-since")).toHaveTextContent("1m 02s");
+    expect(screen.getByTestId("diagnostic-timeline")).toBeInTheDocument();
   });
 });

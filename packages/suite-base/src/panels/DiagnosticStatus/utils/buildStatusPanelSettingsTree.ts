@@ -1,54 +1,38 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { TFunction } from "i18next";
+
 import { SettingsTreeNodes } from "@lichtblick/suite";
 import { DiagnosticStatusConfig } from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
-import { DEFAULT_SECONDS_UNTIL_STALE } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
+import {
+  buildTopicsSettingsNode,
+  DiagnosticTopics,
+} from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticTopics";
+import { staleTimeoutField } from "@lichtblick/suite-base/panels/DiagnosticSummary/utils/buildSettingsTree";
 
 export function buildStatusPanelSettingsTree(
   config: DiagnosticStatusConfig,
-  topicToRender: string,
-  availableTopics: readonly string[],
+  topics: DiagnosticTopics,
+  t: TFunction<"diagnostics">,
 ): SettingsTreeNodes {
-  const topicOptions = availableTopics.map((topic) => ({ label: topic, value: topic }));
-  const topicIsAvailable = availableTopics.includes(topicToRender);
-  if (!topicIsAvailable) {
-    topicOptions.unshift({ value: topicToRender, label: topicToRender });
-  }
-  const topicError = topicIsAvailable ? undefined : `Topic ${topicToRender} is not available`;
-
   return {
     general: {
-      label: "General",
+      label: t("general"),
       fields: {
-        topicToRender: {
-          label: "Topic",
-          input: "select",
-          value: topicToRender,
-          error: topicError,
-          options: topicOptions,
-        },
         numericPrecision: {
-          label: "Numeric precision",
+          label: t("numericPrecision"),
           input: "number",
           min: 0,
           max: 17,
           precision: 0,
           step: 1,
-          placeholder: "auto",
+          placeholder: t("numericPrecisionPlaceholder"),
           value: config.numericPrecision,
         },
-        secondsUntilStale: {
-          label: "Stale timeout",
-          help: "Number of seconds after which entries will be marked as stale if no new diagnostic message(s) have been received",
-          input: "number",
-          placeholder: `${DEFAULT_SECONDS_UNTIL_STALE} seconds`,
-          min: 0,
-          step: 1,
-          precision: 0,
-          value: config.secondsUntilStale,
-        },
+        secondsUntilStale: staleTimeoutField(config.secondsUntilStale, t),
       },
     },
+    topics: buildTopicsSettingsNode(topics, t),
   };
 }

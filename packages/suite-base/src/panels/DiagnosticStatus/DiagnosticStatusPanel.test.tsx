@@ -2,126 +2,94 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
+import { render, screen } from "@testing-library/react";
 
 import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";
-import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/DiagnosticStatus/constants";
+import { DiagnosticStatusConfig } from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
 import {
-  DiagnosticStatusConfig,
-  DiagnosticStatusPanelProps,
-} from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
-import useDiagnostics, {
-  UseDiagnosticsResult,
-} from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnostics";
+  DiagnosticsPanelData,
+  useDiagnosticsPanelData,
+} from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticsPanelData";
+import { DiagnosticsById } from "@lichtblick/suite-base/panels/DiagnosticSummary/types";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
 import DiagnosticsBuilder from "@lichtblick/suite-base/testing/builders/DiagnosticsBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import DiagnosticStatusPanel from "./DiagnosticStatusPanel";
 
-jest.mock("@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnostics");
+jest.mock("@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticsPanelData");
+
+// Render every row; jsdom has no layout for the virtualizer to measure.
+jest.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: ({ count }: { count: number }) => ({
+    getTotalSize: () => count * 26,
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, index) => ({ index, key: index, start: 0 })),
+    measureElement: () => {},
+  }),
+}));
+
+function mockData(diagnostics: DiagnosticsById, subscribed = ["/diagnostics"]) {
+  const data: DiagnosticsPanelData = {
+    topics: { available: subscribed, selected: subscribed, subscribed },
+    diagnostics,
+    history: new Map(),
+    staleSec: 5,
+    range: undefined,
+    seek: undefined,
+  };
+  (useDiagnosticsPanelData as jest.Mock).mockReturnValue(data);
+}
 
 describe("DiagnosticStatusPanel", () => {
-  const mockSaveConfig = jest.fn();
-  const mockUseDataSourceInfo = jest.fn(() => ({
-    topics: [],
-  }));
-  const mockUsePanelContext = jest.fn(() => ({
-    openSiblingPanel: jest.fn(),
-  }));
-  const mockUseAvailableDiagnostics = jest.fn();
-
-  jest.mock("@lichtblick/suite-base/PanelAPI", () => ({
-    useDataSourceInfo: mockUseDataSourceInfo,
-  }));
-  jest.mock("@lichtblick/suite-base/components/PanelContext", () => ({
-    usePanelContext: mockUsePanelContext,
-  }));
-
-  jest.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", () => ({
-    usePanelSettingsTreeUpdate: jest.fn(),
-  }));
-
-  jest.mock("@lichtblick/suite-base/panels/DiagnosticStatus/hooks/useAvailableDiagnostics", () => ({
-    __esModule: true,
-    default: mockUseAvailableDiagnostics,
-  }));
-
-  const setup = (configOverride: Partial<DiagnosticStatusConfig> = {}) => {
-    const config = DiagnosticsBuilder.statusConfig({
-      ...DEFAULT_CONFIG,
-      ...configOverride,
-    });
-
-    const props: DiagnosticStatusPanelProps = {
-      config,
-      saveConfig: mockSaveConfig,
-    };
-
-    const ui: React.ReactElement = (
+  const setup = (config: DiagnosticStatusConfig = {}) =>
+    render(
       <MockPanelContextProvider>
         <PanelSetup>
-          <DiagnosticStatusPanel {...props} />
+          <DiagnosticStatusPanel config={config} saveConfig={jest.fn()} />
         </PanelSetup>
-      </MockPanelContextProvider>
+      </MockPanelContextProvider>,
     );
 
-    return {
-      ...render(ui),
-      ...props,
-    };
-  };
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-  });
-
-  it("should render the empty state when no diagnostics are available", () => {
-    const diagnosticResult: UseDiagnosticsResult = new Map();
-    (useDiagnostics as jest.Mock).mockReturnValue(diagnosticResult);
-
+  it("asks to select a node when nothing is selected", () => {
+    mockData(new Map());
     setup();
-
     expect(screen.getByText(/No diagnostic node selected/i)).toBeInTheDocument();
   });
 
-  it("should render the empty state when there is a selected display name", () => {
-    const diagnosticResult: UseDiagnosticsResult = new Map();
-    (useDiagnostics as jest.Mock).mockReturnValue(diagnosticResult);
-
-    const { config } = setup({
-      selectedHardwareId: BasicBuilder.string(),
-      selectedName: BasicBuilder.string(),
-    });
-
-    expect(screen.getByText(/Waiting for diagnostics from/i)).toBeInTheDocument();
-    expect(
-      screen.getByText(new RegExp(`${config.selectedHardwareId}: ${config.selectedName}`, "i")),
-    ).toBeInTheDocument();
+  it("explains when no diagnostics topic exists", () => {
+    mockData(new Map(), []);
+    setup();
+    expect(screen.getByText(/No diagnostics topics available/i)).toBeInTheDocument();
   });
 
-  it("should render diagnostics when there are filtered diagnostics", () => {
-    // Given When
+  it("waits for the selected node", () => {
+    mockData(new Map());
+    const selectedHardwareId = BasicBuilder.string();
+    const selectedName = BasicBuilder.string();
+    setup({ selectedHardwareId, selectedName });
+
+    expect(screen.getByText(/Waiting for diagnostics from/i)).toBeInTheDocument();
+    expect(screen.getByText(`${selectedHardwareId}: ${selectedName}`)).toBeInTheDocument();
+  });
+
+  it("renders all checks of the selected hardware id", () => {
     const hardwareId = BasicBuilder.string();
-    const statusMessageName = BasicBuilder.string();
-    const statusMessage = DiagnosticsBuilder.statusMessage({
-      name: statusMessageName,
+    const a = DiagnosticsBuilder.info({
+      status: DiagnosticsBuilder.statusMessage({ hardware_id: hardwareId }),
     });
-    const diagnosticResult: UseDiagnosticsResult = new Map([
-      [
-        hardwareId,
-        new Map([[BasicBuilder.string(), DiagnosticsBuilder.info({ status: statusMessage })]]),
-      ],
-    ]);
-    (useDiagnostics as jest.Mock).mockReturnValue(diagnosticResult);
-
-    setup({
-      selectedHardwareId: hardwareId,
-      selectedName: statusMessageName,
+    const b = DiagnosticsBuilder.info({
+      status: DiagnosticsBuilder.statusMessage({ hardware_id: hardwareId }),
     });
+    const other = DiagnosticsBuilder.info();
+    mockData(new Map([a, b, other].map((info) => [info.id, info])));
 
-    // Then
+    setup({ selectedHardwareId: hardwareId });
+
     expect(screen.getByTestId("filtered-diagnostics")).toBeInTheDocument();
+    expect(screen.getByText(a.status.message)).toBeInTheDocument();
+    expect(screen.getByText(b.status.message)).toBeInTheDocument();
+    expect(screen.queryByText(other.status.message)).not.toBeInTheDocument();
   });
 });

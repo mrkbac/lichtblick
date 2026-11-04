@@ -2,103 +2,144 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { render, screen, fireEvent } from "@testing-library/react";
+import "@testing-library/jest-dom";
+import { fireEvent, render, screen } from "@testing-library/react";
 
-import {
-  DiagnosticInfo,
-  DiagnosticStatusProps,
-} from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
+import { DiagnosticInfo } from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
+import { LEVELS } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
+import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
 import DiagnosticsBuilder from "@lichtblick/suite-base/testing/builders/DiagnosticsBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-import DiagnosticTable from "./DiagnosticTable";
+import DiagnosticTable, { DiagnosticTableProps, formatValue } from "./DiagnosticTable";
 
-type Setup = {
-  infoOverride?: Partial<DiagnosticInfo>;
-};
+// Render every row; jsdom has no layout for the virtualizer to measure.
+jest.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: ({
+    count,
+    getItemKey,
+  }: {
+    count: number;
+    getItemKey: (index: number) => string;
+  }) => ({
+    getTotalSize: () => count * 26,
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, index) => ({ index, key: getItemKey(index), start: 0 })),
+    measureElement: () => {},
+  }),
+}));
+
+function renderTable(props: DiagnosticTableProps) {
+  const ui = (p: DiagnosticTableProps) => (
+    <PanelSetup>
+      <DiagnosticTable {...p} />
+    </PanelSetup>
+  );
+  const result = render(ui(props));
+  return {
+    rerender: (p: DiagnosticTableProps) => {
+      result.rerender(ui(p));
+    },
+  };
+}
 
 describe("DiagnosticTable", () => {
   const mockOnChangeSplitFraction = jest.fn();
   const mockOpenSiblingPanel = jest.fn();
 
-  function setup({ infoOverride }: Setup = {}) {
-    const info = {
-      ...DiagnosticsBuilder.info(),
-      ...infoOverride,
-    };
-    const defaultProps: DiagnosticStatusProps = {
-      info,
-      numericPrecision: 2,
+  function props(infos: DiagnosticInfo[]): DiagnosticTableProps {
+    return {
+      infos,
+      history: new Map(),
+      range: undefined,
+      staleSec: 5,
+      numericPrecision: undefined,
       onChangeSplitFraction: mockOnChangeSplitFraction,
       openSiblingPanel: mockOpenSiblingPanel,
       splitFraction: 0.5,
-      topicToRender: BasicBuilder.string(),
-    };
-
-    return {
-      ...render(<DiagnosticTable {...defaultProps} />),
-      ...defaultProps,
     };
   }
 
-  it("should render the display name and message", () => {
-    // Given When
-    const { info } = setup();
-
-    // Then
-    expect(screen.getByText(info.displayName)).toBeTruthy();
-    expect(screen.getByText(info.status.message)).toBeTruthy();
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  it("should render the resize handle and triggers onChangeSplitFraction on mouse events", () => {
-    // Given When
-    setup();
+  it("renders display name, message and key-values of every status", () => {
+    const infos = [DiagnosticsBuilder.info(), DiagnosticsBuilder.info()];
+    renderTable(props(infos));
 
-    const resizeHandle = screen.getByTestId("DiagnosticTable-resizeHandle");
-    expect(resizeHandle).toBeTruthy();
+    for (const info of infos) {
+      expect(screen.getByText(info.displayName)).toBeInTheDocument();
+      expect(screen.getByText(info.status.message)).toBeInTheDocument();
+      for (const { key, value } of info.status.values) {
+        expect(screen.getByText(key)).toBeInTheDocument();
+        expect(screen.getByText(value)).toBeInTheDocument();
+      }
+    }
+  });
 
-    fireEvent.mouseDown(resizeHandle);
+  it("triggers onChangeSplitFraction while dragging the resize handle", () => {
+    renderTable(props([DiagnosticsBuilder.info()]));
+
+    fireEvent.mouseDown(screen.getByTestId("DiagnosticTable-resizeHandle"));
     fireEvent.mouseMove(window, { clientX: 100 });
     fireEvent.mouseUp(window);
 
     expect(mockOnChangeSplitFraction).toHaveBeenCalled();
   });
 
-  it("should render key-value pairs with numeric precision formatting", () => {
-    const { info } = setup();
+  it("opens Plot for numbers and State Transitions for text, using the status' topic", () => {
+    const status = DiagnosticsBuilder.statusMessage({
+      values: [
+        DiagnosticsBuilder.keyValue({ value: "text" }),
+        DiagnosticsBuilder.keyValue({ key: "num", value: "1.5" }),
+      ],
+    });
+    const info = DiagnosticsBuilder.info({ status, topic: "/agg" });
+    renderTable(props([info]));
 
-    expect(screen.getByText(info.status.values[0]!.key)).toBeTruthy();
-    expect(screen.getByText(info.status.values[0]!.value)).toBeTruthy();
-    expect(screen.getByText(info.status.values[1]!.key)).toBeTruthy();
-    expect(screen.getByText(info.status.values[1]!.value)).toBeTruthy();
-    expect(screen.getByText(info.status.values[2]!.key)).toBeTruthy();
-    expect(screen.getByText(info.status.values[2]!.value)).toBeTruthy();
+    fireEvent.click(screen.getByTestId("open-plot-button"));
+    const plotConfig = mockOpenSiblingPanel.mock.calls[0][0].siblingConfigCreator({ paths: [] });
+    expect(JSON.stringify(plotConfig)).toContain(`/agg.status[:]{hardware_id==`);
+    expect(JSON.stringify(plotConfig)).toContain(`{key==\\"num\\"}.value`);
+
+    fireEvent.click(screen.getByTestId("open-state-transitions-button"));
+    expect(mockOpenSiblingPanel).toHaveBeenCalledTimes(2);
   });
 
-  it("should render 'Open in Plot panel' and 'Open in State Transitions panel' buttons", () => {
-    const values = [
-      DiagnosticsBuilder.keyValue({
-        key: BasicBuilder.string(),
-        value: BasicBuilder.string(),
-      }),
-      DiagnosticsBuilder.keyValue({
-        key: BasicBuilder.string(),
-        value: BasicBuilder.float().toString(),
-      }),
-    ];
-    const status = DiagnosticsBuilder.statusMessage({ values });
-    setup({
-      infoOverride: DiagnosticsBuilder.info({ status }),
+  it("highlights values that changed since the previous message", () => {
+    const key = BasicBuilder.string();
+    const status = DiagnosticsBuilder.statusMessage({
+      level: LEVELS.OK,
+      values: [{ key, value: "1" }, DiagnosticsBuilder.keyValue({ value: "same" })],
     });
+    const info = DiagnosticsBuilder.info({ status });
+    const { rerender } = renderTable(props([info]));
+    expect(screen.queryByTestId("diagnostic-value-changed")).not.toBeInTheDocument();
 
-    const plotButton = screen.getByTestId("open-plot-button");
-    expect(plotButton).toBeTruthy();
-    fireEvent.click(plotButton);
-    expect(mockOpenSiblingPanel).toHaveBeenCalled();
+    const next = {
+      ...info,
+      status: { ...status, values: [{ key, value: "2" }, status.values[1]!] },
+    };
+    rerender(props([next]));
 
-    const stateTransitionsButton = screen.getByTestId("open-state-transitions-button");
-    expect(stateTransitionsButton).toBeTruthy();
-    fireEvent.click(stateTransitionsButton);
-    expect(mockOpenSiblingPanel).toHaveBeenCalled();
+    const changed = screen.getAllByTestId("diagnostic-value-changed");
+    expect(changed).toHaveLength(1);
+    expect(changed[0]).toHaveTextContent("2");
+    expect(changed[0]).toHaveAttribute("title", "Previous: 1");
+  });
+
+  it("offers copy buttons for values and the whole status", () => {
+    renderTable(props([DiagnosticsBuilder.info()]));
+    expect(screen.getByLabelText("Copy status as JSON")).toBeInTheDocument();
+    expect(screen.getAllByLabelText("Copy value")).toHaveLength(3);
+  });
+});
+
+describe("formatValue", () => {
+  it("applies numeric precision only to numbers", () => {
+    expect(formatValue("1.23456", 2)).toBe("1.23");
+    expect(formatValue("abc", 2)).toBe("abc");
+    expect(formatValue("1.23456", undefined)).toBe("1.23456");
   });
 });

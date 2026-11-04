@@ -9,6 +9,7 @@ export * from "./addPanel";
 export * from "./appBar";
 export * from "./appSettings";
 export * from "./dataSourceInfo";
+export * from "./diagnostics";
 export * from "./desktopWindow";
 export * from "./extensionsSettings";
 export * from "./gauge";

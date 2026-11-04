@@ -26,6 +26,7 @@ import {
   getDiagnosticsByLevel,
   filterAndSortDiagnostics,
   computeDiagnosticInfo,
+  getStaleTime,
 } from "./util";
 
 const watchdogStatus: DiagnosticInfo = {
@@ -38,6 +39,8 @@ const watchdogStatus: DiagnosticInfo = {
   },
   id: "watchdog",
   stamp: { sec: 1547062465, nsec: 999879954 },
+  receiveTime: { sec: 1547062465, nsec: 999879954 },
+  topic: "/diagnostics",
   displayName: "watchdog: status",
 };
 const mctmLogger: DiagnosticInfo = {
@@ -50,13 +53,10 @@ const mctmLogger: DiagnosticInfo = {
   },
   id: "mctm_logger",
   stamp: { sec: 1547062466, nsec: 1674890 },
+  receiveTime: { sec: 1547062466, nsec: 1674890 },
+  topic: "/diagnostics",
   displayName: "mctm_logger: MCTM Logger",
 };
-const okMap = new Map<string, DiagnosticsById>([
-  ["watchdog", new Map([["status", watchdogStatus]])],
-  ["mctm_logger", new Map([["MCTM Logger", mctmLogger]])],
-]);
-
 const cameraStatus: DiagnosticInfo = {
   status: {
     level: 1,
@@ -66,14 +66,12 @@ const cameraStatus: DiagnosticInfo = {
     hardware_id: "camera_front_left_40/camera_ground_rendering",
     values: [],
   },
-  id: "status",
+  id: "camera_status",
   stamp: { sec: 1547062466, nsec: 37309350 },
+  receiveTime: { sec: 1547062466, nsec: 37309350 },
+  topic: "/diagnostics",
   displayName: "camera_front_left_40/camera_ground_rendering: status",
 };
-const warnMap = new Map([
-  ["camera_front_left_40/camera_ground_rendering", new Map([["status", cameraStatus]])],
-]);
-
 const usrrStatus: DiagnosticInfo = {
   status: {
     level: 2,
@@ -85,17 +83,13 @@ const usrrStatus: DiagnosticInfo = {
   },
   id: "status",
   stamp: { sec: 1547062466, nsec: 98998486 },
+  receiveTime: { sec: 1547062466, nsec: 98998486 },
+  topic: "/diagnostics",
   displayName: "usrr_rear_left_center/usrr_segmentation_node: status",
 };
-const errorMap = new Map<string, DiagnosticsById>([
-  ["usrr_rear_left_center/usrr_segmentation_node", new Map([["status", usrrStatus]])],
-]);
-
-const diagnosticsByHardwareId = new Map<string, DiagnosticsById>([
-  ...okMap,
-  ...warnMap,
-  ...errorMap,
-]);
+const diagnosticsByHardwareId: DiagnosticsById = new Map(
+  [watchdogStatus, mctmLogger, cameraStatus, usrrStatus].map((info) => [info.id, info]),
+);
 
 describe("diagnostics", () => {
   describe("getDiagnosticId", () => {
@@ -169,11 +163,15 @@ describe("diagnostics", () => {
             values: [{ key: "example key", value: new Array(10000).join("x") }],
           },
           { sec: 1, nsec: 0 },
+          { sec: 2, nsec: 0 },
+          "/diagnostics",
         ),
       ).toEqual({
         displayName: "example hardware_id: example name",
         id: "|example hardware_id|example name|",
         stamp: { sec: 1, nsec: 0 },
+        receiveTime: { sec: 2, nsec: 0 },
+        topic: "/diagnostics",
         status: {
           hardware_id: "example hardware_id",
           level: 0,
@@ -185,5 +183,14 @@ describe("diagnostics", () => {
         },
       });
     });
+  });
+});
+
+describe("getStaleTime", () => {
+  it("subtracts whole seconds and disables staleness below one second", () => {
+    expect(getStaleTime({ sec: 10, nsec: 5 }, 3.7)).toEqual({ sec: 7, nsec: 5 });
+    expect(getStaleTime({ sec: 1, nsec: 0 }, 5)).toEqual({ sec: 0, nsec: 0 });
+    expect(getStaleTime({ sec: 10, nsec: 0 }, 0.5)).toBeUndefined();
+    expect(getStaleTime(undefined, 5)).toBeUndefined();
   });
 });

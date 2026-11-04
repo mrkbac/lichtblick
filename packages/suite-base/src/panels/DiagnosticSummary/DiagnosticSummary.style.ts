@@ -12,6 +12,8 @@ import { makeStyles } from "tss-react/mui";
 export const useStyles = makeStyles()((theme) => ({
   listItemButton: {
     padding: 0,
+    paddingRight: theme.spacing(1),
+    gap: theme.spacing(1),
 
     [`.${iconButtonClasses.root}`]: {
       visibility: "hidden",
@@ -27,6 +29,10 @@ export const useStyles = makeStyles()((theme) => ({
     [`&:hover .${iconButtonClasses.root}`]: {
       visibility: "visible",
     },
+  },
+  levelSince: {
+    flex: "none",
+    fontVariantNumeric: "tabular-nums",
   },
   select: {
     [`.${inputBaseClasses.input}.${selectClasses.select}.MuiInputBase-sizeSmall`]: {

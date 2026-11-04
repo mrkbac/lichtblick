@@ -16,7 +16,7 @@
 
 import * as _ from "lodash-es";
 
-import { Time } from "@lichtblick/rostime";
+import { clampTime, subtract, Time } from "@lichtblick/rostime";
 import {
   DiagnosticId,
   DiagnosticInfo,
@@ -36,6 +36,8 @@ export function getDiagnosticId(hardwareId: string, name?: string): DiagnosticId
 export function computeDiagnosticInfo(
   status: DiagnosticStatusMessage,
   stamp: Time,
+  receiveTime: Time,
+  topic: string,
 ): DiagnosticInfo {
   const displayName = getDisplayName(status.hardware_id, status.name);
   let validatedStatus = status;
@@ -52,23 +54,21 @@ export function computeDiagnosticInfo(
   return {
     status: validatedStatus,
     stamp,
+    receiveTime,
+    topic,
     id: getDiagnosticId(status.hardware_id, status.name),
     displayName,
   };
 }
 
-export function getDiagnosticsByLevel(
-  diagnosticsByHardwareId: Map<string, DiagnosticsById>,
-): Map<number, DiagnosticInfo[]> {
+export function getDiagnosticsByLevel(diagnostics: DiagnosticsById): Map<number, DiagnosticInfo[]> {
   const ret = new Map<number, DiagnosticInfo[]>();
-  for (const diagnosticsByName of diagnosticsByHardwareId.values()) {
-    for (const diagnostic of diagnosticsByName.values()) {
-      const statuses = ret.get(diagnostic.status.level);
-      if (statuses) {
-        statuses.push(diagnostic);
-      } else {
-        ret.set(diagnostic.status.level, [diagnostic]);
-      }
+  for (const diagnostic of diagnostics.values()) {
+    const statuses = ret.get(diagnostic.status.level);
+    if (statuses) {
+      statuses.push(diagnostic);
+    } else {
+      ret.set(diagnostic.status.level, [diagnostic]);
     }
   }
   return ret;
@@ -90,3 +90,15 @@ export const filterAndSortDiagnostics = (
     getText: ({ displayName }) => displayName,
   });
 };
+
+/** Diagnostics received before the returned time are stale; undefined disables staleness. */
+export function getStaleTime(
+  currentTime: Time | undefined,
+  secondsUntilStale: number,
+): Time | undefined {
+  if (!currentTime || secondsUntilStale < 1) {
+    return undefined;
+  }
+  const timeUntilStale: Time = { sec: Math.floor(secondsUntilStale), nsec: 0 };
+  return subtract(clampTime(currentTime, timeUntilStale, currentTime), timeUntilStale);
+}

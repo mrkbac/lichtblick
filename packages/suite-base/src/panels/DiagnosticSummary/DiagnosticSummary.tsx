@@ -18,12 +18,12 @@ import { InputBase, MenuItem, Select, Typography } from "@mui/material";
 import { produce } from "immer";
 import * as _ from "lodash-es";
 import { useCallback, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import AutoSizer from "react-virtualized-auto-sizer";
 import { List, RowComponentProps } from "react-window";
 
 import { filterMap } from "@lichtblick/den/collection";
 import { SettingsTreeAction } from "@lichtblick/suite";
-import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
@@ -32,40 +32,35 @@ import { DiagnosticInfo } from "@lichtblick/suite-base/panels/DiagnosticStatus/t
 import DiagnosticNodeRow from "@lichtblick/suite-base/panels/DiagnosticSummary/DiagnosticNodeRow";
 import { useStyles } from "@lichtblick/suite-base/panels/DiagnosticSummary/DiagnosticSummary.style";
 import {
-  ALLOWED_DATATYPES,
-  DEFAULT_SECONDS_UNTIL_STALE,
   KNOWN_LEVELS,
   LEVEL_NAMES,
   MESSAGE_COLORS,
 } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
-import useDiagnostics from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnostics";
-import useStaleTime from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useStaleTime";
+import {
+  getConfiguredTopics,
+  handleTopicToggle,
+} from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticTopics";
+import { useDiagnosticsPanelData } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticsPanelData";
 import {
   DiagnosticSummaryConfig,
   DiagnosticSummaryProps,
 } from "@lichtblick/suite-base/panels/DiagnosticSummary/types";
-import { getDiagnosticsWithStales } from "@lichtblick/suite-base/panels/DiagnosticSummary/utils/getDiagnosticsWithStales";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import toggle from "@lichtblick/suite-base/util/toggle";
 
 import { buildSettingsTree } from "./utils/buildSettingsTree";
 import { filterAndSortDiagnostics, getDiagnosticsByLevel } from "./utils/util";
 
+type RowData = { data: DiagnosticInfo[] };
+
 const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => {
   const { config, saveConfig } = props;
   const { classes } = useStyles();
-  const { topics } = useDataSourceInfo();
-  const {
-    minLevel,
-    topicToRender,
-    pinnedIds,
-    hardwareIdFilter,
-    sortByLevel = true,
-    secondsUntilStale = DEFAULT_SECONDS_UNTIL_STALE,
-  } = config;
+  const { t } = useTranslation("diagnostics");
+  const { minLevel, pinnedIds, hardwareIdFilter, sortByLevel = true, showHistory = true } = config;
   const { openSiblingPanel } = usePanelContext();
   const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
-  const staleTime = useStaleTime(secondsUntilStale);
+  const { topics, diagnostics, history, staleSec, range, seek } = useDiagnosticsPanelData(config);
 
   const togglePinned = useCallback(
     (info: DiagnosticInfo) => {
@@ -74,6 +69,10 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
     [pinnedIds, saveConfig],
   );
 
+  const configuredTopics = useMemo(
+    () => getConfiguredTopics({ topics: config.topics, topicToRender: config.topicToRender }),
+    [config.topics, config.topicToRender],
+  );
   const showDetails = useCallback(
     (info: DiagnosticInfo) => {
       openSiblingPanel({
@@ -81,17 +80,17 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
         siblingConfigCreator: () => ({
           selectedHardwareId: info.status.hardware_id,
           selectedName: info.status.name,
-          topicToRender,
+          topics: configuredTopics,
           collapsedSections: [],
         }),
         updateIfExists: true,
       });
     },
-    [topicToRender, openSiblingPanel],
+    [configuredTopics, openSiblingPanel],
   );
 
   const renderRow = useCallback(
-    (renderProps: RowComponentProps<{ data: DiagnosticInfo[] }>) => {
+    (renderProps: RowComponentProps<RowData>) => {
       const item = renderProps.data[renderProps.index]!;
       return (
         <div
@@ -104,78 +103,42 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
             isPinned={pinnedIds.includes(item.id)}
             onClick={showDetails}
             onClickPin={togglePinned}
+            history={history.get(item.id)}
+            range={range}
+            staleSec={staleSec}
+            showHistory={showHistory}
+            onSeek={seek}
           />
         </div>
       );
     },
-    [pinnedIds, showDetails, togglePinned],
+    [pinnedIds, showDetails, togglePinned, history, range, staleSec, showHistory, seek],
   );
 
-  // Filter down all topics to those that conform to our supported datatypes
-  const availableTopics = useMemo(() => {
-    const filtered = topics
-      .filter(
-        (topic) => topic.schemaName != undefined && ALLOWED_DATATYPES.includes(topic.schemaName),
-      )
-      .map((topic) => topic.name);
-
-    // Keeps only the first occurrence of each topic.
-    return [...new Set(filtered)];
-  }, [topics]);
-
-  // If the topicToRender is not in the availableTopics, then we should not try to use it
-  const diagnosticTopic = useMemo(() => {
-    return availableTopics.includes(topicToRender) ? topicToRender : undefined;
-  }, [availableTopics, topicToRender]);
-
-  const diagnostics = useDiagnostics(diagnosticTopic);
-
-  const diagnosticsWithOldMarkedAsStales = useMemo(() => {
-    return staleTime ? getDiagnosticsWithStales(diagnostics, staleTime) : diagnostics;
-  }, [diagnostics, staleTime]);
-
-  const summary = useMemo(() => {
-    if (diagnosticsWithOldMarkedAsStales.size === 0) {
-      return (
-        <EmptyState>
-          Waiting for <code>{topicToRender}</code> messages
-        </EmptyState>
-      );
-    }
-    const pinnedNodes = filterMap(pinnedIds, (id) => {
-      const [, trimmedHardwareId, name] = id.split("|");
-      if (name == undefined || trimmedHardwareId == undefined) {
-        return;
-      }
-      const diagnosticsByName = diagnosticsWithOldMarkedAsStales.get(trimmedHardwareId);
-      return diagnosticsByName?.get(name);
-    });
-
-    const nodesByLevel = getDiagnosticsByLevel(diagnosticsWithOldMarkedAsStales);
+  const nodes = useMemo(() => {
+    const pinnedNodes = filterMap(pinnedIds, (id) => diagnostics.get(id));
+    const nodesByLevel = getDiagnosticsByLevel(diagnostics);
     const levels = Array.from(nodesByLevel.keys()).sort().reverse();
     const sortedNodes = sortByLevel
-      ? ([] as DiagnosticInfo[]).concat(
-          ...levels.map((level) =>
-            filterAndSortDiagnostics(nodesByLevel.get(level) ?? [], hardwareIdFilter, pinnedIds),
-          ),
+      ? levels.flatMap((level) =>
+          filterAndSortDiagnostics(nodesByLevel.get(level) ?? [], hardwareIdFilter, pinnedIds),
         )
-      : filterAndSortDiagnostics(
-          ([] as DiagnosticInfo[]).concat(...nodesByLevel.values()),
-          hardwareIdFilter,
-          pinnedIds,
-        );
+      : filterAndSortDiagnostics([...diagnostics.values()], hardwareIdFilter, pinnedIds);
 
-    const nodes: DiagnosticInfo[] = [..._.compact(pinnedNodes), ...sortedNodes].filter(
-      ({ status }) => status.level >= minLevel,
-    );
-    if (nodes.length === 0) {
-      return ReactNull;
-    }
-    return (
+    return [...pinnedNodes, ...sortedNodes].filter(({ status }) => status.level >= minLevel);
+  }, [diagnostics, hardwareIdFilter, pinnedIds, sortByLevel, minLevel]);
+
+  let summary: React.ReactNode = ReactNull;
+  if (topics.subscribed.length === 0) {
+    summary = <EmptyState>{t("noTopics")}</EmptyState>;
+  } else if (diagnostics.size === 0) {
+    summary = <EmptyState>{t("waitingForDiagnostics")}</EmptyState>;
+  } else if (nodes.length > 0) {
+    summary = (
       <AutoSizer>
         {({ height, width }) => (
           <div style={{ width, height }}>
-            <List<{ data: DiagnosticInfo[] }>
+            <List<RowData>
               style={{ outline: "none", width, height }}
               rowHeight={30}
               rowProps={{ data: nodes }}
@@ -187,34 +150,30 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
         )}
       </AutoSizer>
     );
-  }, [
-    diagnosticsWithOldMarkedAsStales,
-    hardwareIdFilter,
-    pinnedIds,
-    renderRow,
-    sortByLevel,
-    minLevel,
-    topicToRender,
-  ]);
+  }
 
   const actionHandler = useCallback(
     (action: SettingsTreeAction) => {
       if (action.action !== "update") {
         return;
       }
-
       const { path, value } = action.payload;
+      const topicPatch = handleTopicToggle(path, value, topics);
+      if (topicPatch) {
+        saveConfig(topicPatch);
+        return;
+      }
       saveConfig(produce<DiagnosticSummaryConfig>((draft) => _.set(draft, path.slice(1), value)));
     },
-    [saveConfig],
+    [saveConfig, topics],
   );
 
   useEffect(() => {
     updatePanelSettingsTree({
       actionHandler,
-      nodes: buildSettingsTree({ config, topicToRender, availableTopics }),
+      nodes: buildSettingsTree(config, topics, t),
     });
-  }, [actionHandler, availableTopics, config, topicToRender, updatePanelSettingsTree]);
+  }, [actionHandler, config, topics, t, updatePanelSettingsTree]);
 
   return (
     <Stack flex="auto">
@@ -241,7 +200,7 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
           </Select>
           <InputBase
             value={hardwareIdFilter}
-            placeholder="Filter"
+            placeholder={t("filter")}
             onChange={(e) => {
               saveConfig({ hardwareIdFilter: e.target.value });
             }}
