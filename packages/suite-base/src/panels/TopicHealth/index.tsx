@@ -228,6 +228,14 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
   });
   const liveDeepRef = useRef(liveDeep);
   liveDeepRef.current = liveDeep;
+  useEffect(() => {
+    // Forget topics that were opted out so re-enabling does not report the pause as a gap.
+    for (const topic of liveDeep.keys()) {
+      if (!deepTopics.includes(topic)) {
+        liveDeep.delete(topic);
+      }
+    }
+  }, [deepTopics, liveDeep]);
 
   const [snapshot, setSnapshot] = useState<Snapshot>(() => ({
     nowMs: Date.now(),
@@ -389,7 +397,7 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
           expectedHz,
           ageSec,
           staleAfterSec: staleAfterSec(settings, expectedHz),
-          tolerancePercent: config.tolerancePercent,
+          tolerancePercent: config.tolerancePercent ?? DEFAULT_CONFIG.tolerancePercent,
         }),
       });
     }

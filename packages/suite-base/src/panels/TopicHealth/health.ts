@@ -23,11 +23,11 @@ export type TopicHealthConfig = {
   /** Show problems first instead of alphabetical order. */
   sortByStatus?: boolean;
   /** Allowed rate shortfall in percent before a topic counts as slow. */
-  tolerancePercent: number;
+  tolerancePercent?: number;
   topics: Record<string, TopicSettings>;
 };
 
-export const DEFAULT_CONFIG: TopicHealthConfig = {
+export const DEFAULT_CONFIG: TopicHealthConfig & { tolerancePercent: number } = {
   tolerancePercent: 20,
   topics: {},
 };
