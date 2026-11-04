@@ -153,7 +153,6 @@ export function makeConfig(
 
         // don't inject these things into our web build
         fs: false,
-        pnpapi: false,
 
         // punycode is a dependency for some older webpack v4 browser libs
         // It adds unecessary bloat to the build so we make sure it isn't included
@@ -166,11 +165,6 @@ export function makeConfig(
     },
     module: {
       rules: [
-        // Add support for native node modules
-        {
-          test: /\.node$/,
-          use: "node-loader",
-        },
         {
           test: /\.wasm$/,
           type: "asset/resource",
