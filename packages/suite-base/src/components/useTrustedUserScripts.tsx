@@ -99,7 +99,7 @@ export function useTrustedUserScripts({
   const [declined, setDeclined] = useState<Decision>();
   const [pending, setPending] = useState<Decision & { names: string[] }>();
   /** The last layout whose scripts the user allowed, so their own edits keep running. */
-  const allowedLayoutRef = useRef<string>();
+  const allowedLayoutRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     if (layoutId == undefined) {
