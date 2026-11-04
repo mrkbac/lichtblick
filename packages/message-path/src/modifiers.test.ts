@@ -68,6 +68,59 @@ describe("applyModifier", () => {
       (apply({ x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 }, "rpy") as typeof rpy).yaw,
     ).toBeCloseTo(Math.PI / 2);
   });
+
+  type Quaternion = { x: number; y: number; z: number; w: number };
+  const axisAngle = (axis: "x" | "y" | "z", angle: number): Quaternion => ({
+    x: 0,
+    y: 0,
+    z: 0,
+    [axis]: Math.sin(angle / 2),
+    w: Math.cos(angle / 2),
+  });
+  const multiply = (a: Quaternion, b: Quaternion): Quaternion => ({
+    x: a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y,
+    y: a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x,
+    z: a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w,
+    w: a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z,
+  });
+  // Intrinsic rotations in the given axis order
+  const compose = (...rotations: [axis: "x" | "y" | "z", angle: number][]) =>
+    rotations.map(([axis, angle]) => axisAngle(axis, angle)).reduce(multiply);
+
+  it.each([
+    ["rpy", compose(["x", 0.3], ["y", 0.2], ["z", 0.5])],
+    ["ypr", compose(["z", 0.5], ["y", 0.2], ["x", 0.3])],
+    ["yrp", compose(["z", 0.5], ["x", 0.3], ["y", 0.2])],
+  ])("extracts intrinsic Euler angles with .@%s", (name, quaternion) => {
+    const result = apply(quaternion, name) as Record<string, number>;
+    expect(result.roll).toBeCloseTo(0.3);
+    expect(result.pitch).toBeCloseTo(0.2);
+    expect(result.yaw).toBeCloseTo(0.5);
+  });
+
+  it("uses the order to tell rpy, ypr and yrp apart", () => {
+    const quaternion = compose(["z", 0.5], ["y", 0.2], ["x", 0.3]);
+    expect((apply(quaternion, "rpy") as Record<string, number>).yaw).not.toBeCloseTo(0.5);
+  });
+
+  it("composes .@quat as intrinsic XYZ", () => {
+    const quaternion = apply({ roll: 0.3, pitch: 0.2, yaw: 0.5 }, "quat") as Quaternion;
+    const expected = compose(["x", 0.3], ["y", 0.2], ["z", 0.5]);
+    for (const key of ["x", "y", "z", "w"] as const) {
+      expect(quaternion[key]).toBeCloseTo(expected[key]);
+    }
+  });
+
+  it("reports the last axis as 0 at gimbal lock", () => {
+    const result = apply(compose(["x", 0.4], ["y", Math.PI / 2]), "rpy") as Record<string, number>;
+    expect(result.pitch).toBeCloseTo(Math.PI / 2);
+    expect(result.roll).toBeCloseTo(0.4);
+    expect(result.yaw).toBe(0);
+  });
+
+  it("drops a zero-length quaternion", () => {
+    expect(apply({ x: 0, y: 0, z: 0, w: 0 }, "ypr")).toBeUndefined();
+  });
 });
 
 describe("modifierResultStructure", () => {
@@ -106,6 +159,8 @@ describe("modifierResultStructure", () => {
     ["norm", false, quaternion, float64],
     ["rpy", false, quaternion, rpy],
     ["rpy", false, floats, undefined],
+    ["ypr", false, quaternion, rpy],
+    ["yrp", false, quaternion, rpy],
     ["quat", false, quaternion, undefined],
     ["nope", false, float64, undefined],
     ["nope", false, undefined, undefined],
@@ -118,7 +173,12 @@ describe("modifierResultStructure", () => {
   });
 
   it("suggests only modifiers that apply to the input", () => {
-    expect(modifierSuggestions(quaternion, { streamModifiers: true })).toEqual(["norm", "rpy"]);
+    expect(modifierSuggestions(quaternion, { streamModifiers: true })).toEqual([
+      "norm",
+      "rpy",
+      "ypr",
+      "yrp",
+    ]);
     expect(modifierSuggestions(floats, { streamModifiers: true })).toEqual(
       expect.arrayContaining(["abs", "mul(1)", "max", "length", "norm"]),
     );

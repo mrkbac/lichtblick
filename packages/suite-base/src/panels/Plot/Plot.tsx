@@ -10,8 +10,12 @@ import * as _ from "lodash-es";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { MessagePath } from "@lichtblick/message-path";
 import { Immutable } from "@lichtblick/suite";
+import * as PanelAPI from "@lichtblick/suite-base/PanelAPI";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
+import { messagePathStructures } from "@lichtblick/suite-base/components/MessagePathSyntax/messagePathsForDatatype";
+import { resolveEnumNamesInPath } from "@lichtblick/suite-base/components/MessagePathSyntax/resolveEnumNames";
 import {
   useMessagePipelineGetter,
   useMessagePipelineSubscribe,
@@ -32,6 +36,7 @@ import { PlotProps, TooltipStateSetter } from "@lichtblick/suite-base/panels/Plo
 import { MeasureModeToolbarButton } from "@lichtblick/suite-base/panels/shared/MeasureModeToolbarButton";
 import { createMeasureModeEscapeHandler } from "@lichtblick/suite-base/panels/shared/measureModeEscapeHandler";
 import useAppendOnlyKey from "@lichtblick/suite-base/panels/shared/useAppendOnlyKey";
+import { enumValuesByDatatypeAndField } from "@lichtblick/suite-base/util/enums";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { useStyles } from "./Plot.style";
@@ -71,6 +76,14 @@ const Plot = (props: PlotProps): React.JSX.Element => {
   const shouldSync = config.isSynced;
   const renderer = useRenderer(canvasDiv, theme);
   const { globalVariables } = useGlobalVariables();
+  const { topics, datatypes } = PanelAPI.useDataSourceInfo();
+  const resolveEnumNames = useMemo(() => {
+    const structures = messagePathStructures(datatypes);
+    const enumValues = enumValuesByDatatypeAndField(datatypes);
+    const schemaNames = new Map(topics.map((topic) => [topic.name, topic.schemaName]));
+    return (path: MessagePath) =>
+      resolveEnumNamesInPath(path, structures, enumValues, schemaNames.get(path.topicName));
+  }, [datatypes, topics]);
   const getMessagePipelineState = useMessagePipelineGetter();
   const subscribeMessagePipeline = useMessagePipelineSubscribe();
   const subscribeMessageRange = useSubscribeMessageRange();
@@ -164,14 +177,21 @@ const Plot = (props: PlotProps): React.JSX.Element => {
   }, [saveConfig, setMessagePathDropConfig]);
 
   useEffect(() => {
-    coordinator?.handleConfig(config, theme.palette.mode, globalVariables);
+    coordinator?.handleConfig(config, theme.palette.mode, globalVariables, resolveEnumNames);
 
     // When config changes (e.g., series reordering) and the player is paused,
     // we need to re-process the current player state to update the rendered data
     if (coordinator) {
       coordinator.handlePlayerState(getMessagePipelineState().playerState);
     }
-  }, [coordinator, config, globalVariables, theme.palette.mode, getMessagePipelineState]);
+  }, [
+    coordinator,
+    config,
+    globalVariables,
+    resolveEnumNames,
+    theme.palette.mode,
+    getMessagePipelineState,
+  ]);
 
   // This effect must come after the one above it so the coordinator gets the latest config before
   // the latest player state and can properly initialize if the player state already contains the

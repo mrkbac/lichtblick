@@ -38,6 +38,10 @@ vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   useMessagePipelineSubscribe: () => mockSubscribeMessagePipeline,
 }));
 
+vi.mock("@lichtblick/suite-base/PanelAPI", () => ({
+  useDataSourceInfo: () => ({ topics: [], datatypes: new Map() }),
+}));
+
 vi.mock("@lichtblick/suite-base/components/PanelContextMenu", () => ({
   PanelContextMenu: vi.fn(function () {
     return <div data-testid="panel-context-menu" />;
@@ -354,6 +358,7 @@ describe("Plot Component", () => {
       config,
       expect.any(String),
       {},
+      expect.any(Function),
     );
     expect(mockCoordinatorInstance.handlePlayerState).toHaveBeenCalledWith({
       source: "subscriber",

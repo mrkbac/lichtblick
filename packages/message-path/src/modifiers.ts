@@ -8,8 +8,14 @@ import {
   MessagePathStructureItemMessage,
 } from "./types";
 
-/** Modifiers computed across messages. Only valid at the end of a path, see `MessagePath.modifier`. */
+/**
+ * Time-series modifiers, computed across messages. At most one per path, followed only by scalar
+ * modifiers, see `MessagePath.modifier`.
+ */
 export const STREAM_MODIFIERS: readonly string[] = ["derivative", "delta", "timedelta", "integral"];
+
+/** Intrinsic Euler orders of the quaternion-to-Euler modifiers. */
+const EULER_ORDERS = ["rpy", "ypr", "yrp"];
 
 const DEG_PER_RAD = 180 / Math.PI;
 
@@ -69,7 +75,7 @@ function own<T>(table: Record<string, T>, name: string): T | undefined {
   return Object.hasOwn(table, name) ? table[name] : undefined;
 }
 
-const FLOAT64: MessagePathStructureItem = {
+export const FLOAT64_STRUCTURE: MessagePathStructureItem = {
   structureType: "primitive",
   primitiveType: "float64",
   datatype: "",
@@ -79,7 +85,7 @@ function messageStructure(datatype: string, names: string[]): MessagePathStructu
   return {
     structureType: "message",
     datatype,
-    nextByName: Object.fromEntries(names.map((name) => [name, FLOAT64])),
+    nextByName: Object.fromEntries(names.map((name) => [name, FLOAT64_STRUCTURE])),
   };
 }
 
@@ -115,10 +121,10 @@ function mapNumericStructure(
   input: MessagePathStructureItem,
 ): MessagePathStructureItem | undefined {
   if (isNumericStructure(input)) {
-    return FLOAT64;
+    return FLOAT64_STRUCTURE;
   }
   return isNumericArray(input)
-    ? { structureType: "array", next: FLOAT64, datatype: "" }
+    ? { structureType: "array", next: FLOAT64_STRUCTURE, datatype: "" }
     : undefined;
 }
 
@@ -138,34 +144,36 @@ export function modifierResultStructure(
     (own(ARITHMETIC, name) != undefined && (hasArgs || name === "round"));
   const isReducer = own(REDUCERS, name) != undefined;
   if (input == undefined) {
-    if (name === "rpy") {
+    if (EULER_ORDERS.includes(name)) {
       return RPY_STRUCTURE;
     }
     if (name === "quat") {
       return QUATERNION_STRUCTURE;
     }
     const known = isElementWise || isReducer || ["length", "norm", "magnitude"].includes(name);
-    return known ? FLOAT64 : undefined;
+    return known ? FLOAT64_STRUCTURE : undefined;
   }
   if (isElementWise) {
     return mapNumericStructure(input);
   }
   if (isReducer) {
     if (!hasArgs) {
-      return isNumericArray(input) ? FLOAT64 : undefined;
+      return isNumericArray(input) ? FLOAT64_STRUCTURE : undefined;
     }
     if (input.structureType === "message") {
-      return FLOAT64;
+      return FLOAT64_STRUCTURE;
     }
     return name === "min" || name === "max" ? mapNumericStructure(input) : undefined;
   }
   switch (name) {
     case "length":
-      return input.structureType === "array" ? FLOAT64 : undefined;
+      return input.structureType === "array" ? FLOAT64_STRUCTURE : undefined;
     case "norm":
     case "magnitude":
-      return isNumericArray(input) || hasNumericFields(input, ["x", "y"]) ? FLOAT64 : undefined;
+      return isNumericArray(input) || hasNumericFields(input, ["x", "y"]) ? FLOAT64_STRUCTURE : undefined;
     case "rpy":
+    case "ypr":
+    case "yrp":
       return hasNumericFields(input, ["x", "y", "z", "w"]) ? RPY_STRUCTURE : undefined;
     case "quat":
       return hasNumericFields(input, ["roll", "pitch", "yaw"]) ? QUATERNION_STRUCTURE : undefined;
@@ -185,7 +193,7 @@ const SUGGESTIONS = [
   ...Object.keys(REDUCERS),
   "length",
   "norm",
-  "rpy",
+  ...EULER_ORDERS,
   "quat",
 ];
 
@@ -276,23 +284,61 @@ function resolveArg(value: unknown, arg: MessagePathModifierArg): number | undef
   return toNumber(current);
 }
 
-function quaternionToRpy([x, y, z, w]: number[]): Obj {
-  return {
-    roll: Math.atan2(2 * (w! * x! + y! * z!), 1 - 2 * (x! * x! + y! * y!)),
-    pitch: Math.asin(Math.min(1, Math.max(-1, 2 * (w! * y! - z! * x!)))),
-    yaw: Math.atan2(2 * (w! * z! + x! * y!), 1 - 2 * (y! * y! + z! * z!)),
-  };
+/**
+ * Convert a quaternion to roll/pitch/yaw in radians. `rpy` uses intrinsic XYZ, `ypr` ZYX and
+ * `yrp` ZXY rotations. At gimbal lock the last axis is reported as 0.
+ */
+function quaternionToEuler([qx, qy, qz, qw]: number[], order: string): Obj | undefined {
+  const length = Math.hypot(qx!, qy!, qz!, qw!);
+  if (length === 0) {
+    return undefined;
+  }
+  const [x, y, z, w] = [qx! / length, qy! / length, qz! / length, qw! / length];
+  // Rotation matrix elements
+  const r00 = 1 - 2 * (y * y + z * z);
+  const r01 = 2 * (x * y - z * w);
+  const r02 = 2 * (x * z + y * w);
+  const r10 = 2 * (x * y + z * w);
+  const r11 = 1 - 2 * (x * x + z * z);
+  const r12 = 2 * (y * z - x * w);
+  const r20 = 2 * (x * z - y * w);
+  const r21 = 2 * (y * z + x * w);
+  const r22 = 1 - 2 * (x * x + y * y);
+  const clampedAsin = (v: number) => Math.asin(Math.min(1, Math.max(-1, v)));
+  const LOCK = 0.9999999;
+  switch (order) {
+    case "rpy": {
+      const pitch = clampedAsin(r02);
+      return Math.abs(r02) < LOCK
+        ? { roll: Math.atan2(-r12, r22), pitch, yaw: Math.atan2(-r01, r00) }
+        : { roll: Math.atan2(r21, r11), pitch, yaw: 0 };
+    }
+    case "ypr": {
+      const pitch = clampedAsin(-r20);
+      return Math.abs(r20) < LOCK
+        ? { roll: Math.atan2(r21, r22), pitch, yaw: Math.atan2(r10, r00) }
+        : { roll: 0, pitch, yaw: Math.atan2(-r01, r11) };
+    }
+    case "yrp": {
+      const roll = clampedAsin(r21);
+      return Math.abs(r21) < LOCK
+        ? { roll, pitch: Math.atan2(-r20, r22), yaw: Math.atan2(-r01, r11) }
+        : { roll, pitch: 0, yaw: Math.atan2(r10, r00) };
+    }
+  }
+  return undefined;
 }
 
+/** Inverse of `rpy`: roll/pitch/yaw in radians (intrinsic XYZ) to a quaternion. */
 function rpyToQuaternion([roll, pitch, yaw]: number[]): Obj {
-  const [cr, sr] = [Math.cos(roll! / 2), Math.sin(roll! / 2)];
-  const [cp, sp] = [Math.cos(pitch! / 2), Math.sin(pitch! / 2)];
-  const [cy, sy] = [Math.cos(yaw! / 2), Math.sin(yaw! / 2)];
+  const [c1, s1] = [Math.cos(roll! / 2), Math.sin(roll! / 2)];
+  const [c2, s2] = [Math.cos(pitch! / 2), Math.sin(pitch! / 2)];
+  const [c3, s3] = [Math.cos(yaw! / 2), Math.sin(yaw! / 2)];
   return {
-    x: sr * cp * cy - cr * sp * sy,
-    y: cr * sp * cy + sr * cp * sy,
-    z: cr * cp * sy - sr * sp * cy,
-    w: cr * cp * cy + sr * sp * sy,
+    x: s1 * c2 * c3 + c1 * s2 * s3,
+    y: c1 * s2 * c3 - s1 * c2 * s3,
+    z: c1 * c2 * s3 + s1 * s2 * c3,
+    w: c1 * c2 * c3 - s1 * s2 * s3,
   };
 }
 
@@ -345,9 +391,11 @@ export function applyModifier(value: unknown, modifier: MessagePathModifier): un
     case "norm":
     case "magnitude":
       return norm(value);
-    case "rpy": {
+    case "rpy":
+    case "ypr":
+    case "yrp": {
       const quaternion = fields(value, ["x", "y", "z", "w"]);
-      return quaternion && quaternionToRpy(quaternion);
+      return quaternion && quaternionToEuler(quaternion, name);
     }
     case "quat": {
       const rpy = fields(value, ["roll", "pitch", "yaw"]);

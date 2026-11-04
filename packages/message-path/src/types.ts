@@ -38,6 +38,8 @@ export type MessagePathFilter = {
   valueLoc: number;
   repr: string; // the original string representation of the filter
   operator: OperatorType;
+  /** `value` is a bare enum constant name like `MOVING`, to be resolved against the schema */
+  isEnum?: boolean;
 };
 
 export type MessagePathName = {
@@ -89,10 +91,12 @@ export type MessagePath = {
   topicNameRepr: string;
   messagePath: MessagePathPart[];
   /**
-   * Trailing cross-message modifier like `.@derivative` or `.@@delta`. Per-message modifiers are
-   * part of `messagePath` instead.
+   * Time-series modifier like `.@derivative`, computed across messages. Per-message modifiers
+   * before it are part of `messagePath`.
    */
   modifier?: string;
+  /** Scalar modifiers applied to the result of `modifier`, e.g. `.@abs` in `.@derivative.@abs` */
+  modifiersAfter?: MessagePathModifier[];
 };
 
 // "Structure items" are a more useful version of `datatypes`. They can be

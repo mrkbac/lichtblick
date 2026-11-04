@@ -11,7 +11,7 @@ import * as _ from "lodash-es";
 
 import { debouncePromise } from "@lichtblick/den/async";
 import { filterMap } from "@lichtblick/den/collection";
-import { parseMessagePath } from "@lichtblick/message-path";
+import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
 import { Immutable, Time } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 import { stringifyMessagePath } from "@lichtblick/suite-base/components/MessagePathSyntax/stringifyRosPath";
@@ -215,6 +215,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     config: Immutable<PlotConfig>,
     colorScheme: "light" | "dark",
     globalVariables: GlobalVariables,
+    resolveEnumNames: (path: MessagePath) => MessagePath = (path) => path,
   ): void {
     if (this.isDestroyed()) {
       return;
@@ -278,7 +279,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
         return;
       }
 
-      const filledParsed = fillInGlobalVariablesInPath(parsed, globalVariables);
+      const filledParsed = resolveEnumNames(fillInGlobalVariablesInPath(parsed, globalVariables));
 
       // When global variables change the path.value is still the original value with the variable
       // names But we need to consider this as a new series (new block cursor) so we compute new

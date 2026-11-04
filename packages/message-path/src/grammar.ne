@@ -13,10 +13,10 @@
 # easier for both humans and computers to understand what's going on.
 #
 # For more examples, please see parseRosPath.test.js
-# A trailing per-message modifier with a cross-message name (e.g. `.@derivative`) is moved into
-# `modifier` by parseMessagePath.
-main -> topicName messagePath:? streamModifier:?
-  {% (d) => ({ topicName: d[0].value, topicNameRepr: d[0].repr, messagePath: d[1] || [], modifier: d[2] }) %}
+# A time-series modifier (e.g. `.@derivative`) and the modifiers after it are moved out of
+# `messagePath` by parseMessagePath.
+main -> topicName messagePath:?
+  {% (d) => ({ topicName: d[0].value, topicNameRepr: d[0].repr, messagePath: d[1] || [], modifier: null }) %}
 
 ## Primitives
 
@@ -140,6 +140,23 @@ filter -> "{" simplePath:? "}"
                 repr: `${(d[1] || []).join(".")}${d[2]}${d[3].repr}`,
               })
             %}
+        | "{" simplePath:? comparisonOperator enumName "}"
+            {%
+              (d, loc) => ({
+                type: "filter",
+                path: d[1] || [],
+                operator: d[2],
+                value: d[3],
+                isEnum: true,
+                nameLoc: loc+1,
+                valueLoc: loc+1+(d[1] || []).join(".").length+d[2].length,
+                repr: `${(d[1] || []).join(".")}${d[2]}${d[3]}`,
+              })
+            %}
+
+# Bare enum constant name like `MOVING`, case-sensitive. `true` and `false` are booleans.
+enumName -> [a-zA-Z_] [a-zA-Z0-9_]:*
+  {% (d, _loc, reject) => { const name = d[0] + d[1].join(""); return name === "true" || name === "false" ? reject : name; } %}
 
 ## Modifiers.
 # Per-message modifier, e.g. `.@abs`, `.@mul(2, $scale)` or `.@product(width, height)`. The name may be
@@ -169,6 +186,3 @@ modifierArg -> integer {% (d) => ({ value: Number(d[0].value), repr: d[0].repr }
                 {% (d, _loc, reject) => /^[0-9-]/.test(d[0][0]) ? reject : { value: d[0], repr: d[0].join(".") } %}
 
 _ -> " ":* {% () => null %}
-
-# Cross-message modifier at the end of a path, e.g. `.@@delta`.
-streamModifier -> ".@@" id {% (d) => d[1] %}

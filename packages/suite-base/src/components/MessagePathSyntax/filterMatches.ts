@@ -12,7 +12,8 @@ export function filterMatches(filter: Immutable<MessagePathFilter>, value: unkno
   if (typeof filter.value === "object") {
     throw new Error("filterMatches only works on paths where global variables have been filled in");
   }
-  if (filter.value == undefined) {
+  // Unresolved enum names match nothing, see `resolveEnumFilter`
+  if (filter.value == undefined || filter.isEnum === true) {
     return false;
   }
   let currentValue = value;

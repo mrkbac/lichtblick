@@ -26,6 +26,7 @@ import {
   MessagePathStructureItem,
   MessagePathStructureItemMessage,
   MessagePath,
+  MessagePathModifier,
 } from "@lichtblick/message-path";
 import { Immutable } from "@lichtblick/suite";
 import * as PanelAPI from "@lichtblick/suite-base/PanelAPI";
@@ -42,6 +43,7 @@ import {
 import { filterMatches } from "./filterMatches";
 import { TypicalFilterNames } from "./isTypicalFilterName";
 import { messagePathStructures } from "./messagePathsForDatatype";
+import { resolveEnumNamesInPath } from "./resolveEnumNames";
 
 type ValueInMapRecord<T> = T extends Map<unknown, infer I> ? I : never;
 
@@ -138,12 +140,25 @@ export function useCachedGetMessagePathDataItems(
     [relevantDatatypes],
   );
 
+  const resolvedPaths = useMemo(
+    () =>
+      _.mapValues(memoizedFilledInPaths, (path) =>
+        resolveEnumNamesInPath(
+          path,
+          structures,
+          enumValues,
+          topicsByName[path.topicName]?.schemaName,
+        ),
+      ),
+    [memoizedFilledInPaths, structures, enumValues, topicsByName],
+  );
+
   return useCallback(
     (path: string, message: MessageEvent): MessagePathDataItem[] | undefined => {
       if (!memoizedPaths.includes(path)) {
         throw new Error(`path (${path}) was not in the list of cached paths`);
       }
-      const filledInPath = memoizedFilledInPaths[path];
+      const filledInPath = resolvedPaths[path];
       if (!filledInPath) {
         return;
       }
@@ -156,7 +171,7 @@ export function useCachedGetMessagePathDataItems(
       );
       return messagePathDataItems;
     },
-    [memoizedPaths, memoizedFilledInPaths, topicsByName, structures, enumValues],
+    [memoizedPaths, resolvedPaths, topicsByName, structures, enumValues],
   );
 }
 
@@ -164,6 +179,16 @@ export function fillInGlobalVariablesInPath(
   rosPath: MessagePath,
   globalVariables: GlobalVariables,
 ): MessagePath {
+  const fillInModifier = (modifier: MessagePathModifier): MessagePathModifier => ({
+    ...modifier,
+    args: modifier.args.map((arg) => {
+      if (typeof arg !== "object" || !("variableName" in arg)) {
+        return arg;
+      }
+      // An unset or non-numeric variable becomes NaN
+      return Number(globalVariables[arg.variableName]);
+    }),
+  });
   return {
     ...rosPath,
     messagePath: rosPath.messagePath.map((messagePathPart) => {
@@ -190,20 +215,12 @@ export function fillInGlobalVariablesInPath(
         }
         return { ...messagePathPart, value };
       } else if (messagePathPart.type === "modifier") {
-        return {
-          ...messagePathPart,
-          args: messagePathPart.args.map((arg) => {
-            if (typeof arg !== "object" || !("variableName" in arg)) {
-              return arg;
-            }
-            // An unset or non-numeric variable becomes NaN
-            return Number(globalVariables[arg.variableName]);
-          }),
-        };
+        return fillInModifier(messagePathPart);
       }
 
       return messagePathPart;
     }),
+    modifiersAfter: rosPath.modifiersAfter?.map(fillInModifier),
   };
 }
 
