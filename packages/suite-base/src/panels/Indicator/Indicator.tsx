@@ -15,7 +15,6 @@ import {
   useLayoutEffect,
   useMemo,
   useReducer,
-  useId,
   useRef,
   useState,
 } from "react";
@@ -158,13 +157,15 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
 
   // Alert only on transitions into a rule; seeks, rule edits and missing data just reset the baseline.
   const prevSnapshot = useRef<AlertSnapshot>();
-  const notificationTag = useId();
+  // unique across tabs so panels in different tabs don't replace each other's notifications
+  const [notificationTag] = useState(() => crypto.randomUUID());
   useEffect(() => {
     const snapshot: AlertSnapshot = {
       ruleIndex:
         rawValue == undefined ? undefined : matchingRule ? rules.indexOf(matchingRule) : -1,
       rules,
-      path: config.path,
+      // the reducer's path, which updates together with rawValue (config.path changes a render earlier)
+      path: state.path,
       seekCount,
     };
     const alertRule = getAlertRule(prevSnapshot.current, snapshot);
@@ -176,7 +177,16 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
     if (alertRule.alertNotify === true) {
       showAlertNotification(config.path, alertRule.label, notificationTag);
     }
-  }, [alertsMuted, config.path, matchingRule, notificationTag, rawValue, rules, seekCount]);
+  }, [
+    alertsMuted,
+    config.path,
+    matchingRule,
+    notificationTag,
+    rawValue,
+    rules,
+    seekCount,
+    state.path,
+  ]);
 
   const toggleMuted = useCallback(() => {
     setConfig((prev) => ({ ...prev, alertsMuted: prev.alertsMuted !== true }));
