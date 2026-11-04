@@ -31,6 +31,8 @@ describe("formatMessages", () => {
     };
 
     const item: NormalizedLogMessage = {
+      topic: "/log",
+      receiveTime: stamp,
       level: 2,
       stamp,
       name: "TestLogger",
@@ -48,6 +50,8 @@ describe("formatMessages", () => {
     };
 
     const item: NormalizedLogMessage = {
+      topic: "/log",
+      receiveTime: stamp,
       level: 4,
       stamp,
       name: "",

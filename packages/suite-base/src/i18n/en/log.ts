@@ -13,6 +13,11 @@ export const log = {
   nameFilter: "Namespaces",
   nothingToCopy: "Nothing to copy",
   showAll: "Show all",
-  topic: "Topic",
-  topicError: "Topic {{topic}} is not available",
+  invalidRegex: "Invalid regular expression: {{terms}}",
+  matchCase: "Match case",
+  nextProblem: "Next warning or error",
+  noLogTopics: "No log topics available",
+  previousProblem: "Previous warning or error",
+  topics: "Topics",
+  useRegex: "Use regular expression",
 };

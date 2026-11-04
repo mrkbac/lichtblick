@@ -32,10 +32,13 @@ export function FilterTagInput({
   items,
   suggestions,
   onChange,
+  error,
 }: {
   items: string[];
-  suggestions: string[];
+  suggestions: readonly string[];
   onChange: (items: string[]) => void;
+  /** Shown as a tooltip and error outline, e.g. for invalid regular expressions */
+  error?: string;
 }): React.JSX.Element {
   const { classes } = useStyles();
 
@@ -59,7 +62,14 @@ export function FilterTagInput({
         },
       }}
       renderInput={(params) => (
-        <TextField {...params} size="small" className={classes.input} placeholder="Search filter" />
+        <TextField
+          {...params}
+          size="small"
+          className={classes.input}
+          placeholder="Search (-term to exclude)"
+          error={error != undefined}
+          title={error}
+        />
       )}
     />
   );

@@ -14,147 +14,93 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { MessageEvent } from "@lichtblick/suite-base/players/types";
+import filterMessages, { compileSearch, LogFilter } from "./filterMessages";
+import { LogLevel, NormalizedLogMessage } from "./types";
 
-import filterMessages from "./filterMessages";
-import { LogLevel, Ros1RosgraphMsgs$Log, Ros2RosgraphMsgs$Log } from "./types";
+function item(level: LogLevel, message: string, name?: string): NormalizedLogMessage {
+  return {
+    topic: "/log",
+    receiveTime: { sec: 0, nsec: 0 },
+    stamp: { sec: 0, nsec: 0 },
+    level,
+    message,
+    name,
+  };
+}
 
-describe("filter", () => {
-  const ros1msgs = [
-    {
-      topic: "/some_topic",
-      receiveTime: { sec: 123, nsec: 456 },
-      schemaName: "rosgraph_msgs/Log",
-      message: {
-        msg: "Couldn't find int 83757.",
-        level: 2,
-        name: "/some_topic",
-      },
-    },
-  ] as MessageEvent<Ros1RosgraphMsgs$Log>[];
+const items = [
+  item(LogLevel.DEBUG, "Couldn't find int 83757.", "/some_topic"),
+  item(LogLevel.INFO, "Couldn't find int 2121.", "/other_node"),
+  item(LogLevel.WARN, "Lost connection", "/some_topic"),
+  item(LogLevel.ERROR, "Planner FAILED", "/planner"),
+  item(LogLevel.UNKNOWN, "no level"),
+];
 
-  const ros2msgs = [
-    {
-      topic: "/some_topic",
-      receiveTime: { sec: 123, nsec: 456 },
-      schemaName: "rcl_interfaces/msg/Log",
-      message: {
-        msg: "Couldn't find int 83757.",
-        level: 30,
-        name: "/some_topic",
-      },
-    },
-  ] as MessageEvent<Ros2RosgraphMsgs$Log>[];
+function run(
+  terms: string[],
+  options: Partial<LogFilter> & Parameters<typeof compileSearch>[1] = {},
+) {
+  return filterMessages(items, {
+    minLogLevel: options.minLogLevel ?? LogLevel.DEBUG,
+    nameFilter: options.nameFilter ?? {},
+    search: compileSearch(terms, options),
+  }).map((i) => i.message);
+}
 
-  it("should remove when minLogLevel is higher than msg level", () => {
+describe("filterMessages", () => {
+  it("returns the same array when nothing is filtered", () => {
     expect(
-      filterMessages(ros1msgs, {
-        minLogLevel: 3,
-        searchTerms: [],
+      filterMessages(items, {
+        minLogLevel: 1,
         nameFilter: {},
+        search: compileSearch([], {}),
       }),
-    ).toEqual([]);
+    ).toBe(items);
   });
 
-  it("should filter when minLogLevel is same as msg level", () => {
-    expect(
-      filterMessages(ros1msgs, {
-        minLogLevel: 2,
-        searchTerms: [],
-        nameFilter: {},
-      }),
-    ).toEqual(ros1msgs);
+  it("filters by minimum level", () => {
+    expect(run([], { minLogLevel: LogLevel.WARN })).toEqual(["Lost connection", "Planner FAILED"]);
   });
 
-  it("should map log levels by data source", () => {
-    expect(
-      filterMessages(ros2msgs, {
-        minLogLevel: LogLevel.INFO,
-        searchTerms: [],
-        nameFilter: {},
-      }),
-    ).toEqual(ros2msgs);
-
-    expect(
-      filterMessages(ros2msgs, {
-        minLogLevel: LogLevel.ERROR,
-        searchTerms: [],
-        nameFilter: {},
-      }),
-    ).toEqual([]);
+  it("hides node names that are not visible", () => {
+    expect(run([], { nameFilter: { "/some_topic": { visible: false } } })).toEqual([
+      "Couldn't find int 2121.",
+      "Planner FAILED",
+      "no level",
+    ]);
   });
 
-  describe("when minLogLevel lower than or equal to msg level", () => {
-    const minLogLevel = 1;
+  it("matches any include term in message or name, case-insensitively by default", () => {
+    expect(run(["failed", "OTHER"])).toEqual(["Couldn't find int 2121.", "Planner FAILED"]);
+  });
 
-    it("should keep when search term is empty", () => {
-      expect(
-        filterMessages(ros1msgs, {
-          minLogLevel,
-          searchTerms: ["/some_topic"],
-          nameFilter: {},
-        }),
-      ).toEqual(ros1msgs);
-    });
+  it("supports case-sensitive search", () => {
+    expect(run(["failed"], { caseSensitive: true })).toEqual([]);
+    expect(run(["FAILED"], { caseSensitive: true })).toEqual(["Planner FAILED"]);
+  });
 
-    it("should keep when msg name contains search terms", () => {
-      expect(
-        filterMessages(ros1msgs, {
-          minLogLevel,
-          searchTerms: ["some"],
-          nameFilter: {},
-        }),
-      ).toEqual(ros1msgs);
-    });
+  it("excludes -terms", () => {
+    expect(run(["-couldn't"])).toEqual(["Lost connection", "Planner FAILED", "no level"]);
+    expect(run(["find", "-2121"])).toEqual(["Couldn't find int 83757."]);
+  });
 
-    it("should keep when msg contains search term", () => {
-      expect(
-        filterMessages(ros1msgs, {
-          minLogLevel,
-          searchTerms: ["int"],
-          nameFilter: {},
-        }),
-      ).toEqual(ros1msgs);
-    });
+  it("treats a lone '-' as a literal term", () => {
+    expect(run(["-"])).toEqual([]);
+  });
 
-    it("should remove when msg name doesn't contain any search terms", () => {
-      expect(
-        filterMessages(ros1msgs, {
-          minLogLevel,
-          searchTerms: ["random"],
-          nameFilter: {},
-        }),
-      ).toEqual([]);
-    });
+  it("supports regular expressions", () => {
+    expect(run(["int \\d{4}\\.$"], { regex: true })).toEqual(["Couldn't find int 2121."]);
+    expect(run(["^/p"], { regex: true })).toEqual(["Planner FAILED"]);
+    expect(run(["-^couldn"], { regex: true })).toEqual([
+      "Lost connection",
+      "Planner FAILED",
+      "no level",
+    ]);
+  });
 
-    it("should keep when minLogLevel equals msg level and msg contains search terms", () => {
-      expect(
-        filterMessages(ros1msgs, {
-          minLogLevel: 2,
-          searchTerms: ["int", "random"],
-          nameFilter: {},
-        }),
-      ).toEqual(ros1msgs);
-    });
-
-    it("should exclude messages for names that are set to invisible", () => {
-      expect(
-        filterMessages(ros1msgs, {
-          minLogLevel,
-          searchTerms: [],
-          nameFilter: { "/some_topic": { visible: false } },
-        }),
-      ).toEqual([]);
-    });
-
-    it("should include messages for names that are set to visible", () => {
-      expect(
-        filterMessages(ros1msgs, {
-          minLogLevel,
-          searchTerms: [],
-          nameFilter: { "/some_topic": { visible: true } },
-        }),
-      ).toEqual(ros1msgs);
-    });
+  it("reports and ignores invalid regular expressions", () => {
+    const search = compileSearch(["(", "lost"], { regex: true });
+    expect(search.invalidTerms).toEqual(["("]);
+    expect(search.include).toHaveLength(1);
   });
 });
