@@ -124,11 +124,6 @@ export function makeConfig(
     },
     module: {
       rules: [
-        // Add support for native node modules
-        {
-          test: /\.node$/,
-          use: "node-loader",
-        },
         {
           test: /\.wasm$/,
           type: "asset/resource",
