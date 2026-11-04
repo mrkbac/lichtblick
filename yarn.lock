@@ -3368,9 +3368,7 @@ __metadata:
     electron: "npm:45.1.0"
     electron-builder: "npm:26.18.0"
     electron-devtools-installer: "npm:4.0.0"
-    electron-squirrel-startup: "npm:1.0.1"
     electron-updater: "npm:6.8.11"
-    eventemitter3: "npm:5.0.4"
     html-webpack-plugin: "npm:5.6.8"
     jszip: "npm:3.10.2"
     mock-fs: "npm:5.5.0"
@@ -9112,15 +9110,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"debug@npm:^2.2.0":
-  version: 2.6.9
-  resolution: "debug@npm:2.6.9"
-  dependencies:
-    ms: "npm:2.0.0"
-  checksum: 10/e07005f2b40e04f1bd14a3dd20520e9c4f25f60224cb006ce9d6781732c917964e9ec029fc7f1a151083cd929025ad5133814d4dc624a9aaf020effe4914ed14
-  languageName: node
-  linkType: hard
-
 "debug@npm:^3.1.0, debug@npm:^3.2.7":
   version: 3.2.7
   resolution: "debug@npm:3.2.7"
@@ -9684,15 +9673,6 @@ __metadata:
     lazy-val: "npm:^1.0.5"
     mime: "npm:^2.5.2"
   checksum: 10/4d73f15899d327cf99c7d90358c9f1fd5419c26159b1da7296bb9b1d4f731099939014ced152e59f8e44790bc2e79235e55a0e8c11a8ed7440025dd5e95663dd
-  languageName: node
-  linkType: hard
-
-"electron-squirrel-startup@npm:1.0.1":
-  version: 1.0.1
-  resolution: "electron-squirrel-startup@npm:1.0.1"
-  dependencies:
-    debug: "npm:^2.2.0"
-  checksum: 10/ef393c8174d9429400548676d2b6ae0c099b87c62af64723c13971de4777ee18ba05cb28128cbc4bb092f2c518d3e08c6ec4fd17f09b32d25ddc80f825ab8400
   languageName: node
   linkType: hard
 
@@ -14249,13 +14229,6 @@ __metadata:
   version: 2.0.1
   resolution: "mrmime@npm:2.0.1"
   checksum: 10/1f966e2c05b7264209c4149ae50e8e830908eb64dd903535196f6ad72681fa109b794007288a3c2814f7a1ecf9ca192769909c0c374d974d604a8de5fc095d4a
-  languageName: node
-  linkType: hard
-
-"ms@npm:2.0.0":
-  version: 2.0.0
-  resolution: "ms@npm:2.0.0"
-  checksum: 10/0e6a22b8b746d2e0b65a430519934fefd41b6db0682e3477c10f60c76e947c4c0ad06f63ffdf1d78d335f83edee8c0aa928aa66a36c7cd95b69b26f468d527f4
   languageName: node
   linkType: hard
 
