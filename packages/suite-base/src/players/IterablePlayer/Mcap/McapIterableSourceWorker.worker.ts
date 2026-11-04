@@ -14,9 +14,7 @@ import { pickDefinedHydrationOverrides } from "@lichtblick/suite-base/players/It
 
 import { McapIterableSource } from "./McapIterableSource";
 
-export function initialize(
-  args: IterableSourceInitializeArgs,
-): WorkerIterableSourceWorker {
+export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSourceWorker {
   if (args.file) {
     const source = new McapIterableSource({ type: "file", file: args.file });
     const wrapped = new WorkerIterableSourceWorker(source);

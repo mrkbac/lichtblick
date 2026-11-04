@@ -112,7 +112,6 @@ type ExpandBackfill = (
 ) => Promise<MessageEvent[]>;
 
 type IterablePlayerOptions = {
-
   source: IDeserializedIterableSource | ISerializedIterableSource;
 
   // Optional player name
