@@ -9,7 +9,15 @@ import { fromNanoSec } from "@foxglove/rostime";
 
 import { IteratorResult } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 
-import { BUCKET_COUNT, aggregateBuckets, bucketTime, inspectTopic } from "./inspection";
+import {
+  BUCKET_COUNT,
+  aggregateBuckets,
+  bucketTime,
+  createInspectionState,
+  finishInspection,
+  inspectTopic,
+  updateInspection,
+} from "./inspection";
 
 async function* messages(times: bigint[]): AsyncIterableIterator<IteratorResult> {
   for (const time of times) {
@@ -200,4 +208,24 @@ it("bounds median samples while keeping exact jitter and extrema for long record
     jitterNs: 0,
     duplicateTimestamps: 0,
   });
+});
+
+it("updates incrementally, counts reversals without failing, and keeps the state usable after a snapshot", () => {
+  const state = createInspectionState();
+  for (const offset of [0n, 100_000_000n, 200_000_000n, 150_000_000n, 300_000_000n]) {
+    updateInspection(state, { receiveTime: fromNanoSec(base + offset), sizeInBytes: 4 });
+  }
+  const snapshot = finishInspection(state);
+  expect(state.reversals).toBe(1);
+  expect(snapshot).toMatchObject({ count: 5, bytes: 20, estimatedBytes: true });
+  expect(snapshot.largestInterval?.nanoseconds).toBe(150_000_000n);
+  expect(snapshot.timing?.medianHz).toBeCloseTo(10);
+
+  updateInspection(state, {
+    receiveTime: fromNanoSec(base + 400_000_000n),
+    sizeInBytes: 9,
+    serializedSizeInBytes: 4,
+  });
+  expect(finishInspection(state)).toMatchObject({ count: 6, bytes: 24 });
+  expect(snapshot.count).toBe(5);
 });
