@@ -8,7 +8,6 @@
 import { Time, fromNanoSec, toNanoSec } from "@foxglove/rostime";
 import { create } from "zustand";
 
-
 /**
  * The cut (trim range) shared by the timeline, playback and the export dialog.
  * Times are absolute nanoseconds. While a cut is set, playback stays inside it.
