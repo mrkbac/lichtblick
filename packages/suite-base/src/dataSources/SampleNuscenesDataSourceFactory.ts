@@ -51,7 +51,6 @@ class SampleNuscenesDataSourceFactory implements IDataSourceFactory {
 
     return new IterablePlayer({
       source,
-      isSampleDataSource: true,
       name: SAMPLE_NUSCENES_DATA_SOURCE_NAME,
       metricsCollector: args.metricsCollector,
       // Use blank url params so the data source is set in the url
