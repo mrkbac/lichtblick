@@ -64,6 +64,8 @@ import { Player } from "@lichtblick/suite-base/players/types";
 import { UserScripts } from "@lichtblick/suite-base/types/panels";
 import { mergeMultipleFileNames } from "@lichtblick/suite-base/util/mergeMultipleFileName";
 
+import { useTrustedUserScripts } from "./useTrustedUserScripts";
+
 const log = Logger.getLogger(__filename);
 
 // Per tab, so a reload reopens the file that tab had open
@@ -112,6 +114,8 @@ const userScriptsSelector = (state: LayoutState) =>
 const globalVariablesSelector = (state: LayoutState) =>
   state.selectedLayout?.data?.globalVariables ?? EMPTY_GLOBAL_VARIABLES;
 const isLayoutLoadingSelector = (state: LayoutState) => state.selectedLayout?.loading ?? false;
+const layoutIdSelector = (state: LayoutState) => state.selectedLayout?.id;
+const layoutEditedSelector = (state: LayoutState) => state.selectedLayout?.edited ?? false;
 
 const selectUserScriptActions = (store: UserScriptStore) => store.actions;
 
@@ -137,7 +141,13 @@ export default function PlayerManager(
     useIndexedDbRecents();
   const [currentRecentId, setCurrentRecentId] = useState<string | undefined>();
 
-  const userScripts = useCurrentLayoutSelector(userScriptsSelector);
+  const layoutUserScripts = useCurrentLayoutSelector(userScriptsSelector);
+  const { scripts: userScripts, prompt: userScriptsPrompt } = useTrustedUserScripts({
+    layoutId: useCurrentLayoutSelector(layoutIdSelector),
+    userScripts: layoutUserScripts,
+    edited: useCurrentLayoutSelector(layoutEditedSelector),
+  });
+
   const globalVariables = useCurrentLayoutSelector(globalVariablesSelector);
   const isLayoutLoading = useCurrentLayoutSelector(isLayoutLoadingSelector);
 
@@ -419,6 +429,7 @@ export default function PlayerManager(
 
   return (
     <>
+      {userScriptsPrompt}
       <PlayerSelectionContext.Provider value={value}>
         <MessagePipelineProvider player={player}>{children}</MessagePipelineProvider>
       </PlayerSelectionContext.Provider>
