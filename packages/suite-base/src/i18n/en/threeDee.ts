@@ -19,6 +19,11 @@ export const threeDee = {
   type: "Type",
   topic: "Topic",
 
+  // WebGL context loss
+  graphicsContextLost: "Graphics context lost",
+  graphicsContextRestoring: "Graphics context lost — restoring…",
+  restoreGraphics: "Restore",
+
   // Frame
   age: "Age",
   axisScale: "Axis scale",
