@@ -4,9 +4,9 @@
 import { toSec } from "@foxglove/rostime";
 
 import { Immutable } from "@lichtblick/suite";
-import { MessageEvent } from "@lichtblick/suite-base/players/types";
 // A dynamic frame is stale after STALE_PERIODS missed periods, but never sooner than MIN_STALE_SEC.
 import { MIN_STALE_SEC, STALE_PERIODS } from "@lichtblick/suite-base/panels/TopicHealth/health";
+import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 import { samplesFromMessage } from "./transforms";
 import { FrameEntries, FrameEntry, FrameRow, FrameWarning } from "./types";

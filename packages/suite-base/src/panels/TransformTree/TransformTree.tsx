@@ -22,10 +22,10 @@ import {
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { formatSeconds } from "@lichtblick/suite-base/panels/TopicHealth/health";
 import { MessageEvent, SubscribePayload } from "@lichtblick/suite-base/players/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
-import { formatSeconds } from "@lichtblick/suite-base/panels/TopicHealth/health";
 
 import { useStyles } from "./TransformTree.style";
 import { buildSettingsTree, resolveTopics, settingsActionReducer } from "./settings";
