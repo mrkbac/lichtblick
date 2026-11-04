@@ -14,9 +14,10 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { clampTime, subtract, Time } from "@foxglove/rostime";
+import { Fzf } from "fzf";
 import * as _ from "lodash-es";
 
-import { clampTime, subtract, Time } from "@foxglove/rostime";
 import {
   DiagnosticId,
   DiagnosticInfo,
@@ -25,7 +26,6 @@ import {
 import { getDisplayName } from "@lichtblick/suite-base/panels/DiagnosticStatus/utils/getDisplayName";
 import { MAX_STRING_LENGTH } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
 import { DiagnosticsById } from "@lichtblick/suite-base/panels/DiagnosticSummary/types";
-import fuzzyFilter from "@lichtblick/suite-base/util/fuzzyFilter";
 
 export function getDiagnosticId(hardwareId: string, name?: string): DiagnosticId {
   const trimmedHardwareId = hardwareId.startsWith("/") ? hardwareId.slice(1) : hardwareId;
@@ -83,12 +83,13 @@ export const filterAndSortDiagnostics = (
   if (hardwareIdFilter.length === 0) {
     return _.sortBy(unpinnedNodes, (info) => info.displayName.replace(/^\//, ""));
   }
-  // fuzzyFilter sorts by match accuracy.
-  return fuzzyFilter({
-    options: unpinnedNodes,
-    filter: hardwareIdFilter,
-    getText: ({ displayName }) => displayName,
-  });
+  // fzf sorts by match quality.
+  return new Fzf(unpinnedNodes, {
+    selector: ({ displayName }) => displayName,
+    casing: "case-insensitive",
+  })
+    .find(hardwareIdFilter)
+    .map(({ item }) => item);
 };
 
 /** Diagnostics received before the returned time are stale; undefined disables staleness. */

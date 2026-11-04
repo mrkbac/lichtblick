@@ -48,7 +48,6 @@ describe("StudioLogsSettingsProvider", () => {
     name: vi.fn().mockReturnValue("test-logger"),
     setLevel: vi.fn(),
     isLevelOn: vi.fn().mockReturnValue(true),
-    getLevel: vi.fn().mockReturnValue("info"),
     debug: vi.fn(),
     info: vi.fn(),
     warn: vi.fn(),

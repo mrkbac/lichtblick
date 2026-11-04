@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Bitstream } from "../Bitstream";
+import { byteToHex } from "../utils";
 
 const H264_PROFILE_NAMES = new Map<number, string>([
   [66, "BASELINE"],
@@ -359,13 +360,9 @@ export class SPS {
   public MIME(): string {
     const f = [];
     f.push("avc1.");
-    f.push(byteToHex(this.profile_idc).toUpperCase());
-    f.push(byteToHex(this.profileCompatibility()).toUpperCase());
-    f.push(byteToHex(this.level_idc).toUpperCase());
+    f.push(byteToHex(this.profile_idc));
+    f.push(byteToHex(this.profileCompatibility()));
+    f.push(byteToHex(this.level_idc));
     return f.join("");
   }
-}
-
-function byteToHex(val: number): string {
-  return ("00" + val.toString(16)).slice(-2);
 }

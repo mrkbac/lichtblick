@@ -9,8 +9,6 @@ import * as _ from "lodash-es";
 import { useCallback, useEffect, useRef, ReactNode, useState, useLayoutEffect } from "react";
 import { makeStyles } from "tss-react/mui";
 
-import { scaleValue } from "@lichtblick/den/math";
-
 export type HoverOverEvent = {
   /** Hovered `fraction` value */
   fraction: number;
@@ -77,7 +75,7 @@ export default function Slider(props: Props): React.JSX.Element {
       return 0;
     }
     const { left, right } = elRef.current.getBoundingClientRect();
-    const scaled = scaleValue(ev.clientX, left, right, 0, 1);
+    const scaled = (ev.clientX - left) / (right - left);
     return _.clamp(scaled, 0, 1);
   }, []);
 
