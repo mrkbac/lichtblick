@@ -16,14 +16,13 @@ import {
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import TextMiddleTruncate from "@lichtblick/suite-base/components/TextMiddleTruncate";
 import Timestamp from "@lichtblick/suite-base/components/Timestamp";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
 import { customTypography } from "@lichtblick/theme";
-
-import { MultilineMiddleTruncate } from "./MultilineMiddleTruncate";
 
 const useStyles = makeStyles()(() => ({
   overline: {
@@ -77,7 +76,9 @@ function DataSourceInfoContent(props: {
             <Typography variant="inherit">{t("waitingForConnection")}</Typography>
           ) : playerName ? (
             <Typography variant="inherit" component="span">
-              <MultilineMiddleTruncate text={playerName} />
+              {playerName.split("\n").map((line) => (
+                <TextMiddleTruncate key={line} text={line} />
+              ))}
             </Typography>
           ) : (
             <Typography className={classes.numericValue} variant="inherit">
