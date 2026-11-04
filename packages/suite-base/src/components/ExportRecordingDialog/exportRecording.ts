@@ -40,14 +40,24 @@ export function createChunkWorkerPool(): Required<
     void remote.warmUp();
   });
   let next = 0;
+  // Terminated workers never answer, so pending requests fail instead of hanging the export.
+  let rejectPending: (reason: Error) => void = () => {};
+  const terminated = new Promise<never>((_resolve, reject) => {
+    rejectPending = reject;
+  });
+  terminated.catch(() => {});
   return {
     concurrency: size,
     // Chunks are queued in order and kept at most 2 per worker, so round robin balances well.
     processChunk: async (job: ChunkJob) => {
       const remote = remotes[next++ % remotes.length]!;
-      return await remote.rewriteChunk(Comlink.transfer(job, [job.records.buffer]));
+      return await Promise.race([
+        remote.rewriteChunk(Comlink.transfer(job, [job.records.buffer])),
+        terminated,
+      ]);
     },
     terminate: () => {
+      rejectPending(new Error("Export cancelled"));
       workers.forEach((worker) => {
         worker.terminate();
       });

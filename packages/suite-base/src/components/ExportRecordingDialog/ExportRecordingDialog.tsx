@@ -85,12 +85,14 @@ export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Eleme
 
   const readable = useMemo(() => new BlobReadable(file), [file]);
   const opened = useAsync(async () => {
-    return await McapIndexedReader.Initialize({
+    const newReader = await McapIndexedReader.Initialize({
       readable,
       decompressHandlers: await loadDecompressHandlers(),
     });
+    return { reader: newReader, readable };
   }, [readable]);
-  const reader = opened.value;
+  // useAsync keeps the previous value while the next file loads; only use a matching reader.
+  const reader = opened.value?.readable === readable ? opened.value.reader : undefined;
 
   return (
     <Dialog open onClose={onClose} maxWidth="md" fullWidth>
@@ -171,6 +173,10 @@ function ExportForm({
 
   /** Commits a range field. See {@link parseTimeInput} for what can be typed or pasted. */
   const commitTime = (which: "start" | "end", text: string) => {
+    // Unchanged text would round the exact range to the displayed milliseconds.
+    if (text === toSecondsText((which === "start" ? startNs : endNs) - recordingStart)) {
+      return;
+    }
     const parsed = parseTimeInput(text, recordingStart, recordingEnd);
     if (parsed == undefined) {
       setRangeFieldKey((key) => key + 1);
