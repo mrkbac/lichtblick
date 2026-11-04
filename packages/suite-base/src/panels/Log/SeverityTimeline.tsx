@@ -58,8 +58,10 @@ export function binLevels(
   }
   const startSec = toSec(start);
   for (const item of items) {
-    const col = Math.floor(((toSec(item.receiveTime) - startSec) / durationSec) * bins.length);
-    if (col >= 0 && col < bins.length) {
+    const fraction = (toSec(item.receiveTime) - startSec) / durationSec;
+    // A message exactly at the end belongs to the last column
+    const col = Math.min(Math.floor(fraction * bins.length), bins.length - 1);
+    if (fraction >= 0 && fraction <= 1) {
       // +1 so that UNKNOWN (0) messages still mark their column
       bins[col] = Math.max(bins[col]!, item.level + 1);
     }

@@ -29,6 +29,11 @@ describe("binLevels", () => {
     expect([...bins]).toEqual([LogLevel.ERROR + 1, LogLevel.WARN + 1]);
   });
 
+  it("puts a message at the end time into the last column", () => {
+    const bins = binLevels([at(20, LogLevel.WARN)], { sec: 10, nsec: 0 }, 10, 4);
+    expect([...bins]).toEqual([0, 0, 0, LogLevel.WARN + 1]);
+  });
+
   it("handles empty ranges", () => {
     expect(binLevels([at(1, LogLevel.INFO)], { sec: 0, nsec: 0 }, 0, 10)).toHaveLength(10);
     expect(binLevels([], { sec: 0, nsec: 0 }, 10, 0)).toHaveLength(0);
