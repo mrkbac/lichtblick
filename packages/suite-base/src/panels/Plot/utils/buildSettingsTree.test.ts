@@ -28,7 +28,8 @@ describe("buildSettingsTree", () => {
       }),
       PlotBuilder.path(),
     ];
-    const config: PlotConfig = PlotBuilder.config({ paths });
+    // x min/max apply to every non-time x-axis (time plots only show them in a fixed time window)
+    const config: PlotConfig = PlotBuilder.config({ paths, xAxisVal: "index" });
 
     const tree = buildSettingsTree(config, t);
 
