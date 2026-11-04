@@ -47,13 +47,7 @@ import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
 
 import { ActivityChart, ContainerDetails, KeyValueTable, SchemaFields } from "./InspectionViews";
 import { useStyles } from "./index.style";
-import {
-  aggregateBuckets,
-  BUCKET_COUNT,
-  inspectTopic,
-  inspectTopics,
-  TopicInspection,
-} from "./inspection";
+import { aggregateBuckets, BUCKET_COUNT, inspectSourceTopics, TopicInspection } from "./inspection";
 import { namespaceTotals, topicTreeRows } from "./topicTree";
 
 const selectTopics = (ctx: MessagePipelineContext) => ctx.sortedTopics;
@@ -285,58 +279,22 @@ export function RecordingInspector(): React.JSX.Element {
       if (pending.length === 0) {
         return;
       }
-      const sourceNames = [
-        ...new Set(
-          pending.map(
-            (topicName) =>
-              topics.find((topic) => topic.name === topicName)?.aliasedFromName ?? topicName,
-          ),
-        ),
-      ];
       setScanning(pending.length === 1 ? pending[0] : "selected topics");
       setProgress(`0 messages · ${pending.length} topics`);
-      const onProgress = (count: number) => {
-        setProgress(`${count.toLocaleString()} messages · ${pending.length} topics`);
-      };
-      const shared = getInspectionIterator?.(sourceNames, { start, end });
-      if (shared) {
-        const results = await inspectTopics(
-          shared,
-          sourceNames,
-          start,
-          end,
-          activeController.signal,
-          onProgress,
-        );
-        setInspections((previous) => {
-          const next = new Map(previous);
-          for (const topicName of pending) {
-            const sourceName =
-              topics.find((topic) => topic.name === topicName)?.aliasedFromName ?? topicName;
-            next.set(topicName, results.get(sourceName)!);
-          }
-          return next;
-        });
-      } else {
-        // Virtual topics and third-party players may only provide decoded single-topic iterators.
-        for (const topicName of pending) {
-          activeController.signal.throwIfAborted();
-          const sourceName =
-            topics.find((topic) => topic.name === topicName)?.aliasedFromName ?? topicName;
-          const iterator = getIterator(sourceName, { start, end });
-          if (!iterator) {
-            throw new Error("This source does not support recording inspection.");
-          }
-          const result = await inspectTopic(
-            iterator,
-            start,
-            end,
-            activeController.signal,
-            onProgress,
-          );
-          setInspections((previous) => new Map(previous).set(topicName, result));
-        }
-      }
+      await inspectSourceTopics({
+        pipeline: { getBatchIterator: getIterator, getInspectionIterator },
+        topics,
+        names: pending,
+        start,
+        end,
+        signal: activeController.signal,
+        onProgress: (count) => {
+          setProgress(`${count.toLocaleString()} messages · ${pending.length} topics`);
+        },
+        onResult: (results) => {
+          setInspections((previous) => new Map([...previous, ...results]));
+        },
+      });
     } catch (err) {
       if (!activeController.signal.aborted) {
         setError(err instanceof Error ? err.message : String(err));
