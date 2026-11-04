@@ -10,6 +10,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useStyles } from "@lichtblick/suite-base/components/AppBar/AppMenu.style";
+import { ExportRecordingDialog } from "@lichtblick/suite-base/components/ExportRecordingDialog/ExportRecordingDialog";
 import TextMiddleTruncate from "@lichtblick/suite-base/components/TextMiddleTruncate";
 import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
@@ -37,7 +38,13 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
   const [nestedMenu, setNestedMenu] = useState<string | undefined>();
   const captureMenuClick = useInteractionCapture(AppEvent.APP_MENU_CLICK);
 
-  const { recentSources, selectRecent } = usePlayerSelection();
+  const { recentSources, selectRecent, selectedFiles } = usePlayerSelection();
+  // ponytail: export supports a single indexed MCAP file; multi-file merge is a later phase.
+  const exportableFile =
+    selectedFiles?.length === 1 && /\.mcap$/i.test(selectedFiles[0]!.name)
+      ? selectedFiles[0]
+      : undefined;
+  const [exportFile, setExportFile] = useState<File | undefined>();
 
   const leftSidebarOpen = useWorkspaceStore(selectLeftSidebarOpen);
   const rightSidebarOpen = useWorkspaceStore(selectRightSidebarOpen);
@@ -106,6 +113,17 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
           handleNestedMenuClose();
         },
       },
+      {
+        type: "item",
+        label: t("exportRecording"),
+        key: "export-recording",
+        disabled: !exportableFile,
+        dataTestId: "menu-item-export-recording",
+        onClick: () => {
+          setExportFile(exportableFile);
+          handleNestedMenuClose();
+        },
+      },
       { type: "divider" },
       { type: "item", label: t("recentDataSources"), key: "recent-sources", disabled: true },
     ];
@@ -127,6 +145,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
     classes.truncate,
     dialogActions.dataSource,
     dialogActions.openFile,
+    exportableFile,
     handleNestedMenuClose,
     recentSources,
     selectRecent,
@@ -266,6 +285,14 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
           {t("help")}
         </NestedMenuItem>
       </Menu>
+      {exportFile && (
+        <ExportRecordingDialog
+          file={exportFile}
+          onClose={() => {
+            setExportFile(undefined);
+          }}
+        />
+      )}
     </>
   );
 }

@@ -162,6 +162,7 @@ export default function PlayerManager(
   const { enqueueSnackbar } = useSnackbar();
 
   const [selectedSource, setSelectedSource] = useState<IDataSourceFactory | undefined>();
+  const [selectedFiles, setSelectedFiles] = useState<readonly File[] | undefined>();
 
   const selectSource = useCallback(
     async (sourceId: string, args?: DataSourceArgs) => {
@@ -178,6 +179,7 @@ export default function PlayerManager(
       metricsCollector.setProperty("player", sourceId);
 
       setSelectedSource(foundSource);
+      setSelectedFiles(undefined);
 
       // Sample sources don't need args or prompts to initialize
       if (foundSource.type === "sample") {
@@ -241,6 +243,7 @@ export default function PlayerManager(
               });
 
               setBasePlayer(newPlayer);
+              setSelectedFiles(fileList);
               return;
             } else if (handles) {
               for (const handle of handles) {
@@ -267,6 +270,7 @@ export default function PlayerManager(
               });
 
               setBasePlayer(newPlayer);
+              setSelectedFiles(filesHandled);
               addRecent({
                 type: "file",
                 title: mergeMultipleFileNames(handles.map((h) => h.name)),
@@ -306,6 +310,7 @@ export default function PlayerManager(
     selectSource,
     selectRecent,
     selectedSource,
+    selectedFiles,
     availableSources: playerSources,
     recentSources,
   };

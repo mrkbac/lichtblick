@@ -11,6 +11,7 @@ export const appBar = {
   documentation: "Documentation",
   exploreSampleData: "Explore sample data",
   exportLayoutToFile: "Export layout to file…",
+  exportRecording: "Export recording…",
   extensions: "Extensions",
   file: "File",
   help: "Help",

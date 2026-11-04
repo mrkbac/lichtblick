@@ -107,6 +107,9 @@ export interface PlayerSelection {
   /** Currently selected data source */
   selectedSource?: IDataSourceFactory;
 
+  /** Local files backing the current data source, if it was opened from files */
+  selectedFiles?: readonly File[];
+
   /** List of available data sources */
   availableSources: readonly IDataSourceFactory[];
 
