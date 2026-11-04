@@ -127,7 +127,8 @@ const useStyles = makeStyles()((theme) => ({
     fontFamily: "monospace",
   },
   list: { flex: 1, overflow: "auto", contain: "strict" },
-  summary: { flex: 1 },
+  summary: { flex: "1 1 200px" },
+  wrap: { flexWrap: "wrap" },
 }));
 
 /** Highlights parameters whose value changed since the previous update, after the first load. */
@@ -165,7 +166,7 @@ function useChangedParameters(
 }
 
 function Parameters({ config, saveConfig }: Props): ReactElement {
-  const { classes } = useStyles();
+  const { classes, cx } = useStyles();
   const capabilities = useMessagePipeline(selectCapabilities);
   const setParameter = useMessagePipeline(selectSetParameter);
   const parameters = useMessagePipeline(selectParameters);
@@ -517,8 +518,8 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
         </Alert>
       )}
       {snapshot && (
-        <div className={classes.bar}>
-          <Typography variant="body2" noWrap className={classes.summary} title={snapshot.name}>
+        <div className={cx(classes.bar, classes.wrap)}>
+          <Typography variant="body2" className={classes.summary} title={snapshot.name}>
             vs <b>{snapshot.name}</b>: {counts.changed ?? 0} changed, {counts.added ?? 0} added,{" "}
             {counts.removed ?? 0} removed
           </Typography>
