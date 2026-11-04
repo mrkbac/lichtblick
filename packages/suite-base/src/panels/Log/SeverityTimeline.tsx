@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { fromSec, add as addTimes, subtract as subtractTimes, toSec } from "@foxglove/rostime";
 import { useTheme } from "@mui/material";
 import { useCallback } from "react";
 import { makeStyles } from "tss-react/mui";
 
-import { fromSec, add as addTimes, subtract as subtractTimes, toSec } from "@lichtblick/rostime";
 import { Time } from "@lichtblick/suite";
 import AutoSizingCanvas from "@lichtblick/suite-base/components/AutoSizingCanvas";
 import {

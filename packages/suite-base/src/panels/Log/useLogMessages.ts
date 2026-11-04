@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { compare } from "@foxglove/rostime";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { compare } from "@lichtblick/rostime";
 import { useMessagesByTopic } from "@lichtblick/suite-base/PanelAPI";
 import {
   MessagePipelineContext,
@@ -93,7 +93,7 @@ export function useLogMessages(topics: readonly string[]): {
   // Active range subscriptions, keyed by topic. Reset when the player changes.
   const subsRef = useRef(new Map<string, () => void>());
   const accumulatedRef = useRef<Record<string, NormalizedLogMessage[]>>({});
-  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>();
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
     const subs = subsRef.current;

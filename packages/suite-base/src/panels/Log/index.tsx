@@ -250,7 +250,7 @@ const LogPanel = React.memo(({ config, saveConfig }: Props) => {
   );
 
   // Time of the last jump target when seeking isn't possible (live data)
-  const jumpAnchor = useRef<Time | undefined>();
+  const jumpAnchor = useRef<Time | undefined>(undefined);
 
   // Seek, or for sources that can't seek, scroll to the matching row
   const goTo = useCallback(
@@ -269,7 +269,7 @@ const LogPanel = React.memo(({ config, saveConfig }: Props) => {
   const jump = useCallback(
     (direction: 1 | -1) => {
       const anchor = seekPlayback
-        ? getMessagePipeline().playerState.activeData?.currentTime
+        ? getMessagePipeline().playerState.activeData?.currentTime ?? undefined
         : jumpAnchor.current;
       const index = findLevel(filteredItems, anchor, direction, LogLevel.WARN);
       const target = filteredItems[index];

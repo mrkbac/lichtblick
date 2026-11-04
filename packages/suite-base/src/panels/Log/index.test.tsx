@@ -291,7 +291,7 @@ describe("Log Panel topic selection", () => {
   const topics = ["/a", "/b", "/c"];
 
   function apply(action: SettingsTreeAction, config: Config): Config {
-    const saveConfig = jest.fn();
+    const saveConfig = vi.fn();
     createActionHandler(saveConfig, new Set(), topics)(action);
     return saveConfig.mock.calls[0]?.[0](config);
   }

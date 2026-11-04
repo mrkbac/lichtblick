@@ -223,7 +223,7 @@ describe("LogList Component", () => {
     const items = Array.from({ length: 5 }, (_, i) => createMockLogMessage(i, 2));
 
     it("seeks to the receive time of a clicked row", async () => {
-      const onSeek = jest.fn();
+      const onSeek = vi.fn();
       const { user } = setup(items, {
         onSeek,
         currentTime: { sec: 2000, nsec: 0 },
@@ -235,8 +235,8 @@ describe("LogList Component", () => {
     });
 
     it("copies a row without seeking", async () => {
-      const onSeek = jest.fn();
-      const onCopy = jest.fn();
+      const onSeek = vi.fn();
+      const onCopy = vi.fn();
       const { user } = setup(items, { onSeek, onCopy });
 
       await user.click(screen.getAllByLabelText("Copy log message")[1]!);
@@ -247,7 +247,7 @@ describe("LogList Component", () => {
 
     it("marks the row at the playhead and dims later rows", () => {
       setup(items, {
-        onSeek: jest.fn(),
+        onSeek: vi.fn(),
         currentTime: { sec: 2002, nsec: 500 },
       });
 

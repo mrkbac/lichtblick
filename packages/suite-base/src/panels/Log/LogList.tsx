@@ -138,7 +138,7 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
 
   const [following, setFollowing] = useState(true);
   // scrollTop set by our own scrolling, so the resulting scroll event isn't taken as user input
-  const programmaticScrollTop = useRef<number | undefined>();
+  const programmaticScrollTop = useRef<number | undefined>(undefined);
 
   const scrollToRow = useCallback((index: number) => {
     const list = listRef.current;
@@ -242,6 +242,8 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
       <List<ListItemData>
         listRef={listRef}
         style={{ outline: "none", width: "100%", height: "100%" }}
+        // Rows to render before the first measurement
+        defaultHeight={600}
         rowProps={rowProps}
         rowHeight={rowHeight}
         rowCount={items.length}

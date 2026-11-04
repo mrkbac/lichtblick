@@ -3,6 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { act, renderHook } from "@testing-library/react";
+import type { Mock } from "vitest";
 
 import { MessageEvent, SubscribeMessageRangeArgs } from "@lichtblick/suite";
 import { useMessagesByTopic } from "@lichtblick/suite-base/PanelAPI";
@@ -13,9 +14,9 @@ import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { NormalizedLogMessage } from "./types";
 import { mergeByReceiveTime, useLogMessages } from "./useLogMessages";
 
-jest.mock("@lichtblick/suite-base/components/MessagePipeline");
-jest.mock("@lichtblick/suite-base/components/PanelExtensionAdapter");
-jest.mock("@lichtblick/suite-base/PanelAPI");
+vi.mock("@lichtblick/suite-base/components/MessagePipeline");
+vi.mock("@lichtblick/suite-base/components/PanelExtensionAdapter");
+vi.mock("@lichtblick/suite-base/PanelAPI");
 
 const at = (sec: number, topic = "/a"): NormalizedLogMessage => ({
   topic,
@@ -48,25 +49,25 @@ describe("mergeByReceiveTime", () => {
 describe("useLogMessages", () => {
   let ctx: { playerState: { playerId: string; presence: PlayerPresence } };
   let rangeIterators: Map<string, (batch: MessageEvent[] | "done") => void>;
-  let cancelByTopic: Map<string, jest.Mock>;
+  let cancelByTopic: Map<string, Mock>;
 
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
     cancelByTopic = new Map();
     ctx = { playerState: { playerId: "p1", presence: PlayerPresence.PRESENT } };
     rangeIterators = new Map();
-    (useMessagePipeline as jest.Mock).mockImplementation((selector: (c: typeof ctx) => unknown) =>
+    (useMessagePipeline as Mock).mockImplementation((selector: (c: typeof ctx) => unknown) =>
       selector(ctx),
     );
-    (useMessagesByTopic as jest.Mock).mockReturnValue({});
+    (useMessagesByTopic as Mock).mockReturnValue({});
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   function withRange() {
-    const subscribe = jest.fn(({ topic, onNewRangeIterator }: SubscribeMessageRangeArgs) => {
+    const subscribe = vi.fn(({ topic, onNewRangeIterator }: SubscribeMessageRangeArgs) => {
       // Async iterator fed by the test
       const queue: (MessageEvent[] | "done")[] = [];
       const waiting: (() => void)[] = [];
@@ -93,11 +94,11 @@ describe("useLogMessages", () => {
           }
         })(),
       );
-      const cancel = jest.fn();
+      const cancel = vi.fn();
       cancelByTopic.set(topic, cancel);
       return cancel;
     });
-    (useSubscribeMessageRange as jest.Mock).mockReturnValue(subscribe);
+    (useSubscribeMessageRange as Mock).mockReturnValue(subscribe);
     return subscribe;
   }
 
@@ -117,7 +118,7 @@ describe("useLogMessages", () => {
       rangeIterators.get("/b")!([event(2, "/b")]);
       rangeIterators.get("/a")!("done");
       rangeIterators.get("/b")!("done");
-      await jest.runAllTimersAsync();
+      await vi.runAllTimersAsync();
     });
 
     expect(result.current.items.map((m) => m.message)).toEqual(["/a@1", "/b@2", "/a@3"]);
@@ -130,14 +131,14 @@ describe("useLogMessages", () => {
 
     await act(async () => {
       rangeIterators.get("/a")!([event(1, "/a")]);
-      await jest.runAllTimersAsync();
+      await vi.runAllTimersAsync();
     });
     const first = result.current.items;
     expect(first).toHaveLength(1);
 
     await act(async () => {
       rangeIterators.get("/a")!([event(2, "/a")]);
-      await jest.runAllTimersAsync();
+      await vi.runAllTimersAsync();
     });
 
     expect(result.current.items).not.toBe(first);
@@ -152,7 +153,7 @@ describe("useLogMessages", () => {
     });
     await act(async () => {
       rangeIterators.get("/b")!([event(2, "/b")]);
-      await jest.runAllTimersAsync();
+      await vi.runAllTimersAsync();
     });
 
     rerender({ topics: ["/a"] });
@@ -163,8 +164,8 @@ describe("useLogMessages", () => {
   });
 
   it("falls back to a rolling buffer when the source has no range support", () => {
-    (useSubscribeMessageRange as jest.Mock).mockReturnValue(jest.fn(() => () => {}));
-    (useMessagesByTopic as jest.Mock).mockReturnValue({
+    (useSubscribeMessageRange as Mock).mockReturnValue(vi.fn(() => () => {}));
+    (useMessagesByTopic as Mock).mockReturnValue({
       "/a": [event(1, "/a"), event(3, "/a")],
       "/b": [event(2, "/b")],
     });
