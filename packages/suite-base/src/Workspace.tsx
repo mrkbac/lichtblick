@@ -41,7 +41,6 @@ import {
 import PanelLayout from "@lichtblick/suite-base/components/PanelLayout";
 import PanelSettings from "@lichtblick/suite-base/components/PanelSettings";
 import PlaybackControls from "@lichtblick/suite-base/components/PlaybackControls";
-import RemountOnValueChange from "@lichtblick/suite-base/components/RemountOnValueChange";
 import Sidebars from "@lichtblick/suite-base/components/Sidebars";
 import { SidebarItem } from "@lichtblick/suite-base/components/Sidebars/types";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -165,8 +164,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     return extensions;
   }, [availableSources]);
 
-  // We use playerId to detect when a player changes for RemountOnValueChange below
-  // see comment below above the RemountOnValueChange component
+  // Keys the panel tree below so it remounts when the player changes
   const playerId = useMessagePipeline(selectPlayerId);
 
   const currentUserType = useCurrentUserType();
@@ -626,11 +624,9 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
           setRightSidebarSize={sidebarActions.right.setSize}
         >
           {/* To ensure no stale player state remains, we unmount all panels when players change */}
-          <RemountOnValueChange value={playerId}>
-            <Stack data-testid="workspace-panels">
-              <PanelLayout />
-            </Stack>
-          </RemountOnValueChange>
+          <Stack key={playerId} data-testid="workspace-panels">
+            <PanelLayout />
+          </Stack>
         </Sidebars>
         {play && pause && seek && (
           <div style={{ flexShrink: 0 }} data-testid="playback-controls">
