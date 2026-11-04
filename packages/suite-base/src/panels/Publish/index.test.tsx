@@ -3,13 +3,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import "@testing-library/jest-dom";
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
 import PublishBuilder from "@lichtblick/suite-base/testing/builders/PublishBuilder";
+import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
 import Publish from "./index";
 import { PublishConfig } from "./types";
@@ -61,11 +62,15 @@ describe("Publish", () => {
     jest.clearAllMocks();
   });
 
-  function setup(configOverride: Partial<PublishConfig> = {}, capabilities: string[] = []) {
+  function setup(
+    configOverride: Partial<PublishConfig> = {},
+    capabilities: string[] = [],
+    datatypes: RosDatatypes = new Map(),
+  ) {
     const config = PublishBuilder.config(configOverride);
     (useDataSourceInfo as jest.Mock).mockReturnValue({
       topics: [],
-      datatypes: new Map(),
+      datatypes,
       capabilities,
     });
 
@@ -84,7 +89,7 @@ describe("Publish", () => {
       setup({ advancedView: true });
 
       // Then
-      expect(screen.getByPlaceholderText("Enter message content as JSON")).toBeInTheDocument();
+      expect(screen.getByPlaceholderText("Enter the message as JSON")).toBeInTheDocument();
     });
   });
 
@@ -94,9 +99,7 @@ describe("Publish", () => {
       setup({ advancedView: false });
 
       // Then
-      expect(
-        screen.queryByPlaceholderText("Enter message content as JSON"),
-      ).not.toBeInTheDocument();
+      expect(screen.queryByPlaceholderText("Enter the message as JSON")).not.toBeInTheDocument();
     });
   });
 
@@ -152,6 +155,64 @@ describe("Publish", () => {
 
       // Then
       expect(screen.getByText(/unexpected token/i)).toBeInTheDocument();
+    });
+  });
+
+  describe("with a known message schema", () => {
+    const datatypes: RosDatatypes = new Map([
+      ["std_msgs/String", { definitions: [{ name: "data", type: "string" }] }],
+    ]);
+
+    it("edits the message in a form", () => {
+      setup({ datatype: "std_msgs/String", value: '{"data": "a"}' }, [], datatypes);
+      expect(screen.getByLabelText("data")).toHaveValue("a");
+      expect(screen.queryByPlaceholderText("Enter the message as JSON")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("keyboard shortcut", () => {
+    it("publishes on Ctrl+Enter", () => {
+      setup({ value: '{"data": "hello"}' }, [PLAYER_CAPABILITIES.advertise]);
+      fireEvent.keyDown(screen.getByPlaceholderText("Enter the message as JSON"), {
+        key: "Enter",
+        ctrlKey: true,
+      });
+      expect(mockPublish).toHaveBeenCalledWith({ data: "hello" });
+    });
+  });
+
+  describe("repeated publishing", () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("publishes at the configured rate until stopped or unmounted", () => {
+      const { unmount } = setup({ value: '{"data": 1}', publishRate: 10 }, [
+        PLAYER_CAPABILITIES.advertise,
+      ]);
+
+      fireEvent.click(screen.getByRole("button", { name: "10 Hz" }));
+      act(() => {
+        jest.advanceTimersByTime(350);
+      });
+      expect(mockPublish).toHaveBeenCalledTimes(3);
+      expect(screen.getByText("Publishing at 10 Hz")).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+      act(() => {
+        jest.advanceTimersByTime(500);
+      });
+      expect(mockPublish).toHaveBeenCalledTimes(3);
+
+      fireEvent.click(screen.getByRole("button", { name: "10 Hz" }));
+      unmount();
+      act(() => {
+        jest.advanceTimersByTime(500);
+      });
+      expect(mockPublish).toHaveBeenCalledTimes(3);
     });
   });
 });

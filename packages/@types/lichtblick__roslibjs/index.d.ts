@@ -38,8 +38,27 @@ declare module "@lichtblick/roslibjs" {
       errorCallback: (error: Error) => void,
     ): void;
 
+    public getServiceRequestDetails(
+      type: string,
+      cb: (result: { typedefs: RosapiTypeDef[] }) => void,
+      errorCallback: (error: Error) => void,
+    ): void;
+
+    public getServiceResponseDetails(
+      type: string,
+      cb: (result: { typedefs: RosapiTypeDef[] }) => void,
+      errorCallback: (error: Error) => void,
+    ): void;
+
     public close(): void;
   }
+
+  type RosapiTypeDef = {
+    type: string;
+    fieldnames: string[];
+    fieldtypes: string[];
+    fieldarraylen: number[];
+  };
 
   type Message = Record<string, unknown>;
 

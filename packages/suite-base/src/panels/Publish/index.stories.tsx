@@ -20,7 +20,27 @@ const getFixture = ({ allowPublish }: { allowPublish: boolean }): Fixture => {
   return {
     topics: [{ name: "/sample_topic", schemaName: "std_msgs/String" }],
     datatypes: new Map(
-      Object.entries({ "std_msgs/String": { definitions: [{ name: "data", type: "string" }] } }),
+      Object.entries({
+        "std_msgs/String": { definitions: [{ name: "data", type: "string" }] },
+        "example/Command": {
+          definitions: [
+            { name: "MODE_IDLE", type: "uint8", isConstant: true, value: 0 },
+            { name: "MODE_DRIVE", type: "uint8", isConstant: true, value: 1 },
+            { name: "mode", type: "uint8" },
+            { name: "enabled", type: "bool" },
+            { name: "speed", type: "float64" },
+            { name: "target", type: "example/Point", isComplex: true },
+            { name: "waypoints", type: "example/Point", isComplex: true, isArray: true },
+            { name: "gains", type: "float64", isArray: true, arrayLength: 3 },
+          ],
+        },
+        "example/Point": {
+          definitions: [
+            { name: "x", type: "float64" },
+            { name: "y", type: "float64" },
+          ],
+        },
+      }),
     ),
     frame: {},
     capabilities: allowPublish ? [PLAYER_CAPABILITIES.advertise] : [],
@@ -98,7 +118,6 @@ export const WhenSelectingATopicSchemaIsSuggested: Story = {
     const inputs = await canvas.findAllByRole("combobox");
     const topicInput = inputs[0];
     const schemaInput = inputs[1];
-    const valueTextarea = await canvas.findByPlaceholderText("Enter message content as JSON");
 
     await step("Select a topic", async () => {
       await type(topicInput!, "/sample_");
@@ -107,10 +126,29 @@ export const WhenSelectingATopicSchemaIsSuggested: Story = {
     });
 
     await expect(topicInput).toHaveValue("/sample_topic");
-    await expect(valueTextarea).toHaveValue(advancedJSON);
+    await expect(await canvas.findByLabelText("data")).toHaveValue("");
     await expect(schemaInput).toHaveValue("std_msgs/String");
   },
   parameters: { colorScheme: "light" },
+};
+
+export const FormWithNestedMessage: Story = {
+  args: {
+    allowPublish: true,
+    overrideConfig: {
+      ...baseConfig,
+      topicName: "/command",
+      datatype: "example/Command",
+      value: JSON.stringify({
+        mode: 1,
+        enabled: true,
+        speed: 0.5,
+        target: { x: 1, y: 2 },
+        waypoints: [{ x: 0, y: 0 }],
+        gains: [1, 0.1, 0],
+      }),
+    },
+  },
 };
 
 export const PublishEnabledWithTopicAndSchema: Story = {

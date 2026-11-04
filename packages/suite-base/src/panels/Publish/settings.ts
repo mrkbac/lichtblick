@@ -10,7 +10,10 @@ import * as _ from "lodash-es";
 import { useCallback, useEffect, useMemo } from "react";
 
 import { Immutable, SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
-import buildSampleMessage from "@lichtblick/suite-base/panels/Publish/buildSampleMessage";
+import {
+  isEditedMessage,
+  sampleMessageJson,
+} from "@lichtblick/suite-base/components/MessageEditor/messageJson";
 import { Topic } from "@lichtblick/suite-base/players/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
@@ -23,7 +26,11 @@ export const defaultConfig: PublishConfig = {
   buttonTooltip: "",
   advancedView: true,
   value: "{}",
+  publishRate: 1,
 };
+
+/** Asks the user whether an edited message may be replaced by a new template. */
+type ConfirmReplace = (schemaName: string) => Promise<boolean>;
 
 function datatypeError(schemaNames: string[], datatype?: string) {
   if (!datatype) {
@@ -68,6 +75,15 @@ const buildSettingsTree = (
         input: "boolean",
         value: config.advancedView,
       },
+      publishRate: {
+        label: "Repeat rate (Hz)",
+        help: "Rate used by the repeat button",
+        input: "number",
+        min: 0.1,
+        max: 1000,
+        step: 1,
+        value: config.publishRate ?? defaultConfig.publishRate,
+      },
     },
   },
   button: {
@@ -80,22 +96,12 @@ const buildSettingsTree = (
   },
 });
 
-const getSampleMessage = (
-  datatypes: Immutable<RosDatatypes>,
-  datatype?: string,
-): string | undefined => {
-  if (datatype == undefined) {
-    return undefined;
-  }
-  const sampleMessage = buildSampleMessage(datatypes, datatype);
-  return sampleMessage != undefined ? JSON.stringify(sampleMessage, undefined, 2) : "{}";
-};
-
 export function usePublishPanelSettings(
   config: PublishConfig,
   saveConfig: SaveConfig<PublishConfig>,
   topics: readonly Topic[],
   datatypes: Immutable<RosDatatypes>,
+  confirmReplace: ConfirmReplace,
 ): void {
   const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
   const schemaNames = useMemo(() => Array.from(datatypes.keys()).sort(), [datatypes]);
@@ -106,38 +112,47 @@ export function usePublishPanelSettings(
         return;
       }
       const { path, value, input } = action.payload;
-
-      saveConfig(
-        produce<PublishConfig>((draft) => {
-          if (input === "autocomplete") {
-            if (_.isEqual(path, ["general", "topicName"])) {
-              const topicSchemaName = topics.find((t) => t.name === value)?.schemaName;
-              const sampleMessage = getSampleMessage(datatypes, topicSchemaName);
-
-              draft.topicName = value;
-
-              if (topicSchemaName) {
-                draft.datatype = topicSchemaName;
-              }
-              if (sampleMessage) {
-                draft.value = sampleMessage;
-              }
-            } else if (_.isEqual(path, ["general", "datatype"])) {
-              const sampleMessage = getSampleMessage(datatypes, value);
-
-              draft.datatype = value;
-
-              if (sampleMessage) {
-                draft.value = sampleMessage;
-              }
-            }
-          } else {
+      const isTopic = input === "autocomplete" && _.isEqual(path, ["general", "topicName"]);
+      const isSchema = input === "autocomplete" && _.isEqual(path, ["general", "datatype"]);
+      if (!isTopic && !isSchema) {
+        saveConfig(
+          produce<PublishConfig>((draft) => {
             _.set(draft, path.slice(1), value);
-          }
-        }),
-      );
+          }),
+        );
+        return;
+      }
+
+      const newValue = typeof value === "string" ? value : undefined;
+      const schemaName = isTopic
+        ? (topics.find((t) => t.name === newValue)?.schemaName ?? config.datatype)
+        : newValue;
+      const template =
+        schemaName !== config.datatype ? sampleMessageJson(datatypes, schemaName) : undefined;
+      const update = ({ replaceMessage }: { replaceMessage: boolean }) => {
+        saveConfig(
+          produce<PublishConfig>((draft) => {
+            if (isTopic) {
+              draft.topicName = newValue;
+            }
+            draft.datatype = schemaName;
+            if (replaceMessage && template != undefined) {
+              draft.value = template;
+            }
+          }),
+        );
+      };
+
+      if (template == undefined || !isEditedMessage(config.value, datatypes, config.datatype)) {
+        update({ replaceMessage: true });
+        return;
+      }
+      // Don't silently throw away an edited message
+      void confirmReplace(schemaName!).then((replaceMessage) => {
+        update({ replaceMessage });
+      });
     },
-    [datatypes, saveConfig, topics],
+    [config.datatype, config.value, confirmReplace, datatypes, saveConfig, topics],
   );
 
   useEffect(() => {
