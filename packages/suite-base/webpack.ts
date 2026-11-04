@@ -292,7 +292,8 @@ export function makeConfig(
         // Should match webpack-defines.d.ts
         ReactNull: null,
         LICHTBLICK_SUITE_VERSION: JSON.stringify(version),
-        API_URL: JSON.stringify(process.env.API_URL),
+        // licht deploys talk to its organization server unless API_URL says otherwise.
+        API_URL: JSON.stringify(process.env.API_URL ?? "https://licht-server.marko.im"),
         DEV_WORKSPACE: JSON.stringify(process.env.DEV_WORKSPACE),
         OTLP_ENDPOINT: JSON.stringify(process.env.OTLP_ENDPOINT),
         ...buildEnvVars(),
