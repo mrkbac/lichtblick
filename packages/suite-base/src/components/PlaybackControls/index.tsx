@@ -29,12 +29,9 @@ import {
   Previous20Regular,
 } from "@fluentui/react-icons";
 import { Time, compare, fromNanoSec, toNanoSec } from "@foxglove/rostime";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { CreateEventDialog } from "@lichtblick/suite-base/components/CreateEventDialog";
-import EventIcon from "@lichtblick/suite-base/components/EventIcon";
-import EventOutlinedIcon from "@lichtblick/suite-base/components/EventOutlinedIcon";
 import { ExportRecordingDialog } from "@lichtblick/suite-base/components/ExportRecordingDialog/ExportRecordingDialog";
 import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
 import {
@@ -53,8 +50,6 @@ import { useStyles } from "@lichtblick/suite-base/components/PlaybackControls/in
 import { useDirectionalSeek } from "@lichtblick/suite-base/components/PlaybackControls/useDirectionalSeek";
 import PlaybackSpeedControls from "@lichtblick/suite-base/components/PlaybackSpeedControls";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { useCurrentUser } from "@lichtblick/suite-base/context/BaseUserContext";
-import { EventsStore, useEvents } from "@lichtblick/suite-base/context/EventsContext";
 import {
   WorkspaceContextStore,
   useWorkspaceStore,
@@ -76,7 +71,6 @@ import { TrimBar, useTrimKeyHandlers } from "./TrimRange";
 const selectPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
 const selectHasLiveHistory = (ctx: MessagePipelineContext) =>
   ctx.playerState.capabilities.includes(PLAYER_CAPABILITIES.liveHistory);
-const selectEventsSupported = (store: EventsStore) => store.eventsSupported;
 const selectPlaybackRepeat = (store: WorkspaceContextStore) => store.playbackControls.repeat;
 
 type PlaybackControlsProps = Readonly<{
@@ -102,9 +96,6 @@ export default function PlaybackControls({
 
   const { classes } = useStyles();
   const repeat = useWorkspaceStore(selectPlaybackRepeat);
-  const [createEventDialogOpen, setCreateEventDialogOpen] = useState(false);
-  const { currentUserType } = useCurrentUser();
-  const eventsSupported = useEvents(selectEventsSupported);
   const exportableFile = useExportableFile();
   const cutActive = useTrimStore((state) => state.start != undefined);
   const editingCut = useTrimStore((state) => state.editing);
@@ -230,11 +221,6 @@ export default function PlaybackControls({
     ],
   );
 
-  const toggleCreateEventDialog = useCallback(() => {
-    pause();
-    setCreateEventDialogOpen((open) => !open);
-  }, [pause]);
-
   const disableControls = presence === PlayerPresence.ERROR;
 
   return (
@@ -253,15 +239,6 @@ export default function PlaybackControls({
         {exportableFile && <TrimBar />}
         <Stack direction="row" alignItems="center" flex={1} gap={1}>
           <Stack direction="row" alignItems="center" flex={1} gap={0.5}>
-            {currentUserType !== "unauthenticated" && eventsSupported && (
-              <HoverableIconButton
-                size="small"
-                title="Create event"
-                icon={<EventOutlinedIcon />}
-                activeIcon={<EventIcon />}
-                onClick={toggleCreateEventDialog}
-              />
-            )}
             <DataSourceInfoButton disabled={disableControls} />
             {exportableFile && (
               <HoverableIconButton
@@ -327,9 +304,6 @@ export default function PlaybackControls({
         </Stack>
         {exportOpen && exportableFile && (
           <ExportRecordingDialog file={exportableFile} onClose={closeExport} />
-        )}
-        {createEventDialogOpen && eventsSupported && (
-          <CreateEventDialog onClose={toggleCreateEventDialog} />
         )}
       </div>
     </>
