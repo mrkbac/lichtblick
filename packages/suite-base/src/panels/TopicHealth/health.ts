@@ -36,8 +36,8 @@ export const DEFAULT_CONFIG: TopicHealthConfig = {
 
 /** Rates are learned only after enough messages, so one-shot (latched) topics never go stale. */
 const MIN_MESSAGES_TO_LEARN = 10;
-const MIN_STALE_SEC = 1;
-const STALE_PERIODS = 5;
+export const MIN_STALE_SEC = 1;
+export const STALE_PERIODS = 5;
 const SMOOTHING = 0.3;
 export const HISTORY_LENGTH = 60;
 
@@ -168,3 +168,11 @@ export const STATUS_ORDER: Record<TopicHealthStatus, number> = {
   unmeasured: 2,
   ok: 3,
 };
+
+/** Durations as `123 ms` below a second, `1.5 s` above; `—` when unknown. */
+export function formatSeconds(seconds: number | undefined): string {
+  if (seconds == undefined) {
+    return "—";
+  }
+  return seconds < 1 ? `${(seconds * 1000).toFixed(0)} ms` : `${seconds.toFixed(1)} s`;
+}

@@ -55,6 +55,7 @@ import {
   TopicHealthStatus,
   TopicSettings,
   averageRate,
+  formatSeconds,
   recordingAge,
   recordingRate,
   sampleLiveRates,
@@ -107,13 +108,6 @@ function formatHz(hz: number | undefined): string {
     return "—";
   }
   return hz >= 100 ? hz.toFixed(0) : hz >= 10 ? hz.toFixed(1) : hz.toFixed(2);
-}
-
-function formatSeconds(seconds: number | undefined): string {
-  if (seconds == undefined) {
-    return "—";
-  }
-  return seconds < 1 ? `${(seconds * 1000).toFixed(0)} ms` : `${seconds.toFixed(1)} s`;
 }
 
 function Sparkline({ values, label }: { values: readonly number[]; label: string }) {

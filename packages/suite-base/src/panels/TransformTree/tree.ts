@@ -5,14 +5,13 @@ import { toSec } from "@foxglove/rostime";
 
 import { Immutable } from "@lichtblick/suite";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
+// A dynamic frame is stale after STALE_PERIODS missed periods, but never sooner than MIN_STALE_SEC.
+import { MIN_STALE_SEC, STALE_PERIODS } from "@lichtblick/suite-base/panels/TopicHealth/health";
 
 import { samplesFromMessage } from "./transforms";
 import { FrameEntries, FrameEntry, FrameRow, FrameWarning } from "./types";
 
 const RATE_WINDOW = 20;
-/** A dynamic frame is stale after this many missed periods, but never sooner than MIN_STALE_SEC. */
-const STALE_PERIODS = 5;
-const MIN_STALE_SEC = 1;
 
 /** Returns a new map with the transforms from `events` applied on top of `entries`. */
 export function addTransformEvents(
