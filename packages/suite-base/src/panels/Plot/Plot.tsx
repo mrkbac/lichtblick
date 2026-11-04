@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { ZoomIn20Regular } from "@fluentui/react-icons";
 import { Button, Tooltip, Fade, useTheme } from "@mui/material";
 import * as _ from "lodash-es";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -23,6 +24,7 @@ import {
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { PanelContextMenu } from "@lichtblick/suite-base/components/PanelContextMenu";
 import { useSubscribeMessageRange } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
 import { PANEL_TOOLBAR_MIN_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TimeBasedChartTooltipContent from "@lichtblick/suite-base/components/TimeBasedChart/TimeBasedChartTooltipContent";
@@ -32,16 +34,23 @@ import { VerticalBars } from "@lichtblick/suite-base/panels/Plot/VerticalBars";
 import useDeltaMeasureMode from "@lichtblick/suite-base/panels/Plot/hooks/useDeltaMeasureMode";
 import usePanning from "@lichtblick/suite-base/panels/Plot/hooks/usePanning";
 import usePlotInteractionHandlers from "@lichtblick/suite-base/panels/Plot/hooks/usePlotInteractionHandlers";
-import { PlotProps, TooltipStateSetter } from "@lichtblick/suite-base/panels/Plot/types";
+import {
+  PixelRect,
+  PlotProps,
+  TooltipStateSetter,
+  ZoomMode,
+} from "@lichtblick/suite-base/panels/Plot/types";
 import { MeasureModeToolbarButton } from "@lichtblick/suite-base/panels/shared/MeasureModeToolbarButton";
 import { createMeasureModeEscapeHandler } from "@lichtblick/suite-base/panels/shared/measureModeEscapeHandler";
 import useAppendOnlyKey from "@lichtblick/suite-base/panels/shared/useAppendOnlyKey";
 import { enumValuesByDatatypeAndField } from "@lichtblick/suite-base/util/enums";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
+import { BoxZoomOverlay } from "./BoxZoomOverlay";
 import { useStyles } from "./Plot.style";
 import { PlotCoordinator } from "./PlotCoordinator";
 import { PlotLegend } from "./PlotLegend";
+import { RangeStatsTable, useRangeStats } from "./RangeStats";
 import useGlobalSync from "./hooks/useGlobalSync";
 import usePlotDataHandling from "./hooks/usePlotDataHandling";
 import usePlotPanelSettings from "./hooks/usePlotPanelSettings";
@@ -69,6 +78,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
   const [canReset, setCanReset] = useState(false);
 
   const [activeTooltip, setActiveTooltip] = useState<TooltipStateSetter>();
+  const [boxZoomActive, setBoxZoomActive] = useState(false);
 
   const [subscriberId] = useState(() => randomUUID());
   const [canvasDiv, setCanvasDiv] = useState<HTMLDivElement | ReactNull>(ReactNull);
@@ -99,6 +109,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
     keyDownHandlers,
     keyUpHandlers,
     getPanelContextMenuItems,
+    isHovered,
   } = usePlotInteractionHandlers({
     config,
     coordinator,
@@ -144,13 +155,39 @@ const Plot = (props: PlotProps): React.JSX.Element => {
     [deltaMeasureMode, onClick],
   );
   const isHoveringSelectablePoint = deltaMeasureMode.active && activeTooltip != undefined;
-  const mergedKeyDownHandlers = useMemo(
-    () => ({
-      ...keyDownHandlers,
-      escape: createMeasureModeEscapeHandler(deltaMeasureMode),
-    }),
-    [deltaMeasureMode, keyDownHandlers],
+  const rangeStats = useRangeStats(coordinator, deltaMeasureMode.markerA, deltaMeasureMode.markerB);
+
+  const toggleBoxZoom = useCallback(() => {
+    setBoxZoomActive((active) => !active);
+  }, []);
+  const handleBoxZoom = useCallback(
+    (rect: PixelRect, mode: ZoomMode) => {
+      void coordinator?.zoomToPixelRect(rect, mode);
+    },
+    [coordinator],
   );
+
+  const mergedKeyDownHandlers = useMemo(() => {
+    const measureEscape = createMeasureModeEscapeHandler(deltaMeasureMode);
+    return {
+      ...keyDownHandlers,
+      // Toggle the zoom tool of the hovered plot
+      z: () => {
+        if (!isHovered()) {
+          return false;
+        }
+        toggleBoxZoom();
+        return true;
+      },
+      escape: () => {
+        if (boxZoomActive) {
+          setBoxZoomActive(false);
+          return true;
+        }
+        return measureEscape();
+      },
+    };
+  }, [boxZoomActive, deltaMeasureMode, isHovered, keyDownHandlers, toggleBoxZoom]);
 
   useEffect(() => {
     setMessagePathDropConfig({
@@ -287,7 +324,18 @@ const Plot = (props: PlotProps): React.JSX.Element => {
         onToggle={deltaMeasureMode.toggleActive}
         title={t("measureMode")}
         testId="plot-measure-mode-toggle"
-      />
+      >
+        <ToolbarIconButton
+          title={t("zoomTool")}
+          aria-label={t("zoomTool")}
+          aria-pressed={boxZoomActive}
+          color={boxZoomActive ? "primary" : "default"}
+          onClick={toggleBoxZoom}
+          data-testid="plot-box-zoom-toggle"
+        >
+          <ZoomIn20Regular />
+        </ToolbarIconButton>
+      </MeasureModeToolbarButton>
       <Stack
         direction={legendDisplay === "top" ? "column" : "row"}
         flex="auto"
@@ -351,7 +399,22 @@ const Plot = (props: PlotProps): React.JSX.Element => {
               markerBLabel={t("markerB")}
               onRemoveMarkerA={deltaMeasureMode.removeMarkerA}
               onRemoveMarkerB={deltaMeasureMode.removeMarkerB}
-            />
+            >
+              {rangeStats && rangeStats.length > 0 && (
+                <RangeStatsTable
+                  stats={rangeStats}
+                  labelsByConfigIndex={labelsByDatasetIndex}
+                  colorsByConfigIndex={colorsByDatasetIndex}
+                />
+              )}
+            </DeltaMarkerBars>
+            {boxZoomActive && (
+              <BoxZoomOverlay
+                onZoom={handleBoxZoom}
+                onWheel={onWheel}
+                onDoubleClick={onResetView}
+              />
+            )}
           </div>
         </Tooltip>
         {canReset && (

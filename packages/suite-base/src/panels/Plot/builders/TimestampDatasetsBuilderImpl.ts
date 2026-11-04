@@ -72,7 +72,7 @@ export type UpdateDataAction =
   | UpdateSeriesFullAction;
 
 const compareDatum = (a: Datum, b: Datum) => a.x - b.x;
-type IndexedDatum = Datum & { index: number };
+export type IndexedDatum = Datum & { index: number };
 
 function getDerivativeY(
   item: IndexedDatum,
@@ -135,6 +135,34 @@ function applyStreamModifier(
     }
     data[i] = { ...item, y, value: Number.isNaN(y) ? null : y };
     prev = valid ? item : undefined;
+  }
+}
+
+/**
+ * Trailing moving average over `windowSize` samples, in place. A NaN sample (line break) restarts the
+ * window. Tooltips and CSV show the smoothed value, like they do for derivatives.
+ */
+export function applyMovingAverage(allData: IndexedDatum[], windowSize: number): void {
+  let sum = 0;
+  let count = 0;
+  let windowStart = 0;
+  const raw = allData.map((item) => item.y);
+  for (let i = 0; i < allData.length; ++i) {
+    const y = raw[i]!;
+    if (Number.isNaN(y)) {
+      sum = 0;
+      count = 0;
+      windowStart = i + 1;
+      continue;
+    }
+    sum += y;
+    count += 1;
+    if (count > windowSize) {
+      sum -= raw[windowStart]!;
+      windowStart += 1;
+      count -= 1;
+    }
+    allData[i] = { ...allData[i]!, y: sum / count, value: sum / count };
   }
 }
 
@@ -295,6 +323,7 @@ export class TimestampDatasetsBuilderImpl {
 
       datasets.push({
         label: series.config.messagePath,
+        configIndex: series.config.configIndex,
         data: this.#getData(series),
       });
     }
@@ -310,7 +339,10 @@ export class TimestampDatasetsBuilderImpl {
     if (modifier != undefined && STREAM_MODIFIERS.includes(modifier)) {
       applyStreamModifier(allData, modifier, modifiersAfter);
     }
-
+    const smoothing = Math.round(series.config.smoothing ?? 0);
+    if (smoothing > 1) {
+      applyMovingAverage(allData, smoothing);
+    }
     return allData;
   }
 

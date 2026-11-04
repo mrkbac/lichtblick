@@ -14,7 +14,11 @@ import { CurrentCustomDatasetsBuilder } from "@lichtblick/suite-base/panels/Plot
 import { CustomDatasetsBuilder } from "@lichtblick/suite-base/panels/Plot/builders/CustomDatasetsBuilder";
 import { IndexDatasetsBuilder } from "@lichtblick/suite-base/panels/Plot/builders/IndexDatasetsBuilder";
 import { TimestampDatasetsBuilder } from "@lichtblick/suite-base/panels/Plot/builders/TimestampDatasetsBuilder";
-import { PlotConfig, PlotPath } from "@lichtblick/suite-base/panels/Plot/utils/config";
+import {
+  PlotConfig,
+  PlotPath,
+  PlotXAxisVal,
+} from "@lichtblick/suite-base/panels/Plot/utils/config";
 import { DeltaMarker } from "@lichtblick/suite-base/panels/shared/types";
 import { Bounds1D } from "@lichtblick/suite-base/types/Bounds";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
@@ -48,7 +52,14 @@ export type MouseBase = BaseInteractionEvent & {
   clientY: number;
 };
 
-export type WheelInteractionEvent = { type: "wheel" } & BaseInteractionEvent & MouseBase;
+export type ZoomMode = "x" | "y" | "xy";
+
+export type WheelInteractionEvent = {
+  type: "wheel";
+  /** Overrides the zoom mode for this event (modifier keys). Hovering an axis always zooms only that axis. */
+  zoomMode?: ZoomMode;
+} & BaseInteractionEvent &
+  MouseBase;
 
 export type PanStartInteractionEvent = {
   type: "panstart";
@@ -76,11 +87,23 @@ export type ChartType = Chart<"scatter", Datum[]>;
 export type HoverElement = {
   data: Datum;
   configIndex: number;
+  /** Seconds between the sample and the hovered time, set when the sample is not under the cursor. */
+  ageSec?: number;
 };
+
+/** Canvas-pixel rectangle */
+export type PixelRect = { left: number; right: number; top: number; bottom: number };
 
 export type Size = { width: number; height: number };
 
-export type ReferenceLine = { color: string; value: number };
+export type ReferenceLine = { color: string; value: number; scaleID?: "y" | "y2" };
+
+export type SecondaryYAxisOptions = {
+  display: boolean;
+  showLabels: boolean;
+  label: string;
+  showGrid: boolean;
+};
 
 export type UpdateAction = {
   type: "update";
@@ -91,7 +114,15 @@ export type UpdateAction = {
   yAxisLabel?: string;
   xBounds?: Partial<Bounds1D>;
   yBounds?: Partial<Bounds1D>;
-  zoomMode?: "x" | "y" | "xy";
+  y2Bounds?: Partial<Bounds1D>;
+  y2Axis?: SecondaryYAxisOptions;
+  showXAxisGrid?: boolean;
+  showYAxisGrid?: boolean;
+  /** Format x ticks as wall-clock time: seconds of the plot's x = 0. Undefined shows relative seconds. */
+  xTickFormat?: { absoluteStartSec?: number };
+  /** Lock one x unit to one y unit */
+  equalAxes?: boolean;
+  zoomMode?: ZoomMode;
   referenceLines?: ReferenceLine[];
   interactionEvents?: InteractionEvent[];
 };
@@ -113,6 +144,8 @@ export type PanStartEvent = PanEvent & {
 
 export type ZoomableChart = Chart & {
   $zoom: {
+    /** Plugin options as resolved at the last chart update; read by the wheel handler. */
+    _options?: { zoom?: { mode?: ZoomMode; overScaleMode?: ZoomMode } };
     panStartHandler(event: PanStartEvent): void;
     panHandler(event: PanEvent): void;
     panEndHandler(): void;
@@ -142,12 +175,15 @@ export type UseHoverHandlersHook = {
   keyDownHandlers: {
     v: () => void;
     b: () => void;
+    r: () => boolean;
   };
   keyUpHandlers: {
     v: () => void;
     b: () => void;
   };
   getPanelContextMenuItems: () => PanelContextMenuItem[];
+  /** True while the mouse is over the plot */
+  isHovered: () => boolean;
 };
 
 export type TooltipStateSetter = {
@@ -186,6 +222,8 @@ export type DeltaMarkerBarsProps = {
   markerBLabel: string;
   onRemoveMarkerA: () => void;
   onRemoveMarkerB: () => void;
+  /** Shown below the delta overlay, e.g. range statistics */
+  children?: React.ReactNode;
 };
 
 export type UsePlotDataHandling = {
@@ -247,12 +285,15 @@ export type MakeSeriesNode = {
   canDelete: boolean;
   canReorder: boolean;
   t: TFunction<"plot">;
+  /** Some series settings only apply to one x-axis mode */
+  xAxisVal?: PlotXAxisVal;
 };
 
 export type MakeRootSeriesNode = {
   paths: PlotPath[];
   supportsStreamModifiers: boolean;
   t: TFunction<"plot">;
+  xAxisVal?: PlotXAxisVal;
 };
 
 export type HandleMoveSeriesAction = HandleAction & {

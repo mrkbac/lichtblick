@@ -27,7 +27,16 @@ export type TimeBasedChartTooltipData = {
   configIndex: number;
   value: number | bigint | boolean | string;
   constantName?: string;
+  /** Seconds since this sample, when it is the last one before the cursor rather than under it. */
+  ageSec?: number;
 };
+
+/** "0.4s ago" for a sample that is not under the cursor */
+function formatAge(ageSec: number | undefined): string | undefined {
+  return ageSec == undefined
+    ? undefined
+    : `${ageSec < 10 ? ageSec.toFixed(1) : ageSec.toFixed(0)}s ago`;
+}
 
 type Props = Immutable<{
   colorsByConfigIndex?: Record<string, undefined | string>;
@@ -69,6 +78,10 @@ const useStyles = makeStyles()((theme) => ({
   value: {
     fontWeight: 600,
     paddingLeft: theme.spacing(2),
+  },
+  stale: {
+    color: theme.palette.text.secondary,
+    fontWeight: 400,
   },
   overflow: {
     gridColumn: "2/4",
@@ -151,9 +164,10 @@ export default function TimeBasedChartTooltipContent(
 
     return (
       <Stack className={classes.root} data-testid="TimeBasedChartTooltipContent">
-        <div>
+        <div className={cx({ [classes.stale]: tooltip.ageSec != undefined })}>
           {value}
           {tooltip.constantName != undefined ? ` (${tooltip.constantName})` : ""}
+          {tooltip.ageSec != undefined ? ` · ${formatAge(tooltip.ageSec)}` : ""}
         </div>
         {content.length > 1 && <OverflowMessage />}
       </Stack>
@@ -181,9 +195,10 @@ export default function TimeBasedChartTooltipContent(
               <span className={classes.colorIconReplacement} />
             )}
             <div className={classes.path}>{label ?? ""}</div>
-            <div className={classes.value}>
+            <div className={cx(classes.value, { [classes.stale]: tooltip.ageSec != undefined })}>
               {value}
               {tooltip.constantName != undefined ? ` (${tooltip.constantName})` : ""}
+              {tooltip.ageSec != undefined ? ` · ${formatAge(tooltip.ageSec)}` : ""}
             </div>
             {item.hasMultipleValues && <OverflowMessage />}
           </Fragment>

@@ -14,6 +14,7 @@ describe("csv", () => {
         [
           {
             label: "label",
+            configIndex: 0,
             data: [
               {
                 receiveTime: { sec: 0, nsec: 0 },
@@ -36,6 +37,7 @@ describe("csv", () => {
         [
           {
             label: "label",
+            configIndex: 0,
             data: [
               {
                 receiveTime: { sec: 0, nsec: 0 },

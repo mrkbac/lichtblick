@@ -103,6 +103,7 @@ export class IndexDatasetsBuilder implements IDatasetsBuilder {
 
       datasets.push({
         label: series.messagePath,
+        configIndex: series.configIndex,
         data: series.dataset.data,
       });
     }

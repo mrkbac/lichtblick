@@ -26,7 +26,22 @@ export type PlotPath = BasePlotPath & {
   timestampMethod: TimestampMethod;
   showLine?: boolean;
   lineSize?: number;
+  /** "step" holds each value until the next sample (sample-and-hold). */
+  interpolation?: PlotInterpolation;
+  /** Which y-axis the series is drawn against. */
+  axis?: PlotYAxis;
+  /** Per-series x-value path for "Path (accumulated)" plots; falls back to the panel x-axis path. */
+  xValue?: string;
+  /** Trailing moving-average window in samples for timestamp plots. 0 or unset disables it. */
+  smoothing?: number;
 };
+
+export type PlotInterpolation = "linear" | "step";
+export type PlotYAxis = "primary" | "secondary";
+export type PlotTimeWindow = "automatic" | "sliding" | "fixed";
+export type PlotPlayheadPosition = "right" | "center";
+export type PlotTimestampFormat = "relative" | "absolute";
+export type PlotAxisScales = "independent" | "equal";
 
 export type PlotXAxisVal =
   // x-axis is either receive time since start or header stamp since start
@@ -94,7 +109,38 @@ export type PlotConfig = DeprecatedPlotConfig & {
   xAxisPath?: BasePlotPath;
   xAxisLabel?: string;
   yAxisLabel?: string;
+  showXAxisGrid?: boolean;
+  showYAxisGrid?: boolean;
+  /** Secondary y-axis settings. The axis shows when at least one series uses it. */
+  y2AxisLabel?: string;
+  showY2AxisLabels?: boolean;
+  showY2AxisGrid?: boolean;
+  minY2Value?: number;
+  maxY2Value?: number;
+  /** Unset on older layouts; see getTimeWindow. */
+  timeWindow?: PlotTimeWindow;
+  playheadPosition?: PlotPlayheadPosition;
+  timestampFormat?: PlotTimestampFormat;
+  /** "equal" locks one x unit to one y unit (path x-axis plots only). */
+  axisScales?: PlotAxisScales;
   followingViewWidth?: number;
   sidebarDimension: number;
   [PANEL_TITLE_CONFIG_KEY]?: string;
 };
+
+/**
+ * The time window of a timestamp plot. Older layouts have no `timeWindow` and express it through
+ * `followingViewWidth` (sliding) or `minXValue`/`maxXValue` (fixed).
+ */
+export function getTimeWindow(config: Immutable<PlotConfig>): PlotTimeWindow {
+  if (config.timeWindow) {
+    return config.timeWindow;
+  }
+  if (config.followingViewWidth != undefined) {
+    return "sliding";
+  }
+  if (config.minXValue != undefined || config.maxXValue != undefined) {
+    return "fixed";
+  }
+  return "automatic";
+}

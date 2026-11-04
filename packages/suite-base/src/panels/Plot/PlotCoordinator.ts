@@ -35,15 +35,20 @@ import {
   ConfigBounds,
   Dataset,
   InteractionEvent,
+  PixelRect,
   PlotCoordinatorEventTypes,
   Scale,
   UpdateAction,
   YScale,
+  ZoomMode,
 } from "./types";
-import { isReferenceLinePlotPathType, PlotConfig } from "./utils/config";
+import { getTimeWindow, isReferenceLinePlotPathType, PlotConfig } from "./utils/config";
 import { pathToSubscribePayload } from "./utils/subscription";
 
 const replaceUndefinedWithEmptyDataset = (dataset: Dataset | undefined) => dataset ?? { data: [] };
+
+/** Window size of a sliding time window that has no size set yet */
+export const DEFAULT_SLIDING_WINDOW_SECONDS = 10;
 
 /**
  * PlotCoordinator interfaces commands and updates between the dataset builder and the chart
@@ -54,6 +59,14 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   private datasetsBuilder: IDatasetsBuilder;
   private shouldSync: boolean = false;
   private configBounds: ConfigBounds = { x: {}, y: {} };
+  private configY2Bounds: Partial<Bounds1D> = {};
+  /** Keep the playhead in the middle of a sliding window instead of at its right edge */
+  private playheadCenter = false;
+  /** Wheel zoom mode without modifier keys: x for time/index plots, xy for path x-axis plots */
+  private defaultZoomMode: ZoomMode = "x";
+  private absoluteTimeTicks = false;
+  /** Start of the x-axis tick format last sent to the renderer; NaN = never sent */
+  private sentTickStartSec: number | undefined = NaN;
   private globalBounds?: Immutable<Partial<Bounds1D>>;
   private datasetRange?: Bounds1D;
   private followRange?: number;
@@ -133,6 +146,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
 
     const { messages, lastSeekTime, currentTime, startTime } = activeData;
     this.startTime = startTime;
+    this.updateTickFormat();
 
     // When individual topic object references change (e.g. user script source code updated),
     // mark only the affected subscriptions as inactive so subscribeTopicRanges re-creates
@@ -224,13 +238,32 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     if (!this.isTimeseriesPlot) {
       this.currentSeconds = undefined;
     }
-    this.followRange = config.followingViewWidth;
+    // Plots with a path x-axis only have fixed (or automatic) bounds.
+    const timeWindow = this.isTimeseriesPlot ? getTimeWindow(config) : "fixed";
+    this.followRange =
+      timeWindow === "sliding"
+        ? (config.followingViewWidth ?? DEFAULT_SLIDING_WINDOW_SECONDS)
+        : undefined;
+    this.playheadCenter = config.playheadPosition === "center";
+    this.absoluteTimeTicks = this.isTimeseriesPlot && config.timestampFormat === "absolute";
+    this.updateTickFormat();
+
+    const isPathXAxis = config.xAxisVal === "custom" || config.xAxisVal === "currentCustom";
+    const defaultZoomMode: ZoomMode = isPathXAxis ? "xy" : "x";
+    if (defaultZoomMode !== this.defaultZoomMode) {
+      this.defaultZoomMode = defaultZoomMode;
+      this.updateAction.zoomMode = defaultZoomMode;
+    }
+    this.updateAction.equalAxes = isPathXAxis && config.axisScales === "equal";
 
     const newConfigBounds = {
-      x: {
-        max: config.maxXValue,
-        min: config.minXValue,
-      },
+      x:
+        timeWindow === "fixed"
+          ? {
+              max: config.maxXValue,
+              min: config.minXValue,
+            }
+          : {},
       y: {
         max: config.maxYValue == undefined ? undefined : +config.maxYValue,
         min: config.minYValue == undefined ? undefined : +config.minYValue,
@@ -240,6 +273,12 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       this.configBounds.y.min !== newConfigBounds.y.min ||
       this.configBounds.y.max !== newConfigBounds.y.max;
     this.configBounds = newConfigBounds;
+
+    const newY2Bounds = { min: config.minY2Value, max: config.maxY2Value };
+    if (!_.isEqual(newY2Bounds, this.configY2Bounds)) {
+      this.configY2Bounds = newY2Bounds;
+      this.updateAction.y2Bounds = newY2Bounds;
+    }
 
     const referenceLines = filterMap(config.paths, (path, idx) => {
       if (!path.enabled || !isReferenceLinePlotPathType(path)) {
@@ -254,6 +293,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       return {
         color: getLineColor(path.color, idx),
         value,
+        scaleID: path.axis === "secondary" ? ("y2" as const) : ("y" as const),
       };
     });
 
@@ -262,6 +302,14 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     this.updateAction.xAxisLabel = config.xAxisLabel;
     this.updateAction.yAxisLabel = config.yAxisLabel;
     this.updateAction.referenceLines = referenceLines;
+    this.updateAction.showXAxisGrid = config.showXAxisGrid ?? true;
+    this.updateAction.showYAxisGrid = config.showYAxisGrid ?? true;
+    this.updateAction.y2Axis = {
+      display: config.paths.some((path) => path.enabled && path.axis === "secondary"),
+      showLabels: config.showY2AxisLabels ?? true,
+      label: config.y2AxisLabel ?? "",
+      showGrid: config.showY2AxisGrid ?? false,
+    };
 
     if (configYBoundsChanged) {
       // Config changes to yBounds always takes precedence over user interaction changes like pan/zoom
@@ -281,6 +329,13 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
 
       const filledParsed = resolveEnumNames(fillInGlobalVariablesInPath(parsed, globalVariables));
 
+      // A series' own x path only applies to accumulated path plots
+      const xPath = config.xAxisVal === "custom" ? path.xValue?.trim() : undefined;
+      const xParsedRaw = xPath ? parseMessagePath(xPath) : undefined;
+      const xParsed = xParsedRaw
+        ? fillInGlobalVariablesInPath(xParsedRaw, globalVariables)
+        : undefined;
+
       // When global variables change the path.value is still the original value with the variable
       // names But we need to consider this as a new series (new block cursor) so we compute new
       // values when variables cause the resolved path value to update.
@@ -291,9 +346,10 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       //
       // This key lets us treat series with the same name but different timestamp methods as distinct
       // using a key instead of the path index lets us preserve loaded data when a path is removed
+      const xKey = xParsed ? `:x=${stringifyMessagePath(xParsed)}` : "";
       const key = `${idx}:${path.timestampMethod}:${stringifyMessagePath(
         filledParsed,
-      )}` as SeriesConfigKey;
+      )}${xKey}` as SeriesConfigKey;
 
       // Keep current values for paths that match existing ones
       const existingSeries = this.series.find((series) => series.key === key);
@@ -321,6 +377,10 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
         timestampMethod: path.timestampMethod,
         showLine: path.showLine ?? true,
         enabled: path.enabled,
+        interpolation: path.interpolation ?? "linear",
+        yAxisID: path.axis === "secondary" ? "y2" : "y",
+        smoothing: path.smoothing ?? 0,
+        xParsed,
       };
     });
 
@@ -353,8 +413,29 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     this.queueDispatchRender();
   }
 
-  public setZoomMode(mode: "x" | "xy" | "y"): void {
+  public setZoomMode(mode: ZoomMode): void {
     this.updateAction.zoomMode = mode;
+    this.queueDispatchRender();
+  }
+
+  /** Back to the zoom mode of this plot type, after a zoom-mode key is released. */
+  public resetZoomMode(): void {
+    this.setZoomMode(this.defaultZoomMode);
+  }
+
+  /** Box zoom to a canvas-pixel rectangle */
+  public async zoomToPixelRect(rect: PixelRect, mode: ZoomMode): Promise<void> {
+    if (this.isDestroyed()) {
+      return;
+    }
+    const bounds = await this.renderer.zoomToRect(rect, mode);
+    if (this.isDestroyed() || !bounds) {
+      return;
+    }
+    this.interactionBounds = bounds;
+    if (this.shouldSync && mode !== "y") {
+      this.emit("timeseriesBounds", bounds.x);
+    }
     this.queueDispatchRender();
   }
 
@@ -418,6 +499,16 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     }
   }
 
+  /** Send the x tick format when the absolute-time setting or the data start changes. */
+  private updateTickFormat(): void {
+    const startSec = this.absoluteTimeTicks && this.startTime ? toSec(this.startTime) : undefined;
+    if (startSec !== this.sentTickStartSec) {
+      this.sentTickStartSec = startSec;
+      this.updateAction.xTickFormat = { absoluteStartSec: startSec };
+      this.queueDispatchRender();
+    }
+  }
+
   private canReset(): boolean {
     if (this.interactionBounds) {
       return true;
@@ -434,7 +525,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   private getXResetBounds(): Partial<Bounds1D> {
     const currentSecondsIfFollowMode =
       this.isTimeseriesPlot && this.followRange != undefined && this.currentSeconds != undefined
-        ? this.currentSeconds
+        ? this.currentSeconds + (this.playheadCenter ? this.followRange / 2 : 0)
         : undefined;
     const xMax = currentSecondsIfFollowMode ?? this.configBounds.x.max ?? this.datasetRange?.max;
 
@@ -465,6 +556,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       const yMin = this.interactionBounds?.y.min ?? this.configBounds.y.min;
       const yMax = this.interactionBounds?.y.max ?? this.configBounds.y.max;
       this.updateAction.yBounds = { min: yMin, max: yMax };
+      this.updateAction.y2Bounds = this.configY2Bounds;
       this.shouldResetY = false;
     }
 

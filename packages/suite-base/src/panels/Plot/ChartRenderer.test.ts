@@ -430,6 +430,77 @@ describe("ChartRenderer", () => {
     });
   });
 
+  describe("getLatestElementsAtPixel", () => {
+    it("returns each dataset's last sample at or before the hovered x, with its age when stale", () => {
+      // GIVEN a dense series, a sparse series and a series that starts after the cursor
+      const { chartRenderer } = setup();
+      const chartInstance = (chartRenderer as any).getChartInstance();
+      // 1 pixel per unit
+      chartInstance.scales = {
+        x: {
+          getValueForPixel: (px: number) => px,
+          getPixelForValue: (value: number) => value,
+        },
+      };
+      chartInstance.data.datasets = [
+        {
+          data: [
+            { x: 9, y: 1 },
+            { x: 10, y: 2 },
+            { x: 11, y: 3 },
+          ],
+        },
+        {
+          data: [
+            { x: 2, y: 5 },
+            { x: 4, y: NaN },
+            { x: 30, y: 6 },
+          ],
+        },
+        { data: [{ x: 20, y: 7 }] },
+      ];
+
+      // WHEN hovering x = 10
+      const elements = chartRenderer.getLatestElementsAtPixel({ x: 10, y: 0 });
+
+      // THEN the dense series is under the cursor, the sparse one is 8 s old (the NaN break is
+      // skipped) and the late series has nothing yet
+      expect(elements).toEqual([
+        { data: { x: 10, y: 2 }, configIndex: 0, ageSec: undefined },
+        { data: { x: 2, y: 5 }, configIndex: 1, ageSec: 8 },
+      ]);
+    });
+  });
+
+  describe("zoomToRect", () => {
+    it("zooms only the x scales in x mode", () => {
+      // GIVEN x and y scales mapping 1 pixel to 1 unit
+      const { chartRenderer } = setup();
+      const chartInstance = (chartRenderer as any).getChartInstance();
+      const scale = (id: "x" | "y") => ({
+        id,
+        isHorizontal: () => id === "x",
+        getValueForPixel: (px: number) => px,
+      });
+      chartInstance.scales = { x: scale("x"), y: scale("y") };
+      chartInstance.options.scales.x.min = undefined;
+      chartInstance.options.scales.x.max = undefined;
+      chartInstance.options.scales.y.min = undefined;
+      chartInstance.options.scales.y.max = undefined;
+
+      // WHEN box zooming from pixel 30 to 10 in x mode
+      chartRenderer.zoomToRect({ left: 10, right: 30, top: 5, bottom: 50 }, "x");
+
+      // THEN x spans the box and y is untouched
+      expect(chartInstance.options.scales.x).toMatchObject({
+        min: 10,
+        max: 30,
+      });
+      expect(chartInstance.options.scales.y.min).toBeUndefined();
+      expect(chartInstance.options.scales.y.max).toBeUndefined();
+    });
+  });
+
   describe("getElementsAtPixel", () => {
     it("should return elements sorted by proximity to a pixel", () => {
       const { chartRenderer } = setup();
