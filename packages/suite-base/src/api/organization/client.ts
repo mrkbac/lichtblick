@@ -35,7 +35,7 @@ export type SessionResult =
 export async function fetchCurrentSession(client: OrganizationApiClient): Promise<SessionResult> {
   const { data, error, response } = await client.GET("/v1/me");
   if (data) {
-    return { status: "authenticated", session: data };
+    return { status: "authenticated", session: cleanSession(data) };
   }
   if (response.status === 401 && "oidc" in error) {
     return { status: "unauthenticated", oidc: error.oidc ?? null };
@@ -49,7 +49,7 @@ export class OrganizationApiError extends Error {
 
   public constructor(response: Response, problem: unknown) {
     const p = (problem ?? {}) as Partial<Schemas["Problem"]>;
-    super(`Organization API ${response.status}: ${p.title ?? response.statusText}`);
+    super(`Organization API ${response.status}: ${cleanText(p.title ?? response.statusText, 200)}`);
     this.name = "OrganizationApiError";
     this.status = response.status;
     this.type = p.type;
@@ -71,4 +71,38 @@ export function isSafeUrl(url: string): boolean {
     parsed.protocol === "https:" ||
     (parsed.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(parsed.hostname))
   );
+}
+
+// Control characters, and bidi/zero-width formatting characters that can make a name display as
+// something else (e.g. U+202E right-to-left override). Emoji joiners (U+200D) are kept.
+const UNSAFE_TEXT =
+  // eslint-disable-next-line no-control-regex
+  /[\u0000-\u001f\u007f-\u009f\u061c\u200b\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g;
+
+/** Server-provided text made safe to show: no control or bidi characters, trimmed, length-capped. */
+export function cleanText(value: string, maxLength: number): string {
+  const cleaned = value.replace(UNSAFE_TEXT, "").replace(/\s+/g, " ").trim();
+  return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength - 1)}…` : cleaned;
+}
+
+const NAME_LENGTH = 200;
+
+/** The session with displayable names and only links Lichtblick is willing to open. */
+function cleanSession(session: Schemas["CurrentSession"]): Schemas["CurrentSession"] {
+  const { avatarUrl, ...user } = session.user;
+  return {
+    ...session,
+    user: {
+      ...user,
+      displayName: cleanText(user.displayName, NAME_LENGTH),
+      ...(avatarUrl != undefined && isSafeUrl(avatarUrl) ? { avatarUrl } : {}),
+    },
+    organizations: session.organizations.map((org) => ({
+      ...org,
+      displayName: cleanText(org.displayName, NAME_LENGTH),
+    })),
+    links: session.links
+      .filter((link) => isSafeUrl(link.url))
+      .map((link) => ({ ...link, label: cleanText(link.label, NAME_LENGTH) })),
+  };
 }

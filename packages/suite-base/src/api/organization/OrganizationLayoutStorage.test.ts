@@ -6,7 +6,7 @@ import { ISO8601Timestamp } from "@lichtblick/suite-base/services/ILayoutStorage
 import LayoutBuilder from "@lichtblick/suite-base/testing/builders/LayoutBuilder";
 
 import { OrganizationLayoutStorage } from "./OrganizationLayoutStorage";
-import { Schemas, createOrganizationApiClient } from "./client";
+import { Schemas, cleanText, createOrganizationApiClient, fetchCurrentSession } from "./client";
 
 const me = { id: "user-1", displayName: "Me" };
 
@@ -28,7 +28,7 @@ function layout(organizationId: string, id: string, revision = 1): Schemas["Layo
     organizationId,
     revision,
     displayName: `Layout ${id}`,
-    data: { configById: {} },
+    data: layoutData,
     createdAt: "2026-11-04T00:00:00Z",
     updatedAt: `2026-11-04T00:00:0${revision}Z`,
     createdBy: me,
@@ -46,7 +46,7 @@ function json(status: number, body: unknown, headers: Record<string, string> = {
 function setup(handler: (request: Request) => Response) {
   const requests: Request[] = [];
   // openapi-fetch passes a Request; the test environment has no fetch of its own.
-  globalThis.fetch = vi.fn(async (input: Request) => {
+  globalThis.fetch = (async (input: Request) => {
     requests.push(input.clone());
     return handler(input);
   }) as unknown as typeof fetch;
@@ -120,7 +120,7 @@ describe("OrganizationLayoutStorage", () => {
     const put = requests.at(-1)!;
     expect(route(put)).toBe("PUT /v1/organizations/mine/layouts/a");
     expect(put.headers.get("If-Match")).toBe('"4"');
-    expect(await put.json()).toEqual({ displayName: "Renamed", data: { configById: {} } });
+    expect(await put.json()).toEqual({ displayName: "Renamed", data: layoutData });
   });
 
   it("treats a retried create of its own layout as success", async () => {
@@ -140,5 +140,69 @@ describe("OrganizationLayoutStorage", () => {
       organizationId: "mine",
     });
     expect(saved.externalId).toBe("b");
+  });
+
+  it("skips layouts with invalid data and cleans their names", async () => {
+    const { storage } = setup((request) => {
+      if (!route(request).startsWith("GET /v1/organizations/mine")) {
+        return json(200, { items: [], nextCursor: null });
+      }
+      const good = { ...layout("mine", "good"), displayName: "Evil\u202Egnp.exe\u0007" };
+      const bad = { ...layout("mine", "bad"), data: { configById: "<script>" } };
+      if (route(request).endsWith("/layouts")) {
+        const { data: _a, ...goodSummary } = good;
+        const { data: _b, ...badSummary } = bad;
+        return json(200, { items: [goodSummary, badSummary], nextCursor: null });
+      }
+      return json(200, route(request).endsWith("/good") ? good : bad);
+    });
+    const layouts = await storage.getLayouts();
+    expect(layouts.map((l) => [l.id, l.name])).toEqual([["good", "Evilgnp.exe"]]);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    (console.warn as unknown as { mockClear: () => void }).mockClear();
+  });
+
+  it("encodes path parameters", async () => {
+    const { storage, requests } = setup(() => json(404, { type: "x", title: "x", status: 404 }));
+    await storage
+      .saveNewLayout({
+        id: "a" as LayoutID,
+        name: "a",
+        permission: "ORG_WRITE",
+        data: layoutData,
+        organizationId: "../me?x=1#",
+      })
+      .catch(() => undefined);
+    expect(new URL(requests[0]!.url).pathname).toBe("/v1/organizations/..%2Fme%3Fx%3D1%23/layouts");
+  });
+});
+
+describe("fetchCurrentSession", () => {
+  it("cleans names and drops links and avatars Lichtblick must not open", async () => {
+    globalThis.fetch = async () =>
+      json(200, {
+        user: { id: "u", displayName: " A\u202Edmin\n", avatarUrl: "javascript:alert(1)" },
+        organizations: [{ id: "o", displayName: "\u2066Team\u2069", permissions: [] }],
+        links: [
+          { id: "ok", label: "Account", url: "https://auth.example.com/account" },
+          { id: "js", label: "Bad", url: "javascript:alert(1)" },
+          { id: "data", label: "Bad", url: "data:text/html,<script>alert(1)</script>" },
+          { id: "http", label: "Bad", url: "http://example.com" },
+        ],
+      });
+    const client = createOrganizationApiClient("https://api.example.com", async () => undefined);
+    const result = await fetchCurrentSession(client);
+    expect(result).toEqual({
+      status: "authenticated",
+      session: {
+        user: { id: "u", displayName: "Admin" },
+        organizations: [{ id: "o", displayName: "Team", permissions: [] }],
+        links: [{ id: "ok", label: "Account", url: "https://auth.example.com/account" }],
+      },
+    });
+  });
+
+  it("caps long text", () => {
+    expect(cleanText("x".repeat(300), 200)).toHaveLength(200);
   });
 });

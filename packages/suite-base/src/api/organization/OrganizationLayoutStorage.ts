@@ -1,21 +1,30 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import Logger from "@lichtblick/log";
 import {
   SaveNewLayoutParams,
   UpdateLayoutRequest,
   UpdateLayoutResponse,
 } from "@lichtblick/suite-base/api/layouts/types";
 import { LayoutID } from "@lichtblick/suite-base/context/CurrentLayoutContext";
-import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
 import { ISO8601Timestamp } from "@lichtblick/suite-base/services/ILayoutStorage";
 import { IRemoteLayoutFavoritesStorage } from "@lichtblick/suite-base/services/IRemoteLayoutFavoritesStorage";
 import {
   IRemoteLayoutStorage,
   RemoteLayout,
 } from "@lichtblick/suite-base/services/IRemoteLayoutStorage";
+import { validateLayoutData } from "@lichtblick/suite-base/util/layout";
 
-import { OrganizationApiClient, OrganizationApiError, Schemas, revisionETag } from "./client";
+import {
+  OrganizationApiClient,
+  OrganizationApiError,
+  Schemas,
+  cleanText,
+  revisionETag,
+} from "./client";
+
+const log = Logger.getLogger(__filename);
 
 type ApiLayout = Schemas["Layout"];
 type LayoutSummary = Schemas["LayoutSummary"];
@@ -69,7 +78,15 @@ export class OrganizationLayoutStorage
         return await Promise.all(summaries.map(async (summary) => await this.#full(summary)));
       }),
     );
-    return perOrganization.flat().map((layout) => this.#toRemote(layout));
+    return perOrganization.flat().flatMap((layout) => {
+      try {
+        return [this.#toRemote(layout)];
+      } catch (error) {
+        // Layouts are written by other users: one broken layout must not stop the sync.
+        log.warn(`Skipping invalid layout ${layout.id} from ${layout.organizationId}`, error);
+        return [];
+      }
+    });
   }
 
   public async getLayout(id: LayoutID): Promise<RemoteLayout | undefined> {
@@ -285,13 +302,14 @@ export class OrganizationLayoutStorage
     this.#layouts.delete(id);
   }
 
+  /** Throws if the layout data is not a valid Lichtblick layout. */
   #toRemote(layout: ApiLayout): RemoteLayout {
     return {
       id: layout.id as LayoutID,
       externalId: layout.id,
       organizationId: layout.organizationId,
-      name: layout.displayName,
-      data: layout.data as LayoutData,
+      name: cleanText(layout.displayName, 200),
+      data: validateLayoutData(layout.data),
       permission: this.canWrite(layout.organizationId) ? "ORG_WRITE" : "ORG_READ",
       savedAt: layout.updatedAt as ISO8601Timestamp,
     };
