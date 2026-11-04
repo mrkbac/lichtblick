@@ -13,7 +13,6 @@ import { useEffect } from "react";
 import type { Mock } from "vitest";
 
 import { Condvar } from "@lichtblick/den/async";
-import { CurrentLayoutSyncAdapter } from "@lichtblick/suite-base/components/CurrentLayoutSyncAdapter";
 import {
   CurrentLayoutActions,
   LayoutData,
@@ -129,10 +128,7 @@ function renderTest({
             <SnackbarProvider>
               <LayoutManagerContext.Provider value={mockLayoutManager}>
                 <UserProfileStorageContext.Provider value={mockUserProfile}>
-                  <CurrentLayoutProvider loaders={[]}>
-                    {children}
-                    <CurrentLayoutSyncAdapter />
-                  </CurrentLayoutProvider>
+                  <CurrentLayoutProvider loaders={[]}>{children}</CurrentLayoutProvider>
                 </UserProfileStorageContext.Provider>
               </LayoutManagerContext.Provider>
             </SnackbarProvider>
