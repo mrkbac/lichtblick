@@ -110,6 +110,12 @@ export class Picker {
     y: number,
     camera: THREE.OrthographicCamera | THREE.PerspectiveCamera,
   ): number | undefined {
+    // Off-canvas cursors (e.g. a drag leaving the panel) would read outside the depth target
+    const pixelRatio = this.#gl.getPixelRatio();
+    const { width, height } = this.#gl.domElement;
+    if (x < 0 || y < 0 || x * pixelRatio >= width || y * pixelRatio >= height) {
+      return undefined;
+    }
     if (!this.#depthTarget || !this.#depthReadTarget || !this.#depthCopyScene) {
       this.#initDepthPicking();
     }

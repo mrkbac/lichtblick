@@ -648,9 +648,15 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
 
   /**
    * Snap a screen position to the nearest rendered surface (ground plane as fallback) and write it
-   * into `out` in the item's frame. Returns false if the cursor ray misses everything.
+   * into `out` in the item's frame. Returns false if the cursor ray misses everything or the
+   * item's frame is currently unavailable.
    */
   #snapToLocal(cursor: THREE.Vector2, item: Measurement, out: THREE.Vector3): boolean {
+    // Hidden means the item's frame isn't in the tree right now (e.g. after a seek), so its matrix
+    // is stale and converting into it would misplace the point
+    if (!item.group.visible) {
+      return false;
+    }
     if (!this.renderer.pickPoint(cursor, out)) {
       const { width, height } = this.renderer.input.canvasSize;
       tempRaycaster.setFromCamera(
