@@ -10,6 +10,7 @@ import { TFunction } from "i18next";
 import { PanelInfo } from "@lichtblick/suite-base/context/PanelCatalogContext";
 
 import { TAB_PANEL_TYPE } from "../util/constants";
+import cameraGridThumbnail from "./CameraGrid/thumbnail.png";
 import dataSourceInfoThumbnail from "./DataSourceInfo/thumbnail.png";
 import diagnosticStatusThumbnail from "./DiagnosticStatus/assets/diagnostic-status.png";
 import diagnosticSummaryThumbnail from "./DiagnosticSummary/assets/diagnostic-summary.png";
@@ -63,6 +64,13 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("imageDescription"),
     thumbnail: imageThumbnail,
     module: async () => await import("./Image"),
+  },
+  {
+    title: t("cameraGrid"),
+    type: "CameraGrid",
+    description: t("cameraGridDescription"),
+    thumbnail: cameraGridThumbnail,
+    module: async () => await import("./CameraGrid"),
   },
   {
     title: t("indicator"),
