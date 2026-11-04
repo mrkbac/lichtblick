@@ -5,8 +5,9 @@
 
 import "@testing-library/jest-dom";
 
-import { act, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 
+import { PanelContextMenuItem } from "@lichtblick/suite-base/components/PanelContextMenu";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
 import { RendererOverlay } from "./RendererOverlay";
@@ -64,7 +65,7 @@ const mockRenderer = {
   setPickingEnabled: jest.fn(),
   setSelectedRenderable: jest.fn(),
   canResetView: jest.fn(() => false),
-  getContextMenuItems: jest.fn(() => []),
+  getContextMenuItems: jest.fn((): PanelContextMenuItem[] => []),
   fixedFrameId: undefined,
 };
 
@@ -317,5 +318,60 @@ describe("<RendererOverlay /> hover wiring", () => {
       expect(mockLastHoverTooltipProps).toBeDefined();
       expect(mockLastHoverTooltipProps.entities).toEqual([]);
     });
+  });
+});
+
+describe("<RendererOverlay /> download image button", () => {
+  function renderOverlay(interfaceMode: "3d" | "image") {
+    return render(
+      <ThemeProvider isDark={false}>
+        <RendererOverlay
+          addPanel={jest.fn() as any}
+          canPublish={false}
+          canvas={ReactNull}
+          enableStats={false}
+          interfaceMode={interfaceMode}
+          measureActive={false}
+          onChangePublishClickType={jest.fn()}
+          onClickMeasure={jest.fn()}
+          onClickPublish={jest.fn()}
+          onShowTopicSettings={jest.fn()}
+          onTogglePerspective={jest.fn()}
+          perspective={false}
+          publishActive={false}
+          publishClickType="point"
+          timezone={undefined}
+        />
+      </ThemeProvider>,
+    );
+  }
+
+  it("triggers the Download image context menu action in image mode", () => {
+    const onclick = jest.fn();
+    mockRenderer.getContextMenuItems.mockReturnValue([
+      { type: "item", label: "Download image", onclick },
+    ]);
+
+    const { getByTestId } = renderOverlay("image");
+    fireEvent.click(getByTestId("download-image-button"));
+
+    expect(onclick).toHaveBeenCalledTimes(1);
+  });
+
+  it("does nothing when the action is disabled", () => {
+    const onclick = jest.fn();
+    mockRenderer.getContextMenuItems.mockReturnValue([
+      { type: "item", label: "Download image", onclick, disabled: true },
+    ]);
+
+    const { getByTestId } = renderOverlay("image");
+    fireEvent.click(getByTestId("download-image-button"));
+
+    expect(onclick).not.toHaveBeenCalled();
+  });
+
+  it("is not shown in 3d mode", () => {
+    const { queryByTestId } = renderOverlay("3d");
+    expect(queryByTestId("download-image-button")).toBeNull();
   });
 });

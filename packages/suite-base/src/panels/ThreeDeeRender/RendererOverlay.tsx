@@ -5,7 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { PointScan20Regular, PointScan20Filled } from "@fluentui/react-icons";
+import {
+  ArrowDownload20Regular,
+  PointScan20Regular,
+  PointScan20Filled,
+} from "@fluentui/react-icons";
 import {
   Button,
   IconButton,
@@ -43,6 +47,7 @@ import { Renderable } from "./Renderable";
 import { useRenderer, useRendererEvent } from "./RendererContext";
 import { Stats } from "./Stats";
 import { MouseEventObject } from "./camera";
+import { DOWNLOAD_IMAGE_LABEL } from "./renderables/ImageMode/constants";
 import { PublishClickType } from "./renderables/PublishClickTool";
 import { InterfaceMode } from "./types";
 
@@ -440,6 +445,16 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
     return renderer?.getContextMenuItems() ?? [];
   }, [renderer]);
 
+  // Same action as the "Download image" context menu item, surfaced as a toolbar button
+  const onDownloadImage = useCallback(() => {
+    const item = getContextMenuItems().find(
+      (menuItem) => menuItem.type === "item" && menuItem.label === DOWNLOAD_IMAGE_LABEL,
+    );
+    if (item?.type === "item" && item.disabled !== true) {
+      item.onclick();
+    }
+  }, [getContextMenuItems]);
+
   const mousePresenceRef = useRef<HTMLDivElement>(ReactNull);
   const mousePresent = usePanelMousePresence(mousePresenceRef);
 
@@ -460,6 +475,21 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
             />
           )
         }
+        {props.interfaceMode === "image" && mousePresent && (
+          <Paper square={false} elevation={4} style={{ display: "flex", flexDirection: "column" }}>
+            <Tooltip placement="left" title={DOWNLOAD_IMAGE_LABEL}>
+              <IconButton
+                data-testid="download-image-button"
+                aria-label={DOWNLOAD_IMAGE_LABEL}
+                className={classes.iconButton}
+                size="small"
+                onClick={onDownloadImage}
+              >
+                <ArrowDownload20Regular />
+              </IconButton>
+            </Tooltip>
+          </Paper>
+        )}
         {props.interfaceMode === "3d" && (
           <Paper square={false} elevation={4} style={{ display: "flex", flexDirection: "column" }}>
             <Tooltip
