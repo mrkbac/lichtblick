@@ -11,6 +11,7 @@ export * from "./appSettings";
 export * from "./catalog";
 export * from "./dataSourceInfo";
 export * from "./desktopWindow";
+export * from "./exportRecording";
 export * from "./extensionsSettings";
 export * from "./gauge";
 export * from "./general";

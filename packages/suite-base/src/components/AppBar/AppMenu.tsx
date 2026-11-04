@@ -11,6 +11,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useStyles } from "@lichtblick/suite-base/components/AppBar/AppMenu.style";
+import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
+import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
@@ -45,6 +47,8 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
   const captureMenuClick = useInteractionCapture(AppEvent.APP_MENU_CLICK);
 
   const { recentSources, selectRecent, clearRecents } = usePlayerSelection();
+  const exportableFile = useExportableFile();
+  const openExport = useTrimStore((state) => state.openExport);
 
   const leftSidebarOpen = useWorkspaceStore(selectLeftSidebarOpen);
   const rightSidebarOpen = useWorkspaceStore(selectRightSidebarOpen);
@@ -113,6 +117,17 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
           handleNestedMenuClose();
         },
       },
+      {
+        type: "item",
+        label: t("exportRecording"),
+        key: "export-recording",
+        disabled: !exportableFile,
+        dataTestId: "menu-item-export-recording",
+        onClick: () => {
+          openExport();
+          handleNestedMenuClose();
+        },
+      },
     ];
 
     if (recentSources.length === 0) {
@@ -168,6 +183,8 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
     clearRecents,
     dialogActions.dataSource,
     dialogActions.openFile,
+    exportableFile,
+    openExport,
     handleNestedMenuClose,
     recentSources,
     selectRecent,

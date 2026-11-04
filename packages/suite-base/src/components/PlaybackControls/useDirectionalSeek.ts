@@ -5,6 +5,7 @@ import { Time } from "@foxglove/rostime";
 import { useCallback } from "react";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
+import { clampTimeToCut } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import {
   DIRECTION,
   jumpSeek,
@@ -48,7 +49,9 @@ export function useDirectionalSeek({
       // i.e. Skipping coordinate frame messages may result in incorrectly rendered markers or
       // missing markers altogther.
 
-      const targetTime = jumpSeek(DIRECTION.FORWARD, currentTime, ev, defaultStepSize);
+      const targetTime = clampTimeToCut(
+        jumpSeek(DIRECTION.FORWARD, currentTime, ev, defaultStepSize),
+      );
       if (playUntil) {
         playUntil(targetTime);
 
@@ -74,7 +77,9 @@ export function useDirectionalSeek({
       if (!currentTime) {
         return;
       }
-      const targetTime = jumpSeek(DIRECTION.BACKWARD, currentTime, ev, defaultStepSize);
+      const targetTime = clampTimeToCut(
+        jumpSeek(DIRECTION.BACKWARD, currentTime, ev, defaultStepSize),
+      );
       seek(targetTime);
 
       BroadcastManager.getInstance().postMessage({

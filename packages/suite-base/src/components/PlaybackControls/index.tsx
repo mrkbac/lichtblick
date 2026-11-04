@@ -16,6 +16,8 @@
 
 import {
   ArrowRepeatAll20Regular,
+  Cut20Filled,
+  Cut20Regular,
   ArrowRepeatAllOff20Regular,
   Info20Regular,
   Next20Filled,
@@ -27,14 +29,21 @@ import {
   Previous20Filled,
   Previous20Regular,
 } from "@fluentui/react-icons";
-import { Time, compare } from "@foxglove/rostime";
+import { Time, compare, fromNanoSec, toNanoSec } from "@foxglove/rostime";
 import { Tooltip } from "@mui/material";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { CreateEventDialog } from "@lichtblick/suite-base/components/CreateEventDialog";
 import { DataSourceInfoView } from "@lichtblick/suite-base/components/DataSourceInfoView";
 import EventIcon from "@lichtblick/suite-base/components/EventIcon";
 import EventOutlinedIcon from "@lichtblick/suite-base/components/EventOutlinedIcon";
+import { ExportRecordingDialog } from "@lichtblick/suite-base/components/ExportRecordingDialog/ExportRecordingDialog";
+import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
+import {
+  clampTimeToCut,
+  useTrimStore,
+} from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import {
@@ -59,6 +68,7 @@ import BroadcastManager from "@lichtblick/suite-base/util/broadcast/BroadcastMan
 import PlaybackTimeDisplay from "./PlaybackTimeDisplay";
 import { RepeatAdapter } from "./RepeatAdapter";
 import Scrubber from "./Scrubber";
+import { TrimBar, useTrimKeyHandlers } from "./TrimRange";
 
 const selectPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
 const selectEventsSupported = (store: EventsStore) => store.eventsSupported;
@@ -82,12 +92,65 @@ export default function PlaybackControls({
   getTimeInfo,
 }: PlaybackControlsProps): React.JSX.Element {
   const presence = useMessagePipeline(selectPresence);
+  const { t } = useTranslation("exportRecording");
 
   const { classes, cx } = useStyles();
   const repeat = useWorkspaceStore(selectPlaybackRepeat);
   const [createEventDialogOpen, setCreateEventDialogOpen] = useState(false);
   const { currentUserType } = useCurrentUser();
   const eventsSupported = useEvents(selectEventsSupported);
+  const exportableFile = useExportableFile();
+  const cutActive = useTrimStore((state) => state.start != undefined);
+  const editingCut = useTrimStore((state) => state.editing);
+  const startEditingCut = useTrimStore((state) => state.startEditing);
+  const stopEditingCut = useTrimStore((state) => state.stopEditing);
+  const clearCut = useTrimStore((state) => state.clear);
+  const exportOpen = useTrimStore((state) => state.exportOpen);
+  const closeExport = useTrimStore((state) => state.closeExport);
+  const trimKeyHandlers = useTrimKeyHandlers();
+
+  // A cut belongs to the file it was made on.
+  useEffect(() => {
+    clearCut();
+  }, [exportableFile, clearCut]);
+
+  // While a cut is set, seeking outside it lands on its nearest edge.
+  const seekInCut = useCallback(
+    (time: Time) => {
+      seek(clampTimeToCut(time));
+    },
+    [seek],
+  );
+  const playUntilInCut = useMemo(
+    () =>
+      playUntil
+        ? (time: Time) => {
+            playUntil(clampTimeToCut(time));
+          }
+        : undefined,
+    [playUntil],
+  );
+  /** Start and end of what can be played: the cut, or the whole recording. */
+  const getPlayableRange = useCallback((): { start?: Time; end?: Time; current?: Time } => {
+    const { startTime, endTime, currentTime } = getTimeInfo();
+    const cut = useTrimStore.getState();
+    return {
+      start: cut.start != undefined ? fromNanoSec(cut.start) : startTime,
+      end: cut.end != undefined ? fromNanoSec(cut.end) : endTime,
+      current: currentTime,
+    };
+  }, [getTimeInfo]);
+
+  const toggleCutEditing = useCallback(() => {
+    if (editingCut) {
+      stopEditingCut();
+      return;
+    }
+    const { startTime, endTime } = getTimeInfo();
+    if (startTime && endTime) {
+      startEditingCut(toNanoSec(startTime), toNanoSec(endTime));
+    }
+  }, [editingCut, getTimeInfo, startEditingCut, stopEditingCut]);
 
   const {
     playbackControlActions: { setRepeat },
@@ -98,7 +161,7 @@ export default function PlaybackControls({
   }, [setRepeat]);
 
   const togglePlayPause = useCallback(() => {
-    const { startTime: start, endTime: end, currentTime: current } = getTimeInfo();
+    const { start, end, current } = getPlayableRange();
 
     if (isPlaying) {
       pause();
@@ -119,12 +182,12 @@ export default function PlaybackControls({
         time: current!,
       });
     }
-  }, [isPlaying, pause, getTimeInfo, play, seek]);
+  }, [isPlaying, pause, getPlayableRange, play, seek]);
 
   const { seekForwardAction, seekBackwardAction } = useDirectionalSeek({
-    seek,
+    seek: seekInCut,
     getTimeInfo,
-    playUntil,
+    playUntil: playUntilInCut,
   });
 
   const keyDownHandlers = useMemo(
@@ -136,8 +199,28 @@ export default function PlaybackControls({
       ArrowRight: (ev: KeyboardEvent) => {
         seekForwardAction(ev);
       },
+      Home: () => {
+        const { start } = getPlayableRange();
+        if (start) {
+          seek(start);
+        }
+      },
+      End: () => {
+        const { end } = getPlayableRange();
+        if (end) {
+          seek(end);
+        }
+      },
+      ...trimKeyHandlers,
     }),
-    [seekBackwardAction, seekForwardAction, togglePlayPause],
+    [
+      getPlayableRange,
+      seek,
+      seekBackwardAction,
+      seekForwardAction,
+      togglePlayPause,
+      trimKeyHandlers,
+    ],
   );
 
   const toggleCreateEventDialog = useCallback(() => {
@@ -149,12 +232,13 @@ export default function PlaybackControls({
 
   return (
     <>
-      <RepeatAdapter play={play} seek={seek} repeatEnabled={repeat} />
+      <RepeatAdapter play={play} pause={pause} seek={seek} repeatEnabled={repeat} />
       <KeyListener global keyDownHandlers={keyDownHandlers} />
       <div className={classes.root}>
         <div className={classes.scrubberWrapper}>
-          <Scrubber onSeek={seek} />
+          <Scrubber onSeek={seekInCut} />
         </div>
+        {exportableFile && <TrimBar />}
         <Stack direction="row" alignItems="center" flex={1} gap={1}>
           <Stack direction="row" alignItems="center" flex={1} gap={0.5}>
             {currentUserType !== "unauthenticated" && eventsSupported && (
@@ -189,7 +273,18 @@ export default function PlaybackControls({
                 icon={<Info20Regular />}
               />
             </Tooltip>
-            <PlaybackTimeDisplay onSeek={seek} onPause={pause} />
+            {exportableFile && (
+              <HoverableIconButton
+                size="small"
+                title={editingCut ? t("hideCutHandles") : t("cutRecording")}
+                color={cutActive ? "primary" : "inherit"}
+                icon={editingCut ? <Cut20Filled /> : <Cut20Regular />}
+                activeIcon={<Cut20Filled />}
+                onClick={toggleCutEditing}
+                data-testid="trim-button"
+              />
+            )}
+            <PlaybackTimeDisplay onSeek={seekInCut} onPause={pause} />
           </Stack>
           <Stack direction="row" alignItems="center" gap={1}>
             <HoverableIconButton
@@ -236,6 +331,9 @@ export default function PlaybackControls({
             <PlaybackSpeedControls />
           </Stack>
         </Stack>
+        {exportOpen && exportableFile && (
+          <ExportRecordingDialog file={exportableFile} onClose={closeExport} />
+        )}
         {createEventDialogOpen && eventsSupported && (
           <CreateEventDialog onClose={toggleCreateEventDialog} />
         )}

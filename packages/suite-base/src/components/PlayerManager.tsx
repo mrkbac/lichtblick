@@ -202,6 +202,7 @@ export default function PlayerManager(
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
 
   const [selectedSource, setSelectedSource] = useState<IDataSourceFactory | undefined>();
+  const [selectedFiles, setSelectedFiles] = useState<readonly File[] | undefined>();
 
   const selectSource = useCallback(
     async (sourceId: string, args?: DataSourceArgs) => {
@@ -221,6 +222,7 @@ export default function PlayerManager(
       setCurrentRecentId(undefined);
 
       setSelectedSource(foundSource);
+      setSelectedFiles(undefined);
 
       // Sample sources don't need args or prompts to initialize
       if (foundSource.type === "sample") {
@@ -305,6 +307,7 @@ export default function PlayerManager(
               });
 
               setBasePlayer(newPlayer);
+              setSelectedFiles(files);
 
               // Only handles can be reopened after a reload
               if (handles) {
@@ -409,6 +412,7 @@ export default function PlayerManager(
     togglePinRecent,
     clearRecents,
     selectedSource,
+    selectedFiles,
     availableSources: playerSources,
     recentSources,
   };

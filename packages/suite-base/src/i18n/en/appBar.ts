@@ -15,6 +15,7 @@ export const appBar = {
   noUpdateAvailable: "You're on the latest version.",
   updateCheckFailed: "Couldn't check for updates.",
   exportLayoutToFile: "Export layout to file…",
+  exportRecording: "Export recording…",
   extensions: "Extensions",
   file: "File",
   help: "Help",

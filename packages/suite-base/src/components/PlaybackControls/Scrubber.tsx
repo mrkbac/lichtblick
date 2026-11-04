@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useLatest } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
+import { clampTimeToCut } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -35,6 +36,7 @@ import PlaybackBarHoverTicks from "./PlaybackBarHoverTicks";
 import { PlaybackControlsTooltipContent } from "./PlaybackControlsTooltipContent";
 import { ProgressPlot } from "./ProgressPlot";
 import Slider, { HoverOverEvent } from "./Slider";
+import { TrimRangeOverlay } from "./TrimRange";
 
 type PopperInstance = PopperProps["popperRef"] extends React.Ref<infer T> | undefined ? T : never;
 
@@ -46,6 +48,8 @@ const useStyles = makeStyles()((theme) => ({
     borderRadius: 1,
     width: 2,
     transform: "translate(-50%, 0)",
+    // Above the cut handles, so the playhead stays visible at the cut's edges.
+    zIndex: 2,
   },
   track: {
     position: "absolute",
@@ -100,9 +104,11 @@ export default function Scrubber(props: Props): React.JSX.Element {
       if (!latestStartTime.current || !latestEndTime.current) {
         return;
       }
-      const timeToSeek = addTimes(
-        latestStartTime.current,
-        fromSec(fraction * toSec(subtractTimes(latestEndTime.current, latestStartTime.current))),
+      const timeToSeek = clampTimeToCut(
+        addTimes(
+          latestStartTime.current,
+          fromSec(fraction * toSec(subtractTimes(latestEndTime.current, latestStartTime.current))),
+        ),
       );
       onSeek(timeToSeek);
       BroadcastManager.getInstance().postMessage({
@@ -232,6 +238,7 @@ export default function Scrubber(props: Props): React.JSX.Element {
             renderSlider={renderSlider}
           />
         </Stack>
+        <TrimRangeOverlay />
         <EventsOverlay />
         <PlaybackBarHoverTicks componentId={hoverComponentId} />
       </Stack>
