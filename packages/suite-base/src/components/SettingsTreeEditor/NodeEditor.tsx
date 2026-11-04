@@ -42,7 +42,6 @@ import {
   SelectVisibilityFilterValue,
 } from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
 
 import { FieldEditor } from "./FieldEditor";
 import { NodeActionsMenu } from "./NodeActionsMenu";
@@ -110,7 +109,6 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
     textFilter: "",
     visibilityFilter: "all",
   });
-  const { renderSettingsStatusButton } = useAppContext();
   const { t } = useTranslation("settingsEditor");
   const { classes, cx, theme } = useStyles();
 
@@ -335,10 +333,6 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
     [settings.actions],
   );
 
-  const statusButton = renderSettingsStatusButton
-    ? renderSettingsStatusButton(settings)
-    : undefined;
-
   const isDragHandleIcon = settings.icon === "DragHandle" && isReorderable;
 
   const iconItem = useMemo(() => {
@@ -482,16 +476,15 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
               <EditIcon fontSize="small" />
             </IconButton>
           )}
-          {statusButton ??
-            (settings.visible != undefined && (
-              <VisibilityToggle
-                size="small"
-                checked={visible}
-                onChange={toggleVisibility}
-                style={{ opacity: allowVisibilityToggle ? 1 : 0 }}
-                disabled={!allowVisibilityToggle}
-              />
-            ))}
+          {settings.visible != undefined && (
+            <VisibilityToggle
+              size="small"
+              checked={visible}
+              onChange={toggleVisibility}
+              style={{ opacity: allowVisibilityToggle ? 1 : 0 }}
+              disabled={!allowVisibilityToggle}
+            />
+          )}
           {inlineActions.map((action) => {
             const Icon = action.icon ? icons[action.icon] : undefined;
             const handler = () => {
