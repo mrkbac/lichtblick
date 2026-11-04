@@ -1186,28 +1186,19 @@ export default class UserScriptPlayer implements Player {
     const processor = registration.buildMessageProcessor();
     const globalVariables = this.#globalVariables;
 
-    let resolve = () => {};
     const cache: BatchIteratorCacheEntry = {
       results: [],
       done: false,
       error: undefined,
-      resolve,
-      promise: new Promise<void>((r) => {
-        resolve = r;
-      }),
+      ...Promise.withResolvers<void>(),
       processor,
       consumers: new Set(),
       pruneOffset: 0,
     };
 
-    // The executor runs synchronously, so `resolve` is now set.
-    cache.resolve = resolve;
-
     const notify = () => {
       cache.resolve();
-      cache.promise = new Promise<void>((r) => {
-        cache.resolve = r;
-      });
+      ({ promise: cache.promise, resolve: cache.resolve } = Promise.withResolvers<void>());
     };
 
     // Source consumer — processes messages once, populates shared results
