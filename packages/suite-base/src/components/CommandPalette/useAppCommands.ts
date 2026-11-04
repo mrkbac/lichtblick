@@ -105,26 +105,18 @@ export function formatOffset(seconds: number): string {
   const h = Math.floor(totalMs / 3_600_000);
   const m = Math.floor((totalMs % 3_600_000) / 60_000);
   const s = ((totalMs % 60_000) / 1000).toFixed(3).padStart(6, "0");
-  return h > 0
-    ? `${sign}${h}:${String(m).padStart(2, "0")}:${s}`
-    : `${sign}${m}:${s}`;
+  return h > 0 ? `${sign}${h}:${String(m).padStart(2, "0")}:${s}` : `${sign}${m}:${s}`;
 }
 
-const selectLeftSidebarOpen = (store: WorkspaceContextStore) =>
-  store.sidebars.left.open;
-const selectLeftSidebarItem = (store: WorkspaceContextStore) =>
-  store.sidebars.left.item;
+const selectLeftSidebarOpen = (store: WorkspaceContextStore) => store.sidebars.left.open;
+const selectLeftSidebarItem = (store: WorkspaceContextStore) => store.sidebars.left.item;
 const selectLayout = (state: LayoutState) => state.selectedLayout;
-const selectPresence = (ctx: MessagePipelineContext) =>
-  ctx.playerState.presence;
+const selectPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
 const selectIsPlaying = (ctx: MessagePipelineContext) =>
   ctx.playerState.activeData?.isPlaying === true;
-const selectStart = (ctx: MessagePipelineContext) =>
-  ctx.playerState.activeData?.startTime;
-const selectEnd = (ctx: MessagePipelineContext) =>
-  ctx.playerState.activeData?.endTime;
-const selectTopics = (ctx: MessagePipelineContext) =>
-  ctx.playerState.activeData?.topics;
+const selectStart = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
+const selectEnd = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
+const selectTopics = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.topics;
 const selectPlay = (ctx: MessagePipelineContext) => ctx.startPlayback;
 const selectPause = (ctx: MessagePipelineContext) => ctx.pausePlayback;
 const selectSeek = (ctx: MessagePipelineContext) => ctx.seekPlayback;
@@ -143,10 +135,7 @@ function shortcutCommands(t: TFunction<"commandPalette">): Command[] {
   const entries: [string, string][] = [
     [t("shortcutCommandPalette"), formatKeyboardShortcut("K", ["Meta"])],
     [t("shortcutOpenFile"), formatKeyboardShortcut("O", ["Meta"])],
-    [
-      t("shortcutOpenConnection"),
-      formatKeyboardShortcut("O", ["Meta", "Shift"]),
-    ],
+    [t("shortcutOpenConnection"), formatKeyboardShortcut("O", ["Meta", "Shift"])],
     [t("shortcutPlayPause"), "Space"],
     [t("shortcutStep"), "← / →"],
     [t("toggleLeftSidebar"), "["],
@@ -170,10 +159,8 @@ export function useAppCommands(): {
   queryCommands: (query: string) => Command[];
 } {
   const { t } = useTranslation("commandPalette");
-  const { availableSources, recentSources, selectRecent } =
-    usePlayerSelection();
-  const { dialogActions, sidebarActions, openPanelSettings } =
-    useWorkspaceActions();
+  const { availableSources, recentSources, selectRecent } = usePlayerSelection();
+  const { dialogActions, sidebarActions, openPanelSettings } = useWorkspaceActions();
   const leftSidebarOpen = useWorkspaceStore(selectLeftSidebarOpen);
   const leftSidebarItem = useWorkspaceStore(selectLeftSidebarItem);
   const layoutManager = useLayoutManager();
@@ -203,9 +190,7 @@ export function useAppCommands(): {
     };
 
     // ---- Open ----
-    const remoteFile = availableSources.find(
-      (source) => source.id === "remote-file",
-    );
+    const remoteFile = availableSources.find((source) => source.id === "remote-file");
     push(
       t("groupOpen"),
       {
@@ -234,11 +219,7 @@ export function useAppCommands(): {
       });
     }
     for (const source of availableSources) {
-      if (
-        source.type !== "connection" ||
-        source.hidden === true ||
-        source === remoteFile
-      ) {
+      if (source.type !== "connection" || source.hidden === true || source === remoteFile) {
         continue;
       }
       push(t("groupOpen"), {
@@ -274,11 +255,7 @@ export function useAppCommands(): {
         title: t("newTab"),
         keywords: ["window"],
         run: () => {
-          window.open(
-            window.location.origin + window.location.pathname,
-            "_blank",
-            "noopener",
-          );
+          window.open(window.location.origin + window.location.pathname, "_blank", "noopener");
         },
       });
     }
@@ -297,10 +274,7 @@ export function useAppCommands(): {
             .map((layout) => ({
               id: `layout.switch.${layout.id}`,
               title: layout.name,
-              detail:
-                layout.id === selectedLayout?.id
-                  ? t("currentLayout")
-                  : undefined,
+              detail: layout.id === selectedLayout?.id ? t("currentLayout") : undefined,
               run: () => {
                 setSelectedLayoutId(layout.id);
               },
@@ -334,24 +308,21 @@ export function useAppCommands(): {
         layoutData.layout != undefined
           ? getAllPanelIds(layoutData.layout, layoutData.configById)
           : [];
-      const panelCommands =
-        (idPrefix: string, onPick: (id: string) => void) => () =>
-          panelIds.map((id) => {
-            const type = getPanelTypeFromId(id);
-            const customTitle =
-              layoutData.configById[id]?.[PANEL_TITLE_CONFIG_KEY];
-            const typeTitle = panelCatalog.getPanelByType(type)?.title ?? type;
-            const hasCustomTitle =
-              typeof customTitle === "string" && customTitle !== "";
-            return {
-              id: `${idPrefix}.${id}`,
-              title: hasCustomTitle ? customTitle : typeTitle,
-              detail: hasCustomTitle ? typeTitle : undefined,
-              run: () => {
-                onPick(id);
-              },
-            };
-          });
+      const panelCommands = (idPrefix: string, onPick: (id: string) => void) => () =>
+        panelIds.map((id) => {
+          const type = getPanelTypeFromId(id);
+          const customTitle = layoutData.configById[id]?.[PANEL_TITLE_CONFIG_KEY];
+          const typeTitle = panelCatalog.getPanelByType(type)?.title ?? type;
+          const hasCustomTitle = typeof customTitle === "string" && customTitle !== "";
+          return {
+            id: `${idPrefix}.${id}`,
+            title: hasCustomTitle ? customTitle : typeTitle,
+            detail: hasCustomTitle ? typeTitle : undefined,
+            run: () => {
+              onPick(id);
+            },
+          };
+        });
       push(t("groupPanel"), {
         id: "panel.add",
         title: t("addPanel"),
@@ -406,8 +377,7 @@ export function useAppCommands(): {
             .flatMap((topic: Topic) =>
               topicTargets(topic.schemaName).map((target) => {
                 const panelTitle =
-                  panelCatalog.getPanelByType(target.panelType)?.title ??
-                  target.panelType;
+                  panelCatalog.getPanelByType(target.panelType)?.title ?? target.panelType;
                 return {
                   id: `topic.open.${target.panelType}.${topic.name}`,
                   title: topic.name,
@@ -499,9 +469,7 @@ export function useAppCommands(): {
         shortcut: ",",
         run: () => {
           sidebarActions.left.selectItem(
-            leftSidebarOpen && leftSidebarItem === "panel-settings"
-              ? undefined
-              : "panel-settings",
+            leftSidebarOpen && leftSidebarItem === "panel-settings" ? undefined : "panel-settings",
           );
         },
       },
@@ -523,11 +491,7 @@ export function useAppCommands(): {
         title: t("documentation"),
         keywords: ["docs", "manual"],
         run: () => {
-          window.open(
-            LICHTBLICK_DOCUMENTATION_LINK,
-            "_blank",
-            "noopener,noreferrer",
-          );
+          window.open(LICHTBLICK_DOCUMENTATION_LINK, "_blank", "noopener,noreferrer");
         },
       },
       {
@@ -580,12 +544,7 @@ export function useAppCommands(): {
 
   const queryCommands = useCallback(
     (query: string): Command[] => {
-      if (
-        presence !== PlayerPresence.PRESENT ||
-        !seek ||
-        !startTime ||
-        !endTime
-      ) {
+      if (presence !== PlayerPresence.PRESENT || !seek || !startTime || !endTime) {
         return [];
       }
       const current = getPipeline().playerState.activeData?.currentTime;

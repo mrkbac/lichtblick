@@ -5,14 +5,7 @@ import { Fzf } from "fzf";
 import { useEffect } from "react";
 import { create } from "zustand";
 
-import {
-  Time,
-  add,
-  clampTime,
-  fromSec,
-  subtract,
-  toSec,
-} from "@lichtblick/rostime";
+import { Time, add, clampTime, fromSec, subtract, toSec } from "@lichtblick/rostime";
 import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
 
 export type Command = {
@@ -68,8 +61,7 @@ export function rankCommands(
     );
   }
   const fzf = new Fzf(commands, {
-    selector: (cmd: Command) =>
-      [cmd.title, cmd.group, ...(cmd.keywords ?? [])].join(" "),
+    selector: (cmd: Command) => [cmd.title, cmd.group, ...(cmd.keywords ?? [])].join(" "),
     limit: MAX_RESULTS * 2,
   });
   return fzf
@@ -97,8 +89,7 @@ const UNIT_SECONDS: Record<string, number> = {
   h: 3600,
 };
 const NUMBER_RE = /^([+-])?\s*(\d+(?:\.\d*)?|\.\d+)\s*(ms|s|min|m|h)?$/;
-const CLOCK_RE =
-  /^([+-])?\s*(\d+):(\d{1,2}(?:\.\d*)?)(?::(\d{1,2}(?:\.\d*)?))?$/;
+const CLOCK_RE = /^([+-])?\s*(\d+):(\d{1,2}(?:\.\d*)?)(?::(\d{1,2}(?:\.\d*)?))?$/;
 /** Plain numbers above this are absolute epoch timestamps (2001-09-09), not offsets. */
 const EPOCH_THRESHOLD_SEC = 1e9;
 
@@ -130,9 +121,7 @@ export function parseSeekInput(
     seconds = Number(num[2]) * (UNIT_SECONDS[unit ?? "s"] ?? 1);
   } else if (clock) {
     sign = clock[1];
-    const parts = [clock[2], clock[3], clock[4]]
-      .filter((p) => p != undefined)
-      .map(Number);
+    const parts = [clock[2], clock[3], clock[4]].filter((p) => p != undefined).map(Number);
     seconds = parts.reduce((acc, part) => acc * 60 + part, 0);
     // Two parts are m:ss; the last part must be < 60 and so must minutes when hours are given.
     if (parts.slice(1).some((p) => p >= 60)) {
@@ -195,10 +184,7 @@ export const initialPaletteState: PaletteState = {
   stack: [{ query: "", selectedIndex: 0 }],
 };
 
-export function paletteReducer(
-  state: PaletteState,
-  action: PaletteAction,
-): PaletteState {
+export function paletteReducer(state: PaletteState, action: PaletteAction): PaletteState {
   const top = state.stack[state.stack.length - 1]!;
   const replaceTop = (level: PaletteLevel) => ({
     stack: [...state.stack.slice(0, -1), level],
@@ -219,9 +205,7 @@ export function paletteReducer(
         ],
       };
     case "pop":
-      return state.stack.length > 1
-        ? { stack: state.stack.slice(0, -1) }
-        : state;
+      return state.stack.length > 1 ? { stack: state.stack.slice(0, -1) } : state;
     case "set-query":
       return replaceTop({ ...top, query: action.query, selectedIndex: 0 });
     case "select":
@@ -231,8 +215,7 @@ export function paletteReducer(
         return state;
       }
       // Wrap around at both ends.
-      const index =
-        (top.selectedIndex + action.delta + action.count) % action.count;
+      const index = (top.selectedIndex + action.delta + action.count) % action.count;
       return replaceTop({ ...top, selectedIndex: index });
     }
   }
@@ -245,25 +228,15 @@ const MAX_RECENT = 30;
 
 export function loadRecentCommandIds(): string[] {
   try {
-    const parsed: unknown = JSON.parse(
-      localStorage.getItem(RECENT_KEY) ?? "[]",
-    );
-    return Array.isArray(parsed)
-      ? parsed.filter((id): id is string => typeof id === "string")
-      : [];
+    const parsed: unknown = JSON.parse(localStorage.getItem(RECENT_KEY) ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter((id): id is string => typeof id === "string") : [];
   } catch {
     return [];
   }
 }
 
-export function pushRecentCommandId(
-  recent: readonly string[],
-  id: string,
-): string[] {
-  const next = [id, ...recent.filter((other) => other !== id)].slice(
-    0,
-    MAX_RECENT,
-  );
+export function pushRecentCommandId(recent: readonly string[], id: string): string[] {
+  const next = [id, ...recent.filter((other) => other !== id)].slice(0, MAX_RECENT);
   try {
     localStorage.setItem(RECENT_KEY, JSON.stringify(next) ?? "[]");
   } catch {
@@ -284,10 +257,7 @@ export const useCommandRegistry = create<RegistryState>(() => ({
  * Adds commands to the palette while the calling component is mounted. Memoize `commands`;
  * every new array re-registers.
  */
-export function useRegisterCommands(
-  key: string,
-  commands: readonly Command[],
-): void {
+export function useRegisterCommands(key: string, commands: readonly Command[]): void {
   useEffect(() => {
     useCommandRegistry.setState(({ contributions }) => ({
       contributions: new Map(contributions).set(key, commands),

@@ -13,14 +13,7 @@ import {
   ListItemButton,
   Typography,
 } from "@mui/material";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -120,11 +113,7 @@ export function CommandPalette(): React.JSX.Element {
   );
 }
 
-function CommandPaletteDialog({
-  onClose,
-}: {
-  onClose: () => void;
-}): React.JSX.Element {
+function CommandPaletteDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("commandPalette");
   const { commands: appCommands, queryCommands } = useAppCommands();
@@ -143,11 +132,7 @@ function CommandPaletteDialog({
   );
 
   const results: RankedCommand[] = useMemo(() => {
-    const ranked = rankCommands(
-      level.items ?? rootCommands,
-      level.query,
-      recentIds,
-    );
+    const ranked = rankCommands(level.items ?? rootCommands, level.query, recentIds);
     if (!isRoot) {
       return ranked;
     }
@@ -156,14 +141,7 @@ function CommandPaletteDialog({
       positions: new Set<number>(),
     }));
     return [...fromQuery, ...ranked];
-  }, [
-    isRoot,
-    level.items,
-    level.query,
-    queryCommands,
-    recentIds,
-    rootCommands,
-  ]);
+  }, [isRoot, level.items, level.query, queryCommands, recentIds, rootCommands]);
 
   const selectedIndex = Math.min(level.selectedIndex, results.length - 1);
 
@@ -252,9 +230,7 @@ function CommandPaletteDialog({
     }
   };
 
-  const placeholder = level.parent?.children
-    ? level.parent.placeholder
-    : undefined;
+  const placeholder = level.parent?.children ? level.parent.placeholder : undefined;
 
   return (
     <Dialog
@@ -263,7 +239,8 @@ function CommandPaletteDialog({
       fullWidth
       maxWidth="sm"
       classes={{ paper: classes.paper }}
-      aria-label="Command palette"
+      // The Paper carries role="dialog", so it needs the accessible name.
+      slotProps={{ paper: { "aria-label": t("title") } }}
     >
       <div className={classes.header}>
         {isRoot ? (
@@ -280,11 +257,7 @@ function CommandPaletteDialog({
               <ArrowBackIcon fontSize="small" />
             </IconButton>
             {state.stack.slice(1).map((crumb) => (
-              <Typography
-                key={crumb.parent?.id}
-                variant="body2"
-                className={classes.crumb}
-              >
+              <Typography key={crumb.parent?.id} variant="body2" className={classes.crumb}>
                 {crumb.parent?.title.replace(/…$/, "")}
               </Typography>
             ))}
@@ -303,8 +276,7 @@ function CommandPaletteDialog({
             role: "combobox",
             "aria-expanded": true,
             "aria-controls": LISTBOX_ID,
-            "aria-activedescendant":
-              selectedIndex >= 0 ? optionId(selectedIndex) : undefined,
+            "aria-activedescendant": selectedIndex >= 0 ? optionId(selectedIndex) : undefined,
             spellCheck: false,
           }}
         />
@@ -315,13 +287,7 @@ function CommandPaletteDialog({
           {loading ? t("loading") : t("noResults")}
         </Typography>
       ) : (
-        <List
-          dense
-          id={LISTBOX_ID}
-          role="listbox"
-          ref={listRef}
-          className={classes.list}
-        >
+        <List dense id={LISTBOX_ID} role="listbox" ref={listRef} className={classes.list}>
           {results.map(({ command, positions }, index) => (
             <ListItemButton
               key={command.id}
@@ -366,12 +332,8 @@ function CommandPaletteDialog({
       <div className={classes.footer}>
         <Typography variant="caption">↑↓ {t("hintNavigate")}</Typography>
         <Typography variant="caption">↵ {t("hintRun")}</Typography>
-        {!isRoot && (
-          <Typography variant="caption">⌫ {t("hintBack")}</Typography>
-        )}
-        <Typography variant="caption">
-          esc {isRoot ? t("hintClose") : t("hintBack")}
-        </Typography>
+        {!isRoot && <Typography variant="caption">⌫ {t("hintBack")}</Typography>}
+        <Typography variant="caption">esc {isRoot ? t("hintClose") : t("hintBack")}</Typography>
       </div>
     </Dialog>
   );

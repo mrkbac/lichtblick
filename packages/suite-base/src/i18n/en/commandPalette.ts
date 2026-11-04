@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 export const commandPalette = {
+  title: "Command palette",
   placeholder: "Search commands, or type a time like 12.5, 1:02 or +5s",
   noResults: "No matching commands",
   loading: "Loading…",

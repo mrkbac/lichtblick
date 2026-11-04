@@ -42,51 +42,69 @@ describe("CommandPalette", () => {
     jest.mocked(useAppCommands).mockReturnValue({
       commands,
       queryCommands: (query) =>
-        query === "12.5"
-          ? [{ id: "playback.seek", title: "Seek to 0:12.500", run: seek }]
-          : [],
+        query === "12.5" ? [{ id: "playback.seek", title: "Seek to 0:12.500", run: seek }] : [],
     });
   });
 
   it("opens with Cmd+K and closes with Escape", async () => {
+    // Given a closed palette
     render(<CommandPalette />);
     expect(screen.queryByRole("combobox")).toBeNull();
+
+    // When opening it with Cmd+K, then pressing Escape
     openPalette();
+    const dialog = screen.getByRole("dialog", { name: "Command palette" });
     await userEvent.keyboard("{Escape}");
+
+    // Then it opened as a named dialog and closed again
+    expect(dialog).toBeTruthy();
     await waitFor(() => {
       expect(screen.queryByRole("combobox")).toBeNull();
     });
   });
 
-  it("drills into a sub-menu, goes back, and runs a child with the keyboard", async () => {
+  it("drills into a sub-menu and back with the keyboard", async () => {
+    // Given the palette opened and filtered to a command with a sub-menu
     render(<CommandPalette />);
-    const input = openPalette();
-    await userEvent.type(input, "layout");
-    await userEvent.keyboard("{Enter}");
-    expect(await screen.findByRole("option", { name: "Alpha" })).toBeTruthy();
+    await userEvent.type(openPalette(), "layout");
 
-    // Backspace on an empty query returns to the root, keeping the root query.
+    // When entering the sub-menu, then pressing Backspace on its empty query
+    await userEvent.keyboard("{Enter}");
+    const child = await screen.findByRole("option", { name: "Alpha" });
     await userEvent.keyboard("{Backspace}");
-    expect(screen.getByRole("combobox")).toHaveProperty("value", "layout");
 
-    await userEvent.keyboard("{Enter}");
+    // Then the sub-menu was shown and going back keeps the root query
+    expect(child).toBeTruthy();
+    expect(screen.getByRole("combobox")).toHaveProperty("value", "layout");
+  });
+
+  it("runs a sub-menu item and ranks the used sub-menu first next time", async () => {
+    // Given the palette inside a sub-menu
+    render(<CommandPalette />);
+    await userEvent.type(openPalette(), "layout{Enter}");
     await screen.findByRole("option", { name: "Beta" });
+
+    // When choosing the second item, then reopening the palette
     await userEvent.keyboard("{ArrowDown}{Enter}");
-    expect(switchLayout).toHaveBeenCalledWith("b");
     await waitFor(() => {
       expect(screen.queryByRole("combobox")).toBeNull();
     });
-
-    // The used sub-menu and its entry now rank first.
     openPalette();
-    expect(screen.getAllByRole("option")[0]!.textContent).toContain(
-      "Change layout",
-    );
+
+    // Then the item ran and its sub-menu ranks first
+    expect(switchLayout).toHaveBeenCalledWith("b");
+    expect(screen.getAllByRole("option")[0]!.textContent).toContain("Change layout");
   });
 
   it("offers seeking for time input", async () => {
+    // Given an open palette
     render(<CommandPalette />);
-    await userEvent.type(openPalette(), "12.5{Enter}");
+    const input = openPalette();
+
+    // When typing a time and pressing Enter
+    await userEvent.type(input, "12.5{Enter}");
+
+    // Then playback seeks
     expect(seek).toHaveBeenCalled();
   });
 });
