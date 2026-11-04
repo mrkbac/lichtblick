@@ -62,7 +62,7 @@ export const commandPalette = {
   settings: "Open settings",
 
   documentation: "Open documentation",
-  about: "About Lichtblick",
+  about: "About Thimble",
   version: "Version {{version}}",
   keyboardShortcuts: "Keyboard shortcuts…",
   keyboardShortcutsPlaceholder: "Search shortcuts",

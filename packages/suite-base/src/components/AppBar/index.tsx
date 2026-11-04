@@ -21,9 +21,9 @@ import { makeStyles } from "tss-react/mui";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { isSafeUrl } from "@lichtblick/suite-base/api/organization/client";
-import { LichtblickLogo } from "@lichtblick/suite-base/components/LichtblickLogo";
 import { MemoryUseIndicator } from "@lichtblick/suite-base/components/MemoryUseIndicator";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { ThimbleLogo } from "@lichtblick/suite-base/components/ThimbleLogo";
 import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
 import {
   LayoutState,
@@ -64,7 +64,7 @@ const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()(
       logo: {
         padding: theme.spacing(0.75, 0.5),
         fontSize: "2rem",
-        color: theme.palette.appBar.primary,
+        color: theme.palette.primary.light,
         borderRadius: 0,
 
         "svg:not(.MuiSvgIcon-root)": {
@@ -222,7 +222,7 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                   setAppMenuEl(event.currentTarget);
                 }}
               >
-                <LichtblickLogo fontSize="inherit" color="inherit" />
+                <ThimbleLogo fontSize="inherit" color="inherit" />
                 <ChevronDown12Regular
                   className={classes.dropDownIcon}
                   primaryFill={theme.palette.appBar.text}
