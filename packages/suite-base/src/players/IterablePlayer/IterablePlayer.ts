@@ -236,7 +236,7 @@ export class IterablePlayer implements Player {
 
   /** Promise that resolves when the player is closed. Only used for testing currently */
   public readonly isClosed: Promise<void>;
-  #resolveIsClosed: () => void = () => {};
+  readonly #resolveIsClosed: () => void;
 
   public constructor(options: IterablePlayerOptions) {
     const {
@@ -274,9 +274,7 @@ export class IterablePlayer implements Player {
     this.#sourceId = sourceId;
     this.#expandBackfill = expandBackfill;
 
-    this.isClosed = new Promise((resolveClose) => {
-      this.#resolveIsClosed = resolveClose;
-    });
+    ({ promise: this.isClosed, resolve: this.#resolveIsClosed } = Promise.withResolvers<void>());
 
     // Wrap emitStateImpl in a debouncePromise for our states to call. Since we can emit from states
     // or from block loading updates we use debouncePromise to guard against concurrent emits.
