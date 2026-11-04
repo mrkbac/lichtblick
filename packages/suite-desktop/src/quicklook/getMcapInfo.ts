@@ -5,13 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { McapStreamReader, hasMcapPrefix, McapConstants } from "@mcap/core";
+import { hasMcapPrefix, McapConstants } from "@mcap/core";
 
 import Logger from "@lichtblick/log";
 import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 
 import getIndexedMcapInfo from "./getIndexedMcapInfo";
-import getStreamedMcapInfo, { processMcapRecord } from "./getStreamedMcapInfo";
+import getStreamedMcapInfo from "./getStreamedMcapInfo";
 import { FileInfo } from "./types";
 
 const log = Logger.getLogger(__filename);
@@ -36,12 +36,6 @@ export async function getMcapInfo(file: Blob): Promise<FileInfo> {
   return {
     fileType: "MCAP v0, unindexed",
     loadMoreInfo: async (reportProgress) =>
-      await getStreamedMcapInfo(
-        file,
-        new McapStreamReader({ includeChunks: true, decompressHandlers, validateCrcs: true }),
-        processMcapRecord,
-        "MCAP v0, unindexed",
-        reportProgress,
-      ),
+      await getStreamedMcapInfo(file, decompressHandlers, "MCAP v0, unindexed", reportProgress),
   };
 }
