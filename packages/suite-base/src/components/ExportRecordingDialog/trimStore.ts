@@ -7,6 +7,8 @@
 
 import { create } from "zustand";
 
+import { Time, fromNanoSec, toNanoSec } from "@lichtblick/rostime";
+
 /**
  * The cut (trim range) shared by the timeline, playback and the export dialog.
  * Times are absolute nanoseconds. While a cut is set, playback stays inside it.
@@ -64,4 +66,14 @@ export function clampToCut(ns: bigint, { start, end }: Pick<TrimState, "start" |
     return end;
   }
   return ns;
+}
+
+/**
+ * Clamps a seek target into the current cut. Seek callers use it for both the local seek and
+ * what they broadcast to synced instances, so all instances land on the same time.
+ */
+export function clampTimeToCut(time: Time): Time {
+  const ns = toNanoSec(time);
+  const clamped = clampToCut(ns, useTrimStore.getState());
+  return clamped === ns ? time : fromNanoSec(clamped);
 }

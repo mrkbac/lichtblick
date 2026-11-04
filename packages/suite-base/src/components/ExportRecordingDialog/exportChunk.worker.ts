@@ -19,9 +19,9 @@ const api = {
   async warmUp(): Promise<void> {
     await deps;
   },
-  async rewriteChunk(job: ChunkJob): Promise<ChunkResult | undefined> {
+  async rewriteChunk(job: ChunkJob): Promise<ChunkResult> {
     const result = rewriteChunk(job, await deps);
-    return result ? Comlink.transfer(result, [result.bytes.buffer]) : undefined;
+    return Comlink.transfer(result, [result.bytes.buffer]);
   },
 };
 

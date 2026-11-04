@@ -120,6 +120,13 @@ describe("exportMcap", () => {
     expect(progress.at(-1)).toBe(1);
   });
 
+  it("keeps counting a decimated topic through chunks that end up empty", async () => {
+    // Each small chunk holds one /b message, so every other rewritten chunk keeps nothing.
+    const input = await makeInput({ chunkSize: 100, useMessageIndex: false });
+    const { times } = await runExport(input, { topics: new Map([["/b", { everyNth: 2 }]]) });
+    expect(times("/b")).toEqual([0, 2, 4, 6, 8]);
+  });
+
   it("copies chunks as-is when nothing in them changes", async () => {
     const input = await makeInput({ chunkSize: 100 });
     const { reader, times } = await runExport(input, {

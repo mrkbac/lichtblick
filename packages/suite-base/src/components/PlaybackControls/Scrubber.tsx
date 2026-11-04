@@ -19,6 +19,7 @@ import {
   fromSec,
   Time,
 } from "@lichtblick/rostime";
+import { clampTimeToCut } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -102,9 +103,11 @@ export default function Scrubber(props: Props): React.JSX.Element {
       if (!latestStartTime.current || !latestEndTime.current) {
         return;
       }
-      const timeToSeek = addTimes(
-        latestStartTime.current,
-        fromSec(fraction * toSec(subtractTimes(latestEndTime.current, latestStartTime.current))),
+      const timeToSeek = clampTimeToCut(
+        addTimes(
+          latestStartTime.current,
+          fromSec(fraction * toSec(subtractTimes(latestEndTime.current, latestStartTime.current))),
+        ),
       );
       onSeek(timeToSeek);
       BroadcastManager.getInstance().postMessage({

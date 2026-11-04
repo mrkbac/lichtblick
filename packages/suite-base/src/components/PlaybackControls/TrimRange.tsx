@@ -125,6 +125,9 @@ export function TrimRangeOverlay(): React.JSX.Element | ReactNull {
     role: "slider",
     tabIndex: 0,
     "aria-label": which === "start" ? t("trimStart") : t("trimEnd"),
+    "aria-valuemin": 0,
+    "aria-valuemax": Number(formatSeconds(bounds.end - bounds.start)),
+    "aria-valuenow": Number(formatSeconds((which === "start" ? start : end) - bounds.start)),
     "aria-valuetext": `${formatSeconds((which === "start" ? start : end) - bounds.start)} s`,
     onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => {
       // Don't let the scrubber below seek.

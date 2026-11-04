@@ -31,6 +31,7 @@ import {
 } from "@fluentui/react-icons";
 import { Tooltip } from "@mui/material";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Time, compare, fromNanoSec, toNanoSec } from "@lichtblick/rostime";
 import { CreateEventDialog } from "@lichtblick/suite-base/components/CreateEventDialog";
@@ -40,7 +41,7 @@ import EventOutlinedIcon from "@lichtblick/suite-base/components/EventOutlinedIc
 import { ExportRecordingDialog } from "@lichtblick/suite-base/components/ExportRecordingDialog/ExportRecordingDialog";
 import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
 import {
-  clampToCut,
+  clampTimeToCut,
   useTrimStore,
 } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
@@ -91,6 +92,7 @@ export default function PlaybackControls({
   getTimeInfo,
 }: PlaybackControlsProps): React.JSX.Element {
   const presence = useMessagePipeline(selectPresence);
+  const { t } = useTranslation("exportRecording");
 
   const { classes, cx } = useStyles();
   const repeat = useWorkspaceStore(selectPlaybackRepeat);
@@ -115,7 +117,7 @@ export default function PlaybackControls({
   // While a cut is set, seeking outside it lands on its nearest edge.
   const seekInCut = useCallback(
     (time: Time) => {
-      seek(fromNanoSec(clampToCut(toNanoSec(time), useTrimStore.getState())));
+      seek(clampTimeToCut(time));
     },
     [seek],
   );
@@ -123,7 +125,7 @@ export default function PlaybackControls({
     () =>
       playUntil
         ? (time: Time) => {
-            playUntil(fromNanoSec(clampToCut(toNanoSec(time), useTrimStore.getState())));
+            playUntil(clampTimeToCut(time));
           }
         : undefined,
     [playUntil],
@@ -274,7 +276,7 @@ export default function PlaybackControls({
             {exportableFile && (
               <HoverableIconButton
                 size="small"
-                title={editingCut ? "Hide cut handles" : "Cut recording"}
+                title={editingCut ? t("hideCutHandles") : t("cutRecording")}
                 color={cutActive ? "primary" : "inherit"}
                 icon={editingCut ? <Cut20Filled /> : <Cut20Regular />}
                 activeIcon={<Cut20Filled />}

@@ -88,9 +88,9 @@ const MESSAGE_INDEX_ENTRY = 8 + 8; // log time + offset
 
 /**
  * Filters one chunk's messages by channel, time and decimation, working on raw record bytes.
- * Returns undefined when no message is kept.
+ * When no message is kept, `bytes` is empty but `topicSeen` still counts what was seen.
  */
-export function rewriteChunk(job: ChunkJob, deps: RewriteChunkDeps): ChunkResult | undefined {
+export function rewriteChunk(job: ChunkJob, deps: RewriteChunkDeps): ChunkResult {
   let records = job.records;
   if (job.compression !== "") {
     const decompress = deps.decompressHandlers[job.compression];
@@ -149,7 +149,19 @@ export function rewriteChunk(job: ChunkJob, deps: RewriteChunkDeps): ChunkResult
   }
 
   if (messageStartTime == undefined) {
-    return undefined;
+    return {
+      bytes: new Uint8Array(0),
+      chunkLength: 0n,
+      messageIndexOffsets: new Map(),
+      messageIndexLength: 0n,
+      messageStartTime: 0n,
+      messageEndTime: 0n,
+      compression: "",
+      compressedSize: 0n,
+      uncompressedSize: 0n,
+      channelMessageCounts: new Map(),
+      topicSeen,
+    };
   }
 
   const uncompressed = out.subarray(0, outLength);
@@ -353,7 +365,7 @@ export async function exportMcap(
   const inFlight: Promise<{ result?: ChunkResult; size: number }>[] = [];
   const writeNext = async () => {
     const { result, size } = await inFlight.shift()!;
-    if (result) {
+    if (result && result.bytes.byteLength > 0) {
       await writeChunk(result);
     }
     doneBytes += size;
