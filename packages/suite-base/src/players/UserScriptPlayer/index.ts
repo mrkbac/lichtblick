@@ -14,6 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import * as Comlink from "@foxglove/comlink";
 import { Time, compare } from "@foxglove/rostime";
 import { Mutex } from "async-mutex";
 import * as _ from "lodash-es";
@@ -34,9 +35,6 @@ import { generateTypesLib } from "@lichtblick/suite-base/players/UserScriptPlaye
 import { TransformArgs } from "@lichtblick/suite-base/players/UserScriptPlayer/transformerWorker/types";
 import {
   Diagnostic,
-  ProcessMessageOutput,
-  RegistrationOutput,
-  ScriptData,
   ScriptRegistration,
   UserScriptLog,
 } from "@lichtblick/suite-base/players/UserScriptPlayer/types";
@@ -55,13 +53,14 @@ import {
 import { reportError } from "@lichtblick/suite-base/reportError";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { UserScript, UserScripts } from "@lichtblick/suite-base/types/panels";
-import Rpc from "@lichtblick/suite-base/util/Rpc";
 import { basicDatatypes } from "@lichtblick/suite-base/util/basicDatatypes";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { DIAGNOSTIC_SEVERITY, ERROR_CODES, MAX_GLOBAL_BUFFER_SIZE, SOURCES } from "./constants";
+import type { RuntimeWorkerApi } from "./runtimeWorker";
 import { getPreloadTypes, remapVirtualSubscriptions } from "./subscriptions";
+import type { TransformerWorkerApi } from "./transformerWorker";
 
 const log = Log.getLogger(__filename);
 
@@ -128,10 +127,10 @@ export default class UserScriptPlayer implements Player {
   #listener?: (arg0: PlayerState) => Promise<void>;
 
   // Not sure if there is perf issue with unused workers (may just go idle) - requires more research
-  #unusedRuntimeWorkers: Rpc[] = [];
+  #unusedRuntimeWorkers: Comlink.Remote<RuntimeWorkerApi>[] = [];
   #setUserScriptDiagnostics: (scriptId: string, diagnostics: readonly Diagnostic[]) => void;
   #addUserScriptLogs: (scriptId: string, logs: UserScriptLog[]) => void;
-  #transformRpc?: Rpc;
+  #transformRpc?: Comlink.Remote<TransformerWorkerApi>;
   #globalVariables: GlobalVariables = {};
   #userScriptActions: UserScriptActions;
   #rosLibGenerator: MemoizedLibGenerator;
@@ -218,7 +217,7 @@ export default class UserScriptPlayer implements Player {
 
     this.#rosLibGenerator = new MemoizedLibGenerator(async (args) => {
       const transformWorker = this.#getTransformWorker();
-      return await transformWorker.send("generateRosLib", {
+      return await transformWorker.generateRosLib({
         topics: args.topics,
         // Include basic datatypes along with any custom datatypes.
         // Custom datatypes appear as the second array items to override any basicDatatype items
@@ -361,7 +360,7 @@ export default class UserScriptPlayer implements Player {
       datatypes: scriptDatatypes,
     };
     const transformWorker = this.#getTransformWorker();
-    const scriptData = await transformWorker.send<ScriptData>("transform", transformMessage);
+    const scriptData = await transformWorker.transform(transformMessage);
     const { inputTopics, outputTopic, transpiledCode, projectCode, outputDatatype } = scriptData;
 
     // alertKey is a unique identifier for each user script so we can manage alerts from
@@ -374,7 +373,7 @@ export default class UserScriptPlayer implements Player {
     } => {
       // rpc channel for this processor. Lazily created on each message if an unused
       // channel isn't available.
-      let rpc: undefined | Rpc;
+      let rpc: undefined | Comlink.Remote<RuntimeWorkerApi>;
 
       const registration = async (msgEvent: MessageEvent, globalVariables: GlobalVariables) => {
         // Register the script within a web worker to be executed.
@@ -409,22 +408,24 @@ export default class UserScriptPlayer implements Player {
               void this.#queueEmitState();
             };
             port.start();
-            rpc = new Rpc(port);
+            rpc = Comlink.wrap<RuntimeWorkerApi>(port);
 
-            rpc.receive("error", (msg) => {
-              log.error(msg);
+            void rpc.onError(
+              Comlink.proxy((msg: string) => {
+                log.error(msg);
 
-              this.#alertStore.set(alertKey, {
-                severity: "error",
-                message: `User script runtime error: ${msg}`,
-              });
+                this.#alertStore.set(alertKey, {
+                  severity: "error",
+                  message: `User script runtime error: ${msg}`,
+                });
 
-              void this.#queueEmitState();
-            });
+                void this.#queueEmitState();
+              }),
+            );
           }
 
           const { error, userScriptDiagnostics, userScriptLogs } =
-            await rpc.send<RegistrationOutput>("registerScript", {
+            await rpc.registerScript({
               projectCode,
               scriptCode: transpiledCode,
             });
@@ -443,7 +444,7 @@ export default class UserScriptPlayer implements Player {
           this.#addUserScriptLogs(scriptId, userScriptLogs);
         }
 
-        const result = await rpc.send<ProcessMessageOutput>("processMessage", {
+        const result = await rpc.processMessage({
           message: {
             topic: msgEvent.topic,
             receiveTime: msgEvent.receiveTime,
@@ -533,7 +534,7 @@ export default class UserScriptPlayer implements Player {
     return result;
   }
 
-  #getTransformWorker(): Rpc {
+  #getTransformWorker(): Comlink.Remote<TransformerWorkerApi> {
     if (!this.#transformRpc) {
       const worker = UserScriptPlayer.CreateTransformWorker();
 
@@ -563,18 +564,20 @@ export default class UserScriptPlayer implements Player {
         void this.#queueEmitState();
       };
       port.start();
-      const rpc = new Rpc(port);
+      const rpc = Comlink.wrap<TransformerWorkerApi>(port);
 
-      rpc.receive("error", (msg) => {
-        log.error(msg);
+      void rpc.onError(
+        Comlink.proxy((msg: string) => {
+          log.error(msg);
 
-        this.#alertStore.set("worker-error", {
-          severity: "error",
-          message: `User Script error: ${msg}`,
-        });
+          this.#alertStore.set("worker-error", {
+            severity: "error",
+            message: `User Script error: ${msg}`,
+          });
 
-        void this.#queueEmitState();
-      });
+          void this.#queueEmitState();
+        }),
+      );
 
       this.#transformRpc = rpc;
     }
@@ -985,7 +988,7 @@ export default class UserScriptPlayer implements Player {
     });
     this.#player.close();
     if (this.#transformRpc) {
-      void this.#transformRpc.send("close");
+      void this.#transformRpc.close();
     }
   };
 
