@@ -3,7 +3,7 @@
 
 import * as Comlink from "@foxglove/comlink";
 
-import { WorkerSerializedIterableSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSourceWorker";
+import { WorkerIterableSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSourceWorker";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { RosDb3IterableSource } from "./RosDb3IterableSource";
@@ -18,7 +18,7 @@ vi.mock("@foxglove/comlink", () => ({
 }));
 
 vi.mock("./RosDb3IterableSource");
-vi.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSourceWorker");
+vi.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSourceWorker");
 
 describe("initialize", () => {
   beforeEach(() => {
@@ -33,9 +33,9 @@ describe("initialize", () => {
     const result = initialize({ files });
 
     expect(RosDb3IterableSource).toHaveBeenCalledWith(files);
-    expect(WorkerSerializedIterableSourceWorker).toHaveBeenCalled();
+    expect(WorkerIterableSourceWorker).toHaveBeenCalled();
     expect(Comlink.proxy).toHaveBeenCalled();
-    expect(result).toBeInstanceOf(WorkerSerializedIterableSourceWorker);
+    expect(result).toBeInstanceOf(WorkerIterableSourceWorker);
   });
 
   it("should initialize with a single file", () => {
@@ -45,9 +45,9 @@ describe("initialize", () => {
     const result = initialize({ file });
 
     expect(RosDb3IterableSource).toHaveBeenCalledWith([file]);
-    expect(WorkerSerializedIterableSourceWorker).toHaveBeenCalled();
+    expect(WorkerIterableSourceWorker).toHaveBeenCalled();
     expect(Comlink.proxy).toHaveBeenCalled();
-    expect(result).toBeInstanceOf(WorkerSerializedIterableSourceWorker);
+    expect(result).toBeInstanceOf(WorkerIterableSourceWorker);
   });
 
   it("should throw with initialized with a url", () => {

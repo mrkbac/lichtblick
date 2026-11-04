@@ -11,7 +11,7 @@ import {
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
-import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource";
+import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
 import {
   MultiFileHydrationOverrides,
   addMultiFileHydrationOverrides,
@@ -58,7 +58,6 @@ class McapLocalDataSourceFactory implements IDataSourceFactory {
     });
 
     return new IterablePlayer({
-      metricsCollector: args.metricsCollector,
       source,
       name: files.map((file) => file.name).join(", "),
       sourceId: this.id,

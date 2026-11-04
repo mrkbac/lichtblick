@@ -103,7 +103,7 @@ describe("FoxgloveWebSocketPlayer worker", () => {
     it("should post a close message when the socket closes", () => {
       // Given
       dispatch({ type: "open", data: { wsUrl } });
-      const closeEvent = { code: 1000, reason: BasicBuilder.string() };
+      const closeEvent = { code: 1000, reason: BasicBuilder.string(), wasClean: true };
       // When
       MockWebSocket.lastInstance?.onclose?.(closeEvent);
       // Then

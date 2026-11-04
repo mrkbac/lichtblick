@@ -17,6 +17,7 @@ import { Filelike } from "@foxglove/rosbag";
 import * as _ from "lodash-es";
 
 import Logger from "@lichtblick/log";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import type { FileReader, FileStream, ILogger } from "./CachedFilelike.types";
 import VirtualLRUBuffer from "./VirtualLRUBuffer";

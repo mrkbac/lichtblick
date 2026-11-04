@@ -7,9 +7,8 @@ import type { Mock } from "vitest";
 
 import { DataSourceFactoryInitializeArgs } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
-import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource";
+import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
 import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
-import { PlayerMetricsCollectorInterface } from "@lichtblick/suite-base/players/types";
 
 import RemoteDataSourceFactory from "./RemoteDataSourceFactory";
 
@@ -17,14 +16,13 @@ vi.mock("@lichtblick/suite-base/players/IterablePlayer", () => ({
   IterablePlayer: vi.fn(),
 }));
 
-vi.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource", () => ({
+vi.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource", () => ({
   WorkerSerializedIterableSource: vi.fn(),
 }));
 
 function setupArgs(params?: Record<string, string | undefined>): DataSourceFactoryInitializeArgs {
   const mockArgs: DataSourceFactoryInitializeArgs = {
     params,
-    metricsCollector: vi.fn() as unknown as PlayerMetricsCollectorInterface,
   };
   return mockArgs;
 }
@@ -87,7 +85,6 @@ describe("RemoteDataSourceFactory", () => {
     expect(IterablePlayer).toHaveBeenCalledWith({
       source: mockSource,
       name: "https://example.com/test.mcap",
-      metricsCollector: mockArgs.metricsCollector,
       urlParams: { urls: ["https://example.com/test.mcap"] },
       sourceId: "remote-file",
       readAheadDuration: { sec: 10, nsec: 0 },
@@ -112,7 +109,6 @@ describe("RemoteDataSourceFactory", () => {
     expect(IterablePlayer).toHaveBeenCalledWith({
       source: mockSource,
       name: "https://example.com/test.bag",
-      metricsCollector: mockArgs.metricsCollector,
       urlParams: { urls: ["https://example.com/test.bag"] },
       sourceId: "remote-file",
       readAheadDuration: { sec: 10, nsec: 0 },
@@ -132,7 +128,6 @@ describe("RemoteDataSourceFactory", () => {
     expect(IterablePlayer).toHaveBeenCalledWith({
       source: mockSource,
       name: mockArgs.params?.url,
-      metricsCollector: mockArgs.metricsCollector,
       urlParams: { urls: ["https://example.com/test1.mcap", "https://example.com/test2.mcap"] },
       sourceId: "remote-file",
       readAheadDuration: { sec: 10, nsec: 0 },

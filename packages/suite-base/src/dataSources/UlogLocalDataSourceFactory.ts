@@ -42,7 +42,6 @@ class UlogLocalDataSourceFactory implements IDataSourceFactory {
     });
 
     return new IterablePlayer({
-      metricsCollector: args.metricsCollector,
       source,
       name: file.name,
       sourceId: this.id,

@@ -13,20 +13,24 @@
 //   This source code is licensed under the Apache License, Version 2.0,
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
+import * as Comlink from "@foxglove/comlink";
+
 import generateRosLib from "@lichtblick/suite-base/players/UserScriptPlayer/transformerWorker/generateRosLib";
 import transform from "@lichtblick/suite-base/players/UserScriptPlayer/transformerWorker/transform";
-import Rpc from "@lichtblick/suite-base/util/Rpc";
-import { setupSendReportNotificationHandler } from "@lichtblick/suite-base/util/RpcWorkerUtils";
 import { enforceFetchIsBlocked, inSharedWorker } from "@lichtblick/suite-base/util/workers";
 
+// Errors are queued until the main thread registers its handler with onError()
 let unsentErrors: string[] = [];
+let sendError = (message: string) => {
+  unsentErrors.push(message);
+};
 (global as unknown as SharedWorkerGlobalScope).onerror = (event: ErrorEvent) => {
-  unsentErrors.push((event.error as Error).toString());
+  sendError((event.error as Error).toString());
 };
 (global as unknown as SharedWorkerGlobalScope).onunhandledrejection = (
   event: PromiseRejectionEvent,
 ) => {
-  unsentErrors.push(String(event.reason instanceof Error ? event.reason.message : event.reason));
+  sendError(String(event.reason instanceof Error ? event.reason.message : event.reason));
 };
 
 // Workaround for missing process.versions in worker.
@@ -42,37 +46,28 @@ if (!inSharedWorker()) {
   throw new Error("Not in a SharedWorker.");
 }
 
+const api = {
+  onError(handler: (message: string) => void): void {
+    sendError = handler;
+    for (const message of unsentErrors) {
+      handler(message);
+    }
+    unsentErrors = [];
+  },
+  // Shared workers need to be closed "from the inside" -- they have no terminate() method.
+  close(): void {
+    global.close();
+  },
+  transform: enforceFetchIsBlocked(transform),
+  generateRosLib,
+};
+
+export type TransformerWorkerApi = typeof api;
+
 (global as unknown as SharedWorkerGlobalScope).onconnect = (connectEvent: MessageEvent) => {
   const port = connectEvent.ports[0];
   if (!port) {
     throw new Error("TransformWorker connect requires at least 1 message port.");
   }
-
-  const rpc = new Rpc(port);
-
-  // If any errors occurred while nobody was connected, send them now
-  unsentErrors.forEach(async (message) => {
-    await rpc.send("error", message);
-  });
-  unsentErrors = [];
-  (global as unknown as SharedWorkerGlobalScope).onerror = (event: ErrorEvent) => {
-    void rpc.send("error", event.error.toString());
-  };
-  (global as unknown as SharedWorkerGlobalScope).onunhandledrejection = (
-    event: PromiseRejectionEvent,
-  ) => {
-    void rpc.send(
-      "error",
-      String(event.reason instanceof Error ? event.reason.message : event.reason),
-    );
-  };
-
-  setupSendReportNotificationHandler(rpc);
-  // Shared workers need to be closed "from the inside" -- they have no terminate() method.
-  rpc.receive("close", () => {
-    global.close();
-  });
-  rpc.receive("transform", enforceFetchIsBlocked(transform));
-  rpc.receive("generateRosLib", generateRosLib);
-  port.start();
+  Comlink.expose(api, port);
 };

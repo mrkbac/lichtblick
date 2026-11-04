@@ -47,7 +47,6 @@ import {
   AdvertiseOptions,
   MessageEvent,
   Player,
-  PlayerMetricsCollectorInterface,
   PlayerPresence,
   PlayerAlert,
   PlayerState,
@@ -76,7 +75,7 @@ import {
   SUPPORTED_SERVICE_ENCODINGS,
   ZERO_TIME,
 } from "./constants";
-import { bytesToBase64, dataTypeToFullName, statusLevelToAlertSeverity } from "./helpers";
+import { dataTypeToFullName, statusLevelToAlertSeverity } from "./helpers";
 import {
   decodePlaybackState,
   encodePlaybackControlRequest,
@@ -115,7 +114,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #parsedMessages: MessageEvent[] = []; // Queue of messages that we'll send in next _emitState() call.
   #parsedMessagesBytes: number = 0;
   #receivedBytes: number = 0;
-  #metricsCollector: PlayerMetricsCollectorInterface;
   #presence: PlayerPresence = PlayerPresence.INITIALIZING;
   #alerts = new PlayerAlertManager();
   #numTimeSeeks = 0;
@@ -170,17 +168,13 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
   public constructor({
     url,
-    metricsCollector,
     sourceId,
   }: {
     url: string;
-    metricsCollector: PlayerMetricsCollectorInterface;
     sourceId: string;
   }) {
-    this.#metricsCollector = metricsCollector;
     this.#url = url;
     this.#name = url;
-    this.#metricsCollector.playerConstructed();
     this.#sourceId = sourceId;
     this.#urlState = {
       sourceId: this.#sourceId,
@@ -679,7 +673,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         return param.type === "byte_array"
           ? {
               ...param,
-              value: Uint8Array.from(atob(param.value as string), (c) => c.charCodeAt(0)),
+              value: Uint8Array.fromBase64(param.value as string),
             }
           : param;
       });
@@ -1142,7 +1136,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
     log.debug(`FoxgloveWebSocketPlayer.setParameter(key=${key}, value=${JSON.stringify(value)})`);
     const isByteArray = value instanceof Uint8Array;
-    const paramValueToSent = isByteArray ? bytesToBase64(value) : value;
+    const paramValueToSent = isByteArray ? value.toBase64() : value;
     this.#client.setParameters(
       [
         {
@@ -1225,7 +1219,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
           const data = parsedResponse.deserialize(response.data);
           resolve(data as Record<string, unknown>);
         } catch (error: unknown) {
-          reject(error instanceof Error ? error : new Error(String(error)));
+          reject(toError(error));
         }
       });
     });

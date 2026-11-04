@@ -12,17 +12,18 @@
 /// <reference types="@foxglove/chartjs-plugin-zoom" />
 
 import { type ZoomPluginOptions } from "@foxglove/chartjs-plugin-zoom/types/options";
+import * as Comlink from "@foxglove/comlink";
 import { ChartOptions } from "chart.js";
+import * as _ from "lodash-es";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useMountedState } from "react-use";
 import { assert } from "ts-essentials";
 
+import { ComlinkWrap } from "@lichtblick/den/worker";
 import Logger from "@lichtblick/log";
 import ChartJsMux, {
   ChartUpdateMessage,
 } from "@lichtblick/suite-base/components/Chart/worker/ChartJsMux";
-import Rpc, { createLinkedChannels } from "@lichtblick/suite-base/util/Rpc";
-import WebWorkerManager from "@lichtblick/suite-base/util/WebWorkerManager";
 import { listenForPan } from "@lichtblick/suite-base/util/listenForPan";
 import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuallyBePartial";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
@@ -71,7 +72,28 @@ type Props = {
 
 const devicePixelRatio = mightActuallyBePartial(window).devicePixelRatio ?? 1;
 
-const webWorkerManager = new WebWorkerManager(makeChartJSWorker, 4);
+// Charts share a capped number of workers: a new worker is started until the cap is reached, then
+// each chart joins the worker with the fewest charts. A worker is terminated with its last chart.
+const MAX_CHART_WORKERS = 4;
+type ChartWorker = { remote: Comlink.Remote<ChartJsMux>; dispose: () => void; chartCount: number };
+const chartWorkers: ChartWorker[] = [];
+
+function acquireChartWorker(): ChartWorker {
+  let chartWorker = _.minBy(chartWorkers, (worker) => worker.chartCount);
+  if (!chartWorker || chartWorkers.length < MAX_CHART_WORKERS) {
+    chartWorker = { ...ComlinkWrap<ChartJsMux>(makeChartJSWorker()), chartCount: 0 };
+    chartWorkers.push(chartWorker);
+  }
+  chartWorker.chartCount++;
+  return chartWorker;
+}
+
+function releaseChartWorker(chartWorker: ChartWorker): void {
+  if (--chartWorker.chartCount === 0) {
+    _.pull(chartWorkers, chartWorker);
+    chartWorker.dispose();
+  }
+}
 
 // turn a React.MouseEvent into an object we can send over rpc
 function rpcMouseEvent(event: React.MouseEvent<HTMLElement>) {
@@ -88,7 +110,7 @@ function rpcMouseEvent(event: React.MouseEvent<HTMLElement>) {
 }
 
 type RpcSend = <T>(
-  topic: string,
+  topic: keyof ChartJsMux,
   payload?: Record<string, unknown>,
   transferables?: Transferable[],
 ) => Promise<T>;
@@ -137,22 +159,19 @@ function Chart(props: Props): React.JSX.Element {
 
   useLayoutEffect(() => {
     log.info(`Register Chart ${id}`);
-    let rpc: Rpc;
-    if (supportsOffscreenCanvas) {
-      rpc = webWorkerManager.registerWorkerListener(id);
-    } else {
-      const { local, remote } = createLinkedChannels();
-      new ChartJsMux(new Rpc(remote));
-      rpc = new Rpc(local);
-    }
+    // Without OffscreenCanvas support the chart renders on the main thread.
+    const chartWorker = supportsOffscreenCanvas ? acquireChartWorker() : undefined;
+    const mux = chartWorker?.remote ?? new ChartJsMux();
 
-    // helper function to send rpc to our worker - all invocations need an _id_ so we inject it here
+    // helper function to send requests to our worker - all invocations need an _id_ so we inject it here
     const sendWrapper = async <T,>(
-      topic: string,
+      topic: keyof ChartJsMux,
       payload?: Record<string, unknown>,
-      transferables?: Transferable[],
+      transferables: Transferable[] = [],
     ) => {
-      return await rpc.send<T>(topic, { id, ...payload }, transferables);
+      const args = Comlink.transfer({ id, ...payload }, transferables);
+      // Reflect.apply keeps `this` for the main-thread mux and works on the Comlink proxy too.
+      return (await Reflect.apply(mux[topic], mux, [args])) as T;
     };
 
     // store the send wrapper so it can be set to rpcSendRef once initialization occurs
@@ -167,8 +186,8 @@ function Chart(props: Props): React.JSX.Element {
       previousUpdateMessage.current = {};
       canvasRef.current?.remove();
       canvasRef.current = undefined;
-      if (supportsOffscreenCanvas) {
-        webWorkerManager.unregisterWorkerListener(id);
+      if (chartWorker) {
+        releaseChartWorker(chartWorker);
       }
     };
   }, [id]);

@@ -4,7 +4,6 @@
 import { StatusLevel } from "@foxglove/ws-protocol";
 
 import {
-  bytesToBase64,
   dataTypeToFullName,
   statusLevelToAlertSeverity,
 } from "@lichtblick/suite-base/players/FoxgloveWebSocketPlayer/helpers";
@@ -37,21 +36,5 @@ describe("statusLevelToProblemSeverity", () => {
     [StatusLevel.ERROR, "error"],
   ])("should map StatusLevel %s to result %s", (level, result) => {
     expect(statusLevelToAlertSeverity(level)).toBe(result);
-  });
-});
-
-describe("bytesToBase64", () => {
-  it("round-trips non-UTF-8 bytes", () => {
-    const bytes = Uint8Array.from({ length: 256 }, (_, i) => i);
-
-    const decoded = Uint8Array.from(atob(bytesToBase64(bytes)), (c) => c.charCodeAt(0));
-
-    expect(decoded).toEqual(bytes);
-  });
-
-  it("encodes large arrays", () => {
-    const bytes = new Uint8Array(100_000).fill(0xff);
-
-    expect(atob(bytesToBase64(bytes))).toHaveLength(100_000);
   });
 });

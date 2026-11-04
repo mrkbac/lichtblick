@@ -10,6 +10,7 @@ import * as Comlink from "@foxglove/comlink";
 import { abortSignalTransferHandler } from "@lichtblick/comlink-transfer-handlers";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 
+import { ComlinkTransferIteratorCursor } from "./ComlinkTransferIteratorCursor";
 import type {
   GetBackfillMessagesArgs,
   IIterableSource,
@@ -20,21 +21,27 @@ import type {
 } from "./IIterableSource";
 import { IteratorCursor } from "./IteratorCursor";
 
-export class WorkerIterableSourceWorker implements IIterableSource {
-  protected _source: IIterableSource;
+/**
+ * Worker-side half of WorkerIterableSource. Serialized (Uint8Array) message buffers are
+ * transferred to the main thread instead of being structured-cloned.
+ */
+export class WorkerIterableSourceWorker<MessageType = unknown>
+  implements IIterableSource<MessageType>
+{
+  #source: IIterableSource<MessageType>;
 
-  public constructor(source: IIterableSource) {
-    this._source = source;
+  public constructor(source: IIterableSource<MessageType>) {
+    this.#source = source;
   }
 
   public async initialize(): Promise<Initialization> {
-    return await this._source.initialize();
+    return await this.#source.initialize();
   }
 
   public messageIterator(
     args: MessageIteratorArgs,
-  ): AsyncIterableIterator<Readonly<IteratorResult>> & Comlink.ProxyMarked {
-    return Comlink.proxy(this._source.messageIterator(args));
+  ): AsyncIterableIterator<Readonly<IteratorResult<MessageType>>> & Comlink.ProxyMarked {
+    return Comlink.proxy(this.#source.messageIterator(args));
   }
 
   public async getBackfillMessages(
@@ -42,20 +49,28 @@ export class WorkerIterableSourceWorker implements IIterableSource {
     // abortSignal is a separate argument so it can be proxied by comlink since AbortSignal is not
     // clonable (and needs to signal across the worker boundary)
     abortSignal?: AbortSignal,
-  ): Promise<MessageEvent[]> {
-    return await this._source.getBackfillMessages({
+  ): Promise<MessageEvent<MessageType>[]> {
+    const messages = await this.#source.getBackfillMessages({
       ...args,
       abortSignal,
     });
+    return Comlink.transfer(
+      messages,
+      messages.flatMap((msg) => (msg.message instanceof Uint8Array ? [msg.message.buffer] : [])),
+    );
   }
 
   public getMessageCursor(
     args: Omit<Immutable<MessageIteratorArgs>, "abort">,
     abort?: AbortSignal,
-  ): IMessageCursor & Comlink.ProxyMarked {
-    const iter = this._source.messageIterator(args);
-    const cursor = new IteratorCursor(iter, abort);
+  ): IMessageCursor<MessageType> & Comlink.ProxyMarked {
+    const iter = this.#source.messageIterator(args);
+    const cursor = new ComlinkTransferIteratorCursor(new IteratorCursor<MessageType>(iter, abort));
     return Comlink.proxy(cursor);
+  }
+
+  public async terminate(): Promise<void> {
+    await this.#source.terminate?.();
   }
 }
 
