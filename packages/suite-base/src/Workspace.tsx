@@ -68,7 +68,6 @@ import { TopicList } from "@lichtblick/suite-base/components/TopicList";
 import VariablesList from "@lichtblick/suite-base/components/VariablesList";
 import { WorkspaceDialogs } from "@lichtblick/suite-base/components/WorkspaceDialogs";
 import { AllowedFileExtensions } from "@lichtblick/suite-base/constants/allowedFileExtensions";
-import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
 import {
   LayoutState,
   useCurrentLayoutSelector,
@@ -84,7 +83,6 @@ import {
   LeftSidebarItemKey,
   RightSidebarItemKey,
   SidebarItemKey,
-  SidebarItemKeys,
   WorkspaceContextStore,
   useWorkspaceStore,
 } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
@@ -101,8 +99,7 @@ import { useStructureItemsStoreManager } from "@lichtblick/suite-base/panels/Plo
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { PanelStateContextProvider } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import WorkspaceContextProvider from "@lichtblick/suite-base/providers/WorkspaceContextProvider";
-import ICONS from "@lichtblick/suite-base/theme/icons";
-import { InjectedSidebarItem, Namespace, WorkspaceProps } from "@lichtblick/suite-base/types";
+import { Namespace, WorkspaceProps } from "@lichtblick/suite-base/types";
 import { parseAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import useBroadcast from "@lichtblick/suite-base/util/broadcast/useBroadcast";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
@@ -118,16 +115,6 @@ const ExtensionsSettings = lazy(
 const log = Logger.getLogger(__filename);
 
 const selectedLayoutIdSelector = (state: LayoutState) => state.selectedLayout?.id;
-
-function isInjectedSidebarItem(
-  item: [string, { iconName?: string; title: string }],
-): item is InjectedSidebarItem {
-  return (
-    SidebarItemKeys.some((itemKey) => itemKey === item[0]) &&
-    item[1].iconName != undefined &&
-    Object.keys(ICONS).includes(item[1].iconName)
-  );
-}
 
 const selectPlayerPresence = ({ playerState }: MessagePipelineContext) => playerState.presence;
 const selectPlayerIsPresent = ({ playerState }: MessagePipelineContext) =>
@@ -151,7 +138,6 @@ const selectWorkspaceRightSidebarOpen = (store: WorkspaceContextStore) => store.
 const selectWorkspaceRightSidebarSize = (store: WorkspaceContextStore) => store.sidebars.right.size;
 
 function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
-  const { PerformanceSidebarComponent } = useAppContext();
   const { classes } = useStyles();
   const containerRef = useRef<HTMLDivElement>(ReactNull);
   const { availableSources, selectSource } = usePlayerSelection();
@@ -238,8 +224,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   const [initialEnableNewTopNav] = useState(currentEnableNewTopNav);
   const enableNewTopNav = isDesktopApp() ? initialEnableNewTopNav : currentEnableNewTopNav;
 
-  const { sidebarItems: appContextSidebarItems } = useAppContext();
-
   // When a player is activated, hide the open dialog.
   useLayoutEffect(() => {
     if (
@@ -322,8 +306,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     };
   }, []);
 
-  const { layoutBrowser: AppContextLayoutBrowser } = useAppContext();
-
   const [sidebarItems, sidebarBottomItems] = useMemo(() => {
     const topItems = new Map<SidebarItemKey, SidebarItem>([
       [
@@ -344,7 +326,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       topItems.set("layouts", {
         iconName: "FiveTileGrid",
         title: "Layouts",
-        component: AppContextLayoutBrowser ?? LayoutBrowser,
+        component: LayoutBrowser,
       });
       topItems.set("add-panel", {
         iconName: "RectangularClipping",
@@ -388,12 +370,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         });
       }
 
-      for (const item of appContextSidebarItems ?? []) {
-        if (isInjectedSidebarItem(item)) {
-          bottomItems.set(item[0], item[1]);
-        }
-      }
-
       bottomItems.set("app-settings", {
         iconName: "Settings",
         title: "Settings",
@@ -407,10 +383,8 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     highestSeverity,
     enableNewTopNav,
     enableStudioLogsSidebar,
-    AppContextLayoutBrowser,
     supportsAccountSettings,
     currentUser,
-    appContextSidebarItems,
   ]);
 
   const eventsSupported = useEvents(selectEventsSupported);
@@ -447,12 +421,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       ],
     ]);
     if (enableDebugMode) {
-      if (PerformanceSidebarComponent) {
-        items.set("performance", {
-          title: t("workspace:performance"),
-          component: PerformanceSidebarComponent,
-        });
-      }
       items.set("logs-settings", {
         title: t("workspace:studioLogs"),
         component: StudioLogsSettings,
@@ -465,7 +433,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       });
     }
     return items;
-  }, [enableDebugMode, showEventsTab, PerformanceSidebarComponent]);
+  }, [enableDebugMode, showEventsTab]);
 
   const keyboardEventHasModifier = (event: KeyboardEvent) =>
     navigator.userAgent.includes("Mac") ? event.metaKey : event.ctrlKey;
@@ -807,8 +775,6 @@ export default function Workspace(props: WorkspaceProps): React.JSX.Element {
     AppSetting.SHOW_OPEN_DIALOG_ON_STARTUP,
   );
 
-  const { workspaceStoreCreator } = useAppContext();
-
   const isPlayerPresent = useMessagePipeline(selectPlayerIsPresent);
 
   const initialItem: undefined | DataSourceDialogItem =
@@ -831,7 +797,6 @@ export default function Workspace(props: WorkspaceProps): React.JSX.Element {
   return (
     <WorkspaceContextProvider
       initialState={initialState}
-      workspaceStoreCreator={workspaceStoreCreator}
       disablePersistenceForStorybook={props.disablePersistenceForStorybook}
     >
       <WorkspaceContent {...props} />

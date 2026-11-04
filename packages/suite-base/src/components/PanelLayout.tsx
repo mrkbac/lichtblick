@@ -28,7 +28,6 @@ import {
 import { EmptyPanelLayout } from "@lichtblick/suite-base/components/EmptyPanelLayout";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
 import {
   LayoutState,
   useCurrentLayoutActions,
@@ -212,7 +211,6 @@ const selectedLayoutMosaicSelector = (state: LayoutState) => state.selectedLayou
 
 export default function PanelLayout(): React.JSX.Element {
   const { classes } = useStyles();
-  const { layoutEmptyState } = useAppContext();
   const { changePanelLayout } = useCurrentLayoutActions();
   const layoutExists = useCurrentLayoutSelector(selectedLayoutExistsSelector);
   const mosaicLayout = useCurrentLayoutSelector(selectedLayoutMosaicSelector);
@@ -249,10 +247,6 @@ export default function PanelLayout(): React.JSX.Element {
         loadingComponent={loadingComponent}
       />
     );
-  }
-
-  if (layoutEmptyState) {
-    return layoutEmptyState;
   }
 
   return <></>;

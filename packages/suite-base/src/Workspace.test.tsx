@@ -13,7 +13,6 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import Sidebars from "@lichtblick/suite-base/components/Sidebars";
 import { SidebarItem } from "@lichtblick/suite-base/components/Sidebars/types";
-import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
 import {
   useCurrentUser,
   useCurrentUserType,
@@ -158,9 +157,6 @@ vi.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", () => ({
 vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   useMessagePipeline: vi.fn(),
   useMessagePipelineGetter: vi.fn(),
-}));
-vi.mock("@lichtblick/suite-base/context/AppContext", () => ({
-  useAppContext: vi.fn(),
 }));
 vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
   useCurrentLayoutSelector: vi.fn().mockReturnValue(undefined),
@@ -311,12 +307,6 @@ describe("Workspace - alerts badge in leftSidebarItems", () => {
       (selector: (store: { eventsSupported: boolean; selectEvent: Mock }) => unknown) =>
         selector({ eventsSupported: false, selectEvent: vi.fn() }),
     );
-    (useAppContext as Mock).mockReturnValue({
-      PerformanceSidebarComponent: undefined,
-      sidebarItems: [],
-      layoutBrowser: undefined,
-      workspaceStoreCreator: undefined,
-    });
   });
 
   afterEach(() => {
@@ -403,12 +393,6 @@ describe("Workspace - session-based MCAP resolution", () => {
       (selector: (store: { eventsSupported: boolean; selectEvent: Mock }) => unknown) =>
         selector({ eventsSupported: false, selectEvent: vi.fn() }),
     );
-    (useAppContext as Mock).mockReturnValue({
-      PerformanceSidebarComponent: undefined,
-      sidebarItems: [],
-      layoutBrowser: undefined,
-      workspaceStoreCreator: undefined,
-    });
   });
 
   it("should fetch session and call selectSource with resolved URLs and metadata", async () => {
@@ -508,12 +492,6 @@ describe("Workspace - fetchLayoutFromUrl", () => {
       (selector: (store: { eventsSupported: boolean; selectEvent: Mock }) => unknown) =>
         selector({ eventsSupported: false, selectEvent: vi.fn() }),
     );
-    (useAppContext as Mock).mockReturnValue({
-      PerformanceSidebarComponent: undefined,
-      sidebarItems: [],
-      layoutBrowser: undefined,
-      workspaceStoreCreator: undefined,
-    });
   };
 
   beforeEach(() => {

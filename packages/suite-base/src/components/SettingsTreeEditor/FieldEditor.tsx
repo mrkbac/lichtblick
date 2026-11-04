@@ -28,7 +28,6 @@ import { useStyles } from "@lichtblick/suite-base/components/SettingsTreeEditor/
 import { LegendControls } from "@lichtblick/suite-base/components/SettingsTreeEditor/inputs/LegendControls";
 import { FieldEditorProps } from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { ColorGradientInput, ColorPickerInput, NumberInput, Vec2Input, Vec3Input } from "./inputs";
@@ -455,12 +454,6 @@ function FieldEditorComponent(props: Readonly<FieldEditorProps>): React.JSX.Elem
   const paddingLeft = 0.75 + 2 * (indent - 1);
   const { classes, cx } = useStyles();
 
-  const { renderSettingsStatusButton } = useAppContext();
-
-  const statusButton = renderSettingsStatusButton
-    ? renderSettingsStatusButton(props.field)
-    : undefined;
-
   return (
     <>
       <Stack
@@ -472,7 +465,6 @@ function FieldEditorComponent(props: Readonly<FieldEditorProps>): React.JSX.Elem
         fullHeight
         data-testid="FieldEditor"
       >
-        {statusButton}
         {props.field.error && (
           <Tooltip
             arrow

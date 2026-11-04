@@ -35,7 +35,6 @@ import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import { ExperimentalFeatureSettings } from "@lichtblick/suite-base/components/ExperimentalFeatureSettings";
 import LichtblickLogoText from "@lichtblick/suite-base/components/LichtblickLogoText";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
 import {
   useWorkspaceStore,
   WorkspaceContextStore,
@@ -78,8 +77,6 @@ export function AppSettingsDialog(
   const { classes, cx, theme } = useStyles();
   const smUp = useMediaQuery(theme.breakpoints.up("sm"));
 
-  const { extensionSettings } = useAppContext();
-
   // automatic updates are a desktop-only setting
   const supportsAppUpdates = isDesktopApp();
 
@@ -92,12 +89,6 @@ export function AppSettingsDialog(
       props.onClose(event, "backdropClick");
     }
   };
-
-  const extensionSettingsComponent = extensionSettings ?? (
-    <Suspense>
-      <ExtensionsSettings />
-    </Suspense>
-  );
 
   return (
     <Dialog {...props} fullWidth maxWidth="md" data-testid={`AppSettingsDialog--${activeTab}`}>
@@ -163,7 +154,11 @@ export function AppSettingsDialog(
               [classes.tabPanelActive]: activeTab === "extensions",
             })}
           >
-            <Stack gap={2}>{extensionSettingsComponent}</Stack>
+            <Stack gap={2}>
+              <Suspense>
+                <ExtensionsSettings />
+              </Suspense>
+            </Stack>
           </section>
 
           <section
