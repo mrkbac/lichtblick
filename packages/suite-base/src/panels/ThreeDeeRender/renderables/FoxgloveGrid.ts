@@ -21,8 +21,9 @@ import {
   colorModeSettingsFields,
   getColorConverter,
 } from "./colorMode";
-import type { AnyRendererSubscription, IRenderer } from "../IRenderer";
+import type { AnyRendererSubscription } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import {
   PartialMessage,
   PartialMessageEvent,
@@ -398,7 +399,7 @@ export class FoxgloveGrid extends SceneExtension<FoxgloveGridRenderable> {
   public static extensionId = "foxglove.Grid";
   #fieldsByTopic = new Map<string, string[]>();
 
-  public constructor(renderer: IRenderer, name: string = FoxgloveGrid.extensionId) {
+  public constructor(renderer: Renderer, name: string = FoxgloveGrid.extensionId) {
     super(name, renderer);
   }
 
@@ -651,7 +652,7 @@ function createGridGeometry(): THREE.PlaneGeometry {
   return geometry;
 }
 
-function invalidFoxgloveGridError(renderer: IRenderer, topic: string, message: string): void {
+function invalidFoxgloveGridError(renderer: Renderer, topic: string, message: string): void {
   renderer.settings.errors.addToTopic(topic, INVALID_LICHTBLICK_GRID, message);
 }
 

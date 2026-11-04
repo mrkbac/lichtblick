@@ -37,8 +37,9 @@ import {
   getColorConverter,
   colorFieldComputedPrefix,
 } from "./colorMode";
-import type { AnyRendererSubscription, IRenderer } from "../IRenderer";
+import type { AnyRendererSubscription } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import { PartialMessage, PartialMessageEvent, SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../SettingsManager";
 import { POINTCLOUD_DATATYPES as FOXGLOVE_POINTCLOUD_DATATYPES } from "../foxglove";
@@ -153,7 +154,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   #stixelsHistory: RenderObjectHistory<StixelsRenderable>;
   #cubeMaterials: CubeMaterials;
 
-  public constructor(topic: string, renderer: IRenderer, userData: PointCloudHistoryUserData) {
+  public constructor(topic: string, renderer: Renderer, userData: PointCloudHistoryUserData) {
     super(topic, renderer, userData);
 
     const isDecay = userData.settings.decayTime > 0;
@@ -827,7 +828,7 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
   public static extensionId = "foxglove.PointClouds";
   #fieldsByTopic = new Map<string, string[]>();
 
-  public constructor(renderer: IRenderer, name: string = PointClouds.extensionId) {
+  public constructor(renderer: Renderer, name: string = PointClouds.extensionId) {
     super(name, renderer);
   }
 

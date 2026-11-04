@@ -34,7 +34,7 @@ import { IMAGE_ANNOTATIONS_DATATYPES } from "../../../foxglove";
 import { IMAGE_MARKER_ARRAY_DATATYPES, IMAGE_MARKER_DATATYPES } from "../../../ros";
 import { topicIsConvertibleToSchema } from "../../../topicIsConvertibleToSchema";
 import { sortPrefixMatchesToFront } from "../../Images/topicPrefixMatching";
-import { IMessageHandler, MessageRenderState } from "../MessageHandler";
+import { MessageHandler, MessageRenderState } from "../MessageHandler";
 
 const MISSING_SYNCHRONIZED_ANNOTATION = "MISSING_SYNCHRONIZED_ANNOTATION";
 
@@ -50,7 +50,7 @@ interface ImageAnnotationsContext {
   updateConfig(updateHandler: (draft: ImageModeConfig) => void): void;
   updateSettingsTree(): void;
   labelPool: LabelPool;
-  messageHandler: IMessageHandler;
+  messageHandler: MessageHandler;
   addSettingsError(path: Path, errorId: string, errorMessage: string): void;
   removeSettingsError(path: Path, errorId: string): void;
 }

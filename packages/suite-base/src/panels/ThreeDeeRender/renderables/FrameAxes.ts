@@ -21,8 +21,9 @@ import {
 } from "@lichtblick/suite";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
-import type { IRenderer, RendererConfig } from "../IRenderer";
+import type { RendererConfig } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { getLuminance, stringToRgb } from "../color";
@@ -98,7 +99,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
   #defaultRenderableSettings: LayerSettingsTransform;
 
   public constructor(
-    renderer: IRenderer,
+    renderer: Renderer,
     defaultRenderableSettings: Partial<LayerSettingsTransform>,
     name: string = FrameAxes.extensionId,
   ) {

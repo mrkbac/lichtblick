@@ -32,9 +32,10 @@ import {
   rememberSource,
 } from "@lichtblick/suite-base/panels/Map/savedSources";
 
-import type { AnyRendererSubscription, IRenderer } from "../IRenderer";
+import type { AnyRendererSubscription } from "../IRenderer";
 import { createBundledDracoLoader } from "../ModelCache";
 import { BaseUserData, Renderable } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import { SceneExtension, onlyLastByTopicMessage } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { normalizeTime } from "../normalizeMessages";
@@ -206,7 +207,7 @@ class MapRenderable extends Renderable<MapUserData> {
 
   public constructor(
     name: string,
-    renderer: IRenderer,
+    renderer: Renderer,
     userData: MapUserData,
     onErrorsChanged: () => void,
   ) {
@@ -687,7 +688,7 @@ export class Maps extends SceneExtension<MapRenderable> {
   #fixes = new Map<string, MessageEvent<LocationMessage>>();
   #anchors = new Map<string, Anchor>();
 
-  public constructor(renderer: IRenderer, name: string = Maps.extensionId) {
+  public constructor(renderer: Renderer, name: string = Maps.extensionId) {
     super(name, renderer);
     renderer.addCustomLayerAction({
       layerId: LAYER_ID,

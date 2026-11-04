@@ -11,7 +11,8 @@ import * as _ from "lodash-es";
 import { SettingsTreeAction } from "@lichtblick/suite";
 
 import { PublishClickType } from "./PublishClickTool";
-import type { IRenderer, RendererConfig } from "../IRenderer";
+import type { RendererConfig } from "../IRenderer";
+import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 
@@ -27,7 +28,7 @@ export const DEFAULT_PUBLISH_SETTINGS: RendererConfig["publish"] = {
 
 export class PublishSettings extends SceneExtension {
   public static extensionId = "foxglove.PublishSettings";
-  public constructor(renderer: IRenderer, name: string = PublishSettings.extensionId) {
+  public constructor(renderer: Renderer, name: string = PublishSettings.extensionId) {
     super(name, renderer);
 
     renderer.publishClickTool.addEventListener(

@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { Time, subtract, toSec } from "@foxglove/rostime";
 import InsightsIcon from "@mui/icons-material/Insights";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
@@ -16,7 +17,6 @@ import * as _ from "lodash-es";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { formatByteSize } from "@lichtblick/den/format";
-import { Time, subtract, toSec } from "@foxglove/rostime";
 import { MessageEvent, SettingsTreeAction } from "@lichtblick/suite";
 import { useMessageReducer } from "@lichtblick/suite-base/PanelAPI";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
@@ -44,6 +44,7 @@ import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { Topic, TopicStats } from "@lichtblick/suite-base/players/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import {
   DEFAULT_CONFIG,
@@ -54,6 +55,7 @@ import {
   TopicHealthStatus,
   TopicSettings,
   averageRate,
+  formatSeconds,
   recordingAge,
   recordingRate,
   sampleLiveRates,
@@ -106,13 +108,6 @@ function formatHz(hz: number | undefined): string {
     return "—";
   }
   return hz >= 100 ? hz.toFixed(0) : hz >= 10 ? hz.toFixed(1) : hz.toFixed(2);
-}
-
-function formatSeconds(seconds: number | undefined): string {
-  if (seconds == undefined) {
-    return "—";
-  }
-  return seconds < 1 ? `${(seconds * 1000).toFixed(0)} ms` : `${seconds.toFixed(1)} s`;
 }
 
 function Sparkline({ values, label }: { values: readonly number[]; label: string }) {
@@ -302,7 +297,7 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
       },
     }).catch((err: unknown) => {
       if (!controller.signal.aborted) {
-        setScanError(err instanceof Error ? err.message : String(err));
+        setScanError(toError(err).message);
       }
     });
     return () => {

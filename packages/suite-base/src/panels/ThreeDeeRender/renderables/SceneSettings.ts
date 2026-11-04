@@ -10,8 +10,8 @@ import * as _ from "lodash-es";
 
 import { SettingsTreeAction, SettingsTreeFields } from "@lichtblick/suite";
 
-import type { IRenderer } from "../IRenderer";
 import { DEFAULT_MESH_UP_AXIS } from "../ModelCache";
+import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 
@@ -19,7 +19,7 @@ export const DEFAULT_LABEL_SCALE_FACTOR = 1;
 
 export class SceneSettings extends SceneExtension {
   public static extensionId = "foxglove.SceneSettings";
-  public constructor(renderer: IRenderer, name: string = SceneSettings.extensionId) {
+  public constructor(renderer: Renderer, name: string = SceneSettings.extensionId) {
     super(name, renderer);
 
     renderer.labelPool.scaleFactor =

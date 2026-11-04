@@ -8,6 +8,7 @@
 import { toNanoSec } from "@foxglove/rostime";
 import { SceneEntity, SceneEntityDeletion, SceneEntityDeletionType } from "@foxglove/schemas";
 
+import { BaseUserData, Renderable } from "../Renderable";
 import { PrimitivePool } from "./primitives/PrimitivePool";
 import { RenderableArrows } from "./primitives/RenderableArrows";
 import { RenderableCubes } from "./primitives/RenderableCubes";
@@ -19,8 +20,7 @@ import { RenderableTexts } from "./primitives/RenderableTexts";
 import { RenderableTriangles } from "./primitives/RenderableTriangles";
 import { ALL_PRIMITIVE_TYPES, PrimitiveType } from "./primitives/constants";
 import { missingTransformMessage, MISSING_TRANSFORM } from "./transforms";
-import type { IRenderer } from "../IRenderer";
-import { BaseUserData, Renderable } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import { LayerSettingsEntity } from "../settings";
 import { updatePose } from "../updatePose";
 
@@ -60,7 +60,7 @@ export class TopicEntities extends Renderable<EntityTopicUserData> {
   public constructor(
     name: string,
     private primitivePool: PrimitivePool,
-    renderer: IRenderer,
+    renderer: Renderer,
     userData: EntityTopicUserData,
   ) {
     super(name, renderer, userData);

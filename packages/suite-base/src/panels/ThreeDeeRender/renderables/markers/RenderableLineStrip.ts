@@ -16,8 +16,8 @@ import {
   makeLinePickingMaterial,
   markerHasTransparency,
 } from "./materials";
-import type { IRenderer } from "../../IRenderer";
 import { LineMaterialWithAlphaVertex } from "../../LineMaterialWithAlphaVertex";
+import type { Renderer } from "../../Renderer";
 import { Marker } from "../../ros";
 
 const tempTuple4: THREE.Vector4Tuple = [0, 0, 0, 0];
@@ -33,7 +33,7 @@ export class RenderableLineStrip extends RenderableMarker {
     topic: string,
     marker: Marker,
     receiveTime: bigint | undefined,
-    renderer: IRenderer,
+    renderer: Renderer,
   ) {
     super(topic, marker, receiveTime, renderer);
 

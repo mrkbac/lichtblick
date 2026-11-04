@@ -44,7 +44,7 @@ import {
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
-import type { IRenderer, ImageModeConfig, RendererConfig, RendererSubscription } from "./IRenderer";
+import type { ImageModeConfig, RendererConfig, RendererSubscription } from "./IRenderer";
 import type { Path } from "./LayerErrors";
 import type { PickedRenderable } from "./Picker";
 import { SELECTED_ID_VARIABLE } from "./Renderable";
@@ -88,7 +88,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     context,
     interfaceMode,
     testOptions,
-    customSceneExtensions,
     customCameraModels,
     enqueueSnackbarFromParent,
     logError,
@@ -139,8 +138,8 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const backgroundColor = config.scene.backgroundColor;
 
   const [canvas, setCanvas] = useState<HTMLCanvasElement | ReactNull>(ReactNull);
-  const [renderer, setRenderer] = useState<IRenderer | undefined>(undefined);
-  const rendererRef = useRef<IRenderer | undefined>(undefined);
+  const [renderer, setRenderer] = useState<Renderer | undefined>(undefined);
+  const rendererRef = useRef<Renderer | undefined>(undefined);
   const {
     canvasKey,
     status: contextStatus,
@@ -163,11 +162,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
           config: configRef.current,
           interfaceMode,
           fetchAsset,
-          sceneExtensionConfig: _.merge(
-            {},
-            DEFAULT_SCENE_EXTENSION_CONFIG,
-            customSceneExtensions ?? {},
-          ),
+          sceneExtensionConfig: DEFAULT_SCENE_EXTENSION_CONFIG,
           displayTemporaryError,
           testOptions,
           customCameraModels,
@@ -183,7 +178,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     canvas,
     configRef,
     config.scene.transforms?.enablePreloading,
-    customSceneExtensions,
     customCameraModels,
     interfaceMode,
     fetchAsset,
@@ -297,13 +291,13 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
 
   // Maintain the settings tree
   const [settingsTree, setSettingsTree] = useState<SettingsTreeNodes | undefined>(undefined);
-  const updateSettingsTree = useCallback((curRenderer: IRenderer) => {
+  const updateSettingsTree = useCallback((curRenderer: Renderer) => {
     setSettingsTree(curRenderer.settings.tree());
   }, []);
   useRendererEvent("settingsTreeChange", updateSettingsTree, renderer);
 
   // Save the panel configuration when it changes
-  const updateConfig = useCallback((curRenderer: IRenderer) => {
+  const updateConfig = useCallback((curRenderer: Renderer) => {
     setConfig(curRenderer.config);
   }, []);
   useRendererEvent("configChange", updateConfig, renderer);

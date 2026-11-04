@@ -10,8 +10,9 @@ import { toNanoSec } from "@foxglove/rostime";
 import { SettingsTreeAction, SettingsTreeFields } from "@lichtblick/suite";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
-import type { AnyRendererSubscription, IRenderer } from "../IRenderer";
+import type { AnyRendererSubscription } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import {
   PartialMessage,
   PartialMessageEvent,
@@ -71,7 +72,7 @@ export class PolygonRenderable extends Renderable<PolygonUserData> {
 
 export class Polygons extends SceneExtension<PolygonRenderable> {
   public static extensionId = "foxglove.Polygons";
-  public constructor(renderer: IRenderer, name: string = Polygons.extensionId) {
+  public constructor(renderer: Renderer, name: string = Polygons.extensionId) {
     super(name, renderer);
   }
 

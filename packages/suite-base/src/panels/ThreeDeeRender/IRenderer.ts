@@ -5,81 +5,50 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { LabelPool } from "@foxglove/three-text";
-import EventEmitter from "eventemitter3";
 import * as THREE from "three";
 
-import { CameraModelsMap } from "@lichtblick/den/image/types";
-import {
-  Immutable,
-  MessageEvent,
-  ParameterValue,
-  SettingsIcon,
-  Topic,
-  VariableValue,
-} from "@lichtblick/suite";
-import { PanelContextMenuItem } from "@lichtblick/suite-base/components/PanelContextMenu";
-import {
-  BuiltinPanelExtensionContext,
-  DraggedMessagePath,
-  MessagePathDropStatus,
-} from "@lichtblick/suite-base/components/PanelExtensionAdapter";
-import {
-  HUDItemManager,
-  HUDItem,
-} from "@lichtblick/suite-base/panels/ThreeDeeRender/HUDItemManager";
-import { ICameraHandler } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ICameraHandler";
-import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
+import { Immutable, MessageEvent, ParameterValue } from "@lichtblick/suite";
 
-import { Input } from "./Input";
-import { MeshUpAxis, ModelCache } from "./ModelCache";
+import { MeshUpAxis } from "./ModelCache";
 import { PickedRenderable } from "./Picker";
-import { SceneExtension } from "./SceneExtension";
-import { SettingsManager } from "./SettingsManager";
-import { SharedGeometry } from "./SharedGeometry";
+import type { Renderer } from "./Renderer";
 import { CameraState } from "./camera";
-import { DetailLevel } from "./lod";
 import { LayerSettingsTransform } from "./renderables/FrameAxes";
-import { MeasurementTool } from "./renderables/MeasurementTool";
-import { PublishClickTool, PublishClickType } from "./renderables/PublishClickTool";
+import { PublishClickType } from "./renderables/PublishClickTool";
 import { ColorModeSettings } from "./renderables/colorMode";
-import { MarkerPool } from "./renderables/markers/MarkerPool";
-import { Quaternion, Vector3 } from "./ros";
-import { BaseSettings, CustomLayerSettings, SelectEntry } from "./settings";
-import { AddTransformResult, TransformTree } from "./transforms";
-import { InterfaceMode } from "./types";
+import { BaseSettings, CustomLayerSettings } from "./settings";
 
 export type RendererEvents = {
-  startFrame: (currentTime: bigint, renderer: IRenderer) => void;
-  endFrame: (currentTime: bigint, renderer: IRenderer) => void;
-  cameraMove: (renderer: IRenderer) => void;
+  startFrame: (currentTime: bigint, renderer: Renderer) => void;
+  endFrame: (currentTime: bigint, renderer: Renderer) => void;
+  cameraMove: (renderer: Renderer) => void;
   renderablesClicked: (
     selections: PickedRenderable[],
     cursorCoords: { x: number; y: number },
-    renderer: IRenderer,
+    renderer: Renderer,
   ) => void;
-  selectedRenderable: (selection: PickedRenderable | undefined, renderer: IRenderer) => void;
+  selectedRenderable: (selection: PickedRenderable | undefined, renderer: Renderer) => void;
   renderableHovered: (
     selections: PickedRenderable[],
     cursorCoords: { x: number; y: number },
-    renderer: IRenderer,
+    renderer: Renderer,
   ) => void;
-  hoverMoved: (cursorCoords: { x: number; y: number }, renderer: IRenderer) => void;
+  hoverMoved: (cursorCoords: { x: number; y: number }, renderer: Renderer) => void;
   parametersChange: (
     parameters: ReadonlyMap<string, ParameterValue> | undefined,
-    renderer: IRenderer,
+    renderer: Renderer,
   ) => void;
   /** Fired when the structure of the transform tree changes ie: new frame added/removed or frame assigned new parent */
-  transformTreeUpdated: (renderer: IRenderer) => void;
-  settingsTreeChange: (renderer: IRenderer) => void;
-  configChange: (renderer: IRenderer) => void;
-  schemaSubscriptionsChanged: (renderer: IRenderer) => void;
-  topicSubscriptionsChanged: (renderer: IRenderer) => void;
-  topicsChanged: (renderer: IRenderer) => void;
-  resetViewChanged: (renderer: IRenderer) => void;
-  resetAllFramesCursor: (renderer: IRenderer) => void;
-  hudItemsChanged: (renderer: IRenderer) => void;
-  clearPreloadBuffer: (renderer: IRenderer) => void;
+  transformTreeUpdated: (renderer: Renderer) => void;
+  settingsTreeChange: (renderer: Renderer) => void;
+  configChange: (renderer: Renderer) => void;
+  schemaSubscriptionsChanged: (renderer: Renderer) => void;
+  topicSubscriptionsChanged: (renderer: Renderer) => void;
+  topicsChanged: (renderer: Renderer) => void;
+  resetViewChanged: (renderer: Renderer) => void;
+  resetAllFramesCursor: (renderer: Renderer) => void;
+  hudItemsChanged: (renderer: Renderer) => void;
+  clearPreloadBuffer: (renderer: Renderer) => void;
 };
 
 export type FollowMode = "follow-pose" | "follow-position" | "follow-none";
@@ -244,200 +213,3 @@ export class InstancedLineMaterial extends THREE.LineBasicMaterial {
 export type AddMessageEventOptions = {
   inBatch: boolean;
 };
-
-export interface IRenderer extends EventEmitter<RendererEvents> {
-  readonly interfaceMode: InterfaceMode;
-  readonly gl: THREE.WebGLRenderer;
-  readonly testOptions: TestOptions;
-  customCameraModels: CameraModelsMap;
-  maxLod: DetailLevel;
-  config: Immutable<RendererConfig>;
-  settings: SettingsManager;
-  hud: HUDItemManager;
-  debugPicking: boolean;
-  // [{ name, datatype }]
-  topics: ReadonlyArray<Topic> | undefined;
-  // topicName -> { name, datatype }
-  topicsByName: ReadonlyMap<string, Topic> | undefined;
-  // parameterKey -> parameterValue
-  parameters: ReadonlyMap<string, ParameterValue> | undefined;
-  // variableName -> variableValue
-  variables: ReadonlyMap<string, VariableValue>;
-  // extensionId -> SceneExtension
-  sceneExtensions: Map<string, SceneExtension>;
-  // datatype -> RendererSubscription[]
-  schemaSubscriptions: Map<string, RendererSubscription[]>;
-  // topicName -> RendererSubscription[]
-  topicSubscriptions: Map<string, RendererSubscription[]>;
-  // layerId -> { action, handler }
-  input: Input;
-  readonly outlineMaterial: THREE.LineBasicMaterial;
-  readonly instancedOutlineMaterial: InstancedLineMaterial;
-
-  measurementTool: MeasurementTool;
-  publishClickTool: PublishClickTool;
-
-  /** only public for testing - prefer to use `getCameraState` instead */
-  cameraHandler: ICameraHandler;
-
-  // Are we connected to a ROS data source? Normalize coordinate frames if so by
-  // stripping any leading "/" prefix. See `normalizeFrameId()` for details.
-  ros: boolean;
-
-  colorScheme: "dark" | "light";
-  modelCache: ModelCache;
-  transformTree: TransformTree;
-  coordinateFrameList: SelectEntry[];
-  currentTime: bigint;
-  /** Coordinate frame that transforms are applied through to the follow frame. Should be unchanging. */
-  fixedFrameId: string | undefined;
-  /**
-   * The frameId that we _want_ to follow and render in if it exists.
-   */
-  readonly followFrameId: string | undefined;
-
-  labelPool: LabelPool;
-  markerPool: MarkerPool;
-  sharedGeometry: SharedGeometry;
-
-  /** Optional analytics API to log events in Renderer or SceneExtensions */
-  analytics?: IAnalytics;
-  setAnalytics(analytics: IAnalytics): void;
-  enableImageOnlySubscriptionMode: () => void;
-  disableImageOnlySubscriptionMode: () => void;
-
-  dispose(): void;
-  cameraSyncError(): undefined | string;
-  setCameraSyncError(error: undefined | string): void;
-  getPixelRatio(): number;
-
-  /**
-   *
-   * @param currentTime what renderer.currentTime will be set to
-   */
-  setCurrentTime(newTimeNs: bigint): void;
-
-  /**
-   * Updates renderer state according to seek delta. Handles clearing of future state and resetting of allFrames cursor if seeked backwards
-   * Should be called after `setCurrentTime` as been called
-   * @param oldTime used to determine if seeked backwards
-   */
-  handleSeek(oldTimeNs: bigint): void;
-
-  /**
-   * Clears:
-   *  - Rendered objects (a backfill is performed to ensure that they are regenerated with new messages from current frame)
-   *  - Errors in settings. Messages that caused errors in the past are cleared, but will be re-added if they are still causing errors when read in.
-   *  - [Optional] Transform tree. This should be set to true when a seek to a previous time is performed in order to flush potential future state to the newly set time.
-   *  - [Optional] allFramesCursor. This is the cursor that iterates through allFrames up to currentTime. It should be reset when seeking backwards to avoid keeping future state.
-   * @param {Object} params - modifiers to the clear operation
-   * @param {boolean} params.clearTransforms - whether to clear the transform tree. This should be set to true when a seek to a previous time is performed in order
-   * order to flush potential future state to the newly set time.
-   * @param {boolean} params.resetAllFramesCursor - whether to reset the cursor for the allFrames array.
-   */
-  clear(args: { clearTransforms?: boolean; resetAllFramesCursor?: boolean }): void;
-
-  /**
-   * Iterates through allFrames and handles messages with a receiveTime <= currentTime
-   * @param allFrames - array of all preloaded messages
-   * @returns {boolean} - whether the allFramesCursor has been updated and new messages were read in
-   */
-  handleAllFramesMessages(allFrames?: readonly MessageEvent[]): boolean;
-
-  updateConfig(updateHandler: (draft: RendererConfig) => void): void;
-
-  addCustomLayerAction(options: {
-    layerId: string;
-    label: string;
-    icon?: SettingsIcon;
-    handler: (instanceId: string) => void;
-  }): void;
-
-  /** Enable or disable object selection mode */
-  setPickingEnabled(enabled: boolean): void;
-
-  /** Update the color scheme and background color, rebuilding any materials as necessary */
-  setColorScheme(colorScheme: "dark" | "light", backgroundColor: string | undefined): void;
-
-  /** Re-apply renderer scene settings such as lighting and tone mapping from the current config */
-  updateSceneRenderSettings(): void;
-
-  /** Update the list of topics and rebuild all settings nodes when the identity
-   * of the topics list changes */
-  setTopics(topics: ReadonlyArray<Topic> | undefined): void;
-
-  setParameters(parameters: Immutable<Map<string, ParameterValue>> | undefined): void;
-
-  updateCustomLayersCount(): void;
-
-  setCameraState(cameraState: CameraState): void;
-
-  setCustomCameraModels(newCameraModels: CameraModelsMap): void;
-
-  getCameraState(): CameraState | undefined;
-
-  /** Whether the view has been modified and a reset button should be shown (image mode only). */
-  canResetView(): boolean;
-  /** Reset any manual view modifications (image mode only). */
-  resetView(): void;
-
-  setSelectedRenderable(selection: PickedRenderable | undefined): void;
-
-  addMessageEvent(
-    messageEvent: Readonly<MessageEvent>,
-    options?: Partial<AddMessageEventOptions>,
-  ): void;
-
-  /**  Set desired render/display frame, will render using fallback if id is undefined or frame does not exist */
-  setFollowFrameId(frameId: string | undefined): void;
-
-  /** Match the behavior of `tf::Transformer` by stripping leading slashes from
-   * frame_ids. This preserves compatibility with earlier versions of ROS while
-   * not breaking any current versions where:
-   * > tf2 does not accept frame_ids starting with "/"
-   * Source: <http://wiki.ros.org/tf2/Migration#tf_prefix_backwards_compatibility>
-   */
-  normalizeFrameId(frameId: string): string;
-
-  addCoordinateFrame(frameId: string): void;
-
-  // Create a new transform and add it to the renderer's TransformTree
-  addTransform(
-    parentFrameId: string,
-    childFrameId: string,
-    stamp: bigint,
-    translation: Vector3,
-    rotation: Quaternion,
-    errorSettingsPath?: string[],
-  ): AddTransformResult;
-
-  removeTransform(childFrameId: string, parentFrameId: string, stamp: bigint): void;
-
-  // Callback handlers
-  animationFrame: () => void;
-  queueAnimationFrame: () => void;
-
-  /**
-   * Resolves once all scene extensions have finished any in-flight asynchronous video decoding.
-   * Used by the panel to gate the frame barrier on a seek so the cursor parks on the target until
-   * the seek frame is actually rendered.
-   */
-  settleVideoDecodes(): Promise<void>;
-
-  // Function to fetch an asset from Studio's asset manager.
-  fetchAsset: BuiltinPanelExtensionContext["unstable_fetchAsset"];
-
-  /** Returns whether active scene extensions can handle the MessagePaths being dropped */
-  getDropStatus: (paths: readonly DraggedMessagePath[]) => MessagePathDropStatus;
-
-  /** Handles MessagePaths being dropped into the 3D panel. Allows scene extensions to update in response */
-  handleDrop: (paths: readonly DraggedMessagePath[]) => void;
-
-  /** Returns context menu items for active scene extensions. Takes Enqueue snackbar function for showing info that might result from option. */
-  getContextMenuItems: () => PanelContextMenuItem[];
-
-  /** Items to render in an over-canvas Heads-up display*/
-  hudItems: HUDItem[];
-
-  displayTemporaryError?: (message: string) => void;
-}
