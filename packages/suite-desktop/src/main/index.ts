@@ -147,8 +147,8 @@ export async function main(): Promise<void> {
     }
   });
 
-  if (!app.isDefaultProtocolClient("foxglove")) {
-    if (!app.setAsDefaultProtocolClient("foxglove")) {
+  if (!app.isDefaultProtocolClient("lichtblick")) {
+    if (!app.setAsDefaultProtocolClient("lichtblick")) {
       log.warn("Could not set app as handler for lichtblick://");
     }
   }
