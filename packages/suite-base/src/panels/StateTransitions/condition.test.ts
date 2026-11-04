@@ -51,6 +51,8 @@ describe("conditionMatches", () => {
     expect(matches("> 2", 2.5)).toBe(true);
     expect(matches("> 2", 2)).toBe(false);
     expect(matches(">= 2", 2n)).toBe(true);
+    expect(matches("== 9007199254740993", 9007199254740993n)).toBe(true);
+    expect(matches("== 9007199254740993", 9007199254740992n)).toBe(false);
     expect(matches('== "ERROR"', "ERROR")).toBe(true);
     expect(matches("!= ERROR", "OK")).toBe(true);
     expect(matches("== true", true)).toBe(true);

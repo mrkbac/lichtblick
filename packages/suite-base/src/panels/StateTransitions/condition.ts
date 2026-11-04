@@ -36,7 +36,7 @@ export function parseCondition(input: string | undefined): MessagePathFilter | u
   };
 }
 
-function parseLiteral(literal: string): number | string | undefined {
+function parseLiteral(literal: string): number | bigint | string | undefined {
   const parts = LITERAL_RE.exec(literal);
   if (!parts) {
     return undefined;
@@ -50,6 +50,10 @@ function parseLiteral(literal: string): number | string | undefined {
     return literal === "true" ? 1 : 0;
   }
   const number = Number(literal);
+  // Integers beyond 2^53 stay exact as bigint so 64-bit values compare correctly.
+  if (/^-?\d+$/.test(literal) && !Number.isSafeInteger(number)) {
+    return BigInt(literal);
+  }
   return Number.isFinite(number) ? number : literal;
 }
 
