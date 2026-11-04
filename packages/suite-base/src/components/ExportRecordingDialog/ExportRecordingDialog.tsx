@@ -163,9 +163,9 @@ function ExportForm({
   const [busy, setBusy] = useState(false);
   // Progress lives in a ref and is shown by <ExportProgress>, so the form (with its large
   // topic table) doesn't re-render for every chunk.
-  const progressRef = useRef<number | undefined>();
+  const progressRef = useRef<number | undefined>(undefined);
   const [result, setResult] = useState<{ messageCount?: number; error?: string }>();
-  const abortRef = useRef<AbortController | undefined>();
+  const abortRef = useRef<AbortController | undefined>(undefined);
 
   // Start the workers (and their WASM) while the user is still choosing options.
   const [pool] = useState(createChunkWorkerPool);
