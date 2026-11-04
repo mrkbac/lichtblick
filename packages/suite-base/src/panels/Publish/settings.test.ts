@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock } from "vitest";
+
 import { renderHook, waitFor } from "@testing-library/react";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
@@ -11,8 +13,8 @@ import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { defaultConfig, usePublishPanelSettings } from "./settings";
 import { PublishConfig } from "./types";
 
-jest.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", () => ({
-  usePanelSettingsTreeUpdate: jest.fn(),
+vi.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", () => ({
+  usePanelSettingsTreeUpdate: vi.fn(),
 }));
 
 const datatypes: RosDatatypes = new Map([
@@ -22,16 +24,16 @@ const datatypes: RosDatatypes = new Map([
 const topics = [{ name: "/b", schemaName: "pkg/B" }];
 
 function setup(config: PublishConfig, { confirmResult }: { confirmResult: boolean }) {
-  const updateTree = jest.fn();
-  (usePanelSettingsTreeUpdate as jest.Mock).mockReturnValue(updateTree);
+  const updateTree = vi.fn();
+  (usePanelSettingsTreeUpdate as Mock).mockReturnValue(updateTree);
   let current = config;
-  const saveConfig = jest.fn((update: unknown) => {
+  const saveConfig = vi.fn((update: unknown) => {
     current =
       typeof update === "function"
         ? (update as (c: PublishConfig) => PublishConfig)(current)
         : { ...current, ...(update as Partial<PublishConfig>) };
   });
-  const confirmReplace = jest.fn(async () => confirmResult);
+  const confirmReplace = vi.fn(async () => confirmResult);
   renderHook(() => {
     usePublishPanelSettings(config, saveConfig, topics, datatypes, confirmReplace);
   });

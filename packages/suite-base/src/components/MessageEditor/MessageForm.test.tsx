@@ -30,7 +30,7 @@ const datatypes: RosDatatypes = new Map([
 ]);
 
 function setup(value: Record<string, unknown>) {
-  const onChange = jest.fn();
+  const onChange = vi.fn();
   render(
     <ThemeProvider isDark={false}>
       <MessageForm datatypes={datatypes} schemaName="pkg/Goal" value={value} onChange={onChange} />

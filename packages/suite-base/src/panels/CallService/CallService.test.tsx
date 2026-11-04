@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock } from "vitest";
+
 import "@testing-library/jest-dom";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -12,7 +14,7 @@ import PanelSetup, { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";
 import CallServicePanel from "./index";
 import { Config } from "./types";
 
-function setup(config: Partial<Config>, callService: jest.Mock) {
+function setup(config: Partial<Config>, callService: Mock) {
   const fixture: Fixture = {
     capabilities: [PLAYER_CAPABILITIES.callServices],
     datatypes: new Map([
@@ -36,7 +38,7 @@ function setup(config: Partial<Config>, callService: jest.Mock) {
 describe("CallService", () => {
   it("fills in the request template once the request type is known", async () => {
     // Given / When
-    setup({ requestPayload: "{}", editorMode: "json" }, jest.fn());
+    setup({ requestPayload: "{}", editorMode: "json" }, vi.fn());
 
     // Then
     await waitFor(() => {
@@ -45,7 +47,7 @@ describe("CallService", () => {
   });
 
   it("does not re-fill the template after the request was cleared", async () => {
-    setup({ requestPayload: "{}", editorMode: "json" }, jest.fn());
+    setup({ requestPayload: "{}", editorMode: "json" }, vi.fn());
     const textarea = await screen.findByLabelText("Message JSON");
     await waitFor(() => {
       expect(textarea).toHaveValue('{\n  "data": false\n}');
@@ -55,7 +57,7 @@ describe("CallService", () => {
   });
 
   it("calls the service with the form's request and shows the response", async () => {
-    const callService = jest.fn().mockResolvedValue({ success: true });
+    const callService = vi.fn().mockResolvedValue({ success: true });
     setup({ requestPayload: '{"data": true}' }, callService);
 
     expect(await screen.findByLabelText("data")).toBeChecked();
@@ -74,7 +76,7 @@ describe("CallService", () => {
   });
 
   it("calls the service on Ctrl+Enter and shows errors", async () => {
-    const callService = jest.fn().mockRejectedValue(new Error("Service unavailable"));
+    const callService = vi.fn().mockRejectedValue(new Error("Service unavailable"));
     setup({ requestPayload: '{"data": true}' }, callService);
 
     fireEvent.keyDown(await screen.findByLabelText("data"), { key: "Enter", metaKey: true });
@@ -86,7 +88,7 @@ describe("CallService", () => {
   });
 
   it("does not call the service with an invalid request", async () => {
-    const callService = jest.fn();
+    const callService = vi.fn();
     setup({ requestPayload: "{", editorMode: "json" }, callService);
 
     expect(await screen.findByTestId("call-service-button")).toBeDisabled();

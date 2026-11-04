@@ -21,16 +21,16 @@ function loseContext(canvas: HTMLCanvasElement): Event {
 }
 
 describe("useWebGLContextRecovery", () => {
-  const forceContextLoss = jest.fn();
+  const forceContextLoss = vi.fn();
   const gl = { forceContextLoss } as unknown as THREE.WebGLRenderer;
 
   beforeEach(() => {
-    jest.useFakeTimers();
-    jest.clearAllMocks();
+    vi.useFakeTimers();
+    vi.clearAllMocks();
   });
 
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   function setup() {
@@ -64,7 +64,7 @@ describe("useWebGLContextRecovery", () => {
 
     loseContext(canvas);
     act(() => {
-      jest.advanceTimersByTime(RESTORE_TIMEOUT_MS);
+      vi.advanceTimersByTime(RESTORE_TIMEOUT_MS);
     });
 
     expect(hook.result.current.status).toBe("ok");
@@ -75,7 +75,7 @@ describe("useWebGLContextRecovery", () => {
     const { canvas, hook } = setup();
     loseContext(canvas);
     act(() => {
-      jest.advanceTimersByTime(RESTORE_TIMEOUT_MS);
+      vi.advanceTimersByTime(RESTORE_TIMEOUT_MS);
     });
 
     // The recreated canvas is lost again, e.g. evicted because too many contexts are open
@@ -83,7 +83,7 @@ describe("useWebGLContextRecovery", () => {
     hook.rerender({ target: nextCanvas });
     loseContext(nextCanvas);
     act(() => {
-      jest.advanceTimersByTime(RESTORE_TIMEOUT_MS);
+      vi.advanceTimersByTime(RESTORE_TIMEOUT_MS);
     });
 
     expect(hook.result.current.status).toBe("paused");
@@ -99,7 +99,7 @@ describe("useWebGLContextRecovery", () => {
     const thirdCanvas = document.createElement("canvas");
     hook.rerender({ target: thirdCanvas });
     act(() => {
-      jest.advanceTimersByTime(MIN_AUTO_RECREATE_INTERVAL_MS);
+      vi.advanceTimersByTime(MIN_AUTO_RECREATE_INTERVAL_MS);
     });
     loseContext(thirdCanvas);
     expect(hook.result.current.status).toBe("restoring");

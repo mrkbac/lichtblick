@@ -9,7 +9,7 @@ import { Autocomplete, Checkbox, IconButton, TextField, Tooltip, Typography } fr
 import { ReactNode, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
-import { MessageDefinitionField } from "@lichtblick/message-definition";
+import { MessageDefinitionField } from "@foxglove/message-definition";
 import { Immutable } from "@lichtblick/suite";
 import { NumberInput } from "@lichtblick/suite-base/components/SettingsTreeEditor/inputs/NumberInput";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";

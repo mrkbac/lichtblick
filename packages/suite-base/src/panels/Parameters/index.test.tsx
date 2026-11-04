@@ -15,7 +15,7 @@ import Parameters, { ParametersConfig } from "./index";
 import { parametersToYaml } from "./utils";
 
 // jsdom has no layout, so render every row
-jest.mock("@tanstack/react-virtual", () => ({
+vi.mock("@tanstack/react-virtual", () => ({
   useVirtualizer: ({
     count,
     getItemKey,
@@ -30,7 +30,7 @@ jest.mock("@tanstack/react-virtual", () => ({
         start: 0,
       })),
     getTotalSize: () => 0,
-    measureElement: jest.fn(),
+    measureElement: vi.fn(),
   }),
 }));
 
@@ -50,7 +50,7 @@ function setup({
   config?: ParametersConfig;
   canSet?: boolean;
 } = {}) {
-  const setParameter = jest.fn();
+  const setParameter = vi.fn();
   const fixture = {
     topics: [],
     frame: {},
@@ -105,7 +105,7 @@ describe("Parameters panel", () => {
 
   it("submits quick edits to different parameters without dropping any", async () => {
     const { setParameter } = setup();
-    await userEvent.click(screen.getByRole("checkbox", { name: "/arm/enabled" }));
+    await userEvent.click(screen.getByRole("switch", { name: "/arm/enabled" }));
     await userEvent.type(screen.getByRole("textbox", { name: "/camera/exposure" }), "0{Enter}");
 
     expect(setParameter).toHaveBeenCalledWith("/arm/enabled", false);
@@ -146,7 +146,7 @@ describe("Parameters panel", () => {
 
 describe("ParameterEditor", () => {
   it("submits on Enter, resets on Escape and validates", async () => {
-    const onSubmit = jest.fn();
+    const onSubmit = vi.fn();
     render(<ParameterEditor name="p" value={1} onSubmit={onSubmit} />);
     const input = screen.getByRole("textbox", { name: "p" });
 
@@ -163,15 +163,15 @@ describe("ParameterEditor", () => {
   });
 
   it("keeps an in-progress edit when the value updates", async () => {
-    const { rerender } = render(<ParameterEditor name="p" value="a" onSubmit={jest.fn()} />);
+    const { rerender } = render(<ParameterEditor name="p" value="a" onSubmit={vi.fn()} />);
     const input = screen.getByRole("textbox", { name: "p" });
     await userEvent.type(input, "b");
-    rerender(<ParameterEditor name="p" value="remote" onSubmit={jest.fn()} />);
+    rerender(<ParameterEditor name="p" value="remote" onSubmit={vi.fn()} />);
     expect(input).toHaveValue("ab");
   });
 
   it("edits bytes as hex and objects as JSON", () => {
-    const onSubmit = jest.fn();
+    const onSubmit = vi.fn();
     render(
       <>
         <ParameterEditor name="bytes" value={new Uint8Array([0, 255])} onSubmit={onSubmit} />

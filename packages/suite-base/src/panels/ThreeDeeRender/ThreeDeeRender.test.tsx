@@ -1317,7 +1317,7 @@ describe("ThreeDeeRender", () => {
   });
   describe("WebGL context loss", () => {
     it("shows an overlay and remounts the canvas with a new renderer", () => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
       try {
         const { container, getByRole } = render(<ThreeDeeRender {...setup()} />);
         const canvas = container.querySelector("canvas")!;
@@ -1338,7 +1338,7 @@ describe("ThreeDeeRender", () => {
         expect(mockedRenderer.mock.calls[1]![0].canvas).toBe(newCanvas);
         expect(container.querySelector('[role="status"]')).toBeNull();
       } finally {
-        jest.useRealTimers();
+        vi.useRealTimers();
       }
     });
   });

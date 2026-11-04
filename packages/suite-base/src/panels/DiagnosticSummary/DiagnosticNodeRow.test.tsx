@@ -72,7 +72,7 @@ describe("DiagnosticNodeRow", () => {
     );
 
     const timeline = screen.getByTestId("diagnostic-timeline");
-    jest
+    vi
       .spyOn(timeline, "getBoundingClientRect")
       .mockReturnValue({ left: 0, width: 100 } as DOMRect);
     fireEvent.click(timeline, { clientX: 25 });

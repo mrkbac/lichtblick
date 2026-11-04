@@ -172,7 +172,7 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
   // The request type may only become known after the service was picked (e.g. once the data source
   // has looked it up). Fill in the template then, unless the user already typed a request.
   // Fill once per schema, so clearing the request afterwards doesn't bring the template back.
-  const filledSchema = useRef<string>();
+  const filledSchema = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (requestSchema == undefined || filledSchema.current === requestSchema) {
       return;

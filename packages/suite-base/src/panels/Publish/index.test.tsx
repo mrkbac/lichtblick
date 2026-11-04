@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock } from "vitest";
+
 import "@testing-library/jest-dom";
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -15,40 +17,40 @@ import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import Publish from "./index";
 import { PublishConfig } from "./types";
 
-const mockPublish = jest.fn();
+const mockPublish = vi.fn();
 
-jest.mock("@lichtblick/suite-base/PanelAPI", () => ({
-  useDataSourceInfo: jest.fn(() => ({
+vi.mock("@lichtblick/suite-base/PanelAPI", () => ({
+  useDataSourceInfo: vi.fn(() => ({
     topics: [],
     datatypes: new Map(),
     capabilities: [],
   })),
-  useConfigById: jest.fn(() => [undefined, jest.fn()]),
+  useConfigById: vi.fn(() => [undefined, vi.fn()]),
 }));
 
-jest.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
-  ...jest.requireActual("@lichtblick/suite-base/components/MessagePipeline"),
-  useMessagePipeline: jest.fn(() => undefined),
+vi.mock("@lichtblick/suite-base/components/MessagePipeline", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@lichtblick/suite-base/components/MessagePipeline")>()),
+  useMessagePipeline: vi.fn(() => undefined),
 }));
 
-jest.mock("@lichtblick/suite-base/hooks/usePublisher", () => ({
+vi.mock("@lichtblick/suite-base/hooks/usePublisher", () => ({
   __esModule: true,
-  default: jest.fn(() => mockPublish),
+  default: vi.fn(() => mockPublish),
 }));
 
-jest.mock("@lichtblick/suite-base/hooks/useCallbackWithToast", () => ({
+vi.mock("@lichtblick/suite-base/hooks/useCallbackWithToast", () => ({
   __esModule: true,
   default: (fn: unknown) => fn,
 }));
 
-jest.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", () => ({
-  ...jest.requireActual("@lichtblick/suite-base/providers/PanelStateContextProvider"),
-  usePanelSettingsTreeUpdate: jest.fn(),
-  useDefaultPanelTitle: jest.fn(() => ["Publish", jest.fn()]),
+vi.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@lichtblick/suite-base/providers/PanelStateContextProvider")>()),
+  usePanelSettingsTreeUpdate: vi.fn(),
+  useDefaultPanelTitle: vi.fn(() => ["Publish", vi.fn()]),
 }));
 
-jest.mock("./settings", () => ({
-  usePublishPanelSettings: jest.fn(),
+vi.mock("./settings", () => ({
+  usePublishPanelSettings: vi.fn(),
   defaultConfig: {
     buttonText: "Publish",
     buttonTooltip: "",
@@ -59,7 +61,7 @@ jest.mock("./settings", () => ({
 
 describe("Publish", () => {
   beforeEach(() => {
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   function setup(
@@ -68,7 +70,7 @@ describe("Publish", () => {
     datatypes: RosDatatypes = new Map(),
   ) {
     const config = PublishBuilder.config(configOverride);
-    (useDataSourceInfo as jest.Mock).mockReturnValue({
+    (useDataSourceInfo as Mock).mockReturnValue({
       topics: [],
       datatypes,
       capabilities,
@@ -191,10 +193,10 @@ describe("Publish", () => {
 
   describe("repeated publishing", () => {
     beforeEach(() => {
-      jest.useFakeTimers();
+      vi.useFakeTimers();
     });
     afterEach(() => {
-      jest.useRealTimers();
+      vi.useRealTimers();
     });
 
     function startRepeating() {
@@ -207,7 +209,7 @@ describe("Publish", () => {
 
     function advance(ms: number) {
       act(() => {
-        jest.advanceTimersByTime(ms);
+        vi.advanceTimersByTime(ms);
       });
     }
 

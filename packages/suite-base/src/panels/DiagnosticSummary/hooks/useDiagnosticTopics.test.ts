@@ -3,6 +3,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock } from "vitest";
+
 import { renderHook } from "@testing-library/react";
 
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
@@ -33,7 +35,7 @@ describe("getConfiguredTopics", () => {
 
 describe("useDiagnosticTopics", () => {
   beforeEach(() => {
-    (useDataSourceInfo as vi.Mock).mockReturnValue({ topics: dataSourceTopics });
+    (useDataSourceInfo as Mock).mockReturnValue({ topics: dataSourceTopics });
   });
 
   it("auto-detects all DiagnosticArray topics by schema", () => {

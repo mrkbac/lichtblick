@@ -137,7 +137,7 @@ function useChangedParameters(
 ): ReadonlySet<string> {
   const [changed, setChanged] = useState<ReadonlySet<string>>(EMPTY_SET);
   const previous = useRef(parameters);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(
     () => () => {

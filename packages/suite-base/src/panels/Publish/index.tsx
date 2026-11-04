@@ -21,8 +21,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 import { useDebounce } from "use-debounce";
 
-import { MessageDefinition } from "@lichtblick/message-definition";
-import CommonRosTypes from "@lichtblick/rosmsg-msgs-common";
+import { MessageDefinition } from "@foxglove/message-definition";
+import CommonRosTypes from "@foxglove/rosmsg-msgs-common";
 import { Immutable } from "@lichtblick/suite";
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import { MessageEditor } from "@lichtblick/suite-base/components/MessageEditor/MessageEditor";

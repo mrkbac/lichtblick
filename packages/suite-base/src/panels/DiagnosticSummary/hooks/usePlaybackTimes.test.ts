@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock } from "vitest";
+
 import { act, renderHook } from "@testing-library/react";
 
 import { Time } from "@foxglove/rostime";
@@ -25,10 +27,10 @@ describe("usePlaybackTimes", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     current = { sec: 10, nsec: 0 };
-    (useMessagePipelineGetter as vi.Mock).mockReturnValue(() => ({
+    (useMessagePipelineGetter as Mock).mockReturnValue(() => ({
       playerState: { activeData: { startTime: start, endTime: end, currentTime: current } },
     }));
-    (useMessagePipeline as vi.Mock).mockReturnValue(undefined);
+    (useMessagePipeline as Mock).mockReturnValue(undefined);
   });
 
   afterEach(() => {
@@ -58,7 +60,7 @@ describe("usePlaybackTimes", () => {
   });
 
   it("handles a player without active data", () => {
-    (useMessagePipelineGetter as vi.Mock).mockReturnValue(() => ({ playerState: {} }));
+    (useMessagePipelineGetter as Mock).mockReturnValue(() => ({ playerState: {} }));
     const { result } = renderHook(() => usePlaybackTimes());
     expect(result.current).toEqual({ start: undefined, end: undefined, current: undefined });
   });

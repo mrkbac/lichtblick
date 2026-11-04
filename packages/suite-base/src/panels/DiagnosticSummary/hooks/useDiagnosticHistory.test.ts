@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock } from "vitest";
+
 import { renderHook, waitFor } from "@testing-library/react";
 
 import { SubscribeMessageRangeArgs } from "@lichtblick/suite";
@@ -40,7 +42,7 @@ describe("useDiagnosticHistory", () => {
       );
       return cancel;
     });
-    (useSubscribeMessageRange as vi.Mock).mockReturnValue(subscribe);
+    (useSubscribeMessageRange as Mock).mockReturnValue(subscribe);
     const topics = ["/diagnostics"];
 
     const { result, unmount } = renderHook(() => useDiagnosticHistory(topics, 5));
@@ -63,7 +65,7 @@ describe("useDiagnosticHistory", () => {
   });
 
   it("stays undefined when the source has no message range", () => {
-    (useSubscribeMessageRange as vi.Mock).mockReturnValue(() => () => {});
+    (useSubscribeMessageRange as Mock).mockReturnValue(() => () => {});
     const topics = ["/diagnostics"];
     const { result } = renderHook(() => useDiagnosticHistory(topics, 5));
     expect(result.current).toBeUndefined();

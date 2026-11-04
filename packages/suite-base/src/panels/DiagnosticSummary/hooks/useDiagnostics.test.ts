@@ -3,6 +3,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock } from "vitest";
+
 import { renderHook } from "@testing-library/react";
 
 import * as PanelAPI from "@lichtblick/suite-base/PanelAPI";
@@ -102,7 +104,7 @@ describe("addMessages", () => {
 });
 
 describe("useDiagnostics", () => {
-  const useMessageReducerMock = PanelAPI.useMessageReducer as vi.Mock;
+  const useMessageReducerMock = PanelAPI.useMessageReducer as Mock;
 
   it("subscribes to the given topics and restores to an empty state", () => {
     const topics = [BasicBuilder.string(), BasicBuilder.string()];

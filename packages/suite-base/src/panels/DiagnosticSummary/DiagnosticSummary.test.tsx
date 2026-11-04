@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { Mock } from "vitest";
+
 import "@testing-library/jest-dom";
 import { render, screen } from "@testing-library/react";
 
@@ -32,7 +34,7 @@ vi.mock("react-virtualized-auto-sizer", () => ({
 
 function mockData(data: Partial<DiagnosticsPanelData>) {
   const subscribed = ["/diagnostics"];
-  (useDiagnosticsPanelData as vi.Mock).mockReturnValue({
+  (useDiagnosticsPanelData as Mock).mockReturnValue({
     topics: { available: subscribed, selected: subscribed, subscribed },
     diagnostics: new Map(),
     history: new Map(),

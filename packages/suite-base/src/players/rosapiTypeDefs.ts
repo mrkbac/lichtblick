@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { MessageDefinitionField } from "@lichtblick/message-definition";
+import { MessageDefinitionField } from "@foxglove/message-definition";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
 /** Type definition as returned by rosapi's `service_request_details` / `service_response_details`. */

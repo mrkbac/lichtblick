@@ -99,7 +99,7 @@ describe("DiagnosticTable", () => {
     renderTable(props([info]));
 
     fireEvent.click(screen.getByTestId("open-plot-button"));
-    const plotConfig = mockOpenSiblingPanel.mock.calls[0][0].siblingConfigCreator({ paths: [] });
+    const plotConfig = mockOpenSiblingPanel.mock.calls[0]![0].siblingConfigCreator({ paths: [] });
     expect(JSON.stringify(plotConfig)).toContain(`/agg.status[:]{hardware_id==`);
     expect(JSON.stringify(plotConfig)).toContain(`{key==\\"num\\"}.value`);
 
