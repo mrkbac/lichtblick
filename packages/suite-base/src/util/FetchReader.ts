@@ -39,7 +39,7 @@ export default class FetchReader extends EventEmitter<EventTypes> {
     super();
     this.#url = url;
     this.#controller = new AbortController();
-    this.#response = globalRequestQueue.run(
+    this.#response = globalRequestQueue.runExclusive(
       async () => await fetch(url, { ...options, signal: this.#controller.signal }),
     );
   }
