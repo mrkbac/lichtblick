@@ -142,7 +142,7 @@ function makeElectronBuilderConfig(params) {
         ],
         CFBundleURLTypes: [
           {
-            CFBundleURLSchemes: ["foxglove"],
+            CFBundleURLSchemes: ["lichtblick"],
             CFBundleTypeRole: "Viewer",
           },
         ],
