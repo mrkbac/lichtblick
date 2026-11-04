@@ -35,7 +35,9 @@ describe("useUpdateSharedPanelState", () => {
   });
 
   it("does not update state if selectedLayout.data is undefined", () => {
-    const { result } = renderHook(() => useUpdateSharedPanelState(layoutStateRef, setLayoutState));
+    const { result } = renderHook(() =>
+      useUpdateSharedPanelState(() => layoutStateRef.current, setLayoutState),
+    );
 
     act(() => {
       result.current.updateSharedPanelState(panelType, { [keyTest]: valueTest });
@@ -54,7 +56,9 @@ describe("useUpdateSharedPanelState", () => {
       version: BasicBuilder.number(),
     };
 
-    const { result } = renderHook(() => useUpdateSharedPanelState(layoutStateRef, setLayoutState));
+    const { result } = renderHook(() =>
+      useUpdateSharedPanelState(() => layoutStateRef.current, setLayoutState),
+    );
 
     act(() => {
       result.current.updateSharedPanelState(panelType, { [keyTest]: valueTest });

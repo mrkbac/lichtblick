@@ -7,10 +7,11 @@
 
 import * as _ from "lodash-es";
 import { useSnackbar } from "notistack";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { getNodeAtPath } from "react-mosaic-component";
 import { useAsync, useAsyncFn, useMountedState } from "react-use";
+import { createStore } from "zustand";
 import { shallow } from "zustand/shallow";
 
 import { useShallowMemo } from "@lichtblick/hooks";
@@ -86,58 +87,39 @@ export default function CurrentLayoutProvider({
 
   const [mosaicId] = useState(() => randomUUID());
 
-  const layoutStateListeners = useRef(new Set<(_: LayoutState) => void>());
-  const addLayoutStateListener = useCallback((listener: (_: LayoutState) => void) => {
-    layoutStateListeners.current.add(listener);
-  }, []);
-  const removeLayoutStateListener = useCallback((listener: (_: LayoutState) => void) => {
-    layoutStateListeners.current.delete(listener);
-  }, []);
-
-  const [layoutState, setLayoutStateInternal] = useState<LayoutState>({
-    selectedLayout: undefined,
-  });
-  const layoutStateRef = useRef(layoutState);
+  const [layoutStore] = useState(() =>
+    createStore<LayoutState>(() => ({ selectedLayout: undefined })),
+  );
+  const getLayoutState = layoutStore.getState;
   const [incompatibleLayoutVersionError, setIncompatibleLayoutVersionError] = useState(false);
-  const setLayoutState = useCallback((newState: LayoutState) => {
-    const layoutVersion = newState.selectedLayout?.data?.version;
-    if (layoutVersion != undefined && layoutVersion > MAX_SUPPORTED_LAYOUT_VERSION) {
-      setIncompatibleLayoutVersionError(true);
-      setLayoutStateInternal({ selectedLayout: undefined });
-      return;
-    }
+  const setLayoutState = useCallback(
+    (newState: LayoutState) => {
+      const layoutVersion = newState.selectedLayout?.data?.version;
+      if (layoutVersion != undefined && layoutVersion > MAX_SUPPORTED_LAYOUT_VERSION) {
+        setIncompatibleLayoutVersionError(true);
+        return;
+      }
+      layoutStore.setState(newState, true);
+    },
+    [layoutStore],
+  );
 
-    setLayoutStateInternal(newState);
-
-    // listeners rely on being able to getCurrentLayoutState() inside effects that may run before we re-render
-    layoutStateRef.current = newState;
-
-    for (const listener of [...layoutStateListeners.current]) {
-      listener(newState);
-    }
-  }, []);
-
-  const selectedPanelIds = useRef<readonly string[]>([]);
-  const selectedPanelIdsListeners = useRef(new Set<(_: readonly string[]) => void>());
-  const addSelectedPanelIdsListener = useCallback((listener: (_: readonly string[]) => void) => {
-    selectedPanelIdsListeners.current.add(listener);
-  }, []);
-  const removeSelectedPanelIdsListener = useCallback((listener: (_: readonly string[]) => void) => {
-    selectedPanelIdsListeners.current.delete(listener);
-  }, []);
-
-  const getSelectedPanelIds = useCallback(() => selectedPanelIds.current, []);
+  const [selectedPanelIdsStore] = useState(() =>
+    createStore<{ selectedPanelIds: readonly string[] }>(() => ({ selectedPanelIds: [] })),
+  );
+  const getSelectedPanelIds = useCallback(
+    () => selectedPanelIdsStore.getState().selectedPanelIds,
+    [selectedPanelIdsStore],
+  );
   const setSelectedPanelIds = useCallback(
     (value: readonly string[] | ((prevState: readonly string[]) => readonly string[])): void => {
-      const newValue = typeof value === "function" ? value(selectedPanelIds.current) : value;
-      if (!shallow(newValue, selectedPanelIds.current)) {
-        selectedPanelIds.current = newValue;
-        for (const listener of [...selectedPanelIdsListeners.current]) {
-          listener(selectedPanelIds.current);
-        }
+      const current = selectedPanelIdsStore.getState().selectedPanelIds;
+      const newValue = typeof value === "function" ? value(current) : value;
+      if (!shallow(newValue, current)) {
+        selectedPanelIdsStore.setState({ selectedPanelIds: newValue });
       }
     },
-    [],
+    [selectedPanelIdsStore],
   );
 
   const [, setSelectedLayoutId] = useAsyncFn(
@@ -199,13 +181,11 @@ export default function CurrentLayoutProvider({
 
   const performAction = useCallback(
     (action: PanelsActions) => {
-      if (
-        layoutStateRef.current.selectedLayout?.data == undefined ||
-        layoutStateRef.current.selectedLayout.loading === true
-      ) {
+      const { selectedLayout, sharedPanelState } = getLayoutState();
+      if (selectedLayout?.data == undefined || selectedLayout.loading === true) {
         return;
       }
-      const oldData = layoutStateRef.current.selectedLayout.data;
+      const oldData = selectedLayout.data;
       const newData = panelsReducer(oldData, action);
 
       // The panel state did not change, so no need to perform layout state
@@ -220,16 +200,16 @@ export default function CurrentLayoutProvider({
 
       setLayoutState({
         // discared shared panel state for panel types that are no longer in the layout
-        sharedPanelState: _.pick(layoutStateRef.current.sharedPanelState, panelTypesInUse),
+        sharedPanelState: _.pick(sharedPanelState, panelTypesInUse),
         selectedLayout: {
-          id: layoutStateRef.current.selectedLayout.id,
+          id: selectedLayout.id,
           data: newData,
-          name: layoutStateRef.current.selectedLayout.name,
+          name: selectedLayout.name,
           edited: true,
         },
       });
     },
-    [setLayoutState],
+    [getLayoutState, setLayoutState],
   );
 
   /**
@@ -243,7 +223,7 @@ export default function CurrentLayoutProvider({
       if (
         event.type === "revert" &&
         updatedLayout &&
-        updatedLayout.id === layoutStateRef.current.selectedLayout?.id
+        updatedLayout.id === getLayoutState().selectedLayout?.id
       ) {
         setLayoutState({
           selectedLayout: {
@@ -259,16 +239,17 @@ export default function CurrentLayoutProvider({
     return () => {
       layoutManager.off("change", listener);
     };
-  }, [layoutManager, setLayoutState]);
+  }, [getLayoutState, layoutManager, setLayoutState]);
 
   // Make sure our layout still exists after changes. If not deselect it.
   useEffect(() => {
     const listener: LayoutManagerEventTypes["change"] = async (event) => {
-      if (event.type !== "delete" || !layoutStateRef.current.selectedLayout?.id) {
+      const selectedId = getLayoutState().selectedLayout?.id;
+      if (event.type !== "delete" || !selectedId) {
         return;
       }
 
-      if (event.layoutId === layoutStateRef.current.selectedLayout.id) {
+      if (event.layoutId === selectedId) {
         const layouts = await layoutManager.getLayouts();
         await setSelectedLayoutId(layouts[0]?.id);
       }
@@ -278,7 +259,7 @@ export default function CurrentLayoutProvider({
     return () => {
       layoutManager.off("change", listener);
     };
-  }, [enqueueSnackbar, layoutManager, setSelectedLayoutId]);
+  }, [enqueueSnackbar, getLayoutState, layoutManager, setSelectedLayoutId]);
 
   // Load initial state by re-selecting the last selected layout from the UserProfile.
   useAsync(async () => {
@@ -384,14 +365,14 @@ export default function CurrentLayoutProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [getUserProfile, layoutManager, setSelectedLayoutId, enqueueSnackbar]);
 
-  const { updateSharedPanelState } = useUpdateSharedPanelState(layoutStateRef, setLayoutState);
+  const { updateSharedPanelState } = useUpdateSharedPanelState(getLayoutState, setLayoutState);
 
   const actions: ICurrentLayout["actions"] = useMemo(
     () => ({
       updateSharedPanelState,
       setCurrentLayout: () => {},
       setSelectedLayoutId,
-      getCurrentLayoutState: () => layoutStateRef.current,
+      getCurrentLayoutState: getLayoutState,
 
       savePanelConfigs: (payload: SaveConfigsPayload) => {
         performAction({ type: "SAVE_PANEL_CONFIGS", payload });
@@ -441,14 +422,12 @@ export default function CurrentLayoutProvider({
         // Select the new panel if the original panel was selected. We don't know what
         // the new panel id will be so we diff the panelIds of the old and
         // new layout so we can select the new panel.
-        const originalIsSelected = selectedPanelIds.current.includes(payload.originalId);
-        const beforePanelIds = Object.keys(
-          layoutStateRef.current.selectedLayout?.data?.configById ?? {},
-        );
+        const originalIsSelected = getSelectedPanelIds().includes(payload.originalId);
+        const beforePanelIds = Object.keys(getLayoutState().selectedLayout?.data?.configById ?? {});
         performAction({ type: "SWAP_PANEL", payload });
         if (originalIsSelected) {
           const afterPanelIds = Object.keys(
-            layoutStateRef.current.selectedLayout?.data?.configById ?? {},
+            getLayoutState().selectedLayout?.data?.configById ?? {},
           );
           setSelectedPanelIds(_.difference(afterPanelIds, beforePanelIds));
         }
@@ -479,14 +458,20 @@ export default function CurrentLayoutProvider({
         performAction({ type: "END_DRAG", payload });
       },
     }),
-    [analytics, performAction, setSelectedLayoutId, setSelectedPanelIds, updateSharedPanelState],
+    [
+      analytics,
+      getLayoutState,
+      getSelectedPanelIds,
+      performAction,
+      setSelectedLayoutId,
+      setSelectedPanelIds,
+      updateSharedPanelState,
+    ],
   );
 
   const value: ICurrentLayout = useShallowMemo({
-    addLayoutStateListener,
-    removeLayoutStateListener,
-    addSelectedPanelIdsListener,
-    removeSelectedPanelIdsListener,
+    layoutStore,
+    selectedPanelIdsStore,
     mosaicId,
     getSelectedPanelIds,
     setSelectedPanelIds,

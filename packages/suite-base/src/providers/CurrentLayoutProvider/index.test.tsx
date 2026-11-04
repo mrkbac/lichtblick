@@ -203,6 +203,7 @@ describe("CurrentLayoutProvider", () => {
     expect(mockLayoutManager.getLayouts).toHaveBeenCalled();
     expect(all.map((item) => (item instanceof Error ? undefined : item.layoutState))).toEqual([
       { selectedLayout: undefined },
+      { selectedLayout: { id: "example", loading: true, data: undefined } },
       {
         selectedLayout: {
           loading: false,
@@ -257,6 +258,7 @@ describe("CurrentLayoutProvider", () => {
     expect(mockLayoutManager.getLayouts).toHaveBeenCalled();
     expect(all.map((item) => (item instanceof Error ? undefined : item.layoutState))).toEqual([
       { selectedLayout: undefined },
+      { selectedLayout: { id: "example", loading: true, data: undefined } },
       { selectedLayout: undefined },
     ]);
   });
