@@ -4,6 +4,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
+import i18next from "i18next";
 import * as THREE from "three";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
@@ -33,15 +34,19 @@ export type MeasurementInfo = {
   complete: boolean;
 };
 
-export const MEASURE_KIND_LABELS: Record<MeasureKind, string> = {
-  point: "Point",
-  distance: "Distance",
-  polyline: "Polyline",
-  angle: "Angle",
-  area: "Area",
-  height: "Height",
-  profile: "Height profile",
-};
+const MEASURE_KIND_KEYS = {
+  point: "measurePoint",
+  distance: "measureDistance",
+  polyline: "measurePolyline",
+  angle: "measureAngle",
+  area: "measureArea",
+  height: "measureHeight",
+  profile: "measureProfile",
+} as const satisfies Record<MeasureKind, string>;
+
+export function measureKindLabel(kind: MeasureKind): string {
+  return i18next.t(`threeDee:${MEASURE_KIND_KEYS[kind]}`);
+}
 
 /** A renderOrder value that should result in rendering after most/all other objects in the scene */
 const LATE_RENDER_ORDER = 9999999;
@@ -186,6 +191,8 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   #cursor = new THREE.Vector2();
   #cursorDirty = false;
   #drag?: { item: Measurement; index: number };
+  #dragCursor = new THREE.Vector2();
+  #dragPending = false;
   #suppressClick = false;
   #rightDown = new THREE.Vector2(NaN, NaN);
   #labelContainer?: HTMLDivElement;
@@ -308,8 +315,8 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       .filter((info) => info.complete && (id == undefined || info.id === id))
       .map(({ kind, summary }) =>
         [
-          `${MEASURE_KIND_LABELS[kind]}: ${summary.label}`,
-          `Frame: ${frame}`,
+          `${measureKindLabel(kind)}: ${summary.label}`,
+          `${i18next.t("threeDee:measureFrame")}: ${frame}`,
           ...summary.details,
           ...(summary.profile
             ? [
@@ -345,6 +352,11 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     }
     if (this.#draft) {
       this.#updateItem(this.#draft, currentTime);
+    }
+
+    // Snap at most once per frame while dragging; pointermove can fire several times per frame
+    if (this.#drag && this.#dragPending) {
+      this.#snapDrag();
     }
 
     if (this.#cursorDirty && this.state === "active" && !this.#drag) {
@@ -387,7 +399,18 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       item.frameId,
       currentTime,
     );
-    if (ok && (item.dirty || !tempMatrix.equals(item.resultMatrix))) {
+    if (!ok) {
+      // Don't show values from another frame under the selected frame's name
+      const unavailable = i18next.t("threeDee:measureFrameUnavailable");
+      if (item.summary.label !== unavailable) {
+        item.summary = { label: unavailable, segmentLabels: [], details: [] };
+        this.#rebuildLabels(item);
+        this.#changed ||= item.complete;
+      }
+      item.dirty = true;
+      return;
+    }
+    if (item.dirty || !tempMatrix.equals(item.resultMatrix)) {
       item.resultMatrix.copy(tempMatrix);
       item.dirty = false;
       this.#recompute(item);
@@ -849,14 +872,16 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
 
     const onMove = (moveEvent: PointerEvent) => {
       const r = canvas.getBoundingClientRect();
-      tempVec2.set(moveEvent.clientX - r.left, moveEvent.clientY - r.top);
-      if (this.#snapToLocal(tempVec2, hit.item, hit.item.points[hit.index]!)) {
-        hit.item.dirty = true;
-        this.renderer.queueAnimationFrame();
-      }
+      this.#dragCursor.set(moveEvent.clientX - r.left, moveEvent.clientY - r.top);
+      this.#dragPending = true;
+      this.renderer.queueAnimationFrame();
     };
     const onUp = () => {
       window.removeEventListener("pointermove", onMove);
+      // A release between frames must not leave the vertex one move behind
+      if (this.#dragPending) {
+        this.#snapDrag();
+      }
       this.#drag = undefined;
       canvas.style.cursor = "grab";
       this.#sampleProfile(hit.item);
@@ -867,8 +892,25 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
     window.addEventListener("pointerup", onUp, { once: true });
   };
 
+  #snapDrag(): void {
+    this.#dragPending = false;
+    const drag = this.#drag;
+    if (drag && this.#snapToLocal(this.#dragCursor, drag.item, drag.item.points[drag.index]!)) {
+      drag.item.dirty = true;
+      this.renderer.queueAnimationFrame();
+    }
+  }
+
   #handleKeyDown = (event: KeyboardEvent): void => {
     const target = event.target as HTMLElement | null;
+    // Only react to keys meant for this panel: pointer over it or focus inside it
+    const panel = this.renderer.gl.domElement.parentElement;
+    const forThisPanel =
+      panel?.matches(":hover") === true ||
+      (target != undefined && panel?.contains(target) === true);
+    if (!forThisPanel) {
+      return;
+    }
     if (
       target instanceof HTMLInputElement ||
       target instanceof HTMLTextAreaElement ||

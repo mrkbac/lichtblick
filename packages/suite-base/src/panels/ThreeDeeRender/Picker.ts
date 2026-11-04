@@ -260,11 +260,15 @@ export class Picker {
 
     if (options.disableSetViewOffset !== true) {
       const hw = (PIXEL_WIDTH / 2) | 0;
-      const xi = Math.max(0, x * pixelRatio - hw);
-      const yi = Math.max(0, y * pixelRatio - hw);
+      const px = Math.floor(x * pixelRatio);
+      const py = Math.floor(y * pixelRatio);
+      const xi = Math.max(0, px - hw);
+      const yi = Math.max(0, py - hw);
       // Set the projection matrix to only look at the pixels we are interested in
       this.#camera.setViewOffset(w, h, xi, yi, PIXEL_WIDTH, PIXEL_WIDTH);
-      return { xInView: hw, yInView: hw };
+      // The offset is clamped at the left/top edges, so the cursor is not always centered.
+      // GL rows count from the bottom.
+      return { xInView: px - xi, yInView: PIXEL_WIDTH - 1 - (py - yi) };
     } else {
       if (this.#pickingTarget.width !== w || this.#pickingTarget.height !== h) {
         this.#pickingTarget.setSize(w, h);

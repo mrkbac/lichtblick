@@ -481,7 +481,10 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
                 <span className={classes.threeDeeButton}>3D</span>
               </IconButton>
             </Tooltip>
-            <Tooltip placement="left" title={props.measureActive ? "Stop measuring" : "Measure"}>
+            <Tooltip
+              placement="left"
+              title={props.measureActive ? t("stopMeasuring") : t("measure")}
+            >
               <IconButton
                 data-testid="measure-button"
                 className={classes.iconButton}

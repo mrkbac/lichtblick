@@ -182,4 +182,25 @@ export const threeDee = {
   waitingForCalibration: "Waiting for calibration messages…",
   waitingForImages: "Waiting for image messages…",
   waitingForSyncAnnotations: "Waiting for synchronized annotations…",
+
+  // Measurement tool
+  measure: "Measure",
+  stopMeasuring: "Stop measuring",
+  measurePoint: "Point",
+  measureDistance: "Distance",
+  measurePolyline: "Polyline",
+  measureAngle: "Angle",
+  measureArea: "Area",
+  measureHeight: "Height",
+  measureProfile: "Height profile",
+  measureHelp:
+    "Click to place points. Right-click or Esc finishes, Backspace undoes a point. Drag points to edit; Del removes the selected measurement.",
+  measureResultsIn: "Results in",
+  measureDisplayFrame: "Display frame",
+  measureFrame: "Frame",
+  measureFrameUnavailable: "Frame unavailable",
+  measureCopy: "Copy",
+  measureDelete: "Delete",
+  measureCopyAll: "Copy all",
+  measureClearAll: "Clear all",
 };

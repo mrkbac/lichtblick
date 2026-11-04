@@ -24,13 +24,14 @@ import {
   Typography,
 } from "@mui/material";
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import clipboard from "@lichtblick/suite-base/util/clipboard";
 import { fontMonospace } from "@lichtblick/theme";
 
 import type { IRenderer } from "./IRenderer";
-import { MEASURE_KIND_LABELS, MeasureKind, MeasurementInfo } from "./renderables/MeasurementTool";
+import { measureKindLabel, MeasureKind, MeasurementInfo } from "./renderables/MeasurementTool";
 import type { ProfileSeries } from "./renderables/measure/geometry";
 
 const KIND_ICONS: Record<MeasureKind, React.JSX.Element> = {
@@ -115,6 +116,7 @@ function ProfileChart({ profile }: { profile: ProfileSeries }): React.JSX.Elemen
 /** Tool picker and result list for the 3D panel's measurement tool */
 export function MeasurePanel({ renderer }: { renderer: IRenderer }): React.JSX.Element {
   const { classes, cx } = useStyles();
+  const { t } = useTranslation("threeDee");
   const tool = renderer.measurementTool;
   const [, setVersion] = useState(0);
   const [frames, setFrames] = useState(() => renderer.transformTree.frameList());
@@ -151,20 +153,19 @@ export function MeasurePanel({ renderer }: { renderer: IRenderer }): React.JSX.E
         }}
       >
         {(Object.keys(KIND_ICONS) as MeasureKind[]).map((kind) => (
-          <ToggleButton key={kind} value={kind} aria-label={MEASURE_KIND_LABELS[kind]}>
-            <Tooltip title={MEASURE_KIND_LABELS[kind]} placement="top">
+          <ToggleButton key={kind} value={kind} aria-label={measureKindLabel(kind)}>
+            <Tooltip title={measureKindLabel(kind)} placement="top">
               <span style={{ display: "flex" }}>{KIND_ICONS[kind]}</span>
             </Tooltip>
           </ToggleButton>
         ))}
       </ToggleButtonGroup>
       <Typography variant="caption" color="text.secondary">
-        Click to place points. Right-click or Esc finishes, Backspace undoes a point. Drag points to
-        edit; Del removes the selected measurement.
+        {t("measureHelp")}
       </Typography>
       <div className={classes.row}>
         <Typography variant="caption" color="text.secondary" noWrap flexShrink={0}>
-          Results in
+          {t("measureResultsIn")}
         </Typography>
         <Select
           size="small"
@@ -177,7 +178,7 @@ export function MeasurePanel({ renderer }: { renderer: IRenderer }): React.JSX.E
             tool.setResultFrame(value === DISPLAY_FRAME ? undefined : value);
           }}
         >
-          <MenuItem value={DISPLAY_FRAME}>Display frame</MenuItem>
+          <MenuItem value={DISPLAY_FRAME}>{t("measureDisplayFrame")}</MenuItem>
           {frames.map((frame) => (
             <MenuItem key={frame.value} value={frame.value}>
               {frame.label}
@@ -201,7 +202,7 @@ export function MeasurePanel({ renderer }: { renderer: IRenderer }): React.JSX.E
                 <Typography variant="body2" className={classes.value} noWrap>
                   {info.summary.label}
                 </Typography>
-                <Tooltip title="Copy">
+                <Tooltip title={t("measureCopy")}>
                   <IconButton
                     size="small"
                     onClick={(event) => {
@@ -212,7 +213,7 @@ export function MeasurePanel({ renderer }: { renderer: IRenderer }): React.JSX.E
                     <Copy16Regular />
                   </IconButton>
                 </Tooltip>
-                <Tooltip title="Delete">
+                <Tooltip title={t("measureDelete")}>
                   <IconButton
                     size="small"
                     onClick={(event) => {
@@ -243,7 +244,7 @@ export function MeasurePanel({ renderer }: { renderer: IRenderer }): React.JSX.E
               copy();
             }}
           >
-            Copy all
+            {t("measureCopyAll")}
           </Button>
           <Button
             size="small"
@@ -253,7 +254,7 @@ export function MeasurePanel({ renderer }: { renderer: IRenderer }): React.JSX.E
               tool.clearAll();
             }}
           >
-            Clear all
+            {t("measureClearAll")}
           </Button>
         </div>
       )}
