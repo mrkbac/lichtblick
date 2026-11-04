@@ -19,7 +19,7 @@ import {
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 
-const SPEED_OPTIONS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 0.8, 1, 2, 3, 5];
+export const PLAYBACK_SPEED_OPTIONS = [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 0.8, 1, 2, 3, 5];
 
 const formatSpeed = (val: number) => `${val < 0.1 ? val.toFixed(2) : val}×`;
 
@@ -100,7 +100,7 @@ export default function PlaybackSpeedControls(): React.JSX.Element {
           horizontal: "left",
         }}
       >
-        {SPEED_OPTIONS.map((option) => (
+        {PLAYBACK_SPEED_OPTIONS.map((option) => (
           <MenuItem
             selected={displayedSpeed === option}
             key={option}

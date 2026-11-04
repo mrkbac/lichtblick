@@ -26,6 +26,7 @@ import McapBundleAPI from "@lichtblick/suite-base/api/mcapBundle/McapBundleAPI";
 import AccountSettings from "@lichtblick/suite-base/components/AccountSettingsSidebar/AccountSettings";
 import { AlertsList } from "@lichtblick/suite-base/components/AlertList/AlertsList";
 import { AppBar } from "@lichtblick/suite-base/components/AppBar";
+import { CommandPalette } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
 import {
   DataSourceDialog,
   DataSourceDialogItem,
@@ -483,6 +484,11 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       "]": () => {
         sidebarActions.right.setOpen((oldValue) => !oldValue);
       },
+      ",": () => {
+        sidebarActions.left.selectItem(
+          leftSidebarOpen && leftSidebarItem === "panel-settings" ? undefined : "panel-settings",
+        );
+      },
       o: (ev: KeyboardEvent) => {
         if (!keyboardEventHasModifier(ev)) {
           return;
@@ -497,7 +503,14 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         });
       },
     };
-  }, [dialogActions.dataSource, dialogActions.openFile, sidebarActions.left, sidebarActions.right]);
+  }, [
+    dialogActions.dataSource,
+    dialogActions.openFile,
+    leftSidebarItem,
+    leftSidebarOpen,
+    sidebarActions.left,
+    sidebarActions.right,
+  ]);
 
   const targetUrlState = useMemo(() => {
     const deepLinks = props.deepLinks ?? [];
@@ -716,6 +729,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       <DocumentDropListener onDrop={dropHandler} allowedExtensions={allowedDropExtensions} />
       <SyncAdapters />
       <KeyListener global keyDownHandlers={keyDownHandlers} />
+      <CommandPalette />
       <div className={classes.container} ref={containerRef} tabIndex={0}>
         {appBar}
         <Sidebars
