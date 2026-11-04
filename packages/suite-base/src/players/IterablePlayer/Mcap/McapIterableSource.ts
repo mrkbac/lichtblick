@@ -11,6 +11,7 @@ import { MCAP_MAGIC, McapIndexedReader, McapTypes } from "@mcap/core";
 import Log from "@lichtblick/log";
 import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { BlobReadable } from "./BlobReadable";
 import { McapIndexedIterableSource } from "./McapIndexedIterableSource";
@@ -67,7 +68,7 @@ async function tryCreateIndexedReader(
       decompressHandlers,
     });
   } catch (err: unknown) {
-    const error = err instanceof Error ? err : new Error(String(err));
+    const error = toError(err);
     // @mcap/core throws exactly this message (plus a " [library=...]" suffix) when the file has
     // no summary section at all (footer.summaryStart === 0n) — a genuinely unindexed file, not an
     // operational failure. Any other message indicates a malformed file or an I/O error bubbling

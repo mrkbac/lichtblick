@@ -59,6 +59,7 @@ import { UserScript, UserScripts } from "@lichtblick/suite-base/types/panels";
 import Rpc from "@lichtblick/suite-base/util/Rpc";
 import { basicDatatypes } from "@lichtblick/suite-base/util/basicDatatypes";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { DIAGNOSTIC_SEVERITY, ERROR_CODES, MAX_GLOBAL_BUFFER_SIZE, SOURCES } from "./constants";
 import { getPreloadTypes, remapVirtualSubscriptions } from "./subscriptions";
@@ -976,7 +977,7 @@ export default class UserScriptPlayer implements Player {
       })
       .catch((err: unknown) => {
         log.error(err);
-        reportError(err instanceof Error ? err : new Error(String(err)));
+        reportError(toError(err));
       });
   }
 
