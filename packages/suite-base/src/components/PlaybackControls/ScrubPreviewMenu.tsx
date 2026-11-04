@@ -8,6 +8,7 @@ import { useState } from "react";
 
 import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
 
+import { PREVIEW_TOPIC_OFF } from "./scrubPreview";
 import { usePreviewTopic } from "./useScrubPreview";
 
 /** Picks the image topic shown as a thumbnail when hovering the playback bar. */
@@ -70,7 +71,7 @@ export function ScrubPreviewMenu(): ReactNull | React.JSX.Element {
         transformOrigin={{ vertical: "bottom", horizontal: "right" }}
       >
         <ListSubheader>Timeline preview</ListSubheader>
-        {item({ label: "Off", value: "", checked: topic == undefined })}
+        {item({ label: "Off", value: PREVIEW_TOPIC_OFF, checked: topic == undefined })}
         <Divider />
         {imageTopics.map((name) => item({ label: name, value: name, checked: name === topic }))}
       </Menu>

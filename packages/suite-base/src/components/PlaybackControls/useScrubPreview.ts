@@ -24,6 +24,7 @@ import {
 import {
   COMPRESSED_IMAGE_SCHEMAS,
   RAW_IMAGE_SCHEMAS,
+  THUMBNAIL_WIDTH,
   ThumbnailCache,
   findCachedMessage,
   previewableTopics,
@@ -33,7 +34,6 @@ import {
 } from "./scrubPreview";
 import * as foxglove from "../../panels/ThreeDeeRender/foxglove";
 
-export const THUMBNAIL_WIDTH = 192;
 const DEBOUNCE_MS = 40;
 
 const selectTopics = (ctx: MessagePipelineContext) => ctx.sortedTopics;

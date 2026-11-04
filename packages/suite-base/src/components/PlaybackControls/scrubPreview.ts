@@ -14,6 +14,12 @@ export const COMPRESSED_IMAGE_SCHEMAS = new Set([
   ...foxglove.COMPRESSED_IMAGE_DATATYPES,
 ]);
 
+/** Display width of the thumbnail in CSS pixels. */
+export const THUMBNAIL_WIDTH = 192;
+
+/** Stored setting meaning "preview off" (an empty string reads back as unset). */
+export const PREVIEW_TOPIC_OFF = "__off__";
+
 /** Number of time buckets across the recording; hovers within one bucket share a thumbnail. */
 export const BUCKET_COUNT = 500;
 
@@ -33,13 +39,13 @@ export function previewableTopics(
 
 /**
  * Resolve the preview topic from the user's setting.
- * `undefined` setting = auto (first image topic), `""` = off, otherwise that topic if present.
+ * `undefined` setting = auto (first image topic), `PREVIEW_TOPIC_OFF` = off, otherwise that topic if present.
  */
 export function resolvePreviewTopic(
   setting: string | undefined,
   imageTopics: readonly string[],
 ): string | undefined {
-  if (setting === "") {
+  if (setting === PREVIEW_TOPIC_OFF) {
     return undefined;
   }
   if (setting != undefined && imageTopics.includes(setting)) {

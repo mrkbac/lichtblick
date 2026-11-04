@@ -22,7 +22,7 @@ import {
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { customTypography } from "@lichtblick/theme";
 
-import { THUMBNAIL_WIDTH } from "./useScrubPreview";
+import { THUMBNAIL_WIDTH } from "./scrubPreview";
 
 type PlaybackControlsTooltipItem =
   | { type: "divider" }

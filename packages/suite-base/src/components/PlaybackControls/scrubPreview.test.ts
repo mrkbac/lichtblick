@@ -6,6 +6,7 @@ import { MessageEvent } from "@lichtblick/suite";
 import { BlockCache } from "@lichtblick/suite-base/players/types";
 
 import {
+  PREVIEW_TOPIC_OFF,
   ThumbnailCache,
   findCachedMessage,
   previewableTopics,
@@ -41,7 +42,7 @@ describe("previewableTopics / resolvePreviewTopic", () => {
     expect(resolvePreviewTopic(undefined, topics)).toBe("/a/cam");
     expect(resolvePreviewTopic("/z/cam", topics)).toBe("/z/cam");
     expect(resolvePreviewTopic("/missing", topics)).toBe("/a/cam");
-    expect(resolvePreviewTopic("", topics)).toBeUndefined();
+    expect(resolvePreviewTopic(PREVIEW_TOPIC_OFF, topics)).toBeUndefined();
     expect(resolvePreviewTopic(undefined, [])).toBeUndefined();
   });
 });
