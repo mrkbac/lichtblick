@@ -44,6 +44,7 @@ import Stack from "@lichtblick/suite-base/components/Stack";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { Topic } from "@lichtblick/suite-base/players/types";
 import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { ActivityChart, ContainerDetails, KeyValueTable, SchemaFields } from "./InspectionViews";
 import { useStyles } from "./index.style";
@@ -297,7 +298,7 @@ export function RecordingInspector(): React.JSX.Element {
       });
     } catch (err) {
       if (!activeController.signal.aborted) {
-        setError(err instanceof Error ? err.message : String(err));
+        setError(toError(err).message);
       }
     } finally {
       if (controller.current === activeController) {

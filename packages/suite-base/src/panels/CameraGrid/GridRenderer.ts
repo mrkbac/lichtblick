@@ -14,6 +14,7 @@ import {
   normalizeRosImage,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/imageNormalizers";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { imageKind } from "./layout";
 import { TileConfig } from "./types";
@@ -204,7 +205,7 @@ export class GridRenderer {
     } catch (error) {
       if (tile.elements === elements) {
         tile.drawn = event;
-        this.#showStatus(tile, error instanceof Error ? error.message : String(error));
+        this.#showStatus(tile, toError(error).message);
       }
     }
   }
