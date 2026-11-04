@@ -78,7 +78,12 @@ function syncRemoteLayout(
         break;
       }
 
-      if (localLayout.syncInfo.lastRemoteSavedAt !== remoteLayout.savedAt) {
+      // A different organization also refreshes the cached copy: older builds stored some shared
+      // layouts without it, which hid them from their organization's section.
+      if (
+        localLayout.syncInfo.lastRemoteSavedAt !== remoteLayout.savedAt ||
+        localLayout.organizationId !== remoteLayout.organizationId
+      ) {
         operations.push({
           local: true,
           type: "update-baseline",

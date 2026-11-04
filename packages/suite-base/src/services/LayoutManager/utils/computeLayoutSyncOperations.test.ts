@@ -120,6 +120,28 @@ describe("computeLayoutSyncOperations", () => {
       });
     });
 
+    it("should refresh a tracked layout stored without its organization", () => {
+      // Given
+      const localLayout = LayoutBuilder.layout({
+        id: layoutId,
+        organizationId: undefined,
+        syncInfo: { status: "tracked", lastRemoteSavedAt: savedAt },
+      });
+      const remoteLayout = LayoutBuilder.remoteLayout({
+        id: layoutId,
+        savedAt,
+        organizationId: "team",
+      });
+
+      // When
+      const operations = computeLayoutSyncOperations([localLayout], [remoteLayout]);
+
+      // Then
+      expect(operations).toEqual([
+        expect.objectContaining({ type: "update-baseline", remoteLayout }),
+      ]);
+    });
+
     it("should not create operations when remote layout is tracked and up to date", () => {
       // Given
       const localLayout = LayoutBuilder.layout({
