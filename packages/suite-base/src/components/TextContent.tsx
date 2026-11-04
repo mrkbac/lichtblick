@@ -15,13 +15,12 @@
 //   You may not use this file except in compliance with the License.
 
 import { Link } from "@mui/material";
-import { CSSProperties, PropsWithChildren, useCallback, useContext } from "react";
+import { CSSProperties, PropsWithChildren } from "react";
 import Markdown, { type Options } from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 import { makeStyles } from "tss-react/mui";
 
-import LinkHandlerContext from "@lichtblick/suite-base/context/LinkHandlerContext";
 import { customTypography } from "@lichtblick/theme";
 
 const useStyles = makeStyles()(({ palette, shape, spacing, typography, shadows }) => {
@@ -168,6 +167,23 @@ const useStyles = makeStyles()(({ palette, shape, spacing, typography, shadows }
   };
 });
 
+function linkRenderer(
+  linkProps: React.AnchorHTMLAttributes<HTMLAnchorElement>,
+): React.JSX.Element {
+  return (
+    <Link
+      color="primary"
+      underline="hover"
+      variant="inherit"
+      href={linkProps.href}
+      rel="noopener noreferrer"
+      target="_blank"
+    >
+      {linkProps.children}
+    </Link>
+  );
+}
+
 type Props = {
   style?: CSSProperties;
   allowMarkdownHtml?: boolean;
@@ -180,28 +196,6 @@ export default function TextContent(
 ): React.ReactElement | ReactNull {
   const { children, style, allowMarkdownHtml, components } = props;
   const { classes } = useStyles();
-  const handleLink = useContext(LinkHandlerContext);
-
-  const linkRenderer = useCallback(
-    (linkProps: React.AnchorHTMLAttributes<HTMLAnchorElement>) => {
-      return (
-        <Link
-          color="primary"
-          underline="hover"
-          variant="inherit"
-          href={linkProps.href}
-          rel="noopener noreferrer"
-          onClick={(event) => {
-            handleLink(event, linkProps.href ?? "");
-          }}
-          target="_blank"
-        >
-          {linkProps.children}
-        </Link>
-      );
-    },
-    [handleLink],
-  );
 
   return (
     <div className={classes.root} style={style}>
