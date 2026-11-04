@@ -648,17 +648,19 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
 
   /**
    * Snap a screen position to the nearest rendered surface (ground plane as fallback) and write it
-   * into `out` in the item's frame. Returns false if the cursor ray misses everything or the
-   * item's frame is currently unavailable.
+   * into `out` in the item's frame. Returns false if the cursor is off the canvas, its
+   * ray misses everything, or the item's frame is currently unavailable.
    */
   #snapToLocal(cursor: THREE.Vector2, item: Measurement, out: THREE.Vector3): boolean {
     // Hidden means the item's frame isn't in the tree right now (e.g. after a seek), so its matrix
     // is stale and converting into it would misplace the point
-    if (!item.group.visible) {
+    const { width, height } = this.renderer.input.canvasSize;
+    // Off-canvas cursors (a drag leaving the panel) keep the point where it last was
+    const onCanvas = cursor.x >= 0 && cursor.y >= 0 && cursor.x < width && cursor.y < height;
+    if (!item.group.visible || !onCanvas) {
       return false;
     }
     if (!this.renderer.pickPoint(cursor, out)) {
-      const { width, height } = this.renderer.input.canvasSize;
       tempRaycaster.setFromCamera(
         tempVec2.set((cursor.x / width) * 2 - 1, -(cursor.y / height) * 2 + 1),
         this.renderer.cameraHandler.getActiveCamera(),
