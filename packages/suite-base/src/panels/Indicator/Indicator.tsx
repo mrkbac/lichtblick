@@ -5,7 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Typography } from "@mui/material";
+import VolumeOffIcon from "@mui/icons-material/VolumeOff";
+import VolumeUpIcon from "@mui/icons-material/VolumeUp";
+import { IconButton, Typography } from "@mui/material";
 import {
   memo,
   useCallback,
@@ -13,6 +15,7 @@ import {
   useLayoutEffect,
   useMemo,
   useReducer,
+  useRef,
   useState,
 } from "react";
 
@@ -25,9 +28,22 @@ import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Indicator/constant
 import { stateReducer } from "@lichtblick/suite-base/panels/shared/gaugeAndIndicatorStateReducer";
 import { GaugeAndIndicatorState } from "@lichtblick/suite-base/panels/shared/types";
 
+import {
+  AlertSnapshot,
+  getAlertRule,
+  hasAlert,
+  playAlertSound,
+  requestNotificationPermission,
+  showAlertNotification,
+} from "./alerts";
 import { getMatchingRule } from "./getMatchingRule";
 import { settingsActionReducer, useSettingsTree } from "./settings";
-import { IndicatorConfig, IndicatorProps, RawValueIndicator } from "./types";
+import {
+  IndicatorAlertSound,
+  IndicatorConfig,
+  IndicatorProps,
+  RawValueIndicator,
+} from "./types";
 
 export function Indicator({ context }: IndicatorProps): React.JSX.Element {
   // panel extensions must notify when they've completed rendering
@@ -39,7 +55,8 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
     ...(context.initialState as Partial<IndicatorConfig>),
   }));
 
-  const { style, rules, fallbackColor, fallbackLabel } = config;
+  const { style, rules, fallbackColor, fallbackLabel, alertsMuted = false } = config;
+  const [seekCount, setSeekCount] = useState(0);
 
   const [state, dispatch] = useReducer(
     stateReducer,
@@ -79,6 +96,7 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
 
       if (renderState.didSeek === true) {
         dispatch({ type: "seek" });
+        setSeekCount((count) => count + 1);
       }
 
       if (renderState.currentFrame) {
@@ -96,6 +114,14 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
 
   const settingsActionHandler = useCallback(
     (action: SettingsTreeAction) => {
+      if (action.action === "update" && action.payload.path[0] === "rules") {
+        const { path, value } = action.payload;
+        if (path[2] === "alertSound") {
+          playAlertSound(value as IndicatorAlertSound); // preview the selected tone
+        } else if (path[2] === "alertNotify" && value === true) {
+          requestNotificationPermission();
+        }
+      }
       setConfig((prevConfig) => settingsActionReducer(prevConfig, action));
     },
     [setConfig],
@@ -134,6 +160,30 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
     [rawValue, rules],
   );
 
+  // Alert only on transitions into a rule; seeks, rule edits and missing data just reset the baseline.
+  const prevSnapshot = useRef<AlertSnapshot>();
+  useEffect(() => {
+    const snapshot: AlertSnapshot = {
+      ruleIndex:
+        rawValue == undefined ? undefined : matchingRule ? rules.indexOf(matchingRule) : -1,
+      rules,
+      seekCount,
+    };
+    const alertRule = getAlertRule(prevSnapshot.current, snapshot);
+    prevSnapshot.current = snapshot;
+    if (alertRule == undefined || alertsMuted) {
+      return;
+    }
+    playAlertSound(alertRule.alertSound);
+    if (alertRule.alertNotify === true) {
+      showAlertNotification(config.path, alertRule.label);
+    }
+  }, [alertsMuted, config.path, matchingRule, rawValue, rules, seekCount]);
+
+  const toggleMuted = useCallback(() => {
+    setConfig((prev) => ({ ...prev, alertsMuted: prev.alertsMuted !== true }));
+  }, []);
+
   const bulbColor = matchingRule?.color ?? fallbackColor;
   const {
     classes,
@@ -150,11 +200,22 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
   }, [style, bulbColor, augmentColor]);
 
   return (
-    <Stack fullHeight>
+    <Stack fullHeight position="relative">
       <Stack className={classes.indicatorStack}>
         {style === "bulb" && <Bulb label={label} bulbColor={bulbColor} />}
         {style === "background" && <Background label={label} textColor={textColor} />}
       </Stack>
+      {rules.some(hasAlert) && (
+        <IconButton
+          className={classes.muteButton}
+          size="small"
+          onClick={toggleMuted}
+          title={alertsMuted ? "Unmute alerts" : "Mute alerts"}
+          aria-label={alertsMuted ? "Unmute alerts" : "Mute alerts"}
+        >
+          {alertsMuted ? <VolumeOffIcon fontSize="small" /> : <VolumeUpIcon fontSize="small" />}
+        </IconButton>
+      )}
     </Stack>
   );
 }
