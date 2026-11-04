@@ -14,9 +14,9 @@ import { useShallowMemo } from "@lichtblick/hooks";
 import {
   SettingsTreeAction,
   SettingsTreeNode,
-  SettingsTreeNodeAction,
   SettingsTreeNodes,
 } from "@lichtblick/suite";
+import { moveItem, moveUpDownActions } from "@lichtblick/suite-base/panels/utils";
 
 import { IndicatorConfig, IndicatorRule } from "./types";
 
@@ -59,14 +59,13 @@ export function settingsActionReducer(
               color: `#${Math.floor(Math.random() * 0x1000000).toString(16)}`,
               label: "Label",
             });
-          } else if (action.payload.id === "move-up") {
+          } else if (action.payload.id === "move-up" || action.payload.id === "move-down") {
             const ruleIndex = +action.payload.path[1]!;
-            const [rule] = draft.rules.splice(ruleIndex, 1);
-            draft.rules.splice(ruleIndex - 1, 0, rule!);
-          } else if (action.payload.id === "move-down") {
-            const ruleIndex = +action.payload.path[1]!;
-            const [rule] = draft.rules.splice(ruleIndex, 1);
-            draft.rules.splice(ruleIndex + 1, 0, rule!);
+            moveItem(
+              draft.rules,
+              ruleIndex,
+              action.payload.id === "move-up" ? ruleIndex - 1 : ruleIndex + 1,
+            );
           }
         }
         break;
@@ -93,21 +92,14 @@ export function settingsActionReducer(
 
 const memoizedCreateRuleNode = memoizeWeak(
   (rule: IndicatorRule, i: number, rules: readonly IndicatorRule[]): SettingsTreeNode => {
-    const actions: (SettingsTreeNodeAction | false)[] = [
-      { type: "action", id: "delete-rule", label: "Delete rule", icon: "Delete" },
-      i > 0 && { type: "action", id: "move-up", label: "Move up", icon: "MoveUp" },
-      i < rules.length - 1 && {
-        type: "action",
-        id: "move-down",
-        label: "Move down",
-        icon: "MoveDown",
-      },
-      { type: "action", id: "add-rule-above", label: "Add rule above", icon: "Add" },
-      { type: "action", id: "add-rule-below", label: "Add rule below", icon: "Add" },
-    ];
     return {
       label: ruleToString(rule),
-      actions: actions.filter((action): action is SettingsTreeNodeAction => action !== false),
+      actions: [
+        { type: "action", id: "delete-rule", label: "Delete rule", icon: "Delete" },
+        ...moveUpDownActions(i, rules.length),
+        { type: "action", id: "add-rule-above", label: "Add rule above", icon: "Add" },
+        { type: "action", id: "add-rule-below", label: "Add rule below", icon: "Add" },
+      ],
       fields: {
         operator: {
           label: "Comparison",

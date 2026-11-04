@@ -22,6 +22,7 @@ import { buildSettingsTree } from "@lichtblick/suite-base/panels/Plot/utils/buil
 import {
   assignDefaultColorsToSeries,
   handleReorderSeriesAction,
+  moveItem,
 } from "@lichtblick/suite-base/panels/utils";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
@@ -74,14 +75,7 @@ export function handleDeleteSeriesAction({ draft, index }: HandleDeleteSeriesAct
 }
 
 export function handleMoveSeriesAction({ draft, index, direction }: HandleMoveSeriesAction): void {
-  const targetIndex = direction === "up" ? index - 1 : index + 1;
-
-  if (targetIndex >= 0 && targetIndex < draft.paths.length) {
-    [draft.paths[index], draft.paths[targetIndex]] = [
-      draft.paths[targetIndex]!,
-      draft.paths[index]!,
-    ];
-  }
+  moveItem(draft.paths, index, direction === "up" ? index - 1 : index + 1);
 }
 
 export default function usePlotPanelSettings(
