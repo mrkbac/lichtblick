@@ -268,7 +268,7 @@ describe("McapIndexedIterableSource", () => {
     await writer.end();
 
     const blobReadable = new BlobReadable(
-      new Blob([tempBuffer.get()]) as unknown as globalThis.Blob,
+      new Blob([tempBuffer.get().slice()]) as unknown as globalThis.Blob,
     );
     let bytesRead = 0;
     const readable = {
@@ -285,8 +285,8 @@ describe("McapIndexedIterableSource", () => {
     const source = new McapIndexedIterableSource(reader);
     await source.initialize();
     const topics = new Map([
-      ["fast", {}],
-      ["slow", {}],
+      ["fast", { topic: "fast" }],
+      ["slow", { topic: "slow" }],
     ]);
 
     const read = async (skimInterval?: { sec: number; nsec: number }) => {
