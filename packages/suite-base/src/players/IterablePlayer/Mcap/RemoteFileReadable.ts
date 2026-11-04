@@ -9,17 +9,34 @@ import { McapTypes } from "@mcap/core";
 
 import BrowserHttpReader from "@lichtblick/suite-base/util/BrowserHttpReader";
 import CachedFilelike from "@lichtblick/suite-base/util/CachedFilelike";
+import { RequestQueue } from "@lichtblick/suite-base/util/RequestQueue";
 
 import { BatchingReadable } from "./BatchingReadable";
 import type { RemoteFileReadableOptions } from "./RemoteFileReadable.types";
 
 const DEFAULT_CACHE_SIZE_BYTES = 1024 * 1024 * 500; // 500MiB
+// Parallel range requests hide per-request latency; a few saturate most links
+const PREFETCH_CONCURRENCY = 4;
+// ponytail: FIFO eviction; switch to LRU if prefetched ranges get re-read after long gaps
+const PREFETCH_MAX_BYTES = 1024 * 1024 * 128;
+// While prefetches keep coming in, reads jump around: fetch misses exactly too instead of
+// opening a streaming connection that reads ahead megabytes the next jump skips
+const PREFETCH_ACTIVE_MS = 2000;
+
+type Prefetched = { start: number; end: number; data: Promise<Uint8Array | undefined> };
 
 export class RemoteFileReadable {
   readonly #remoteReader: CachedFilelike;
   readonly #batchingReadable: BatchingReadable;
+  readonly #url: string;
+  readonly #prefetchQueue = new RequestQueue(PREFETCH_CONCURRENCY);
+  // Exact-range downloads keyed by start offset, in request order for eviction
+  readonly #prefetched = new Map<number, Prefetched>();
+  #prefetchedBytes = 0;
+  #lastPrefetchMs = 0;
 
   public constructor(url: string, options?: RemoteFileReadableOptions) {
+    this.#url = url;
     const fileReader = new BrowserHttpReader(url);
     this.#remoteReader = new CachedFilelike({
       fileReader,
@@ -48,10 +65,74 @@ export class RemoteFileReadable {
     return BigInt(this.#remoteReader.size());
   }
   public async read(offset: bigint, size: bigint): Promise<Uint8Array> {
+    const start = Number(offset);
+    const end = start + Number(size);
+    let prefetched = this.#findPrefetched(start, end);
+    if (!prefetched && Date.now() - this.#lastPrefetchMs < PREFETCH_ACTIVE_MS) {
+      this.prefetch([{ offset, length: size }]);
+      prefetched = this.#findPrefetched(start, end);
+    }
+    const data = await prefetched?.data;
+    if (prefetched && data) {
+      return data.subarray(start - prefetched.start, end - prefetched.start);
+    }
     return await this.#batchingReadable.read(offset, size);
   }
 
+  #findPrefetched(start: number, end: number): Prefetched | undefined {
+    for (const prefetched of this.#prefetched.values()) {
+      if (prefetched.start <= start && end <= prefetched.end) {
+        return prefetched;
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Download these exact ranges in parallel, without the cache's read-ahead, so reads that jump
+   * around (e.g. skimming at high playback speed) don't each wait for a request round trip or
+   * stream megabytes they skip. Failed prefetches fall back to the normal read path.
+   */
+  public prefetch(ranges: { offset: bigint; length: bigint }[]): void {
+    this.#lastPrefetchMs = Date.now();
+    for (const range of ranges) {
+      const start = Number(range.offset);
+      const end = start + Number(range.length);
+      if (this.#prefetched.has(start)) {
+        continue;
+      }
+      const data = this.#prefetchQueue
+        .run(async () => await this.#fetchRange(start, end))
+        .catch(() => undefined);
+      this.#prefetched.set(start, { start, end, data });
+      this.#prefetchedBytes += end - start;
+      for (const [key, oldest] of this.#prefetched) {
+        if (this.#prefetchedBytes <= PREFETCH_MAX_BYTES) {
+          break;
+        }
+        this.#prefetched.delete(key);
+        this.#prefetchedBytes -= oldest.end - oldest.start;
+      }
+    }
+  }
+
+  async #fetchRange(start: number, end: number): Promise<Uint8Array | undefined> {
+    const controller = new AbortController();
+    const response = await fetch(this.#url, {
+      headers: { range: `bytes=${start}-${end - 1}` },
+      signal: controller.signal,
+    });
+    if (response.status !== 206) {
+      // The server ignored the range; don't download the whole file
+      controller.abort();
+      return undefined;
+    }
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
   public close(): void {
+    this.#prefetched.clear();
+    this.#prefetchedBytes = 0;
     this.#remoteReader.close();
   }
 }

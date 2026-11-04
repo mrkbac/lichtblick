@@ -19,6 +19,7 @@ import {
   compare,
   fromMillis,
   fromNanoSec,
+  toNanoSec,
   toRFC3339String,
   toString,
 } from "@lichtblick/rostime";
@@ -69,6 +70,10 @@ const DEFAULT_CACHE_SIZE_BYTES = 1.0e9;
 // times per second, instead of every message.
 const SKIM_MIN_SPEED = 10;
 const SKIM_UPDATES_PER_SEC = 30;
+// How often skim checks whether playback keeps up with the requested speed
+const SKIM_ADAPT_WINDOW_SEC = 3;
+// Below this fraction of the requested speed, skim takes fewer, larger steps
+const SKIM_MIN_ACHIEVED_SPEED = 0.8;
 
 // Amount to wait until panels have had the chance to subscribe to topics before
 // we start playback
@@ -331,17 +336,49 @@ export class IterablePlayer implements Player {
 
   // Skim interval of the current playback iterator; the iterator is reset when speed changes it
   #playbackSkimInterval: Time | undefined;
+  // Lowered when the source can't deliver skim updates in time (e.g. a slow remote file)
+  #skimUpdatesPerSec = SKIM_UPDATES_PER_SEC;
+  // Wall clock and playback time at the start of the current keep-up check
+  #skimCheck: { wallMs: number; time: Time } | undefined;
 
   #skimInterval(): Time | undefined {
     if (this.#speed < SKIM_MIN_SPEED) {
       return undefined;
     }
-    return fromNanoSec(BigInt(Math.round((this.#speed * 1e9) / SKIM_UPDATES_PER_SEC)));
+    return fromNanoSec(BigInt(Math.round((this.#speed * 1e9) / this.#skimUpdatesPerSec)));
+  }
+
+  /**
+   * Each skim update costs about the same to read, so when the source can't deliver them in time,
+   * take fewer, larger steps instead of playing slower than the selected speed.
+   */
+  // ponytail: only steps down; it resets on speed change, add probing up if bandwidth recovers often
+  #adaptSkimRate(): void {
+    if (!this.#playbackSkimInterval || !this.#currentTime) {
+      return;
+    }
+    const now = Date.now();
+    if (!this.#skimCheck) {
+      this.#skimCheck = { wallMs: now, time: this.#currentTime };
+      return;
+    }
+    const wallSec = (now - this.#skimCheck.wallMs) / 1000;
+    if (wallSec < SKIM_ADAPT_WINDOW_SEC) {
+      return;
+    }
+    const playedSec = Number(toNanoSec(this.#currentTime) - toNanoSec(this.#skimCheck.time)) / 1e9;
+    const achieved = playedSec / (wallSec * this.#speed);
+    this.#skimCheck = { wallMs: now, time: this.#currentTime };
+    if (achieved < SKIM_MIN_ACHIEVED_SPEED) {
+      this.#skimUpdatesPerSec = Math.max(1, Math.floor(this.#skimUpdatesPerSec * achieved));
+    }
   }
 
   public setPlaybackSpeed(speed: number): void {
     this.#lastRangeMillis = undefined;
     this.#speed = speed;
+    this.#skimUpdatesPerSec = SKIM_UPDATES_PER_SEC;
+    this.#skimCheck = undefined;
     this.#bufferImpl.setPlaybackSpeed(speed);
 
     // Queue event state update to update speed in player state to UI
@@ -1242,6 +1279,7 @@ export class IterablePlayer implements Player {
     // Track the identity of allTopics, if this changes we need to reset our iterator to
     // get new messages for new topics
     const allTopics = this.#allTopics;
+    this.#skimCheck = undefined;
 
     try {
       while (this.#isPlaying && !this.#hasError && !this.#nextState) {
@@ -1272,6 +1310,8 @@ export class IterablePlayer implements Player {
             [MEMORY_INFO_BUFFERED_MSGS]: this.#bufferImpl.getCacheSize(),
           },
         };
+
+        this.#adaptSkimRate();
 
         // If subscriptions or the skim interval changed, update to the new subscriptions
         if (

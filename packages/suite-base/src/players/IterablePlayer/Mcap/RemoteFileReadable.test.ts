@@ -134,4 +134,38 @@ describe("RemoteFileReadable", () => {
       expect(mockClose).toHaveBeenCalledTimes(1);
     });
   });
+
+  describe("prefetch", () => {
+    const realFetch = globalThis.fetch;
+    afterEach(() => {
+      globalThis.fetch = realFetch;
+    });
+
+    it("serves reads inside a prefetched range from one exact range request", async () => {
+      const fetchMock = jest
+        .fn()
+        .mockResolvedValue(new Response(new Uint8Array([10, 11, 12, 13, 14]), { status: 206 }));
+      globalThis.fetch = fetchMock;
+      const readable = new RemoteFileReadable(testUrl);
+
+      readable.prefetch([{ offset: 100n, length: 5n }]);
+      const data = await readable.read(101n, 3n);
+
+      expect([...data]).toEqual([11, 12, 13]);
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock.mock.calls[0][1].headers).toEqual({ range: "bytes=100-104" });
+      expect(mockRead).not.toHaveBeenCalled();
+    });
+
+    it("falls back to the cached reader when the server ignores the range", async () => {
+      globalThis.fetch = jest.fn().mockResolvedValue(new Response(new Uint8Array(1024)));
+      const readable = new RemoteFileReadable(testUrl);
+
+      readable.prefetch([{ offset: 100n, length: 5n }]);
+      const data = await readable.read(100n, 3n);
+
+      expect([...data]).toEqual([1, 2, 3]);
+      expect(mockRead).toHaveBeenCalled();
+    });
+  });
 });
