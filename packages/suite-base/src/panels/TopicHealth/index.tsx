@@ -44,6 +44,7 @@ import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import { Topic, TopicStats } from "@lichtblick/suite-base/players/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import {
   DEFAULT_CONFIG,
@@ -302,7 +303,7 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
       },
     }).catch((err: unknown) => {
       if (!controller.signal.aborted) {
-        setScanError(err instanceof Error ? err.message : String(err));
+        setScanError(toError(err).message);
       }
     });
     return () => {

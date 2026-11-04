@@ -5,6 +5,7 @@ import * as _ from "lodash-es";
 import YAML, { SchemaOptions } from "yaml";
 
 import { ParameterValue } from "@lichtblick/suite";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 export type ParameterType =
   | "bool"
@@ -206,7 +207,7 @@ export function makeMatcher(
       const re = new RegExp(query, "i");
       return (name) => re.test(name);
     } catch (err) {
-      return err instanceof Error ? err : new Error(String(err));
+      return toError(err);
     }
   }
   const needle = query.toLowerCase();
