@@ -179,7 +179,9 @@ export default [
       // (kept as a placeholder for non-TypeScript files that may still need it)
     },
     rules: {
-      "@lichtblick/license-header": ["error", { licenseType: "MPL-2.0" }],
+      // Existing upstream files keep their copyright notice (MPL-2.0 section 3.4), but new
+      // files in this fork should not be stamped with the upstream copyright holder.
+      "@lichtblick/license-header": "off",
       "@lichtblick/prefer-hash-private": "off",
       "@typescript-eslint/no-unnecessary-type-conversion": "off",
 
@@ -367,16 +369,6 @@ export default [
       "import/default": "off",
       "import/no-named-as-default": "off",
       "import/no-named-as-default-member": "off",
-    },
-  },
-
-  // userUtils: no license header required
-  {
-    files: [
-      "packages/suite-base/src/players/UserScriptPlayer/transformerWorker/typescript/userUtils/**",
-    ],
-    rules: {
-      "@lichtblick/license-header": "off",
     },
   },
 ];
