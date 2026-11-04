@@ -91,8 +91,8 @@ vi.mock("@lichtblick/suite-base/api/layouts/LayoutsAPI", () => ({
   }),
 }));
 
-jest.mock("@lichtblick/suite-base/context/OrganizationContext", () => ({
-  ...jest.requireActual("@lichtblick/suite-base/context/OrganizationContext"),
+vi.mock("@lichtblick/suite-base/context/OrganizationContext", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@lichtblick/suite-base/context/OrganizationContext")>()),
   useOrganizationSession: () => ({ status: "disabled" }),
 }));
 

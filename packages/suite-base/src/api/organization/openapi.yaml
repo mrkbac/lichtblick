@@ -772,16 +772,7 @@ components:
     OrganizationResource:
       type: object
       description: Fields every organization-owned resource has.
-      required:
-        [
-          id,
-          organizationId,
-          revision,
-          createdAt,
-          updatedAt,
-          createdBy,
-          updatedBy,
-        ]
+      required: [id, organizationId, revision, createdAt, updatedAt, createdBy, updatedBy]
       properties:
         id:
           $ref: "#/components/schemas/Id"

@@ -46,7 +46,7 @@ function json(status: number, body: unknown, headers: Record<string, string> = {
 function setup(handler: (request: Request) => Response) {
   const requests: Request[] = [];
   // openapi-fetch passes a Request; the test environment has no fetch of its own.
-  globalThis.fetch = jest.fn(async (input: Request) => {
+  globalThis.fetch = vi.fn(async (input: Request) => {
     requests.push(input.clone());
     return handler(input);
   }) as unknown as typeof fetch;
