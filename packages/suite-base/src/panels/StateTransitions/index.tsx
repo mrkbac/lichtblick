@@ -36,6 +36,7 @@ import Stack from "@lichtblick/suite-base/components/Stack";
 import TimeBasedChart from "@lichtblick/suite-base/components/TimeBasedChart";
 import { PathLegend } from "@lichtblick/suite-base/panels/StateTransitions/PathLegend";
 import { useStateTransitionsStyles } from "@lichtblick/suite-base/panels/StateTransitions/StateTransitions.style";
+import { parseCondition } from "@lichtblick/suite-base/panels/StateTransitions/condition";
 import {
   EMPTY_ITEMS_BY_PATH,
   EMPTY_PATHS,
@@ -174,28 +175,27 @@ function StateTransitions(props: StateTransitionPanelProps) {
     [messagePipeline],
   );
 
-  const hasCondition = paths.some((path) => path.condition);
-  // Matches at or before the playhead; the epsilon absorbs float error after seeking to a start.
-  const matchesSoFar = useMemo(() => {
-    const now = (currentTimeSinceStart ?? 0) + MATCH_EPSILON;
-    return matchStarts.filter((x) => x <= now).length;
-  }, [currentTimeSinceStart, matchStarts]);
+  const hasCondition = paths.some((path) => parseCondition(path.condition) != undefined);
+  // The epsilon absorbs float error after seeking to a match start.
+  const now = currentTimeSinceStart ?? 0;
+  const matchesSoFar = useMemo(
+    () => matchStarts.filter((x) => x <= now + MATCH_EPSILON).length,
+    [now, matchStarts],
+  );
+  const previousMatch = _.findLast(matchStarts, (x) => x < now - MATCH_EPSILON);
+  const nextMatch = matchStarts.find((x) => x > now + MATCH_EPSILON);
 
   const seekToNextMatch = useCallback(() => {
-    const now = (currentTimeSinceStart ?? 0) + MATCH_EPSILON;
-    const next = matchStarts.find((x) => x > now);
-    if (next != undefined) {
-      seekToSeconds(next);
+    if (nextMatch != undefined) {
+      seekToSeconds(nextMatch);
     }
-  }, [currentTimeSinceStart, matchStarts, seekToSeconds]);
+  }, [nextMatch, seekToSeconds]);
 
   const seekToPreviousMatch = useCallback(() => {
-    const now = (currentTimeSinceStart ?? 0) - MATCH_EPSILON;
-    const previous = _.findLast(matchStarts, (x) => x < now);
-    if (previous != undefined) {
-      seekToSeconds(previous);
+    if (previousMatch != undefined) {
+      seekToSeconds(previousMatch);
     }
-  }, [currentTimeSinceStart, matchStarts, seekToSeconds]);
+  }, [previousMatch, seekToSeconds]);
 
   const keyDownHandlers = useMemo(
     () => ({
@@ -296,7 +296,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
               title={t("previousMatch")}
               aria-label={t("previousMatch")}
               onClick={seekToPreviousMatch}
-              disabled={matchesSoFar === 0}
+              disabled={previousMatch == undefined}
               data-testid="state-transitions-previous-match"
             >
               <ChevronLeft20Regular />
@@ -312,7 +312,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
               title={t("nextMatch")}
               aria-label={t("nextMatch")}
               onClick={seekToNextMatch}
-              disabled={matchesSoFar >= matchStarts.length}
+              disabled={nextMatch == undefined}
               data-testid="state-transitions-next-match"
             >
               <ChevronRight20Regular />

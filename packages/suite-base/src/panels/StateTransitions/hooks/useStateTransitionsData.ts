@@ -9,6 +9,7 @@ import {
   ChartDataset,
   ChartDatasets,
 } from "@lichtblick/suite-base/components/TimeBasedChart/types";
+import { parseCondition } from "@lichtblick/suite-base/panels/StateTransitions/condition";
 import {
   ROW_MARGIN,
   ROW_SPACING,
@@ -58,6 +59,7 @@ function useStateTransitionsData(
       const y = -(pathIndex + 1) * ROW_SPACING;
       outMinY = Math.min(outMinY ?? y, y - ROW_MARGIN);
 
+      const hasCondition = parseCondition(path.condition) != undefined;
       const blocksForPath = decodedBlocks.map((decodedBlock) => decodedBlock[path.value]);
 
       const newBlockDataSet = messagesToDataset({
@@ -77,7 +79,7 @@ function useStateTransitionsData(
         isArray,
       });
       outDatasets.push(newBlockDataSet);
-      if (path.condition) {
+      if (hasCondition) {
         addMatchStarts(newBlockDataSet, matchStarts);
       }
 
@@ -94,7 +96,7 @@ function useStateTransitionsData(
         showPoints,
       });
       outDatasets.push(newPathDataSet);
-      if (path.condition) {
+      if (hasCondition) {
         addMatchStarts(newPathDataSet, matchStarts);
       }
     });

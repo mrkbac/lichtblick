@@ -23,11 +23,12 @@ jest.mock("@lichtblick/suite-base/components/Panel", () => ({
 
 jest.mock("@lichtblick/suite-base/components/MessagePathSyntax/useMessagesByPath");
 jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useDecodedMessageRange");
+let mockCurrentTime = 0;
 jest.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsTime", () => ({
   __esModule: true,
   default: () => ({
     startTime: { sec: 0, nsec: 0 },
-    currentTimeSinceStart: 0,
+    currentTimeSinceStart: mockCurrentTime,
     endTimeSinceStart: 10,
   }),
 }));
@@ -112,6 +113,7 @@ describe("StateTransitions", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCurrentTime = 0;
     mockUseDecodedMessageRange.mockReturnValue([{}]);
     mockUseMessagesByPath.mockReturnValue({});
   });
@@ -219,8 +221,8 @@ describe("StateTransitions", () => {
     expect(mockUseMessagesByPath).toHaveBeenCalledWith([]);
   });
 
-  it("hides match navigation without a condition", () => {
-    renderPanel({ paths: [{ value: "/a.b", timestampMethod: "receiveTime" }] });
+  it.each([undefined, "=> 2"])("hides match navigation for condition %s", (condition) => {
+    renderPanel({ paths: [{ value: "/a.b", condition, timestampMethod: "receiveTime" }] });
     expect(screen.queryByTestId("state-transitions-match-count")).toBeNull();
   });
 
@@ -242,5 +244,22 @@ describe("StateTransitions", () => {
     // Nothing before the playhead (t=0), so Shift+N does not seek.
     fireEvent.keyDown(document, { key: "N", shiftKey: true });
     expect(mockSeekPlayback).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    [1, "1/2", true, false],
+    [3, "1/2", false, false],
+    [5, "2/2", false, true],
+  ])("at t=%s shows %s with previous/next disabled = %s/%s", (time, count, noPrev, noNext) => {
+    mockCurrentTime = time;
+    renderPanel({ paths: [{ value: "/a.b", condition: "> 2", timestampMethod: "receiveTime" }] });
+
+    expect(screen.getByTestId("state-transitions-match-count")).toHaveTextContent(count);
+    expect(screen.getByTestId("state-transitions-previous-match").hasAttribute("disabled")).toBe(
+      noPrev,
+    );
+    expect(screen.getByTestId("state-transitions-next-match").hasAttribute("disabled")).toBe(
+      noNext,
+    );
   });
 });

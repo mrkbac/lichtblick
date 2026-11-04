@@ -27,7 +27,18 @@ describe("parseCondition", () => {
     });
   });
 
-  it.each([undefined, "", "2", "=> 2", "== ", "~ 1"])("rejects %s", (input) => {
+  it.each([
+    undefined,
+    "",
+    "2",
+    "=> 2",
+    "== ",
+    "~ 1",
+    '== "ERROR',
+    "> 1 2",
+    "== a > b",
+    "== 'x\"",
+  ])("rejects %s", (input) => {
     expect(parseCondition(input)).toBeUndefined();
   });
 });
@@ -50,6 +61,9 @@ describe("conditionMatches", () => {
     expect(matches("== ERROR", 3, "ERROR")).toBe(true);
     expect(matches("!= ERROR", 3, "ERROR")).toBe(false);
     expect(matches("== 3", 3, "ERROR")).toBe(true);
+    expect(matches('== "3"', 3, "ERROR")).toBe(true);
+    expect(matches('!= "3"', 3, "ERROR")).toBe(false);
+    expect(matches("!= OK", 3, "ERROR")).toBe(true);
   });
 });
 

@@ -7,7 +7,8 @@ import { filterMatches } from "@lichtblick/suite-base/components/MessagePathSynt
 import { ValidQueriedDataValue } from "./types";
 
 const CONDITION_RE = /^\s*(==|!=|<=|>=|<|>)\s*(\S.*?)\s*$/;
-const QUOTED_RE = /^(["'])(.*)\1$/;
+// A quoted string, or a single bare token (number, true/false or an unquoted word).
+const LITERAL_RE = /^(?:"([^"]*)"|'([^']*)'|([^\s"'<>=!]+))$/;
 
 /**
  * Parses a single comparison like `> 2`, `== "ERROR"` or `!= true` into a message path filter
@@ -20,21 +21,29 @@ export function parseCondition(input: string | undefined): MessagePathFilter | u
     return undefined;
   }
   const [, operator, literal] = match as unknown as [string, MessagePathFilter["operator"], string];
+  const value = parseLiteral(literal);
+  if (value == undefined) {
+    return undefined;
+  }
   return {
     type: "filter",
     path: [],
     operator,
-    value: parseLiteral(literal),
+    value,
     nameLoc: 0,
     valueLoc: 0,
     repr: `${operator} ${literal}`,
   };
 }
 
-function parseLiteral(literal: string): number | string {
-  const quoted = QUOTED_RE.exec(literal);
-  if (quoted) {
-    return quoted[2]!;
+function parseLiteral(literal: string): number | string | undefined {
+  const parts = LITERAL_RE.exec(literal);
+  if (!parts) {
+    return undefined;
+  }
+  const quoted = parts[1] ?? parts[2];
+  if (quoted != undefined) {
+    return quoted;
   }
   // Booleans compare loosely against 1/0, the same way filters treat them.
   if (literal === "true" || literal === "false") {
@@ -44,13 +53,19 @@ function parseLiteral(literal: string): number | string {
   return Number.isFinite(number) ? number : literal;
 }
 
-/** String literals also match the constant name, so `== ERROR` works on ROS enum constants. */
+/**
+ * String literals are also compared against the constant name, so `== ERROR` works on ROS enum
+ * constants while `== 3` (or `== "3"`) still matches the raw value.
+ */
 export function conditionMatches(
   condition: MessagePathFilter,
   value: ValidQueriedDataValue,
   constantName: string | undefined,
 ): boolean {
-  const subject =
-    typeof condition.value === "string" && constantName != undefined ? constantName : value;
-  return filterMatches(condition, subject);
+  const matchesValue = filterMatches(condition, value);
+  if (typeof condition.value !== "string" || constantName == undefined) {
+    return matchesValue;
+  }
+  const matchesName = filterMatches(condition, constantName);
+  return condition.operator === "!=" ? matchesValue && matchesName : matchesValue || matchesName;
 }
