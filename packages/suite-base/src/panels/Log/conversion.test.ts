@@ -22,6 +22,7 @@ describe("normalizeLogEvent", () => {
     ["ros.rosgraph_msgs.Log", { header: { stamp: { sec: 1, nsec: 2 } }, level: 8, msg: "m" }],
     ["rcl_interfaces/msg/Log", { stamp: { sec: 1, nsec: 2 }, level: 40, msg: "m" }],
     ["ros.rcl_interfaces.Log", { stamp: { sec: 1, nsec: 2 }, level: 40, msg: "m" }],
+    ["rcl_interfaces/msg/Log", { stamp: { sec: 1, nanosec: 2 }, level: 40, msg: "m" }],
     ["foxglove.Log", { timestamp: { sec: 1, nsec: 2 }, level: 4, message: "m" }],
     ["foxglove.Log", { timestamp: 1_000_000_002n, level: 4, message: "m" }],
     ["foxglove_msgs/msg/Log", { timestamp: { seconds: 1, nanos: 2 }, level: 4, message: "m" }],

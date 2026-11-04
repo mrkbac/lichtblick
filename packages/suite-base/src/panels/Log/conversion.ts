@@ -39,7 +39,7 @@ type RawLog = {
 
 const ZERO: Time = { sec: 0, nsec: 0 };
 
-/** Accepts ROS {sec,nsec}, protobuf {seconds,nanos} and bigint nanoseconds. */
+/** Accepts {sec,nsec}, ROS 2 {sec,nanosec}, protobuf {seconds,nanos} and bigint nanoseconds. */
 function toTime(value: unknown): Time | undefined {
   if (typeof value === "bigint") {
     return fromNanoSec(value);
@@ -50,11 +50,12 @@ function toTime(value: unknown): Time | undefined {
   const t = value as {
     sec?: number;
     nsec?: number;
+    nanosec?: number;
     seconds?: number | bigint;
     nanos?: number;
   };
   if (t.sec != undefined) {
-    return { sec: t.sec, nsec: t.nsec ?? 0 };
+    return { sec: t.sec, nsec: t.nsec ?? t.nanosec ?? 0 };
   }
   if (t.seconds != undefined) {
     return { sec: Number(t.seconds), nsec: t.nanos ?? 0 };

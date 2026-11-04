@@ -50,14 +50,6 @@ jest.mock("react-resize-detector", () => ({
   }),
 }));
 
-// The global ResizeObserver mock reports entries without a target, which the dynamic row
-// height measurement can't handle.
-global.ResizeObserver = class {
-  public observe() {}
-  public unobserve() {}
-  public disconnect() {}
-};
-
 describe("LogList Component", () => {
   let originalClientHeight: PropertyDescriptor | undefined;
 

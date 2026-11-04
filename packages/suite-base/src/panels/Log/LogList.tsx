@@ -16,9 +16,18 @@
 
 import DoubleArrowDownIcon from "@mui/icons-material/KeyboardDoubleArrowDown";
 import { Fab } from "@mui/material";
-import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useMemo,
+  useReducer,
+  useRef,
+  useState,
+} from "react";
+import { useResizeDetector } from "react-resize-detector";
 import AutoSizer from "react-virtualized-auto-sizer";
-import { List, ListImperativeAPI, RowComponentProps, useDynamicRowHeight } from "react-window";
+import { List, ListImperativeAPI, RowComponentProps } from "react-window";
 
 import { Time } from "@lichtblick/suite";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
@@ -55,14 +64,31 @@ type ListItemData = {
   timeZone: string | undefined;
   onRowClick?: (item: NormalizedLogMessage) => void;
   onCopy?: (item: NormalizedLogMessage) => void;
+  setRowHeight: (item: NormalizedLogMessage, height: number) => void;
+  /** Changes when measured heights change, so the List re-reads row heights */
+  heightVersion: number;
+  /** Re-measure rows when the width changes */
+  width: number | undefined;
 };
 
 function Row(props: RowComponentProps<ListItemData>): React.JSX.Element {
-  const { index, style, ariaAttributes, items, playheadIndex, dimFuture } = props;
+  const { index, style, ariaAttributes, items, playheadIndex, dimFuture, setRowHeight, width } =
+    props;
+  const item = items[index]!;
+  const ref = useRef<HTMLDivElement>(ReactNull);
+
+  // Measured in an effect rather than with a ResizeObserver, which can trigger
+  // "ResizeObserver loop" errors while the list scrolls.
+  useEffect(() => {
+    if (ref.current) {
+      setRowHeight(item, ref.current.clientHeight);
+    }
+  }, [item, setRowHeight, width]);
+
   return (
-    <div style={{ ...style, height: "auto" }} {...ariaAttributes}>
+    <div style={{ ...style, height: "auto" }} {...ariaAttributes} ref={ref}>
       <LogMessage
-        value={items[index]!}
+        value={item}
         timestampFormat={props.timeFormat}
         timeZone={props.timeZone}
         current={index === playheadIndex}
@@ -83,9 +109,26 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
   const { classes } = useStyles();
   const { timeFormat, timeZone } = useAppTimeFormat();
   const listRef = useRef<ListImperativeAPI>(ReactNull);
-  const rowHeight = useDynamicRowHeight({
-    defaultRowHeight: DEFAULT_ROW_HEIGHT,
-  });
+  const { width, ref: resizeRef } = useResizeDetector({ refreshRate: 0, refreshMode: "debounce" });
+
+  // Row heights keyed by message so they survive filtering. Reset when the width changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- width invalidates measured heights
+  const heights = useMemo(() => new WeakMap<NormalizedLogMessage, number>(), [width]);
+  const [heightVersion, bumpHeightVersion] = useReducer((n: number) => n + 1, 0);
+  const setRowHeight = useCallback(
+    (item: NormalizedLogMessage, height: number) => {
+      if (heights.get(item) !== height) {
+        heights.set(item, height);
+        bumpHeightVersion();
+      }
+    },
+    [heights],
+  );
+  const rowHeight = useCallback(
+    (index: number, { items: rowItems }: ListItemData) =>
+      heights.get(rowItems[index]!) ?? DEFAULT_ROW_HEIGHT,
+    [heights],
+  );
 
   const playheadIndex = useMemo(
     () => (currentTime == undefined ? items.length - 1 : lastIndexAtOrBefore(items, currentTime)),
@@ -165,17 +208,35 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
       timeZone,
       onRowClick,
       onCopy,
+      setRowHeight,
+      heightVersion,
+      width,
     }),
-    [items, playheadIndex, currentTime, timeFormat, timeZone, onRowClick, onCopy],
+    [
+      items,
+      playheadIndex,
+      currentTime,
+      timeFormat,
+      timeZone,
+      onRowClick,
+      onCopy,
+      setRowHeight,
+      heightVersion,
+      width,
+    ],
   );
 
   return (
     <AutoSizer>
-      {({ width, height }) => (
-        <div style={{ position: "relative", width, height }} data-testid="virtualized-list">
+      {({ width: autoWidth, height }) => (
+        <div
+          style={{ position: "relative", width: autoWidth, height }}
+          ref={resizeRef}
+          data-testid="virtualized-list"
+        >
           <List<ListItemData>
             listRef={listRef}
-            style={{ outline: "none", width, height }}
+            style={{ outline: "none", width: autoWidth, height }}
             rowProps={rowProps}
             rowHeight={rowHeight}
             rowCount={items.length}
