@@ -24,10 +24,11 @@ function setup(config: Partial<Config>, callService: jest.Mock) {
       ]),
     },
     callService,
+    savedProps: { "CallService!1": { serviceName: "/set_bool", ...config } },
   };
   return render(
     <PanelSetup fixture={fixture}>
-      <CallServicePanel overrideConfig={{ serviceName: "/set_bool", ...config }} />
+      <CallServicePanel childId="CallService!1" />
     </PanelSetup>,
   );
 }
@@ -36,6 +37,16 @@ describe("CallService", () => {
   it("fills in the request template once the request type is known", async () => {
     setup({ requestPayload: "{}" }, jest.fn());
     expect(await screen.findByLabelText("data")).not.toBeChecked();
+  });
+
+  it("does not re-fill the template after the request was cleared", async () => {
+    setup({ requestPayload: "{}", editorMode: "json" }, jest.fn());
+    const textarea = await screen.findByLabelText("Message JSON");
+    await waitFor(() => {
+      expect(textarea).toHaveValue('{\n  "data": false\n}');
+    });
+    fireEvent.change(textarea, { target: { value: "" } });
+    expect(screen.getByLabelText("Message JSON")).toHaveValue("");
   });
 
   it("calls the service with the form's request and shows the response", async () => {

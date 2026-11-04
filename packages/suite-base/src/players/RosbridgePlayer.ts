@@ -605,6 +605,11 @@ export default class RosbridgePlayer implements Player {
     });
 
     this.#serviceTypeCache.set(service, serviceTypePromise);
+    serviceTypePromise.catch(() => {
+      if (this.#serviceTypeCache.get(service) === serviceTypePromise) {
+        this.#serviceTypeCache.delete(service);
+      }
+    });
 
     return await serviceTypePromise;
   }
@@ -631,6 +636,13 @@ export default class RosbridgePlayer implements Player {
         }
       });
       this.#serviceDetailsCache.set(key, promise);
+      // Don't cache failures, so the next node graph refresh retries
+      const cached = promise;
+      cached.catch(() => {
+        if (this.#serviceDetailsCache.get(key) === cached) {
+          this.#serviceDetailsCache.delete(key);
+        }
+      });
     }
     return await promise;
   }
