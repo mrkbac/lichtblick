@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { Button } from "@mui/material";
 import * as _ from "lodash-es";
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -63,6 +64,7 @@ import type { LayerSettingsTransform } from "./renderables/FrameAxes";
 import { PublishClickEventMap } from "./renderables/PublishClickTool";
 import { DEFAULT_PUBLISH_SETTINGS } from "./renderables/PublishSettings";
 import { Shared3DPanelState, ThreeDeeRenderProps } from "./types";
+import { useWebGLContextRecovery } from "./useWebGLContextRecovery";
 
 /**
  * Schemas that carry coordinate frame transforms. Topics with one of these schemas generally
@@ -138,6 +140,11 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const [canvas, setCanvas] = useState<HTMLCanvasElement | ReactNull>(ReactNull);
   const [renderer, setRenderer] = useState<IRenderer | undefined>(undefined);
   const rendererRef = useRef<IRenderer | undefined>(undefined);
+  const {
+    canvasKey,
+    status: contextStatus,
+    recreate,
+  } = useWebGLContextRecovery(canvas, renderer?.gl);
 
   const displayTemporaryError = useCallback(
     (errorString: string) => {
@@ -1005,6 +1012,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     <ThemeProvider isDark={colorScheme === "dark"}>
       <div style={PANEL_STYLE} onKeyDown={onKeyDown}>
         <canvas
+          key={canvasKey}
           ref={setCanvas}
           style={{
             position: "absolute",
@@ -1020,6 +1028,20 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
             (config.scene.transforms?.maxPreloadMessages ?? MAX_TRANSFORM_MESSAGES)
               ? `(max ${(config.scene.transforms?.maxPreloadMessages ?? MAX_TRANSFORM_MESSAGES).toLocaleString()})`
               : "messages"}
+          </div>
+        )}
+        {contextStatus !== "ok" && (
+          <div className={classes.contextLost} role="status">
+            {contextStatus === "restoring" ? (
+              t("graphicsContextRestoring")
+            ) : (
+              <>
+                {t("graphicsContextLost")}
+                <Button size="small" variant="outlined" color="inherit" onClick={recreate}>
+                  {t("restoreGraphics")}
+                </Button>
+              </>
+            )}
           </div>
         )}
         <RendererContext.Provider value={renderer}>

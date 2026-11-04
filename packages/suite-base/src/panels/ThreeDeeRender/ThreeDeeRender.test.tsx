@@ -1286,4 +1286,31 @@ describe("ThreeDeeRender", () => {
       }).not.toThrow();
     });
   });
+  describe("WebGL context loss", () => {
+    it("shows an overlay and remounts the canvas with a new renderer", () => {
+      jest.useFakeTimers();
+      try {
+        const { container, getByRole } = render(<ThreeDeeRender {...setup()} />);
+        const canvas = container.querySelector("canvas")!;
+        expect(mockedRenderer).toHaveBeenCalledTimes(1);
+
+        act(() => {
+          canvas.dispatchEvent(new Event("webglcontextlost", { cancelable: true }));
+        });
+        expect(getByRole("status")).toHaveTextContent("Graphics context lost — restoring…");
+
+        act(() => {
+          canvas.dispatchEvent(new Event("webglcontextrestored"));
+        });
+
+        const newCanvas = container.querySelector("canvas");
+        expect(newCanvas).not.toBe(canvas);
+        expect(mockedRenderer).toHaveBeenCalledTimes(2);
+        expect(mockedRenderer.mock.calls[1]![0].canvas).toBe(newCanvas);
+        expect(container.querySelector('[role="status"]')).toBeNull();
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+  });
 });
