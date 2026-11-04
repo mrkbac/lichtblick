@@ -4,8 +4,10 @@
 // End to end through LayoutManager: share, rename, reload, sync, against an in-memory server
 // that follows openapi.yaml (revisions, ETags, list versions).
 
+import { Layout } from "@lichtblick/suite-base/services/ILayoutStorage";
 import LayoutManager from "@lichtblick/suite-base/services/LayoutManager/LayoutManager";
 import MockLayoutStorage from "@lichtblick/suite-base/services/MockLayoutStorage";
+import { migrateLayout } from "@lichtblick/suite-base/services/migrateLayout";
 import LayoutBuilder from "@lichtblick/suite-base/testing/builders/LayoutBuilder";
 
 import { OrganizationLayoutStorage } from "./OrganizationLayoutStorage";
@@ -92,11 +94,25 @@ function fakeServer() {
   return { layouts, handle };
 }
 
+/** Reads go through migrateLayout and a JSON round trip, like IdbLayoutStorage. */
+class StoredLayoutStorage extends MockLayoutStorage {
+  public override async list(namespace: string): Promise<readonly Layout[]> {
+    return (await super.list(namespace)).map((layout) =>
+      migrateLayout(JSON.parse(JSON.stringify(layout))),
+    );
+  }
+
+  public override async get(namespace: string, id: string): Promise<Layout | undefined> {
+    const layout = await super.get(namespace, id);
+    return layout && migrateLayout(JSON.parse(JSON.stringify(layout)));
+  }
+}
+
 describe("organization layouts through LayoutManager", () => {
   it("keeps a shared and renamed layout after a reload", async () => {
     const server = fakeServer();
     globalThis.fetch = (async (input: Request) => await server.handle(input)) as typeof fetch;
-    const browserStorage = new MockLayoutStorage(LayoutManager.LOCAL_STORAGE_NAMESPACE, []);
+    const browserStorage = new StoredLayoutStorage(LayoutManager.LOCAL_STORAGE_NAMESPACE, []);
 
     const open = () => {
       const client = createOrganizationApiClient("https://api.example.com", async () => "token");
