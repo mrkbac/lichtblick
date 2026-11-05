@@ -25,8 +25,8 @@ async function drag(
   to: () => Promise<Point>,
   holdMs = 150,
 ) {
-  // A cold dev server can drop the first drag; every panel drag shows "+ New tab" targets, so
-  // retry until they show up.
+  // Every panel drag shows "+ New tab" targets; retry until they show up, in case something
+  // covered the drag handle.
   await expect(async () => {
     const from = typeof source === "function" ? await source() : source;
     await page.mouse.move(...from);
@@ -41,12 +41,10 @@ async function drag(
         .waitFor({ state: "attached", timeout: 2000 });
     } catch (error) {
       await page.mouse.up();
-      // Shows in the CI log what the drag grabbed instead of a drag handle.
-      const grabbed = await page.evaluate(([x, y]) => {
-        const el = document.elementFromPoint(x, y);
-        return `${el?.tagName} ${el?.className} draggable=${el?.closest("[draggable=true]") != undefined}`;
-      }, from);
-      console.log(`drag did not start at ${from.join(",")}: ${grabbed}`);
+      // On a cold dev server the data source dialog can open again after the first Escape.
+      if (await page.getByTestId("DataSourceDialog").isVisible()) {
+        await page.keyboard.press("Escape");
+      }
       throw error;
     }
   }).toPass({ timeout: 30_000 });
