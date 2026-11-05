@@ -18,6 +18,7 @@
     "html-webpack-plugin": "5.6.8",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "react-refresh": "0.18.0",
     "storybook-react-rsbuild": "3.6.1",
     "tss-react": "4.9.21",
     "webpack": "5.108.3",
