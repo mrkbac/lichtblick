@@ -46,10 +46,13 @@ function changePanelLayout(
   { layout, trimConfigById = true }: ChangePanelLayoutPayload,
 ): LayoutData {
   const normalized = normalizeLayout(layout);
-  // Drop the configs of panels that left the layout, so they don't hang around forever
-  const configById = trimConfigById
-    ? _.pick(state.configById, getPanelIds(normalized))
-    : state.configById;
+  // Drop the configs of panels that left the layout, so they don't hang around forever. Keep the
+  // same object when nothing is dropped (moving panels or switching tabs), so config consumers
+  // don't re-render.
+  const panelIds = new Set(getPanelIds(normalized));
+  const keepAll = Object.keys(state.configById).every((id) => panelIds.has(id));
+  const configById =
+    trimConfigById && !keepAll ? _.pick(state.configById, [...panelIds]) : state.configById;
   return { ...state, configById, layout: normalized };
 }
 

@@ -64,6 +64,7 @@ import { layoutsEqual } from "@lichtblick/suite-base/util/layoutTree";
 import ErrorBoundary from "./ErrorBoundary";
 import { useStyles } from "./PanelLayout.style";
 import { PanelRemounter } from "./PanelRemounter";
+import { PanelTab } from "./PanelTab";
 import { UnknownPanel } from "./UnknownPanel";
 import "dockview-react/dist/styles/dockview.css";
 import { useInstallingExtensionsStore } from "../hooks/useInstallingExtensionsStore";
@@ -125,7 +126,8 @@ function DockPanel({ api, containerApi }: IDockviewPanelProps): React.JSX.Elemen
   );
 }
 
-const DOCK_COMPONENTS = { [PANEL_COMPONENT]: DockPanel };
+// Panels only depend on their dockview api, so a layout change elsewhere doesn't re-render them.
+const DOCK_COMPONENTS = { [PANEL_COMPONENT]: React.memo(DockPanel) };
 
 /** A group shows its tab strip only when it stacks several panels. */
 function updateGroupHeaders(api: DockviewApi) {
@@ -222,7 +224,11 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
 
   const onDidDrop = useCallback(
     (event: DockviewDidDropEvent) => {
-      if (!(event.nativeEvent instanceof DragEvent)) {
+      // Drops on a tab are handled by the tab (PanelTab).
+      if (
+        !(event.nativeEvent instanceof DragEvent) ||
+        (event.nativeEvent.target instanceof Element && event.nativeEvent.target.closest(".dv-tab"))
+      ) {
         return;
       }
       const selection = getPanelDragData(event.nativeEvent.dataTransfer);
@@ -254,6 +260,9 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
             disableFloatingGroups
             singleTabMode="fullwidth"
             scrollbars="native"
+            defaultTabComponent={PanelTab}
+            // Background tabs stay mounted and in the DOM, so switching tabs only toggles visibility.
+            defaultRenderer="always"
           />
         </div>
       </PanelComponentsContext.Provider>
