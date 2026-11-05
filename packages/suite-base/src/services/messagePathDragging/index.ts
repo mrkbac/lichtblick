@@ -26,6 +26,21 @@ const log = Logger.getLogger(__filename);
 
 /** Key in the drag data that marks a message path drag. */
 const MESSAGE_PATHS_KEY = "lichtblickMessagePaths";
+/** Key in the drag data holding the id of the panel the drag started in, if any. */
+const SOURCE_PANEL_KEY = "lichtblickSourcePanelId";
+
+/**
+ * True when the drag (its `data`) started in the panel `ownerPanelId`. Dropping a
+ * series back onto its own panel would only duplicate it, so such drops are ignored. Drags that
+ * don't start in a panel (e.g. the topic list) are never self drops.
+ */
+export function isSelfDrop(
+  data: Record<string | symbol, unknown>,
+  ownerPanelId: string | undefined,
+): boolean {
+  const sourcePanelId = data[SOURCE_PANEL_KEY];
+  return sourcePanelId != undefined && sourcePanelId === ownerPanelId;
+}
 
 function getDraggedItems(data: Record<string | symbol, unknown>): DraggedMessagePath[] | undefined {
   const items = data[MESSAGE_PATHS_KEY];
@@ -36,7 +51,7 @@ function getDraggedItems(data: Record<string | symbol, unknown>): DraggedMessage
  * Use this to create a drag source for message paths that can be dropped onto target components
  * that use `useMessagePathDrop()`.
  */
-export function useMessagePathDrag({ item, selected }: MessagePathDragParams): {
+export function useMessagePathDrag({ item, selected, sourcePanelId }: MessagePathDragParams): {
   dragRef: (element: HTMLElement | null) => (() => void) | undefined;
   isDragging: boolean;
   /** Count shown on the drag preview while it is captured; 0 otherwise. */
@@ -47,8 +62,8 @@ export function useMessagePathDrag({ item, selected }: MessagePathDragParams): {
   const [draggedItemCount, setDraggedItemCount] = useState(0);
 
   // Read the latest values when a drag starts, without re-registering the drag source.
-  const latest = useRef({ item, selected, context });
-  latest.current = { item, selected, context };
+  const latest = useRef({ item, selected, context, sourcePanelId });
+  latest.current = { item, selected, context, sourcePanelId };
 
   const dragRef = useCallback((element: HTMLElement | null) => {
     if (element == undefined) {
@@ -63,7 +78,10 @@ export function useMessagePathDrag({ item, selected }: MessagePathDragParams): {
     };
     return draggable({
       element,
-      getInitialData: () => ({ [MESSAGE_PATHS_KEY]: getItems() }),
+      getInitialData: () => ({
+        [MESSAGE_PATHS_KEY]: getItems(),
+        [SOURCE_PANEL_KEY]: latest.current.sourcePanelId,
+      }),
       onGenerateDragPreview: () => {
         // The browser snapshots the element right after this, so the count badge must be in the
         // DOM now; it is hidden again once the drag starts.
@@ -89,7 +107,7 @@ export function useMessagePathDrag({ item, selected }: MessagePathDragParams): {
  * Use this to create a drop target accepting message paths dragged from components that use
  * `useMessagePathDrag()`.
  */
-export function useMessagePathDrop(): {
+export function useMessagePathDrop(ownerPanelId?: string): {
   /** True if the target supports dragging (a config is set) and a drag has started */
   isDragging: boolean;
   isOver: boolean;
@@ -104,12 +122,16 @@ export function useMessagePathDrop(): {
 
   const configRef = useRef(config);
   configRef.current = config;
+  const ownerRef = useRef(ownerPanelId);
+  ownerRef.current = ownerPanelId;
 
   // Track message path drags anywhere, so every target can show whether it accepts them.
   useEffect(
     () =>
       monitorForElements({
-        canMonitor: ({ source }) => getDraggedItems(source.data) != undefined,
+        // A panel ignores drags that started in itself, so it shows no drop overlay for them.
+        canMonitor: ({ source }) =>
+          getDraggedItems(source.data) != undefined && !isSelfDrop(source.data, ownerRef.current),
         onDragStart: ({ source }) => {
           setDraggedItems(getDraggedItems(source.data));
         },
@@ -127,7 +149,9 @@ export function useMessagePathDrop(): {
     }
     const statusOf = (data: Record<string | symbol, unknown>) => {
       const items = getDraggedItems(data);
-      return items != undefined ? configRef.current?.getDropStatus(items) : undefined;
+      return items != undefined && !isSelfDrop(data, ownerRef.current)
+        ? configRef.current?.getDropStatus(items)
+        : undefined;
     };
     return dropTargetForElements({
       element,

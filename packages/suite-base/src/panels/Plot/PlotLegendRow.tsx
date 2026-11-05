@@ -22,6 +22,7 @@ import { Immutable } from "@lichtblick/suite";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { useSelectedPanels } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
+import { useSeriesDrag } from "@lichtblick/suite-base/panels/shared/useSeriesDrag";
 import { getLineColor } from "@lichtblick/suite-base/util/plotColors";
 import { customTypography } from "@lichtblick/theme";
 
@@ -84,6 +85,12 @@ const useStyles = makeStyles<void, "plotName" | "actionButton">()((theme, _param
     },
   },
   disabledPathLabel: {
+    opacity: 0.5,
+  },
+  draggable: {
+    cursor: "grab",
+  },
+  dragging: {
     opacity: 0.5,
   },
   plotName: {
@@ -166,6 +173,7 @@ export function PlotLegendRow({
 
   // When there are no series configured we render an extra row to show an "add series" button.
   const isAddSeriesRow = paths.length === 0;
+  const { dragRef, isDragging } = useSeriesDrag(isAddSeriesRow ? undefined : path.value);
 
   const handleDeletePath: MouseEventHandler<HTMLButtonElement> = (ev) => {
     // Deleting a path is a "quick action" and we want to avoid opening the settings sidebar
@@ -218,7 +226,12 @@ export function PlotLegendRow({
         />
       </div>
       <div
-        className={classes.plotName}
+        ref={dragRef}
+        title={dragRef ? "Drag onto another panel to add this series" : undefined}
+        className={cx(classes.plotName, {
+          [classes.draggable]: dragRef != undefined,
+          [classes.dragging]: isDragging,
+        })}
         style={{ gridColumn: !showPlotValuesInLegend ? "span 2" : undefined }}
       >
         <Typography

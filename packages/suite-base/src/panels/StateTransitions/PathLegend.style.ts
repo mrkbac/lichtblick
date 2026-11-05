@@ -15,6 +15,9 @@ export default makeStyles()((theme) => ({
     paddingInline: theme.spacing(1, 0.5),
     pointerEvents: "none",
   },
+  dragging: {
+    opacity: 0.5,
+  },
   dismissIcon: {
     paddingInline: theme.spacing(0.5),
     minWidth: "auto !important",
