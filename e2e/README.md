@@ -6,47 +6,47 @@ This directory contains all end-to-end (E2E) tests using [Playwright](https://pl
 
 ```bash
 # Build desktop packages
-yarn desktop:build:dev
+pnpm desktop:build:dev
 ```
 
 ```bash
 # Install Playwright
-yarn playwright install
+pnpm exec playwright install
 ```
 
 ### Web
 
 ```bash
 # Run all web tests
-yarn test:e2e:web
+pnpm test:e2e:web
 
 # Run in debug mode (step-by-step)
-yarn test:e2e:web:debug
+pnpm test:e2e:web:debug
 
 # View latest web test report
-yarn test:e2e:web:report
+pnpm test:e2e:web:report
 ```
 
 ### Desktop (Electron)
 
 ```bash
 # Run all desktop tests
-yarn test:e2e:desktop
+pnpm test:e2e:desktop
 
 # Run in debug mode
-yarn test:e2e:desktop:debug
+pnpm test:e2e:desktop:debug
 
 # View latest desktop test report
-yarn test:e2e:desktop:report
+pnpm test:e2e:desktop:report
 
 # Run desktop tests in CI (headless mode enforced in Electron)
-yarn test:e2e:desktop:ci
+pnpm test:e2e:desktop:ci
 
 # Generate test summary with timings
-yarn test:e2e:summary
+pnpm test:e2e:summary
 
 # Run a specific test when developing (filename: uninstall-extension.desktop.spec.ts)
-yarn test:e2e:desktop:debug uninstall-extens
+pnpm test:e2e:desktop:debug uninstall-extens
 ```
 
 ## 🏷️ Test Categories
@@ -62,12 +62,12 @@ All E2E tests are labeled with one of two tags that control which CI pipeline ex
 
 ```bash
 # Smoke only
-yarn test:e2e:desktop:smoke
-yarn test:e2e:web:smoke
+pnpm test:e2e:desktop:smoke
+pnpm test:e2e:web:smoke
 
 # All tests (smoke + regression)
-yarn test:e2e:desktop
-yarn test:e2e:web
+pnpm test:e2e:desktop
+pnpm test:e2e:web
 ```
 
 ---
@@ -78,8 +78,8 @@ After running tests, you can generate a summary report showing test execution ti
 
 ```bash
 # Run tests and generate summary
-yarn test:e2e:desktop
-yarn test:e2e:summary
+pnpm test:e2e:desktop
+pnpm test:e2e:summary
 ```
 
 The summary includes:
@@ -162,7 +162,7 @@ The Playwright MCP server exposes browser automation as MCP tools that AI agents
 
 ### Workflow
 
-1. Start the web app: `yarn web:serve`
+1. Start the web app: `pnpm web:serve`
 2. Open VS Code agent mode (Copilot Chat) and invoke `@lb-e2e-test`
 3. The MCP server starts automatically and opens a Chromium browser
 4. Ask the agent to navigate to `http://localhost:8080` and explore the UI

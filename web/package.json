@@ -3,7 +3,6 @@
   "private": true,
   "devDependencies": {
     "@lichtblick/suite-base": "workspace:*",
-    "@lichtblick/suite-web": "workspace:*",
-    "@rspack/core": "2.3.0"
+    "@lichtblick/suite-web": "workspace:*"
   }
 }

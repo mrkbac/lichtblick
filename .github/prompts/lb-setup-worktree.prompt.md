@@ -70,10 +70,10 @@ git worktree add ../lichtblick.worktree/pr-{id} pr-{id}
 
 ```bash
 cd ../lichtblick.worktree/{short-name}
-yarn install
+pnpm install
 ```
 
-`yarn install` performs a full install in this worktree. Worktrees do **not** share `.yarn/cache` (it is gitignored, and `.yarnrc.yml` sets `enableGlobalCache: false`), and `nodeLinker: node-modules` means a real `node_modules` is created. Expect a complete install rather than a quick link step.
+`pnpm install` performs a full install in this worktree. Packages come from the shared pnpm store, so this is mostly a link step.
 
 ## Copy local config (if any)
 

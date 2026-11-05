@@ -31,6 +31,7 @@ export * from "./plot";
 export * from "./alertsList";
 export * from "./settingsEditor";
 export * from "./stateTransitions";
+export * from "./syncTabs";
 export * from "./threeDee";
 export * from "./topicList";
 export * from "./transformTree";

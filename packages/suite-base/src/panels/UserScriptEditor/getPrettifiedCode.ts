@@ -20,11 +20,12 @@ async function getPrettifiedCode(code: string): Promise<string> {
   const estreePlugin = (await import(
     "prettier/plugins/estree"
   )) as typeof import("prettier/plugins/estree");
-  const typescriptPlugin = await import("prettier/plugins/typescript");
+  const babelPlugin = await import("prettier/plugins/babel");
 
   return await prettier.format(code, {
-    parser: "typescript",
-    plugins: [estreePlugin, typescriptPlugin],
+    // babel-ts instead of the "typescript" parser, which bundles another copy of TypeScript
+    parser: "babel-ts",
+    plugins: [estreePlugin, babelPlugin],
   });
 }
 

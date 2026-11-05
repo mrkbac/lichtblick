@@ -91,7 +91,10 @@ function setup(options: SetupOptions = {}): MockDecoderHandle & {
   return { ...handle, player };
 }
 
-function createFrame(timestamp: number): VideoFrame {
+function createFrame(
+  timestamp: number,
+  overrides: { close?: () => void; clone?: () => VideoFrame } = {},
+): VideoFrame {
   return {
     timestamp,
     codedWidth: 640,
@@ -100,6 +103,7 @@ function createFrame(timestamp: number): VideoFrame {
     clone: vi.fn().mockImplementation(function (this: VideoFrame) {
       return this;
     }),
+    ...overrides,
   } as unknown as VideoFrame;
 }
 
@@ -181,7 +185,7 @@ describe("VideoPlayer", () => {
     ]);
     await Promise.resolve();
     await vi.advanceTimersByTimeAsync(10);
-    // The reference frame arrives after the deadline; it has no waiter and is dropped.
+    // The reference frame arrives after the deadline; it has no waiter, so it is only cached.
     outputFrames.get(0)?.(createFrame(0));
 
     // Then decodeFrames resolves with a timeout (the de-serialized path has no intermediate result)
@@ -217,6 +221,86 @@ describe("VideoPlayer", () => {
       type: "target",
       frame: targetFrame,
     });
+  });
+
+  it("should show frames that arrive after their wait budget (#1360)", async () => {
+    // Given an H.264 decoder that holds frames for reordering, so every output misses its waiter
+    const { player, outputFrames } = setup({ trackDecodes: true });
+    await player.init({ codec: "avc1.42C01F" });
+    const decodeAt = async (timestampMicros: number) => {
+      const promise = player.decodeFrames([
+        { data: new Uint8Array([1]), timestampMicros, type: "delta" },
+      ]);
+      await vi.advanceTimersByTimeAsync(10);
+      return await promise;
+    };
+
+    // When frame 0 times out and then arrives late (clone() returns a distinct frame, like WebCodecs)
+    await expect(decodeAt(0)).resolves.toEqual({ type: "timeout" });
+    const closeReturned = vi.fn();
+    const returnedClone = createFrame(0, { close: closeReturned });
+    const closeCached = vi.fn();
+    const cachedClone = createFrame(0, { close: closeCached, clone: () => returnedClone });
+    const closeLate = vi.fn();
+    const lateFrame = createFrame(0, { close: closeLate, clone: () => cachedClone });
+    outputFrames.get(0)?.(lateFrame);
+
+    // Then the decoder's frame is closed, but an open clone is cached
+    expect(closeLate).toHaveBeenCalled();
+    expect(player.lastVideoFrame).toBe(cachedClone);
+    expect(closeCached).not.toHaveBeenCalled();
+
+    // And the next timed-out call gets its own open clone, exactly once
+    await expect(decodeAt(1)).resolves.toEqual({ type: "intermediate", frame: returnedClone });
+    expect(closeReturned).not.toHaveBeenCalled();
+    await expect(decodeAt(2)).resolves.toEqual({ type: "timeout" });
+
+    // And a frame older than the cached one never replaces it
+    outputFrames.get(2)?.(createFrame(2));
+    outputFrames.get(1)?.(createFrame(1));
+    expect(player.lastVideoFrame?.timestamp).toBe(2);
+  });
+
+  it("should accept older late frames again after init() starts a new stream", async () => {
+    const { player, outputFrames } = setup({ trackDecodes: true });
+    await player.init({ codec: "avc1.42C01F" });
+    const first = player.decodeFrames([
+      { data: new Uint8Array([1]), timestampMicros: 5000, type: "key" },
+    ]);
+    await vi.advanceTimersByTimeAsync(10);
+    await first;
+    outputFrames.get(5000)?.(createFrame(5000));
+
+    await player.init({ codec: "avc1.42C01F" });
+    const next = player.decodeFrames([
+      { data: new Uint8Array([1]), timestampMicros: 1000, type: "key" },
+    ]);
+    await vi.advanceTimersByTimeAsync(10);
+    await next;
+    outputFrames.get(1000)?.(createFrame(1000));
+
+    expect(player.lastVideoFrame?.timestamp).toBe(1000);
+  });
+
+  it("should accept older late frames again after a seek", async () => {
+    const { player, outputFrames } = setup({ trackDecodes: true });
+    await player.init({ codec: "avc1.42C01F" });
+    const first = player.decodeFrames([
+      { data: new Uint8Array([1]), timestampMicros: 5000, type: "key" },
+    ]);
+    await vi.advanceTimersByTimeAsync(10);
+    await first;
+    outputFrames.get(5000)?.(createFrame(5000));
+
+    player.resetForSeek();
+    const afterSeek = player.decodeFrames([
+      { data: new Uint8Array([1]), timestampMicros: 1000, type: "key" },
+    ]);
+    await vi.advanceTimersByTimeAsync(10);
+    await afterSeek;
+    outputFrames.get(1000)?.(createFrame(1000));
+
+    expect(player.lastVideoFrame?.timestamp).toBe(1000);
   });
 
   it("should return timeout when no frame is produced", async () => {
