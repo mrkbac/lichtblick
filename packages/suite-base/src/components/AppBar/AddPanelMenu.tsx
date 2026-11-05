@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Menu, PaperProps, PopoverPosition, PopoverReference } from "@mui/material";
+import { useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { PanelCatalog } from "@lichtblick/suite-base/components/PanelCatalog";
@@ -15,6 +16,9 @@ const useStyles = makeStyles()((theme) => ({
   menuList: {
     minWidth: 270,
     paddingBottom: theme.spacing(1),
+  },
+  hidden: {
+    visibility: "hidden",
   },
 }));
 
@@ -31,6 +35,9 @@ export function AddPanelMenu(props: AddPanelProps): React.JSX.Element {
   const { classes } = useStyles();
   const { anchorEl, anchorPosition, anchorReference, disablePortal, handleClose, open } = props;
   const addPanel = useAddPanel();
+  // While a panel is dragged out of the menu, the menu stays mounted (removing the drag source ends
+  // the drag in Chrome) but is hidden so its backdrop doesn't cover the layout's drop targets.
+  const [dragging, setDragging] = useState(false);
 
   return (
     <Menu
@@ -41,6 +48,11 @@ export function AddPanelMenu(props: AddPanelProps): React.JSX.Element {
       disablePortal={disablePortal}
       open={open}
       onClose={handleClose}
+      className={dragging ? classes.hidden : undefined}
+      onDragEnd={() => {
+        setDragging(false);
+        handleClose();
+      }}
       slotProps={{
         list: {
           dense: true,
@@ -63,8 +75,9 @@ export function AddPanelMenu(props: AddPanelProps): React.JSX.Element {
     >
       <PanelCatalog
         isMenu
-        // Close when a drag starts so the modal menu doesn't block the drop targets
-        onDragStart={handleClose}
+        onDragStart={() => {
+          setDragging(true);
+        }}
         onPanelSelect={(selection) => {
           addPanel(selection);
           handleClose();

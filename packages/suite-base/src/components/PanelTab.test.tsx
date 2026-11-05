@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { IDockviewHeaderActionsProps, IDockviewPanelHeaderProps } from "dockview-react";
 
 import { setPanelDragData } from "@lichtblick/suite-base/components/PanelCatalog/panelDrag";
@@ -166,6 +166,7 @@ describe("NewTabDropTarget", () => {
   }
 
   it("shows only while a panel is dragged, and adds the dropped panel as a new tab", () => {
+    vi.useFakeTimers();
     const onAction = vi.fn();
     renderTarget(onAction);
     expect(screen.queryByTestId("new-tab-drop-target")).toBeNull();
@@ -181,6 +182,12 @@ describe("NewTabDropTarget", () => {
       type: "ADD_PANEL",
       payload: expect.objectContaining({ position: "center", targetPanelId: "Plot!a" }),
     });
+    // The target goes away after the drop, not before React has delivered it.
+    expect(screen.getByTestId("new-tab-drop-target")).toBeTruthy();
+    act(() => {
+      vi.runAllTimers();
+    });
     expect(screen.queryByTestId("new-tab-drop-target")).toBeNull();
+    vi.useRealTimers();
   });
 });

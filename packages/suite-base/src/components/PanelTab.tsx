@@ -82,7 +82,7 @@ function subscribeToPanelDrag(listener: () => void): () => void {
   if (dragListeners.size === 0) {
     document.addEventListener("dragover", onDocumentDragOver, true);
     document.addEventListener("dragend", onDocumentDragEnd, true);
-    document.addEventListener("drop", onDocumentDragEnd, true);
+    document.addEventListener("drop", onDocumentDrop, true);
   }
   dragListeners.add(listener);
   return () => {
@@ -90,7 +90,7 @@ function subscribeToPanelDrag(listener: () => void): () => void {
     if (dragListeners.size === 0) {
       document.removeEventListener("dragover", onDocumentDragOver, true);
       document.removeEventListener("dragend", onDocumentDragEnd, true);
-      document.removeEventListener("drop", onDocumentDragEnd, true);
+      document.removeEventListener("drop", onDocumentDrop, true);
     }
   };
 }
@@ -100,6 +100,11 @@ function onDocumentDragOver(event: globalThis.DragEvent) {
     panelDragActive = active;
     notifyDragListeners();
   }
+}
+// Reset only after the drop has reached its target: re-rendering now would unmount the "+ New tab"
+// target before React delivers the drop to it.
+function onDocumentDrop() {
+  setTimeout(onDocumentDragEnd, 0);
 }
 function onDocumentDragEnd() {
   if (panelDragActive) {
