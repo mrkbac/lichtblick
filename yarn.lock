@@ -7699,7 +7699,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"base64-js@npm:^1.3.1, base64-js@npm:^1.5.1":
+"base64-js@npm:^1.3.1":
   version: 1.5.1
   resolution: "base64-js@npm:1.5.1"
   checksum: 10/669632eb3745404c2f822a18fc3a0122d2f9a7a13f7fb8b5823ee19d1d2ff9ee5b52c53367176ea4ad093c332fd5ab4bd0ebae5a8e27917a4105a4cfc86b1005
@@ -14728,17 +14728,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"plist@npm:3.1.0":
-  version: 3.1.0
-  resolution: "plist@npm:3.1.0"
-  dependencies:
-    "@xmldom/xmldom": "npm:^0.8.8"
-    base64-js: "npm:^1.5.1"
-    xmlbuilder: "npm:^15.1.1"
-  checksum: 10/f513beecc01a021b4913d4e5816894580b284335ae437e7ed2d5e78f8b6f0d2e0f874ec57bab9c9d424cc49e77b8347efa75abcfa8ac138dbfb63a045e1ce559
-  languageName: node
-  linkType: hard
-
 "plist@npm:4.0.0":
   version: 4.0.0
   resolution: "plist@npm:4.0.0"
@@ -14746,17 +14735,6 @@ __metadata:
     "@xmldom/xmldom": "npm:^0.9.10"
     xmlbuilder: "npm:^15.1.1"
   checksum: 10/be6a68abe7f1964402109556fc490930e80bb79808e9f9eb4b3a406d4948d737120563aaf4a5ab5ab4b151f0f5998dba5101d77a92f36278baba5e289feeaa80
-  languageName: node
-  linkType: hard
-
-"plist@patch:plist@npm%3A3.1.0#./patches/plist-npm-3.1.0-66799cb2cb.patch::locator=lichtblick%40workspace%3A.":
-  version: 3.1.0
-  resolution: "plist@patch:plist@npm%3A3.1.0#./patches/plist-npm-3.1.0-66799cb2cb.patch::version=3.1.0&hash=f176ea&locator=lichtblick%40workspace%3A."
-  dependencies:
-    "@xmldom/xmldom": "npm:^0.8.8"
-    base64-js: "npm:^1.5.1"
-    xmlbuilder: "npm:^15.1.1"
-  checksum: 10/7bd95fe6dae8af6e88dca39ad4c52dd190addec3539bcc05c80e5ac3a2159777e806e15fe48d0d6a90facd4826c8ccf467bc1d1b2626be31602c2fa7bc0455cc
   languageName: node
   linkType: hard
 
