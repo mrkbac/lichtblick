@@ -124,11 +124,12 @@ class PointColumns {
   #pushRow(src: PointColumns, i: number): void {
     this.#reserve(this.length + 1);
     const j = this.length++;
-    const srcCols = src.#columns();
-    const cols = this.#columns();
-    for (let c = 0; c < cols.length; c++) {
-      cols[c]![j] = srcCols[c]![i]!;
-    }
+    this.x[j] = src.x[i]!;
+    this.y[j] = src.y[i]!;
+    this.#receiveSec[j] = src.#receiveSec[i]!;
+    this.#receiveNsec[j] = src.#receiveNsec[i]!;
+    this.#stampSec[j] = src.#stampSec[i]!;
+    this.#stampNsec[j] = src.#stampNsec[i]!;
     if (src.#values || this.#values) {
       this.#values ??= [];
       this.#values[j] = src.#values?.[i];

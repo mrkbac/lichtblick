@@ -61,6 +61,7 @@ describe("TimestampDatasetsBuilderImpl", () => {
   });
 
   it("restarts the moving average window after a line break", () => {
+    // GIVEN a NaN line break between two runs, smoothed over 2 samples
     const ys = [10, 20, NaN, 1, 3];
     const builder = build([seriesItem("0", { smoothing: 2 })]);
     builder.applyAction({
@@ -69,6 +70,8 @@ describe("TimestampDatasetsBuilderImpl", () => {
       items: items([0, 1, 2, 3, 4], (x) => ys[x]!),
     });
 
+    // WHEN reading the derived values
+    // THEN the second run does not mix in values from the first
     expect(builder.getCsvData()[0]!.data.map((item) => item.y)).toEqual([10, 15, NaN, 1, 2]);
   });
 
@@ -102,6 +105,7 @@ describe("TimestampDatasetsBuilderImpl", () => {
   });
 
   it("recomputes derived values when the config changes", () => {
+    // GIVEN a delta series
     const builder = build([seriesItem("0", { path: "/topic.value.@delta" })]);
     builder.applyAction({
       type: "append-full",
@@ -110,6 +114,8 @@ describe("TimestampDatasetsBuilderImpl", () => {
     });
     expect(builder.getCsvData()[0]!.data.map((item) => item.value)).toEqual([null, 2, 4]);
 
+    // WHEN the modifier changes, and then is removed
+    // THEN the cached values are recomputed each time
     builder.applyAction({
       type: "update-series-config",
       seriesItems: [seriesItem("0", { path: "/topic.value.@timedelta" })],
@@ -142,16 +148,21 @@ describe("TimestampDatasetsBuilderImpl", () => {
   });
 
   it("merges header stamp current data and drops what full data covers", () => {
+    // GIVEN out-of-order current header stamp batches
     const builder = build([seriesItem("0", { timestampMethod: "headerStamp" })]);
     builder.applyAction({ type: "append-current", series: key, items: items([6, 4, 8]) });
     builder.applyAction({ type: "append-current", series: key, items: items([7, 5]) });
+    // THEN they are merged in order
     expect(builder.getCsvData()[0]!.data.map((item) => item.x)).toEqual([4, 5, 6, 7, 8]);
 
+    // WHEN full data up to x=6 arrives
+    // THEN current rows it covers are dropped
     builder.applyAction({ type: "append-full", series: key, items: items([0, 6, 3]) });
     expect(builder.getCsvData()[0]!.data.map((item) => item.x)).toEqual([0, 3, 6, 7, 8]);
   });
 
   it("keeps original values that are not the plotted number", () => {
+    // GIVEN values that are strings, bigints, gaps and plain numbers, without header stamps
     const builder = build([seriesItem("0")]);
     builder.applyAction({
       type: "append-full",
@@ -164,7 +175,10 @@ describe("TimestampDatasetsBuilderImpl", () => {
       ],
     });
 
+    // WHEN exported
     const data = builder.getCsvData()[0]!.data;
+
+    // THEN each original value and the missing header stamps come back unchanged
     expect(data.map((item) => item.value)).toEqual(["1", 2n, null, 4]);
     expect(data.map((item) => item.headerStamp)).toEqual([
       undefined,
@@ -203,13 +217,17 @@ describe("TimestampDatasetsBuilderImpl", () => {
   });
 
   it("keeps one point on either side of the zoomed range", () => {
+    // GIVEN 100 points
     const builder = build([seriesItem("0")]);
     builder.applyAction({ type: "append-full", series: key, items: items(range(0, 100)) });
 
+    // WHEN zoomed to x 10.5..20
     const data = builder.getViewportDatasets({
       ...viewport,
       bounds: { x: { min: 10.5, max: 20 } },
     })[0]!.data;
+
+    // THEN the points in view plus one on each side are drawn
     expect(data.map((item) => item.x)).toEqual(range(10, 22));
   });
 });
