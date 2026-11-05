@@ -8,13 +8,9 @@
 import { List } from "@mui/material";
 import { useCallback, useMemo } from "react";
 
-import {
-  useCurrentLayoutActions,
-  usePanelMosaicId,
-} from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { PanelInfo } from "@lichtblick/suite-base/context/PanelCatalogContext";
 
-import { PanelListItem, DropDescription } from "./PanelListItem";
+import { PanelListItem } from "./PanelListItem";
 import { PanelSelection } from "./types";
 
 type Props = {
@@ -44,25 +40,6 @@ export function PanelList(props: Props): React.JSX.Element {
     searchQuery = "",
   } = props;
 
-  const { dropPanel } = useCurrentLayoutActions();
-  const mosaicId = usePanelMosaicId();
-
-  // Update panel layout when a panel menu item is dropped;
-  // actual operations to change layout supplied by react-mosaic-component
-  const onPanelMenuItemDrop = useCallback(
-    ({ config, type, position, path, tabId }: DropDescription) => {
-      dropPanel({
-        newPanelType: type,
-        destinationPath: path,
-        position,
-        tabId,
-        config,
-      });
-      blurActiveElement();
-    },
-    [dropPanel],
-  );
-
   const highlightedPanel = useMemo(() => {
     return highlightedPanelIdx != undefined ? filteredPanels[highlightedPanelIdx] : undefined;
   }, [filteredPanels, highlightedPanelIdx]);
@@ -73,10 +50,8 @@ export function PanelList(props: Props): React.JSX.Element {
       return (
         <PanelListItem
           key={`${type}-${title}`}
-          mosaicId={mosaicId}
           panel={panelInfo}
           onDragStart={onDragStart}
-          onDrop={onPanelMenuItemDrop}
           onClick={() => {
             onPanelSelect({ type, config });
             blurActiveElement();
@@ -87,15 +62,7 @@ export function PanelList(props: Props): React.JSX.Element {
         />
       );
     },
-    [
-      highlightedPanel?.title,
-      mosaicId,
-      onDragStart,
-      onPanelMenuItemDrop,
-      onPanelSelect,
-      searchQuery,
-      selectedPanelType,
-    ],
+    [highlightedPanel?.title, onDragStart, onPanelSelect, searchQuery, selectedPanelType],
   );
 
   return (

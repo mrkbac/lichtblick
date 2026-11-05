@@ -5,9 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { MosaicNode } from "react-mosaic-component";
-
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
+import { migratePanelsState } from "@lichtblick/suite-base/services/migrateLayout";
 
 import DefaultMultipleThreeDee from "./layouts/DefaultMultipleThreeDee.json";
 import Empty from "./layouts/Empty.json";
@@ -23,13 +22,14 @@ import TransformPreloading from "./layouts/TransformPreloading.json";
 function makeLayoutData(
   partialData: Pick<LayoutData, "configById"> & { layout?: unknown },
 ): LayoutData {
-  return {
+  // The layout files are in the old mosaic format, which the migration converts.
+  return migratePanelsState({
     configById: partialData.configById,
-    layout: partialData.layout as MosaicNode<string> | undefined,
+    layout: partialData.layout as LayoutData["layout"],
     globalVariables: {},
     userNodes: {},
     playbackConfig: { speed: 1 },
-  };
+  });
 }
 
 const LAYOUTS: Record<string, LayoutData> = {

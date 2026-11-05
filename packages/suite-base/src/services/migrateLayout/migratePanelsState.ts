@@ -11,15 +11,28 @@ import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/
 
 import { migrateLegacyToNew3DPanels } from "./migrateLegacyToNew3DPanels";
 import { migrateLegacyToNewImagePanels } from "./migrateLegacyToNewImagePanels";
+import { migrateMosaicLayout } from "./migrateMosaicLayout";
+
+/**
+ * Layout data version written by this app. Version 2 stores the layout as a tree of tab groups
+ * (`LayoutNode`); older apps refuse to open it instead of misreading it.
+ */
+export const LAYOUT_VERSION = 2;
 
 /**
  * Perform any necessary migrations on old layout data.
  */
 export function migratePanelsState(data: MarkOptional<LayoutData, "configById">): LayoutData {
   let result: LayoutData = { ...data, configById: data.configById ?? {} };
+  // A newer app wrote this layout: the legacy migrations could drop content they don't recognize.
+  if ((result.version ?? 0) > LAYOUT_VERSION) {
+    return result;
+  }
 
+  result = migrateMosaicLayout(result);
   result = migrateLegacyToNew3DPanels(result);
   result = migrateLegacyToNewImagePanels(result);
+  result.version = Math.max(result.version ?? 0, LAYOUT_VERSION);
 
   return result;
 }

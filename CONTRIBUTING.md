@@ -244,7 +244,7 @@ Before pushing, ensure your changes pass all checks:
 
 ```sh
 yarn format                 # Formatting (Biome)
-yarn lint                   # Linting (ESLint)
+yarn lint                   # Linting (oxlint)
 yarn test                   # Unit tests (Vitest)
 yarn run tsc --noEmit       # TypeScript type checking
 ```
@@ -308,7 +308,7 @@ Code quality is enforced through automated tooling. All checks run in CI and mus
 
 ### Linting
 
-- **ESLint** with the `@lichtblick` plugin suite enforces consistent code patterns.
+- **oxlint** (type-aware, see `.oxlintrc.json`) with our custom rules in `packages/oxlint-plugin` enforces consistent code patterns.
 - Run `yarn lint` to auto-fix issues locally.
 
 ### Git Hooks
@@ -317,7 +317,7 @@ Git hooks are managed by [Husky](https://typicode.github.io/husky/) and are **in
 
 | Hook | When it runs | What it does |
 | ------------ | ------------ | ------------------------------------------------------------------------------------------------------- |
-| `pre-commit` | `git commit` | Runs [lint-staged](https://github.com/lint-staged/lint-staged) on **staged** `*.{js,jsx,mjs,cjs,ts,tsx, json}` files: `eslint --fix` then `biome format --write`. Auto-fixes are re-staged; non-fixable lint errors block the commit. |
+| `pre-commit` | `git commit` | Runs [lint-staged](https://github.com/lint-staged/lint-staged) on **staged** `*.{js,jsx,mjs,cjs,ts,tsx, json}` files: `oxlint --fix` then `biome format --write`. Auto-fixes are re-staged; non-fixable lint errors block the commit. |
 
 Notes:
 
@@ -337,7 +337,7 @@ Notes:
 
 ### License Headers
 
-All source files must include the **MPL-2.0** license header. This is enforced by ESLint via the `@lichtblick/license-header` rule.
+All source files must include the **MPL-2.0** license header. This is enforced by oxlint via the `@lichtblick/license-header` rule.
 
 ### File Organization
 
@@ -438,7 +438,7 @@ The following checks run automatically on every PR:
 | Check           | Description                                                                                     |
 | --------------- | ----------------------------------------------------------------------------------------------- |
 | **npm audit**   | Security vulnerability scan                                                                     |
-| **lint**        | License check, dedup check, TypeScript type checking, ESLint, unused exports, dependency checks |
+| **lint**        | License check, dedup check, TypeScript type checking, oxlint, unused exports, dependency checks |
 | **packages**    | Build all internal packages                                                                     |
 | **web**         | Production web build                                                                            |
 | **desktop**     | Production desktop build                                                                        |

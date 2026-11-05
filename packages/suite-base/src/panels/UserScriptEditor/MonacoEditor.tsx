@@ -12,8 +12,6 @@ type Options = monacoApi.editor.IStandaloneEditorConstructionOptions;
 export type EditorWillMount = (monaco: Monaco) => Options | void;
 export type EditorDidMount = (editor: Editor, monaco: Monaco) => void;
 
-// Mount-only props are read through latestProps, which the rule cannot see.
-/* eslint-disable react/no-unused-prop-types */
 type Props = {
   language: string;
   theme: string;
@@ -22,7 +20,6 @@ type Props = {
   editorDidMount: EditorDidMount;
   onChange: (value: string) => void;
 };
-/* eslint-enable react/no-unused-prop-types */
 
 // Monaco's fallback for its editor worker is a bare `new URL(...)`, which the bundler emits as an
 // unbundled asset, so create the workers here (Monaco's documented ESM setup).

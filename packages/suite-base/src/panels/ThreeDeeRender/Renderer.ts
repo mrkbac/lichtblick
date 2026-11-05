@@ -1364,9 +1364,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   };
 
   public queueAnimationFrame(): void {
-    if (this.#animationFrame == undefined) {
-      this.#animationFrame = requestAnimationFrame(this.animationFrame);
-    }
+    this.#animationFrame ??= requestAnimationFrame(this.animationFrame);
   }
 
   public async settleVideoDecodes(): Promise<void> {

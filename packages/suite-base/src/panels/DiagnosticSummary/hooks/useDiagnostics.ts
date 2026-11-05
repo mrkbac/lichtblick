@@ -14,9 +14,9 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { toSec } from "@foxglove/rostime";
 import { useCallback } from "react";
 
-import { toSec } from "@foxglove/rostime";
 import { useMessageReducer } from "@lichtblick/suite-base/PanelAPI";
 import { DiagnosticStatusArrayMsg } from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
 import { MAX_LIVE_HISTORY_CHANGES } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";

@@ -15,7 +15,7 @@ import { RspackArgv } from "./RspackArgv";
 
 /**
  * Type checking runs on the native TypeScript 7 compiler (installed as "typescript7"); tooling
- * that needs the compiler API (ESLint) stays on the "typescript" 6 package.
+ * that needs the compiler API (ts-node, the user script transformer) stays on the "typescript" 6 package.
  */
 export function tsCheckerOptions(): { tsgo: true; typescriptPath: string } {
   // Builds run from the repo root, where typescript7 is installed (works in ESM and CJS)
@@ -158,9 +158,6 @@ export function makeConfig(
         // https://github.com/yarnpkg/berry/pull/2889#issuecomment-849905154
         module: false,
 
-        // These are optional for react-mosaic-component
-        "@blueprintjs/core": false,
-        "@blueprintjs/icons": false,
         domain: false,
 
         // don't inject these things into our web build
@@ -170,10 +167,6 @@ export function makeConfig(
         // punycode is a dependency for some older webpack v4 browser libs
         // It adds unecessary bloat to the build so we make sure it isn't included
         punycode: false,
-
-        // Workaround for https://github.com/react-dnd/react-dnd/issues/3423
-        "react/jsx-runtime": "react/jsx-runtime.js",
-        "react/jsx-dev-runtime": "react/jsx-dev-runtime.js",
       },
     },
     module: {

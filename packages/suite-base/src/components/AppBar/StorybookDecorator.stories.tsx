@@ -7,9 +7,6 @@
 
 /* eslint-disable storybook/story-exports */
 
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
-
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelCatalogContext, {
@@ -69,16 +66,14 @@ export default {
 
 export function StorybookDecorator(Wrapped: React.ComponentType): React.JSX.Element {
   return (
-    <DndProvider backend={HTML5Backend}>
-      <WorkspaceContextProvider>
-        <PanelCatalogContext.Provider value={new MockPanelCatalog()}>
-          <MockCurrentLayoutProvider>
-            <MockMessagePipelineProvider>
-              <Wrapped />
-            </MockMessagePipelineProvider>
-          </MockCurrentLayoutProvider>
-        </PanelCatalogContext.Provider>
-      </WorkspaceContextProvider>
-    </DndProvider>
+    <WorkspaceContextProvider>
+      <PanelCatalogContext.Provider value={new MockPanelCatalog()}>
+        <MockCurrentLayoutProvider>
+          <MockMessagePipelineProvider>
+            <Wrapped />
+          </MockMessagePipelineProvider>
+        </MockCurrentLayoutProvider>
+      </PanelCatalogContext.Provider>
+    </WorkspaceContextProvider>
   );
 }

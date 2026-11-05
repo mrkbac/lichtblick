@@ -269,7 +269,7 @@ const LogPanel = React.memo(({ config, saveConfig }: Props) => {
   const jump = useCallback(
     (direction: 1 | -1) => {
       const anchor = seekPlayback
-        ? getMessagePipeline().playerState.activeData?.currentTime ?? undefined
+        ? (getMessagePipeline().playerState.activeData?.currentTime ?? undefined)
         : jumpAnchor.current;
       const index = findLevel(filteredItems, anchor, direction, LogLevel.WARN);
       const target = filteredItems[index];

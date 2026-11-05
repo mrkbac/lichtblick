@@ -8,7 +8,7 @@
 import { ReOrderDotsVertical16Regular } from "@fluentui/react-icons";
 import { Badge, Typography } from "@mui/material";
 import { FzfResultItem } from "fzf";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 
 import { HighlightChars } from "@lichtblick/suite-base/components/HighlightChars";
 import { DraggedMessagePath } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
@@ -52,28 +52,19 @@ export function MessagePathRow({
     [fullPath, isLeaf, topic.name, topic.schemaName],
   );
 
-  const { connectDragSource, connectDragPreview, cursor, isDragging, draggedItemCount } =
-    useMessagePathDrag({
-      item,
-      selected,
-    });
-
-  const combinedRef: React.Ref<HTMLDivElement> = useCallback(
-    (el) => {
-      connectDragSource(el);
-      connectDragPreview(el);
-    },
-    [connectDragPreview, connectDragSource],
-  );
+  const { dragRef, isDragging, draggedItemCount } = useMessagePathDrag({
+    item,
+    selected,
+  });
 
   return (
     <div
-      ref={combinedRef}
+      ref={dragRef}
       className={cx(classes.row, classes.fieldRow, {
         [classes.isDragging]: isDragging,
         [classes.selected]: selected,
       })}
-      style={{ ...style, cursor }}
+      style={style}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}
@@ -93,7 +84,7 @@ export function MessagePathRow({
           {type}
         </Typography>
       </Stack>
-      <div data-testid="TopicListDragHandle" style={{ cursor }} className={classes.dragHandle}>
+      <div data-testid="TopicListDragHandle" className={classes.dragHandle}>
         <ReOrderDotsVertical16Regular />
       </div>
     </div>

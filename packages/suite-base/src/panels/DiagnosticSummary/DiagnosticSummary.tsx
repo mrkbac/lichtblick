@@ -181,7 +181,7 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
             onChange={(event) => {
               saveConfig({ minLevel: event.target.value });
             }}
-            MenuProps={{ MenuListProps: { dense: true } }}
+            MenuProps={{ slotProps: { list: { dense: true } } }}
           >
             {KNOWN_LEVELS.map((level) => (
               <MenuItem key={level} value={level}>

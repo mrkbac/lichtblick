@@ -63,6 +63,7 @@ const useStyles = makeStyles()(() => ({
     fontWeight: "bold",
     display: "-webkit-box",
     WebkitLineClamp: 2,
+    // oxlint-disable-next-line typescript/no-deprecated -- still required for -webkit-line-clamp
     WebkitBoxOrient: "vertical",
     wordBreak: "break-all",
     overflow: "hidden",

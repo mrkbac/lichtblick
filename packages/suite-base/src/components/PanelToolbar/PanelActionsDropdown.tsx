@@ -19,13 +19,11 @@ import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { Divider, Menu, MenuItem } from "@mui/material";
 import { MouseEvent, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { MosaicContext, MosaicNode, MosaicWindowContext } from "react-mosaic-component";
 import { makeStyles } from "tss-react/mui";
 
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import ChangePanelMenu from "@lichtblick/suite-base/components/PanelToolbar/ChangePanelMenu";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
-import { getPanelTypeFromMosaic } from "@lichtblick/suite-base/components/PanelToolbar/utils";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 
 type Props = {
@@ -67,18 +65,11 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
   const submenuOpen = Boolean(subMenuAnchorEl);
 
   const panelContext = useContext(PanelContext);
-  const tabId = panelContext?.tabId;
-  const { mosaicActions } = useContext(MosaicContext);
-  const { mosaicWindowActions } = useContext(MosaicWindowContext);
   const {
     getCurrentLayoutState: getCurrentLayout,
     closePanel,
     splitPanel,
   } = useCurrentLayoutActions();
-  const getPanelType = useCallback(
-    () => getPanelTypeFromMosaic(mosaicWindowActions, mosaicActions),
-    [mosaicActions, mosaicWindowActions],
-  );
   const handleTouchStart = useCallback(() => {
     isTouchInteraction.current = true;
   }, []);
@@ -111,33 +102,23 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
   };
 
   const close = useCallback(() => {
-    closePanel({
-      tabId,
-      root: mosaicActions.getRoot() as MosaicNode<string>,
-      path: mosaicWindowActions.getPath(),
-    });
+    if (panelContext?.id != undefined) {
+      closePanel({ id: panelContext.id });
+    }
     handleMenuClose();
-  }, [closePanel, mosaicActions, mosaicWindowActions, tabId]);
+  }, [closePanel, panelContext?.id]);
 
   const split = useCallback(
     (id: string | undefined, direction: "row" | "column") => {
-      const type = getPanelType();
-      if (id == undefined || type == undefined) {
+      if (id == undefined) {
         throw new Error("Trying to split unknown panel!");
       }
 
       const config = getCurrentLayout().selectedLayout?.data?.configById[id] ?? {};
-      splitPanel({
-        id,
-        tabId,
-        direction,
-        root: mosaicActions.getRoot() as MosaicNode<string>,
-        path: mosaicWindowActions.getPath(),
-        config,
-      });
+      splitPanel({ id, direction, config });
       handleMenuClose();
     },
-    [getCurrentLayout, getPanelType, mosaicActions, mosaicWindowActions, splitPanel, tabId],
+    [getCurrentLayout, splitPanel],
   );
 
   const enterFullscreen = useCallback(() => {
@@ -199,7 +180,7 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
   ]);
 
   const buttonRef = useRef<HTMLDivElement>(ReactNull);
-  const type = getPanelType();
+  const type = panelContext?.type;
 
   if (type == undefined) {
     return <></>;
@@ -245,7 +226,7 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
           {t("changePanel")}
           <ChevronRightIcon className={classes.icon} fontSize="small" />
         </MenuItem>
-        <ChangePanelMenu anchorEl={subMenuAnchorEl} onClose={handleSubmenuClose} tabId={tabId} />
+        <ChangePanelMenu anchorEl={subMenuAnchorEl} onClose={handleSubmenuClose} />
         <Divider variant="middle" />
         {menuItems.map((item, idx) =>
           item.type === "divider" ? (
