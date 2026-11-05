@@ -51,7 +51,7 @@ const suiteBaseAlias = [
   { find: /^.*\.(glb|md|png)$/, replacement: path.join(suiteBaseSrc, "test/mocks/fileMock.ts") },
   // build config modules live at the package root, everything else in src/
   {
-    find: /^@lichtblick\/suite-base\/(webpack|WebpackArgv)$/,
+    find: /^@lichtblick\/suite-base\/(rspack|RspackArgv)$/,
     replacement: path.join(root, "packages/suite-base/$1.ts"),
   },
   { find: /^@lichtblick\/suite-base\/(?:src\/)?(.*)$/, replacement: `${suiteBaseSrc}/$1` },
@@ -76,7 +76,7 @@ export default defineConfig({
   test: {
     // Like jest: a test file's afterEach runs before the shared ones from setup files
     sequence: { hooks: "stack" },
-    // Sonar reads coverage/lcov.info
+    // lcov.info for coverage tooling
     coverage: { provider: "v8", reporter: ["text-summary", "lcov"], reportsDirectory: "coverage" },
     // Unit tests run in UTC so time formatting doesn't depend on the machine's timezone
     env: { TZ: "UTC" },

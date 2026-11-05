@@ -11,8 +11,8 @@ import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "path";
 import { GenerateSW } from "workbox-webpack-plugin";
 
-import type { WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
-import { makeConfig } from "@lichtblick/suite-base/webpack";
+import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv";
+import { makeConfig } from "@lichtblick/suite-base/rspack";
 import * as palette from "@lichtblick/theme/src/palette";
 
 export type ConfigParams = {
@@ -102,7 +102,7 @@ export const devServerConfig = (params: ConfigParams): Configuration => ({
 
 export const mainConfig =
   (params: ConfigParams) =>
-  (env: unknown, argv: WebpackArgv): Configuration => {
+  (env: unknown, argv: RspackArgv): Configuration => {
     const isDev = argv.mode === "development";
     const isServe = argv.env?.RSPACK_SERVE ?? false;
 
@@ -131,7 +131,7 @@ export const mainConfig =
       );
     }
 
-    const appWebpackConfig = makeConfig(env, argv, {
+    const appConfig = makeConfig(env, argv, {
       allowUnusedVariables,
       version: params.version,
     });
@@ -139,7 +139,7 @@ export const mainConfig =
     const config: Configuration = {
       name: "main",
 
-      ...appWebpackConfig,
+      ...appConfig,
 
       target: "web",
       context: params.contextPath,
@@ -158,7 +158,7 @@ export const mainConfig =
 
       plugins: [
         ...plugins,
-        ...(appWebpackConfig.plugins ?? []),
+        ...(appConfig.plugins ?? []),
         new rspack.CopyRspackPlugin({
           patterns: [{ from: path.resolve(__dirname, "..", "public") }],
         }),

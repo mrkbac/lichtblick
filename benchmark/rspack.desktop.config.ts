@@ -9,8 +9,8 @@ import { Configuration } from "@rspack/core";
 import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "node:path";
 
-import { resolveConfigs, type WebpackArgv } from "../packages/suite-base/WebpackArgv";
-import { makeConfig, swcRule } from "../packages/suite-base/webpack";
+import { resolveConfigs, type RspackArgv } from "../packages/suite-base/RspackArgv";
+import { makeConfig, swcRule } from "../packages/suite-base/rspack";
 
 // This is a standalone Electron shell for the benchmark app, separate from the production
 // `desktop/` shell. It intentionally does not depend on `@lichtblick/suite-desktop` (auto-update,
@@ -24,7 +24,7 @@ const outputPath = path.resolve(__dirname, ".webpack-desktop");
 // main entry point when launched with `electron <outputPath>`. Named so the other configs can
 // declare it as a `dependencies` entry, forcing webpack to run cleanup before their compilers
 // start (they run in parallel otherwise, which can delete output emitted by a sibling compiler).
-const rootConfig = (_env: unknown, _argv: WebpackArgv): Configuration => ({
+const rootConfig = (_env: unknown, _argv: RspackArgv): Configuration => ({
   name: "root",
   entry: {},
   output: {
@@ -44,7 +44,7 @@ const rootConfig = (_env: unknown, _argv: WebpackArgv): Configuration => ({
   ],
 });
 
-const mainConfig = (_env: unknown, argv: WebpackArgv): Configuration => {
+const mainConfig = (_env: unknown, argv: RspackArgv): Configuration => {
   const isDev = argv.mode === "development";
 
   return {
@@ -67,7 +67,7 @@ const mainConfig = (_env: unknown, argv: WebpackArgv): Configuration => {
   };
 };
 
-const preloadConfig = (_env: unknown, argv: WebpackArgv): Configuration => {
+const preloadConfig = (_env: unknown, argv: RspackArgv): Configuration => {
   const isDev = argv.mode === "development";
 
   return {
@@ -91,17 +91,17 @@ const preloadConfig = (_env: unknown, argv: WebpackArgv): Configuration => {
   };
 };
 
-const rendererConfig = (env: unknown, argv: WebpackArgv): Configuration => {
+const rendererConfig = (env: unknown, argv: RspackArgv): Configuration => {
   const isDev = argv.mode === "development";
 
-  const appWebpackConfig = makeConfig(env, argv, {
+  const appConfig = makeConfig(env, argv, {
     allowUnusedVariables: isDev,
     version: "0.0.0-benchmark",
   });
 
   return {
     name: "renderer",
-    ...appWebpackConfig,
+    ...appConfig,
     dependencies: ["root"],
 
     // force web target instead of electron-renderer
@@ -118,7 +118,7 @@ const rendererConfig = (env: unknown, argv: WebpackArgv): Configuration => {
     },
 
     plugins: [
-      ...(appWebpackConfig.plugins ?? []),
+      ...(appConfig.plugins ?? []),
       new HtmlWebpackPlugin({
         templateContent: `
   <!doctype html>
@@ -140,5 +140,5 @@ const rendererConfig = (env: unknown, argv: WebpackArgv): Configuration => {
   };
 };
 
-export default (env: unknown, argv: WebpackArgv): Configuration[] =>
+export default (env: unknown, argv: RspackArgv): Configuration[] =>
   resolveConfigs(env, argv, [rootConfig, mainConfig, preloadConfig, rendererConfig]);

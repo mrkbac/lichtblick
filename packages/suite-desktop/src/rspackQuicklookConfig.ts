@@ -11,14 +11,14 @@ import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "path";
 import { TsCheckerRspackPlugin } from "ts-checker-rspack-plugin";
 
-import type { WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
-import { swcRule, tsCheckerOptions } from "@lichtblick/suite-base/webpack";
+import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv";
+import { swcRule, tsCheckerOptions } from "@lichtblick/suite-base/rspack";
 
-import { WebpackConfigParams } from "./WebpackConfigParams";
+import { RspackConfigParams } from "./RspackConfigParams";
 
-export const webpackQuicklookConfig =
-  (params: WebpackConfigParams) =>
-  (_env: unknown, argv: WebpackArgv): Configuration => {
+export const rspackQuicklookConfig =
+  (params: RspackConfigParams) =>
+  (_env: unknown, argv: RspackArgv): Configuration => {
     const isDev = argv.mode === "development";
     const isServe = argv.env?.RSPACK_SERVE ?? false;
 

@@ -98,13 +98,13 @@ function fakeServer() {
 class StoredLayoutStorage extends MockLayoutStorage {
   public override async list(namespace: string): Promise<readonly Layout[]> {
     return (await super.list(namespace)).map((layout) =>
-      migrateLayout(JSON.parse(JSON.stringify(layout))),
+      migrateLayout(JSON.parse(JSON.stringify(layout)!)),
     );
   }
 
   public override async get(namespace: string, id: string): Promise<Layout | undefined> {
     const layout = await super.get(namespace, id);
-    return layout && migrateLayout(JSON.parse(JSON.stringify(layout)));
+    return layout && migrateLayout(JSON.parse(JSON.stringify(layout)!));
   }
 }
 

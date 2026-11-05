@@ -7,7 +7,7 @@
   "recommendations": [
     "oxc.oxc-vscode",
     "biomejs.biome",
-    "orta.vscode-jest",
+    "vitest.explorer",
     "bierner.comment-tagged-templates"
   ],
   // List of extensions recommended by VS Code that should not be recommended for users of this workspace.

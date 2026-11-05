@@ -31,8 +31,5 @@ test-results/*
 !.yarn/sdks
 .pnp.*
 
-# SonarQube files
-.sonar_lock
-.scannerwork
 lint-report.sarif
 blob-report/*
