@@ -252,6 +252,42 @@ describe("parseJsonSchema", () => {
     expect(postprocessValue({ arr: [{ foo: 3 }] })).toEqual({ arr: [{ foo: 3 }] });
   });
 
+  it("resolves type unions", () => {
+    const { datatypes } = parseJsonSchema(
+      {
+        type: ["object", "null"],
+        properties: {
+          maybeNumber: { type: ["number", "null"] },
+          numeric: { type: ["integer", "number"] },
+          maybeInts: { type: ["array", "null"], items: { type: ["integer", "null"], minimum: 0 } },
+          maybeObject: {
+            type: ["null", "object"],
+            properties: { s: { type: ["string", "null"] } },
+          },
+          mixed: { type: ["string", "number"] },
+          mixedItems: { type: "array", items: { type: ["boolean", "object"] } },
+        },
+      },
+      "Root",
+    );
+    expect(datatypes).toEqual(
+      new Map([
+        ["Root.maybeObject", { definitions: [{ name: "s", type: "string" }] }],
+        [
+          "Root",
+          {
+            definitions: [
+              { name: "maybeNumber", type: "float64" },
+              { name: "numeric", type: "float64" },
+              { name: "maybeInts", type: "uint32", isArray: true },
+              { name: "maybeObject", type: "Root.maybeObject", isComplex: true },
+            ],
+          },
+        ],
+      ]),
+    );
+  });
+
   it("converts oneOf to enum", () => {
     const { datatypes } = parseJsonSchema(
       {
