@@ -6,7 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { info, warning, error } from "@actions/core";
-import depcheck, { Detector } from "depcheck";
+import depcheck from "depcheck";
+import type { Detector } from "depcheck";
 import fs from "node:fs";
 import path from "path";
 
@@ -125,7 +126,9 @@ async function getAllWorkspacePackages(roots: string[]) {
   const results: { name: string; path: string }[] = [];
   const workspacePackages: string[] = [];
   for (const workspaceRoot of roots) {
-    const workspaceInfo = await import(path.resolve(process.cwd(), workspaceRoot, "package.json"));
+    const workspaceInfo = JSON.parse(
+      fs.readFileSync(path.resolve(process.cwd(), workspaceRoot, "package.json"), "utf8"),
+    );
     const patterns: string[] = Array.isArray(workspaceInfo.workspaces)
       ? workspaceInfo.workspaces
       : Array.isArray(workspaceInfo.workspaces?.packages)
@@ -147,7 +150,9 @@ async function getAllWorkspacePackages(roots: string[]) {
   }
   for (const packagePath of workspacePackages) {
     try {
-      const packageInfo = await import(path.join(packagePath, "package.json"));
+      const packageInfo = JSON.parse(
+        fs.readFileSync(path.join(packagePath, "package.json"), "utf8"),
+      );
       const name = packageInfo.name;
       if (typeof name !== "string") {
         warning(`No name in package.json at ${packagePath}`);
