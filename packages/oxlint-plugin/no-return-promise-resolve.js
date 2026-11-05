@@ -36,20 +36,18 @@ module.exports = {
             node: isReject && isReturn ? returnOrArrowFunction : callExpr,
             messageId: isReject ? "returnReject" : "returnResolve",
             fix(fixer) {
-              if (callExpr.arguments.length === 0) {
+              if (callExpr.arguments.length === 0 && !isReject) {
                 return fixer.replaceText(callExpr, "undefined");
               }
               if (isReject) {
+                const reason =
+                  callExpr.arguments.length === 0
+                    ? "undefined"
+                    : sourceCode.getText(callExpr.arguments[0]);
                 if (isArrowFunction) {
-                  return fixer.replaceText(
-                    returnOrArrowFunction.body,
-                    `{ throw ${sourceCode.getText(callExpr.arguments[0])}; }`,
-                  );
+                  return fixer.replaceText(returnOrArrowFunction.body, `{ throw ${reason}; }`);
                 } else {
-                  return fixer.replaceText(
-                    returnOrArrowFunction,
-                    `throw ${sourceCode.getText(callExpr.arguments[0])};`,
-                  );
+                  return fixer.replaceText(returnOrArrowFunction, `throw ${reason};`);
                 }
               }
               const firstArgToken = sourceCode.getFirstToken(callExpr.arguments[0]);

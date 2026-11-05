@@ -3095,6 +3095,8 @@ __metadata:
 "@lichtblick/oxlint-plugin@workspace:packages/oxlint-plugin":
   version: 0.0.0-use.local
   resolution: "@lichtblick/oxlint-plugin@workspace:packages/oxlint-plugin"
+  dependencies:
+    oxlint: "npm:1.91.0"
   languageName: unknown
   linkType: soft
 

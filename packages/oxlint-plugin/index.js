@@ -10,7 +10,6 @@ module.exports = {
     "lodash-ramda-imports": require("./lodash-ramda-imports"),
     "no-boolean-parameters": require("./no-boolean-parameters"),
     "no-getters-setters": require("./no-getters-setters"),
-    "no-map-type-argument": require("./no-map-type-argument"),
     "no-return-promise-resolve": require("./no-return-promise-resolve"),
     "ramda-usage": require("./ramda-usage"),
     "strict-equality": require("./strict-equality"),

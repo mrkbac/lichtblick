@@ -42,7 +42,7 @@
     "format:ci": "biome format --max-diagnostics=none .",
     "lint": "oxlint --report-unused-disable-directives --fix",
     "lint:ci": "oxlint --report-unused-disable-directives --max-warnings 0",
-    "lint:ci:report": "oxlint --report-unused-disable-directives --quiet -f sarif > lint-report.sarif",
+    "lint:ci:report": "oxlint --report-unused-disable-directives-severity error --quiet -f sarif > lint-report.sarif",
     "lint:unused-exports": "ts-node ./ci/lint-unused-exports.ts",
     "lint:dependencies": "ts-node ./ci/lint-dependencies.ts .",
     "test": "vitest run",

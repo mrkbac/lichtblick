@@ -244,7 +244,6 @@
     "@lichtblick/link-target": "error",
     "@lichtblick/lodash-ramda-imports": "error",
     "@lichtblick/ramda-usage": "error",
-    "@lichtblick/no-map-type-argument": "error",
     "tss-unused-classes/unused-classes": "error"
   },
   "overrides": [
