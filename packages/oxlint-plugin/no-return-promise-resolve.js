@@ -3,6 +3,22 @@
 
 // Vendored from @lichtblick/eslint-plugin (MPL-2.0).
 
+/**
+ * Whether `node` sits in the `try` block of a try/catch inside its own function, where turning a
+ * returned rejection into `throw` would hand it to the `catch` instead.
+ */
+function isInsideTryWithCatch(node) {
+  for (let child = node, parent = node.parent; parent; child = parent, parent = parent.parent) {
+    if (/Function/.test(parent.type)) {
+      return false;
+    }
+    if (parent.type === "TryStatement" && parent.block === child && parent.handler) {
+      return true;
+    }
+  }
+  return false;
+}
+
 module.exports = {
   meta: {
     type: "suggestion",
@@ -32,33 +48,34 @@ module.exports = {
           const isReturn = returnOrArrowFunction.type === "ReturnStatement";
           const isArrowFunction = !isReturn;
           const isReject = node.property.name === "reject";
+          const canFix = !(isReject && isInsideTryWithCatch(returnOrArrowFunction));
           context.report({
             node: isReject && isReturn ? returnOrArrowFunction : callExpr,
             messageId: isReject ? "returnReject" : "returnResolve",
-            fix(fixer) {
-              if (callExpr.arguments.length === 0 && !isReject) {
-                return fixer.replaceText(callExpr, "undefined");
-              }
-              if (isReject) {
-                const reason =
-                  callExpr.arguments.length === 0
-                    ? "undefined"
-                    : sourceCode.getText(callExpr.arguments[0]);
-                if (isArrowFunction) {
-                  return fixer.replaceText(returnOrArrowFunction.body, `{ throw ${reason}; }`);
-                } else {
-                  return fixer.replaceText(returnOrArrowFunction, `throw ${reason};`);
-                }
-              }
-              const firstArgToken = sourceCode.getFirstToken(callExpr.arguments[0]);
-              const needsParens =
-                isArrowFunction &&
-                firstArgToken.type === "Punctuator" &&
-                firstArgToken.value === "{";
-              const argText = sourceCode.getText(callExpr.arguments[0]);
-              return fixer.replaceText(callExpr, needsParens ? `(${argText})` : argText);
-            },
+            fix: canFix ? fix : undefined,
           });
+
+          function fix(fixer) {
+            if (callExpr.arguments.length === 0 && !isReject) {
+              return fixer.replaceText(callExpr, "undefined");
+            }
+            if (isReject) {
+              const reason =
+                callExpr.arguments.length === 0
+                  ? "undefined"
+                  : sourceCode.getText(callExpr.arguments[0]);
+              if (isArrowFunction) {
+                return fixer.replaceText(returnOrArrowFunction.body, `{ throw ${reason}; }`);
+              } else {
+                return fixer.replaceText(returnOrArrowFunction, `throw ${reason};`);
+              }
+            }
+            const firstArgToken = sourceCode.getFirstToken(callExpr.arguments[0]);
+            const needsParens =
+              isArrowFunction && firstArgToken.type === "Punctuator" && firstArgToken.value === "{";
+            const argText = sourceCode.getText(callExpr.arguments[0]);
+            return fixer.replaceText(callExpr, needsParens ? `(${argText})` : argText);
+          }
         },
     };
   },

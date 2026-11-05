@@ -43,5 +43,16 @@ ruleTester.run("no-return-promise-resolve", plugin.rules["no-return-promise-reso
       errors: [{ messageId: "returnReject" }],
       output: "const f = async () => { throw undefined; };",
     },
+    {
+      // A throw here would be caught by the catch block, so no autofix.
+      code: "async function f() { try { return Promise.reject(1); } catch { return 2; } }",
+      errors: [{ messageId: "returnReject" }],
+      output: null,
+    },
+    {
+      code: "async function f() { try { return Promise.resolve(1); } catch { return 2; } }",
+      errors: [{ messageId: "returnResolve" }],
+      output: "async function f() { try { return 1; } catch { return 2; } }",
+    },
   ],
 });
