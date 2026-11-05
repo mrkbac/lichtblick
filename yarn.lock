@@ -3883,19 +3883,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@napi-rs/wasm-runtime@npm:^1.1.4, @napi-rs/wasm-runtime@npm:^1.1.5":
-  version: 1.2.3
-  resolution: "@napi-rs/wasm-runtime@npm:1.2.3"
-  dependencies:
-    "@tybys/wasm-util": "npm:^0.10.3"
-  peerDependencies:
-    "@emnapi/core": ^1.7.1 || ^2.0.0-alpha.4
-    "@emnapi/runtime": ^1.7.1 || ^2.0.0-alpha.4
-  checksum: 10/86f7f092309eb005ff9e456c12a9f81ae06ff823602740a8c9c54b2dfc17620d9b4d88c4cd179541c794aed521ac57c7e37457a00e87a624867d78f6bbce0d7c
-  languageName: node
-  linkType: hard
-
-"@napi-rs/wasm-runtime@npm:^1.1.6":
+"@napi-rs/wasm-runtime@npm:^1.1.4, @napi-rs/wasm-runtime@npm:^1.1.5, @napi-rs/wasm-runtime@npm:^1.1.6":
   version: 1.2.7
   resolution: "@napi-rs/wasm-runtime@npm:1.2.7"
   dependencies:
@@ -11328,21 +11316,12 @@ __metadata:
   languageName: node
   linkType: hard
 
-"get-tsconfig@npm:4.14.3":
+"get-tsconfig@npm:4.14.3, get-tsconfig@npm:^4.10.1":
   version: 4.14.3
   resolution: "get-tsconfig@npm:4.14.3"
   dependencies:
     resolve-pkg-maps: "npm:^1.0.0"
   checksum: 10/ac18243ffd5c2e7c0cbecc11d053599c73a4c534a626988fe545b686695bf2fa789ba47bc2af87e30d85c657dbcadc26b4e3e328096894fde6a9229615c67253
-  languageName: node
-  linkType: hard
-
-"get-tsconfig@npm:^4.10.1":
-  version: 4.14.0
-  resolution: "get-tsconfig@npm:4.14.0"
-  dependencies:
-    resolve-pkg-maps: "npm:^1.0.0"
-  checksum: 10/f5626971905ca386c9ddeb302504e8a2301b9c05641803267223ebd50b7c81aaf9324d29cf9f4e4ff3f245632c3392aa83719dc6cb3e98b4e4a1702a27c5cc5d
   languageName: node
   linkType: hard
 
@@ -18904,17 +18883,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"unist-util-visit-parents@npm:^6.0.0":
-  version: 6.0.2
-  resolution: "unist-util-visit-parents@npm:6.0.2"
-  dependencies:
-    "@types/unist": "npm:^3.0.0"
-    unist-util-is: "npm:^6.0.0"
-  checksum: 10/aa16e97e45bd1d641e1f933d2fb3bf0800865350eaeb5cc0317ab511075480fb4ac5e2a55f57dd72d27311e8ba29fd23908848bd83479849c626be1f7dabcae5
-  languageName: node
-  linkType: hard
-
-"unist-util-visit-parents@npm:^6.1.0":
+"unist-util-visit-parents@npm:^6.0.0, unist-util-visit-parents@npm:^6.1.0":
   version: 6.1.0
   resolution: "unist-util-visit-parents@npm:6.1.0"
   dependencies:
