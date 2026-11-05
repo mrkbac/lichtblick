@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import "@testing-library/jest-dom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import { composeStories } from "storybook-react-rsbuild";
 import type { Mock } from "vitest";
 
@@ -38,6 +38,37 @@ describe("Watch", () => {
     expect(screen.getByText("km/h")).toBeInTheDocument();
     // The invalid path is logged by the parser
     (console.error as Mock).mockClear();
+  });
+
+  it("repaints rows when the panel is resized", async () => {
+    const callbacks: ResizeObserverCallback[] = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        public constructor(callback: ResizeObserverCallback) {
+          callbacks.push(callback);
+        }
+        public observe() {}
+        public disconnect() {}
+      },
+    );
+    try {
+      render(<Default />);
+      await waitFor(() => {
+        expect(screen.getByText("12.35")).toBeInTheDocument();
+      });
+      const value = screen.getAllByTestId("watch-row")[0]!.querySelector("[data-value]")!;
+      value.textContent = "stale";
+      act(() => {
+        for (const callback of callbacks) {
+          callback([], {} as ResizeObserver);
+        }
+      });
+      expect(value.textContent).toBe("12.35");
+      (console.error as Mock).mockClear();
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("explains how to add rows when empty", () => {
