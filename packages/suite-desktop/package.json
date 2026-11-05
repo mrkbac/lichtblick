@@ -38,6 +38,7 @@
     "quicklookjs": "1.0.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "react-refresh": "0.18.0",
     "react-use": "17.6.1",
     "storybook-react-rsbuild": "3.6.1",
     "tinycolor2": "1.6.0",
