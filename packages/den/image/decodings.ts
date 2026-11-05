@@ -240,19 +240,34 @@ export function decodeMono8(
   height: number,
   step: number,
   output: Uint8ClampedArray,
+  options?: {
+    colorConverter?: (value: number) => { r: number; g: number; b: number; a: number };
+  },
 ): void {
   if (step < width) {
     throw new Error(`Uint8 image row step (${step}) must be at least width (${width})`);
+  }
+  // Only 256 possible inputs, so run the color converter once per value instead of per pixel.
+  const lut = new Uint8ClampedArray(256 * 3);
+  for (let i = 0; i < 256; i++) {
+    if (options?.colorConverter) {
+      const { r, g, b } = options.colorConverter(i);
+      lut[i * 3] = r * 255;
+      lut[i * 3 + 1] = g * 255;
+      lut[i * 3 + 2] = b * 255;
+    } else {
+      lut[i * 3] = lut[i * 3 + 1] = lut[i * 3 + 2] = i;
+    }
   }
   let outIdx = 0;
 
   for (let row = 0; row < height; row++) {
     const rowStart = row * step;
     for (let col = 0; col < width; col++) {
-      const ch = mono8[rowStart + col]!;
-      output[outIdx++] = ch;
-      output[outIdx++] = ch;
-      output[outIdx++] = ch;
+      const lutIdx = mono8[rowStart + col]! * 3;
+      output[outIdx++] = lut[lutIdx]!;
+      output[outIdx++] = lut[lutIdx + 1]!;
+      output[outIdx++] = lut[lutIdx + 2]!;
       output[outIdx++] = 255;
     }
   }

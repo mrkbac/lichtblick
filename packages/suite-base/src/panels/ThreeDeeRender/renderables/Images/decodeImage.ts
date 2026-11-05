@@ -160,9 +160,34 @@ export const IMAGE_DEFAULT_COLOR_MODE_SETTINGS: Required<
   colorMap: "turbo",
   explicitAlpha: 0,
 };
+const MIN_MAX_8_BIT = { minValue: 0, maxValue: 255 };
 const MIN_MAX_16_BIT = { minValue: 0, maxValue: 65535 };
 
 export type RawImageOptions = ColorModeSettings;
+
+/** Maps a single-channel value to a color using the panel's gradient/colormap and value range. */
+function monoColorConverter(
+  options: Partial<RawImageOptions>,
+  defaultRange: { minValue: number; maxValue: number },
+  label: string,
+): (value: number) => { r: number; g: number; b: number; a: number } {
+  // lodash merge replaces undefined values in options with defaults, whereas a spread would let
+  // undefined overwrite them
+  const settings = _.merge({}, IMAGE_DEFAULT_COLOR_MODE_SETTINGS, defaultRange, options);
+  if (settings.colorMode === "rgba-fields" || settings.colorMode === "flat") {
+    throw Error(`${settings.colorMode} color mode is not supported for ${label} images`);
+  }
+  const converter = getColorConverter(
+    settings as ColorModeSettings & { colorMode: typeof settings.colorMode },
+    settings.minValue,
+    settings.maxValue,
+  );
+  const tempColor = { r: 0, g: 0, b: 0, a: 0 };
+  return (value: number) => {
+    converter(tempColor, value);
+    return tempColor;
+  };
+}
 
 /**
  * See also:
@@ -215,36 +240,16 @@ export function decodeRawImage(
       break;
     case "mono8":
     case "8UC1":
-      decodeMono8(rawData, width, height, step, output);
-      break;
-    case "mono16":
-    case "16UC1": {
-      // combine options with defaults. lodash merge makes sure undefined values in options are replaced with defaults
-      // whereas a normal spread would allow undefined values to overwrite defaults
-      const settings = _.merge({}, IMAGE_DEFAULT_COLOR_MODE_SETTINGS, MIN_MAX_16_BIT, options);
-      if (settings.colorMode === "rgba-fields" || settings.colorMode === "flat") {
-        throw Error(`${settings.colorMode} color mode is not supported for mono16 images`);
-      }
-      const min = settings.minValue;
-      const max = settings.maxValue;
-      const tempColor = { r: 0, g: 0, b: 0, a: 0 };
-      const converter = getColorConverter(
-        settings as ColorModeSettings & {
-          colorMode: typeof settings.colorMode;
-        },
-        min,
-        max,
-      );
-      decodeMono16(rawData, width, height, step, is_bigendian, output, {
-        minValue: options.minValue,
-        maxValue: options.maxValue,
-        colorConverter: (value: number) => {
-          converter(tempColor, value);
-          return tempColor;
-        },
+      decodeMono8(rawData, width, height, step, output, {
+        colorConverter: monoColorConverter(options, MIN_MAX_8_BIT, "mono8"),
       });
       break;
-    }
+    case "mono16":
+    case "16UC1":
+      decodeMono16(rawData, width, height, step, is_bigendian, output, {
+        colorConverter: monoColorConverter(options, MIN_MAX_16_BIT, "mono16"),
+      });
+      break;
     default:
       throw new Error(`Unsupported encoding ${encoding}`);
   }

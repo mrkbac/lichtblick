@@ -392,6 +392,44 @@ describe("decodeRawImage", () => {
     }).not.toThrow();
   });
 
+  it.each(["mono8", "8UC1"])("applies min/max and gradient to %s images", (encoding) => {
+    // GIVEN an 8-bit mono image and a custom value range and gradient
+    const mockImage = createMockROSImage({
+      encoding,
+      width: 3,
+      height: 1,
+      step: 3,
+      data: new Uint8Array([10, 15, 20]),
+    });
+    const output = new Uint8ClampedArray(3 * 4);
+
+    // WHEN it is decoded with those settings
+    decodeRawImage(
+      mockImage,
+      { colorMode: "gradient", gradient: ["#ff0000", "#0000ff"], minValue: 10, maxValue: 20 },
+      output,
+    );
+
+    // THEN values are normalized to the range and mapped onto the gradient
+    expect(Array.from(output.slice(0, 4))).toEqual([255, 0, 0, 255]);
+    expect(output[4]).toBeGreaterThan(0);
+    expect(output[6]).toBeGreaterThan(0);
+    expect(Array.from(output.slice(8, 12))).toEqual([0, 0, 255, 255]);
+  });
+
+  it("keeps plain grayscale for mono8 with default settings", () => {
+    const mockImage = createMockROSImage({
+      encoding: "mono8",
+      width: 3,
+      height: 1,
+      step: 3,
+      data: new Uint8Array([0, 128, 255]),
+    });
+    const output = new Uint8ClampedArray(3 * 4);
+    decodeRawImage(mockImage, {}, output);
+    expect(Array.from(output)).toEqual([0, 0, 0, 255, 128, 128, 128, 255, 255, 255, 255, 255]);
+  });
+
   it("should throw an error for unsupported encoding", () => {
     // GIVEN a raw ROS image with an unsupported encoding
     const mockImage = createMockROSImage({
