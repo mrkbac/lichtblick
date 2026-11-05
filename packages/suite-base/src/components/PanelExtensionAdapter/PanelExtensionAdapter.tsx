@@ -814,7 +814,7 @@ function PanelExtensionAdapter(
       panelElement,
       ...partialExtensionContext,
 
-      // eslint-disable-next-line no-restricted-syntax
+      // eslint-disable-next-line @lichtblick/no-getters-setters
       set onRender(renderFunction: RenderFn | undefined) {
         setRenderFn(() => renderFunction);
       },

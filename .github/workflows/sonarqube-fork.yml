@@ -73,12 +73,12 @@ jobs:
           # https://docs.github.com/en/actions/reference/security/securely-using-pull_request_target#opting-out-of-built-in-protections
           allow-unsafe-pr-checkout: true
 
-      - name: Download ESLint report artifact
+      - name: Download lint report artifact
         uses: actions/download-artifact@v8
         with:
           github-token: ${{ github.token }}
           run-id: ${{ github.event.workflow_run.id }}
-          name: sonar-eslint-report
+          name: sonar-lint-report
           path: .
 
       - name: Download coverage artifact

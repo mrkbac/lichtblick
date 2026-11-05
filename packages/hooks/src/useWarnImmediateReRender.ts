@@ -18,8 +18,8 @@ const log = Log.getLogger(__filename);
 // useEffect which run on the next animation frame.
 const useWarnImmediateReRender =
   process.env.NODE_ENV !== "development"
-    ? () => {}
-    : () => {
+    ? (): void => {}
+    : (): void => {
         const renderedRef = useRef(false);
         useLayoutEffect(() => {
           if (renderedRef.current) {

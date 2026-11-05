@@ -170,7 +170,9 @@ export function modifierResultStructure(
       return input.structureType === "array" ? FLOAT64_STRUCTURE : undefined;
     case "norm":
     case "magnitude":
-      return isNumericArray(input) || hasNumericFields(input, ["x", "y"]) ? FLOAT64_STRUCTURE : undefined;
+      return isNumericArray(input) || hasNumericFields(input, ["x", "y"])
+        ? FLOAT64_STRUCTURE
+        : undefined;
     case "rpy":
     case "ypr":
     case "yrp":

@@ -5,7 +5,14 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-const { ESLintUtils } = require("@typescript-eslint/utils");
+/**
+ * Syntactic stand-in for the old type check: oxlint JS plugins have no type information, so only
+ * array literals (optionally `as const`) are known to be arrays.
+ */
+function isArrayLiteral(node) {
+  const inner = node.type === "TSAsExpression" ? node.expression : node;
+  return inner.type === "ArrayExpression";
+}
 
 /**
  * @type {import("eslint").Rule.RuleModule}
@@ -59,12 +66,8 @@ module.exports = {
         (/** @type {import("estree").MemberExpression} */ node) => {
           /** @type {import("estree").CallExpression} */
           const callExpr = node.parent;
-          const { esTreeNodeToTSNodeMap, program } = ESLintUtils.getParserServices(context);
-          const sourceCode = context.getSourceCode();
-          const checker = program.getTypeChecker();
-          const tsNode = esTreeNodeToTSNodeMap.get(callExpr.arguments[1]);
-          const type = checker.getTypeAtLocation(tsNode);
-          if (!checker.isArrayType(type) && !checker.isTupleType(type)) {
+          const sourceCode = context.sourceCode;
+          if (!isArrayLiteral(callExpr.arguments[1])) {
             return;
           }
           const arrayName = node.property.name === "all" ? "every" : "some";
@@ -94,12 +97,8 @@ module.exports = {
         (/** @type {import("estree").MemberExpression} */ node) => {
           /** @type {import("estree").CallExpression} */
           const callExpr = node.parent;
-          const { esTreeNodeToTSNodeMap, program } = ESLintUtils.getParserServices(context);
-          const sourceCode = context.getSourceCode();
-          const checker = program.getTypeChecker();
-          const tsNode = esTreeNodeToTSNodeMap.get(callExpr.arguments[1]);
-          const type = checker.getTypeAtLocation(tsNode);
-          if (!checker.isArrayType(type) && !checker.isTupleType(type)) {
+          const sourceCode = context.sourceCode;
+          if (!isArrayLiteral(callExpr.arguments[1])) {
             return;
           }
           context.report({

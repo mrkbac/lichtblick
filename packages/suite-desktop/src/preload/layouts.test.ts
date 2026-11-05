@@ -5,6 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+// the package-wide tsconfig (DOM lib) types JSON.stringify as string | undefined; src/main and src/preload tsconfigs do not.
+/* oxlint-disable typescript/no-unnecessary-type-assertion */
+
 import { existsSync } from "fs";
 import { readFile, readdir } from "fs/promises";
 import type { Mock, MockedFunction } from "vitest";

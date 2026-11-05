@@ -1,7 +1,6 @@
 *.log
 *.tsbuildinfo
 .DS_Store
-.eslintcache
 .webpack/
 .webpack-desktop/
 benchmark/.artifacts/
@@ -35,5 +34,5 @@ test-results/*
 # SonarQube files
 .sonar_lock
 .scannerwork
-eslint-report.json
+lint-report.sarif
 blob-report/*

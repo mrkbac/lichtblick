@@ -16,7 +16,7 @@ import { WebpackArgv } from "./WebpackArgv";
 
 /**
  * Type checking runs on the native TypeScript 7 compiler (installed as "typescript7"); tooling
- * that needs the compiler API (ESLint) stays on the "typescript" 6 package.
+ * that needs the compiler API (ts-node, the user script transformer) stays on the "typescript" 6 package.
  */
 export function tsCheckerOptions(): { tsgo: true; typescriptPath: string } {
   // Builds run from the repo root, where typescript7 is installed (works in ESM and CJS)

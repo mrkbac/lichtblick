@@ -33,6 +33,7 @@ export function useDecodedMessageRange(
           setMessagesByTopic((prev) => ({ ...prev, [topic]: [] }));
 
           for await (const batch of batchIterator) {
+            // oxlint-disable-next-line typescript/no-unnecessary-condition -- cleanup deletes the entry while batches are still awaited
             accumulatedRef.current[topic] ??= [];
             accumulatedRef.current[topic].push(...batch);
 
