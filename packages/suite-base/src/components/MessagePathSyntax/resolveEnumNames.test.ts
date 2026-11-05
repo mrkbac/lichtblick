@@ -43,7 +43,13 @@ function query(path: string, message: unknown): unknown[] {
     "robot",
   );
   return simpleGetMessagePathDataItems(
-    { topic: "/robot", schemaName: "robot", receiveTime: { sec: 0, nsec: 0 }, sizeInBytes: 0, message },
+    {
+      topic: "/robot",
+      schemaName: "robot",
+      receiveTime: { sec: 0, nsec: 0 },
+      sizeInBytes: 0,
+      message,
+    },
     resolved,
   );
 }

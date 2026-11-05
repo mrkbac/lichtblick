@@ -219,23 +219,23 @@ describe("ChartJSManager", () => {
     it.each([
       { width: 600, height: 200 },
       { width: 600.9, height: 200.9 },
-    ])("should resize the plot area to whole pixels when the size changes to $width x $height", async ({
-      width,
-      height,
-    }) => {
-      // Given
-      const manager = await createManager();
-      const before = requireScales(manager.getScales());
+    ])(
+      "should resize the plot area to whole pixels when the size changes to $width x $height",
+      async ({ width, height }) => {
+        // Given
+        const manager = await createManager();
+        const before = requireScales(manager.getScales());
 
-      // When
-      const after = requireScales(manager.update({ width, height, isBoundsReset: false }));
+        // When
+        const after = requireScales(manager.update({ width, height, isBoundsReset: false }));
 
-      // Then
-      expect([after.x.pixelMax, after.y.pixelMin]).toEqual([
-        before.x.pixelMax + 200,
-        before.y.pixelMin + 100,
-      ]);
-    });
+        // Then
+        expect([after.x.pixelMax, after.y.pixelMin]).toEqual([
+          before.x.pixelMax + 200,
+          before.y.pixelMin + 100,
+        ]);
+      },
+    );
 
     it("should only change the height when no width is given", async () => {
       // Given
@@ -270,21 +270,21 @@ describe("ChartJSManager", () => {
       expect(getPlotAreaEdges(after)).toEqual(getPlotAreaEdges(before));
     });
 
-    it.each([
-      true,
-      false,
-    ])("should apply an explicit x range when isBoundsReset is %s", async (isBoundsReset) => {
-      // Given
-      const manager = await createManager();
-      const options = createOptions();
-      options.scales!.x = { type: "linear", min: 2, max: 8 };
+    it.each([true, false])(
+      "should apply an explicit x range when isBoundsReset is %s",
+      async (isBoundsReset) => {
+        // Given
+        const manager = await createManager();
+        const options = createOptions();
+        options.scales!.x = { type: "linear", min: 2, max: 8 };
 
-      // When
-      const { x } = requireScales(manager.update({ options, isBoundsReset }));
+        // When
+        const { x } = requireScales(manager.update({ options, isBoundsReset }));
 
-      // Then
-      expect([x.min, x.max]).toEqual([2, 8]);
-    });
+        // Then
+        expect([x.min, x.max]).toEqual([2, 8]);
+      },
+    );
 
     it("should keep the current scales when bounds are not reset and no range is given", async () => {
       // Given
@@ -326,37 +326,34 @@ describe("ChartJSManager", () => {
   });
 
   describe("pointer events", () => {
-    it.each([
-      "panstart",
-      "panmove",
-      "panend",
-    ] as const)("should return no scales from %s when the chart is not initialized yet", (method) => {
-      // Given
-      const manager = buildManager({ fontLoaded: new Promise<FontFace>(() => {}) });
+    it.each(["panstart", "panmove", "panend"] as const)(
+      "should return no scales from %s when the chart is not initialized yet",
+      (method) => {
+        // Given
+        const manager = buildManager({ fontLoaded: new Promise<FontFace>(() => {}) });
 
-      // When
-      const scales = manager[method](makeRpcEvent({ deltaX: 0, deltaY: 0 }));
+        // When
+        const scales = manager[method](makeRpcEvent({ deltaX: 0, deltaY: 0 }));
 
-      // Then
-      expect(scales).toEqual({});
-    });
+        // Then
+        expect(scales).toEqual({});
+      },
+    );
 
-    it.each([
-      "wheel",
-      "mousedown",
-      "mousemove",
-      "mouseup",
-    ] as const)("should use the bounding rect sent over RPC when handling %s", async (method) => {
-      // Given
-      const manager = await createManager();
-      const event = makeRpcEvent<WheelEvent>({ clientX: 0, clientY: 0 });
+    it.each(["wheel", "mousedown", "mousemove", "mouseup"] as const)(
+      "should use the bounding rect sent over RPC when handling %s",
+      async (method) => {
+        // Given
+        const manager = await createManager();
+        const event = makeRpcEvent<WheelEvent>({ clientX: 0, clientY: 0 });
 
-      // When
-      manager[method](event);
+        // When
+        manager[method](event);
 
-      // Then
-      expect((event.target as Element).getBoundingClientRect()).toBe(BOUNDING_RECT);
-    });
+        // Then
+        expect((event.target as Element).getBoundingClientRect()).toBe(BOUNDING_RECT);
+      },
+    );
 
     it("should zoom into the x axis when the wheel turns with zoom enabled", async () => {
       // Given
