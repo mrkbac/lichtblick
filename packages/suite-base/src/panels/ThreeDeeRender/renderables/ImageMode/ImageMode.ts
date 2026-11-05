@@ -69,6 +69,7 @@ import {
   CompressedVideo,
   getFrameIdFromImage,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/ImageTypes";
+import { isCompressedDepthFormat } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/decodeCompressedDepth";
 import { filterCompressedVideoQueue } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/filterCompressedVideoQueue";
 import {
   cameraInfosEqual,
@@ -118,6 +119,7 @@ export class ImageMode
   readonly #annotations: ImageAnnotations;
 
   protected imageRenderable: ImageRenderable | undefined;
+  #imageIsCompressedDepth = false;
   #removeImageTimeout: ReturnType<typeof setTimeout> | undefined;
 
   protected readonly messageHandler: IMessageHandler;
@@ -574,8 +576,9 @@ export class ImageMode
       imageTopic != undefined &&
       topicIsConvertibleToSchema(imageTopic, SUPPORTED_RAW_IMAGE_SCHEMAS);
 
-    // color settings only apply to raw image topics, so we can hide them otherwise
-    if (isRawImageTopic) {
+    // color settings only apply to raw images (compressedDepth images decode to raw depth), so we
+    // can hide them otherwise
+    if (isRawImageTopic || this.#imageIsCompressedDepth) {
       const colorModeFields = colorModeSettingsFields({
         config: settings as ImageModeConfig,
 
@@ -756,6 +759,12 @@ export class ImageMode
     }
 
     const renderable = this.#getImageRenderable(topic, receiveTime, image, frameId);
+
+    const isCompressedDepth = "format" in image && isCompressedDepthFormat(image.format);
+    if (isCompressedDepth !== this.#imageIsCompressedDepth) {
+      this.#imageIsCompressedDepth = isCompressedDepth;
+      this.updateSettingsTree();
+    }
 
     if (this.#cameraModel) {
       renderable.userData.cameraInfo = this.#cameraModel.info;
