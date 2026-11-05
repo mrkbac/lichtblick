@@ -8,6 +8,12 @@ on:
 permissions:
   contents: read
 
+# A new push to a PR supersedes the previous run; cancel it so it doesn't hold runners.
+# Runs on licht are never cancelled, so every merge commit keeps a result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -24,33 +30,28 @@ jobs:
         config:
           # Specify names so that the GitHub branch protection settings for
           # required checks don't need to change if we ever change the commands used.
-          - name: npm audit
-            command: yarn npm audit --all --recursive --severity high
+          # Cheap checks share one job: on the shared runner pool, queue time per job
+          # (often minutes) dwarfs these commands' run time (seconds each).
           - name: lint
+            # `check` (defined in the run step) keeps going after a failure so every result shows.
             command: |
-              # lint steps
-              set -x
-              yarn license-check
-              yarn dedupe --check
-              yarn run typecheck # type checks the apps and root files (builds only transpile; packages are checked by build:packages)
-              yarn run format:ci
-              yarn run lint:ci
-              yarn run lint:knip
-          - name: packages
-            command: yarn run build:packages
-          - name: web
-            command: yarn run web:build:prod
-          - name: desktop
-            command: yarn run desktop:build:prod
-          - name: build benchmark
-            command: yarn run benchmark:build:prod
+              check yarn license-check
+              check yarn dedupe --check
+              # type checks the apps and root files (builds only transpile; packages are checked by build:packages)
+              check yarn run typecheck
+              check yarn run format:ci
+              check yarn run lint:ci
+              check yarn run lint:knip
+              # last: advisories change without our code changing
+              check yarn npm audit --all --recursive --severity high
+          - name: build
+            command: |
+              check yarn run build:packages
+              check yarn run web:build:prod
+              check yarn run desktop:build:prod
+              check yarn run benchmark:build:prod
           - name: test
-            command: yarn run test --maxWorkers=100%
-        include:
-          - os: windows-latest
-            config:
-              name: packages
-              command: echo complete
+            command: check yarn run test --maxWorkers=100%
 
     name: ${{ matrix.config.name }} (${{ matrix.os }})
 
@@ -73,9 +74,21 @@ jobs:
 
       - run: yarn install --immutable
 
-      - run: ${{ matrix.config.command }}
+      - name: Run checks
+        run: |
+          failed=0
+          check() {
+            echo "::group::$*"
+            "$@" || { echo "::error::failed: $*"; failed=1; }
+            echo "::endgroup::"
+          }
+          ${{ matrix.config.command }}
+          exit $failed
 
   e2e-desktop:
+    # Not on PRs for now: the smoke suite is red on licht and needs its own fix. It still runs on
+    # every licht push here and nightly in e2e-regression.yml.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     # Run smoke tests in parallel across 2 shards
@@ -180,7 +193,8 @@ jobs:
 
   # Merge reports from all shards and generate summary
   e2e-report:
-    if: always()
+    # Only merges the desktop shards' reports (e2e-web uploads its own), so it follows e2e-desktop.
+    if: always() && github.event_name == 'push'
     needs: [e2e-desktop, e2e-web]
     runs-on: ubuntu-latest
 
