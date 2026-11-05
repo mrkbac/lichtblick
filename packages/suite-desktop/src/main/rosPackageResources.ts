@@ -216,9 +216,14 @@ export function registerRosPackageProtocolHandlers(): void {
   });
 }
 
-/** Enable fetch for custom URL schemes. */
+/**
+ * Enable fetch for custom URL schemes. The renderer runs on a file:// origin, so these requests are
+ * cross-origin and Chromium blocks them unless the scheme is CORS-enabled.
+ */
 export function registerRosPackageProtocolSchemes(): void {
+  const privileges = { supportFetchAPI: true, corsEnabled: true };
   protocol.registerSchemesAsPrivileged([
-    { scheme: "package", privileges: { supportFetchAPI: true } },
+    { scheme: "package", privileges },
+    { scheme: "x-foxglove-converted-tiff", privileges },
   ]);
 }

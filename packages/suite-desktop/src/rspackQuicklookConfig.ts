@@ -5,16 +5,14 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Configuration, rspack } from "@rspack/core";
+import { type Configuration, rspack } from "@rspack/core";
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
-import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "path";
-import { TsCheckerRspackPlugin } from "ts-checker-rspack-plugin";
 
-import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv";
-import { swcRule, tsCheckerOptions } from "@lichtblick/suite-base/rspack";
+import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
+import { swcRule } from "@lichtblick/suite-base/rspack.ts";
 
-import { RspackConfigParams } from "./RspackConfigParams";
+import type { RspackConfigParams } from "./RspackConfigParams.ts";
 
 export const rspackQuicklookConfig =
   (params: RspackConfigParams) =>
@@ -22,10 +20,9 @@ export const rspackQuicklookConfig =
     const isDev = argv.mode === "development";
     const isServe = argv.env?.RSPACK_SERVE ?? false;
 
-    const allowUnusedVariables = isDev && isServe;
-
     return {
       name: "quicklook",
+      dependencies: ["root"],
 
       context: params.quicklookContext,
       entry: params.quicklookEntrypoint,
@@ -46,25 +43,16 @@ export const rspackQuicklookConfig =
       },
 
       plugins: [
-        new TsCheckerRspackPlugin({
-          typescript: {
-            ...tsCheckerOptions(),
-            configOverwrite: {
-              compilerOptions: {
-                noUnusedLocals: !allowUnusedVariables,
-                noUnusedParameters: !allowUnusedVariables,
-              },
-            },
-          },
-        }),
-        new HtmlWebpackPlugin({
+        new rspack.HtmlRspackPlugin({
           templateContent: `
 <!doctype html>
 <html>
-  <head><meta charset="utf-8"></head>
-  <script>
-    global = globalThis;
-  </script>
+  <head>
+    <meta charset="utf-8">
+    <script>
+      global = globalThis;
+    </script>
+  </head>
   <body>
     <div id="root"></div>
   </body>
@@ -83,7 +71,7 @@ export const rspackQuicklookConfig =
       resolve: {
         extensions: [".js", ".ts", ".tsx", ".json"],
         fallback: {
-          path: require.resolve("path-browserify"),
+          path: "path-browserify",
           stream: false,
           crypto: false,
           fs: false,

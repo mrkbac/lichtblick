@@ -25,8 +25,8 @@ import {
   decodeYUYV,
 } from "@lichtblick/den/image";
 import {
-  H264 as H264Parser,
   H265 as H265Parser,
+  VIDEO_CODECS,
   VideoCodec,
   VideoPlayer,
   canonicalVideoCodec,
@@ -58,14 +58,8 @@ export function isCompressedVideoKeyframe(
 }
 
 export function getVideoDecoderConfig(frameMsg: CompressedVideo): VideoDecoderConfig | undefined {
-  switch (canonicalVideoCodec(frameMsg.format)) {
-    // Search for an SPS NAL unit to initialize the decoder. This should precede each keyframe.
-    case VideoCodec.H264:
-      return H264Parser.ParseDecoderConfig(frameMsg.data);
-    case VideoCodec.H265:
-      return H265Parser.ParseDecoderConfig(frameMsg.data);
-  }
-  return undefined;
+  const codec = canonicalVideoCodec(frameMsg.format);
+  return codec == undefined ? undefined : VIDEO_CODECS[codec].decoderConfig(frameMsg.data);
 }
 
 export function prepareVideoFrame(
@@ -73,7 +67,8 @@ export function prepareVideoFrame(
   context?: PrepareVideoFrameContext,
   resolvedCodec?: VideoCodec,
 ): PreparedVideoFrame {
-  switch (resolvedCodec ?? canonicalVideoCodec(frameMsg.format)) {
+  const codec = resolvedCodec ?? canonicalVideoCodec(frameMsg.format) ?? VideoCodec.H264;
+  switch (codec) {
     case VideoCodec.H265: {
       const frameInfo = H265Parser.InspectFrame(frameMsg.data, context?.h265);
       if (frameInfo.bitstreamFormat === "unknown" || frameInfo.normalizedData == undefined) {
@@ -104,14 +99,14 @@ export function prepareVideoFrame(
         type,
       };
     }
-    case VideoCodec.H264:
     default: {
       const frameData = frameMsg.data;
-      const type = H264Parser.IsKeyframe(frameData) ? "key" : "delta";
+      const spec = VIDEO_CODECS[codec];
+      const type = spec.isKeyframe(frameData) ? "key" : "delta";
       return {
         data: frameData,
-        // Only keyframes carry an SPS; delta frames have nothing to parse.
-        decoderConfig: type === "key" ? H264Parser.ParseDecoderConfig(frameData) : undefined,
+        // Only keyframes carry a decoder config; delta frames have nothing to parse.
+        decoderConfig: type === "key" ? spec.decoderConfig(frameData) : undefined,
         status: PreparedVideoFrameStatus.Ok,
         type,
       };

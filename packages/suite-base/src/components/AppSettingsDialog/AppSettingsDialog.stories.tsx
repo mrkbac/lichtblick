@@ -9,10 +9,10 @@ import * as _ from "lodash-es";
 import { screen, userEvent } from "storybook/test";
 import { StoryObj } from "storybook-react-rsbuild";
 
-import { ExtensionInfo, IExtensionLoader } from "@lichtblick/suite-base";
 import ExtensionMarketplaceContext, {
   ExtensionMarketplace,
 } from "@lichtblick/suite-base/context/ExtensionMarketplaceContext";
+import { ExtensionInfo, IExtensionLoader } from "@lichtblick/suite-base/index";
 import ExtensionCatalogProvider from "@lichtblick/suite-base/providers/ExtensionCatalogProvider/ExtensionCatalogProvider";
 import WorkspaceContextProvider from "@lichtblick/suite-base/providers/WorkspaceContextProvider";
 
