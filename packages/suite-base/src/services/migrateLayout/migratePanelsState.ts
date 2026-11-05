@@ -24,6 +24,10 @@ export const LAYOUT_VERSION = 2;
  */
 export function migratePanelsState(data: MarkOptional<LayoutData, "configById">): LayoutData {
   let result: LayoutData = { ...data, configById: data.configById ?? {} };
+  // A newer app wrote this layout: the legacy migrations could drop content they don't recognize.
+  if ((result.version ?? 0) > LAYOUT_VERSION) {
+    return result;
+  }
 
   result = migrateMosaicLayout(result);
   result = migrateLegacyToNew3DPanels(result);

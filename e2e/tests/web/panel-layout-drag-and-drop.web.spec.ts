@@ -23,7 +23,8 @@ async function drag(
   page: Page,
   source: Point | (() => Promise<Point>),
   to: () => Promise<Point>,
-  holdMs = 150,
+  /** Waits for a state that must hold before the drop, e.g. a hovered tab opening. */
+  beforeDrop?: () => Promise<void>,
 ) {
   // Every panel drag shows "+ New tab" targets; retry until they show up, in case something
   // covered the drag handle.
@@ -50,7 +51,8 @@ async function drag(
   }).toPass({ timeout: 30_000 });
   const [x, y] = await to();
   await page.mouse.move(x, y, { steps: 15 });
-  await page.waitForTimeout(holdMs);
+  await beforeDrop?.();
+  // The drop goes where the last dragover was.
   await page.mouse.move(x + 1, y + 1);
   await page.mouse.up();
 }
@@ -143,7 +145,9 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
       page,
       async () => await toolbarOf(page, "RawMessages"),
       centerOf(page.locator(".dv-tab", { hasText: "3D" })),
-      900,
+      async () => {
+        await expect(page.locator(".dv-tab", { hasText: "3D" })).toHaveClass(/dv-active-tab/);
+      },
     );
     await expect.poll(async () => await groups(page)).toEqual(["3D|Raw Messages|Image"]);
   });
