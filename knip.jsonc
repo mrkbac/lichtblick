@@ -66,6 +66,8 @@
       "ignore": ["src/services/migrateLayout/{index,migratePanelsState}.ts"],
       // Named as strings in rspack.ts (loaders and resolve.fallback polyfills)
       "ignoreDependencies": [
+        // Browser polyfill for `import assert from "assert"`; knip sees the Node built-in instead
+        "assert",
         "@svgr/webpack",
         "css-loader",
         "nearley-loader",
