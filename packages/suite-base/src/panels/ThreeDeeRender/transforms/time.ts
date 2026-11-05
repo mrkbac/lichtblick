@@ -8,10 +8,6 @@
 export type Time = bigint;
 export type Duration = bigint;
 
-export function compareTime(a: Time, b: Time): number {
-  return a < b ? -1 : a > b ? 1 : 0;
-}
-
 export function percentOf(start: Time, end: Time, target: Time): number {
   const totalDuration = end - start;
   const targetDuration = target - start;

@@ -91,7 +91,7 @@ beforeEach(() => {
       return {
         matches: false,
         media: query,
-        onchange: ReactNull,
+        onchange: null,
         addListener: vi.fn(), // deprecated
         removeListener: vi.fn(), // deprecated
         addEventListener: vi.fn(),

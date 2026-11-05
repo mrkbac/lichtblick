@@ -5,7 +5,6 @@
     "jsx": "react-jsx",
     "lib": ["ESNext.Disposable"],
     "module": "preserve",
-    "noEmit": true,
-    "experimentalDecorators": true
+    "noEmit": true
   }
 }

@@ -31,7 +31,7 @@ type DocumentDropListenerProps = {
   allowedExtensions?: string[];
   onDrop?: (event: {
     files?: File[];
-    handles?: FileSystemFileHandle[]; // foxglove-depcheck-used: @types/wicg-file-system-access
+    handles?: FileSystemFileHandle[];
     namespace?: Namespace;
   }) => void;
 };
@@ -95,7 +95,7 @@ export default function DocumentDropListener(props: DocumentDropListenerProps): 
       }
 
       let handles: FileSystemFileHandle[] | undefined = [];
-      const handlePromises: Promise<FileSystemHandle | ReactNull>[] = [];
+      const handlePromises: Promise<FileSystemHandle | null>[] = [];
       const allFiles: File[] = [];
       const directories: FileSystemDirectoryEntry[] = [];
       const dataItems = ev.dataTransfer.items;

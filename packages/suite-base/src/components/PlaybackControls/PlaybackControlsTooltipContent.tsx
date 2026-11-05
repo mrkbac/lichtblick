@@ -66,7 +66,7 @@ const selectHoveredEvents = (store: TimelineInteractionStateStore) => store.even
 const selectStartTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
 
 function Thumbnail({ bitmap, className }: { bitmap: ImageBitmap; className: string }) {
-  const ref = useRef<HTMLCanvasElement>(ReactNull);
+  const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
     // A closed (evicted) bitmap has zero size; keep the last drawn frame instead.
@@ -83,7 +83,7 @@ function Thumbnail({ bitmap, className }: { bitmap: ImageBitmap; className: stri
 export function PlaybackControlsTooltipContent(params: {
   stamp: Time;
   thumbnail?: ImageBitmap;
-}): ReactNull | React.JSX.Element {
+}): null | React.JSX.Element {
   const { stamp, thumbnail } = params;
   const { timeFormat, formatTime, formatDate } = useAppTimeFormat();
   const hoveredEvents = useTimelineInteractionState(selectHoveredEvents);
@@ -91,7 +91,7 @@ export function PlaybackControlsTooltipContent(params: {
   const { classes } = useStyles();
 
   if (!startTime) {
-    return ReactNull;
+    return null;
   }
 
   const timeFromStart = subtractTimes(stamp, startTime);

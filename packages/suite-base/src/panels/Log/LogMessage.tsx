@@ -16,6 +16,7 @@
 
 import { Copy16Regular } from "@fluentui/react-icons";
 import * as _ from "lodash-es";
+import React from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 

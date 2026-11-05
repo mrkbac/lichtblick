@@ -328,7 +328,7 @@ Notes:
 ### TypeScript Conventions
 
 - **Strict mode** is enabled — avoid `any` types where possible.
-- Prefer `undefined` over `null`. When required for React refs, use the `ReactNull` alias.
+- Prefer `undefined` over `null`. Use `null` only where React APIs require it (refs, render return).
 - Do not use property getters or setters — use function syntax instead.
 - Unused variables must have a `_` prefix (e.g., `_unusedParam`).
 - Avoid `@emotion/styled` and MUI's `styled`/`sx`/`Box` — use **tss-react/mui** for styling instead.

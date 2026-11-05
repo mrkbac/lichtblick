@@ -47,98 +47,12 @@ export function vec3Identity(): vec3 {
   return [0, 0, 0];
 }
 
-export function vec3FromValues(x: number, y: number, z: number): vec3 {
-  return [x, y, z];
-}
-
-export function vec3Clone(a: vec3): vec3 {
-  return [a[0], a[1], a[2]];
-}
-
 export function quatIdentity(): quat {
   return [0, 0, 0, 1];
 }
 
-export function quatFromValues(x: number, y: number, z: number, w: number): quat {
-  return [x, y, z, w];
-}
-
-export function quatClone(q: quat): quat {
-  return [q[0], q[1], q[2], q[3]];
-}
-
 export function mat4Identity(): mat4 {
   return [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
-}
-
-export function mat4FromValues(
-  m00: number,
-  m01: number,
-  m02: number,
-  m03: number,
-  m10: number,
-  m11: number,
-  m12: number,
-  m13: number,
-  m20: number,
-  m21: number,
-  m22: number,
-  m23: number,
-  m30: number,
-  m31: number,
-  m32: number,
-  m33: number,
-): mat4 {
-  return [m00, m01, m02, m03, m10, m11, m12, m13, m20, m21, m22, m23, m30, m31, m32, m33];
-}
-
-export function mat4Clone(m: mat4): mat4 {
-  return [
-    m[0],
-    m[1],
-    m[2],
-    m[3],
-    m[4],
-    m[5],
-    m[6],
-    m[7],
-    m[8],
-    m[9],
-    m[10],
-    m[11],
-    m[12],
-    m[13],
-    m[14],
-    m[15],
-  ];
-}
-
-/**
- * Test if two numbers are approximately equal.
- */
-export function approxEq(v1: number, v2: number, epsilon = 0.00001): boolean {
-  return Math.abs(v1 - v2) <= epsilon;
-}
-
-/**
- * Test if two quaternions are approximately equal.
- */
-export function quatAproxEq(q1: Orientation, q2: Orientation): boolean {
-  return (
-    approxEq(q1.x, q2.x) && approxEq(q1.y, q2.y) && approxEq(q1.z, q2.z) && approxEq(q1.w, q2.w)
-  );
-}
-
-/**
- * Test if two poses are approximately equal.
- */
-export function poseApproxEq(p1: Pose, p2: Pose): boolean {
-  return (
-    approxEq(p1.position.x, p2.position.x) &&
-    approxEq(p1.position.y, p2.position.y) &&
-    approxEq(p1.position.z, p2.position.z) &&
-    quatAproxEq(p1.orientation, p2.orientation)
-  );
 }
 
 /**

@@ -50,7 +50,7 @@ type RecentConnectionRecord = RecentRecordCommon & {
 
 type RecentFileRecord = RecentRecordCommon & {
   type: "file";
-  handles: FileSystemFileHandle[]; // foxglove-depcheck-used: @types/wicg-file-system-access
+  handles: FileSystemFileHandle[];
 };
 
 // Make sure users with old recents can still use them

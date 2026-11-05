@@ -28,5 +28,5 @@ export const H265_RANDOM_ACCESS_TYPES = new Set<number>([
  * of correct frames. The "target wait" is equal to the overall max because HEVC decoders rarely
  * produce an intermediate frame within the H.264 budget.
  */
-export const H265_MAX_DECODE_WAIT_MS = 2000;
+const H265_MAX_DECODE_WAIT_MS = 2000;
 export const H265_TARGET_FRAME_WAIT_MS = H265_MAX_DECODE_WAIT_MS;

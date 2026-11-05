@@ -47,29 +47,3 @@ export function getAppSetting<T>(
     return undefined;
   }
 }
-
-export function setAppSetting(
-  key: AppSetting,
-  value: unknown,
-  { overrideUserDataDir }: Options = {},
-): void {
-  const datastoreDir = path.join(
-    overrideUserDataDir ?? app.getPath("userData"),
-    DATASTORES_DIR_NAME,
-    SETTINGS_DATASTORE_NAME,
-  );
-  const settingsPath = path.join(datastoreDir, SETTINGS_JSON_DATASTORE_KEY);
-
-  const existingSettings = {};
-  try {
-    fs.mkdirSync(datastoreDir, { recursive: true });
-  } catch {
-    // Ignore directory creation errors, including dir already exists
-  }
-
-  fs.writeFileSync(
-    settingsPath,
-    // oxlint-disable-next-line typescript/no-unnecessary-type-assertion -- the package-wide tsconfig (DOM lib) types JSON.stringify as string | undefined; src/main and src/preload tsconfigs do not
-    JSON.stringify({ ...existingSettings, [key]: value }, undefined, 2)!,
-  );
-}

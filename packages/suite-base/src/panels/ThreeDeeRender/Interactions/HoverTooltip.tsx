@@ -27,9 +27,9 @@ export function HoverTooltip({
   entities,
   position,
   canvas,
-}: HoverTooltipProperties): React.JSX.Element | ReactNull {
+}: HoverTooltipProperties): React.JSX.Element | null {
   const { classes } = useStyles();
-  const paperRef = useRef<HTMLDivElement>(ReactNull);
+  const paperRef = useRef<HTMLDivElement>(null);
   const graceTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const dwellTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const leaveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -287,7 +287,7 @@ export function HoverTooltip({
   }, []);
 
   if (mode === "hidden" || visibleEntities.length === 0) {
-    return ReactNull;
+    return null;
   }
 
   const interactive = mode !== "following";

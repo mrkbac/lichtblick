@@ -69,18 +69,8 @@ export type PropsDiffSpan = {
   style?: CSSProperties;
 };
 
-export type PropsDiffStats = {
-  data: DiffObject;
-  itemType: ReactNode;
-};
-
 export type PropsHighlightedValue = {
   itemLabel: string;
-};
-
-export type PropsRawMessages = {
-  config: Immutable<RawMessagesPanelConfig>;
-  saveConfig: SaveConfig<RawMessagesPanelConfig>;
 };
 
 export type PropsRawMessagesVirtual = {

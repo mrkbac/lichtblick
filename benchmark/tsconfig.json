@@ -3,7 +3,6 @@
   "include": ["*.ts"],
   "compilerOptions": {
     "module": "preserve",
-    "noEmit": true,
-    "experimentalDecorators": true
+    "noEmit": true
   }
 }

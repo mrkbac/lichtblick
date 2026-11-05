@@ -492,11 +492,11 @@ describe("ExtensionCatalogProvider", () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
 
     function getDummyPanel(updatedConfig: Mock, childId: string) {
-      function DummyComponent(): ReactNull {
+      function DummyComponent(): null {
         const [config] = useConfigById(childId);
 
         useEffect(() => updatedConfig(config), [config]);
-        return ReactNull;
+        return null;
       }
       DummyComponent.panelType = "Dummy";
       DummyComponent.defaultConfig = { someString: "hello world" };

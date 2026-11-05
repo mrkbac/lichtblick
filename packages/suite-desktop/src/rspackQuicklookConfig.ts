@@ -83,7 +83,7 @@ export const rspackQuicklookConfig =
       resolve: {
         extensions: [".js", ".ts", ".tsx", ".json"],
         fallback: {
-          path: "path-browserify", // foxglove-depcheck-used: path-browserify
+          path: "path-browserify",
           stream: false,
           crypto: false,
           fs: false,

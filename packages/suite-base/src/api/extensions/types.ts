@@ -17,10 +17,6 @@ export interface IExtensionAPI {
 
 export type ExtensionInfoWorkspace = Pick<StoredExtension, "info" | "workspace">;
 
-export type ListExtensionsQueryParams = {
-  workspace?: string;
-};
-
 type RemoteExtension = Pick<
   ExtensionInfo,
   | "changelog"
@@ -50,8 +46,4 @@ export type CreateOrUpdateBody = RemoteExtension & {
   extensionId: string;
   scope: Namespace;
   replace?: boolean;
-};
-
-export type DownloadExtensionsInBatchBody = {
-  ids: string[];
 };

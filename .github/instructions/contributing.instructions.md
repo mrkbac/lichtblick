@@ -37,7 +37,7 @@ Every React component must follow this file organization:
 ## TypeScript Rules
 
 - **Strict mode** — avoid `any` types
-- Prefer `undefined` over `null`; use `ReactNull` alias where React APIs require `null`
+- Prefer `undefined` over `null`; use `null` only where React APIs require it
 - Do NOT use property getters or setters — use function syntax
 - Unused variables must have `_` prefix (e.g., `_unusedParam`)
 - Use `@lichtblick/den/async` `race` instead of `Promise.race`

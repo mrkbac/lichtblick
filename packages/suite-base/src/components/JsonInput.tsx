@@ -18,6 +18,7 @@ import ErrorIcon from "@mui/icons-material/Error";
 import { Typography } from "@mui/material";
 import CodeEditor from "@uiw/react-textarea-code-editor/nohighlight";
 import * as _ from "lodash-es";
+import { useState, useCallback, useRef, useLayoutEffect, useEffect } from "react";
 import json from "refractor/lang/json.js";
 import { refractor } from "refractor/lib/core.js";
 import rehypePrismGenerator from "rehype-prism-plus/generator";
@@ -33,8 +34,6 @@ refractor.register(json);
 const rehypePlugins: React.ComponentProps<typeof CodeEditor>["rehypePlugins"] = [
   [rehypePrismGenerator(refractor), { ignoreMissing: true }],
 ];
-
-const { useState, useCallback, useRef, useLayoutEffect, useEffect } = React;
 
 const useStyles = makeStyles()((theme) => ({
   editor: {
@@ -86,7 +85,7 @@ function ValidatedInputBase({
   const [error, setError] = useState<string>("");
   const [inputStr, setInputStr] = useState<string>("");
   const prevIncomingVal = useRef<unknown>("");
-  const inputRef = useRef<HTMLTextAreaElement>(ReactNull);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const [isEditing, setIsEditing] = useState<boolean>(false);
 
   // validate the input string, and setError or call onChange if needed

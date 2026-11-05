@@ -105,7 +105,7 @@ export default function PanelSettings({
   const shareModal = useMemo(() => {
     const panelConfigById = getCurrentLayout().selectedLayout?.data?.configById;
     if (selectedPanelId == undefined || !showShareModal || !panelConfigById) {
-      return ReactNull;
+      return null;
     }
     return (
       <ShareJsonModal

@@ -14,7 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { useEffect } from "react";
+import React, { useEffect } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { parseMessagePath, MessagePath } from "@lichtblick/message-path";

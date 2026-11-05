@@ -17,7 +17,7 @@
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import { Typography } from "@mui/material";
-import { useContext, useMemo } from "react";
+import React, { useContext, useMemo } from "react";
 
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import { useStyles } from "@lichtblick/suite-base/components/PanelToolbar/PanelToolbar.style";

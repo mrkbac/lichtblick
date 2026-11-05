@@ -579,7 +579,7 @@ function ExportProgress({
 }: {
   progressRef: React.RefObject<number | undefined>;
   running: boolean;
-}): React.JSX.Element | ReactNull {
+}): React.JSX.Element | null {
   const [progress, setProgress] = useState(progressRef.current);
   useEffect(() => {
     setProgress(progressRef.current);
@@ -593,9 +593,7 @@ function ExportProgress({
       clearInterval(interval);
     };
   }, [progressRef, running]);
-  return progress == undefined ? (
-    ReactNull
-  ) : (
+  return progress == undefined ? null : (
     <LinearProgress variant="determinate" value={Math.min(100, progress * 100)} />
   );
 }

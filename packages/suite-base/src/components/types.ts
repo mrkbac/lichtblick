@@ -49,7 +49,7 @@ export type PanelContextType<T> = {
   setHasFullscreenDescendant: (hasFullscreenDescendant: boolean) => void;
 
   /** Ref callback that makes an element a drag handle for moving the panel in the layout. */
-  connectToolbarDragHandle?: (el: HTMLElement | ReactNull) => (() => void) | undefined;
+  connectToolbarDragHandle?: (el: HTMLElement | null) => (() => void) | undefined;
 
   setMessagePathDropConfig: (config: MessagePathDropConfig | undefined) => void;
 };

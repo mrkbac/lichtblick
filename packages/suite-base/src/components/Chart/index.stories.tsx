@@ -14,7 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 import * as _ from "lodash-es";
-import { useState, useCallback, ComponentProps, useEffect } from "react";
+import React, { useState, useCallback, ComponentProps, useEffect } from "react";
 import { fireEvent } from "storybook/test";
 import { StoryObj } from "storybook-react-rsbuild";
 
