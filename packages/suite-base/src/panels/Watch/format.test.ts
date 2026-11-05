@@ -52,6 +52,13 @@ describe("expanded values", () => {
     expect(copyText("raw")).toBe("raw");
     expect(copyText(undefined)).toBe("");
     expect(JSON.parse(copyText(new Array(300).fill(1))) as unknown[]).toHaveLength(300);
+    const floats = new Float64Array(300);
+    floats[250] = NaN;
+    floats[251] = -Infinity;
+    expect((JSON.parse(copyText(floats)) as unknown[]).slice(250, 252)).toEqual([
+      "NaN",
+      "-Infinity",
+    ]);
   });
 
   it("converts plottable values", () => {

@@ -107,6 +107,10 @@ export function formatExpanded(value: unknown, maxItems: number = MAX_EXPANDED_I
         if (typeof item === "bigint") {
           return item.toString();
         }
+        // JSON would turn these into null
+        if (typeof item === "number" && !Number.isFinite(item)) {
+          return String(item);
+        }
         if (isTypedArray(item) || Array.isArray(item)) {
           const arr = item as ArrayLike<unknown>;
           if (arr.length > maxItems) {
