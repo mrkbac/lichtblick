@@ -11,8 +11,10 @@
 module.exports = {
   meta: {
     type: "problem",
-    fixable: "code",
+    // A suggestion, not an autofix: without type info the receiver may not be an array.
+    hasSuggestions: true,
     messages: {
+      annotateReturnType: "Move the type argument to the callback return type",
       preferReturnTypeAnnotation: `Annotate the function return type explicitly instead of passing generic arguments to Array#map, to avoid return type widening (https://github.com/microsoft/TypeScript/issues/241)`,
     },
   },
@@ -43,19 +45,24 @@ module.exports = {
           context.report({
             node: callExpr.typeArguments,
             messageId: "preferReturnTypeAnnotation",
-            *fix(fixer) {
-              const returnType = sourceCode.getText(callExpr.typeArguments.params[0]);
-              yield fixer.remove(callExpr.typeArguments);
-              if (closeParenToken) {
-                yield fixer.insertTextAfter(closeParenToken, `: ${returnType}`);
-              } else {
-                yield fixer.insertTextBefore(callExpr.arguments[0], "(");
-                yield fixer.insertTextAfter(
-                  callExpr.arguments[0].params[callExpr.arguments[0].params.length - 1],
-                  `): ${returnType}`,
-                );
-              }
-            },
+            suggest: [
+              {
+                messageId: "annotateReturnType",
+                *fix(fixer) {
+                  const returnType = sourceCode.getText(callExpr.typeArguments.params[0]);
+                  yield fixer.remove(callExpr.typeArguments);
+                  if (closeParenToken) {
+                    yield fixer.insertTextAfter(closeParenToken, `: ${returnType}`);
+                  } else {
+                    yield fixer.insertTextBefore(callExpr.arguments[0], "(");
+                    yield fixer.insertTextAfter(
+                      callExpr.arguments[0].params[callExpr.arguments[0].params.length - 1],
+                      `): ${returnType}`,
+                    );
+                  }
+                },
+              },
+            ],
           });
         },
     };

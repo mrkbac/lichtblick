@@ -32,13 +32,33 @@ ruleTester.run("no-map-type-argument", plugin.rules["no-map-type-argument"], {
         [1, 2].map<number>((x) => x + 1);
       `,
       errors: [
-        { messageId: "preferReturnTypeAnnotation", line: 2 },
-        { messageId: "preferReturnTypeAnnotation", line: 3 },
-      ],
-      output: /* ts */ `
+        {
+          messageId: "preferReturnTypeAnnotation",
+          line: 2,
+          suggestions: [
+            {
+              messageId: "annotateReturnType",
+              output: /* ts */ `
         [1, 2].map((x): number => x + 1);
+        [1, 2].map<number>((x) => x + 1);
+      `,
+            },
+          ],
+        },
+        {
+          messageId: "preferReturnTypeAnnotation",
+          line: 3,
+          suggestions: [
+            {
+              messageId: "annotateReturnType",
+              output: /* ts */ `
+        [1, 2].map<number>(x => x + 1);
         [1, 2].map((x): number => x + 1);
       `,
+            },
+          ],
+        },
+      ],
     },
   ],
 });
