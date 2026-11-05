@@ -33,24 +33,25 @@ jobs:
           # Cheap checks share one job: on the shared runner pool, queue time per job
           # (often minutes) dwarfs these commands' run time (seconds each).
           - name: lint
+            # `check` (defined in the run step) keeps going after a failure so every result shows.
             command: |
-              set -x
-              yarn license-check
-              yarn dedupe --check
-              yarn run typecheck # typecheck files that are not included by the app or package builds (TypeScript 7)
-              yarn run format:ci
-              yarn run lint:ci
-              yarn run lint:knip
-              yarn npm audit --all --recursive --severity high # last: advisories change without our code changing
+              check yarn license-check
+              check yarn dedupe --check
+              # typecheck files that are not included by the app or package builds (TypeScript 7)
+              check yarn run typecheck
+              check yarn run format:ci
+              check yarn run lint:ci
+              check yarn run lint:knip
+              # last: advisories change without our code changing
+              check yarn npm audit --all --recursive --severity high
           - name: build
             command: |
-              set -x
-              yarn run build:packages
-              yarn run web:build:prod
-              yarn run desktop:build:prod
-              yarn run benchmark:build:prod
+              check yarn run build:packages
+              check yarn run web:build:prod
+              check yarn run desktop:build:prod
+              check yarn run benchmark:build:prod
           - name: test
-            command: yarn run test --maxWorkers=100%
+            command: check yarn run test --maxWorkers=100%
 
     name: ${{ matrix.config.name }} (${{ matrix.os }})
 
@@ -73,7 +74,16 @@ jobs:
 
       - run: yarn install --immutable
 
-      - run: ${{ matrix.config.command }}
+      - name: Run checks
+        run: |
+          failed=0
+          check() {
+            echo "::group::$*"
+            "$@" || { echo "::error::failed: $*"; failed=1; }
+            echo "::endgroup::"
+          }
+          ${{ matrix.config.command }}
+          exit $failed
 
   e2e-desktop:
     # Not on PRs for now: the smoke suite is red on licht and needs its own fix. It still runs on
