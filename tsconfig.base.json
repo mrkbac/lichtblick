@@ -4,6 +4,9 @@
   "compilerOptions": {
     // Stricter than the shared Lichtblick config
     "allowUnusedLabels": false,
-    "noUncheckedSideEffectImports": true
+    "noUncheckedSideEffectImports": true,
+    // Build scripts and Rspack configs run under Node's native type stripping
+    "allowImportingTsExtensions": true,
+    "rewriteRelativeImportExtensions": true
   }
 }

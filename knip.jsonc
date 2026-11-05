@@ -78,7 +78,9 @@
       ]
     },
     "packages/suite-desktop": {
-      "entry": ["src/electronBuilderConfig.js", "src/afterPack.ts", "src/test/setup.ts"]
+      "entry": ["src/electronBuilderConfig.js", "src/afterPack.ts", "src/test/setup.ts"],
+      // Referenced by name in the quicklook rspack `resolve.fallback`
+      "ignoreDependencies": ["path-browserify"]
     },
     "packages/oxlint-plugin": {
       // JSDoc-only `import("estree")` types, provided by oxlint

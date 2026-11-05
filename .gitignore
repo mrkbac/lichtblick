@@ -33,3 +33,4 @@ test-results/*
 
 lint-report.sarif
 blob-report/*
+.eslintcache
