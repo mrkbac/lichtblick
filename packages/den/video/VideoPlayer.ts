@@ -181,6 +181,9 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
       this.#codedSize = undefined;
       this.#lastSubmittedTimestampMicros = undefined;
       this.#currentDecodeTimestampMicros = undefined;
+      // A new stream restarts timestamps; keep the display cache but not its ordering.
+      this.#newestCachedTimestampMicros = undefined;
+      this.#hasUnclaimedLateFrame = false;
       if (
         this.#decoderConfig.codedWidth != undefined &&
         this.#decoderConfig.codedHeight != undefined
