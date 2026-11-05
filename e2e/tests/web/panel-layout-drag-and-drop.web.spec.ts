@@ -69,7 +69,7 @@ async function catalogItem(page: Page, title: string): Promise<Point> {
   return await centerOf(page.getByTestId(`panel-menu-item ${title}`))();
 }
 
-test.describe("panel layout drag and drop", () => {
+test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
   test.beforeEach(async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 1000 });
     await page.goto("/");
