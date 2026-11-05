@@ -41,6 +41,12 @@ async function drag(
         .waitFor({ state: "attached", timeout: 2000 });
     } catch (error) {
       await page.mouse.up();
+      // Shows in the CI log what the drag grabbed instead of a drag handle.
+      const grabbed = await page.evaluate(([x, y]) => {
+        const el = document.elementFromPoint(x, y);
+        return `${el?.tagName} ${el?.className} draggable=${el?.closest("[draggable=true]") != undefined}`;
+      }, from);
+      console.log(`drag did not start at ${from.join(",")}: ${grabbed}`);
       throw error;
     }
   }).toPass({ timeout: 30_000 });
