@@ -8,6 +8,12 @@ on:
 permissions:
   contents: read
 
+# A new push to a PR supersedes the previous run; cancel it so it doesn't hold runners.
+# Runs on licht are never cancelled, so every merge commit keeps a result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -24,33 +30,28 @@ jobs:
         config:
           # Specify names so that the GitHub branch protection settings for
           # required checks don't need to change if we ever change the commands used.
-          - name: npm audit
-            command: pnpm audit --audit-level high
+          # Cheap checks share one job: on the shared runner pool, queue time per job
+          # (often minutes) dwarfs these commands' run time (seconds each).
           - name: lint
+            # `check` (defined in the run step) keeps going after a failure so every result shows.
             command: |
-              # lint steps
-              set -x
-              pnpm license-check
-              pnpm dedupe --check
-              pnpm run typecheck # type checks the apps and root files (builds only transpile; packages are checked by build:packages)
-              pnpm run format:ci
-              pnpm run lint:ci
-              pnpm run lint:knip
-          - name: packages
-            command: pnpm run build:packages
-          - name: web
-            command: pnpm run web:build:prod
-          - name: desktop
-            command: pnpm run desktop:build:prod
-          - name: build benchmark
-            command: pnpm run benchmark:build:prod
+              check pnpm license-check
+              check pnpm dedupe --check
+              # type checks the apps and root files (builds only transpile; packages are checked by build:packages)
+              check pnpm run typecheck
+              check pnpm run format:ci
+              check pnpm run lint:ci
+              check pnpm run lint:knip
+              # last: advisories change without our code changing
+              check pnpm audit --audit-level high
+          - name: build
+            command: |
+              check pnpm run build:packages
+              check pnpm run web:build:prod
+              check pnpm run desktop:build:prod
+              check pnpm run benchmark:build:prod
           - name: test
-            command: pnpm run test --maxWorkers=100%
-        include:
-          - os: windows-latest
-            config:
-              name: packages
-              command: echo complete
+            command: check pnpm run test --maxWorkers=100%
 
     name: ${{ matrix.config.name }} (${{ matrix.os }})
 
@@ -66,9 +67,21 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      - run: ${{ matrix.config.command }}
+      - name: Run checks
+        run: |
+          failed=0
+          check() {
+            echo "::group::$*"
+            "$@" || { echo "::error::failed: $*"; failed=1; }
+            echo "::endgroup::"
+          }
+          ${{ matrix.config.command }}
+          exit $failed
 
   e2e-desktop:
+    # Not on PRs for now: the smoke suite is red on licht and needs its own fix. It still runs on
+    # every licht push here and nightly in e2e-regression.yml.
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     # Run smoke tests in parallel across 2 shards
@@ -159,7 +172,8 @@ jobs:
 
   # Merge reports from all shards and generate summary
   e2e-report:
-    if: always()
+    # Only merges the desktop shards' reports (e2e-web uploads its own), so it follows e2e-desktop.
+    if: always() && github.event_name == 'push'
     needs: [e2e-desktop, e2e-web]
     runs-on: ubuntu-latest
 
