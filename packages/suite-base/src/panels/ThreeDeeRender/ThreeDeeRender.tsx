@@ -366,6 +366,19 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     setFocusedSettingsPath(["topics", topic]);
   }, []);
 
+  // Save panel settings whenever they change
+  const throttledSave = useDebouncedCallback(
+    (newConfig: Immutable<RendererConfig>) => {
+      // Immediate converter saves already persist this config.
+      if (newConfig !== lastSavedConfig.current) {
+        saveState(newConfig);
+        lastSavedConfig.current = newConfig;
+      }
+    },
+    100,
+    { leading: false, trailing: true, maxWait: 1000 },
+  );
+
   // Rebuild the settings sidebar tree as needed
   useEffect(() => {
     let topicsBeforeAction = renderer?.config.topics;
@@ -381,6 +394,8 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       if (renderer) {
         renderer.updateConfig(updateSettings);
         if (renderer.config.topics !== topicsBeforeAction) {
+          // A pending debounced save holds an older config; it must not overwrite this one.
+          throttledSave.cancel();
           saveState(renderer.config);
           lastSavedConfig.current = renderer.config;
         }
@@ -396,7 +411,15 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       },
       applyConverterSettings,
     );
-  }, [actionHandler, context, focusedSettingsPath, settingsTree, renderer, saveState]);
+  }, [
+    actionHandler,
+    context,
+    focusedSettingsPath,
+    settingsTree,
+    renderer,
+    saveState,
+    throttledSave,
+  ]);
 
   // Update the renderer's reference to `config` when it changes. Note that this does *not*
   // automatically update the settings tree.
@@ -440,19 +463,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       renderer.ros = context.dataSourceProfile === "ros1" || context.dataSourceProfile === "ros2";
     }
   }, [context.dataSourceProfile, renderer]);
-
-  // Save panel settings whenever they change
-  const throttledSave = useDebouncedCallback(
-    (newConfig: Immutable<RendererConfig>) => {
-      // Immediate converter saves already persist this config.
-      if (newConfig !== lastSavedConfig.current) {
-        saveState(newConfig);
-        lastSavedConfig.current = newConfig;
-      }
-    },
-    100,
-    { leading: false, trailing: true, maxWait: 1000 },
-  );
 
   useEffect(() => {
     throttledSave(config);
