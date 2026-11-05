@@ -130,7 +130,6 @@ export function makeConfig(
         path: localRequire.resolve("path-browserify"),
         stream: localRequire.resolve("readable-stream"),
         url: _nodeFileURLToPath(new URL("src/util/shims/url.ts", dirHref)),
-        assert: false,
         zlib: false,
         // Only reached by Node-only code paths (sql.js); the polyfill pulled in ~1 MiB.
         crypto: false,
