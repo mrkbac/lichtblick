@@ -133,7 +133,7 @@
     "@babel/core": "7.29.7",
     "@babel/plugin-proposal-decorators": "7.29.7",
     "@babel/plugin-transform-explicit-resource-management": "7.29.7",
-    "@babel/preset-env": "7.29.7",
+    "@babel/preset-env": "8.0.7",
     "@babel/preset-react": "7.29.7",
     "@babel/preset-typescript": "7.29.7",
     "@biomejs/biome": "2.5.2",
