@@ -581,6 +581,13 @@ export class RenderObjectHistory<TRenderable extends DisposableObject> {
         hadTfError = true;
       }
     }
+    if (!hadTfError) {
+      // Clear a stale error once the transform shows up.
+      this.#renderer.settings.errors.remove(
+        this.#parentRenderable.userData.settingsPath,
+        MISSING_TRANSFORM,
+      );
+    }
   }
 
   public latest(): HistoryEntry<TRenderable> {
