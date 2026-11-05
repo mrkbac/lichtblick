@@ -3,7 +3,7 @@
   "license": "MPL-2.0",
   "private": true,
   "devDependencies": {
-    "@actions/exec": "1.1.1",
+    "@actions/exec": "3.0.0",
     "@actions/tool-cache": "2.0.2",
     "@foxglove/electron-socket": "2.1.1",
     "@foxglove/rosbag": "0.4.2",
