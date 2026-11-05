@@ -75,7 +75,7 @@ function Row(props: RowComponentProps<ListItemData>): React.JSX.Element {
   const { index, style, ariaAttributes, items, playheadIndex, dimFuture, setRowHeight, width } =
     props;
   const item = items[index]!;
-  const ref = useRef<HTMLDivElement>(ReactNull);
+  const ref = useRef<HTMLDivElement>(null);
 
   // Measured in an effect rather than with a ResizeObserver, which can trigger
   // "ResizeObserver loop" errors while the list scrolls.
@@ -109,7 +109,7 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
   const { classes } = useStyles();
   const { t } = useTranslation("log");
   const { timeFormat, timeZone } = useAppTimeFormat();
-  const listRef = useRef<ListImperativeAPI>(ReactNull);
+  const listRef = useRef<ListImperativeAPI>(null);
   const { width, ref: resizeRef } = useElementSize<HTMLDivElement>();
 
   // Row heights keyed by message so they survive filtering. Reset when the width changes.

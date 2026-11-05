@@ -25,7 +25,6 @@ export function createCommonWebpackConfig(
     plugins: [
       new rspack.DefinePlugin({
         // Should match webpack-defines.d.ts
-        ReactNull: null,
         LICHTBLICK_PRODUCT_NAME: JSON.stringify(params.packageJson.productName),
         LICHTBLICK_PRODUCT_VERSION: JSON.stringify(params.packageJson.version),
         LICHTBLICK_PRODUCT_HOMEPAGE: JSON.stringify(params.packageJson.homepage),

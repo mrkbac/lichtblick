@@ -106,7 +106,7 @@ const useStyles = makeStyles()((theme) => ({
 type Props = {
   addPanel: LayoutActions["addPanel"];
   canPublish: boolean;
-  canvas: HTMLCanvasElement | ReactNull;
+  canvas: HTMLCanvasElement | null;
   enableStats: boolean;
   interfaceMode: InterfaceMode;
   measureActive: boolean;
@@ -340,7 +340,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
     renderer?.setSelectedRenderable(selectedRenderable);
   }, [renderer, selectedRenderable]);
 
-  const publishClickButtonRef = useRef<HTMLButtonElement>(ReactNull);
+  const publishClickButtonRef = useRef<HTMLButtonElement>(null);
   const [publishMenuExpanded, setPublishMenuExpanded] = useState(false);
   const selectedPublishClickIcon = PublishClickIcons[props.publishClickType];
 
@@ -455,7 +455,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
     }
   }, [getContextMenuItems, t]);
 
-  const mousePresenceRef = useRef<HTMLDivElement>(ReactNull);
+  const mousePresenceRef = useRef<HTMLDivElement>(null);
   const mousePresent = usePanelMousePresence(mousePresenceRef);
 
   return (

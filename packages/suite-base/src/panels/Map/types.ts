@@ -8,11 +8,6 @@
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import { FoxgloveMessages } from "@lichtblick/suite-base/types/FoxgloveMessages";
 
-export type Point = {
-  lat: number;
-  lon: number;
-};
-
 export type Matrix3x3 = [number, number, number, number, number, number, number, number, number];
 
 // https://docs.ros.org/en/api/sensor_msgs/html/msg/NavSatFix.html

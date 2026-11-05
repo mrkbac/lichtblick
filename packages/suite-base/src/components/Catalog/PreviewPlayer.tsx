@@ -56,7 +56,7 @@ type Props = {
 };
 
 /** A looping low frame rate preview of a recording's camera, scrubbed by hovering. */
-export function PreviewPlayer({ recording, loadPreview }: Props): React.JSX.Element | ReactNull {
+export function PreviewPlayer({ recording, loadPreview }: Props): React.JSX.Element | null {
   const { classes } = useStyles();
   const { t } = useTranslation("catalog");
   const imageTopics = useMemo(
@@ -108,7 +108,7 @@ export function PreviewPlayer({ recording, loadPreview }: Props): React.JSX.Elem
       : undefined;
   const src = frame?.url ?? recording.thumbnail;
   if (src == undefined && imageTopics.length === 0) {
-    return ReactNull;
+    return null;
   }
 
   return (

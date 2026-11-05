@@ -11,6 +11,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
 import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import { IconButton, MenuItem, Select, SelectChangeEvent } from "@mui/material";
+import React from "react";
 
 import MessagePathInput from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";

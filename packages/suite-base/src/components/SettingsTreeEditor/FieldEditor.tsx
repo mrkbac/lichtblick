@@ -20,7 +20,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useCallback } from "react";
+import React, { useCallback } from "react";
 
 import { Immutable, SettingsTreeAction, SettingsTreeField } from "@lichtblick/suite";
 import MessagePathInput from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput";

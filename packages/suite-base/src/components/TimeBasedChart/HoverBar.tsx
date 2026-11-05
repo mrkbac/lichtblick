@@ -14,6 +14,8 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import React from "react";
+
 import { RpcScales } from "@lichtblick/suite-base/components/Chart/types";
 import { useHoverValue } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 

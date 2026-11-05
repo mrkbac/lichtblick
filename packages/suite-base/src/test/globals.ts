@@ -3,7 +3,6 @@
 
 // Globals the webpack build injects with DefinePlugin
 Object.assign(globalThis, {
-  ReactNull: null,
   LICHTBLICK_SUITE_VERSION: "TEST",
   API_URL: "/",
   DEV_WORKSPACE: "",

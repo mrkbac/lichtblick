@@ -17,6 +17,7 @@
 import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { IconButton, Typography } from "@mui/material";
+import React from "react";
 
 import type { LayoutActions } from "@lichtblick/suite";
 import Stack from "@lichtblick/suite-base/components/Stack";

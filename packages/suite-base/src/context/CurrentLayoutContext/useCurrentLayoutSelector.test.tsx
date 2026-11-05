@@ -89,7 +89,7 @@ describe("useCurrentLayoutSelector", () => {
           value: (value as number) + 1,
         }));
       }, []);
-      return ReactNull;
+      return null;
     }
 
     const all: unknown[] = [];

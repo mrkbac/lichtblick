@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Feature, FeatureCollection, GeoJsonObject, Geometry } from "geojson";
+import type { Feature, FeatureCollection, GeoJsonObject, Geometry } from "geojson";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { FoxgloveMessages } from "@lichtblick/suite-base/types/FoxgloveMessages";

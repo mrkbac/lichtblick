@@ -6,7 +6,6 @@
     "lib": ["dom", "dom.iterable", "es2025", "esnext.typedarrays", "webworker"],
     "types": ["node", "vitest/globals"],
     "noEmit": true,
-    "experimentalDecorators": true,
     "paths": {
       "@lichtblick/suite-base/*": ["../suite-base/src/*"]
     }

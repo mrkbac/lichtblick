@@ -12,12 +12,12 @@ import { PREVIEW_TOPIC_OFF } from "./scrubPreview";
 import { usePreviewTopic } from "./useScrubPreview";
 
 /** Picks the image topic shown as a thumbnail when hovering the playback bar. */
-export function ScrubPreviewMenu(): ReactNull | React.JSX.Element {
+export function ScrubPreviewMenu(): null | React.JSX.Element {
   const { imageTopics, topic, setSetting } = usePreviewTopic();
   const [anchorEl, setAnchorEl] = useState<undefined | HTMLElement>(undefined);
 
   if (imageTopics.length === 0) {
-    return ReactNull;
+    return null;
   }
 
   const choose = (value: string) => {

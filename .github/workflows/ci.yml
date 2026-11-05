@@ -35,8 +35,7 @@ jobs:
               yarn run typecheck # type checks the apps and root files (builds only transpile; packages are checked by build:packages)
               yarn run format:ci
               yarn run lint:ci
-              yarn run lint:unused-exports
-              yarn run lint:dependencies
+              yarn run lint:knip
           - name: packages
             command: yarn run build:packages
           - name: web

@@ -30,12 +30,9 @@ export function swcRule({
     loader: "builtin:swc-loader",
     options: {
       jsc: {
-        parser: { syntax: "typescript", tsx: true, decorators: true },
+        parser: { syntax: "typescript", tsx: true },
         target: "es2022",
         transform: {
-          // matches experimentalDecorators / emitDecoratorMetadata in tsconfig
-          legacyDecorator: true,
-          decoratorMetadata: true,
           react: { runtime: "automatic", development: isDev, refresh },
         },
       },
@@ -114,8 +111,8 @@ export function makeConfig(
       },
       // Node built-ins still imported by browser code. Everything else resolves on its own.
       fallback: {
-        path: localRequire.resolve("path-browserify"), // foxglove-depcheck-used: path-browserify
-        stream: localRequire.resolve("readable-stream"), // foxglove-depcheck-used: readable-stream
+        path: localRequire.resolve("path-browserify"),
+        stream: localRequire.resolve("readable-stream"),
         // Only reached by Node-only code paths (sql.js, TypeScript, wasm decoders)
         crypto: false,
         fs: false,
@@ -169,14 +166,14 @@ export function makeConfig(
         { test: /\.(md|template)$/, type: "asset/source" },
         {
           test: /\.svg$/,
-          loader: "@svgr/webpack", // foxglove-depcheck-used: @svgr/webpack
+          loader: "@svgr/webpack",
           options: {
             svgo: {
               plugins: [{ removeViewBox: false }, { removeDimensions: false }],
             },
           },
         },
-        { test: /\.ne$/, loader: "nearley-loader" }, // foxglove-depcheck-used: nearley-loader
+        { test: /\.ne$/, loader: "nearley-loader" },
         {
           test: /\.(png|jpg|gif)$/i,
           type: "asset",
@@ -188,12 +185,12 @@ export function makeConfig(
         },
         {
           test: /\.css$/,
-          loader: "style-loader", // foxglove-depcheck-used: style-loader
+          loader: "style-loader",
           sideEffects: true,
         },
         {
           test: /\.css$/,
-          loader: "css-loader", // foxglove-depcheck-used: css-loader
+          loader: "css-loader",
           options: { sourceMap: true },
         },
         { test: /\.woff2?$/, type: "asset/inline" },
@@ -204,7 +201,7 @@ export function makeConfig(
           // https://github.com/microsoft/TypeScript/issues/39436
           // Prettier's TS parser also bundles the same code: https://github.com/prettier/prettier/issues/11076
           test: /[\\/]node_modules[\\/]typescript[\\/]lib[\\/]typescript\.js$|[\\/]node_modules[\\/]prettier[\\/]plugins[\\/]typescript\.m?js$/,
-          loader: "string-replace-loader", // foxglove-depcheck-used: string-replace-loader
+          loader: "string-replace-loader",
           options: {
             multiple: [
               {
@@ -243,8 +240,6 @@ export function makeConfig(
     },
     plugins: [
       new rspack.ProvidePlugin({
-        // since we avoid "import React from 'react'" we shim here when used globally
-        React: "react",
         // the buffer module exposes the Buffer class as a property
         Buffer: ["buffer", "Buffer"],
         process: ["@lichtblick/suite-base/util/process", "default"],
@@ -252,7 +247,6 @@ export function makeConfig(
       }),
       new rspack.DefinePlugin({
         // Should match webpack-defines.d.ts
-        ReactNull: null,
         LICHTBLICK_SUITE_VERSION: JSON.stringify(version),
         // licht deploys talk to its organization server unless API_URL says otherwise.
         API_URL: JSON.stringify(process.env.API_URL ?? "https://licht-server.marko.im"),

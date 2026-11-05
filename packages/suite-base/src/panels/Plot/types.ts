@@ -94,8 +94,6 @@ export type HoverElement = {
 /** Canvas-pixel rectangle */
 export type PixelRect = { left: number; right: number; top: number; bottom: number };
 
-export type Size = { width: number; height: number };
-
 export type ReferenceLine = { color: string; value: number; scaleID?: "y" | "y2" };
 
 export type SecondaryYAxisOptions = {

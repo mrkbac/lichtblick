@@ -7,7 +7,7 @@
 
 import ErrorIcon from "@mui/icons-material/Error";
 import { Tooltip, useTheme } from "@mui/material";
-import { useCallback, useMemo, useState, useRef, useEffect } from "react";
+import React, { useCallback, useMemo, useState, useRef, useEffect } from "react";
 import { withStyles } from "tss-react/mui";
 
 import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
