@@ -144,8 +144,8 @@ class LocalStorageAppConfiguration implements IAppConfiguration {
 1. **Bundle size**: Tree-shaking via lodash-es, dynamic imports for heavy panels
 2. **4GB V8 limit**: Can't increase in browser — cache eviction must be strict
 3. **WASM startup**: First MCAP open incurs ~100ms WASM initialization
-4. **Service Worker**: Not currently used — potential for offline caching
-5. **CDN deployment**: Static assets via Vercel (`vercel.json` config)
+4. **Service Worker**: production builds precache the whole app with workbox (`generateSW` in `rspackConfigs.ts`); `useServiceWorkerUpdatePrompt` offers the reload into a new version
+5. **Deployment**: static files from `web/.webpack`
 
 ## Key Files
 - `packages/suite-web/src/index.tsx`
@@ -153,7 +153,6 @@ class LocalStorageAppConfiguration implements IAppConfiguration {
 - `packages/suite-web/src/rspackConfigs.ts`
 - `packages/suite-web/src/canRenderApp.ts`
 - `web/rspack.config.ts`
-- `vercel.json`
 
 ## Skills Reference
 - Worker/Comlink patterns (SharedArrayBuffer, COOP/COEP context): `read_file(".github/skills/web-workers/SKILL.md")`

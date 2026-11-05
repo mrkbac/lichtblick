@@ -60,6 +60,7 @@ import {
 import { HIGH_FREQUENCY_ALERT } from "@lichtblick/suite-base/players/utils/constants";
 import { isTopicHighFrequency } from "@lichtblick/suite-base/players/utils/isTopicHighFrequency";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
+import { ros2CommonDatatypes } from "@lichtblick/suite-base/util/ros2CommonDatatypes";
 import rosDatatypesToMessageDefinition from "@lichtblick/suite-base/util/rosDatatypesToMessageDefinition";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
@@ -345,11 +346,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         this.#profile = isRos1 ? "ros1" : "ros2";
 
         // Add common ROS message definitions
-        const rosDataTypes = isRos1
-          ? CommonRosTypes.ros1
-          : ["foxy", "galactic"].includes(rosDistro)
-            ? CommonRosTypes.ros2galactic
-            : CommonRosTypes.ros2humble;
+        const rosDataTypes = isRos1 ? CommonRosTypes.ros1 : ros2CommonDatatypes(rosDistro);
 
         const dataTypes: MessageDefinitionMap = new Map();
         for (const dataType in rosDataTypes) {

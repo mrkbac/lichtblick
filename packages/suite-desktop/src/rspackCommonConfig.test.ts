@@ -46,15 +46,6 @@ vi.mock("@rspack/core", async (importOriginal) => {
   };
 });
 
-// --- mock other heavy plugins ---
-vi.mock("ts-checker-rspack-plugin", () => ({
-  TsCheckerRspackPlugin: vi.fn().mockImplementation(function () {
-    return {
-      pluginName: "TsCheckerRspackPlugin",
-    };
-  }),
-}));
-
 describe("createCommonWebpackConfig", () => {
   it("should configure development mode with source maps", () => {
     // Given
@@ -96,19 +87,6 @@ describe("createCommonWebpackConfig", () => {
     expect(defs.LICHTBLICK_PRODUCT_NAME).toBe(JSON.stringify("Test Product"));
     expect(defs.LICHTBLICK_PRODUCT_VERSION).toBe(JSON.stringify("1.0.0"));
     expect(defs.LICHTBLICK_PRODUCT_HOMEPAGE).toBe(JSON.stringify("https://example.com"));
-  });
-
-  it("should include TsCheckerRspackPlugin", () => {
-    // Given
-    const params = createTestParams();
-
-    // When
-    const config = createCommonWebpackConfig(params, { isDev: true });
-    const plugins = config.plugins as any[];
-
-    // Then
-    const hasTsChecker = plugins.some((p) => p.pluginName === "TsCheckerRspackPlugin");
-    expect(hasTsChecker).toBe(true);
   });
 
   it("should propagate API_URL, DEV_WORKSPACE and OTLP_ENDPOINT from environment if set", () => {
