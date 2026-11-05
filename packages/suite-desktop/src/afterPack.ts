@@ -9,10 +9,11 @@ import { exec } from "@actions/exec";
 import { downloadTool, extractZip } from "@actions/tool-cache";
 import { log, Arch } from "builder-util";
 import crypto from "crypto";
-import { AfterPackContext, MacPackager } from "electron-builder";
+import type { AfterPackContext, MacPackager } from "electron-builder";
 import fs from "fs/promises";
 import path from "path";
-import plist, { PlistObject } from "plist";
+import * as plist from "plist";
+import { fileURLToPath } from "url";
 
 async function getKeychainFile(context: AfterPackContext): Promise<string | undefined> {
   // Ensure it's a macOS packager
@@ -127,19 +128,19 @@ async function configureQuickLookExtension(context: AfterPackContext) {
 
   const originalInfo = plist.parse(
     await fs.readFile(appexInfoPlist, { encoding: "utf-8" }),
-  ) as PlistObject;
+  ) as plist.PlistObject;
   const newInfo = {
     ...originalInfo,
     CFBundleIdentifier: `${appBundleId}.quicklook`,
     NSExtension: {
-      ...(originalInfo.NSExtension as PlistObject),
+      ...(originalInfo.NSExtension as plist.PlistObject),
       NSExtensionAttributes: {
         QLSupportedContentTypes: ["org.ros.bag", "dev.mcap.mcap"],
         QLSupportsSearchableItems: false,
       },
     },
     QLJS: {
-      ...(originalInfo.QLJS as PlistObject),
+      ...(originalInfo.QLJS as plist.PlistObject),
       pagePath: "index.html",
     },
   };
@@ -179,7 +180,7 @@ async function configureQuickLookExtension(context: AfterPackContext) {
     "--options",
     "runtime", // notarization requires Hardened Runtime to be enabled
     "--entitlements",
-    path.join(require.resolve("quicklookjs/index.d.ts"), "../dist/PreviewExtension.entitlements"),
+    fileURLToPath(import.meta.resolve("quicklookjs/dist/PreviewExtension.entitlements")),
     appexPath,
   ]);
   log.info("Re-sandboxed appex");

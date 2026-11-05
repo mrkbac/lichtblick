@@ -12,9 +12,9 @@ import assert from "assert";
 import { promises as fs } from "fs";
 import path from "path";
 
-import { execOutput } from "./exec";
+import { execOutput } from "./exec.ts";
 
-const PACKAGE_JSON_PATH = path.join(__dirname, "..", "package.json");
+const PACKAGE_JSON_PATH = path.join(import.meta.dirname, "..", "package.json");
 
 async function main(): Promise<void> {
   // Parse package.json
@@ -34,9 +34,7 @@ async function main(): Promise<void> {
   await fs.writeFile(PACKAGE_JSON_PATH, `${JSON.stringify(pkg, undefined, 2)}\n`, "utf8");
 }
 
-if (require.main === module) {
-  main().catch((e: unknown) => {
-    console.error(e);
-    process.exit(1);
-  });
-}
+main().catch((e: unknown) => {
+  console.error(e);
+  process.exit(1);
+});

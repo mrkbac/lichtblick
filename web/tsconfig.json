@@ -4,7 +4,7 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "lib": ["ESNext.Disposable"],
-    "module": "commonjs",
+    "module": "preserve",
     "noEmit": true,
     "experimentalDecorators": true
   }

@@ -8,9 +8,9 @@
 import type { Configuration } from "@rspack/core";
 import HtmlWebpackPlugin from "html-webpack-plugin";
 
-import { RspackArgv } from "@lichtblick/suite-base/RspackArgv";
+import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
 
-import { RspackConfigParams } from "./RspackConfigParams";
+import type { RspackConfigParams } from "./RspackConfigParams.ts";
 
 export const rspackDevServerConfig =
   (params: RspackConfigParams) =>
