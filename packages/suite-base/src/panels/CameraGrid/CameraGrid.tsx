@@ -231,11 +231,7 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
     [maximizedTile, visibleTiles],
   );
 
-  const {
-    width = 0,
-    height = 0,
-    ref: gridRef,
-  } = useElementSize<HTMLDivElement>();
+  const { width = 0, height = 0, ref: gridRef } = useElementSize<HTMLDivElement>();
 
   const aspect = useMemo(() => {
     void aspectVersion; // recompute when the renderer reports new image sizes

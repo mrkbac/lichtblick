@@ -137,11 +137,7 @@ export function getModifierNameAutocomplete(
     };
   }
   const last = rosPath.messagePath.at(-1);
-  if (
-    last?.type !== "modifier" ||
-    traversal?.valid !== false ||
-    traversal.msgPathPart !== last
-  ) {
+  if (last?.type !== "modifier" || traversal?.valid !== false || traversal.msgPathPart !== last) {
     return undefined;
   }
   const start = path.lastIndexOf(".@") + 2;

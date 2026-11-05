@@ -72,9 +72,7 @@ describe("DiagnosticNodeRow", () => {
     );
 
     const timeline = screen.getByTestId("diagnostic-timeline");
-    vi
-      .spyOn(timeline, "getBoundingClientRect")
-      .mockReturnValue({ left: 0, width: 100 } as DOMRect);
+    vi.spyOn(timeline, "getBoundingClientRect").mockReturnValue({ left: 0, width: 100 } as DOMRect);
     fireEvent.click(timeline, { clientX: 25 });
 
     expect(onSeek).toHaveBeenCalledWith(2.5);
