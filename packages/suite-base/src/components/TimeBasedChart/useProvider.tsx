@@ -15,7 +15,7 @@
 //   You may not use this file except in compliance with the License.
 
 import { ChartDataset, ChartData } from "chart.js";
-import { useEffect, useMemo, useCallback } from "react";
+import React, { useEffect, useMemo, useCallback } from "react";
 
 import { iterateObjects, iterateTyped } from "@lichtblick/suite-base/components/Chart/datasets";
 import type { ObjectData, TypedData } from "@lichtblick/suite-base/components/Chart/types";

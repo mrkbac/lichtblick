@@ -78,7 +78,7 @@ const DiagnosticStatusPanel = (props: DiagnosticStatusPanelProps): React.JSX.Ele
     return (
       autocompleteOptions.find((item) => {
         return item.label === selectedDisplayName;
-      }) ?? ReactNull
+      }) ?? null
     );
   }, [autocompleteOptions, selectedDisplayName]);
 
@@ -151,7 +151,7 @@ const DiagnosticStatusPanel = (props: DiagnosticStatusPanelProps): React.JSX.Ele
           blurOnSelect={true}
           disabled={autocompleteOptions.length === 0}
           options={autocompleteOptions}
-          value={selectedAutocompleteOption ?? ReactNull}
+          value={selectedAutocompleteOption ?? null}
           noOptionsText={noOptionsText}
           isOptionEqualToValue={(option, value) => option.label === value.label}
           onChange={(_ev, value) => {

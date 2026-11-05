@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import * as _ from "lodash-es";
+import React from "react";
 import ReactDOM from "react-dom";
 
 import { CameraModelsMap } from "@lichtblick/den/image/types";

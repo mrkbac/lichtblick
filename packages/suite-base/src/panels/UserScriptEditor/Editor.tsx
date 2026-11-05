@@ -89,8 +89,8 @@ const Editor = ({
   setScriptOverride,
   rosLib,
   typesLib,
-}: Props): ReactElement | ReactNull => {
-  const editorRef = React.useRef<CodeEditor>(ReactNull);
+}: Props): ReactElement | null => {
+  const editorRef = React.useRef<CodeEditor>(null);
   const autoFormatOnSaveRef = React.useRef(autoFormatOnSave);
   autoFormatOnSaveRef.current = autoFormatOnSave;
 
@@ -339,7 +339,7 @@ const Editor = ({
 
   if (!script) {
     // No script to load
-    return ReactNull;
+    return null;
   }
 
   // The ErrorBoundary is required to properly capture runtime errors from Monaco Editor.

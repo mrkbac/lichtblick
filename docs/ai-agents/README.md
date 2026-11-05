@@ -168,7 +168,7 @@ Located in `.github/instructions/`. Each file uses YAML frontmatter with an `app
 
 | Instruction    | Pattern            | Purpose                                                                                                                                                                                                         |
 | -------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `contributing` | `**/*.ts,**/*.tsx` | Enforces CONTRIBUTING.md conventions: component structure, TypeScript rules (strict, `undefined` > `null`, `ReactNull`), styling (`tss-react` only), GWT testing pattern, i18n guidelines, and license headers. |
+| `contributing` | `**/*.ts,**/*.tsx` | Enforces CONTRIBUTING.md conventions: component structure, TypeScript rules (strict, `undefined` > `null`), styling (`tss-react` only), GWT testing pattern, i18n guidelines, and license headers. |
 | `performance`  | `**/*.ts,**/*.tsx` | Enforces performance best practices: allocation rules, React memoization, render-path optimization, and memory management patterns.                                                                             |
 
 ---

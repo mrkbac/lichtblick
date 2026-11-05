@@ -82,7 +82,7 @@ export default function CatalogMap({
   const { classes } = useStyles();
   const theme = useTheme();
   const { t } = useTranslation("catalog");
-  const containerRef = useRef<HTMLDivElement>(ReactNull);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<MapLibreMap>();
   const fittedRef = useRef(false);
   const onSelectRef = useLatest(onSelect);

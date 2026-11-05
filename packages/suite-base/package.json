@@ -14,7 +14,7 @@
     "email": "lichtblick@bmwgroup.com"
   },
   "homepage": "https://github.com/lichtblick-suite",
-  "main": "src/index",
+  "main": "./src/index.ts",
   "devDependencies": {
     "@atlaskit/pragmatic-drag-and-drop": "4.0.0",
     "@emotion/cache": "11.14.0",
@@ -37,6 +37,7 @@
     "@foxglove/rosmsg2-serialization": "3.1.2",
     "@foxglove/rostime": "1.1.3",
     "@foxglove/schemas": "2.3.1",
+    "@foxglove/sql.js": "0.0.4",
     "@foxglove/three-text": "0.6.1",
     "@foxglove/ulog": "2.3.2",
     "@foxglove/velodyne-cloud": "1.0.1",
@@ -75,6 +76,7 @@
     "@testing-library/user-event": "14.6.8",
     "@types/base16": "^1.0.5",
     "@types/foxglove__roslibjs": "workspace:*",
+    "@types/foxglove__web": "workspace:*",
     "@types/geojson": "7946.0.16",
     "@types/memoize-weak": "workspace:*",
     "@types/nearley": "2.11.5",

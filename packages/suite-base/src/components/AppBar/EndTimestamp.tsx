@@ -19,13 +19,13 @@ import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time"
 
 const selectEndTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
 
-export function EndTimestamp(): React.JSX.Element | ReactNull {
+export function EndTimestamp(): React.JSX.Element | null {
   const endTime = useMessagePipeline(selectEndTime);
   const [timezone] = useAppConfigurationValue<string>(AppSetting.TIMEZONE);
   const { timeFormat } = useAppTimeFormat();
   const theme = useTheme();
 
-  const timeRef = useRef<HTMLDivElement>(ReactNull);
+  const timeRef = useRef<HTMLDivElement>(null);
 
   // We bypass react and update the DOM elements directly for better performance here.
   useEffect(() => {

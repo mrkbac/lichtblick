@@ -154,13 +154,13 @@ export function CompatibilityBanner({
   isChrome: boolean;
   currentVersion: number;
   isDismissable: boolean;
-}): React.JSX.Element | ReactNull {
+}): React.JSX.Element | null {
   const { classes } = useStyles();
   const muiTheme = createMuiTheme("dark");
   const [showBanner, setShowBanner] = useState(true);
 
   if (!showBanner || currentVersion >= MINIMUM_CHROME_VERSION) {
-    return ReactNull;
+    return null;
   }
 
   return (

@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Divider, Menu, MenuItem } from "@mui/material";
-import { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 
 import { Immutable } from "@lichtblick/suite";
 import { PANEL_ROOT_CLASS_NAME } from "@lichtblick/suite-base/components/PanelRoot";
@@ -46,7 +46,7 @@ type PanelContextMenuProps = {
 function PanelContextMenuComponent(props: PanelContextMenuProps): React.JSX.Element {
   const { getItems } = props;
 
-  const rootRef = useRef<HTMLDivElement>(ReactNull);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const [position, setPosition] = useState<undefined | { x: number; y: number }>();
 

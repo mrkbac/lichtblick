@@ -23,7 +23,7 @@ export type ContextLossStatus = "ok" | "restoring" | "paused";
  * browser's context limit.
  */
 export function useWebGLContextRecovery(
-  canvas: HTMLCanvasElement | ReactNull,
+  canvas: HTMLCanvasElement | null,
   gl: THREE.WebGLRenderer | undefined,
 ): { canvasKey: number; status: ContextLossStatus; recreate: () => void } {
   const [canvasKey, setCanvasKey] = useState(0);

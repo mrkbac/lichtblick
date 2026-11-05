@@ -13,11 +13,11 @@ import { DockPanelContext } from "@lichtblick/suite-base/components/DockPanelCon
  */
 export function usePanelDragHandle(
   onDragStart?: () => void,
-): ((element: HTMLElement | ReactNull) => (() => void) | undefined) | undefined {
+): ((element: HTMLElement | null) => (() => void) | undefined) | undefined {
   const dock = useContext(DockPanelContext);
 
   const ref = useCallback(
-    (element: HTMLElement | ReactNull) => {
+    (element: HTMLElement | null) => {
       if (element == undefined || dock == undefined) {
         return undefined;
       }

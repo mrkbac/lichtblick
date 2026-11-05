@@ -259,6 +259,8 @@ export const useCommandRegistry = create<RegistryState>(() => ({
 /**
  * Adds commands to the palette while the calling component is mounted. Memoize `commands`;
  * every new array re-registers.
+ *
+ * @public
  */
 export function useRegisterCommands(key: string, commands: readonly Command[]): void {
   useEffect(() => {

@@ -73,11 +73,11 @@ function Playhead({ start, durationSec }: { start: Time; durationSec: number }) 
   const { classes } = useStyles();
   const currentTime = useMessagePipeline(selectCurrentTime);
   if (currentTime == undefined) {
-    return ReactNull;
+    return null;
   }
   const fraction = (toSec(currentTime) - toSec(start)) / durationSec;
   if (!(fraction >= 0 && fraction <= 1)) {
-    return ReactNull;
+    return null;
   }
   return <div className={classes.playhead} style={{ left: `${fraction * 100}%` }} />;
 }
@@ -89,7 +89,7 @@ export function SeverityTimeline({
 }: {
   items: readonly NormalizedLogMessage[];
   onSeek?: (time: Time) => void;
-}): React.JSX.Element | ReactNull {
+}): React.JSX.Element | null {
   const { classes, cx } = useStyles();
   const { palette } = useTheme();
   const start = useMessagePipeline(selectStartTime);
@@ -136,7 +136,7 @@ export function SeverityTimeline({
   );
 
   if (!start || durationSec <= 0) {
-    return ReactNull;
+    return null;
   }
 
   return (

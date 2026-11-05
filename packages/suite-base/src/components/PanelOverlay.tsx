@@ -129,7 +129,7 @@ export type PanelOverlayProps = {
 };
 
 export const PanelOverlay = forwardRef<HTMLDivElement, PanelOverlayProps>(
-  function PanelOverlay(props, ref): React.JSX.Element | ReactNull {
+  function PanelOverlay(props, ref): React.JSX.Element | null {
     const { actions, variant, highlightMode, dropMessage, open, onClickAway } = props;
     const { classes, cx } = useStyles();
 

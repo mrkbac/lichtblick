@@ -236,7 +236,7 @@ const useStyles = makeStyles()((theme) => ({
 export function NewTabDropTarget({
   group,
   containerApi,
-}: IDockviewHeaderActionsProps): React.JSX.Element | ReactNull {
+}: IDockviewHeaderActionsProps): React.JSX.Element | null {
   const { classes, cx } = useStyles();
   const { t } = useTranslation("panelToolbar");
   const dragActive = usePanelDragActive();
@@ -244,7 +244,7 @@ export function NewTabDropTarget({
   const { onDragOver, onDrop } = useDropIntoGroup(group, containerApi);
 
   if (!dragActive) {
-    return ReactNull;
+    return null;
   }
   return (
     <div

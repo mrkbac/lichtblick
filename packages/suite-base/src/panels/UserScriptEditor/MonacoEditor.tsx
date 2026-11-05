@@ -37,7 +37,7 @@ globalThis.MonacoEnvironment = {
 
 /** Thin wrapper around the locally bundled monaco editor (no CDN loader). */
 export default function MonacoEditor(props: Props): ReactElement {
-  const containerRef = useRef<HTMLDivElement>(ReactNull);
+  const containerRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<Editor>(undefined);
   const latestProps = useLatest(props);
 

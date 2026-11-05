@@ -42,7 +42,7 @@ import { toError } from "@lichtblick/suite-base/util/toError";
 import { migratePanelsState } from "../migrateLayout";
 import { NamespacedLayoutStorage } from "./NamespacedLayoutStorage";
 import WriteThroughLayoutCache from "./WriteThroughLayoutCache";
-import { emitBusyStatus } from "./utils/emitBusyStatus.decorator";
+import { emitBusyStatus } from "./utils/emitBusyStatus";
 
 const log = Logger.getLogger(__filename);
 
@@ -238,7 +238,6 @@ export default class LayoutManager implements ILayoutManager {
     });
   }
 
-  @emitBusyStatus
   public async saveNewLayout({
     name,
     data: unmigratedData,
@@ -295,7 +294,6 @@ export default class LayoutManager implements ILayoutManager {
     return newLayout;
   }
 
-  @emitBusyStatus
   public async updateLayout({
     id,
     name,
@@ -380,7 +378,6 @@ export default class LayoutManager implements ILayoutManager {
     }
   }
 
-  @emitBusyStatus
   public async deleteLayout({ id }: { id: LayoutID }): Promise<void> {
     const localLayout = await this.local.runExclusive(async (local) => await local.get(id));
     if (!localLayout) {
@@ -421,7 +418,6 @@ export default class LayoutManager implements ILayoutManager {
     this.notifyChangeListeners({ type: "delete", layoutId: id });
   }
 
-  @emitBusyStatus
   public async overwriteLayout({ id }: { id: LayoutID }): Promise<Layout> {
     const localLayout = await this.local.runExclusive(async (local) => await local.get(id));
     if (!localLayout) {
@@ -473,7 +469,6 @@ export default class LayoutManager implements ILayoutManager {
     }
   }
 
-  @emitBusyStatus
   public async revertLayout({ id }: { id: LayoutID }): Promise<Layout> {
     const result = await this.local.runExclusive(async (local) => {
       const layout = await local.get(id);
@@ -489,7 +484,6 @@ export default class LayoutManager implements ILayoutManager {
     return result;
   }
 
-  @emitBusyStatus
   public async makePersonalCopy({ id, name }: { id: LayoutID; name: string }): Promise<Layout> {
     const now = new Date().toISOString() as ISO8601Timestamp;
     const result = await this.local.runExclusive(async (local) => {
@@ -672,7 +666,6 @@ export default class LayoutManager implements ILayoutManager {
    * the cached and remote layout lists; it may also involve modifications to the cache, remote
    * storage, or both.
    */
-  @emitBusyStatus
   public async syncWithRemote(abortSignal: AbortSignal): Promise<void> {
     if (this.currentSync) {
       log.debug("Layout sync is already in progress");
@@ -884,3 +877,15 @@ export default class LayoutManager implements ILayoutManager {
     });
   }
 }
+
+// Methods that report progress through isBusy() and the "busychange" event.
+// The wrapper calls the original with the instance as `this`.
+/* eslint-disable @typescript-eslint/unbound-method */
+LayoutManager.prototype.saveNewLayout = emitBusyStatus(LayoutManager.prototype.saveNewLayout);
+LayoutManager.prototype.updateLayout = emitBusyStatus(LayoutManager.prototype.updateLayout);
+LayoutManager.prototype.deleteLayout = emitBusyStatus(LayoutManager.prototype.deleteLayout);
+LayoutManager.prototype.overwriteLayout = emitBusyStatus(LayoutManager.prototype.overwriteLayout);
+LayoutManager.prototype.revertLayout = emitBusyStatus(LayoutManager.prototype.revertLayout);
+LayoutManager.prototype.makePersonalCopy = emitBusyStatus(LayoutManager.prototype.makePersonalCopy);
+LayoutManager.prototype.syncWithRemote = emitBusyStatus(LayoutManager.prototype.syncWithRemote);
+/* eslint-enable @typescript-eslint/unbound-method */

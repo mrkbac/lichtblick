@@ -34,7 +34,7 @@ const selectCurrentLayout = (state: LayoutState) => state.selectedLayout;
  * Observes changes in the current layout and asynchronously pushes them to the
  * layout manager.
  */
-export function CurrentLayoutSyncAdapter(): ReactNull {
+export function CurrentLayoutSyncAdapter(): null {
   const selectedLayout = useCurrentLayoutSelector(selectCurrentLayout);
 
   const layoutManager = useLayoutManager();
@@ -90,5 +90,5 @@ export function CurrentLayoutSyncAdapter(): ReactNull {
     analytics.logEvent(AppEvent.LAYOUT_UPDATE);
   }, [analytics, debouncedUnsavedLayouts, isMounted, layoutManager]);
 
-  return ReactNull;
+  return null;
 }

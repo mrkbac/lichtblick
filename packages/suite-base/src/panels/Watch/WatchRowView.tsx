@@ -96,10 +96,10 @@ export const WatchRowView = memo(function WatchRowViewInner({
   const theme = useTheme();
   const [expanded, setExpanded] = useState(false);
 
-  const rootRef = useRef<HTMLDivElement>(ReactNull);
-  const valueRef = useRef<HTMLSpanElement>(ReactNull);
-  const sparkRef = useRef<HTMLCanvasElement>(ReactNull);
-  const expandedRef = useRef<HTMLPreElement>(ReactNull);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const valueRef = useRef<HTMLSpanElement>(null);
+  const sparkRef = useRef<HTMLCanvasElement>(null);
+  const expandedRef = useRef<HTMLPreElement>(null);
   const hadValue = useRef(false);
 
   const flashColor = alpha(theme.palette.primary.main, 0.2);

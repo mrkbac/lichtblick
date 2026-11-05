@@ -15,7 +15,7 @@ import {
 } from "@fluentui/react-icons";
 import { IconButton } from "@mui/material";
 import * as _ from "lodash-es";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import tinycolor from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 
