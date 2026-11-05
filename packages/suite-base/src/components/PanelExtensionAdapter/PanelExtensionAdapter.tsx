@@ -820,6 +820,7 @@ function PanelExtensionAdapter(
         }
       }) as F;
     const { advertise, unadvertise } = partialExtensionContext;
+    const advertisements = advertisementsRef.current;
 
     log.info(`Init panel ${panelId}`);
     const onUnmount = initPanel({
@@ -846,6 +847,7 @@ function PanelExtensionAdapter(
       isCurrentInstance = false;
       isPanelInitializedRef.current = false;
       panelElement.remove();
+      advertisements.clear();
       getMessagePipelineContext().setSubscriptions(panelId, []);
       getMessagePipelineContext().setPublishers(panelId, []);
     };
