@@ -14,13 +14,10 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { MosaicNode, MosaicPath } from "react-mosaic-component";
-
 import { VariableValue } from "@lichtblick/suite";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
-import { TabLocation } from "@lichtblick/suite-base/types/layouts";
+import { LayoutDropPosition, LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import {
-  MosaicDropTargetPosition,
   PanelConfig,
   PlaybackConfig,
   SavedProps,
@@ -30,7 +27,7 @@ import {
 export type LayoutData = {
   // We store config for each panel in an object keyed by the panel id.
   configById: SavedProps;
-  layout?: MosaicNode<string>;
+  layout?: LayoutNode;
   globalVariables: GlobalVariables;
   playbackConfig: PlaybackConfig;
   userNodes?: UserScripts;
@@ -51,7 +48,7 @@ export type ConfigsPayload = {
   defaultConfig?: PanelConfig;
 };
 export type ChangePanelLayoutPayload = {
-  layout?: MosaicNode<string>;
+  layout?: LayoutNode;
   trimConfigById?: boolean;
 };
 export type SaveConfigsPayload = {
@@ -64,19 +61,11 @@ export type SaveFullConfigPayload = {
   perPanelFunc: PerPanelFunc<PanelConfig>;
 };
 
-export type CreateTabPanelPayload = {
-  idToReplace?: string;
-  layout: MosaicNode<string>;
-  idsToRemove: readonly string[];
-  singleTab: boolean;
-};
-
 export type SAVE_PANEL_CONFIGS = { type: "SAVE_PANEL_CONFIGS"; payload: SaveConfigsPayload };
 export type SAVE_FULL_PANEL_CONFIG = {
   type: "SAVE_FULL_PANEL_CONFIG";
   payload: SaveFullConfigPayload;
 };
-export type CREATE_TAB_PANEL = { type: "CREATE_TAB_PANEL"; payload: CreateTabPanelPayload };
 export type CHANGE_PANEL_LAYOUT = {
   type: "CHANGE_PANEL_LAYOUT";
   payload: ChangePanelLayoutPayload;
@@ -96,78 +85,44 @@ export type SET_STUDIO_NODES = { type: "SET_USER_NODES"; payload: Partial<UserSc
 
 export type SET_PLAYBACK_CONFIG = { type: "SET_PLAYBACK_CONFIG"; payload: Partial<PlaybackConfig> };
 
-export type ClosePanelPayload = {
-  tabId?: string;
-  root: MosaicNode<string>;
-  path: MosaicPath;
-};
+export type ClosePanelPayload = { id: string };
 export type CLOSE_PANEL = { type: "CLOSE_PANEL"; payload: ClosePanelPayload };
 
 export type SplitPanelPayload = {
-  tabId?: string;
   id: string;
   direction: "row" | "column";
-  root: MosaicNode<string>;
-  path: MosaicPath;
   config: PanelConfig;
 };
 export type SPLIT_PANEL = { type: "SPLIT_PANEL"; payload: SplitPanelPayload };
 
 export type SwapPanelPayload = {
-  tabId?: string;
   originalId: string;
   type: string;
-  root: MosaicNode<string>;
-  path: MosaicPath;
   config: PanelConfig;
 };
 export type SWAP_PANEL = { type: "SWAP_PANEL"; payload: SwapPanelPayload };
-
-export type MoveTabPayload = { source: TabLocation; target: TabLocation };
-export type MOVE_TAB = { type: "MOVE_TAB"; payload: MoveTabPayload };
 
 export type AddPanelPayload = {
   /** id must be formatted as returned by `getPanelIdForType`. This is required as an argument
    * rather than automatically generated because the caller may want to use the new id for
    * something, such as selecting the newly added panel. */
   id: string;
-  tabId?: string;
   config?: PanelConfig;
+  /** Where to put the panel. Defaults to the left edge of the layout. */
+  position?: LayoutDropPosition;
+  /** Place the panel relative to the group holding this panel instead of the whole layout. */
+  targetPanelId?: string;
 };
 export type ADD_PANEL = { type: "ADD_PANEL"; payload: AddPanelPayload };
 
-export type DropPanelPayload = {
-  newPanelType: string;
-  destinationPath?: MosaicPath;
-  position?: "top" | "bottom" | "left" | "right";
-  tabId?: string;
-  config?: PanelConfig;
-};
-export type DROP_PANEL = { type: "DROP_PANEL"; payload: DropPanelPayload };
-
-export type StartDragPayload = {
-  path: MosaicPath;
-  sourceTabId?: string;
-};
-export type START_DRAG = { type: "START_DRAG"; payload: StartDragPayload };
-
-export type EndDragPayload = {
-  originalLayout: MosaicNode<string>;
-  originalSavedProps: SavedProps;
-  panelId: string;
-  sourceTabId?: string;
-  targetTabId?: string;
-  position?: MosaicDropTargetPosition;
-  destinationPath?: MosaicPath;
-  ownPath: MosaicPath;
-};
-export type END_DRAG = { type: "END_DRAG"; payload: EndDragPayload };
+/** Stack panels as tabs into the group of `targetPanelId`. */
+export type GroupPanelsPayload = { targetPanelId: string; panelIds: readonly string[] };
+export type GROUP_PANELS = { type: "GROUP_PANELS"; payload: GroupPanelsPayload };
 
 export type PanelsActions =
   | CHANGE_PANEL_LAYOUT
   | SAVE_PANEL_CONFIGS
   | SAVE_FULL_PANEL_CONFIG
-  | CREATE_TAB_PANEL
   | OVERWRITE_GLOBAL_DATA
   | SET_GLOBAL_DATA
   | SET_STUDIO_NODES
@@ -175,8 +130,5 @@ export type PanelsActions =
   | CLOSE_PANEL
   | SPLIT_PANEL
   | SWAP_PANEL
-  | MOVE_TAB
   | ADD_PANEL
-  | DROP_PANEL
-  | START_DRAG
-  | END_DRAG;
+  | GROUP_PANELS;

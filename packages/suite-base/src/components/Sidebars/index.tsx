@@ -5,21 +5,52 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { useCallback, useEffect, useState } from "react";
-import { MosaicNode, MosaicWithoutDragDropContext } from "react-mosaic-component";
+import { useCallback, useRef, useState } from "react";
 
 import ErrorBoundary from "@lichtblick/suite-base/components/ErrorBoundary";
 import { useStyles } from "@lichtblick/suite-base/components/Sidebars/index.style";
-import { LayoutNode, SidebarProps } from "@lichtblick/suite-base/components/Sidebars/types";
-import {
-  clampLeftSidebarPercentage,
-  mosaicLeftSidebarSplitPercentage,
-  mosaicRightSidebarSplitPercentage,
-} from "@lichtblick/suite-base/components/Sidebars/utils";
+import { SidebarProps } from "@lichtblick/suite-base/components/Sidebars/types";
+import { clampLeftSidebarPercentage } from "@lichtblick/suite-base/components/Sidebars/utils";
 import Stack from "@lichtblick/suite-base/components/Stack";
 
-import "react-mosaic-component/react-mosaic-component.css";
 import { NewSidebar } from "./NewSidebar";
+
+const DEFAULT_SIDEBAR_WIDTH_PX = 320;
+/** Neither sidebar may push the panel area below this share of the window. */
+const MIN_CHILDREN_PERCENTAGE = 10;
+
+/**
+ * Drag handle on a sidebar edge. Reports the pointer position as a percentage of the container.
+ */
+function ResizeHandle({
+  onResize,
+  onResizeEnd,
+}: {
+  onResize: (percentage: number) => void;
+  onResizeEnd: () => void;
+}): React.JSX.Element {
+  const { classes } = useStyles();
+  return (
+    <div
+      className={classes.resizeHandle}
+      role="separator"
+      aria-orientation="vertical"
+      onPointerDown={(event) => {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      }}
+      onPointerMove={(event) => {
+        const container = event.currentTarget.parentElement;
+        if (!event.currentTarget.hasPointerCapture(event.pointerId) || container == undefined) {
+          return;
+        }
+        const rect = container.getBoundingClientRect();
+        onResize(((event.clientX - rect.left) / rect.width) * 100);
+      }}
+      // Fires after pointerup and when the browser cancels the drag, so the drag state always ends.
+      onLostPointerCapture={onResizeEnd}
+    />
+  );
+}
 
 export default function Sidebars<
   OldLeftKey extends string,
@@ -39,106 +70,94 @@ export default function Sidebars<
     rightSidebarSize,
     setRightSidebarSize,
   } = props;
-
-  const [mosaicValue, setMosaicValue] = useState<MosaicNode<LayoutNode>>("children");
   const { classes } = useStyles();
 
   const leftSidebarOpen = selectedLeftKey != undefined && leftItems.has(selectedLeftKey);
-
   const rightSidebarOpen = selectedRightKey != undefined && rightItems.has(selectedRightKey);
 
-  useEffect(() => {
-    const leftTargetWidth = 320;
-    const rightTargetWidth = 320;
-    const defaultLeftPercentage = 100 * (leftTargetWidth / window.innerWidth);
-    const defaultRightPercentage = 100 * (1 - rightTargetWidth / window.innerWidth);
+  // Sizes while dragging a handle; saved when the drag ends.
+  const [dragLeft, setDragLeft] = useState<number | undefined>();
+  const [dragRight, setDragRight] = useState<number | undefined>();
+  const latest = useRef({ dragLeft, dragRight });
+  latest.current = { dragLeft, dragRight };
 
-    setMosaicValue((oldValue) => {
-      let node: MosaicNode<LayoutNode> = "children";
-      if (rightSidebarOpen) {
-        node = {
-          direction: "row",
-          first: node,
-          second: "rightbar",
-          splitPercentage:
-            rightSidebarSize ??
-            mosaicRightSidebarSplitPercentage(oldValue) ??
-            defaultRightPercentage,
-        };
-      }
-      if (leftSidebarOpen) {
-        node = {
-          direction: "row",
-          first: "leftbar",
-          second: node,
-          splitPercentage: clampLeftSidebarPercentage(
-            leftSidebarSize ?? mosaicLeftSidebarSplitPercentage(oldValue) ?? defaultLeftPercentage,
-          ),
-        };
-      }
-      return node;
-    });
-  }, [leftSidebarSize, rightSidebarSize, leftSidebarOpen, rightSidebarOpen]);
+  const defaultWidth = (100 * DEFAULT_SIDEBAR_WIDTH_PX) / window.innerWidth;
+  // The left size is the left sidebar's width; the right size is where the right sidebar starts.
+  const leftWidth = clampLeftSidebarPercentage(dragLeft ?? leftSidebarSize ?? defaultWidth);
+  const rightWidth = 100 - (dragRight ?? rightSidebarSize ?? 100 - defaultWidth);
 
-  const onChangeMosaicValue = useCallback(
-    (newValue: null | MosaicNode<LayoutNode>) => {
-      if (newValue != undefined) {
-        setMosaicValue(newValue);
-        setRightSidebarSize(mosaicRightSidebarSplitPercentage(newValue));
-        setLeftSidebarSize(mosaicLeftSidebarSplitPercentage(newValue));
-      }
+  const resizeLeft = useCallback(
+    (percentage: number) => {
+      const maxWidth = 100 - MIN_CHILDREN_PERCENTAGE - (rightSidebarOpen ? rightWidth : 0);
+      setDragLeft(Math.min(clampLeftSidebarPercentage(percentage), maxWidth));
     },
-    [setLeftSidebarSize, setRightSidebarSize],
+    [rightSidebarOpen, rightWidth],
+  );
+  const resizeRight = useCallback(
+    (percentage: number) => {
+      const minStart = MIN_CHILDREN_PERCENTAGE + (leftSidebarOpen ? leftWidth : 0);
+      setDragRight(Math.min(Math.max(percentage, minStart), 100 - MIN_CHILDREN_PERCENTAGE));
+    },
+    [leftSidebarOpen, leftWidth],
   );
 
+  // The children keep their place in the tree so they don't remount when a sidebar opens or closes.
   return (
     <Stack direction="row" fullHeight overflow="hidden" data-testid="sidebars-wrapper">
-      {
-        // By always rendering the mosaic, even if we are only showing children, we can prevent the
-        // children from having to re-mount each time the sidebar is opened/closed.
-      }
-      <div className={classes.mosaicWrapper}>
-        <MosaicWithoutDragDropContext<LayoutNode>
-          className=""
-          value={mosaicValue}
-          onChange={onChangeMosaicValue}
-          renderTile={(id) => {
-            switch (id) {
-              case "children":
-                return <ErrorBoundary>{children as React.JSX.Element}</ErrorBoundary>;
-              case "leftbar":
-                return (
-                  <ErrorBoundary>
-                    <NewSidebar<LeftKey>
-                      anchor="left"
-                      onClose={() => {
-                        onSelectLeftKey(undefined);
-                      }}
-                      items={leftItems}
-                      activeTab={selectedLeftKey}
-                      setActiveTab={onSelectLeftKey}
-                    />
-                  </ErrorBoundary>
-                );
-              case "rightbar":
-                return (
-                  <ErrorBoundary>
-                    <NewSidebar<RightKey>
-                      anchor="right"
-                      onClose={() => {
-                        onSelectRightKey(undefined);
-                      }}
-                      items={rightItems}
-                      activeTab={selectedRightKey}
-                      setActiveTab={onSelectRightKey}
-                    />
-                  </ErrorBoundary>
-                );
+      {leftSidebarOpen && [
+        <div key="leftbar" className={classes.sidebar} style={{ width: `${leftWidth}%` }}>
+          <ErrorBoundary>
+            <NewSidebar<LeftKey>
+              anchor="left"
+              onClose={() => {
+                onSelectLeftKey(undefined);
+              }}
+              items={leftItems}
+              activeTab={selectedLeftKey}
+              setActiveTab={onSelectLeftKey}
+            />
+          </ErrorBoundary>
+        </div>,
+        <ResizeHandle
+          key="lefthandle"
+          onResize={resizeLeft}
+          onResizeEnd={() => {
+            // A click without movement keeps the saved size
+            if (latest.current.dragLeft != undefined) {
+              setLeftSidebarSize(latest.current.dragLeft);
             }
+            setDragLeft(undefined);
           }}
-          resize={{ minimumPaneSizePercentage: clampLeftSidebarPercentage(10) }}
-        />
+        />,
+      ]}
+      <div key="children" className={classes.children}>
+        <ErrorBoundary>{children as React.JSX.Element}</ErrorBoundary>
       </div>
+      {rightSidebarOpen && [
+        <ResizeHandle
+          key="righthandle"
+          onResize={resizeRight}
+          onResizeEnd={() => {
+            if (latest.current.dragRight != undefined) {
+              setRightSidebarSize(latest.current.dragRight);
+            }
+            setDragRight(undefined);
+          }}
+        />,
+        <div key="rightbar" className={classes.sidebar} style={{ width: `${rightWidth}%` }}>
+          <ErrorBoundary>
+            <NewSidebar<RightKey>
+              anchor="right"
+              onClose={() => {
+                onSelectRightKey(undefined);
+              }}
+              items={rightItems}
+              activeTab={selectedRightKey}
+              setActiveTab={onSelectRightKey}
+            />
+          </ErrorBoundary>
+        </div>,
+      ]}
     </Stack>
   );
 }

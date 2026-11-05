@@ -243,7 +243,11 @@ describe("MessagePathInput Component", () => {
       { supportsMathModifiers: true, supportsStreamModifiers: true },
       false,
     ],
-    ["/t.x.@derivative.@length", { supportsMathModifiers: true, supportsStreamModifiers: true }, true],
+    [
+      "/t.x.@derivative.@length",
+      { supportsMathModifiers: true, supportsStreamModifiers: true },
+      true,
+    ],
     ["/t.x.@delta.@integral", { supportsMathModifiers: true, supportsStreamModifiers: true }, true],
   ])("flags %s as invalid with %p: %p", (path, props, invalid) => {
     mockTopics = [{ name: "/t", schemaName: "msg" }];

@@ -296,7 +296,7 @@ function FieldInput({
               },
             });
           }}
-          MenuProps={{ MenuListProps: { dense: true } }}
+          MenuProps={{ slotProps: { list: { dense: true } } }}
         >
           {field.options.map(({ label, value = UNDEFINED_SENTINEL_VALUE, disabled }) => (
             <MenuItem key={value} value={value} disabled={disabled}>

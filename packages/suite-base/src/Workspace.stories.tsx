@@ -20,7 +20,6 @@ import PanelCatalogContext, {
   PanelCatalog,
   PanelInfo,
 } from "@lichtblick/suite-base/context/PanelCatalogContext";
-import Tab from "@lichtblick/suite-base/panels/Tab";
 import AppParametersProvider from "@lichtblick/suite-base/providers/AppParametersProvider";
 import MockCurrentLayoutProvider from "@lichtblick/suite-base/providers/CurrentLayoutProvider/MockCurrentLayoutProvider";
 import EventsProvider from "@lichtblick/suite-base/providers/EventsProvider";
@@ -97,11 +96,7 @@ class MockPanelCatalog implements PanelCatalog {
   };
 
   public getPanels(): readonly PanelInfo[] {
-    return [
-      MockPanelCatalog.#fakePanel,
-      MockPanelCatalog.#droppablePanel,
-      { title: "Tab", type: "Tab", module: async () => ({ default: Tab }) },
-    ];
+    return [MockPanelCatalog.#fakePanel, MockPanelCatalog.#droppablePanel];
   }
   public getPanelByType(type: string): PanelInfo | undefined {
     return this.getPanels().find((panel) => panel.type === type);
@@ -110,7 +105,7 @@ class MockPanelCatalog implements PanelCatalog {
 
 export const Basic: StoryObj<{ initialLayoutState: Partial<LayoutData> }> = {
   args: {
-    initialLayoutState: { layout: "Fake" },
+    initialLayoutState: { layout: { panels: ["Fake"] } },
   },
   render: (args) => {
     const fixture: Fixture = {
@@ -171,17 +166,9 @@ export const DragTopicStart: typeof Basic = {
     initialLayoutState: {
       layout: {
         direction: "column",
-        first: "Fake",
-        second: "Tab!a",
+        children: [{ panels: ["Fake"] }, { panels: ["Droppable"] }],
       },
-      configById: {
-        "Tab!a": {
-          activeTabIdx: 0,
-          tabs: [
-            { title: "Tab A", layout: { direction: "row", first: "Fake", second: "Droppable" } },
-          ],
-        },
-      },
+      configById: {},
     },
   },
   play: async () => {

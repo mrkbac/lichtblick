@@ -69,6 +69,7 @@ export function setAppSetting(
 
   fs.writeFileSync(
     settingsPath,
+    // oxlint-disable-next-line typescript/no-unnecessary-type-assertion -- the package-wide tsconfig (DOM lib) types JSON.stringify as string | undefined; src/main and src/preload tsconfigs do not
     JSON.stringify({ ...existingSettings, [key]: value }, undefined, 2)!,
   );
 }

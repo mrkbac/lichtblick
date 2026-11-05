@@ -3,8 +3,9 @@
 
 import { defaultLayout } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/defaultLayout";
 import { SaveNewLayout } from "@lichtblick/suite-base/services/LayoutManager/LayoutManager";
+import { LAYOUT_VERSION } from "@lichtblick/suite-base/services/migrateLayout/migratePanelsState";
 
-export const MAX_SUPPORTED_LAYOUT_VERSION = 1;
+export const MAX_SUPPORTED_LAYOUT_VERSION = LAYOUT_VERSION;
 
 export const ORG_PERMISSION_PREFIX = "ORG_";
 

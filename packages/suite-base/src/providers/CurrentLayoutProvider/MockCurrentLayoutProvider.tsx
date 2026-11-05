@@ -123,9 +123,6 @@ export default function MockCurrentLayoutProvider({
       updatePanelConfigs: (panelType, perPanelFunc) => {
         performAction({ type: "SAVE_FULL_PANEL_CONFIG", payload: { panelType, perPanelFunc } });
       },
-      createTabPanel: (payload) => {
-        performAction({ type: "CREATE_TAB_PANEL", payload });
-      },
       changePanelLayout: (payload) => {
         performAction({ type: "CHANGE_PANEL_LAYOUT", payload });
       },
@@ -150,20 +147,11 @@ export default function MockCurrentLayoutProvider({
       swapPanel: (payload) => {
         performAction({ type: "SWAP_PANEL", payload });
       },
-      moveTab: (payload) => {
-        performAction({ type: "MOVE_TAB", payload });
-      },
       addPanel: (payload) => {
         performAction({ type: "ADD_PANEL", payload });
       },
-      dropPanel: (payload) => {
-        performAction({ type: "DROP_PANEL", payload });
-      },
-      startDrag: (payload) => {
-        performAction({ type: "START_DRAG", payload });
-      },
-      endDrag: (payload) => {
-        performAction({ type: "END_DRAG", payload });
+      groupPanels: (payload) => {
+        performAction({ type: "GROUP_PANELS", payload });
       },
     }),
     [performAction, setCurrentLayout, updateSharedPanelState],
@@ -174,7 +162,6 @@ export default function MockCurrentLayoutProvider({
     removeLayoutStateListener,
     addSelectedPanelIdsListener: useCallback(() => {}, []),
     removeSelectedPanelIdsListener: useCallback(() => {}, []),
-    mosaicId: "mockMosaicId",
     getSelectedPanelIds: useCallback(() => [], []),
     setSelectedPanelIds: useCallback(() => {
       // no-op

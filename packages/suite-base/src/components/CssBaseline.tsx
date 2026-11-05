@@ -7,14 +7,13 @@
 
 import { alpha } from "@mui/material";
 import { PropsWithChildren } from "react";
-import tinycolor from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 
 import "@lichtblick/suite-base/styles/assets/inter.css";
 import "@lichtblick/suite-base/styles/assets/plex-mono.css";
 import { customTypography } from "@lichtblick/theme";
 
-const useStyles = makeStyles()(({ palette, typography }) => ({
+const useStyles = makeStyles()(({ palette, shape, typography }) => ({
   root: {
     // container styling
     height: "100%",
@@ -84,115 +83,53 @@ const useStyles = makeStyles()(({ palette, typography }) => ({
       textAlign: "inherit",
     },
 
-    // mosaic styling
-    ".mosaic": {
-      ".mosaic-root": {
-        top: 0,
-        left: 0,
-        bottom: 0,
-        right: 0,
+    // Panel layout (dockview). The tab strip only shows for groups with several panels; panels
+    // draw their own toolbar.
+    ".dockview-theme-lichtblick": {
+      colorScheme: palette.mode,
+      "--dv-group-view-background-color": palette.background.paper,
+      "--dv-tabs-and-actions-container-background-color": palette.background.default,
+      "--dv-tabs-and-actions-container-height": "28px",
+      "--dv-tabs-and-actions-container-font-size": "12px",
+      "--dv-tab-font-size": "12px",
+      "--dv-tab-margin": "0",
+      "--dv-tab-divider-color": palette.divider,
+      "--dv-activegroup-visiblepanel-tab-background-color": palette.background.paper,
+      "--dv-activegroup-hiddenpanel-tab-background-color": palette.background.default,
+      "--dv-inactivegroup-visiblepanel-tab-background-color": palette.background.paper,
+      "--dv-inactivegroup-hiddenpanel-tab-background-color": palette.background.default,
+      "--dv-activegroup-visiblepanel-tab-color": palette.text.primary,
+      "--dv-activegroup-hiddenpanel-tab-color": palette.text.secondary,
+      "--dv-inactivegroup-visiblepanel-tab-color": palette.text.primary,
+      "--dv-inactivegroup-hiddenpanel-tab-color": palette.text.secondary,
+      "--dv-separator-border": palette.divider,
+      "--dv-paneview-header-border-color": palette.divider,
+      "--dv-sash-color": "transparent",
+      "--dv-active-sash-color": palette.primary.main,
+      "--dv-active-sash-transition-duration": "0.1s",
+      "--dv-active-sash-transition-delay": "0.2s",
+      "--dv-drag-over-background-color": alpha(palette.primary.main, 0.2),
+      "--dv-drag-over-border-color": palette.primary.main,
+      "--dv-edge-dock-indicator-color": palette.primary.main,
+      "--dv-icon-hover-background-color": palette.action.hover,
+      "--dv-tabs-container-scrollbar-color": palette.action.disabled,
+      "--dv-scrollbar-background-color": palette.action.disabled,
+      "--dv-overlay-z-index": 999,
+      "--dv-border-radius": "0px",
+      "--dv-tab-border-radius": "0px",
+      "--dv-sash-border-radius": "0px",
+      "--dv-dropdown-border-radius": `${shape.borderRadius}px`,
+      "--dv-spacing-padding": "0px",
+      "--dv-floating-border": `1px solid ${palette.divider}`,
+      "--dv-floating-group-border": "none",
+      "--dv-drag-over-border": "none",
+      "--dv-transition-duration": "0.1s",
 
-        ".drop-target-container .drop-target": {
-          backgroundColor: palette.action.hover,
-          border: `2px solid ${alpha(palette.divider, 0.5)}`,
-        },
-        ".drop-target-container .drop-target-hover": {
-          opacity: 1,
-        },
-      },
-      ".mosaic-tile": {
-        margin: 0,
-      },
-      ".mosaic-tile:first-of-type": {
-        // make room for splitters - unfortunately this means the background color will show
-        // through even if the tile has its own background color set
-        gap: 1,
-      },
-      // The last tile does not need a bottom margin
-      ".mosaic-tile:last-child": {
-        marginBottom: 0,
-      },
-      // If there is only one tile in the container there are no splitters and no margin is needed
-      ".mosaic-tile:only-child": {
-        margin: 0,
-      },
-      // tile immediately after a row splitter needs 1px margin so the splitter doesn't overlap the tile content
-      ".-row + .mosaic-tile": {
-        gap: 1,
-      },
-      // tile immediately after a column splitter needs 1px margin so the splitter doesn't overlap the tile content
-      ".-column + .mosaic-tile": {
-        gap: 1,
-      },
-      ".mosaic-window": {
-        boxShadow: "none",
-        width: "100%",
-
-        // we use custom toolbars
-        ".mosaic-window-toolbar": {
-          display: "none",
-        },
-        ".mosaic-window-body": {
-          flex: "1 1 auto",
-          display: "flex",
-          background: "unset",
-          zIndex: "unset",
-        },
-      },
-      ".mosaic-preview": {
-        maxHeight: "none",
-
-        // we use custom toolbars
-        ".mosaic-window-toolbar": {
-          display: "none",
-        },
-        ".mosaic-window-body": {
-          flex: "1 1 auto",
-          display: "flex",
-          background: "unset",
-          zIndex: "unset",
-        },
-      },
-      ".mosaic-window-toolbar": {
-        display: "none",
-      },
-      ".mosaic-window-body": {
-        flex: "1 1 auto",
+      // Panels fill their group, like they did in the mosaic window body.
+      ".dv-react-part": {
         display: "flex",
-        background: "unset",
-        zIndex: "unset",
-      },
-      ".mosaic-window-title": {
-        fontSize: 12,
-        lineHeight: "30px",
-        paddingLeft: 5,
-      },
-      ".mosaic-split": {
-        background: "none !important",
-        zIndex: 99,
-
-        ".mosaic-split-line": {
-          boxShadow: `0 0 0 1px ${palette.divider}`,
-        },
-        "&:hover .mosaic-split-line": {
-          boxShadow: `0 0 0 1px ${
-            palette.mode === "dark"
-              ? tinycolor(palette.divider).lighten().toHexString()
-              : tinycolor(palette.divider).darken().toHexString()
-          }`,
-        },
-      },
-      "&.borderless": {
-        ".mosaic-split": {
-          opacity: 0,
-
-          "&:hover": {
-            opacity: 1,
-          },
-        },
-        ".mosaic-tile": {
-          margin: 0,
-        },
+        width: "100%",
+        height: "100%",
       },
     },
   },

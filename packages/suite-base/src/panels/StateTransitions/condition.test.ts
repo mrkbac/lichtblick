@@ -28,20 +28,12 @@ describe("parseCondition", () => {
     });
   });
 
-  it.each([
-    undefined,
-    "",
-    "2",
-    "=> 2",
-    "== ",
-    "~ 1",
-    '== "ERROR',
-    "> 1 2",
-    "== a > b",
-    "== 'x\"",
-  ])("rejects %s", (input) => {
-    expect(parseCondition(input)).toBeUndefined();
-  });
+  it.each([undefined, "", "2", "=> 2", "== ", "~ 1", '== "ERROR', "> 1 2", "== a > b", "== 'x\""])(
+    "rejects %s",
+    (input) => {
+      expect(parseCondition(input)).toBeUndefined();
+    },
+  );
 });
 
 describe("conditionMatches", () => {

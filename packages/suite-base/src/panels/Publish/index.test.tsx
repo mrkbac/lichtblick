@@ -46,7 +46,9 @@ vi.mock("@lichtblick/suite-base/hooks/useCallbackWithToast", () => ({
 }));
 
 vi.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@lichtblick/suite-base/providers/PanelStateContextProvider")>()),
+  ...(await importOriginal<
+    typeof import("@lichtblick/suite-base/providers/PanelStateContextProvider")
+  >()),
   usePanelSettingsTreeUpdate: vi.fn(),
   useDefaultPanelTitle: vi.fn(() => ["Publish", vi.fn()]),
 }));

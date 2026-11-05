@@ -11,6 +11,7 @@ export const MuiTextField: OverrideComponentReturn<"MuiTextField"> = {
   defaultProps: {
     variant: "outlined",
     color: "primary",
+    // oxlint-disable-next-line typescript/no-deprecated -- MUI deprecated theme default prop; migrate to slots/slotProps separately
     FormHelperTextProps: {
       variant: "standard",
     },

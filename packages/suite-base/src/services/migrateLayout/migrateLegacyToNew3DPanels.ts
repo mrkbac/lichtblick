@@ -11,11 +11,8 @@ import { filterMap } from "@lichtblick/den/collection";
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
 import type { RendererConfig } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
 import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRender/camera";
-import {
-  getAllPanelIds,
-  getPanelIdForType,
-  getPanelTypeFromId,
-} from "@lichtblick/suite-base/util/layout";
+import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
+import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
 
 import { replacePanel } from "./replacePanel";
 
@@ -102,7 +99,7 @@ export function migrateLegacyToNew3DPanels(layoutData: LayoutData): LayoutData {
     return layoutData;
   }
 
-  const legacy3DPanels = getAllPanelIds(layoutData.layout, layoutData.configById).filter(
+  const legacy3DPanels = getPanelIds(layoutData.layout).filter(
     (id) => getPanelTypeFromId(id) === "3D Panel",
   );
   let newState = layoutData;

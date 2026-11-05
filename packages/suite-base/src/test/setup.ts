@@ -42,8 +42,9 @@ class ResizeObserverMock {
 
   public disconnect() {}
 
-  public observe() {
+  public observe(target: Element) {
     const entry = {
+      target,
       contentRect: { width: 150, height: 150 },
     };
     this.#callback([entry as ResizeObserverEntry], this);

@@ -9,7 +9,6 @@ import * as _ from "lodash-es";
 import { useSnackbar } from "notistack";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { getNodeAtPath } from "react-mosaic-component";
 import { useAsync, useAsyncFn, useMountedState } from "react-use";
 import { shallow } from "zustand/shallow";
 
@@ -27,14 +26,10 @@ import {
   AddPanelPayload,
   ChangePanelLayoutPayload,
   ClosePanelPayload,
-  CreateTabPanelPayload,
-  DropPanelPayload,
-  EndDragPayload,
-  MoveTabPayload,
+  GroupPanelsPayload,
   PanelsActions,
   SaveConfigsPayload,
   SplitPanelPayload,
-  StartDragPayload,
   SwapPanelPayload,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
@@ -54,10 +49,10 @@ import { findFavoriteLayout } from "@lichtblick/suite-base/providers/CurrentLayo
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { LayoutLoader } from "@lichtblick/suite-base/services/ILayoutLoader";
 import { LayoutManagerEventTypes } from "@lichtblick/suite-base/services/ILayoutManager";
+import { migratePanelsState } from "@lichtblick/suite-base/services/migrateLayout";
 import { PanelConfig, PlaybackConfig, UserScripts } from "@lichtblick/suite-base/types/panels";
 import { windowAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
-import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { IncompatibleLayoutVersionAlert } from "./IncompatibleLayoutVersionAlert";
@@ -83,8 +78,6 @@ export default function CurrentLayoutProvider({
   const { t } = useTranslation("general");
 
   const appParameters = useAppParameters();
-
-  const [mosaicId] = useState(() => randomUUID());
 
   const layoutStateListeners = useRef(new Set<(_: LayoutState) => void>());
   const addLayoutStateListener = useCallback((listener: (_: LayoutState) => void) => {
@@ -169,7 +162,7 @@ export default function CurrentLayoutProvider({
             selectedLayout: {
               loading: false,
               id: layout.id,
-              data: layout.working?.data ?? layout.baseline.data,
+              data: migratePanelsState(layout.working?.data ?? layout.baseline.data),
               name: layout.name,
             },
           });
@@ -249,7 +242,7 @@ export default function CurrentLayoutProvider({
           selectedLayout: {
             loading: false,
             id: updatedLayout.id,
-            data: updatedLayout.working?.data ?? updatedLayout.baseline.data,
+            data: migratePanelsState(updatedLayout.working?.data ?? updatedLayout.baseline.data),
             name: updatedLayout.name,
           },
         });
@@ -402,11 +395,6 @@ export default function CurrentLayoutProvider({
       ) => {
         performAction({ type: "SAVE_FULL_PANEL_CONFIG", payload: { panelType, perPanelFunc } });
       },
-      createTabPanel: (payload: CreateTabPanelPayload) => {
-        performAction({ type: "CREATE_TAB_PANEL", payload });
-        setSelectedPanelIds([]);
-        analytics.logEvent(AppEvent.PANEL_ADD, { type: "Tab" });
-      },
       changePanelLayout: (payload: ChangePanelLayoutPayload) => {
         performAction({ type: "CHANGE_PANEL_LAYOUT", payload });
       },
@@ -424,15 +412,9 @@ export default function CurrentLayoutProvider({
       },
       closePanel: (payload: ClosePanelPayload) => {
         performAction({ type: "CLOSE_PANEL", payload });
-
-        const closedId = getNodeAtPath(payload.root, payload.path);
         // Deselect the removed panel
-        setSelectedPanelIds((ids) => ids.filter((id) => id !== closedId));
-
-        analytics.logEvent(
-          AppEvent.PANEL_DELETE,
-          typeof closedId === "string" ? { type: getPanelTypeFromId(closedId) } : undefined,
-        );
+        setSelectedPanelIds((ids) => ids.filter((id) => id !== payload.id));
+        analytics.logEvent(AppEvent.PANEL_DELETE, { type: getPanelTypeFromId(payload.id) });
       },
       splitPanel: (payload: SplitPanelPayload) => {
         performAction({ type: "SPLIT_PANEL", payload });
@@ -458,25 +440,13 @@ export default function CurrentLayoutProvider({
           action: "swap",
         });
       },
-      moveTab: (payload: MoveTabPayload) => {
-        performAction({ type: "MOVE_TAB", payload });
-      },
       addPanel: (payload: AddPanelPayload) => {
         performAction({ type: "ADD_PANEL", payload });
         analytics.logEvent(AppEvent.PANEL_ADD, { type: getPanelTypeFromId(payload.id) });
       },
-      dropPanel: (payload: DropPanelPayload) => {
-        performAction({ type: "DROP_PANEL", payload });
-        analytics.logEvent(AppEvent.PANEL_ADD, {
-          type: payload.newPanelType,
-          action: "drop",
-        });
-      },
-      startDrag: (payload: StartDragPayload) => {
-        performAction({ type: "START_DRAG", payload });
-      },
-      endDrag: (payload: EndDragPayload) => {
-        performAction({ type: "END_DRAG", payload });
+      groupPanels: (payload: GroupPanelsPayload) => {
+        performAction({ type: "GROUP_PANELS", payload });
+        setSelectedPanelIds([]);
       },
     }),
     [analytics, performAction, setSelectedLayoutId, setSelectedPanelIds, updateSharedPanelState],
@@ -487,7 +457,6 @@ export default function CurrentLayoutProvider({
     removeLayoutStateListener,
     addSelectedPanelIdsListener,
     removeSelectedPanelIdsListener,
-    mosaicId,
     getSelectedPanelIds,
     setSelectedPanelIds,
     actions,

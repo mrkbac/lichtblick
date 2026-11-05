@@ -347,13 +347,11 @@ export class ImageMode
     // ImageRenderable for a short timeout. When a new image message arrives, we cancel the timeout,
     // so the old image will continue displaying until the new one has been decoded.
     this.imageRenderable?.resetVideoForSeek();
-    if (this.#removeImageTimeout == undefined) {
-      this.#removeImageTimeout = setTimeout(() => {
-        this.#removeImageTimeout = undefined;
-        this.#removeImageRenderable();
-        this.renderer.queueAnimationFrame();
-      }, REMOVE_IMAGE_TIMEOUT_MS);
-    }
+    this.#removeImageTimeout ??= setTimeout(() => {
+      this.#removeImageTimeout = undefined;
+      this.#removeImageRenderable();
+      this.renderer.queueAnimationFrame();
+    }, REMOVE_IMAGE_TIMEOUT_MS);
     // fallback camera model shouldn't ever be stale so we don't need to clear it
     if (!this.#fallbackCameraModelActive()) {
       this.#clearCameraModel();

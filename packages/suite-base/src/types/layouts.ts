@@ -14,21 +14,27 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { MosaicNode } from "react-mosaic-component";
-
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 
-export type TabConfig = { title: string; layout?: MosaicNode<string> };
-
-export type TabPanelConfig = {
-  activeTabIdx: number;
-  tabs: Array<TabConfig>;
+/** A stack of panels shown as tabs. With one panel the tab strip is hidden. */
+export type LayoutGroup = {
+  panels: string[];
+  /** Panel id of the visible tab, defaults to the first panel. */
+  active?: string;
 };
 
-export type TabLocation = {
-  panelId: string;
-  tabIndex?: number;
+/** Children laid out side by side ("row") or on top of each other ("column"). */
+export type LayoutSplit = {
+  direction: "row" | "column";
+  children: LayoutNode[];
+  /** Relative size of each child in percent. Missing means equal sizes. */
+  sizes?: number[];
 };
+
+export type LayoutNode = LayoutGroup | LayoutSplit;
+
+/** Where a panel goes relative to a group, or relative to the whole layout without a target. */
+export type LayoutDropPosition = "left" | "right" | "top" | "bottom" | "center";
 
 /**
  * Metadata describing a layout.

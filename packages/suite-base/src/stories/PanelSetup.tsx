@@ -18,10 +18,7 @@ import { useTheme } from "@mui/material";
 import { TFunction } from "i18next";
 import * as _ from "lodash-es";
 import { ComponentProps, ReactNode, useLayoutEffect, useMemo, useState } from "react";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import { useTranslation } from "react-i18next";
-import { Mosaic, MosaicNode, MosaicWindow } from "react-mosaic-component";
 
 import { useShallowMemo } from "@lichtblick/hooks";
 import {
@@ -65,11 +62,8 @@ import TimelineInteractionStateProvider from "@lichtblick/suite-base/providers/T
 import WorkspaceContextProvider from "@lichtblick/suite-base/providers/WorkspaceContextProvider";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
+import { LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import { SavedProps, UserScripts } from "@lichtblick/suite-base/types/panels";
-
-import "react-mosaic-component/react-mosaic-component.css";
-
-const NO_TOOLBAR_CONTROLS = <></>;
 
 function noop() {}
 
@@ -89,7 +83,7 @@ export type Fixture = {
   progress?: Progress;
   datatypes?: RosDatatypes;
   globalVariables?: GlobalVariables;
-  layout?: MosaicNode<string>;
+  layout?: LayoutNode;
   userScripts?: UserScripts;
   userScriptDiagnostics?: { [scriptId: string]: readonly Diagnostic[] };
   userScriptLogs?: { [scriptId: string]: readonly UserScriptLog[] };
@@ -111,7 +105,6 @@ type UnconnectedProps = {
   includeSettings?: boolean;
   settingsWidth?: number;
   panelCatalog?: PanelCatalog;
-  omitDragAndDrop?: boolean;
   pauseFrame?: ComponentProps<typeof MockMessagePipelineProvider>["pauseFrame"];
   style?: React.CSSProperties;
   // Needed for functionality not in React.CSSProperties, like child selectors: "& > *"
@@ -137,29 +130,6 @@ export function triggerWheel(target: HTMLElement, deltaX: number): void {
   const event = new WheelEvent("wheel", { deltaX, bubbles: true, cancelable: true });
   target.dispatchEvent(event);
 }
-
-const MosaicWrapper = ({ children }: { children: React.ReactNode }): React.JSX.Element => {
-  return (
-    <DndProvider backend={HTML5Backend}>
-      <Mosaic
-        className="mosaic-foxglove-theme" // prevent the default mosaic theme from being applied
-        initialValue="mock"
-        renderTile={(_id, path) => {
-          return (
-            <MosaicWindow
-              title=""
-              path={path}
-              renderPreview={() => <div />}
-              toolbarControls={NO_TOOLBAR_CONTROLS}
-            >
-              {children}
-            </MosaicWindow>
-          );
-        }}
-      />
-    </DndProvider>
-  );
-};
 
 const EmptyTree: SettingsTree = {
   actionHandler: () => undefined,
@@ -349,8 +319,7 @@ function UnconnectedPanelSetup(props: UnconnectedProps): React.JSX.Element | nul
     return null;
   }
 
-  const { omitDragAndDrop = false } = props;
-  return omitDragAndDrop ? inner : <MosaicWrapper>{inner}</MosaicWrapper>;
+  return inner;
 }
 
 type Props = UnconnectedProps & {

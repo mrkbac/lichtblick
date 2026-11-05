@@ -13,20 +13,17 @@ import {
 } from "@lichtblick/suite-base/context/PanelStateContext";
 
 /**
- * Wrapper component used to force-remount the panel when key properties like the tabId
- * or settings sequence number change.
+ * Wrapper component used to force-remount the panel when its settings sequence number changes.
  */
 export function PanelRemounter({
   children,
   id,
-  tabId,
 }: {
   children: ReactNode;
   id: string;
-  tabId: undefined | string;
 }): React.JSX.Element {
   const selector = useCallback((store: PanelStateStore) => store.sequenceNumbers[id] ?? 0, [id]);
   const sequenceNumber = usePanelStateStore(selector);
 
-  return <Fragment key={`${id}${tabId ?? ""}${sequenceNumber}`}>{children}</Fragment>;
+  return <Fragment key={`${id}${sequenceNumber}`}>{children}</Fragment>;
 }

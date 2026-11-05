@@ -14,8 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import { StoryObj } from "storybook-react-rsbuild";
 
 import { SettingsTreeNodes } from "@lichtblick/suite";
@@ -31,11 +29,9 @@ export default {
   decorators: [
     (Story: React.ComponentType): React.JSX.Element => (
       <div style={{ margin: 30, height: 400 }}>
-        <DndProvider backend={HTML5Backend}>
-          <MockCurrentLayoutProvider>
-            <Story />
-          </MockCurrentLayoutProvider>
-        </DndProvider>
+        <MockCurrentLayoutProvider>
+          <Story />
+        </MockCurrentLayoutProvider>
       </div>
     ),
   ],
@@ -54,13 +50,18 @@ class MockPanelCatalog implements PanelCatalog {
   }
 }
 
-const fixture = { topics: [], datatypes: new Map(), frame: {}, layout: "Sample1!abc" };
+const fixture = {
+  topics: [],
+  datatypes: new Map(),
+  frame: {},
+  layout: { panels: ["Sample1!abc"] },
+};
 const selectedPanelIds: readonly string[] = ["Sample1!abc"];
 
 export const NoPanelSelected: StoryObj = {
   render: () => {
     return (
-      <PanelSetup panelCatalog={new MockPanelCatalog()} fixture={fixture} omitDragAndDrop>
+      <PanelSetup panelCatalog={new MockPanelCatalog()} fixture={fixture}>
         <PanelSettings />
       </PanelSetup>
     );
@@ -73,7 +74,6 @@ export const PanelSelected: StoryObj = {
       <PanelSetup
         panelCatalog={new MockPanelCatalog()}
         fixture={{ ...fixture, savedProps: { "Sample1!abc": { someKey: "someVal" } } }}
-        omitDragAndDrop
       >
         <PanelSettings selectedPanelIdsForTests={selectedPanelIds} />
       </PanelSetup>
@@ -112,7 +112,6 @@ export const PanelSelectedWithAppBar: StoryObj = {
             },
           },
         }}
-        omitDragAndDrop
       >
         <PanelSettings selectedPanelIdsForTests={selectedPanelIds} />
       </PanelSetup>
@@ -123,7 +122,7 @@ export const PanelSelectedWithAppBar: StoryObj = {
 export const PanelLoading: StoryObj = {
   render: () => {
     return (
-      <PanelSetup panelCatalog={new MockPanelCatalog()} fixture={fixture} omitDragAndDrop>
+      <PanelSetup panelCatalog={new MockPanelCatalog()} fixture={fixture}>
         <PanelSettings selectedPanelIdsForTests={selectedPanelIds} />
       </PanelSetup>
     );

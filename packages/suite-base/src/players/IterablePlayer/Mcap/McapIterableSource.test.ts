@@ -78,7 +78,7 @@ async function createMcapFile({
   }
 
   await writer.end();
-  return new Blob([tempBuffer.get().slice()]) as unknown as globalThis.Blob;
+  return new Blob([tempBuffer.get().slice()]);
 }
 
 describe("McapIterableSource", () => {

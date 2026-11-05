@@ -8,8 +8,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import "@testing-library/jest-dom";
-import { composeStories } from "storybook-react-rsbuild";
 import { fireEvent, render, screen } from "@testing-library/react";
+import { composeStories } from "storybook-react-rsbuild";
 
 import * as stories from "./index.stories";
 

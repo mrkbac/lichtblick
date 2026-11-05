@@ -5,18 +5,18 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-// This file is not used in the app, but exists to test that our eslint config catches the code we want it to catch.
-// Because we run eslint with --report-unused-disable-directives, any unused comments will be errors.
+// This file is not used in the app, but exists to test that our oxlint config catches the code we want it to catch.
+// Because we run oxlint with --report-unused-disable-directives, any unused comments will be errors.
 
 /* eslint-disable @typescript-eslint/no-unused-expressions */
 
 ({
-  // eslint-disable-next-line no-restricted-syntax
+  // eslint-disable-next-line @lichtblick/no-getters-setters
   get x() {
     return 1;
   },
   // @ts-expect-error unused variable
-  // eslint-disable-next-line no-restricted-syntax
+  // eslint-disable-next-line @lichtblick/no-getters-setters
   set x(newX) {},
 });
 

@@ -31,7 +31,6 @@ import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 type DummyConfig = { someString: string };
-// eslint-disable-next-line react/no-unused-prop-types
 type DummyProps = { config: DummyConfig; saveConfig: (arg0: Partial<DummyConfig>) => void };
 
 function getDummyPanel(renderFn: Mock) {

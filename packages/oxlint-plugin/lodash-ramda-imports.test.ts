@@ -5,29 +5,17 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { RuleTester } from "@typescript-eslint/rule-tester";
-import { TSESLint } from "@typescript-eslint/utils";
-import path from "path";
+import { RuleTester } from "oxlint/plugins-dev";
+import { describe, it } from "vitest";
 
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const rule = require("./lodash-ramda-imports") as TSESLint.RuleModule<
-  "useDifferentPackage" | "useNamespaceImport"
->;
+import plugin from "./index";
 
-const ruleTester = new RuleTester({
-  languageOptions: {
-    parserOptions: {
-      ecmaVersion: 2020,
-      tsconfigRootDir: path.join(__dirname, "fixture"),
-      project: "tsconfig.json",
-    },
-  },
-  linterOptions: {
-    reportUnusedDisableDirectives: true,
-  },
-});
+RuleTester.describe = describe;
+RuleTester.it = it;
 
-ruleTester.run("lodash-ramda-imports", rule, {
+const ruleTester = new RuleTester({ languageOptions: { parserOptions: { lang: "ts" } } });
+
+ruleTester.run("lodash-ramda-imports", plugin.rules["lodash-ramda-imports"], {
   valid: [
     /* ts */ `
     import * as _ from "lodash-es";

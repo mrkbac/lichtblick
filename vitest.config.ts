@@ -107,7 +107,7 @@ export default defineConfig({
         root: "packages/hooks",
         include: ["src/**/*.test.{ts,tsx}"],
       }),
-      ...["den", "eslint-plugin-suite"].map((name) =>
+      ...["den", "oxlint-plugin"].map((name) =>
         project(name, { root: `packages/${name}`, include: ["**/*.test.{ts,tsx}"] }),
       ),
       ...["mcap-support", "message-path"].map((name) =>

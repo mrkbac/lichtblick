@@ -43,7 +43,7 @@ const baseFixture: Fixture = {
   topics: [],
   datatypes: new Map(),
   frame: {},
-  layout: panelId,
+  layout: { panels: [panelId] },
 };
 
 function setup(selectedPanelIdsForTests: readonly string[], fixture: Fixture = baseFixture) {
