@@ -47,25 +47,25 @@ jobs:
 Step order:
 
 1. Check out the repository on `main`.
-2. Set up Node.js 24 and enable Yarn via Corepack.
-3. Install dependencies with `yarn install --immutable`.
+2. Set up Node.js 24 and install pnpm.
+3. Install dependencies with `pnpm install --frozen-lockfile`.
 4. Determine the bump type from the source branch name:
    - `hotfix/*` -> `patch`
    - `release/major(/.*)?` -> `major`
    - `release/minor(/.*)?` -> `minor`
    - anything else -> fail
-5. Bump the root version with `yarn version <type>`.
-6. Bump `packages/suite/package.json` with `yarn version <type>`.
+5. Bump the root version with `pnpm version <type>`.
+6. Bump `packages/suite/package.json` with `pnpm version <type>`.
 7. Read the new version from the root `package.json`.
 8. Update `sonar-project.properties` so `sonar.projectVersion` matches the new version.
 9. Commit the version files and tag `main` as `v${version}`, then push `main` and tags.
 10. Build the production desktop and web bundles:
-    - `yarn desktop:build:prod`
-    - `yarn web:build:prod`
+    - `pnpm desktop:build:prod`
+    - `pnpm web:build:prod`
 11. Package release binaries for Windows, Linux, and macOS:
-    - `yarn package:win`
-    - `yarn package:linux`
-    - `yarn package:darwin`
+    - `pnpm package:win`
+    - `pnpm package:linux`
+    - `pnpm package:darwin`
 12. Create the web static tarball at `dist/lichtblick-web.tar.gz`.
 13. Create the GitHub Release with `ncipollo/release-action@v1`.
 14. Trigger `sonarqube.yml` on `main` via `gh workflow run`.
@@ -94,11 +94,11 @@ This workflow fans out into two parallel jobs:
 
 ### `npm`
 
-> Yarn (per the `packageManager` field in `package.json`, currently 4.17.0) via Corepack remains this repo's dependency manager everywhere else; `npm publish` here is an intentional, pipeline-only exception used solely to publish the built package to the npm registry.
+> pnpm (per the `packageManager` field in `package.json`) remains this repo's dependency manager everywhere else; `npm publish` here is an intentional, pipeline-only exception used solely to publish the built package to the npm registry.
 
 1. Check out the release tag (`github.event.release.tag_name`).
 2. Set up Node.js 24 and point npm at `https://registry.npmjs.org`.
-3. Enable Yarn and run `yarn install --immutable`.
+3. Install pnpm and run `pnpm install --frozen-lockfile`.
 4. Publish `./packages/suite` to npm with `npm publish ./packages/suite`.
 
 ### `docker`

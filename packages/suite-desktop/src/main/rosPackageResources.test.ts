@@ -8,12 +8,33 @@
 import path from "path";
 import type { Mock } from "vitest";
 
-import { findRosPackage, rosPackageNameAtPath } from "./rosPackageResources";
+import {
+  findRosPackage,
+  registerRosPackageProtocolSchemes,
+  rosPackageNameAtPath,
+} from "./rosPackageResources";
+
+const { registerSchemesAsPrivileged } = vi.hoisted(() => ({
+  registerSchemesAsPrivileged: vi.fn(),
+}));
+vi.mock("electron", () => ({ protocol: { registerSchemesAsPrivileged }, net: {} }));
 
 const FIXTURES_ROOT = path.join(__dirname, "./fixtures");
 const PACKAGES_ROOT = path.join(FIXTURES_ROOT, "./packages");
 
 describe("rosPackageResources", () => {
+  describe("registerRosPackageProtocolSchemes", () => {
+    it("allows cross-origin fetch from the file:// renderer", () => {
+      registerRosPackageProtocolSchemes();
+      expect(registerSchemesAsPrivileged).toHaveBeenCalledWith(
+        ["package", "x-foxglove-converted-tiff"].map((scheme) => ({
+          scheme,
+          privileges: { supportFetchAPI: true, corsEnabled: true },
+        })),
+      );
+    });
+  });
+
   describe("rosPackageNameAtPath", () => {
     it("should read package name from package.xml file at path", async () => {
       const name = await rosPackageNameAtPath(path.join(PACKAGES_ROOT, "./foo"));

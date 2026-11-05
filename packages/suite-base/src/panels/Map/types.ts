@@ -20,6 +20,7 @@ export enum NavSatFixPositionCovarianceType {
 }
 
 export enum NavSatFixStatus {
+  STATUS_UNKNOWN = -2, // ROS 2 Jazzy+: status not set (the default)
   STATUS_NO_FIX = -1, // unable to fix position
   STATUS_FIX = 0, // unaugmented fix
   STATUS_SBAS_FIX = 1, // with satellite-based augmentation

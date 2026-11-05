@@ -72,8 +72,8 @@ import {
 } from "./layers";
 import { forgetSavedSources, loadSavedSources, rememberSource } from "./savedSources";
 import {
+  fixLabel,
   GeoJsonMessage,
-  hasFix,
   isGeoJSONMessage,
   isGeoJSONSchema,
   isSupportedSchema,
@@ -118,7 +118,7 @@ function popupContent(hit: Hit): HTMLElement {
     if (altitude != undefined && isFinite(altitude)) {
       line(`alt ${altitude.toFixed(2)} m`);
     }
-    line(hasFix(hit.message) ? "fix" : "no fix");
+    line(fixLabel(hit.message));
     if (hit.value != undefined) {
       line(hit.value, { bold: true });
     }

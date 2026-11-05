@@ -17,7 +17,6 @@
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
     "electron": "45.1.0",
-    "html-webpack-plugin": "5.6.0",
     "mathjs": "15.2.0",
     "react": "19.3.1",
     "react-dom": "19.3.1",

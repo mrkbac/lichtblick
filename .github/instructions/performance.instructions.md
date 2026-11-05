@@ -85,5 +85,5 @@ These rules apply to ALL TypeScript and TSX code in the Lichtblick monorepo. Vio
 - Use React DevTools Profiler to identify components with high render frequency or cost
 - Watch for GC pressure spikes in the Memory panel
 - Validate with `performance.now()` for timing-critical paths
-- Check bundle impact with `yarn build:packages` — avoid unnecessary imports
+- Check bundle impact with `pnpm build:packages` — avoid unnecessary imports
 - Measure before you optimize: if profiling shows no measurable issue, don't add complexity

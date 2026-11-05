@@ -41,6 +41,7 @@ import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { useDefaultPanelTitle } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { ros2CommonDatatypes } from "@lichtblick/suite-base/util/ros2CommonDatatypes";
 
 import { defaultConfig, usePublishPanelSettings } from "./settings";
 import { PublishConfig } from "./types";
@@ -98,11 +99,11 @@ function Publish(props: Props) {
   const [lastPublished, setLastPublished] = useState<Date>();
 
   const datatypes = useMemo(() => {
-    // Add common ROS datatypes, depending on the data source profile. Humble definitions match
-    // all current ROS 2 distributions.
+    // Add common ROS datatypes, depending on the data source profile. The distro is unknown here;
+    // the player's own datatypes (distro-specific for a ROS 2 WebSocket connection) take precedence.
     const commonTypes: Record<string, MessageDefinition> | undefined = {
       ros1: CommonRosTypes.ros1,
-      ros2: CommonRosTypes.ros2humble,
+      ros2: ros2CommonDatatypes(),
     }[dataSourceProfile ?? ""];
 
     if (commonTypes == undefined) {

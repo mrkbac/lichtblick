@@ -115,6 +115,6 @@ player.setSubscriptions(activeTopics); // Player only iterates these
 ## Benchmarking
 
 - Project benchmark suite: `benchmark/` directory
-- Run: `cd benchmark && yarn start`
+- Run: `cd benchmark && pnpm start`
 - Measures: message throughput, deserialization speed, render time
 - Use for before/after comparison when optimizing
