@@ -16,7 +16,6 @@ export type MeasureModeToolbarButtonProps = {
 };
 
 // Shared by Plot and StateTransitions so their delta measure mode toggle stays in sync.
-// eslint-disable-next-line @typescript-eslint/no-shadow
 export const MeasureModeToolbarButton = React.memo(function MeasureModeToolbarButton(
   props: MeasureModeToolbarButtonProps,
 ): React.JSX.Element {

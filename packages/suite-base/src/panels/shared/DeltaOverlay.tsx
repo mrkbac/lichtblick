@@ -40,7 +40,6 @@ export type DeltaOverlayProps = Immutable<{
 }>;
 
 // Purely presentational: panels place markers, compute values via computeDelta, and position this overlay.
-// eslint-disable-next-line @typescript-eslint/no-shadow
 export const DeltaOverlay = React.memo(function DeltaOverlay(
   props: DeltaOverlayProps,
 ): React.JSX.Element {

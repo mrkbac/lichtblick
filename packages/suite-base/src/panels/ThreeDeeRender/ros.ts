@@ -82,13 +82,15 @@ export enum MarkerType {
   TRIANGLE_LIST = 11,
 }
 
+// ROS defines ADD and MODIFY with the same value.
+/* oxlint-disable typescript/no-duplicate-enum-values */
 export enum MarkerAction {
   ADD = 0,
-  // eslint-disable-next-line @typescript-eslint/no-duplicate-enum-values
   MODIFY = 0,
   DELETE = 2,
   DELETEALL = 3,
 }
+/* oxlint-enable typescript/no-duplicate-enum-values */
 
 export enum PointFieldType {
   UNKNOWN = 0,

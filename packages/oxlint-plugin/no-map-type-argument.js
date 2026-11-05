@@ -5,8 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-const { ESLintUtils } = require("@typescript-eslint/utils");
-
 /**
  * @type {import("eslint").Rule.RuleModule}
  */
@@ -25,14 +23,9 @@ module.exports = {
           /** @type {import("estree").CallExpression} */
           const callExpr = node.parent;
 
-          const { esTreeNodeToTSNodeMap, program } = ESLintUtils.getParserServices(context);
-          const sourceCode = context.getSourceCode();
-          const checker = program.getTypeChecker();
-          const objectTsNode = esTreeNodeToTSNodeMap.get(node.object);
-          const objectType = checker.getTypeAtLocation(objectTsNode);
-          if (!checker.isArrayType(objectType) && !checker.isTupleType(objectType)) {
-            return;
-          }
+          // Syntactic only: oxlint JS plugins have no type information, so any `.map<T>(arrow)`
+          // is reported, not just Array#map.
+          const sourceCode = context.sourceCode;
 
           const arrowToken = sourceCode.getTokenBefore(
             callExpr.arguments[0].body,

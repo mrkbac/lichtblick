@@ -1,0 +1,6 @@
+{
+  "name": "@lichtblick/oxlint-plugin",
+  "license": "MPL-2.0",
+  "private": true,
+  "main": "./index.js"
+}

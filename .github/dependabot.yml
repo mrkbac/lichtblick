@@ -17,9 +17,10 @@ updates:
         patterns:
           - "storybook"
           - "@storybook/*"
-      eslint:
+      oxlint:
         patterns:
-          - "@typescript-eslint/*"
+          - "oxlint"
+          - "oxlint-tsgolint"
       emotion:
         patterns:
           - "@emotion/*"

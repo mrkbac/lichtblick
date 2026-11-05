@@ -225,7 +225,6 @@ export const UtilsUsageInNode: StoryObj = {
 
 export const EditorShowsNewCodeWhenUserNodesChange: StoryObj = {
   render: function Story() {
-    // eslint-disable-next-line @typescript-eslint/no-shadow
     const ChangeUserNodeOnMount = useCallback(function ChangeUserNodeOnMount(): React.JSX.Element {
       const actions = useCurrentLayoutActions();
       useEffect(() => {

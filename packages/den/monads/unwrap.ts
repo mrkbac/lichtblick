@@ -16,7 +16,6 @@ type Null = null;
  */
 type MustBeNullable<T> = undefined extends T ? T : Null extends T ? T : never;
 export function unwrap<T>(val: MustBeNullable<T>): NonNullable<T> {
-  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
   if (val == undefined) {
     throw new Error("Invariant: unexpected undefined value");
   }

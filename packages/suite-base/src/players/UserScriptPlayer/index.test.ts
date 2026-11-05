@@ -1905,6 +1905,7 @@ describe("UserScriptPlayer", () => {
       };
 
       expectFromSource = (messages: any, sourceIndex: number) => {
+        // oxlint-disable-next-line vitest/no-standalone-expect -- helper assigned in beforeEach and only called from tests
         expect(messages).toEqual([
           upstreamFirst,
           {

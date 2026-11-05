@@ -14,9 +14,9 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { clampTime, subtract, Time } from "@foxglove/rostime";
 import * as _ from "lodash-es";
 
-import { clampTime, subtract, Time } from "@foxglove/rostime";
 import {
   DiagnosticId,
   DiagnosticInfo,
