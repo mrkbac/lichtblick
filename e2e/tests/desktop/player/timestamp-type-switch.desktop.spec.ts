@@ -31,6 +31,5 @@ test("should switch playback time to epoch format next to the player", {
   await player.switchToEpochFormat(initialTimeInUTC);
 
   // Then
-  const playerStartingTimeInEpoch = mainWindow.locator(`input[value^="${intialTimeInEpoch}"]`);
-  await expect(playerStartingTimeInEpoch).toBeVisible();
+  await expect(player.getTimestampInput()).toHaveValue(intialTimeInEpoch);
 });

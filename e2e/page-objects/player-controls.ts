@@ -32,7 +32,7 @@ export class PlayerControls {
   }
 
   public async switchToEpochFormat(initialTimestamp: string): Promise<void> {
-    const playerStartingTime = this.page.locator(`input[value^="${initialTimestamp}"]`);
+    const playerStartingTime = this.getTimestampInput().and(this.page.locator(`[value^="${initialTimestamp}"]`));
     await playerStartingTime.hover();
     const timestampDropdown = this.page.getByTestId("playback-time-display-toggle-button");
     await timestampDropdown.click();
