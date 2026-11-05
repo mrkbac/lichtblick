@@ -32,6 +32,7 @@ import topicGraphThumbnail from "./TopicGraph/thumbnail.png";
 import topicHealthThumbnail from "./TopicHealth/thumbnail.png";
 import userScriptEditorThumbnail from "./UserScriptEditor/thumbnail.png";
 import variableSliderThumbnail from "./VariableSlider/thumbnail.png";
+import watchThumbnail from "./Watch/thumbnail.png";
 
 export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
@@ -207,6 +208,13 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("topicHealthDescription"),
     thumbnail: topicHealthThumbnail,
     module: async () => await import("./TopicHealth"),
+  },
+  {
+    title: t("watch"),
+    type: "Watch",
+    description: t("watchDescription"),
+    thumbnail: watchThumbnail,
+    module: async () => await import("./Watch"),
   },
   {
     title: t("variableSlider"),

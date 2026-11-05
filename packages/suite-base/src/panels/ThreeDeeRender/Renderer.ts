@@ -1661,6 +1661,23 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     this.updateCustomLayersCount();
   };
 
+  /**
+   * Find the 3D point (in render frame coordinates) of the nearest pickable surface under the
+   * cursor, writing it into `out`. Returns false when nothing pickable is under the cursor.
+   */
+  public pickPoint(cursorCoords: THREE.Vector2, out: THREE.Vector3): boolean {
+    const camera = this.cameraHandler.getActiveCamera();
+    const depth = this.#picker.pickDepth(cursorCoords.x, cursorCoords.y, camera);
+    if (depth == undefined) {
+      return false;
+    }
+    const { width, height } = this.input.canvasSize;
+    out
+      .set((cursorCoords.x / width) * 2 - 1, -(cursorCoords.y / height) * 2 + 1, depth * 2 - 1)
+      .unproject(camera);
+    return true;
+  }
+
   #pickSingleObject(cursorCoords: THREE.Vector2): PickedRenderable | undefined {
     // Render a single pixel using a fragment shader that writes object IDs as
     // colors, then read the value of that single pixel back

@@ -122,6 +122,21 @@ describe("buildSettingsTree", () => {
     expect(result).toEqual(settingsTree);
   });
 
+  it("should not add a topics node to panels without one", () => {
+    const { config, extensionSettings, messagePipelineState } = setup();
+    const settingsTree = { nodes: { general: { label: "General" } }, actionHandler: vi.fn() };
+
+    const result = buildSettingsTree({
+      config,
+      extensionSettings,
+      panelType: "myPanelType",
+      settingsTree,
+      messagePipelineState,
+    });
+
+    expect(result).toBe(settingsTree);
+  });
+
   it("should return the settingsTree even if topics are empty", () => {
     const { config, extensionSettings, messagePipelineState } = setup();
     const { settingsTrees }: Pick<PanelStateStore, "settingsTrees"> = {

@@ -15,6 +15,8 @@ import { TimestampMethod } from "@lichtblick/suite-base/util/time";
 export type StateTransitionPath = {
   color?: string;
   value: string;
+  /** Optional comparison such as `> 2` or `== "ERROR"`; the series then shows true/false bands. */
+  condition?: string;
   label?: string;
   enabled?: boolean;
   timestampMethod: TimestampMethod;

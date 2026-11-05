@@ -19,6 +19,7 @@ import {
   SettingsTreeNodeActionItem,
   SettingsTreeNodes,
 } from "@lichtblick/suite";
+import { parseCondition } from "@lichtblick/suite-base/panels/StateTransitions/condition";
 import { DEFAULT_STATE_TRANSITION_PATH } from "@lichtblick/suite-base/panels/StateTransitions/constants";
 import { PLOTABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/shared/constants";
 import {
@@ -81,6 +82,16 @@ export const makeSeriesNode = memoizeWeak(
           label: t("labels.messagePath"),
           validTypes: PLOTABLE_ROS_TYPES,
           value: path.value,
+        },
+        condition: {
+          input: "string",
+          label: t("labels.condition"),
+          help: t("labels.conditionHelp"),
+          placeholder: '> 2, == "ERROR"',
+          value: path.condition,
+          ...(path.condition && !parseCondition(path.condition)
+            ? { error: t("conditionErrorMessage") }
+            : {}),
         },
         label: {
           input: "string",

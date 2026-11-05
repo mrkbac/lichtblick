@@ -18,9 +18,13 @@ export const buildSettingsTree = ({
   if (panelType == undefined || settingsTree == undefined) {
     return undefined;
   }
+  // Panels without a `topics` node would otherwise get an empty one
+  if (settingsTree.nodes.topics == undefined) {
+    return settingsTree;
+  }
 
   const topicToSchemaNameMap = getTopicToSchemaNameMap(messagePipelineState());
-  const topics = Object.keys(settingsTree.nodes.topics?.children ?? {});
+  const topics = Object.keys(settingsTree.nodes.topics.children ?? {});
   const topicsConfig = maybeCast<{ topics: Record<string, unknown> }>(config)?.topics;
   const topicsSettings = topics.reduce<Record<string, SettingsTreeNode | undefined>>(
     (acc, topic) => {
@@ -39,7 +43,7 @@ export const buildSettingsTree = ({
       ...settingsTree.nodes,
       topics: {
         ...settingsTree.nodes.topics,
-        children: _.merge({}, settingsTree.nodes.topics?.children, topicsSettings),
+        children: _.merge({}, settingsTree.nodes.topics.children, topicsSettings),
       },
     },
   };

@@ -14,51 +14,90 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuallyBePartial";
+import { LogLevel, NormalizedLogMessage, VisibilityFilter } from "./types";
 
-import { getNormalizedMessage, getNormalizedLevel } from "./conversion";
-import { LogMessageEvent } from "./types";
+type Matcher = (text: string) => boolean;
+
+export type CompiledSearch = {
+  /** A message matches if any include term matches (or there are none) */
+  include: Matcher[];
+  /** A message is hidden if any exclude term (`-term`) matches */
+  exclude: Matcher[];
+  /** Terms that are not valid regular expressions */
+  invalidTerms: string[];
+};
+
+/**
+ * Compile search terms into matchers. A term starting with `-` excludes matches.
+ * Terms are substrings by default, or regular expressions when `regex` is set.
+ */
+export function compileSearch(
+  terms: readonly string[],
+  { regex = false, caseSensitive = false }: { regex?: boolean; caseSensitive?: boolean },
+): CompiledSearch {
+  const result: CompiledSearch = { include: [], exclude: [], invalidTerms: [] };
+  for (const rawTerm of terms) {
+    const negate = rawTerm.length > 1 && rawTerm.startsWith("-");
+    const term = negate ? rawTerm.slice(1) : rawTerm;
+    if (term.length === 0) {
+      continue;
+    }
+    let matcher: Matcher;
+    if (regex) {
+      try {
+        const re = new RegExp(term, caseSensitive ? "" : "i");
+        matcher = (text) => re.test(text);
+      } catch {
+        result.invalidTerms.push(rawTerm);
+        continue;
+      }
+    } else if (caseSensitive) {
+      matcher = (text) => text.includes(term);
+    } else {
+      const lower = term.toLowerCase();
+      matcher = (text) => text.toLowerCase().includes(lower);
+    }
+    (negate ? result.exclude : result.include).push(matcher);
+  }
+  return result;
+}
+
+export type LogFilter = {
+  minLogLevel: number;
+  search: CompiledSearch;
+  nameFilter: VisibilityFilter;
+};
 
 export default function filterMessages(
-  events: readonly LogMessageEvent[],
-  filter: {
-    minLogLevel: number;
-    searchTerms: string[];
-    nameFilter: Record<string, { visible?: boolean }>;
-  },
-): readonly LogMessageEvent[] {
-  const { minLogLevel, searchTerms, nameFilter } = filter;
-  const hasActiveFilters =
-    minLogLevel > 1 ||
-    searchTerms.length > 0 ||
-    Object.values(nameFilter).some(({ visible }) => visible === false);
+  items: readonly NormalizedLogMessage[],
+  { minLogLevel, search, nameFilter }: LogFilter,
+): readonly NormalizedLogMessage[] {
+  const { include, exclude } = search;
+  const hasHiddenNames = Object.values(nameFilter).some(({ visible }) => visible === false);
   // return all messages if we wouldn't filter anything
-  if (!hasActiveFilters) {
-    return events;
+  if (
+    minLogLevel <= LogLevel.DEBUG &&
+    include.length === 0 &&
+    exclude.length === 0 &&
+    !hasHiddenNames
+  ) {
+    return items;
   }
 
-  const searchTermsInLowerCase = searchTerms.map((term) => term.toLowerCase());
+  const matches = (matcher: Matcher, item: NormalizedLogMessage) =>
+    matcher(item.message) || (item.name != undefined && matcher(item.name));
 
-  return events.filter((event) => {
-    const logMessage = event.message;
-    const effectiveLogLevel = getNormalizedLevel(event.schemaName, logMessage);
-    if (effectiveLogLevel < minLogLevel) {
+  return items.filter((item) => {
+    // ">= DEBUG" shows everything, including messages with an unknown level
+    if (minLogLevel > LogLevel.DEBUG && item.level < minLogLevel) {
       return false;
     }
-
-    const maybeName = mightActuallyBePartial(logMessage).name;
-    if (maybeName != undefined && nameFilter[maybeName]?.visible === false) {
+    if (item.name != undefined && nameFilter[item.name]?.visible === false) {
       return false;
     }
-
-    if (searchTerms.length === 0) {
-      return true;
+    if (exclude.some((m) => matches(m, item))) {
+      return false;
     }
-
-    const lowerCaseName = mightActuallyBePartial(logMessage).name?.toLowerCase() ?? "";
-    const lowerCaseMsg = getNormalizedMessage(logMessage).toLowerCase();
-    return searchTermsInLowerCase.some(
-      (term) => lowerCaseName.includes(term) || lowerCaseMsg.includes(term),
-    );
+    return include.length === 0 || include.some((m) => matches(m, item));
   });
 }

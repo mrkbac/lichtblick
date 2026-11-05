@@ -10,4 +10,6 @@ export type UseStateTransitionsData = {
     datasets: ChartDatasets;
   };
   minY: number | undefined;
+  /** Sorted seconds-since-start where any condition series becomes true. */
+  matchStarts: number[];
 };

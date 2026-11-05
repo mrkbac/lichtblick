@@ -62,4 +62,7 @@ export const panels = {
     "Write custom data transformations in TypeScript. Previously known as Node Playground.",
   variableSlider: "Variable Slider",
   variableSliderDescription: "Update numerical variable values for a layout.",
+  watch: "Watch",
+  watchDescription:
+    "Watch the latest value of many message paths in one table, with sparklines and change highlights.",
 };

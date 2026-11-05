@@ -14,9 +14,11 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { ChevronLeft20Regular, ChevronRight20Regular } from "@fluentui/react-icons";
 import { add as addTimes, fromSec } from "@foxglove/rostime";
-import { alpha, useTheme } from "@mui/material";
+import { Typography, alpha, useTheme } from "@mui/material";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
+import * as _ from "lodash-es";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -29,10 +31,12 @@ import {
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import Panel from "@lichtblick/suite-base/components/Panel";
+import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TimeBasedChart from "@lichtblick/suite-base/components/TimeBasedChart";
 import { PathLegend } from "@lichtblick/suite-base/panels/StateTransitions/PathLegend";
 import { useStateTransitionsStyles } from "@lichtblick/suite-base/panels/StateTransitions/StateTransitions.style";
+import { parseCondition } from "@lichtblick/suite-base/panels/StateTransitions/condition";
 import {
   EMPTY_ITEMS_BY_PATH,
   EMPTY_PATHS,
@@ -55,6 +59,8 @@ import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { OnClickArg as OnChartClickArgs } from "@lichtblick/suite-base/src/components/Chart";
 
 import { StateTransitionConfig, StateTransitionPanelProps } from "./types";
+
+const MATCH_EPSILON = 1e-6;
 
 const selectPlayerPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
 
@@ -121,7 +127,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
 
   const showPoints = config.showPoints === true;
 
-  const { pathState, data, minY } = useStateTransitionsData(
+  const { pathState, data, minY, matchStarts } = useStateTransitionsData(
     paths,
     startTime,
     newItemsByPath,
@@ -141,8 +147,8 @@ function StateTransitions(props: StateTransitionPanelProps) {
   const pathSignatures = useMemo(
     () =>
       paths.map(
-        ({ color, value, label, enabled, timestampMethod }) =>
-          JSON.stringify([color, value, label, enabled, timestampMethod]) ?? "",
+        ({ color, value, condition, label, enabled, timestampMethod }) =>
+          JSON.stringify([color, value, condition, label, enabled, timestampMethod]) ?? "",
       ),
     [paths],
   );
@@ -153,14 +159,65 @@ function StateTransitions(props: StateTransitionPanelProps) {
   });
   const { markerA, markerB } = deltaMode;
 
+  const messagePipeline = useMessagePipelineGetter();
+
+  const seekToSeconds = useCallback(
+    (seconds: number) => {
+      const {
+        seekPlayback,
+        playerState: { activeData: { startTime: start } = {} },
+      } = messagePipeline();
+      if (!seekPlayback || start == undefined) {
+        return;
+      }
+      seekPlayback(addTimes(start, fromSec(seconds)));
+    },
+    [messagePipeline],
+  );
+
+  const hasCondition = paths.some((path) => parseCondition(path.condition) != undefined);
+  // The epsilon absorbs float error after seeking to a match start.
+  const now = currentTimeSinceStart ?? 0;
+  const matchesSoFar = useMemo(
+    () => matchStarts.filter((x) => x <= now + MATCH_EPSILON).length,
+    [now, matchStarts],
+  );
+  const previousMatch = _.findLast(matchStarts, (x) => x < now - MATCH_EPSILON);
+  const nextMatch = matchStarts.find((x) => x > now + MATCH_EPSILON);
+
+  const seekToNextMatch = useCallback(() => {
+    if (nextMatch != undefined) {
+      seekToSeconds(nextMatch);
+    }
+  }, [nextMatch, seekToSeconds]);
+
+  const seekToPreviousMatch = useCallback(() => {
+    if (previousMatch != undefined) {
+      seekToSeconds(previousMatch);
+    }
+  }, [previousMatch, seekToSeconds]);
+
   const keyDownHandlers = useMemo(
     () => ({
       escape: createMeasureModeEscapeHandler(deltaMode),
+      // ponytail: global listener, so every panel with a condition seeks on N; scope it to the
+      // focused panel if several condition panels get confusing.
+      ...(hasCondition && {
+        n: (event: KeyboardEvent) => {
+          if (event.metaKey || event.ctrlKey || event.altKey) {
+            return false;
+          }
+          if (event.shiftKey) {
+            seekToPreviousMatch();
+          } else {
+            seekToNextMatch();
+          }
+          return true;
+        },
+      }),
     }),
-    [deltaMode],
+    [deltaMode, hasCondition, seekToNextMatch, seekToPreviousMatch],
   );
-
-  const messagePipeline = useMessagePipelineGetter();
 
   const onClick = useCallback(
     ({ x: seekSeconds }: OnChartClickArgs) => {
@@ -173,17 +230,9 @@ function StateTransitions(props: StateTransitionPanelProps) {
         return;
       }
 
-      const {
-        seekPlayback,
-        playerState: { activeData: { startTime: start } = {} },
-      } = messagePipeline();
-      if (!seekPlayback || start == undefined) {
-        return;
-      }
-      const seekTime = addTimes(start, fromSec(seekSeconds));
-      seekPlayback(seekTime);
+      seekToSeconds(seekSeconds);
     },
-    [deltaMode, messagePipeline],
+    [deltaMode, seekToSeconds],
   );
 
   const annotations = useMemo((): AnnotationOptions[] => {
@@ -240,7 +289,37 @@ function StateTransitions(props: StateTransitionPanelProps) {
         onToggle={deltaMode.toggleActive}
         title={t("measureMode")}
         testId="state-transitions-measure-mode-toggle"
-      />
+      >
+        {hasCondition && (
+          <>
+            <ToolbarIconButton
+              title={t("previousMatch")}
+              aria-label={t("previousMatch")}
+              onClick={seekToPreviousMatch}
+              disabled={previousMatch == undefined}
+              data-testid="state-transitions-previous-match"
+            >
+              <ChevronLeft20Regular />
+            </ToolbarIconButton>
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              data-testid="state-transitions-match-count"
+            >
+              {matchesSoFar}/{matchStarts.length}
+            </Typography>
+            <ToolbarIconButton
+              title={t("nextMatch")}
+              aria-label={t("nextMatch")}
+              onClick={seekToNextMatch}
+              disabled={nextMatch == undefined}
+              data-testid="state-transitions-next-match"
+            >
+              <ChevronRight20Regular />
+            </ToolbarIconButton>
+          </>
+        )}
+      </MeasureModeToolbarButton>
       <Stack fullWidth fullHeight flex="auto" overflowX="hidden" overflowY="auto">
         <div className={classes.chartWrapper} ref={sizeRef}>
           <TimeBasedChart

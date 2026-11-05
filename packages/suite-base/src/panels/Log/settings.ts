@@ -8,9 +8,8 @@
 import { TFunction } from "i18next";
 
 import { SettingsTreeChildren, SettingsTreeNodes } from "@lichtblick/suite";
-import { Topic } from "@lichtblick/suite-base/players/types";
 
-import { LogLevel } from "./types";
+import { Config, LogLevel, VisibilityFilter } from "./types";
 
 // Create the log level options nodes once since they don't change per render.
 const LOG_LEVEL_OPTIONS = [
@@ -21,56 +20,69 @@ const LOG_LEVEL_OPTIONS = [
   { label: ">= FATAL", value: LogLevel.FATAL },
 ];
 
-export function buildSettingsTree(
-  topicToRender: string,
-  minLogLevel: number,
-  nameFilter: Record<string, { visible?: boolean }>,
-  availableTopics: Topic[],
-  availableNames: string[],
-  t: TFunction<"log">,
-): SettingsTreeNodes {
-  const topicOptions = availableTopics.map((topic) => ({ label: topic.name, value: topic.name }));
-  const topicIsAvailable = availableTopics.some((topic) => topic.name === topicToRender);
-  if (!topicIsAvailable) {
-    topicOptions.unshift({ value: topicToRender, label: topicToRender });
+/**
+ * Whether a topic is shown. Explicit per-topic settings win; legacy configs with a single
+ * `topicToRender` show only that topic; otherwise every log topic is shown.
+ */
+export function isTopicVisible(
+  config: Pick<Config, "topics" | "topicToRender">,
+  topic: string,
+): boolean {
+  const explicit = config.topics?.[topic]?.visible;
+  if (explicit != undefined) {
+    return explicit;
   }
-  const topicError = topicIsAvailable ? undefined : t("topicError", { topic: topicToRender });
-  const nodeChildren: SettingsTreeChildren = Object.fromEntries(
-    availableNames.map((name) => [
+  return config.topicToRender == undefined || config.topicToRender === topic;
+}
+
+function visibilityChildren(
+  names: readonly string[],
+  filter: VisibilityFilter | ((name: string) => boolean),
+): SettingsTreeChildren {
+  return Object.fromEntries(
+    names.map((name) => [
       name,
       {
         label: name,
-        visible: nameFilter[name]?.visible ?? true,
+        visible: typeof filter === "function" ? filter(name) : (filter[name]?.visible ?? true),
       },
     ]),
   );
+}
 
+export function buildSettingsTree(
+  config: Config,
+  availableTopics: readonly string[],
+  availableNames: readonly string[],
+  t: TFunction<"log">,
+): SettingsTreeNodes {
+  const showHideActions = [
+    { id: "show-all", type: "action" as const, label: t("showAll") },
+    { id: "hide-all", type: "action" as const, label: t("hideAll") },
+  ];
   return {
     general: {
       fields: {
-        topicToRender: {
-          input: "select",
-          label: t("topic"),
-          value: topicToRender,
-          error: topicError,
-          options: topicOptions,
-        },
         minLogLevel: {
           input: "select",
           label: t("minLogLevel"),
-          value: minLogLevel,
+          value: config.minLogLevel,
           options: LOG_LEVEL_OPTIONS,
         },
       },
     },
+    topics: {
+      enableVisibilityFilter: true,
+      label: t("topics"),
+      error: availableTopics.length === 0 ? t("noLogTopics") : undefined,
+      children: visibilityChildren(availableTopics, (topic) => isTopicVisible(config, topic)),
+      actions: showHideActions,
+    },
     nameFilter: {
       enableVisibilityFilter: true,
-      children: nodeChildren,
+      children: visibilityChildren(availableNames, config.nameFilter ?? {}),
       label: t("nameFilter"),
-      actions: [
-        { id: "show-all", type: "action", label: t("showAll") },
-        { id: "hide-all", type: "action", label: t("hideAll") },
-      ],
+      actions: showHideActions,
     },
   };
 }

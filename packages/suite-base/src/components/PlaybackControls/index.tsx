@@ -67,6 +67,7 @@ import BroadcastManager from "@lichtblick/suite-base/util/broadcast/BroadcastMan
 
 import PlaybackTimeDisplay from "./PlaybackTimeDisplay";
 import { RepeatAdapter } from "./RepeatAdapter";
+import { ScrubPreviewMenu } from "./ScrubPreviewMenu";
 import Scrubber from "./Scrubber";
 import { TrimBar, useTrimKeyHandlers } from "./TrimRange";
 
@@ -321,6 +322,7 @@ export default function PlaybackControls({
           </Stack>
           <Stack direction="row" flex={1} alignItems="center" justifyContent="flex-end" gap={0.5}>
             <SyncInstanceToggle />
+            <ScrubPreviewMenu />
             <HoverableIconButton
               size="small"
               title="Loop playback"
