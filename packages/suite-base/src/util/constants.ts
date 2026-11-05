@@ -21,5 +21,4 @@ export const JSON_TREE_THEME_COLORS = {
     label: "#0550ae", // base0D - label & arrow
   },
 } as const;
-export const TAB_PANEL_TYPE = "Tab";
 export const GLOBAL_REQUEST_QUEUE_MAX_CONCURRENT = 10;

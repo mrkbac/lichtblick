@@ -166,7 +166,7 @@
         "targetOrientation": [0, 0, 0, 1],
         "thetaOffset": 45,
         "fovy": 45,
-        "near": 1.0,
+        "near": 1,
         "far": 5000
       },
       "scene": {},
@@ -409,72 +409,6 @@
       "diffEnabled": false,
       "showFullMessageForDiff": false,
       "autoExpandMode": "auto"
-    },
-    "Tab!1xyw5ix": {
-      "activeTabIdx": 0,
-      "tabs": [
-        {
-          "title": "Perception",
-          "layout": {
-            "first": {
-              "first": "Image!s2ii8x",
-              "second": {
-                "first": "Image!qd8g5l",
-                "second": "Image!37zuv25",
-                "direction": "row",
-                "splitPercentage": 50
-              },
-              "direction": "row",
-              "splitPercentage": 33.333
-            },
-            "second": "3D!12ucir",
-            "direction": "column",
-            "splitPercentage": 30
-          }
-        },
-        {
-          "title": "Planning",
-          "layout": {
-            "first": "map!2vkib4e",
-            "second": "3D!3edtgyg",
-            "direction": "row",
-            "splitPercentage": 30
-          }
-        },
-        {
-          "title": "Controls",
-          "layout": {
-            "first": "Plot!2pb7zl7",
-            "second": "Plot!4792hqu",
-            "direction": "column",
-            "splitPercentage": 50
-          }
-        },
-        {
-          "title": "Diagnostics",
-          "layout": {
-            "first": {
-              "first": "StateTransitions!3i4dk1l",
-              "second": {
-                "first": "DiagnosticSummary!3equ26v",
-                "second": "DiagnosticStatusPanel!4bdyip2",
-                "direction": "column",
-                "splitPercentage": 27
-              },
-              "direction": "column",
-              "splitPercentage": 18
-            },
-            "second": {
-              "first": "SourceInfo!7dc2bd",
-              "second": "RawMessages!21ab95j",
-              "direction": "column",
-              "splitPercentage": 60
-            },
-            "direction": "row",
-            "splitPercentage": 50
-          }
-        }
-      ]
     }
   },
   "globalVariables": {},
@@ -482,5 +416,35 @@
   "playbackConfig": {
     "speed": 1
   },
-  "layout": "Tab!1xyw5ix"
+  "layout": {
+    "direction": "column",
+    "children": [
+      {
+        "direction": "row",
+        "children": [
+          {
+            "panels": [
+              "Image!s2ii8x",
+              "map!2vkib4e",
+              "Plot!2pb7zl7",
+              "StateTransitions!3i4dk1l",
+              "RawMessages!21ab95j"
+            ]
+          },
+          {
+            "panels": ["Image!qd8g5l", "3D!3edtgyg", "Plot!4792hqu", "DiagnosticSummary!3equ26v"]
+          },
+          {
+            "panels": ["Image!37zuv25", "DiagnosticStatusPanel!4bdyip2"]
+          }
+        ],
+        "sizes": [33.33, 33.33, 33.33]
+      },
+      {
+        "panels": ["3D!12ucir", "SourceInfo!7dc2bd"]
+      }
+    ],
+    "sizes": [30, 70]
+  },
+  "version": 2
 }

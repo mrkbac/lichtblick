@@ -6,8 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Fragment, Suspense, useEffect, useMemo } from "react";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 
 import { IdbLayoutStorage } from "@lichtblick/suite-base/IdbLayoutStorage";
 import GlobalCss from "@lichtblick/suite-base/components/GlobalCss";
@@ -144,23 +142,21 @@ export function App(props: AppProps): React.JSX.Element {
                 <MultiProvider providers={providers}>
                   <DocumentTitleAdapter />
                   <SendNotificationToastAdapter />
-                  <DndProvider backend={HTML5Backend}>
-                    <Suspense fallback={<></>}>
-                      <PanelCatalogProvider>
-                        <Workspace
-                          deepLinks={deepLinks}
-                          appBarLeftInset={props.appBarLeftInset}
-                          onAppBarDoubleClick={props.onAppBarDoubleClick}
-                          showCustomWindowControls={props.showCustomWindowControls}
-                          isMaximized={props.isMaximized}
-                          onMinimizeWindow={props.onMinimizeWindow}
-                          onMaximizeWindow={props.onMaximizeWindow}
-                          onUnmaximizeWindow={props.onUnmaximizeWindow}
-                          onCloseWindow={props.onCloseWindow}
-                        />
-                      </PanelCatalogProvider>
-                    </Suspense>
-                  </DndProvider>
+                  <Suspense fallback={<></>}>
+                    <PanelCatalogProvider>
+                      <Workspace
+                        deepLinks={deepLinks}
+                        appBarLeftInset={props.appBarLeftInset}
+                        onAppBarDoubleClick={props.onAppBarDoubleClick}
+                        showCustomWindowControls={props.showCustomWindowControls}
+                        isMaximized={props.isMaximized}
+                        onMinimizeWindow={props.onMinimizeWindow}
+                        onMaximizeWindow={props.onMaximizeWindow}
+                        onUnmaximizeWindow={props.onUnmaximizeWindow}
+                        onCloseWindow={props.onCloseWindow}
+                      />
+                    </PanelCatalogProvider>
+                  </Suspense>
                 </MultiProvider>
               </MaybeLaunchPreference>
             </ErrorBoundary>

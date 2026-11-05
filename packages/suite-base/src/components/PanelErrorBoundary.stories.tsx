@@ -5,8 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import { action } from "storybook/actions";
 import { StoryObj } from "storybook-react-rsbuild";
 
@@ -30,14 +28,12 @@ export default {
 export const Default: StoryObj = {
   render: () => {
     return (
-      <DndProvider backend={HTML5Backend}>
-        <PanelErrorBoundary
-          onRemovePanel={action("onRemovePanel")}
-          onResetPanel={action("onResetPanel")}
-        >
-          <Broken />
-        </PanelErrorBoundary>
-      </DndProvider>
+      <PanelErrorBoundary
+        onRemovePanel={action("onRemovePanel")}
+        onResetPanel={action("onResetPanel")}
+      >
+        <Broken />
+      </PanelErrorBoundary>
     );
   },
 };
@@ -45,16 +41,14 @@ export const Default: StoryObj = {
 export const ShowingDetails: StoryObj = {
   render: () => {
     return (
-      <DndProvider backend={HTML5Backend}>
-        <PanelErrorBoundary
-          showErrorDetails
-          hideErrorSourceLocations
-          onRemovePanel={action("onRemovePanel")}
-          onResetPanel={action("onResetPanel")}
-        >
-          <Broken />
-        </PanelErrorBoundary>
-      </DndProvider>
+      <PanelErrorBoundary
+        showErrorDetails
+        hideErrorSourceLocations
+        onRemovePanel={action("onRemovePanel")}
+        onResetPanel={action("onResetPanel")}
+      >
+        <Broken />
+      </PanelErrorBoundary>
     );
   },
 };

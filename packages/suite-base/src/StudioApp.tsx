@@ -6,8 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Fragment, Suspense, useEffect, useMemo } from "react";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 
 import { IdbLayoutStorage } from "@lichtblick/suite-base/IdbLayoutStorage";
 import { LayoutFavoritesAPI } from "@lichtblick/suite-base/api/layouts/LayoutFavoritesAPI";
@@ -154,25 +152,23 @@ export function StudioApp(): React.JSX.Element {
       <MultiProvider providers={providers}>
         <DocumentTitleAdapter />
         <SendNotificationToastAdapter />
-        <DndProvider backend={HTML5Backend}>
-          <Suspense fallback={<></>}>
-            <PanelCatalogProvider>
-              <Workspace
-                deepLinks={deepLinks}
-                appBarLeftInset={appBarLeftInset}
-                onAppBarDoubleClick={onAppBarDoubleClick}
-                showCustomWindowControls={customWindowControlProps?.showCustomWindowControls}
-                isMaximized={customWindowControlProps?.isMaximized}
-                initialZoomFactor={customWindowControlProps?.initialZoomFactor}
-                onMinimizeWindow={customWindowControlProps?.onMinimizeWindow}
-                onMaximizeWindow={customWindowControlProps?.onMaximizeWindow}
-                onUnmaximizeWindow={customWindowControlProps?.onUnmaximizeWindow}
-                onCloseWindow={customWindowControlProps?.onCloseWindow}
-                AppBarComponent={AppBarComponent}
-              />
-            </PanelCatalogProvider>
-          </Suspense>
-        </DndProvider>
+        <Suspense fallback={<></>}>
+          <PanelCatalogProvider>
+            <Workspace
+              deepLinks={deepLinks}
+              appBarLeftInset={appBarLeftInset}
+              onAppBarDoubleClick={onAppBarDoubleClick}
+              showCustomWindowControls={customWindowControlProps?.showCustomWindowControls}
+              isMaximized={customWindowControlProps?.isMaximized}
+              initialZoomFactor={customWindowControlProps?.initialZoomFactor}
+              onMinimizeWindow={customWindowControlProps?.onMinimizeWindow}
+              onMaximizeWindow={customWindowControlProps?.onMaximizeWindow}
+              onUnmaximizeWindow={customWindowControlProps?.onUnmaximizeWindow}
+              onCloseWindow={customWindowControlProps?.onCloseWindow}
+              AppBarComponent={AppBarComponent}
+            />
+          </PanelCatalogProvider>
+        </Suspense>
       </MultiProvider>
     </MaybeLaunchPreference>
   );
