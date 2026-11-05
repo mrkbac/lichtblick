@@ -108,6 +108,10 @@ export class UndeliveredMessages {
     pipelineFrame: Immutable<MessageEvent[]> | undefined,
     subscribedTopics: ReadonlySet<string>,
   ): Immutable<MessageEvent[]> | undefined {
+    // Steady state on a live source: nothing held, so skip the per-frame Set.
+    if (this.#heldByTopic.size === 0) {
+      return pipelineFrame;
+    }
     const inFrame = new Set<unknown>(pipelineFrame ?? []);
     const missed = this.#heldOn(subscribedTopics).filter(
       (messageEvent) => !inFrame.has(messageEvent),
