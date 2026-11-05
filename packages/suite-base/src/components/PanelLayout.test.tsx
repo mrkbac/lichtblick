@@ -21,6 +21,8 @@ import MockCurrentLayoutProvider from "@lichtblick/suite-base/providers/CurrentL
 import ExtensionCatalogProvider from "@lichtblick/suite-base/providers/ExtensionCatalogProvider/ExtensionCatalogProvider";
 import { PanelStateContextProvider } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import WorkspaceContextProvider from "@lichtblick/suite-base/providers/WorkspaceContextProvider";
+import { LayoutNode } from "@lichtblick/suite-base/types/layouts";
+import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
 import { makeMockAppConfiguration } from "@lichtblick/suite-base/util/makeMockAppConfiguration";
 
 import { UnconnectedPanelLayout } from "./PanelLayout";
@@ -72,7 +74,7 @@ describe("UnconnectedPanelLayout", () => {
     const panelCatalog = new MockPanelCatalog(panels);
 
     // Dockview may report adjusted split sizes back (the test container is tiny)
-    const onChange = vi.fn();
+    const onChange = vi.fn<(layout: LayoutNode | undefined) => void>();
     const { rerender, unmount } = render(
       <UnconnectedPanelLayout
         layout={{
@@ -115,6 +117,13 @@ describe("UnconnectedPanelLayout", () => {
     expect(moduleB).toHaveBeenCalledTimes(1);
     expect(moduleC).toHaveBeenCalledTimes(0);
     expect(renderC).toHaveBeenCalledTimes(0);
+    // Showing an outside layout may only report adjusted split sizes back, never other panels.
+    const panelsReported = (from: number) =>
+      onChange.mock.calls.slice(from).map(([reported]) => getPanelIds(reported));
+    for (const ids of panelsReported(0)) {
+      expect(ids).toEqual(["a", "b"]);
+    }
+    const callsBeforeRerender = onChange.mock.calls.length;
 
     rerender(
       <UnconnectedPanelLayout
@@ -134,6 +143,9 @@ describe("UnconnectedPanelLayout", () => {
     expect(moduleA).toHaveBeenCalledTimes(1);
     expect(moduleB).toHaveBeenCalledTimes(1);
     expect(moduleC).toHaveBeenCalledTimes(1);
+    for (const ids of panelsReported(callsBeforeRerender)) {
+      expect(ids).toEqual(["a", "c"]);
+    }
 
     unmount();
   });
