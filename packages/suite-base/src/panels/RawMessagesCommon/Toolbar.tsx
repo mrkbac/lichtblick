@@ -90,7 +90,7 @@ function ToolbarComponent(props: PropsToolbar): React.JSX.Element {
             size="small"
             title="Diff method"
             value={diffMethod}
-            MenuProps={{ MenuListProps: { dense: true } }}
+            MenuProps={{ slotProps: { list: { dense: true } } }}
             onChange={(event: SelectChangeEvent) => {
               saveConfig({
                 diffMethod: event.target.value as RawMessagesVirtualPanelConfig["diffMethod"],

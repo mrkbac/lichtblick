@@ -14,6 +14,8 @@ jobs:
   internal-scan:
     name: SonarCloud Analysis
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     if: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) }}
     steps:
       - uses: actions/checkout@v7
@@ -43,7 +45,7 @@ jobs:
       - name: Generates lint report and file path formatting
         run: |
           yarn lint:ci:report
-          sed -i 's|/home/runner/work/lichtblick/lichtblick/|./|g' eslint-report.json
+          sed -i 's|/home/runner/work/lichtblick/lichtblick/|./|g' lint-report.sarif
         continue-on-error: true
 
       - name: Test and coverage

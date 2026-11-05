@@ -13,7 +13,7 @@
 export class ArrayMap<K, V> {
   #list: [K, V][] = [];
 
-  // eslint-disable-next-line no-restricted-syntax
+  // eslint-disable-next-line @lichtblick/no-getters-setters
   public get size(): number {
     return this.#list.length;
   }

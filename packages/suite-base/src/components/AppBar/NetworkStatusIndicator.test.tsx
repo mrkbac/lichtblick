@@ -18,7 +18,7 @@ vi.mock("react-use", () => ({
 
 vi.mock("@lichtblick/suite-base/constants/config", () => ({
   APP_CONFIG: {
-    // eslint-disable-next-line no-restricted-syntax
+    // eslint-disable-next-line @lichtblick/no-getters-setters
     get apiUrl() {
       return mockApiUrl;
     },
