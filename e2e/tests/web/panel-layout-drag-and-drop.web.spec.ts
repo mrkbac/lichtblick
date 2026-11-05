@@ -19,10 +19,16 @@ async function groups(page: Page): Promise<string[]> {
     );
 }
 
-async function drag(page: Page, from: Point, to: () => Promise<Point>, holdMs = 150) {
+async function drag(
+  page: Page,
+  source: Point | (() => Promise<Point>),
+  to: () => Promise<Point>,
+  holdMs = 150,
+) {
   // A cold dev server can drop the first drag; every panel drag shows "+ New tab" targets, so
   // retry until they show up.
   await expect(async () => {
+    const from = typeof source === "function" ? await source() : source;
     await page.mouse.move(...from);
     await page.mouse.down();
     await page.mouse.move(from[0] + 10, from[1] + 10, { steps: 3 });
@@ -37,7 +43,7 @@ async function drag(page: Page, from: Point, to: () => Promise<Point>, holdMs = 
       await page.mouse.up();
       throw error;
     }
-  }).toPass({ timeout: 15_000 });
+  }).toPass({ timeout: 30_000 });
   const [x, y] = await to();
   await page.mouse.move(x, y, { steps: 15 });
   await page.waitForTimeout(holdMs);
@@ -99,7 +105,7 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
   });
 
   async function stackImageOn3D(page: Page) {
-    await drag(page, await toolbarOf(page, "Image"), inGroup(page, "3D", 0.5, 0.5));
+    await drag(page, async () => await toolbarOf(page, "Image"), inGroup(page, "3D", 0.5, 0.5));
     await expect.poll(async () => await groups(page)).toEqual(["3D|Image", "Raw Messages"]);
   }
 
@@ -108,7 +114,7 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
   });
 
   test("splits when a panel is dropped on an edge", async ({ page }) => {
-    await drag(page, await toolbarOf(page, "Image"), inGroup(page, "3D", 0.03, 0.5));
+    await drag(page, async () => await toolbarOf(page, "Image"), inGroup(page, "3D", 0.03, 0.5));
     await expect.poll(async () => await groups(page)).toEqual(["Image", "3D", "Raw Messages"]);
     const [image, threeD] = await Promise.all([
       group(page, "Image").boundingBox(),
@@ -131,7 +137,7 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
     await stackImageOn3D(page);
     await drag(
       page,
-      await toolbarOf(page, "RawMessages"),
+      async () => await toolbarOf(page, "RawMessages"),
       centerOf(page.locator(".dv-tab", { hasText: "3D" })),
       900,
     );
@@ -142,7 +148,7 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
     await stackImageOn3D(page);
     await drag(
       page,
-      await toolbarOf(page, "RawMessages"),
+      async () => await toolbarOf(page, "RawMessages"),
       centerOf(group(page, "3D").getByTestId("new-tab-drop-target")),
     );
     await expect.poll(async () => await groups(page)).toEqual(["3D|Image|Raw Messages"]);
