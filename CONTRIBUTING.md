@@ -240,9 +240,9 @@ Before pushing, ensure your changes pass all checks:
 
 ```sh
 pnpm format                 # Formatting (Biome)
-pnpm lint                   # Linting (ESLint)
+pnpm lint                   # Linting (oxlint)
 pnpm test                   # Unit tests (Vitest)
-pnpm typecheck       # TypeScript type checking
+pnpm typecheck              # TypeScript type checking
 ```
 
 > Formatting and linting also run automatically via Git hooks — see [Git Hooks](#git-hooks).
@@ -304,7 +304,7 @@ Code quality is enforced through automated tooling. All checks run in CI and mus
 
 ### Linting
 
-- **ESLint** with the `@lichtblick` plugin suite enforces consistent code patterns.
+- **oxlint** (type-aware, see `.oxlintrc.json`) with our custom rules in `packages/oxlint-plugin` enforces consistent code patterns.
 - Run `pnpm lint` to auto-fix issues locally.
 
 ### Git Hooks
@@ -313,7 +313,7 @@ Git hooks are managed by [Husky](https://typicode.github.io/husky/) and are **in
 
 | Hook | When it runs | What it does |
 | ------------ | ------------ | ------------------------------------------------------------------------------------------------------- |
-| `pre-commit` | `git commit` | Runs [lint-staged](https://github.com/lint-staged/lint-staged) on **staged** `*.{js,jsx,mjs,cjs,ts,tsx, json}` files: `eslint --fix` then `biome format --write`. Auto-fixes are re-staged; non-fixable lint errors block the commit. |
+| `pre-commit` | `git commit` | Runs [lint-staged](https://github.com/lint-staged/lint-staged) on **staged** `*.{js,jsx,mjs,cjs,ts,tsx, json}` files: `oxlint --fix` then `biome format --write`. Auto-fixes are re-staged; non-fixable lint errors block the commit. |
 
 Notes:
 
@@ -324,7 +324,7 @@ Notes:
 ### TypeScript Conventions
 
 - **Strict mode** is enabled — avoid `any` types where possible.
-- Prefer `undefined` over `null`. When required for React refs, use the `ReactNull` alias.
+- Prefer `undefined` over `null`. Use `null` only where React APIs require it (refs, render return).
 - Do not use property getters or setters — use function syntax instead.
 - Unused variables must have a `_` prefix (e.g., `_unusedParam`).
 - Avoid `@emotion/styled` and MUI's `styled`/`sx`/`Box` — use **tss-react/mui** for styling instead.
@@ -333,7 +333,7 @@ Notes:
 
 ### License Headers
 
-All source files must include the **MPL-2.0** license header. This is enforced by ESLint via the `@lichtblick/license-header` rule.
+All source files must include the **MPL-2.0** license header. This is enforced by oxlint via the `@lichtblick/license-header` rule.
 
 ### File Organization
 
@@ -434,7 +434,7 @@ The following checks run automatically on every PR:
 | Check           | Description                                                                                     |
 | --------------- | ----------------------------------------------------------------------------------------------- |
 | **npm audit**   | Security vulnerability scan                                                                     |
-| **lint**        | License check, dedup check, TypeScript type checking, ESLint, unused exports, dependency checks |
+| **lint**        | License check, dedup check, TypeScript type checking, oxlint, unused exports, dependency checks |
 | **packages**    | Build all internal packages                                                                     |
 | **web**         | Production web build                                                                            |
 | **desktop**     | Production desktop build                                                                        |

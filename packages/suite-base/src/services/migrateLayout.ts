@@ -5,23 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { MarkOptional } from "ts-essentials";
-
-import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
 import { ISO8601Timestamp, Layout } from "@lichtblick/suite-base/services/ILayoutStorage";
 
-import { migrateLegacyToNew3DPanels } from "./migrateLayout/migrateLegacyToNew3DPanels";
+import { migratePanelsState } from "./migrateLayout/migratePanelsState";
 
-/**
- * Perform any necessary migrations on old layout data.
- */
-export function migratePanelsState(data: MarkOptional<LayoutData, "configById">): LayoutData {
-  let result: LayoutData = { ...data, configById: data.configById ?? {} };
-
-  result = migrateLegacyToNew3DPanels(result);
-
-  return result;
-}
+export { migratePanelsState };
 
 /**
  * Import a layout from storage, transferring old properties to the current expected format.

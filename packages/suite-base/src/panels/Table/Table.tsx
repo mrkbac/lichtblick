@@ -30,6 +30,7 @@ import {
   CellContext,
 } from "@tanstack/react-table";
 import memoizeWeak from "memoize-weak";
+import React from "react";
 import { makeStyles } from "tss-react/mui";
 
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
@@ -382,7 +383,7 @@ export default function Table({
               onChange={(e) => {
                 table.setPageSize(Number(e.target.value));
               }}
-              MenuProps={{ MenuListProps: { dense: true } }}
+              MenuProps={{ slotProps: { list: { dense: true } } }}
             >
               {[10, 20, 30, 40, 50].map((size) => (
                 <MenuItem key={size} value={size}>{`Show ${size}`}</MenuItem>

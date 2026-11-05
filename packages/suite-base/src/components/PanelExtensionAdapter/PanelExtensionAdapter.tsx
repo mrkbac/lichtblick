@@ -761,7 +761,7 @@ function PanelExtensionAdapter(
     clearAlert,
   ]);
 
-  const panelContainerRef = useRef<HTMLDivElement>(ReactNull);
+  const panelContainerRef = useRef<HTMLDivElement>(null);
 
   useValueChangedDebugLog(initPanel, "initPanel");
   useValueChangedDebugLog(panelId, "panelId");
@@ -814,7 +814,7 @@ function PanelExtensionAdapter(
       panelElement,
       ...partialExtensionContext,
 
-      // eslint-disable-next-line no-restricted-syntax
+      // eslint-disable-next-line @lichtblick/no-getters-setters
       set onRender(renderFunction: RenderFn | undefined) {
         setRenderFn(() => renderFunction);
       },

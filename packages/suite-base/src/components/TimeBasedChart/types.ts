@@ -10,7 +10,6 @@ import type { ChartData as AbstractChartData } from "chart.js";
 import type {
   ObjectData,
   ChartData,
-  TypedChartData,
   TypedData,
 } from "@lichtblick/suite-base/components/Chart/types";
 
@@ -18,9 +17,6 @@ import type {
 export type ChartDatasets = ChartData["datasets"];
 export type ChartDataset = ChartDatasets[0];
 export type ChartDatum = ChartDataset["data"][0];
-
-export type TypedChartDatasets = TypedChartData["datasets"];
-export type TypedChartDataset = TypedChartDatasets[0];
 
 export type Bounds1D = { min: number; max: number };
 export type Bounds = {
@@ -45,8 +41,6 @@ export type ProviderState<T> = {
   // the bounds of the data contained in the `data` field
   bounds: Bounds;
 };
-export type ChartProviderState = ProviderState<ObjectData>;
-export type TypedProviderState = ProviderState<TypedData[]>;
 
 export type ProviderStateSetter<T> = (state: ProviderState<T>) => void;
 

@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { PropsWithChildren } from "react";
+import React, { PropsWithChildren } from "react";
 
 /**
  * Reduces the amount of nesting required to wrap a subtree with multiple React context providers.

@@ -26,7 +26,7 @@ describe("McapUnindexedIterableSource", () => {
 
     const source = new McapUnindexedIterableSource({
       size: file.size,
-      stream: file.stream() as ReadableStream<Uint8Array>,
+      stream: file.stream(),
     });
 
     const { metadata } = await source.initialize();
@@ -51,7 +51,7 @@ describe("McapUnindexedIterableSource", () => {
 
     const source = new McapUnindexedIterableSource({
       size: file.size,
-      stream: file.stream() as ReadableStream<Uint8Array>,
+      stream: file.stream(),
     });
 
     const { metadata } = await source.initialize();
@@ -67,7 +67,7 @@ describe("McapUnindexedIterableSource", () => {
       const file = new Blob([tempBuffer.get().slice()]);
       const source = new McapUnindexedIterableSource({
         size: file.size,
-        stream: file.stream() as ReadableStream<Uint8Array>,
+        stream: file.stream(),
       });
 
       // When calling getStart and getEnd before initialize
@@ -110,7 +110,7 @@ describe("McapUnindexedIterableSource", () => {
       const file = new Blob([tempBuffer.get().slice()]);
       const source = new McapUnindexedIterableSource({
         size: file.size,
-        stream: file.stream() as ReadableStream<Uint8Array>,
+        stream: file.stream(),
       });
 
       // When initializing

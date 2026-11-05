@@ -138,7 +138,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const { cameraState } = config;
   const backgroundColor = config.scene.backgroundColor;
 
-  const [canvas, setCanvas] = useState<HTMLCanvasElement | ReactNull>(ReactNull);
+  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const [renderer, setRenderer] = useState<IRenderer | undefined>(undefined);
   const rendererRef = useRef<IRenderer | undefined>(undefined);
   const {

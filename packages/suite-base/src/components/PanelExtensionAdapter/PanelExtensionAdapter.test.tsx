@@ -193,7 +193,7 @@ describe("PanelExtensionAdapter", () => {
               topics: [],
               datatypes: new Map(),
               frame: {},
-              layout: "UnknownPanel!4co6n9d",
+              layout: { panels: ["UnknownPanel!4co6n9d"] },
               setPublishers: (id, advertisements) => {
                 if (passed) {
                   return;
@@ -240,7 +240,7 @@ describe("PanelExtensionAdapter", () => {
               topics: [],
               datatypes: new Map(),
               frame: {},
-              layout: "UnknownPanel!4co6n9d",
+              layout: { panels: ["UnknownPanel!4co6n9d"] },
               setPublishers: (id, advertisements) => {
                 expect(id).toBeDefined();
                 ++count;
@@ -310,7 +310,7 @@ describe("PanelExtensionAdapter", () => {
               topics: [],
               datatypes: new Map(),
               frame: {},
-              layout: "UnknownPanel!4co6n9d",
+              layout: { panels: ["UnknownPanel!4co6n9d"] },
               setPublishers: (id, advertisements) => {
                 if (passed) {
                   return;
@@ -366,7 +366,7 @@ describe("PanelExtensionAdapter", () => {
               topics: [],
               datatypes: new Map(),
               frame: {},
-              layout: "UnknownPanel!4co6n9d",
+              layout: { panels: ["UnknownPanel!4co6n9d"] },
               setPublishers: (id, advertisements) => {
                 expect(id).toBeDefined();
                 ++count;
@@ -443,7 +443,7 @@ describe("PanelExtensionAdapter", () => {
       topics: [],
       datatypes: new Map(),
       frame: {},
-      layout: "UnknownPanel!4co6n9d",
+      layout: { panels: ["UnknownPanel!4co6n9d"] },
       setPublishers: (id, advertisements) => {
         expect(id).toBeDefined();
         ++count;
@@ -568,7 +568,7 @@ describe("PanelExtensionAdapter", () => {
               topics: [],
               datatypes: new Map(),
               frame: {},
-              layout: "UnknownPanel!4co6n9d",
+              layout: { panels: ["UnknownPanel!4co6n9d"] },
               setSubscriptions: (_, payload) => {
                 expect(payload).toEqual([]);
                 sig.resolve();

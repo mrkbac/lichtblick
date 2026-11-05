@@ -8,15 +8,13 @@
 import { ReOrderDotsVertical16Filled } from "@fluentui/react-icons";
 import { Fade, ListItem, ListItemButton, ListItemText, Tooltip, Typography } from "@mui/material";
 import { useCallback, useEffect, useRef } from "react";
-import { useDrag } from "react-dnd";
-import { MosaicDragType, MosaicPath } from "react-mosaic-component";
-import { MosaicDropTargetPosition } from "react-mosaic-component/lib/internalTypes";
 import { makeStyles } from "tss-react/mui";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TextHighlight from "@lichtblick/suite-base/components/TextHighlight";
 import { PanelInfo } from "@lichtblick/suite-base/context/PanelCatalogContext";
-import { MosaicDropResult, PanelConfig } from "@lichtblick/suite-base/types/panels";
+
+import { setPanelDragData } from "./panelDrag";
 
 const useStyles = makeStyles<void, "dragIcon">()((theme, _params, classes) => {
   return {
@@ -36,67 +34,28 @@ const useStyles = makeStyles<void, "dragIcon">()((theme, _params, classes) => {
   };
 });
 
-export type DropDescription = {
-  type: string;
-  config?: PanelConfig;
-  position?: MosaicDropTargetPosition;
-  path?: MosaicPath;
-  tabId?: string;
-};
-
 type Props = {
   panel: PanelInfo;
   searchQuery: string;
   checked?: boolean;
   highlighted?: boolean;
   onClick: () => void;
-  mosaicId: string;
   onDragStart?: () => void;
-  onDrop: (arg0: DropDescription) => void;
 };
 
 export function PanelListItem(props: Props): React.JSX.Element {
-  const {
-    searchQuery,
-    panel,
-    onClick,
-    onDragStart,
-    onDrop,
-    checked = false,
-    highlighted = false,
-    mosaicId,
-  } = props;
+  const { searchQuery, panel, onClick, onDragStart, checked = false, highlighted = false } = props;
   const { classes } = useStyles();
-  const scrollRef = useRef<HTMLElement>(ReactNull);
-  const [, connectDragSource] = useDrag<unknown, MosaicDropResult, never>({
-    type: MosaicDragType.WINDOW,
-    // mosaicId is needed for react-mosaic to accept the drop
-    item: () => {
-      onDragStart?.();
-      return { mosaicId };
+  const scrollRef = useRef<HTMLDivElement>(null);
+  // Dropping is handled by the panel layout, which reads the panel from the drag data.
+  const handleDragStart = useCallback(
+    (event: React.DragEvent) => {
+      setPanelDragData(event.dataTransfer, { type: panel.type, config: panel.config });
+      // Let the drag start before a surrounding menu closes and unmounts this item.
+      setTimeout(() => onDragStart?.(), 0);
     },
-    options: { dropEffect: "copy" },
-    end: (_item, monitor) => {
-      const dropResult = monitor.getDropResult();
-
-      // do nothing when the user wants to cancel a dragged panel
-      if (dropResult == undefined || !monitor.didDrop()) {
-        return;
-      }
-
-      const { position, path, tabId } = dropResult;
-      // dropping outside mosaic does nothing. If we have a tabId, but no
-      // position or path, we're dragging into an empty tab.
-      if ((position == undefined || path == undefined) && tabId == undefined) {
-        // when dragging a panel into an empty layout treat it link clicking the panel
-        // mosaic doesn't give us a position or path to invoke onDrop
-        onClick();
-        return;
-      }
-      const { type, config } = panel;
-      onDrop({ type, config, position, path, tabId });
-    },
-  });
+    [onDragStart, panel.config, panel.type],
+  );
 
   useEffect(() => {
     if (highlighted && scrollRef.current) {
@@ -116,14 +75,6 @@ export function PanelListItem(props: Props): React.JSX.Element {
       }
     }
   }, [highlighted]);
-
-  const mergedRef = useCallback(
-    (el: HTMLElement | ReactNull) => {
-      connectDragSource(el);
-      scrollRef.current = el;
-    },
-    [connectDragSource, scrollRef],
-  );
 
   const targetString = panel.extensionNamespace
     ? `${panel.title} [${panel.extensionNamespace}]`
@@ -162,7 +113,9 @@ export function PanelListItem(props: Props): React.JSX.Element {
           selected={highlighted}
           className={classes.listItemButton}
           disabled={checked}
-          ref={mergedRef}
+          ref={scrollRef}
+          draggable
+          onDragStart={handleDragStart}
           onClick={onClickWithStopPropagation}
         >
           <ListItemText>

@@ -127,7 +127,7 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
     return [...pinnedNodes, ...sortedNodes].filter(({ status }) => status.level >= minLevel);
   }, [diagnostics, hardwareIdFilter, pinnedIds, sortByLevel, minLevel]);
 
-  let summary: React.ReactNode = ReactNull;
+  let summary: React.ReactNode = null;
   if (topics.subscribed.length === 0) {
     summary = <EmptyState>{t("noTopics")}</EmptyState>;
   } else if (diagnostics.size === 0) {
@@ -181,7 +181,7 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
             onChange={(event) => {
               saveConfig({ minLevel: event.target.value });
             }}
-            MenuProps={{ MenuListProps: { dense: true } }}
+            MenuProps={{ slotProps: { list: { dense: true } } }}
           >
             {KNOWN_LEVELS.map((level) => (
               <MenuItem key={level} value={level}>

@@ -15,7 +15,7 @@ import { PANEL_ROOT_CLASS_NAME } from "@lichtblick/suite-base/components/PanelRo
  * @param ref The element to hide and show on panel hove
  * @returns True if the mouse is currently within the parent panel.
  */
-export function usePanelMousePresence(ref: RefObject<HTMLElement | ReactNull>): boolean {
+export function usePanelMousePresence(ref: RefObject<HTMLElement | null>): boolean {
   const [present, setPresent] = useState(false);
 
   const listener = useCallback(
@@ -39,7 +39,7 @@ export function usePanelMousePresence(ref: RefObject<HTMLElement | ReactNull>): 
       return;
     }
 
-    const parent: HTMLElement | ReactNull = element.closest(`.${PANEL_ROOT_CLASS_NAME}`);
+    const parent: HTMLElement | null = element.closest(`.${PANEL_ROOT_CLASS_NAME}`);
     parent?.addEventListener("mouseenter", listener);
     parent?.addEventListener("mouseleave", listener);
 

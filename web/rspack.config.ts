@@ -5,22 +5,19 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import type { Configuration } from "@rspack/core";
 import path from "path";
 
-import { resolveConfigs, type RspackArgv } from "@lichtblick/suite-base/RspackArgv";
-import { ConfigParams, devServerConfig, mainConfig } from "@lichtblick/suite-web/src/rspackConfigs";
+import { type ConfigParams, mainConfig } from "@lichtblick/suite-web/src/rspackConfigs.ts";
 
-import packageJson from "../package.json";
+import packageJson from "../package.json" with { type: "json" };
 
 const params: ConfigParams = {
-  outputPath: path.resolve(__dirname, ".webpack"),
-  contextPath: path.resolve(__dirname, "src"),
+  outputPath: path.resolve(import.meta.dirname, ".webpack"),
+  contextPath: path.resolve(import.meta.dirname, "src"),
   entrypoint: "./entrypoint.tsx",
   prodSourceMap: "source-map",
   // Fork-only: show commit + build time in the version string (Settings > About, start dialog).
   version: `${packageJson.version} (${process.env.CF_PAGES_COMMIT_SHA?.slice(0, 7) ?? "local"}, built ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC)`,
 };
 
-export default (env: unknown, argv: RspackArgv): Configuration[] =>
-  resolveConfigs(env, argv, [devServerConfig(params), mainConfig(params)]);
+export default mainConfig(params);

@@ -34,13 +34,13 @@ import {
 } from "@lichtblick/suite-base/context/PanelStateContext";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
 import { PanelConfig } from "@lichtblick/suite-base/types/panels";
-import { TAB_PANEL_TYPE } from "@lichtblick/suite-base/util/constants";
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
+import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
 
-const singlePanelIdSelector = (state: LayoutState) =>
-  typeof state.selectedLayout?.data?.layout === "string"
-    ? state.selectedLayout.data.layout
-    : undefined;
+const singlePanelIdSelector = (state: LayoutState) => {
+  const panelIds = getPanelIds(state.selectedLayout?.data?.layout);
+  return panelIds.length === 1 ? panelIds[0] : undefined;
+};
 
 const selectIncrementSequenceNumber = (store: PanelStateStore) => store.incrementSequenceNumber;
 
@@ -105,7 +105,7 @@ export default function PanelSettings({
   const shareModal = useMemo(() => {
     const panelConfigById = getCurrentLayout().selectedLayout?.data?.configById;
     if (selectedPanelId == undefined || !showShareModal || !panelConfigById) {
-      return ReactNull;
+      return null;
     }
     return (
       <ShareJsonModal
@@ -193,7 +193,7 @@ export default function PanelSettings({
       trailingItems={[
         <ActionMenu
           key={1}
-          allowShare={panelType !== TAB_PANEL_TYPE}
+          allowShare
           onReset={resetToDefaults}
           onShare={() => {
             setShowShareModal(true);
@@ -216,7 +216,7 @@ export default function PanelSettings({
                 <ActionMenu
                   key={1}
                   fontSize="small"
-                  allowShare={panelType !== TAB_PANEL_TYPE}
+                  allowShare
                   onReset={resetToDefaults}
                   onShare={() => {
                     setShowShareModal(true);

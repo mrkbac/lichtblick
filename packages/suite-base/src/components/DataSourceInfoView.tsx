@@ -7,7 +7,7 @@
 
 import { subtract as subtractTimes, Time } from "@foxglove/rostime";
 import { Skeleton, Typography } from "@mui/material";
-import { RefObject, useEffect, useRef } from "react";
+import React, { RefObject, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -42,8 +42,8 @@ const selectSeek = (ctx: MessagePipelineContext) => ctx.seekPlayback;
 
 function DataSourceInfoContent(props: {
   disableSource?: boolean;
-  durationRef: RefObject<ReactNull | HTMLDivElement>;
-  endTimeRef: RefObject<ReactNull | HTMLDivElement>;
+  durationRef: RefObject<null | HTMLDivElement>;
+  endTimeRef: RefObject<null | HTMLDivElement>;
   playerName?: string;
   playerPresence: PlayerPresence;
   startTime?: Time;
@@ -148,8 +148,8 @@ export function DataSourceInfoView({
   const playerPresence = useMessagePipeline(selectPlayerPresence);
   const seek = useMessagePipeline(selectSeek);
 
-  const durationRef = useRef<HTMLDivElement>(ReactNull);
-  const endTimeRef = useRef<HTMLDivElement>(ReactNull);
+  const durationRef = useRef<HTMLDivElement>(null);
+  const endTimeRef = useRef<HTMLDivElement>(null);
   const { formatDate, formatTime } = useAppTimeFormat();
 
   // We bypass react and update the DOM elements directly for better performance here.

@@ -16,6 +16,7 @@
 
 import { Cursor20Regular } from "@fluentui/react-icons";
 import { Typography } from "@mui/material";
+import React from "react";
 
 import type { LayoutActions } from "@lichtblick/suite";
 import ExpandingToolbar, {
@@ -48,7 +49,6 @@ type Props = {
   timezone: string | undefined;
 };
 
-// eslint-disable-next-line @typescript-eslint/no-shadow
 const InteractionsBaseComponent = React.memo<Props>(function InteractionsBaseComponent({
   addPanel,
   selectedObject,

@@ -7,7 +7,7 @@
 
 import { ArrowMinimize20Filled } from "@fluentui/react-icons";
 import { Paper, IconButton, Tabs, Tab, tabClasses, tabsClasses, Tooltip } from "@mui/material";
-import { ReactElement, ReactNode } from "react";
+import React, { ReactElement, ReactNode } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import Stack from "@lichtblick/suite-base/components/Stack";

@@ -1,16 +1,15 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Configuration, rspack } from "@rspack/core";
+import { type Configuration, rspack } from "@rspack/core";
 import dotenv from "dotenv";
 import path from "path";
-import { TsCheckerRspackPlugin } from "ts-checker-rspack-plugin";
 
-import { swcRule, tsCheckerOptions } from "@lichtblick/suite-base/rspack";
+import { swcRule } from "@lichtblick/suite-base/rspack.ts";
 
-import { RspackConfigParams } from "./RspackConfigParams";
+import type { RspackConfigParams } from "./RspackConfigParams.ts";
 
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+dotenv.config({ path: path.resolve(import.meta.dirname, "../../../.env") });
 
 export function createCommonWebpackConfig(
   params: RspackConfigParams,
@@ -26,7 +25,6 @@ export function createCommonWebpackConfig(
     plugins: [
       new rspack.DefinePlugin({
         // Should match webpack-defines.d.ts
-        ReactNull: null,
         LICHTBLICK_PRODUCT_NAME: JSON.stringify(params.packageJson.productName),
         LICHTBLICK_PRODUCT_VERSION: JSON.stringify(params.packageJson.version),
         LICHTBLICK_PRODUCT_HOMEPAGE: JSON.stringify(params.packageJson.homepage),
@@ -39,7 +37,6 @@ export function createCommonWebpackConfig(
           ? JSON.stringify(process.env.OTLP_ENDPOINT)
           : undefined,
       }),
-      new TsCheckerRspackPlugin({ typescript: tsCheckerOptions() }),
     ],
 
     resolve: {

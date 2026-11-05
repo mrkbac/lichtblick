@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { toSec } from "@foxglove/rostime";
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef } from "react";
 import { useLatest } from "react-use";
 
 import { useMessagePipelineSubscribe } from "@lichtblick/suite-base/components/MessagePipeline";
@@ -21,7 +21,6 @@ import type { VerticalBarsProps, Scale } from "./types";
  *
  * This is a separate component in order to limit the scope of what needs to re-render when time and scale change.
  */
-// eslint-disable-next-line @typescript-eslint/no-shadow
 export const VerticalBars = React.memo(function VerticalBars({
   coordinator,
   hoverComponentId,
@@ -39,8 +38,8 @@ export const VerticalBars = React.memo(function VerticalBars({
   const latestCurrentTimeSinceStart = useRef<number | undefined>(undefined);
   const latestXScale = useRef<Scale | undefined>(undefined);
 
-  const currentTimeBarRef = useRef<HTMLDivElement>(ReactNull);
-  const hoverBarRef = useRef<HTMLDivElement>(ReactNull);
+  const currentTimeBarRef = useRef<HTMLDivElement>(null);
+  const hoverBarRef = useRef<HTMLDivElement>(null);
 
   const updateBars = useCallback(() => {
     if (!currentTimeBarRef.current || !hoverBarRef.current) {

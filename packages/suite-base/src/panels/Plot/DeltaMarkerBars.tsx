@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import React, { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useLatest } from "react-use";
 
 import { DEFAULT_MARKER_COLOR } from "@lichtblick/suite-base/panels/Plot/constants";
@@ -102,7 +102,6 @@ function setLabelPosition(
   }
 }
 
-// eslint-disable-next-line @typescript-eslint/no-shadow
 export const DeltaMarkerBars = React.memo(function DeltaMarkerBars({
   coordinator,
   active,
@@ -126,16 +125,16 @@ export const DeltaMarkerBars = React.memo(function DeltaMarkerBars({
   const latestMarkerB = useLatest(markerB);
 
   const markerARefs: MarkerRefs = {
-    verticalBar: useRef(ReactNull),
-    horizontalBar: useRef(ReactNull),
-    point: useRef(ReactNull),
-    label: useRef(ReactNull),
+    verticalBar: useRef(null),
+    horizontalBar: useRef(null),
+    point: useRef(null),
+    label: useRef(null),
   };
   const markerBRefs: MarkerRefs = {
-    verticalBar: useRef(ReactNull),
-    horizontalBar: useRef(ReactNull),
-    point: useRef(ReactNull),
-    label: useRef(ReactNull),
+    verticalBar: useRef(null),
+    horizontalBar: useRef(null),
+    point: useRef(null),
+    label: useRef(null),
   };
 
   const updateMarker = useCallback(

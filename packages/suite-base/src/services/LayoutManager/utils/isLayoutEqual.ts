@@ -19,7 +19,7 @@ import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/
  * 1. Top-level non-configById fields: extra undefined fields in b are ignored.
  * 2. configById (panel configs): two levels of additive tolerance are applied.
  *    a. New panel IDs in b that were not in a are ignored — a panel can be added to the
- *       mosaic but its first saveConfig call is not a user edit.
+ *       layout but its first saveConfig call is not a user edit.
  *    b. New config keys in b's panel config that were not in a's panel config are ignored —
  *       panels populate their own default config keys during initialization, and treating
  *       those additions as user edits would create false "unsaved changes" indicators on

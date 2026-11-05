@@ -96,15 +96,6 @@ vi.mock("@lichtblick/suite-base/context/OrganizationContext", async (importOrigi
   useOrganizationSession: () => ({ status: "disabled" }),
 }));
 
-// Mock react-dnd
-vi.mock("react-dnd", () => ({
-  DndProvider: ({ children }: any) => <div data-testid="dnd-provider">{children}</div>,
-}));
-
-vi.mock("react-dnd-html5-backend", () => ({
-  HTML5Backend: {},
-}));
-
 // Mock the LayoutManager to avoid private fields issue
 vi.mock("./services/LayoutManager/LayoutManager", () => ({
   LayoutManager: vi.fn().mockImplementation(function () {
@@ -182,7 +173,6 @@ describe("StudioApp", () => {
     expect(screen.getByTestId("multi-provider")).toBeInTheDocument();
     expect(screen.getByTestId("document-title-adapter")).toBeInTheDocument();
     expect(screen.getByTestId("notification-toast-adapter")).toBeInTheDocument();
-    expect(screen.getByTestId("dnd-provider")).toBeInTheDocument();
     expect(screen.getByTestId("panel-catalog-provider")).toBeInTheDocument();
     expect(screen.getByTestId("workspace")).toBeInTheDocument();
   });

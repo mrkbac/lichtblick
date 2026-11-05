@@ -35,11 +35,8 @@ import { PlayerPresence, Topic } from "@lichtblick/suite-base/players/types";
 import { PanelConfig } from "@lichtblick/suite-base/types/panels";
 import { formatKeyboardShortcut } from "@lichtblick/suite-base/util/formatKeyboardShortcut";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
-import {
-  PANEL_TITLE_CONFIG_KEY,
-  getAllPanelIds,
-  getPanelTypeFromId,
-} from "@lichtblick/suite-base/util/layout";
+import { PANEL_TITLE_CONFIG_KEY, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
+import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
 
 import { Command, parseSeekInput } from "./commands";
@@ -306,10 +303,7 @@ export function useAppCommands(): {
     // ---- Panels ----
     const layoutData = selectedLayout?.data;
     if (layoutData) {
-      const panelIds =
-        layoutData.layout != undefined
-          ? getAllPanelIds(layoutData.layout, layoutData.configById)
-          : [];
+      const panelIds = layoutData.layout != undefined ? getPanelIds(layoutData.layout) : [];
       const panelCommands = (idPrefix: string, onPick: (id: string) => void) => () =>
         panelIds.map((id) => {
           const type = getPanelTypeFromId(id);

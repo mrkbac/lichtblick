@@ -91,7 +91,7 @@ beforeEach(() => {
       return {
         matches: false,
         media: query,
-        onchange: ReactNull,
+        onchange: null,
         addListener: vi.fn(), // deprecated
         removeListener: vi.fn(), // deprecated
         addEventListener: vi.fn(),
@@ -2541,7 +2541,7 @@ describe("Renderer static transform caching across message types", () => {
 
     // Then: The cyclic transform must not have been cached, so it is not resurrected
     const grandparentFrame = renderer.transformTree.frame("grandparent");
-    expect(grandparentFrame == undefined || grandparentFrame.parent()?.id !== "child").toBe(true);
+    expect(grandparentFrame?.parent()?.id !== "child").toBe(true);
 
     renderer.dispose();
   });

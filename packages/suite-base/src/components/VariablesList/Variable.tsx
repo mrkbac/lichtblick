@@ -22,7 +22,7 @@ import {
   InputBase,
 } from "@mui/material";
 import * as _ from "lodash-es";
-import { useMemo, useCallback, useState, useRef } from "react";
+import React, { useMemo, useCallback, useState, useRef } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { VariableValue } from "@lichtblick/suite";
@@ -162,7 +162,7 @@ export default function Variable(props: {
     setEditedName(undefined);
   };
 
-  const rootRef = useRef<HTMLDivElement>(ReactNull);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const activeElementIsChild = rootRef.current?.contains(document.activeElement) === true;
 

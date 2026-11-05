@@ -109,7 +109,7 @@ export function Notes({ config, saveConfig }: Props): React.JSX.Element {
   );
 
   // Focus the editor with the cursor at the end, where people usually continue writing.
-  const editorRef = useCallback((el: HTMLTextAreaElement | ReactNull) => {
+  const editorRef = useCallback((el: HTMLTextAreaElement | null) => {
     el?.focus();
     el?.setSelectionRange(el.value.length, el.value.length);
   }, []);

@@ -10,8 +10,6 @@ import EventEmitter from "eventemitter3";
 
 import { H265_TARGET_FRAME_WAIT_MS } from "./h265/constants";
 
-// foxglove-depcheck-used: @types/dom-webcodecs
-
 // H.264 typically emits a decoded VideoFrame within a couple of milliseconds of submitting an
 // EncodedVideoChunk, so a tight 30 ms ceiling lets us return quickly when decoding is healthy and
 // fail fast when the decoder is stuck. The H.265 budgets live in `./h265/constants.ts` and are
@@ -317,9 +315,7 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
   }
 
   #cacheDisplayFrame(videoFrame: VideoFrame): void {
-    if (!this.#codedSize) {
-      this.#codedSize = { width: 0, height: 0 };
-    }
+    this.#codedSize ??= { width: 0, height: 0 };
     this.#codedSize.width = videoFrame.codedWidth;
     this.#codedSize.height = videoFrame.codedHeight;
     this.lastVideoFrame?.close();

@@ -24,7 +24,6 @@ import { StandaloneServices } from "monaco-editor/editor/standalone/browser/stan
 import * as path from "path";
 import React, { Suspense, ReactElement, useCallback, useEffect, useRef } from "react";
 import { useLatest } from "react-use";
-import { ModuleResolutionKind } from "typescript";
 
 import ErrorBoundary from "@lichtblick/suite-base/components/ErrorBoundary";
 import getPrettifiedCode from "@lichtblick/suite-base/panels/UserScriptEditor/getPrettifiedCode";
@@ -90,8 +89,8 @@ const Editor = ({
   setScriptOverride,
   rosLib,
   typesLib,
-}: Props): ReactElement | ReactNull => {
-  const editorRef = React.useRef<CodeEditor>(ReactNull);
+}: Props): ReactElement | null => {
+  const editorRef = React.useRef<CodeEditor>(null);
   const autoFormatOnSaveRef = React.useRef(autoFormatOnSave);
   autoFormatOnSaveRef.current = autoFormatOnSave;
 
@@ -262,9 +261,15 @@ const Editor = ({
       });
       typescript.typescriptDefaults.setCompilerOptions({
         ...typescript.typescriptDefaults.getCompilerOptions(),
-        // This is needed for @foxglove/schemas to resolve correctly in the editor.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        moduleResolution: ModuleResolutionKind.NodeNext as any,
+        // This is needed for @foxglove/schemas to resolve correctly in the editor. NodeNext
+        // resolution requires NodeNext modules, otherwise "./types" needs a file extension.
+        // Monaco's enums lack NodeNext, and importing them from "typescript" would load the
+        // compiler here.
+        module: 199 /* ts.ModuleKind.NodeNext */ as typescript.ModuleKind,
+        moduleResolution:
+          99 /* ts.ModuleResolutionKind.NodeNext */ as typescript.ModuleResolutionKind,
+        // The lib comes from the project config above (same as the compile step), not Monaco.
+        noLib: true,
       });
       projectConfig.utilityFiles.forEach((sourceFile) => {
         const filePath = monacoApi.Uri.parse(`file://${sourceFile.filePath}`);
@@ -334,7 +339,7 @@ const Editor = ({
 
   if (!script) {
     // No script to load
-    return ReactNull;
+    return null;
   }
 
   // The ErrorBoundary is required to properly capture runtime errors from Monaco Editor.

@@ -17,7 +17,7 @@
 import { subtract as subtractTimes, toSec } from "@foxglove/rostime";
 import { Typography } from "@mui/material";
 import * as _ from "lodash-es";
-import { ReactElement } from "react";
+import React, { ReactElement } from "react";
 
 import { Immutable } from "@lichtblick/suite";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";

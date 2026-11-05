@@ -3,19 +3,12 @@
   "debug.javascript.autoAttachFilter": "onlyWithFlag",
   "debug.toolBarLocation": "docked",
   "editor.codeActionsOnSave": {
-    "source.fixAll.eslint": "explicit"
+    "source.fixAll.oxc": "explicit"
   },
   "editor.defaultFormatter": "biomejs.biome",
   "editor.formatOnSave": true,
   // enable intellisense in custom snippets (see snippets.code-snippets)
   "editor.suggest.snippetsPreventQuickSuggestions": false,
-  "eslint.options": {
-    "overrideConfig": {
-      "linterOptions": {
-        "reportUnusedDisableDirectives": "error"
-      }
-    }
-  },
   "files.eol": "\n",
   "files.insertFinalNewline": true,
   "files.trimFinalNewlines": true,
@@ -28,7 +21,6 @@
   },
   "js/ts.tsdk.path": "node_modules/typescript/lib",
   "js/ts.preferences.importModuleSpecifier": "non-relative",
-  "eslint.lintTask.enable": true,
   "[javascript]": {
     "editor.defaultFormatter": "biomejs.biome"
   },

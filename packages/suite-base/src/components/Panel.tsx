@@ -8,12 +8,10 @@
 import {
   Delete20Regular,
   TabDesktop20Regular,
-  TabDesktopMultiple20Regular,
   SplitVertical20Regular,
   SplitHorizontal20Regular,
 } from "@fluentui/react-icons";
-import * as _ from "lodash-es";
-import {
+import React, {
   ComponentType,
   MouseEventHandler,
   Profiler,
@@ -25,21 +23,12 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  getNodeAtPath,
-  getOtherBranch,
-  MosaicContext,
-  MosaicNode,
-  MosaicWindowActions,
-  MosaicWindowContext,
-} from "react-mosaic-component";
 import { Transition } from "react-transition-group";
 import { useMountedState } from "react-use";
 
 import { useShallowMemo } from "@lichtblick/hooks";
 import { useConfigById } from "@lichtblick/suite-base/PanelAPI";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
-import { MosaicPathContext } from "@lichtblick/suite-base/components/MosaicPathContext";
 import { useStyles } from "@lichtblick/suite-base/components/Panel.style";
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import PanelErrorBoundary from "@lichtblick/suite-base/components/PanelErrorBoundary";
@@ -47,7 +36,6 @@ import { MessagePathDropConfig } from "@lichtblick/suite-base/components/PanelEx
 import PanelLogs from "@lichtblick/suite-base/components/PanelLogs";
 import { PanelOverlay, PanelOverlayProps } from "@lichtblick/suite-base/components/PanelOverlay";
 import { PanelRoot } from "@lichtblick/suite-base/components/PanelRoot";
-import { getPanelTypeFromMosaic } from "@lichtblick/suite-base/components/PanelToolbar/utils";
 import {
   loadPanelLogsHeight,
   savePanelLogsHeight,
@@ -63,7 +51,7 @@ import {
   WorkspaceStoreSelectors,
 } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
 import { useInteractionCapture } from "@lichtblick/suite-base/hooks/useInteractionCapture";
-import usePanelDrag from "@lichtblick/suite-base/hooks/usePanelDrag";
+import { usePanelDragHandle } from "@lichtblick/suite-base/hooks/usePanelDragHandle";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { useMessagePathDrop } from "@lichtblick/suite-base/services/messagePathDragging";
 import {
@@ -71,9 +59,8 @@ import {
   setPanelDropConfig,
 } from "@lichtblick/suite-base/services/messagePathDragging/panelDropRegistry";
 import { OpenSiblingPanel, PanelConfig, SaveConfig } from "@lichtblick/suite-base/types/panels";
-import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
-
-import { TAB_PANEL_TYPE } from "../util/constants";
+import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
+import { getSiblingGroup } from "@lichtblick/suite-base/util/layoutTree";
 
 /** Used in storybook when panels are renered outside of a <PanelLayout/> */
 const FALLBACK_PANEL_ID = "$unknown_id";
@@ -98,13 +85,9 @@ export default function Panel<
     const addLog = useCallback((message: string, error?: Error) => {
       setLogs((prev) => [...prev, { timestamp: new Date().toLocaleString(), message, error }]);
     }, []);
-    const { childId = FALLBACK_PANEL_ID, overrideConfig, tabId, ...otherProps } = props;
+    const { childId = FALLBACK_PANEL_ID, overrideConfig, ...otherProps } = props;
     const { classes, cx, theme } = useStyles();
     const isMounted = useMountedState();
-
-    const { mosaicActions } = useContext(MosaicContext);
-    const { mosaicWindowActions }: { mosaicWindowActions: MosaicWindowActions } =
-      useContext(MosaicWindowContext);
 
     const {
       selectedPanelIds,
@@ -126,10 +109,11 @@ export default function Panel<
     const {
       savePanelConfigs,
       updatePanelConfigs,
-      createTabPanel,
+      groupPanels,
       closePanel,
       splitPanel,
       swapPanel,
+      addPanel,
       getCurrentLayoutState,
     } = useCurrentLayoutActions();
 
@@ -139,11 +123,8 @@ export default function Panel<
       undefined,
     );
     const [hasFullscreenDescendant, _setHasFullscreenDescendant] = useState(false);
-    const panelRootRef = useRef<HTMLDivElement>(ReactNull);
+    const panelRootRef = useRef<HTMLDivElement>(null);
     const panelCatalog = usePanelCatalog();
-
-    const mosaicPath = useContext(MosaicPathContext);
-    const isTopLevelPanel = mosaicPath?.length === 0 && tabId == undefined;
 
     // There may be a parent panel (when a panel is in a tab).
     const parentPanelContext = useContext(PanelContext);
@@ -214,15 +195,11 @@ export default function Panel<
           siblingDefaultConfig = siblingModule.default.defaultConfig;
         }
 
-        const ownPath = mosaicWindowActions.getPath();
-
         // Try to find a sibling panel and update it with the `siblingConfig`
         if (updateIfExists) {
-          const lastNode = _.last(ownPath);
-          const siblingPathEnd = lastNode != undefined ? getOtherBranch(lastNode) : "second";
-          const siblingPath = ownPath.slice(0, -1).concat(siblingPathEnd);
-          const siblingId = getNodeAtPath(mosaicActions.getRoot(), siblingPath);
-          if (typeof siblingId === "string" && getPanelTypeFromId(siblingId) === panelType) {
+          const sibling = getSiblingGroup(panelsState.layout, childId);
+          const siblingId = sibling?.active ?? sibling?.panels[0];
+          if (siblingId != undefined && getPanelTypeFromId(siblingId) === panelType) {
             const siblingConfig: PanelConfig = {
               ...siblingDefaultConfig,
               ...panelsState.configById[siblingId],
@@ -241,45 +218,21 @@ export default function Panel<
         }
 
         // Otherwise, open new panel
-        const newPanelPath = ownPath.concat("second");
-        const newPanelConfig = siblingConfigCreator(siblingDefaultConfig);
-        void mosaicWindowActions
-          .split({ type: panelType, panelConfig: newPanelConfig })
-          .then(() => {
-            const newPanelId = getNodeAtPath(mosaicActions.getRoot(), newPanelPath) as string;
-            savePanelConfigs({
-              configs: [
-                {
-                  id: newPanelId,
-                  config: newPanelConfig,
-                  defaultConfig: siblingDefaultConfig,
-                },
-              ],
-            });
-          });
+        addPanel({
+          id: getPanelIdForType(panelType),
+          config: { ...siblingDefaultConfig, ...siblingConfigCreator(siblingDefaultConfig) },
+          position: "right",
+          targetPanelId: childId,
+        });
       },
-      [
-        getCurrentLayoutState,
-        isMounted,
-        mosaicActions,
-        mosaicWindowActions,
-        panelCatalog,
-        savePanelConfigs,
-      ],
+      [addPanel, childId, getCurrentLayoutState, isMounted, panelCatalog, savePanelConfigs],
     );
 
     const replacePanel = useCallback(
       (newPanelType: string, config: Record<string, unknown>) => {
-        swapPanel({
-          tabId,
-          originalId: childId,
-          type: newPanelType,
-          root: mosaicActions.getRoot() as MosaicNode<string>,
-          path: mosaicWindowActions.getPath(),
-          config,
-        });
+        swapPanel({ originalId: childId, type: newPanelType, config });
       },
-      [childId, mosaicActions, mosaicWindowActions, swapPanel, tabId],
+      [childId, swapPanel],
     );
 
     const panelSettingsOpen = useWorkspaceStore(WorkspaceStoreSelectors.selectPanelSettingsOpen);
@@ -288,14 +241,12 @@ export default function Panel<
       (e) => {
         if (panelSettingsOpen) {
           // Allow clicking with no modifiers to select a panel (and deselect others) when panel settings are open
-          e.stopPropagation(); // select the deepest clicked panel, not parent tab panels
           setSelectedPanelIds([childId]);
         } else if (e.metaKey || e.shiftKey || isSelected) {
-          e.stopPropagation(); // select the deepest clicked panel, not parent tab panels
-          togglePanelSelected(childId, tabId);
+          togglePanelSelected(childId);
         }
       },
-      [childId, tabId, togglePanelSelected, isSelected, setSelectedPanelIds, panelSettingsOpen],
+      [childId, togglePanelSelected, isSelected, setSelectedPanelIds, panelSettingsOpen],
     );
 
     const capturePanelInteraction = useInteractionCapture(AppEvent.PANEL_INTERACTION, {
@@ -303,63 +254,20 @@ export default function Panel<
       data: { type },
     });
 
-    const groupPanels = useCallback(() => {
-      const layout = getCurrentLayoutState().selectedLayout?.data?.layout;
-      if (layout == undefined) {
-        return;
-      }
-      createTabPanel({
-        idToReplace: childId,
-        layout,
-        idsToRemove: getSelectedPanelIds(),
-        singleTab: true,
-      });
-    }, [getCurrentLayoutState, getSelectedPanelIds, createTabPanel, childId]);
-
-    const createTabs = useCallback(() => {
-      const layout = getCurrentLayoutState().selectedLayout?.data?.layout;
-      if (layout == undefined) {
-        return;
-      }
-      createTabPanel({
-        idToReplace: childId,
-        layout,
-        idsToRemove: getSelectedPanelIds(),
-        singleTab: false,
-      });
-    }, [getCurrentLayoutState, getSelectedPanelIds, createTabPanel, childId]);
+    const groupSelectedPanels = useCallback(() => {
+      groupPanels({ targetPanelId: childId, panelIds: getSelectedPanelIds() });
+    }, [childId, getSelectedPanelIds, groupPanels]);
 
     const removePanel = useCallback(() => {
-      closePanel({
-        path: mosaicWindowActions.getPath(),
-        root: mosaicActions.getRoot() as MosaicNode<string>,
-        tabId,
-      });
-    }, [closePanel, mosaicActions, mosaicWindowActions, tabId]);
-
-    const getPanelType = useCallback(
-      () => getPanelTypeFromMosaic(mosaicWindowActions, mosaicActions),
-      [mosaicActions, mosaicWindowActions],
-    );
+      closePanel({ id: childId });
+    }, [childId, closePanel]);
 
     const split = useCallback(
-      (id: string | undefined, direction: "row" | "column") => {
-        const panelType = getPanelType();
-        if (id == undefined || panelType == undefined) {
-          throw new Error("Trying to split unknown panel!");
-        }
-
+      (id: string, direction: "row" | "column") => {
         const config = getCurrentLayoutState().selectedLayout?.data?.configById[id] ?? {};
-        splitPanel({
-          id,
-          tabId,
-          direction,
-          root: mosaicActions.getRoot() as MosaicNode<string>,
-          path: mosaicWindowActions.getPath(),
-          config,
-        });
+        splitPanel({ id, direction, config });
       },
-      [getCurrentLayoutState, getPanelType, mosaicActions, mosaicWindowActions, splitPanel, tabId],
+      [getCurrentLayoutState, splitPanel],
     );
 
     const { enterFullscreen, exitFullscreen } = useMemo(
@@ -457,6 +365,14 @@ export default function Panel<
       [exitFullscreen],
     );
 
+    const panelRootCallbackRef = useCallback(
+      (el: HTMLDivElement | null) => {
+        panelRootRef.current = el;
+        return connectMessagePathDropTarget(el);
+      },
+      [connectMessagePathDropTarget],
+    );
+
     const otherPanelProps = useShallowMemo(otherProps);
     const childProps = useMemo(
       // We have to lie to TypeScript with "as PanelProps" because the "PanelProps extends {...}"
@@ -469,8 +385,8 @@ export default function Panel<
 
     const renderCount = useRef(0);
 
-    const perfInfo = useRef<HTMLDivElement>(ReactNull);
-    const quickActionsOverlayRef = useRef<HTMLDivElement>(ReactNull);
+    const perfInfo = useRef<HTMLDivElement>(null);
+    const quickActionsOverlayRef = useRef<HTMLDivElement>(null);
     const onDragStart = useCallback(() => {
       // Temporarily hide the overlay so that the panel can be shown as the drag preview image --
       // even though the overlay is a sibling rather than a child, Chrome still includes it in the
@@ -483,9 +399,7 @@ export default function Panel<
         setTimeout(() => (overlay.style.opacity = "1"), 0);
       }
     }, []);
-    const dragSpec = { tabId, panelId: childId, onDragStart };
-    const [connectOverlayDragSource, connectOverlayDragPreview] = usePanelDrag(dragSpec);
-    const [connectToolbarDragHandle, connectToolbarDragPreview] = usePanelDrag(dragSpec);
+    const connectDragHandle = usePanelDragHandle(onDragStart);
 
     const panelOverlayProps = useMemo(() => {
       const overlayProps: PanelOverlayProps = {
@@ -512,26 +426,13 @@ export default function Panel<
         overlayProps.actions = [
           {
             key: "group",
-            text: "Group in tab",
+            text: "Group as tabs",
             icon: <TabDesktop20Regular />,
-            onClick: groupPanels,
-          },
-          {
-            key: "create-tabs",
-            text: "Create tabs",
-            icon: (
-              <>
-                <span className={classes.tabCount}>
-                  {numSelectedPanelsIfSelected <= 99 ? numSelectedPanelsIfSelected : ""}{" "}
-                </span>
-                <TabDesktopMultiple20Regular />
-              </>
-            ),
-            onClick: createTabs,
+            onClick: groupSelectedPanels,
           },
         ];
       }
-      if (type !== TAB_PANEL_TYPE && quickActionsKeyPressed) {
+      if (quickActionsKeyPressed) {
         overlayProps.variant = "selected";
         overlayProps.highlightMode = "active";
       }
@@ -565,10 +466,8 @@ export default function Panel<
       return overlayProps;
     }, [
       childId,
-      classes.tabCount,
-      createTabs,
       dropMessage,
-      groupPanels,
+      groupSelectedPanels,
       isDragging,
       isOver,
       isSelected,
@@ -578,7 +477,6 @@ export default function Panel<
       removePanel,
       setSelectedPanelIds,
       split,
-      type,
     ]);
 
     return (
@@ -604,9 +502,7 @@ export default function Panel<
             exitFullscreen,
             setHasFullscreenDescendant,
             isFullscreen: fullscreen,
-            tabId,
-            // disallow dragging the root panel in a layout
-            connectToolbarDragHandle: isTopLevelPanel ? undefined : connectToolbarDragHandle,
+            connectToolbarDragHandle: connectDragHandle,
             setMessagePathDropConfig,
             showLogs,
             setShowLogs: ({ show }) => {
@@ -639,25 +535,14 @@ export default function Panel<
                 selected={isSelected || (isDragging && isValidTarget && isOver)}
                 data-testid={cx("panel-mouseenter-container", childId)}
                 data-telemetry-id="panel"
-                ref={(el) => {
-                  panelRootRef.current = el;
-                  // disallow dragging the root panel in a layout
-                  if (!isTopLevelPanel) {
-                    connectOverlayDragPreview(el);
-                    connectToolbarDragPreview(el);
-                  }
-                  connectMessagePathDropTarget(el);
-                }}
+                ref={panelRootCallbackRef}
               >
-                {!fullscreen && type !== TAB_PANEL_TYPE && (
+                {!fullscreen && (
                   <PanelOverlay
                     {...panelOverlayProps}
                     ref={(el) => {
                       quickActionsOverlayRef.current = el;
-                      // disallow dragging the root panel in a layout
-                      if (!isTopLevelPanel) {
-                        connectOverlayDragSource(el);
-                      }
+                      return connectDragHandle?.(el);
                     }}
                   />
                 )}

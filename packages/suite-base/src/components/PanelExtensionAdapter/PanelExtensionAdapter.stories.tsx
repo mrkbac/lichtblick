@@ -54,7 +54,7 @@ export const CatchRenderError: StoryObj = {
           ],
           datatypes: new Map(),
           frame: {},
-          layout: "UnknownPanel!4co6n9d",
+          layout: { panels: ["UnknownPanel!4co6n9d"] },
         }}
       >
         <MockPanelContextProvider>
@@ -113,7 +113,7 @@ export const SimplePanelRender: StoryObj = {
               ["param2", "value2"],
             ]),
           },
-          layout: "UnknownPanel!4co6n9d",
+          layout: { panels: ["UnknownPanel!4co6n9d"] },
         }}
       >
         <MockPanelContextProvider>

@@ -5,12 +5,10 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-/* eslint-disable filenames/match-exported */
-
 import { mergeRsbuildConfig } from "@rsbuild/core";
 import { StorybookConfig } from "storybook-react-rsbuild";
 
-import { makeConfig } from "../packages/suite-base/rspack";
+import { makeConfig } from "../packages/suite-base/rspack.ts";
 
 const storybookConfig: StorybookConfig = {
   // Workaround for https://github.com/storybookjs/storybook/issues/19446
@@ -31,9 +29,7 @@ const storybookConfig: StorybookConfig = {
             undefined,
             { mode: rspackConfig.mode },
             {
-              allowUnusedVariables: true,
               version: "0.0.0-storybook",
-              tsconfigPath: new URL("tsconfig.json", import.meta.url).pathname,
               // Required in ESM context (Storybook) where __dirname is not available in webpack.ts.
               packageDir: new URL("../packages/suite-base", import.meta.url).pathname,
             },
@@ -43,7 +39,10 @@ const storybookConfig: StorybookConfig = {
             optimization: { ...rspackConfig.optimization, minimize: false },
             resolve: {
               ...studioConfig.resolve,
-              fallback: { ...studioConfig.resolve?.fallback, ...rspackConfig.resolve?.fallback },
+              fallback: {
+                ...studioConfig.resolve?.fallback,
+                ...rspackConfig.resolve?.fallback,
+              },
             },
             module: studioConfig.module,
             plugins: [...(rspackConfig.plugins ?? []), ...(studioConfig.plugins ?? [])],

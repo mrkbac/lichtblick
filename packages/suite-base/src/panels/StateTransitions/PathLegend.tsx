@@ -7,7 +7,7 @@
 
 import { Add16Regular, Dismiss12Regular } from "@fluentui/react-icons";
 import { Button, ButtonGroup, Stack } from "@mui/material";
-import { MouseEvent, useCallback } from "react";
+import React, { MouseEvent, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
@@ -21,7 +21,6 @@ import {
   StateTransitionPath,
 } from "@lichtblick/suite-base/panels/StateTransitions/types";
 
-// eslint-disable-next-line @typescript-eslint/no-shadow
 export const PathLegend = React.memo(function PathLegend(props: PathLegendProps) {
   const { t } = useTranslation("stateTransitions");
   const { paths, heightPerTopic, setFocusedPath, saveConfig } = props;

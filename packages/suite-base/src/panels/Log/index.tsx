@@ -24,7 +24,7 @@ import { Divider, IconButton, LinearProgress, Tooltip, Typography } from "@mui/m
 import { produce } from "immer";
 import * as _ from "lodash-es";
 import { useSnackbar } from "notistack";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useDeepMemo } from "@lichtblick/hooks";
@@ -160,7 +160,7 @@ const LogPanel = React.memo(({ config, saveConfig }: Props) => {
   const { t } = useTranslation("log");
   const seekPlayback = useMessagePipeline(selectSeek);
   const getMessagePipeline = useMessagePipelineGetter();
-  const listApi = useRef<LogListApi>(ReactNull);
+  const listApi = useRef<LogListApi>(null);
 
   const availableTopics = useMemo(
     () =>

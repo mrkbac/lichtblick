@@ -17,7 +17,7 @@
 import MinusIcon from "@mui/icons-material/IndeterminateCheckBoxOutlined";
 import { IconButton } from "@mui/material";
 import { Row } from "@tanstack/react-table";
-import { PropsWithChildren } from "react";
+import React, { PropsWithChildren } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { CellValue, TableFeatures } from "@lichtblick/suite-base/panels/Table/types";

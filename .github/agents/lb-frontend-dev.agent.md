@@ -66,7 +66,7 @@ const useStyles = makeStyles()((theme) => ({
 ```
 
 ### TypeScript Conventions (per CONTRIBUTING.md)
-- Prefer `undefined` over `null`; use `ReactNull` alias where React APIs require `null`
+- Prefer `undefined` over `null`; use `null` only where React APIs require it
 - Do **not** use property getters or setters — use function syntax
 - Unused variables must have `_` prefix (e.g., `_unusedParam`)
 - Use `useCallback` and `useMemo` for referential stability in props

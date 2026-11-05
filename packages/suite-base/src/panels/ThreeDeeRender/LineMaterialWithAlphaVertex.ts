@@ -10,7 +10,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/explicit-module-boundary-types */
-/* eslint-disable no-restricted-syntax */
+/* eslint-disable @lichtblick/no-getters-setters */
 
 /**
  * parameters = {

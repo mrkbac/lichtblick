@@ -1,4 +1,4 @@
 #!/bin/bash
-# Remove build outputs and TypeScript build info (written by `pnpm build:packages`).
-rimraf --glob .webpack "*/.webpack" dist "packages/*/dist" storybook-screenshots storybook-static coverage "packages/**/*.tsbuildinfo"
+# Remove build outputs: bundles, `tsc --build` output of the packages, Storybook and coverage.
+rm -rf .webpack */.webpack benchmark/.webpack-desktop dist packages/*/dist packages/*/tsconfig.tsbuildinfo storybook-screenshots storybook-static coverage
 echo "Build cleaned."

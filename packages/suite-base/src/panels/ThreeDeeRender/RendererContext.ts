@@ -36,7 +36,7 @@ export function useRendererEvent<K extends keyof RendererEvents>(
   listener: (
     ...args: EventEmitter.ArgumentMap<RendererEvents>[Extract<K, keyof RendererEvents>]
   ) => void,
-  rendererInstance?: IRenderer | ReactNull,
+  rendererInstance?: IRenderer | null,
 ): void {
   const usedRenderer = useRenderer();
   const renderer = rendererInstance ?? usedRenderer;

@@ -54,5 +54,5 @@ export type HoverTooltipProperties = Readonly<{
   entities: HoverEntityInfo[];
   position: { clientX: number; clientY: number };
   /** Canvas element used to constrain tooltip within the 3D panel bounds. */
-  canvas: HTMLCanvasElement | ReactNull;
+  canvas: HTMLCanvasElement | null;
 }>;

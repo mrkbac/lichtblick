@@ -17,7 +17,6 @@ export const EXPANDED_ICON = "▶";
 
 export const COLLAPSED_ICON = "▼";
 
-export const ROW_HEIGHT = 24;
 export const TREE_NODE_INDENTATION = 16;
 export const SCROLLL_OVERSCAN = 5;
 export const DEFAULT_FONT_SIZE = 12;

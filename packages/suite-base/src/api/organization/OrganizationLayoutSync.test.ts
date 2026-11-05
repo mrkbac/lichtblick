@@ -94,17 +94,15 @@ function fakeServer() {
   return { layouts, handle };
 }
 
-/** Reads go through migrateLayout and a JSON round trip, like IdbLayoutStorage. */
+/** Reads go through migrateLayout and a structured clone, like IdbLayoutStorage. */
 class StoredLayoutStorage extends MockLayoutStorage {
   public override async list(namespace: string): Promise<readonly Layout[]> {
-    return (await super.list(namespace)).map((layout) =>
-      migrateLayout(JSON.parse(JSON.stringify(layout)!)),
-    );
+    return (await super.list(namespace)).map((layout) => migrateLayout(structuredClone(layout)));
   }
 
   public override async get(namespace: string, id: string): Promise<Layout | undefined> {
     const layout = await super.get(namespace, id);
-    return layout && migrateLayout(JSON.parse(JSON.stringify(layout)!));
+    return layout && migrateLayout(structuredClone(layout));
   }
 }
 

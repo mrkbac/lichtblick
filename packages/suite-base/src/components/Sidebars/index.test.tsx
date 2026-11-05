@@ -5,8 +5,6 @@
 
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 
 import "@testing-library/jest-dom/vitest";
 
@@ -36,24 +34,22 @@ describe("Sidebars", () => {
     };
 
     const ui: React.ReactElement = (
-      <DndProvider backend={HTML5Backend}>
-        <Sidebars
-          items={defaultProps.items}
-          bottomItems={defaultProps.bottomItems}
-          selectedKey={defaultProps.selectedKey}
-          onSelectKey={defaultProps.onSelectKey}
-          leftItems={defaultProps.leftItems}
-          selectedLeftKey={defaultProps.selectedLeftKey}
-          onSelectLeftKey={defaultProps.onSelectLeftKey}
-          leftSidebarSize={defaultProps.leftSidebarSize}
-          setLeftSidebarSize={defaultProps.setLeftSidebarSize}
-          rightItems={defaultProps.rightItems}
-          selectedRightKey={defaultProps.selectedRightKey}
-          onSelectRightKey={defaultProps.onSelectRightKey}
-          rightSidebarSize={defaultProps.rightSidebarSize}
-          setRightSidebarSize={defaultProps.setRightSidebarSize}
-        />
-      </DndProvider>
+      <Sidebars
+        items={defaultProps.items}
+        bottomItems={defaultProps.bottomItems}
+        selectedKey={defaultProps.selectedKey}
+        onSelectKey={defaultProps.onSelectKey}
+        leftItems={defaultProps.leftItems}
+        selectedLeftKey={defaultProps.selectedLeftKey}
+        onSelectLeftKey={defaultProps.onSelectLeftKey}
+        leftSidebarSize={defaultProps.leftSidebarSize}
+        setLeftSidebarSize={defaultProps.setLeftSidebarSize}
+        rightItems={defaultProps.rightItems}
+        selectedRightKey={defaultProps.selectedRightKey}
+        onSelectRightKey={defaultProps.onSelectRightKey}
+        rightSidebarSize={defaultProps.rightSidebarSize}
+        setRightSidebarSize={defaultProps.setRightSidebarSize}
+      />
     );
 
     return {

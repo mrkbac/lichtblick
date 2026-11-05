@@ -65,12 +65,11 @@ const CustomPopper = function (props: PopperProps) {
  * for things like multiple autocompletes that seamlessly transition into each
  * other, e.g. when building more complex strings like in the Plot panel.
  */
-// eslint-disable-next-line @typescript-eslint/no-shadow
 export const Autocomplete = React.forwardRef(function Autocomplete(
   props: AutocompleteProps,
   ref: React.ForwardedRef<IAutocomplete>,
 ): React.JSX.Element {
-  const inputRef = useRef<HTMLInputElement>(ReactNull);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   const { classes, cx } = useStyles();
 
@@ -133,7 +132,7 @@ export const Autocomplete = React.forwardRef(function Autocomplete(
   ]);
 
   const onChange = useCallback(
-    (_event: ReactNull | React.SyntheticEvent, newValue: string): void => {
+    (_event: null | React.SyntheticEvent, newValue: string): void => {
       if (onChangeCallback) {
         if (_event) {
           onChangeCallback(_event, newValue);
@@ -148,7 +147,7 @@ export const Autocomplete = React.forwardRef(function Autocomplete(
   // To allow multiple completions in sequence, it's up to the parent component
   // to manually blur the input to finish a completion.
   const onSelect = useCallback(
-    (_event: SyntheticEvent, selectedValue: ReactNull | string | FzfResultItem): void => {
+    (_event: SyntheticEvent, selectedValue: null | string | FzfResultItem): void => {
       if (selectedValue != undefined && typeof selectedValue !== "string") {
         setValue(undefined);
         onSelectCallback(selectedValue.item, { setSelectionRange, focus, blur });
@@ -200,7 +199,7 @@ export const Autocomplete = React.forwardRef(function Autocomplete(
       }}
       selectOnFocus={selectOnFocus}
       size="small"
-      value={value ?? ReactNull}
+      value={value ?? null}
     />
   );
 });

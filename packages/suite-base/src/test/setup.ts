@@ -14,8 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import React from "react";
-
 import setImmediate from "@lichtblick/suite-base/util/setImmediate";
 
 process.env.WASM_LZ4_ENVIRONMENT = "NODE";
@@ -34,9 +32,6 @@ if (typeof window !== "undefined") {
   (window as { setImmediate?: typeof setImmediate }).setImmediate ??= setImmediate;
 }
 
-// React available everywhere (matches webpack config)
-global.React = React;
-
 // jsdom does not include ResizeObserver.
 class ResizeObserverMock {
   #callback: ResizeObserverCallback;
@@ -47,8 +42,9 @@ class ResizeObserverMock {
 
   public disconnect() {}
 
-  public observe() {
+  public observe(target: Element) {
     const entry = {
+      target,
       contentRect: { width: 150, height: 150 },
     };
     this.#callback([entry as ResizeObserverEntry], this);

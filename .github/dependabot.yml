@@ -17,9 +17,10 @@ updates:
         patterns:
           - "storybook"
           - "@storybook/*"
-      eslint:
+      oxlint:
         patterns:
-          - "@typescript-eslint/*"
+          - "oxlint"
+          - "oxlint-tsgolint"
       emotion:
         patterns:
           - "@emotion/*"
@@ -41,7 +42,6 @@ updates:
       monaco-editor:
         patterns:
           - "monaco-editor"
-          - "monaco-editor-webpack-plugin"
 
   - package-ecosystem: "github-actions"
     directory: "/"

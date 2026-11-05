@@ -5,7 +5,6 @@
     "rootDir": "../../",
     "noEmit": true,
     "jsx": "react-jsx",
-    "experimentalDecorators": true,
     "lib": ["dom", "dom.iterable", "es2025", "esnext.typedarrays", "webworker"],
     "paths": {
       "@lichtblick/suite-base/*": ["../../packages/suite-base/src/*"]

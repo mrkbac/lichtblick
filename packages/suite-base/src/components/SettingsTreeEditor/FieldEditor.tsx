@@ -20,7 +20,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { useCallback } from "react";
+import React, { useCallback } from "react";
 
 import { Immutable, SettingsTreeAction, SettingsTreeField } from "@lichtblick/suite";
 import MessagePathInput from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput";
@@ -296,7 +296,7 @@ function FieldInput({
               },
             });
           }}
-          MenuProps={{ MenuListProps: { dense: true } }}
+          MenuProps={{ slotProps: { list: { dense: true } } }}
         >
           {field.options.map(({ label, value = UNDEFINED_SENTINEL_VALUE, disabled }) => (
             <MenuItem key={value} value={value} disabled={disabled}>

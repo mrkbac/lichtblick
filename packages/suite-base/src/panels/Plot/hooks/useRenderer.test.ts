@@ -48,7 +48,7 @@ describe("useRenderer hook", () => {
   });
 
   it("should not create renderer if canvasDiv is undefined", () => {
-    const { result } = renderHook(() => useRenderer(ReactNull, theme));
+    const { result } = renderHook(() => useRenderer(null, theme));
 
     expect(result.current).toBeUndefined();
   });

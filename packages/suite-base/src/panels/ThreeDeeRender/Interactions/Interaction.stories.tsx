@@ -203,7 +203,6 @@ function PanelSetupWithData(props: PropsWithChildren<{ title: React.ReactNode }>
   const { children, title } = props;
   return (
     <PanelSetup
-      omitDragAndDrop
       style={{ width: "auto", height: "auto" }}
       fixture={{
         topics: [],

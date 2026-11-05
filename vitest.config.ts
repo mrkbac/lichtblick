@@ -51,7 +51,7 @@ const suiteBaseAlias = [
   { find: /^.*\.(glb|md|png)$/, replacement: path.join(suiteBaseSrc, "test/mocks/fileMock.ts") },
   // build config modules live at the package root, everything else in src/
   {
-    find: /^@lichtblick\/suite-base\/(rspack|RspackArgv)$/,
+    find: /^@lichtblick\/suite-base\/(rspack|RspackArgv)(?:\.ts)?$/,
     replacement: path.join(root, "packages/suite-base/$1.ts"),
   },
   { find: /^@lichtblick\/suite-base\/(?:src\/)?(.*)$/, replacement: `${suiteBaseSrc}/$1` },
@@ -106,9 +106,8 @@ export default defineConfig({
       project("hooks", {
         root: "packages/hooks",
         include: ["src/**/*.test.{ts,tsx}"],
-        setupFiles: ["test/setup.ts"],
       }),
-      ...["den", "eslint-plugin-suite"].map((name) =>
+      ...["den", "oxlint-plugin"].map((name) =>
         project(name, { root: `packages/${name}`, include: ["**/*.test.{ts,tsx}"] }),
       ),
       ...["mcap-support", "message-path"].map((name) =>

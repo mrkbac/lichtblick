@@ -15,7 +15,7 @@
 //   You may not use this file except in compliance with the License.
 
 import * as _ from "lodash-es";
-import { useCallback, useMemo } from "react";
+import React, { useCallback, useMemo } from "react";
 
 import { filterMap } from "@lichtblick/den/collection";
 import {

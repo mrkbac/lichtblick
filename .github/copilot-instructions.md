@@ -25,7 +25,7 @@ primarily with **TypeScript** and **React**, available as a desktop app (Electro
 - **No `console.log`**: Use `console.warn`, `console.error`, `console.debug`, `console.assert` only
 - **License headers**: All source files must include the MPL-2.0 SPDX header
 
-### Formatting (enforced by Biome; linting by ESLint)
+### Formatting (enforced by Biome; linting by oxlint)
 
 - **Print width**: 100 characters
 - **Quotes**: Double quotes
@@ -85,7 +85,7 @@ pnpm desktop:start           # Launch Electron app (requires desktop:serve)
 pnpm test                    # All unit tests (Vitest)
 pnpm test:watch              # Watch mode
 pnpm test:coverage           # Unit tests with coverage
-pnpm lint                    # ESLint + Prettier
+pnpm lint                    # oxlint (type-aware)
 pnpm test:e2e:web            # Web E2E tests (Playwright)
 pnpm test:e2e:desktop        # Desktop E2E tests (Playwright + Electron)
 ```

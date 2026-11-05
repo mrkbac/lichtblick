@@ -11,6 +11,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
 import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import { IconButton, MenuItem, Select, SelectChangeEvent } from "@mui/material";
+import React from "react";
 
 import MessagePathInput from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
@@ -90,7 +91,7 @@ function ToolbarComponent(props: PropsToolbar): React.JSX.Element {
             size="small"
             title="Diff method"
             value={diffMethod}
-            MenuProps={{ MenuListProps: { dense: true } }}
+            MenuProps={{ slotProps: { list: { dense: true } } }}
             onChange={(event: SelectChangeEvent) => {
               saveConfig({
                 diffMethod: event.target.value as RawMessagesVirtualPanelConfig["diffMethod"],
