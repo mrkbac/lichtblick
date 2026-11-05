@@ -6,7 +6,7 @@
     "react-mosaic-component": "6.2.0"
   },
   "devDependencies": {
-    "@foxglove/schemas": "1.13.0",
+    "@foxglove/schemas": "2.3.1",
     "@lichtblick/den": "workspace:*",
     "@lichtblick/log": "workspace:*",
     "@lichtblick/rostime": "1.0.0",

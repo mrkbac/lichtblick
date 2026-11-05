@@ -2417,6 +2417,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@foxglove/rosmsg-msgs-common@npm:^3.3.0":
+  version: 3.3.0
+  resolution: "@foxglove/rosmsg-msgs-common@npm:3.3.0"
+  dependencies:
+    "@foxglove/message-definition": "npm:0.5.0"
+    "@foxglove/rosmsg": "npm:^5.0.5"
+  checksum: 10/9580488fd3751f9c4005607c27361db3f0a05c8ce0b99c1fef48f7003523cbef80ca70dab928cbae4057f97470dd8c66fff629f1e5708c5d7e29309acfa3b68c
+  languageName: node
+  linkType: hard
+
 "@foxglove/rosmsg@npm:^5.0.5":
   version: 5.0.5
   resolution: "@foxglove/rosmsg@npm:5.0.5"
@@ -2427,13 +2437,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@foxglove/schemas@npm:1.13.0":
-  version: 1.13.0
-  resolution: "@foxglove/schemas@npm:1.13.0"
+"@foxglove/schemas@npm:2.3.1":
+  version: 2.3.1
+  resolution: "@foxglove/schemas@npm:2.3.1"
   dependencies:
-    "@foxglove/rosmsg-msgs-common": "npm:^3.2.2"
+    "@foxglove/message-definition": "npm:0.5.0"
+    "@foxglove/rosmsg-msgs-common": "npm:^3.3.0"
     tslib: "npm:^2"
-  checksum: 10/faefc18cb1cd898833035fc2d1b16287beb00f166275a9850ef52cea4c25acb008e100cbfadd21dc49e77ccdafa03a100949cfb2208bc2dc80b0ea3a26698e39
+  checksum: 10/30364a43380f41e97a9bf80240b6c3848337ea0949219ac290490588f0c8aa888dd292e06095dcb90f2007cb4dc29849b3db0040eca38de5879b2cb9da4d8f72
   languageName: node
   linkType: hard
 
@@ -3373,7 +3384,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@lichtblick/mcap-support@workspace:packages/mcap-support"
   dependencies:
-    "@foxglove/schemas": "npm:1.13.0"
+    "@foxglove/schemas": "npm:2.3.1"
     "@lichtblick/message-definition": "npm:1.0.0"
     "@lichtblick/omgidl-parser": "npm:1.0.0"
     "@lichtblick/omgidl-serialization": "npm:1.0.0"
@@ -3552,7 +3563,7 @@ __metadata:
     "@emotion/react": "npm:11.14.0"
     "@emotion/styled": "npm:11.14.1"
     "@fluentui/react-icons": "npm:2.0.308"
-    "@foxglove/schemas": "npm:1.13.0"
+    "@foxglove/schemas": "npm:2.3.1"
     "@foxglove/ws-protocol": "npm:0.8.0"
     "@lichtblick/avl": "npm:1.0.0"
     "@lichtblick/chartjs-plugin-zoom": "npm:1.0.0"
@@ -8702,7 +8713,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "benchmark@workspace:benchmark"
   dependencies:
-    "@foxglove/schemas": "npm:1.13.0"
+    "@foxglove/schemas": "npm:2.3.1"
     "@lichtblick/den": "workspace:*"
     "@lichtblick/log": "workspace:*"
     "@lichtblick/rostime": "npm:1.0.0"
