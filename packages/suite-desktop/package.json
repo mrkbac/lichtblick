@@ -31,7 +31,6 @@
     "electron-squirrel-startup": "1.0.1",
     "electron-updater": "6.8.11",
     "eventemitter3": "5.0.4",
-    "html-webpack-plugin": "5.6.8",
     "jszip": "3.10.2",
     "path-browserify": "1.0.1",
     "plist": "4.0.0",
@@ -39,11 +38,12 @@
     "quicklookjs": "1.0.1",
     "react": "19.3.1",
     "react-dom": "19.3.1",
+    "react-refresh": "0.18.0",
     "react-use": "17.6.1",
     "storybook-react-rsbuild": "3.6.1",
     "tinycolor2": "1.6.0",
-    "ts-checker-rspack-plugin": "1.7.2",
     "tss-react": "4.9.21",
+    "typescript": "6.0.3",
     "utif": "3.1.0"
   }
 }
