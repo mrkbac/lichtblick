@@ -13,7 +13,8 @@
   ],
   "compilerOptions": {
     "jsx": "react-jsx",
-    "module": "commonjs",
+    "module": "preserve",
+    "erasableSyntaxOnly": true,
     "types": ["node"],
     "noEmit": true
   }

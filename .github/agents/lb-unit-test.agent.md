@@ -82,10 +82,10 @@ afterEach(() => { vi.useRealTimers(); });
 
 ## Key Commands
 
-- Run all tests: `yarn test`
-- Run specific file: `yarn vitest run <path>`
-- Run with coverage: `yarn test:coverage`
-- Watch mode: `yarn vitest <path>`
+- Run all tests: `pnpm test`
+- Run specific file: `pnpm vitest run <path>`
+- Run with coverage: `pnpm test:coverage`
+- Watch mode: `pnpm vitest <path>`
 
 ## Test Quality Rules
 

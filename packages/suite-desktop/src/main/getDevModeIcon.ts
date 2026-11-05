@@ -16,12 +16,7 @@ export default function getDevModeIcon(): NativeImage | undefined {
   try {
     // This can fail when opening the app from a packaged DMG.
     const originalIcon = nativeImage.createFromPath(
-      path.resolve(
-        __dirname,
-        "..",
-        require.resolve("@lichtblick/suite-desktop/src/main"),
-        "../../../resources/icon/icon.png",
-      ),
+      path.resolve(__dirname, "..", require.resolve("./index"), "../../../resources/icon/icon.png"),
     );
 
     const buffer = originalIcon.toBitmap();
