@@ -9,23 +9,12 @@ import { type Configuration, type RuleSetRule, rspack } from "@rspack/core";
 import dotenv from "dotenv";
 import { createRequire as _nodeCreateRequire } from "node:module";
 import { fileURLToPath as _nodeFileURLToPath, pathToFileURL as _nodePathToFileURL } from "node:url";
-import { TsCheckerRspackPlugin } from "ts-checker-rspack-plugin";
 
 import type { RspackArgv } from "./RspackArgv.ts";
 
 /**
- * Type checking runs on the native TypeScript 7 compiler (installed as "typescript7"); tooling
- * that needs the compiler API (ts-node, the user script transformer) stays on the "typescript" 6 package.
- */
-export function tsCheckerOptions(): { tsgo: true; typescriptPath: string } {
-  // Builds run from the repo root, where typescript7 is installed (works in ESM and CJS)
-  const rootRequire = _nodeCreateRequire(`${process.cwd()}/package.json`);
-  return { tsgo: true, typescriptPath: rootRequire.resolve("typescript7/package.json") };
-}
-
-/**
- * Transpiles TypeScript/TSX with Rspack's built-in SWC loader (type checking runs separately in
- * TsCheckerRspackPlugin). `refresh` enables React Fast Refresh for the dev server.
+ * Transpiles TypeScript/TSX with Rspack's built-in SWC loader (type checking runs separately with
+ * `yarn typecheck`). `refresh` enables React Fast Refresh for the dev server.
  */
 export function swcRule({
   isDev,
@@ -67,14 +56,8 @@ function initModuleLocals(packageDir: string | undefined): void {
 }
 
 type Options = {
-  // During hot reloading and development it is useful to comment out code while iterating.
-  // We ignore errors from unused locals to avoid having to also comment
-  // those out while iterating.
-  allowUnusedVariables?: boolean;
   /** Specify the app version. */
   version: string;
-  /** Specify the path to the tsconfig.json file for ForkTsCheckerWebpackPlugin. If unset, the plugin defaults to finding the config file in the webpack `context` directory. */
-  tsconfigPath?: string;
   /**
    * Absolute path to the @lichtblick/suite-base package directory.
    * Defaults to the directory of this file.
@@ -103,7 +86,7 @@ export function makeConfig(
   const isDev = argv.mode === "development";
   const isServe = argv.env?.RSPACK_SERVE ?? false;
 
-  const { allowUnusedVariables = isDev && isServe, version, tsconfigPath } = options;
+  const { version } = options;
 
   return {
     resolve: {
@@ -124,32 +107,15 @@ export function makeConfig(
           ]),
         ),
       },
+      // Node built-ins still imported by browser code. Everything else resolves on its own.
       fallback: {
         path: localRequire.resolve("path-browserify"),
         stream: localRequire.resolve("readable-stream"),
-        url: _nodeFileURLToPath(new URL("src/util/shims/url.ts", dirHref)),
-        assert: false,
-        zlib: false,
-        // Only reached by Node-only code paths (sql.js); the polyfill pulled in ~1 MiB.
+        // Only reached by Node-only code paths (sql.js, TypeScript, wasm decoders)
         crypto: false,
-        vm: false,
-
-        // TypeScript tries to use this when running in node
-        perf_hooks: false,
-        // Yarn patches these imports into TypeScript for PnP support
-        // https://github.com/microsoft/TypeScript/pull/35206
-        // https://github.com/yarnpkg/berry/pull/2889#issuecomment-849905154
-        module: false,
-
-        domain: false,
-
-        // don't inject these things into our web build
         fs: false,
-        pnpapi: false,
-
-        // punycode is a dependency for some older webpack v4 browser libs
-        // It adds unecessary bloat to the build so we make sure it isn't included
-        punycode: false,
+        module: false,
+        perf_hooks: false,
       },
     },
     module: {
@@ -174,18 +140,21 @@ export function makeConfig(
           test: /maplibre-gl\.mjs$/,
           parser: { url: false },
         },
-        { ...swcRule({ isDev, refresh: isServe }), resourceQuery: { not: [/raw/] } },
-        // Name tss-react classes after their file in dev builds
-        ...(isDev
-          ? [
-              {
-                test: /\.tsx?$/,
-                exclude: /node_modules/,
-                resourceQuery: { not: [/raw/] },
-                loader: _nodeFileURLToPath(new URL("loaders/tssReactNameLoader.cjs", dirHref)),
-              },
-            ]
-          : []),
+        {
+          // xmlbuilder2 (via @foxglove/xmlrpc) imports domainToASCII/domainToUnicode from Node's
+          // "url". An alias, not a fallback: the npm "url" package (used by geotiff) resolves first
+          // and lacks those exports.
+          test: /[\\/]node_modules[\\/]@oozcitak[\\/]url[\\/]/,
+          resolve: {
+            alias: {
+              url$: _nodeFileURLToPath(new URL("src/util/shims/url.ts", dirHref)),
+            },
+          },
+        },
+        {
+          ...swcRule({ isDev, refresh: isServe }),
+          resourceQuery: { not: [/raw/] },
+        },
         {
           // "?raw" imports are used to load the original un-modified source
           // https://webpack.js.org/guides/asset-modules/#replacing-inline-loader-syntax
@@ -241,19 +210,6 @@ export function makeConfig(
         DEV_WORKSPACE: JSON.stringify(process.env.DEV_WORKSPACE),
         OTLP_ENDPOINT: JSON.stringify(process.env.OTLP_ENDPOINT),
         ...buildEnvVars(),
-      }),
-      new TsCheckerRspackPlugin({
-        typescript: {
-          ...tsCheckerOptions(),
-          configFile: tsconfigPath,
-          configOverwrite: {
-            compilerOptions: {
-              noUnusedLocals: !allowUnusedVariables,
-              noUnusedParameters: !allowUnusedVariables,
-              jsx: isDev ? "react-jsxdev" : "react-jsx",
-            },
-          },
-        },
       }),
     ],
     node: {

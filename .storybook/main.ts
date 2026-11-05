@@ -29,9 +29,7 @@ const storybookConfig: StorybookConfig = {
             undefined,
             { mode: rspackConfig.mode },
             {
-              allowUnusedVariables: true,
               version: "0.0.0-storybook",
-              tsconfigPath: new URL("tsconfig.json", import.meta.url).pathname,
               // Required in ESM context (Storybook) where __dirname is not available in webpack.ts.
               packageDir: new URL("../packages/suite-base", import.meta.url).pathname,
             },
@@ -41,7 +39,10 @@ const storybookConfig: StorybookConfig = {
             optimization: { ...rspackConfig.optimization, minimize: false },
             resolve: {
               ...studioConfig.resolve,
-              fallback: { ...studioConfig.resolve?.fallback, ...rspackConfig.resolve?.fallback },
+              fallback: {
+                ...studioConfig.resolve?.fallback,
+                ...rspackConfig.resolve?.fallback,
+              },
             },
             module: studioConfig.module,
             plugins: [...(rspackConfig.plugins ?? []), ...(studioConfig.plugins ?? [])],

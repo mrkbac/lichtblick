@@ -74,7 +74,7 @@
     "storybook": "storybook dev --port 9009 --config-dir .storybook",
     "storybook:build": "storybook build --config-dir .storybook --stats-json",
     "version:all": "yarn workspaces foreach version",
-    "typecheck": "node ./node_modules/typescript7/bin/tsc --noEmit"
+    "typecheck": "node ./node_modules/typescript7/bin/tsc --build tsconfig.json web/src/tsconfig.json desktop/tsconfig.json desktop/*/tsconfig.json benchmark/tsconfig.json benchmark/src/tsconfig.json benchmark/desktop/*/tsconfig.json"
   },
   "lint-staged": {
     "*.{js,jsx,mjs,cjs,ts,tsx,json}": [

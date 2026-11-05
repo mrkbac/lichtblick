@@ -5,8 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import type { Configuration } from "@rspack/core";
-import HtmlWebpackPlugin from "html-webpack-plugin";
+import { type Configuration, rspack } from "@rspack/core";
 import path from "node:path";
 
 import { resolveConfigs, type RspackArgv } from "../packages/suite-base/RspackArgv.ts";
@@ -33,13 +32,18 @@ const rootConfig = (_env: unknown, _argv: RspackArgv): Configuration => ({
     clean: true,
   },
   plugins: [
-    new HtmlWebpackPlugin({
-      filename: "package.json",
-      templateContent: JSON.stringify({
-        main: "main/main.js",
-        name: "lichtblick-benchmark-desktop",
-        version: "0.0.0-benchmark",
-      }),
+    new rspack.CopyRspackPlugin({
+      patterns: [
+        {
+          from: path.resolve(import.meta.dirname, "package.json"),
+          transform: () =>
+            JSON.stringify({
+              main: "main/main.js",
+              name: "lichtblick-benchmark-desktop",
+              version: "0.0.0-benchmark",
+            }),
+        },
+      ],
     }),
   ],
 });
@@ -94,10 +98,7 @@ const preloadConfig = (_env: unknown, argv: RspackArgv): Configuration => {
 const rendererConfig = (env: unknown, argv: RspackArgv): Configuration => {
   const isDev = argv.mode === "development";
 
-  const appConfig = makeConfig(env, argv, {
-    allowUnusedVariables: isDev,
-    version: "0.0.0-benchmark",
-  });
+  const appConfig = makeConfig(env, argv, { version: "0.0.0-benchmark" });
 
   return {
     name: "renderer",
@@ -119,17 +120,17 @@ const rendererConfig = (env: unknown, argv: RspackArgv): Configuration => {
 
     plugins: [
       ...(appConfig.plugins ?? []),
-      new HtmlWebpackPlugin({
+      new rspack.HtmlRspackPlugin({
         templateContent: `
   <!doctype html>
   <html>
     <head>
       <meta charset="utf-8">
       <title>Lichtblick Benchmark (Desktop)</title>
+      <script>
+        global = globalThis;
+      </script>
     </head>
-    <script>
-      global = globalThis;
-    </script>
     <body>
       <div id="root"></div>
     </body>

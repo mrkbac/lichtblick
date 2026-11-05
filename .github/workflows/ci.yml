@@ -37,7 +37,7 @@ jobs:
             command: |
               check yarn license-check
               check yarn dedupe --check
-              # typecheck files that are not included by the app or package builds (TypeScript 7)
+              # type checks the apps and root files (builds only transpile; packages are checked by build:packages)
               check yarn run typecheck
               check yarn run format:ci
               check yarn run lint:ci
