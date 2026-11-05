@@ -54,7 +54,7 @@ export const rspackRootConfig =
                   productDescription: params.packageJson.productDescription,
                   license: params.packageJson.license,
                   author: params.packageJson.author,
-                }),
+                }) ?? "",
             },
           ],
         }),
