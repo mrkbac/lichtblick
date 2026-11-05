@@ -8,6 +8,12 @@ on:
 permissions:
   contents: read
 
+# A new push to a PR supersedes the previous run; cancel it so it doesn't hold runners.
+# Runs on licht are never cancelled, so every merge commit keeps a result.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -24,11 +30,10 @@ jobs:
         config:
           # Specify names so that the GitHub branch protection settings for
           # required checks don't need to change if we ever change the commands used.
-          - name: npm audit
-            command: yarn npm audit --all --recursive --severity high
+          # Cheap checks share one job: on the shared runner pool, queue time per job
+          # (often minutes) dwarfs these commands' run time (seconds each).
           - name: lint
             command: |
-              # lint steps
               set -x
               yarn license-check
               yarn dedupe --check
@@ -36,14 +41,14 @@ jobs:
               yarn run format:ci
               yarn run lint:ci
               yarn run lint:knip
-          - name: packages
-            command: yarn run build:packages
-          - name: web
-            command: yarn run web:build:prod
-          - name: desktop
-            command: yarn run desktop:build:prod
-          - name: build benchmark
-            command: yarn run benchmark:build:prod
+              yarn npm audit --all --recursive --severity high # last: advisories change without our code changing
+          - name: build
+            command: |
+              set -x
+              yarn run build:packages
+              yarn run web:build:prod
+              yarn run desktop:build:prod
+              yarn run benchmark:build:prod
           - name: test
             command: yarn run test --maxWorkers=100%
         include:
