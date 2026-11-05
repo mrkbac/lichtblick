@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { fromSec } from "@lichtblick/rostime";
+import { fromSec } from "@foxglove/rostime";
+import type { Mock } from "vitest";
+
 import { MessageEvent } from "@lichtblick/suite";
 import { BlockCache } from "@lichtblick/suite-base/players/types";
 
@@ -15,8 +17,8 @@ import {
   timeBucket,
 } from "./scrubPreview";
 
-const bitmap = () => ({ close: jest.fn(), width: 1, height: 1 }) as unknown as ImageBitmap;
-const closeOf = (b: ImageBitmap) => (b as unknown as { close: jest.Mock }).close;
+const bitmap = () => ({ close: vi.fn(), width: 1, height: 1 }) as unknown as ImageBitmap;
+const closeOf = (b: ImageBitmap) => (b as unknown as { close: Mock }).close;
 
 const msg = (topic: string, seconds: number): MessageEvent => ({
   topic,
@@ -120,18 +122,18 @@ describe("ThumbnailCache", () => {
 
 describe("requestThumbnail", () => {
   beforeEach(() => {
-    jest.useFakeTimers();
+    vi.useFakeTimers();
   });
   afterEach(() => {
-    jest.useRealTimers();
+    vi.useRealTimers();
   });
 
   it("answers from cache synchronously without loading", () => {
     const cache = new ThumbnailCache();
     const a = bitmap();
     cache.set(1, a);
-    const load = jest.fn();
-    const onResult = jest.fn();
+    const load = vi.fn();
+    const onResult = vi.fn();
     requestThumbnail({ key: 1, cache, delayMs: 50, load, onResult });
     expect(onResult).toHaveBeenCalledWith(a);
     expect(load).not.toHaveBeenCalled();
@@ -140,27 +142,27 @@ describe("requestThumbnail", () => {
   it("debounces, then caches and reports the result", async () => {
     const cache = new ThumbnailCache();
     const a = bitmap();
-    const load = jest.fn().mockResolvedValue(a);
-    const onResult = jest.fn();
+    const load = vi.fn().mockResolvedValue(a);
+    const onResult = vi.fn();
     requestThumbnail({ key: 1, cache, delayMs: 50, load, onResult });
     expect(load).not.toHaveBeenCalled();
-    await jest.advanceTimersByTimeAsync(50);
+    await vi.advanceTimersByTimeAsync(50);
     expect(load).toHaveBeenCalledTimes(1);
     expect(onResult).toHaveBeenCalledWith(a);
     expect(cache.get(1)).toBe(a);
   });
 
   it("cancelling before the debounce skips the load", async () => {
-    const load = jest.fn();
+    const load = vi.fn();
     const cancel = requestThumbnail({
       key: 1,
       cache: new ThumbnailCache(),
       delayMs: 50,
       load,
-      onResult: jest.fn(),
+      onResult: vi.fn(),
     });
     cancel();
-    await jest.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(100);
     expect(load).not.toHaveBeenCalled();
   });
 
@@ -169,19 +171,19 @@ describe("requestThumbnail", () => {
     const a = bitmap();
     let signal: AbortSignal | undefined;
     let resolve: (b: ImageBitmap) => void = () => {};
-    const load = jest.fn(async (s: AbortSignal) => {
+    const load = vi.fn(async (s: AbortSignal) => {
       signal = s;
       return await new Promise<ImageBitmap>((r) => {
         resolve = r;
       });
     });
-    const onResult = jest.fn();
+    const onResult = vi.fn();
     const cancel = requestThumbnail({ key: 1, cache, delayMs: 0, load, onResult });
-    await jest.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(0);
     cancel();
     expect(signal?.aborted).toBe(true);
     resolve(a);
-    await jest.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(0);
     expect(onResult).not.toHaveBeenCalled();
     expect(closeOf(a)).toHaveBeenCalled();
     expect(cache.has(1)).toBe(false);
@@ -189,7 +191,7 @@ describe("requestThumbnail", () => {
 
   it("remembers failures as misses", async () => {
     const cache = new ThumbnailCache();
-    const onResult = jest.fn();
+    const onResult = vi.fn();
     requestThumbnail({
       key: 1,
       cache,
@@ -197,7 +199,7 @@ describe("requestThumbnail", () => {
       load: async () => await Promise.reject(new Error("bad image")),
       onResult,
     });
-    await jest.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(0);
     expect(onResult).toHaveBeenCalledWith(undefined);
     expect(cache.has(1)).toBe(true);
   });
