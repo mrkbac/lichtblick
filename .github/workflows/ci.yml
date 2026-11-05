@@ -238,7 +238,7 @@ jobs:
       - name: Generate E2E Test Summary
         run: |
           echo "Generating E2E test summary from merged reports..."
-          yarn ts-node e2e/ci-helpers/generate-test-summary.ts >> $GITHUB_STEP_SUMMARY
+          node e2e/ci-helpers/generate-test-summary.ts >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Merged E2E Test Reports
         if: always()

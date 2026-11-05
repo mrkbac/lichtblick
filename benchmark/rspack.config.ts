@@ -5,13 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Configuration, RspackPluginInstance } from "@rspack/core";
+import type { Configuration, RspackPluginInstance } from "@rspack/core";
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "node:path";
 
-import { resolveConfigs, type RspackArgv } from "../packages/suite-base/RspackArgv";
-import { makeConfig } from "../packages/suite-base/rspack";
+import { resolveConfigs, type RspackArgv } from "../packages/suite-base/RspackArgv.ts";
+import { makeConfig } from "../packages/suite-base/rspack.ts";
 
 const devServerConfig: Configuration = {
   // Use empty entry to avoid webpack default fallback to /src
@@ -20,12 +20,12 @@ const devServerConfig: Configuration = {
   // Output path must be specified here for HtmlWebpackPlugin within render config to work
   output: {
     publicPath: "",
-    path: path.resolve(__dirname, ".webpack"),
+    path: path.resolve(import.meta.dirname, ".webpack"),
   },
 
   devServer: {
     static: {
-      directory: path.resolve(__dirname, ".webpack"),
+      directory: path.resolve(import.meta.dirname, ".webpack"),
     },
     hot: true,
     // The problem and solution are described at <https://github.com/webpack/webpack-dev-server/issues/1604>.
@@ -65,7 +65,7 @@ const mainConfig = (env: unknown, argv: RspackArgv): Configuration => {
     ...appConfig,
 
     target: "web",
-    context: path.resolve(__dirname, "src"),
+    context: path.resolve(import.meta.dirname, "src"),
     entry: "./index.tsx",
     devtool: isDev ? "eval-cheap-module-source-map" : "source-map",
 
@@ -74,7 +74,7 @@ const mainConfig = (env: unknown, argv: RspackArgv): Configuration => {
 
       // Output filenames should include content hashes in order to cache bust when new versions are available
       filename: isDev ? "[name].js" : "[name].[contenthash].js",
-      path: path.resolve(__dirname, ".webpack"),
+      path: path.resolve(import.meta.dirname, ".webpack"),
       clean: true,
     },
 

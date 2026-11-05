@@ -8,14 +8,18 @@
 import type { Configuration } from "@rspack/core";
 import path from "path";
 
-import { resolveConfigs, type RspackArgv } from "@lichtblick/suite-base/RspackArgv";
-import { ConfigParams, devServerConfig, mainConfig } from "@lichtblick/suite-web/src/rspackConfigs";
+import { resolveConfigs, type RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
+import {
+  type ConfigParams,
+  devServerConfig,
+  mainConfig,
+} from "@lichtblick/suite-web/src/rspackConfigs.ts";
 
-import packageJson from "../package.json";
+import packageJson from "../package.json" with { type: "json" };
 
 const params: ConfigParams = {
-  outputPath: path.resolve(__dirname, ".webpack"),
-  contextPath: path.resolve(__dirname, "src"),
+  outputPath: path.resolve(import.meta.dirname, ".webpack"),
+  contextPath: path.resolve(import.meta.dirname, "src"),
   entrypoint: "./entrypoint.tsx",
   prodSourceMap: "source-map",
   // Fork-only: show commit + build time in the version string (Settings > About, start dialog).

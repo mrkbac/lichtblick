@@ -5,12 +5,12 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Configuration } from "@rspack/core";
+import type { Configuration } from "@rspack/core";
 import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "node:path";
 
-import { resolveConfigs, type RspackArgv } from "../packages/suite-base/RspackArgv";
-import { makeConfig, swcRule } from "../packages/suite-base/rspack";
+import { resolveConfigs, type RspackArgv } from "../packages/suite-base/RspackArgv.ts";
+import { makeConfig, swcRule } from "../packages/suite-base/rspack.ts";
 
 // This is a standalone Electron shell for the benchmark app, separate from the production
 // `desktop/` shell. It intentionally does not depend on `@lichtblick/suite-desktop` (auto-update,
@@ -18,7 +18,7 @@ import { makeConfig, swcRule } from "../packages/suite-base/rspack";
 // benchmark harness) -- it is only a `BrowserWindow` that renders `benchmark/src/Root.tsx` plus a
 // preload bridge exposing Electron process memory metrics for the Playwright benchmark suite.
 
-const outputPath = path.resolve(__dirname, ".webpack-desktop");
+const outputPath = path.resolve(import.meta.dirname, ".webpack-desktop");
 
 // Cleans the output directory once and writes the `package.json` that Electron reads to find its
 // main entry point when launched with `electron <outputPath>`. Named so the other configs can
@@ -51,7 +51,7 @@ const mainConfig = (_env: unknown, argv: RspackArgv): Configuration => {
     name: "main",
     dependencies: ["root"],
     target: "electron-main",
-    context: path.resolve(__dirname, "desktop/main"),
+    context: path.resolve(import.meta.dirname, "desktop/main"),
     entry: "./index.ts",
     devtool: isDev ? "eval-cheap-module-source-map" : "source-map",
     output: {
@@ -74,7 +74,7 @@ const preloadConfig = (_env: unknown, argv: RspackArgv): Configuration => {
     name: "preload",
     dependencies: ["root"],
     target: "electron-preload",
-    context: path.resolve(__dirname, "desktop/preload"),
+    context: path.resolve(import.meta.dirname, "desktop/preload"),
     entry: "./index.ts",
     devtool: isDev ? "eval-cheap-module-source-map" : "source-map",
     output: {
@@ -108,7 +108,7 @@ const rendererConfig = (env: unknown, argv: RspackArgv): Configuration => {
     // Fixes "require is not defined" errors since nodeIntegration is off
     // https://gist.github.com/msafi/d1b8571aa921feaaa0f893ab24bb727b
     target: "web",
-    context: path.resolve(__dirname, "desktop/renderer"),
+    context: path.resolve(import.meta.dirname, "desktop/renderer"),
     entry: "./index.tsx",
     devtool: isDev ? "eval-cheap-module-source-map" : "source-map",
 
