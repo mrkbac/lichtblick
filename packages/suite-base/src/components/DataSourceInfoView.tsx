@@ -93,6 +93,7 @@ function Field(props: {
   children: React.ReactNode;
 }): React.JSX.Element {
   const { label, copyText, children } = props;
+  const { t } = useTranslation("dataSourceInfo");
   const { classes } = useStyles();
   return (
     <Stack className={classes.field}>
@@ -109,7 +110,7 @@ function Field(props: {
             size="small"
             iconSize="small"
             color="inherit"
-            aria-label={`Copy ${label.toLowerCase()}`}
+            aria-label={t("copyValue", { label })}
             getText={() => copyText}
           />
         )}
