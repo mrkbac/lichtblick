@@ -24,6 +24,17 @@ describe("layout", () => {
   });
 
   describe("validateLayoutData", () => {
+    it("rejects a malformed layout tree", () => {
+      expect(() => validateLayoutData({ ...validData(), layout: { direction: "row" } })).toThrow(
+        'invalid "layout"',
+      );
+    });
+
+    it("accepts the current layout tree format", () => {
+      const data = { ...validData(), layout: { panels: ["Plot!1"] } };
+      expect(validateLayoutData(data)).toBe(data);
+    });
+
     function validData(): Record<string, unknown> {
       return {
         configById: {},

@@ -96,4 +96,8 @@ describe("migrateMosaicLayout", () => {
     expect(result.layout).toEqual({ panels: ["A!1"] });
     expect(Object.keys(result.configById)).toEqual(["A!1"]);
   });
+
+  it("drops a malformed layout instead of failing on it", () => {
+    expect(migrateMosaicLayout(layoutData({ direction: "row" })).layout).toBeUndefined();
+  });
 });

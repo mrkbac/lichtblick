@@ -46,10 +46,8 @@ function ResizeHandle({
         const rect = container.getBoundingClientRect();
         onResize(((event.clientX - rect.left) / rect.width) * 100);
       }}
-      onPointerUp={(event) => {
-        event.currentTarget.releasePointerCapture(event.pointerId);
-        onResizeEnd();
-      }}
+      // Fires after pointerup and when the browser cancels the drag, so the drag state always ends.
+      onLostPointerCapture={onResizeEnd}
     />
   );
 }
@@ -124,7 +122,10 @@ export default function Sidebars<
           key="lefthandle"
           onResize={resizeLeft}
           onResizeEnd={() => {
-            setLeftSidebarSize(latest.current.dragLeft);
+            // A click without movement keeps the saved size
+            if (latest.current.dragLeft != undefined) {
+              setLeftSidebarSize(latest.current.dragLeft);
+            }
             setDragLeft(undefined);
           }}
         />,
@@ -137,7 +138,9 @@ export default function Sidebars<
           key="righthandle"
           onResize={resizeRight}
           onResizeEnd={() => {
-            setRightSidebarSize(latest.current.dragRight);
+            if (latest.current.dragRight != undefined) {
+              setRightSidebarSize(latest.current.dragRight);
+            }
             setDragRight(undefined);
           }}
         />,

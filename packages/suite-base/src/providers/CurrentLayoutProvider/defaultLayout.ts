@@ -59,4 +59,4 @@ export const defaultLayout: LayoutData =
       sizes: [70, 30],
     },
     version: 2,
-  } as const);
+  } satisfies LayoutData);

@@ -5,29 +5,19 @@ import type { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutCon
 import type { LayoutGroup, LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import type { SavedProps } from "@lichtblick/suite-base/types/panels";
 import { PANEL_TITLE_CONFIG_KEY, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
-import { getGroups, isLayoutGroup, normalizeLayout } from "@lichtblick/suite-base/util/layoutTree";
+import {
+  MosaicNode,
+  getGroups,
+  isLayoutGroup,
+  isLayoutNode,
+  isMosaicNode,
+  normalizeLayout,
+} from "@lichtblick/suite-base/util/layoutTree";
 
 /** Panel type of the retired Tab panel, which nested a whole layout per tab. */
 const LEGACY_TAB_PANEL_TYPE = "Tab";
 
-/** Layout tree of react-mosaic-component, which layouts were saved in before. */
-type MosaicNode =
-  | string
-  | {
-      direction: "row" | "column";
-      first: MosaicNode;
-      second: MosaicNode;
-      splitPercentage?: number;
-    };
-
-type LegacyTabConfig = { activeTabIdx?: number; tabs?: { title?: string; layout?: MosaicNode }[] };
-
-function isMosaicNode(value: unknown): value is MosaicNode {
-  return (
-    typeof value === "string" ||
-    (typeof value === "object" && value != undefined && "first" in value && "second" in value)
-  );
-}
+type LegacyTabConfig = { activeTabIdx?: number; tabs?: { title?: string; layout?: unknown }[] };
 
 /**
  * Convert a layout saved by react-mosaic-component (binary splits, nested Tab panels) into a layout
@@ -41,7 +31,8 @@ export function migrateMosaicLayout(data: LayoutData): LayoutData {
     (id) => getPanelTypeFromId(id) === LEGACY_TAB_PANEL_TYPE,
   );
   if (!isMosaicNode(legacy) && !hasTabConfigs) {
-    return data;
+    // Drop a malformed tree (e.g. from a hand-edited file) instead of failing on it later.
+    return legacy == undefined || isLayoutNode(legacy) ? data : { ...data, layout: undefined };
   }
 
   const configById: SavedProps = { ...data.configById };
@@ -68,7 +59,7 @@ export function migrateMosaicLayout(data: LayoutData): LayoutData {
     const config = configById[tabPanelId] as LegacyTabConfig | undefined;
     delete configById[tabPanelId];
     const tabs = (config?.tabs ?? []).flatMap((tab, index) => {
-      const tree = tab.layout != undefined ? convert(tab.layout) : undefined;
+      const tree = isMosaicNode(tab.layout) ? convert(tab.layout) : undefined;
       return tree == undefined ? [] : [{ title: tab.title, tree, index }];
     });
     const base = tabs.find((tab) => tab.index === (config?.activeTabIdx ?? 0)) ?? tabs[0];
@@ -104,7 +95,7 @@ export function migrateMosaicLayout(data: LayoutData): LayoutData {
     return normalizeLayout(result);
   }
 
-  const layout = isMosaicNode(legacy) ? convert(legacy) : data.layout;
+  const layout = isMosaicNode(legacy) ? convert(legacy) : isLayoutNode(legacy) ? legacy : undefined;
   // Tab panels that are no longer in the layout only leave orphaned configs behind.
   for (const id of Object.keys(configById)) {
     if (getPanelTypeFromId(id) === LEGACY_TAB_PANEL_TYPE) {

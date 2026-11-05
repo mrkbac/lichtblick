@@ -12,6 +12,54 @@ export function isLayoutGroup(node: LayoutNode): node is LayoutGroup {
   return "panels" in node;
 }
 
+/** Layout tree of react-mosaic-component, which layouts were saved in before (version 1). */
+export type MosaicNode =
+  | string
+  | {
+      direction: "row" | "column";
+      first: MosaicNode;
+      second: MosaicNode;
+      splitPercentage?: number;
+    };
+
+/** Whether `value` is a well-formed react-mosaic-component layout tree. */
+export function isMosaicNode(value: unknown): value is MosaicNode {
+  if (typeof value === "string") {
+    return true;
+  }
+  if (typeof value !== "object" || value == undefined) {
+    return false;
+  }
+  const node = value as Record<string, unknown>;
+  return (
+    (node.direction === "row" || node.direction === "column") &&
+    isMosaicNode(node.first) &&
+    isMosaicNode(node.second)
+  );
+}
+
+/** Whether `value` is a well-formed layout tree, e.g. one read from an imported file. */
+export function isLayoutNode(value: unknown): value is LayoutNode {
+  if (typeof value !== "object" || value == undefined) {
+    return false;
+  }
+  const node = value as Record<string, unknown>;
+  if ("panels" in node) {
+    return (
+      Array.isArray(node.panels) &&
+      node.panels.every((id) => typeof id === "string") &&
+      (node.active == undefined || typeof node.active === "string")
+    );
+  }
+  return (
+    (node.direction === "row" || node.direction === "column") &&
+    Array.isArray(node.children) &&
+    node.children.every(isLayoutNode) &&
+    (node.sizes == undefined ||
+      (Array.isArray(node.sizes) && node.sizes.every((size) => typeof size === "number")))
+  );
+}
+
 /** All panel ids in layout order (tabs in tab order). */
 export function getPanelIds(node: LayoutNode | undefined): string[] {
   if (node == undefined) {
@@ -207,13 +255,18 @@ export function groupPanels(
   targetPanelId: string,
   panelIds: readonly string[],
 ): LayoutNode | undefined {
+  // Selections can outlive their panels; ignore ids that are no longer in the layout.
+  const present = new Set(getPanelIds(node));
+  if (node == undefined || !present.has(targetPanelId)) {
+    return node;
+  }
   let result = node;
   for (const id of panelIds) {
-    if (id !== targetPanelId) {
+    if (id !== targetPanelId && present.has(id)) {
       result = insertPanel(result, id, "center", targetPanelId);
     }
   }
-  return result == undefined ? undefined : setActivePanel(result, targetPanelId);
+  return setActivePanel(result, targetPanelId);
 }
 
 export function setActivePanel(node: LayoutNode, panelId: string): LayoutNode {

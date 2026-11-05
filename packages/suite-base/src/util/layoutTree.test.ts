@@ -9,6 +9,8 @@ import {
   getSiblingGroup,
   groupPanels,
   insertPanel,
+  isLayoutNode,
+  isMosaicNode,
   layoutsEqual,
   normalizeLayout,
   removePanels,
@@ -111,6 +113,15 @@ describe("layout edits", () => {
     });
   });
 
+  it("ignores ids that are not in the layout when grouping", () => {
+    expect(getPanelIds(groupPanels(threePanels, "A!1", ["B!1", "Gone!1"]))).toEqual([
+      "A!1",
+      "B!1",
+      "C!1",
+    ]);
+    expect(groupPanels(threePanels, "Gone!1", ["A!1", "B!1"])).toBe(threePanels);
+  });
+
   it("finds the neighbouring group", () => {
     expect(getSiblingGroup(threePanels, "B!1")).toEqual({ panels: ["C!1"] });
     expect(getSiblingGroup(threePanels, "C!1")).toEqual({ panels: ["B!1"] });
@@ -134,5 +145,22 @@ describe("dockview conversion", () => {
     };
     expect(dockviewToLayout(layoutToDockview(tabbed))).toEqual(tabbed);
     expect(dockviewToLayout(layoutToDockview({ panels: ["A!1"] }))).toEqual({ panels: ["A!1"] });
+  });
+});
+
+describe("layout validation", () => {
+  it("accepts well-formed trees only", () => {
+    expect(isLayoutNode(threePanels)).toBe(true);
+    expect(isLayoutNode({ panels: ["A!1"], active: "A!1" })).toBe(true);
+    expect(isLayoutNode({ direction: "row" })).toBe(false);
+    expect(isLayoutNode({ panels: "A!1" })).toBe(false);
+    expect(isLayoutNode({ direction: "row", children: [{ panels: [1] }] })).toBe(false);
+  });
+
+  it("recognizes old mosaic trees", () => {
+    expect(isMosaicNode("A!1")).toBe(true);
+    expect(isMosaicNode({ direction: "row", first: "A!1", second: "B!1" })).toBe(true);
+    expect(isMosaicNode({ direction: "row", first: "A!1" })).toBe(false);
+    expect(isMosaicNode(threePanels)).toBe(false);
   });
 });

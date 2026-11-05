@@ -14,6 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
+import { isLayoutNode, isMosaicNode } from "@lichtblick/suite-base/util/layoutTree";
 
 /** Key injected into panel configs for user-selected title (overrides setDefaultPanelTitle) */
 export const PANEL_TITLE_CONFIG_KEY = "lichtblickPanelTitle";
@@ -69,7 +70,8 @@ export function validateLayoutData(data: unknown): LayoutData {
     errors.push(`invalid "userNodes"`);
   }
 
-  if (data.layout != undefined && typeof data.layout !== "string" && !isPlainObject(data.layout)) {
+  // Older files store the react-mosaic-component tree, which is converted when loaded
+  if (data.layout != undefined && !isLayoutNode(data.layout) && !isMosaicNode(data.layout)) {
     errors.push(`invalid "layout"`);
   }
 

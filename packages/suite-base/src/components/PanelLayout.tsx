@@ -93,9 +93,11 @@ function DockPanel({ api, containerApi }: IDockviewPanelProps): React.JSX.Elemen
   const type = getPanelTypeFromId(id);
   const panelComponents = useContext(PanelComponentsContext);
   const panelCatalog = usePanelCatalog();
-  const customTitle = useCurrentLayoutSelector(
-    (state) => state.selectedLayout?.data?.configById[id]?.[PANEL_TITLE_CONFIG_KEY],
+  const customTitleSelector = useCallback(
+    (state: LayoutState) => state.selectedLayout?.data?.configById[id]?.[PANEL_TITLE_CONFIG_KEY],
+    [id],
   );
+  const customTitle = useCurrentLayoutSelector(customTitleSelector);
 
   // The tab shows the panel's title when the panel shares its group with others.
   const title = panelTitle(id, customTitle, panelCatalog);
