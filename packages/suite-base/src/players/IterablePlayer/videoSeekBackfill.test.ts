@@ -78,11 +78,11 @@ describe("needsGopBackfill", () => {
 
   it("rejects unrecognized codecs and non-Uint8Array payloads", () => {
     // Given
-    const vp9 = MessageEventBuilder.messageEvent({
+    const mjpeg = MessageEventBuilder.messageEvent({
       topic: "video",
       schemaName: "foxglove.CompressedVideo",
       receiveTime: { sec: 0, nsec: 0 },
-      message: { format: "vp9", data: new Uint8Array() },
+      message: { format: "mjpeg", data: new Uint8Array() },
       sizeInBytes: 1,
     });
     const invalidData = MessageEventBuilder.messageEvent({
@@ -94,11 +94,11 @@ describe("needsGopBackfill", () => {
     });
 
     // When
-    const vp9Result = needsGopBackfill(vp9);
+    const mjpegResult = needsGopBackfill(mjpeg);
     const invalidDataResult = needsGopBackfill(invalidData);
 
     // Then
-    expect(vp9Result).toBe(false);
+    expect(mjpegResult).toBe(false);
     expect(invalidDataResult).toBe(false);
   });
 });
@@ -328,7 +328,7 @@ describe("expandVideoSeekBackfill", () => {
       topic: "video",
       schemaName: "foxglove.CompressedVideo",
       receiveTime: { sec: 0, nsec: 1 },
-      message: { format: "vp9", data: new Uint8Array([0x01]) },
+      message: { format: "mjpeg", data: new Uint8Array([0x01]) },
       sizeInBytes: 1,
     });
     const keyframe = MessageEventBuilder.messageEvent({

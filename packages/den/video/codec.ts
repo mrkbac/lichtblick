@@ -5,9 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { H265_CODEC_FORMAT_STRINGS } from "./constants";
+import { isAV1Keyframe, parseAV1DecoderConfig } from "./av1";
 import { H264 as H264Parser } from "./h264";
 import { H265 as H265Parser } from "./h265";
+import { H265_TARGET_FRAME_WAIT_MS } from "./h265/constants";
+import { isVP9Keyframe, parseVP9DecoderConfig } from "./vp9";
 
 /**
  * Canonical codec identifier used internally so callers do not need to know that some recordings
@@ -16,22 +18,104 @@ import { H265 as H265Parser } from "./h265";
 export enum VideoCodec {
   H264 = "h264",
   H265 = "h265",
+  VP9 = "vp9",
+  AV1 = "av1",
 }
+
+/**
+ * H.264 and VP9 decoders typically emit a decoded VideoFrame within a couple of milliseconds of
+ * submitting a chunk, so a tight ceiling lets us return quickly when decoding is healthy. Frames
+ * that arrive later are still shown (see `VideoPlayer`), one call late.
+ */
+export const DEFAULT_TARGET_FRAME_WAIT_MS = 10;
+
+type VideoCodecSpec = {
+  /** Whether a `CompressedVideo.format` string names this codec. */
+  matchesFormat: (format: string) => boolean;
+  /** Prefixes of the WebCodecs codec strings `decoderConfig` produces. */
+  codecStringPrefixes: readonly string[];
+  /** Whether decoding can start at this frame. */
+  isKeyframe: (data: Uint8Array) => boolean;
+  /** Decoder config parsed from a keyframe, or undefined if the frame carries none. */
+  decoderConfig: (data: Uint8Array) => VideoDecoderConfig | undefined;
+  /**
+   * Whether non-keyframes can only be decoded by replaying the full GOP inside the renderable.
+   * H.265 and AV1 decoders hold many submitted chunks in their pipeline before emitting the target
+   * frame, so the renderable must drive submission in order. H.264 and VP9 emit promptly and can
+   * decode in parallel; serializing them through the drain queue adds per-frame latency that
+   * surfaces as jank. Use `needsSeekBackfill` (not this) to decide whether a seek target needs its
+   * preceding GOP attached.
+   */
+  needsKeyframeReplay: boolean;
+  /**
+   * Whether a seek target may be a delta frame that cannot be decoded without first replaying the
+   * preceding GOP (most recent keyframe → target). Every inter-coded codec needs this; without it
+   * a forward seek produces garbled output and a backward seek waits for the next keyframe.
+   */
+  needsSeekBackfill: boolean;
+  /** How long `VideoPlayer` waits for the target frame before returning. */
+  targetFrameWaitMs: number;
+};
+
+/**
+ * Every supported video codec. Adding a codec means adding one entry here; all call sites read
+ * from this table.
+ */
+export const VIDEO_CODECS: Record<VideoCodec, VideoCodecSpec> = {
+  [VideoCodec.H264]: {
+    matchesFormat: (format) => format === "h264",
+    codecStringPrefixes: ["avc1", "avc3"],
+    isKeyframe: (data) => H264Parser.IsKeyframe(data),
+    decoderConfig: (data) => H264Parser.ParseDecoderConfig(data),
+    needsKeyframeReplay: false,
+    needsSeekBackfill: true,
+    targetFrameWaitMs: DEFAULT_TARGET_FRAME_WAIT_MS,
+  },
+  [VideoCodec.H265]: {
+    matchesFormat: (format) =>
+      ["h265", "hevc", "hvc1", "hev1"].some((prefix) => format.startsWith(prefix)),
+    codecStringPrefixes: ["hvc1", "hev1"],
+    isKeyframe: (data) => H265Parser.IsKeyframe(data),
+    decoderConfig: (data) => H265Parser.ParseDecoderConfig(data),
+    needsKeyframeReplay: true,
+    needsSeekBackfill: true,
+    targetFrameWaitMs: H265_TARGET_FRAME_WAIT_MS,
+  },
+  [VideoCodec.VP9]: {
+    matchesFormat: (format) => format === "vp9",
+    codecStringPrefixes: ["vp09"],
+    isKeyframe: isVP9Keyframe,
+    decoderConfig: parseVP9DecoderConfig,
+    needsKeyframeReplay: false,
+    needsSeekBackfill: true,
+    targetFrameWaitMs: DEFAULT_TARGET_FRAME_WAIT_MS,
+  },
+  [VideoCodec.AV1]: {
+    matchesFormat: (format) => format === "av1",
+    codecStringPrefixes: ["av01"],
+    isKeyframe: isAV1Keyframe,
+    decoderConfig: parseAV1DecoderConfig,
+    needsKeyframeReplay: true,
+    needsSeekBackfill: true,
+    targetFrameWaitMs: H265_TARGET_FRAME_WAIT_MS,
+  },
+};
+
+const VIDEO_CODEC_ENTRIES = Object.entries(VIDEO_CODECS) as [VideoCodec, VideoCodecSpec][];
 
 /**
  * Maps an external `CompressedVideo.format` string to the canonical {@link VideoCodec}, or returns
  * undefined if the format is not a recognized video codec.
  */
 export function canonicalVideoCodec(format: string): VideoCodec | undefined {
-  if (H265_CODEC_FORMAT_STRINGS.some((substr) => format.startsWith(substr))) {
-    return VideoCodec.H265;
-  }
+  return VIDEO_CODEC_ENTRIES.find(([, spec]) => spec.matchesFormat(format))?.[0];
+}
 
-  if (format === "h264") {
-    return VideoCodec.H264;
-  }
-
-  return undefined;
+/** Maps a WebCodecs codec string (e.g. `avc1.42C01F`) to its {@link VideoCodec}. */
+export function videoCodecFromCodecString(codecString: string): VideoCodec | undefined {
+  return VIDEO_CODEC_ENTRIES.find(([, spec]) =>
+    spec.codecStringPrefixes.some((prefix) => codecString.startsWith(prefix)),
+  )?.[0];
 }
 
 /**
@@ -43,45 +127,16 @@ export function isVideoKeyframe(
   data: Uint8Array,
   resolvedCodec?: VideoCodec,
 ): boolean {
-  switch (resolvedCodec ?? canonicalVideoCodec(format)) {
-    case VideoCodec.H264:
-      // Search for an IDR NAL unit to determine if this is a keyframe.
-      return H264Parser.IsKeyframe(data);
-    case VideoCodec.H265:
-      return H265Parser.IsKeyframe(data);
-  }
-  return false;
+  const codec = resolvedCodec ?? canonicalVideoCodec(format);
+  return codec != undefined && VIDEO_CODECS[codec].isKeyframe(data);
 }
 
-/**
- * Codecs whose non-keyframes can only be decoded by replaying the full GOP (the most recent
- * keyframe plus every frame after it). For these we cannot decode from the latest frame alone.
- *
- * This gates the in-renderable queue + drain serialization. H.265 needs it because the decoder
- * holds many submitted chunks in its pipeline before emitting the target frame, so the renderable
- * must drive submission in order. H.264, by contrast, emits a decoded VideoFrame within ~2 ms and
- * can run its `#startDecode` calls in parallel — serializing it through the drain queue adds
- * per-frame latency that surfaces as 30 fps jank. Use {@link videoCodecNeedsSeekBackfill} (not
- * this predicate) when deciding whether a seek target needs its preceding GOP attached: both
- * H.264 and H.265 P-frames require the GOP for a correct seek, but only H.265 needs the
- * renderable's queue to drive submission order during normal playback.
- */
+/** See {@link VideoCodecSpec.needsKeyframeReplay}. */
 export function videoCodecNeedsKeyframeReplay(codec: VideoCodec | undefined): boolean {
-  return codec === VideoCodec.H265;
+  return codec != undefined && VIDEO_CODECS[codec].needsKeyframeReplay;
 }
 
-/**
- * Codecs whose seek target may be a P-frame that cannot be decoded without first replaying the
- * preceding GOP (most recent keyframe → target). Both H.264 and H.265 have inter-frame
- * dependencies, so for either codec a seek that lands on a non-keyframe needs the keyframe and
- * every intervening P-frame attached. Without this, a forward seek to a P-frame produces garbled
- * decoder output (stale reference state) and a backward seek waits seconds for the next IDR
- * before any picture appears.
- *
- * This is intentionally separate from {@link videoCodecNeedsKeyframeReplay}: backfill is a
- * correctness requirement at the player/source boundary, whereas keyframe-replay queueing is a
- * codec-specific performance trade-off inside the renderable.
- */
+/** See {@link VideoCodecSpec.needsSeekBackfill}. */
 export function videoCodecNeedsSeekBackfill(codec: VideoCodec | undefined): boolean {
-  return codec === VideoCodec.H264 || codec === VideoCodec.H265;
+  return codec != undefined && VIDEO_CODECS[codec].needsSeekBackfill;
 }
