@@ -3148,7 +3148,7 @@ __metadata:
     "@lichtblick/theme": "workspace:*"
     "@maplibre/maplibre-gl-style-spec": "npm:26.5.1"
     "@mcap/core": "npm:2.4.0"
-    "@mui/icons-material": "npm:7.3.11"
+    "@mui/icons-material": "npm:9.5.0"
     "@mui/material": "npm:7.3.11"
     "@mui/x-data-grid": "npm:9.17.0"
     "@opentelemetry/api": "npm:1.9.1"
@@ -3353,7 +3353,7 @@ __metadata:
     "@emotion/react": "npm:11.14.0"
     "@emotion/styled": "npm:11.14.1"
     "@fluentui/react-icons": "npm:2.0.345"
-    "@mui/icons-material": "npm:7.3.11"
+    "@mui/icons-material": "npm:9.5.0"
     "@mui/material": "npm:7.3.11"
     "@mui/x-data-grid": "npm:9.17.0"
     "@types/react": "npm:19.3.0"
@@ -3512,19 +3512,19 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@mui/icons-material@npm:7.3.11":
-  version: 7.3.11
-  resolution: "@mui/icons-material@npm:7.3.11"
+"@mui/icons-material@npm:9.5.0":
+  version: 9.5.0
+  resolution: "@mui/icons-material@npm:9.5.0"
   dependencies:
-    "@babel/runtime": "npm:^7.28.6"
+    "@babel/runtime": "npm:^7.29.7 || ^8.0.5"
   peerDependencies:
-    "@mui/material": ^7.3.11
+    "@mui/material": ^9.5.0
     "@types/react": ^17.0.0 || ^18.0.0 || ^19.0.0
     react: ^17.0.0 || ^18.0.0 || ^19.0.0
   peerDependenciesMeta:
     "@types/react":
       optional: true
-  checksum: 10/330167c053fa8d7c811055816539d60e334acc8a6c02077105c18843532b11b722ff526b0dbc84cff6d6c7014b7b40751a62a387ad0d60ff79b86c4c404a20b1
+  checksum: 10/d58a410f5628da5e55b99f995e5f680edb3fffbc42ec4c1fd4fa7cde13821cfaaf4c160c787842502948cf1027325f97dc2e05e97a9a1b9fb72077a933700514
   languageName: node
   linkType: hard
 
