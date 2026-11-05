@@ -36,7 +36,7 @@ export default {
   parameters: {
     colorScheme: "both-column",
   },
-} satisfies Meta;
+} as Meta;
 
 export const Default: StoryObj = {
   render: () => (

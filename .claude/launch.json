@@ -3,8 +3,8 @@
   "configurations": [
     {
       "name": "web",
-      "runtimeExecutable": "corepack",
-      "runtimeArgs": ["yarn", "web:serve"],
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": ["web:serve"],
       "port": 8080
     }
   ]

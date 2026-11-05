@@ -4,7 +4,7 @@
 import * as fs from "fs";
 import * as path from "path";
 
-import { PlaywrightJSONReport, ReportTestResult } from "./types";
+import type { PlaywrightJSONReport, ReportTestResult } from "./types.ts";
 
 function formatDuration(ms: number): string {
   if (ms < 1000) {
@@ -147,7 +147,7 @@ function generateSummary(reportPath: string, reportName: string): void {
 }
 
 function main(): void {
-  const reportsDir = path.join(__dirname, "..", "reports");
+  const reportsDir = path.join(import.meta.dirname, "..", "reports");
   process.stdout.write(`Generating E2E test summary from reports in: ${reportsDir}\n`);
 
   process.stdout.write("# E2E Test Results Summary\n");

@@ -47,13 +47,13 @@ export const test = base.extend<BenchmarkElectronFixtures>({
 function checkBuild(webpackPath: string): void {
   if (!fs.existsSync(webpackPath)) {
     throw new Error(
-      `Webpack path does not exist: ${webpackPath}. Run \`yarn benchmark:desktop:build:dev\` (or :prod) first.`,
+      `Webpack path does not exist: ${webpackPath}. Run \`pnpm benchmark:desktop:build:dev\` (or :prod) first.`,
     );
   }
   const files = fs.readdirSync(webpackPath);
   if (files.length === 0) {
     throw new Error(
-      `Webpack path is empty: ${webpackPath}. Run \`yarn benchmark:desktop:build:dev\` (or :prod) first.`,
+      `Webpack path is empty: ${webpackPath}. Run \`pnpm benchmark:desktop:build:dev\` (or :prod) first.`,
     );
   }
 }

@@ -18,7 +18,7 @@ Follow the **test-conventions** skill for GWT pattern and core quality rules.
 
 | Platform | Runner | Base URL / Entry | Config |
 | --- | --- | --- | --- |
-| **Web** | Chromium | `http://localhost:8080` (via `yarn web:serve`) | `e2e/tests/web/playwright.config.ts` |
+| **Web** | Chromium | `http://localhost:8080` (via `pnpm web:serve`) | `e2e/tests/web/playwright.config.ts` |
 | **Desktop** | Electron | Custom `electronApp` fixture | `e2e/tests/desktop/playwright.config.ts` |
 
 **Primary focus: desktop.** Write web tests only when the behavior is web-specific (e.g., URL-based data loading, multi-tab `BroadcastChannel` sync, timestamp URL parameters).
@@ -398,7 +398,7 @@ The MCP server is configured in `.mcp.json` (repo root) with `--isolated`, `--br
 > For desktop tests, discover selectors by reading source components and
 > existing test files.
 
-1. **Start the dev server** — `yarn web:serve` (for web tests)
+1. **Start the dev server** — `pnpm web:serve` (for web tests)
 2. **Open Copilot in Agent mode**
 3. **Use MCP to explore the UI**:
    - Navigate to the target URL or state
@@ -421,9 +421,9 @@ The MCP server is configured in `.mcp.json` (repo root) with `--isolated`, `--br
 ## Test Commands
 
 ```bash
-yarn test:e2e:web                          # All web E2E tests
-yarn test:e2e:web:debug                    # Debug mode (headed)
-yarn test:e2e:desktop                      # All desktop E2E tests
-yarn test:e2e:desktop:debug <filter>       # Debug a single test by filename fragment
-yarn test:e2e:desktop:ci                   # Headless CI mode
+pnpm test:e2e:web                          # All web E2E tests
+pnpm test:e2e:web:debug                    # Debug mode (headed)
+pnpm test:e2e:desktop                      # All desktop E2E tests
+pnpm test:e2e:desktop:debug <filter>       # Debug a single test by filename fragment
+pnpm test:e2e:desktop:ci                   # Headless CI mode
 ```

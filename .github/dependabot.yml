@@ -42,7 +42,6 @@ updates:
       monaco-editor:
         patterns:
           - "monaco-editor"
-          - "monaco-editor-webpack-plugin"
 
   - package-ecosystem: "github-actions"
     directory: "/"
