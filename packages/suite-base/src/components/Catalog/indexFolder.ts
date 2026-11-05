@@ -15,7 +15,7 @@ export type FolderFile = {
   path: string;
   getFile: () => Promise<File>;
   /** Present when the folder came from showDirectoryPicker(); lets the file show up in recents. */
-  handle?: FileSystemFileHandle; // foxglove-depcheck-used: @types/wicg-file-system-access
+  handle?: FileSystemFileHandle;
 };
 
 const DB_NAME = `${KEY_WORKSPACE_PREFIX}lichtblick-catalog`;

@@ -1,0 +1,93 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // Vitest reads `@jest-environment jsdom` docblocks; knip maps them to this package
+  "ignoreDependencies": ["jest-environment-jsdom"],
+  // Exports only used in their own file are fine
+  "ignoreExportsUsedInFile": true,
+  "ignoreIssues": {
+    "packages/suite-base/src/api/organization/schema.gen.ts": ["types"],
+    // Loaded as `?raw` source into the user script editor, so their exports are the public API
+    "packages/suite-base/src/players/UserScriptPlayer/transformerWorker/typescript/userUtils/*.ts": [
+      "exports",
+      "types"
+    ]
+  },
+  "rules": {
+    // Enums mirror message and protocol constants, so unused members are expected
+    "enumMembers": "off"
+  },
+  "workspaces": {
+    ".": {
+      "entry": [
+        "ci/*.ts",
+        "eslint-test.ts",
+        "vitest.config.ts",
+        "e2e/**/*.spec.ts",
+        "e2e/tests/*/web-{setup,teardown}.ts"
+      ],
+      "storybook": {
+        "config": ".storybook/main.ts",
+        "entry": [".storybook/preview.tsx", "packages/**/*.stories.tsx"]
+      },
+      // The root config only holds `projects`; their setup files are entries in each workspace
+      "vitest": false
+    },
+    "benchmark": {
+      "entry": [
+        "rspack.config.ts",
+        "rspack.desktop.config.ts",
+        "desktop/*/index.{ts,tsx}",
+        "**/*.test.{ts,tsx}",
+        "e2e/**/*.spec.ts"
+      ],
+      // A second @playwright/test copy can't be loaded in one process; the spec glob covers it
+      "playwright": false,
+      // Rspack configs build on suite-base's makeConfig, which owns the loaders
+      "rspack": false
+    },
+    "desktop": {
+      "entry": ["rspack.config.ts", "*/index.{ts,tsx}", "electronBuilderConfig.js"],
+      "rspack": false
+    },
+    "web": {
+      "entry": ["rspack.config.ts", "src/entrypoint.tsx"],
+      "rspack": false
+    },
+    "packages/suite-base": {
+      "entry": [
+        "src/test/{globals,setup,setupTestFramework}.ts",
+        "src/test/mocks/{MockSvg.tsx,fileMock.ts}",
+        // Injected by rspack.ts (ProvidePlugin and resolve.fallback)
+        "src/util/process.ts",
+        "src/util/shims/url.ts",
+        "loaders/*.cjs"
+      ],
+      // Shadowed by services/migrateLayout.ts, see the PR description
+      "ignore": ["src/services/migrateLayout/{index,migratePanelsState}.ts"],
+      // Named as strings in rspack.ts (loaders and resolve.fallback polyfills)
+      "ignoreDependencies": [
+        "@svgr/webpack",
+        "css-loader",
+        "nearley-loader",
+        "path-browserify",
+        "readable-stream",
+        "string-replace-loader",
+        "style-loader"
+      ]
+    },
+    "packages/suite-desktop": {
+      "entry": ["src/electronBuilderConfig.js", "src/afterPack.ts", "src/test/setup.ts"]
+    },
+    "packages/eslint-plugin-suite": {
+      // RuleTester's default fixture file
+      "entry": ["fixture/file.ts"]
+    },
+    "packages/message-path": {
+      // Ambient `*.ne` module declaration
+      "entry": ["src/typings/extensions.ts"]
+    },
+    "packages/hooks": {
+      "entry": ["test/setup.ts"]
+    }
+  }
+}
