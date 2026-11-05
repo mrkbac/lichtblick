@@ -5,6 +5,9 @@ on:
     branches: [licht]
   pull_request:
 
+permissions:
+  contents: read
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -57,7 +60,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: corepack enable yarn
+      - run: npm i -g --force corepack@0.36.0 && corepack enable
 
       - name: Restore cache
         uses: actions/cache@v6
@@ -96,7 +99,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: corepack enable yarn
+      - run: npm i -g --force corepack@0.36.0 && corepack enable
 
       - name: Restore cache
         uses: actions/cache@v6
@@ -147,7 +150,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: corepack enable yarn
+      - run: npm i -g --force corepack@0.36.0 && corepack enable
 
       - name: Restore cache
         uses: actions/cache@v6
@@ -189,7 +192,7 @@ jobs:
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: corepack enable yarn
+      - run: npm i -g --force corepack@0.36.0 && corepack enable
 
       - name: Restore cache
         uses: actions/cache@v6

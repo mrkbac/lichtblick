@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import fs, { Stats } from "fs";
-import mockFs from "mock-fs";
-import { DirectoryItems } from "mock-fs/lib/filesystem";
 import os from "os";
+import nodePath from "path";
 import type { Mock } from "vitest";
 
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -33,28 +32,52 @@ function buildPath(): string {
   return `${genericString()}/${genericString()}`;
 }
 
-function setup(fsConfigOverride?: DirectoryItems) {
+type Tree = { [name: string]: string | Tree };
+
+let tmpRoot = "";
+
+beforeEach(() => {
+  tmpRoot = fs.mkdtempSync(nodePath.join(os.tmpdir(), "resolveSourcePaths-"));
+});
+
+afterEach(() => {
+  fs.rmSync(tmpRoot, { recursive: true, force: true });
+});
+
+/** Writes `tree` below a fresh temp dir. Keys are relative paths; string values are file contents. */
+function writeTree(tree: Tree, dir = tmpRoot): void {
+  for (const [name, value] of Object.entries(tree)) {
+    const target = nodePath.join(dir, name);
+    if (typeof value === "string") {
+      fs.mkdirSync(nodePath.dirname(target), { recursive: true });
+      fs.writeFileSync(target, value);
+    } else {
+      fs.mkdirSync(target, { recursive: true });
+      writeTree(value, target);
+    }
+  }
+}
+
+function inTmp(relativePath: string): string {
+  return nodePath.join(tmpRoot, relativePath);
+}
+
+function setup() {
   const path = buildPath();
   const file1 = buildFile({ extension: "txt" });
   const file2 = buildFile({ extension: "txt" });
   const file3 = buildFile({ extension: "mcap" });
   const files = { file1, file2, file3 };
-  const fsConfig: DirectoryItems = fsConfigOverride ?? {
+  writeTree({
     [path]: {
       [file1.name]: file1.content,
       [file2.name]: file2.content,
       [file3.name]: file3.content,
     },
-  };
+  });
 
-  mockFs(fsConfig);
-
-  return { fsConfig, path, files };
+  return { path: inTmp(path), files };
 }
-
-afterEach(() => {
-  mockFs.restore();
-});
 
 describe("getFilesFromDirectory", () => {
   it("should return only the .mcap files from the directory", () => {
@@ -68,21 +91,14 @@ describe("getFilesFromDirectory", () => {
     expect(result).toEqual(mcapFiles);
   });
 
-  it("should a return a empty array because the directory has no supported files", () => {
-    const { path } = setup({
-      [genericString()]: buildFile({ extension: "txt" }),
-    });
+  it("should return an empty array when the directory has no supported files", () => {
+    const dir = buildPath();
+    writeTree({ [dir]: { [buildFile({ extension: "txt" }).name]: "" } });
 
-    const result = getFilesFromDirectory(path);
+    const result = getFilesFromDirectory(inTmp(dir));
 
     expect(result).toEqual([]);
-    expect(console.error).toHaveBeenCalled();
-    expect(console.error).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining("ENOENT, no such file or directory"),
-      }),
-    );
-    (console.error as Mock).mockClear();
+    expect(console.error).not.toHaveBeenCalled();
   });
 
   it("should return an empty array when an error occurs in fs.readdirSync", () => {
@@ -103,23 +119,18 @@ describe("isPathToDirectory", () => {
   it("should return false cause there's more than one path", () => {
     const path1 = buildPath();
     const path2 = buildPath();
-    setup({
-      [path1]: {},
-      [path2]: {},
-    });
+    writeTree({ [path1]: {}, [path2]: {} });
 
-    const result = isPathToDirectory([path1, path2]);
+    const result = isPathToDirectory([inTmp(path1), inTmp(path2)]);
 
     expect(result).toBe(false);
   });
 
   it("should return true because the path passed is a path to a directory", () => {
     const path1 = buildPath();
-    setup({
-      [path1]: {},
-    });
+    writeTree({ [path1]: {} });
 
-    const result = isPathToDirectory([path1]);
+    const result = isPathToDirectory([inTmp(path1)]);
 
     expect(result).toBe(true);
   });
@@ -203,20 +214,11 @@ describe("resolveSourcePaths", () => {
   it("should return an array with mcap files after getting a path to a directory with mcap files", () => {
     const path = `/${buildPath()}`;
     const file1 = buildFile({ extension: "mcap" });
-    const file2 = buildFile({ extension: "bag" });
     const file3 = buildFile({ extension: "mcap" });
     vi.spyOn(fs, "statSync").mockReturnValueOnce({
       isDirectory: () => true,
     } as Stats);
     vi.spyOn(fs, "readdirSync").mockReturnValueOnce([file1.name, file3.name] as never);
-
-    setup({
-      [path]: {
-        [file1.name]: file1.content,
-        [file2.name]: file2.content,
-        [file3.name]: file1.content,
-      },
-    });
     const mockSourceParameter = `~${path}`;
 
     const result = resolveSourcePaths(mockSourceParameter);

@@ -20,7 +20,7 @@
     ".": {
       "entry": [
         "ci/*.ts",
-        "eslint-test.ts",
+        "lint-test.ts",
         "vitest.config.ts",
         "e2e/**/*.spec.ts",
         "e2e/tests/*/web-{setup,teardown}.ts"
@@ -78,9 +78,9 @@
     "packages/suite-desktop": {
       "entry": ["src/electronBuilderConfig.js", "src/afterPack.ts", "src/test/setup.ts"]
     },
-    "packages/eslint-plugin-suite": {
-      // RuleTester's default fixture file
-      "entry": ["fixture/file.ts"]
+    "packages/oxlint-plugin": {
+      // JSDoc-only `import("estree")` types, provided by oxlint
+      "ignoreDependencies": ["estree"]
     },
     "packages/message-path": {
       // Ambient `*.ne` module declaration

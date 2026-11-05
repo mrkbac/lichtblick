@@ -15,21 +15,18 @@
 //   You may not use this file except in compliance with the License.
 
 import { Typography } from "@mui/material";
-import { useCallback } from "react";
-import { useDrop } from "react-dnd";
+import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { MosaicDragType } from "react-mosaic-component";
 import { makeStyles } from "tss-react/mui";
 
 import { PanelCatalog, PanelSelection } from "@lichtblick/suite-base/components/PanelCatalog";
+import {
+  getPanelDragData,
+  isPanelDrag,
+} from "@lichtblick/suite-base/components/PanelCatalog/panelDrag";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
-import { MosaicDropResult } from "@lichtblick/suite-base/types/panels";
 import { getPanelIdForType } from "@lichtblick/suite-base/util/layout";
-
-type Props = {
-  tabId?: string;
-};
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -58,34 +55,46 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
-export const EmptyPanelLayout = ({ tabId }: Props): React.JSX.Element => {
+export const EmptyPanelLayout = (): React.JSX.Element => {
   const { classes, cx } = useStyles();
   const { addPanel } = useCurrentLayoutActions();
   const { t } = useTranslation("addPanel");
-
-  const [{ isOver }, drop] = useDrop<unknown, MosaicDropResult, { isOver: boolean }>({
-    accept: MosaicDragType.WINDOW,
-    drop: () => {
-      return { tabId };
-    },
-    collect: (monitor) => ({
-      isOver: monitor.isOver(),
-    }),
-  });
+  const [isOver, setIsOver] = useState(false);
 
   const onPanelSelect = useCallback(
     ({ type, config }: PanelSelection) => {
-      const id = getPanelIdForType(type);
-      addPanel({ tabId, id, config });
+      addPanel({ id: getPanelIdForType(type), config });
     },
-    [addPanel, tabId],
+    [addPanel],
+  );
+
+  const onDragOver = useCallback((event: React.DragEvent) => {
+    if (isPanelDrag(event.dataTransfer)) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "copy";
+      setIsOver(true);
+    }
+  }, []);
+
+  const onDrop = useCallback(
+    (event: React.DragEvent) => {
+      setIsOver(false);
+      const selection = getPanelDragData(event.dataTransfer);
+      if (selection) {
+        event.preventDefault();
+        onPanelSelect(selection);
+      }
+    },
+    [onPanelSelect],
   );
 
   return (
     <div
-      ref={(el) => {
-        drop(el);
+      onDragOver={onDragOver}
+      onDragLeave={() => {
+        setIsOver(false);
       }}
+      onDrop={onDrop}
       data-testid="empty-drop-target"
       className={cx(classes.dropTarget, { [classes.isOver]: isOver })}
     >

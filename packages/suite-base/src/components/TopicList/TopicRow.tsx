@@ -92,19 +92,10 @@ export function TopicRow({
     [topic.name, topic.schemaName],
   );
 
-  const { connectDragSource, connectDragPreview, cursor, isDragging, draggedItemCount } =
-    useMessagePathDrag({
-      item,
-      selected,
-    });
-
-  const combinedRef: React.Ref<HTMLDivElement> = useCallback(
-    (el) => {
-      connectDragSource(el);
-      connectDragPreview(el);
-    },
-    [connectDragPreview, connectDragSource],
-  );
+  const { dragRef, isDragging, draggedItemCount } = useMessagePathDrag({
+    item,
+    selected,
+  });
 
   const seekToNextMessage = useCallback(
     (event: React.MouseEvent) => {
@@ -128,12 +119,12 @@ export function TopicRow({
 
   return (
     <div
-      ref={combinedRef}
+      ref={dragRef}
       className={cx(classes.row, {
         [classes.isDragging]: isDragging,
         [classes.selected]: selected,
       })}
-      style={{ ...style, cursor }}
+      style={style}
       onClick={onClick}
       onDoubleClick={onDoubleClick}
       onContextMenu={onContextMenu}

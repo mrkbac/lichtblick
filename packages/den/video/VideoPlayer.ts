@@ -315,9 +315,7 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
   }
 
   #cacheDisplayFrame(videoFrame: VideoFrame): void {
-    if (!this.#codedSize) {
-      this.#codedSize = { width: 0, height: 0 };
-    }
+    this.#codedSize ??= { width: 0, height: 0 };
     this.#codedSize.width = videoFrame.codedWidth;
     this.#codedSize.height = videoFrame.codedHeight;
     this.lastVideoFrame?.close();

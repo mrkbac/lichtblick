@@ -5,8 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import * as _ from "lodash-es";
 import { createContext, useCallback, useLayoutEffect, useReducer, useRef, useState } from "react";
-import { getLeaves } from "react-mosaic-component";
 
 import {
   selectWithUnstableIdentityWarning,
@@ -16,21 +16,17 @@ import {
 import Logger from "@lichtblick/log";
 import { RenderState, VariableValue } from "@lichtblick/suite";
 import useShouldNotChangeOften from "@lichtblick/suite-base/hooks/useShouldNotChangeOften";
-import toggleSelectedPanel from "@lichtblick/suite-base/providers/CurrentLayoutProvider/toggleSelectedPanel";
 import { PanelConfig, PlaybackConfig, UserScripts } from "@lichtblick/suite-base/types/panels";
+import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
 
 import {
   AddPanelPayload,
   ChangePanelLayoutPayload,
   ClosePanelPayload,
-  CreateTabPanelPayload,
-  DropPanelPayload,
-  EndDragPayload,
+  GroupPanelsPayload,
   LayoutData,
-  MoveTabPayload,
   SaveConfigsPayload,
   SplitPanelPayload,
-  StartDragPayload,
   SwapPanelPayload,
 } from "./actions";
 
@@ -67,7 +63,7 @@ export type LayoutState = Readonly<{
 }>;
 
 /**
- * Encapsulates the mosaic layout, user nodes, and playback settings (everything considered to be
+ * Encapsulates the panel layout, user nodes, and playback settings (everything considered to be
  * part of a saved "layout") used by the current workspace.
  */
 export interface ICurrentLayout {
@@ -75,12 +71,6 @@ export interface ICurrentLayout {
   removeLayoutStateListener: (listener: (_: LayoutState) => void) => void;
   addSelectedPanelIdsListener: (listener: (_: readonly string[]) => void) => void;
   removeSelectedPanelIdsListener: (listener: (_: readonly string[]) => void) => void;
-
-  /**
-   * We use the same mosaicId for all mosaics (at the top level and within tabs) to support
-   * dragging and dropping between them.
-   */
-  mosaicId: string;
 
   getSelectedPanelIds: () => readonly string[];
   setSelectedPanelIds: (
@@ -102,7 +92,6 @@ export interface ICurrentLayout {
 
     savePanelConfigs: (payload: SaveConfigsPayload) => void;
     updatePanelConfigs: (panelType: string, updater: (config: PanelConfig) => PanelConfig) => void;
-    createTabPanel: (payload: CreateTabPanelPayload) => void;
     changePanelLayout: (payload: ChangePanelLayoutPayload) => void;
     overwriteGlobalVariables: (payload: Record<string, VariableValue>) => void;
     setGlobalVariables: (payload: Record<string, VariableValue>) => void;
@@ -111,11 +100,8 @@ export interface ICurrentLayout {
     closePanel: (payload: ClosePanelPayload) => void;
     splitPanel: (payload: SplitPanelPayload) => void;
     swapPanel: (payload: SwapPanelPayload) => void;
-    moveTab: (payload: MoveTabPayload) => void;
     addPanel: (payload: AddPanelPayload) => void;
-    dropPanel: (payload: DropPanelPayload) => void;
-    startDrag: (payload: StartDragPayload) => void;
-    endDrag: (payload: EndDragPayload) => void;
+    groupPanels: (payload: GroupPanelsPayload) => void;
   };
 }
 
@@ -128,17 +114,13 @@ export type SelectedPanelActions = {
     _: readonly string[] | ((prevState: readonly string[]) => string[]),
   ) => void;
   selectAllPanels: () => void;
-  togglePanelSelected: (panelId: string, containingTabId: string | undefined) => void;
+  togglePanelSelected: (panelId: string) => void;
 };
 
 const log = Logger.getLogger(__filename);
 
 const CurrentLayoutContext = createContext<ICurrentLayout | undefined>(undefined);
 CurrentLayoutContext.displayName = "CurrentLayoutContext";
-
-export function usePanelMosaicId(): string {
-  return useGuaranteedContext(CurrentLayoutContext).mosaicId;
-}
 
 export function useCurrentLayoutActions(): CurrentLayoutActions {
   return useGuaranteedContext(CurrentLayoutContext).actions;
@@ -215,26 +197,15 @@ export function useSelectedPanels(): SelectedPanelActions {
   const { getCurrentLayoutState: getCurrentLayout } = useCurrentLayoutActions();
 
   const selectAllPanels = useCallback(() => {
-    const panelIds = getLeaves(getCurrentLayout().selectedLayout?.data?.layout ?? null);
+    const panelIds = getPanelIds(getCurrentLayout().selectedLayout?.data?.layout);
     setSelectedPanelIds(panelIds);
   }, [getCurrentLayout, setSelectedPanelIds]);
 
   const togglePanelSelected = useCallback(
-    (panelId: string, containingTabId: string | undefined) => {
-      setSelectedPanelIds((selectedIds) => {
-        const { selectedLayout } = getCurrentLayout();
-        if (!selectedLayout?.data) {
-          return selectedIds;
-        }
-        return toggleSelectedPanel(
-          panelId,
-          containingTabId,
-          selectedLayout.data.configById,
-          selectedIds,
-        );
-      });
+    (panelId: string) => {
+      setSelectedPanelIds((selectedIds) => _.xor(selectedIds, [panelId]));
     },
-    [setSelectedPanelIds, getCurrentLayout],
+    [setSelectedPanelIds],
   );
 
   return useShallowMemo({

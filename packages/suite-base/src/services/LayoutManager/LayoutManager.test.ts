@@ -369,7 +369,7 @@ describe("LayoutManager", () => {
         expect.objectContaining({
           name: layoutName,
           permission,
-          baseline: expect.objectContaining({ data: layoutData }),
+          baseline: expect.objectContaining({ data: { ...layoutData, version: 2 } }),
           working: undefined,
         }),
       );

@@ -55,7 +55,7 @@ export class HydratedSourcePool {
     this.#minResident = Math.min(this.#maxCount, Math.max(1, Math.floor(options.minResident ?? 1)));
   }
 
-  // eslint-disable-next-line no-restricted-syntax
+  // eslint-disable-next-line @lichtblick/no-getters-setters
   public get size(): number {
     return this.#entries.size;
   }

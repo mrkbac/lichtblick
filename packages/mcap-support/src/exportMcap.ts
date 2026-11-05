@@ -491,7 +491,7 @@ export async function exportMcap(
   if (options.includeAttachments === true) {
     // A full-range export keeps attachments outside the first and last message times too.
     for await (const attachment of reader.readAttachments(
-      isFullRange ? {} : { startTime, endTime },
+      isFullRange ? {} : { startingAt: startTime, endingAt: endTime },
     )) {
       signal?.throwIfAborted();
       await flush();

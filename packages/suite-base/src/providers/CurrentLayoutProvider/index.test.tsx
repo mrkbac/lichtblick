@@ -45,7 +45,7 @@ vi.mock("notistack", async () => ({
 }));
 
 const TEST_LAYOUT: LayoutData = {
-  layout: "ExamplePanel!1",
+  layout: { panels: ["ExamplePanel!1"] },
   configById: {},
   globalVariables: {},
   userNodes: {},
@@ -164,11 +164,12 @@ describe("CurrentLayoutProvider", () => {
 
   it("uses currentLayoutId from UserProfile to load from LayoutStorage", async () => {
     const expectedState: LayoutData = {
-      layout: "Foo!bar",
+      layout: { panels: ["Foo!bar"] },
       configById: { "Foo!bar": { setting: 1 } },
       globalVariables: { var: "hello" },
       userNodes: { node1: { name: "node", sourceCode: "node()" } },
       playbackConfig: { speed: 0.1 },
+      version: 2,
     };
     const condvar = new Condvar();
     const layoutStorageGetCalledWait = condvar.wait();
@@ -216,7 +217,7 @@ describe("CurrentLayoutProvider", () => {
 
   it("refuses to load an incompatible layout", async () => {
     const expectedState: LayoutData = {
-      layout: "Foo!bar",
+      layout: { panels: ["Foo!bar"] },
       configById: { "Foo!bar": { setting: 1 } },
       globalVariables: { var: "hello" },
       userNodes: { node1: { name: "node", sourceCode: "node()" } },

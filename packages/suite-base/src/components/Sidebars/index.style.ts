@@ -36,14 +36,38 @@ export const useStyles = makeStyles()((theme) => ({
       },
     },
   },
-  mosaicWrapper: {
-    flex: "1 1 100%",
+  children: {
+    flex: "1 1 0",
+    minWidth: 0,
+    // One grid cell stretches the content to the full width and height.
+    display: "grid",
+    gridTemplate: "minmax(0, 1fr) / minmax(0, 1fr)",
+    overflow: "hidden",
+  },
+  sidebar: {
+    flex: "none",
+    minWidth: 0,
+    display: "grid",
+    gridTemplate: "minmax(0, 1fr) / minmax(0, 1fr)",
+    overflow: "hidden",
+  },
+  resizeHandle: {
+    flex: "none",
+    width: 1,
+    cursor: "col-resize",
+    backgroundColor: theme.palette.divider,
+    position: "relative",
+    zIndex: 1,
+    touchAction: "none",
 
-    // Root drop targets in this top level sidebar mosaic interfere with drag/mouse events from the
-    // PanelList. We don't allow users to edit the mosaic since it's just used for the sidebar, so we
-    // can hide the drop targets.
-    "& > .mosaic > .drop-target-container": {
-      display: "none !important",
+    // A wider invisible hit area around the 1px line
+    "&::before": {
+      content: "''",
+      position: "absolute",
+      inset: "0 -3px",
+    },
+    "&:hover, &:active": {
+      backgroundColor: theme.palette.primary.main,
     },
   },
 }));

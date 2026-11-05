@@ -5,8 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import { fireEvent, screen } from "storybook/test";
 import { StoryObj } from "storybook-react-rsbuild";
 
@@ -47,11 +45,9 @@ const bigVariableInitialState = {
 export const Default: StoryObj = {
   render: () => {
     return (
-      <DndProvider backend={HTML5Backend}>
-        <MockCurrentLayoutProvider>
-          <VariablesList />
-        </MockCurrentLayoutProvider>
-      </DndProvider>
+      <MockCurrentLayoutProvider>
+        <VariablesList />
+      </MockCurrentLayoutProvider>
     );
   },
 };
@@ -59,11 +55,9 @@ export const Default: StoryObj = {
 export const Interactive: StoryObj = {
   render: function Story() {
     return (
-      <DndProvider backend={HTML5Backend}>
-        <MockCurrentLayoutProvider>
-          <VariablesList />
-        </MockCurrentLayoutProvider>
-      </DndProvider>
+      <MockCurrentLayoutProvider>
+        <VariablesList />
+      </MockCurrentLayoutProvider>
     );
   },
 
@@ -95,11 +89,9 @@ export const Interactive: StoryObj = {
 export const WithBigVariable: StoryObj = {
   render: function Story() {
     return (
-      <DndProvider backend={HTML5Backend}>
-        <MockCurrentLayoutProvider initialState={bigVariableInitialState}>
-          <VariablesList />
-        </MockCurrentLayoutProvider>
-      </DndProvider>
+      <MockCurrentLayoutProvider initialState={bigVariableInitialState}>
+        <VariablesList />
+      </MockCurrentLayoutProvider>
     );
   },
 
@@ -109,11 +101,9 @@ export const WithBigVariable: StoryObj = {
 export const WithVariablesLight: StoryObj = {
   render: function Story() {
     return (
-      <DndProvider backend={HTML5Backend}>
-        <MockCurrentLayoutProvider initialState={initialState}>
-          <VariablesList />
-        </MockCurrentLayoutProvider>
-      </DndProvider>
+      <MockCurrentLayoutProvider initialState={initialState}>
+        <VariablesList />
+      </MockCurrentLayoutProvider>
     );
   },
 
@@ -123,11 +113,9 @@ export const WithVariablesLight: StoryObj = {
 export const WithVariablesDark: StoryObj = {
   render: function Story() {
     return (
-      <DndProvider backend={HTML5Backend}>
-        <MockCurrentLayoutProvider initialState={initialState}>
-          <VariablesList />
-        </MockCurrentLayoutProvider>
-      </DndProvider>
+      <MockCurrentLayoutProvider initialState={initialState}>
+        <VariablesList />
+      </MockCurrentLayoutProvider>
     );
   },
 

@@ -14,8 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import { StoryObj } from "storybook-react-rsbuild";
 
 import ErrorBoundary from "./ErrorBoundary";
@@ -41,11 +39,9 @@ export default {
 export const Default: StoryObj = {
   render: () => {
     return (
-      <DndProvider backend={HTML5Backend}>
-        <ErrorBoundary>
-          <Broken />
-        </ErrorBoundary>
-      </DndProvider>
+      <ErrorBoundary>
+        <Broken />
+      </ErrorBoundary>
     );
   },
 };
@@ -53,11 +49,9 @@ export const Default: StoryObj = {
 export const ShowingDetails: StoryObj = {
   render: () => {
     return (
-      <DndProvider backend={HTML5Backend}>
-        <ErrorBoundary showErrorDetails hideErrorSourceLocations>
-          <Broken />
-        </ErrorBoundary>
-      </DndProvider>
+      <ErrorBoundary showErrorDetails hideErrorSourceLocations>
+        <Broken />
+      </ErrorBoundary>
     );
   },
 };

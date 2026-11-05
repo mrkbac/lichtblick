@@ -83,28 +83,26 @@ class MessageOrderTracker {
             if (this.#trackIncorrectMessages) {
               this.#incorrectMessages.push(message);
             }
-            if (!this.#warningTimeout) {
-              this.#warningTimeout = setTimeout(() => {
-                // timeout has fired, we need to clear so a new timeout registers if there are more messages
-                this.#warningTimeout = undefined;
-                // reset incorrect message queue before posting warning so we never keep
-                // incorrectMessages around. The browser console will keep messages in memory when
-                // logged, so disable logging of messages unless explicitly enabled.
-                const info = {
-                  currentTime,
-                  lastSeekTime,
-                  messageTime,
-                  incorrectMessages: this.#trackIncorrectMessages
-                    ? this.#incorrectMessages
-                    : "not being tracked",
-                };
-                this.#incorrectMessages = [];
-                log.warn(
-                  `Message receiveTime very different from player.currentTime; without updating lastSeekTime`,
-                  info,
-                );
-              }, WAIT_FOR_SEEK_SEC * 1000);
-            }
+            this.#warningTimeout ??= setTimeout(() => {
+              // timeout has fired, we need to clear so a new timeout registers if there are more messages
+              this.#warningTimeout = undefined;
+              // reset incorrect message queue before posting warning so we never keep
+              // incorrectMessages around. The browser console will keep messages in memory when
+              // logged, so disable logging of messages unless explicitly enabled.
+              const info = {
+                currentTime,
+                lastSeekTime,
+                messageTime,
+                incorrectMessages: this.#trackIncorrectMessages
+                  ? this.#incorrectMessages
+                  : "not being tracked",
+              };
+              this.#incorrectMessages = [];
+              log.warn(
+                `Message receiveTime very different from player.currentTime; without updating lastSeekTime`,
+                info,
+              );
+            }, WAIT_FOR_SEEK_SEC * 1000);
           }
         }
 

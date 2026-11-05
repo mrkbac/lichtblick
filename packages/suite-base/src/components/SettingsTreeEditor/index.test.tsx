@@ -5,8 +5,6 @@
 
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import type { Mock } from "vitest";
 
 import "@testing-library/jest-dom/vitest";
@@ -46,9 +44,7 @@ describe("SettingsTreeEditor", () => {
     };
 
     const ui: React.ReactElement = (
-      <DndProvider backend={HTML5Backend}>
-        <SettingsTreeEditor variant={defaultProps.variant} settings={defaultProps.settings} />
-      </DndProvider>
+      <SettingsTreeEditor variant={defaultProps.variant} settings={defaultProps.settings} />
     );
 
     return {
