@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { render, screen, fireEvent } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import type { Mock } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
@@ -90,6 +91,15 @@ describe("SyncInstanceToggle", () => {
     const button = setup({ syncInstances: false, otherTabs: 0 });
 
     fireEvent.mouseOver(button.parentElement!);
+    expect(await screen.findByText(/Open Lichtblick in another tab/)).toBeInTheDocument();
+  });
+
+  it("explains itself on keyboard focus while disabled", async () => {
+    const button = setup({ syncInstances: false, otherTabs: 0 });
+
+    expect(button.parentElement).toHaveAttribute("tabindex", "0");
+    await userEvent.tab();
+    expect(button.parentElement).toHaveFocus();
     expect(await screen.findByText(/Open Lichtblick in another tab/)).toBeInTheDocument();
   });
 });

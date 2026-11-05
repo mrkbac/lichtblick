@@ -50,14 +50,27 @@ describe("useOtherTabCount", () => {
       expect(first.result.current).toBe(0);
     });
 
+    // A second mount in the same tab is not another tab.
     const second = renderHook(() => useOtherTabCount());
     await waitFor(() => {
-      expect(second.result.current).toBe(1);
+      expect(locks.held.size).toBe(2);
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(second.result.current).toBe(0);
+
+    // Two mounts from another tab count once.
+    locks.held.add("lichtblick-tab:other-tab:a");
+    locks.held.add("lichtblick-tab:other-tab:b");
+    const third = renderHook(() => useOtherTabCount());
+    await waitFor(() => {
+      expect(third.result.current).toBe(1);
     });
 
     second.unmount();
     await waitFor(() => {
-      expect(locks.held.size).toBe(1);
+      expect(locks.held.size).toBe(4);
     });
   });
 

@@ -49,8 +49,8 @@ const SyncInstanceToggle = (): React.JSX.Element => {
         </Stack>
       }
     >
-      {/* span so the tooltip still shows while the button is disabled */}
-      <span>
+      {/* span so the tooltip still shows (on hover and keyboard focus) while the button is disabled */}
+      <span tabIndex={alone ? 0 : undefined}>
         <HoverableIconButton
           size="small"
           aria-label={syncInstances ? t("turnOff") : t("turnOn")}

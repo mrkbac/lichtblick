@@ -7,11 +7,13 @@ const LOCK_PREFIX = "lichtblick-tab:";
 const PRESENCE_CHANNEL_NAME = "lichtblick-tab-presence";
 // A closed or crashed tab sends nothing; polling picks it up.
 const POLL_INTERVAL_MS = 3000;
+// One id per tab: every mount in this tab shares it, so several toggles in one tab count as one.
+const TAB_ID = crypto.randomUUID();
 
 /**
  * Number of other Lichtblick tabs (same origin) that are using this hook right now.
  *
- * Each tab holds a Web Lock while mounted. The browser releases it when the tab closes or crashes,
+ * Each mount holds a Web Lock named after its tab. The browser releases it when the tab closes or crashes,
  * so `navigator.locks.query()` is an exact list of open tabs, even hidden or throttled ones.
  *
  * Returns undefined when the Web Locks API is unavailable (insecure context, old browser).
@@ -26,7 +28,7 @@ export function useOtherTabCount(): number | undefined {
       return;
     }
 
-    const ownName = `${LOCK_PREFIX}${crypto.randomUUID()}`;
+    const ownName = `${LOCK_PREFIX}${TAB_ID}:${crypto.randomUUID()}`;
     const channel = new BroadcastChannel(PRESENCE_CHANNEL_NAME);
     let active = true;
 
@@ -35,10 +37,14 @@ export function useOtherTabCount(): number | undefined {
       if (!active) {
         return;
       }
-      setCount(
-        held.filter((lock) => lock.name?.startsWith(LOCK_PREFIX) === true && lock.name !== ownName)
-          .length,
-      );
+      const tabs = new Set<string>();
+      for (const { name } of held) {
+        if (name?.startsWith(LOCK_PREFIX) === true) {
+          tabs.add(name.slice(LOCK_PREFIX.length).split(":")[0]!);
+        }
+      }
+      tabs.delete(TAB_ID);
+      setCount(tabs.size);
     };
     const onChange = () => {
       void refresh();
