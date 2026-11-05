@@ -120,7 +120,7 @@
     "plist": "4.0.0"
   },
   "devDependencies": {
-    "@actions/exec": "1.1.1",
+    "@actions/exec": "3.0.0",
     "@biomejs/biome": "2.6.4",
     "@foxglove/ws-protocol": "0.8.0",
     "@lichtblick/tsconfig": "1.1.2",
