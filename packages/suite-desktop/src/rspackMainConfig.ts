@@ -5,17 +5,17 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Configuration, rspack } from "@rspack/core";
+import { type Configuration, rspack } from "@rspack/core";
 import dotenv from "dotenv";
 import path from "path";
 
-import { RspackArgv } from "@lichtblick/suite-base/RspackArgv";
+import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
 
-import { RspackConfigParams } from "./RspackConfigParams";
-import { createCommonWebpackConfig } from "./rspackCommonConfig";
+import type { RspackConfigParams } from "./RspackConfigParams.ts";
+import { createCommonWebpackConfig } from "./rspackCommonConfig.ts";
 
 // Load environment variables from .env
-dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
+dotenv.config({ path: path.resolve(import.meta.dirname, "../../../.env") });
 
 export const rspackMainConfig =
   (params: RspackConfigParams) =>
@@ -46,6 +46,9 @@ export const rspackMainConfig =
 
     return {
       ...common,
+      name: "main",
+      // root cleans the output directory first
+      dependencies: ["root"],
       context: params.mainContext,
       entry: params.mainEntrypoint,
       target: "electron-main",

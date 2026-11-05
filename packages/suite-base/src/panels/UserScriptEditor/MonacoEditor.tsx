@@ -21,6 +21,20 @@ type Props = {
   onChange: (value: string) => void;
 };
 
+// Monaco's fallback for its editor worker is a bare `new URL(...)`, which the bundler emits as an
+// unbundled asset, so create the workers here (Monaco's documented ESM setup).
+globalThis.MonacoEnvironment = {
+  getWorker: (_moduleId: string, label: string) =>
+    label === "typescript" || label === "javascript"
+      ? new Worker(
+          new URL("monaco-editor/languages/features/typescript/ts.worker.js", import.meta.url),
+          { type: "module" },
+        )
+      : new Worker(new URL("monaco-editor/editor/editor.worker.js", import.meta.url), {
+          type: "module",
+        }),
+};
+
 /** Thin wrapper around the locally bundled monaco editor (no CDN loader). */
 export default function MonacoEditor(props: Props): ReactElement {
   const containerRef = useRef<HTMLDivElement>(null);

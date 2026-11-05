@@ -16,13 +16,12 @@ import { isCompressedVideoKeyframe } from "./decodeImage";
 /**
  * Filters the per-frame queue for the `CompressedVideo` subscription.
  *
- * Codecs whose delta frames depend on a preceding GOP (H.264 and H.265) need the entire chain
- * from the most recent keyframe through the latest delta preserved — dropping older queued frames
- * leaves the decoder unable to produce a picture for the new latest frame until the next
- * keyframe arrives (which can be several seconds away for typical recordings, and is exactly the
- * post-seek "black screen / garbled image" symptom the GOP backfill in `videoSeekBackfill.ts`
- * also addresses). For codecs without inter-frame dependencies (or unrecognized formats), only
- * the newest message is needed — matching the long-standing `onlyLastByTopicMessage` behavior.
+ * Codecs whose delta frames depend on a preceding GOP (every codec in `VIDEO_CODECS`) need the
+ * entire chain from the most recent keyframe through the latest delta preserved — dropping older
+ * queued frames leaves the decoder unable to produce a picture for the new latest frame until the
+ * next keyframe arrives (which can be several seconds away for typical recordings, and is exactly
+ * the post-seek "black screen / garbled image" symptom the GOP backfill in `videoSeekBackfill.ts`
+ * also addresses). For unrecognized formats (e.g. still images), only the newest message is needed — matching the long-standing `onlyLastByTopicMessage` behavior.
  *
  * The relative order of the kept messages is preserved so downstream handlers see the stream in
  * the same order it arrived.

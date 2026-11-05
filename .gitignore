@@ -24,12 +24,8 @@ benchmark/e2e/reports/*
 benchmark/test-results/*
 test-results/*
 
-# Yarn
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/sdks
 .pnp.*
 
 lint-report.sarif
 blob-report/*
+.eslintcache
