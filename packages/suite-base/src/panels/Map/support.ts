@@ -22,12 +22,22 @@ export function hasFix(ev: MessageEvent<NavSatFixMsg>): boolean {
     case NavSatFixStatus.STATUS_GBAS_FIX:
     case NavSatFixStatus.STATUS_SBAS_FIX:
     case NavSatFixStatus.STATUS_FIX:
+    case NavSatFixStatus.STATUS_UNKNOWN: // Jazzy+ default; don't paint unset statuses as "no fix".
     case undefined: // LocationFix has no status; don't paint every LocationFix as "no fix".
       return true;
     case NavSatFixStatus.STATUS_NO_FIX:
     default:
       return false;
   }
+}
+
+/** Fix status for display; "unknown" when the message has no status or reports it as unknown. */
+export function fixLabel(ev: MessageEvent<NavSatFixMsg>): string {
+  const status = ev.message.status?.status;
+  if (status == undefined || status === NavSatFixStatus.STATUS_UNKNOWN) {
+    return "unknown";
+  }
+  return hasFix(ev) ? "fix" : "no fix";
 }
 
 export function isGeoJSONMessage(msgEvent: MessageEvent): msgEvent is GeoJsonMessage {
