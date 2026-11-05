@@ -34,7 +34,6 @@ export default [
     ignores: [
       "**/.webpack/**",
       "**/.webpack-desktop/**",
-      "**/.yarn/**",
       "**/.storybook/**",
       "**/dist/**",
       "**/out/**",

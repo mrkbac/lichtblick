@@ -25,28 +25,28 @@ jobs:
           # Specify names so that the GitHub branch protection settings for
           # required checks don't need to change if we ever change the commands used.
           - name: npm audit
-            command: yarn npm audit --all --recursive --severity high
+            command: pnpm audit --audit-level high
           - name: lint
             command: |
               # lint steps
               set -x
-              yarn license-check
-              yarn dedupe --check
-              yarn run typecheck # typecheck files that are not included by the app or package builds (TypeScript 7)
-              yarn run format:ci
-              yarn run lint:ci
-              yarn run lint:unused-exports
-              yarn run lint:dependencies
+              pnpm license-check
+              pnpm dedupe --check
+              pnpm run typecheck # typecheck files that are not included by the app or package builds (TypeScript 7)
+              pnpm run format:ci
+              pnpm run lint:ci
+              pnpm run lint:unused-exports
+              pnpm run lint:dependencies
           - name: packages
-            command: yarn run build:packages
+            command: pnpm run build:packages
           - name: web
-            command: yarn run web:build:prod
+            command: pnpm run web:build:prod
           - name: desktop
-            command: yarn run desktop:build:prod
+            command: pnpm run desktop:build:prod
           - name: build benchmark
-            command: yarn run benchmark:build:prod
+            command: pnpm run benchmark:build:prod
           - name: test
-            command: yarn run test --maxWorkers=100%
+            command: pnpm run test --maxWorkers=100%
         include:
           - os: windows-latest
             config:
@@ -58,21 +58,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: pnpm/action-setup@9bbca1e9dc2902adb87e8780fe5c98796985a62d # v6.1.1
+
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: npm i -g --force corepack@0.36.0 && corepack enable
+          cache: pnpm
 
-      - name: Restore cache
-        uses: actions/cache@v6
-        with:
-          path: |
-            .yarn/cache
-            **/node_modules
-          key: v5-${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: v5-${{ runner.os }}-yarn-
-
-      - run: yarn install --immutable
+      - run: pnpm install --frozen-lockfile
 
       - run: ${{ matrix.config.command }}
 
@@ -97,21 +90,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: pnpm/action-setup@9bbca1e9dc2902adb87e8780fe5c98796985a62d # v6.1.1
+
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: npm i -g --force corepack@0.36.0 && corepack enable
+          cache: pnpm
 
-      - name: Restore cache
-        uses: actions/cache@v6
-        with:
-          path: |
-            .yarn/cache
-            **/node_modules
-          key: v5-${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: v5-${{ runner.os }}-yarn-
-
-      - run: yarn install --immutable
+      - run: pnpm install --frozen-lockfile
 
       - name: Apply AppArmor Fix (Ubuntu)
         # Required for Playwright on Ubuntu to work properly
@@ -121,13 +107,13 @@ jobs:
       # It must be dev build, otherwise playwright wont't have all data-testid avaiable for icons
       # https://mui.com/material-ui/migration/upgrade-to-v7/#svgicons-data-testid-removed
       - name: Build desktop app
-        run: yarn desktop:build:dev
+        run: pnpm desktop:build:dev
 
       - name: Run E2E Desktop smoke tests - Shard ${{ matrix.shard }}/2
         uses: coactions/setup-xvfb@v1
         with:
           working-directory: ./
-          run: yarn test:e2e:desktop:smoke:ci --shard=${{ matrix.shard }}/2
+          run: pnpm test:e2e:desktop:smoke:ci --shard=${{ matrix.shard }}/2
 
       - name: Upload Desktop E2E Test Reports (Shard ${{ matrix.shard }})
         if: always()
@@ -148,27 +134,20 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: pnpm/action-setup@9bbca1e9dc2902adb87e8780fe5c98796985a62d # v6.1.1
+
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: npm i -g --force corepack@0.36.0 && corepack enable
+          cache: pnpm
 
-      - name: Restore cache
-        uses: actions/cache@v6
-        with:
-          path: |
-            .yarn/cache
-            **/node_modules
-          key: v5-${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: v5-${{ runner.os }}-yarn-
-
-      - run: yarn install --immutable
+      - run: pnpm install --frozen-lockfile
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E Web smoke tests
-        run: yarn test:e2e:web:smoke:ci
+        run: pnpm test:e2e:web:smoke:ci
 
       - name: Upload Web E2E Test Reports
         if: always()
@@ -190,21 +169,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: pnpm/action-setup@9bbca1e9dc2902adb87e8780fe5c98796985a62d # v6.1.1
+
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: npm i -g --force corepack@0.36.0 && corepack enable
+          cache: pnpm
 
-      - name: Restore cache
-        uses: actions/cache@v6
-        with:
-          path: |
-            .yarn/cache
-            **/node_modules
-          key: v5-${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: v5-${{ runner.os }}-yarn-
-
-      - run: yarn install --immutable
+      - run: pnpm install --frozen-lockfile
 
       - name: Download all desktop blob reports
         uses: actions/download-artifact@v8
@@ -239,7 +211,7 @@ jobs:
       - name: Generate E2E Test Summary
         run: |
           echo "Generating E2E test summary from merged reports..."
-          yarn ts-node e2e/ci-helpers/generate-test-summary.ts >> $GITHUB_STEP_SUMMARY
+          pnpm exec ts-node e2e/ci-helpers/generate-test-summary.ts >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Merged E2E Test Reports
         if: always()

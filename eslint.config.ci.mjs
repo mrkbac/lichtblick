@@ -15,7 +15,7 @@ export default [
     rules: {
       // disable progress spinner in CI output
       "file-progress/activate": "off",
-      // Formatting is enforced by Biome (see biome.json + `yarn format:ci`), not ESLint.
+      // Formatting is enforced by Biome (see biome.json + `pnpm format:ci`), not ESLint.
       // The rule is provided by the shared @lichtblick/eslint-plugin base config and is
       // kept disabled here so ESLint no longer double-checks formatting.
       "prettier/prettier": "off",

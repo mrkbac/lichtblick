@@ -24,7 +24,7 @@ This agent is the designated **writer** for E2E test files. Only this agent edit
 
 ## Skills Reference
 
-1. **Ask the user to start the application** before proceeding. For web tests, confirm that `yarn web:serve` is running at `http://localhost:8080`. For desktop tests, confirm that the desktop build exists (`yarn desktop:build:dev`). Do not proceed until the user confirms the app is running.
+1. **Ask the user to start the application** before proceeding. For web tests, confirm that `pnpm web:serve` is running at `http://localhost:8080`. For desktop tests, confirm that the desktop build exists (`pnpm desktop:build:dev`). Do not proceed until the user confirms the app is running.
 2. Read the **test-conventions** skill — `read_file(".github/skills/test-conventions/SKILL.md")`
 3. Read the **e2e-playwright-mcp** skill — `read_file(".github/skills/e2e-playwright-mcp/SKILL.md")`
 4. Read at least one **existing sibling spec file** in the same `e2e/tests/desktop/` subdirectory to match the exact style
@@ -40,13 +40,13 @@ This agent is the designated **writer** for E2E test files. Only this agent edit
 
 ### For Web Tests
 
-1. Ensure `yarn web:serve` is running at `http://localhost:8080`
+1. Ensure `pnpm web:serve` is running at `http://localhost:8080`
 2. Use Playwright MCP to navigate and explore the UI
 3. Take accessibility snapshots to discover stable selectors
 4. Interact with elements to verify behavior before coding
 5. Extract `data-testid`, role-based, or `aria-*` selectors
 6. Write the test following GWT pattern
-7. Run `yarn test:e2e:web:debug <filter>` to verify
+7. Run `pnpm test:e2e:web:debug <filter>` to verify
 
 ### For Desktop Tests
 
@@ -63,7 +63,7 @@ This agent is the designated **writer** for E2E test files. Only this agent edit
 2. Check source components for existing `data-testid` attributes
 3. If no stable selector exists, add `data-testid` (and `aria-pressed` for toggles) to the source component
 4. Write the test following GWT pattern
-5. Run `yarn test:e2e:desktop:debug <filter>` to verify
+5. Run `pnpm test:e2e:desktop:debug <filter>` to verify
 
 ---
 
@@ -190,14 +190,14 @@ See the **e2e-playwright-mcp** skill for full instrumentation rules and examples
 
 ```bash
 # Desktop
-yarn test:e2e:desktop:debug <filename-fragment>   # Debug single test
-yarn test:e2e:desktop                             # All desktop tests
+pnpm test:e2e:desktop:debug <filename-fragment>   # Debug single test
+pnpm test:e2e:desktop                             # All desktop tests
 
 # Web
-yarn test:e2e:web:debug <filename-fragment>       # Debug single test
-yarn test:e2e:web                                 # All web tests
+pnpm test:e2e:web:debug <filename-fragment>       # Debug single test
+pnpm test:e2e:web                                 # All web tests
 
 # CI
-yarn test:e2e:ci                                  # Always confirm that all tests pass in CI before pushing
+pnpm test:e2e:ci                                  # Always confirm that all tests pass in CI before pushing
 
 ```

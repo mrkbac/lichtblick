@@ -118,8 +118,8 @@ Human checkpoint:
    | Cross-cutting or unclear | `@lb-orchestrator` |
 
 7. After each fix is applied, verify:
-   - `yarn lint` passes on affected files
-   - Related tests still pass: `yarn test --testPathPattern=<affected file>`
+   - `pnpm lint` passes on affected files
+   - Related tests still pass: `pnpm test --testPathPattern=<affected file>`
 8. Do not implement findings marked as **nitpick** or **informational** unless the user
    explicitly requests it.
 

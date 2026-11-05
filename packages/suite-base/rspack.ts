@@ -141,9 +141,7 @@ export function makeConfig(
 
         // TypeScript tries to use this when running in node
         perf_hooks: false,
-        // Yarn patches these imports into TypeScript for PnP support
-        // https://github.com/microsoft/TypeScript/pull/35206
-        // https://github.com/yarnpkg/berry/pull/2889#issuecomment-849905154
+        // TypeScript requires this when running in node
         module: false,
 
         // These are optional for react-mosaic-component
@@ -160,8 +158,8 @@ export function makeConfig(
         punycode: false,
 
         // Workaround for https://github.com/react-dnd/react-dnd/issues/3423
-        "react/jsx-runtime": "react/jsx-runtime.js",
-        "react/jsx-dev-runtime": "react/jsx-dev-runtime.js",
+        "react/jsx-runtime": localRequire.resolve("react/jsx-runtime"),
+        "react/jsx-dev-runtime": localRequire.resolve("react/jsx-dev-runtime"),
       },
     },
     module: {
@@ -207,14 +205,14 @@ export function makeConfig(
         { test: /\.(md|template)$/, type: "asset/source" },
         {
           test: /\.svg$/,
-          loader: "@svgr/webpack", // foxglove-depcheck-used: @svgr/webpack
+          loader: localRequire.resolve("@svgr/webpack"), // foxglove-depcheck-used: @svgr/webpack
           options: {
             svgo: {
               plugins: [{ removeViewBox: false }, { removeDimensions: false }],
             },
           },
         },
-        { test: /\.ne$/, loader: "nearley-loader" }, // foxglove-depcheck-used: nearley-loader
+        { test: /\.ne$/, loader: localRequire.resolve("nearley-loader") }, // foxglove-depcheck-used: nearley-loader
         {
           test: /\.(png|jpg|gif)$/i,
           type: "asset",
@@ -226,12 +224,12 @@ export function makeConfig(
         },
         {
           test: /\.css$/,
-          loader: "style-loader", // foxglove-depcheck-used: style-loader
+          loader: localRequire.resolve("style-loader"), // foxglove-depcheck-used: style-loader
           sideEffects: true,
         },
         {
           test: /\.css$/,
-          loader: "css-loader", // foxglove-depcheck-used: css-loader
+          loader: localRequire.resolve("css-loader"), // foxglove-depcheck-used: css-loader
           options: { sourceMap: true },
         },
         { test: /\.woff2?$/, type: "asset/inline" },
@@ -242,7 +240,7 @@ export function makeConfig(
           // https://github.com/microsoft/TypeScript/issues/39436
           // Prettier's TS parser also bundles the same code: https://github.com/prettier/prettier/issues/11076
           test: /[\\/]node_modules[\\/]typescript[\\/]lib[\\/]typescript\.js$|[\\/]node_modules[\\/]prettier[\\/]plugins[\\/]typescript\.m?js$/,
-          loader: "string-replace-loader", // foxglove-depcheck-used: string-replace-loader
+          loader: localRequire.resolve("string-replace-loader"), // foxglove-depcheck-used: string-replace-loader
           options: {
             multiple: [
               {
@@ -301,6 +299,8 @@ export function makeConfig(
       new MonacoWebpackPlugin({
         // available options: https://github.com/Microsoft/monaco-editor-webpack-plugin#options
         languages: ["typescript", "javascript"],
+        // The plugin otherwise looks in the root node_modules, which pnpm doesn't hoist into.
+        monacoEditorPath: _nodeFileURLToPath(new URL("node_modules/monaco-editor", dirHref)),
 
         // Output filenames should include content hashes in order to avoid caching issues with
         // downstream users of the suite-base package.

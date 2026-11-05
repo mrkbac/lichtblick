@@ -37,21 +37,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: pnpm/action-setup@9bbca1e9dc2902adb87e8780fe5c98796985a62d # v6.1.1
+
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: npm i -g --force corepack@0.36.0 && corepack enable
+          cache: pnpm
 
-      - name: Restore cache
-        uses: actions/cache@v6
-        with:
-          path: |
-            .yarn/cache
-            **/node_modules
-          key: v5-${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: v5-${{ runner.os }}-yarn-
-
-      - run: yarn install --immutable
+      - run: pnpm install --frozen-lockfile
 
       - name: Apply AppArmor Fix (Ubuntu)
         # Required for Playwright on Ubuntu to work properly
@@ -61,13 +54,13 @@ jobs:
       # It must be dev build, otherwise playwright won't have all data-testid available for icons
       # https://mui.com/material-ui/migration/upgrade-to-v7/#svgicons-data-testid-removed
       - name: Build desktop app
-        run: yarn desktop:build:dev
+        run: pnpm desktop:build:dev
 
       - name: Run E2E Desktop regression tests - Shard ${{ matrix.shard }}/4
         uses: coactions/setup-xvfb@v1
         with:
           working-directory: ./
-          run: yarn test:e2e:desktop:ci --shard=${{ matrix.shard }}/4
+          run: pnpm test:e2e:desktop:ci --shard=${{ matrix.shard }}/4
 
       - name: Upload Desktop E2E Test Reports (Shard ${{ matrix.shard }})
         if: always()
@@ -88,27 +81,20 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: pnpm/action-setup@9bbca1e9dc2902adb87e8780fe5c98796985a62d # v6.1.1
+
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: npm i -g --force corepack@0.36.0 && corepack enable
+          cache: pnpm
 
-      - name: Restore cache
-        uses: actions/cache@v6
-        with:
-          path: |
-            .yarn/cache
-            **/node_modules
-          key: v5-${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: v5-${{ runner.os }}-yarn-
-
-      - run: yarn install --immutable
+      - run: pnpm install --frozen-lockfile
 
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps chromium
 
       - name: Run E2E Web regression tests
-        run: yarn test:e2e:web:ci
+        run: pnpm test:e2e:web:ci
 
       - name: Upload Web E2E Test Reports
         if: always()
@@ -130,21 +116,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: pnpm/action-setup@9bbca1e9dc2902adb87e8780fe5c98796985a62d # v6.1.1
+
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: npm i -g --force corepack@0.36.0 && corepack enable
+          cache: pnpm
 
-      - name: Restore cache
-        uses: actions/cache@v6
-        with:
-          path: |
-            .yarn/cache
-            **/node_modules
-          key: v5-${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: v5-${{ runner.os }}-yarn-
-
-      - run: yarn install --immutable
+      - run: pnpm install --frozen-lockfile
 
       - name: Download all desktop blob reports
         uses: actions/download-artifact@v8
@@ -179,7 +158,7 @@ jobs:
       - name: Generate E2E Test Summary
         run: |
           echo "Generating E2E regression test summary from merged reports..."
-          yarn ts-node e2e/ci-helpers/generate-test-summary.ts >> $GITHUB_STEP_SUMMARY
+          pnpm exec ts-node e2e/ci-helpers/generate-test-summary.ts >> $GITHUB_STEP_SUMMARY
 
       - name: Upload Merged E2E Test Reports
         if: always()

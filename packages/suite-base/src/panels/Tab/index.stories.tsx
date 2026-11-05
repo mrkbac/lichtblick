@@ -27,9 +27,9 @@ import {
   nestedTabLayoutFixture,
   nestedTabLayoutFixture2,
 } from "@lichtblick/suite-base/panels/Tab/nestedTabLayoutFixture";
-import { TabPanelConfig } from "@lichtblick/suite-base/src/types/layouts";
 import PanelSetup, { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";
 import { ExpectedResult } from "@lichtblick/suite-base/stories/storyHelpers";
+import { TabPanelConfig } from "@lichtblick/suite-base/types/layouts";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import Tab from "./index";

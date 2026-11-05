@@ -85,15 +85,15 @@ const useStyles = makeStyles()((theme) => ({
 - Follow **Given-When-Then (GWT)** structure for all tests
 - Use **Builder pattern** for test data (see `builders/` directories)
 - Tests colocated with source: `*.test.ts` / `*.test.tsx`
-- Run tests: `yarn test` | `yarn test:watch` | `yarn test:coverage`
+- Run tests: `pnpm test` | `pnpm test:watch` | `pnpm test:coverage`
 
 ## Commands
 
-- Lint: `yarn lint`
-- Type check: `yarn run tsc --noEmit`
-- Build packages: `yarn build:packages`
-- Desktop dev: `yarn desktop:serve` + `yarn desktop:start`
-- Web dev: `yarn web:serve`
+- Lint: `pnpm lint`
+- Type check: `pnpm typecheck`
+- Build packages: `pnpm build:packages`
+- Desktop dev: `pnpm desktop:serve` + `pnpm desktop:start`
+- Web dev: `pnpm web:serve`
 
 ## Performance Awareness
 

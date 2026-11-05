@@ -6,7 +6,7 @@
   "productName": "Lichtblick",
   "description": "Core components of Lichtblick",
   "productDescription": "Lichtblick Suite",
-  "packageManager": "yarn@4.17.0",
+  "packageManager": "pnpm@10.34.9",
   "repository": {
     "type": "git",
     "url": "https://github.com/lichtblick-suite/lichtblick.git"
@@ -41,7 +41,7 @@
     "format:ci": "biome format --max-diagnostics=none .",
     "lint": "TIMING=1 eslint --report-unused-disable-directives --cache --fix .",
     "lint:ci": "TIMING=1 eslint --report-unused-disable-directives --cache --max-warnings 0 --config eslint.config.ci.mjs .",
-    "lint:ci:report": "yarn lint:ci -f json -o eslint-report.json --quiet",
+    "lint:ci:report": "pnpm lint:ci -f json -o eslint-report.json --quiet",
     "lint:unused-exports": "ts-node ./ci/lint-unused-exports.ts",
     "lint:dependencies": "ts-node ./ci/lint-dependencies.ts .",
     "test": "vitest run",
@@ -66,15 +66,14 @@
     "test:e2e:benchmark:report": "playwright show-report benchmark/e2e/reports",
     "test:e2e:benchmark:ci": "CI=true PLAYWRIGHT_JSON_OUTPUT_NAME=reports/results.json playwright test --config=benchmark/e2e/playwright.config.ts --reporter=list,json",
     "test:e2e:benchmark:summary": "ts-node benchmark/e2e/ci-helpers/generate-benchmark-summary.ts",
-    "package:win": "yarn package --win",
-    "package:darwin": "yarn package --mac",
-    "package:linux": "yarn package --linux",
+    "package:win": "pnpm package --win",
+    "package:darwin": "pnpm package --mac",
+    "package:linux": "pnpm package --linux",
     "package": "cross-env NODE_OPTIONS='-r ts-node/register' electron-builder build --config desktop/electronBuilderConfig.js --publish never",
-    "package:e2e": "yarn && yarn clean && yarn desktop:build:prod && yarn package",
+    "package:e2e": "pnpm install && pnpm clean && pnpm desktop:build:prod && pnpm package",
     "release:bump-nightly-version": "node -r ts-node/register ./ci/bump-nightly-version.ts",
     "storybook": "storybook dev --port 9009 --config-dir .storybook",
     "storybook:build": "storybook build --config-dir .storybook --stats-json",
-    "version:all": "yarn workspaces foreach version",
     "typecheck": "node ./node_modules/typescript7/bin/tsc --noEmit"
   },
   "lint-staged": {
@@ -82,47 +81,6 @@
       "eslint --report-unused-disable-directives --fix --cache",
       "biome format --write --no-errors-on-unmatched"
     ]
-  },
-  "workspaces": {
-    "packages": [
-      "desktop",
-      "packages/*",
-      "packages/@types/*",
-      "web",
-      "benchmark"
-    ]
-  },
-  "resolutions": {
-    "@types/node": "26.6.6",
-    "react-dnd": "patch:react-dnd@npm:16.0.1#./patches/react-dnd.patch",
-    "@types/react": "19.3.0",
-    "esbuild": "0.28.1",
-    "dompurify": "3.4.17",
-    "js-yaml": "4.3.2",
-    "js-cookie": "3.0.7",
-    "qs": "6.15.2",
-    "ws@^8.18.0": "8.21.0",
-    "tar": "7.5.22",
-    "undici": "6.29.1",
-    "brace-expansion@^2.0.1": "2.1.7",
-    "brace-expansion@^2.0.2": "2.1.7",
-    "brace-expansion@^5.0.5": "5.0.12",
-    "compression": "1.8.2",
-    "http-cache-semantics": "4.3.0",
-    "proxy-addr": "2.0.8",
-    "shell-quote": "1.12.0",
-    "source-map-js": "1.2.2",
-    "webpack-dev-middleware@^6.1.2": "7.4.5",
-    "flatted": "3.4.2",
-    "@xmldom/xmldom": "0.9.12",
-    "uuid": "14.0.0",
-    "svgo": "3.3.5",
-    "browserslist": "4.28.9",
-    "fast-uri": "3.1.7",
-    "plist@3.1.0": "patch:plist@npm%3A3.1.0#./patches/plist-npm-3.1.0-66799cb2cb.patch",
-    "plist@^3.0.4": "patch:plist@npm%3A3.1.0#./patches/plist-npm-3.1.0-66799cb2cb.patch",
-    "plist@^3.0.5": "patch:plist@npm%3A3.1.0#./patches/plist-npm-3.1.0-66799cb2cb.patch",
-    "plist@^3.1.0": "patch:plist@npm%3A3.1.0#./patches/plist-npm-3.1.0-66799cb2cb.patch"
   },
   "devDependencies": {
     "@actions/core": "1.11.1",

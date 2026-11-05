@@ -5,42 +5,41 @@ This file helps AI coding agents work effectively in the Lichtblick monorepo.
 ## Quick Start
 
 - Use Node.js 20+.
-- Enable Corepack and install dependencies with Yarn 3.6.3:
+- Install pnpm, then the dependencies (pnpm switches to the version pinned in `package.json`):
 
 ```sh
-npm install --global corepack # Node 25+ no longer bundles Corepack
-corepack enable
-yarn install
+npm install --global pnpm
+pnpm install
 ```
 
-- Use Yarn commands only (not npm or pnpm).
+- Use pnpm commands only (not npm or Yarn).
 
 ## Core Commands
 
-- Lint and auto-fix: `yarn lint`
-- CI lint mode: `yarn lint:ci`
-- Unit tests: `yarn test`
-- Coverage: `yarn test:coverage`
-- Type check (from contributing guide): `yarn run tsc --noEmit`
-- Build internal packages: `yarn build:packages`
+- Lint and auto-fix: `pnpm lint`
+- CI lint mode: `pnpm lint:ci`
+- Unit tests: `pnpm test`
+- Coverage: `pnpm test:coverage`
+- Type check (from contributing guide): `pnpm typecheck`
+- Build internal packages: `pnpm build:packages`
 
 Desktop app development (run in separate terminals):
 
 ```sh
-yarn desktop:serve
-yarn desktop:start
+pnpm desktop:serve
+pnpm desktop:start
 ```
 
 Web app development:
 
 ```sh
-yarn web:serve
+pnpm web:serve
 ```
 
 E2E tests:
 
-- Desktop: `yarn test:e2e:desktop`
-- Web: `yarn test:e2e:web`
+- Desktop: `pnpm test:e2e:desktop`
+- Web: `pnpm test:e2e:web`
 
 ## Monorepo Map
 
@@ -52,7 +51,7 @@ E2E tests:
 - `packages/suite/`: Extension API types
 - `e2e/`: Playwright end-to-end tests
 - `ci/`: CI and repository maintenance scripts
-- `patches/`: Yarn patch protocol patches for third-party dependencies
+- `patches/`: pnpm `patchedDependencies` patches for third-party dependencies
 
 ## High-Impact Conventions
 

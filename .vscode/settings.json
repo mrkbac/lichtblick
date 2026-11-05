@@ -24,8 +24,7 @@
     "**/*.code-search": true,
     "**/bower_components": true,
     "**/node_modules": true,
-    ".yarn/**": true,
-    "yarn.lock": true
+    "pnpm-lock.yaml": true
   },
   "js/ts.tsdk.path": "node_modules/typescript/lib",
   "js/ts.preferences.importModuleSpecifier": "non-relative",
