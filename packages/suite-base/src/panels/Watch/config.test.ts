@@ -17,6 +17,7 @@ describe("migrateConfig", () => {
         { id: "b", path: "/b", label: "", precision: -1, unit: 5 },
         { id: "c" },
         42,
+        null,
       ],
     });
     expect(config).toEqual({

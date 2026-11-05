@@ -43,8 +43,12 @@ export function migrateConfig(raw: unknown): WatchConfig {
   const rows: WatchRow[] = [];
   for (const item of Array.isArray(input.rows) ? (input.rows as unknown[]) : []) {
     // Plain strings are accepted as paths
-    const obj = (typeof item === "string" ? { path: item } : item) as Record<string, unknown>;
-    if (typeof obj !== "object" || typeof obj.path !== "string") {
+    const candidate = typeof item === "string" ? { path: item } : item;
+    if (typeof candidate !== "object" || candidate == undefined) {
+      continue; // also rejects `null`
+    }
+    const obj = candidate as Record<string, unknown>;
+    if (typeof obj.path !== "string") {
       continue;
     }
     let id = optionalString(obj.id) ?? randomUUID();

@@ -204,9 +204,16 @@ export const WatchRowView = memo(function WatchRowViewInner({
         <Tooltip title={invalid ? t("invalidPath") : `${row.path} — ${t("openInPlot")}`}>
           <span
             role="button"
+            tabIndex={0}
             className={cx(classes.name, { [classes.invalid]: invalid })}
             onClick={() => {
               onAction("openInPlot", row.id);
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                onAction("openInPlot", row.id);
+              }
             }}
           >
             {row.label ?? row.path}

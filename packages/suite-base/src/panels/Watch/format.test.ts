@@ -51,6 +51,7 @@ describe("expanded values", () => {
     expect(copyText(1.23456789)).toBe("1.23456789");
     expect(copyText("raw")).toBe("raw");
     expect(copyText(undefined)).toBe("");
+    expect(JSON.parse(copyText(new Array(300).fill(1))) as unknown[]).toHaveLength(300);
   });
 
   it("converts plottable values", () => {

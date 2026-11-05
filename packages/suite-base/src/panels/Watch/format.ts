@@ -99,7 +99,7 @@ export function formatValue(
 }
 
 /** Multi-line text for an expanded value. Long arrays are truncated to keep it cheap. */
-export function formatExpanded(value: unknown): string {
+export function formatExpanded(value: unknown, maxItems: number = MAX_EXPANDED_ITEMS): string {
   return (
     JSON.stringify(
       value,
@@ -109,10 +109,10 @@ export function formatExpanded(value: unknown): string {
         }
         if (isTypedArray(item) || Array.isArray(item)) {
           const arr = item as ArrayLike<unknown>;
-          if (arr.length > MAX_EXPANDED_ITEMS) {
+          if (arr.length > maxItems) {
             return [
-              ...Array.prototype.slice.call(arr, 0, MAX_EXPANDED_ITEMS),
-              `… ${arr.length - MAX_EXPANDED_ITEMS} more`,
+              ...Array.prototype.slice.call(arr, 0, maxItems),
+              `… ${arr.length - maxItems} more`,
             ];
           }
           return isTypedArray(item) ? Array.from(arr) : item;
@@ -136,7 +136,7 @@ export function copyText(value: unknown): string {
     case "undefined":
       return "";
     default:
-      return formatExpanded(value);
+      return formatExpanded(value, Infinity);
   }
 }
 

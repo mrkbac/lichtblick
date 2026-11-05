@@ -25,7 +25,7 @@ export const useStyles = makeStyles()((theme) => ({
     borderBottom: `1px solid ${theme.palette.divider}`,
     fontSize: theme.typography.body2.fontSize,
     "&:hover": { backgroundColor: theme.palette.action.hover },
-    "&:hover [data-actions]": { visibility: "visible" },
+    "&:hover [data-actions], &:focus-within [data-actions]": { visibility: "visible" },
     // The expand toggle only applies to arrays and objects; set while painting values
     "&[data-expandable='false'] [data-expand]": { visibility: "hidden" },
     "&[data-error='true'] [data-value]": { color: theme.palette.error.main },
