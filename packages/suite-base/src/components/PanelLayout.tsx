@@ -64,7 +64,7 @@ import { layoutsEqual } from "@lichtblick/suite-base/util/layoutTree";
 import ErrorBoundary from "./ErrorBoundary";
 import { useStyles } from "./PanelLayout.style";
 import { PanelRemounter } from "./PanelRemounter";
-import { PanelTab } from "./PanelTab";
+import { NewTabDropTarget, PanelTab } from "./PanelTab";
 import { UnknownPanel } from "./UnknownPanel";
 import "dockview-react/dist/styles/dockview.css";
 import { useInstallingExtensionsStore } from "../hooks/useInstallingExtensionsStore";
@@ -224,10 +224,11 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
 
   const onDidDrop = useCallback(
     (event: DockviewDidDropEvent) => {
-      // Drops on a tab are handled by the tab (PanelTab).
+      // Drops on a tab or the "+ New tab" target are handled there (PanelTab).
       if (
         !(event.nativeEvent instanceof DragEvent) ||
-        (event.nativeEvent.target instanceof Element && event.nativeEvent.target.closest(".dv-tab"))
+        (event.nativeEvent.target instanceof Element &&
+          event.nativeEvent.target.closest(".dv-tab, [data-testid='new-tab-drop-target']"))
       ) {
         return;
       }
@@ -261,6 +262,7 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
             singleTabMode="fullwidth"
             scrollbars="native"
             defaultTabComponent={PanelTab}
+            leftHeaderActionsComponent={NewTabDropTarget}
             // Background tabs stay mounted and in the DOM, so switching tabs only toggles visibility.
             defaultRenderer="always"
           />
