@@ -60,7 +60,9 @@
         // Injected by rspack.ts (ProvidePlugin and resolve.fallback)
         "src/util/process.ts",
         "src/util/shims/url.ts",
-        "loaders/*.cjs"
+        "loaders/*.cjs",
+        // Monaco's TypeScript modules, aliased in rspack.ts
+        "src/panels/UserScriptEditor/monacoTypescript{,Libs}.ts"
       ],
       // Shadowed by services/migrateLayout.ts, see the PR description
       "ignore": ["src/services/migrateLayout/{index,migratePanelsState}.ts"],
@@ -73,7 +75,6 @@
         "nearley-loader",
         "path-browserify",
         "readable-stream",
-        "string-replace-loader",
         "style-loader"
       ]
     },

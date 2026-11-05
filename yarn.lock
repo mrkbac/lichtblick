@@ -3209,7 +3209,6 @@ __metadata:
     memoize-weak: "npm:1.0.2"
     meshoptimizer: "npm:1.3.0"
     monaco-editor: "npm:0.57.0"
-    monaco-editor-webpack-plugin: "npm:7.1.1"
     nearley: "npm:2.20.1"
     nearley-loader: "npm:2.0.0"
     notistack: "npm:3.0.2"
@@ -3236,7 +3235,6 @@ __metadata:
     reselect: "npm:5.3.0"
     storybook: "npm:10.6.5"
     storybook-react-rsbuild: "npm:3.6.1"
-    string-replace-loader: "npm:3.3.0"
     style-loader: "npm:4.0.0"
     three: "npm:0.187.0"
     tinycolor2: "npm:1.6.0"
@@ -7695,13 +7693,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"big.js@npm:^5.2.2":
-  version: 5.2.2
-  resolution: "big.js@npm:5.2.2"
-  checksum: 10/c04416aeb084f4aa1c5857722439c327cc0ada9bd99ab80b650e3f30e2e4f1b92a04527ed1e7df8ffcd7c0ea311745a04af12d53e2f091bf09a06f1292003827
-  languageName: node
-  linkType: hard
-
 "bind-event-listener@npm:^3.0.0":
   version: 3.0.0
   resolution: "bind-event-listener@npm:3.0.0"
@@ -9319,13 +9310,6 @@ __metadata:
   version: 8.0.0
   resolution: "emoji-regex@npm:8.0.0"
   checksum: 10/c72d67a6821be15ec11997877c437491c313d924306b8da5d87d2a2bcc2cec9903cb5b04ee1a088460501d8e5b44f10df82fdc93c444101a7610b80c8b6938e1
-  languageName: node
-  linkType: hard
-
-"emojis-list@npm:^3.0.0":
-  version: 3.0.0
-  resolution: "emojis-list@npm:3.0.0"
-  checksum: 10/114f47d6d45612621497d2b1556c8f142c35332a591780a54e863e42d281e72d6c7d7c419f2e419319d4eb7f6ebf1db82d9744905d90f275db20d06a763b5e19
   languageName: node
   linkType: hard
 
@@ -11935,7 +11919,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"json5@npm:^2.1.2, json5@npm:^2.2.2, json5@npm:^2.2.3":
+"json5@npm:^2.2.2, json5@npm:^2.2.3":
   version: 2.2.3
   resolution: "json5@npm:2.2.3"
   bin:
@@ -12291,17 +12275,6 @@ __metadata:
   version: 4.3.2
   resolution: "loader-runner@npm:4.3.2"
   checksum: 10/fc0cf0026cdea7182720f58e8ff07869334bf299bd451d6192a8c2c4119ad493f1e0f5df099d031e81361f96196150d21047bf415edef4dc1e0fa02fa65ecced
-  languageName: node
-  linkType: hard
-
-"loader-utils@npm:^2.0.2":
-  version: 2.0.4
-  resolution: "loader-utils@npm:2.0.4"
-  dependencies:
-    big.js: "npm:^5.2.2"
-    emojis-list: "npm:^3.0.0"
-    json5: "npm:^2.1.2"
-  checksum: 10/28bd9af2025b0cb2fc6c9c2d8140a75a3ab61016e5a86edf18f63732216e985a50bf2479a662555beb472a54d12292e380423705741bfd2b54cab883aa067f18
   languageName: node
   linkType: hard
 
@@ -13364,18 +13337,6 @@ __metadata:
   bin:
     mkdirp: bin/cmd.js
   checksum: 10/0c91b721bb12c3f9af4b77ebf73604baf350e64d80df91754dc509491ae93bf238581e59c7188360cec7cb62fc4100959245a42cfe01834efedc5e9d068376c2
-  languageName: node
-  linkType: hard
-
-"monaco-editor-webpack-plugin@npm:7.1.1":
-  version: 7.1.1
-  resolution: "monaco-editor-webpack-plugin@npm:7.1.1"
-  dependencies:
-    loader-utils: "npm:^2.0.2"
-  peerDependencies:
-    monaco-editor: ">= 0.31.0"
-    webpack: ^4.5.0 || 5.x
-  checksum: 10/633ce250ac28008eb8fa0ce617655793fa014547f5b26f18210b5385365d96a967e799c3c16cf90ea01325fd8fd26d68d0b7995e6b1e5062984e72ee1bd3abd2
   languageName: node
   linkType: hard
 
@@ -16130,7 +16091,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"schema-utils@npm:^4, schema-utils@npm:^4.3.3, schema-utils@npm:^4.6.0":
+"schema-utils@npm:^4.3.3, schema-utils@npm:^4.6.0":
   version: 4.8.2
   resolution: "schema-utils@npm:4.8.2"
   dependencies:
@@ -16707,17 +16668,6 @@ __metadata:
   version: 0.3.2
   resolution: "string-argv@npm:0.3.2"
   checksum: 10/f9d3addf887026b4b5f997a271149e93bf71efc8692e7dc0816e8807f960b18bcb9787b45beedf0f97ff459575ee389af3f189d8b649834cac602f2e857e75af
-  languageName: node
-  linkType: hard
-
-"string-replace-loader@npm:3.3.0":
-  version: 3.3.0
-  resolution: "string-replace-loader@npm:3.3.0"
-  dependencies:
-    schema-utils: "npm:^4"
-  peerDependencies:
-    webpack: ^5
-  checksum: 10/dbfd4bbec4041c6e8a0cfba16e046140127d01ac48ca82d0e410746a6703b78f31bdc373c8e379ce93aa1c6de0837b6675a5635edff4fee2ff88e8c459920eed
   languageName: node
   linkType: hard
 
