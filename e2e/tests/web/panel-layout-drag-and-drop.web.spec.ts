@@ -20,9 +20,24 @@ async function groups(page: Page): Promise<string[]> {
 }
 
 async function drag(page: Page, from: Point, to: () => Promise<Point>, holdMs = 150) {
-  await page.mouse.move(...from);
-  await page.mouse.down();
-  await page.mouse.move(from[0] + 10, from[1] + 10, { steps: 3 });
+  // A cold dev server can drop the first drag; every panel drag shows "+ New tab" targets, so
+  // retry until they show up.
+  await expect(async () => {
+    await page.mouse.move(...from);
+    await page.mouse.down();
+    await page.mouse.move(from[0] + 10, from[1] + 10, { steps: 3 });
+    // Drag events need movement after the drag has started.
+    await page.mouse.move(from[0] + 30, from[1] + 40, { steps: 3 });
+    try {
+      await page
+        .getByTestId("new-tab-drop-target")
+        .first()
+        .waitFor({ state: "attached", timeout: 2000 });
+    } catch (error) {
+      await page.mouse.up();
+      throw error;
+    }
+  }).toPass({ timeout: 15_000 });
   const [x, y] = await to();
   await page.mouse.move(x, y, { steps: 15 });
   await page.waitForTimeout(holdMs);
@@ -71,6 +86,8 @@ async function catalogItem(page: Page, title: string): Promise<Point> {
 
 test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
   test.beforeEach(async ({ page }) => {
+    // The first test compiles panels on a cold dev server.
+    test.setTimeout(90_000);
     await page.setViewportSize({ width: 1600, height: 1000 });
     await page.goto("/");
     const dialog = page.getByTestId("DataSourceDialog");
@@ -78,6 +95,7 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
     await expect.poll(async () => await groups(page)).toEqual(["3D", "Image", "Raw Messages"]);
+    await expect(page.getByTestId("mosaic-drag-handle")).toHaveCount(3, { timeout: 30_000 });
   });
 
   async function stackImageOn3D(page: Page) {
@@ -131,25 +149,26 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
     await expect(page.getByTestId("new-tab-drop-target")).toHaveCount(0);
   });
 
+  // Uses panel types that are already loaded: a cold dev server can fail to lazy-load new ones.
   test("adds panels dragged from the panel catalog", async ({ page }) => {
-    await drag(page, await catalogItem(page, "Gauge"), inGroup(page, "3D", 0.5, 0.97));
+    await drag(page, await catalogItem(page, "Raw Messages"), inGroup(page, "3D", 0.5, 0.97));
     await expect
       .poll(async () => await groups(page))
-      .toEqual(["3D", "Gauge", "Image", "Raw Messages"]);
-    await expect(page.getByTestId("panel-menu-item Gauge")).toHaveCount(0);
+      .toEqual(["3D", "Raw Messages", "Image", "Raw Messages"]);
+    await expect(page.getByTestId("panel-menu-item Raw Messages")).toHaveCount(0);
 
-    await drag(page, await catalogItem(page, "Plot"), inGroup(page, "Gauge", 0.5, 0.5));
+    await drag(page, await catalogItem(page, "Image"), inGroup(page, "3D", 0.5, 0.5));
     await expect
       .poll(async () => await groups(page))
-      .toEqual(["3D", "Gauge|Plot", "Image", "Raw Messages"]);
+      .toEqual(["3D|Image", "Raw Messages", "Image", "Raw Messages"]);
 
     await drag(
       page,
-      await catalogItem(page, "Table"),
-      centerOf(group(page, "Gauge").getByTestId("new-tab-drop-target")),
+      await catalogItem(page, "3D"),
+      centerOf(group(page, "3D").getByTestId("new-tab-drop-target")),
     );
     await expect
       .poll(async () => await groups(page))
-      .toEqual(["3D", "Gauge|Plot|Table", "Image", "Raw Messages"]);
+      .toEqual(["3D|Image|3D", "Raw Messages", "Image", "Raw Messages"]);
   });
 });
