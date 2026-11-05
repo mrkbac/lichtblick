@@ -113,6 +113,7 @@ export class ModelCache {
           buffer.byteOffset,
           buffer.byteOffset + buffer.byteLength,
         ),
+        this.options.meshUpAxis,
         reportError,
       );
     }
@@ -149,6 +150,7 @@ export class ModelCache {
   async #loadGltf(
     url: string,
     buffer: ArrayBuffer,
+    meshUpAxis: MeshUpAxis,
     reportError: ErrorCallback,
   ): Promise<LoadedModel> {
     const onError = (assetUrl: string) => {
@@ -167,9 +169,12 @@ export class ModelCache {
     const gltf = await gltfLoader.parseAsync(buffer, "");
     manager.itemEnd(url);
 
-    // THREE.js uses Y-up, while Studio follows the ROS
-    // [REP-0103](https://www.ros.org/reps/rep-0103.html) convention of Z-up
-    gltf.scene.rotateX(Math.PI / 2);
+    // glTF is Y-up by spec, while we follow the ROS
+    // [REP-0103](https://www.ros.org/reps/rep-0103.html) convention of Z-up. Many robot meshes are
+    // exported Z-up anyway, so honor the mesh up axis setting like STL and OBJ do.
+    if (meshUpAxis === "y_up") {
+      gltf.scene.rotateX(Math.PI / 2);
+    }
 
     return gltf.scene;
   }
