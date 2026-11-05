@@ -16,6 +16,7 @@ describe("ros2CommonDatatypes", () => {
     ["lyrical", CommonRosTypes.ros2lyrical],
     ["rolling", CommonRosTypes.ros2lyrical],
     ["some-future-distro", CommonRosTypes.ros2humble],
+    ["constructor", CommonRosTypes.ros2humble],
     [undefined, CommonRosTypes.ros2humble],
   ])("picks the definitions for %s", (distro, expected) => {
     expect(ros2CommonDatatypes(distro)).toBe(expected);
