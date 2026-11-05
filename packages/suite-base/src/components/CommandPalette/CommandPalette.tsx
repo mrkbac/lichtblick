@@ -122,7 +122,7 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }): React.JSX.E
   const [recentIds, setRecentIds] = useState(loadRecentCommandIds);
   const [state, dispatch] = useReducer(paletteReducer, initialPaletteState);
   const [loading, setLoading] = useState(false);
-  const listRef = useRef<HTMLUListElement>(ReactNull);
+  const listRef = useRef<HTMLUListElement>(null);
 
   const level = state.stack[state.stack.length - 1]!;
   const isRoot = state.stack.length === 1;

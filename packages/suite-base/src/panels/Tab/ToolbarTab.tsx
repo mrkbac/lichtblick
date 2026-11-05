@@ -119,7 +119,7 @@ export function ToolbarTab(props: Props): React.JSX.Element {
     hidden,
   } = props;
   const { classes, cx } = useStyles();
-  const inputRef = useRef<HTMLInputElement>(ReactNull);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [title, setTitle] = useState<string>(tabTitle);
   const [editingTitle, setEditingTitle] = useState<boolean>(false);
   const onChangeTitleInput = useCallback((ev: React.ChangeEvent<HTMLInputElement>) => {

@@ -3,6 +3,7 @@
 
 import { CloudOff20Regular } from "@fluentui/react-icons";
 import { Tooltip, Typography } from "@mui/material";
+import React from "react";
 import { useTranslation } from "react-i18next";
 import { useNetworkState } from "react-use";
 

@@ -8,7 +8,7 @@
 import { AutocompleteRenderOptionState } from "@mui/material/Autocomplete";
 import MenuItem from "@mui/material/MenuItem";
 import { FzfResultItem } from "fzf";
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import { List, RowComponentProps } from "react-window";
 import { makeStyles } from "tss-react/mui";
 
@@ -106,7 +106,7 @@ function FixedSizeListRenderRow(
 
   const dataSet = options[index];
   if (!dataSet) {
-    return ReactNull;
+    return null;
   }
 
   const inlineStyle = {

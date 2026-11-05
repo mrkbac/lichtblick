@@ -41,12 +41,9 @@ export function swcRule({
     loader: "builtin:swc-loader",
     options: {
       jsc: {
-        parser: { syntax: "typescript", tsx: true, decorators: true },
+        parser: { syntax: "typescript", tsx: true },
         target: "es2022",
         transform: {
-          // matches experimentalDecorators / emitDecoratorMetadata in tsconfig
-          legacyDecorator: true,
-          decoratorMetadata: true,
           react: { runtime: "automatic", development: isDev, refresh },
         },
       },
@@ -281,8 +278,6 @@ export function makeConfig(
     },
     plugins: [
       new rspack.ProvidePlugin({
-        // since we avoid "import React from 'react'" we shim here when used globally
-        React: "react",
         // the buffer module exposes the Buffer class as a property
         Buffer: ["buffer", "Buffer"],
         process: ["@lichtblick/suite-base/util/process", "default"],
@@ -290,7 +285,6 @@ export function makeConfig(
       }),
       new rspack.DefinePlugin({
         // Should match webpack-defines.d.ts
-        ReactNull: null,
         LICHTBLICK_SUITE_VERSION: JSON.stringify(version),
         // licht deploys talk to its organization server unless API_URL says otherwise.
         API_URL: JSON.stringify(process.env.API_URL ?? "https://licht-server.marko.im"),

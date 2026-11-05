@@ -18,7 +18,7 @@ describe("RemountOnValueChange", () => {
       useLayoutEffect(() => {
         mountCount = mountCount + 1;
       }, []);
-      return ReactNull;
+      return null;
     };
     const { rerender } = render(
       <RemountOnValueChange value="some-value">
@@ -42,7 +42,7 @@ describe("RemountOnValueChange", () => {
       useLayoutEffect(() => {
         mountCount = mountCount + 1;
       }, []);
-      return ReactNull;
+      return null;
     };
     const { rerender } = render(
       <RemountOnValueChange value="some-value">

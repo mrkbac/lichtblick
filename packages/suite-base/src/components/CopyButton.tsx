@@ -22,7 +22,7 @@ import {
   Typography,
   useTheme,
 } from "@mui/material";
-import { useCallback, useState, PropsWithChildren, useMemo } from "react";
+import React, { useCallback, useState, PropsWithChildren, useMemo } from "react";
 
 import clipboard from "@lichtblick/suite-base/util/clipboard";
 

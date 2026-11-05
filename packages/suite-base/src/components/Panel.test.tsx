@@ -35,7 +35,7 @@ type DummyConfig = { someString: string };
 type DummyProps = { config: DummyConfig; saveConfig: (arg0: Partial<DummyConfig>) => void };
 
 function getDummyPanel(renderFn: Mock) {
-  function DummyComponent(props: DummyProps): ReactNull {
+  function DummyComponent(props: DummyProps): null {
     // Call the mock function in an effect rather than during render, since render may happen more
     // than once due to React.StrictMode.
     useEffect(() => {
@@ -44,7 +44,7 @@ function getDummyPanel(renderFn: Mock) {
         props.saveConfig({ someString: "saved" });
       }
     });
-    return ReactNull;
+    return null;
   }
   DummyComponent.panelType = "Dummy";
   DummyComponent.defaultConfig = { someString: "hello world" };

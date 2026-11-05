@@ -25,8 +25,8 @@ const tempResolution = new THREE.Vector2(0, 0);
 const WHITE_COLOR = new THREE.Color(0xffffff);
 
 // These work around incorrect method definitions, where passing null is valid
-const NullScene = ReactNull as unknown as THREE.Scene;
-const NullGroup = ReactNull as unknown as THREE.GeometryGroup;
+const NullScene = null as unknown as THREE.Scene;
+const NullGroup = null as unknown as THREE.GeometryGroup;
 
 export type PickedRenderable = {
   renderable: Renderable;
@@ -295,7 +295,7 @@ export class Picker {
   }
 
   #prepareGLRendererForPick(target: THREE.WebGLRenderTarget = this.#pickingTarget): {
-    originalRenderTarget: THREE.WebGLRenderTarget | ReactNull;
+    originalRenderTarget: THREE.WebGLRenderTarget | null;
     originalAlpha: number;
   } {
     const originalRenderTarget = this.#gl.getRenderTarget();
@@ -311,7 +311,7 @@ export class Picker {
     originalRenderTarget,
     originalAlpha,
   }: {
-    originalRenderTarget: THREE.WebGLRenderTarget | ReactNull;
+    originalRenderTarget: THREE.WebGLRenderTarget | null;
     originalAlpha: number;
   }): void {
     this.#gl.setRenderTarget(originalRenderTarget);
@@ -370,7 +370,7 @@ export class Picker {
           groupOrder: 0,
           renderOrder: 0,
           z: 0,
-          group: ReactNull,
+          group: null,
         };
         this.#renderInstancedItemForPicking(renderItem);
       }

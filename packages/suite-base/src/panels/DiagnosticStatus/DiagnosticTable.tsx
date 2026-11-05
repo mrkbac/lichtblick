@@ -87,8 +87,8 @@ export default function DiagnosticTable(props: DiagnosticTableProps): React.JSX.
   } = props;
   const { classes, cx } = useStyles();
   const { t } = useTranslation("diagnostics");
-  const rootRef = useRef<HTMLDivElement>(ReactNull);
-  const scrollRef = useRef<HTMLDivElement>(ReactNull);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   // Track value changes across messages to highlight what just changed.
   const changesRef = useRef(new Map<string, ValueChange>());

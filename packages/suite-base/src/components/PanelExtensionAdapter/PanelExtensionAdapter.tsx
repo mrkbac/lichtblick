@@ -761,7 +761,7 @@ function PanelExtensionAdapter(
     clearAlert,
   ]);
 
-  const panelContainerRef = useRef<HTMLDivElement>(ReactNull);
+  const panelContainerRef = useRef<HTMLDivElement>(null);
 
   useValueChangedDebugLog(initPanel, "initPanel");
   useValueChangedDebugLog(panelId, "panelId");

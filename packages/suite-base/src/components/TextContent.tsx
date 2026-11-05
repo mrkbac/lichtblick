@@ -177,7 +177,7 @@ type Props = {
 
 export default function TextContent(
   props: PropsWithChildren<Props>,
-): React.ReactElement | ReactNull {
+): React.ReactElement | null {
   const { children, style, allowMarkdownHtml, components } = props;
   const { classes } = useStyles();
   const handleLink = useContext(LinkHandlerContext);

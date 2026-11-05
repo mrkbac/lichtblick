@@ -81,7 +81,7 @@ export default function Sidebars<
   }, [leftSidebarSize, rightSidebarSize, leftSidebarOpen, rightSidebarOpen]);
 
   const onChangeMosaicValue = useCallback(
-    (newValue: ReactNull | MosaicNode<LayoutNode>) => {
+    (newValue: null | MosaicNode<LayoutNode>) => {
       if (newValue != undefined) {
         setMosaicValue(newValue);
         setRightSidebarSize(mosaicRightSidebarSplitPercentage(newValue));

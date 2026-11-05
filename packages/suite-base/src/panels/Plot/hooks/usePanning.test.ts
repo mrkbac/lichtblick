@@ -25,7 +25,7 @@ describe("usePanning", () => {
   const boundingClientRect = { x: 0, y: 0, width: 800, height: 600 };
 
   function setup({ withCanvas = true, withCoordinator = true } = {}) {
-    const canvasDiv = withCanvas ? document.createElement("div") : ReactNull;
+    const canvasDiv = withCanvas ? document.createElement("div") : null;
     if (canvasDiv) {
       canvasDiv.getBoundingClientRect = () => ({ toJSON: () => boundingClientRect }) as DOMRect;
     }

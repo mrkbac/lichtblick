@@ -3,12 +3,13 @@
 
 import EventEmitter from "eventemitter3";
 
-import { emitBusyStatus, LayoutManagerContext } from "./emitBusyStatus.decorator";
+import type LayoutManager from "../LayoutManager";
+import { emitBusyStatus, LayoutManagerContext } from "./emitBusyStatus";
 
-describe("emitBusyStatus decorator", () => {
-  describe("when executing a decorated method", () => {
+describe("emitBusyStatus", () => {
+  describe("when executing a wrapped method", () => {
     let mockContext: LayoutManagerContext;
-    let decoratedMethod: () => Promise<string>;
+    let wrappedMethod: () => Promise<string>;
     let busyChangeEvents: number[];
 
     beforeEach(() => {
@@ -28,13 +29,9 @@ describe("emitBusyStatus decorator", () => {
         return "success";
       };
 
-      const descriptor: TypedPropertyDescriptor<() => Promise<string>> = {
-        value: originalMethod,
-      };
-
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
-      emitBusyStatus({} as any, "testMethod", descriptor);
-      decoratedMethod = descriptor.value!.bind(mockContext);
+      wrappedMethod = emitBusyStatus(
+        originalMethod as unknown as (this: LayoutManager) => Promise<string>,
+      ).bind(mockContext as unknown as LayoutManager);
     });
 
     it("should increment busy count before execution and decrement after completion", async () => {
@@ -42,7 +39,7 @@ describe("emitBusyStatus decorator", () => {
       expect(mockContext.busyCount).toBe(0);
 
       // When
-      const resultPromise = decoratedMethod();
+      const resultPromise = wrappedMethod();
 
       // Then - busy count should be incremented immediately
       expect(mockContext.busyCount).toBe(1);
@@ -56,7 +53,7 @@ describe("emitBusyStatus decorator", () => {
 
     it("should emit busychange events when operation starts and completes", async () => {
       // When
-      await decoratedMethod();
+      await wrappedMethod();
 
       // Then
       expect(busyChangeEvents).toEqual([1, 0]);

@@ -13,7 +13,7 @@ import {
   Time,
 } from "@foxglove/rostime";
 import { Fade, PopperProps, Tooltip } from "@mui/material";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLatest } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
@@ -167,7 +167,7 @@ export default function Scrubber(props: Props): React.JSX.Element {
 
   const loading = presence === PlayerPresence.INITIALIZING || presence === PlayerPresence.BUFFERING;
 
-  const popperRef = React.useRef<PopperInstance>(ReactNull);
+  const popperRef = React.useRef<PopperInstance>(null);
 
   const isHovered = hoverInfo != undefined;
   const popperProps: Partial<PopperProps> = useMemo(

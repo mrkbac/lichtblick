@@ -14,15 +14,16 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { MessageDefinition } from "@foxglove/message-definition";
+import CommonRosTypes from "@foxglove/rosmsg-msgs-common";
 import RepeatIcon from "@mui/icons-material/Repeat";
 import StopIcon from "@mui/icons-material/Stop";
 import { Button, Tooltip, Typography } from "@mui/material";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 import { useDebounce } from "use-debounce";
 
-import { MessageDefinition } from "@foxglove/message-definition";
-import CommonRosTypes from "@foxglove/rosmsg-msgs-common";
+
 import { Immutable } from "@lichtblick/suite";
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import { MessageEditor } from "@lichtblick/suite-base/components/MessageEditor/MessageEditor";

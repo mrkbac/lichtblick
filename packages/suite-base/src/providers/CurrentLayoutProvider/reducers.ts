@@ -76,7 +76,7 @@ function changePanelLayout(
   state: LayoutData,
   { layout, trimConfigById = true }: ChangePanelLayoutPayload,
 ): LayoutData {
-  const panelIds: string[] = getLeaves(layout ?? ReactNull).filter(
+  const panelIds: string[] = getLeaves(layout ?? null).filter(
     (panelId) => !_.isEmpty(panelId),
   );
   const panelIdsInsideTabPanels = getPanelIdsInsideTabPanels(panelIds, state.configById);

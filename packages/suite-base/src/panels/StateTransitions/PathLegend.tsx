@@ -7,7 +7,7 @@
 
 import { Add16Regular, Dismiss12Regular } from "@fluentui/react-icons";
 import { Button, ButtonGroup, Stack } from "@mui/material";
-import { MouseEvent, useCallback } from "react";
+import React, { MouseEvent, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";

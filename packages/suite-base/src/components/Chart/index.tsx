@@ -103,7 +103,7 @@ function Chart(props: Props): React.JSX.Element {
 
   const initialized = useRef(false);
   const canvasRef = useRef<HTMLCanvasElement>(undefined);
-  const containerRef = useRef<HTMLDivElement>(ReactNull);
+  const containerRef = useRef<HTMLDivElement>(null);
   const isMounted = useMountedState();
 
   // to avoid changing useCallback deps for callbacks which access the scale value

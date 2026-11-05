@@ -14,7 +14,7 @@ import { Button, Divider, IconButton, TextField, Tooltip, Typography } from "@mu
 import { TFunction } from "i18next";
 import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef } from "react";
+import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef } from "react";
 import { useDrag, useDrop, DropTargetMonitor, ConnectableElement } from "react-dnd";
 import { useTranslation } from "react-i18next";
 import { useImmer } from "use-immer";
@@ -205,7 +205,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
   const hasChildren = children != undefined && Object.keys(children).length > 0;
   const hasProperties = fields != undefined || hasChildren;
 
-  const rootRef = useRef<HTMLDivElement>(ReactNull);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const entries = useMemo(() => Object.entries(fields ?? {}), [fields]);
 
@@ -385,7 +385,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
           [classes.nodeHeaderDropTarget]: isOver && canDrop,
         })}
         ref={(el: ConnectableElement) => {
-          rootRef.current = el as HTMLDivElement | typeof ReactNull;
+          rootRef.current = el as HTMLDivElement | null;
           if (isReorderable) {
             connectDragRef(el);
             connectDropRef(el);

@@ -9,8 +9,8 @@ import { useStateToURLSynchronization } from "@lichtblick/suite-base/hooks/useSt
 
 // This is in a simple subcomponent so it doesn't trigger rerenders of an entire expensive
 // component like Workspace while it's listening for time values.
-export function URLStateSyncAdapter(): ReactNull {
+export function URLStateSyncAdapter(): null {
   useStateToURLSynchronization();
 
-  return ReactNull;
+  return null;
 }

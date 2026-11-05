@@ -130,7 +130,7 @@ export type PanelOverlayProps = {
 
 export const PanelOverlay = forwardRef<HTMLDivElement, PanelOverlayProps>(
   // eslint-disable-next-line @typescript-eslint/no-shadow
-  function PanelOverlay(props, ref): React.JSX.Element | ReactNull {
+  function PanelOverlay(props, ref): React.JSX.Element | null {
     const { actions, variant, highlightMode, dropMessage, open, onClickAway } = props;
     const { classes, cx } = useStyles();
 

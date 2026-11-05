@@ -48,7 +48,7 @@ export type PanelContextType<T> = {
   // eslint-disable-next-line @lichtblick/no-boolean-parameters
   setHasFullscreenDescendant: (hasFullscreenDescendant: boolean) => void;
 
-  connectToolbarDragHandle?: (el: Element | ReactNull) => void;
+  connectToolbarDragHandle?: (el: Element | null) => void;
 
   setMessagePathDropConfig: (config: MessagePathDropConfig | undefined) => void;
 };

@@ -54,7 +54,7 @@ const useStyles = makeStyles()((theme) => ({
 
 function defaultRenderSlider(value: number | undefined, className: string): ReactNode {
   if (value == undefined || isNaN(value)) {
-    return ReactNull;
+    return null;
   }
   return <div className={className} style={{ width: `${value * 100}%` }} />;
 }
@@ -70,7 +70,7 @@ export default function Slider(props: Props): React.JSX.Element {
   } = props;
   const { classes, cx } = useStyles();
 
-  const elRef = useRef<HTMLDivElement | ReactNull>(ReactNull);
+  const elRef = useRef<HTMLDivElement | null>(null);
 
   const getValueAtMouse = useCallback((ev: React.MouseEvent | MouseEvent): number => {
     if (!elRef.current) {

@@ -67,7 +67,7 @@ export function PanelListItem(props: Props): React.JSX.Element {
     mosaicId,
   } = props;
   const { classes } = useStyles();
-  const scrollRef = useRef<HTMLElement>(ReactNull);
+  const scrollRef = useRef<HTMLElement>(null);
   const [, connectDragSource] = useDrag<unknown, MosaicDropResult, never>({
     type: MosaicDragType.WINDOW,
     // mosaicId is needed for react-mosaic to accept the drop
@@ -118,7 +118,7 @@ export function PanelListItem(props: Props): React.JSX.Element {
   }, [highlighted]);
 
   const mergedRef = useCallback(
-    (el: HTMLElement | ReactNull) => {
+    (el: HTMLElement | null) => {
       connectDragSource(el);
       scrollRef.current = el;
     },

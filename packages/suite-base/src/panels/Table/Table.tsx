@@ -30,6 +30,7 @@ import {
   CellContext,
 } from "@tanstack/react-table";
 import memoizeWeak from "memoize-weak";
+import React from "react";
 import { makeStyles } from "tss-react/mui";
 
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";

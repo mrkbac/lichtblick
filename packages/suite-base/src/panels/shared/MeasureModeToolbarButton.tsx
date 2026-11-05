@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { PointScan20Regular } from "@fluentui/react-icons";
+import React from "react";
 
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";

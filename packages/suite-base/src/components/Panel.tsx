@@ -13,7 +13,7 @@ import {
   SplitHorizontal20Regular,
 } from "@fluentui/react-icons";
 import * as _ from "lodash-es";
-import {
+import React, {
   ComponentType,
   MouseEventHandler,
   Profiler,
@@ -139,7 +139,7 @@ export default function Panel<
       undefined,
     );
     const [hasFullscreenDescendant, _setHasFullscreenDescendant] = useState(false);
-    const panelRootRef = useRef<HTMLDivElement>(ReactNull);
+    const panelRootRef = useRef<HTMLDivElement>(null);
     const panelCatalog = usePanelCatalog();
 
     const mosaicPath = useContext(MosaicPathContext);
@@ -469,8 +469,8 @@ export default function Panel<
 
     const renderCount = useRef(0);
 
-    const perfInfo = useRef<HTMLDivElement>(ReactNull);
-    const quickActionsOverlayRef = useRef<HTMLDivElement>(ReactNull);
+    const perfInfo = useRef<HTMLDivElement>(null);
+    const quickActionsOverlayRef = useRef<HTMLDivElement>(null);
     const onDragStart = useCallback(() => {
       // Temporarily hide the overlay so that the panel can be shown as the drag preview image --
       // even though the overlay is a sibling rather than a child, Chrome still includes it in the

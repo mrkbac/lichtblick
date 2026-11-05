@@ -83,7 +83,7 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
   useEffect(() => scheduler.cancel, [scheduler]);
 
   // Sparkline canvases size their backing store when painted, so repaint all rows on resize
-  const rootRef = useRef<HTMLDivElement>(ReactNull);
+  const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     const root = rootRef.current;
     if (!root || typeof ResizeObserver === "undefined") {

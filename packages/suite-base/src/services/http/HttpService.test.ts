@@ -612,7 +612,7 @@ describe("HttpService", () => {
         ok: true,
         status: 204,
         statusText: "No Content",
-        headers: { get: vi.fn().mockReturnValue(ReactNull) },
+        headers: { get: vi.fn().mockReturnValue(null) },
         json,
       });
 

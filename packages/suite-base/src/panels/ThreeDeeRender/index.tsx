@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { useSnackbar } from "notistack";
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 
 import { CameraModelsMap } from "@lichtblick/den/image/types";
 import { useCrash } from "@lichtblick/hooks";

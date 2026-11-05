@@ -7,7 +7,7 @@ import { PlotCoordinator } from "@lichtblick/suite-base/panels/Plot/PlotCoordina
 import { listenForPan } from "@lichtblick/suite-base/util/listenForPan";
 
 const usePanning = (
-  canvasDiv: HTMLDivElement | ReactNull,
+  canvasDiv: HTMLDivElement | null,
   coordinator: PlotCoordinator | undefined,
   draggingRef: React.RefObject<boolean>,
 ): void => {

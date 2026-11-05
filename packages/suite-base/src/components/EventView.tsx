@@ -7,7 +7,7 @@
 
 import { alpha } from "@mui/material";
 import * as _ from "lodash-es";
-import { Fragment } from "react";
+import React, { Fragment } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { HighlightedText } from "@lichtblick/suite-base/components/HighlightedText";

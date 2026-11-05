@@ -21,7 +21,7 @@ export default function PanelLogs({
   const { classes } = useStylesPanelLogs();
   const [height, setHeight] = useState(initialHeight);
   const [isDragging, setIsDragging] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(ReactNull);
+  const containerRef = useRef<HTMLDivElement>(null);
   const startYRef = useRef(0);
   const startHeightRef = useRef(0);
 

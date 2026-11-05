@@ -207,7 +207,7 @@ export const getParentTabPanelByPanelId = (
       if (isTabPanel(savedPanelId) && savedConfig != undefined) {
         const tabPanelConfig = savedConfig as Partial<TabPanelConfig>;
         tabPanelConfig.tabs?.forEach((tab) => {
-          const panelIdsInTab = getLeaves(tab.layout ?? ReactNull);
+          const panelIdsInTab = getLeaves(tab.layout ?? null);
           panelIdsInTab.forEach((id) => (memo[id] = savedPanelId));
         });
       }
@@ -275,7 +275,7 @@ export function getPanelIdsInsideTabPanels(panelIds: string[], savedProps: Saved
       tabProps.tabs.forEach((tab: TabConfig) => {
         tabLayouts.push(
           tab.layout!,
-          ...getPanelIdsInsideTabPanels(getLeaves(tab.layout ?? ReactNull), savedProps),
+          ...getPanelIdsInsideTabPanels(getLeaves(tab.layout ?? null), savedProps),
         );
       });
     }
@@ -351,7 +351,7 @@ export const removePanelFromTabPanel = (
   if (path.length === 0) {
     newTree = undefined;
   } else {
-    const update = createRemoveUpdate(currentTabLayout ?? ReactNull, path);
+    const update = createRemoveUpdate(currentTabLayout ?? null, path);
     newTree = updateTree<string>(currentTabLayout!, [update]);
   }
 

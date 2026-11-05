@@ -211,7 +211,7 @@ const defaultFetchAsset: ComponentProps<typeof MockMessagePipelineProvider>["fet
 
 const selectUserScriptActions = (store: UserScriptStore) => store.actions;
 
-function UnconnectedPanelSetup(props: UnconnectedProps): React.JSX.Element | ReactNull {
+function UnconnectedPanelSetup(props: UnconnectedProps): React.JSX.Element | null {
   const { t } = useTranslation("panels");
   const mockPanelCatalog = useMemo(
     () => props.panelCatalog ?? makeMockPanelCatalog(t),
@@ -346,7 +346,7 @@ function UnconnectedPanelSetup(props: UnconnectedProps): React.JSX.Element | Rea
 
   // Wait to render children until we've initialized state as requested in the fixture
   if (!initialized) {
-    return ReactNull;
+    return null;
   }
 
   const { omitDragAndDrop = false } = props;

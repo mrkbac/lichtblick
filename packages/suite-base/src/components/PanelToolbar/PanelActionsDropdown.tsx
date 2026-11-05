@@ -17,7 +17,7 @@
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import MoreVertIcon from "@mui/icons-material/MoreVert";
 import { Divider, Menu, MenuItem } from "@mui/material";
-import { MouseEvent, useCallback, useContext, useMemo, useRef, useState } from "react";
+import React, { MouseEvent, useCallback, useContext, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { MosaicContext, MosaicNode, MosaicWindowContext } from "react-mosaic-component";
 import { makeStyles } from "tss-react/mui";
@@ -198,7 +198,7 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
     t,
   ]);
 
-  const buttonRef = useRef<HTMLDivElement>(ReactNull);
+  const buttonRef = useRef<HTMLDivElement>(null);
   const type = getPanelType();
 
   if (type == undefined) {
