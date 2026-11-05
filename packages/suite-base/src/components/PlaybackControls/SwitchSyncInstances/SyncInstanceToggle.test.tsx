@@ -39,8 +39,9 @@ describe("SyncInstanceToggle", () => {
     (useWorkspaceActions as Mock).mockReturnValue({
       playbackControlActions: { setSyncInstances: setSyncInstancesMock },
     });
-    (useWorkspaceStore as Mock).mockImplementation((selector: any) =>
-      selector({ playbackControls: { syncInstances } }),
+    (useWorkspaceStore as Mock).mockImplementation(
+      (selector: (store: { playbackControls: { syncInstances: boolean } }) => unknown) =>
+        selector({ playbackControls: { syncInstances } }),
     );
     (useOtherTabCount as Mock).mockReturnValue(otherTabs);
     render(<SyncInstanceToggle />);

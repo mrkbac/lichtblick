@@ -8,7 +8,9 @@ const PRESENCE_CHANNEL_NAME = "lichtblick-tab-presence";
 // A closed or crashed tab sends nothing; polling picks it up.
 const POLL_INTERVAL_MS = 3000;
 // One id per tab: every mount in this tab shares it, so several toggles in one tab count as one.
-const TAB_ID = crypto.randomUUID();
+// Not crypto.randomUUID(): it only exists in secure contexts and this runs at import.
+const randomId = () => Math.random().toString(36).slice(2) + Date.now().toString(36);
+const TAB_ID = randomId();
 
 /**
  * Number of other Lichtblick tabs (same origin) that are using this hook right now.
@@ -28,12 +30,21 @@ export function useOtherTabCount(): number | undefined {
       return;
     }
 
-    const ownName = `${LOCK_PREFIX}${TAB_ID}:${crypto.randomUUID()}`;
+    const ownName = `${LOCK_PREFIX}${TAB_ID}:${randomId()}`;
     const channel = new BroadcastChannel(PRESENCE_CHANNEL_NAME);
     let active = true;
 
     const refresh = async () => {
-      const { held = [] } = await locks.query();
+      let held: LockInfo[];
+      try {
+        ({ held = [] } = await locks.query());
+      } catch {
+        // Treat a failing Web Locks API like a missing one.
+        if (active) {
+          setCount(undefined);
+        }
+        return;
+      }
       if (!active) {
         return;
       }
@@ -59,6 +70,11 @@ export function useOtherTabCount(): number | undefined {
         channel.postMessage("changed");
         await refresh();
         await released;
+      })
+      .catch(() => {
+        if (active) {
+          setCount(undefined);
+        }
       })
       .finally(() => {
         // Our lock is gone now: tell the other tabs to recount, then close.

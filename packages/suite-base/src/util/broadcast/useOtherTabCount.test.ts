@@ -74,6 +74,20 @@ describe("useOtherTabCount", () => {
     });
   });
 
+  it("falls back to undefined when the Web Locks API fails", async () => {
+    const locks = new FakeLocks();
+    locks.query = async () => {
+      throw new Error("denied");
+    };
+    Object.defineProperty(navigator, "locks", { value: locks, configurable: true });
+
+    const { result } = renderHook(() => useOtherTabCount());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    expect(result.current).toBeUndefined();
+  });
+
   it("returns undefined without the Web Locks API", () => {
     Object.defineProperty(navigator, "locks", { value: undefined, configurable: true });
 
