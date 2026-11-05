@@ -10,6 +10,10 @@ export const dataSourceInfo = {
   dataSource: "Data source",
   duration: "Duration",
   endTime: "End time",
+  files: "Files",
+  messages: "Messages",
+  schemas: "Schemas",
   startTime: "Start time",
+  topics: "Topics",
   waitingForConnection: "Waiting for connection…",
 };

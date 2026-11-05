@@ -20,15 +20,4 @@ export const useStyles = makeStyles()((theme) => ({
     right: 0,
     left: 0,
   },
-  disabled: {
-    opacity: theme.palette.action.disabledOpacity,
-  },
-  popper: {
-    "&[data-popper-placement*=top] .MuiTooltip-tooltip": {
-      margin: theme.spacing(0.5, 0.5, 0.75),
-    },
-  },
-  dataSourceInfoButton: {
-    cursor: "default",
-  },
 }));
