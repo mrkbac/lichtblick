@@ -12,9 +12,11 @@ export const useStyles = makeStyles()((theme) => ({
     flex: "auto",
     minHeight: 0,
     position: "relative",
+    containerType: "inline-size",
   },
   list: { flex: "auto", overflow: "auto", minHeight: 0 },
   row: {
+    position: "relative",
     display: "flex",
     alignItems: "center",
     gap: theme.spacing(1),
@@ -52,11 +54,23 @@ export const useStyles = makeStyles()((theme) => ({
     fontVariantNumeric: "tabular-nums",
   },
   unit: { color: theme.palette.text.secondary, whiteSpace: "nowrap" },
-  sparkline: { width: 64, height: 18, flex: "none" },
+  sparkline: {
+    width: 64,
+    height: 18,
+    flex: "none",
+    "@container (max-width: 280px)": { display: "none" },
+  },
+  // Overlays the end of the row on hover, so it takes no space from values
   actions: {
     visibility: "hidden",
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
     display: "flex",
-    flex: "none",
+    alignItems: "center",
+    paddingLeft: theme.spacing(0.5),
+    backgroundColor: theme.palette.background.paper,
     "& button": { padding: 2 },
   },
   expanded: {

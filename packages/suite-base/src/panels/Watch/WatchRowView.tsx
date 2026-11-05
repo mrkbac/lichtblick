@@ -102,7 +102,7 @@ export const WatchRowView = memo(function WatchRowViewInner({
   const expandedRef = useRef<HTMLPreElement>(ReactNull);
   const hadValue = useRef(false);
 
-  const flashColor = alpha(theme.palette.primary.main, 0.35);
+  const flashColor = alpha(theme.palette.primary.main, 0.2);
   const lineColor = theme.palette.primary.main;
 
   // Writes straight to the DOM: values change far more often than React should render
