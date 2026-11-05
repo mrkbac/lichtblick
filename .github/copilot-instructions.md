@@ -73,21 +73,21 @@ ComponentName/
 
 ## Package Manager
 
-- **Yarn 3.6.3** via Corepack (do not use npm or pnpm)
-- Enable with: `npm install --global corepack && corepack enable` (Node 25+ no longer bundles Corepack)
+- **pnpm 10** (do not use npm or Yarn)
+- Install with: `npm install --global pnpm` (it switches to the version pinned in `package.json`)
 
 ### Key Commands
 
 ```bash
-yarn web:serve               # Start web dev server (http://localhost:8080)
-yarn desktop:serve           # Start Rspack for Electron
-yarn desktop:start           # Launch Electron app (requires desktop:serve)
-yarn test                    # All unit tests (Vitest)
-yarn test:watch              # Watch mode
-yarn test:coverage           # Unit tests with coverage
-yarn lint                    # oxlint (type-aware)
-yarn test:e2e:web            # Web E2E tests (Playwright)
-yarn test:e2e:desktop        # Desktop E2E tests (Playwright + Electron)
+pnpm web:serve               # Start web dev server (http://localhost:8080)
+pnpm desktop:serve           # Start Rspack for Electron
+pnpm desktop:start           # Launch Electron app (requires desktop:serve)
+pnpm test                    # All unit tests (Vitest)
+pnpm test:watch              # Watch mode
+pnpm test:coverage           # Unit tests with coverage
+pnpm lint                    # oxlint (type-aware)
+pnpm test:e2e:web            # Web E2E tests (Playwright)
+pnpm test:e2e:desktop        # Desktop E2E tests (Playwright + Electron)
 ```
 
 ---

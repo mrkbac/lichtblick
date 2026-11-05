@@ -10,7 +10,7 @@ import * as _ from "lodash-es";
 
 import { quoteFieldNameIfNeeded, quoteTopicNameIfNeeded } from "@lichtblick/message-path";
 import { Immutable } from "@lichtblick/suite";
-import { Topic } from "@lichtblick/suite-base/src/players/types";
+import { Topic } from "@lichtblick/suite-base/players/types";
 
 /**
  * Represents a message path inside a specific schema

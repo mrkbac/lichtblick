@@ -17,12 +17,12 @@
 import { useState } from "react";
 import { StoryObj } from "storybook-react-rsbuild";
 
-import { ExtensionInfo, IExtensionLoader } from "@lichtblick/suite-base";
 import ExtensionsSettings from "@lichtblick/suite-base/components/ExtensionsSettings";
 import AppConfigurationContext from "@lichtblick/suite-base/context/AppConfigurationContext";
 import ExtensionMarketplaceContext, {
   ExtensionMarketplace,
 } from "@lichtblick/suite-base/context/ExtensionMarketplaceContext";
+import { ExtensionInfo, IExtensionLoader } from "@lichtblick/suite-base/index";
 import ExtensionCatalogProvider from "@lichtblick/suite-base/providers/ExtensionCatalogProvider/ExtensionCatalogProvider";
 import { makeMockAppConfiguration } from "@lichtblick/suite-base/util/makeMockAppConfiguration";
 

@@ -14,7 +14,7 @@ import type { RspackArgv } from "./RspackArgv.ts";
 
 /**
  * Transpiles TypeScript/TSX with Rspack's built-in SWC loader (type checking runs separately with
- * `yarn typecheck`). `refresh` enables React Fast Refresh for the dev server.
+ * `pnpm typecheck`). `refresh` enables React Fast Refresh for the dev server.
  */
 export function swcRule({
   isDev,
@@ -93,6 +93,10 @@ export function makeConfig(
       extensions: [".js", ".ts", ".jsx", ".tsx"],
       alias: {
         "@lichtblick/suite-base": _nodeFileURLToPath(new URL("src", dirHref)),
+        // Apps outside suite-base (web/src, desktop/renderer) don't depend on react themselves, and
+        // pnpm doesn't hoist it, so JSX there resolves the runtime from suite-base.
+        "react/jsx-runtime": localRequire.resolve("react/jsx-runtime"),
+        "react/jsx-dev-runtime": localRequire.resolve("react/jsx-dev-runtime"),
         // Run Monaco's TS worker on our `typescript` instead of the copy Monaco bundles.
         ...Object.fromEntries(
           [
@@ -164,14 +168,14 @@ export function makeConfig(
         { test: /\.(md|template)$/, type: "asset/source" },
         {
           test: /\.svg$/,
-          loader: "@svgr/webpack",
+          loader: localRequire.resolve("@svgr/webpack"),
           options: {
             svgo: {
               plugins: [{ removeViewBox: false }, { removeDimensions: false }],
             },
           },
         },
-        { test: /\.ne$/, loader: "nearley-loader" },
+        { test: /\.ne$/, loader: localRequire.resolve("nearley-loader") },
         {
           test: /\.(png|jpg|gif)$/i,
           type: "asset",
@@ -183,12 +187,12 @@ export function makeConfig(
         },
         {
           test: /\.css$/,
-          loader: "style-loader",
+          loader: localRequire.resolve("style-loader"),
           sideEffects: true,
         },
         {
           test: /\.css$/,
-          loader: "css-loader",
+          loader: localRequire.resolve("css-loader"),
           options: { sourceMap: true },
         },
         { test: /\.woff2?$/, type: "asset/inline" },
