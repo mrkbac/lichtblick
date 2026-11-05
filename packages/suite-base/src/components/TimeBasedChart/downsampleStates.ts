@@ -108,7 +108,7 @@ export function downsampleStates(
    * * One at the x-value of the end of the interval (which is not a real point)
    * This allows the renderer to draw a gray line segment between these two points.
    */
-  const finishInterval = () => {
+  const finishInterval = (gapX?: number) => {
     if (interval == undefined) {
       return;
     }
@@ -133,7 +133,8 @@ export function downsampleStates(
     }
 
     indices.push({
-      x: endX,
+      // Don't let the synthetic end run past a gap that starts within the same pixel.
+      x: gapX != undefined ? Math.min(endX, gapX) : endX,
       index: last.index,
     });
   };
@@ -161,9 +162,11 @@ export function downsampleStates(
       continue;
     }
 
-    // This only seems to occur when we've inserted a dummy final point, which
-    // we need to add
+    // Unlabelled points (gap markers, segment ends) close the open interval first so output
+    // stays in x order and a same-state segment after a gap isn't merged into the one before.
     if (label == undefined) {
+      finishInterval(x);
+      interval = undefined;
       indices.push({
         x,
         index,
