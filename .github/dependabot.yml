@@ -8,7 +8,7 @@ updates:
       interval: monthly
     open-pull-requests-limit: 10
     labels: [dependabot]
-    target-branch: "develop"
+    target-branch: "licht"
 
     # Define groups of dependencies to be updated together
     # https://github.blog/changelog/2023-06-30-grouped-version-updates-for-dependabot-public-beta/
@@ -34,11 +34,10 @@ updates:
           - "vite"
           - "@vitest/*"
           - "vitest-*"
-      webpack:
+      rspack:
         patterns:
+          - "@rspack/*"
           - "webpack"
-          - "webpack-cli"
-          - "webpack-dev-server"
       monaco-editor:
         patterns:
           - "monaco-editor"

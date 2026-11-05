@@ -7,7 +7,7 @@
 
 import type { Configuration } from "@rspack/core";
 
-export type WebpackConfigParams = {
+export type RspackConfigParams = {
   packageJson: {
     productName: string;
     name: string;

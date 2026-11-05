@@ -10,7 +10,7 @@
 import { mergeRsbuildConfig } from "@rsbuild/core";
 import { StorybookConfig } from "storybook-react-rsbuild";
 
-import { makeConfig } from "../packages/suite-base/webpack";
+import { makeConfig } from "../packages/suite-base/rspack";
 
 const storybookConfig: StorybookConfig = {
   // Workaround for https://github.com/storybookjs/storybook/issues/19446

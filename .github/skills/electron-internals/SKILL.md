@@ -132,7 +132,7 @@ lichtblick://open?url=https://example.com/recording.mcap
 ## Build & Packaging
 
 - `desktop/electronBuilderConfig.js` — electron-builder configuration
-- `desktop/webpack.config.ts` — Rspack for main/preload/renderer
+- `desktop/rspack.config.ts` — Rspack for main/preload/renderer
 - Output: `.dmg` (macOS), `.exe`/`.msi` (Windows), `.deb`/`.AppImage` (Linux)
 - Auto-update via electron-updater (if configured)
 

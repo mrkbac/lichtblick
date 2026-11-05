@@ -6,14 +6,14 @@ import dotenv from "dotenv";
 import path from "path";
 import { TsCheckerRspackPlugin } from "ts-checker-rspack-plugin";
 
-import { swcRule, tsCheckerOptions } from "@lichtblick/suite-base/webpack";
+import { swcRule, tsCheckerOptions } from "@lichtblick/suite-base/rspack";
 
-import { WebpackConfigParams } from "./WebpackConfigParams";
+import { RspackConfigParams } from "./RspackConfigParams";
 
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 
 export function createCommonWebpackConfig(
-  params: WebpackConfigParams,
+  params: RspackConfigParams,
   { isDev }: { isDev: boolean },
 ): Partial<Configuration> {
   return {

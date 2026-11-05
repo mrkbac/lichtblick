@@ -12,7 +12,7 @@ import { createRequire as _nodeCreateRequire } from "node:module";
 import { fileURLToPath as _nodeFileURLToPath, pathToFileURL as _nodePathToFileURL } from "node:url";
 import { TsCheckerRspackPlugin } from "ts-checker-rspack-plugin";
 
-import { WebpackArgv } from "./WebpackArgv";
+import { RspackArgv } from "./RspackArgv";
 
 /**
  * Type checking runs on the native TypeScript 7 compiler (installed as "typescript7"); tooling
@@ -110,7 +110,7 @@ function buildEnvVars(): Record<string, string | undefined> {
 // Returns a webpack configuration containing resolve, module, plugins, and node fields.
 export function makeConfig(
   _: unknown,
-  argv: WebpackArgv,
+  argv: RspackArgv,
   options: Options,
 ): Pick<Configuration, "resolve" | "module" | "plugins" | "node" | "ignoreWarnings"> {
   initModuleLocals(options.packageDir);

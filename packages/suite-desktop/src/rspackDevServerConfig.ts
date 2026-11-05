@@ -8,13 +8,13 @@
 import type { Configuration } from "@rspack/core";
 import HtmlWebpackPlugin from "html-webpack-plugin";
 
-import { WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
+import { RspackArgv } from "@lichtblick/suite-base/RspackArgv";
 
-import { WebpackConfigParams } from "./WebpackConfigParams";
+import { RspackConfigParams } from "./RspackConfigParams";
 
-export const webpackDevServerConfig =
-  (params: WebpackConfigParams) =>
-  (_: unknown, argv: WebpackArgv): Configuration => {
+export const rspackDevServerConfig =
+  (params: RspackConfigParams) =>
+  (_: unknown, argv: RspackArgv): Configuration => {
     const isRelease = argv.mode === "production";
 
     // The appdata directory is derived from the product name. To have a separate directory

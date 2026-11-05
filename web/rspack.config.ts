@@ -8,12 +8,8 @@
 import type { Configuration } from "@rspack/core";
 import path from "path";
 
-import { resolveConfigs, type WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
-import {
-  ConfigParams,
-  devServerConfig,
-  mainConfig,
-} from "@lichtblick/suite-web/src/webpackConfigs";
+import { resolveConfigs, type RspackArgv } from "@lichtblick/suite-base/RspackArgv";
+import { ConfigParams, devServerConfig, mainConfig } from "@lichtblick/suite-web/src/rspackConfigs";
 
 import packageJson from "../package.json";
 
@@ -26,5 +22,5 @@ const params: ConfigParams = {
   version: `${packageJson.version} (${process.env.CF_PAGES_COMMIT_SHA?.slice(0, 7) ?? "local"}, built ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC)`,
 };
 
-export default (env: unknown, argv: WebpackArgv): Configuration[] =>
+export default (env: unknown, argv: RspackArgv): Configuration[] =>
   resolveConfigs(env, argv, [devServerConfig(params), mainConfig(params)]);

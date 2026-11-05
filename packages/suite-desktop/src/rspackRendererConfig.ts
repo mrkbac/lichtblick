@@ -10,15 +10,15 @@ import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "path";
 
-import type { WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
-import { makeConfig } from "@lichtblick/suite-base/webpack";
+import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv";
+import { makeConfig } from "@lichtblick/suite-base/rspack";
 import * as palette from "@lichtblick/theme/src/palette";
 
-import { WebpackConfigParams } from "./WebpackConfigParams";
+import { RspackConfigParams } from "./RspackConfigParams";
 
-export const webpackRendererConfig =
-  (params: WebpackConfigParams) =>
-  (env: unknown, argv: WebpackArgv): Configuration => {
+export const rspackRendererConfig =
+  (params: RspackConfigParams) =>
+  (env: unknown, argv: RspackArgv): Configuration => {
     const isDev = argv.mode === "development";
     const isServe = argv.env?.RSPACK_SERVE ?? false;
 
@@ -30,13 +30,13 @@ export const webpackRendererConfig =
       plugins.push(new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } }));
     }
 
-    const appWebpackConfig = makeConfig(env, argv, {
+    const appConfig = makeConfig(env, argv, {
       allowUnusedVariables,
       version: params.packageJson.version,
     });
 
     const config: Configuration = {
-      ...appWebpackConfig,
+      ...appConfig,
 
       // force web target instead of electron-render
       // Fixes "require is not defined" errors if nodeIntegration is off
@@ -53,7 +53,7 @@ export const webpackRendererConfig =
 
       plugins: [
         ...plugins,
-        ...(appWebpackConfig.plugins ?? []),
+        ...(appConfig.plugins ?? []),
         new HtmlWebpackPlugin({
           templateContent: `
   <!doctype html>
