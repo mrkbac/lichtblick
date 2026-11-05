@@ -8,14 +8,7 @@
 import { Mutex } from "async-mutex";
 import EventEmitter from "eventemitter3";
 
-import { H265_TARGET_FRAME_WAIT_MS } from "./h265/constants";
-
-// H.264 typically emits a decoded VideoFrame within a couple of milliseconds of submitting an
-// EncodedVideoChunk, so a tight 30 ms ceiling lets us return quickly when decoding is healthy and
-// fail fast when the decoder is stuck. The H.265 budgets live in `./h265/constants.ts` and are
-// much larger because HEVC decoders may need to consume an entire GOP before emitting the target
-// frame.
-const DEFAULT_TARGET_FRAME_WAIT_MS = 10;
+import { DEFAULT_TARGET_FRAME_WAIT_MS, VIDEO_CODECS, videoCodecFromCodecString } from "./codec";
 
 /** A single chunk of encoded video bitstream representing one frame. */
 export type EncodedVideoFrame = {
@@ -69,6 +62,10 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
   #lastSubmittedTimestampMicros: number | undefined;
   #currentDecodeTimestampMicros: number | undefined;
   #codedSize: { width: number; height: number } | undefined;
+  /** Timestamp of `lastVideoFrame`, so a late frame never replaces a newer one. */
+  #newestCachedTimestampMicros: number | undefined;
+  /** A late frame was cached into `lastVideoFrame` and not yet returned to a caller. */
+  #hasUnclaimedLateFrame = false;
   /** Last decoded frame as an ImageBitmap; populated by callers after they paint a frame. */
   public lastImageBitmap: ImageBitmap | undefined;
   /** Owned clone of the last frame returned to the caller, used to redraw without redecoding. */
@@ -87,9 +84,19 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
 
         const waiter = this.#frameWaiters.get(timestampMicros);
         if (!waiter) {
-          // No awaiter for this timestamp: either a reference (non-target) frame from a
-          // GOP chain, or a late frame that arrived after its timeout/seek. Nobody will
-          // claim it, so close it now to avoid the "VideoFrame GC without close" stall.
+          // No awaiter for this timestamp: either a reference (non-target) frame from a GOP
+          // chain, or a late frame that arrived after its waiter timed out. Hardware decoders
+          // can hold several frames for reordering (e.g. ~200 ms for H.264 without VUI
+          // bitstream_restriction), so every frame may be late. Keep it if it is the newest so
+          // the next timed-out call can show it instead of nothing. Always close the original
+          // to avoid the "VideoFrame GC without close" stall.
+          if (
+            this.#newestCachedTimestampMicros == undefined ||
+            timestampMicros >= this.#newestCachedTimestampMicros
+          ) {
+            this.#cacheDisplayFrame(videoFrame);
+            this.#hasUnclaimedLateFrame = true;
+          }
           videoFrame.close();
           return;
         }
@@ -267,10 +274,9 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
           return;
         }
 
-        const isH265 =
-          this.#decoderConfig?.codec.startsWith("hev1") === true ||
-          this.#decoderConfig?.codec.startsWith("hvc1") === true;
-        const targetFrameWaitMs = isH265 ? H265_TARGET_FRAME_WAIT_MS : DEFAULT_TARGET_FRAME_WAIT_MS;
+        const codec = videoCodecFromCodecString(this.#decoderConfig?.codec ?? "");
+        const targetFrameWaitMs =
+          codec == undefined ? DEFAULT_TARGET_FRAME_WAIT_MS : VIDEO_CODECS[codec].targetFrameWaitMs;
 
         // Register the target waiter BEFORE submitting so the output callback always finds it,
         // even if the decoder delivers the frame synchronously during decode(). Reference
@@ -308,6 +314,13 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
 
     const timeoutId = setTimeout(() => {
       this.#frameWaiters.delete(timestampMicros);
+      // Hand out a late frame that arrived since the last call, so a decoder that always
+      // outputs after the budget still shows video (one frame behind) instead of staying black.
+      if (this.#hasUnclaimedLateFrame && this.lastVideoFrame) {
+        this.#hasUnclaimedLateFrame = false;
+        resolve({ type: "intermediate", frame: this.lastVideoFrame.clone() });
+        return;
+      }
       resolve({ type: "timeout" });
     }, timeoutMs);
 
@@ -320,6 +333,8 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
     this.#codedSize.height = videoFrame.codedHeight;
     this.lastVideoFrame?.close();
     this.lastVideoFrame = videoFrame.clone();
+    this.#newestCachedTimestampMicros = videoFrame.timestamp;
+    this.#hasUnclaimedLateFrame = false;
   }
 
   #decodeChunk(data: Uint8Array, timestampMicros: number, type: "key" | "delta"): boolean {
@@ -400,6 +415,9 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
 
     this.#lastSubmittedTimestampMicros = undefined;
     this.#currentDecodeTimestampMicros = undefined;
+    // Timestamps restart after a seek, so the next late frame may be older than the cached one.
+    this.#newestCachedTimestampMicros = undefined;
+    this.#hasUnclaimedLateFrame = false;
     // lastVideoFrame/lastImageBitmap are intentionally NOT closed here. This runs on every
     // seek/loop reset, and discarding the cached frame forces the renderer into emptyVideoFrame()
   }
