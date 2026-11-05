@@ -181,6 +181,7 @@ export const WatchRowView = memo(function WatchRowViewInner({
         className={cx(classes.row, { [classes.dropTarget]: isDropTarget })}
         data-testid="watch-row"
         data-expandable="false"
+        data-expanded={expanded}
         draggable
         onDragStart={onDragStart}
         onDragOver={onDragOver}

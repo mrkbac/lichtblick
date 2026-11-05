@@ -27,7 +27,8 @@ export const useStyles = makeStyles()((theme) => ({
     "&:hover": { backgroundColor: theme.palette.action.hover },
     "&:hover [data-actions], &:focus-within [data-actions]": { visibility: "visible" },
     // The expand toggle only applies to arrays and objects; set while painting values
-    "&[data-expandable='false'] [data-expand]": { visibility: "hidden" },
+    // Stays visible while expanded, so a value that turned scalar can still be collapsed
+    "&[data-expandable='false'][data-expanded='false'] [data-expand]": { visibility: "hidden" },
     "&[data-error='true'] [data-value]": { color: theme.palette.error.main },
   },
   dropTarget: { boxShadow: `inset 0 2px 0 ${theme.palette.primary.main}` },

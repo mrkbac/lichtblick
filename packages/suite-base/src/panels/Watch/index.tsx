@@ -4,7 +4,7 @@
 import AddIcon from "@mui/icons-material/Add";
 import { IconButton, Tooltip } from "@mui/material";
 import { useSnackbar } from "notistack";
-import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useDeepMemo } from "@lichtblick/hooks";
@@ -81,6 +81,24 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
   );
   const requestPaint = scheduler.request;
   useEffect(() => scheduler.cancel, [scheduler]);
+
+  // Sparkline canvases size their backing store when painted, so repaint all rows on resize
+  const rootRef = useRef<HTMLDivElement>(ReactNull);
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root || typeof ResizeObserver === "undefined") {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      for (const paint of painters.values()) {
+        paint();
+      }
+    });
+    observer.observe(root);
+    return () => {
+      observer.disconnect();
+    };
+  }, [painters]);
 
   useLayoutEffect(() => {
     store.setRows(compiled);
@@ -220,6 +238,7 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
 
   return (
     <div
+      ref={rootRef}
       className={classes.root}
       onPaste={onPaste}
       onDragEnd={() => {
