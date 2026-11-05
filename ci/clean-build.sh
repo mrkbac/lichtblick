@@ -1,4 +1,4 @@
 #!/bin/bash
-# Remove build outputs. Packages are typechecked with noEmit, so there is no tsc output to clean.
-rm -rf .webpack */.webpack dist storybook-screenshots storybook-static coverage
+# Remove build outputs: bundles, `tsc --build` output of the packages, Storybook and coverage.
+rm -rf .webpack */.webpack benchmark/.webpack-desktop dist packages/*/dist packages/*/tsconfig.tsbuildinfo storybook-screenshots storybook-static coverage
 echo "Build cleaned."
