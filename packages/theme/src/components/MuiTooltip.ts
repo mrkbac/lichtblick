@@ -12,6 +12,7 @@ import { OverrideComponentReturn } from "../types";
 export const MuiTooltip: OverrideComponentReturn<"MuiTooltip"> = {
   defaultProps: {
     arrow: true,
+    // oxlint-disable-next-line typescript/no-deprecated -- MUI deprecated theme default prop; migrate to slots/slotProps separately
     TransitionComponent: Fade,
   },
   styleOverrides: {

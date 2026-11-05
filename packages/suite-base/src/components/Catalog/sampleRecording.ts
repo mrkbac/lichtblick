@@ -132,8 +132,8 @@ export async function sampleRecording(
     const done = new Set<string>();
     for await (const message of reader.readMessages({
       topics,
-      startTime: chunk.messageStartTime,
-      endTime: chunk.messageEndTime,
+      startingAt: chunk.messageStartTime,
+      endingAt: chunk.messageEndTime,
     })) {
       const topic = reader.channelsById.get(message.channelId)!.topic;
       if (done.has(topic)) {

@@ -1,7 +1,6 @@
 *.log
 *.tsbuildinfo
 .DS_Store
-.eslintcache
 .webpack/
 .webpack-desktop/
 benchmark/.artifacts/
@@ -32,5 +31,5 @@ test-results/*
 !.yarn/sdks
 .pnp.*
 
-eslint-report.json
+lint-report.sarif
 blob-report/*

@@ -802,12 +802,10 @@ export default class UserScriptPlayer implements Player {
         return;
       }
 
-      if (this.#totalTimeMetric == undefined) {
-        this.#totalTimeMetric = this.#perfRegistry?.registerMetric({
-          name: "User scripts (total)",
-          unit: "ms per frame",
-        });
-      }
+      this.#totalTimeMetric ??= this.#perfRegistry?.registerMetric({
+        name: "User scripts (total)",
+        unit: "ms per frame",
+      });
       using $timer = this.#totalTimeMetric
         ? this.#perfRegistry?.scopeTimer(this.#totalTimeMetric)
         : undefined;
