@@ -92,7 +92,7 @@ export class Picker {
     }
     this.#materialCache.clear();
     this.#pickingTarget.dispose();
-    this.#depthTarget?.depthTexture.dispose();
+    this.#depthTarget?.depthTexture?.dispose();
     this.#depthTarget?.dispose();
     this.#depthReadTarget?.dispose();
     this.#depthCopyMaterial?.dispose();
