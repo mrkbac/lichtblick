@@ -93,11 +93,40 @@ describe("filterCompressedVideoQueue", () => {
 
   it("falls back to keep-latest for unrecognized codecs", () => {
     const unknown = (recv: number): MessageEvent<CompressedVideo> =>
-      videoMessageEvent("/exotic", { ...h264Frame(), format: "vp9" }, recv);
+      videoMessageEvent("/exotic", { ...h264Frame(), format: "mjpeg" }, recv);
     const result = filterCompressedVideoQueue([unknown(1), unknown(2), unknown(3)]);
 
     expect(result).toHaveLength(1);
     expect(result[0]!.receiveTime.sec).toBe(3);
+  });
+
+  it.each([
+    // Leading header bytes of real 64x48 libvpx-vp9 / SVT-AV1 frames (see den/video parser tests).
+    {
+      format: "vp9",
+      key: [0x82, 0x49, 0x83, 0x42, 0x00, 0x03, 0xf0, 0x02, 0xf6, 0x06],
+      delta: [0x86, 0x00, 0x40, 0x92, 0x9c, 0x0c, 0x50],
+    },
+    {
+      format: "av1",
+      key: [
+        0x0a, 0x0a, 0x00, 0x00, 0x00, 0x02, 0xaf, 0xf7, 0x8d, 0x5f, 0x20, 0x08, 0x32, 0x01, 0x14,
+      ],
+      delta: [0x32, 0x01, 0x30],
+    },
+  ])("keeps the $format GOP starting from the most recent keyframe", ({ format, key, delta }) => {
+    const frame = (data: number[], recv: number) =>
+      videoMessageEvent(`/${format}`, { ...h264Frame(data), format }, recv);
+    const olderKey = frame(key, 1);
+    const olderDelta = frame(delta, 2);
+    const newerKey = frame(key, 3);
+    const deltaA = frame(delta, 4);
+    const deltaB = frame(delta, 5);
+
+    const result = filterCompressedVideoQueue([olderKey, olderDelta, newerKey, deltaA, deltaB]);
+
+    // Dropping deltaA would corrupt deltaB, which references it.
+    expect(result).toEqual([newerKey, deltaA, deltaB]);
   });
 
   it("keeps the H.265 GOP starting from the most recent keyframe", () => {

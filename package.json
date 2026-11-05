@@ -6,7 +6,7 @@
   "productName": "Lichtblick",
   "description": "Core components of Lichtblick",
   "productDescription": "Lichtblick Suite",
-  "packageManager": "yarn@4.17.0",
+  "packageManager": "pnpm@10.34.9",
   "repository": {
     "type": "git",
     "url": "https://github.com/lichtblick-suite/lichtblick.git"
@@ -65,59 +65,21 @@
     "test:e2e:benchmark:report": "playwright show-report benchmark/e2e/reports",
     "test:e2e:benchmark:ci": "CI=true PLAYWRIGHT_JSON_OUTPUT_NAME=reports/results.json playwright test --config=benchmark/e2e/playwright.config.ts --reporter=list,json",
     "test:e2e:benchmark:summary": "node benchmark/e2e/ci-helpers/generate-benchmark-summary.ts",
-    "package:win": "yarn package --win",
-    "package:darwin": "yarn package --mac",
-    "package:linux": "yarn package --linux",
+    "package:win": "pnpm package --win",
+    "package:darwin": "pnpm package --mac",
+    "package:linux": "pnpm package --linux",
     "package": "electron-builder build --config desktop/electronBuilderConfig.js --publish never",
-    "package:e2e": "yarn && yarn clean && yarn desktop:build:prod && yarn package",
+    "package:e2e": "pnpm install && pnpm clean && pnpm desktop:build:prod && pnpm package",
     "release:bump-nightly-version": "node ./ci/bump-nightly-version.ts",
     "storybook": "storybook dev --port 9009 --config-dir .storybook",
     "storybook:build": "storybook build --config-dir .storybook --stats-json",
-    "version:all": "yarn workspaces foreach version",
-    "typecheck": "node ./node_modules/typescript7/bin/tsc --noEmit"
+    "typecheck": "node ./node_modules/typescript7/bin/tsc --build tsconfig.json web/src/tsconfig.json desktop/tsconfig.json desktop/*/tsconfig.json benchmark/tsconfig.json benchmark/src/tsconfig.json benchmark/desktop/*/tsconfig.json"
   },
   "lint-staged": {
     "*.{js,jsx,mjs,cjs,ts,tsx,json}": [
       "oxlint --report-unused-disable-directives --no-error-on-unmatched-pattern --fix",
       "biome format --write --no-errors-on-unmatched"
     ]
-  },
-  "workspaces": {
-    "packages": [
-      "desktop",
-      "packages/*",
-      "packages/@types/*",
-      "web",
-      "benchmark"
-    ]
-  },
-  "resolutions": {
-    "@types/node": "26.6.6",
-    "@types/react": "19.3.0",
-    "esbuild": "0.28.1",
-    "dompurify": "3.4.17",
-    "js-yaml": "4.3.2",
-    "js-cookie": "3.0.7",
-    "qs": "6.15.2",
-    "ws@^8.18.0": "8.21.0",
-    "tar": "7.5.22",
-    "undici": "6.29.1",
-    "brace-expansion@^2.0.1": "2.1.7",
-    "brace-expansion@^2.0.2": "2.1.7",
-    "brace-expansion@^5.0.5": "5.0.12",
-    "compression": "1.8.2",
-    "http-cache-semantics": "4.3.0",
-    "proxy-addr": "2.0.8",
-    "shell-quote": "1.12.0",
-    "source-map-js": "1.2.2",
-    "webpack-dev-middleware@^6.1.2": "7.4.5",
-    "flatted": "3.4.2",
-    "@xmldom/xmldom": "0.9.12",
-    "uuid": "14.0.0",
-    "svgo": "3.3.5",
-    "browserslist": "4.28.9",
-    "fast-uri": "3.1.7",
-    "plist": "4.0.0"
   },
   "devDependencies": {
     "@actions/exec": "1.1.1",
@@ -154,9 +116,11 @@
     "oxlint-tsgolint": "7.0.2005",
     "playwright": "1.64.1",
     "prettier": "3.9.10",
+    "react": "19.3.1",
     "react-i18next": "17.1.11",
     "storybook": "10.6.5",
     "storybook-react-rsbuild": "3.6.1",
+    "tslib": "2.9.1",
     "typescript": "6.0.3",
     "typescript7": "npm:typescript@7.0.2",
     "vite": "8.3.5",

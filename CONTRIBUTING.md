@@ -37,12 +37,9 @@ Before contributing, ensure you have the following installed:
 
 | Tool                                             | Version                | Notes                                                |
 | ------------------------------------------------ | ---------------------- | ---------------------------------------------------- |
-| [Node.js](https://nodejs.org/)                   | >= 20                  | LTS recommended                                      |
-| [Corepack](https://github.com/nodejs/corepack) | latest | `npm install --global corepack && corepack enable` |
-| [Yarn](https://yarnpkg.com/)                     | 3.6.3                  | Managed via Corepack — do **not** install separately |
+| [Node.js](https://nodejs.org/)                   | >= 26                  | Matches `engines` in package.json                    |
+| [pnpm](https://pnpm.io/) | 10 | `npm install --global pnpm`; it switches to the version pinned in `package.json` |
 | [Git](https://git-scm.com/)                      | Latest                 | Required for version control                         |
-
-> **Note:** If you encounter issues with Corepack after enabling it, try uninstalling and reinstalling Node.js. Ensure Yarn is installed _via_ Corepack, not from another source.
 
 ---
 
@@ -77,64 +74,63 @@ cd lichtblick
 
 ### Setup
 
-1. **Enable Corepack** and install dependencies:
+1. **Install pnpm** and the dependencies:
 
    ```sh
-   npm install --global corepack # Node 25+ no longer bundles Corepack
-   corepack enable
-   yarn install
+   npm install --global pnpm
+   pnpm install
    ```
 
 2. **Launch the development environment:**
 
    ```sh
    # Desktop app (run in separate terminals):
-   yarn desktop:serve        # Start the Rspack dev server
-   yarn desktop:start        # Launch Electron (wait for desktop:serve to finish)
+   pnpm desktop:serve        # Start the Rspack dev server
+   pnpm desktop:start        # Launch Electron (wait for desktop:serve to finish)
 
    # Web app:
-   yarn web:serve            # Available at http://localhost:8080
+   pnpm web:serve            # Available at http://localhost:8080
    ```
 
 3. **Explore available commands:**
 
    ```sh
-   yarn run                  # List all available commands
+   pnpm run                  # List all available commands
    ```
 
 ### Other useful commands
 
 ```sh
 # Launch Storybook for component development
-yarn storybook
+pnpm storybook
 
 # Lint all files (with auto-fix)
-yarn lint
+pnpm lint
 
 # Run all unit tests
-yarn test
+pnpm test
 
 # Run tests in watch mode (for active development)
-yarn test:watch
+pnpm test:watch
 
 # Run E2E tests
-yarn test:e2e:desktop
-yarn test:e2e:web
+pnpm test:e2e:desktop
+pnpm test:e2e:web
 ```
 
 ### Advanced: remote Rspack + Electron
 
 ```sh
 # Running Rspack and Electron on different machines on the same network
-yarn desktop:serve --host 192.168.xxx.yyy
-yarn dlx electron@22.1.0 .webpack
+pnpm desktop:serve --host 192.168.xxx.yyy
+pnpm dlx electron@22.1.0 .webpack
 ```
 
 ---
 
 ## Project Structure
 
-Lichtblick is organized as a **monorepo** managed with Yarn Workspaces:
+Lichtblick is organized as a **monorepo** managed with pnpm workspaces:
 
 ```
 lichtblick/
@@ -243,10 +239,10 @@ panels/
 Before pushing, ensure your changes pass all checks:
 
 ```sh
-yarn format                 # Formatting (Biome)
-yarn lint                   # Linting (oxlint)
-yarn test                   # Unit tests (Vitest)
-yarn run tsc --noEmit       # TypeScript type checking
+pnpm format                 # Formatting (Biome)
+pnpm lint                   # Linting (oxlint)
+pnpm test                   # Unit tests (Vitest)
+pnpm typecheck              # TypeScript type checking
 ```
 
 > Formatting and linting also run automatically via Git hooks — see [Git Hooks](#git-hooks).
@@ -304,16 +300,16 @@ Code quality is enforced through automated tooling. All checks run in CI and mus
 ### Formatting
 
 - **Biome** is used for code formatting with a `lineWidth` of **100** characters (see `biome.json`).
-- Run `yarn format` to auto-format locally; `yarn format:ci` checks formatting in CI.
+- Run `pnpm format` to auto-format locally; `pnpm format:ci` checks formatting in CI.
 
 ### Linting
 
 - **oxlint** (type-aware, see `.oxlintrc.json`) with our custom rules in `packages/oxlint-plugin` enforces consistent code patterns.
-- Run `yarn lint` to auto-fix issues locally.
+- Run `pnpm lint` to auto-fix issues locally.
 
 ### Git Hooks
 
-Git hooks are managed by [Husky](https://typicode.github.io/husky/) and are **installed automatically** the first time you run `yarn install` (via the `prepare` script). No manual setup is required.
+Git hooks are managed by [Husky](https://typicode.github.io/husky/) and are **installed automatically** the first time you run `pnpm install` (via the `prepare` script). No manual setup is required.
 
 | Hook | When it runs | What it does |
 | ------------ | ------------ | ------------------------------------------------------------------------------------------------------- |
@@ -323,7 +319,7 @@ Notes:
 
 - Only staged JavaScript/TypeScript files are formatted and linted on commit, so hooks stay fast.
 - Type checking runs on `pre-push` rather than `pre-commit` because TypeScript needs the whole project (it cannot be reliably scoped to individual files).
-- If hooks are not running, re-run `yarn install` (or `yarn prepare`) to reinstall them.
+- If hooks are not running, re-run `pnpm install` (or `pnpm prepare`) to reinstall them.
 
 ### TypeScript Conventions
 
@@ -376,10 +372,10 @@ The project uses a **Builder pattern** to streamline the creation of test data a
 - Run tests:
 
   ```sh
-  yarn test                   # Run all tests
-  yarn test:watch             # Run tests on changed files
-  yarn test:coverage          # Run tests with coverage report
-  yarn test:debug             # Run tests with debugger attached
+  pnpm test                   # Run all tests
+  pnpm test:watch             # Run tests on changed files
+  pnpm test:coverage          # Run tests with coverage report
+  pnpm test:debug             # Run tests with debugger attached
   ```
 
 ### End-to-End Tests (Playwright)
@@ -425,10 +421,10 @@ e2e/
 #### Running E2E tests
 
 ```sh
-yarn test:e2e:desktop           # Desktop E2E tests
-yarn test:e2e:web               # Web E2E tests
-yarn test:e2e:desktop:debug     # Desktop E2E with debug mode
-yarn test:e2e:web:debug         # Web E2E with debug mode
+pnpm test:e2e:desktop           # Desktop E2E tests
+pnpm test:e2e:web               # Web E2E tests
+pnpm test:e2e:desktop:debug     # Desktop E2E with debug mode
+pnpm test:e2e:web:debug         # Web E2E with debug mode
 ```
 
 ### CI Pipeline

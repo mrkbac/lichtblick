@@ -7,12 +7,10 @@
 
 import { type Configuration, rspack } from "@rspack/core";
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
-import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "path";
-import { TsCheckerRspackPlugin } from "ts-checker-rspack-plugin";
 
 import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
-import { swcRule, tsCheckerOptions } from "@lichtblick/suite-base/rspack.ts";
+import { swcRule } from "@lichtblick/suite-base/rspack.ts";
 
 import type { RspackConfigParams } from "./RspackConfigParams.ts";
 
@@ -22,10 +20,9 @@ export const rspackQuicklookConfig =
     const isDev = argv.mode === "development";
     const isServe = argv.env?.RSPACK_SERVE ?? false;
 
-    const allowUnusedVariables = isDev && isServe;
-
     return {
       name: "quicklook",
+      dependencies: ["root"],
 
       context: params.quicklookContext,
       entry: params.quicklookEntrypoint,
@@ -46,25 +43,16 @@ export const rspackQuicklookConfig =
       },
 
       plugins: [
-        new TsCheckerRspackPlugin({
-          typescript: {
-            ...tsCheckerOptions(),
-            configOverwrite: {
-              compilerOptions: {
-                noUnusedLocals: !allowUnusedVariables,
-                noUnusedParameters: !allowUnusedVariables,
-              },
-            },
-          },
-        }),
-        new HtmlWebpackPlugin({
+        new rspack.HtmlRspackPlugin({
           templateContent: `
 <!doctype html>
 <html>
-  <head><meta charset="utf-8"></head>
-  <script>
-    global = globalThis;
-  </script>
+  <head>
+    <meta charset="utf-8">
+    <script>
+      global = globalThis;
+    </script>
+  </head>
   <body>
     <div id="root"></div>
   </body>

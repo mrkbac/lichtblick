@@ -10,11 +10,11 @@ import path from "node:path";
 
 import { resolveConfigs, type RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
 import type { RspackConfigParams } from "@lichtblick/suite-desktop/src/RspackConfigParams.ts";
-import { rspackDevServerConfig } from "@lichtblick/suite-desktop/src/rspackDevServerConfig.ts";
 import { rspackMainConfig } from "@lichtblick/suite-desktop/src/rspackMainConfig.ts";
 import { rspackPreloadConfig } from "@lichtblick/suite-desktop/src/rspackPreloadConfig.ts";
 import { rspackQuicklookConfig } from "@lichtblick/suite-desktop/src/rspackQuicklookConfig.ts";
 import { rspackRendererConfig } from "@lichtblick/suite-desktop/src/rspackRendererConfig.ts";
+import { rspackRootConfig } from "@lichtblick/suite-desktop/src/rspackRootConfig.ts";
 
 import packageJson from "../package.json" with { type: "json" };
 
@@ -34,7 +34,7 @@ const params: RspackConfigParams = {
 
 export default (env: unknown, argv: RspackArgv): Configuration[] =>
   resolveConfigs(env, argv, [
-    rspackDevServerConfig(params),
+    rspackRootConfig(params),
     rspackMainConfig(params),
     rspackPreloadConfig(params),
     rspackRendererConfig(params),
