@@ -54,10 +54,6 @@ export default function AccountInfo(props: { currentUser?: User }): React.JSX.El
     });
   }, [beginSignOut, confirm]);
 
-  const onSettingsClick = useCallback(() => {
-    window.open(process.env.LICHTBLICK_ACCOUNT_PROFILE_URL, "_blank");
-  }, []);
-
   if (!props.currentUser) {
     return <></>;
   }
@@ -75,9 +71,6 @@ export default function AccountInfo(props: { currentUser?: User }): React.JSX.El
             </Typography>
           </Stack>
         </Stack>
-        <Button onClick={onSettingsClick} variant="contained">
-          Account settings
-        </Button>
       </Stack>
       <Stack gap={1}>
         <Button onClick={onSignoutClick} variant="outlined">

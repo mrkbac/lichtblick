@@ -201,10 +201,9 @@ export function makeConfig(
     },
     plugins: [
       new rspack.ProvidePlugin({
-        // the buffer module exposes the Buffer class as a property
+        // Some dependencies call Buffer without importing it (@foxglove/wasm-zstd, wasm-lz4,
+        // xmlrpc, @oozcitak/infra). Our own code must not rely on this.
         Buffer: ["buffer", "Buffer"],
-        process: ["@lichtblick/suite-base/util/process", "default"],
-        setImmediate: ["@lichtblick/suite-base/util/setImmediate", "default"],
       }),
       new rspack.DefinePlugin({
         // Should match webpack-defines.d.ts

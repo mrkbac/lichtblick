@@ -338,7 +338,7 @@ export default class CachedFilelike implements Filelike {
     this.#readUncached(request.range)
       .then((data) => {
         // The main connection may have delivered this range first; then the read is resolved already.
-        this.#virtualBuffer.copyFrom(Buffer.from(data), request.range.start);
+        this.#virtualBuffer.copyFrom(data, request.range.start);
         this.#readRequests = this.#readRequests.filter((other) => other !== request);
         request.resolve(data);
       })
@@ -410,7 +410,7 @@ export default class CachedFilelike implements Filelike {
         }
       }
 
-      this.#virtualBuffer.copyFrom(Buffer.from(chunk), currentConnection.remainingRange.start);
+      this.#virtualBuffer.copyFrom(chunk, currentConnection.remainingRange.start);
       bytesRead += chunk.byteLength;
 
       // Every now and then, do some logging of the current download speed.

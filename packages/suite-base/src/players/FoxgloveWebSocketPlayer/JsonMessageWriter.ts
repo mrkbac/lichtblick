@@ -9,6 +9,6 @@ import { MessageWriter } from "./types";
 
 export class JsonMessageWriter implements MessageWriter {
   public writeMessage(message: unknown): Uint8Array {
-    return new Uint8Array(Buffer.from(JSON.stringify(message) ?? ""));
+    return new TextEncoder().encode(JSON.stringify(message) ?? "");
   }
 }

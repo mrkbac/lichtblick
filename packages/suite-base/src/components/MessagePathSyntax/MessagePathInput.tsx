@@ -261,7 +261,7 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
         const target = event.target as HTMLInputElement;
         const newCursorPosition = target.selectionEnd ?? 0;
         value = `${value.slice(0, newCursorPosition)}}${value.slice(newCursorPosition)}`;
-        setImmediate(() => {
+        queueMicrotask(() => {
           target.setSelectionRange(newCursorPosition, newCursorPosition);
         });
       }
@@ -307,7 +307,7 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
         value.includes("(")
       ) {
         const newCursorPosition = autocompleteRange.start + value.length;
-        setImmediate(() => {
+        queueMicrotask(() => {
           autocomplete.setSelectionRange(newCursorPosition, newCursorPosition);
         });
       } else {

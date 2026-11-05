@@ -75,7 +75,7 @@ export default class VirtualLRUBuffer {
   }
 
   // Copy data from the `source` buffer to the byte at `targetStart` in the VirtualLRUBuffer.
-  public copyFrom(source: Buffer, targetStart: number): void {
+  public copyFrom(source: Uint8Array, targetStart: number): void {
     if (targetStart < 0 || targetStart >= this.byteLength) {
       throw new Error("VirtualLRUBuffer#copyFrom invalid input");
     }
@@ -89,7 +89,7 @@ export default class VirtualLRUBuffer {
       const { blockIndex, positionInBlock, remainingBytesInBlock } =
         this.#calculatePosition(position);
       copy(
-        new Uint8Array(source),
+        source,
         this.#getBlock(blockIndex),
         positionInBlock,
         position - targetStart,
