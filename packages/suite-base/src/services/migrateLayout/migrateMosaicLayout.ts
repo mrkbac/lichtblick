@@ -17,7 +17,7 @@ import {
 /** Panel type of the retired Tab panel, which nested a whole layout per tab. */
 const LEGACY_TAB_PANEL_TYPE = "Tab";
 
-type LegacyTabConfig = { activeTabIdx?: number; tabs?: { title?: string; layout?: unknown }[] };
+type LegacyTabConfig = { activeTabIdx?: unknown; tabs?: unknown };
 
 /**
  * Convert a layout saved by react-mosaic-component (binary splits, nested Tab panels) into a layout
@@ -58,7 +58,13 @@ export function migrateMosaicLayout(data: LayoutData): LayoutData {
   function convertTabPanel(tabPanelId: string): LayoutNode | undefined {
     const config = configById[tabPanelId] as LegacyTabConfig | undefined;
     delete configById[tabPanelId];
-    const tabs = (config?.tabs ?? []).flatMap((tab, index) => {
+    // Configs come from saved files; skip anything that isn't a list of tab objects
+    const rawTabs: unknown[] = Array.isArray(config?.tabs) ? config.tabs : [];
+    const tabs = rawTabs.flatMap((rawTab, index) => {
+      if (typeof rawTab !== "object" || rawTab == undefined) {
+        return [];
+      }
+      const tab = rawTab as { title?: unknown; layout?: unknown };
       const tree = isMosaicNode(tab.layout) ? convert(tab.layout) : undefined;
       return tree == undefined ? [] : [{ title: tab.title, tree, index }];
     });
@@ -69,7 +75,7 @@ export function migrateMosaicLayout(data: LayoutData): LayoutData {
 
     // A tab holding a single panel shows its tab title, unless the panel has its own title.
     for (const { title, tree } of tabs) {
-      if (isLayoutGroup(tree) && tree.panels.length === 1 && title) {
+      if (isLayoutGroup(tree) && tree.panels.length === 1 && typeof title === "string" && title) {
         const panelId = tree.panels[0]!;
         const panelConfig = configById[panelId] ?? {};
         if (panelConfig[PANEL_TITLE_CONFIG_KEY] == undefined) {

@@ -100,4 +100,15 @@ describe("migrateMosaicLayout", () => {
   it("drops a malformed layout instead of failing on it", () => {
     expect(migrateMosaicLayout(layoutData({ direction: "row" })).layout).toBeUndefined();
   });
+
+  it("drops Tab panels whose config is malformed, keeping the rest of the layout", () => {
+    const result = migrateMosaicLayout(
+      layoutData(
+        { direction: "row", first: "Tab!t", second: "A!1" },
+        { "Tab!t": { tabs: {} }, "Tab!u": { tabs: ["x", { title: 3, layout: "B!1" }] } },
+      ),
+    );
+    expect(result.layout).toEqual({ panels: ["A!1"] });
+    expect(result.configById["Tab!t"]).toBeUndefined();
+  });
 });
