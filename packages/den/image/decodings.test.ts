@@ -15,6 +15,7 @@ import {
   decodeFloat1c,
   decodeMono16,
   decodeMono8,
+  decodeYUV420,
   decodeRGB8,
   decodeRGBA8,
   decodeUYVY,
@@ -182,6 +183,63 @@ describe("decodeRGBA8", () => {
     expect(() => {
       decodeRGBA8(new Uint8Array([]), width, height, step + 1, new Uint8ClampedArray([]));
     }).not.toThrow();
+  });
+});
+
+describe("decodeYUV420", () => {
+  // 4x2 image: one Y row per image row, one chroma sample per 2x2 block
+  const Y = [
+    [81, 145, 41, 210],
+    [100, 120, 60, 200],
+  ];
+  const U = [90, 140];
+  const V = [240, 100];
+
+  // YUYV carries the same chroma per horizontal pixel pair, so it gives the expected output
+  const expected = new Uint8ClampedArray(4 * 2 * 4);
+  decodeYUYV(
+    new Uint8Array(
+      Y.flatMap((row) => [row[0]!, U[0]!, row[1]!, V[0]!, row[2]!, U[1]!, row[3]!, V[1]!]),
+    ),
+    4,
+    2,
+    8,
+    expected,
+  );
+
+  it.each([
+    ["i420", 4, [...Y[0]!, ...Y[1]!, ...U, ...V]],
+    ["i420", 6, [...Y[0]!, 0, 0, ...Y[1]!, 0, 0, ...U, 0, ...V, 0]],
+    ["nv12", 4, [...Y[0]!, ...Y[1]!, U[0]!, V[0]!, U[1]!, V[1]!]],
+    ["nv12", 6, [...Y[0]!, 0, 0, ...Y[1]!, 0, 0, U[0]!, V[0]!, U[1]!, V[1]!, 0, 0]],
+    ["nv21", 4, [...Y[0]!, ...Y[1]!, V[0]!, U[0]!, V[1]!, U[1]!]],
+  ] as const)("decodes %s with step %d", (layout, step, data) => {
+    const output = new Uint8ClampedArray(4 * 2 * 4);
+    decodeYUV420(new Uint8Array(data), 4, 2, step, layout, output);
+    expect(output).toEqual(expected);
+  });
+
+  it("handles odd dimensions by rounding chroma size up", () => {
+    // 3x3 I420: chroma planes are 2x2 (step 3 -> chroma step 2)
+    const data = new Uint8Array([
+      ...[1, 2, 3, 4, 5, 6, 7, 8, 9],
+      ...[128, 128, 128, 128],
+      ...[128, 128, 128, 128],
+    ]);
+    const output = new Uint8ClampedArray(3 * 3 * 4);
+    decodeYUV420(data, 3, 3, 3, "i420", output);
+    // Neutral chroma -> grayscale equal to Y
+    expect(Array.from(output.filter((_, i) => i % 4 === 0))).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  });
+
+  it("rejects truncated data and invalid row step", () => {
+    const output = new Uint8ClampedArray(4 * 2 * 4);
+    expect(() => {
+      decodeYUV420(new Uint8Array(11), 4, 2, 4, "i420", output);
+    }).toThrow("YUV420 (i420) image data is truncated: expected at least 12 bytes, got 11");
+    expect(() => {
+      decodeYUV420(new Uint8Array(12), 4, 2, 3, "nv12", output);
+    }).toThrow("YUV420 image row step (3) must be at least width (4)");
   });
 });
 

@@ -93,6 +93,57 @@ export function decodeYUYV(
   }
 }
 
+/**
+ * Decodes 4:2:0 YUV images: a full-resolution Y plane followed by quarter-resolution chroma.
+ * - `i420`: planar, a U plane then a V plane, each with a row stride of ceil(step / 2)
+ * - `nv12` / `nv21`: semi-planar, one interleaved UV (or VU) plane with a row stride of `step`
+ */
+export function decodeYUV420(
+  data: Uint8Array,
+  width: number,
+  height: number,
+  step: number,
+  layout: "i420" | "nv12" | "nv21",
+  output: Uint8ClampedArray,
+): void {
+  if (step < width) {
+    throw new Error(`YUV420 image row step (${step}) must be at least width (${width})`);
+  }
+  const chromaRows = Math.ceil(height / 2);
+  const chromaStep = layout === "i420" ? Math.ceil(step / 2) : step;
+  const ySize = step * height;
+  const chromaSize = chromaStep * chromaRows;
+  const expectedSize = ySize + (layout === "i420" ? 2 * chromaSize : chromaSize);
+  if (data.length < expectedSize) {
+    throw new Error(
+      `YUV420 (${layout}) image data is truncated: expected at least ${expectedSize} bytes, got ${data.length}`,
+    );
+  }
+  // Offset of the first U and V sample and the distance between neighboring chroma samples
+  const [uStart, vStart, chromaPixelStride] =
+    layout === "i420"
+      ? [ySize, ySize + chromaSize, 1]
+      : layout === "nv12"
+        ? [ySize, ySize + 1, 2]
+        : [ySize + 1, ySize, 2];
+
+  let outIdx = 0;
+  for (let row = 0; row < height; row++) {
+    const yRow = row * step;
+    const chromaRow = (row >> 1) * chromaStep;
+    for (let col = 0; col < width; col++) {
+      const chromaOff = chromaRow + (col >> 1) * chromaPixelStride;
+      const y = data[yRow + col]!;
+      const u = data[uStart + chromaOff]! - 128;
+      const v = data[vStart + chromaOff]! - 128;
+      output[outIdx++] = y + Math.trunc((1403 * v) / 1000);
+      output[outIdx++] = y - Math.trunc((344 * u) / 1000) - Math.trunc((714 * v) / 1000);
+      output[outIdx++] = y + Math.trunc((1770 * u) / 1000);
+      output[outIdx++] = 255;
+    }
+  }
+}
+
 export function decodeRGB8(
   rgb: Uint8Array,
   width: number,
