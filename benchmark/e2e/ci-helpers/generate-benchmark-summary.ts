@@ -4,7 +4,7 @@
 import fs from "node:fs";
 import path from "node:path";
 
-import type { BenchmarkArtifact } from "../types";
+import type { BenchmarkArtifact } from "../types.ts";
 
 // Copied rather than imported from `e2e/ci-helpers/types.ts`: kept local since this report only
 // needs pass/fail/duration, and importing that module would re-run its own `main()` side effect.
@@ -14,8 +14,8 @@ type PlaywrightSpec = { title: string; tests: PlaywrightTest[] };
 type PlaywrightSuite = { title: string; specs: PlaywrightSpec[] };
 type PlaywrightJSONReport = { suites: PlaywrightSuite[] };
 
-const REPORT_PATH = path.join(__dirname, "..", "reports", "results.json");
-const ARTIFACTS_DIR = path.join(__dirname, "..", "..", ".artifacts");
+const REPORT_PATH = path.join(import.meta.dirname, "..", "reports", "results.json");
+const ARTIFACTS_DIR = path.join(import.meta.dirname, "..", "..", ".artifacts");
 
 function formatDuration(ms: number): string {
   if (ms < 1000) {

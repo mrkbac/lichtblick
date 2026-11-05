@@ -5,14 +5,19 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Configuration, DevServer, RspackPluginInstance, rspack } from "@rspack/core";
+import {
+  type Configuration,
+  type DevServer,
+  type RspackPluginInstance,
+  rspack,
+} from "@rspack/core";
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import path from "path";
 import { generateSW } from "workbox-build";
 
-import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv";
-import { makeConfig } from "@lichtblick/suite-base/rspack";
-import * as palette from "@lichtblick/theme/src/palette";
+import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
+import { makeConfig } from "@lichtblick/suite-base/rspack.ts";
+import * as palette from "@lichtblick/theme/src/palette.ts";
 
 export type ConfigParams = {
   /** Directory to find `entrypoint` and `tsconfig.json`. */
@@ -152,7 +157,7 @@ export const mainConfig =
         ...plugins,
         ...(appConfig.plugins ?? []),
         new rspack.CopyRspackPlugin({
-          patterns: [{ from: path.resolve(__dirname, "..", "public") }],
+          patterns: [{ from: path.resolve(import.meta.dirname, "..", "public") }],
         }),
         new rspack.HtmlRspackPlugin({
           // Minifying would strip the default layout placeholder comment below

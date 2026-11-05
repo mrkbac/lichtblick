@@ -8,27 +8,27 @@
 import type { Configuration } from "@rspack/core";
 import path from "node:path";
 
-import { resolveConfigs, type RspackArgv } from "@lichtblick/suite-base/RspackArgv";
-import { RspackConfigParams } from "@lichtblick/suite-desktop/src/RspackConfigParams";
-import { rspackMainConfig } from "@lichtblick/suite-desktop/src/rspackMainConfig";
-import { rspackPreloadConfig } from "@lichtblick/suite-desktop/src/rspackPreloadConfig";
-import { rspackQuicklookConfig } from "@lichtblick/suite-desktop/src/rspackQuicklookConfig";
-import { rspackRendererConfig } from "@lichtblick/suite-desktop/src/rspackRendererConfig";
-import { rspackRootConfig } from "@lichtblick/suite-desktop/src/rspackRootConfig";
+import { resolveConfigs, type RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
+import type { RspackConfigParams } from "@lichtblick/suite-desktop/src/RspackConfigParams.ts";
+import { rspackMainConfig } from "@lichtblick/suite-desktop/src/rspackMainConfig.ts";
+import { rspackPreloadConfig } from "@lichtblick/suite-desktop/src/rspackPreloadConfig.ts";
+import { rspackQuicklookConfig } from "@lichtblick/suite-desktop/src/rspackQuicklookConfig.ts";
+import { rspackRendererConfig } from "@lichtblick/suite-desktop/src/rspackRendererConfig.ts";
+import { rspackRootConfig } from "@lichtblick/suite-desktop/src/rspackRootConfig.ts";
 
-import packageJson from "../package.json";
+import packageJson from "../package.json" with { type: "json" };
 
 const params: RspackConfigParams = {
   packageJson,
-  outputPath: path.resolve(__dirname, ".webpack"),
+  outputPath: path.resolve(import.meta.dirname, ".webpack"),
   prodSourceMap: "source-map",
-  rendererContext: path.resolve(__dirname, "renderer"),
+  rendererContext: path.resolve(import.meta.dirname, "renderer"),
   rendererEntrypoint: "./index.tsx",
-  mainContext: path.resolve(__dirname, "main"),
+  mainContext: path.resolve(import.meta.dirname, "main"),
   mainEntrypoint: "./index.ts",
-  quicklookContext: path.resolve(__dirname, "quicklook"),
+  quicklookContext: path.resolve(import.meta.dirname, "quicklook"),
   quicklookEntrypoint: "./index.ts",
-  preloadContext: path.resolve(__dirname, "preload"),
+  preloadContext: path.resolve(import.meta.dirname, "preload"),
   preloadEntrypoint: "./index.ts",
 };
 

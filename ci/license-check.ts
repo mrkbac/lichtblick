@@ -33,7 +33,7 @@ const EXCLUDED_PACKAGES = ["gl-vec3@1.1.3"];
 
 async function main() {
   const output = await initChecker({
-    start: path.join(__dirname, ".."),
+    start: path.join(import.meta.dirname, ".."),
     summary: true,
     onlyAllow: ALLOWED_LICENSES.join(";"),
     excludePackages: EXCLUDED_PACKAGES.join(";"),

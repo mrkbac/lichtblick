@@ -5,14 +5,14 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Configuration, rspack } from "@rspack/core";
+import { type Configuration, rspack } from "@rspack/core";
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import path from "path";
 
-import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv";
-import { swcRule } from "@lichtblick/suite-base/rspack";
+import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
+import { swcRule } from "@lichtblick/suite-base/rspack.ts";
 
-import { RspackConfigParams } from "./RspackConfigParams";
+import type { RspackConfigParams } from "./RspackConfigParams.ts";
 
 export const rspackQuicklookConfig =
   (params: RspackConfigParams) =>
@@ -71,7 +71,7 @@ export const rspackQuicklookConfig =
       resolve: {
         extensions: [".js", ".ts", ".tsx", ".json"],
         fallback: {
-          path: require.resolve("path-browserify"),
+          path: "path-browserify",
           stream: false,
           crypto: false,
           fs: false,

@@ -5,13 +5,12 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Configuration, RuleSetRule, rspack } from "@rspack/core";
+import { type Configuration, type RuleSetRule, rspack } from "@rspack/core";
 import dotenv from "dotenv";
-import MonacoWebpackPlugin from "monaco-editor-webpack-plugin";
 import { createRequire as _nodeCreateRequire } from "node:module";
 import { fileURLToPath as _nodeFileURLToPath, pathToFileURL as _nodePathToFileURL } from "node:url";
 
-import { RspackArgv } from "./RspackArgv";
+import type { RspackArgv } from "./RspackArgv.ts";
 
 /**
  * Transpiles TypeScript/TSX with Rspack's built-in SWC loader (type checking runs separately with
@@ -41,13 +40,6 @@ export function swcRule({
   };
 }
 
-// In CJS (ts-node / webpack-cli), __dirname is injected by Node's module wrapper.
-// In ESM (Storybook 10+), __dirname is undefined; callers must provide `packageDir`.
-// We avoid import.meta.url here to stay compatible with "module: commonjs" TypeScript compilation
-// (e.g. webpack-cli's ts-node with the root tsconfig) and Node.js 24's loadESMFromCJS detection.
-// eslint-disable-next-line no-var, no-underscore-dangle
-declare var __dirname: string | undefined;
-
 let currentDirHref: string | undefined;
 let localRequireInstance: NodeJS.Require | undefined;
 
@@ -55,13 +47,7 @@ function initModuleLocals(packageDir: string | undefined): void {
   if (currentDirHref != undefined) {
     return;
   }
-  const dir = packageDir ?? __dirname;
-  if (dir == undefined) {
-    throw new Error(
-      "makeConfig: cannot determine the @lichtblick/suite-base package directory. " +
-        "Pass the `packageDir` option when calling makeConfig in ESM environments.",
-    );
-  }
+  const dir = packageDir ?? import.meta.dirname;
   const dirHref = _nodePathToFileURL(dir + "/").href;
   currentDirHref = dirHref;
   localRequireInstance = _nodeCreateRequire(dir + "/package.json");
@@ -74,8 +60,7 @@ type Options = {
   version: string;
   /**
    * Absolute path to the @lichtblick/suite-base package directory.
-   * Required in ESM environments (e.g. Storybook) where __dirname is not available.
-   * Example: `new URL("../packages/suite-base", import.meta.url).pathname`
+   * Defaults to the directory of this file.
    */
   packageDir?: string;
 };
@@ -108,6 +93,19 @@ export function makeConfig(
       extensions: [".js", ".ts", ".jsx", ".tsx"],
       alias: {
         "@lichtblick/suite-base": _nodeFileURLToPath(new URL("src", dirHref)),
+        // Run Monaco's TS worker on our `typescript` instead of the copy Monaco bundles.
+        ...Object.fromEntries(
+          [
+            ["typescriptServices", "monacoTypescript"],
+            ["lib", "monacoTypescriptLibs"],
+            ["lib.index", "monacoTypescriptLibs"],
+          ].map(([monacoFile, ourFile]) => [
+            localRequire.resolve(
+              `monaco-editor/languages/features/typescript/lib/${monacoFile}.js`,
+            ),
+            _nodeFileURLToPath(new URL(`src/panels/UserScriptEditor/${ourFile}.ts`, dirHref)),
+          ]),
+        ),
       },
       // Node built-ins still imported by browser code. Everything else resolves on its own.
       fallback: {
@@ -195,47 +193,6 @@ export function makeConfig(
         },
         { test: /\.woff2?$/, type: "asset/inline" },
         { test: /\.(glb|bag|ttf|bin)$/, type: "asset/resource" },
-        {
-          // TypeScript uses dynamic requires()s when running in node. We can disable these when we
-          // bundle it for the renderer.
-          // https://github.com/microsoft/TypeScript/issues/39436
-          // Prettier's TS parser also bundles the same code: https://github.com/prettier/prettier/issues/11076
-          test: /[\\/]node_modules[\\/]typescript[\\/]lib[\\/]typescript\.js$|[\\/]node_modules[\\/]prettier[\\/]plugins[\\/]typescript\.m?js$/,
-          loader: "string-replace-loader",
-          options: {
-            multiple: [
-              {
-                search: /etwModule\s*=\s*require\(etwModulePath\);/,
-                replace:
-                  "throw new Error('[Foxglove] This module is not supported in the browser.');",
-              },
-              {
-                search: `typescript-etw";r=require(i)`,
-                replace: `typescript-etw";throw new Error('[Foxglove] This module is not supported in the browser.');`,
-              },
-              {
-                search:
-                  "return { module: require(modulePath), modulePath: modulePath, error: undefined };",
-                replace:
-                  "throw new Error('[Foxglove] This module is not supported in the browser.');",
-              },
-              {
-                search: `return{module:require(n),modulePath:n,error:void 0}`,
-                replace:
-                  "throw new Error('[Foxglove] This module is not supported in the browser.');",
-              },
-              {
-                search: `return { module:   require(modulePath), modulePath, error: void 0 };`,
-                replace: `throw new Error('[Foxglove] This module is not supported in the browser.');`,
-              },
-              {
-                search: `getModuleResolver=function(e){let t;try{t=require(e)}`,
-                replace:
-                  "getModuleResolver=function(e){let t;try{throw new Error('[Foxglove] This module is not supported in the browser.')}",
-              },
-            ],
-          },
-        },
       ],
     },
     plugins: [
@@ -253,14 +210,6 @@ export function makeConfig(
         DEV_WORKSPACE: JSON.stringify(process.env.DEV_WORKSPACE),
         OTLP_ENDPOINT: JSON.stringify(process.env.OTLP_ENDPOINT),
         ...buildEnvVars(),
-      }),
-      new MonacoWebpackPlugin({
-        // available options: https://github.com/Microsoft/monaco-editor-webpack-plugin#options
-        languages: ["typescript", "javascript"],
-
-        // Output filenames should include content hashes in order to avoid caching issues with
-        // downstream users of the suite-base package.
-        filename: "[name].worker.[contenthash].js",
       }),
     ],
     node: {

@@ -5,12 +5,12 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Configuration, RspackPluginInstance, rspack } from "@rspack/core";
+import { type Configuration, type RspackPluginInstance, rspack } from "@rspack/core";
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import path from "node:path";
 
-import type { RspackArgv } from "../packages/suite-base/RspackArgv";
-import { makeConfig } from "../packages/suite-base/rspack";
+import type { RspackArgv } from "../packages/suite-base/RspackArgv.ts";
+import { makeConfig } from "../packages/suite-base/rspack.ts";
 
 const devServer: Configuration["devServer"] = {
   // Everything is served from memory; never serve stale files from disk
@@ -47,7 +47,7 @@ export default (env: unknown, argv: RspackArgv): Configuration => {
     ...appConfig,
 
     target: "web",
-    context: path.resolve(__dirname, "src"),
+    context: path.resolve(import.meta.dirname, "src"),
     entry: "./index.tsx",
     devtool: isDev ? "eval-cheap-module-source-map" : "source-map",
     devServer,
@@ -57,7 +57,7 @@ export default (env: unknown, argv: RspackArgv): Configuration => {
 
       // Output filenames should include content hashes in order to cache bust when new versions are available
       filename: isDev ? "[name].js" : "[name].[contenthash].js",
-      path: path.resolve(__dirname, ".webpack"),
+      path: path.resolve(import.meta.dirname, ".webpack"),
       clean: true,
     },
 

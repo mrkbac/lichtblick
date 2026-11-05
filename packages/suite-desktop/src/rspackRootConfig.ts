@@ -8,9 +8,9 @@
 import { type Configuration, rspack } from "@rspack/core";
 import path from "path";
 
-import { RspackArgv } from "@lichtblick/suite-base/RspackArgv";
+import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
 
-import { RspackConfigParams } from "./RspackConfigParams";
+import type { RspackConfigParams } from "./RspackConfigParams.ts";
 
 /**
  * Cleans the output directory and writes the `package.json` Electron reads to find its main entry.
@@ -43,7 +43,7 @@ export const rspackRootConfig =
         new rspack.CopyRspackPlugin({
           patterns: [
             {
-              from: path.resolve(__dirname, "../../../package.json"),
+              from: path.resolve(import.meta.dirname, "../../../package.json"),
               transform: () =>
                 JSON.stringify({
                   main: "main/main.js",

@@ -60,7 +60,9 @@
         // Injected by rspack.ts (ProvidePlugin and resolve.fallback)
         "src/util/process.ts",
         "src/util/shims/url.ts",
-        "loaders/*.cjs"
+        "loaders/*.cjs",
+        // Monaco's TypeScript modules, aliased in rspack.ts
+        "src/panels/UserScriptEditor/monacoTypescript{,Libs}.ts"
       ],
       // Shadowed by services/migrateLayout.ts, see the PR description
       "ignore": ["src/services/migrateLayout/{index,migratePanelsState}.ts"],
@@ -73,12 +75,13 @@
         "nearley-loader",
         "path-browserify",
         "readable-stream",
-        "string-replace-loader",
         "style-loader"
       ]
     },
     "packages/suite-desktop": {
-      "entry": ["src/electronBuilderConfig.js", "src/afterPack.ts", "src/test/setup.ts"]
+      "entry": ["src/electronBuilderConfig.js", "src/afterPack.ts", "src/test/setup.ts"],
+      // Referenced by name in the quicklook rspack `resolve.fallback`
+      "ignoreDependencies": ["path-browserify"]
     },
     "packages/oxlint-plugin": {
       // JSDoc-only `import("estree")` types, provided by oxlint

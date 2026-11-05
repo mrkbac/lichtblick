@@ -5,15 +5,15 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Configuration, RspackPluginInstance, rspack } from "@rspack/core";
+import { type Configuration, type RspackPluginInstance, rspack } from "@rspack/core";
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import path from "path";
 
-import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv";
-import { makeConfig } from "@lichtblick/suite-base/rspack";
-import * as palette from "@lichtblick/theme/src/palette";
+import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
+import { makeConfig } from "@lichtblick/suite-base/rspack.ts";
+import * as palette from "@lichtblick/theme/src/palette.ts";
 
-import { RspackConfigParams } from "./RspackConfigParams";
+import type { RspackConfigParams } from "./RspackConfigParams.ts";
 
 export const rspackRendererConfig =
   (params: RspackConfigParams) =>
