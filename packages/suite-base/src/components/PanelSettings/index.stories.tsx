@@ -14,8 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import { StoryObj } from "storybook-react-rsbuild";
 
 import { SettingsTreeNodes } from "@lichtblick/suite";
@@ -31,11 +29,9 @@ export default {
   decorators: [
     (Story: React.ComponentType): React.JSX.Element => (
       <div style={{ margin: 30, height: 400 }}>
-        <DndProvider backend={HTML5Backend}>
-          <MockCurrentLayoutProvider>
-            <Story />
-          </MockCurrentLayoutProvider>
-        </DndProvider>
+        <MockCurrentLayoutProvider>
+          <Story />
+        </MockCurrentLayoutProvider>
       </div>
     ),
   ],

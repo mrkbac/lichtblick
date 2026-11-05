@@ -14,8 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import { fireEvent, screen } from "storybook/test";
 import { StoryObj } from "storybook-react-rsbuild";
 
@@ -93,18 +91,16 @@ export default {
 export const PanelNotFound: StoryObj = {
   render: function Story() {
     return (
-      <DndProvider backend={HTML5Backend}>
-        <PanelSetup
-          fixture={{
-            topics: [],
-            datatypes: new Map(),
-            frame: {},
-            layout: { panels: ["UnknownPanel!4co6n9d"] },
-          }}
-        >
-          <PanelLayout />
-        </PanelSetup>
-      </DndProvider>
+      <PanelSetup
+        fixture={{
+          topics: [],
+          datatypes: new Map(),
+          frame: {},
+          layout: { panels: ["UnknownPanel!4co6n9d"] },
+        }}
+      >
+        <PanelLayout />
+      </PanelSetup>
     );
   },
 
@@ -121,19 +117,17 @@ export const PanelNotFoundLight: StoryObj = {
 export const PanelWithError: StoryObj = {
   render: () => {
     return (
-      <DndProvider backend={HTML5Backend}>
-        <PanelSetup
-          panelCatalog={new MockPanelCatalog()}
-          fixture={{
-            topics: [],
-            datatypes: new Map(),
-            frame: {},
-            layout: { panels: ["Sample2!4co6n9d"] },
-          }}
-        >
-          <PanelLayout />
-        </PanelSetup>
-      </DndProvider>
+      <PanelSetup
+        panelCatalog={new MockPanelCatalog()}
+        fixture={{
+          topics: [],
+          datatypes: new Map(),
+          frame: {},
+          layout: { panels: ["Sample2!4co6n9d"] },
+        }}
+      >
+        <PanelLayout />
+      </PanelSetup>
     );
   },
 };
@@ -141,18 +135,16 @@ export const PanelWithError: StoryObj = {
 export const RemoveUnknownPanel: StoryObj = {
   render: function Story() {
     return (
-      <DndProvider backend={HTML5Backend}>
-        <PanelSetup
-          fixture={{
-            topics: [],
-            datatypes: new Map(),
-            frame: {},
-            layout: { panels: ["UnknownPanel!4co6n9d"] },
-          }}
-        >
-          <PanelLayout />
-        </PanelSetup>
-      </DndProvider>
+      <PanelSetup
+        fixture={{
+          topics: [],
+          datatypes: new Map(),
+          frame: {},
+          layout: { panels: ["UnknownPanel!4co6n9d"] },
+        }}
+      >
+        <PanelLayout />
+      </PanelSetup>
     );
   },
 
@@ -188,19 +180,17 @@ export const EmptyLayoutJapanese: StoryObj = {
 export const PanelLoading: StoryObj = {
   render: () => {
     return (
-      <DndProvider backend={HTML5Backend}>
-        <PanelSetup
-          panelCatalog={new MockPanelCatalog()}
-          fixture={{
-            topics: [],
-            datatypes: new Map(),
-            frame: {},
-            layout: { panels: ["Sample1!4co6n9d"] },
-          }}
-        >
-          <PanelLayout />
-        </PanelSetup>
-      </DndProvider>
+      <PanelSetup
+        panelCatalog={new MockPanelCatalog()}
+        fixture={{
+          topics: [],
+          datatypes: new Map(),
+          frame: {},
+          layout: { panels: ["Sample1!4co6n9d"] },
+        }}
+      >
+        <PanelLayout />
+      </PanelSetup>
     );
   },
 };
@@ -208,26 +198,24 @@ export const PanelLoading: StoryObj = {
 export const FullScreen: StoryObj = {
   render: function Story() {
     return (
-      <DndProvider backend={HTML5Backend}>
-        <PanelSetup
-          panelCatalog={new MockPanelCatalog()}
-          fixture={{
-            topics: [],
-            datatypes: new Map(),
-            frame: {},
-            layout: {
-              direction: "row",
-              children: [{ panels: ["Sample3!a"] }, { panels: ["Sample3!b"] }],
-            },
-            savedProps: {
-              "Sample3!a": { x: 1 },
-              "Sample3!b": { x: 2 },
-            },
-          }}
-        >
-          <PanelLayout />
-        </PanelSetup>
-      </DndProvider>
+      <PanelSetup
+        panelCatalog={new MockPanelCatalog()}
+        fixture={{
+          topics: [],
+          datatypes: new Map(),
+          frame: {},
+          layout: {
+            direction: "row",
+            children: [{ panels: ["Sample3!a"] }, { panels: ["Sample3!b"] }],
+          },
+          savedProps: {
+            "Sample3!a": { x: 1 },
+            "Sample3!b": { x: 2 },
+          },
+        }}
+      >
+        <PanelLayout />
+      </PanelSetup>
     );
   },
 
