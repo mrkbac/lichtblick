@@ -22,7 +22,7 @@ This agent is the designated **writer** for the web platform. Only this agent ed
 ## Architecture
 
 ```
-web/webpack.config.ts (entry)
+web/rspack.config.ts (entry)
     │
     ▼
 packages/suite-web/src/index.tsx (app bootstrap)
@@ -46,16 +46,16 @@ WebRoot.tsx
 |------|------|
 | `packages/suite-web/src/index.tsx` | Entry point, font loading, compatibility |
 | `packages/suite-web/src/WebRoot.tsx` | Data sources, extension loaders, config |
-| `packages/suite-web/src/webpackConfigs.ts` | Rspack config with COOP/COEP headers |
+| `packages/suite-web/src/rspackConfigs.ts` | Rspack config with COOP/COEP headers |
 | `packages/suite-web/src/canRenderApp.ts` | Browser compatibility checks |
-| `web/webpack.config.ts` | Top-level Rspack entry |
+| `web/rspack.config.ts` | Top-level Rspack entry |
 
 ## COOP/COEP Headers
 
 Required for `SharedArrayBuffer` (used by WASM decoders and Workers):
 
 ```typescript
-// webpackConfigs.ts dev server headers
+// rspackConfigs.ts dev server headers
 headers: {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Embedder-Policy": "credentialless",
@@ -150,9 +150,9 @@ class LocalStorageAppConfiguration implements IAppConfiguration {
 ## Key Files
 - `packages/suite-web/src/index.tsx`
 - `packages/suite-web/src/WebRoot.tsx`
-- `packages/suite-web/src/webpackConfigs.ts`
+- `packages/suite-web/src/rspackConfigs.ts`
 - `packages/suite-web/src/canRenderApp.ts`
-- `web/webpack.config.ts`
+- `web/rspack.config.ts`
 - `vercel.json`
 
 ## Skills Reference

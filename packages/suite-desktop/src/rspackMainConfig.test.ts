@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
+import { RspackArgv } from "@lichtblick/suite-base/RspackArgv";
 
-import { WebpackConfigParams } from "./WebpackConfigParams";
-import { webpackMainConfig } from "./webpackMainConfig";
+import { RspackConfigParams } from "./RspackConfigParams";
+import { rspackMainConfig } from "./rspackMainConfig";
 
-function createTestParams(overrides: Partial<WebpackConfigParams> = {}): WebpackConfigParams {
+function createTestParams(overrides: Partial<RspackConfigParams> = {}): RspackConfigParams {
   return {
     packageJson: {
       productName: "Test Product",
@@ -48,18 +48,18 @@ vi.mock("@rspack/core", async (importOriginal) => {
   };
 });
 
-describe("webpackMainConfig", () => {
+describe("rspackMainConfig", () => {
   describe("development mode", () => {
     it("should configure webpack for development with source maps", () => {
       // Given
       const params = createTestParams();
-      const argv: WebpackArgv = {
+      const argv: RspackArgv = {
         mode: "development",
         env: {},
       };
 
       // When
-      const config = webpackMainConfig(params)({}, argv);
+      const config = rspackMainConfig(params)({}, argv);
 
       // Then
       expect(config.mode).toBeUndefined();
@@ -70,13 +70,13 @@ describe("webpackMainConfig", () => {
     it("should include electron-devtools-installer in development", () => {
       // Given
       const params = createTestParams();
-      const argv: WebpackArgv = {
+      const argv: RspackArgv = {
         mode: "development",
         env: {},
       };
 
       // When
-      const config = webpackMainConfig(params)({}, argv);
+      const config = rspackMainConfig(params)({}, argv);
 
       // Then
       expect(config.resolve?.alias).toBeUndefined();
@@ -87,13 +87,13 @@ describe("webpackMainConfig", () => {
     it("should configure webpack for production with minification", () => {
       // Given
       const params = createTestParams();
-      const argv: WebpackArgv = {
+      const argv: RspackArgv = {
         mode: "production",
         env: {},
       };
 
       // When
-      const config = webpackMainConfig(params)({}, argv);
+      const config = rspackMainConfig(params)({}, argv);
 
       // Then
       expect(config.devtool).toBe("source-map");
@@ -102,13 +102,13 @@ describe("webpackMainConfig", () => {
     it("should stub out electron-devtools-installer in production", () => {
       // Given
       const params = createTestParams();
-      const argv: WebpackArgv = {
+      const argv: RspackArgv = {
         mode: "production",
         env: {},
       };
 
       // When
-      const config = webpackMainConfig(params)({}, argv);
+      const config = rspackMainConfig(params)({}, argv);
 
       // Then
       expect(config.resolve?.alias).toEqual({
@@ -121,13 +121,13 @@ describe("webpackMainConfig", () => {
     it("should configure correct entry and output paths", () => {
       // Given
       const params = createTestParams();
-      const argv: WebpackArgv = {
+      const argv: RspackArgv = {
         mode: "development",
         env: {},
       };
 
       // When
-      const config = webpackMainConfig(params)({}, argv);
+      const config = rspackMainConfig(params)({}, argv);
 
       // Then
       expect(config.context).toBe("/test/main");

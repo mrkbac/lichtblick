@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { WebpackConfigParams } from "./WebpackConfigParams";
-import { createCommonWebpackConfig } from "./webpackCommonConfig";
+import { RspackConfigParams } from "./RspackConfigParams";
+import { createCommonWebpackConfig } from "./rspackCommonConfig";
 
-function createTestParams(overrides: Partial<WebpackConfigParams> = {}): WebpackConfigParams {
+function createTestParams(overrides: Partial<RspackConfigParams> = {}): RspackConfigParams {
   return {
     packageJson: {
       productName: "Test Product",

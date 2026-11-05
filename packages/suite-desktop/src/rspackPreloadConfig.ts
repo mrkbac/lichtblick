@@ -9,17 +9,17 @@ import { Configuration } from "@rspack/core";
 import dotenv from "dotenv";
 import path from "path";
 
-import { WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
+import { RspackArgv } from "@lichtblick/suite-base/RspackArgv";
 
-import { WebpackConfigParams } from "./WebpackConfigParams";
-import { createCommonWebpackConfig } from "./webpackCommonConfig";
+import { RspackConfigParams } from "./RspackConfigParams";
+import { createCommonWebpackConfig } from "./rspackCommonConfig";
 
 // Load environment variables from .env
 dotenv.config({ path: path.resolve(__dirname, "../../../.env") });
 
-export const webpackPreloadConfig =
-  (params: WebpackConfigParams) =>
-  (_: unknown, argv: WebpackArgv): Configuration => {
+export const rspackPreloadConfig =
+  (params: RspackConfigParams) =>
+  (_: unknown, argv: RspackArgv): Configuration => {
     const isDev = argv.mode === "development";
     const commonConfig = createCommonWebpackConfig(params, { isDev });
 

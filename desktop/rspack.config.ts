@@ -8,17 +8,17 @@
 import type { Configuration } from "@rspack/core";
 import path from "node:path";
 
-import { resolveConfigs, type WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
-import { WebpackConfigParams } from "@lichtblick/suite-desktop/src/WebpackConfigParams";
-import { webpackDevServerConfig } from "@lichtblick/suite-desktop/src/webpackDevServerConfig";
-import { webpackMainConfig } from "@lichtblick/suite-desktop/src/webpackMainConfig";
-import { webpackPreloadConfig } from "@lichtblick/suite-desktop/src/webpackPreloadConfig";
-import { webpackQuicklookConfig } from "@lichtblick/suite-desktop/src/webpackQuicklookConfig";
-import { webpackRendererConfig } from "@lichtblick/suite-desktop/src/webpackRendererConfig";
+import { resolveConfigs, type RspackArgv } from "@lichtblick/suite-base/RspackArgv";
+import { RspackConfigParams } from "@lichtblick/suite-desktop/src/RspackConfigParams";
+import { rspackDevServerConfig } from "@lichtblick/suite-desktop/src/rspackDevServerConfig";
+import { rspackMainConfig } from "@lichtblick/suite-desktop/src/rspackMainConfig";
+import { rspackPreloadConfig } from "@lichtblick/suite-desktop/src/rspackPreloadConfig";
+import { rspackQuicklookConfig } from "@lichtblick/suite-desktop/src/rspackQuicklookConfig";
+import { rspackRendererConfig } from "@lichtblick/suite-desktop/src/rspackRendererConfig";
 
 import packageJson from "../package.json";
 
-const params: WebpackConfigParams = {
+const params: RspackConfigParams = {
   packageJson,
   outputPath: path.resolve(__dirname, ".webpack"),
   prodSourceMap: "source-map",
@@ -32,11 +32,11 @@ const params: WebpackConfigParams = {
   preloadEntrypoint: "./index.ts",
 };
 
-export default (env: unknown, argv: WebpackArgv): Configuration[] =>
+export default (env: unknown, argv: RspackArgv): Configuration[] =>
   resolveConfigs(env, argv, [
-    webpackDevServerConfig(params),
-    webpackMainConfig(params),
-    webpackPreloadConfig(params),
-    webpackRendererConfig(params),
-    webpackQuicklookConfig(params),
+    rspackDevServerConfig(params),
+    rspackMainConfig(params),
+    rspackPreloadConfig(params),
+    rspackRendererConfig(params),
+    rspackQuicklookConfig(params),
   ]);

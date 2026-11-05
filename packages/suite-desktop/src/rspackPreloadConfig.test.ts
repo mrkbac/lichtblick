@@ -3,12 +3,12 @@
 
 import path from "path";
 
-import { WebpackArgv } from "@lichtblick/suite-base/WebpackArgv";
+import { RspackArgv } from "@lichtblick/suite-base/RspackArgv";
 
-import { WebpackConfigParams } from "./WebpackConfigParams";
-import { webpackPreloadConfig } from "./webpackPreloadConfig";
+import { RspackConfigParams } from "./RspackConfigParams";
+import { rspackPreloadConfig } from "./rspackPreloadConfig";
 
-function createTestParams(overrides: Partial<WebpackConfigParams> = {}): WebpackConfigParams {
+function createTestParams(overrides: Partial<RspackConfigParams> = {}): RspackConfigParams {
   return {
     packageJson: {
       productName: "Test Product",
@@ -34,25 +34,25 @@ function createTestParams(overrides: Partial<WebpackConfigParams> = {}): Webpack
   };
 }
 
-vi.mock("./webpackCommonConfig", () => ({
+vi.mock("./rspackCommonConfig", () => ({
   createCommonWebpackConfig: vi.fn().mockImplementation((_params, { isDev }) => ({
     devtool: (isDev as boolean) ? "eval-cheap-module-source-map" : "source-map",
     plugins: [{ pluginName: "MockPlugin" }],
   })),
 }));
 
-describe("webpackPreloadConfig", () => {
+describe("rspackPreloadConfig", () => {
   describe("development mode", () => {
     it("should configure webpack for preload in development mode", () => {
       // Given
       const params = createTestParams();
-      const argv: WebpackArgv = {
+      const argv: RspackArgv = {
         mode: "development",
         env: {},
       };
 
       // When
-      const config = webpackPreloadConfig(params)({}, argv);
+      const config = rspackPreloadConfig(params)({}, argv);
 
       // Then
       expect(config.target).toBe("electron-preload");
@@ -68,13 +68,13 @@ describe("webpackPreloadConfig", () => {
     it("should configure webpack for preload in production mode", () => {
       // Given
       const params = createTestParams();
-      const argv: WebpackArgv = {
+      const argv: RspackArgv = {
         mode: "production",
         env: {},
       };
 
       // When
-      const config = webpackPreloadConfig(params)({}, argv);
+      const config = rspackPreloadConfig(params)({}, argv);
 
       // Then
       expect(config.target).toBe("electron-preload");
@@ -89,13 +89,13 @@ describe("webpackPreloadConfig", () => {
     it("should merge common webpack config correctly", () => {
       // Given
       const params = createTestParams();
-      const argv: WebpackArgv = {
+      const argv: RspackArgv = {
         mode: "development",
         env: {},
       };
 
       // When
-      const config = webpackPreloadConfig(params)({}, argv);
+      const config = rspackPreloadConfig(params)({}, argv);
 
       // Then
       expect(config.plugins).toEqual([{ pluginName: "MockPlugin" }]);

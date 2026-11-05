@@ -10,7 +10,7 @@ export type BenchmarkElectronFixtures = {
   mainWindow: Page;
 };
 
-// Standalone Electron shell for `benchmark/` (see `benchmark/webpack.desktop.config.ts`), distinct
+// Standalone Electron shell for `benchmark/` (see `benchmark/rspack.desktop.config.ts`), distinct
 // from the production app's `desktop/.webpack` used by `e2e/fixtures/electron.ts`. It has no
 // user-data-dir/extension pre-install concerns since `Root.tsx` uses an in-memory-only
 // `MemoryAppConfiguration` and no extension loaders.

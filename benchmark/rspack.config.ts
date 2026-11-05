@@ -10,8 +10,8 @@ import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "node:path";
 
-import { resolveConfigs, type WebpackArgv } from "../packages/suite-base/WebpackArgv";
-import { makeConfig } from "../packages/suite-base/webpack";
+import { resolveConfigs, type RspackArgv } from "../packages/suite-base/RspackArgv";
+import { makeConfig } from "../packages/suite-base/rspack";
 
 const devServerConfig: Configuration = {
   // Use empty entry to avoid webpack default fallback to /src
@@ -42,7 +42,7 @@ const devServerConfig: Configuration = {
   },
 };
 
-const mainConfig = (env: unknown, argv: WebpackArgv): Configuration => {
+const mainConfig = (env: unknown, argv: RspackArgv): Configuration => {
   const isDev = argv.mode === "development";
   const isServe = argv.env?.RSPACK_SERVE ?? false;
 
@@ -54,7 +54,7 @@ const mainConfig = (env: unknown, argv: WebpackArgv): Configuration => {
     plugins.push(new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } }));
   }
 
-  const appWebpackConfig = makeConfig(env, argv, {
+  const appConfig = makeConfig(env, argv, {
     allowUnusedVariables,
     version: "0.0.0-benchmark",
   });
@@ -62,7 +62,7 @@ const mainConfig = (env: unknown, argv: WebpackArgv): Configuration => {
   const config: Configuration = {
     name: "main",
 
-    ...appWebpackConfig,
+    ...appConfig,
 
     target: "web",
     context: path.resolve(__dirname, "src"),
@@ -80,7 +80,7 @@ const mainConfig = (env: unknown, argv: WebpackArgv): Configuration => {
 
     plugins: [
       ...plugins,
-      ...(appWebpackConfig.plugins ?? []),
+      ...(appConfig.plugins ?? []),
       new HtmlWebpackPlugin({
         templateContent: `
   <!doctype html>
@@ -104,5 +104,5 @@ const mainConfig = (env: unknown, argv: WebpackArgv): Configuration => {
   return config;
 };
 
-export default (env: unknown, argv: WebpackArgv): Configuration[] =>
+export default (env: unknown, argv: RspackArgv): Configuration[] =>
   resolveConfigs(env, argv, [devServerConfig, mainConfig]);

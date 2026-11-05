@@ -22,8 +22,6 @@
   },
   "js/ts.tsdk.path": "node_modules/typescript/lib",
   "js/ts.preferences.importModuleSpecifier": "non-relative",
-  "jest.runMode": "on-save",
-  "jest.jestCommandLine": "yarn test",
   "[javascript]": {
     "editor.defaultFormatter": "biomejs.biome"
   },
@@ -44,10 +42,6 @@
   },
   "[shellscript]": {
     "editor.defaultFormatter": "foxundermoon.shell-format"
-  },
-  "sonarlint.connectedMode.project": {
-    "connectionId": "lichtblick-suite",
-    "projectKey": "Lichtblick-Suite_lichtblick"
   },
   "[ignore]": {
     "editor.defaultFormatter": "foxundermoon.shell-format"
