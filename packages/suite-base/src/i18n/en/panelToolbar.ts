@@ -9,6 +9,7 @@ export const panelToolbar = {
   changePanel: "Change panel",
   fullscreen: "Fullscreen",
   more: "More",
+  newTab: "+ New tab",
   removePanel: "Remove panel",
   splitDown: "Split down",
   splitRight: "Split right",

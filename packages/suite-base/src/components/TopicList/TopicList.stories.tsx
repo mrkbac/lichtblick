@@ -7,8 +7,6 @@
 
 import { ros2humble } from "@foxglove/rosmsg-msgs-common";
 import * as _ from "lodash-es";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import { fireEvent, userEvent, waitFor, within } from "storybook/test";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
 
@@ -52,13 +50,11 @@ export default {
     topicStats,
   },
   render: (args) => (
-    <DndProvider backend={HTML5Backend}>
-      <MockMessagePipelineProvider {...args}>
-        <MockCurrentLayoutProvider>
-          <TopicList />
-        </MockCurrentLayoutProvider>
-      </MockMessagePipelineProvider>
-    </DndProvider>
+    <MockMessagePipelineProvider {...args}>
+      <MockCurrentLayoutProvider>
+        <TopicList />
+      </MockCurrentLayoutProvider>
+    </MockMessagePipelineProvider>
   ),
 } as Meta<typeof MockMessagePipelineProvider>;
 

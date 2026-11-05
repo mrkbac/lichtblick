@@ -6,8 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { useEffect, useState } from "react";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import { StoryObj } from "storybook-react-rsbuild";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
@@ -76,28 +74,26 @@ function Story({
   }, [clickKey]);
 
   return (
-    <DndProvider backend={HTML5Backend}>
-      <div style={{ height }}>
-        <Sidebars
-          items={ITEMS}
-          bottomItems={BOTTOM_ITEMS}
-          rightItems={new Map()}
-          leftItems={new Map()}
-          selectedKey={selectedKey}
-          onSelectKey={setSelectedKey}
-          selectedRightKey={undefined}
-          onSelectRightKey={() => {}}
-          selectedLeftKey={undefined}
-          onSelectLeftKey={() => {}}
-          leftSidebarSize={undefined}
-          rightSidebarSize={undefined}
-          setLeftSidebarSize={() => {}}
-          setRightSidebarSize={() => {}}
-        >
-          Main content
-        </Sidebars>
-      </div>
-    </DndProvider>
+    <div style={{ height }}>
+      <Sidebars
+        items={ITEMS}
+        bottomItems={BOTTOM_ITEMS}
+        rightItems={new Map()}
+        leftItems={new Map()}
+        selectedKey={selectedKey}
+        onSelectKey={setSelectedKey}
+        selectedRightKey={undefined}
+        onSelectRightKey={() => {}}
+        selectedLeftKey={undefined}
+        onSelectLeftKey={() => {}}
+        leftSidebarSize={undefined}
+        rightSidebarSize={undefined}
+        setLeftSidebarSize={() => {}}
+        setRightSidebarSize={() => {}}
+      >
+        Main content
+      </Sidebars>
+    </div>
   );
 }
 

@@ -27,8 +27,6 @@ export type NewSidebarProps<K> = {
   setActiveTab: (newValue: K) => void;
 };
 
-export type LayoutNode = "leftbar" | "children" | "rightbar";
-
 export type SidebarProps<OldLeftKey, LeftKey, RightKey> = PropsWithChildren<{
   items: Map<OldLeftKey, SidebarItem>;
   bottomItems: Map<OldLeftKey, SidebarItem>;

@@ -9,11 +9,8 @@ import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/
 import type { RendererConfig } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
 import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRender/camera";
 import { DEFAULT_PUBLISH_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PublishSettings";
-import {
-  getAllPanelIds,
-  getPanelIdForType,
-  getPanelTypeFromId,
-} from "@lichtblick/suite-base/util/layout";
+import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
+import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
 
 import { replacePanel } from "./replacePanel";
 
@@ -68,7 +65,7 @@ export function migrateLegacyToNewImagePanels(layoutData: LayoutData): LayoutDat
     return layoutData;
   }
 
-  const legacyImagePanels = getAllPanelIds(layoutData.layout, layoutData.configById).filter(
+  const legacyImagePanels = getPanelIds(layoutData.layout).filter(
     (id) => getPanelTypeFromId(id) === "ImageViewPanel",
   );
   let newState = layoutData;

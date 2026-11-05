@@ -29,7 +29,7 @@ import { PANEL_TITLE_CONFIG_KEY } from "@lichtblick/suite-base/util/layout";
 import { PanelToolbarControls } from "./PanelToolbarControls";
 
 // Panel toolbar should be added to any panel that's part of the
-// react-mosaic layout.  It adds a drag handle, remove/replace controls
+// panel layout.  It adds a drag handle, remove/replace controls
 // and has a place to add custom controls via it's children property
 export default React.memo<PanelToolbarProps>(function PanelToolbar({
   additionalIcons,
