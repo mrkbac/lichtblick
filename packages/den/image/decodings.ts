@@ -106,8 +106,10 @@ export function decodeYUV420(
   layout: "i420" | "nv12" | "nv21",
   output: Uint8ClampedArray,
 ): void {
-  if (step < width) {
-    throw new Error(`YUV420 image row step (${step}) must be at least width (${width})`);
+  // Semi-planar rows also hold the interleaved chroma, which needs a full pair for an odd last pixel
+  const minStep = layout === "i420" ? width : 2 * Math.ceil(width / 2);
+  if (step < minStep) {
+    throw new Error(`YUV420 (${layout}) image row step (${step}) must be at least ${minStep}`);
   }
   const chromaRows = Math.ceil(height / 2);
   const chromaStep = layout === "i420" ? Math.ceil(step / 2) : step;

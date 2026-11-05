@@ -219,6 +219,14 @@ describe("decodeYUV420", () => {
     expect(output).toEqual(expected);
   });
 
+  it("decodes odd-width nv12 with an even row step", () => {
+    // 3x2 NV12, step 4: Y rows padded by one byte, one chroma row with two UV pairs
+    const data = new Uint8Array([...[1, 2, 3, 0], ...[4, 5, 6, 0], ...[128, 128, 128, 128]]);
+    const output = new Uint8ClampedArray(3 * 2 * 4);
+    decodeYUV420(data, 3, 2, 4, "nv12", output);
+    expect(Array.from(output.filter((_, i) => i % 4 === 0))).toEqual([1, 2, 3, 4, 5, 6]);
+  });
+
   it("handles odd dimensions by rounding chroma size up", () => {
     // 3x3 I420: chroma planes are 2x2 (step 3 -> chroma step 2)
     const data = new Uint8Array([
@@ -239,7 +247,11 @@ describe("decodeYUV420", () => {
     }).toThrow("YUV420 (i420) image data is truncated: expected at least 12 bytes, got 11");
     expect(() => {
       decodeYUV420(new Uint8Array(12), 4, 2, 3, "nv12", output);
-    }).toThrow("YUV420 image row step (3) must be at least width (4)");
+    }).toThrow("YUV420 (nv12) image row step (3) must be at least 4");
+    // Odd width: the last NV12/NV21 chroma pair needs an even row step
+    expect(() => {
+      decodeYUV420(new Uint8Array(100), 3, 2, 3, "nv21", output);
+    }).toThrow("YUV420 (nv21) image row step (3) must be at least 4");
   });
 });
 
