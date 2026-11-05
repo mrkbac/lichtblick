@@ -880,7 +880,13 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
 
     const onMove = (moveEvent: PointerEvent) => {
       const r = canvas.getBoundingClientRect();
-      this.#dragCursor.set(moveEvent.clientX - r.left, moveEvent.clientY - r.top);
+      const x = moveEvent.clientX - r.left;
+      const y = moveEvent.clientY - r.top;
+      // Ignore off-canvas moves so they can't replace a pending in-canvas position
+      if (x < 0 || y < 0 || x >= r.width || y >= r.height) {
+        return;
+      }
+      this.#dragCursor.set(x, y);
       this.#dragPending = true;
       this.renderer.queueAnimationFrame();
     };
