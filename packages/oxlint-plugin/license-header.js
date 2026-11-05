@@ -92,6 +92,14 @@ module.exports = {
             node,
             messageId: "wrongHeaderError",
             fix: (fixer) => {
+              if (!match) {
+                // Only allowed prefix lines (or nothing) precede: append the header after them.
+                const separator = fullText === "" || fullText.endsWith("\n") ? "" : "\n";
+                return fixer.insertTextAfterRange(
+                  [0, fullText.length],
+                  `${separator}${EXPECTED_HEADER}`,
+                );
+              }
               return fixer.replaceTextRange([headerStartIndex, headerEndIndex], EXPECTED_HEADER);
             },
           });
