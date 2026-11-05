@@ -3238,7 +3238,7 @@ __metadata:
     style-loader: "npm:4.0.0"
     three: "npm:0.187.0"
     tinycolor2: "npm:1.6.0"
-    ts-essentials: "npm:9.4.0"
+    ts-essentials: "npm:10.2.1"
     ts-key-enum: "npm:3.0.13"
     tss-react: "npm:4.9.21"
     typescript: "npm:6.0.3"
@@ -16748,15 +16748,15 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ts-essentials@npm:9.4.0":
-  version: 9.4.0
-  resolution: "ts-essentials@npm:9.4.0"
+"ts-essentials@npm:10.2.1":
+  version: 10.2.1
+  resolution: "ts-essentials@npm:10.2.1"
   peerDependencies:
-    typescript: ">=4.1.0"
+    typescript: ">=4.5.0"
   peerDependenciesMeta:
     typescript:
       optional: true
-  checksum: 10/aa8dfccd31e7ade042cc07127ff1eec2e3a0bb7f291c2c344651a4d3a70a0b1f67d7230a3665eff1d171699fefb4de5853a393b1a9c7e6b283f75e58b6e7ca72
+  checksum: 10/60f2e1afb1d2c768b750370163ba02b0b6310c4dd16a3973e452724e59ec4efe3acc27f6266ae671cd7e26790f39efee7c8b6a42d6ebed133bc35216eba3b3b2
   languageName: node
   linkType: hard
 
