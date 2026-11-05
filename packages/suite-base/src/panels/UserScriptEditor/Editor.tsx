@@ -265,10 +265,9 @@ const Editor = ({
         // resolution requires NodeNext modules, otherwise "./types" needs a file extension.
         // Monaco's enums lack NodeNext, and importing them from "typescript" would load the
         // compiler here.
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        module: 199 /* ts.ModuleKind.NodeNext */ as any,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        moduleResolution: 99 /* ts.ModuleResolutionKind.NodeNext */ as any,
+        module: 199 /* ts.ModuleKind.NodeNext */ as typescript.ModuleKind,
+        moduleResolution:
+          99 /* ts.ModuleResolutionKind.NodeNext */ as typescript.ModuleResolutionKind,
         // The lib comes from the project config above (same as the compile step), not Monaco.
         noLib: true,
       });

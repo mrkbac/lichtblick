@@ -134,7 +134,9 @@ export function makeConfig(
             ["lib", "monacoTypescriptLibs"],
             ["lib.index", "monacoTypescriptLibs"],
           ].map(([monacoFile, ourFile]) => [
-            localRequire.resolve(`monaco-editor/languages/features/typescript/lib/${monacoFile}.js`),
+            localRequire.resolve(
+              `monaco-editor/languages/features/typescript/lib/${monacoFile}.js`,
+            ),
             _nodeFileURLToPath(new URL(`src/panels/UserScriptEditor/${ourFile}.ts`, dirHref)),
           ]),
         ),
