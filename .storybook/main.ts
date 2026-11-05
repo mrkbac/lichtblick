@@ -5,8 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-/* eslint-disable filenames/match-exported */
-
 import { mergeRsbuildConfig } from "@rsbuild/core";
 import { StorybookConfig } from "storybook-react-rsbuild";
 
@@ -33,8 +31,7 @@ const storybookConfig: StorybookConfig = {
             {
               version: "0.0.0-storybook",
               // Required in ESM context (Storybook) where __dirname is not available in webpack.ts.
-              packageDir: new URL("../packages/suite-base", import.meta.url)
-                .pathname,
+              packageDir: new URL("../packages/suite-base", import.meta.url).pathname,
             },
           );
           return {
@@ -48,10 +45,7 @@ const storybookConfig: StorybookConfig = {
               },
             },
             module: studioConfig.module,
-            plugins: [
-              ...(rspackConfig.plugins ?? []),
-              ...(studioConfig.plugins ?? []),
-            ],
+            plugins: [...(rspackConfig.plugins ?? []), ...(studioConfig.plugins ?? [])],
             node: studioConfig.node,
             ignoreWarnings: studioConfig.ignoreWarnings,
           };

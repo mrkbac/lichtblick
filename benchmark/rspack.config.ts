@@ -36,9 +36,7 @@ export default (env: unknown, argv: RspackArgv): Configuration => {
   const plugins: RspackPluginInstance[] = [];
 
   if (isServe) {
-    plugins.push(
-      new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } }),
-    );
+    plugins.push(new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } }));
   }
 
   const appConfig = makeConfig(env, argv, { version: "0.0.0-benchmark" });

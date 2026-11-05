@@ -6,8 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { PropsWithChildren, useEffect, useState } from "react";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import { screen, userEvent } from "storybook/test";
 import { StoryObj } from "storybook-react-rsbuild";
 
@@ -83,30 +81,28 @@ function Story({
   }, [setAppBarEnabled]);
 
   return (
-    <DndProvider backend={HTML5Backend}>
-      <div style={{ height: "100%" }}>
-        <Sidebars
-          items={ITEMS}
-          bottomItems={BOTTOM_ITEMS}
-          rightItems={RIGHT_ITEMS}
-          leftItems={LEFT_ITEMS}
-          selectedKey={undefined}
-          onSelectKey={() => {
-            // no-op
-          }}
-          selectedRightKey={selectedRightKey}
-          onSelectRightKey={setSelectedRightKey}
-          selectedLeftKey={selectedLeftKey}
-          onSelectLeftKey={setSelectedLeftKey}
-          leftSidebarSize={leftSidebarSize}
-          setLeftSidebarSize={setLeftSidebarSize}
-          rightSidebarSize={rightSidebarSize}
-          setRightSidebarSize={setRightSidebarSize}
-        >
-          {label ?? "Main content"}
-        </Sidebars>
-      </div>
-    </DndProvider>
+    <div style={{ height: "100%" }}>
+      <Sidebars
+        items={ITEMS}
+        bottomItems={BOTTOM_ITEMS}
+        rightItems={RIGHT_ITEMS}
+        leftItems={LEFT_ITEMS}
+        selectedKey={undefined}
+        onSelectKey={() => {
+          // no-op
+        }}
+        selectedRightKey={selectedRightKey}
+        onSelectRightKey={setSelectedRightKey}
+        selectedLeftKey={selectedLeftKey}
+        onSelectLeftKey={setSelectedLeftKey}
+        leftSidebarSize={leftSidebarSize}
+        setLeftSidebarSize={setLeftSidebarSize}
+        rightSidebarSize={rightSidebarSize}
+        setRightSidebarSize={setRightSidebarSize}
+      >
+        {label ?? "Main content"}
+      </Sidebars>
+    </div>
   );
 }
 

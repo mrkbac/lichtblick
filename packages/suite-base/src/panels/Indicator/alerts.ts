@@ -90,6 +90,7 @@ export function playAlertSound(sound: IndicatorAlertSound | undefined): void {
 }
 
 export function requestNotificationPermission(): void {
+  // oxlint-disable-next-line typescript/prefer-optional-chain -- `Notification?.x` throws where the global is missing
   if (typeof Notification !== "undefined" && Notification.permission === "default") {
     void Notification.requestPermission();
   }
@@ -97,6 +98,7 @@ export function requestNotificationPermission(): void {
 
 /** `tag` should identify the panel so its notifications replace each other instead of stacking. */
 export function showAlertNotification(title: string, body: string, tag: string): void {
+  // oxlint-disable-next-line typescript/prefer-optional-chain -- `Notification?.x` throws where the global is missing
   if (typeof Notification !== "undefined" && Notification.permission === "granted") {
     try {
       new Notification(title, { body, tag });

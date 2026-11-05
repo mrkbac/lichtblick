@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { MessageDefinitionField } from "@foxglove/message-definition";
+
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
 /** Type definition as returned by rosapi's `service_request_details` / `service_response_details`. */

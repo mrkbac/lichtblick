@@ -5,6 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import ArrowDownIcon from "@mui/icons-material/ArrowDropDown";
 import ArrowRightIcon from "@mui/icons-material/ArrowRight";
 import CheckIcon from "@mui/icons-material/Check";
@@ -14,8 +19,7 @@ import { Button, Divider, IconButton, TextField, Tooltip, Typography } from "@mu
 import { TFunction } from "i18next";
 import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef } from "react";
-import { useDrag, useDrop, DropTargetMonitor, ConnectableElement } from "react-dnd";
+import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useImmer } from "use-immer";
 
@@ -116,45 +120,61 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
   const selectVisibilityFilterEnabled = props.settings?.enableVisibilityFilter === true;
   const isReorderable = settings.reorderable === true;
 
-  // Set up drag and drop for reorderable nodes
-  const [{ isDragging }, connectDragRef] = useDrag<DragItem, void, { isDragging: boolean }>(
-    () => ({
-      type: SETTINGS_NODE_DRAG_TYPE,
-      item: { path: props.path },
-      canDrag: () => isReorderable,
-      collect: (monitor) => ({
-        isDragging: monitor.isDragging(),
-      }),
-    }),
-    [props.path, isReorderable],
-  );
+  // Drag and drop for reorderable nodes: a node can be dropped onto a sibling to reorder it.
+  const [isDragging, setIsDragging] = useState(false);
+  const [isDropTarget, setIsDropTarget] = useState(false);
+  const latest = useRef({ path: props.path, actionHandler });
+  latest.current = { path: props.path, actionHandler };
 
-  const [{ isOver, canDrop }, connectDropRef] = useDrop<
-    DragItem,
-    void,
-    { isOver: boolean; canDrop: boolean }
-  >(
-    () => ({
-      accept: SETTINGS_NODE_DRAG_TYPE,
-      canDrop: (item: DragItem) => {
-        // Can only drop if both source and target are reorderable and are siblings
-        return (
-          isReorderable &&
-          item.path.length === props.path.length &&
-          item.path.length >= 2 &&
-          item.path[0] === props.path[0] &&
-          !_.isEqual(item.path, props.path)
-        );
-      },
-      drop: (item: DragItem, _monitor) => {
-        handleDropNode(item, props.path, actionHandler);
-      },
-      collect: (monitor: DropTargetMonitor<DragItem, void>) => ({
-        isOver: monitor.isOver(),
-        canDrop: monitor.canDrop(),
+  const connectReorder = useCallback((element: HTMLElement) => {
+    const sourcePath = (data: Record<string | symbol, unknown>) =>
+      data.type === SETTINGS_NODE_DRAG_TYPE ? (data as DragItem).path : undefined;
+    const canDropOnThis = (path: readonly string[] | undefined) => {
+      const ownPath = latest.current.path;
+      return (
+        path?.length === ownPath.length &&
+        path.length >= 2 &&
+        path[0] === ownPath[0] &&
+        !_.isEqual(path, ownPath)
+      );
+    };
+    return combine(
+      draggable({
+        element,
+        getInitialData: () => ({ type: SETTINGS_NODE_DRAG_TYPE, path: latest.current.path }),
+        onDragStart: () => {
+          setIsDragging(true);
+        },
+        onDrop: () => {
+          setIsDragging(false);
+        },
       }),
-    }),
-    [props.path, isReorderable, actionHandler],
+      dropTargetForElements({
+        element,
+        canDrop: ({ source }) => canDropOnThis(sourcePath(source.data)),
+        onDragEnter: () => {
+          setIsDropTarget(true);
+        },
+        onDragLeave: () => {
+          setIsDropTarget(false);
+        },
+        onDrop: ({ source }) => {
+          setIsDropTarget(false);
+          const path = sourcePath(source.data);
+          if (path != undefined) {
+            handleDropNode({ path }, latest.current.path, latest.current.actionHandler);
+          }
+        },
+      }),
+    );
+  }, []);
+
+  const headerRef = useCallback(
+    (el: HTMLDivElement | ReactNull) => {
+      rootRef.current = el;
+      return el != undefined && isReorderable ? connectReorder(el) : undefined;
+    },
+    [connectReorder, isReorderable],
   );
 
   const selectVisibilityFilter = (action: SettingsTreeAction) => {
@@ -382,15 +402,9 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
           [classes.focusedNode]: isFocused,
           [classes.nodeHeaderVisible]: visible,
           [classes.nodeHeaderDragging]: isDragging,
-          [classes.nodeHeaderDropTarget]: isOver && canDrop,
+          [classes.nodeHeaderDropTarget]: isDropTarget,
         })}
-        ref={(el: ConnectableElement) => {
-          rootRef.current = el as HTMLDivElement | typeof ReactNull;
-          if (isReorderable) {
-            connectDragRef(el);
-            connectDropRef(el);
-          }
-        }}
+        ref={headerRef}
         style={{
           opacity: isDragging ? 0.5 : 1,
           cursor: isReorderable ? "grab" : undefined,

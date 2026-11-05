@@ -63,9 +63,7 @@ export const rspackQuicklookConfig =
           // the buffer module exposes the Buffer class as a property
           Buffer: ["buffer", "Buffer"],
         }),
-        ...(isServe
-          ? [new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } })]
-          : []),
+        ...(isServe ? [new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } })] : []),
       ],
 
       // webpack mocked these silently for web targets; the wasm decoders reference them

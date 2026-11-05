@@ -9,10 +9,7 @@ import { Configuration, RuleSetRule, rspack } from "@rspack/core";
 import dotenv from "dotenv";
 import MonacoWebpackPlugin from "monaco-editor-webpack-plugin";
 import { createRequire as _nodeCreateRequire } from "node:module";
-import {
-  fileURLToPath as _nodeFileURLToPath,
-  pathToFileURL as _nodePathToFileURL,
-} from "node:url";
+import { fileURLToPath as _nodeFileURLToPath, pathToFileURL as _nodePathToFileURL } from "node:url";
 
 import { RspackArgv } from "./RspackArgv";
 
@@ -98,10 +95,7 @@ export function makeConfig(
   _: unknown,
   argv: RspackArgv,
   options: Options,
-): Pick<
-  Configuration,
-  "resolve" | "module" | "plugins" | "node" | "ignoreWarnings"
-> {
+): Pick<Configuration, "resolve" | "module" | "plugins" | "node" | "ignoreWarnings"> {
   initModuleLocals(options.packageDir);
   // After initModuleLocals, currentDirHref and localRequireInstance are guaranteed to be set.
   const dirHref = currentDirHref!;
@@ -158,9 +152,7 @@ export function makeConfig(
           test: /[\\/]node_modules[\\/]@oozcitak[\\/]url[\\/]/,
           resolve: {
             alias: {
-              url$: _nodeFileURLToPath(
-                new URL("src/util/shims/url.ts", dirHref),
-              ),
+              url$: _nodeFileURLToPath(new URL("src/util/shims/url.ts", dirHref)),
             },
           },
         },
@@ -263,9 +255,7 @@ export function makeConfig(
         ReactNull: null,
         LICHTBLICK_SUITE_VERSION: JSON.stringify(version),
         // licht deploys talk to its organization server unless API_URL says otherwise.
-        API_URL: JSON.stringify(
-          process.env.API_URL ?? "https://licht-server.marko.im",
-        ),
+        API_URL: JSON.stringify(process.env.API_URL ?? "https://licht-server.marko.im"),
         DEV_WORKSPACE: JSON.stringify(process.env.DEV_WORKSPACE),
         OTLP_ENDPOINT: JSON.stringify(process.env.OTLP_ENDPOINT),
         ...buildEnvVars(),
@@ -286,13 +276,11 @@ export function makeConfig(
     ignoreWarnings: [
       {
         module: /node_modules\/typescript\/lib\/typescript\.js$/,
-        message:
-          /Critical dependency: the request of a dependency is an expression/,
+        message: /Critical dependency: the request of a dependency is an expression/,
       },
       {
         module: /node_modules\/@protobufjs\/inquire\/index\.js$/,
-        message:
-          /Critical dependency: the request of a dependency is an expression/,
+        message: /Critical dependency: the request of a dependency is an expression/,
       },
     ],
   };

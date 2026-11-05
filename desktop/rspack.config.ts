@@ -8,10 +8,7 @@
 import type { Configuration } from "@rspack/core";
 import path from "node:path";
 
-import {
-  resolveConfigs,
-  type RspackArgv,
-} from "@lichtblick/suite-base/RspackArgv";
+import { resolveConfigs, type RspackArgv } from "@lichtblick/suite-base/RspackArgv";
 import { RspackConfigParams } from "@lichtblick/suite-desktop/src/RspackConfigParams";
 import { rspackMainConfig } from "@lichtblick/suite-desktop/src/rspackMainConfig";
 import { rspackPreloadConfig } from "@lichtblick/suite-desktop/src/rspackPreloadConfig";

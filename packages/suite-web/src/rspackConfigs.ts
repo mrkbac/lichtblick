@@ -5,12 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  Configuration,
-  DevServer,
-  RspackPluginInstance,
-  rspack,
-} from "@rspack/core";
+import { Configuration, DevServer, RspackPluginInstance, rspack } from "@rspack/core";
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import path from "path";
 import { generateSW } from "workbox-build";
@@ -100,9 +95,7 @@ export const mainConfig =
 
     // "?raw" imports feed source text to the user script type checker and must stay untouched
     if (isServe) {
-      plugins.push(
-        new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } }),
-      );
+      plugins.push(new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } }));
     }
 
     // Runs on the files on disk after emit, so only for real builds (the dev server serves from memory)

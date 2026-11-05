@@ -28,13 +28,9 @@ export function createCommonWebpackConfig(
         ReactNull: null,
         LICHTBLICK_PRODUCT_NAME: JSON.stringify(params.packageJson.productName),
         LICHTBLICK_PRODUCT_VERSION: JSON.stringify(params.packageJson.version),
-        LICHTBLICK_PRODUCT_HOMEPAGE: JSON.stringify(
-          params.packageJson.homepage,
-        ),
+        LICHTBLICK_PRODUCT_HOMEPAGE: JSON.stringify(params.packageJson.homepage),
         LICHTBLICK_SUITE_VERSION: JSON.stringify(params.packageJson.version),
-        API_URL: process.env.API_URL
-          ? JSON.stringify(process.env.API_URL)
-          : undefined,
+        API_URL: process.env.API_URL ? JSON.stringify(process.env.API_URL) : undefined,
         DEV_WORKSPACE: process.env.DEV_WORKSPACE
           ? JSON.stringify(process.env.DEV_WORKSPACE)
           : undefined,

@@ -24,9 +24,7 @@ export const rspackRendererConfig =
     const plugins: RspackPluginInstance[] = [];
 
     if (isServe) {
-      plugins.push(
-        new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } }),
-      );
+      plugins.push(new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } }));
     }
 
     const appConfig = makeConfig(env, argv, {

@@ -17,7 +17,6 @@
 import { Database20Filled } from "@fluentui/react-icons";
 import { useTheme } from "@mui/material";
 import { PropsWithChildren } from "react";
-import { Mosaic, MosaicWindow } from "react-mosaic-component";
 import { fireEvent, screen } from "storybook/test";
 import { StoryObj } from "storybook-react-rsbuild";
 
@@ -29,43 +28,25 @@ import WorkspaceContextProvider from "@lichtblick/suite-base/providers/Workspace
 
 import PanelToolbar from "./index";
 
-import "react-mosaic-component/react-mosaic-component.css";
-
-function MosaicWrapper(
-  props: PropsWithChildren<{ layout?: any; width?: number }>,
-): React.JSX.Element {
-  const { children, layout = "dummy", width = 268 } = props;
+function ToolbarWrapper(props: PropsWithChildren<{ width?: number }>): React.JSX.Element {
+  const { children, width = 268 } = props;
   const theme = useTheme();
 
   return (
     <WorkspaceContextProvider>
-      <Mosaic
-        onChange={() => undefined}
-        renderTile={(id, path) => (
-          <MosaicWindow
-            title="test"
-            path={path}
-            toolbarControls={<div />}
-            renderPreview={() => undefined as any}
-          >
-            <PanelStateContextProvider>
-              <div
-                style={{
-                  width: "100%",
-                  height: "100%",
-                  padding: theme.spacing(3),
-                  position: "relative",
-                  backgroundColor: theme.palette.background.default,
-                }}
-              >
-                <div style={{ width }}>{id === "Sibling" ? "Sibling Panel" : children}</div>
-              </div>
-            </PanelStateContextProvider>
-          </MosaicWindow>
-        )}
-        value={layout}
-        className="mosaic-foxglove-theme" // prevent the default mosaic theme from being applied
-      />
+      <PanelStateContextProvider>
+        <div
+          style={{
+            width: "100%",
+            height: "100%",
+            padding: theme.spacing(3),
+            position: "relative",
+            backgroundColor: theme.palette.background.default,
+          }}
+        >
+          <div style={{ width }}>{children}</div>
+        </div>
+      </PanelStateContextProvider>
     </WorkspaceContextProvider>
   );
 }
@@ -90,16 +71,16 @@ const ToolbarContent = (): React.JSX.Element => (
   <div style={{ width: "100%", lineHeight: "22px", paddingLeft: 5 }}>Some controls here</div>
 );
 
-type PanelToolbarStoryObj = StoryObj<{ width?: number; layout?: any }>;
+type PanelToolbarStoryObj = StoryObj<{ width?: number }>;
 
 export const NonFloatingNarrow: PanelToolbarStoryObj = {
   render: () => {
     return (
-      <MosaicWrapper>
+      <ToolbarWrapper>
         <PanelToolbar>
           <ToolbarContent />
         </PanelToolbar>
-      </MosaicWrapper>
+      </ToolbarWrapper>
     );
   },
   name: "non-floating (narrow)",
@@ -108,11 +89,11 @@ export const NonFloatingNarrow: PanelToolbarStoryObj = {
 export const NonFloatingWideWithPanelName: PanelToolbarStoryObj = {
   render: (args) => {
     return (
-      <MosaicWrapper {...args}>
+      <ToolbarWrapper {...args}>
         <PanelToolbar>
           <ToolbarContent />
         </PanelToolbar>
-      </MosaicWrapper>
+      </ToolbarWrapper>
     );
   },
   args: { width: 468 },
@@ -127,11 +108,11 @@ export const OneAdditionalIcon: PanelToolbarStoryObj = {
       </ToolbarIconButton>
     );
     return (
-      <MosaicWrapper {...args}>
+      <ToolbarWrapper {...args}>
         <PanelToolbar additionalIcons={additionalIcons}>
           <ToolbarContent />
         </PanelToolbar>
-      </MosaicWrapper>
+      </ToolbarWrapper>
     );
   },
   args: { width: 468 },
@@ -140,11 +121,11 @@ export const OneAdditionalIcon: PanelToolbarStoryObj = {
 
 export const MenuOnlyPanel: PanelToolbarStoryObj = {
   render: () => (
-    <MosaicWrapper>
+    <ToolbarWrapper>
       <PanelToolbar>
         <ToolbarContent />
       </PanelToolbar>
-    </MosaicWrapper>
+    </ToolbarWrapper>
   ),
   name: "menu (only panel)",
   parameters: { colorScheme: "dark" },
@@ -155,11 +136,11 @@ export const MenuOnlyPanel: PanelToolbarStoryObj = {
 
 export const MenuLight: PanelToolbarStoryObj = {
   render: () => (
-    <MosaicWrapper>
+    <ToolbarWrapper>
       <PanelToolbar>
         <ToolbarContent />
       </PanelToolbar>
-    </MosaicWrapper>
+    </ToolbarWrapper>
   ),
   name: "menu light",
   parameters: { colorScheme: "light" },
@@ -170,30 +151,13 @@ export const MenuLight: PanelToolbarStoryObj = {
 
 export const MenuWithSiblingPanel: PanelToolbarStoryObj = {
   render: (args) => (
-    <MosaicWrapper {...args}>
+    <ToolbarWrapper {...args}>
       <PanelToolbar>
         <ToolbarContent />
       </PanelToolbar>
-    </MosaicWrapper>
+    </ToolbarWrapper>
   ),
   name: "menu (with sibling panel)",
-  args: { layout: { direction: "row", first: "dummy", second: "Sibling" } },
-  parameters: { colorScheme: "dark" },
-  play: async () => {
-    await fireEvent.click(await screen.findByTestId("panel-menu"));
-  },
-};
-
-export const MenuForTabPanel: PanelToolbarStoryObj = {
-  render: (args): React.JSX.Element => (
-    <MosaicWrapper {...args}>
-      <PanelToolbar>
-        <ToolbarContent />
-      </PanelToolbar>
-    </MosaicWrapper>
-  ),
-  name: "menu for Tab panel",
-  args: { layout: { direction: "row", first: "Tab", second: "Sibling" } },
   parameters: { colorScheme: "dark" },
   play: async () => {
     await fireEvent.click(await screen.findByTestId("panel-menu"));
@@ -202,13 +166,12 @@ export const MenuForTabPanel: PanelToolbarStoryObj = {
 
 export const NoToolbars: PanelToolbarStoryObj = {
   render: (args) => (
-    <MosaicWrapper {...args}>
+    <ToolbarWrapper {...args}>
       <PanelToolbar>
         <ToolbarContent />
       </PanelToolbar>
-    </MosaicWrapper>
+    </ToolbarWrapper>
   ),
-  args: { layout: { direction: "row", first: "dummy", second: "Sibling" } },
   name: "no toolbars",
   parameters: { colorScheme: "dark" },
   play: async () => {

@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time, toSec } from "@foxglove/rostime";
+
 import { TopicStats } from "@lichtblick/suite-base/players/types";
 
 export type TopicHealthStatus = "ok" | "slow" | "stale" | "unmeasured";

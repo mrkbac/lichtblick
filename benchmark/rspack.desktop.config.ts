@@ -8,10 +8,7 @@
 import { Configuration, rspack } from "@rspack/core";
 import path from "node:path";
 
-import {
-  resolveConfigs,
-  type RspackArgv,
-} from "../packages/suite-base/RspackArgv";
+import { resolveConfigs, type RspackArgv } from "../packages/suite-base/RspackArgv";
 import { makeConfig, swcRule } from "../packages/suite-base/rspack";
 
 // This is a standalone Electron shell for the benchmark app, separate from the production
@@ -145,9 +142,4 @@ const rendererConfig = (env: unknown, argv: RspackArgv): Configuration => {
 };
 
 export default (env: unknown, argv: RspackArgv): Configuration[] =>
-  resolveConfigs(env, argv, [
-    rootConfig,
-    mainConfig,
-    preloadConfig,
-    rendererConfig,
-  ]);
+  resolveConfigs(env, argv, [rootConfig, mainConfig, preloadConfig, rendererConfig]);

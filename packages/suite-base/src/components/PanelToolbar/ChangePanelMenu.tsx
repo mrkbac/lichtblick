@@ -7,7 +7,6 @@
 
 import { ClickAwayListener, Grow, Paper, Popper } from "@mui/material";
 import { useCallback, useContext } from "react";
-import { MosaicContext, MosaicNode, MosaicWindowContext } from "react-mosaic-component";
 import { makeStyles } from "tss-react/mui";
 
 import { PanelCatalog, PanelSelection } from "@lichtblick/suite-base/components/PanelCatalog";
@@ -26,18 +25,14 @@ const useStyles = makeStyles()((theme) => ({
 }));
 
 export default function ChangePanelMenu({
-  tabId,
   anchorEl,
   onClose,
 }: {
-  tabId?: string;
   anchorEl?: HTMLElement;
   onClose: () => void;
 }): React.JSX.Element {
   const { classes } = useStyles();
   const panelContext = useContext(PanelContext);
-  const { mosaicActions } = useContext(MosaicContext);
-  const { mosaicWindowActions } = useContext(MosaicWindowContext);
   const { swapPanel } = useCurrentLayoutActions();
   const open = Boolean(anchorEl);
 
@@ -50,16 +45,9 @@ export default function ChangePanelMenu({
           return;
         }
 
-        swapPanel({
-          tabId,
-          originalId: id ?? "",
-          type,
-          root: mosaicActions.getRoot() as MosaicNode<string>,
-          path: mosaicWindowActions.getPath(),
-          config: config ?? {},
-        });
+        swapPanel({ originalId: id ?? "", type, config: config ?? {} });
       },
-    [onClose, mosaicActions, mosaicWindowActions, panelContext?.type, swapPanel, tabId],
+    [onClose, panelContext?.type, swapPanel],
   );
 
   // https://github.com/mui/material-ui/issues/35287#issuecomment-1332327752

@@ -7,10 +7,7 @@
 
 import path from "path";
 
-import {
-  ConfigParams,
-  mainConfig,
-} from "@lichtblick/suite-web/src/rspackConfigs";
+import { ConfigParams, mainConfig } from "@lichtblick/suite-web/src/rspackConfigs";
 
 import packageJson from "../package.json";
 

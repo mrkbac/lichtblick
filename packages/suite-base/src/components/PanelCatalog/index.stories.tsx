@@ -6,8 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { useTheme } from "@mui/material";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 import { userEvent } from "storybook/test";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
 
@@ -71,17 +69,15 @@ export default {
     (Wrapped: React.ComponentType): React.JSX.Element => {
       const theme = useTheme();
       return (
-        <DndProvider backend={HTML5Backend}>
-          <PanelCatalogContext.Provider value={new MockPanelCatalog()}>
-            <MockCurrentLayoutProvider>
-              <div
-                style={{ margin: 50, height: 480, backgroundColor: theme.palette.background.paper }}
-              >
-                <Wrapped />
-              </div>
-            </MockCurrentLayoutProvider>
-          </PanelCatalogContext.Provider>
-        </DndProvider>
+        <PanelCatalogContext.Provider value={new MockPanelCatalog()}>
+          <MockCurrentLayoutProvider>
+            <div
+              style={{ margin: 50, height: 480, backgroundColor: theme.palette.background.paper }}
+            >
+              <Wrapped />
+            </div>
+          </MockCurrentLayoutProvider>
+        </PanelCatalogContext.Provider>
       );
     },
   ],

@@ -14,16 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import type { MosaicPath } from "react-mosaic-component";
-
-// Mosaic Types
-export type MosaicDropTargetPosition = "top" | "bottom" | "left" | "right";
-export type MosaicDropResult = {
-  path?: MosaicPath;
-  position?: MosaicDropTargetPosition;
-  tabId?: string;
-};
-
 export type PanelConfig = {
   [key: string]: unknown;
 };
