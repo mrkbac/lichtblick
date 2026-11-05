@@ -9,7 +9,11 @@ import type { Configuration } from "@rspack/core";
 import path from "path";
 
 import { resolveConfigs, type RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
-import { type ConfigParams, devServerConfig, mainConfig } from "@lichtblick/suite-web/src/rspackConfigs.ts";
+import {
+  type ConfigParams,
+  devServerConfig,
+  mainConfig,
+} from "@lichtblick/suite-web/src/rspackConfigs.ts";
 
 import packageJson from "../package.json" with { type: "json" };
 

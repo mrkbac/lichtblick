@@ -5,7 +5,12 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { type Configuration, type DevServer, type RspackPluginInstance, rspack } from "@rspack/core";
+import {
+  type Configuration,
+  type DevServer,
+  type RspackPluginInstance,
+  rspack,
+} from "@rspack/core";
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "path";
