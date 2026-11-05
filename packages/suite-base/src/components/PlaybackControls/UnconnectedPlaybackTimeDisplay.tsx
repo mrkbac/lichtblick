@@ -45,54 +45,53 @@ type PlaybackTimeDisplayMethodProps = {
   isPlaying: boolean;
 };
 
-const useStyles = makeStyles<{ timeDisplayMethod: TimeDisplayMethod }>()(
-  (theme, { timeDisplayMethod }) => ({
-    textField: {
-      borderRadius: theme.shape.borderRadius,
+const useStyles = makeStyles()((theme) => ({
+  textField: {
+    borderRadius: theme.shape.borderRadius,
 
-      "&.Mui-disabled": {
-        [`.${filledInputClasses.root}`]: {
-          backgroundColor: "transparent",
-        },
-      },
-      "&:not(.Mui-disabled):hover": {
-        backgroundColor: theme.palette.action.hover,
-
-        [`.${iconButtonClasses.root}`]: {
-          visibility: "visible",
-        },
-      },
+    "&.Mui-disabled": {
       [`.${filledInputClasses.root}`]: {
         backgroundColor: "transparent",
+      },
+    },
+    "&:not(.Mui-disabled):hover": {
+      backgroundColor: theme.palette.action.hover,
 
-        ":hover": {
-          backgroundColor: "transparent",
-        },
-      },
-      [`.${inputBaseClasses.input}`]: {
-        fontFeatureSettings: `${customTypography.fontFeatureSettings}, 'zero' !important`,
-        fontVariantNumeric: "tabular-nums", // Example of a valid property
-        minWidth: timeDisplayMethod === "TOD" ? "28ch" : "20ch",
-      },
       [`.${iconButtonClasses.root}`]: {
-        borderTopLeftRadius: 0,
-        borderBottomLeftRadius: 0,
-        borderLeft: `1px solid ${theme.palette.background.paper}`,
-        visibility: "hidden",
-        marginRight: theme.spacing(-1),
+        visibility: "visible",
       },
     },
-    textFieldError: {
-      outline: `1px solid ${theme.palette.error.main}`,
-      outlineOffset: -1,
+    [`.${filledInputClasses.root}`]: {
+      backgroundColor: "transparent",
 
-      [`.${inputBaseClasses.root}`]: {
-        color: theme.palette.error.main,
-        borderLeftColor: theme.palette.error.main,
+      ":hover": {
+        backgroundColor: "transparent",
       },
     },
-  }),
-);
+    [`.${inputBaseClasses.input}`]: {
+      fontFeatureSettings: `${customTypography.fontFeatureSettings}, 'zero' !important`,
+      fontVariantNumeric: "tabular-nums", // Example of a valid property
+      // Fit the displayed time exactly so long timezone names aren't cut off.
+      fieldSizing: "content",
+    },
+    [`.${iconButtonClasses.root}`]: {
+      borderTopLeftRadius: 0,
+      borderBottomLeftRadius: 0,
+      borderLeft: `1px solid ${theme.palette.background.paper}`,
+      visibility: "hidden",
+      marginRight: theme.spacing(-1),
+    },
+  },
+  textFieldError: {
+    outline: `1px solid ${theme.palette.error.main}`,
+    outlineOffset: -1,
+
+    [`.${inputBaseClasses.root}`]: {
+      color: theme.palette.error.main,
+      borderLeftColor: theme.palette.error.main,
+    },
+  },
+}));
 
 function PlaybackTimeMethodMenu({
   timeFormat,
@@ -193,7 +192,7 @@ export function UnconnectedPlaybackTimeDisplay({
   onPause,
   isPlaying,
 }: PlaybackTimeDisplayMethodProps): React.JSX.Element {
-  const { classes, cx } = useStyles({ timeDisplayMethod: appTimeFormat.timeFormat });
+  const { classes, cx } = useStyles();
   const timeOutID = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const timeRawString = useMemo(
@@ -279,6 +278,8 @@ export function UnconnectedPlaybackTimeDisplay({
             variant="filled"
             size="small"
             slotProps={{
+              // Approximate width for browsers without `field-sizing` support.
+              htmlInput: { size: currentTimeString?.length },
               input: {
                 startAdornment: hasError ? <WarningIcon color="error" /> : undefined,
                 endAdornment: (

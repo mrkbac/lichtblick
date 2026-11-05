@@ -47,12 +47,15 @@ const RELATIVE_TIME_UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["second", 1],
 ];
 
-/** Format a past timestamp as e.g. "2 hours ago" */
+/**
+ * Format a past timestamp as e.g. "2 hours ago". Uses the largest unit that fits at least twice,
+ * so 17 months reads "17 months ago" rather than rounding to "last year".
+ */
 export function formatTimeAgo(timestamp: number, now: number, locale?: string): string {
   const seconds = Math.round((timestamp - now) / 1000);
   const format = new Intl.RelativeTimeFormat(locale, { numeric: "auto" });
   for (const [unit, unitSeconds] of RELATIVE_TIME_UNITS) {
-    if (Math.abs(seconds) >= unitSeconds) {
+    if (Math.abs(seconds) >= 2 * unitSeconds) {
       return format.format(Math.round(seconds / unitSeconds), unit);
     }
   }
