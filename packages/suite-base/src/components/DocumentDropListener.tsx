@@ -31,7 +31,7 @@ type DocumentDropListenerProps = {
   allowedExtensions?: string[];
   onDrop?: (event: {
     files?: File[];
-    handles?: FileSystemFileHandle[]; // foxglove-depcheck-used: @types/wicg-file-system-access
+    handles?: FileSystemFileHandle[];
     namespace?: Namespace;
   }) => void;
 };

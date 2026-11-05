@@ -32,9 +32,7 @@ export const BASE_LINK_FRAME_ID = "base_link";
 export const FIXED_FRAME_ID = "map";
 
 export const VEC3_ZERO = { x: 0, y: 0, z: 0 };
-// ts-unused-exports:disable-next-line
 export const VEC3_HALF = { x: 0.5, y: 0.5, z: 0.5 };
-// ts-unused-exports:disable-next-line
 export const VEC3_3_4 = { x: 0.75, y: 0.75, z: 0.75 };
 export const QUAT_IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
 
