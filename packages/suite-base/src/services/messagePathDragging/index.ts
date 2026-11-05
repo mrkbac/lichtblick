@@ -37,7 +37,7 @@ function getDraggedItems(data: Record<string | symbol, unknown>): DraggedMessage
  * that use `useMessagePathDrop()`.
  */
 export function useMessagePathDrag({ item, selected }: MessagePathDragParams): {
-  dragRef: (element: HTMLElement | ReactNull) => (() => void) | undefined;
+  dragRef: (element: HTMLElement | null) => (() => void) | undefined;
   isDragging: boolean;
   /** Count shown on the drag preview while it is captured; 0 otherwise. */
   draggedItemCount: number;
@@ -50,7 +50,7 @@ export function useMessagePathDrag({ item, selected }: MessagePathDragParams): {
   const latest = useRef({ item, selected, context });
   latest.current = { item, selected, context };
 
-  const dragRef = useCallback((element: HTMLElement | ReactNull) => {
+  const dragRef = useCallback((element: HTMLElement | null) => {
     if (element == undefined) {
       return undefined;
     }
@@ -95,7 +95,7 @@ export function useMessagePathDrop(): {
   isOver: boolean;
   isValidTarget: boolean;
   dropMessage: string | undefined;
-  connectMessagePathDropTarget: (element: HTMLElement | ReactNull) => (() => void) | undefined;
+  connectMessagePathDropTarget: (element: HTMLElement | null) => (() => void) | undefined;
   setMessagePathDropConfig: (config: MessagePathDropConfig | undefined) => void;
 } {
   const [config, setMessagePathDropConfig] = useState<MessagePathDropConfig | undefined>();
@@ -121,7 +121,7 @@ export function useMessagePathDrop(): {
     [],
   );
 
-  const connectMessagePathDropTarget = useCallback((element: HTMLElement | ReactNull) => {
+  const connectMessagePathDropTarget = useCallback((element: HTMLElement | null) => {
     if (element == undefined) {
       return undefined;
     }

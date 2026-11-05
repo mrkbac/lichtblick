@@ -81,7 +81,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
   const [boxZoomActive, setBoxZoomActive] = useState(false);
 
   const [subscriberId] = useState(() => randomUUID());
-  const [canvasDiv, setCanvasDiv] = useState<HTMLDivElement | ReactNull>(ReactNull);
+  const [canvasDiv, setCanvasDiv] = useState<HTMLDivElement | null>(null);
   const [coordinator, setCoordinator] = useState<PlotCoordinator | undefined>(undefined);
   const shouldSync = config.isSynced;
   const renderer = useRenderer(canvasDiv, theme);

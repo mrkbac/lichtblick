@@ -25,7 +25,7 @@ import {
   Link,
   Typography,
 } from "@mui/material";
-import { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Group as PanelGroup,
   PanelImperativeHandle,
@@ -351,7 +351,7 @@ function UserScriptEditor(props: Props) {
     };
   }, []);
 
-  const bottomBarRef = useRef<PanelImperativeHandle>(ReactNull);
+  const bottomBarRef = useRef<PanelImperativeHandle>(null);
 
   const onChangeBottomBarTab = useCallback(() => {
     bottomBarRef.current?.expand();

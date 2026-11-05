@@ -312,7 +312,7 @@ function CursorCoordinates({ map, units }: { map: MapLibreMap; units: Units }) {
   }, [map]);
 
   if (!cursor) {
-    return ReactNull;
+    return null;
   }
   const [lon, lat] = cursor.lngLat;
   const text = `${lat.toFixed(7)}, ${lon.toFixed(7)}`;

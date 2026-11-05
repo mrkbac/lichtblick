@@ -21,7 +21,7 @@ const useStyles = makeStyles()({
 
 export default function Snow({ effect }: { effect: "snow" | "confetti" }): React.JSX.Element {
   const { classes } = useStyles();
-  const containerRef = useRef<HTMLDivElement>(ReactNull);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   useLayoutEffect(() => {
     let requestID: ReturnType<typeof requestAnimationFrame>;

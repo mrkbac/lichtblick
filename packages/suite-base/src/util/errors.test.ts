@@ -14,6 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import React from "react";
 import type { Mock } from "vitest";
 
 import { AppError } from "@lichtblick/suite-base/util/errors";

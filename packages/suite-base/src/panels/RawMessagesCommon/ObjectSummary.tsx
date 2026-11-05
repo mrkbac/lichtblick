@@ -14,13 +14,13 @@ type ObjectSummaryProps = {
 /**
  * Component that displays a summary for arrays and objects in the tree view.
  */
-function ObjectSummary({ value }: ObjectSummaryProps): React.JSX.Element | ReactNull {
+function ObjectSummary({ value }: ObjectSummaryProps): React.JSX.Element | null {
   const { classes } = useStyles();
   const getItemString = useGetItemStringWithTimezone();
 
   const summary = useMemo((): React.ReactNode => {
     if (typeof value !== "object" || value == undefined) {
-      return ReactNull;
+      return null;
     }
 
     const itemString = Array.isArray(value)
@@ -30,8 +30,8 @@ function ObjectSummary({ value }: ObjectSummaryProps): React.JSX.Element | React
     return getItemString("", value, "", itemString);
   }, [value, getItemString]);
 
-  if (summary === ReactNull) {
-    return ReactNull;
+  if (summary == null) {
+    return null;
   }
 
   return <span className={classes.summary}>{summary}</span>;

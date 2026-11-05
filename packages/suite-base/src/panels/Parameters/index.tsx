@@ -191,8 +191,8 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
   const [selected, setSelected] = useState<ReadonlySet<string>>(EMPTY_SET);
   const [error, setError] = useState<string | undefined>();
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | undefined>();
-  const fileInput = useRef<HTMLInputElement>(ReactNull);
-  const listRef = useRef<HTMLDivElement>(ReactNull);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const changed = useChangedParameters(parameters);
 

@@ -20,7 +20,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import {
+import React, {
   MouseEvent,
   useCallback,
   useEffect,
@@ -180,7 +180,7 @@ export default React.memo(function LayoutRow({
     [onSubmit],
   );
 
-  const nameInputRef = useRef<HTMLInputElement>(ReactNull);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   const confirmDelete = useCallback(() => {
     const layoutWarning =

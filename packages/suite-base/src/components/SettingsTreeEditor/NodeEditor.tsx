@@ -19,7 +19,7 @@ import { Button, Divider, IconButton, TextField, Tooltip, Typography } from "@mu
 import { TFunction } from "i18next";
 import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
-import { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useImmer } from "use-immer";
 
@@ -170,7 +170,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
   }, []);
 
   const headerRef = useCallback(
-    (el: HTMLDivElement | ReactNull) => {
+    (el: HTMLDivElement | null) => {
       rootRef.current = el;
       return el != undefined && isReorderable ? connectReorder(el) : undefined;
     },
@@ -225,7 +225,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
   const hasChildren = children != undefined && Object.keys(children).length > 0;
   const hasProperties = fields != undefined || hasChildren;
 
-  const rootRef = useRef<HTMLDivElement>(ReactNull);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   const entries = useMemo(() => Object.entries(fields ?? {}), [fields]);
 

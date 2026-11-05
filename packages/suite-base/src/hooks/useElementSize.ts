@@ -5,8 +5,8 @@ import { useEffect, useState } from "react";
 
 type ElementSize<T> = {
   /** Callback ref to attach to the element. */
-  ref: (element: T | ReactNull) => void;
-  element: T | ReactNull;
+  ref: (element: T | null) => void;
+  element: T | null;
   width?: number;
   height?: number;
 };
@@ -16,7 +16,7 @@ type ElementSize<T> = {
  * animation frame so layout work done in response can't trigger a "ResizeObserver loop" error.
  */
 export function useElementSize<T extends Element>(): ElementSize<T> {
-  const [element, setElement] = useState<T | ReactNull>(ReactNull);
+  const [element, setElement] = useState<T | null>(null);
   const [size, setSize] = useState<{ width?: number; height?: number }>({});
 
   useEffect(() => {

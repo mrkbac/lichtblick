@@ -46,7 +46,7 @@ type Props = {
 export function PanelListItem(props: Props): React.JSX.Element {
   const { searchQuery, panel, onClick, onDragStart, checked = false, highlighted = false } = props;
   const { classes } = useStyles();
-  const scrollRef = useRef<HTMLDivElement>(ReactNull);
+  const scrollRef = useRef<HTMLDivElement>(null);
   // Dropping is handled by the panel layout, which reads the panel from the drag data.
   const handleDragStart = useCallback(
     (event: React.DragEvent) => {
