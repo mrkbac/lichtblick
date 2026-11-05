@@ -91,19 +91,14 @@ describe("getFilesFromDirectory", () => {
     expect(result).toEqual(mcapFiles);
   });
 
-  it("should a return a empty array because the directory has no supported files", () => {
-    writeTree({ [genericString()]: { [buildFile({ extension: "txt" }).name]: "" } });
+  it("should return an empty array when the directory has no supported files", () => {
+    const dir = buildPath();
+    writeTree({ [dir]: { [buildFile({ extension: "txt" }).name]: "" } });
 
-    const result = getFilesFromDirectory(inTmp(buildPath()));
+    const result = getFilesFromDirectory(inTmp(dir));
 
     expect(result).toEqual([]);
-    expect(console.error).toHaveBeenCalled();
-    expect(console.error).toHaveBeenCalledWith(
-      expect.objectContaining({
-        message: expect.stringContaining("ENOENT: no such file or directory"),
-      }),
-    );
-    (console.error as Mock).mockClear();
+    expect(console.error).not.toHaveBeenCalled();
   });
 
   it("should return an empty array when an error occurs in fs.readdirSync", () => {
