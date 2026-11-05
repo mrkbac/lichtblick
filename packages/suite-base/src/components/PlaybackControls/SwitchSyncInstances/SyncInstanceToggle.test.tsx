@@ -55,7 +55,7 @@ describe("SyncInstanceToggle", () => {
   it("turns sync on when another tab is open", () => {
     const button = setup({ syncInstances: false, otherTabs: 1 });
 
-    expect(button).toBeEnabled();
+    expect(button).toHaveAttribute("aria-disabled", "false");
     expect(button).toHaveAttribute("aria-pressed", "false");
     fireEvent.click(button);
     expect(setSyncInstancesMock).toHaveBeenCalledWith(true);
@@ -72,35 +72,39 @@ describe("SyncInstanceToggle", () => {
   it("is disabled but still rendered when no other tab is open", () => {
     const button = setup({ syncInstances: true, otherTabs: 0 });
 
-    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute("aria-disabled", "true");
     expect(button).toHaveAccessibleName("Turn off tab sync");
     expect(button).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(button);
+    expect(setSyncInstancesMock).not.toHaveBeenCalled();
   });
 
   it("stays enabled when the tab count is unknown", () => {
-    expect(setup({ syncInstances: false, otherTabs: undefined })).toBeEnabled();
+    expect(setup({ syncInstances: false, otherTabs: undefined })).toHaveAttribute(
+      "aria-disabled",
+      "false",
+    );
   });
 
   it("shows the tab count", async () => {
     const button = setup({ syncInstances: true, otherTabs: 2 });
 
-    fireEvent.mouseOver(button.parentElement!);
+    fireEvent.mouseOver(button);
     expect(await screen.findByText(/2 other tabs open/)).toBeInTheDocument();
   });
 
   it("explains itself on hover", async () => {
     const button = setup({ syncInstances: false, otherTabs: 0 });
 
-    fireEvent.mouseOver(button.parentElement!);
+    fireEvent.mouseOver(button);
     expect(await screen.findByText(/Open Lichtblick in another tab/)).toBeInTheDocument();
   });
 
   it("explains itself on keyboard focus while disabled", async () => {
     const button = setup({ syncInstances: false, otherTabs: 0 });
 
-    expect(button.parentElement).toHaveAttribute("tabindex", "0");
     await userEvent.tab();
-    expect(button.parentElement).toHaveFocus();
+    expect(button).toHaveFocus();
     expect(await screen.findByText(/Open Lichtblick in another tab/)).toBeInTheDocument();
   });
 });

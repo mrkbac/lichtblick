@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { WindowMultiple20Regular, WindowMultipleOff20Regular } from "@fluentui/react-icons";
-import { Tooltip, Typography } from "@mui/material";
+import { Tooltip, Typography, useTheme } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
 import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
@@ -13,6 +13,7 @@ import { useOtherTabCount } from "@lichtblick/suite-base/util/broadcast/useOther
 
 const SyncInstanceToggle = (): React.JSX.Element => {
   const { t } = useTranslation("syncTabs");
+  const theme = useTheme();
   const syncInstances = useWorkspaceStore((store) => store.playbackControls.syncInstances);
   const otherTabs = useOtherTabCount();
 
@@ -49,21 +50,23 @@ const SyncInstanceToggle = (): React.JSX.Element => {
         </Stack>
       }
     >
-      {/* span so the tooltip still shows (on hover and keyboard focus) while the button is disabled */}
-      <span tabIndex={alone ? 0 : undefined}>
-        <HoverableIconButton
-          size="small"
-          aria-label={syncInstances ? t("turnOff") : t("turnOn")}
-          aria-pressed={syncInstances}
-          disabled={alone}
-          color={syncInstances ? "primary" : "inherit"}
-          icon={syncInstances ? <WindowMultiple20Regular /> : <WindowMultipleOff20Regular />}
-          onClick={() => {
+      {/* aria-disabled, not disabled: the button stays focusable and hoverable, so the tooltip
+          explaining why it is unavailable reaches mouse, keyboard and screen-reader users. */}
+      <HoverableIconButton
+        size="small"
+        aria-label={syncInstances ? t("turnOff") : t("turnOn")}
+        aria-pressed={syncInstances}
+        aria-disabled={alone}
+        color={syncInstances ? "primary" : "inherit"}
+        style={alone ? { color: theme.palette.text.disabled } : undefined}
+        icon={syncInstances ? <WindowMultiple20Regular /> : <WindowMultipleOff20Regular />}
+        onClick={() => {
+          if (!alone) {
             setSyncInstances(!syncInstances);
-          }}
-          data-testid="sync-tabs-button"
-        />
-      </span>
+          }
+        }}
+        data-testid="sync-tabs-button"
+      />
     </Tooltip>
   );
 };
