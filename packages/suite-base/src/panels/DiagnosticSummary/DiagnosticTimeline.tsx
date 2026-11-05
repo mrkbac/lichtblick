@@ -3,7 +3,7 @@
 
 import { fromSec } from "@foxglove/rostime";
 import { Tooltip, useTheme } from "@mui/material";
-import { useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 

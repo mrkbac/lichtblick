@@ -94,7 +94,7 @@ function ErrorDisplay(props: ErrorDisplayProps): React.JSX.Element {
 
   const errorDetails = useMemo(() => {
     if (!showErrorDetails) {
-      return ReactNull;
+      return null;
     }
 
     let stackWithoutMessage = error?.stack ?? "";

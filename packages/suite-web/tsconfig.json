@@ -12,7 +12,6 @@
       "ESNext.Disposable"
     ],
     "noEmit": true,
-    "experimentalDecorators": true,
     "types": ["node", "vitest/globals"],
     "paths": {
       "@lichtblick/suite-base/*": ["../suite-base/src/*"]

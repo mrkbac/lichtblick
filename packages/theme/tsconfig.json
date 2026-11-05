@@ -14,7 +14,6 @@
       "ESNext.Disposable"
     ],
     "declarationMap": false,
-    "sourceMap": false,
-    "experimentalDecorators": true
+    "sourceMap": false
   }
 }

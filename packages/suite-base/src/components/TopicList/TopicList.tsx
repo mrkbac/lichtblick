@@ -50,7 +50,7 @@ export function TopicList(): React.JSX.Element {
   const playerPresence = useMessagePipeline(selectPlayerPresence);
   const { topics, datatypes } = useDataSourceInfo();
 
-  const listRef = useRef<ListImperativeAPI>(ReactNull);
+  const listRef = useRef<ListImperativeAPI>(null);
 
   const treeItems = useTopicListSearch({
     topics,
@@ -150,7 +150,7 @@ export function TopicList(): React.JSX.Element {
             />
           );
       }
-      return ReactNull;
+      return null;
     },
     [handleContextMenu, handleDoubleClick, onSelect],
   );

@@ -91,7 +91,7 @@ export function NumberInput(
     precision = 100,
   } = props;
 
-  const inputRef = useRef<HTMLInputElement>(ReactNull);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Maintain our own internal scrub value during the scrub to prevent jitter.
   const scrubValue = useRef(0);

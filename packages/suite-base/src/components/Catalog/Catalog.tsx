@@ -246,7 +246,7 @@ export default function Catalog({
     key: "start",
     desc: true,
   });
-  const scrollRef = useRef<HTMLDivElement>(ReactNull);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const shown = useMemo(() => {
     const matching = filterRecordings(recordings, query).filter((r) => {

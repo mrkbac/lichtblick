@@ -10,7 +10,7 @@ import { StoryObj } from "storybook-react-rsbuild";
 
 import PanelErrorBoundary from "./PanelErrorBoundary";
 
-function Broken(): React.JSX.Element | ReactNull {
+function Broken(): React.JSX.Element | null {
   throw Object.assign(new Error("Hello!"), {
     stack: `
   an error occurred
@@ -18,7 +18,7 @@ function Broken(): React.JSX.Element | ReactNull {
   now the user sees
       `,
   });
-  return ReactNull;
+  return null;
 }
 
 export default {

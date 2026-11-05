@@ -60,7 +60,7 @@ export function AnimatedThumbnail({
   scrub = false,
 }: Props): React.JSX.Element {
   const { classes, cx } = useStyles();
-  const ref = useRef<HTMLDivElement>(ReactNull);
+  const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [frames, setFrames] = useState<PreviewFrame[]>();
   const [index, setIndex] = useState(0);

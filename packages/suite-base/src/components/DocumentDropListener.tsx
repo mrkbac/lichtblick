@@ -95,7 +95,7 @@ export default function DocumentDropListener(props: DocumentDropListenerProps): 
       }
 
       let handles: FileSystemFileHandle[] | undefined = [];
-      const handlePromises: Promise<FileSystemHandle | ReactNull>[] = [];
+      const handlePromises: Promise<FileSystemHandle | null>[] = [];
       const allFiles: File[] = [];
       const directories: FileSystemDirectoryEntry[] = [];
       const dataItems = ev.dataTransfer.items;

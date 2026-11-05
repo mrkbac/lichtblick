@@ -86,7 +86,7 @@ describe("<RendererOverlay /> hover wiring", () => {
     vi.clearAllMocks();
   });
 
-  function renderOverlay(canvas: HTMLCanvasElement | ReactNull) {
+  function renderOverlay(canvas: HTMLCanvasElement | null) {
     return render(
       <ThemeProvider isDark={false}>
         <RendererOverlay
@@ -328,7 +328,7 @@ describe("<RendererOverlay /> download image button", () => {
         <RendererOverlay
           addPanel={vi.fn() as any}
           canPublish={false}
-          canvas={ReactNull}
+          canvas={null}
           enableStats={false}
           interfaceMode={interfaceMode}
           measureActive={false}

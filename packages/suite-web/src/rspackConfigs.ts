@@ -141,6 +141,10 @@ export const mainConfig =
 
       ...appConfig,
 
+      // `rspack serve` compiles lazy imports on first use, and the recompile reloads every open page.
+      // E2E tests run in parallel against one dev server, so build everything up front for them.
+      ...(process.env.E2E === "true" && { lazyCompilation: false }),
+
       target: "web",
       context: params.contextPath,
       entry: params.entrypoint,

@@ -285,7 +285,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   const [sourceErrors, setSourceErrors] = useState<ReadonlyMap<string, string>>(new Map());
   const [map, setMap] = useState<MapLibreMap | undefined>();
 
-  const containerRef = useRef<HTMLDivElement>(ReactNull);
+  const containerRef = useRef<HTMLDivElement>(null);
   const overlayData = useRef(emptyOverlayData());
   const measuringRef = useRef(false);
   const rangeTopicsRef = useRef(new Set<string>());

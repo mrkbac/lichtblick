@@ -121,9 +121,9 @@ function Tile({
   onToggleMaximize,
 }: TileProps): React.JSX.Element {
   const { classes, cx } = useStyles();
-  const canvasRef = useRef<HTMLCanvasElement>(ReactNull);
-  const timestampRef = useRef<HTMLSpanElement>(ReactNull);
-  const statusRef = useRef<HTMLDivElement>(ReactNull);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const timestampRef = useRef<HTMLSpanElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
   const tileRef = useRef(tile);
   tileRef.current = tile;
 

@@ -16,6 +16,7 @@
 
 import { Cursor20Regular } from "@fluentui/react-icons";
 import { Typography } from "@mui/material";
+import React from "react";
 
 import type { LayoutActions } from "@lichtblick/suite";
 import ExpandingToolbar, {

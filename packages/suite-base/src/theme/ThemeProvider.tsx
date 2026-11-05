@@ -28,7 +28,7 @@ ThemeContainer.displayName = "ThemeContainer";
 export default function ThemeProvider({
   children,
   isDark,
-}: React.PropsWithChildren<{ isDark: boolean }>): React.ReactElement | ReactNull {
+}: React.PropsWithChildren<{ isDark: boolean }>): React.ReactElement | null {
   useEffect(() => {
     // Trick CodeEditor into sync with our theme
     document.documentElement.setAttribute("data-color-mode", isDark ? "dark" : "light");

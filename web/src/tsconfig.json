@@ -12,7 +12,6 @@
       "webworker",
       "ESNext.Disposable"
     ],
-    "experimentalDecorators": true,
     "paths": {
       "@lichtblick/suite-base/*": ["../../packages/suite-base/src/*"]
     }

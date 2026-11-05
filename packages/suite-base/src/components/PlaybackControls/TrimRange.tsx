@@ -96,7 +96,7 @@ export function formatSeconds(ns: bigint): string {
 }
 
 /** Highlighted trim range with draggable in and out handles, drawn over the scrubber. */
-export function TrimRangeOverlay(): React.JSX.Element | ReactNull {
+export function TrimRangeOverlay(): React.JSX.Element | null {
   const { classes, cx } = useStyles();
   const { t } = useTranslation("exportRecording");
   const editing = useTrimStore((state) => state.editing);
@@ -104,10 +104,10 @@ export function TrimRangeOverlay(): React.JSX.Element | ReactNull {
   const bounds = useRecordingBounds();
   const start = useTrimStore((state) => state.start);
   const end = useTrimStore((state) => state.end);
-  const rootRef = useRef<HTMLDivElement>(ReactNull);
+  const rootRef = useRef<HTMLDivElement>(null);
 
   if (!bounds || start == undefined || end == undefined) {
-    return ReactNull;
+    return null;
   }
   const duration = Math.max(1, Number(bounds.end - bounds.start));
   const toPercent = (ns: bigint) => (Number(ns - bounds.start) / duration) * 100;
@@ -189,7 +189,7 @@ export function TrimRangeOverlay(): React.JSX.Element | ReactNull {
 }
 
 /** Row under the scrubber while trimming: range readout, set in/out, export, close. */
-export function TrimBar(): React.JSX.Element | ReactNull {
+export function TrimBar(): React.JSX.Element | null {
   const { classes } = useStyles();
   const { t } = useTranslation("exportRecording");
   const editing = useTrimStore((state) => state.editing);
@@ -200,7 +200,7 @@ export function TrimBar(): React.JSX.Element | ReactNull {
   const { bounds, start, end } = useTrimRange();
 
   if (!editing || !bounds || start == undefined || end == undefined) {
-    return ReactNull;
+    return null;
   }
   const playhead = currentTime ? toNanoSec(currentTime) : undefined;
 

@@ -32,7 +32,7 @@ function makeCanvas(bounds?: Partial<DOMRect>): HTMLCanvasElement {
 function renderHoverTooltip(props: {
   entities: HoverEntityInfo[];
   position: { clientX: number; clientY: number };
-  canvas: HTMLCanvasElement | ReactNull;
+  canvas: HTMLCanvasElement | null;
 }) {
   return render(
     <ThemeProvider isDark={false}>

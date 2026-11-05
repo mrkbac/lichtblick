@@ -3,7 +3,7 @@
 
 import { fromSec } from "@foxglove/rostime";
 import { IconButton, ListItem, ListItemButton, ListItemText, Typography } from "@mui/material";
-import { useCallback } from "react";
+import React, { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
 import PublishPointIcon from "@lichtblick/suite-base/components/PublishPointIcon";

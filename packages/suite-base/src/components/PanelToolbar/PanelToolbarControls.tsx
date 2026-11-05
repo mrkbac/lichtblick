@@ -8,7 +8,7 @@
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { Badge } from "@mui/material";
-import { forwardRef, useCallback, useContext, useMemo } from "react";
+import React, { forwardRef, useCallback, useContext, useMemo } from "react";
 
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import { useStyles } from "@lichtblick/suite-base/components/PanelToolbar/PanelToolbarControls.style";

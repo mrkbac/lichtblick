@@ -185,7 +185,7 @@ export function useCatalogFolder(): CatalogFolder {
       const handle =
         window.isSecureContext && "getAsFileSystemHandle" in item
           ? item.getAsFileSystemHandle()
-          : Promise.resolve(ReactNull);
+          : Promise.resolve(null);
       void scan(entry.name, async () => {
         const dir = await handle;
         if (dir?.kind === "directory") {

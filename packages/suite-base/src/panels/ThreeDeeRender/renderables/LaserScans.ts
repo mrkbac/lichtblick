@@ -278,7 +278,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       latestEntry.renderable.geometry.boundingSphere.set(VEC3_ZERO, maxRange);
       latestEntry.renderable.frustumCulled = true;
     } else {
-      latestEntry.renderable.geometry.boundingSphere = ReactNull;
+      latestEntry.renderable.geometry.boundingSphere = null;
       latestEntry.renderable.frustumCulled = false;
     }
 
