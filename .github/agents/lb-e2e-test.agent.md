@@ -198,6 +198,6 @@ pnpm test:e2e:web:debug <filename-fragment>       # Debug single test
 pnpm test:e2e:web                                 # All web tests
 
 # CI
-pnpm test:e2e:ci                                  # Always confirm that all tests pass in CI before pushing
+pnpm test:e2e:web:ci && pnpm test:e2e:desktop:ci  # Always confirm that all tests pass in CI before pushing
 
 ```

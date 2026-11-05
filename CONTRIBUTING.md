@@ -37,7 +37,7 @@ Before contributing, ensure you have the following installed:
 
 | Tool                                             | Version                | Notes                                                |
 | ------------------------------------------------ | ---------------------- | ---------------------------------------------------- |
-| [Node.js](https://nodejs.org/)                   | >= 20                  | LTS recommended                                      |
+| [Node.js](https://nodejs.org/)                   | >= 26                  | Matches `engines` in package.json                    |
 | [pnpm](https://pnpm.io/) | 10 | `npm install --global pnpm`; it switches to the version pinned in `package.json` |
 | [Git](https://git-scm.com/)                      | Latest                 | Required for version control                         |
 

@@ -119,7 +119,7 @@ Human checkpoint:
 
 7. After each fix is applied, verify:
    - `pnpm lint` passes on affected files
-   - Related tests still pass: `pnpm test --testPathPattern=<affected file>`
+   - Related tests still pass: `pnpm test <affected test file>`
 8. Do not implement findings marked as **nitpick** or **informational** unless the user
    explicitly requests it.
 

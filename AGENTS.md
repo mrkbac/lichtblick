@@ -4,7 +4,7 @@ This file helps AI coding agents work effectively in the Lichtblick monorepo.
 
 ## Quick Start
 
-- Use Node.js 20+.
+- Use Node.js 26+.
 - Install pnpm, then the dependencies (pnpm switches to the version pinned in `package.json`):
 
 ```sh
