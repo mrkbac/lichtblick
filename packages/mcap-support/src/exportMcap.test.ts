@@ -70,7 +70,7 @@ async function runExport(input: Input, options: ExportMcapOptions) {
     readable: output,
     decompressHandlers: await loadDecompressHandlers(),
   });
-  const messages = [];
+  const messages: { topic: string; logTime: number; data: number[] }[] = [];
   for await (const message of reader.readMessages()) {
     messages.push({
       topic: reader.channelsById.get(message.channelId)!.topic,
