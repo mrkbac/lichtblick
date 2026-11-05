@@ -81,36 +81,33 @@ Clone the repository:
 $ git clone https://github.com/lichtblick-suite/lichtblick.git
 ```
 
-Install and enable Corepack (Node 25+ no longer bundles it):
+Install pnpm (it switches to the version pinned in `package.json`):
 
 ```sh
-$ npm install --global corepack
-$ corepack enable
+$ npm install --global pnpm
 ```
 
 Install packages from `package.json`:
 
 ```sh
-$ yarn install
+$ pnpm install
 ```
-
-- If you still get errors about corepack after running `corepack enable`, try uninstalling and reinstalling Node.js. Ensure that Yarn is not separately installed from another source, but is installed _via_ corepack.
 
 Launch the development environment:
 
 ```sh
 # To launch the desktop app (run scripts in different terminals):
-$ yarn desktop:serve        # start the Rspack dev server
-$ yarn desktop:start        # launch electron (make sure the desktop:serve finished to build)
+$ pnpm desktop:serve        # start the Rspack dev server
+$ pnpm desktop:start        # launch electron (make sure the desktop:serve finished to build)
 
 # To launch the web app:
-$ yarn run web:serve        # it will be avaiable in http://localhost:8080
+$ pnpm run web:serve        # it will be avaiable in http://localhost:8080
 ```
 
 :warning: Ubuntu users: the application may present some issues using GPU. In order to bypass the GPU and process it using directly the CPU (software), please run lichtblick using the variable `LIBGL_ALWAYS_SOFTWARE` set to `1`:
 
 ```sh
-$ LIBGL_ALWAYS_SOFTWARE=1 yarn desktop:start
+$ LIBGL_ALWAYS_SOFTWARE=1 pnpm desktop:start
 ```
 
 ## :hammer_and_wrench: Building Lichtblick
@@ -119,17 +116,17 @@ Build the application for production using these commands:
 
 ```sh
 # To build the desktop apps:
-$ yarn run desktop:build:prod   # compile necessary files
+$ pnpm run desktop:build:prod   # compile necessary files
 
-- yarn run package:win         # Package for windows
-- yarn run package:darwin      # Package for macOS
-- yarn run package:linux       # Package for linux
+- pnpm run package:win         # Package for windows
+- pnpm run package:darwin      # Package for macOS
+- pnpm run package:linux       # Package for linux
 
 # To build the web app:
-$ yarn run web:build:prod
+$ pnpm run web:build:prod
 
 # It is possible to clean up build files using the following command:
-$ yarn run clean
+$ pnpm run clean
 ```
 
 - The desktop builds are located in the `dist` directory, and the web builds are found in the `web/.webpack` directory.

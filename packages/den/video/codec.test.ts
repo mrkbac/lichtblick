@@ -9,6 +9,7 @@ import {
   VideoCodec,
   canonicalVideoCodec,
   isVideoKeyframe,
+  videoCodecFromCodecString,
   videoCodecNeedsKeyframeReplay,
   videoCodecNeedsSeekBackfill,
 } from "./codec";
@@ -37,6 +38,11 @@ describe("canonicalVideoCodec", () => {
     expect(canonicalVideoCodec("hevc")).toBe(VideoCodec.H265);
   });
 
+  it("maps 'vp9' and 'av1' to their codecs", () => {
+    expect(canonicalVideoCodec("vp9")).toBe(VideoCodec.VP9);
+    expect(canonicalVideoCodec("av1")).toBe(VideoCodec.AV1);
+  });
+
   it("maps 'h264' to H264", () => {
     // GIVEN the H.264 format string
     // WHEN canonicalVideoCodec normalizes it
@@ -57,7 +63,7 @@ describe("canonicalVideoCodec", () => {
     // GIVEN formats that are not recognized video codecs
     // WHEN canonicalVideoCodec normalizes them
     // THEN no canonical codec is returned
-    expect(canonicalVideoCodec("vp9")).toBeUndefined();
+    expect(canonicalVideoCodec("mjpeg")).toBeUndefined();
     expect(canonicalVideoCodec("")).toBeUndefined();
   });
 });
@@ -80,7 +86,7 @@ describe("isVideoKeyframe", () => {
   it("returns false for unrecognized formats without consulting any parser", () => {
     const h264Spy = vi.spyOn(H264, "IsKeyframe");
     const h265Spy = vi.spyOn(H265, "IsKeyframe");
-    expect(isVideoKeyframe("vp9", new Uint8Array([0x01]))).toBe(false);
+    expect(isVideoKeyframe("mjpeg", new Uint8Array([0x01]))).toBe(false);
     expect(h264Spy).not.toHaveBeenCalled();
     expect(h265Spy).not.toHaveBeenCalled();
   });
@@ -89,7 +95,9 @@ describe("isVideoKeyframe", () => {
 describe("videoCodecNeedsKeyframeReplay", () => {
   it("is true only for codecs that cannot decode a delta frame in isolation", () => {
     expect(videoCodecNeedsKeyframeReplay(VideoCodec.H265)).toBe(true);
+    expect(videoCodecNeedsKeyframeReplay(VideoCodec.AV1)).toBe(true);
     expect(videoCodecNeedsKeyframeReplay(VideoCodec.H264)).toBe(false);
+    expect(videoCodecNeedsKeyframeReplay(VideoCodec.VP9)).toBe(false);
     expect(videoCodecNeedsKeyframeReplay(undefined)).toBe(false);
   });
 });
@@ -101,6 +109,18 @@ describe("videoCodecNeedsSeekBackfill", () => {
     // picture, so backfill is required at the player/source boundary.
     expect(videoCodecNeedsSeekBackfill(VideoCodec.H264)).toBe(true);
     expect(videoCodecNeedsSeekBackfill(VideoCodec.H265)).toBe(true);
+    expect(videoCodecNeedsSeekBackfill(VideoCodec.VP9)).toBe(true);
+    expect(videoCodecNeedsSeekBackfill(VideoCodec.AV1)).toBe(true);
     expect(videoCodecNeedsSeekBackfill(undefined)).toBe(false);
+  });
+});
+
+describe("videoCodecFromCodecString", () => {
+  it("maps WebCodecs codec strings to their codec", () => {
+    expect(videoCodecFromCodecString("avc1.42C01F")).toBe(VideoCodec.H264);
+    expect(videoCodecFromCodecString("hvc1.1.6.L93.B0")).toBe(VideoCodec.H265);
+    expect(videoCodecFromCodecString("vp09.00.10.08")).toBe(VideoCodec.VP9);
+    expect(videoCodecFromCodecString("av01.0.00M.08")).toBe(VideoCodec.AV1);
+    expect(videoCodecFromCodecString("")).toBeUndefined();
   });
 });

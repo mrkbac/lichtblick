@@ -4,7 +4,7 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
-import { ros1, ros2humble } from "@foxglove/rosmsg-msgs-common";
+import { ros1 } from "@foxglove/rosmsg-msgs-common";
 import { Slider, Typography } from "@mui/material";
 import * as _ from "lodash-es";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -31,6 +31,7 @@ import {
   TeleopVector,
 } from "@lichtblick/suite-base/panels/Teleop/types";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
+import { ros2CommonDatatypes } from "@lichtblick/suite-base/util/ros2CommonDatatypes";
 
 const KEY_ACTIONS: Record<string, DirectionalPadAction> = {
   w: DirectionalPadAction.UP,
@@ -214,7 +215,7 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
     }
 
     const isRos2 = context.dataSourceProfile === "ros2";
-    const datatypes = isRos2 ? ros2humble : ros1;
+    const datatypes = isRos2 ? ros2CommonDatatypes() : ros1;
     const rootType = `geometry_msgs/${messageType}` as const;
     // ROS 2 schema names include "/msg/"; the definition maps use the short names
     const schemaName = isRos2 ? `geometry_msgs/msg/${messageType}` : rootType;
