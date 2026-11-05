@@ -13,6 +13,11 @@ on:
 permissions:
   contents: read
 
+# Only the newest licht commit matters; drop runs a later push has superseded.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
@@ -29,21 +34,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+
       - uses: actions/setup-node@v7
         with:
           node-version: 26
-      - run: npm i -g --force corepack@0.36.0 && corepack enable
+          cache: pnpm
 
-      - name: Restore cache
-        uses: actions/cache@v6
-        with:
-          path: |
-            .yarn/cache
-            **/node_modules
-          key: v5-${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
-          restore-keys: v5-${{ runner.os }}-yarn-
-
-      - run: yarn install --immutable
+      - run: pnpm install --frozen-lockfile
 
       - name: Apply AppArmor Fix (Ubuntu)
         # Required for Playwright/Electron on Ubuntu to work properly
@@ -51,18 +49,18 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
 
       - name: Build benchmark desktop app
-        run: yarn benchmark:desktop:build:prod
+        run: pnpm benchmark:desktop:build:prod
 
       - name: Run Benchmark E2E tests
         uses: coactions/setup-xvfb@v1
         with:
           working-directory: ./
           # Call playwright directly with an explicit reporter list instead of relying on
-          # `yarn test:e2e:benchmark:ci`'s config default: `--reporter=json` alone has no syntax
+          # `pnpm test:e2e:benchmark:ci`'s config default: `--reporter=json` alone has no syntax
           # for an output path, so without PLAYWRIGHT_JSON_OUTPUT_NAME below the json reporter
           # would dump the report to stdout instead of a file.
-          run: yarn test:e2e:benchmark:ci --reporter=list,json
+          run: pnpm test:e2e:benchmark:ci --reporter=list,json
 
       - name: Generate Benchmark Test Summary
         if: always()
-        run: yarn test:e2e:benchmark:summary >> "$GITHUB_STEP_SUMMARY"
+        run: pnpm test:e2e:benchmark:summary >> "$GITHUB_STEP_SUMMARY"

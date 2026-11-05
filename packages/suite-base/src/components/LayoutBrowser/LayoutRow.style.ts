@@ -3,7 +3,10 @@
 
 /* eslint-disable @lichtblick/no-restricted-imports, no-restricted-imports */
 
+// The type-only imports let TypeScript name these packages in the emitted declarations below.
+import type {} from "@emotion/styled";
 import { ListItem, MenuItem, styled as muiStyled } from "@mui/material";
+import type {} from "@mui/system";
 
 export const StyledListItem = muiStyled(ListItem, {
   shouldForwardProp: (prop) =>
