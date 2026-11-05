@@ -38,7 +38,6 @@ function hasChanged(node: TreeNode, previousData: unknown): boolean {
   return !Object.is(previous, node.value);
 }
 
-// eslint-disable-next-line @typescript-eslint/no-shadow
 export const VirtualizedTree = memo(function VirtualizedTree({
   data,
   diff = false,

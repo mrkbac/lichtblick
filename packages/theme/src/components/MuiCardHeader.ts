@@ -9,6 +9,7 @@ import { OverrideComponentReturn } from "../types";
 
 export const MuiCardHeader: OverrideComponentReturn<"MuiCardHeader"> = {
   defaultProps: {
+    // oxlint-disable-next-line typescript/no-deprecated -- MUI deprecated theme default prop; migrate to slots/slotProps separately
     titleTypographyProps: {
       variant: "h4",
     },

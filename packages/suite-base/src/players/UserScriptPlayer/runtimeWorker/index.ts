@@ -40,7 +40,7 @@ if (!inSharedWorker()) {
 }
 
 (global as unknown as SharedWorkerGlobalScope).onconnect = (e) => {
-  const port = e.ports[0]! as MessagePort;
+  const port = e.ports[0]!;
   const rpc = new Rpc(port);
 
   // If any errors occurred while nobody was connected, send them now
