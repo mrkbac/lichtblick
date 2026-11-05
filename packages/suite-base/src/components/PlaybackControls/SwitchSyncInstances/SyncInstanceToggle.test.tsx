@@ -71,11 +71,19 @@ describe("SyncInstanceToggle", () => {
     const button = setup({ syncInstances: true, otherTabs: 0 });
 
     expect(button).toBeDisabled();
-    expect(button).toHaveAccessibleName("Turn on tab sync");
+    expect(button).toHaveAccessibleName("Turn off tab sync");
+    expect(button).toHaveAttribute("aria-pressed", "true");
   });
 
   it("stays enabled when the tab count is unknown", () => {
     expect(setup({ syncInstances: false, otherTabs: undefined })).toBeEnabled();
+  });
+
+  it("shows the tab count", async () => {
+    const button = setup({ syncInstances: true, otherTabs: 2 });
+
+    fireEvent.mouseOver(button.parentElement!);
+    expect(await screen.findByText(/2 other tabs open/)).toBeInTheDocument();
   });
 
   it("explains itself on hover", async () => {

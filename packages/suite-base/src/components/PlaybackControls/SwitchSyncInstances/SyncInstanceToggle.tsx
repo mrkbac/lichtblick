@@ -3,6 +3,7 @@
 
 import { WindowMultiple20Regular, WindowMultipleOff20Regular } from "@fluentui/react-icons";
 import { Tooltip, Typography } from "@mui/material";
+import { useTranslation } from "react-i18next";
 
 import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -10,25 +11,8 @@ import { useWorkspaceStore } from "@lichtblick/suite-base/context/Workspace/Work
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { useOtherTabCount } from "@lichtblick/suite-base/util/broadcast/useOtherTabCount";
 
-function tooltipText({
-  syncInstances,
-  otherTabs,
-}: {
-  syncInstances: boolean;
-  otherTabs: number | undefined;
-}): string {
-  if (otherTabs === 0) {
-    return "Open Lichtblick in another tab to play, pause and seek both together.";
-  }
-  const tabs =
-    otherTabs == undefined ? "" : ` ${otherTabs} other tab${otherTabs === 1 ? "" : "s"} open.`;
-  if (syncInstances) {
-    return `Play, pause and seek here are mirrored in other tabs that have sync on.${tabs}`;
-  }
-  return `Turn on to mirror play, pause and seek in other tabs that have sync on.${tabs}`;
-}
-
 const SyncInstanceToggle = (): React.JSX.Element => {
+  const { t } = useTranslation("syncTabs");
   const syncInstances = useWorkspaceStore((store) => store.playbackControls.syncInstances);
   const otherTabs = useOtherTabCount();
 
@@ -36,20 +20,30 @@ const SyncInstanceToggle = (): React.JSX.Element => {
     playbackControlActions: { setSyncInstances },
   } = useWorkspaceActions();
 
+  // Alone: keep showing the real setting, but there is nothing to sync with yet.
   const alone = otherTabs === 0;
-  const active = syncInstances && !alone;
+
+  let description: string;
+  if (alone) {
+    description = syncInstances ? t("aloneWhileOn") : t("alone");
+  } else {
+    description = syncInstances ? t("on") : t("off");
+    if (otherTabs != undefined) {
+      description += ` ${t("otherTabs", { count: otherTabs })}`;
+    }
+  }
 
   return (
     <Tooltip
       title={
         <Stack gap={0.5} paddingY={0.5}>
           <Typography variant="subtitle2">
-            {active ? "Playback synced across tabs" : "Sync playback across tabs"}
+            {syncInstances ? t("titleOn") : t("titleOff")}
           </Typography>
-          <Typography variant="body2">{tooltipText({ syncInstances, otherTabs })}</Typography>
+          <Typography variant="body2">{description}</Typography>
           {!alone && (
             <Typography variant="caption" color="text.secondary">
-              Tabs line up by timestamp, so use recordings from the same time span.
+              {t("timestampHint")}
             </Typography>
           )}
         </Stack>
@@ -59,11 +53,11 @@ const SyncInstanceToggle = (): React.JSX.Element => {
       <span>
         <HoverableIconButton
           size="small"
-          aria-label={active ? "Turn off tab sync" : "Turn on tab sync"}
+          aria-label={syncInstances ? t("turnOff") : t("turnOn")}
           aria-pressed={syncInstances}
           disabled={alone}
-          color={active ? "primary" : "inherit"}
-          icon={active ? <WindowMultiple20Regular /> : <WindowMultipleOff20Regular />}
+          color={syncInstances ? "primary" : "inherit"}
+          icon={syncInstances ? <WindowMultiple20Regular /> : <WindowMultipleOff20Regular />}
           onClick={() => {
             setSyncInstances(!syncInstances);
           }}
