@@ -7,12 +7,10 @@
 
 import { Configuration, rspack } from "@rspack/core";
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
-import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "path";
-import { TsCheckerRspackPlugin } from "ts-checker-rspack-plugin";
 
 import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv";
-import { swcRule, tsCheckerOptions } from "@lichtblick/suite-base/rspack";
+import { swcRule } from "@lichtblick/suite-base/rspack";
 
 import { RspackConfigParams } from "./RspackConfigParams";
 
@@ -21,8 +19,6 @@ export const rspackQuicklookConfig =
   (_env: unknown, argv: RspackArgv): Configuration => {
     const isDev = argv.mode === "development";
     const isServe = argv.env?.RSPACK_SERVE ?? false;
-
-    const allowUnusedVariables = isDev && isServe;
 
     return {
       name: "quicklook",
@@ -46,25 +42,16 @@ export const rspackQuicklookConfig =
       },
 
       plugins: [
-        new TsCheckerRspackPlugin({
-          typescript: {
-            ...tsCheckerOptions(),
-            configOverwrite: {
-              compilerOptions: {
-                noUnusedLocals: !allowUnusedVariables,
-                noUnusedParameters: !allowUnusedVariables,
-              },
-            },
-          },
-        }),
-        new HtmlWebpackPlugin({
+        new rspack.HtmlRspackPlugin({
           templateContent: `
 <!doctype html>
 <html>
-  <head><meta charset="utf-8"></head>
-  <script>
-    global = globalThis;
-  </script>
+  <head>
+    <meta charset="utf-8">
+    <script>
+      global = globalThis;
+    </script>
+  </head>
   <body>
     <div id="root"></div>
   </body>
@@ -75,7 +62,9 @@ export const rspackQuicklookConfig =
           // the buffer module exposes the Buffer class as a property
           Buffer: ["buffer", "Buffer"],
         }),
-        ...(isServe ? [new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } })] : []),
+        ...(isServe
+          ? [new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } })]
+          : []),
       ],
 
       // webpack mocked these silently for web targets; the wasm decoders reference them

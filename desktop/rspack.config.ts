@@ -8,13 +8,16 @@
 import type { Configuration } from "@rspack/core";
 import path from "node:path";
 
-import { resolveConfigs, type RspackArgv } from "@lichtblick/suite-base/RspackArgv";
+import {
+  resolveConfigs,
+  type RspackArgv,
+} from "@lichtblick/suite-base/RspackArgv";
 import { RspackConfigParams } from "@lichtblick/suite-desktop/src/RspackConfigParams";
-import { rspackDevServerConfig } from "@lichtblick/suite-desktop/src/rspackDevServerConfig";
 import { rspackMainConfig } from "@lichtblick/suite-desktop/src/rspackMainConfig";
 import { rspackPreloadConfig } from "@lichtblick/suite-desktop/src/rspackPreloadConfig";
 import { rspackQuicklookConfig } from "@lichtblick/suite-desktop/src/rspackQuicklookConfig";
 import { rspackRendererConfig } from "@lichtblick/suite-desktop/src/rspackRendererConfig";
+import { rspackRootConfig } from "@lichtblick/suite-desktop/src/rspackRootConfig";
 
 import packageJson from "../package.json";
 
@@ -34,7 +37,7 @@ const params: RspackConfigParams = {
 
 export default (env: unknown, argv: RspackArgv): Configuration[] =>
   resolveConfigs(env, argv, [
-    rspackDevServerConfig(params),
+    rspackRootConfig(params),
     rspackMainConfig(params),
     rspackPreloadConfig(params),
     rspackRendererConfig(params),

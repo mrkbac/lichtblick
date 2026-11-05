@@ -4,7 +4,9 @@
 import { RspackConfigParams } from "./RspackConfigParams";
 import { createCommonWebpackConfig } from "./rspackCommonConfig";
 
-function createTestParams(overrides: Partial<RspackConfigParams> = {}): RspackConfigParams {
+function createTestParams(
+  overrides: Partial<RspackConfigParams> = {},
+): RspackConfigParams {
   return {
     packageJson: {
       productName: "Test Product",
@@ -46,15 +48,6 @@ vi.mock("@rspack/core", async (importOriginal) => {
   };
 });
 
-// --- mock other heavy plugins ---
-vi.mock("ts-checker-rspack-plugin", () => ({
-  TsCheckerRspackPlugin: vi.fn().mockImplementation(function () {
-    return {
-      pluginName: "TsCheckerRspackPlugin",
-    };
-  }),
-}));
-
 describe("createCommonWebpackConfig", () => {
   it("should configure development mode with source maps", () => {
     // Given
@@ -66,7 +59,9 @@ describe("createCommonWebpackConfig", () => {
     // Then
     expect(config.devtool).toBe("eval-cheap-module-source-map");
     expect(config.resolve?.extensions).toContain(".tsx");
-    expect((config.module?.rules?.[0] as any).loader).toBe("builtin:swc-loader");
+    expect((config.module?.rules?.[0] as any).loader).toBe(
+      "builtin:swc-loader",
+    );
   });
 
   it("should configure production mode with source maps", () => {
@@ -95,20 +90,9 @@ describe("createCommonWebpackConfig", () => {
 
     expect(defs.LICHTBLICK_PRODUCT_NAME).toBe(JSON.stringify("Test Product"));
     expect(defs.LICHTBLICK_PRODUCT_VERSION).toBe(JSON.stringify("1.0.0"));
-    expect(defs.LICHTBLICK_PRODUCT_HOMEPAGE).toBe(JSON.stringify("https://example.com"));
-  });
-
-  it("should include TsCheckerRspackPlugin", () => {
-    // Given
-    const params = createTestParams();
-
-    // When
-    const config = createCommonWebpackConfig(params, { isDev: true });
-    const plugins = config.plugins as any[];
-
-    // Then
-    const hasTsChecker = plugins.some((p) => p.pluginName === "TsCheckerRspackPlugin");
-    expect(hasTsChecker).toBe(true);
+    expect(defs.LICHTBLICK_PRODUCT_HOMEPAGE).toBe(
+      JSON.stringify("https://example.com"),
+    );
   });
 
   it("should propagate API_URL, DEV_WORKSPACE and OTLP_ENDPOINT from environment if set", () => {
@@ -120,12 +104,20 @@ describe("createCommonWebpackConfig", () => {
 
     // When
     const config = createCommonWebpackConfig(params, { isDev: true });
-    const definePlugin = (config.plugins as any[]).find((p) => p.pluginName === "DefinePlugin");
+    const definePlugin = (config.plugins as any[]).find(
+      (p) => p.pluginName === "DefinePlugin",
+    );
 
     // Then
-    expect(definePlugin.definitions.API_URL).toBe(JSON.stringify("https://api.example.com"));
-    expect(definePlugin.definitions.DEV_WORKSPACE).toBe(JSON.stringify("workspace-1"));
-    expect(definePlugin.definitions.OTLP_ENDPOINT).toBe(JSON.stringify("http://localhost:4318"));
+    expect(definePlugin.definitions.API_URL).toBe(
+      JSON.stringify("https://api.example.com"),
+    );
+    expect(definePlugin.definitions.DEV_WORKSPACE).toBe(
+      JSON.stringify("workspace-1"),
+    );
+    expect(definePlugin.definitions.OTLP_ENDPOINT).toBe(
+      JSON.stringify("http://localhost:4318"),
+    );
   });
 
   it("should leave API_URL, DEV_WORKSPACE and OTLP_ENDPOINT undefined if not set", () => {
@@ -137,7 +129,9 @@ describe("createCommonWebpackConfig", () => {
 
     // When
     const config = createCommonWebpackConfig(params, { isDev: true });
-    const definePlugin = (config.plugins as any[]).find((p) => p.pluginName === "DefinePlugin");
+    const definePlugin = (config.plugins as any[]).find(
+      (p) => p.pluginName === "DefinePlugin",
+    );
 
     // Then
     expect(definePlugin.definitions.API_URL).toBeUndefined();

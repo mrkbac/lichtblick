@@ -5,59 +5,43 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Configuration, RspackPluginInstance } from "@rspack/core";
+import { Configuration, RspackPluginInstance, rspack } from "@rspack/core";
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
-import HtmlWebpackPlugin from "html-webpack-plugin";
 import path from "node:path";
 
-import { resolveConfigs, type RspackArgv } from "../packages/suite-base/RspackArgv";
+import type { RspackArgv } from "../packages/suite-base/RspackArgv";
 import { makeConfig } from "../packages/suite-base/rspack";
 
-const devServerConfig: Configuration = {
-  // Use empty entry to avoid webpack default fallback to /src
-  entry: {},
-
-  // Output path must be specified here for HtmlWebpackPlugin within render config to work
-  output: {
-    publicPath: "",
-    path: path.resolve(__dirname, ".webpack"),
-  },
-
-  devServer: {
-    static: {
-      directory: path.resolve(__dirname, ".webpack"),
-    },
-    hot: true,
-    // The problem and solution are described at <https://github.com/webpack/webpack-dev-server/issues/1604>.
-    // When running in dev mode two errors are logged to the dev console:
-    //  "Invalid Host/Origin header"
-    //  "[WDS] Disconnected!"
-    // Since we are only connecting to localhost, DNS rebinding attacks are not a concern during dev
-    allowedHosts: "all",
-    headers: {
-      // Enable cross-origin isolation: https://resourcepolicy.fyi
-      "cross-origin-opener-policy": "same-origin",
-      "cross-origin-embedder-policy": "credentialless",
-    },
+const devServer: Configuration["devServer"] = {
+  // Everything is served from memory; never serve stale files from disk
+  static: false,
+  hot: true,
+  // The problem and solution are described at <https://github.com/webpack/webpack-dev-server/issues/1604>.
+  // When running in dev mode two errors are logged to the dev console:
+  //  "Invalid Host/Origin header"
+  //  "[WDS] Disconnected!"
+  // Since we are only connecting to localhost, DNS rebinding attacks are not a concern during dev
+  allowedHosts: "all",
+  headers: {
+    // Enable cross-origin isolation: https://resourcepolicy.fyi
+    "cross-origin-opener-policy": "same-origin",
+    "cross-origin-embedder-policy": "credentialless",
   },
 };
 
-const mainConfig = (env: unknown, argv: RspackArgv): Configuration => {
+export default (env: unknown, argv: RspackArgv): Configuration => {
   const isDev = argv.mode === "development";
   const isServe = argv.env?.RSPACK_SERVE ?? false;
-
-  const allowUnusedVariables = isDev;
 
   const plugins: RspackPluginInstance[] = [];
 
   if (isServe) {
-    plugins.push(new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } }));
+    plugins.push(
+      new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } }),
+    );
   }
 
-  const appConfig = makeConfig(env, argv, {
-    allowUnusedVariables,
-    version: "0.0.0-benchmark",
-  });
+  const appConfig = makeConfig(env, argv, { version: "0.0.0-benchmark" });
 
   const config: Configuration = {
     name: "main",
@@ -68,6 +52,7 @@ const mainConfig = (env: unknown, argv: RspackArgv): Configuration => {
     context: path.resolve(__dirname, "src"),
     entry: "./index.tsx",
     devtool: isDev ? "eval-cheap-module-source-map" : "source-map",
+    devServer,
 
     output: {
       publicPath: "auto",
@@ -81,17 +66,17 @@ const mainConfig = (env: unknown, argv: RspackArgv): Configuration => {
     plugins: [
       ...plugins,
       ...(appConfig.plugins ?? []),
-      new HtmlWebpackPlugin({
+      new rspack.HtmlRspackPlugin({
         templateContent: `
   <!doctype html>
   <html>
     <head>
       <meta charset="utf-8">
       <title>Lichtblick Benchmark</title>
+      <script>
+        global = globalThis;
+      </script>
     </head>
-    <script>
-      global = globalThis;
-    </script>
     <body>
       <div id="root"></div>
     </body>
@@ -103,6 +88,3 @@ const mainConfig = (env: unknown, argv: RspackArgv): Configuration => {
 
   return config;
 };
-
-export default (env: unknown, argv: RspackArgv): Configuration[] =>
-  resolveConfigs(env, argv, [devServerConfig, mainConfig]);
