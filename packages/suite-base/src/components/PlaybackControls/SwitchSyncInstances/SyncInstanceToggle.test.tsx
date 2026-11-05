@@ -3,13 +3,13 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-// SyncInstanceToggle.test.tsx
 import { render, screen, fireEvent } from "@testing-library/react";
 import type { Mock } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
 import { useWorkspaceStore } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
+import { useOtherTabCount } from "@lichtblick/suite-base/util/broadcast/useOtherTabCount";
 
 import SyncInstanceToggle from "./SyncInstanceToggle";
 
@@ -21,88 +21,67 @@ vi.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => ({
   useWorkspaceActions: vi.fn(),
 }));
 
-vi.mock("./SyncInstanceToggle.style", () => ({
-  useStyles: () => ({
-    classes: {
-      button: "mock-button",
-      textWrapper: "mock-text-wrapper",
-      syncText: "mock-sync-text",
-      onOffText: "mock-onoff-text",
-    },
-  }),
+vi.mock("@lichtblick/suite-base/util/broadcast/useOtherTabCount", () => ({
+  useOtherTabCount: vi.fn(),
 }));
 
 describe("SyncInstanceToggle", () => {
-  const useWorkspaceActionsMock = useWorkspaceActions as Mock;
-  const useWorkspaceStoreMock = useWorkspaceStore as Mock;
-
   const setSyncInstancesMock = vi.fn();
 
-  beforeEach(() => {
-    useWorkspaceActionsMock.mockReturnValue({
+  function setup({
+    syncInstances,
+    otherTabs,
+  }: {
+    syncInstances: boolean;
+    otherTabs: number | undefined;
+  }) {
+    (useWorkspaceActions as Mock).mockReturnValue({
       playbackControlActions: { setSyncInstances: setSyncInstancesMock },
     });
-  });
+    (useWorkspaceStore as Mock).mockImplementation((selector: any) =>
+      selector({ playbackControls: { syncInstances } }),
+    );
+    (useOtherTabCount as Mock).mockReturnValue(otherTabs);
+    render(<SyncInstanceToggle />);
+    return screen.getByTestId("sync-tabs-button");
+  }
 
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  it("renders button with correct text when sync is on", () => {
-    // GIVEN
-    useWorkspaceStoreMock.mockImplementation((selector: any) =>
-      selector({ playbackControls: { syncInstances: true } }),
-    );
+  it("turns sync on when another tab is open", () => {
+    const button = setup({ syncInstances: false, otherTabs: 1 });
 
-    // WHEN
-    render(<SyncInstanceToggle />);
-
-    // THEN
-    expect(screen.getByText("Sync")).toBeInTheDocument();
-    expect(screen.getByText("on")).toBeInTheDocument();
-  });
-
-  it("renders button with correct text when sync is off", () => {
-    // GIVEN
-    useWorkspaceStoreMock.mockImplementation((selector: any) =>
-      selector({ playbackControls: { syncInstances: false } }),
-    );
-
-    // WHEN
-    render(<SyncInstanceToggle />);
-
-    // THEN
-    expect(screen.getByText("Sync")).toBeInTheDocument();
-    expect(screen.getByText("off")).toBeInTheDocument();
-  });
-
-  it("toggles sync state on button click (turn on)", () => {
-    // GIVEN sync is initially off
-    useWorkspaceStoreMock.mockImplementationOnce((selector: any) =>
-      selector({ playbackControls: { syncInstances: false } }),
-    );
-
-    // WHEN user clicks the button
-    render(<SyncInstanceToggle />);
-    fireEvent.click(screen.getByRole("button"));
-
-    // THEN sync is turned on
-    expect(setSyncInstancesMock).toHaveBeenCalledTimes(1);
+    expect(button).toBeEnabled();
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(button);
     expect(setSyncInstancesMock).toHaveBeenCalledWith(true);
   });
 
-  it("toggles sync state on button click (turn off)", () => {
-    // GIVEN sync is initially on
-    useWorkspaceStoreMock.mockImplementationOnce((selector: any) =>
-      selector({ playbackControls: { syncInstances: true } }),
-    );
+  it("turns sync off", () => {
+    const button = setup({ syncInstances: true, otherTabs: 2 });
 
-    // WHEN user clicks the button
-    render(<SyncInstanceToggle />);
-    fireEvent.click(screen.getByRole("button"));
-
-    // THEN sync is turned off
-    expect(setSyncInstancesMock).toHaveBeenCalledTimes(1);
+    expect(button).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(button);
     expect(setSyncInstancesMock).toHaveBeenCalledWith(false);
+  });
+
+  it("is disabled but still rendered when no other tab is open", () => {
+    const button = setup({ syncInstances: true, otherTabs: 0 });
+
+    expect(button).toBeDisabled();
+    expect(button).toHaveAccessibleName("Turn on tab sync");
+  });
+
+  it("stays enabled when the tab count is unknown", () => {
+    expect(setup({ syncInstances: false, otherTabs: undefined })).toBeEnabled();
+  });
+
+  it("explains itself on hover", async () => {
+    const button = setup({ syncInstances: false, otherTabs: 0 });
+
+    fireEvent.mouseOver(button.parentElement!);
+    expect(await screen.findByText(/Open Lichtblick in another tab/)).toBeInTheDocument();
   });
 });
