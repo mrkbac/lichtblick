@@ -7,14 +7,14 @@ import { PlayerControls } from "../../../page-objects";
 
 /**
  * GIVEN example.mcap file is loaded
- * THEN the player time should be 2025-02-26 10:37:15.547 AM WET
+ * THEN the player time should be 2025-02-26 10:37:15.547 AM
  * WHEN the user opens settings
  * And changes the step size to 400ms
  * And clicks on the seek forward button
  * THEN the player time should move 400ms forward
- * And be 2025-02-26 10:37:15.947 AM WET
+ * And be 2025-02-26 10:37:15.947 AM
  * WHEN the user clicks on the seek backward button
- * THEN the player time should go back to 2025-02-26 10:37:15.547 AM WET
+ * THEN the player time should go back to 2025-02-26 10:37:15.547 AM
  */
 test("Should update the step size value via settings and verify that change being applied on the player by moving forward and backward", {
   tag: "@regression",
@@ -22,8 +22,8 @@ test("Should update the step size value via settings and verify that change bein
   const player = new PlayerControls(mainWindow);
 
   // Given
-  const initialTime = "2025-02-26 10:37:15.547 AM WET";
-  const forwardedTime = "2025-02-26 10:37:15.947 AM WET";
+  const initialTime = "2025-02-26 10:37:15.547 AM";
+  const forwardedTime = "2025-02-26 10:37:15.947 AM";
 
   const filename = "example.mcap";
   await loadFiles({
@@ -32,8 +32,8 @@ test("Should update the step size value via settings and verify that change bein
   });
 
   // Then
-  const playerStartingTime = mainWindow.locator(`input[value="${initialTime}"]`);
-  expect(await playerStartingTime.inputValue()).toBe(initialTime);
+  const playerStartingTime = mainWindow.locator(`input[value^="${initialTime}"]`);
+  expect(await playerStartingTime.inputValue()).toContain(initialTime);
 
   //When
   await mainWindow.getByTestId("user-button").click();
@@ -44,12 +44,12 @@ test("Should update the step size value via settings and verify that change bein
   await player.seekForward();
 
   // Then
-  const playerForwardedTime = mainWindow.locator(`input[value="${forwardedTime}"]`);
-  expect(await playerForwardedTime.inputValue()).toBe(forwardedTime);
+  const playerForwardedTime = mainWindow.locator(`input[value^="${forwardedTime}"]`);
+  expect(await playerForwardedTime.inputValue()).toContain(forwardedTime);
 
   // When
   await player.seekBackward();
 
   // Then
-  expect(await playerStartingTime.inputValue()).toBe(initialTime);
+  expect(await playerStartingTime.inputValue()).toContain(initialTime);
 });

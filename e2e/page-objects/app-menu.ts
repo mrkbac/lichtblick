@@ -33,7 +33,7 @@ export class AppMenu {
 
   public async openConnection(): Promise<void> {
     await this.openFileMenu();
-    await this.page.getByText("Open connection").click();
+    await this.page.getByTestId("menu-item-open-connection").click();
   }
 
   public getMenuButton(): Locator {

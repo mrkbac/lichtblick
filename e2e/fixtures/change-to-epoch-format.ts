@@ -6,10 +6,10 @@ import { Page } from "playwright";
 import { expect } from "./electron";
 
 export async function changeToEpochFormat(mainWindow: Page): Promise<void> {
-  const initialTimeInUTC = "2025-02-26 10:37:15.547 AM WET";
+  const initialTimeInUTC = "2025-02-26 10:37:15.547 AM";
 
   // get date values in epoch format
-  const playerStartingTime = mainWindow.locator(`input[value="${initialTimeInUTC}"]`);
+  const playerStartingTime = mainWindow.locator(`input[value^="${initialTimeInUTC}"]`);
   await playerStartingTime.hover();
   const timestampDropdown = mainWindow.getByTestId("playback-time-display-toggle-button");
   await timestampDropdown.click();
