@@ -265,6 +265,8 @@ export function UnconnectedPlaybackTimeDisplay({
     };
   }, [hasError, inputText, isPlaying]);
 
+  const displayedText = isEditing ? inputText : currentTimeString;
+
   return (
     <Stack direction="row" alignItems="center" flexGrow={0} gap={0.5}>
       {currentTime ? (
@@ -273,13 +275,13 @@ export function UnconnectedPlaybackTimeDisplay({
             className={cx(classes.textField, { [classes.textFieldError]: hasError })}
             aria-label="Playback Time Method"
             data-testid="PlaybackTime-text"
-            value={isEditing ? inputText : currentTimeString}
+            value={displayedText}
             error={hasError}
             variant="filled"
             size="small"
             slotProps={{
               // Approximate width for browsers without `field-sizing` support.
-              htmlInput: { size: currentTimeString?.length },
+              htmlInput: { size: displayedText ? displayedText.length : undefined },
               input: {
                 startAdornment: hasError ? <WarningIcon color="error" /> : undefined,
                 endAdornment: (
