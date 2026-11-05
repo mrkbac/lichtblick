@@ -37,6 +37,7 @@ import { PlaybackControlsTooltipContent } from "./PlaybackControlsTooltipContent
 import { ProgressPlot } from "./ProgressPlot";
 import Slider, { HoverOverEvent } from "./Slider";
 import { TrimRangeOverlay } from "./TrimRange";
+import { useScrubPreview } from "./useScrubPreview";
 
 type PopperInstance = PopperProps["popperRef"] extends React.Ref<infer T> | undefined ? T : never;
 
@@ -95,6 +96,7 @@ export default function Scrubber(props: Props): React.JSX.Element {
   };
   const [hoverInfo, setHoverInfo] = useState<HoverInfo | undefined>();
   const latestHoverInfo = useLatest(hoverInfo);
+  const thumbnail = useScrubPreview(hoverInfo?.stamp);
 
   const latestStartTime = useLatest(startTime);
   const latestEndTime = useLatest(endTime);
@@ -205,12 +207,16 @@ export default function Scrubber(props: Props): React.JSX.Element {
     if (popperRef.current != undefined) {
       void popperRef.current.update();
     }
-  }, [hoverInfo]);
+  }, [hoverInfo, thumbnail]);
 
   return (
     <Tooltip
       title={
-        hoverInfo != undefined ? <PlaybackControlsTooltipContent stamp={hoverInfo.stamp} /> : ""
+        hoverInfo != undefined ? (
+          <PlaybackControlsTooltipContent stamp={hoverInfo.stamp} thumbnail={thumbnail} />
+        ) : (
+          ""
+        )
       }
       placement="top"
       disableInteractive
