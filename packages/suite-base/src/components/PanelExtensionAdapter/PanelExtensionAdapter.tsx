@@ -809,10 +809,28 @@ function PanelExtensionAdapter(
     panelElement.style.overflow = "hidden";
     panelContainerRef.current.appendChild(panelElement);
 
+    // All instances share panelId, and a panel's own cleanup can run after the next instance has
+    // subscribed (createSyncRoot unmounts in a microtask). Ignore subscription calls from an
+    // instance that is no longer the current one, so they can't clear the new instance's.
+    let isCurrentInstance = true;
+    const ifCurrent = <F extends (...args: never[]) => void>(fn: F): F =>
+      ((...args: Parameters<F>) => {
+        if (isCurrentInstance) {
+          fn(...args);
+        }
+      }) as F;
+    const { advertise, unadvertise } = partialExtensionContext;
+
     log.info(`Init panel ${panelId}`);
     const onUnmount = initPanel({
       panelElement,
       ...partialExtensionContext,
+      // Wraps both overloads, not only the deprecated one.
+      // eslint-disable-next-line @typescript-eslint/no-deprecated
+      subscribe: ifCurrent(partialExtensionContext.subscribe),
+      unsubscribeAll: ifCurrent(partialExtensionContext.unsubscribeAll),
+      advertise: advertise && ifCurrent(advertise),
+      unadvertise: unadvertise && ifCurrent(unadvertise),
 
       // eslint-disable-next-line @lichtblick/no-getters-setters
       set onRender(renderFunction: RenderFn | undefined) {
@@ -825,6 +843,7 @@ function PanelExtensionAdapter(
       if (onUnmount) {
         onUnmount();
       }
+      isCurrentInstance = false;
       isPanelInitializedRef.current = false;
       panelElement.remove();
       getMessagePipelineContext().setSubscriptions(panelId, []);
