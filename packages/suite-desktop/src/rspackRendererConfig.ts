@@ -35,6 +35,8 @@ export const rspackRendererConfig =
 
     const config: Configuration = {
       ...appConfig,
+      name: "renderer",
+      dependencies: ["root"],
 
       // force web target instead of electron-render
       // Fixes "require is not defined" errors if nodeIntegration is off

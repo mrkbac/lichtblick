@@ -46,6 +46,9 @@ export const rspackMainConfig =
 
     return {
       ...common,
+      name: "main",
+      // root cleans the output directory first
+      dependencies: ["root"],
       context: params.mainContext,
       entry: params.mainEntrypoint,
       target: "electron-main",

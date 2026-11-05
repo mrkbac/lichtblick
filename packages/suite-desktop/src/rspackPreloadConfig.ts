@@ -25,6 +25,8 @@ export const rspackPreloadConfig =
 
     return {
       ...commonConfig,
+      name: "preload",
+      dependencies: ["root"],
       context: params.preloadContext,
       entry: params.preloadEntrypoint,
       target: "electron-preload",

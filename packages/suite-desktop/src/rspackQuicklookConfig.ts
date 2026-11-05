@@ -22,6 +22,7 @@ export const rspackQuicklookConfig =
 
     return {
       name: "quicklook",
+      dependencies: ["root"],
 
       context: params.quicklookContext,
       entry: params.quicklookEntrypoint,
