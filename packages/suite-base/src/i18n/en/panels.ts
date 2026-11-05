@@ -46,8 +46,6 @@ export const panels = {
   studioPlaybackPerformance: "Studio - Playback Performance",
   studioPlaybackPerformanceDescription:
     "Display playback and data-streaming performance statistics.",
-  tab: "Tab",
-  tabDescription: "Group panels together in a tabbed interface.",
   table: "Table",
   tableDescription: "Display topic messages in a tabular format.",
   teleop: "Teleop",

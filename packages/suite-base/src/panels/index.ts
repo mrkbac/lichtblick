@@ -9,7 +9,6 @@ import { TFunction } from "i18next";
 
 import { PanelInfo } from "@lichtblick/suite-base/context/PanelCatalogContext";
 
-import { TAB_PANEL_TYPE } from "../util/constants";
 import cameraGridThumbnail from "./CameraGrid/thumbnail.png";
 import dataSourceInfoThumbnail from "./DataSourceInfo/thumbnail.png";
 import diagnosticStatusThumbnail from "./DiagnosticStatus/assets/diagnostic-status.png";
@@ -26,7 +25,6 @@ import plotThumbnail from "./Plot/thumbnail.png";
 import publishThumbnail from "./Publish/thumbnail.png";
 import rawMessagesThumbnail from "./RawMessages/thumbnail.png";
 import stateTransitionsThumbnail from "./StateTransitions/thumbnail.png";
-import tabThumbnail from "./Tab/thumbnail.png";
 import tableThumbnail from "./Table/thumbnail.png";
 import teleopThumbnail from "./Teleop/thumbnail.png";
 import threeDeeRenderThumbnail from "./ThreeDeeRender/thumbnail.png";
@@ -223,14 +221,6 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("userScriptsDescription"),
     thumbnail: userScriptEditorThumbnail,
     module: async () => await import("./UserScriptEditor"),
-  },
-  {
-    title: t("tab"),
-    type: TAB_PANEL_TYPE,
-    description: t("tabDescription"),
-    thumbnail: tabThumbnail,
-    module: async () => await import("./Tab"),
-    hasCustomToolbar: true,
   },
   {
     title: t("studioPlaybackPerformance"),

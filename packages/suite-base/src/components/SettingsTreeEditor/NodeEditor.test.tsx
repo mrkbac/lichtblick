@@ -5,8 +5,6 @@
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { DndProvider } from "react-dnd";
-import { HTML5Backend } from "react-dnd-html5-backend";
 
 import "@testing-library/jest-dom/vitest";
 
@@ -60,11 +58,7 @@ function setupFn(propsOverride: Partial<NodeEditorProps> = {}) {
     ...propsOverride,
   };
 
-  const ui: React.ReactElement = (
-    <DndProvider backend={HTML5Backend}>
-      <NodeEditor {...props} />
-    </DndProvider>
-  );
+  const ui: React.ReactElement = <NodeEditor {...props} />;
 
   return {
     ...render(ui),
@@ -122,11 +116,7 @@ describe("NodeEditor childNodes filtering", () => {
       ...overrides,
     };
 
-    const ui: React.ReactElement = (
-      <DndProvider backend={HTML5Backend}>
-        <NodeEditor {...props} />
-      </DndProvider>
-    );
+    const ui: React.ReactElement = <NodeEditor {...props} />;
 
     return {
       ...render(ui),
@@ -448,7 +438,7 @@ describe("NodeEditor drag and drop functionality", () => {
     actionHandler = vi.fn(),
   ) {
     const ui: React.ReactElement = (
-      <DndProvider backend={HTML5Backend}>
+      <>
         {nodes.map(({ path, label, reorderable = true }) => (
           <NodeEditor
             key={path.join("-")}
@@ -458,7 +448,7 @@ describe("NodeEditor drag and drop functionality", () => {
             focusedPath={[]}
           />
         ))}
-      </DndProvider>
+      </>
     );
 
     return {
@@ -498,7 +488,7 @@ describe("NodeEditor drag and drop functionality", () => {
       const sourceLabel = "Source Node";
       const targetLabel = "Target Node";
 
-      // When: Both nodes are rendered in the same DndProvider
+      // When: Both nodes are rendered
       const { container } = setupMultipleNodes([
         { path: ["topics", "node1"], label: sourceLabel },
         { path: ["topics", "node2"], label: targetLabel },
@@ -576,7 +566,7 @@ describe("NodeEditor drag and drop functionality", () => {
 
       // When: dragStart event is fired
       fireEvent.dragStart(nodeHeader, {
-        dataTransfer: { setData: vi.fn(), effectAllowed: "move" },
+        dataTransfer: { setData: vi.fn(), setDragImage: vi.fn(), effectAllowed: "move" },
       });
 
       // Then: The node should still be in the document
@@ -617,8 +607,8 @@ describe("NodeEditor drag and drop functionality", () => {
       expect(screen.getByText("Source")).toBeInTheDocument();
       expect(screen.getByText("Target")).toBeInTheDocument();
 
-      // Note: Testing the actual drop behavior via react-dnd requires more complex setup
-      // The drop functionality is tested through the render and canDrop logic
+      // Note: the drop itself goes through native drag events, which jsdom does not fully support;
+      // handleDropNode is tested on its own
     });
   });
 });

@@ -47,14 +47,16 @@ export const defaultLayout: LayoutData =
     userNodes: {},
     playbackConfig: { ...defaultPlaybackConfig },
     layout: {
-      first: "3D!18i6zy7",
-      second: {
-        first: "Image!3mnp456",
-        second: "RawMessages!os6rgs",
-        direction: "column",
-        splitPercentage: 30,
-      },
       direction: "row",
-      splitPercentage: 70,
+      children: [
+        { panels: ["3D!18i6zy7"] },
+        {
+          direction: "column",
+          children: [{ panels: ["Image!3mnp456"] }, { panels: ["RawMessages!os6rgs"] }],
+          sizes: [30, 70],
+        },
+      ],
+      sizes: [70, 30],
     },
+    version: 2,
   } as const);

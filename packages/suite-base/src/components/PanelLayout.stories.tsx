@@ -95,8 +95,12 @@ export const PanelNotFound: StoryObj = {
     return (
       <DndProvider backend={HTML5Backend}>
         <PanelSetup
-          fixture={{ topics: [], datatypes: new Map(), frame: {}, layout: "UnknownPanel!4co6n9d" }}
-          omitDragAndDrop
+          fixture={{
+            topics: [],
+            datatypes: new Map(),
+            frame: {},
+            layout: { panels: ["UnknownPanel!4co6n9d"] },
+          }}
         >
           <PanelLayout />
         </PanelSetup>
@@ -120,8 +124,12 @@ export const PanelWithError: StoryObj = {
       <DndProvider backend={HTML5Backend}>
         <PanelSetup
           panelCatalog={new MockPanelCatalog()}
-          fixture={{ topics: [], datatypes: new Map(), frame: {}, layout: "Sample2!4co6n9d" }}
-          omitDragAndDrop
+          fixture={{
+            topics: [],
+            datatypes: new Map(),
+            frame: {},
+            layout: { panels: ["Sample2!4co6n9d"] },
+          }}
         >
           <PanelLayout />
         </PanelSetup>
@@ -135,8 +143,12 @@ export const RemoveUnknownPanel: StoryObj = {
     return (
       <DndProvider backend={HTML5Backend}>
         <PanelSetup
-          fixture={{ topics: [], datatypes: new Map(), frame: {}, layout: "UnknownPanel!4co6n9d" }}
-          omitDragAndDrop
+          fixture={{
+            topics: [],
+            datatypes: new Map(),
+            frame: {},
+            layout: { panels: ["UnknownPanel!4co6n9d"] },
+          }}
         >
           <PanelLayout />
         </PanelSetup>
@@ -179,8 +191,12 @@ export const PanelLoading: StoryObj = {
       <DndProvider backend={HTML5Backend}>
         <PanelSetup
           panelCatalog={new MockPanelCatalog()}
-          fixture={{ topics: [], datatypes: new Map(), frame: {}, layout: "Sample1!4co6n9d" }}
-          omitDragAndDrop
+          fixture={{
+            topics: [],
+            datatypes: new Map(),
+            frame: {},
+            layout: { panels: ["Sample1!4co6n9d"] },
+          }}
         >
           <PanelLayout />
         </PanelSetup>
@@ -199,13 +215,15 @@ export const FullScreen: StoryObj = {
             topics: [],
             datatypes: new Map(),
             frame: {},
-            layout: { first: "Sample3!a", second: "Sample3!b", direction: "row" },
+            layout: {
+              direction: "row",
+              children: [{ panels: ["Sample3!a"] }, { panels: ["Sample3!b"] }],
+            },
             savedProps: {
               "Sample3!a": { x: 1 },
               "Sample3!b": { x: 2 },
             },
           }}
-          omitDragAndDrop
         >
           <PanelLayout />
         </PanelSetup>

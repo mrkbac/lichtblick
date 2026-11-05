@@ -15,103 +15,137 @@
 //   You may not use this file except in compliance with the License.
 
 import { CircularProgress } from "@mui/material";
-import React, { PropsWithChildren, Suspense, useCallback, useMemo } from "react";
-import { useDrop } from "react-dnd";
 import {
-  MosaicDragType,
-  MosaicNode,
-  MosaicPath,
-  MosaicWindow,
-  MosaicWithoutDragDropContext,
-} from "react-mosaic-component";
+  DockviewApi,
+  DockviewDidDropEvent,
+  DockviewReact,
+  DockviewTheme,
+  IDockviewPanelProps,
+} from "dockview-react";
+import React, {
+  Suspense,
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 
+import { DockPanelContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import { EmptyPanelLayout } from "@lichtblick/suite-base/components/EmptyPanelLayout";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
+import {
+  getPanelDragData,
+  isPanelDrag,
+} from "@lichtblick/suite-base/components/PanelCatalog/panelDrag";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
 import {
   LayoutState,
   useCurrentLayoutActions,
   useCurrentLayoutSelector,
-  usePanelMosaicId,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useExtensionCatalog } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
-import { usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogContext";
-import { MosaicDropResult, PanelConfig } from "@lichtblick/suite-base/types/panels";
-import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
+import { PanelCatalog, usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogContext";
+import { LayoutNode } from "@lichtblick/suite-base/types/layouts";
+import {
+  PANEL_COMPONENT,
+  dockviewToLayout,
+  layoutToDockview,
+} from "@lichtblick/suite-base/util/dockviewLayout";
+import {
+  PANEL_TITLE_CONFIG_KEY,
+  getPanelIdForType,
+  getPanelTypeFromId,
+} from "@lichtblick/suite-base/util/layout";
+import { layoutsEqual } from "@lichtblick/suite-base/util/layoutTree";
 
 import ErrorBoundary from "./ErrorBoundary";
-import { MosaicPathContext } from "./MosaicPathContext";
 import { useStyles } from "./PanelLayout.style";
 import { PanelRemounter } from "./PanelRemounter";
 import { UnknownPanel } from "./UnknownPanel";
-import "react-mosaic-component/react-mosaic-component.css";
+import "dockview-react/dist/styles/dockview.css";
 import { useInstallingExtensionsStore } from "../hooks/useInstallingExtensionsStore";
 
-// The mosaic toolbar is hidden (panels render their own), so skip its default buttons. A constant
-// keeps MosaicWindow's PureComponent check from re-rendering panels.
-const NO_TOOLBAR_CONTROLS = <></>;
+type PanelComponents = ReadonlyMap<string, React.ComponentType<{ childId: string }>>;
+const PanelComponentsContext = createContext<PanelComponents>(new Map());
 
-type Props = {
-  layout?: MosaicNode<string>;
-  onChange: (panels: MosaicNode<string> | undefined) => void;
-  loadingComponent?: React.JSX.Element;
-  tabId?: string;
+const DOCKVIEW_THEME: DockviewTheme = {
+  name: "lichtblick",
+  className: "dockview-theme-lichtblick",
+  gap: 0,
 };
 
-// This wrapper makes the tabId available in the drop result when something is dropped into a nested
-// drop target. This allows a panel to know which mosaic it was dropped in regardless of nesting
-// level.
-function TabMosaicWrapper({ tabId, children }: PropsWithChildren<{ tabId?: string }>) {
-  const { classes, cx } = useStyles();
-  const [, drop] = useDrop<unknown, MosaicDropResult, never>({
-    accept: MosaicDragType.WINDOW,
-    drop: (_item, monitor) => {
-      const nestedDropResult = monitor.getDropResult<MosaicDropResult>();
-      // MosaicWindow has a top-level drop target which can fire if something is dropped onto the
-      // tab bar or elsewhere inside the tab that doesn't correspond to one of the other mosaic drop
-      // targets. In this case we don't want to replace the tab's existing layout so we do nothing.
-      if (nestedDropResult?.path == undefined) {
-        return undefined;
-      }
-      // The drop result may already have a tabId if it was dropped in a more deeply-nested Tab
-      // mosaic. Provide our tabId only if there wasn't one already.
-      return { tabId, ...nestedDropResult };
-    },
-  });
+/** The tab title of a panel: its custom title, else the title of its panel type. */
+function panelTitle(panelId: string, customTitle: unknown, panelCatalog: PanelCatalog): string {
+  if (typeof customTitle === "string" && customTitle !== "") {
+    return customTitle;
+  }
+  const type = getPanelTypeFromId(panelId);
+  return panelCatalog.getPanelByType(type)?.title ?? type;
+}
+
+/** Renders one panel inside its dockview group. */
+function DockPanel({ api, containerApi }: IDockviewPanelProps): React.JSX.Element {
+  const id = api.id;
+  const type = getPanelTypeFromId(id);
+  const panelComponents = useContext(PanelComponentsContext);
+  const panelCatalog = usePanelCatalog();
+  const customTitle = useCurrentLayoutSelector(
+    (state) => state.selectedLayout?.data?.configById[id]?.[PANEL_TITLE_CONFIG_KEY],
+  );
+
+  // The tab shows the panel's title when the panel shares its group with others.
+  const title = panelTitle(id, customTitle, panelCatalog);
+  useEffect(() => {
+    api.setTitle(title);
+  }, [api, title]);
+
+  const dock = useMemo(() => ({ api, containerApi }), [api, containerApi]);
+  const PanelComponent = panelComponents.get(type);
   return (
-    <div
-      className={cx(classes.hideTopLevelDropTargets, "mosaic-tile")}
-      ref={(el) => {
-        // react-dnd connectors return a value, which React 19 ref callbacks treat as cleanup
-        drop(el);
-      }}
-    >
-      {children}
-    </div>
+    <DockPanelContext.Provider value={dock}>
+      <Suspense
+        fallback={
+          <EmptyState>
+            <CircularProgress size={28} />
+          </EmptyState>
+        }
+      >
+        <PanelRemounter id={id}>
+          {PanelComponent ? (
+            <PanelComponent childId={id} />
+          ) : (
+            <UnknownPanel childId={id} overrideConfig={{ type, id }} />
+          )}
+        </PanelRemounter>
+      </Suspense>
+    </DockPanelContext.Provider>
   );
 }
 
-export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactElement {
-  const { savePanelConfigs } = useCurrentLayoutActions();
-  const mosaicId = usePanelMosaicId();
-  const { layout, onChange, tabId, loadingComponent } = props;
-  const createTile = useCallback(
-    (config?: { type?: string; panelConfig?: PanelConfig }) => {
-      const defaultPanelType = "RosOut";
-      const type = config?.type ?? defaultPanelType;
-      const id = getPanelIdForType(type);
-      if (config?.panelConfig) {
-        savePanelConfigs({ configs: [{ id, config: config.panelConfig }] });
-      }
-      return id;
-    },
-    [savePanelConfigs],
-  );
+const DOCK_COMPONENTS = { [PANEL_COMPONENT]: DockPanel };
 
+/** A group shows its tab strip only when it stacks several panels. */
+function updateGroupHeaders(api: DockviewApi) {
+  for (const group of api.groups) {
+    group.header.hidden = group.panels.length <= 1;
+  }
+}
+
+type Props = {
+  layout?: LayoutNode;
+  onChange: (layout: LayoutNode | undefined) => void;
+  loadingComponent?: React.JSX.Element;
+};
+
+export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactElement {
+  const { layout, onChange, loadingComponent } = props;
+  const { addPanel, getCurrentLayoutState } = useCurrentLayoutActions();
   const panelCatalog = usePanelCatalog();
 
-  const panelComponents = useMemo(
+  const panelComponents = useMemo<PanelComponents>(
     () =>
       new Map(
         panelCatalog.getPanels().map((panelInfo) => [panelInfo.type, React.lazy(panelInfo.module)]),
@@ -119,78 +153,110 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
     [panelCatalog],
   );
 
-  const renderTile = useCallback(
-    (id: string | Record<string, never> | undefined, path: MosaicPath) => {
-      // `id` is usually a string. But when `layout` is empty, `id` will be an empty object, in which case we don't need to render Tile
-      if (id == undefined || typeof id !== "string") {
-        return <></>;
-      }
-      const type = getPanelTypeFromId(id);
+  const apiRef = useRef<DockviewApi | undefined>(undefined);
+  // The layout dockview currently shows, to tell our own changes from the user's.
+  const shownLayoutRef = useRef<LayoutNode | undefined>(undefined);
+  const latestRef = useRef({ layout, onChange });
+  latestRef.current = { layout, onChange };
 
-      let panel: React.JSX.Element;
-      const PanelComponent = panelComponents.get(type);
-      if (PanelComponent) {
-        panel = <PanelComponent childId={id} tabId={tabId} />;
+  // Split sizes applied while the container has no size are lost, so apply them again once it has.
+  const reapplyWhenSizedRef = useRef(false);
+
+  const showLayout = useCallback(
+    (api: DockviewApi, newLayout: LayoutNode | undefined) => {
+      shownLayoutRef.current = newLayout;
+      reapplyWhenSizedRef.current = api.width === 0 || api.height === 0;
+      if (newLayout == undefined) {
+        api.clear();
       } else {
-        // If we haven't found a panel of the given type, render the panel selector
-        panel = <UnknownPanel childId={id} tabId={tabId} overrideConfig={{ type, id }} />;
+        // Panels that stay in the layout keep running instead of remounting.
+        const configById = getCurrentLayoutState().selectedLayout?.data?.configById;
+        const titleOf = (id: string) =>
+          panelTitle(id, configById?.[id]?.[PANEL_TITLE_CONFIG_KEY], panelCatalog);
+        api.fromJSON(layoutToDockview(newLayout, titleOf), { reuseExistingPanels: true });
       }
-
-      const mosaicWindow = (
-        <MosaicWindow
-          title=""
-          key={id}
-          path={path}
-          createNode={createTile}
-          renderPreview={() => undefined}
-          toolbarControls={NO_TOOLBAR_CONTROLS}
-        >
-          <Suspense
-            fallback={
-              <EmptyState>
-                <CircularProgress size={28} />
-              </EmptyState>
-            }
-          >
-            <MosaicPathContext.Provider value={path}>
-              <PanelRemounter id={id} tabId={tabId}>
-                {panel}
-              </PanelRemounter>
-            </MosaicPathContext.Provider>
-          </Suspense>
-        </MosaicWindow>
-      );
-      if (type === "Tab") {
-        return <TabMosaicWrapper tabId={id}>{mosaicWindow}</TabMosaicWrapper>;
-      }
-      return mosaicWindow;
+      updateGroupHeaders(api);
     },
-    [panelComponents, createTile, tabId],
+    [getCurrentLayoutState, panelCatalog],
   );
 
-  const bodyToRender = useMemo(
-    () =>
-      layout != undefined ? (
-        <MosaicWithoutDragDropContext
-          renderTile={renderTile}
-          className="mosaic-foxglove-theme" // prevent the default mosaic theme from being applied
-          resize={{ minimumPaneSizePercentage: 2 }}
-          value={layout}
-          onChange={(newLayout) => {
-            onChange(newLayout ?? undefined);
-          }}
-          mosaicId={mosaicId}
-        />
-      ) : (
-        <EmptyPanelLayout tabId={tabId} />
-      ),
-    [layout, mosaicId, onChange, renderTile, tabId],
+  const onReady = useCallback(
+    ({ api }: { api: DockviewApi }) => {
+      apiRef.current = api;
+      showLayout(api, latestRef.current.layout);
+
+      api.onDidLayoutChange(() => {
+        updateGroupHeaders(api);
+        // Without a size (hidden, or not laid out yet) dockview reports meaningless split sizes.
+        if (api.width === 0 || api.height === 0) {
+          return;
+        }
+        if (reapplyWhenSizedRef.current) {
+          showLayout(api, shownLayoutRef.current);
+          return;
+        }
+        const newLayout = dockviewToLayout(api.toJSON());
+        if (!layoutsEqual(newLayout, shownLayoutRef.current)) {
+          shownLayoutRef.current = newLayout;
+          latestRef.current.onChange(newLayout);
+        }
+      });
+
+      // Accept panels dragged out of the panel catalog.
+      api.onUnhandledDragOver((event) => {
+        if (event.nativeEvent instanceof DragEvent && isPanelDrag(event.nativeEvent.dataTransfer)) {
+          event.accept();
+        }
+      });
+    },
+    [showLayout],
+  );
+
+  // Apply layout changes that did not come from dockview (adding a panel, undo, loading a layout).
+  useEffect(() => {
+    const api = apiRef.current;
+    if (api != undefined && !layoutsEqual(layout, shownLayoutRef.current)) {
+      showLayout(api, layout);
+    }
+  }, [layout, showLayout]);
+
+  const onDidDrop = useCallback(
+    (event: DockviewDidDropEvent) => {
+      if (!(event.nativeEvent instanceof DragEvent)) {
+        return;
+      }
+      const selection = getPanelDragData(event.nativeEvent.dataTransfer);
+      if (selection == undefined) {
+        return;
+      }
+      addPanel({
+        id: getPanelIdForType(selection.type),
+        config: selection.config,
+        position: event.position,
+        // Without a group the panel was dropped on an edge of the whole layout.
+        targetPanelId: event.group?.activePanel?.id,
+      });
+    },
+    [addPanel],
   );
 
   return (
     <ErrorBoundary>
       {loadingComponent}
-      {bodyToRender}
+      <PanelComponentsContext.Provider value={panelComponents}>
+        {layout == undefined && <EmptyPanelLayout />}
+        <div style={{ display: layout == undefined ? "none" : "contents" }}>
+          <DockviewReact
+            components={DOCK_COMPONENTS}
+            onReady={onReady}
+            onDidDrop={onDidDrop}
+            theme={DOCKVIEW_THEME}
+            disableFloatingGroups
+            singleTabMode="fullwidth"
+            scrollbars="native"
+          />
+        </div>
+      </PanelComponentsContext.Provider>
     </ErrorBoundary>
   );
 }
@@ -208,24 +274,22 @@ function ExtensionsLoadingState(): React.JSX.Element {
 
 const selectedLayoutExistsSelector = (state: LayoutState) =>
   state.selectedLayout?.data != undefined;
-const selectedLayoutMosaicSelector = (state: LayoutState) => state.selectedLayout?.data?.layout;
+const selectedLayoutTreeSelector = (state: LayoutState) => state.selectedLayout?.data?.layout;
 
 export default function PanelLayout(): React.JSX.Element {
   const { classes } = useStyles();
   const { layoutEmptyState } = useAppContext();
   const { changePanelLayout } = useCurrentLayoutActions();
   const layoutExists = useCurrentLayoutSelector(selectedLayoutExistsSelector);
-  const mosaicLayout = useCurrentLayoutSelector(selectedLayoutMosaicSelector);
+  const layout = useCurrentLayoutSelector(selectedLayoutTreeSelector);
   const registeredExtensions = useExtensionCatalog((state) => state.installedExtensions);
   const { installingProgress } = useInstallingExtensionsStore();
 
   const isInstallingExtensions = installingProgress.inProgress;
 
   const onChange = useCallback(
-    (newLayout: MosaicNode<string> | undefined) => {
-      if (newLayout != undefined) {
-        changePanelLayout({ layout: newLayout });
-      }
+    (newLayout: LayoutNode | undefined) => {
+      changePanelLayout({ layout: newLayout });
     },
     [changePanelLayout],
   );
@@ -244,7 +308,7 @@ export default function PanelLayout(): React.JSX.Element {
   if (layoutExists) {
     return (
       <UnconnectedPanelLayout
-        layout={mosaicLayout}
+        layout={layout}
         onChange={onChange}
         loadingComponent={loadingComponent}
       />
