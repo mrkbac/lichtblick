@@ -76,9 +76,7 @@ function changePanelLayout(
   state: LayoutData,
   { layout, trimConfigById = true }: ChangePanelLayoutPayload,
 ): LayoutData {
-  const panelIds: string[] = getLeaves(layout ?? null).filter(
-    (panelId) => !_.isEmpty(panelId),
-  );
+  const panelIds: string[] = getLeaves(layout ?? null).filter((panelId) => !_.isEmpty(panelId));
   const panelIdsInsideTabPanels = getPanelIdsInsideTabPanels(panelIds, state.configById);
   // Filter configById in case a panel was removed from the layout
   // We don't want its configById hanging around forever

@@ -10,5 +10,8 @@ import type { DependencyList } from "react";
 declare module "react" {
   // @types/react uses `any` here, which silences helpful TypeScript errors
   // https://github.com/microsoft/TypeScript/issues/37595
-  function useCallback<T extends (...args: never[]) => unknown>(callback: T, deps: DependencyList): T;
+  function useCallback<T extends (...args: never[]) => unknown>(
+    callback: T,
+    deps: DependencyList,
+  ): T;
 }

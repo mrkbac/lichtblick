@@ -593,9 +593,7 @@ function ExportProgress({
       clearInterval(interval);
     };
   }, [progressRef, running]);
-  return progress == undefined ? (
-    null
-  ) : (
+  return progress == undefined ? null : (
     <LinearProgress variant="determinate" value={Math.min(100, progress * 100)} />
   );
 }

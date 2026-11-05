@@ -23,7 +23,6 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { makeStyles } from "tss-react/mui";
 import { useDebounce } from "use-debounce";
 
-
 import { Immutable } from "@lichtblick/suite";
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import { MessageEditor } from "@lichtblick/suite-base/components/MessageEditor/MessageEditor";
