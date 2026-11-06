@@ -7,7 +7,6 @@
 
 import * as _ from "lodash-es";
 import { useCallback, useMemo } from "react";
-import { DeepPartial } from "ts-essentials";
 
 import { Topic } from "@lichtblick/suite";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
@@ -59,12 +58,12 @@ export default function useConfigById<Config extends Record<string, unknown>>(
   }, [sortedTopics, extensionSettings, panelId]);
 
   const configSelector = useCallback(
-    (state: DeepPartial<LayoutState>) => {
+    (state: LayoutState) => {
       if (panelId == undefined) {
         return undefined;
       }
 
-      const stateConfig = maybeCast<Config>(state.selectedLayout?.data?.configById?.[panelId]);
+      const stateConfig = maybeCast<Config>(state.selectedLayout?.data?.configById[panelId]);
       const customSettings = _.merge({}, customSettingsByTopic, stateConfig?.topics);
 
       // Avoid returning a new object if nothing has changed

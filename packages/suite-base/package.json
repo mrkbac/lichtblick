@@ -72,7 +72,8 @@
     "@svgr/webpack": "8.1.0",
     "@tanstack/react-table": "9.3.1",
     "@tanstack/react-virtual": "3.14.25",
-    "@testing-library/jest-dom": "6.6.2",
+    "@testing-library/dom": "10.4.1",
+    "@testing-library/jest-dom": "7.0.1",
     "@testing-library/react": "16.3.3",
     "@testing-library/user-event": "14.6.8",
     "@types/base16": "^1.0.5",
@@ -94,12 +95,12 @@
     "chartjs-plugin-annotation": "3.1.0",
     "chartjs-plugin-datalabels": "2.2.0",
     "chromatic": "11.5.6",
-    "css-loader": "6.8.1",
+    "css-loader": "7.1.5",
     "cytoscape": "3.34.4",
     "cytoscape-dagre": "4.0.1",
     "dockview-react": "8.8.3",
     "dompurify": "3.4.17",
-    "dotenv": "17.2.2",
+    "dotenv": "18.0.9",
     "eventemitter3": "5.0.4",
     "fake-indexeddb": "6.2.7",
     "fzf": "0.5.2",
@@ -142,7 +143,7 @@
     "style-loader": "4.0.0",
     "three": "0.187.0",
     "tinycolor2": "1.6.0",
-    "ts-essentials": "9.4.0",
+    "ts-essentials": "10.2.1",
     "ts-key-enum": "3.0.13",
     "tss-react": "4.9.21",
     "typescript": "6.0.3",
@@ -158,7 +159,7 @@
     "geotiff": "3.0.5",
     "maplibre-gl": "6.14.0",
     "pmtiles": "4.5.0",
-    "refractor": "4.9.0",
-    "rehype-prism-plus": "2.0.0"
+    "refractor": "5.0.0",
+    "rehype-prism-plus": "2.0.2"
   }
 }
