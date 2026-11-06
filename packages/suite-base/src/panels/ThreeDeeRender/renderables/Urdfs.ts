@@ -1095,7 +1095,7 @@ export function createRenderable(args: {
     }
     case "mesh": {
       // Collada and glTF carry their own materials; STL and OBJ get the URDF color
-      const hasMaterials = /\.(dae|gltf|glb)$/i.test(visual.geometry.filename);
+      const hasMaterials = /\.(dae|gltf|glb)([?#]|$)/i.test(visual.geometry.filename);
       const embedded = hasMaterials ? EmbeddedMaterialUsage.Use : EmbeddedMaterialUsage.Ignore;
       const marker = createMeshMarker(frameId, pose, embedded, visual.geometry, baseUrl, color);
       return new RenderableMeshResource(name, marker, undefined, renderer, {

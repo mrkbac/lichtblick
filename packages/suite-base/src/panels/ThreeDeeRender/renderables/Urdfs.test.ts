@@ -28,6 +28,8 @@ describe("Urdfs createRenderable", () => {
     ["mesh.glb", true],
     ["mesh.GLTF", true],
     ["mesh.dae", true],
+    ["mesh.glb?token=abc", true],
+    ["mesh.stl?v=glb", false],
     ["mesh.stl", false],
     ["mesh.obj", false],
   ])("uses embedded materials for %s: %s", (filename, expected) => {
