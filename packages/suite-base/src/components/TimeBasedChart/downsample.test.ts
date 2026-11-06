@@ -163,6 +163,20 @@ describe("downsampleScatter", () => {
     expect(result).toEqual([0, 1, 2]);
   });
 
+  it("keeps points apart on an axis with inverted bounds", () => {
+    // e.g. a fixed primary y min above a secondary series' automatic max
+    const result = downsampleScatter(
+      iterateObjects([
+        { x: 0, y: 0, value: 0 },
+        { x: 0, y: 40, value: 40 },
+        { x: 100, y: 0, value: 0 },
+      ]),
+      { width: 100, height: 100, bounds: { x: { min: 0, max: 100 }, y: { min: 100, max: 40 } } },
+    );
+
+    expect(result).toEqual([0, 1, 2]);
+  });
+
   it("ignores out of bounds points", () => {
     const result = downsampleScatter(
       iterateObjects([

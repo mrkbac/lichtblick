@@ -323,7 +323,8 @@ export function downsampleScatter(points: Iterable<Point>, view: PlotViewport): 
   const { bounds, width, height } = view;
 
   // A constant axis has zero-width bounds; its values then all share one pixel on that axis
-  const pixelsPerValue = (pixels: number, range: number) => (range > 0 ? pixels / range : 0);
+  // (Inverted bounds still scale and keep points apart.)
+  const pixelsPerValue = (pixels: number, range: number) => (range !== 0 ? pixels / range : 0);
   const pixelPerXValue = pixelsPerValue(width, bounds.x.max - bounds.x.min);
   const pixelPerYValue = pixelsPerValue(height, bounds.y.max - bounds.y.min);
   const pixelPerRow = width;
