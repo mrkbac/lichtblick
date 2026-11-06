@@ -399,7 +399,7 @@ const LogPanel = React.memo(({ config, saveConfig }: Props) => {
           {t("loadFailed", { error: loadError })}
         </Alert>
       )}
-      <Stack flexGrow={1}>
+      <Stack flexGrow={1} overflow="hidden">
         <PlayheadLogList
           items={filteredItems}
           onSeek={seekPlayback ? goTo : undefined}

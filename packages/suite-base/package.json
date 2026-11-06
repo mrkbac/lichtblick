@@ -59,7 +59,6 @@
     "@mui/icons-material": "7.3.11",
     "@mui/material": "7.3.11",
     "@mui/system": "7.3.11",
-    "@mui/x-data-grid": "9.17.0",
     "@opentelemetry/api": "1.10.0",
     "@opentelemetry/exporter-logs-otlp-http": "0.301.0",
     "@opentelemetry/exporter-trace-otlp-http": "0.301.0",
@@ -86,7 +85,6 @@
     "@types/react-transition-group": "^4.4.12",
     "@types/three": "0.187.0",
     "@types/wicg-file-system-access": "2023.10.7",
-    "@uiw/react-textarea-code-editor": "3.1.2",
     "async-mutex": "0.5.0",
     "buffer": "6.0.3",
     "chart.js": "4.6.1",
@@ -107,7 +105,6 @@
     "i18next": "26.7.1",
     "i18next-browser-languagedetector": "8.3.0",
     "idb": "8.0.4",
-    "idb-keyval": "6.3.0",
     "immer": "11.2.9",
     "intervals-fn": "3.0.3",
     "jszip": "3.10.2",
@@ -130,9 +127,7 @@
     "react-resizable-panels": "4.16.1",
     "react-transition-group": "4.4.5",
     "react-use": "17.6.1",
-    "react-window": "2.5.3",
     "readable-stream": "4.8.0",
-    "recharts": "3.10.1",
     "rehype-raw": "7.0.0",
     "remark-gfm": "4.0.1",
     "reselect": "5.3.0",
@@ -155,8 +150,6 @@
     "3d-tiles-renderer": "0.5.3",
     "geotiff": "3.0.5",
     "maplibre-gl": "6.14.0",
-    "pmtiles": "4.5.0",
-    "refractor": "4.9.0",
-    "rehype-prism-plus": "2.0.0"
+    "pmtiles": "4.5.0"
   }
 }

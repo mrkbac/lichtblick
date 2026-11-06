@@ -1,9 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { createStore, get as idbGet, set as idbSet, setMany as idbSetMany } from "idb-keyval";
-
 import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
+import { createKeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
 
 import { PreviewFrame, Previews, previewMcap } from "./preview";
 import { summarizeMcap } from "./summarizeMcap";
@@ -19,10 +18,10 @@ export type FolderFile = {
 };
 
 const DB_NAME = `${KEY_WORKSPACE_PREFIX}lichtblick-catalog`;
-const summaryStore = createStore(DB_NAME, "summaries");
-const folderStore = createStore(`${DB_NAME}-folders`, "folders");
+const summaryStore = createKeyValueStore(DB_NAME, "summaries");
+const folderStore = createKeyValueStore(`${DB_NAME}-folders`, "folders");
 // Kept apart from the summaries, which are all read on every scan; previews are read one at a time.
-const previewStore = createStore(`${DB_NAME}-previews`, "previews");
+const previewStore = createKeyValueStore(`${DB_NAME}-previews`, "previews");
 const LAST_FOLDER_KEY = "last";
 
 const CONCURRENCY = 4;
@@ -100,11 +99,11 @@ export function listInputFiles(fileList: Iterable<File>): FolderFile[] {
 }
 
 export async function saveLastFolder(dir: FileSystemDirectoryHandle): Promise<void> {
-  await idbSet(LAST_FOLDER_KEY, dir, folderStore);
+  await folderStore.set(LAST_FOLDER_KEY, dir);
 }
 
 export async function loadLastFolder(): Promise<FileSystemDirectoryHandle | undefined> {
-  return await idbGet<FileSystemDirectoryHandle>(LAST_FOLDER_KEY, folderStore);
+  return await folderStore.get<FileSystemDirectoryHandle>(LAST_FOLDER_KEY);
 }
 
 async function indexFile(
@@ -130,7 +129,7 @@ async function indexFile(
   // folder still hits the cache.
   const key = `${CACHE_VERSION}|${file.name}|${file.size}|${file.lastModified}`;
   // The cache is only an optimization, so a failing IndexedDB never fails the scan.
-  let summary = await idbGet<CatalogSummary>(key, summaryStore).catch((err: unknown) => {
+  let summary = await summaryStore.get<CatalogSummary>(key).catch((err: unknown) => {
     console.warn("Catalog cache read failed", err);
     return undefined;
   });
@@ -143,16 +142,15 @@ async function indexFile(
     } catch (err: unknown) {
       summary = { error: err instanceof Error ? err.message : String(err) };
     }
-    await idbSet(key, summary, summaryStore).catch((err: unknown) => {
+    await summaryStore.set(key, summary).catch((err: unknown) => {
       console.warn("Catalog cache write failed", err);
     });
     // Previews are stored apart so scans, which read every summary, stay light.
-    await idbSetMany(
-      Object.entries(previews).map(([topic, frames]) => [`${key}|${topic}`, frames]),
-      previewStore,
-    ).catch((err: unknown) => {
-      console.warn("Catalog preview cache write failed", err);
-    });
+    await previewStore
+      .setMany(Object.entries(previews).map(([topic, frames]) => [`${key}|${topic}`, frames]))
+      .catch((err: unknown) => {
+        console.warn("Catalog preview cache write failed", err);
+      });
   }
   return { ...base, size: file.size, previewKey: key, ...summary };
 }
@@ -191,7 +189,7 @@ export async function indexFiles(
 export async function loadPreview(entry: FolderFile, topic: string): Promise<PreviewFrame[]> {
   const file = await entry.getFile();
   const key = `${CACHE_VERSION}|${file.name}|${file.size}|${file.lastModified}|${topic}`;
-  const cached = await idbGet<PreviewFrame[]>(key, previewStore).catch((err: unknown) => {
+  const cached = await previewStore.get<PreviewFrame[]>(key).catch((err: unknown) => {
     console.warn("Catalog preview cache read failed", err);
     return undefined;
   });
@@ -199,7 +197,7 @@ export async function loadPreview(entry: FolderFile, topic: string): Promise<Pre
     return cached;
   }
   const preview = await previewMcap(file, topic);
-  await idbSet(key, preview, previewStore).catch((err: unknown) => {
+  await previewStore.set(key, preview).catch((err: unknown) => {
     console.warn("Catalog preview cache write failed", err);
   });
   return preview;
@@ -213,5 +211,5 @@ export async function readCachedPreview(
   if (recording.previewKey == undefined || topic == undefined) {
     return undefined;
   }
-  return await idbGet<PreviewFrame[]>(`${recording.previewKey}|${topic}`, previewStore);
+  return await previewStore.get<PreviewFrame[]>(`${recording.previewKey}|${topic}`);
 }

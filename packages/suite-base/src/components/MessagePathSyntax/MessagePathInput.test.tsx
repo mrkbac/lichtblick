@@ -263,6 +263,8 @@ describe("MessagePathInput Component", () => {
   describe("autoComplete logic", () => {
     beforeEach(() => {
       vi.clearAllMocks();
+      // jsdom has no layout: give the virtualized list's scroll container a height
+      vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(500);
       (useGlobalVariables as Mock).mockReturnValue({
         globalVariables: {},
         setGlobalVariables: vi.fn(),

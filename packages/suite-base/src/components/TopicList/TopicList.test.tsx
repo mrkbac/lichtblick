@@ -93,6 +93,9 @@ const setup = (playerPresence: PlayerPresence) => {
 describe("TopicList Component", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    (useTopicListSearch as Mock).mockReturnValue([]);
+    // jsdom has no layout: give the virtualized list's scroll container a height
+    vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(500);
   });
 
   it("renders EmptyState when playerPresence is NOT_PRESENT", () => {
