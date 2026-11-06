@@ -45,15 +45,21 @@ type VideoState = {
   waitingForKeyframe: boolean;
   /** Bumped on every reset, so frames decoded before a seek are never painted after it. */
   epoch: number;
+  /** `performance.now()` of the last paint, to keep painting while decoding lags behind. */
+  lastPaint: number;
 };
+
+/** Longest a tile goes without a paint while its decoder works through a backlog. */
+const MAX_PAINT_INTERVAL_MS = 100;
 
 /** Queues a video frame, dropping everything a keyframe makes unnecessary. */
 export function enqueueVideoFrame(
   queue: Immutable<MessageEvent>[],
   event: Immutable<MessageEvent>,
 ): void {
-  const { format, data } = event.message as { format?: string; data?: Uint8Array };
-  if (data instanceof Uint8Array && isVideoKeyframe(format ?? "", data)) {
+  // Normalized because JSON-encoded messages carry `data` as a number array.
+  const { format, data } = normalizeCompressedVideo(event.message as PartialMessage<never>);
+  if (isVideoKeyframe(format, data)) {
     queue.length = 0;
   }
   queue.push(event);
@@ -99,7 +105,7 @@ export class GridRenderer {
         continue;
       }
       if (imageKind(event.schemaName) === "video") {
-        tile.video ??= { queue: [], waitingForKeyframe: true, epoch: 0 };
+        tile.video ??= { queue: [], waitingForKeyframe: true, epoch: 0, lastPaint: 0 };
         enqueueVideoFrame(tile.video.queue, event);
       } else {
         tile.latest = event;
@@ -318,8 +324,11 @@ export class GridRenderer {
         Number((time - firstTime) / 1000n),
         prepared.type,
       );
-      // Intermediate frames only keep the decoder's reference chain intact.
-      if (frame && video.queue.length === 0) {
+      // Older frames only keep the decoder's reference chain intact, unless decoding lags so far
+      // behind that the queue never empties; then paint periodically instead of freezing.
+      const now = performance.now();
+      if (frame && (video.queue.length === 0 || now - video.lastPaint >= MAX_PAINT_INTERVAL_MS)) {
+        video.lastPaint = now;
         const bitmap = await createImageBitmap(frame);
         if (video.epoch !== epoch) {
           bitmap.close(); // a seek happened meanwhile; this frame is from before it

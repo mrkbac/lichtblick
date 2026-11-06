@@ -58,4 +58,16 @@ describe("enqueueVideoFrame", () => {
     // Then it is the only queued frame
     expect(queue).toEqual([key]);
   });
+
+  it("detects keyframes in JSON-decoded messages whose data is a number array", () => {
+    // Given a queue with a pending delta frame
+    const queue = [frame(DELTA)];
+    const key = { ...frame(KEY), message: { format: "h264", data: Array.from(KEY) } };
+
+    // When a keyframe with array data arrives
+    enqueueVideoFrame(queue, key);
+
+    // Then the older frame is dropped
+    expect(queue).toEqual([key]);
+  });
 });
