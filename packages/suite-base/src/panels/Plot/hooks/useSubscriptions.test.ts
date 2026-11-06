@@ -200,7 +200,7 @@ describe("useSubscriptions", () => {
             PlotBuilder.path({
               value: "/odom.v",
               timestampMethod: "customField",
-              timestampPath: "/odom.stamp",
+              timestampPath: " /odom.stamp ",
             }),
           ],
           xAxisVal: "timestamp",

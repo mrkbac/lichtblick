@@ -74,9 +74,12 @@ const useSubscriptions = (config: PlotConfig, subscriberId: string): void => {
 
     // A custom time field is read from the same messages as the series (data and legend values)
     for (const item of paths) {
+      const timestampPath = item.timestampPath?.trim();
       const parsedTimePath =
-        item.timestampMethod === "customField" && item.timestampPath
-          ? parseMessagePath(item.timestampPath)
+        item.timestampMethod === "customField" &&
+        timestampPath &&
+        !isReferenceLinePlotPathType(item)
+          ? parseMessagePath(timestampPath)
           : undefined;
       const timeSub =
         parsedTimePath &&
