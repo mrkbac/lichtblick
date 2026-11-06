@@ -100,6 +100,8 @@ export function OpenUrlInput({
   );
   const picked = connectionSources.find((s) => s.id === pickedId);
   const fields = picked?.formConfig?.fields ?? [];
+  const defaultUrlOf = (s: IDataSourceFactory | undefined) =>
+    s?.formConfig?.fields.find((field) => field.id === "url")?.defaultValue;
   const hasUrlField = (s: IDataSourceFactory) =>
     s.formConfig?.fields.some((field) => field.id === "url") ?? false;
   const sourceId = recentMatch?.sourceId ?? detected?.sourceId;
@@ -117,8 +119,10 @@ export function OpenUrlInput({
     setFieldValues({});
     setFieldErrors({});
     setError(undefined);
-    const defaultUrl = next?.formConfig?.fields.find((field) => field.id === "url")?.defaultValue;
-    if (defaultUrl != undefined && !isUrl) {
+    const defaultUrl = defaultUrlOf(next);
+    // Keep a URL the user typed, but replace another source's prefilled default
+    const isDefault = connectionSources.some((s) => defaultUrlOf(s) === trimmed);
+    if (defaultUrl != undefined && (!isUrl || isDefault)) {
       onChange(defaultUrl);
     }
     inputRef.current?.focus();

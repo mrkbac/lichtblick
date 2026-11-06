@@ -63,6 +63,14 @@ const wsSource = {
   initialize: () => undefined,
 } as unknown as IDataSourceFactory;
 
+const rosbridgeSource = {
+  id: "rosbridge-websocket",
+  type: "connection",
+  displayName: "Rosbridge",
+  formConfig: { fields: [{ id: "url", label: "URL", defaultValue: "ws://localhost:9090" }] },
+  initialize: () => undefined,
+} as unknown as IDataSourceFactory;
+
 const udpSource = {
   id: "udp",
   type: "connection",
@@ -106,7 +114,7 @@ describe("Start Component", () => {
     });
     (usePlayerSelection as Mock).mockReturnValue({
       recentSources,
-      availableSources: [wsSource, udpSource],
+      availableSources: [wsSource, rosbridgeSource, udpSource],
       selectRecent: mockSelectRecent,
       selectSource: mockSelectSource,
       removeRecent: mockRemoveRecent,
@@ -189,6 +197,24 @@ describe("Start Component", () => {
       type: "connection",
       params: { port: "3000" },
     });
+  });
+
+  it("replaces a prefilled default URL when switching connection types", () => {
+    setup();
+    const box = screen.getByPlaceholderText("openUrlPlaceholder");
+    const pick = (name: string) => {
+      fireEvent.click(screen.getByRole("button", { name: "connectionType" }));
+      fireEvent.click(screen.getByRole("menuitem", { name }));
+    };
+
+    pick("Foxglove WebSocket");
+    expect(box).toHaveValue("ws://localhost:8765");
+    pick("Rosbridge");
+    expect(box).toHaveValue("ws://localhost:9090");
+
+    typeUrl("ws://robot:1234");
+    pick("Foxglove WebSocket");
+    expect(box).toHaveValue("ws://robot:1234");
   });
 
   it("re-opens the matching recent for a previously used URL", () => {
