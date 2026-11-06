@@ -56,7 +56,7 @@ type Props = {
 
 function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
   const config = useMemo(() => migrateConfig(rawConfig), [rawConfig]);
-  const { rows, sparklines, showAge, staleAfterSec } = config;
+  const { rows, sparklines, flashChanges, showAge, staleAfterSec } = config;
   const { t } = useTranslation("watch");
   const { classes } = useStyles();
   const { enqueueSnackbar } = useSnackbar();
@@ -299,6 +299,7 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
             enumNames={enumNames.get(row.id)}
             invalid={invalid.has(row.id)}
             sparklines={sparklines}
+            flashChanges={flashChanges}
             showAge={showAge}
             staleAfterSec={row.staleAfterSec ?? staleAfterSec}
             isDropTarget={dropTarget === row.id}

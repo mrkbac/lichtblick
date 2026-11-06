@@ -22,6 +22,7 @@ export const watch = {
   general: "General",
   sparklines: "Sparklines",
   showAge: "Show value age",
+  flashChanges: "Flash on change",
   staleAfter: "Stale after (s)",
   staleAfterHelp: "Values that haven't updated for longer are dimmed and marked",
   rows: "Rows",

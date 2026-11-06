@@ -59,6 +59,7 @@ export function buildSettingsTree(
       label: t("general"),
       fields: {
         sparklines: { label: t("sparklines"), input: "boolean", value: config.sparklines },
+        flashChanges: { label: t("flashChanges"), input: "boolean", value: config.flashChanges },
         showAge: { label: t("showAge"), input: "boolean", value: config.showAge },
         staleAfterSec: {
           label: t("staleAfter"),
@@ -122,6 +123,8 @@ export function settingsReducer(config: WatchConfig, action: SettingsTreeAction)
     switch (path[1]) {
       case "sparklines":
         return { ...config, sparklines: value === true };
+      case "flashChanges":
+        return { ...config, flashChanges: value === true };
       case "showAge":
         return { ...config, showAge: value === true };
       case "staleAfterSec":

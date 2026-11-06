@@ -45,6 +45,22 @@ export function formatNumber(value: number, precision: number | undefined): stri
   return String(Math.round(value * 1e4) / 1e4);
 }
 
+/**
+ * Decimals the automatic format shows for a value (0 to 4), or undefined when it uses exponent
+ * notation. Rows keep the most decimals seen, so the text keeps its width as values change.
+ */
+export function autoDecimals(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return undefined;
+  }
+  const text = formatNumber(value, undefined);
+  if (text.includes("e")) {
+    return undefined;
+  }
+  const dot = text.indexOf(".");
+  return dot === -1 ? 0 : text.length - dot - 1;
+}
+
 function formatScalar(
   value: unknown,
   precision: number | undefined,

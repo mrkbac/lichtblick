@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import {
+  autoDecimals,
   copyText,
   formatAge,
   formatExpanded,
@@ -37,6 +38,17 @@ describe("formatValue", () => {
     expect(formatValue([1, 2.5, 3, 4, 5], 1)).toBe("(5) [1.0, 2.5, 3.0, 4.0, …]");
     expect(formatValue(new Float32Array([1, 2]), undefined)).toBe("(2) [1, 2]");
     expect(formatValue({ a: 1, b: 2 }, undefined)).toBe("{a, b}");
+  });
+});
+
+describe("autoDecimals", () => {
+  it("counts the decimals the automatic format shows", () => {
+    expect(autoDecimals(3)).toBe(0);
+    expect(autoDecimals(1.5)).toBe(1);
+    expect(autoDecimals(0.123456)).toBe(4);
+    expect(autoDecimals(1e-7)).toBeUndefined(); // exponent notation
+    expect(autoDecimals(NaN)).toBeUndefined();
+    expect(autoDecimals("1.5")).toBeUndefined();
   });
 });
 

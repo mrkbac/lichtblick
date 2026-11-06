@@ -11,10 +11,20 @@ import { alpha, useTheme } from "@mui/material/styles";
 import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useSeriesDrag } from "@lichtblick/suite-base/panels/shared/useSeriesDrag";
+
 import { useStyles } from "./Watch.style";
 import { HISTORY_SIZE, WatchStore, historyValues } from "./WatchStore";
 import { WatchRow } from "./config";
-import { EnumNames, formatAge, formatExpanded, formatValue, isExpandable, isStale } from "./format";
+import {
+  EnumNames,
+  autoDecimals,
+  formatAge,
+  formatExpanded,
+  formatValue,
+  isExpandable,
+  isStale,
+} from "./format";
 
 export const DRAG_TYPE = "application/x-lichtblick-watch-row";
 const FLASH_MS = 600;
@@ -34,6 +44,7 @@ type Props = {
   enumNames: EnumNames | undefined;
   invalid: boolean;
   sparklines: boolean;
+  flashChanges: boolean;
   showAge: boolean;
   staleAfterSec: number;
   isDropTarget: boolean;
@@ -91,6 +102,7 @@ export const WatchRowView = memo(function WatchRowViewInner({
   enumNames,
   invalid,
   sparklines,
+  flashChanges,
   showAge,
   staleAfterSec,
   isDropTarget,
@@ -109,6 +121,11 @@ export const WatchRowView = memo(function WatchRowViewInner({
   const ageRef = useRef<HTMLSpanElement>(null);
   const expandedRef = useRef<HTMLPreElement>(null);
   const hadValue = useRef(false);
+  // Most decimals seen so far, so automatic precision doesn't change the text width
+  const decimals = useRef(0);
+  useLayoutEffect(() => {
+    decimals.current = 0;
+  }, [row.path]);
 
   const flashColor = alpha(theme.palette.primary.main, 0.2);
   const lineColor = theme.palette.primary.main;
@@ -151,12 +168,22 @@ export const WatchRowView = memo(function WatchRowViewInner({
     const state = store.get(row.id);
     const value = state?.value;
     const error = state?.error;
-    const text = error ?? formatValue(value, row.precision, enumNames);
+    const own = autoDecimals(value);
+    if (own != undefined) {
+      decimals.current = Math.max(decimals.current, own);
+    }
+    const precision = row.precision ?? (own != undefined ? decimals.current : undefined);
+    const text = error ?? formatValue(value, precision, enumNames);
     if (valueEl.textContent !== text) {
       valueEl.textContent = text;
       valueEl.title = text;
       // Flash changes, but not the first value after adding a row or seeking
-      if (hadValue.current && value != undefined && typeof root.animate === "function") {
+      if (
+        flashChanges &&
+        hadValue.current &&
+        value != undefined &&
+        typeof root.animate === "function"
+      ) {
         root.animate([{ backgroundColor: flashColor }, { backgroundColor: "transparent" }], {
           duration: FLASH_MS,
           easing: "ease-out",
@@ -173,7 +200,7 @@ export const WatchRowView = memo(function WatchRowViewInner({
       expandedRef.current.textContent = isExpandable(value) ? formatExpanded(value) : text;
     }
     paintAge();
-  }, [enumNames, flashColor, lineColor, paintAge, row.id, row.precision, store]);
+  }, [enumNames, flashChanges, flashColor, lineColor, paintAge, row.id, row.precision, store]);
 
   useLayoutEffect(() => {
     painters.set(row.id, (what = "all") => {
@@ -189,10 +216,19 @@ export const WatchRowView = memo(function WatchRowViewInner({
     };
   }, [expanded, paint, paintAge, painters, row.id, showAge, sparklines]);
 
+  // Dragging a row reorders it here, and adds its path to other panels (e.g. a Plot)
+  const { dragRef } = useSeriesDrag(invalid ? undefined : row.path);
+  const setRoot = useCallback(
+    (element: HTMLDivElement | null) => {
+      rootRef.current = element;
+      return element ? dragRef?.(element) : undefined;
+    },
+    [dragRef],
+  );
   const onDragStart = useCallback(
     (event: React.DragEvent) => {
       event.dataTransfer.setData(DRAG_TYPE, row.id);
-      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.effectAllowed = "copyMove";
     },
     [row.id],
   );
@@ -220,7 +256,7 @@ export const WatchRowView = memo(function WatchRowViewInner({
   return (
     <>
       <div
-        ref={rootRef}
+        ref={setRoot}
         className={cx(classes.row, { [classes.dropTarget]: isDropTarget })}
         data-testid="watch-row"
         data-expandable="false"

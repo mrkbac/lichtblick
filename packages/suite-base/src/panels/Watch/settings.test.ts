@@ -8,6 +8,7 @@ import { buildSettingsTree, settingsReducer } from "./settings";
 
 const config: WatchConfig = {
   sparklines: true,
+  flashChanges: true,
   showAge: true,
   staleAfterSec: 2,
   rows: [
@@ -61,6 +62,7 @@ describe("Watch settings", () => {
     expect(update(["rows", "a", "unit"], "m").rows[0]!.unit).toBe("m");
     expect(update(["general", "sparklines"], false).sparklines).toBe(false);
     expect(update(["general", "showAge"], false).showAge).toBe(false);
+    expect(update(["general", "flashChanges"], false).flashChanges).toBe(false);
   });
 
   it("sets the stale threshold per panel and per row", () => {

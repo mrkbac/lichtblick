@@ -49,7 +49,7 @@ export const useStyles = makeStyles()((theme) => ({
   invalid: { color: theme.palette.error.main },
   value: {
     flex: "1 1 0",
-    minWidth: 0,
+    minWidth: "7ch", // the sparkline gives way first
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
@@ -68,10 +68,12 @@ export const useStyles = makeStyles()((theme) => ({
     whiteSpace: "nowrap",
     "@container (max-width: 220px)": { display: "none" },
   },
+  // Grows with the panel: the trend is often what the row is watched for
   sparkline: {
-    width: 64,
-    height: 18,
-    flex: "none",
+    width: "clamp(64px, 30cqi, 240px)",
+    minWidth: 40,
+    height: 22,
+    flex: "0 1 auto",
     "@container (max-width: 280px)": { display: "none" },
   },
   // Overlays the end of the row on hover, so it takes no space from values
