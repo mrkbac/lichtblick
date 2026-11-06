@@ -69,8 +69,7 @@ export const threeDee = {
   labelScale: "Label scale",
   labelScaleHelp: "Scale factor to apply to all labels",
   meshUpAxis: "Mesh up axis",
-  meshUpAxisHelp:
-    "The direction to use as “up” when loading meshes without orientation info (STL and OBJ)",
+  meshUpAxisHelp: "The direction to use as “up” when loading STL, OBJ and glTF meshes",
   renderStats: "Render stats",
   scene: "Scene",
   takeEffectAfterReboot: "This setting requires a restart to take effect",

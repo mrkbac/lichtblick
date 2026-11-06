@@ -1060,7 +1060,7 @@ async function parseUrdf(
   }
 }
 
-function createRenderable(args: {
+export function createRenderable(args: {
   visual: UrdfVisual;
   robot: UrdfRobot;
   id: number;
@@ -1094,9 +1094,9 @@ function createRenderable(args: {
       return new RenderableSphere(name, marker, undefined, renderer);
     }
     case "mesh": {
-      const isCollada = visual.geometry.filename.toLowerCase().endsWith(".dae");
-      // Use embedded materials if the mesh is a Collada file
-      const embedded = isCollada ? EmbeddedMaterialUsage.Use : EmbeddedMaterialUsage.Ignore;
+      // Collada and glTF carry their own materials; STL and OBJ get the URDF color
+      const hasMaterials = /\.(dae|gltf|glb)$/i.test(visual.geometry.filename.split(/[?#]/)[0]!);
+      const embedded = hasMaterials ? EmbeddedMaterialUsage.Use : EmbeddedMaterialUsage.Ignore;
       const marker = createMeshMarker(frameId, pose, embedded, visual.geometry, baseUrl, color);
       return new RenderableMeshResource(name, marker, undefined, renderer, {
         referenceUrl: baseUrl,
