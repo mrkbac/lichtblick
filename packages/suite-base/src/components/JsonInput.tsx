@@ -19,8 +19,8 @@ import { Typography } from "@mui/material";
 import CodeEditor from "@uiw/react-textarea-code-editor/nohighlight";
 import * as _ from "lodash-es";
 import { useState, useCallback, useRef, useLayoutEffect, useEffect } from "react";
-import { refractor } from "refractor/core";
-import json from "refractor/json";
+import json from "refractor/lang/json.js";
+import { refractor } from "refractor/lib/core.js";
 import rehypePrismGenerator from "rehype-prism-plus/generator";
 import { makeStyles } from "tss-react/mui";
 
