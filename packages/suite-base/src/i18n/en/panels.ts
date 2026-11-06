@@ -8,6 +8,8 @@
 export const panels = {
   "3D": "3D",
   "3DPanelDescription": "Display markers, camera images, meshes, URDFs, and more in a 3D scene.",
+  audio: "Audio",
+  audioDescription: "Play audio topics in sync with playback, with a live waveform.",
   callService: "Service Call",
   callServiceDescription: "Call a service and view the service call result",
   cameraGrid: "Camera Grid",
