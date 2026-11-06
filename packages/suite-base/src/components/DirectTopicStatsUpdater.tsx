@@ -60,6 +60,7 @@ export function DirectTopicStatsUpdater({
     () => playerCapabilities.includes(PLAYER_CAPABILITIES.playbackControl),
     [playerCapabilities],
   );
+  const latestIsStaticSource = useLatest(playerIsStaticSource);
 
   const updateStats = useCallback(() => {
     if (!rootRef.current) {
@@ -84,9 +85,13 @@ export function DirectTopicStatsUpdater({
       if (field.dataset.topicStat === "frequency") {
         const frequency = latestFrequenciesByTopic.current[topic];
         field.innerText = frequency != undefined ? `${frequency.toFixed(2)} Hz` : EM_DASH;
+        // A live rate of 0 means the publisher went quiet
+        const stale = !latestIsStaticSource.current && frequency === 0;
+        field.dataset.stale = String(stale);
+        field.title = stale ? "No messages recently" : "";
       }
     });
-  }, [latestFrequenciesByTopic, latestStats]);
+  }, [latestFrequenciesByTopic, latestIsStaticSource, latestStats]);
 
   // Update when new "data-topic" nodes are added, to support virtualized lists and filtering.
   useEffect(() => {
@@ -115,6 +120,16 @@ export function DirectTopicStatsUpdater({
       updateStats();
     }
   }, [updateStats, interval, topicStats, playerIsStaticSource]);
+
+  // Repaint right away when a topic goes stale or recovers, even if nothing else changed
+  const staleCount = useRef(0);
+  useEffect(() => {
+    const count = Object.values(frequenciesByTopic).filter((value) => value === 0).length;
+    if (count !== staleCount.current) {
+      staleCount.current = count;
+      updateStats();
+    }
+  }, [frequenciesByTopic, updateStats]);
 
   // Clear previous samples on player change.
   useEffect(() => {

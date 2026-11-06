@@ -43,6 +43,11 @@ import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { Topic } from "@lichtblick/suite-base/players/types";
+import {
+  LIVE_RATE_WINDOW_MS,
+  LiveRate,
+  LiveTopicRates,
+} from "@lichtblick/suite-base/util/LiveTopicRates";
 import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
 
 import { ActivityChart, ContainerDetails, KeyValueTable, SchemaFields } from "./InspectionViews";
@@ -87,9 +92,16 @@ export function RecordingInspector(): React.JSX.Element {
   const getPipeline = useMessagePipelineGetter();
   // Live players emit a new topicStats map per message, so sample it instead of re-rendering per emit.
   const [topicStats, setTopicStats] = useState(() => selectStats(getPipeline()));
+  // Live sources show the recent rate, which drops to 0 when a publisher stops
+  const [liveRates, setLiveRates] = useState(new Map<string, LiveRate>());
   useEffect(() => {
+    const tracker = new LiveTopicRates();
     const id = setInterval(() => {
-      setTopicStats(selectStats(getPipeline()));
+      const stats = selectStats(getPipeline());
+      setTopicStats(stats);
+      if (stats) {
+        setLiveRates(tracker.update(Date.now(), stats));
+      }
     }, 1000);
     return () => {
       clearInterval(id);
@@ -134,6 +146,9 @@ export function RecordingInspector(): React.JSX.Element {
       return data?.timing?.medianHz;
     }
     if (rateBasis === "recording") {
+      if (!isRecording) {
+        return liveRates.get(topic.name)?.hz;
+      }
       const count = countFor(topic);
       return count != undefined && durationSeconds > 0 ? count / durationSeconds : undefined;
     }
@@ -730,13 +745,20 @@ export function RecordingInspector(): React.JSX.Element {
                             )}
                           </td>
                           <td
-                            className={cx(classes.numeric, classes.rate)}
+                            className={cx(classes.numeric, classes.rate, {
+                              [classes.stale]:
+                                !isRecording &&
+                                rateBasis === "recording" &&
+                                liveRates.get(topic.name)?.stale === true,
+                            })}
                             title={
-                              rateBasis === "median"
-                                ? "Median of positive inter-message interval frequencies; ≈ marks a sampled estimate"
-                                : rateBasis === "active"
-                                  ? "(count − 1) / (last − first)"
-                                  : "count / full recording duration"
+                              !isRecording && rateBasis === "recording"
+                                ? `Messages in the last ${LIVE_RATE_WINDOW_MS / 1000} s; 0 Hz once the publisher stops`
+                                : rateBasis === "median"
+                                  ? "Median of positive inter-message interval frequencies; ≈ marks a sampled estimate"
+                                  : rateBasis === "active"
+                                    ? "(count − 1) / (last − first)"
+                                    : "count / full recording duration"
                             }
                           >
                             {rate != undefined

@@ -5,8 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { subtract as subtractTimes, fromMillis, Time, toSec } from "@foxglove/rostime";
-import { useMemo, useRef } from "react";
+import { subtract as subtractTimes, Time } from "@foxglove/rostime";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Immutable } from "@lichtblick/suite";
 import {
@@ -15,21 +15,13 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { TopicStats } from "@lichtblick/suite-base/players/types";
+import { LiveTopicRates } from "@lichtblick/suite-base/util/LiveTopicRates";
 import { calculateStaticItemFrequency } from "@lichtblick/suite-base/util/calculateStaticItemFrequency";
 
 const EMPTY_TOPIC_STATS = new Map<string, TopicStats>();
 
-// Empirically this seems to strike a good balance between stable values
-// and reasonably quick reactions to change.
-function smoothValues(oldValue: undefined | number, newValue: number): number {
-  return 0.7 * (oldValue ?? newValue) + 0.3 * newValue;
-}
-
-function calculateLiveItemFrequency(numMessages: number, duration: Time) {
-  const durationSec = toSec(duration);
-
-  return durationSec > 0 ? numMessages / durationSec : undefined;
-}
+/** How often live rates are re-evaluated when no messages arrive, so a stopped publisher drops to 0. */
+const LIVE_TICK_MS = 500;
 
 const selectCurrentTime = ({ playerState }: MessagePipelineContext) =>
   playerState.activeData?.currentTime;
@@ -41,22 +33,12 @@ const selectTopicStats = (ctx: MessagePipelineContext) =>
   ctx.playerState.activeData?.topicStats ?? EMPTY_TOPIC_STATS;
 const selectPlayerCapabilities = (ctx: MessagePipelineContext) => ctx.playerState.capabilities;
 
-type StatSample = {
-  time: Time;
-  count: number;
-  frequency: undefined | number;
-};
-
 type FrequenciesByTopic = Record<string, undefined | number>;
 const EMPTY_FREQUENCIES: FrequenciesByTopic = {};
 
 /**
- * Encapsulates logic for directly updating topic stats DOM elements, bypassing
- * react for performance. To use this component mount it directly under your component
- * containing topics you want to update. Tag each topic stat field with data-topic
- * and data-topic-stat attributes.
- *
- * @property interval - the interval, in frames, between updates.
+ * Publish frequency per topic. Recordings use all messages. Live sources use a sliding window of
+ * recent messages, and report 0 when a topic's publisher has gone quiet (see LiveTopicRates).
  */
 export function useTopicPublishFrequencies(): Immutable<FrequenciesByTopic> {
   const startTime = useMessagePipeline(selectStartTime);
@@ -68,62 +50,56 @@ export function useTopicPublishFrequencies(): Immutable<FrequenciesByTopic> {
     [endTime, startTime],
   );
 
-  const samplesByTopic = useRef<Record<string, StatSample>>({});
+  const liveRates = useRef(new LiveTopicRates());
 
   const playerIsStaticSource = useMemo(
     () => playerCapabilities.includes(PLAYER_CAPABILITIES.playbackControl),
     [playerCapabilities],
   );
+  // Live rates must fall even when nothing arrives, so re-evaluate them periodically
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (playerIsStaticSource) {
+      return;
+    }
+    const id = setInterval(() => {
+      setTick((value) => value + 1);
+    }, LIVE_TICK_MS);
+    return () => {
+      clearInterval(id);
+    };
+  }, [playerIsStaticSource]);
   // Static frequencies don't depend on the playhead, so only live sources update every tick.
   const playerCurrentTime = useMessagePipeline<Time | boolean | undefined>(
     playerIsStaticSource ? selectHasCurrentTime : selectCurrentTime,
   );
 
   const frequencies = useMemo(() => {
+    void tick; // re-evaluates live rates while no messages arrive
     if (playerCurrentTime == undefined || playerCurrentTime === false) {
       return EMPTY_FREQUENCIES;
     }
-    const currentTime = fromMillis(Date.now());
+    if (!playerIsStaticSource) {
+      const result: FrequenciesByTopic = {};
+      for (const [topic, rate] of liveRates.current.update(Date.now(), topicStats)) {
+        result[topic] = rate.hz;
+      }
+      return result;
+    }
 
     const result: FrequenciesByTopic = {};
     for (const [topic, stat] of topicStats) {
-      if (playerIsStaticSource) {
-        // For a static source we calculate frequency across all messages.
-        const frequency = calculateStaticItemFrequency(
-          stat.numMessages,
-          stat.firstMessageTime,
-          stat.lastMessageTime,
-          duration,
-        );
-        result[topic] = frequency;
-      } else {
-        // For a live source we calculate a running average of frequency.
-        const sample = samplesByTopic.current[topic];
-        if (sample == undefined) {
-          samplesByTopic.current[topic] = {
-            time: currentTime,
-            count: stat.numMessages,
-            frequency: undefined,
-          };
-        } else {
-          const messageDelta = stat.numMessages - sample.count;
-          if (messageDelta > 0) {
-            const timeDelta = subtractTimes(currentTime, sample.time);
-            const newFrequency = calculateLiveItemFrequency(messageDelta, timeDelta);
-            if (newFrequency != undefined) {
-              const smoothedFrequency = smoothValues(sample.frequency, newFrequency);
-              sample.frequency = smoothedFrequency;
-              sample.count = stat.numMessages;
-              sample.time = currentTime;
-            }
-          }
-          result[topic] = sample.frequency;
-        }
-      }
+      // For a static source we calculate frequency across all messages.
+      result[topic] = calculateStaticItemFrequency(
+        stat.numMessages,
+        stat.firstMessageTime,
+        stat.lastMessageTime,
+        duration,
+      );
     }
 
     return result;
-  }, [playerCurrentTime, duration, playerIsStaticSource, topicStats]);
+  }, [playerCurrentTime, duration, playerIsStaticSource, topicStats, tick]);
 
   return frequencies;
 }

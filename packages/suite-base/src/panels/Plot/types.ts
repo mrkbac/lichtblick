@@ -207,6 +207,8 @@ export type TooltipStateSetter = {
   x: number;
   y: number;
   data: TimeBasedChartTooltipData[];
+  /** Line above the values, e.g. how long ago the hovered time was on a live source */
+  header?: string;
 };
 
 export type ChartRendererProps = {

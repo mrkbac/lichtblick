@@ -247,6 +247,8 @@ export const useStyles = makeStyles()((theme) => ({
   numeric: { whiteSpace: "nowrap", fontFamily: fontMonospace, fontSize: 12 },
   count: { color: theme.palette.success.main, fontWeight: 600 },
   rate: { color: theme.palette.warning.main },
+  // A live topic whose publisher stopped
+  stale: { color: theme.palette.error.main },
   size: { color: theme.palette.info.main },
   share: {
     width: "100%",

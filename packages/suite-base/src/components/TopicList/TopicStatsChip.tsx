@@ -36,6 +36,10 @@ const useStyles = makeStyles<void, "selected">()((theme, _props, classes) => ({
     paddingBlock: theme.spacing(0.25),
     fontFeatureSettings: `${customTypography.fontFeatureSettings}, 'tnum'`,
 
+    '&[data-stale="true"]': {
+      color: theme.palette.warning.main,
+    },
+
     "&:first-of-type": {
       paddingInlineStart: theme.spacing(0.75),
 
