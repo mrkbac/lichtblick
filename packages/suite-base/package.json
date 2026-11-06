@@ -101,7 +101,7 @@
     "dompurify": "3.4.17",
     "dotenv": "17.2.2",
     "eventemitter3": "5.0.4",
-    "fake-indexeddb": "4.0.2",
+    "fake-indexeddb": "6.2.7",
     "fzf": "0.5.2",
     "gl-matrix": "3.4.4",
     "heap-js": "2.7.1",
