@@ -27,11 +27,10 @@ import {
 } from "@lichtblick/suite-base/types/Messages";
 
 import { RenderableTopicAnnotations } from "./RenderableTopicAnnotations";
+import { ALL_SUPPORTED_ANNOTATION_SCHEMAS } from "./normalizeAnnotations";
 import { Annotation } from "./types";
 import { AnyRendererSubscription, ImageModeConfig } from "../../../IRenderer";
 import { SettingsTreeEntry } from "../../../SettingsManager";
-import { IMAGE_ANNOTATIONS_DATATYPES } from "../../../foxglove";
-import { IMAGE_MARKER_ARRAY_DATATYPES, IMAGE_MARKER_DATATYPES } from "../../../ros";
 import { topicIsConvertibleToSchema } from "../../../topicIsConvertibleToSchema";
 import { sortPrefixMatchesToFront } from "../../Images/topicPrefixMatching";
 import { IMessageHandler, MessageRenderState } from "../MessageHandler";
@@ -54,22 +53,6 @@ interface ImageAnnotationsContext {
   addSettingsError(path: Path, errorId: string, errorMessage: string): void;
   removeSettingsError(path: Path, errorId: string): void;
 }
-
-/** For backwards compatibility with previously published type definitions, older studio versions, and webviz */
-const LEGACY_ANNOTATION_SCHEMAS = new Set([
-  "foxglove_msgs/ImageMarkerArray",
-  "foxglove_msgs/msg/ImageMarkerArray",
-  "studio_msgs/ImageMarkerArray",
-  "studio_msgs/msg/ImageMarkerArray",
-  "webviz_msgs/ImageMarkerArray",
-]);
-
-const ALL_SUPPORTED_ANNOTATION_SCHEMAS = new Set([
-  ...IMAGE_ANNOTATIONS_DATATYPES,
-  ...IMAGE_MARKER_DATATYPES,
-  ...IMAGE_MARKER_ARRAY_DATATYPES,
-  ...LEGACY_ANNOTATION_SCHEMAS,
-]);
 
 /**
  * This class handles settings and rendering for ImageAnnotations/ImageMarkers.

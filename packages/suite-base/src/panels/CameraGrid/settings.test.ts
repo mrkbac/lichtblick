@@ -74,4 +74,24 @@ describe("settingsReducer", () => {
       undefined,
     );
   });
+
+  it("turns the automatic annotation match into the tile's own pick on the first toggle", () => {
+    const start = { ...DEFAULT_CONFIG, tiles: [makeTile("/cam/image")] };
+    const available = ["/cam/annotations", "/other/annotations"];
+    const path = (topic: string) => ["topics", "0", "annotations", topic, "visible"];
+
+    const added = settingsReducer(start, update(path("/other/annotations"), true), [], available);
+    expect(added.tiles[0]!.annotationTopics).toEqual(["/cam/annotations", "/other/annotations"]);
+
+    const removed = settingsReducer(added, update(path("/cam/annotations"), false), [], available);
+    expect(removed.tiles[0]!.annotationTopics).toEqual(["/other/annotations"]);
+  });
+
+  it("toggles link zoom and annotation sync", () => {
+    const next = settingsReducer(config, update(["general", "linkZoom"], true), []);
+    expect(next.linkZoom).toBe(true);
+    expect(
+      settingsReducer(next, update(["general", "syncAnnotations"], true), []).syncAnnotations,
+    ).toBe(true);
+  });
 });

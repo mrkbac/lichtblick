@@ -19,11 +19,16 @@ import { useElementSize } from "@lichtblick/suite-base/hooks/useElementSize";
 import { fontMonospace } from "@lichtblick/theme";
 
 import { GridRenderer } from "./GridRenderer";
+import { annotationTopicNames, tileAnnotationTopics } from "./annotations";
 import { autoColumns, imageKind, imageTopicNames } from "./layout";
 import { addAllTopics, buildSettingsTree, settingsReducer } from "./settings";
 import { CameraGridConfig, DEFAULT_CONFIG, TileConfig } from "./types";
 
 const DEFAULT_ASPECT = 4 / 3;
+
+/** Wheel zoom per pixel of scroll (and per line, for mice that scroll by lines). */
+const ZOOM_PER_PIXEL = 0.002;
+const ZOOM_PER_LINE = 0.05;
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -122,6 +127,7 @@ function Tile({
 }: TileProps): React.JSX.Element {
   const { classes, cx } = useStyles();
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const tileElementRef = useRef<HTMLDivElement>(null);
   const timestampRef = useRef<HTMLSpanElement>(null);
   const statusRef = useRef<HTMLDivElement>(null);
   const tileRef = useRef(tile);
@@ -144,11 +150,55 @@ function Tile({
     renderer.setTileConfig(tile);
   }, [renderer, tile]);
 
+  // React's wheel listener is passive, so it can't stop the page from scrolling.
+  useEffect(() => {
+    const element = tileElementRef.current;
+    if (!element) {
+      return;
+    }
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const perUnit =
+        event.deltaMode === WheelEvent.DOM_DELTA_PIXEL ? ZOOM_PER_PIXEL : ZOOM_PER_LINE;
+      renderer.zoomAt(tile.topic, Math.exp(-event.deltaY * perUnit), event.offsetX, event.offsetY);
+    };
+    element.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      element.removeEventListener("wheel", onWheel);
+    };
+  }, [renderer, tile.topic]);
+
+  const dragRef = useRef<{ x: number; y: number } | undefined>(undefined);
+
   return (
     <div
+      ref={tileElementRef}
       className={cx(classes.tile, { [classes.maximized]: maximized })}
       onDoubleClick={() => {
-        onToggleMaximize(tile.topic);
+        // Double-click first resets a zoomed tile, then maximizes it.
+        if (!renderer.resetView(tile.topic)) {
+          onToggleMaximize(tile.topic);
+        }
+      }}
+      onPointerDown={(event) => {
+        if (event.button === 0 && renderer.isZoomed(tile.topic)) {
+          event.currentTarget.setPointerCapture(event.pointerId);
+          dragRef.current = { x: event.clientX, y: event.clientY };
+        }
+      }}
+      onPointerMove={(event) => {
+        const drag = dragRef.current;
+        if (drag) {
+          renderer.panBy(tile.topic, event.clientX - drag.x, event.clientY - drag.y);
+          drag.x = event.clientX;
+          drag.y = event.clientY;
+        }
+      }}
+      onPointerUp={() => {
+        dragRef.current = undefined;
+      }}
+      onPointerCancel={() => {
+        dragRef.current = undefined;
       }}
     >
       <canvas ref={canvasRef} className={classes.canvas} />
@@ -174,8 +224,13 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
   const [renderer] = useState(() => new GridRenderer(bumpAspectVersion, t("waitingForImages")));
 
   const imageTopics = useMemo(() => imageTopicNames(topics), [topics]);
+  const annotationTopics = useMemo(() => annotationTopicNames(topics), [topics]);
   const visibleTiles = useMemo(() => config.tiles.filter((tile) => tile.visible), [config.tiles]);
-  const subscribedKey = visibleTiles.map((tile) => tile.topic).join("\n");
+  // One line per tile: its image topic, then its annotation topics, tab-separated. A string, so
+  // unrelated config changes (rotation, labels) don't resubscribe.
+  const subscribedKey = visibleTiles
+    .map((tile) => [tile.topic, ...tileAnnotationTopics(tile, annotationTopics)].join("\t"))
+    .join("\n");
   // Video decoding needs every frame since the last keyframe, so only still images are sampled.
   const videoTopicsKey = (topics ?? [])
     .filter((topic) => imageKind(topic.schemaName) === "video")
@@ -209,17 +264,31 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
   }, [context, renderer]);
 
   useEffect(() => {
-    const subscribed = subscribedKey === "" ? [] : subscribedKey.split("\n");
+    const lines = subscribedKey === "" ? [] : subscribedKey.split("\n");
+    const annotationsByTile = new Map(
+      lines.map((line) => {
+        const [topic = "", ...annotations] = line.split("\t");
+        return [topic, annotations];
+      }),
+    );
+    const subscribed = [...annotationsByTile.keys()];
     const videoTopics = new Set(videoTopicsKey.split("\n"));
-    renderer.setTopics(subscribed);
-    context.subscribe(
-      subscribed.map((topic) =>
+    renderer.setTopics(subscribed, annotationsByTile);
+    // Annotations are small and unsampled, so syncing can find the one stamped like the image.
+    const annotations = new Set([...annotationsByTile.values()].flat());
+    context.subscribe([
+      ...subscribed.map((topic) =>
         videoTopics.has(topic)
           ? { topic }
           : { topic, sampling: { mode: "latest-per-render-tick" as const } },
       ),
-    );
+      ...[...annotations].map((topic) => ({ topic })),
+    ]);
   }, [context, renderer, subscribedKey, videoTopicsKey]);
+
+  useEffect(() => {
+    renderer.setOptions({ linkZoom: config.linkZoom, syncAnnotations: config.syncAnnotations });
+  }, [renderer, config.linkZoom, config.syncAnnotations]);
 
   useEffect(() => {
     context.saveState(config);
@@ -227,17 +296,17 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
 
   const actionHandler = useCallback(
     (action: SettingsTreeAction) => {
-      setConfig((prev) => settingsReducer(prev, action, imageTopics));
+      setConfig((prev) => settingsReducer(prev, action, imageTopics, annotationTopics));
     },
-    [imageTopics],
+    [imageTopics, annotationTopics],
   );
 
   useEffect(() => {
     context.updatePanelSettingsEditor({
       actionHandler,
-      nodes: buildSettingsTree(config, imageTopics, t),
+      nodes: buildSettingsTree(config, imageTopics, annotationTopics, t),
     });
-  }, [context, actionHandler, config, imageTopics, t]);
+  }, [context, actionHandler, config, imageTopics, annotationTopics, t]);
 
   const maximizedTile = visibleTiles.find((tile) => tile.topic === maximizedTopic);
   const shownTiles = useMemo(

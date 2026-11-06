@@ -30,4 +30,10 @@ export const cameraGrid = {
   rotation: "Rotation",
   flipHorizontal: "Flip horizontal",
   flipVertical: "Flip vertical",
+  annotations: "Annotations",
+  linkZoom: "Link zoom",
+  linkZoomHelp:
+    "Zoom (mouse wheel) and pan (drag) all cameras together. Double-click resets the zoom.",
+  syncAnnotations: "Sync annotations",
+  syncAnnotationsHelp: "Only draw annotations whose timestamp matches the image.",
 };
