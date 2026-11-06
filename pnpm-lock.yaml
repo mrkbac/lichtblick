@@ -105,9 +105,6 @@ importers:
       playwright:
         specifier: 1.64.1
         version: 1.64.1
-      prettier:
-        specifier: 3.9.10
-        version: 3.9.10
       react:
         specifier: 19.3.1
         version: 19.3.1
@@ -604,9 +601,6 @@ importers:
       chartjs-plugin-datalabels:
         specifier: 2.2.0
         version: 2.2.0(chart.js@4.6.1)
-      chromatic:
-        specifier: 11.5.6
-        version: 11.5.6
       css-loader:
         specifier: 6.8.1
         version: 6.8.1
@@ -4841,18 +4835,6 @@ packages:
   chownr@3.0.0:
     resolution: {integrity: sha512-+IxzY9BZOQd/XuYPRmrvEVjF/nqj5kgT4kEq7VofrDoM1MxoRjEWkrCC3EtLi59TVawxTAn+orJwFQcrqEN1+g==}
     engines: {node: '>=18'}
-
-  chromatic@11.5.6:
-    resolution: {integrity: sha512-ycX/hlZLs69BltwwBNsEXr+As6x5/0rlwp6W/CiHMZ3tpm7dmkd+hQCsb8JGHb1h49W3qPOKQ/Lh9evqcJ1yeQ==}
-    hasBin: true
-    peerDependencies:
-      '@chromatic-com/cypress': ^0.*.* || ^1.0.0
-      '@chromatic-com/playwright': ^0.*.* || ^1.0.0
-    peerDependenciesMeta:
-      '@chromatic-com/cypress':
-        optional: true
-      '@chromatic-com/playwright':
-        optional: true
 
   chromium-pickle-js@0.2.0:
     resolution: {integrity: sha512-1R5Fho+jBq0DDydt+/vHWj5KJNJCKdARKOCwZUen84I5BreWoLqRLANH1U87eJy1tiASPtMnGqJJq0ZsLoRPOw==}
@@ -12310,8 +12292,6 @@ snapshots:
       readdirp: 4.1.2
 
   chownr@3.0.0: {}
-
-  chromatic@11.5.6: {}
 
   chromium-pickle-js@0.2.0: {}
 
