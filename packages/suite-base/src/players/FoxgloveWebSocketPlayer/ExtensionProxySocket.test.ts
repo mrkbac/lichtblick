@@ -9,17 +9,18 @@ import { needsExtensionProxy } from "./ExtensionProxySocket";
 
 describe("needsExtensionProxy", () => {
   it.each([
-    ["ws://robot.example:8765", "https:", true],
-    ["ws://10.0.0.5:8765", "https:", true],
-    ["wss://robot.example:8765", "https:", false],
-    ["ws://localhost:8765", "https:", false],
-    ["ws://app.localhost:8765", "https:", false],
-    ["ws://127.0.0.1:8765", "https:", false],
-    ["ws://[::1]:8765", "https:", false],
-    ["ws://robot.example:8765", "http:", false],
-    ["ws://robot.example:8765", "file:", false],
-    ["not a url", "https:", false],
-  ])("%s from %s page → %s", (url, pageProtocol, expected) => {
-    expect(needsExtensionProxy(url, pageProtocol)).toBe(expected);
+    ["ws://robot.example:8765", "https://licht.marko.im", true],
+    ["ws://10.0.0.5:8765", "https://licht.marko.im", true],
+    ["wss://robot.example:8765", "https://licht.marko.im", false],
+    ["ws://localhost:8765", "https://licht.marko.im", false],
+    ["ws://app.localhost:8765", "https://licht.marko.im", false],
+    ["ws://127.0.0.1:8765", "https://licht.marko.im", false],
+    ["ws://[::1]:8765", "https://licht.marko.im", false],
+    ["ws://robot.example:8765", "http://licht.marko.im", false],
+    ["ws://robot.example:8765", "https://preview.example", false],
+    ["ws://robot.example:8765", "file://", false],
+    ["not a url", "https://licht.marko.im", false],
+  ])("%s from %s → %s", (url, pageOrigin, expected) => {
+    expect(needsExtensionProxy(url, pageOrigin)).toBe(expected);
   });
 });

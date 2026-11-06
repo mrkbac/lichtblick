@@ -32,6 +32,11 @@ window.addEventListener("message", (event) => {
     return;
   }
   let closed = false;
+  // An idle WebSocket doesn't keep the service worker alive; incoming port messages
+  // reset its 30 s idle timer, so ping while this socket is open.
+  const keepalive = setInterval(() => {
+    worker.postMessage({ cmd: "ping" });
+  }, 20_000);
 
   pagePort.postMessage({ ev: "attached" });
 
@@ -47,6 +52,7 @@ window.addEventListener("message", (event) => {
     pagePort.postMessage(m);
   });
   worker.onDisconnect.addListener(() => {
+    clearInterval(keepalive);
     if (!closed) {
       pagePort.postMessage({ ev: "close", code: 1006, reason: "Proxy disconnected" });
     }
@@ -63,6 +69,7 @@ window.addEventListener("message", (event) => {
       }
     } else if (m?.cmd === "close") {
       closed = true;
+      clearInterval(keepalive);
       worker.disconnect();
       pagePort.close();
     }

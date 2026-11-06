@@ -33,14 +33,18 @@ function isLoopback(hostname: string): boolean {
   );
 }
 
-/** True when the browser would block this socket as mixed content. */
+// Origins the extension's content script runs on (chrome-extension/manifest.json). Elsewhere
+// keep the direct socket: Chrome may still allow it (e.g. local network access).
+const PROXY_ORIGINS = new Set(["https://licht.marko.im"]);
+
+/** True when this page can use the proxy and the browser would block the socket directly. */
 export function needsExtensionProxy(
   url: string,
-  pageProtocol: string | undefined = typeof window === "undefined"
+  pageOrigin: string | undefined = typeof window === "undefined"
     ? undefined
-    : window.location.protocol,
+    : window.location.origin,
 ): boolean {
-  if (pageProtocol !== "https:") {
+  if (pageOrigin == undefined || !PROXY_ORIGINS.has(pageOrigin)) {
     return false;
   }
   let parsed: URL;
