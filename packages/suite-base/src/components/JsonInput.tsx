@@ -15,13 +15,9 @@
 //   You may not use this file except in compliance with the License.
 
 import ErrorIcon from "@mui/icons-material/Error";
-import { Typography } from "@mui/material";
-import CodeEditor from "@uiw/react-textarea-code-editor/nohighlight";
+import { InputBase, Typography } from "@mui/material";
 import * as _ from "lodash-es";
 import { useState, useCallback, useRef, useLayoutEffect, useEffect } from "react";
-import json from "refractor/lang/json.js";
-import { refractor } from "refractor/lib/core.js";
-import rehypePrismGenerator from "rehype-prism-plus/generator";
 import { makeStyles } from "tss-react/mui";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -29,23 +25,14 @@ import { toError } from "@lichtblick/suite-base/util/toError";
 import { validationErrorToString, ValidationResult } from "@lichtblick/suite-base/util/validators";
 import { customTypography } from "@lichtblick/theme";
 
-// Only JSON is highlighted; the default editor entry bundles every Prism language.
-refractor.register(json);
-const rehypePlugins: React.ComponentProps<typeof CodeEditor>["rehypePlugins"] = [
-  [rehypePrismGenerator(refractor), { ignoreMissing: true }],
-];
-
 const useStyles = makeStyles()((theme) => ({
   editor: {
-    backgroundColor: "transparent !important",
-    font: "inherit !important",
-    fontFamily: `${customTypography.fontMonospace} !important`,
-    overflow: "auto",
+    fontFamily: customTypography.fontMonospace,
+    padding: theme.spacing(1.5),
+    textarea: { overflow: "auto !important" },
   },
   error: {
-    "*": {
-      color: `${theme.palette.error.main} !important`,
-    },
+    color: theme.palette.error.main,
   },
 }));
 
@@ -149,7 +136,7 @@ function ValidatedInputBase({
   }, [value, stringify, memorizedInputValidation, isEditing]);
 
   const handleChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    (e: React.ChangeEvent<HTMLTextAreaElement | HTMLInputElement>) => {
       const val = e.currentTarget.value;
       if (!isEditing) {
         setIsEditing(true);
@@ -181,20 +168,25 @@ function ValidatedInputBase({
 
   return (
     <>
-      <CodeEditor
+      <InputBase
+        multiline
+        fullWidth
         className={cx(classes.editor, { [classes.error]: error.length > 0 })}
         readOnly={readOnly}
-        data-testid={dataTestId ?? `validated-input-${JSON.stringify(inputStr)}`}
-        ref={inputRef}
+        inputRef={inputRef}
         value={inputStr}
         onChange={handleChange}
-        language="json"
-        rehypePlugins={rehypePlugins}
         onBlur={() => {
           setIsEditing(false);
         }}
-        padding={12}
-        style={{ maxHeight: maxHeight ?? 300 }}
+        slotProps={{
+          input: {
+            // Spread: MUI's input slot type has no data-* attributes.
+            ...{ "data-testid": dataTestId ?? `validated-input-${JSON.stringify(inputStr)}` },
+            spellCheck: false,
+            style: { maxHeight: maxHeight ?? 300 },
+          },
+        }}
       />
       {error.length > 0 && (
         <Stack direction="row" alignItems="center" gap={0.25} padding={0.5}>

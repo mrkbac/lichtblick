@@ -63,6 +63,22 @@ const wsSource = {
   initialize: () => undefined,
 } as unknown as IDataSourceFactory;
 
+const rosbridgeSource = {
+  id: "rosbridge-websocket",
+  type: "connection",
+  displayName: "Rosbridge",
+  formConfig: { fields: [{ id: "url", label: "URL", defaultValue: "ws://localhost:9090" }] },
+  initialize: () => undefined,
+} as unknown as IDataSourceFactory;
+
+const udpSource = {
+  id: "udp",
+  type: "connection",
+  displayName: "UDP",
+  formConfig: { fields: [{ id: "port", label: "Port", defaultValue: "2369" }] },
+  initialize: () => undefined,
+} as unknown as IDataSourceFactory;
+
 describe("Start Component", () => {
   const mockSelectRecent = vi.fn();
   const mockSelectSource = vi.fn();
@@ -98,7 +114,7 @@ describe("Start Component", () => {
     });
     (usePlayerSelection as Mock).mockReturnValue({
       recentSources,
-      availableSources: [wsSource],
+      availableSources: [wsSource, rosbridgeSource, udpSource],
       selectRecent: mockSelectRecent,
       selectSource: mockSelectSource,
       removeRecent: mockRemoveRecent,
@@ -169,6 +185,38 @@ describe("Start Component", () => {
     });
   });
 
+  it("opens a source picked from the connection type menu with its extra fields", () => {
+    setup();
+
+    fireEvent.click(screen.getByRole("button", { name: "connectionType" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "UDP" }));
+    fireEvent.change(screen.getByLabelText("Port"), { target: { value: "3000" } });
+    fireEvent.click(screen.getByText("open"));
+
+    expect(mockSelectSource).toHaveBeenCalledWith("udp", {
+      type: "connection",
+      params: { port: "3000" },
+    });
+  });
+
+  it("replaces a prefilled default URL when switching connection types", () => {
+    setup();
+    const box = screen.getByPlaceholderText("openUrlPlaceholder");
+    const pick = (name: string) => {
+      fireEvent.click(screen.getByRole("button", { name: "connectionType" }));
+      fireEvent.click(screen.getByRole("menuitem", { name }));
+    };
+
+    pick("Foxglove WebSocket");
+    expect(box).toHaveValue("ws://localhost:8765");
+    pick("Rosbridge");
+    expect(box).toHaveValue("ws://localhost:9090");
+
+    typeUrl("ws://robot:1234");
+    pick("Foxglove WebSocket");
+    expect(box).toHaveValue("ws://robot:1234");
+  });
+
   it("re-opens the matching recent for a previously used URL", () => {
     setup();
 
@@ -212,14 +260,12 @@ describe("Start Component", () => {
     expect(screen.getByTestId("catalog")).toHaveTextContent("since:2026");
   });
 
-  it("opens the file and connection dialogs", () => {
+  it("opens the file dialog", () => {
     setup();
 
     fireEvent.click(screen.getByText("openLocalFiles"));
-    fireEvent.click(screen.getByRole("button", { name: "moreConnectionOptions" }));
 
-    expect(mockOpenDialog).toHaveBeenNthCalledWith(1, "file");
-    expect(mockOpenDialog).toHaveBeenNthCalledWith(2, "connection");
+    expect(mockOpenDialog).toHaveBeenCalledWith("file");
   });
 
   it("shows the first recents and expands to all", () => {

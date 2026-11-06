@@ -34,9 +34,10 @@ export const openDialog = {
   sourceType: "Source type",
   enterOpensUrl: "↵ {{url}} · {{type}}",
   enterOpens: "↵ opens {{name}}",
-  unrecognizedUrl: "Unrecognized URL; see ⋯ for other connections",
+  unrecognizedUrl: "Unrecognized URL; pick a connection type under ⋯",
+  connectionType: "Connection type…",
+  detectConnectionType: "Detect from URL",
   chooseSourceType: "choose source type",
-  moreConnectionOptions: "More connection options…",
   clearRecents: "Clear unpinned",
   showAllRecents: "Show all ({{count}})",
   pin: "Pin",
@@ -46,7 +47,7 @@ export const openDialog = {
   noRecentMatches: "No recent sources match this search.",
   searchHelpTitle: "Search and connect",
   searchHelpConnect:
-    "Connect by typing a host (robot-1, robot.local, 192.168.1.5: a Foxglove WebSocket on port 8765, when nothing in recents or the catalog matches), host:port, or a full URL (ws://, wss://, https://…/file.mcap). Other connection types are under ⋯.",
+    "Connect by typing a host (robot-1, robot.local, 192.168.1.5: a Foxglove WebSocket on port 8765, when nothing in recents or the catalog matches), host:port, or a full URL (ws://, wss://, https://…/file.mcap). Pick another connection type, or one without a URL, under ⋯.",
   searchHelpSearch: "Anything else searches recents and the catalog. Combine filters with text:",
   searchHelpFilters:
     "topic:/camera · schema:Image · path:2026/ · since:2026-10-01 · until:2026-10-31 · duration>5m · size<2GB · status:error|nosummary|ok · has:image|gps|pointcloud|tf|video",

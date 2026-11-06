@@ -5,16 +5,32 @@
 // SPDX-FileCopyrightText: Copyright (C) 2025 Takayuki Honda <takayuki.honda@tier4.jp>
 // SPDX-License-Identifier: MPL-2.0
 
-import { useCallback, useEffect, useLayoutEffect, useReducer, useState, useMemo } from "react";
-import { PieChart as RechartsPieChart, Pie, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import {
+  ArcElement,
+  Chart,
+  type ChartConfiguration,
+  DoughnutController,
+  Legend,
+  Tooltip,
+} from "chart.js";
+import ChartDataLabels from "chartjs-plugin-datalabels";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useReducer,
+  useRef,
+  useState,
+  useMemo,
+} from "react";
 
 import { parseMessagePath } from "@lichtblick/message-path";
 import { PanelExtensionContext, SettingsTreeAction } from "@lichtblick/suite";
 import { useLegendCount } from "@lichtblick/suite-base/components/SettingsTreeEditor/inputs/useLegendCount";
 
-import { useStyles, tooltipStyle } from "./PieChart.style";
+import { useStyles } from "./PieChart.style";
 import { DEFAULT_CONFIG } from "./constants";
-import type { PieChartConfig, PieChartState } from "./types";
+import type { PieChartConfig, PieChartDatum, PieChartState } from "./types";
 import { useChartData } from "./useChartData";
 import { useSettingsTree } from "./useSettingsTree";
 import { settingsActionReducer } from "./utils/settingsActionReducer";
@@ -27,6 +43,54 @@ type PieChartProps = {
 export function formatTooltip(value: unknown, name: string | number | undefined): [string, string] {
   const formattedValue = typeof value === "number" ? value.toFixed(2) : String(value);
   return [`${formattedValue}%`, String(name ?? "")];
+}
+
+Chart.register(ArcElement, DoughnutController, Tooltip, Legend);
+
+export function buildChartConfig(
+  data: readonly PieChartDatum[],
+  rawValue: Float32Array,
+): ChartConfiguration<"doughnut"> {
+  const colors = data.map((entry) => entry.color);
+  return {
+    type: "doughnut",
+    data: {
+      labels: data.map((entry) => entry.name),
+      datasets: [{ data: data.map((entry) => entry.value), backgroundColor: colors }],
+    },
+    // datalabels is registered per chart so other chart.js users are unaffected
+    plugins: [ChartDataLabels],
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: "50%", // innerRadius 40% / outerRadius 80%
+      radius: "80%",
+      animation: { duration: 1500, easing: "easeInOutQuad" },
+      plugins: {
+        legend: { position: "bottom" },
+        tooltip: {
+          backgroundColor: "rgba(255, 255, 255, 0.8)",
+          titleColor: "#333",
+          bodyColor: "#333",
+          cornerRadius: 10,
+          padding: 10,
+          bodyFont: { size: 14 },
+          callbacks: {
+            label: (item) => {
+              const [value, name] = formatTooltip(item.raw, item.label);
+              return `${name}: ${value}`;
+            },
+          },
+        },
+        datalabels: {
+          anchor: "end",
+          align: "end",
+          color: (ctx) => colors[ctx.dataIndex] ?? "#333",
+          formatter: (_value, ctx) => rawValue[ctx.dataIndex]?.toFixed(2) ?? "",
+        },
+      },
+    },
+  };
 }
 
 export function PieChart({ context }: PieChartProps): React.JSX.Element {
@@ -76,10 +140,35 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
 
   // Normalize values into percentage format from useChartData
   const chartData = useChartData(rawValue, config);
-  // recharts reads each slice's color from its `fill` field
-  const data = useMemo(
-    () => chartData.map((entry) => ({ ...entry, fill: entry.color })),
-    [chartData],
+
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const chartRef = useRef<Chart<"doughnut"> | undefined>(undefined);
+
+  // Create the chart once the canvas exists, update it in place on new data,
+  // destroy it when the canvas goes away (empty data)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      chartRef.current?.destroy();
+      chartRef.current = undefined;
+      return;
+    }
+    const chartConfig = buildChartConfig(chartData, rawValue);
+    if (chartRef.current) {
+      chartRef.current.data = chartConfig.data;
+      chartRef.current.options = chartConfig.options ?? {};
+      chartRef.current.update("none");
+    } else {
+      chartRef.current = new Chart(canvas, chartConfig);
+    }
+  }, [chartData, rawValue]);
+
+  useEffect(
+    () => () => {
+      chartRef.current?.destroy();
+      chartRef.current = undefined;
+    },
+    [],
   );
 
   // Dispatch path change on config.path update
@@ -143,29 +232,9 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
       {rawValue.length === 0 ? (
         <div>No data available</div>
       ) : (
-        <ResponsiveContainer width="100%" height={400}>
-          <RechartsPieChart>
-            <Pie
-              data={data}
-              dataKey="value"
-              nameKey="name"
-              label={({ index }) => {
-                const value = rawValue[index];
-                return value?.toString ? value.toFixed(2) : "";
-              }}
-              fill="#8884d8"
-              cx="50%"
-              cy="50%"
-              innerRadius="40%"
-              outerRadius="80%"
-              animationBegin={500}
-              animationDuration={1500}
-              animationEasing="ease-in-out"
-            />
-            <Tooltip contentStyle={tooltipStyle} formatter={formatTooltip} />
-            <Legend />
-          </RechartsPieChart>
-        </ResponsiveContainer>
+        <div className={classes.chart}>
+          <canvas ref={canvasRef} />
+        </div>
       )}
     </div>
   );

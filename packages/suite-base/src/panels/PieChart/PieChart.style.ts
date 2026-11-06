@@ -4,7 +4,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2025 Takayuki Honda <takayuki.honda@tier4.jp>
 // SPDX-License-Identifier: MPL-2.0
 
-import type { CSSProperties } from "react";
 import { makeStyles } from "tss-react/mui";
 
 export const useStyles = makeStyles()(() => ({
@@ -17,14 +16,9 @@ export const useStyles = makeStyles()(() => ({
     fontSize: "24px",
     marginBottom: "20px",
   },
+  chart: {
+    position: "relative",
+    width: "100%",
+    height: 400,
+  },
 }));
-
-export const tooltipStyle: CSSProperties = {
-  backgroundColor: "rgba(255, 255, 255, 0.8)",
-  borderRadius: "10px",
-  border: "none",
-  color: "#fff",
-  fontSize: "14px",
-  padding: "10px",
-  boxShadow: "0px 4px 6px rgba(0, 0, 0, 0.3)",
-};

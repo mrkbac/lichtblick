@@ -133,14 +133,6 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
           shortcut: formatKeyboardShortcut("O", ["Meta"]),
         },
       )}
-      {item(
-        "open-connection",
-        t("openConnection"),
-        () => {
-          dialogActions.dataSource.open("connection");
-        },
-        { shortcut: formatKeyboardShortcut("O", ["Meta", "Shift"]) },
-      )}
       {item("export-recording", t("exportRecording"), openExport, {
         disabled: !exportableFile,
       })}

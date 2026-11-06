@@ -5,19 +5,19 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { set as idbSet, get as idbGet, createStore as idbCreateStore } from "idb-keyval";
 import * as _ from "lodash-es";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAsync } from "react-use";
 
 import Logger from "@lichtblick/log";
 import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
+import { createKeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 const log = Logger.getLogger(__filename);
 
 const IDB_KEY = "recents";
-const IDB_STORE = idbCreateStore(`${KEY_WORKSPACE_PREFIX}lichtblick-recents`, "recents");
+const IDB_STORE = createKeyValueStore(`${KEY_WORKSPACE_PREFIX}lichtblick-recents`, "recents");
 
 // Maximum number of unpinned recents to keep
 export const MAX_RECENTS = 100;
@@ -96,7 +96,7 @@ function isSameRecent(a: UnsavedRecentRecord, b: UnsavedRecentRecord): boolean {
 
 function useIndexedDbRecents(): IRecentsStore {
   const { value: initialRecents, loading } = useAsync(
-    async () => await idbGet<(RecentRecord & OldRecentRecord)[] | undefined>(IDB_KEY, IDB_STORE),
+    async () => await IDB_STORE.get<(RecentRecord & OldRecentRecord)[]>(IDB_KEY),
     [],
   );
 
@@ -120,7 +120,7 @@ function useIndexedDbRecents(): IRecentsStore {
     newRecentsRef.current = recentsToSave;
 
     setRecents(recentsToSave);
-    idbSet(IDB_KEY, recentsToSave, IDB_STORE).catch((err: unknown) => {
+    IDB_STORE.set(IDB_KEY, recentsToSave).catch((err: unknown) => {
       log.error(err);
     });
   }, [loading]);

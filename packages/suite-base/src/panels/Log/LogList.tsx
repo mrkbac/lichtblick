@@ -16,23 +16,13 @@
 
 import DoubleArrowDownIcon from "@mui/icons-material/KeyboardDoubleArrowDown";
 import { Fab } from "@mui/material";
-import {
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useReducer,
-  useRef,
-  useState,
-} from "react";
+import { elementScroll, useVirtualizer } from "@tanstack/react-virtual";
+import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { List, ListImperativeAPI, RowComponentProps } from "react-window";
 
 import { Time } from "@lichtblick/suite";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
-import { useElementSize } from "@lichtblick/suite-base/hooks/useElementSize";
 import { NormalizedLogMessage } from "@lichtblick/suite-base/panels/Log/types";
-import { TimeDisplayMethod } from "@lichtblick/suite-base/types/panels";
 
 import { useStyles } from "./LogList.style";
 import LogMessage from "./LogMessage";
@@ -56,50 +46,6 @@ export type LogListProps = {
   apiRef?: React.Ref<LogListApi>;
 };
 
-type ListItemData = {
-  items: readonly NormalizedLogMessage[];
-  playheadIndex: number;
-  dimFuture: boolean;
-  timeFormat: TimeDisplayMethod;
-  timeZone: string | undefined;
-  onRowClick?: (item: NormalizedLogMessage) => void;
-  onCopy?: (item: NormalizedLogMessage) => void;
-  setRowHeight: (item: NormalizedLogMessage, height: number) => void;
-  /** Changes when measured heights change, so the List re-reads row heights */
-  heightVersion: number;
-  /** Re-measure rows when the width changes */
-  width: number | undefined;
-};
-
-function Row(props: RowComponentProps<ListItemData>): React.JSX.Element {
-  const { index, style, ariaAttributes, items, playheadIndex, dimFuture, setRowHeight, width } =
-    props;
-  const item = items[index]!;
-  const ref = useRef<HTMLDivElement>(null);
-
-  // Measured in an effect rather than with a ResizeObserver, which can trigger
-  // "ResizeObserver loop" errors while the list scrolls.
-  useEffect(() => {
-    if (ref.current) {
-      setRowHeight(item, ref.current.clientHeight);
-    }
-  }, [item, setRowHeight, width]);
-
-  return (
-    <div style={{ ...style, height: "auto" }} {...ariaAttributes} ref={ref}>
-      <LogMessage
-        value={item}
-        timestampFormat={props.timeFormat}
-        timeZone={props.timeZone}
-        current={index === playheadIndex}
-        future={dimFuture && index > playheadIndex}
-        onClick={props.onRowClick}
-        onCopy={props.onCopy}
-      />
-    </div>
-  );
-}
-
 /**
  * Virtualized list of log messages that follows the playhead: the row nearest the current time
  * is highlighted and kept in view. For live data this means following the newest row.
@@ -109,27 +55,45 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
   const { classes } = useStyles();
   const { t } = useTranslation("log");
   const { timeFormat, timeZone } = useAppTimeFormat();
-  const listRef = useRef<ListImperativeAPI>(null);
-  const { width, ref: resizeRef } = useElementSize<HTMLDivElement>();
+  const scrollRef = useRef<HTMLDivElement>(null);
 
-  // Row heights keyed by message so they survive filtering. Reset when the width changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- width invalidates measured heights
-  const heights = useMemo(() => new WeakMap<NormalizedLogMessage, number>(), [width]);
-  const [heightVersion, bumpHeightVersion] = useReducer((n: number) => n + 1, 0);
-  const setRowHeight = useCallback(
-    (item: NormalizedLogMessage, height: number) => {
-      if (heights.get(item) !== height) {
-        heights.set(item, height);
-        bumpHeightVersion();
+  // Stable keys per message, so measured row heights survive filtering
+  const keyOf = useMemo(() => {
+    const keys = new WeakMap<NormalizedLogMessage, number>();
+    let nextKey = 0;
+    return (item: NormalizedLogMessage) => {
+      let key = keys.get(item);
+      if (key == undefined) {
+        key = nextKey++;
+        keys.set(item, key);
+      }
+      return key;
+    };
+  }, []);
+
+  // scrollTop set by our own scrolling, so the resulting scroll event isn't taken as user input
+  const programmaticScrollTop = useRef<number | undefined>(undefined);
+
+  const virtualizer = useVirtualizer({
+    count: items.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => DEFAULT_ROW_HEIGHT,
+    overscan: 3,
+    getItemKey: (index) => keyOf(items[index]!),
+    measureElement: (element) => element.getBoundingClientRect().height,
+    // Avoids "ResizeObserver loop" errors while the list scrolls
+    useAnimationFrameWithResizeObserver: true,
+    scrollToFn: (offset, options, instance) => {
+      const before = scrollRef.current?.scrollTop;
+      elementScroll(offset, options, instance);
+      const after = scrollRef.current?.scrollTop;
+      // Only a real move dispatches a scroll event that clears the marker; recording a no-op would
+      // leave a stale marker, and clearing it would drop a still-pending earlier event.
+      if (after !== before) {
+        programmaticScrollTop.current = after;
       }
     },
-    [heights],
-  );
-  const rowHeight = useCallback(
-    (index: number, { items: rowItems }: ListItemData) =>
-      heights.get(rowItems[index]!) ?? DEFAULT_ROW_HEIGHT,
-    [heights],
-  );
+  });
 
   const playheadIndex = useMemo(
     () => (currentTime == undefined ? items.length - 1 : lastIndexAtOrBefore(items, currentTime)),
@@ -137,23 +101,22 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
   );
 
   const [following, setFollowing] = useState(true);
-  // scrollTop set by our own scrolling, so the resulting scroll event isn't taken as user input
-  const programmaticScrollTop = useRef<number | undefined>(undefined);
 
-  const scrollToRow = useCallback((index: number) => {
-    const list = listRef.current;
-    if (!list || index < 0) {
-      return;
-    }
-    const before = list.element?.scrollTop;
-    list.scrollToRow({ index, align: "smart" });
-    const after = list.element?.scrollTop;
-    // Only a real move dispatches a scroll event that clears the marker; recording a no-op would
-    // leave a stale marker, and clearing it would drop a still-pending earlier event.
-    if (after !== before) {
-      programmaticScrollTop.current = after;
-    }
-  }, []);
+  const scrollToRow = useCallback(
+    (index: number) => {
+      const item = virtualizer.measurementsCache[index];
+      if (!item) {
+        return;
+      }
+      // Like react-window's "smart" alignment: scroll minimally when the row is within one
+      // viewport of being visible, otherwise center it.
+      const offset = virtualizer.scrollOffset ?? 0;
+      const size = virtualizer.scrollRect?.height ?? 0;
+      const near = offset >= item.end - 2 * size && offset <= item.start + size;
+      virtualizer.scrollToIndex(index, { align: near ? "auto" : "center" });
+    },
+    [virtualizer],
+  );
 
   useEffect(() => {
     if (following && items.length > 0) {
@@ -206,51 +169,52 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
     [onSeek],
   );
 
-  const rowProps = useMemo<ListItemData>(
-    () => ({
-      items,
-      playheadIndex,
-      dimFuture: currentTime != undefined,
-      timeFormat,
-      timeZone,
-      onRowClick,
-      onCopy,
-      setRowHeight,
-      heightVersion,
-      width,
-    }),
-    [
-      items,
-      playheadIndex,
-      currentTime,
-      timeFormat,
-      timeZone,
-      onRowClick,
-      onCopy,
-      setRowHeight,
-      heightVersion,
-      width,
-    ],
-  );
+  const dimFuture = currentTime != undefined;
 
   return (
     <div
       style={{ position: "relative", width: "100%", height: "100%" }}
-      ref={resizeRef}
       data-testid="virtualized-list"
     >
-      <List<ListItemData>
-        listRef={listRef}
-        style={{ outline: "none", width: "100%", height: "100%" }}
-        // Rows to render before the first measurement
-        defaultHeight={600}
-        rowProps={rowProps}
-        rowHeight={rowHeight}
-        rowCount={items.length}
+      <div
+        ref={scrollRef}
+        role="list"
+        style={{ outline: "none", width: "100%", height: "100%", overflowY: "auto" }}
         onScroll={onScroll}
-        rowComponent={Row}
         data-testid="scrollable-list"
-      />
+      >
+        <div style={{ height: virtualizer.getTotalSize(), position: "relative", width: "100%" }}>
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const index = virtualRow.index;
+            return (
+              <div
+                key={virtualRow.key}
+                data-index={index}
+                ref={virtualizer.measureElement}
+                role="listitem"
+                aria-posinset={index + 1}
+                aria-setsize={items.length}
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  width: "100%",
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                <LogMessage
+                  value={items[index]!}
+                  timestampFormat={timeFormat}
+                  timeZone={timeZone}
+                  current={index === playheadIndex}
+                  future={dimFuture && index > playheadIndex}
+                  onClick={onRowClick}
+                  onCopy={onCopy}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
       {!following && (
         <Fab
           size="small"

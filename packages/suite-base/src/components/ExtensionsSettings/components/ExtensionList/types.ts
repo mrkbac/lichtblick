@@ -5,9 +5,9 @@ import { Immutable } from "@lichtblick/suite";
 import { FocusedExtension } from "@lichtblick/suite-base/components/ExtensionsSettings/types";
 import { ExtensionMarketplaceDetail } from "@lichtblick/suite-base/context/ExtensionMarketplaceContext";
 
-export const paginationModel = {
+export const initialPagination = {
+  pageIndex: 0,
   pageSize: 10,
-  page: 0,
 };
 
 export type ExtensionListProps = {

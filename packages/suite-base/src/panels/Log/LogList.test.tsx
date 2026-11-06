@@ -2,8 +2,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import { act, render, screen, cleanup, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { createRef } from "react";
 import type { Mock } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
@@ -12,7 +13,7 @@ import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { NormalizedLogMessage } from "@lichtblick/suite-base/panels/Log/types";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
-import LogList, { LogListProps } from "./LogList";
+import LogList, { LogListApi, LogListProps } from "./LogList";
 
 function createMockLogMessage(
   index: number,
@@ -33,14 +34,6 @@ vi.mock("@lichtblick/suite-base/hooks", () => ({
   useAppTimeFormat: vi.fn(),
 }));
 
-vi.mock("@lichtblick/suite-base/hooks/useElementSize", () => ({
-  useElementSize: () => ({
-    width: 800,
-    height: 600,
-    ref: vi.fn(),
-  }),
-}));
-
 describe("LogList Component", () => {
   let originalClientHeight: PropertyDescriptor | undefined;
 
@@ -50,10 +43,7 @@ describe("LogList Component", () => {
       timeFormat: "SEC",
       timeZone: "UTC",
     });
-    // In JSDOM clientHeight is always 0, which makes the v2 List skip row 0
-    // (all heights collapse to 0, shifting startIndexOverscan past row 0).
-    // Return DEFAULT_ROW_HEIGHT (12px) so the layout stays consistent with
-    // what the component would produce in a real browser.
+    // jsdom has no layout and the virtualizer renders no rows for a 0px tall scroll container
     originalClientHeight = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "clientHeight");
     Object.defineProperty(HTMLElement.prototype, "clientHeight", {
       configurable: true,
@@ -216,6 +206,50 @@ describe("LogList Component", () => {
       await user.click(button);
 
       expect(screen.queryByTestId("scroll-to-bottom-button")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("scroll api", () => {
+    const items = Array.from({ length: 5 }, (_, i) => createMockLogMessage(i, 2));
+
+    it("stops following on scrollToIndex and resumes on follow", () => {
+      const apiRef = createRef<LogListApi>();
+      setup(items, { apiRef });
+
+      act(() => {
+        apiRef.current!.scrollToIndex(0);
+      });
+      expect(screen.getByTestId("scroll-to-bottom-button")).toBeInTheDocument();
+
+      act(() => {
+        apiRef.current!.follow();
+      });
+      expect(screen.queryByTestId("scroll-to-bottom-button")).not.toBeInTheDocument();
+    });
+
+    it("does not take its own scrolling to the playhead as user input", () => {
+      // 14px rows in a 12px viewport, and scrollTo moves scrollTop like a browser would
+      vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue({
+        height: 14,
+      } as DOMRect);
+      vi.spyOn(Element.prototype, "scrollHeight", "get").mockReturnValue(70);
+      const scrollTo = vi.fn(function (this: Element, options: ScrollToOptions) {
+        Object.defineProperty(this, "scrollTop", { configurable: true, value: options.top });
+      });
+      Object.defineProperty(Element.prototype, "scrollTo", { configurable: true, value: scrollTo });
+
+      try {
+        // The playhead is on row 1, so following scrolls away from the end
+        setup(items, { currentTime: { sec: 2001, nsec: 0 } });
+        expect(scrollTo).toHaveBeenCalled();
+
+        fireEvent.scroll(screen.getByTestId("scrollable-list"));
+
+        expect(screen.queryByTestId("scroll-to-bottom-button")).not.toBeInTheDocument();
+      } finally {
+        delete (Element.prototype as Partial<Element>).scrollTo;
+        vi.restoreAllMocks();
+      }
     });
   });
 

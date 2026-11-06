@@ -21,8 +21,15 @@ export class DataSourceDialog {
     return await this.dialog.isVisible();
   }
 
-  public async openConnection(): Promise<void> {
-    await this.dialog.getByRole("button", { name: "More connection options…" }).click();
+  /** Opens the start page's connection type menu. */
+  public async openConnectionTypeMenu(): Promise<void> {
+    await this.dialog.getByRole("button", { name: "Connection type…" }).click();
+  }
+
+  /** Types a URL into the start page's address bar and opens it. */
+  public async connect(url: string): Promise<void> {
+    await this.dialog.getByRole("searchbox").fill(url);
+    await this.page.keyboard.press("Enter");
   }
 
   public getLocator(): Locator {

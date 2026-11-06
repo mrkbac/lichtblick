@@ -22,15 +22,6 @@ import DiagnosticsBuilder from "@lichtblick/suite-base/testing/builders/Diagnost
 
 vi.mock("@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticsPanelData");
 
-vi.mock("react-virtualized-auto-sizer", () => ({
-  __esModule: true,
-  default: ({
-    children,
-  }: {
-    children: (size: { height: number; width: number }) => React.JSX.Element;
-  }) => children({ height: 500, width: 500 }),
-}));
-
 function mockData(data: Partial<DiagnosticsPanelData>) {
   const subscribed = ["/diagnostics"];
   (useDiagnosticsPanelData as Mock).mockReturnValue({
@@ -55,6 +46,11 @@ const byId = (...infos: ReturnType<typeof info>[]): DiagnosticsById =>
   new Map(infos.map((i) => [i.id, i]));
 
 describe("DiagnosticSummary", () => {
+  beforeEach(() => {
+    // jsdom has no layout: give the virtualized list's scroll container a height
+    vi.spyOn(Element.prototype, "clientHeight", "get").mockReturnValue(500);
+  });
+
   function setup(config: Partial<DiagnosticSummaryConfig> = {}) {
     return render(
       <div style={{ width: 800, height: 500 }}>

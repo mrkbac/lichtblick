@@ -15,11 +15,11 @@
 //   You may not use this file except in compliance with the License.
 
 import { InputBase, MenuItem, Select, Typography } from "@mui/material";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { produce } from "immer";
 import * as _ from "lodash-es";
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
-import { List, RowComponentProps } from "react-window";
 
 import { filterMap } from "@lichtblick/den/collection";
 import { SettingsTreeAction } from "@lichtblick/suite";
@@ -50,7 +50,7 @@ import toggle from "@lichtblick/suite-base/util/toggle";
 import { buildSettingsTree } from "./utils/buildSettingsTree";
 import { filterAndSortDiagnostics, getDiagnosticsByLevel } from "./utils/util";
 
-type RowData = { data: DiagnosticInfo[] };
+const ROW_HEIGHT = 30;
 
 const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => {
   const { config, saveConfig } = props;
@@ -88,32 +88,6 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
     [configuredTopics, openSiblingPanel],
   );
 
-  const renderRow = useCallback(
-    (renderProps: RowComponentProps<RowData>) => {
-      const item = renderProps.data[renderProps.index]!;
-      return (
-        <div
-          style={{ ...renderProps.style }}
-          data-testid={`diagnostic-summary-node-row-${renderProps.index}`}
-        >
-          <DiagnosticNodeRow
-            key={item.id}
-            info={item}
-            isPinned={pinnedIds.includes(item.id)}
-            onClick={showDetails}
-            onClickPin={togglePinned}
-            history={history.get(item.id)}
-            range={range}
-            staleSec={staleSec}
-            showHistory={showHistory}
-            onSeek={seek}
-          />
-        </div>
-      );
-    },
-    [pinnedIds, showDetails, togglePinned, history, range, staleSec, showHistory, seek],
-  );
-
   const nodes = useMemo(() => {
     const pinnedNodes = filterMap(pinnedIds, (id) => diagnostics.get(id));
     const nodesByLevel = getDiagnosticsByLevel(diagnostics);
@@ -127,6 +101,15 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
     return [...pinnedNodes, ...sortedNodes].filter(({ status }) => status.level >= minLevel);
   }, [diagnostics, hardwareIdFilter, pinnedIds, sortByLevel, minLevel]);
 
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const virtualizer = useVirtualizer({
+    count: nodes.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    getItemKey: (index) => nodes[index]!.id,
+    overscan: 10,
+  });
+
   let summary: React.ReactNode = null;
   if (topics.subscribed.length === 0) {
     summary = <EmptyState>{t("noTopics")}</EmptyState>;
@@ -134,14 +117,41 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
     summary = <EmptyState>{t("waitingForDiagnostics")}</EmptyState>;
   } else if (nodes.length > 0) {
     summary = (
-      <List<RowData>
-        style={{ outline: "none", width: "100%", height: "100%" }}
-        rowHeight={30}
-        rowProps={{ data: nodes }}
-        rowCount={nodes.length}
-        overscanCount={10}
-        rowComponent={renderRow}
-      />
+      <div
+        ref={scrollRef}
+        style={{ outline: "none", width: "100%", height: "100%", overflowY: "auto" }}
+      >
+        <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const item = nodes[virtualRow.index]!;
+            return (
+              <div
+                key={virtualRow.key}
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  width: "100%",
+                  height: virtualRow.size,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+                data-testid={`diagnostic-summary-node-row-${virtualRow.index}`}
+              >
+                <DiagnosticNodeRow
+                  info={item}
+                  isPinned={pinnedIds.includes(item.id)}
+                  onClick={showDetails}
+                  onClickPin={togglePinned}
+                  history={history.get(item.id)}
+                  range={range}
+                  staleSec={staleSec}
+                  showHistory={showHistory}
+                  onSeek={seek}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </div>
     );
   }
 
