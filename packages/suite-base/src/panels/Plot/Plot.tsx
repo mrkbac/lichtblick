@@ -5,8 +5,12 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { ZoomIn20Regular } from "@fluentui/react-icons";
-import { Button, Tooltip, Fade, useTheme } from "@mui/material";
+import {
+  ArrowCounterclockwise20Regular,
+  TextBulletListLtr20Regular,
+  ZoomIn20Regular,
+} from "@fluentui/react-icons";
+import { Tooltip, Fade, useTheme } from "@mui/material";
 import * as _ from "lodash-es";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -156,6 +160,10 @@ const Plot = (props: PlotProps): React.JSX.Element => {
   );
   const isHoveringSelectablePoint = deltaMeasureMode.active && activeTooltip != undefined;
   const rangeStats = useRangeStats(coordinator, deltaMeasureMode.markerA, deltaMeasureMode.markerB);
+
+  const toggleLegend = useCallback(() => {
+    saveConfig({ showLegend: !showLegend });
+  }, [saveConfig, showLegend]);
 
   const toggleBoxZoom = useCallback(() => {
     setBoxZoomActive((active) => !active);
@@ -325,6 +333,28 @@ const Plot = (props: PlotProps): React.JSX.Element => {
         title={t("measureMode")}
         testId="plot-measure-mode-toggle"
       >
+        {canReset && (
+          <ToolbarIconButton
+            title={`${t("resetView")} (double-click)`}
+            aria-label={t("resetView")}
+            onClick={onResetView}
+            data-testid="plot-reset-view-button"
+          >
+            <ArrowCounterclockwise20Regular />
+          </ToolbarIconButton>
+        )}
+        {legendDisplay !== "none" && (
+          <ToolbarIconButton
+            title={t(showLegend ? "hideLegend" : "showLegend")}
+            aria-label={t(showLegend ? "hideLegend" : "showLegend")}
+            aria-pressed={showLegend}
+            color={showLegend ? "primary" : "default"}
+            onClick={toggleLegend}
+            data-testid="plot-legend-toggle"
+          >
+            <TextBulletListLtr20Regular />
+          </ToolbarIconButton>
+        )}
         <ToolbarIconButton
           title={t("zoomTool")}
           aria-label={t("zoomTool")}
@@ -344,14 +374,13 @@ const Plot = (props: PlotProps): React.JSX.Element => {
         position="relative"
       >
         {/* Pass stable values here for properties when not showing values so that the legend memoization remains stable. */}
-        {legendDisplay !== "none" && (
+        {legendDisplay !== "none" && showLegend && (
           <PlotLegend
             coordinator={coordinator}
             legendDisplay={legendDisplay}
             onClickPath={onClickPath}
             paths={series}
             saveConfig={saveConfig}
-            showLegend={showLegend}
             sidebarDimension={sidebarDimension}
             showValues={config.showPlotValuesInLegend}
             hoveredValuesBySeriesIndex={hoveredValuesBySeriesIndex}
@@ -417,18 +446,6 @@ const Plot = (props: PlotProps): React.JSX.Element => {
             )}
           </div>
         </Tooltip>
-        {canReset && (
-          <div className={classes.resetZoomButton} data-testid="plot-reset-view-button">
-            <Button
-              variant="contained"
-              color="inherit"
-              title="(shortcut: double-click)"
-              onClick={onResetView}
-            >
-              {t("resetView")}
-            </Button>
-          </div>
-        )}
         <PanelContextMenu getItems={getPanelContextMenuItems} />
       </Stack>
       <KeyListener global keyDownHandlers={mergedKeyDownHandlers} keyUpHandlers={keyUpHandlers} />
