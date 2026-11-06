@@ -286,8 +286,19 @@ describe("useDeltaMeasureMode", () => {
 
   it("should reset to a fresh marker A on the third click", async () => {
     // Given
-    getXValueAtPixelMock.mockReturnValueOnce(1).mockReturnValueOnce(2).mockReturnValueOnce(3);
-    const { result } = setup({ coordinator: mockCoordinator });
+    // Deterministic, distinct elements per click: random builder values come from 1..20 and
+    // collided (x and value) ~1/400 runs, making marker A look unchanged.
+    let clicks = 0;
+    const getElementsAtPixel = vi.fn().mockImplementation(async () => {
+      clicks++;
+      return [
+        PlotBuilder.hoverElement({
+          configIndex: 0,
+          data: PlotBuilder.datum({ x: clicks, value: clicks * 10 }),
+        }),
+      ];
+    });
+    const { result } = setup({ coordinator: mockCoordinator, renderer: { getElementsAtPixel } });
     act(() => {
       result.current.toggleActive();
     });
@@ -306,7 +317,10 @@ describe("useDeltaMeasureMode", () => {
 
     // Then
     expect(result.current.markerB).toBeUndefined();
-    expect(result.current.markerA).toBeDefined();
+    expect(result.current.markerA).toEqual({
+      xValue: 3,
+      seriesValues: [{ configIndex: 0, value: 30 }],
+    });
     expect(result.current.markerA).not.toEqual(markerAFromFirstRound);
   });
 
