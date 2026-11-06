@@ -210,6 +210,8 @@ function PanelExtensionAdapter(
   const hoverValue = useHoverValue({
     componentId: `PanelExtensionAdapter:${panelId}`,
     isPlaybackSeconds: true,
+    // Don't re-render on every timeline hover move unless the panel uses previewTime.
+    disableUpdates: !watchedFields.has("previewTime"),
   });
   const setHoverValue = useSetHoverValue();
   const clearHoverValue = useClearHoverValue();
