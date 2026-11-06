@@ -379,6 +379,8 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
       return;
     }
     let frame = 0;
+    // Gamepad.timestamp only changes with new input, so an idle pad isn't re-read every frame
+    let lastReadKey = "";
     const poll = () => {
       const { config: cfg } = latest.current;
       const pads = navigator.getGamepads().filter((pad): pad is Gamepad => pad?.connected === true);
@@ -388,8 +390,16 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
       setGamepadName(pad?.id);
       setGamepadNonStandard(pad != undefined && pad.mapping !== "standard");
 
-      const next = pad && document.hasFocus() ? readGamepad(pad, cfg.gamepadDeadzone) : NEUTRAL_PAD;
+      const readKey =
+        pad && document.hasFocus() ? `${pad.id}:${pad.timestamp}:${cfg.gamepadDeadzone}` : "";
       const prev = sources.current.gamepad;
+      const next =
+        readKey === lastReadKey
+          ? prev
+          : pad && readKey
+            ? readGamepad(pad, cfg.gamepadDeadzone)
+            : NEUTRAL_PAD;
+      lastReadKey = readKey;
       if (!padsEqual(next, prev)) {
         sources.current.gamepad = next;
         const pressed = (button: ButtonName | "none") =>
