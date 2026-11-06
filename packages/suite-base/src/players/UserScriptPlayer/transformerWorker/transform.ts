@@ -139,7 +139,8 @@ export const getInputTopics = (scriptData: ScriptData): ScriptData => {
   }
 
   const inputTopics = filterMap(inputTopicElements, (expression) => {
-    if (!ts.isStringLiteral(expression)) {
+    // An empty string is not a topic
+    if (!ts.isStringLiteral(expression) || expression.text === "") {
       return undefined;
     }
     return expression.text;

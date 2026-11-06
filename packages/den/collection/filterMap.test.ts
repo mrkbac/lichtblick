@@ -17,17 +17,23 @@
 import filterMap from "./filterMap";
 
 describe("filterMap", () => {
-  it("behaves like map()+filter(Boolean)", () => {
+  it("maps values and passes the index", () => {
     expect(filterMap([], (x) => x)).toEqual([]);
     expect(filterMap([1, 2, 3], (x, i) => x === i + 1)).toEqual([true, true, true]);
-    expect(filterMap([0, 1, 2], (x) => x)).toEqual([1, 2]);
-    expect(filterMap([0, 1, 2], (x) => x - 1)).toEqual([-1, 1]);
-    expect(filterMap([0, 1, 2], () => true)).toEqual([true, true, true]);
-    expect(filterMap([0, 1, 2], () => 0)).toEqual([]);
+    expect(filterMap(new Set(["a", "b"]), (x, i) => `${x}${i}`)).toEqual(["a0", "b1"]);
+  });
+
+  it("drops only undefined and null", () => {
     expect(filterMap([0, 1, 2], () => undefined)).toEqual([]);
-    expect(filterMap([0, 1, 2], () => NaN)).toEqual([]);
     expect(filterMap([0, 1, 2], () => null)).toEqual([]);
-    expect(filterMap([0, 1, 2], () => "")).toEqual([]);
-    expect(filterMap([0, 1, 2], () => false)).toEqual([]);
+    expect(filterMap([0, 1, 2], (x) => (x === 1 ? undefined : x))).toEqual([0, 2]);
+  });
+
+  it("keeps other falsy values", () => {
+    expect(filterMap([0, 1, 2], (x) => x)).toEqual([0, 1, 2]);
+    expect(filterMap([0, 1], (x, i) => (x === 0 ? i : undefined))).toEqual([0]);
+    expect(filterMap(["", "a"], (x) => x)).toEqual(["", "a"]);
+    expect(filterMap([0], () => false)).toEqual([false]);
+    expect(filterMap([0], () => NaN)).toEqual([NaN]);
   });
 });
