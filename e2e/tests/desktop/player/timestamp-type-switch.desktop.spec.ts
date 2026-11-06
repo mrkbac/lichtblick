@@ -18,7 +18,7 @@ test("should switch playback time to epoch format next to the player", {
   const player = new PlayerControls(mainWindow);
 
   // Given
-  const initialTimeInUTC = "2025-02-26 10:37:15.547 AM WET";
+  const initialTimeInUTC = "2025-02-26 10:37:15.547 AM";
   const intialTimeInEpoch = "1740566235.547000000";
 
   const filename = "example.mcap";
@@ -31,6 +31,5 @@ test("should switch playback time to epoch format next to the player", {
   await player.switchToEpochFormat(initialTimeInUTC);
 
   // Then
-  const playerStartingTimeInEpoch = mainWindow.locator(`input[value="${intialTimeInEpoch}"]`);
-  await expect(playerStartingTimeInEpoch).toBeVisible();
+  await expect(player.getTimestampInput()).toHaveValue(intialTimeInEpoch);
 });

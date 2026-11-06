@@ -11,7 +11,10 @@ export class DataSourceDialog {
   }
 
   public async close(): Promise<void> {
-    await this.dialog.getByTestId("CloseIcon").click();
+    // The full-screen start page has no close button; Escape closes every view.
+    await this.dialog.waitFor();
+    await this.page.keyboard.press("Escape");
+    await this.dialog.waitFor({ state: "hidden" });
   }
 
   public async isVisible(): Promise<boolean> {
@@ -19,7 +22,7 @@ export class DataSourceDialog {
   }
 
   public async openConnection(): Promise<void> {
-    await this.dialog.getByText("Open connection").click();
+    await this.dialog.getByRole("button", { name: "More connection options…" }).click();
   }
 
   public getLocator(): Locator {
