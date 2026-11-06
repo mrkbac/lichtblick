@@ -69,6 +69,15 @@ export function handleAddSeriesAction({ draft }: HandleAction): void {
   });
 }
 
+/** A horizontal line at 0; the value field takes any number */
+export function handleAddReferenceLineAction({ draft }: HandleAction): void {
+  draft.paths.push({
+    ...DEFAULT_PLOT_PATH,
+    value: "0",
+    color: lineColors[draft.paths.length % lineColors.length],
+  });
+}
+
 export function handleDeleteSeriesAction({ draft, index }: HandleDeleteSeriesAction): void {
   draft.paths.splice(index, 1);
 }
@@ -114,6 +123,12 @@ export default function usePlotPanelSettings(
         saveConfig(
           produce<PlotConfig>((draft: PlotConfig) => {
             handleAddSeriesAction({ draft });
+          }),
+        );
+      } else if (payload.id === "add-reference-line") {
+        saveConfig(
+          produce<PlotConfig>((draft: PlotConfig) => {
+            handleAddReferenceLineAction({ draft });
           }),
         );
       } else if (payload.id === "delete-series") {

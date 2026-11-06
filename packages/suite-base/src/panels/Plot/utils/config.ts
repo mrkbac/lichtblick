@@ -32,9 +32,16 @@ export type PlotPath = BasePlotPath & {
   smoothing?: number;
   /** Reference lines only: "x" draws a vertical line at the value instead of a horizontal one. */
   referenceLineAxis?: PlotReferenceLineAxis;
+  /** Reference lines only: unset draws a dashed line, like older layouts. */
+  referenceLineDashed?: boolean;
+  /** Horizontal reference lines only: shade where series are above or below the line (time plots). */
+  referenceLineShade?: PlotReferenceLineShade;
+  /** Message path of the series to shade; unset shades every series on the line's y axis. */
+  referenceLineShadeSeries?: string;
 };
 
 export type PlotReferenceLineAxis = "y" | "x";
+export type PlotReferenceLineShade = "none" | "above" | "below";
 export type PlotInterpolation = "linear" | "step";
 export type PlotYAxis = "primary" | "secondary";
 export type PlotTimeWindow = "automatic" | "sliding" | "fixed";

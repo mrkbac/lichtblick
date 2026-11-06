@@ -102,6 +102,13 @@ export type ReferenceLine = {
   /** "x" draws a vertical line */
   scaleID?: "x" | "y" | "y2";
   label?: string;
+  /** Unset is dashed */
+  dashed?: boolean;
+  width?: number;
+  /** Fill between series on the line's axis and the line where they are above or below it */
+  shade?: "above" | "below";
+  /** Config indices of the series to shade; unset shades all */
+  shadeSeries?: number[];
 };
 
 export type SecondaryYAxisOptions = {
@@ -296,6 +303,8 @@ export type MakeSeriesNode = {
   t: TFunction<"plot">;
   /** Some series settings only apply to one x-axis mode */
   xAxisVal?: PlotXAxisVal;
+  /** Series a horizontal reference line can shade; unset when shading doesn't apply */
+  shadeSeriesOptions?: { label: string; value: string }[];
 };
 
 export type MakeRootSeriesNode = {
@@ -303,6 +312,8 @@ export type MakeRootSeriesNode = {
   supportsStreamModifiers: boolean;
   t: TFunction<"plot">;
   xAxisVal?: PlotXAxisVal;
+  /** Reference lines can shade series (time display only) */
+  canShade?: boolean;
 };
 
 export type HandleMoveSeriesAction = HandleAction & {

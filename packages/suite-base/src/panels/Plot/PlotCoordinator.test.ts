@@ -856,6 +856,47 @@ describe("PlotCoordinator", () => {
       ]);
     });
 
+    it("sends threshold shading for time plots only, resolving the shaded series by path", () => {
+      const line = PlotBuilder.path({
+        value: "3",
+        enabled: true,
+        referenceLineDashed: false,
+        lineSize: 2,
+        referenceLineShade: "above",
+        referenceLineShadeSeries: "/a.b",
+      });
+      const paths = [
+        PlotBuilder.path({ value: "/a.b", enabled: true }),
+        line,
+        PlotBuilder.path({ value: "/c.d", enabled: true }),
+        PlotBuilder.path({ value: "/a.b", enabled: true }),
+        // Older layouts have no shade setting
+        PlotBuilder.path({ value: "1", enabled: true }),
+      ];
+      vi.spyOn(plotCoordinator as any, "queueDispatchRender").mockImplementation(() => {});
+
+      plotCoordinator.handleConfig(
+        PlotBuilder.config({ xAxisVal: "timestamp", plotMode: "time", paths }),
+        "light",
+        {},
+      );
+      const lines = plotCoordinator["updateAction"].referenceLines;
+      expect(lines?.[0]).toMatchObject({
+        dashed: false,
+        width: 2,
+        shade: "above",
+        shadeSeries: [0, 3],
+      });
+      expect(lines?.[1]).toMatchObject({ shade: undefined, shadeSeries: undefined });
+
+      plotCoordinator.handleConfig(
+        PlotBuilder.config({ xAxisVal: "timestamp", plotMode: "histogram", paths }),
+        "light",
+        {},
+      );
+      expect(plotCoordinator["updateAction"].referenceLines?.[0]?.shade).toBeUndefined();
+    });
+
     it("should pass xAxisLabel through to updateAction", () => {
       const config = PlotBuilder.config({ xAxisLabel: "Time (s)", paths: [] });
       vi.spyOn(plotCoordinator as any, "queueDispatchRender").mockImplementation(() => {});

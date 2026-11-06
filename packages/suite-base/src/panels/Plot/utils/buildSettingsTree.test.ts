@@ -43,8 +43,9 @@ describe("buildSettingsTree", () => {
     // paths
     expect(Object.keys(tree.paths!.children!).length).toBe(paths.length);
     // paths.actions
-    expect(tree.paths!.actions!.length).toBe(1);
-    expect((tree.paths!.actions![0] as SettingsTreeNodeActionItem).id).toEqual("add-series");
+    expect(tree.paths!.actions!.map((action) => (action as SettingsTreeNodeActionItem).id)).toEqual(
+      ["add-series", "add-reference-line"],
+    );
     // paths.children[0]
     const children0: SettingsTreeNode | undefined = tree.paths?.children!["0"];
     expect(children0?.visible).toBe(config.paths[0]?.enabled);
@@ -378,6 +379,74 @@ describe("buildSettingsTree", () => {
 
     expect(children?.["0"]?.fields?.referenceLineAxis?.value).toBe("x");
     expect(children?.["1"]?.fields?.referenceLineAxis).toBeUndefined();
+  });
+
+  it("shows only line settings for reference lines, with shading for horizontal ones", () => {
+    const config = PlotBuilder.config({
+      xAxisVal: "timestamp",
+      paths: [
+        PlotBuilder.path({ value: "5", referenceLineShade: "above" }),
+        PlotBuilder.path({ value: "5", referenceLineAxis: "x" }),
+        PlotBuilder.path({ value: "/a.b", label: "A" }),
+        PlotBuilder.path({ value: "/a.b" }),
+      ],
+    });
+
+    const children = buildSettingsTree(config, t).paths?.children;
+    const horizontal = children?.["0"]?.fields;
+    const vertical = children?.["1"]?.fields;
+
+    expect(Object.keys(horizontal ?? {})).toEqual([
+      "value",
+      "label",
+      "color",
+      "lineSize",
+      "referenceLineAxis",
+      "axis",
+      "referenceLineDashed",
+      "referenceLineShade",
+      "referenceLineShadeSeries",
+    ]);
+    expect(horizontal?.value?.label).toBe("value");
+    expect(horizontal?.referenceLineDashed?.value).toBe(true);
+    expect(horizontal?.referenceLineShadeSeries).toMatchObject({
+      value: "",
+      options: [
+        { label: "allSeriesOnAxis", value: "" },
+        { label: "A", value: "/a.b" },
+      ],
+      error: undefined,
+    });
+    expect(Object.keys(vertical ?? {})).toEqual([
+      "value",
+      "label",
+      "color",
+      "lineSize",
+      "referenceLineAxis",
+      "referenceLineDashed",
+    ]);
+    expect(children?.["2"]?.fields?.referenceLineShade).toBeUndefined();
+  });
+
+  it("flags a shaded series that no longer exists and hides shading on FFT plots", () => {
+    const line = PlotBuilder.path({
+      value: "1",
+      referenceLineShade: "below",
+      referenceLineShadeSeries: "/gone",
+    });
+    const timePlot = buildSettingsTree(
+      PlotBuilder.config({ xAxisVal: "timestamp", paths: [line] }),
+      t,
+    );
+    const fftPlot = buildSettingsTree(
+      PlotBuilder.config({ xAxisVal: "timestamp", plotMode: "fft", paths: [line] }),
+      t,
+    );
+
+    expect(timePlot.paths?.children?.["0"]?.fields?.referenceLineShadeSeries?.error).toBe(
+      "shadeSeriesMissing",
+    );
+    expect(fftPlot.paths?.children?.["0"]?.fields?.referenceLineShade).toBeUndefined();
   });
 
   it("offers FFT and histogram displays only on time plots", () => {

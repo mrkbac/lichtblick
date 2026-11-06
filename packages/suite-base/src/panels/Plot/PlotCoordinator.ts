@@ -345,16 +345,31 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       }
 
       const label = path.label?.trim();
+      const vertical = path.referenceLineAxis === "x";
+      // Shading compares series values with the line, which an FFT or histogram doesn't plot
+      const shade =
+        !vertical && !this.analysis && path.referenceLineShade !== "none"
+          ? path.referenceLineShade
+          : undefined;
+      const shadeSeriesPath = path.referenceLineShadeSeries;
       return {
         color: getLineColor(path.color, idx),
         value,
-        scaleID:
-          path.referenceLineAxis === "x"
-            ? ("x" as const)
-            : path.axis === "secondary"
-              ? ("y2" as const)
-              : ("y" as const),
+        scaleID: vertical
+          ? ("x" as const)
+          : path.axis === "secondary"
+            ? ("y2" as const)
+            : ("y" as const),
         label: label === "" ? undefined : label,
+        dashed: path.referenceLineDashed,
+        width: path.lineSize,
+        shade,
+        shadeSeries:
+          shade && shadeSeriesPath != undefined && shadeSeriesPath !== ""
+            ? config.paths.flatMap((other, otherIdx) =>
+                other.value === shadeSeriesPath ? [otherIdx] : [],
+              )
+            : undefined,
       };
     });
 

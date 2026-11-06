@@ -30,8 +30,10 @@ const makeSeriesNode = memoizeWeak(
     supportsStreamModifiers,
     t,
     xAxisVal,
+    shadeSeriesOptions,
   }: MakeSeriesNode): SettingsTreeNode => {
     const actions = [];
+    const isReferenceLine = isReferenceLinePlotPathType(path);
 
     if (canDelete) {
       actions.push({
@@ -52,7 +54,7 @@ const makeSeriesNode = memoizeWeak(
       fields: {
         value: {
           input: "messagepath",
-          label: t("messagePath"),
+          label: isReferenceLine ? t("value") : t("messagePath"),
           supportsMathModifiers: true,
           supportsStreamModifiers,
           validTypes: PLOTABLE_ROS_TYPES,
@@ -76,84 +78,155 @@ const makeSeriesNode = memoizeWeak(
           min: 0,
           placeholder: "auto",
         },
-        showLine: {
-          input: "boolean",
-          label: t("showLine"),
-          value: path.showLine ?? true,
-        },
-        interpolation: {
-          input: "select",
-          label: t("interpolation"),
-          options: [
-            { label: t("linear"), value: "linear" },
-            { label: t("step"), value: "step" },
-          ],
-          value: path.interpolation ?? "linear",
-        },
-        axis: {
-          input: "select",
-          label: t("yAxis"),
-          options: [
-            { label: t("primary"), value: "primary" },
-            { label: t("secondary"), value: "secondary" },
-          ],
-          value: path.axis ?? "primary",
-        },
-        ...(isReferenceLinePlotPathType(path) && {
-          referenceLineAxis: {
-            input: "select",
-            label: t("orientation"),
-            options: [
-              { label: t("horizontal"), value: "y" },
-              { label: t("vertical"), value: "x" },
-            ],
-            value: path.referenceLineAxis ?? "y",
-          },
-        }),
-        timestampMethod: {
-          input: "select",
-          label: t("timestamp"),
-          options: [
-            { label: t("receiveTime"), value: "receiveTime" },
-            { label: t("headerStamp"), value: "headerStamp" },
-            { label: t("customField"), value: "customField" },
-          ],
-          value: path.timestampMethod,
-        },
-        ...(path.timestampMethod === "customField" && {
-          timestampPath: {
-            input: "messagepath",
-            label: t("timestampField"),
-            validTypes: TIMESTAMP_FIELD_TYPES,
-            value: path.timestampPath ?? "",
-            error: timestampPathError(path, t),
-          },
-        }),
-        ...(xAxisVal === "timestamp" && {
-          smoothing: {
-            input: "number",
-            label: t("movingAverage"),
-            value: path.smoothing,
-            min: 0,
-            step: 1,
-            precision: 0,
-            placeholder: t("off"),
-          },
-        }),
-        ...(xAxisVal === "custom" && {
-          xValue: {
-            input: "messagepath",
-            label: t("xValue"),
-            supportsMathModifiers: true,
-            validTypes: PLOTABLE_ROS_TYPES,
-            value: path.xValue ?? "",
-            error: xValueError(path, t),
-          },
-        }),
+        ...(isReferenceLine
+          ? referenceLineFields(path, t, shadeSeriesOptions)
+          : seriesFields(path, t, xAxisVal)),
       },
     };
   },
 );
+
+/** Settings of a series that are not shared with reference lines */
+function seriesFields(
+  path: PlotPath,
+  t: MakeSeriesNode["t"],
+  xAxisVal: MakeSeriesNode["xAxisVal"],
+): SettingsTreeFields {
+  return {
+    showLine: {
+      input: "boolean",
+      label: t("showLine"),
+      value: path.showLine ?? true,
+    },
+    interpolation: {
+      input: "select",
+      label: t("interpolation"),
+      options: [
+        { label: t("linear"), value: "linear" },
+        { label: t("step"), value: "step" },
+      ],
+      value: path.interpolation ?? "linear",
+    },
+    axis: {
+      input: "select",
+      label: t("yAxis"),
+      options: [
+        { label: t("primary"), value: "primary" },
+        { label: t("secondary"), value: "secondary" },
+      ],
+      value: path.axis ?? "primary",
+    },
+    timestampMethod: {
+      input: "select",
+      label: t("timestamp"),
+      options: [
+        { label: t("receiveTime"), value: "receiveTime" },
+        { label: t("headerStamp"), value: "headerStamp" },
+        { label: t("customField"), value: "customField" },
+      ],
+      value: path.timestampMethod,
+    },
+    ...(path.timestampMethod === "customField" && {
+      timestampPath: {
+        input: "messagepath",
+        label: t("timestampField"),
+        validTypes: TIMESTAMP_FIELD_TYPES,
+        value: path.timestampPath ?? "",
+        error: timestampPathError(path, t),
+      },
+    }),
+    ...(xAxisVal === "timestamp" && {
+      smoothing: {
+        input: "number",
+        label: t("movingAverage"),
+        value: path.smoothing,
+        min: 0,
+        step: 1,
+        precision: 0,
+        placeholder: t("off"),
+      },
+    }),
+    ...(xAxisVal === "custom" && {
+      xValue: {
+        input: "messagepath",
+        label: t("xValue"),
+        supportsMathModifiers: true,
+        validTypes: PLOTABLE_ROS_TYPES,
+        value: path.xValue ?? "",
+        error: xValueError(path, t),
+      },
+    }),
+  };
+}
+
+/**
+ * A reference line is a series whose message path is a number. Horizontal lines belong to a y axis
+ * and can shade where series cross them (thresholds); `shadeSeriesOptions` is unset where shading
+ * doesn't apply (FFT and histogram).
+ */
+function referenceLineFields(
+  path: PlotPath,
+  t: MakeSeriesNode["t"],
+  shadeSeriesOptions: MakeSeriesNode["shadeSeriesOptions"],
+): SettingsTreeFields {
+  const horizontal = path.referenceLineAxis !== "x";
+  const shade = path.referenceLineShade ?? "none";
+  const shadeSeries = path.referenceLineShadeSeries ?? "";
+  return {
+    referenceLineAxis: {
+      input: "select",
+      label: t("orientation"),
+      options: [
+        { label: t("horizontal"), value: "y" },
+        { label: t("vertical"), value: "x" },
+      ],
+      value: path.referenceLineAxis ?? "y",
+    },
+    ...(horizontal && {
+      axis: {
+        input: "select",
+        label: t("yAxis"),
+        options: [
+          { label: t("primary"), value: "primary" },
+          { label: t("secondary"), value: "secondary" },
+        ],
+        value: path.axis ?? "primary",
+      },
+    }),
+    referenceLineDashed: {
+      input: "boolean",
+      label: t("dashed"),
+      value: path.referenceLineDashed ?? true,
+    },
+    ...(horizontal &&
+      shadeSeriesOptions && {
+        referenceLineShade: {
+          input: "select",
+          label: t("shade"),
+          options: [
+            { label: t("none"), value: "none" },
+            { label: t("shadeAbove"), value: "above" },
+            { label: t("shadeBelow"), value: "below" },
+          ],
+          value: shade,
+        },
+      }),
+    ...(horizontal &&
+      shadeSeriesOptions &&
+      shade !== "none" && {
+        referenceLineShadeSeries: {
+          input: "select",
+          label: t("shadeSeries"),
+          options: [{ label: t("allSeriesOnAxis"), value: "" }, ...shadeSeriesOptions],
+          value: shadeSeries,
+          error:
+            shadeSeries !== "" && !shadeSeriesOptions.some((option) => option.value === shadeSeries)
+              ? t("shadeSeriesMissing")
+              : undefined,
+        },
+      }),
+  };
+}
 
 /** Field types a custom timestamp can be read from */
 const TIMESTAMP_FIELD_TYPES = [
@@ -198,7 +271,14 @@ function xValueError(path: PlotPath, t: MakeSeriesNode["t"]): string | undefined
 }
 
 const makeRootSeriesNode = memoizeWeak(
-  ({ paths, supportsStreamModifiers, t, xAxisVal }: MakeRootSeriesNode): SettingsTreeNode => {
+  ({
+    paths,
+    supportsStreamModifiers,
+    t,
+    xAxisVal,
+    canShade,
+  }: MakeRootSeriesNode): SettingsTreeNode => {
+    const shadeSeriesOptions = canShade === true ? makeShadeSeriesOptions(paths) : undefined;
     const children = Object.fromEntries(
       paths.length === 0
         ? [
@@ -212,6 +292,7 @@ const makeRootSeriesNode = memoizeWeak(
                 supportsStreamModifiers,
                 t,
                 xAxisVal,
+                shadeSeriesOptions,
               }),
             ],
           ]
@@ -225,6 +306,7 @@ const makeRootSeriesNode = memoizeWeak(
               supportsStreamModifiers,
               t,
               xAxisVal,
+              shadeSeriesOptions,
             }),
           ]),
     );
@@ -239,10 +321,27 @@ const makeRootSeriesNode = memoizeWeak(
           icon: "Addchart",
           label: t("addSeries"),
         },
+        {
+          type: "action",
+          id: "add-reference-line",
+          display: "menu",
+          label: t("addReferenceLine"),
+        },
       ],
     };
   },
 );
+
+/** Series a threshold can shade, by message path (stable when series are reordered or removed) */
+function makeShadeSeriesOptions(paths: PlotPath[]): { label: string; value: string }[] {
+  const options = new Map<string, string>();
+  paths.forEach((path, index) => {
+    if (path.value !== "" && !isReferenceLinePlotPathType(path) && !options.has(path.value)) {
+      options.set(path.value, plotPathDisplayName(path, index));
+    }
+  });
+  return Array.from(options, ([value, label]) => ({ label, value }));
+}
 
 export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): SettingsTreeNodes {
   const maxYError =
@@ -422,6 +521,7 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
       supportsStreamModifiers: config.xAxisVal === "timestamp",
       t,
       xAxisVal: config.xAxisVal,
+      canShade: getPlotMode(config) === "time",
     }),
   };
 }
