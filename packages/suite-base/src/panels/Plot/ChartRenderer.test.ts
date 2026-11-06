@@ -675,6 +675,44 @@ describe("ChartRenderer", () => {
     });
   });
 
+  describe("threshold shading", () => {
+    it("appends fills after the series, keeps them out of hover, and removes them when unshaded", () => {
+      (Chart as unknown as Mock).mockImplementationOnce(function () {
+        return {
+          update: vi.fn(),
+          scales: SCALES_CHART,
+          data: { datasets: [] },
+          getElementsAtEventForMode: vi.fn(),
+          options: { plugins: { annotation: { annotations: [] } } } as unknown as ChartOptions,
+        };
+      });
+      const { chartRenderer } = setup();
+      const chart = (chartRenderer as any).getChartInstance();
+      const series: Dataset[] = [{ data: [{ x: 0, y: 1 }] }, { data: [{ x: 0, y: 5 }] }];
+
+      chartRenderer.updateDatasets(series);
+      chartRenderer.update({
+        type: "update",
+        referenceLines: [{ value: 2, color: "#f00", shade: "above", dashed: false }],
+      });
+
+      expect(chart.data.datasets).toHaveLength(4);
+      expect(chart.data.datasets.slice(0, 2)).toEqual(series);
+      expect(chart.options.plugins.annotation.annotations[0]).toMatchObject({ borderDash: [] });
+
+      (chart.getElementsAtEventForMode as Mock).mockReturnValue([
+        { element: { x: 0, y: 0 }, datasetIndex: 3, index: 0 },
+        { element: { x: 0, y: 0 }, datasetIndex: 1, index: 0 },
+      ]);
+      expect(chartRenderer.getElementsAtPixel({ x: 0, y: 0 })).toEqual([
+        { data: series[1]!.data[0], configIndex: 1 },
+      ]);
+
+      chartRenderer.update({ type: "update", referenceLines: [{ value: 2, color: "#f00" }] });
+      expect(chart.data.datasets).toBe(series);
+    });
+  });
+
   describe("updateDatasets", () => {
     it("should update dataset and disable animations", () => {
       const { chartRenderer } = setup();

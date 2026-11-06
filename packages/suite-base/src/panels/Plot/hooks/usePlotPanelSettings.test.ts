@@ -13,6 +13,7 @@ import {
 } from "@lichtblick/suite";
 import { DEFAULT_PLOT_PATH } from "@lichtblick/suite-base/panels/Plot/constants";
 import usePlotPanelSettings, {
+  handleAddReferenceLineAction,
   handleAddSeriesAction,
   handleDeleteSeriesAction,
   handleMoveSeriesAction,
@@ -26,6 +27,7 @@ import {
 } from "@lichtblick/suite-base/panels/Plot/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import PlotBuilder from "@lichtblick/suite-base/testing/builders/PlotBuilder";
+import { lineColors } from "@lichtblick/suite-base/util/plotColors";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 vi.mock("@lichtblick/suite-base/providers/PanelStateContextProvider", () => ({
@@ -147,6 +149,16 @@ describe("handleAddSeriesAction", () => {
       });
     },
   );
+});
+
+describe("handleAddReferenceLineAction", () => {
+  it("adds a horizontal line at 0 with its own color", () => {
+    const input: HandleAction = { draft: PlotBuilder.config({ paths: [] }) };
+
+    handleAddReferenceLineAction(input);
+
+    expect(input.draft.paths).toEqual([{ ...DEFAULT_PLOT_PATH, value: "0", color: lineColors[0] }]);
+  });
 });
 
 describe("handleDeleteSeriesAction", () => {

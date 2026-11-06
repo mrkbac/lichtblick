@@ -18,6 +18,7 @@ import {
 } from "@lichtblick/suite-base/components/Chart/worker/eventHandler";
 import { DEFAULT_ANNOTATION } from "@lichtblick/suite-base/panels/Plot/constants";
 import { getChartOptions } from "@lichtblick/suite-base/panels/Plot/utils/getChartOptions";
+import { buildThresholdFills } from "@lichtblick/suite-base/panels/Plot/utils/thresholdFill";
 import { Bounds, Bounds1D } from "@lichtblick/suite-base/types/Bounds";
 import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
 import { isLight, parseColor } from "@lichtblick/suite-base/util/parseColor";
@@ -33,6 +34,7 @@ import {
   InteractionEvent,
   MutableContext,
   PixelRect,
+  ReferenceLine,
   Scale,
   UpdateAction,
   WheelInteractionEvent,
@@ -60,6 +62,11 @@ export class ChartRenderer {
   readonly #titleColor: string;
   #absoluteStartSec?: number;
   #equalAxes = false;
+  /** Series datasets by config index; the chart's datasets also hold threshold fills after them */
+  #seriesDatasets: Dataset[] = [];
+  #referenceLines: Immutable<ReferenceLine[]> = [];
+  /** Threshold fill datasets at the end of the chart's datasets */
+  #fillCount = 0;
 
   public constructor(args: ChartRendererProps) {
     const fakeNode = {
@@ -240,6 +247,8 @@ export class ChartRenderer {
           ...DEFAULT_ANNOTATION,
           scaleID: config.scaleID ?? "y",
           borderColor: config.color,
+          ...(config.width != undefined && { borderWidth: config.width }),
+          ...(config.dashed === false && { borderDash: [] }),
           value: config.value,
           label: config.label
             ? {
@@ -256,6 +265,12 @@ export class ChartRenderer {
       });
 
       annotation.annotations = newAnnotations;
+      // Fills only change with shaded lines; config updates arrive often
+      const hadShade = this.#referenceLines.some((line) => line.shade != undefined);
+      this.#referenceLines = action.referenceLines;
+      if (hadShade || action.referenceLines.some((line) => line.shade != undefined)) {
+        this.#setDatasets();
+      }
     }
 
     this.#render();
@@ -388,7 +403,8 @@ export class ChartRenderer {
     }
 
     const out: HoverElement[] = [];
-    this.#chartInstance.data.datasets.forEach((dataset, configIndex) => {
+    const datasets = this.#chartInstance.data.datasets;
+    datasets.slice(0, datasets.length - this.#fillCount).forEach((dataset, configIndex) => {
       // ponytail: linear scan of the (already downsampled) visible data; binary search if it shows
       // up in profiles. NaN entries are line breaks, so they are skipped.
       for (let i = dataset.data.length - 1; i >= 0; --i) {
@@ -437,6 +453,9 @@ export class ChartRenderer {
     });
 
     for (const element of elements) {
+      if (element.datasetIndex >= this.#chartInstance.data.datasets.length - this.#fillCount) {
+        continue; // threshold fill
+      }
       const data = this.#chartInstance.data.datasets[element.datasetIndex]?.data[element.index];
       if (data == undefined || typeof data === "number") {
         continue;
@@ -452,12 +471,20 @@ export class ChartRenderer {
   }
 
   public updateDatasets(datasets: Dataset[]): { x?: Scale; y?: YScale } {
-    this.#chartInstance.data.datasets = datasets;
+    this.#seriesDatasets = datasets;
+    this.#setDatasets();
 
     // While the chartjs API doesn't indicate update should be called after resize, in practice
     // we've found that performing a resize after an update sometimes results in a blank chart.
     this.#render();
     return { x: this.#getXScale(), y: this.#getYScale() };
+  }
+
+  #setDatasets(): void {
+    const fills = buildThresholdFills(this.#seriesDatasets, this.#referenceLines);
+    this.#fillCount = fills.length;
+    this.#chartInstance.data.datasets =
+      fills.length > 0 ? [...this.#seriesDatasets, ...fills] : this.#seriesDatasets;
   }
 
   #getXScale(): Scale | undefined {
