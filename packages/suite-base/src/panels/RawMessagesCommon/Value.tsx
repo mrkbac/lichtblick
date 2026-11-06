@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import ErrorIcon from "@mui/icons-material/Error";
 import { Tooltip, useTheme } from "@mui/material";
 import React, { useCallback, useMemo, useState, useRef, useEffect } from "react";
@@ -185,14 +186,18 @@ function Value(props: PropsValue): React.JSX.Element {
         setPointerOver(false);
       }}
     >
-      <span
-        ref={dragRef}
-        className={dragRef ? classes.draggable : undefined}
-        style={valueColor ? { color: valueColor } : undefined}
-      >
+      <span style={valueColor ? { color: valueColor } : undefined}>
         <HighlightedValue itemLabel={itemLabel} />
       </span>
       {arrLabel}
+      {/* A grip instead of the whole value, so the value text stays selectable */}
+      {pointerOver && dragRef && (
+        <Tooltip arrow title="Drag to a panel" placement="top">
+          <span ref={dragRef} className={classes.dragHandle}>
+            <DragIndicatorIcon fontSize="inherit" />
+          </span>
+        </Tooltip>
+      )}
       {pointerOver &&
         availableActions.map((action) => (
           <Tooltip key={action.key} arrow title={action.tooltip} placement="top">

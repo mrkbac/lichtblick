@@ -103,5 +103,5 @@ export const useStylesValue = makeStyles()({
     gap: "inherit",
     visibility: "hidden",
   },
-  draggable: { cursor: "grab" },
+  dragHandle: { display: "inline-flex", cursor: "grab", opacity: 0.6, fontSize: 16 },
 });
