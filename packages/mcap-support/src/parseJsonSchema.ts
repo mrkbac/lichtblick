@@ -191,7 +191,12 @@ export function parseJsonSchema(
               postprocessObject = (value) => {
                 const arr = value[fieldName];
                 if (Array.isArray(arr)) {
-                  value[fieldName] = arr.map(postprocessArrayItem);
+                  value[fieldName] = arr.map((item: unknown) =>
+                    // items may be null when the item type is ["object", "null"]
+                    item != undefined && typeof item === "object"
+                      ? postprocessArrayItem(item as Record<string, unknown>)
+                      : item,
+                  );
                 }
                 return prevPostprocess(value);
               };

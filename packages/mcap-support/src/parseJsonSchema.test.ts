@@ -288,6 +288,27 @@ describe("parseJsonSchema", () => {
     );
   });
 
+  it("skips null items of a nullable object array when postprocessing", () => {
+    const { postprocessValue } = parseJsonSchema(
+      {
+        type: "object",
+        properties: {
+          items: {
+            type: "array",
+            items: {
+              type: ["object", "null"],
+              properties: { bin: { type: "string", contentEncoding: "base64" } },
+            },
+          },
+        },
+      },
+      "Root",
+    );
+    expect(postprocessValue({ items: [null, { bin: "AQI=" }] })).toEqual({
+      items: [null, { bin: new Uint8Array([1, 2]) }],
+    });
+  });
+
   it("converts oneOf to enum", () => {
     const { datatypes } = parseJsonSchema(
       {
