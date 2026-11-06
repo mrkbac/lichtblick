@@ -101,6 +101,9 @@ vi.mock("@lichtblick/suite-base/components/LayoutBrowser", () => ({
   __esModule: true,
   default: () => undefined,
 }));
+vi.mock("@lichtblick/suite-base/components/LayoutTemplates", () => ({
+  LayoutTemplateCommands: () => undefined,
+}));
 vi.mock("@lichtblick/suite-base/components/PanelCatalog", () => ({
   PanelCatalog: () => undefined,
 }));
