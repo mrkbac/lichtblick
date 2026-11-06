@@ -46,6 +46,7 @@ import DocumentDropListener from "@lichtblick/suite-base/components/DocumentDrop
 import { EventsList } from "@lichtblick/suite-base/components/EventsList";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import LayoutBrowser from "@lichtblick/suite-base/components/LayoutBrowser";
+import { LayoutTemplateCommands } from "@lichtblick/suite-base/components/LayoutTemplates";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -762,6 +763,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       <SyncAdapters />
       <KeyListener global keyDownHandlers={keyDownHandlers} />
       <CommandPalette />
+      <LayoutTemplateCommands />
       <div className={classes.container} ref={containerRef} tabIndex={0}>
         {appBar}
         <Sidebars

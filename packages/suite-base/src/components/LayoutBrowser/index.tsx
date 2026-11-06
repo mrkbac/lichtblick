@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import AddIcon from "@mui/icons-material/Add";
+import AutoAwesomeMosaicOutlinedIcon from "@mui/icons-material/AutoAwesomeMosaicOutlined";
 import CloudOffIcon from "@mui/icons-material/CloudOff";
 import FileOpenOutlinedIcon from "@mui/icons-material/FileOpenOutlined";
 import {
@@ -21,12 +22,14 @@ import {
 } from "@mui/material";
 import * as _ from "lodash-es";
 import { useSnackbar } from "notistack";
-import { useCallback, useEffect, useLayoutEffect, useMemo } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import useAsyncFn from "react-use/lib/useAsyncFn";
 
 import Logger from "@lichtblick/log";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import SignInPrompt from "@lichtblick/suite-base/components/LayoutBrowser/SignInPrompt";
+import { LayoutTemplateMenu } from "@lichtblick/suite-base/components/LayoutTemplates";
 import { SidebarContent } from "@lichtblick/suite-base/components/SidebarContent";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
@@ -71,6 +74,7 @@ export default function LayoutBrowser({
   currentDateForStorybook?: Date;
 }>): React.JSX.Element {
   const { classes } = useStyles();
+  const { t } = useTranslation("layoutTemplates");
   const { signIn } = useCurrentUser();
   const { enqueueSnackbar } = useSnackbar();
   const layoutManager = useLayoutManager();
@@ -235,6 +239,11 @@ export default function LayoutBrowser({
     setSharedSectionExpanded((expanded) => !expanded);
   }, [setSharedSectionExpanded]);
 
+  const [templateMenuAnchor, setTemplateMenuAnchor] = useState<HTMLElement | undefined>();
+  const openTemplateMenu = (event: React.MouseEvent<HTMLElement>) => {
+    setTemplateMenuAnchor(event.currentTarget);
+  };
+
   const createNewLayout = useCallbackWithToast(async () => {
     const now = currentDateForStorybook ?? new Date();
     const name = `Unnamed layout ${now.toLocaleDateString("en-US")} at ${now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`;
@@ -382,6 +391,17 @@ export default function LayoutBrowser({
         >
           <AddIcon />
         </IconButton>,
+        !enableNewTopNav && (
+          <IconButton
+            color="primary"
+            key="layout-template"
+            onClick={openTemplateMenu}
+            aria-label={t("fromTemplate")}
+            title={t("fromTemplate")}
+          >
+            <AutoAwesomeMosaicOutlinedIcon />
+          </IconButton>
+        ),
         <IconButton
           color="primary"
           key="import-layout"
@@ -395,6 +415,14 @@ export default function LayoutBrowser({
     >
       {promptModal}
       {shareDialog}
+      {templateMenuAnchor && (
+        <LayoutTemplateMenu
+          anchorEl={templateMenuAnchor}
+          onClose={() => {
+            setTemplateMenuAnchor(undefined);
+          }}
+        />
+      )}
       {state.error != undefined && (
         <Alert severity="error" data-testid="layout-sync-error">
           Layouts are not synced: {state.error.message}. Shared layouts may not be saved on the
@@ -435,6 +463,13 @@ export default function LayoutBrowser({
                 <ListItemButton onClick={createNewLayout}>
                   <ListItemText data-testid="create-new-layout" disableTypography>
                     Create new layout
+                  </ListItemText>
+                </ListItemButton>
+              </ListItem>
+              <ListItem disablePadding>
+                <ListItemButton onClick={openTemplateMenu}>
+                  <ListItemText data-testid="layout-from-template" disableTypography>
+                    {t("fromTemplate")}…
                   </ListItemText>
                 </ListItemButton>
               </ListItem>
