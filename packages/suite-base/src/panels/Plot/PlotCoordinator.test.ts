@@ -393,10 +393,12 @@ describe("PlotCoordinator", () => {
         {
           parsed: { topicName: state.activeData?.messages[0]?.topic },
           configIndex: 0,
+          timestampMethod: "receiveTime",
         },
         {
           parsed: { topicName: state.activeData?.messages[1]?.topic },
           configIndex: 1,
+          timestampMethod: "receiveTime",
         },
       ] as SeriesItem[];
       const itemsResponse = [BasicBuilder.numbers(), [BasicBuilder.number()]];
@@ -411,6 +413,40 @@ describe("PlotCoordinator", () => {
         _.last(itemsResponse[0]),
         _.last(itemsResponse[1]),
       ]);
+    });
+
+    it("keeps the latest-stamped value for header stamp series, even when messages arrive out of order", () => {
+      const topic = "/odom";
+      const message = (stamp: number) => ({
+        topic,
+        schemaName: "Odom",
+        receiveTime: { sec: 100, nsec: 0 },
+        sizeInBytes: 0,
+        message: { header: { stamp: { sec: stamp, nsec: 0 } } },
+      });
+      const base = PlayerBuilder.activeData();
+      const stateWith = (stamps: number[]) =>
+        PlayerBuilder.playerState({
+          activeData: { ...base, messages: stamps.map(message) },
+        });
+      plotCoordinator["series"] = [
+        { parsed: { topicName: topic }, configIndex: 0, timestampMethod: "headerStamp" },
+      ] as unknown as SeriesItem[];
+      (simpleGetMessagePathDataItems as Mock).mockImplementation(
+        (event: { message: { header: { stamp: { sec: number } } } }) => [
+          event.message.header.stamp.sec,
+        ],
+      );
+
+      plotCoordinator.handlePlayerState(stateWith([5, 7, 6]));
+      expect(plotCoordinator["currentValuesByConfigIndex"]).toEqual([7]);
+
+      // An older stamp in a later frame does not replace the newer value
+      plotCoordinator.handlePlayerState(stateWith([4]));
+      expect(plotCoordinator["currentValuesByConfigIndex"]).toEqual([7]);
+
+      plotCoordinator.handlePlayerState(stateWith([8]));
+      expect(plotCoordinator["currentValuesByConfigIndex"]).toEqual([8]);
     });
 
     it("should not update currentValuesByConfigIndex", () => {

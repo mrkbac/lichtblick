@@ -11,9 +11,9 @@ import { MessagePath } from "@lichtblick/message-path";
 import type { Immutable, Time, MessageEvent } from "@lichtblick/suite";
 import type { Bounds1D } from "@lichtblick/suite-base/components/TimeBasedChart/types";
 import type { PlayerState } from "@lichtblick/suite-base/players/types";
-import { TimestampMethod } from "@lichtblick/suite-base/util/time";
 
 import type { Dataset } from "../types";
+import type { PlotTimestampMethod } from "../utils/config";
 import { OriginalValue } from "../utils/datum";
 
 type CsvDatum = {
@@ -41,7 +41,9 @@ export type SeriesItem = {
   color: string;
   /** Used for points when lines are also shown to provide extra contrast */
   contrastColor: string;
-  timestampMethod: TimestampMethod;
+  timestampMethod: PlotTimestampMethod;
+  /** The time field for the "customField" timestamp method. On the same topic as `parsed`. */
+  timestampParsed?: MessagePath;
   showLine: boolean;
   lineSize: number;
   enabled: boolean;

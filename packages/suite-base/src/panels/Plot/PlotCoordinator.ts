@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { subtract as subtractTime, toSec } from "@foxglove/rostime";
+import { compare as compareTime, subtract as subtractTime, toSec } from "@foxglove/rostime";
 import EventEmitter from "eventemitter3";
 import * as _ from "lodash-es";
 
@@ -19,7 +19,7 @@ import { fillInGlobalVariablesInPath } from "@lichtblick/suite-base/components/M
 import { UseSubscribeMessageRange } from "@lichtblick/suite-base/components/PanelExtensionAdapter/useSubscribeMessageRange";
 import { Bounds1D } from "@lichtblick/suite-base/components/TimeBasedChart/types";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
-import { PlayerState, Topic } from "@lichtblick/suite-base/players/types";
+import { MessageEvent, PlayerState, Topic } from "@lichtblick/suite-base/players/types";
 import { Bounds } from "@lichtblick/suite-base/types/Bounds";
 import { getContrastColor, getLineColor } from "@lichtblick/suite-base/util/plotColors";
 
@@ -43,6 +43,7 @@ import {
   ZoomMode,
 } from "./types";
 import { getTimeWindow, isReferenceLinePlotPathType, PlotConfig } from "./utils/config";
+import { getSeriesTimestamp } from "./utils/seriesTimestamp";
 import { pathToSubscribePayload } from "./utils/subscription";
 
 const replaceUndefinedWithEmptyDataset = (dataset: Dataset | undefined) => dataset ?? { data: [] };
@@ -76,6 +77,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   private series: Immutable<SeriesItem[]> = [];
   /** Current value for each series to show in the legend */
   private currentValuesByConfigIndex: unknown[] = [];
+  /** Message time of each current value, for series not timed by receive time */
+  private currentValueTimesByConfigIndex: (Time | undefined)[] = [];
   /** Flag indicating that new Y bounds should be sent to the renderer because the bounds have been reset */
   private shouldResetY = false;
   private updateAction: UpdateAction = { type: "update" };
@@ -178,14 +181,13 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
 
     if (lastSeekTime !== this.lastSeekTime) {
       this.currentValuesByConfigIndex = [];
+      this.currentValueTimesByConfigIndex = [];
       this.lastSeekTime = lastSeekTime;
     }
 
     for (const seriesItem of this.series) {
-      if (seriesItem.timestampMethod === "headerStamp") {
-        // We currently do not support showing current values in the legend for header.stamp mode,
-        // which would require keeping a buffer of messages to sort (currently done in
-        // TimestampDatasetsBuilderImpl)
+      if (seriesItem.timestampMethod !== "receiveTime") {
+        this.updateStampedCurrentValue(seriesItem, messages);
         continue;
       }
       for (let i = messages.length - 1; i >= 0; --i) {
@@ -222,6 +224,32 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
 
     if (handlePlayerStateResult.datasetsChanged) {
       this.queueDispatchDownsample();
+    }
+  }
+
+  /**
+   * Messages timed by a header stamp or field can arrive out of order, so the current value is the
+   * one with the latest message time seen since the last seek.
+   */
+  private updateStampedCurrentValue(
+    seriesItem: Immutable<SeriesItem>,
+    messages: Immutable<MessageEvent[]>,
+  ): void {
+    const { configIndex, parsed, timestampMethod, timestampParsed } = seriesItem;
+    for (const msgEvent of messages) {
+      if (msgEvent.topic !== parsed.topicName) {
+        continue;
+      }
+      const time = getSeriesTimestamp(msgEvent, timestampMethod, timestampParsed);
+      const latest = this.currentValueTimesByConfigIndex[configIndex];
+      if (!time || (latest && compareTime(time, latest) < 0)) {
+        continue;
+      }
+      const items = simpleGetMessagePathDataItems(msgEvent, parsed);
+      if (items.length > 0) {
+        this.currentValuesByConfigIndex[configIndex] = items[items.length - 1];
+        this.currentValueTimesByConfigIndex[configIndex] = time;
+      }
     }
   }
 
@@ -326,6 +354,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     }
     const newSeriesKeysByTopic = new Map<string, Set<SeriesConfigKey>>();
     const newCurrentValuesByConfigIndex: unknown[] = [];
+    const newCurrentValueTimesByConfigIndex: (Time | undefined)[] = [];
     this.series = filterMap(config.paths, (path, idx): Immutable<SeriesItem> | undefined => {
       if (isReferenceLinePlotPathType(path)) {
         return;
@@ -355,16 +384,28 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       //
       // This key lets us treat series with the same name but different timestamp methods as distinct
       // using a key instead of the path index lets us preserve loaded data when a path is removed
+      // The custom time field is read from the same messages, like the series' own x path
+      const timestampPath =
+        path.timestampMethod === "customField" ? path.timestampPath?.trim() : undefined;
+      const timestampParsedRaw = timestampPath ? parseMessagePath(timestampPath) : undefined;
+      const timestampParsed =
+        timestampParsedRaw != undefined && timestampParsedRaw.topicName === filledParsed.topicName
+          ? fillInGlobalVariablesInPath(timestampParsedRaw, globalVariables)
+          : undefined;
+
       const xKey = xParsed ? `:x=${stringifyMessagePath(xParsed)}` : "";
+      const timeKey = timestampParsed ? `:t=${stringifyMessagePath(timestampParsed)}` : "";
       const key = `${idx}:${path.timestampMethod}:${stringifyMessagePath(
         filledParsed,
-      )}${xKey}` as SeriesConfigKey;
+      )}${xKey}${timeKey}` as SeriesConfigKey;
 
       // Keep current values for paths that match existing ones
       const existingSeries = this.series.find((series) => series.key === key);
       if (existingSeries != undefined) {
         newCurrentValuesByConfigIndex[idx] =
           this.currentValuesByConfigIndex[existingSeries.configIndex];
+        newCurrentValueTimesByConfigIndex[idx] =
+          this.currentValueTimesByConfigIndex[existingSeries.configIndex];
       }
 
       const color = getLineColor(path.color, idx);
@@ -390,6 +431,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
         yAxisID: path.axis === "secondary" ? "y2" : "y",
         smoothing: path.smoothing ?? 0,
         xParsed,
+        timestampParsed,
       };
     });
 
@@ -402,6 +444,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     this.seriesKeysByTopic = newSeriesKeysByTopic;
 
     this.currentValuesByConfigIndex = newCurrentValuesByConfigIndex;
+    this.currentValueTimesByConfigIndex = newCurrentValueTimesByConfigIndex;
     this.emit("currentValuesChanged", this.currentValuesByConfigIndex);
 
     // Dispatch because bounds changed

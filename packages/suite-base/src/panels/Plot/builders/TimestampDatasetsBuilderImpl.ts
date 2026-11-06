@@ -676,11 +676,12 @@ export class TimestampDatasetsBuilderImpl {
           points.remove(fullLength, fullLength + cullSize + MAX_CURRENT_DATUMS_PER_SERIES * 0.25);
         }
 
-        const isHeaderStamp = series.config.timestampMethod === "headerStamp";
-        const items = (
-          isHeaderStamp ? action.items.slice().sort(compareDatum) : action.items
-        ).filter((item) => lastX == undefined || item.x > lastX);
-        if (isHeaderStamp) {
+        // Message times other than receive time can arrive out of order
+        const needsSort = series.config.timestampMethod !== "receiveTime";
+        const items = (needsSort ? action.items.slice().sort(compareDatum) : action.items).filter(
+          (item) => lastX == undefined || item.x > lastX,
+        );
+        if (needsSort) {
           points.insert(fullLength, items, points.length);
         } else {
           points.insert(points.length, items);
@@ -695,7 +696,7 @@ export class TimestampDatasetsBuilderImpl {
         const { points } = series;
         const oldFullLength = series.fullLength;
 
-        if (series.config.timestampMethod === "headerStamp") {
+        if (series.config.timestampMethod !== "receiveTime") {
           // Batches are mostly already in order: merge instead of re-sorting everything
           const sorted = action.items.slice().sort(compareDatum);
           this.#invalidate(series, points.insert(0, sorted, oldFullLength));

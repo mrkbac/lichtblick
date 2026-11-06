@@ -72,6 +72,29 @@ const useSubscriptions = (config: PlotConfig, subscriberId: string): void => {
       }
     }
 
+    // A custom time field is read from the same messages as the series (data and legend values)
+    for (const item of paths) {
+      const timestampPath = item.timestampPath?.trim();
+      const parsedTimePath =
+        item.timestampMethod === "customField" &&
+        timestampPath &&
+        !isReferenceLinePlotPathType(item)
+          ? parseMessagePath(timestampPath)
+          : undefined;
+      // A field on another topic is never read (settings show an error), so don't load that topic
+      const timeSub =
+        parsedTimePath != undefined &&
+        parsedTimePath.topicName === parseMessagePath(item.value)?.topicName
+          ? pathToSubscribePayload(
+              fillInGlobalVariablesInPath(parsedTimePath, globalVariables),
+              preloadType,
+            )
+          : undefined;
+      if (timeSub) {
+        subscriptions.push(timeSub);
+      }
+    }
+
     if ((xAxisVal === "custom" || xAxisVal === "currentCustom") && config.xAxisPath?.value) {
       const parsedPath = parseMessagePath(config.xAxisPath.value);
       if (parsedPath) {
