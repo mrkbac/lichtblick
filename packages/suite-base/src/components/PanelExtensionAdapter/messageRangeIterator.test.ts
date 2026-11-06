@@ -424,6 +424,32 @@ describe("createMessageRangeIterator", () => {
     (console.error as Mock).mockReset();
   });
 
+  it("rethrows read errors when asked to", async () => {
+    (console.error as Mock).mockImplementation(() => {});
+    // oxlint-disable-next-line require-yield -- fails before the first message
+    async function* errorIterator(): AsyncIterableIterator<Readonly<IteratorResult>> {
+      throw new Error("Test error");
+    }
+
+    const { iterable } = createMessageRangeIterator({
+      topic: mockTopic,
+      rawBatchIterator: errorIterator(),
+      sortedTopics: mockSortedTopics,
+      messageConverters: mockMessageConverters,
+      rethrowErrors: true,
+    });
+
+    const drain = async () => {
+      const batches: MessageEvent[][] = [];
+      for await (const batch of iterable) {
+        batches.push(batch);
+      }
+      return batches;
+    };
+    await expect(drain()).rejects.toThrow("Test error");
+    (console.error as Mock).mockReset();
+  });
+
   it("should not yield remaining messages when cancelled", async () => {
     const mockMessages: MessageEvent[] = MessageEventBuilder.messageEvents();
 

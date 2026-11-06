@@ -121,6 +121,7 @@ export function useLogMessages(topics: readonly string[]): {
       let cancelled = false;
       const cancelRange = subscribeMessageRange({
         topic,
+        rethrowErrors: true,
         onNewRangeIterator: async (iterator) => {
           const messages: NormalizedLogMessage[] = [];
           acc[topic] = messages;

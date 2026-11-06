@@ -20,7 +20,15 @@ export function createMessageRangeIterator(params: CreateMessageRangeIteratorPar
   iterable: AsyncIterable<MessageEvent[]>;
   cancel: () => void;
 } {
-  const { topic, convertTo, rawBatchIterator, sortedTopics, messageConverters, emitAlert } = params;
+  const {
+    topic,
+    convertTo,
+    rawBatchIterator,
+    sortedTopics,
+    messageConverters,
+    emitAlert,
+    rethrowErrors = false,
+  } = params;
 
   // Create a cancellation token
   let cancelled = false;
@@ -92,6 +100,9 @@ export function createMessageRangeIterator(params: CreateMessageRangeIteratorPar
       } catch (err: unknown) {
         if (!cancelled) {
           log.error("Error in createMessageRangeIterator:", err);
+          if (rethrowErrors) {
+            throw err;
+          }
         }
       }
     },
