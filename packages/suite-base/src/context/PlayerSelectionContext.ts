@@ -109,6 +109,8 @@ export type DataSourceArgs = FileDataSourceArgs | ConnectionDataSourceArgs;
  */
 export interface PlayerSelection {
   selectSource: (sourceId: string, args?: DataSourceArgs) => void;
+  /** Close the current data source (disconnects live connections) */
+  closeSource: () => void;
   selectRecent: (recentId: string) => void;
   removeRecent: (recentId: string) => void;
   togglePinRecent: (recentId: string) => void;
@@ -130,6 +132,7 @@ export interface PlayerSelection {
 
 const PlayerSelectionContext = createContext<PlayerSelection>({
   selectSource: () => {},
+  closeSource: () => {},
   selectRecent: () => {},
   removeRecent: () => {},
   togglePinRecent: () => {},
