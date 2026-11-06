@@ -49,7 +49,9 @@ vi.mock("@lichtblick/suite-base/components/PanelContextMenu", () => ({
 }));
 vi.mock("@lichtblick/suite-base/components/PanelToolbar", () => ({
   __esModule: true,
-  default: () => <div data-testid="panel-toolbar" />,
+  default: ({ additionalIcons }: { additionalIcons?: React.ReactNode }) => (
+    <div data-testid="panel-toolbar">{additionalIcons}</div>
+  ),
 }));
 
 let mockLatestLegendProps: any;
@@ -272,13 +274,36 @@ describe("Plot Component", () => {
     expect(screen.queryByTestId("plot-legend")).toBeNull();
   });
 
+  it("Given no zoom When rendering Then the toolbar has no reset button", () => {
+    renderPlot(new PlotConfigBuilder().build());
+
+    expect(screen.queryByTestId("plot-reset-view-button")).toBeNull();
+  });
+
+  it("Given a shown legend When clicking the toolbar legend toggle Then the legend is hidden", async () => {
+    const saveConfig = vi.fn();
+    const { user } = renderPlot(new PlotConfigBuilder().build(), saveConfig);
+    expect(screen.getByTestId("plot-legend")).toBeDefined();
+
+    await user.click(screen.getByTestId("plot-legend-toggle"));
+
+    expect(saveConfig).toHaveBeenCalledWith({ showLegend: false });
+  });
+
+  it("Given a hidden legend When rendering Then only the toolbar toggle remains", () => {
+    renderPlot({ ...new PlotConfigBuilder().build(), showLegend: false });
+
+    expect(screen.queryByTestId("plot-legend")).toBeNull();
+    expect(screen.getByTestId("plot-legend-toggle").getAttribute("aria-pressed")).toBe("false");
+  });
+
   it("Given reset allowed When clicking reset button Then onResetView is called", async () => {
     // Given
     const config = new PlotConfigBuilder().build();
     renderPlot(config);
     act(() => mockSetCanReset?.({ canReset: true }));
 
-    const resetButton = await screen.findByText("resetView");
+    const resetButton = await screen.findByTestId("plot-reset-view-button");
 
     // When
     await userEvent.click(resetButton);

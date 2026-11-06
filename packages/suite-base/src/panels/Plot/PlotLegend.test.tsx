@@ -16,7 +16,6 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import { PlotLegend } from "./PlotLegend";
 
 const defaultProps = {
-  showLegend: true,
   saveConfig: vi.fn(),
   sidebarDimension: BasicBuilder.number(),
   paths: [],
@@ -104,15 +103,6 @@ describe("PlotLegend", () => {
   it("renders PlotLegend without crashing", () => {
     setup();
     expect(screen.getByTitle("Add series")).toBeDefined();
-  });
-
-  it("toggles legend visibility when IconButton is clicked", async () => {
-    const mockSaveConfig = vi.fn();
-    const { getByRole } = setup({ showLegend: false, saveConfig: mockSaveConfig });
-
-    await userEvent.setup().click(getByRole("button"));
-
-    expect(mockSaveConfig).toHaveBeenCalledWith({ showLegend: true });
   });
 
   it("renders paths from props", () => {
