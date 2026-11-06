@@ -676,39 +676,79 @@ describe("ChartRenderer", () => {
   });
 
   describe("threshold shading", () => {
-    it("appends fills after the series, keeps them out of hover, and removes them when unshaded", () => {
+    const series: Dataset[] = [{ data: [{ x: 0, y: 1 }] }, { data: [{ x: 0, y: 5 }] }];
+    const shadedLine = { value: 2, color: "#f00", shade: "above" as const, dashed: false };
+
+    function setupShaded() {
+      const getElementsAtEventForMode = vi.fn();
       (Chart as unknown as Mock).mockImplementationOnce(function () {
         return {
           update: vi.fn(),
-          scales: SCALES_CHART,
+          // 1 pixel per x unit
+          scales: {
+            ...SCALES_CHART,
+            x: {
+              ...SCALES_CHART.x,
+              getValueForPixel: (px: number) => px,
+              getPixelForValue: (value: number) => value,
+            },
+          },
           data: { datasets: [] },
-          getElementsAtEventForMode: vi.fn(),
+          getElementsAtEventForMode,
           options: { plugins: { annotation: { annotations: [] } } } as unknown as ChartOptions,
         };
       });
       const { chartRenderer } = setup();
-      const chart = (chartRenderer as any).getChartInstance();
-      const series: Dataset[] = [{ data: [{ x: 0, y: 1 }] }, { data: [{ x: 0, y: 5 }] }];
-
+      const chart = (
+        chartRenderer as unknown as { getChartInstance: () => ChartType }
+      ).getChartInstance();
       chartRenderer.updateDatasets(series);
-      chartRenderer.update({
-        type: "update",
-        referenceLines: [{ value: 2, color: "#f00", shade: "above", dashed: false }],
-      });
+      chartRenderer.update({ type: "update", referenceLines: [shadedLine] });
+      return { chartRenderer, chart, getElementsAtEventForMode };
+    }
 
+    it("appends one fill per shaded series after the series datasets", () => {
+      // Given two series on the primary axis
+      // When a shaded line is set
+      const { chart } = setupShaded();
+
+      // Then the series keep their indices and the fills follow them
       expect(chart.data.datasets).toHaveLength(4);
       expect(chart.data.datasets.slice(0, 2)).toEqual(series);
-      expect(chart.options.plugins.annotation.annotations[0]).toMatchObject({ borderDash: [] });
+      expect(chart.data.datasets[2]?.data).toBe(series[0]!.data);
+      const annotations = chart.options.plugins?.annotation?.annotations as Record<
+        string,
+        unknown
+      >[];
+      expect(annotations[0]).toMatchObject({ borderDash: [] });
+    });
 
-      (chart.getElementsAtEventForMode as Mock).mockReturnValue([
-        { element: { x: 0, y: 0 }, datasetIndex: 3, index: 0 },
-        { element: { x: 0, y: 0 }, datasetIndex: 1, index: 0 },
-      ]);
-      expect(chartRenderer.getElementsAtPixel({ x: 0, y: 0 })).toEqual([
-        { data: series[1]!.data[0], configIndex: 1 },
-      ]);
+    it("leaves fills out of hover results", () => {
+      // Given a shaded line, and chart.js reporting a fill element under the cursor
+      const { chartRenderer, getElementsAtEventForMode } = setupShaded();
+      const underCursor: InteractionItem[] = [
+        { element: { x: 0, y: 0 } as Element, datasetIndex: 3, index: 0 },
+        { element: { x: 0, y: 0 } as Element, datasetIndex: 1, index: 0 },
+      ];
+      getElementsAtEventForMode.mockReturnValue(underCursor);
 
+      // When hovering
+      const elements = chartRenderer.getElementsAtPixel({ x: 0, y: 0 });
+      const latest = chartRenderer.getLatestElementsAtPixel({ x: 0, y: 0 });
+
+      // Then only series are reported, by config index
+      expect(elements).toEqual([{ data: series[1]!.data[0], configIndex: 1 }]);
+      expect(latest.map((element) => element.configIndex)).toEqual([0, 1]);
+    });
+
+    it("removes the fills when the line is no longer shaded", () => {
+      // Given a shaded line
+      const { chartRenderer, chart } = setupShaded();
+
+      // When shading is turned off
       chartRenderer.update({ type: "update", referenceLines: [{ value: 2, color: "#f00" }] });
+
+      // Then the chart shows the series datasets only
       expect(chart.data.datasets).toBe(series);
     });
   });
