@@ -330,6 +330,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
     return activeTooltip ? (
       <TimeBasedChartTooltipContent
         content={activeTooltip.data}
+        header={activeTooltip.header}
         multiDataset={numSeries > 1}
         colorsByConfigIndex={colorsByDatasetIndex}
         labelsByConfigIndex={labelsByDatasetIndex}

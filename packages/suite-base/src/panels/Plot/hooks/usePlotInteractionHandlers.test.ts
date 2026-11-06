@@ -22,13 +22,19 @@ import {
 } from "@lichtblick/suite-base/panels/Plot/types";
 import { PlotConfig } from "@lichtblick/suite-base/panels/Plot/utils/config";
 import { downloadCSV } from "@lichtblick/suite-base/panels/Plot/utils/csv";
+import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { PlayerState } from "@lichtblick/suite-base/players/types";
 import PlotBuilder from "@lichtblick/suite-base/testing/builders/PlotBuilder";
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
 import { PANEL_TITLE_CONFIG_KEY } from "@lichtblick/suite-base/util/layout";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-import usePlotInteractionHandlers, { formatCursorValues } from "./usePlotInteractionHandlers";
+import usePlotInteractionHandlers, {
+  formatCursorValues,
+  formatTimeAgo,
+  liveTimeAgo,
+} from "./usePlotInteractionHandlers";
 
 vi.mock("@lichtblick/suite-base/panels/Plot/utils/csv", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@lichtblick/suite-base/panels/Plot/utils/csv")>()),
@@ -84,13 +90,14 @@ describe("usePlotInteractionHandlers", () => {
     setActiveTooltip = vi.fn(),
     shouldSync,
     subscriberId,
-  }: Partial<UsePlotInteractionHandlersProps> = {}) => {
+    playerState = { capabilities: [], activeData: { startTime: RosTimeBuilder.time() } },
+  }: Partial<UsePlotInteractionHandlersProps> & { playerState?: unknown } = {}) => {
     (useSetHoverValue as Mock).mockReturnValue(mockSetHoverValue);
     (useClearHoverValue as Mock).mockReturnValue(mockClearHoverValue);
     (useMessagePipelineGetter as Mock).mockReturnValueOnce(
       vi.fn(() => ({
         seekPlayback: mockSeekPlayback,
-        playerState: { activeData: { startTime: RosTimeBuilder.time() } },
+        playerState,
       })),
     );
 
@@ -204,6 +211,29 @@ describe("usePlotInteractionHandlers", () => {
         expect.objectContaining({
           data: [{ configIndex: elements[0]!.configIndex, value: 3, ageSec: 0.4 }],
         }),
+      );
+    });
+
+    it("says how long ago the hovered time was on a live source", async () => {
+      const elements = [PlotBuilder.hoverElement({ data: PlotBuilder.datum({ value: 3 }) })];
+      (debouncePromise as Mock).mockImplementationOnce((fn) => fn);
+      const coordinator = {
+        ...(mockCoordinator as unknown as Record<string, unknown>),
+        getXValueAtPixel: vi.fn(() => 7.69),
+      } as unknown as PlotCoordinator;
+      const { result, props } = setup({
+        coordinator,
+        playerState: {
+          capabilities: [],
+          activeData: { startTime: { sec: 100, nsec: 0 }, endTime: { sec: 110, nsec: 0 } },
+        },
+      });
+      (props.renderer?.getLatestElementsAtPixel as Mock).mockReturnValueOnce(elements);
+
+      await triggerMouseMove(result);
+
+      expect(props.setActiveTooltip).toHaveBeenCalledWith(
+        expect.objectContaining({ header: "2.31 s ago" }),
       );
     });
 
@@ -554,7 +584,7 @@ describe("usePlotInteractionHandlers", () => {
     it("should return early if seekPlayback or startTime is undefined", () => {
       (useMessagePipelineGetter as Mock).mockReturnValueOnce({
         seekPlayback: vi.fn(),
-        playerState: { activeData: { startTime: RosTimeBuilder.time() } },
+        playerState: { capabilities: [], activeData: { startTime: RosTimeBuilder.time() } },
       });
       const { result } = setup();
 
@@ -774,5 +804,39 @@ describe("formatCursorValues", () => {
         "timestamp",
       ),
     ).toBe("elapsed time\t1.5\n/a.x\t3\nspeed\tfast");
+  });
+});
+
+describe("formatTimeAgo", () => {
+  it.each([
+    [0, "0.00 s ago"],
+    [2.314, "2.31 s ago"],
+    [59.5, "59.50 s ago"],
+    [192.4, "3 min 12 s ago"],
+    [7500, "2 h 5 min ago"],
+  ])("formats %d s as %s", (seconds, text) => {
+    expect(formatTimeAgo(seconds)).toBe(text);
+  });
+});
+
+describe("liveTimeAgo", () => {
+  const activeData = { startTime: { sec: 100, nsec: 0 }, endTime: { sec: 110, nsec: 0 } };
+  const state = (capabilities: string[]) =>
+    ({ capabilities, activeData }) as unknown as PlayerState;
+
+  it("measures from the newest data on a live source", () => {
+    expect(liveTimeAgo(state([]), 4)).toBe("6.00 s ago");
+  });
+
+  it("is empty for recordings", () => {
+    expect(liveTimeAgo(state([PLAYER_CAPABILITIES.playbackControl]), 4)).toBeUndefined();
+  });
+
+  it("is empty before the data or without an x scale", () => {
+    expect(liveTimeAgo(state([]), -1)).toBeUndefined();
+  });
+
+  it("is empty past the newest data", () => {
+    expect(liveTimeAgo(state([]), 11)).toBeUndefined();
   });
 });

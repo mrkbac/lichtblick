@@ -1,12 +1,13 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { add as addTimes, fromSec, isTime, toSec } from "@foxglove/rostime";
+import { add as addTimes, fromSec, isTime, subtract, toSec } from "@foxglove/rostime";
 import { useCallback, useRef, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useMountedState } from "react-use";
 
 import { debouncePromise } from "@lichtblick/den/async";
+import { Immutable } from "@lichtblick/suite";
 import { useMessagePipelineGetter } from "@lichtblick/suite-base/components/MessagePipeline";
 import { PanelContextMenuItem } from "@lichtblick/suite-base/components/PanelContextMenu";
 import { TimeBasedChartTooltipData } from "@lichtblick/suite-base/components/TimeBasedChart/TimeBasedChartTooltipContent";
@@ -29,6 +30,8 @@ import {
   plotPathDisplayName,
 } from "@lichtblick/suite-base/panels/Plot/utils/config";
 import { downloadCSV, getCSVColName } from "@lichtblick/suite-base/panels/Plot/utils/csv";
+import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { PlayerState } from "@lichtblick/suite-base/players/types";
 import clipboard from "@lichtblick/suite-base/util/clipboard";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
 import { PANEL_TITLE_CONFIG_KEY } from "@lichtblick/suite-base/util/layout";
@@ -37,6 +40,32 @@ import { getLineColor } from "@lichtblick/suite-base/util/plotColors";
 const selectSetGlobalBounds = (store: TimelineInteractionStateStore) => store.setGlobalBounds;
 
 const DEFAULT_FILE_TITLE = "plot_data";
+
+/** How long before the newest data a hovered time is: "2.31 s ago", "3 min 12 s ago". */
+export function formatTimeAgo(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds.toFixed(2)} s ago`;
+  }
+  if (seconds < 3600) {
+    return `${Math.floor(seconds / 60)} min ${Math.floor(seconds % 60)} s ago`;
+  }
+  return `${Math.floor(seconds / 3600)} h ${Math.floor((seconds % 3600) / 60)} min ago`;
+}
+
+/** Age of plot time `x` (seconds since start) on a live source; undefined for recordings. */
+export function liveTimeAgo(playerState: Immutable<PlayerState>, x: number): string | undefined {
+  const { startTime, endTime } = playerState.activeData ?? {};
+  if (playerState.capabilities.includes(PLAYER_CAPABILITIES.playbackControl)) {
+    return undefined;
+  }
+  // x < 0 is before the data, or the coordinator's "no scale yet" -1
+  if (!startTime || !endTime || x < 0) {
+    return undefined;
+  }
+  const ago = toSec(subtract(endTime, startTime)) - x;
+  // Past the newest data there is nothing to age
+  return ago >= 0 ? formatTimeAgo(ago) : undefined;
+}
 
 const usePlotInteractionHandlers = ({
   config,
@@ -99,13 +128,21 @@ const usePlotInteractionHandlers = ({
       }
 
       cursorValuesRef.current.items = tooltipItems;
+      const header =
+        isTimeAxis && coordinator
+          ? liveTimeAgo(
+              getMessagePipelineState().playerState,
+              coordinator.getXValueAtPixel(pixel.x),
+            )
+          : undefined;
       setActiveTooltip({
         x: args.clientX,
         y: args.clientY,
         data: tooltipItems,
+        ...(header != undefined && { header }),
       });
     });
-  }, [renderer, isMounted, setActiveTooltip, isTimeAxis]);
+  }, [renderer, isMounted, setActiveTooltip, isTimeAxis, coordinator, getMessagePipelineState]);
 
   // Extract the bounding client rect from currentTarget before calling the debounced function
   // because react re-uses the SyntheticEvent objects.

@@ -6,7 +6,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { renderHook } from "@testing-library/react";
+import { act, renderHook } from "@testing-library/react";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import { useTopicPublishFrequencies } from "@lichtblick/suite-base/hooks/useTopicPublishFrequences";
@@ -53,7 +53,8 @@ describe("useTopicPublishFrequencies", () => {
     expect(result.current).toStrictEqual({ topic_a: 2.25, topic_b: 3.8 });
   });
 
-  it("updates frequences for a live source", () => {
+  it("updates frequences for a live source and drops to 0 when a publisher stops", () => {
+    vi.useFakeTimers({ now: 0 });
     let activeData: Partial<PlayerState["activeData"]> = {
       currentTime: { sec: 2, nsec: 0 },
       endTime: { sec: 10, nsec: 0 },
@@ -72,8 +73,11 @@ describe("useTopicPublishFrequencies", () => {
       ),
     });
 
-    expect(result.current).toStrictEqual({});
+    expect(result.current).toStrictEqual({ topic_a: undefined, topic_b: undefined });
 
+    act(() => {
+      vi.setSystemTime(1000);
+    });
     activeData = {
       currentTime: { sec: 3, nsec: 0 },
       endTime: { sec: 10, nsec: 0 },
@@ -85,7 +89,13 @@ describe("useTopicPublishFrequencies", () => {
     };
     rerender();
 
-    expect(result.current["topic_a"]).toBeGreaterThan(0);
-    expect(result.current["topic_b"]).toBeGreaterThan(0);
+    expect(result.current).toStrictEqual({ topic_a: 10, topic_b: 20 });
+
+    // No more messages and no player updates: the periodic re-evaluation reports 0
+    act(() => {
+      vi.advanceTimersByTime(2500);
+    });
+    expect(result.current).toStrictEqual({ topic_a: 0, topic_b: 0 });
+    vi.useRealTimers();
   });
 });

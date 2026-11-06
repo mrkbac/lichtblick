@@ -41,6 +41,8 @@ function formatAge(ageSec: number | undefined): string | undefined {
 type Props = Immutable<{
   colorsByConfigIndex?: Record<string, undefined | string>;
   content: TimeBasedChartTooltipData[];
+  /** Line above the values, e.g. how long ago the hovered time was */
+  header?: string;
   labelsByConfigIndex?: Record<string, undefined | string>;
   // Flag indicating the containing chart has multiple datasets
   multiDataset: boolean;
@@ -83,6 +85,10 @@ const useStyles = makeStyles()((theme) => ({
     color: theme.palette.text.secondary,
     fontWeight: 400,
   },
+  header: {
+    gridColumn: "1/4",
+    color: theme.palette.text.secondary,
+  },
   overflow: {
     gridColumn: "2/4",
     opacity: theme.palette.action.disabledOpacity,
@@ -106,6 +112,7 @@ export default function TimeBasedChartTooltipContent(
   const {
     colorsByConfigIndex: colorsByDatasetIndex,
     content,
+    header,
     labelsByConfigIndex: labelsByDatasetIndex,
     multiDataset,
   } = props;
@@ -164,6 +171,7 @@ export default function TimeBasedChartTooltipContent(
 
     return (
       <Stack className={classes.root} data-testid="TimeBasedChartTooltipContent">
+        {header != undefined && <div className={classes.header}>{header}</div>}
         <div className={cx({ [classes.stale]: tooltip.ageSec != undefined })}>
           {value}
           {tooltip.constantName != undefined ? ` (${tooltip.constantName})` : ""}
@@ -176,6 +184,7 @@ export default function TimeBasedChartTooltipContent(
 
   return (
     <div className={cx(classes.root, classes.grid)} data-testid="TimeBasedChartTooltipContent">
+      {header != undefined && <div className={classes.header}>{header}</div>}
       {sortedItems.map(([datasetIndex, item], idx) => {
         const color = colorsByDatasetIndex?.[datasetIndex];
         const label = labelsByDatasetIndex?.[datasetIndex];
