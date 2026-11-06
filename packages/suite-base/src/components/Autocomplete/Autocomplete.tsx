@@ -30,7 +30,7 @@ import {
   IAutocomplete,
 } from "@lichtblick/suite-base/components/Autocomplete/types";
 
-import { ListboxAdapterChild, ReactWindowListboxAdapter } from "./ReactWindowListboxAdapter";
+import { ListboxAdapterChild, VirtualListboxAdapter } from "./VirtualListboxAdapter";
 
 function itemToFzfResult<T>(item: T): FzfResultItem<T> {
   return {
@@ -167,7 +167,7 @@ export const Autocomplete = React.forwardRef(function Autocomplete(
       slotProps={{
         paper: { elevation: 8 },
         listbox: {
-          component: ReactWindowListboxAdapter,
+          component: VirtualListboxAdapter,
         },
       }}
       slots={{ popper: CustomPopper }}
@@ -190,7 +190,7 @@ export const Autocomplete = React.forwardRef(function Autocomplete(
       )}
       renderOption={(optProps, option: FzfResultItem, state): React.ReactNode => {
         // The return values of renderOption are passed as the _child_ argument to the ListboxComponent.
-        // Our ReactWindowListboxAdapter expects a tuple for each item in the list and will itself manage
+        // Our VirtualListboxAdapter expects a tuple for each item in the list and will itself manage
         // when and which items to render using virtualization.
         //
         // The final as ReactNode cast is to appease the expected return type of renderOption because

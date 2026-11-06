@@ -1,16 +1,42 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
-import { Button, Typography } from "@mui/material";
-import { DataGrid, GridColDef, GridRenderCellParams } from "@mui/x-data-grid";
+import {
+  Button,
+  Checkbox,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TablePagination,
+  TableRow,
+  TableSortLabel,
+  Typography,
+} from "@mui/material";
+import {
+  RowSelectionState,
+  createColumnHelper,
+  createPaginatedRowModel,
+  createSortedRowModel,
+  flexRender,
+  rowPaginationFeature,
+  rowSelectionFeature,
+  rowSortingFeature,
+  sortFn_alphanumeric,
+  sortFn_text,
+  tableFeatures,
+  useTable,
+} from "@tanstack/react-table";
 import { useSnackbar } from "notistack";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { makeStyles } from "tss-react/mui";
 
+import { Immutable } from "@lichtblick/suite";
 import { InstallButton } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionActionButton/InstallButton";
 import { UninstallButton } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionActionButton/UninstallButton";
 import {
   ExtensionListProps,
-  paginationModel,
+  initialPagination,
 } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionList/types";
 import {
   displayNameForNamespace,
@@ -29,6 +55,41 @@ import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { canInstallExtension } from "@lichtblick/suite-base/util/canInstallExtension";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
+const features = tableFeatures({
+  rowSortingFeature,
+  rowPaginationFeature,
+  rowSelectionFeature,
+  sortedRowModel: createSortedRowModel(),
+  paginatedRowModel: createPaginatedRowModel(),
+  sortFns: { alphanumeric: sortFn_alphanumeric, text: sortFn_text },
+});
+
+const columnHelper = createColumnHelper<typeof features, Immutable<ExtensionMarketplaceDetail>>();
+
+const CHECKBOX_COLUMN_WIDTH = 48;
+// Relative column weights, turned into percentages of the visible columns.
+const COLUMN_WEIGHTS: Record<string, number> = {
+  name: 20,
+  version: 10,
+  publisher: 15,
+  description: 35,
+  actions: 20,
+};
+
+const useStyles = makeStyles()({
+  table: {
+    tableLayout: "fixed",
+    "& td, & th": {
+      overflow: "hidden",
+      textOverflow: "ellipsis",
+      whiteSpace: "nowrap",
+    },
+  },
+  row: {
+    cursor: "pointer",
+  },
+});
+
 export default function ExtensionList({
   namespace,
   entries,
@@ -36,11 +97,12 @@ export default function ExtensionList({
   selectExtension,
 }: Readonly<ExtensionListProps>): React.JSX.Element {
   const { t } = useTranslation("extensionsSettings");
+  const { classes } = useStyles();
   const installedExtensions = useExtensionCatalog((state) => state.installedExtensions);
   const uninstallExtension = useExtensionCatalog((state) => state.uninstallExtension);
   const { enqueueSnackbar } = useSnackbar();
   const analytics = useAnalytics();
-  const [selectedExtensionIds, setSelectedExtensionIds] = useState<string[]>([]);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [isBulkOperating, setIsBulkOperating] = useState(false);
 
   const { handleInstall, handleUninstall, operationStatus, isOperating } = useExtensionOperations();
@@ -52,12 +114,16 @@ export default function ExtensionList({
     [installedExtensions, namespace],
   );
 
+  // Only count rows still in the list (a filter change can hide selected rows)
+  const selectedExtensions = entries.filter((entry) => rowSelection[entry.id] === true);
+
   const handleBulkUninstall = useCallback(async () => {
-    const selectedExtensions = entries.filter((entry) => selectedExtensionIds.includes(entry.id));
     const extensionsToUninstall = selectedExtensions.filter((ext) => isExtensionInstalled(ext.id));
 
     if (extensionsToUninstall.length === 0) {
-      enqueueSnackbar("No installed extensions to uninstall from selection", { variant: "info" });
+      enqueueSnackbar("No installed extensions to uninstall from selection", {
+        variant: "info",
+      });
       return;
     }
 
@@ -71,7 +137,9 @@ export default function ExtensionList({
         await new Promise((resolve) => setTimeout(resolve, 100));
         await uninstallExtension(extension.namespace ?? "local", extension.id);
         successCount++;
-        analytics.logEvent(AppEvent.EXTENSION_UNINSTALL, { type: extension.id });
+        analytics.logEvent(AppEvent.EXTENSION_UNINSTALL, {
+          type: extension.id,
+        });
       } catch (error) {
         console.error("Failed to uninstall extension:", error);
         failCount++;
@@ -84,37 +152,28 @@ export default function ExtensionList({
       });
     }
     if (failCount > 0) {
-      enqueueSnackbar(`${failCount} extension(s) failed to uninstall`, { variant: "error" });
+      enqueueSnackbar(`${failCount} extension(s) failed to uninstall`, {
+        variant: "error",
+      });
     }
 
     setIsBulkOperating(false);
-    setSelectedExtensionIds([]);
-  }, [
-    analytics,
-    enqueueSnackbar,
-    entries,
-    isExtensionInstalled,
-    selectedExtensionIds,
-    uninstallExtension,
-  ]);
+    setRowSelection({});
+  }, [analytics, enqueueSnackbar, isExtensionInstalled, selectedExtensions, uninstallExtension]);
 
-  const columns: GridColDef[] = [
-    { field: "name", headerName: "Name", flex: 1, sortable: true },
-    { field: "version", headerName: "Version", flex: 0.5, sortable: true },
-    { field: "publisher", headerName: "Publisher", flex: 0.5, sortable: true },
-    { field: "description", headerName: "Description", flex: 2 },
-    {
-      field: "actions",
-      headerName: "Actions",
-      flex: 1,
-      sortable: false,
-      renderCell: (params: GridRenderCellParams) => {
-        const extension = params.row as ExtensionMarketplaceDetail;
-        const isInstalled = isExtensionInstalled(extension.id);
-        const isExtensionOperating = isOperating(extension.id);
-
-        if (isInstalled) {
-          return (
+  const columns = useMemo(() => {
+    const all = columnHelper.columns([
+      columnHelper.accessor("name", { header: "Name" }),
+      columnHelper.accessor("version", { header: "Version" }),
+      columnHelper.accessor("publisher", { header: "Publisher" }),
+      columnHelper.accessor("description", { header: "Description" }),
+      columnHelper.display({
+        id: "actions",
+        header: "Actions",
+        cell: ({ row }) => {
+          const extension = row.original as ExtensionMarketplaceDetail;
+          const isExtensionOperating = isOperating(extension.id);
+          return isExtensionInstalled(extension.id) ? (
             <UninstallButton
               extension={extension}
               onAction={handleUninstall}
@@ -124,9 +183,7 @@ export default function ExtensionList({
               label={ExtensionActionsLabel.UNINSTALL}
               loadingLabel={ExtensionOperationStatusLabel.UNINSTALLING}
             />
-          );
-        } else {
-          return (
+          ) : (
             <InstallButton
               extension={extension}
               onAction={handleInstall}
@@ -137,10 +194,22 @@ export default function ExtensionList({
               loadingLabel={ExtensionOperationStatusLabel.INSTALLING}
             />
           );
-        }
-      },
-    },
-  ];
+        },
+      }),
+    ]);
+    const showActions = isDesktopApp() || !entries.some((entry) => canInstallExtension(entry));
+    return showActions ? all : all.filter((column) => column.id !== "actions");
+  }, [entries, handleInstall, handleUninstall, isExtensionInstalled, isOperating, operationStatus]);
+
+  const table = useTable({
+    features,
+    columns,
+    data: entries,
+    getRowId: (row) => row.id,
+    initialState: { pagination: initialPagination },
+    state: { rowSelection },
+    onRowSelectionChange: setRowSelection,
+  });
 
   const renderComponent = () => {
     if (entries.length === 0 && filterText) {
@@ -149,7 +218,6 @@ export default function ExtensionList({
       return generatePlaceholderList(t("noExtensionsAvailable"));
     }
 
-    const selectedExtensions = entries.filter((entry) => selectedExtensionIds.includes(entry.id));
     const selectedInstalled = selectedExtensions.filter((ext) => isExtensionInstalled(ext.id));
 
     return (
@@ -160,9 +228,11 @@ export default function ExtensionList({
             color="text.secondary"
             alignSelf="center"
             paddingY={1}
-            style={{ visibility: selectedInstalled.length > 0 ? "visible" : "hidden" }}
+            style={{
+              visibility: selectedInstalled.length > 0 ? "visible" : "hidden",
+            }}
           >
-            {selectedExtensionIds.length} selected
+            {selectedExtensions.length} selected
           </Typography>
           {selectedInstalled.length > 0 && (
             <Button
@@ -179,40 +249,106 @@ export default function ExtensionList({
           )}
         </Stack>
         <div>
-          <DataGrid
-            rows={entries}
-            columns={columns}
-            initialState={{
-              pagination: { paginationModel },
-              columns: {
-                columnVisibilityModel: {
-                  actions: isDesktopApp() || !entries.some((entry) => canInstallExtension(entry)),
-                },
-              },
+          <Table className={classes.table}>
+            <TableHead>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  <TableCell padding="checkbox" style={{ width: CHECKBOX_COLUMN_WIDTH }}>
+                    <Checkbox
+                      size="small"
+                      checked={table.getIsAllRowsSelected()}
+                      indeterminate={table.getIsSomeRowsSelected()}
+                      onChange={table.getToggleAllRowsSelectedHandler()}
+                      slotProps={{ input: { "aria-label": "Select all rows" } }}
+                    />
+                  </TableCell>
+                  {headerGroup.headers.map((header, _index, headers) => {
+                    const totalWeight = headers.reduce(
+                      (sum, { column }) => sum + (COLUMN_WEIGHTS[column.id] ?? 0),
+                      0,
+                    );
+                    const sorted = header.column.getIsSorted();
+                    return (
+                      <TableCell
+                        key={header.id}
+                        style={{
+                          width: `${((COLUMN_WEIGHTS[header.column.id] ?? 0) / totalWeight) * 100}%`,
+                        }}
+                        sortDirection={sorted === false ? false : sorted}
+                      >
+                        {header.column.getCanSort() ? (
+                          <TableSortLabel
+                            active={sorted !== false}
+                            direction={sorted === false ? "asc" : sorted}
+                            onClick={header.column.getToggleSortingHandler()}
+                          >
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                          </TableSortLabel>
+                        ) : (
+                          flexRender(header.column.columnDef.header, header.getContext())
+                        )}
+                      </TableCell>
+                    );
+                  })}
+                </TableRow>
+              ))}
+            </TableHead>
+            <TableBody>
+              {table.getRowModel().rows.map((row) => (
+                <TableRow
+                  key={row.id}
+                  hover
+                  selected={row.getIsSelected()}
+                  className={classes.row}
+                  data-testid="extension-list-entry"
+                  onClick={() => {
+                    const extension = row.original as ExtensionMarketplaceDetail;
+                    const isInstalled =
+                      installedExtensions?.some(
+                        (installed) =>
+                          installed.id === extension.id &&
+                          installed.namespace === extension.namespace,
+                      ) ?? false;
+                    selectExtension({
+                      installed: isInstalled,
+                      entry: extension,
+                    });
+                  }}
+                >
+                  <TableCell
+                    padding="checkbox"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                    }}
+                  >
+                    <Checkbox
+                      size="small"
+                      checked={row.getIsSelected()}
+                      onChange={row.getToggleSelectedHandler()}
+                      slotProps={{ input: { "aria-label": "Select row" } }}
+                    />
+                  </TableCell>
+                  {row.getAllCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <TablePagination
+            component="div"
+            count={entries.length}
+            page={table.state.pagination.pageIndex}
+            rowsPerPage={table.state.pagination.pageSize}
+            rowsPerPageOptions={[5, 10, 20]}
+            onPageChange={(_event, page) => {
+              table.setPageIndex(page);
             }}
-            pageSizeOptions={[5, 10, 20]}
-            checkboxSelection
-            disableRowSelectionOnClick
-            style={{ cursor: "pointer" }}
-            onRowClick={(params) => {
-              const extension = params.row as ExtensionMarketplaceDetail;
-              const isInstalled = installedExtensions
-                ? installedExtensions.some(
-                    (installed) =>
-                      installed.id === extension.id && installed.namespace === extension.namespace,
-                  )
-                : false;
-              selectExtension({ installed: isInstalled, entry: extension });
+            onRowsPerPageChange={(event) => {
+              table.setPageSize(Number(event.target.value));
             }}
-            onRowSelectionModelChange={(newSelection) => {
-              // "exclude" means every row except the listed ids (select-all)
-              const ids = entries
-                .map((entry) => entry.id)
-                .filter((id) => newSelection.ids.has(id) === (newSelection.type === "include"));
-              setSelectedExtensionIds(ids);
-            }}
-            rowSelectionModel={{ type: "include", ids: new Set(selectedExtensionIds) }}
-            data-testid="extension-list-entry"
           />
         </div>
       </Stack>

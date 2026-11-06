@@ -7,10 +7,10 @@
 
 import SearchIcon from "@mui/icons-material/Search";
 import { List, ListItem, ListItemText, PopoverPosition, Skeleton } from "@mui/material";
-import { MouseEvent, useCallback, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
+import { MouseEvent, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLatest } from "react-use";
-import { List as VirtualList, RowComponentProps, ListImperativeAPI } from "react-window";
 import { useDebounce } from "use-debounce";
 
 import { filterMap } from "@lichtblick/den/collection";
@@ -50,7 +50,7 @@ export function TopicList(): React.JSX.Element {
   const playerPresence = useMessagePipeline(selectPlayerPresence);
   const { topics, datatypes } = useDataSourceInfo();
 
-  const listRef = useRef<ListImperativeAPI>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const treeItems = useTopicListSearch({
     topics,
@@ -58,6 +58,19 @@ export function TopicList(): React.JSX.Element {
     filterText: debouncedFilterText,
   });
   const { selectedIndexes, onSelect, getSelectedIndexes } = useMultiSelection(treeItems);
+
+  // The virtualizer re-reads row heights only when the keys change, so they include the row type
+  const getItemKey = useCallback(
+    (index: number) => `${index}:${treeItems[index]?.type}`,
+    [treeItems],
+  );
+  const virtualizer = useVirtualizer({
+    count: treeItems.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (index) => (treeItems[index]?.type === "topic" ? 50 : 28),
+    getItemKey,
+    overscan: 10,
+  });
 
   const [contextMenuState, setContextMenuState] = useState<
     { position: PopoverPosition; items: DraggedMessagePath[] } | undefined
@@ -102,18 +115,10 @@ export function TopicList(): React.JSX.Element {
     setContextMenuState(undefined);
   }, []);
 
-  const itemData = useMemo(() => ({ treeItems, selectedIndexes }), [selectedIndexes, treeItems]);
-
   const renderRow = useCallback(
-    // `treeItems` and `selectedIndexes` come from the `rowProps` we pass to the VirtualList below
-    ({
-      index,
-      style,
-      treeItems: rowTreeItems,
-      selectedIndexes: rowSelectedIndexes,
-    }: RowComponentProps<typeof itemData>): React.JSX.Element | null => {
-      const treeItem = rowTreeItems[index]!;
-      const selected = rowSelectedIndexes.has(index);
+    (index: number, key: React.Key, style: React.CSSProperties): React.JSX.Element | null => {
+      const treeItem = treeItems[index]!;
+      const selected = selectedIndexes.has(index);
       const onClick = (event: React.MouseEvent) => {
         event.preventDefault();
         onSelect({
@@ -126,6 +131,7 @@ export function TopicList(): React.JSX.Element {
         case "topic":
           return (
             <TopicRow
+              key={key}
               style={style}
               topicResult={treeItem.item}
               selected={selected}
@@ -139,6 +145,7 @@ export function TopicList(): React.JSX.Element {
         case "schema":
           return (
             <MessagePathRow
+              key={key}
               style={style}
               messagePathResult={treeItem.item}
               selected={selected}
@@ -152,7 +159,7 @@ export function TopicList(): React.JSX.Element {
       }
       return null;
     },
-    [handleContextMenu, handleDoubleClick, onSelect],
+    [handleContextMenu, handleDoubleClick, onSelect, selectedIndexes, treeItems],
   );
 
   if (playerPresence === PlayerPresence.NOT_PRESENT) {
@@ -211,16 +218,18 @@ export function TopicList(): React.JSX.Element {
           onClear={onClear}
         />
         {treeItems.length > 0 ? (
-          <div style={{ flex: "1 1 100%" }}>
-            <VirtualList
-              listRef={listRef}
-              style={{ width: "100%", height: "100%" }}
-              rowCount={treeItems.length}
-              rowHeight={(index, data) => (data.treeItems[index]?.type === "topic" ? 50 : 28)}
-              rowProps={itemData}
-              overscanCount={10}
-              rowComponent={renderRow}
-            />
+          <div ref={scrollRef} style={{ flex: "1 1 100%", overflowY: "auto" }}>
+            <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+              {virtualizer.getVirtualItems().map((virtualRow) =>
+                renderRow(virtualRow.index, virtualRow.key, {
+                  position: "absolute",
+                  left: 0,
+                  width: "100%",
+                  height: virtualRow.size,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }),
+              )}
+            </div>
           </div>
         ) : (
           <EmptyState>

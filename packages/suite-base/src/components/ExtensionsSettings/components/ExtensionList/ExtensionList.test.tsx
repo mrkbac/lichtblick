@@ -20,7 +20,9 @@ import ExtensionBuilder from "@lichtblick/suite-base/testing/builders/ExtensionB
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-vi.mock("@lichtblick/suite-base/util/isDesktopApp", () => ({ default: vi.fn() }));
+vi.mock("@lichtblick/suite-base/util/isDesktopApp", () => ({
+  default: vi.fn(),
+}));
 
 vi.mock("@lichtblick/suite-base/context/ExtensionCatalogContext", () => ({
   useExtensionCatalog: vi.fn(),
@@ -214,12 +216,16 @@ describe("ExtensionList Component", () => {
       );
 
       // When
-      const checkboxes = screen.getAllByRole("checkbox", { name: /select row/i });
+      const checkboxes = screen.getAllByRole("checkbox", {
+        name: /select row/i,
+      });
       fireEvent.click(checkboxes[0]!); // Select first extension
       fireEvent.click(checkboxes[1]!); // Select second extension
 
       // Then
-      const uninstallButton = await screen.findByRole("button", { name: "Uninstall 2" });
+      const uninstallButton = await screen.findByRole("button", {
+        name: "Uninstall 2",
+      });
       expect(uninstallButton).toBeInTheDocument();
 
       // When
@@ -263,7 +269,9 @@ describe("ExtensionList Component", () => {
       );
 
       // When
-      const checkboxes = screen.getAllByRole("checkbox", { name: /select row/i });
+      const checkboxes = screen.getAllByRole("checkbox", {
+        name: /select row/i,
+      });
       fireEvent.click(checkboxes[0]!); // Select first extension
       fireEvent.click(checkboxes[1]!); // Select second extension
 
@@ -292,12 +300,16 @@ describe("ExtensionList Component", () => {
       );
 
       // When
-      const checkboxes = screen.getAllByRole("checkbox", { name: /select row/i });
+      const checkboxes = screen.getAllByRole("checkbox", {
+        name: /select row/i,
+      });
       fireEvent.click(checkboxes[0]!); // installed
       fireEvent.click(checkboxes[1]!); // not installed
 
       // Then
-      const uninstallButton = await screen.findByRole("button", { name: "Uninstall 1" });
+      const uninstallButton = await screen.findByRole("button", {
+        name: "Uninstall 1",
+      });
       expect(uninstallButton).toBeInTheDocument();
 
       // When
@@ -336,11 +348,15 @@ describe("ExtensionList Component", () => {
       );
 
       // When
-      const checkboxes = screen.getAllByRole("checkbox", { name: /select row/i });
+      const checkboxes = screen.getAllByRole("checkbox", {
+        name: /select row/i,
+      });
       fireEvent.click(checkboxes[0]!);
       fireEvent.click(checkboxes[1]!);
 
-      const uninstallButton = await screen.findByRole("button", { name: "Uninstall 2" });
+      const uninstallButton = await screen.findByRole("button", {
+        name: "Uninstall 2",
+      });
       fireEvent.click(uninstallButton);
 
       // Then
@@ -372,11 +388,15 @@ describe("ExtensionList Component", () => {
         />,
       );
 
-      const checkboxes = screen.getAllByRole("checkbox", { name: /select row/i });
+      const checkboxes = screen.getAllByRole("checkbox", {
+        name: /select row/i,
+      });
       fireEvent.click(checkboxes[0]!);
       fireEvent.click(checkboxes[1]!);
 
-      const uninstallButton = await screen.findByRole("button", { name: "Uninstall 2" });
+      const uninstallButton = await screen.findByRole("button", {
+        name: "Uninstall 2",
+      });
 
       // When
       fireEvent.click(uninstallButton);
@@ -395,7 +415,9 @@ describe("ExtensionList Component", () => {
 
     it("renders an Install button for an extension that is not installed", () => {
       // Given
-      const entry = ExtensionBuilder.extensionMarketplaceDetail({ namespace: "org" });
+      const entry = ExtensionBuilder.extensionMarketplaceDetail({
+        namespace: "org",
+      });
 
       // When
       render(
@@ -408,7 +430,9 @@ describe("ExtensionList Component", () => {
 
     it("renders an Uninstall button for an extension that is installed", () => {
       // Given
-      const entry = ExtensionBuilder.extensionMarketplaceDetail({ namespace: "org" });
+      const entry = ExtensionBuilder.extensionMarketplaceDetail({
+        namespace: "org",
+      });
 
       (useExtensionCatalog as Mock).mockImplementation((selector) => {
         const mockState = {
@@ -425,6 +449,104 @@ describe("ExtensionList Component", () => {
 
       // Then
       expect(screen.getByRole("button", { name: "Uninstall" })).toBeInTheDocument();
+    });
+  });
+
+  describe("table interactions", () => {
+    function renderList(entries = mockEntries, select = mockSelectExtension) {
+      render(
+        <ExtensionList
+          namespace={mockNamespace}
+          entries={entries}
+          filterText=""
+          selectExtension={select}
+        />,
+      );
+    }
+
+    function rowNames(): string[] {
+      return screen
+        .getAllByTestId("extension-list-entry")
+        .map((row) => row.querySelectorAll("td")[1]!.textContent);
+    }
+
+    it("does not select the extension when its checkbox is clicked", () => {
+      const select = vi.fn();
+      renderList(mockEntries, select);
+
+      fireEvent.click(screen.getAllByRole("checkbox", { name: "Select row" })[0]!);
+
+      expect(select).not.toHaveBeenCalled();
+      expect(screen.getAllByRole("checkbox", { name: "Select row" })[0]).toBeChecked();
+    });
+
+    it("selects and deselects all rows with the header checkbox", async () => {
+      (useExtensionCatalog as Mock).mockImplementation((selector) =>
+        selector({
+          installedExtensions: mockEntries,
+          uninstallExtension: vi.fn(),
+        }),
+      );
+      renderList();
+
+      const selectAll = screen.getByRole("checkbox", {
+        name: "Select all rows",
+      });
+      fireEvent.click(selectAll);
+      expect(await screen.findByRole("button", { name: "Uninstall 2" })).toBeInTheDocument();
+      expect(screen.getByText("2 selected")).toBeInTheDocument();
+
+      fireEvent.click(selectAll);
+      expect(screen.queryByRole("button", { name: /^Uninstall \d/ })).not.toBeInTheDocument();
+    });
+
+    it("sorts rows when a column header is clicked", () => {
+      const entries = ["b", "c", "a"].map((name) =>
+        ExtensionBuilder.extensionMarketplaceDetail({
+          name,
+          id: name,
+          namespace: mockNamespace,
+        }),
+      );
+      renderList(entries);
+      expect(rowNames()).toEqual(["b", "c", "a"]);
+
+      fireEvent.click(screen.getByRole("button", { name: "Name" }));
+      expect(rowNames()).toEqual(["a", "b", "c"]);
+
+      fireEvent.click(screen.getByRole("button", { name: "Name" }));
+      expect(rowNames()).toEqual(["c", "b", "a"]);
+    });
+
+    it("paginates 10 rows per page", () => {
+      const entries = Array.from({ length: 12 }, (_, i) =>
+        ExtensionBuilder.extensionMarketplaceDetail({
+          name: `ext-${i}`,
+          id: `${i}`,
+          namespace: mockNamespace,
+        }),
+      );
+      renderList(entries);
+      expect(screen.getAllByTestId("extension-list-entry")).toHaveLength(10);
+
+      fireEvent.click(screen.getByRole("button", { name: /next page/i }));
+      expect(rowNames()).toEqual(["ext-10", "ext-11"]);
+    });
+
+    it("hides the actions column on web when extensions are installable", () => {
+      (isDesktopApp as Mock).mockReturnValue(false);
+      renderList();
+
+      expect(screen.queryByText("Actions")).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Install" })).not.toBeInTheDocument();
+    });
+
+    it("shows the actions column on desktop", () => {
+      (isDesktopApp as Mock).mockReturnValue(true);
+      renderList();
+
+      expect(screen.getByText("Actions")).toBeInTheDocument();
+      expect(screen.getAllByRole("button", { name: "Install" })).toHaveLength(2);
     });
   });
 });
