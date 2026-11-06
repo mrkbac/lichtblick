@@ -417,6 +417,29 @@ describe("decodeRawImage", () => {
     expect(Array.from(output.slice(8, 12))).toEqual([0, 0, 255, 255]);
   });
 
+  it.each(["flat", "rgba-fields"] as const)(
+    "falls back to grayscale for mono8 in %s color mode",
+    (colorMode) => {
+      const mockImage = createMockROSImage({
+        encoding: "mono8",
+        width: 3,
+        height: 1,
+        step: 3,
+        data: new Uint8Array([0, 128, 255]),
+      });
+      const output = new Uint8ClampedArray(3 * 4);
+      decodeRawImage(mockImage, { colorMode }, output);
+      expect(Array.from(output)).toEqual([0, 0, 0, 255, 128, 128, 128, 255, 255, 255, 255, 255]);
+    },
+  );
+
+  it("still rejects flat color mode for mono16", () => {
+    const mockImage = createMockROSImage({ encoding: "mono16", width: 1, height: 1, step: 2 });
+    expect(() => {
+      decodeRawImage(mockImage, { colorMode: "flat" }, new Uint8ClampedArray(4));
+    }).toThrow("flat color mode is not supported for mono16 images");
+  });
+
   it("keeps plain grayscale for mono8 with default settings", () => {
     const mockImage = createMockROSImage({
       encoding: "mono8",

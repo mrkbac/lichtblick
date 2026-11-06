@@ -166,17 +166,19 @@ const MIN_MAX_16_BIT = { minValue: 0, maxValue: 65535 };
 
 export type RawImageOptions = ColorModeSettings;
 
-/** Maps a single-channel value to a color using the panel's gradient/colormap and value range. */
+/**
+ * Maps a single-channel value to a color using the panel's gradient/colormap and value range.
+ * Returns undefined for color modes that don't apply to single-channel images (flat, rgba-fields).
+ */
 function monoColorConverter(
   options: Partial<RawImageOptions>,
   defaultRange: { minValue: number; maxValue: number },
-  label: string,
-): (value: number) => { r: number; g: number; b: number; a: number } {
+): ((value: number) => { r: number; g: number; b: number; a: number }) | undefined {
   // lodash merge replaces undefined values in options with defaults, whereas a spread would let
   // undefined overwrite them
   const settings = _.merge({}, IMAGE_DEFAULT_COLOR_MODE_SETTINGS, defaultRange, options);
   if (settings.colorMode === "rgba-fields" || settings.colorMode === "flat") {
-    throw Error(`${settings.colorMode} color mode is not supported for ${label} images`);
+    return undefined;
   }
   const converter = getColorConverter(
     settings as ColorModeSettings & { colorMode: typeof settings.colorMode },
@@ -252,15 +254,19 @@ export function decodeRawImage(
     case "mono8":
     case "8UC1":
       decodeMono8(rawData, width, height, step, output, {
-        colorConverter: monoColorConverter(options, MIN_MAX_8_BIT, "mono8"),
+        // Unsupported color modes fall back to plain grayscale
+        colorConverter: monoColorConverter(options, MIN_MAX_8_BIT),
       });
       break;
     case "mono16":
-    case "16UC1":
-      decodeMono16(rawData, width, height, step, is_bigendian, output, {
-        colorConverter: monoColorConverter(options, MIN_MAX_16_BIT, "mono16"),
-      });
+    case "16UC1": {
+      const colorConverter = monoColorConverter(options, MIN_MAX_16_BIT);
+      if (!colorConverter) {
+        throw Error(`${options.colorMode} color mode is not supported for mono16 images`);
+      }
+      decodeMono16(rawData, width, height, step, is_bigendian, output, { colorConverter });
       break;
+    }
     default:
       throw new Error(`Unsupported encoding ${encoding}`);
   }
