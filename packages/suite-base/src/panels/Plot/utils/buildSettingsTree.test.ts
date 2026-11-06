@@ -379,4 +379,29 @@ describe("buildSettingsTree", () => {
     expect(children?.["0"]?.fields?.referenceLineAxis?.value).toBe("x");
     expect(children?.["1"]?.fields?.referenceLineAxis).toBeUndefined();
   });
+
+  it("offers FFT and histogram displays only on time plots", () => {
+    const timePlot = buildSettingsTree(PlotBuilder.config({ xAxisVal: "timestamp" }), t);
+    const indexPlot = buildSettingsTree(
+      PlotBuilder.config({ xAxisVal: "index", plotMode: "fft" }),
+      t,
+    );
+
+    expect(timePlot.general?.fields?.plotMode?.value).toBe("time");
+    expect(timePlot.general?.fields?.analysisRange).toBeUndefined();
+    expect(indexPlot.general?.fields?.plotMode).toBeUndefined();
+  });
+
+  it("shows the analyzed range for spectra and the bin count for histograms", () => {
+    const fft = buildSettingsTree(PlotBuilder.config({ xAxisVal: "timestamp", plotMode: "fft" }), t)
+      .general?.fields;
+    const histogram = buildSettingsTree(
+      PlotBuilder.config({ xAxisVal: "timestamp", plotMode: "histogram", histogramBins: 20 }),
+      t,
+    ).general?.fields;
+
+    expect(fft?.analysisRange?.value).toBe("visible");
+    expect(fft?.histogramBins).toBeUndefined();
+    expect(histogram?.histogramBins?.value).toBe(20);
+  });
 });

@@ -23,6 +23,7 @@ import {
   ZoomMode,
 } from "@lichtblick/suite-base/panels/Plot/types";
 import {
+  getPlotMode,
   PlotPath,
   PlotXAxisVal,
   plotPathDisplayName,
@@ -51,6 +52,9 @@ const usePlotInteractionHandlers = ({
   const isMounted = useMountedState();
   const mousePresentRef = useRef(false);
   const { xAxisVal: xAxisMode, [PANEL_TITLE_CONFIG_KEY]: customTitle } = config;
+  /** x is playback time: not on a spectrum or histogram of a time plot */
+  const isTimeAxis = xAxisMode === "timestamp" && getPlotMode(config) === "time";
+  const isAnalysis = getPlotMode(config) !== "time";
   const setGlobalBounds = useTimelineInteractionState(selectSetGlobalBounds);
   const getMessagePipelineState = useMessagePipelineGetter();
   const [focusedPath, setFocusedPath] = useState<undefined | string[]>(undefined);
@@ -65,10 +69,9 @@ const usePlotInteractionHandlers = ({
       const pixel = { x: args.canvasX, y: args.canvasY };
       // Time plots show every series' value at the hovered time, including sparse series whose last
       // sample is earlier. Other plots show the points under the cursor.
-      const elements =
-        xAxisMode === "timestamp"
-          ? await renderer?.getLatestElementsAtPixel(pixel)
-          : await renderer?.getElementsAtPixel(pixel);
+      const elements = isTimeAxis
+        ? await renderer?.getLatestElementsAtPixel(pixel)
+        : await renderer?.getElementsAtPixel(pixel);
 
       if (!isMounted()) {
         return;
@@ -102,7 +105,7 @@ const usePlotInteractionHandlers = ({
         data: tooltipItems,
       });
     });
-  }, [renderer, isMounted, setActiveTooltip, xAxisMode]);
+  }, [renderer, isMounted, setActiveTooltip, isTimeAxis]);
 
   // Extract the bounding client rect from currentTarget before calling the debounced function
   // because react re-uses the SyntheticEvent objects.
@@ -124,15 +127,16 @@ const usePlotInteractionHandlers = ({
       const rect = event.currentTarget.getBoundingClientRect();
       const mouseX = event.clientX - rect.left;
       const seconds = coordinator.getXValueAtPixel(mouseX);
-      cursorValuesRef.current.x = seconds;
+      // A spectrum's or histogram's x is not what the copied x column names
+      cursorValuesRef.current.x = isAnalysis ? undefined : seconds;
 
       setHoverValue({
         componentId: subscriberId,
         value: seconds,
-        type: xAxisMode === "timestamp" ? "PLAYBACK_SECONDS" : "OTHER",
+        type: isTimeAxis ? "PLAYBACK_SECONDS" : "OTHER",
       });
     },
-    [buildTooltip, coordinator, setHoverValue, subscriberId, xAxisMode],
+    [buildTooltip, coordinator, setHoverValue, subscriberId, isAnalysis, isTimeAxis],
   );
 
   const onMouseOut = useCallback(() => {
@@ -171,10 +175,11 @@ const usePlotInteractionHandlers = ({
 
     coordinator.resetBounds();
 
-    if (shouldSync) {
+    // A spectrum or histogram has no time zoom to reset in the synced plots
+    if (shouldSync && !isAnalysis) {
       setGlobalBounds(undefined);
     }
-  }, [coordinator, setGlobalBounds, shouldSync]);
+  }, [coordinator, isAnalysis, setGlobalBounds, shouldSync]);
 
   const onClick = useCallback(
     (event: React.MouseEvent<HTMLElement>): void => {
@@ -184,7 +189,7 @@ const usePlotInteractionHandlers = ({
       }
 
       // Only timestamp plots support click-to-seek
-      if (xAxisMode !== "timestamp" || !coordinator) {
+      if (!isTimeAxis || !coordinator) {
         return;
       }
 
@@ -206,7 +211,7 @@ const usePlotInteractionHandlers = ({
         seekPlayback(addTimes(start, fromSec(seekSeconds)));
       }
     },
-    [coordinator, draggingRef, getMessagePipelineState, xAxisMode],
+    [coordinator, draggingRef, getMessagePipelineState, isTimeAxis],
   );
 
   const onClickPath = useCallback((index: number) => {

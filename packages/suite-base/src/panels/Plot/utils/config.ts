@@ -41,6 +41,10 @@ export type PlotTimeWindow = "automatic" | "sliding" | "fixed";
 export type PlotPlayheadPosition = "right" | "center";
 export type PlotTimestampFormat = "relative" | "absolute";
 export type PlotAxisScales = "independent" | "equal";
+/** "fft" plots each series' frequency spectrum, "histogram" its value distribution */
+export type PlotMode = "time" | "fft" | "histogram";
+/** Which samples an FFT or histogram uses: the time window the time plot would show, or all */
+export type PlotAnalysisRange = "visible" | "all";
 /** Where a series' x value comes from on a time plot */
 export type PlotTimestampMethod = TimestampMethod | "customField";
 
@@ -122,6 +126,12 @@ export type PlotConfig = DeprecatedPlotConfig & {
   /** "equal" locks one x unit to one y unit (path x-axis plots only). */
   axisScales?: PlotAxisScales;
   followingViewWidth?: number;
+  /** Unset on older layouts; see getPlotMode. */
+  plotMode?: PlotMode;
+  /** FFT and histogram input range. Unset means "visible". */
+  analysisRange?: PlotAnalysisRange;
+  /** Histogram bin count; unset picks one automatically */
+  histogramBins?: number;
   sidebarDimension: number;
   [PANEL_TITLE_CONFIG_KEY]?: string;
 };
@@ -141,4 +151,11 @@ export function getTimeWindow(config: Immutable<PlotConfig>): PlotTimeWindow {
     return "fixed";
   }
   return "automatic";
+}
+
+/** FFT and histogram are views of time plots; other x-axis modes always plot over their x. */
+export function getPlotMode(
+  config: Immutable<Pick<PlotConfig, "xAxisVal" | "plotMode">>,
+): PlotMode {
+  return config.xAxisVal === "timestamp" ? (config.plotMode ?? "time") : "time";
 }

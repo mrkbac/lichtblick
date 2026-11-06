@@ -874,7 +874,7 @@ describe("PlotCoordinator", () => {
       expect(plotCoordinator["updateAction"].yAxisLabel).toBe("Velocity");
     });
 
-    it("should pass undefined axis labels when not configured", () => {
+    it("should clear the axis labels when not configured", () => {
       const config = PlotBuilder.config({
         xAxisLabel: undefined,
         yAxisLabel: undefined,
@@ -884,8 +884,35 @@ describe("PlotCoordinator", () => {
 
       plotCoordinator.handleConfig(config, "light", {});
 
-      expect(plotCoordinator["updateAction"].xAxisLabel).toBeUndefined();
-      expect(plotCoordinator["updateAction"].yAxisLabel).toBeUndefined();
+      // An empty label hides one shown before (e.g. a spectrum's default label)
+      expect(plotCoordinator["updateAction"].xAxisLabel).toBe("");
+      expect(plotCoordinator["updateAction"].yAxisLabel).toBe("");
+    });
+
+    it("analyzes the time window a time plot would show on a spectrum", () => {
+      const config = PlotBuilder.config({
+        xAxisVal: "timestamp",
+        plotMode: "fft",
+        timeWindow: "fixed",
+        minXValue: 1,
+        maxXValue: 3,
+        minYValue: -1,
+        paths: [],
+      });
+
+      plotCoordinator.handleConfig(config, "light", {});
+
+      // x is frequency, scaled to the data; the time window picks the samples
+      expect(plotCoordinator["getXBounds"]()).toEqual({ min: undefined, max: undefined });
+      expect(plotCoordinator["configBounds"].y).toEqual({});
+      expect(plotCoordinator["getAnalysis"]()).toEqual({
+        mode: "fft",
+        bins: undefined,
+        timeRange: { min: 1, max: 3 },
+      });
+
+      plotCoordinator.handleConfig({ ...config, analysisRange: "all" }, "light", {});
+      expect(plotCoordinator["getAnalysis"]()).toEqual({ mode: "fft", bins: undefined });
     });
 
     it("should correctly process paths and generate series", () => {
@@ -1263,6 +1290,27 @@ describe("PlotCoordinator", () => {
       await plotCoordinator.getVisibleCsvData();
 
       expect(getCsvData).toHaveBeenCalledWith({ min: 2, max: 9 });
+    });
+
+    it("exports the analyzed time window of a spectrum, not its frequency range", async () => {
+      const getCsvData = vi.fn().mockResolvedValue([]);
+      datasetsBuilder.getCsvData = getCsvData;
+      const config = PlotBuilder.config({
+        xAxisVal: "timestamp",
+        plotMode: "fft",
+        timeWindow: "fixed",
+        minXValue: 1,
+        maxXValue: 3,
+        paths: [],
+      });
+      plotCoordinator.handleConfig(config, "light", {});
+      plotCoordinator["latestXScale"] = { min: 0, max: 50, left: 0, right: 100 };
+
+      await plotCoordinator.getVisibleCsvData();
+      plotCoordinator.handleConfig({ ...config, analysisRange: "all" }, "light", {});
+      await plotCoordinator.getVisibleCsvData();
+
+      expect(getCsvData.mock.calls).toEqual([[{ min: 1, max: 3 }], [undefined]]);
     });
   });
 });
