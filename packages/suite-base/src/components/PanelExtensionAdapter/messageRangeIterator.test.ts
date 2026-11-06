@@ -426,8 +426,18 @@ describe("createMessageRangeIterator", () => {
 
   it("rethrows read errors when asked to", async () => {
     (console.error as Mock).mockImplementation(() => {});
-    // oxlint-disable-next-line require-yield -- fails before the first message
+    // Fails right after a message, before the batch interval yields it
     async function* errorIterator(): AsyncIterableIterator<Readonly<IteratorResult>> {
+      yield {
+        type: "message-event",
+        msgEvent: {
+          topic: mockTopic,
+          schemaName: "test_schema",
+          receiveTime: { sec: 1, nsec: 0 },
+          message: { data: "test" },
+          sizeInBytes: 100,
+        },
+      };
       throw new Error("Test error");
     }
 
@@ -439,14 +449,16 @@ describe("createMessageRangeIterator", () => {
       rethrowErrors: true,
     });
 
-    const drain = async () => {
-      const batches: MessageEvent[][] = [];
-      for await (const batch of iterable) {
-        batches.push(batch);
-      }
-      return batches;
-    };
-    await expect(drain()).rejects.toThrow("Test error");
+    const batches: MessageEvent[][] = [];
+    await expect(
+      (async () => {
+        for await (const batch of iterable) {
+          batches.push([...batch]);
+        }
+      })(),
+    ).rejects.toThrow("Test error");
+    // The message read before the error is not lost
+    expect(batches.flat()).toHaveLength(1);
     (console.error as Mock).mockReset();
   });
 
