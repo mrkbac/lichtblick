@@ -14,7 +14,7 @@ export const appBar = {
   installApp: "Install app",
   noUpdateAvailable: "You're on the latest version.",
   updateCheckFailed: "Couldn't check for updates.",
-  updateReady: "A new version is ready. Click the update button in the top bar to switch.",
+  updateReady: "New version downloaded. Click the orange update button in the top bar to switch.",
   updateAvailable: "New version available",
   updateAvailableDescription: "Reload to update. You'll be right back where you are.",
   exportLayoutToFile: "Export layout to file…",

@@ -63,6 +63,8 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
       .then((found) => {
         enqueueSnackbar(t(found ? "updateReady" : "noUpdateAvailable"), {
           variant: found ? "info" : "success",
+          // only feedback that the manual check ran; the app bar button is the real signal
+          autoHideDuration: 3000,
         });
       })
       .catch((error: unknown) => {
