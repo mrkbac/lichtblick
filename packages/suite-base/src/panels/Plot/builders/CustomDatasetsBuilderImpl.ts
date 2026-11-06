@@ -129,8 +129,8 @@ export class CustomDatasetsBuilderImpl {
       // And then pairing current y-values with their x-value peers
       const allData = this.#pairFullAndCurrentData(series);
 
-      const xBounds: Bounds1D = { min: Number.MAX_VALUE, max: Number.MIN_VALUE };
-      const yBounds: Bounds1D = { min: Number.MAX_VALUE, max: Number.MIN_VALUE };
+      const xBounds: Bounds1D = { min: Number.MAX_VALUE, max: -Number.MAX_VALUE };
+      const yBounds: Bounds1D = { min: Number.MAX_VALUE, max: -Number.MAX_VALUE };
 
       for (const item of allData) {
         if (!Number.isNaN(item.x)) {

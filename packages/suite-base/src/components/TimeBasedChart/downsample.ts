@@ -322,8 +322,11 @@ export function downsampleTimeseriesColumns(
 export function downsampleScatter(points: Iterable<Point>, view: PlotViewport): number[] {
   const { bounds, width, height } = view;
 
-  const pixelPerXValue = width / (bounds.x.max - bounds.x.min);
-  const pixelPerYValue = height / (bounds.y.max - bounds.y.min);
+  // A constant axis has zero-width bounds; its values then all share one pixel on that axis
+  // (Inverted bounds still scale and keep points apart.)
+  const pixelsPerValue = (pixels: number, range: number) => (range !== 0 ? pixels / range : 0);
+  const pixelPerXValue = pixelsPerValue(width, bounds.x.max - bounds.x.min);
+  const pixelPerYValue = pixelsPerValue(height, bounds.y.max - bounds.y.min);
   const pixelPerRow = width;
 
   const indices: number[] = [];

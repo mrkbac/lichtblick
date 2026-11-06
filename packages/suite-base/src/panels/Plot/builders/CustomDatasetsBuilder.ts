@@ -309,11 +309,11 @@ function computeBounds(
 ): Bounds1D {
   const itemBounds = items.reduce(accumulateBounds, {
     min: Number.MAX_VALUE,
-    max: Number.MIN_VALUE,
+    max: -Number.MAX_VALUE,
   });
 
   return unionBounds1D(
-    currentBounds ?? { min: Number.MAX_VALUE, max: Number.MIN_VALUE },
+    currentBounds ?? { min: Number.MAX_VALUE, max: -Number.MAX_VALUE },
     itemBounds,
   );
 }
