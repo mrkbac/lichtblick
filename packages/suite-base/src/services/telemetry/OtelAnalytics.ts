@@ -8,17 +8,18 @@
 import {
   DiagConsoleLogger,
   DiagLogLevel,
+  SeverityNumber,
   diag,
+  logs,
   trace,
   type Attributes,
   type Tracer,
 } from "@opentelemetry/api";
-import { SeverityNumber, logs } from "@opentelemetry/api-logs";
 import { OTLPLogExporter } from "@opentelemetry/exporter-logs-otlp-http";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { resourceFromAttributes } from "@opentelemetry/resources";
 import { BatchLogRecordProcessor, LoggerProvider } from "@opentelemetry/sdk-logs";
-import { BatchSpanProcessor, WebTracerProvider } from "@opentelemetry/sdk-trace-web";
+import { BatchSpanProcessor, TracerProvider } from "@opentelemetry/sdk-trace";
 import { ATTR_SERVICE_NAME, ATTR_SERVICE_VERSION } from "@opentelemetry/semantic-conventions";
 
 import IAnalytics, { AppEvent } from "../IAnalytics";
@@ -71,7 +72,7 @@ function sanitizeAttributes(data: Record<string, unknown>): Attributes {
   const sanitized: Attributes = {};
   for (const [key, value] of Object.entries(data)) {
     if (isScalarAttributeValue(value) || isAttributeArray(value)) {
-      sanitized[key] = value as Attributes[string];
+      sanitized[key] = value;
     } else if (value != undefined) {
       diag.warn(`OtelAnalytics: dropping unsupported attribute "${key}" of type ${typeof value}`);
     }
@@ -91,7 +92,7 @@ function ensureDiagLogger(): void {
 export default class OtelAnalytics implements IAnalytics {
   readonly #loggerProvider: LoggerProvider;
   readonly #logger;
-  readonly #tracerProvider: WebTracerProvider;
+  readonly #tracerProvider: TracerProvider;
   readonly #tracer: Tracer;
   readonly #rateLimiter: RateLimiter;
 
@@ -114,9 +115,9 @@ export default class OtelAnalytics implements IAnalytics {
     this.#logger = this.#loggerProvider.getLogger("lichtblick");
 
     const traceExporter = new OTLPTraceExporter({ url: `${options.endpoint}/v1/traces` });
-    this.#tracerProvider = new WebTracerProvider({
+    this.#tracerProvider = new TracerProvider({
       resource,
-      spanProcessors: [new BatchSpanProcessor(traceExporter)],
+      spanProcessors: [new BatchSpanProcessor({ exporter: traceExporter })],
     });
     trace.setGlobalTracerProvider(this.#tracerProvider);
     this.#tracer = this.#tracerProvider.getTracer("lichtblick");

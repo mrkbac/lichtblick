@@ -33,7 +33,7 @@ const mockTracerProvider = vi.fn().mockImplementation(() => ({
   shutdown: mockTracerShutdown,
 }));
 const mockBatchLogRecordProcessor = vi.fn().mockImplementation((options) => options);
-const mockBatchSpanProcessor = vi.fn().mockImplementation((exporter) => ({ exporter }));
+const mockBatchSpanProcessor = vi.fn().mockImplementation((options) => options);
 const mockOTLPLogExporter = vi.fn().mockImplementation((options) => ({ options }));
 const mockOTLPTraceExporter = vi.fn().mockImplementation((options) => ({ options }));
 const mockResourceFromAttributes = vi.fn().mockImplementation((attributes) => ({ attributes }));
@@ -63,9 +63,6 @@ vi.mock("@opentelemetry/api", () => ({
   DiagLogLevel: {
     WARN: "WARN",
   },
-}));
-
-vi.mock("@opentelemetry/api-logs", () => ({
   SeverityNumber: mockSeverityNumber,
   logs: {
     setGlobalLoggerProvider: (...args: unknown[]) => mockSetGlobalLoggerProvider(...args),
@@ -97,11 +94,11 @@ vi.mock("@opentelemetry/sdk-logs", () => ({
   },
 }));
 
-vi.mock("@opentelemetry/sdk-trace-web", () => ({
-  BatchSpanProcessor: function MockBatchSpanProcessor(exporter: unknown) {
-    return mockBatchSpanProcessor(exporter);
+vi.mock("@opentelemetry/sdk-trace", () => ({
+  BatchSpanProcessor: function MockBatchSpanProcessor(options: unknown) {
+    return mockBatchSpanProcessor(options);
   },
-  WebTracerProvider: function MockWebTracerProvider(options: unknown) {
+  TracerProvider: function MockTracerProvider(options: unknown) {
     return mockTracerProvider(options);
   },
 }));
@@ -163,7 +160,7 @@ describe("OtelAnalytics", () => {
       url: "http://collector:4318/v1/traces",
     });
     expect(mockBatchSpanProcessor).toHaveBeenCalledWith({
-      options: { url: "http://collector:4318/v1/traces" },
+      exporter: { options: { url: "http://collector:4318/v1/traces" } },
     });
     expect(mockTracerProvider).toHaveBeenCalledWith({
       resource: { attributes: expect.any(Object) },
