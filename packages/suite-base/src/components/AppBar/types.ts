@@ -6,26 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { PopoverPosition, PopoverReference } from "@mui/material";
-import { MouseEventHandler, ReactNode } from "react";
-
-/**
- * Represents an item in the app bar menus.
- */
-export type AppBarMenuItem =
-  | {
-      type: "item";
-      label: ReactNode;
-      key: string;
-      disabled?: boolean;
-      selected?: boolean;
-      shortcut?: string;
-      onClick?: MouseEventHandler<HTMLElement>;
-      external?: boolean;
-      icon?: ReactNode;
-      dataTestId?: string;
-    }
-  | { type: "subheader"; label: ReactNode; key: string }
-  | { type: "divider" };
 
 export type AppMenuProps = {
   handleClose: () => void;

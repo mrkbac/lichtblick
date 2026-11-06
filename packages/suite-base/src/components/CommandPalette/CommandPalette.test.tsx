@@ -3,10 +3,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-import { CommandPalette } from "./CommandPalette";
+import { CommandPalette, useCommandPaletteStore } from "./CommandPalette";
 import { Command } from "./commands";
 import { useAppCommands } from "./useAppCommands";
 
@@ -37,6 +37,7 @@ Element.prototype.scrollIntoView = vi.fn();
 
 describe("CommandPalette", () => {
   beforeEach(() => {
+    useCommandPaletteStore.getState().hide();
     localStorage.clear();
     vi.clearAllMocks();
     vi.mocked(useAppCommands).mockReturnValue({
@@ -61,6 +62,19 @@ describe("CommandPalette", () => {
     await waitFor(() => {
       expect(screen.queryByRole("combobox")).toBeNull();
     });
+  });
+
+  it("opens from outside through the store", () => {
+    // Given a closed palette
+    render(<CommandPalette />);
+
+    // When a menu opens it
+    act(() => {
+      useCommandPaletteStore.getState().show();
+    });
+
+    // Then it shows
+    expect(screen.getByRole("combobox")).toBeTruthy();
   });
 
   it("drills into a sub-menu and back with the keyboard", async () => {
