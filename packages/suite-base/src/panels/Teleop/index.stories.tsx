@@ -58,3 +58,16 @@ export const DirectionalPadMode: StoryObj = {
     return <TeleopPanel overrideConfig={{ topic: "/abc", mode: "dpad" }} />;
   },
 };
+
+export const TwoJoysticks: StoryObj = {
+  render: () => {
+    return <TeleopPanel overrideConfig={{ topic: "/abc", mode: "dual" }} />;
+  },
+};
+
+export const JoyOutput: StoryObj = {
+  render: () => {
+    return <TeleopPanel overrideConfig={{ topic: "/joy", messageType: "Joy" }} />;
+  },
+  parameters: { includeSettings: true },
+};
