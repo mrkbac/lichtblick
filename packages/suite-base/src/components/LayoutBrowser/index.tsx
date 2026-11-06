@@ -23,6 +23,7 @@ import {
 import * as _ from "lodash-es";
 import { useSnackbar } from "notistack";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import useAsyncFn from "react-use/lib/useAsyncFn";
 
 import Logger from "@lichtblick/log";
@@ -73,6 +74,7 @@ export default function LayoutBrowser({
   currentDateForStorybook?: Date;
 }>): React.JSX.Element {
   const { classes } = useStyles();
+  const { t } = useTranslation("layoutTemplates");
   const { signIn } = useCurrentUser();
   const { enqueueSnackbar } = useSnackbar();
   const layoutManager = useLayoutManager();
@@ -394,8 +396,8 @@ export default function LayoutBrowser({
             color="primary"
             key="layout-template"
             onClick={openTemplateMenu}
-            aria-label="New layout from template"
-            title="New layout from template"
+            aria-label={t("fromTemplate")}
+            title={t("fromTemplate")}
           >
             <AutoAwesomeMosaicOutlinedIcon />
           </IconButton>
@@ -467,7 +469,7 @@ export default function LayoutBrowser({
               <ListItem disablePadding>
                 <ListItemButton onClick={openTemplateMenu}>
                   <ListItemText data-testid="layout-from-template" disableTypography>
-                    New layout from template…
+                    {t("fromTemplate")}…
                   </ListItemText>
                 </ListItemButton>
               </ListItem>

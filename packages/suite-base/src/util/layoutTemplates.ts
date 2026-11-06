@@ -241,7 +241,12 @@ function topicSignals(topic: string, structure: MessagePathStructureItem): Signa
 const signals: LayoutTemplate = {
   id: "signals",
   build: (topics, datatypes) => {
-    const structures = messagePathStructures(datatypes);
+    let structures: ReturnType<typeof messagePathStructures> = {};
+    try {
+      structures = messagePathStructures(datatypes);
+    } catch {
+      // A definition refers to a missing nested type: offer the empty signals layout.
+    }
     const byTopic = topics
       .filter(
         (topic) => topic.schemaName != undefined && !NON_SIGNAL_DATATYPES.has(topic.schemaName),

@@ -178,6 +178,15 @@ describe("signals template", () => {
     );
   });
 
+  it("falls back to an empty plot when a definition refers to a missing type", () => {
+    const broken: RosDatatypes = new Map([
+      ["pkg/Odom", { definitions: [{ name: "pose", type: "pkg/Missing", isComplex: true }] }],
+    ]);
+    expect(build("signals", [ODOM], broken).panels).toEqual([
+      { type: "Plot", config: { paths: [] } },
+    ]);
+  });
+
   it("leaves one empty plot when nothing matches", () => {
     const { topics, panels } = build("signals", [IMAGE, NO_SCHEMA], DATATYPES);
     expect(topics).toEqual([]);
