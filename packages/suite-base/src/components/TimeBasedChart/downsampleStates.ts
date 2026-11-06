@@ -54,6 +54,8 @@ type Interval = {
   labels: Immutable<Label[]>;
   // The index of the point that started the interval
   index: number;
+  // The last unlabelled repeat of the state in this interval, which ends its band
+  lastRepeat?: StatePoint;
 };
 
 /**
@@ -129,6 +131,10 @@ export function downsampleStates(
     });
 
     if (!haveMultiple) {
+      // Keep where the state was last seen so its band reaches up to a following gap or end.
+      if (interval.lastRepeat) {
+        indices.push(interval.lastRepeat);
+      }
       return;
     }
 
@@ -163,12 +169,13 @@ export function downsampleStates(
     }
 
     // Unlabelled points repeat the previous state (shown points, segment ends) or mark a gap
-    // (y = NaN). A repeat inside the open interval is already covered by it. Anything else closes
+    // (y = NaN). A repeat inside the open interval is folded into it. Anything else closes
     // the interval first so output stays in x order and a same-state segment after a gap isn't
     // merged into the one before.
     if (label == undefined) {
       const isGap = Number.isNaN(datum.y);
       if (!isGap && interval?.xPixel === Math.trunc(x * pixelPerXValue)) {
+        interval.lastRepeat = { x, index };
         continue;
       }
       finishInterval(isGap ? x : undefined);

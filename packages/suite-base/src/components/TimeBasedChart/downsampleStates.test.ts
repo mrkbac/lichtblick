@@ -140,4 +140,18 @@ describe("downsampleStates", () => {
     const result = downsampleStates(iterateObjects(data), bounds, numPoints);
     expect(result[0]).toEqual({ x: 50, index: undefined, states: [A, B] });
   });
+
+  it("keeps the last repeat of a state before a gap in the same interval", () => {
+    const data: Datum[] = [
+      { x: 50, y: 0, label: A },
+      { x: 50.01, y: 0 },
+      { x: 50.02, y: Number.NaN },
+    ];
+
+    expect(downsampleStates(iterateObjects(data), bounds, numPoints)).toEqual([
+      { x: 50, index: 0 },
+      { x: 50.01, index: 1 },
+      { x: 50.02, index: 2 },
+    ]);
+  });
 });
