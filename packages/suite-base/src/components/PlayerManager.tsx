@@ -301,6 +301,9 @@ export default function PlayerManager(
                   const newPerm = await handle.requestPermission({
                     mode: "read",
                   });
+                  if (!isMounted() || gen !== selectionGen.current) {
+                    return;
+                  }
                   if (newPerm !== "granted") {
                     throw new Error(`Permission denied: ${handle.name}`);
                   }
@@ -342,7 +345,10 @@ export default function PlayerManager(
 
         enqueueSnackbar("Unable to initialize player", { variant: "error" });
       } catch (error) {
-        enqueueSnackbar((error as Error).message, { variant: "error" });
+        // A superseded selection (closed or replaced meanwhile) shouldn't surface its error
+        if (gen === selectionGen.current) {
+          enqueueSnackbar((error as Error).message, { variant: "error" });
+        }
       }
     },
     [playerSources, metricsCollector, enqueueSnackbar, isMounted, addRecent],
