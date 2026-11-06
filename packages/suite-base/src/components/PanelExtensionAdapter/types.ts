@@ -125,4 +125,6 @@ export type CreateMessageRangeIteratorParams = {
   sortedTopics: readonly Topic[];
   messageConverters: readonly InstalledMessageConverter[];
   emitAlert?: MessageConverterAlertHandler;
+  /** Rethrow read errors to the consumer instead of only logging them and ending the range */
+  rethrowErrors?: boolean;
 };

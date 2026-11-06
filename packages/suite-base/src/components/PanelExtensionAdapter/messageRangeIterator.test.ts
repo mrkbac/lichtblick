@@ -424,6 +424,44 @@ describe("createMessageRangeIterator", () => {
     (console.error as Mock).mockReset();
   });
 
+  it("rethrows read errors when asked to", async () => {
+    (console.error as Mock).mockImplementation(() => {});
+    // Fails right after a message, before the batch interval yields it
+    async function* errorIterator(): AsyncIterableIterator<Readonly<IteratorResult>> {
+      yield {
+        type: "message-event",
+        msgEvent: {
+          topic: mockTopic,
+          schemaName: "test_schema",
+          receiveTime: { sec: 1, nsec: 0 },
+          message: { data: "test" },
+          sizeInBytes: 100,
+        },
+      };
+      throw new Error("Test error");
+    }
+
+    const { iterable } = createMessageRangeIterator({
+      topic: mockTopic,
+      rawBatchIterator: errorIterator(),
+      sortedTopics: mockSortedTopics,
+      messageConverters: mockMessageConverters,
+      rethrowErrors: true,
+    });
+
+    const batches: MessageEvent[][] = [];
+    await expect(
+      (async () => {
+        for await (const batch of iterable) {
+          batches.push([...batch]);
+        }
+      })(),
+    ).rejects.toThrow("Test error");
+    // The message read before the error is not lost
+    expect(batches.flat()).toHaveLength(1);
+    (console.error as Mock).mockReset();
+  });
+
   it("should not yield remaining messages when cancelled", async () => {
     const mockMessages: MessageEvent[] = MessageEventBuilder.messageEvents();
 

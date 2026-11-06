@@ -20,7 +20,15 @@ import {
   Copy20Filled,
   TextCaseTitle16Regular,
 } from "@fluentui/react-icons";
-import { Divider, IconButton, LinearProgress, Tooltip, Typography } from "@mui/material";
+import {
+  Alert,
+  Button,
+  Divider,
+  IconButton,
+  LinearProgress,
+  Tooltip,
+  Typography,
+} from "@mui/material";
 import { produce } from "immer";
 import * as _ from "lodash-es";
 import { useSnackbar } from "notistack";
@@ -178,7 +186,7 @@ const LogPanel = React.memo(({ config, saveConfig }: Props) => {
     [availableTopics, config.topics, config.topicToRender],
   );
 
-  const { items, loading } = useLogMessages(visibleTopics);
+  const { items, loading, error: loadError, retry } = useLogMessages(visibleTopics);
 
   // Node names of all loaded messages, plus any the user configured. Deep-memoized so live
   // data doesn't rebuild the settings tree for every message.
@@ -378,6 +386,19 @@ const LogPanel = React.memo(({ config, saveConfig }: Props) => {
       </Stack>
       <SeverityTimeline items={filteredItems} onSeek={goTo} />
       {loading ? <LinearProgress style={{ height: 2 }} /> : <Divider />}
+      {loadError != undefined && (
+        <Alert
+          severity="error"
+          style={{ whiteSpace: "pre-line" }}
+          action={
+            <Button color="inherit" size="small" onClick={retry}>
+              {t("retry")}
+            </Button>
+          }
+        >
+          {t("loadFailed", { error: loadError })}
+        </Alert>
+      )}
       <Stack flexGrow={1}>
         <PlayheadLogList
           items={filteredItems}

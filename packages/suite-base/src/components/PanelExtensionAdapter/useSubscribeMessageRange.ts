@@ -19,7 +19,12 @@ const log = Logger.getLogger(__filename);
 const selectInstalledMessageConverters = (state: ExtensionCatalog) =>
   state.installedMessageConverters;
 
-export type UseSubscribeMessageRange = (args: SubscribeMessageRangeArgs) => () => void;
+export type UseSubscribeMessageRange = (
+  args: SubscribeMessageRangeArgs & {
+    /** Let read errors reach `onNewRangeIterator`; by default the range just ends early */
+    rethrowErrors?: boolean;
+  },
+) => () => void;
 
 /**
  * Returns a stable callback that can be used to subscribe to a message range for a topic.
@@ -43,7 +48,7 @@ export function useSubscribeMessageRange(
   emitAlertRef.current = emitAlert;
 
   return useCallback(
-    ({ topic, convertTo, onNewRangeIterator }: SubscribeMessageRangeArgs) => {
+    ({ topic, convertTo, onNewRangeIterator, rethrowErrors }) => {
       const { sortedTopics, getBatchIterator } = getMessagePipelineContext();
 
       const rawBatchIterator = getBatchIterator(topic);
@@ -58,6 +63,7 @@ export function useSubscribeMessageRange(
         sortedTopics,
         messageConverters: messageConvertersRef.current ?? [],
         emitAlert: emitAlertRef.current,
+        rethrowErrors,
       });
 
       onNewRangeIterator(messageEventIterable).catch((err: unknown) => {

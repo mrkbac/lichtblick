@@ -20,7 +20,15 @@ export function createMessageRangeIterator(params: CreateMessageRangeIteratorPar
   iterable: AsyncIterable<MessageEvent[]>;
   cancel: () => void;
 } {
-  const { topic, convertTo, rawBatchIterator, sortedTopics, messageConverters, emitAlert } = params;
+  const {
+    topic,
+    convertTo,
+    rawBatchIterator,
+    sortedTopics,
+    messageConverters,
+    emitAlert,
+    rethrowErrors = false,
+  } = params;
 
   // Create a cancellation token
   let cancelled = false;
@@ -28,6 +36,8 @@ export function createMessageRangeIterator(params: CreateMessageRangeIteratorPar
   // Create a wrapper async iterable that converts IteratorResult to MessageEvent
   const messageEventIterable = {
     async *[Symbol.asyncIterator]() {
+      // Outside the try, so messages read before an error can still be yielded
+      const batchMessages: MessageEvent[] = [];
       try {
         // Create a fake subscription to get message converters for this topic
         // Include convertTo if specified to get proper conversion setup
@@ -48,7 +58,6 @@ export function createMessageRangeIterator(params: CreateMessageRangeIteratorPar
 
         const { topicSchemaConverters, unconvertedSubscriptionTopics } = collatedConversions;
 
-        const batchMessages: MessageEvent[] = [];
         let lastBatchTime = performance.now();
 
         for await (const iterResult of rawBatchIterator) {
@@ -92,6 +101,12 @@ export function createMessageRangeIterator(params: CreateMessageRangeIteratorPar
       } catch (err: unknown) {
         if (!cancelled) {
           log.error("Error in createMessageRangeIterator:", err);
+          if (rethrowErrors) {
+            if (batchMessages.length > 0) {
+              yield batchMessages;
+            }
+            throw err;
+          }
         }
       }
     },
