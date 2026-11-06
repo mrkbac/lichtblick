@@ -62,6 +62,7 @@ import {
 import UserScriptPlayer from "@lichtblick/suite-base/players/UserScriptPlayer";
 import { Player } from "@lichtblick/suite-base/players/types";
 import { UserScripts } from "@lichtblick/suite-base/types/panels";
+import { updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import { mergeMultipleFileNames } from "@lichtblick/suite-base/util/mergeMultipleFileName";
 
 import { useTrustedUserScripts } from "./useTrustedUserScripts";
@@ -397,6 +398,21 @@ export default function PlayerManager(
     })();
   }, [recentsLoaded, recents, selectSource, enqueueSnackbar, closeSnackbar]);
 
+  const closeSource = useCallback(() => {
+    // Dropping the player makes MessagePipelineProvider close() it (e.g. closes the websocket).
+    setBasePlayer(undefined);
+    setSelectedSource(undefined);
+    setSelectedFiles(undefined);
+    setCurrentRecentId(undefined);
+    // Drop ds/time from the URL so a reload doesn't reconnect.
+    const url = updateAppURLState(new URL(window.location.href), {
+      ds: undefined,
+      dsParams: {},
+      time: undefined,
+    });
+    window.history.replaceState(undefined, "", url.href);
+  }, []);
+
   // Make a RecentSources array for the PlayerSelectionContext
   const recentSources = useMemo(() => {
     const sources = recents.map(
@@ -417,6 +433,7 @@ export default function PlayerManager(
 
   const value: PlayerSelection = {
     selectSource,
+    closeSource,
     selectRecent,
     removeRecent,
     togglePinRecent,

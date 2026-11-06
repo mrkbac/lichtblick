@@ -5,8 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { ErrorCircle16Filled } from "@fluentui/react-icons";
-import { CircularProgress, IconButton } from "@mui/material";
+import { Dismiss16Regular, ErrorCircle16Filled } from "@fluentui/react-icons";
+import { CircularProgress, IconButton, Tooltip } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -17,6 +17,7 @@ import {
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TextMiddleTruncate from "@lichtblick/suite-base/components/TextMiddleTruncate";
 import WssErrorModal from "@lichtblick/suite-base/components/WssErrorModal";
+import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 
@@ -88,6 +89,7 @@ export function DataSource(): React.JSX.Element {
   const seek = useMessagePipeline(selectSeek);
 
   const { sidebarActions } = useWorkspaceActions();
+  const { closeSource } = usePlayerSelection();
 
   // A crude but correct proxy (for our current architecture) for whether a connection is live
   const isLiveConnection = seek == undefined;
@@ -142,6 +144,16 @@ export function DataSource(): React.JSX.Element {
             </IconButton>
           )}
         </div>
+        <Tooltip title={isLiveConnection ? t("disconnect") : t("closeDataSource")}>
+          <IconButton
+            color="inherit"
+            size="small"
+            aria-label={isLiveConnection ? t("disconnect") : t("closeDataSource")}
+            onClick={closeSource}
+          >
+            <Dismiss16Regular />
+          </IconButton>
+        </Tooltip>
       </Stack>
     </>
   );
