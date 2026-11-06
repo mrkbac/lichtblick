@@ -299,16 +299,20 @@ export class GridRenderer {
       if (prepared.status === PreparedVideoFrameStatus.UnsupportedBFrame) {
         return;
       }
+      // A seek during any await below invalidates this frame.
+      const epoch = video.epoch;
       if (video.waitingForKeyframe || !video.player.isInitialized()) {
         if (prepared.type !== "key" || !prepared.decoderConfig) {
           return;
         }
         await video.player.init(prepared.decoderConfig);
+        if (video.epoch !== epoch) {
+          return;
+        }
         video.waitingForKeyframe = false;
         video.firstTime = time;
       }
       const firstTime = video.firstTime ?? time;
-      const epoch = video.epoch;
       frame = await video.player.decode(
         prepared.data,
         Number((time - firstTime) / 1000n),
