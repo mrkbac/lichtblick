@@ -1050,6 +1050,13 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     }
   }
 
+  public setVariables(variables: ReadonlyMap<string, VariableValue>): void {
+    if (this.variables !== variables) {
+      this.variables = variables;
+      this.emit("variablesChange", variables, this);
+    }
+  }
+
   public updateCustomLayersCount(): void {
     const layerCount = Object.keys(this.config.layers).length;
     const label = `Custom Layers${layerCount > 0 ? ` (${layerCount})` : ""}`;
