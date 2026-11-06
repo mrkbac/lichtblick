@@ -195,7 +195,7 @@ export class CustomDatasetsBuilderImpl {
     return { datasetsByConfigIndex: datasets, pathsWithMismatchedDataLengths };
   }
 
-  public getCsvData(): CsvDataset[] {
+  public getCsvData(xRange?: Immutable<Bounds1D>): CsvDataset[] {
     const datasets: CsvDataset[] = [];
     for (const series of this.#seriesByKey.values()) {
       if (!series.config.enabled) {
@@ -205,7 +205,9 @@ export class CustomDatasetsBuilderImpl {
       datasets.push({
         label: series.config.messagePath,
         configIndex: series.config.configIndex,
-        data: this.#pairFullAndCurrentData(series),
+        data: this.#pairFullAndCurrentData(series).filter(
+          (datum) => !xRange || (datum.x >= xRange.min && datum.x <= xRange.max),
+        ),
       });
     }
 

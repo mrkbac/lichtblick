@@ -1209,4 +1209,24 @@ describe("PlotCoordinator", () => {
       expect(getCsvDataSpy).toHaveBeenCalled();
     });
   });
+
+  describe("getVisibleCsvData", () => {
+    it("exports nothing before the chart has an x scale", async () => {
+      const getCsvData = vi.fn().mockResolvedValue([]);
+      datasetsBuilder.getCsvData = getCsvData;
+
+      expect(await plotCoordinator.getVisibleCsvData()).toBeUndefined();
+      expect(getCsvData).not.toHaveBeenCalled();
+    });
+
+    it("asks the builder for the visible x range only", async () => {
+      const getCsvData = vi.fn().mockResolvedValue([]);
+      datasetsBuilder.getCsvData = getCsvData;
+      plotCoordinator["latestXScale"] = { min: 2, max: 9, left: 0, right: 100 };
+
+      await plotCoordinator.getVisibleCsvData();
+
+      expect(getCsvData).toHaveBeenCalledWith({ min: 2, max: 9 });
+    });
+  });
 });

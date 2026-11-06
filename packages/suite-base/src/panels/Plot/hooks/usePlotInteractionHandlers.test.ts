@@ -24,13 +24,19 @@ import { PlotConfig } from "@lichtblick/suite-base/panels/Plot/utils/config";
 import { downloadCSV } from "@lichtblick/suite-base/panels/Plot/utils/csv";
 import PlotBuilder from "@lichtblick/suite-base/testing/builders/PlotBuilder";
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
+import { downloadFiles } from "@lichtblick/suite-base/util/download";
 import { PANEL_TITLE_CONFIG_KEY } from "@lichtblick/suite-base/util/layout";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-import usePlotInteractionHandlers from "./usePlotInteractionHandlers";
+import usePlotInteractionHandlers, { formatCursorValues } from "./usePlotInteractionHandlers";
 
-vi.mock("@lichtblick/suite-base/panels/Plot/utils/csv", () => ({
+vi.mock("@lichtblick/suite-base/panels/Plot/utils/csv", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@lichtblick/suite-base/panels/Plot/utils/csv")>()),
   downloadCSV: vi.fn(),
+}));
+
+vi.mock("@lichtblick/suite-base/util/download", () => ({
+  downloadFiles: vi.fn(),
 }));
 
 vi.mock("@lichtblick/den/async", () => ({
@@ -46,6 +52,15 @@ vi.mock("@lichtblick/suite-base/context/TimelineInteractionStateContext", () => 
 vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   useMessagePipelineGetter: vi.fn(),
 }));
+
+type MenuItem = PanelContextMenuItem & { type: "item" };
+function findMenuItem(items: PanelContextMenuItem[], label: string): MenuItem {
+  const item = items.find((it): it is MenuItem => it.type === "item" && it.label === label);
+  if (!item) {
+    throw new Error(`No menu item ${label}`);
+  }
+  return item;
+}
 
 describe("usePlotInteractionHandlers", () => {
   const mockCoordinator = {
@@ -586,9 +601,10 @@ describe("usePlotInteractionHandlers", () => {
       (mockCoordinator.getCsvData as Mock).mockResolvedValueOnce(csvData);
 
       await act(async () => {
-        const item = result.current.getPanelContextMenuItems()[0] as PanelContextMenuItem & {
-          type: "item";
-        };
+        const item = findMenuItem(
+          result.current.getPanelContextMenuItems(),
+          "Download plot data as CSV",
+        );
         item.onclick();
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
@@ -602,9 +618,10 @@ describe("usePlotInteractionHandlers", () => {
       (mockCoordinator.getCsvData as Mock).mockResolvedValueOnce(csvData);
 
       await act(async () => {
-        const item = result.current.getPanelContextMenuItems()[0] as PanelContextMenuItem & {
-          type: "item";
-        };
+        const item = findMenuItem(
+          result.current.getPanelContextMenuItems(),
+          "Download plot data as CSV",
+        );
         item.onclick();
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
@@ -617,9 +634,10 @@ describe("usePlotInteractionHandlers", () => {
       (mockCoordinator.getCsvData as Mock).mockResolvedValueOnce(undefined);
 
       await act(async () => {
-        const item = result.current.getPanelContextMenuItems()[0] as PanelContextMenuItem & {
-          type: "item";
-        };
+        const item = findMenuItem(
+          result.current.getPanelContextMenuItems(),
+          "Download plot data as CSV",
+        );
         item.onclick();
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
@@ -634,9 +652,10 @@ describe("usePlotInteractionHandlers", () => {
       (mockCoordinator.getCsvData as Mock).mockResolvedValueOnce(csvData);
 
       await act(async () => {
-        const item = result.current.getPanelContextMenuItems()[0] as PanelContextMenuItem & {
-          type: "item";
-        };
+        const item = findMenuItem(
+          result.current.getPanelContextMenuItems(),
+          "Download plot data as CSV",
+        );
         item.onclick();
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
@@ -651,9 +670,10 @@ describe("usePlotInteractionHandlers", () => {
       (mockCoordinator.getCsvData as Mock).mockRejectedValueOnce(error);
 
       await act(async () => {
-        const item = result.current.getPanelContextMenuItems()[0] as PanelContextMenuItem & {
-          type: "item";
-        };
+        const item = findMenuItem(
+          result.current.getPanelContextMenuItems(),
+          "Download plot data as CSV",
+        );
         item.onclick();
         await new Promise((resolve) => setTimeout(resolve, 0));
       });
@@ -665,32 +685,94 @@ describe("usePlotInteractionHandlers", () => {
   });
 
   describe("getPanelContextMenuItems", () => {
-    it("returns menu items with correct label and onclick handler", () => {
+    it("offers copy, both CSV downloads and PNG export", () => {
       const { result } = setup();
 
-      const items = result.current.getPanelContextMenuItems();
+      const labels = result.current
+        .getPanelContextMenuItems()
+        .flatMap((item) => (item.type === "item" ? [item.label] : []));
 
-      expect(items).toHaveLength(1);
-      expect(items[0]).toMatchObject({
-        type: "item",
-        label: "Download plot data as CSV",
+      expect(labels).toEqual([
+        "Copy values at cursor",
+        "Download plot data as CSV",
+        "Download visible range as CSV",
+        "Save as PNG",
+      ]);
+    });
+
+    it("disables copy when the cursor is not over a value", () => {
+      const { result } = setup();
+
+      const item = findMenuItem(result.current.getPanelContextMenuItems(), "Copy values at cursor");
+
+      expect(item.disabled).toBe(true);
+    });
+
+    it("downloads the visible range with a _visible file name", async () => {
+      const csvData = BasicBuilder.string();
+      const coordinator = {
+        getVisibleCsvData: vi.fn().mockResolvedValueOnce(csvData),
+      } as unknown as PlotCoordinator;
+      const { result } = setup({ coordinator });
+
+      await act(async () => {
+        findMenuItem(
+          result.current.getPanelContextMenuItems(),
+          "Download visible range as CSV",
+        ).onclick();
+        await new Promise((resolve) => setTimeout(resolve, 0));
       });
-      const item = items[0] as PanelContextMenuItem & { type: "item" };
-      expect(typeof item.onclick).toBe("function");
+
+      expect(downloadCSV).toHaveBeenCalledWith("plot_data_visible", csvData, "timestamp");
     });
 
-    it("updates menu items when onDownloadCsvClick changes", () => {
-      const { result, rerender } = setup();
-      const firstItems = result.current.getPanelContextMenuItems();
+    it("saves the chart as PNG with a legend of the enabled series", async () => {
+      const blob = new Blob(["png"]);
+      const getImageBlob = vi.fn().mockResolvedValueOnce(blob);
+      const { result } = setup({
+        renderer: { getImageBlob } as unknown as UsePlotInteractionHandlersProps["renderer"],
+        config: {
+          paths: [
+            { value: "/a.x", enabled: true, timestampMethod: "receiveTime", color: "#f00" },
+            { value: "/b.y", enabled: false, timestampMethod: "receiveTime" },
+          ],
+        } as unknown as PlotConfig,
+      });
 
-      rerender();
+      await act(async () => {
+        findMenuItem(result.current.getPanelContextMenuItems(), "Save as PNG").onclick();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
 
-      const secondItems = result.current.getPanelContextMenuItems();
-
-      // Items should be from the same reference (same function)
-      const firstItem = firstItems[0] as PanelContextMenuItem & { type: "item" };
-      const secondItem = secondItems[0] as PanelContextMenuItem & { type: "item" };
-      expect(firstItem.onclick).toBe(secondItem.onclick);
+      expect(getImageBlob).toHaveBeenCalledWith([{ label: "/a.x", color: "#f00" }]);
+      expect(downloadFiles).toHaveBeenCalledWith([{ blob, fileName: "plot_data.png" }]);
     });
+  });
+});
+
+describe("formatCursorValues", () => {
+  const paths = [
+    { value: "/a.x", enabled: true, timestampMethod: "receiveTime" as const },
+    { value: "/b.y", label: "speed", enabled: true, timestampMethod: "receiveTime" as const },
+  ];
+
+  it("returns undefined without values under the cursor", () => {
+    expect(formatCursorValues({ x: 1, items: [] }, paths, "timestamp")).toBeUndefined();
+  });
+
+  it("lists the x value and each series as tab-separated rows", () => {
+    expect(
+      formatCursorValues(
+        {
+          x: 1.5,
+          items: [
+            { configIndex: 0, value: 3 },
+            { configIndex: 1, value: "fast" },
+          ],
+        },
+        paths,
+        "timestamp",
+      ),
+    ).toBe("elapsed time\t1.5\n/a.x\t3\nspeed\tfast");
   });
 });

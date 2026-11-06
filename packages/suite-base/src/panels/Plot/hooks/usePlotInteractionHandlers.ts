@@ -3,6 +3,7 @@
 
 import { add as addTimes, fromSec, isTime, toSec } from "@foxglove/rostime";
 import { useCallback, useRef, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useMountedState } from "react-use";
 
 import { debouncePromise } from "@lichtblick/den/async";
@@ -21,12 +22,20 @@ import {
   UsePlotInteractionHandlersProps,
   ZoomMode,
 } from "@lichtblick/suite-base/panels/Plot/types";
-import { downloadCSV } from "@lichtblick/suite-base/panels/Plot/utils/csv";
+import {
+  PlotPath,
+  PlotXAxisVal,
+  plotPathDisplayName,
+} from "@lichtblick/suite-base/panels/Plot/utils/config";
+import { downloadCSV, getCSVColName } from "@lichtblick/suite-base/panels/Plot/utils/csv";
+import clipboard from "@lichtblick/suite-base/util/clipboard";
+import { downloadFiles } from "@lichtblick/suite-base/util/download";
 import { PANEL_TITLE_CONFIG_KEY } from "@lichtblick/suite-base/util/layout";
+import { getLineColor } from "@lichtblick/suite-base/util/plotColors";
 
 const selectSetGlobalBounds = (store: TimelineInteractionStateStore) => store.setGlobalBounds;
 
-const DEFAULT_CSV_TITLE = "plot_data";
+const DEFAULT_FILE_TITLE = "plot_data";
 
 const usePlotInteractionHandlers = ({
   config,
@@ -45,6 +54,11 @@ const usePlotInteractionHandlers = ({
   const setGlobalBounds = useTimelineInteractionState(selectSetGlobalBounds);
   const getMessagePipelineState = useMessagePipelineGetter();
   const [focusedPath, setFocusedPath] = useState<undefined | string[]>(undefined);
+  const { t } = useTranslation("plot");
+  /** x value and tooltip rows under the cursor, for "Copy values at cursor" */
+  const cursorValuesRef = useRef<{ x?: number; items: TimeBasedChartTooltipData[] }>({
+    items: [],
+  });
 
   const buildTooltip = useMemo(() => {
     return debouncePromise(async (args: ElementAtPixelArgs) => {
@@ -63,6 +77,7 @@ const usePlotInteractionHandlers = ({
       // Looking up a tooltip is an async operation so the mouse might leave the component while
       // that is happening and we need to avoid showing a tooltip.
       if (!elements || elements.length === 0 || !mousePresentRef.current) {
+        cursorValuesRef.current.items = [];
         setActiveTooltip(undefined);
         return;
       }
@@ -80,6 +95,7 @@ const usePlotInteractionHandlers = ({
         });
       }
 
+      cursorValuesRef.current.items = tooltipItems;
       setActiveTooltip({
         x: args.clientX,
         y: args.clientY,
@@ -108,6 +124,7 @@ const usePlotInteractionHandlers = ({
       const rect = event.currentTarget.getBoundingClientRect();
       const mouseX = event.clientX - rect.left;
       const seconds = coordinator.getXValueAtPixel(mouseX);
+      cursorValuesRef.current.x = seconds;
 
       setHoverValue({
         componentId: subscriberId,
@@ -120,6 +137,7 @@ const usePlotInteractionHandlers = ({
 
   const onMouseOut = useCallback(() => {
     mousePresentRef.current = false;
+    cursorValuesRef.current = { items: [] };
     setActiveTooltip(undefined);
     clearHoverValue(subscriberId);
   }, [clearHoverValue, subscriberId, setActiveTooltip]);
@@ -226,31 +244,87 @@ const usePlotInteractionHandlers = ({
     };
   }, [coordinator, onResetView]);
 
-  const onDownloadCsvClick = useCallback(() => {
+  const fileTitle = customTitle ?? DEFAULT_FILE_TITLE;
+
+  const onDownloadCsvClick = useCallback(
+    (range: "all" | "visible") => {
+      void (async () => {
+        try {
+          const data = await (range === "visible"
+            ? coordinator?.getVisibleCsvData()
+            : coordinator?.getCsvData());
+          if (!data || !isMounted()) {
+            return;
+          }
+
+          downloadCSV(range === "visible" ? `${fileTitle}_visible` : fileTitle, data, xAxisMode);
+        } catch (err: unknown) {
+          console.error(err);
+        }
+      })();
+    },
+    [coordinator, fileTitle, isMounted, xAxisMode],
+  );
+
+  const onSavePngClick = useCallback(() => {
     void (async () => {
       try {
-        const data = await coordinator?.getCsvData();
-        if (!data || !isMounted()) {
+        const legend = config.paths.flatMap((path, index) =>
+          path.enabled
+            ? [{ label: plotPathDisplayName(path, index), color: getLineColor(path.color, index) }]
+            : [],
+        );
+        const blob = await renderer?.getImageBlob(legend);
+        if (!blob || !isMounted()) {
           return;
         }
-
-        downloadCSV(customTitle ?? DEFAULT_CSV_TITLE, data, xAxisMode);
+        downloadFiles([{ blob, fileName: `${fileTitle}.png` }]);
       } catch (err: unknown) {
         console.error(err);
       }
     })();
-  }, [coordinator, customTitle, isMounted, xAxisMode]);
+  }, [config.paths, fileTitle, isMounted, renderer]);
 
   const getPanelContextMenuItems = useCallback(() => {
+    // Read when the menu opens, while the cursor is still over the plot
+    const cursorValues = cursorValuesRef.current;
+    const cursorText = formatCursorValues(cursorValues, config.paths, xAxisMode);
     const items: PanelContextMenuItem[] = [
       {
         type: "item",
-        label: "Download plot data as CSV",
-        onclick: onDownloadCsvClick,
+        label: t("copyValuesAtCursor"),
+        disabled: cursorText == undefined,
+        onclick: () => {
+          if (cursorText != undefined) {
+            clipboard.copy(cursorText).catch((err: unknown) => {
+              console.error(err);
+            });
+          }
+        },
+      },
+      { type: "divider" },
+      {
+        type: "item",
+        label: t("downloadCsv"),
+        onclick: () => {
+          onDownloadCsvClick("all");
+        },
+      },
+      {
+        type: "item",
+        label: t("downloadVisibleCsv"),
+        onclick: () => {
+          onDownloadCsvClick("visible");
+        },
+      },
+      {
+        type: "item",
+        label: t("savePng"),
+        onclick: onSavePngClick,
       },
     ];
     return items;
-  }, [onDownloadCsvClick]);
+  }, [config.paths, onDownloadCsvClick, onSavePngClick, t, xAxisMode]);
 
   return {
     onMouseMove,
@@ -266,6 +340,31 @@ const usePlotInteractionHandlers = ({
     isHovered,
   };
 };
+
+/**
+ * Tab-separated "name, value" rows for the x value and each series under the cursor, ready to
+ * paste into a spreadsheet. Undefined when the cursor is not over a value.
+ */
+export function formatCursorValues(
+  cursor: { x?: number; items: readonly TimeBasedChartTooltipData[] },
+  paths: readonly PlotPath[],
+  xAxisVal: PlotXAxisVal,
+): string | undefined {
+  if (cursor.items.length === 0) {
+    return undefined;
+  }
+  const rows = cursor.items.map((item) => {
+    const path = paths[item.configIndex];
+    const name = path
+      ? plotPathDisplayName(path, item.configIndex)
+      : `Series ${item.configIndex + 1}`;
+    return `${name}\t${String(item.value)}`;
+  });
+  if (cursor.x != undefined) {
+    rows.unshift(`${getCSVColName(xAxisVal)}\t${cursor.x}`);
+  }
+  return rows.join("\n");
+}
 
 /** Shift zooms y, Alt/Option zooms x, both zoom both; no modifier keeps the plot's mode. */
 export function zoomModeForModifiers(event: {

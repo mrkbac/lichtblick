@@ -638,6 +638,43 @@ describe("ChartRenderer", () => {
     });
   });
 
+  describe("getImageBlob", () => {
+    it("draws the chart and a legend on an opaque background and encodes a PNG", async () => {
+      const { chartRenderer } = setup();
+      const chart = (
+        chartRenderer as unknown as { getChartInstance: () => ChartType }
+      ).getChartInstance() as unknown as Record<string, unknown>;
+      chart.chartArea = { left: 10, top: 10, right: 100, bottom: 100 };
+      chart.currentDevicePixelRatio = 2;
+      const ctx = {
+        fillRect: vi.fn(),
+        drawImage: vi.fn(),
+        scale: vi.fn(),
+        fillText: vi.fn(),
+        measureText: vi.fn(() => ({ width: 40 })),
+      };
+      const blob = new Blob(["png"]);
+      const convertToBlob = vi.fn().mockResolvedValue(blob);
+      const Original = global.OffscreenCanvas;
+      global.OffscreenCanvas = class {
+        public getContext = () => ctx;
+        public convertToBlob = convertToBlob;
+      } as unknown as typeof OffscreenCanvas;
+
+      try {
+        const result = await chartRenderer.getImageBlob("#fff", [{ label: "/a.x", color: "#f00" }]);
+
+        expect(result).toBe(blob);
+        expect(ctx.drawImage).toHaveBeenCalledTimes(1);
+        expect(ctx.scale).toHaveBeenCalledWith(2, 2);
+        expect(ctx.fillText).toHaveBeenCalledWith("/a.x", expect.any(Number), expect.any(Number));
+        expect(convertToBlob).toHaveBeenCalledWith({ type: "image/png" });
+      } finally {
+        global.OffscreenCanvas = Original;
+      }
+    });
+  });
+
   describe("updateDatasets", () => {
     it("should update dataset and disable animations", () => {
       const { chartRenderer } = setup();

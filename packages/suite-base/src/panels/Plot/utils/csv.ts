@@ -19,7 +19,7 @@ function getCSVRow(label: string, data: CsvDataset["data"][0]) {
   return [x, receiveTimeFloat, stampTime, label, value];
 }
 
-const getCSVColName = (xAxisVal: PlotXAxisVal): string => {
+export const getCSVColName = (xAxisVal: PlotXAxisVal): string => {
   switch (xAxisVal) {
     case "custom":
     case "currentCustom":

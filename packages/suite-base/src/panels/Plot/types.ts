@@ -309,3 +309,6 @@ export type HandleMoveSeriesAction = HandleAction & {
   index: number;
   direction: "up" | "down";
 };
+
+/** A series shown in the legend of an exported image */
+export type ImageLegendEntry = { label: string; color: string };

@@ -197,17 +197,23 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
   public async getViewportDatasets(
     viewport: Immutable<Viewport>,
   ): Promise<GetViewportDatasetsResult> {
+    await this.#flushPendingDispatch();
+
+    return await this.#datasetsBuilderRemote.getViewportDatasets(viewport);
+  }
+
+  public async getCsvData(xRange?: Immutable<Bounds1D>): Promise<CsvDataset[]> {
+    await this.#flushPendingDispatch();
+    return await this.#datasetsBuilderRemote.getCsvData(xRange);
+  }
+
+  /** Send queued updates to the worker so reads see the latest series and data */
+  async #flushPendingDispatch(): Promise<void> {
     const dispatch = this.#pendingDispatch;
     if (dispatch.length > 0) {
       this.#pendingDispatch = [];
       await this.#datasetsBuilderRemote.updateData(dispatch);
     }
-
-    return await this.#datasetsBuilderRemote.getViewportDatasets(viewport);
-  }
-
-  public async getCsvData(): Promise<CsvDataset[]> {
-    return await this.#datasetsBuilderRemote.getCsvData();
   }
 }
 
