@@ -36,7 +36,7 @@ import { PanelConfig } from "@lichtblick/suite-base/types/panels";
 import { formatKeyboardShortcut } from "@lichtblick/suite-base/util/formatKeyboardShortcut";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { PANEL_TITLE_CONFIG_KEY, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
-import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
+import { getPanelIds, setActivePanel } from "@lichtblick/suite-base/util/layoutTree";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
 
 import { Command, parseSeekInput } from "./commands";
@@ -163,7 +163,7 @@ export function useAppCommands(): {
   const leftSidebarOpen = useWorkspaceStore(selectLeftSidebarOpen);
   const leftSidebarItem = useWorkspaceStore(selectLeftSidebarItem);
   const layoutManager = useLayoutManager();
-  const { setSelectedLayoutId, setPlaybackConfig } = useCurrentLayoutActions();
+  const { setSelectedLayoutId, setPlaybackConfig, changePanelLayout } = useCurrentLayoutActions();
   const { setSelectedPanelIds } = useSelectedPanels();
   const selectedLayout = useCurrentLayoutSelector(selectLayout);
   const panelCatalog = usePanelCatalog();
@@ -304,6 +304,13 @@ export function useAppCommands(): {
     const layoutData = selectedLayout?.data;
     if (layoutData) {
       const panelIds = layoutData.layout != undefined ? getPanelIds(layoutData.layout) : [];
+      // Selecting a panel in a background tab would leave it hidden, so bring its tab to front too
+      const revealPanel = (id: string) => {
+        if (layoutData.layout != undefined) {
+          changePanelLayout({ layout: setActivePanel(layoutData.layout, id) });
+        }
+        setSelectedPanelIds([id]);
+      };
       const panelCommands = (idPrefix: string, onPick: (id: string) => void) => () =>
         panelIds.map((id) => {
           const type = getPanelTypeFromId(id);
@@ -342,9 +349,7 @@ export function useAppCommands(): {
             title: t("focusPanel"),
             keywords: ["select", "go to"],
             placeholder: t("focusPanelPlaceholder"),
-            children: panelCommands("panel.focus", (id) => {
-              setSelectedPanelIds([id]);
-            }),
+            children: panelCommands("panel.focus", revealPanel),
           },
           {
             id: "panel.settings",
@@ -352,7 +357,7 @@ export function useAppCommands(): {
             keywords: ["config", "edit"],
             placeholder: t("focusPanelPlaceholder"),
             children: panelCommands("panel.settings", (id) => {
-              setSelectedPanelIds([id]);
+              revealPanel(id);
               openPanelSettings();
             }),
           },
@@ -529,6 +534,7 @@ export function useAppCommands(): {
     selectRecent,
     selectedLayout,
     setPlaybackConfig,
+    changePanelLayout,
     setSelectedLayoutId,
     setSelectedPanelIds,
     setSpeed,
