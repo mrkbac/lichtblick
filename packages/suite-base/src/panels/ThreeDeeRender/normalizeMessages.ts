@@ -96,7 +96,13 @@ export function normalizeVector3s(
   if (!vectors) {
     return [];
   }
-  return vectors.map(normalizeVector3);
+  // Deserialized messages are almost always complete: skip copying every point in that case
+  for (const v of vectors) {
+    if (typeof v?.x !== "number" || typeof v.y !== "number" || typeof v.z !== "number") {
+      return vectors.map(normalizeVector3);
+    }
+  }
+  return vectors as Vector3[];
 }
 
 export function normalizeMatrix6(mat: number[] | undefined): Matrix6 {
@@ -131,7 +137,17 @@ export function normalizeColorRGBAs(
   if (!colors) {
     return [];
   }
-  return colors.map(normalizeColorRGBA);
+  for (const c of colors) {
+    if (
+      typeof c?.r !== "number" ||
+      typeof c.g !== "number" ||
+      typeof c.b !== "number" ||
+      typeof c.a !== "number"
+    ) {
+      return colors.map(normalizeColorRGBA);
+    }
+  }
+  return colors as ColorRGBA[];
 }
 
 export function normalizePose(pose: PartialMessage<Pose> | undefined): Pose {

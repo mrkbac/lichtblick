@@ -42,7 +42,6 @@ function createMockSharedLogic(
     diffItem: overrides.diffItem,
     expansion: overrides.expansion ?? "none",
     setExpansion: vi.fn(),
-    nodes: overrides.nodes ?? new Set<string>(),
     canExpandAll: overrides.canExpandAll ?? false,
     onTopicPathChange: vi.fn(),
     onDiffTopicPathChange: vi.fn(),

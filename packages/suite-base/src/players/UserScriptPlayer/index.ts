@@ -117,6 +117,15 @@ type BatchIteratorCacheEntry = {
   pruneOffset: number;
 };
 
+function isSortedByReceiveTime(messages: readonly MessageEvent[]): boolean {
+  for (let i = 1; i < messages.length; i++) {
+    if (compare(messages[i - 1]!.receiveTime, messages[i]!.receiveTime) > 0) {
+      return false;
+    }
+  }
+  return true;
+}
+
 export default class UserScriptPlayer implements Player {
   #player: Player;
   #perfRegistry?: IPerformanceRegistry;
@@ -257,8 +266,8 @@ export default class UserScriptPlayer implements Player {
     globalVariables: GlobalVariables,
     scriptRegistrations: readonly ScriptRegistration[],
   ): Promise<readonly MessageEvent[]> {
-    // fast-track if there's no input and return empty output
-    if (inputMessages.length === 0) {
+    // fast-track if there's no input or no scripts and return empty output
+    if (inputMessages.length === 0 || scriptRegistrations.length === 0) {
       return [];
     }
 
@@ -275,6 +284,9 @@ export default class UserScriptPlayer implements Player {
           const messagePromise = scriptRegistration.processMessage(message, globalVariables);
           messagePromises.push(messagePromise);
         }
+      }
+      if (messagePromises.length === 0) {
+        continue;
       }
       const output = await Promise.all(messagePromises);
       outputMessages.push(...filterMap(output, identity));
@@ -900,19 +912,17 @@ export default class UserScriptPlayer implements Player {
         );
 
         // The current frame messages are the input messages + recomputed + computed sorted by
-        // receive time
-        const currentFrameMessages = messages
-          .concat(recomputed)
-          .concat(computed)
-          .sort((a, b) => compare(a.receiveTime, b.receiveTime));
-
-        const playerProgress = {
-          ...playerState.progress,
-        };
+        // receive time. Reuse the input array when nothing was added and it is already sorted.
+        const currentFrameMessages =
+          recomputed.length === 0 && computed.length === 0 && isSortedByReceiveTime(messages)
+            ? messages
+            : messages
+                .concat(recomputed)
+                .concat(computed)
+                .sort((a, b) => compare(a.receiveTime, b.receiveTime));
 
         return {
           ...playerState,
-          progress: playerProgress,
           activeData: {
             ...activeData,
             messages: currentFrameMessages,

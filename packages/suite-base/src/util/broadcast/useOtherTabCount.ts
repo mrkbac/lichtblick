@@ -84,7 +84,12 @@ export function useOtherTabCount(): number | undefined {
 
     channel.onmessage = onChange;
     document.addEventListener("visibilitychange", onChange);
-    const interval = setInterval(onChange, POLL_INTERVAL_MS);
+    // Hidden tabs show no count; visibilitychange refreshes it when the tab comes back.
+    const interval = setInterval(() => {
+      if (!document.hidden) {
+        onChange();
+      }
+    }, POLL_INTERVAL_MS);
 
     return () => {
       active = false;

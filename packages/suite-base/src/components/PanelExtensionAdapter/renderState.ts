@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { compare, toSec } from "@foxglove/rostime";
-import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
 import { Writable } from "ts-essentials";
 
@@ -35,6 +34,7 @@ import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageC
 import {
   collateTopicSchemaConversions,
   convertMessage,
+  converterKey,
   forEachSortedArrays,
   mapDifference,
   TopicSchemaConversions,
@@ -87,12 +87,20 @@ function initRenderStateBuilder(): BuildRenderStateFn {
   let prevSharedPanelState: BuilderRenderStateInput["sharedPanelState"];
   let prevCurrentFrame: Immutable<RenderState["currentFrame"]>;
   let prevCollatedConversions: undefined | TopicSchemaConversions;
+  let prevConfigTopics: RenderStateConfig["topics"] | undefined;
+  // Processed allFrames output per block. Blocks are replaced (not mutated) when their messages
+  // change, so only new blocks are processed while preloading.
+  let allFramesByBlock = new WeakMap<Immutable<MessageBlock>, MessageEvent[]>();
   const lastMessageByTopic = new Map<string, MessageEvent>();
 
   // Pull these memoized versions into the closure so they are scoped to the lifetime of
   // the panel.
   const memoMapDifference = memoizeWeak(mapDifference);
   const memoCollateTopicSchemaConversions = memoizeWeak(collateTopicSchemaConversions);
+  const memoTopicToSchemaName = memoizeWeak(
+    (topics: BuilderRenderStateInput["sortedTopics"]) =>
+      new Map(topics.map((topic) => [topic.name, topic.schemaName])),
+  );
 
   const prevRenderState: Writable<Immutable<RenderState>> = {};
 
@@ -129,10 +137,7 @@ function initRenderStateBuilder(): BuildRenderStateFn {
 
     const configTopics = config?.topics ?? {};
 
-    const topicToSchemaNameMap = _.mapValues(
-      _.keyBy(sortedTopics, "name"),
-      ({ schemaName }) => schemaName,
-    );
+    const topicToSchemaName = memoTopicToSchemaName(sortedTopics);
 
     // Should render indicates whether any fields of render state are updated
     const shouldRender = { value: false };
@@ -156,6 +161,31 @@ function initRenderStateBuilder(): BuildRenderStateFn {
     );
 
     const variablesChanged = globalVariables !== prevVariables;
+
+    // Copied at most once per call, and only when a converter actually runs.
+    let variablesCopy: Readonly<GlobalVariables> | undefined;
+    const getVariables = () =>
+      (variablesCopy ??= { ...globalVariables } as Readonly<GlobalVariables>);
+    const convert = (
+      messageEvent: Immutable<MessageEvent>,
+      converters: TopicSchemaConversions["topicSchemaConverters"],
+      output: MessageEvent[],
+      variables: (() => Readonly<GlobalVariables>) | undefined,
+    ) => {
+      if (
+        !topicToSchemaName.get(messageEvent.topic) ||
+        !converters.has(converterKey(messageEvent.topic, messageEvent.schemaName))
+      ) {
+        return;
+      }
+      convertMessage(
+        { ...messageEvent, topicConfig: configTopics[messageEvent.topic] },
+        converters,
+        output,
+        variables?.(),
+        { emitAlert },
+      );
+    };
 
     if (prevSeekTime !== activeData?.lastSeekTime) {
       lastMessageByTopic.clear();
@@ -246,16 +276,7 @@ function initRenderStateBuilder(): BuildRenderStateFn {
             postProcessedFrame.push(messageEvent);
           }
 
-          const schemaName = topicToSchemaNameMap[messageEvent.topic];
-          if (schemaName) {
-            convertMessage(
-              { ...messageEvent, topicConfig: configTopics[messageEvent.topic] },
-              topicSchemaConverters,
-              postProcessedFrame,
-              { ...globalVariables } as Readonly<GlobalVariables>,
-              { emitAlert },
-            );
-          }
+          convert(messageEvent, topicSchemaConverters, postProcessedFrame, getVariables);
           lastMessageByTopic.set(messageEvent.topic, messageEvent);
         }
         renderState.currentFrame = postProcessedFrame;
@@ -265,16 +286,7 @@ function initRenderStateBuilder(): BuildRenderStateFn {
         // only the new conversions on our most recent message on each topic.
         const postProcessedFrame: MessageEvent[] = [];
         for (const messageEvent of lastMessageByTopic.values()) {
-          const schemaName = topicToSchemaNameMap[messageEvent.topic];
-          if (schemaName) {
-            convertMessage(
-              { ...messageEvent, topicConfig: configTopics[messageEvent.topic] },
-              newConverters,
-              postProcessedFrame,
-              { ...globalVariables } as Readonly<GlobalVariables>,
-              { emitAlert },
-            );
-          }
+          convert(messageEvent, newConverters, postProcessedFrame, getVariables);
         }
         renderState.currentFrame = postProcessedFrame;
         shouldRender.value = true;
@@ -283,16 +295,7 @@ function initRenderStateBuilder(): BuildRenderStateFn {
         // all conversions on our most recent message on each topic.
         const postProcessedFrame: MessageEvent[] = [];
         for (const messageEvent of lastMessageByTopic.values()) {
-          const schemaName = topicToSchemaNameMap[messageEvent.topic];
-          if (schemaName) {
-            convertMessage(
-              { ...messageEvent, topicConfig: configTopics[messageEvent.topic] },
-              topicSchemaConverters,
-              postProcessedFrame,
-              { ...globalVariables } as Readonly<GlobalVariables>,
-              { emitAlert },
-            );
-          }
+          convert(messageEvent, topicSchemaConverters, postProcessedFrame, getVariables);
         }
         renderState.currentFrame = postProcessedFrame;
         shouldRender.value = true;
@@ -309,6 +312,10 @@ function initRenderStateBuilder(): BuildRenderStateFn {
     if (watchedFields.has("allFrames")) {
       // Rebuild allFrames if we have new blocks or if our conversions have changed.
       const newBlocks = playerState?.progress.messageCache?.blocks;
+      if (conversionsChanged || config?.topics !== prevConfigTopics) {
+        allFramesByBlock = new WeakMap();
+        prevConfigTopics = config?.topics;
+      }
       if ((newBlocks != undefined && prevBlocks !== newBlocks) || conversionsChanged) {
         shouldRender.value = true;
         const blocksToProcess = newBlocks ?? prevBlocks ?? [];
@@ -324,35 +331,34 @@ function initRenderStateBuilder(): BuildRenderStateFn {
           if (!block) {
             continue;
           }
+          let blockFrames = allFramesByBlock.get(block);
+          if (!blockFrames) {
+            const newBlockFrames: MessageEvent[] = [];
 
-          // Given that messagesByTopic should be in order by receiveTime, we need to
-          // combine all of the messages into a single array and sorted by receive time.
-          forEachSortedArrays(
-            topicsToPreloadForPanel.map((topic) => block.messagesByTopic[topic] ?? []),
-            (a, b) => compare(a.receiveTime, b.receiveTime),
-            (messageEvent) => {
-              // Message blocks may contain topics that we are not subscribed to so we
-              // need to filter those out. We use unconvertedSubscriptionTopics to
-              // determine if we should include the message event. Clients expect
-              // allFrames to be a complete set of messages for all subscribed topics so
-              // we include all unconverted and converted messages, unlike in
-              // currentFrame.
-              if (unconvertedSubscriptionTopics.has(messageEvent.topic)) {
-                frames.push(messageEvent);
-              }
-
-              const schemaName = topicToSchemaNameMap[messageEvent.topic];
-              if (schemaName) {
-                convertMessage(
-                  { ...messageEvent, topicConfig: configTopics[messageEvent.topic] },
-                  topicSchemaConverters,
-                  frames,
-                  undefined,
-                  { emitAlert },
-                );
-              }
-            },
-          );
+            // Given that messagesByTopic should be in order by receiveTime, we need to
+            // combine all of the messages into a single array and sorted by receive time.
+            forEachSortedArrays(
+              topicsToPreloadForPanel.map((topic) => block.messagesByTopic[topic] ?? []),
+              (a, b) => compare(a.receiveTime, b.receiveTime),
+              (messageEvent) => {
+                // Message blocks may contain topics that we are not subscribed to so we
+                // need to filter those out. We use unconvertedSubscriptionTopics to
+                // determine if we should include the message event. Clients expect
+                // allFrames to be a complete set of messages for all subscribed topics so
+                // we include all unconverted and converted messages, unlike in
+                // currentFrame.
+                if (unconvertedSubscriptionTopics.has(messageEvent.topic)) {
+                  newBlockFrames.push(messageEvent);
+                }
+                convert(messageEvent, topicSchemaConverters, newBlockFrames, undefined);
+              },
+            );
+            allFramesByBlock.set(block, newBlockFrames);
+            blockFrames = newBlockFrames;
+          }
+          for (const messageEvent of blockFrames) {
+            frames.push(messageEvent);
+          }
         }
       }
       prevBlocks = newBlocks;

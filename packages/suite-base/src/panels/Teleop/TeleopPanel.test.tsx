@@ -387,7 +387,19 @@ describe("TeleopPanel", () => {
     }
 
     function step(...pads: Gamepad[]) {
+      const change =
+        pads.length > gamepads.length
+          ? "gamepadconnected"
+          : pads.length < gamepads.length
+            ? "gamepaddisconnected"
+            : undefined;
       gamepads = pads;
+      if (change) {
+        // like the browser: polling idles without a gamepad until one connects
+        act(() => {
+          window.dispatchEvent(new Event(change));
+        });
+      }
       const pending = frames;
       frames = [];
       act(() => {
@@ -507,6 +519,19 @@ describe("TeleopPanel", () => {
       expect(publish).not.toHaveBeenCalled();
       step(makeGamepad([0, -1, 0, 0], [], "First"), makeGamepad([0, -1, 0, 0], [], "Second"));
       expect(publish).toHaveBeenLastCalledWith("/cmd", twist(1));
+    });
+
+    it("stops polling without a gamepad and stops the robot when it disconnects", () => {
+      const { publish } = setup();
+      step();
+      expect(frames).toHaveLength(0);
+      step(makeGamepad([0, -1, 0, 0]));
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(1));
+      expect(frames).toHaveLength(1);
+      step();
+      expect(publish).toHaveBeenLastCalledWith("/cmd", ZERO);
+      expect(frames).toHaveLength(0);
+      expect(screen.getByText("Press a gamepad button to connect it")).toBeInTheDocument();
     });
   });
 

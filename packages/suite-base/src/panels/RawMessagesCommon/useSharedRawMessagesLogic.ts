@@ -20,6 +20,7 @@ import { useMessageDataItem } from "@lichtblick/suite-base/components/MessagePat
 import {
   MessagePipelineContext,
   useMessagePipeline,
+  useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { Topic } from "@lichtblick/suite-base/players/types";
@@ -117,12 +118,12 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
 
   const inTimetickDiffMode = diffEnabled && diffMethod === PREV_MSG_METHOD;
 
-  const currentTime = useMessagePipeline(selectCurrentTime);
   const topicStats = useMessagePipeline(selectTopicStats);
   const seekPlayback = useMessagePipeline(selectSeekPlayback);
   const pausePlayback = useMessagePipeline(selectPausePlayback);
   const getBatchIterator = useMessagePipeline(selectGetBatchIterator);
   const getMessageAtTime = useMessagePipeline(selectGetMessageAtTime);
+  const getPipelineState = useMessagePipelineGetter();
   const cachedGetMessagePathDataItems = useCachedGetMessagePathDataItems([topicPath]);
 
   // A seek resets the message history, so after stepping (or scrubbing) there is no previous
@@ -169,15 +170,6 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
       : fetchedPair?.diff
     : diffTopicObj;
 
-  const nodes = useMemo(() => {
-    if (baseItem) {
-      const data = dataWithoutWrappingArray(baseItem.queriedData.map(({ value }) => value));
-      return generateDeepKeyPaths(data);
-    } else {
-      return new Set<string>();
-    }
-  }, [baseItem]);
-
   const canExpandAll = useMemo(() => {
     if (expansion === "none") {
       return true;
@@ -218,9 +210,18 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
 
   const onToggleExpand = useCallback(
     (key: string, value: unknown) => {
-      setExpansion((old) => toggleNodeExpansion(old, nodes, key, value));
+      setExpansion((old) => {
+        // Walking the whole message is only needed to turn "all" into a per-node map.
+        const nodes =
+          old === "all" && baseItem
+            ? generateDeepKeyPaths(
+                dataWithoutWrappingArray(baseItem.queriedData.map((item) => item.value)),
+              )
+            : new Set<string>();
+        return toggleNodeExpansion(old, nodes, key, value);
+      });
     },
-    [nodes],
+    [baseItem],
   );
 
   useEffect(() => {
@@ -233,17 +234,40 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
   const isSteppingRef = useRef(false);
   const canStep = seekPlayback != undefined && topic != undefined;
   const stats = topic ? topicStats?.get(topic.name) : undefined;
+  const firstMessageTime = stats?.firstMessageTime;
+  const lastMessageTime = stats?.lastMessageTime;
+  // Select only booleans from the playhead so playback ticks don't re-render the panel.
+  const playheadAfterFirst = useMessagePipeline(
+    useCallback(
+      (ctx: MessagePipelineContext) => {
+        const time = selectCurrentTime(ctx);
+        return (
+          time != undefined &&
+          (firstMessageTime == undefined || compare(time, firstMessageTime) > 0)
+        );
+      },
+      [firstMessageTime],
+    ),
+  );
+  const playheadBeforeLast = useMessagePipeline(
+    useCallback(
+      (ctx: MessagePipelineContext) => {
+        const time = selectCurrentTime(ctx);
+        return (
+          time != undefined && (lastMessageTime == undefined || compare(time, lastMessageTime) < 0)
+        );
+      },
+      [lastMessageTime],
+    ),
+  );
   // Step back from the displayed message rather than the playhead, so the first click always
   // changes what is shown even when the playhead sits between two messages.
-  const prevAnchorTime = currMessageEvent?.receiveTime ?? currentTime;
   const canStepPrevious =
     canStep &&
-    prevAnchorTime != undefined &&
-    (stats?.firstMessageTime == undefined || compare(prevAnchorTime, stats.firstMessageTime) > 0);
-  const canStepNext =
-    canStep &&
-    currentTime != undefined &&
-    (stats?.lastMessageTime == undefined || compare(currentTime, stats.lastMessageTime) < 0);
+    (currMessageEvent
+      ? firstMessageTime == undefined || compare(currMessageEvent.receiveTime, firstMessageTime) > 0
+      : playheadAfterFirst);
+  const canStepNext = canStep && playheadBeforeLast;
 
   const seekTo = useCallback(
     async (findTime: () => Promise<Time | undefined>) => {
@@ -267,7 +291,8 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
   );
 
   const onStepPrevious = useCallback(() => {
-    if (!canStepPrevious) {
+    const prevAnchorTime = currMessageEvent?.receiveTime ?? selectCurrentTime(getPipelineState());
+    if (!canStepPrevious || prevAnchorTime == undefined) {
       return;
     }
     void seekTo(
@@ -275,10 +300,11 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
         (await getMessageAtTime(topic.name, subtractTime(prevAnchorTime, ONE_NANOSECOND)))
           ?.receiveTime,
     );
-  }, [canStepPrevious, getMessageAtTime, prevAnchorTime, seekTo, topic]);
+  }, [canStepPrevious, currMessageEvent, getMessageAtTime, getPipelineState, seekTo, topic]);
 
   const onStepNext = useCallback(() => {
-    if (!canStepNext) {
+    const currentTime = selectCurrentTime(getPipelineState());
+    if (!canStepNext || currentTime == undefined) {
       return;
     }
     void seekTo(async () => {
@@ -295,7 +321,7 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
       }
       return undefined;
     });
-  }, [canStepNext, currentTime, getBatchIterator, seekTo, topic]);
+  }, [canStepNext, getBatchIterator, getPipelineState, seekTo, topic]);
 
   return {
     topicRosPath,
@@ -305,7 +331,6 @@ export function useSharedRawMessagesLogic<T extends SharedConfig>({
     diffItem,
     expansion,
     setExpansion,
-    nodes,
     canExpandAll,
     onTopicPathChange,
     onDiffTopicPathChange,

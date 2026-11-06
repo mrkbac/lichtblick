@@ -112,10 +112,7 @@ export class RenderableLineList extends RenderableMarker {
 
     this.#setPositions(marker, pointsLength);
     this.#setColors(marker, pointsLength);
-
-    // These both update the same `LineSegmentsGeometry` reference, so no need to call both
-    // this.linePrepass.computeLineDistances();
-    this.#line.computeLineDistances();
+    // No computeLineDistances(): line distances are only read by dashed materials (unused here)
   }
 
   #setPositions(marker: Marker, pointsLength: number): void {

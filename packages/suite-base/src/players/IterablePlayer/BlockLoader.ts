@@ -206,6 +206,8 @@ export class BlockLoader {
 
     const { progress } = args;
     let totalBlockSizeBytes = this.#cacheSize();
+    // "cache-full" is only added right before returning, so clearing it once per load is enough
+    let cacheFullCleared = false;
 
     for (let blockId = 0; blockId < this.#blocks.length; ++blockId) {
       // Topics we will fetch for this range
@@ -306,16 +308,18 @@ export class BlockLoader {
 
           // Because we initialized all the topicsToFetch earlier we expect to have an array for each message
           // topic in our results. If we don't, thats a problem.
-          const alertKey = `unexpected-topic-${msgTopic}`;
           if (!arr) {
-            this.#alertManager.addAlert(alertKey, {
+            this.#alertManager.addAlert(`unexpected-topic-${msgTopic}`, {
               severity: "error",
               message: `Received a message on an unexpected topic: ${msgTopic}.`,
             });
 
             continue;
           }
-          this.#alertManager.removeAlert(alertKey);
+          // Only the first message per topic and block can clear the alert; later calls are no-ops
+          if (arr.length === 0) {
+            this.#alertManager.removeAlert(`unexpected-topic-${msgTopic}`);
+          }
 
           const messageSizeInBytes = iterResult.msgEvent.sizeInBytes;
           totalBlockSizeBytes += messageSizeInBytes;
@@ -324,7 +328,10 @@ export class BlockLoader {
           sizeInBytes += messageSizeInBytes;
 
           if (totalBlockSizeBytes < this.#maxCacheSize) {
-            this.#alertManager.removeAlert("cache-full");
+            if (!cacheFullCleared) {
+              cacheFullCleared = true;
+              this.#alertManager.removeAlert("cache-full");
+            }
             continue;
           }
           // cache over capacity, try removing unused topics

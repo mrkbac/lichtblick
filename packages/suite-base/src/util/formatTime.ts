@@ -20,8 +20,11 @@ import { TimeDisplayMethod } from "@lichtblick/suite-base/types/panels";
 
 import parseFuzzyRosTime from "./parseFuzzyRosTime";
 
+// Building an Intl.DateTimeFormat costs ~25 µs and this runs for every formatted timestamp.
+// ponytail: an OS timezone change is picked up on reload only.
+let systemTimezone: string | undefined;
 export function guessTimezone(): string {
-  return Intl.DateTimeFormat().resolvedOptions().timeZone;
+  return (systemTimezone ??= Intl.DateTimeFormat().resolvedOptions().timeZone);
 }
 
 const partsFormatters = new Map<string, Intl.DateTimeFormat>();
@@ -73,26 +76,34 @@ export function formatHms(
   return `${sign}${hms}${withMillis ? `.${pad(ms % 1000, 3)}` : ""}`;
 }
 
+function stampParts(
+  stamp: Time,
+  timezone: string | undefined,
+): Record<Intl.DateTimeFormatPartTypes, string> | undefined {
+  if (stamp.sec < 0 || stamp.nsec < 0) {
+    console.error("Times are not allowed to be negative");
+    return undefined;
+  }
+  return dateParts(toDate(stamp), timezone ?? guessTimezone());
+}
+const datePart = (p: Record<Intl.DateTimeFormatPartTypes, string>) =>
+  `${p.year}-${p.month}-${p.day}`;
+const timePart = (p: Record<Intl.DateTimeFormatPartTypes, string>) =>
+  `${p.hour}:${p.minute}:${p.second}.${p.fractionalSecond} ${p.dayPeriod} ${p.timeZoneName}`;
+
 export function format(stamp: Time, timezone?: string): string {
-  return `${formatDate(stamp, timezone)} ${formatTime(stamp, timezone)}`;
+  const p = stampParts(stamp, timezone);
+  return p ? `${datePart(p)} ${timePart(p)}` : "(invalid negative time) (invalid negative time)";
 }
 
 export function formatDate(stamp: Time, timezone?: string): string {
-  if (stamp.sec < 0 || stamp.nsec < 0) {
-    console.error("Times are not allowed to be negative");
-    return "(invalid negative time)";
-  }
-  const p = dateParts(toDate(stamp), timezone ?? guessTimezone());
-  return `${p.year}-${p.month}-${p.day}`;
+  const p = stampParts(stamp, timezone);
+  return p ? datePart(p) : "(invalid negative time)";
 }
 
 export function formatTime(stamp: Time, timezone?: string): string {
-  if (stamp.sec < 0 || stamp.nsec < 0) {
-    console.error("Times are not allowed to be negative");
-    return "(invalid negative time)";
-  }
-  const p = dateParts(toDate(stamp), timezone ?? guessTimezone());
-  return `${p.hour}:${p.minute}:${p.second}.${p.fractionalSecond} ${p.dayPeriod} ${p.timeZoneName}`;
+  const p = stampParts(stamp, timezone);
+  return p ? timePart(p) : "(invalid negative time)";
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;

@@ -33,6 +33,7 @@ function calculateLiveItemFrequency(numMessages: number, duration: Time) {
 
 const selectCurrentTime = ({ playerState }: MessagePipelineContext) =>
   playerState.activeData?.currentTime;
+const selectHasCurrentTime = (ctx: MessagePipelineContext) => selectCurrentTime(ctx) != undefined;
 const selectStartTime = ({ playerState }: MessagePipelineContext) =>
   playerState.activeData?.startTime;
 const selectEndTime = ({ playerState }: MessagePipelineContext) => playerState.activeData?.endTime;
@@ -58,7 +59,6 @@ const EMPTY_FREQUENCIES: FrequenciesByTopic = {};
  * @property interval - the interval, in frames, between updates.
  */
 export function useTopicPublishFrequencies(): Immutable<FrequenciesByTopic> {
-  const playerCurrentTime = useMessagePipeline(selectCurrentTime);
   const startTime = useMessagePipeline(selectStartTime);
   const endTime = useMessagePipeline(selectEndTime);
   const topicStats = useMessagePipeline(selectTopicStats);
@@ -74,9 +74,13 @@ export function useTopicPublishFrequencies(): Immutable<FrequenciesByTopic> {
     () => playerCapabilities.includes(PLAYER_CAPABILITIES.playbackControl),
     [playerCapabilities],
   );
+  // Static frequencies don't depend on the playhead, so only live sources update every tick.
+  const playerCurrentTime = useMessagePipeline<Time | boolean | undefined>(
+    playerIsStaticSource ? selectHasCurrentTime : selectCurrentTime,
+  );
 
   const frequencies = useMemo(() => {
-    if (!playerCurrentTime) {
+    if (playerCurrentTime == undefined || playerCurrentTime === false) {
       return EMPTY_FREQUENCIES;
     }
     const currentTime = fromMillis(Date.now());

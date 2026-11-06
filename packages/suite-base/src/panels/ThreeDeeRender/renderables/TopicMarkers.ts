@@ -109,6 +109,10 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
       return;
     }
 
+    // Report missing transforms once per frame: per-marker add/remove would emit (and rebuild the
+    // settings tree) once per marker whenever a topic mixes resolvable and unresolvable frames
+    let missingTransform: string | undefined;
+    let anyUpdated = false;
     for (const ns of this.namespaces.values()) {
       for (const renderable of ns.markersById.values()) {
         renderable.visible = ns.settings.visible;
@@ -140,14 +144,17 @@ export class TopicMarkers extends Renderable<MarkerTopicUserData> {
           srcTime,
         );
         renderable.visible = updated;
-        const topic = renderable.userData.topic;
         if (!updated) {
-          const message = missingTransformMessage(renderFrameId, fixedFrameId, frameId);
-          this.renderer.settings.errors.addToTopic(topic, MISSING_TRANSFORM, message);
+          missingTransform ??= missingTransformMessage(renderFrameId, fixedFrameId, frameId);
         } else {
-          this.renderer.settings.errors.removeFromTopic(topic, MISSING_TRANSFORM);
+          anyUpdated = true;
         }
       }
+    }
+    if (missingTransform != undefined) {
+      this.renderer.settings.errors.addToTopic(this.topic, MISSING_TRANSFORM, missingTransform);
+    } else if (anyUpdated) {
+      this.renderer.settings.errors.removeFromTopic(this.topic, MISSING_TRANSFORM);
     }
   }
 

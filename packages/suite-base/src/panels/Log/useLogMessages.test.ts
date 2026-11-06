@@ -216,6 +216,38 @@ describe("useLogMessages", () => {
     });
     expect(result.current.items.map((m) => m.message)).toEqual(["/a@1", "/b@2", "/a@3"]);
   });
+
+  it("takes live updates at most every 250 ms, always ending on the latest", () => {
+    (useSubscribeMessageRange as Mock).mockReturnValue(vi.fn(() => () => {}));
+    let live = { "/a": [event(1, "/a")] };
+    (useMessagesByTopic as Mock).mockImplementation(() => live);
+    const { result, rerender } = renderHook(() => useLogMessages(SINGLE_TOPIC));
+    const messages = () => result.current.items.map((m) => m.message);
+
+    // after a quiet period the first update shows right away
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    live = { "/a": [event(1, "/a"), event(2, "/a")] };
+    rerender();
+    act(() => {
+      vi.advanceTimersByTime(0);
+    });
+    expect(messages()).toEqual(["/a@1", "/a@2"]);
+
+    live = { "/a": [event(1, "/a"), event(2, "/a"), event(3, "/a")] };
+    rerender();
+    act(() => {
+      vi.advanceTimersByTime(100);
+    });
+    expect(messages()).toEqual(["/a@1", "/a@2"]);
+    live = { "/a": [event(1, "/a"), event(2, "/a"), event(3, "/a"), event(4, "/a")] };
+    rerender();
+    act(() => {
+      vi.advanceTimersByTime(150);
+    });
+    expect(messages()).toEqual(["/a@1", "/a@2", "/a@3", "/a@4"]);
+  });
 });
 
 const TOPICS = ["/a", "/b"];
