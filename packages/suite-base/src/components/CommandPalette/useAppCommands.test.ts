@@ -111,11 +111,20 @@ describe("useAppCommands", () => {
     expect(findGroup(newLayout, "Plot!c")?.active).toBe("Plot!c");
   });
 
-  it("does nothing for a panel removed meanwhile", async () => {
-    await pick("panel.focus", "Plot!c", () => {
-      currentLayout = { panels: ["Plot!a"] };
-    });
-    expect(changePanelLayout).not.toHaveBeenCalled();
-    expect(setSelectedPanelIds).not.toHaveBeenCalled();
+  it.each(["panel.focus", "panel.settings"])(
+    "%s does nothing for a panel removed meanwhile",
+    async (command) => {
+      await pick(command, "Plot!c", () => {
+        currentLayout = { panels: ["Plot!a"] };
+      });
+      expect(changePanelLayout).not.toHaveBeenCalled();
+      expect(setSelectedPanelIds).not.toHaveBeenCalled();
+      expect(openPanelSettings).not.toHaveBeenCalled();
+    },
+  );
+
+  it("opens settings for a revealed panel", async () => {
+    await pick("panel.settings", "Plot!c");
+    expect(openPanelSettings).toHaveBeenCalledTimes(1);
   });
 });

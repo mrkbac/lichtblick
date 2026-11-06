@@ -307,13 +307,15 @@ export function useAppCommands(): {
       const panelIds = layoutData.layout != undefined ? getPanelIds(layoutData.layout) : [];
       // Selecting a panel in a background tab would leave it hidden, so bring its tab to front too
       // Reads the layout when picked: it may have changed since the list was built.
-      const revealPanel = (id: string) => {
+      // Returns false when the panel was removed meanwhile.
+      const revealPanel = (id: string): boolean => {
         const layout = getCurrentLayoutState().selectedLayout?.data?.layout;
         if (layout == undefined || !getPanelIds(layout).includes(id)) {
-          return; // removed meanwhile
+          return false;
         }
         changePanelLayout({ layout: setActivePanel(layout, id) });
         setSelectedPanelIds([id]);
+        return true;
       };
       const panelCommands = (idPrefix: string, onPick: (id: string) => void) => () =>
         panelIds.map((id) => {
@@ -353,7 +355,9 @@ export function useAppCommands(): {
             title: t("focusPanel"),
             keywords: ["select", "go to"],
             placeholder: t("focusPanelPlaceholder"),
-            children: panelCommands("panel.focus", revealPanel),
+            children: panelCommands("panel.focus", (id) => {
+              revealPanel(id);
+            }),
           },
           {
             id: "panel.settings",
@@ -361,8 +365,9 @@ export function useAppCommands(): {
             keywords: ["config", "edit"],
             placeholder: t("focusPanelPlaceholder"),
             children: panelCommands("panel.settings", (id) => {
-              revealPanel(id);
-              openPanelSettings();
+              if (revealPanel(id)) {
+                openPanelSettings();
+              }
             }),
           },
         );
