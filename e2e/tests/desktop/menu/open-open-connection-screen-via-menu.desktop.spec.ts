@@ -5,11 +5,11 @@ import { AppMenu, DataSourceDialog } from "../../../page-objects";
 
 /**
  * GIVEN the app is on the initial screen
- * WHEN the user opens the File Open... > Open connection menu
- * AND the user clicks on the "Open connection" button
- * THEN the "Open a new connection" dialog should appear
+ * WHEN the user opens File > Open...
+ * AND the user clicks the connection type button next to the address bar
+ * THEN the connection types should be listed
  */
-test("Display the open a new connection dialog when clicking File > Open... > Open connection", {
+test("List connection types on the start page opened via File > Open...", {
   tag: "@smoke",
 }, async ({ mainWindow }) => {
   const dialog = new DataSourceDialog(mainWindow);
@@ -20,24 +20,9 @@ test("Display the open a new connection dialog when clicking File > Open... > Op
 
   // When
   await appMenu.openFile();
-  await dialog.openConnection();
+  await dialog.openConnectionTypeMenu();
 
   // Then
-  await expect(mainWindow.getByText("Open a new connection", { exact: true })).toBeVisible();
-});
-
-test("Display the open a new connection dialog when clicking File > Open connection…", {
-  tag: "@smoke",
-}, async ({ mainWindow }) => {
-  const dialog = new DataSourceDialog(mainWindow);
-  const appMenu = new AppMenu(mainWindow);
-
-  // Given
-  await dialog.close();
-
-  // When
-  await appMenu.openConnection();
-
-  // Then
-  await expect(mainWindow.getByText("Open a new connection", { exact: true })).toBeVisible();
+  await expect(mainWindow.getByRole("menuitem", { name: "Detect from URL" })).toBeVisible();
+  await expect(mainWindow.getByRole("menuitem", { name: "Rosbridge" })).toBeVisible();
 });

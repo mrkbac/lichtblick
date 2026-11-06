@@ -6,8 +6,7 @@ import { DataSourceDialog, Panels, Sidebar } from "../../../page-objects";
 
 /**
  * GIVEN there is a WebSocket server is running
- * WHEN the user opens the File Open... > Open connection menu
- * AND the user clicks on the "Open connection" button
+ * WHEN the user opens ws://localhost:8765 from the start page's address bar
  * THEN the address ws://localhost:8765 should be visible
  * WHEN the user clicks on the "Topics" tab
  * THEN the topic "/websocket_test" should appear in the list
@@ -25,8 +24,7 @@ test("show correctly open a web socket connection showing correct attibutes on r
 
   try {
     // When
-    await dialog.openConnection();
-    await mainWindow.getByText("Open", { exact: true }).click();
+    await dialog.connect("ws://localhost:8765");
 
     // Then
     await expect(mainWindow.getByText("ws://localhost:8765").innerHTML()).resolves.toBeDefined();

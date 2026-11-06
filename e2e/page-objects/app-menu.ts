@@ -31,11 +31,6 @@ export class AppMenu {
     await this.page.getByText("Open data source").click();
   }
 
-  public async openConnection(): Promise<void> {
-    await this.openFileMenu();
-    await this.page.getByTestId("menu-item-open-connection").click();
-  }
-
   public getMenuButton(): Locator {
     return this.page.getByTestId("AppMenuButton");
   }
