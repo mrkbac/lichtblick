@@ -17,7 +17,9 @@ export type BasePlotPath = {
 export type PlotPath = BasePlotPath & {
   color?: string;
   label?: string;
-  timestampMethod: TimestampMethod;
+  timestampMethod: PlotTimestampMethod;
+  /** Message path of the series' time, for the "customField" timestamp method. Same topic as `value`. */
+  timestampPath?: string;
   showLine?: boolean;
   lineSize?: number;
   /** "step" holds each value until the next sample (sample-and-hold). */
@@ -30,6 +32,8 @@ export type PlotPath = BasePlotPath & {
   smoothing?: number;
 };
 
+/** Where a series' x value comes from on a time plot */
+export type PlotTimestampMethod = TimestampMethod | "customField";
 export type PlotInterpolation = "linear" | "step";
 export type PlotYAxis = "primary" | "secondary";
 export type PlotTimeWindow = "automatic" | "sliding" | "fixed";

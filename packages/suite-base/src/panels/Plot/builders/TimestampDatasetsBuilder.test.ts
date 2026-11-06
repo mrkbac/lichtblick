@@ -16,7 +16,7 @@ import {
 } from "@lichtblick/suite-base/players/types";
 
 import { SeriesConfigKey, SeriesItem } from "./IDatasetsBuilder";
-import { TimestampDatasetsBuilder } from "./TimestampDatasetsBuilder";
+import { readMessagePathItems, TimestampDatasetsBuilder } from "./TimestampDatasetsBuilder";
 import { TimestampDatasetsBuilderImpl } from "./TimestampDatasetsBuilderImpl";
 import { PlotPath } from "../utils/config";
 
@@ -876,5 +876,30 @@ describe("TimestampDatasetsBuilder", () => {
         }),
       ],
     });
+  });
+});
+
+describe("readMessagePathItems", () => {
+  it("places samples at a custom time field and skips messages without it", () => {
+    const parsed = parseMessagePath("/odom.v")!;
+    const timestampParsed = parseMessagePath("/odom.t")!;
+    const msg = (v: number, t: number | undefined) => ({
+      topic: "/odom",
+      schemaName: "Odom",
+      receiveTime: { sec: 50, nsec: 0 },
+      sizeInBytes: 0,
+      message: { v, t },
+    });
+
+    const items = readMessagePathItems(
+      [msg(1, 12), msg(2, undefined), msg(3, 11)],
+      { parsed, timestampMethod: "customField", timestampParsed },
+      { sec: 10, nsec: 0 },
+    );
+
+    expect(items.map(({ x, y }) => ({ x, y }))).toEqual([
+      { x: 2, y: 1 },
+      { x: 1, y: 3 },
+    ]);
   });
 });

@@ -9,11 +9,10 @@ import * as Comlink from "@foxglove/comlink";
 import { toSec, subtract as subtractTime } from "@foxglove/rostime";
 
 import { ComlinkWrap } from "@lichtblick/den/worker";
-import { MessagePath } from "@lichtblick/message-path";
 import { Immutable, MessageEvent, Time } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 import { PlayerState } from "@lichtblick/suite-base/players/types";
-import { TimestampMethod, getTimestampForMessage } from "@lichtblick/suite-base/util/time";
+import { getTimestampForMessage } from "@lichtblick/suite-base/util/time";
 
 import {
   CsvDataset,
@@ -30,6 +29,7 @@ import type {
 } from "./TimestampDatasetsBuilderImpl";
 import { buildCurrentSeriesActions, buildFullSeriesActions } from "./utils";
 import { resolveChartDatum } from "../utils/datum";
+import { getSeriesTimestamp } from "../utils/seriesTimestamp";
 
 // If the datasets builder is garbage collected we also need to cleanup the worker
 // This registry ensures the worker is cleaned up when the builder is garbage collected
@@ -86,13 +86,7 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
       const { actions: seriesActions, datasetsChanged: seriesChanged } = buildCurrentSeriesActions(
         this.#series,
         { didSeek, hasRangeSource: this.#hasRangeSource },
-        (config) =>
-          readMessagePathItems(
-            msgEvents,
-            config.parsed,
-            config.timestampMethod,
-            activeData.startTime,
-          ),
+        (config) => readMessagePathItems(msgEvents, config, activeData.startTime),
       );
       this.#pendingDispatch.push(...(seriesActions as UpdateDataAction[]));
       datasetsChanged ||= seriesChanged;
@@ -116,7 +110,7 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
     }
 
     const actions = buildFullSeriesActions(this.#series, topic, options, (config) =>
-      readMessagePathItems(messages, config.parsed, config.timestampMethod, startTime),
+      readMessagePathItems(messages, config, startTime),
     );
     this.#pendingDispatch.push(...(actions as UpdateDataAction[]));
   }
@@ -147,17 +141,24 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
   }
 }
 
-function readMessagePathItems(
+export function readMessagePathItems(
   events: Immutable<MessageEvent[]>,
-  path: Immutable<MessagePath>,
-  timestampMethod: TimestampMethod,
+  config: Immutable<Pick<SeriesItem, "parsed" | "timestampMethod" | "timestampParsed">>,
   startTime: Immutable<Time>,
 ): DataItem[] {
+  const { parsed: path, timestampMethod, timestampParsed } = config;
   const out = [];
   for (const event of events) {
     if (event.topic !== path.topicName) {
       continue;
     }
+
+    const timestamp = getSeriesTimestamp(event, timestampMethod, timestampParsed);
+    if (!timestamp) {
+      continue;
+    }
+    const headerStamp = getTimestampForMessage(event.message);
+    const xValue = toSec(subtractTime(timestamp, startTime));
 
     const items = simpleGetMessagePathDataItems(event, path);
     for (const item of items) {
@@ -166,13 +167,6 @@ function readMessagePathItems(
         continue;
       }
 
-      const headerStamp = getTimestampForMessage(event.message);
-      const timestamp = timestampMethod === "receiveTime" ? event.receiveTime : headerStamp;
-      if (!timestamp) {
-        continue;
-      }
-
-      const xValue = toSec(subtractTime(timestamp, startTime));
       out.push({
         x: xValue,
         y: datum.y,

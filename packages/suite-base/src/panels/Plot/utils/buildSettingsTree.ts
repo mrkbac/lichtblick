@@ -103,9 +103,19 @@ const makeSeriesNode = memoizeWeak(
           options: [
             { label: t("receiveTime"), value: "receiveTime" },
             { label: t("headerStamp"), value: "headerStamp" },
+            { label: t("customField"), value: "customField" },
           ],
           value: path.timestampMethod,
         },
+        ...(path.timestampMethod === "customField" && {
+          timestampPath: {
+            input: "messagepath",
+            label: t("timestampField"),
+            validTypes: TIMESTAMP_FIELD_TYPES,
+            value: path.timestampPath ?? "",
+            error: timestampPathError(path, t),
+          },
+        }),
         ...(xAxisVal === "timestamp" && {
           smoothing: {
             input: "number",
@@ -131,6 +141,31 @@ const makeSeriesNode = memoizeWeak(
     };
   },
 );
+
+/** Field types a custom timestamp can be read from */
+const TIMESTAMP_FIELD_TYPES = [
+  "time",
+  "duration",
+  "float32",
+  "float64",
+  "int32",
+  "int64",
+  "uint32",
+  "uint64",
+];
+
+/** The custom time field is read from the series' messages, so it must share the topic. */
+function timestampPathError(path: PlotPath, t: MakeSeriesNode["t"]): string | undefined {
+  const timestampPath = path.timestampPath?.trim();
+  if (!timestampPath) {
+    return t("timestampFieldMissing");
+  }
+  const timeTopic = parseMessagePath(timestampPath)?.topicName;
+  const yTopic = parseMessagePath(path.value)?.topicName;
+  return timeTopic != undefined && yTopic != undefined && timeTopic !== yTopic
+    ? t("timestampFieldTopicError")
+    : undefined;
+}
 
 /** A series' own x path is read from the same messages as its y path, so it must share the topic. */
 function xValueError(path: PlotPath, t: MakeSeriesNode["t"]): string | undefined {

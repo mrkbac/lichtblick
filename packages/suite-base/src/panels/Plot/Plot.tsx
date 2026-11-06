@@ -132,7 +132,8 @@ const Plot = (props: PlotProps): React.JSX.Element => {
   const seriesValues = useMemo(
     () =>
       config.paths.map(
-        ({ value, enabled, timestampMethod }) => `${value}|${enabled}|${timestampMethod}`,
+        ({ value, enabled, timestampMethod, timestampPath }) =>
+          `${value}|${enabled}|${timestampMethod}|${timestampPath ?? ""}`,
       ),
     [config.paths],
   );

@@ -186,6 +186,33 @@ describe("useSubscriptions", () => {
       ]);
     });
 
+    it("should subscribe to a series' custom timestamp field on time plots", () => {
+      (isReferenceLinePlotPathType as Mock).mockImplementation(() => false);
+      (parseMessagePath as Mock).mockImplementation((path: string) => ({ path }));
+      (fillInGlobalVariablesInPath as Mock).mockImplementation((parsed: unknown) => parsed);
+      (pathToSubscribePayload as Mock).mockImplementation((parsed: { path: string }) => ({
+        topic: parsed.path,
+      }));
+
+      const { subscriberId } = setup({
+        config: {
+          paths: [
+            PlotBuilder.path({
+              value: "/odom.v",
+              timestampMethod: "customField",
+              timestampPath: "/odom.stamp",
+            }),
+          ],
+          xAxisVal: "timestamp",
+        },
+      });
+
+      expect(setSubscriptions).toHaveBeenCalledWith(subscriberId, [
+        { topic: "/odom.v" },
+        { topic: "/odom.stamp" },
+      ]);
+    });
+
     it("should set subscriptions when xAxisVal is currentCustom", () => {
       const parsedPath = BasicBuilder.string();
       const filledInGlobalVarsPath = BasicBuilder.string();
