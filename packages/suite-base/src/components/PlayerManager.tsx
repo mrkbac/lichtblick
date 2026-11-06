@@ -35,10 +35,13 @@ import { Immutable } from "@lichtblick/suite";
 import { MessagePipelineProvider } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
+  LayoutID,
   LayoutState,
+  useCurrentLayoutActions,
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { ExtensionCatalogContext } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
+import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import { usePerformance } from "@lichtblick/suite-base/context/PerformanceContext";
 import PlayerSelectionContext, {
   DataSourceArgs,
@@ -150,6 +153,8 @@ export default function PlayerManager(
 
   const globalVariables = useCurrentLayoutSelector(globalVariablesSelector);
   const isLayoutLoading = useCurrentLayoutSelector(isLayoutLoadingSelector);
+  const layoutManager = useLayoutManager();
+  const { setSelectedLayoutId } = useCurrentLayoutActions();
 
   const topicAliasPlayer = useMemo(() => {
     if (!basePlayer) {
@@ -214,9 +219,15 @@ export default function PlayerManager(
   const [selectedSource, setSelectedSource] = useState<IDataSourceFactory | undefined>();
   const [selectedFiles, setSelectedFiles] = useState<readonly File[] | undefined>();
 
+  // Sample layout ids for this session, used when localStorage is unavailable.
+  const sampleLayoutIds = useRef(new Map<string, LayoutID>());
+  // Bumped on every selectSource call, so a slow earlier call can't apply its layout late.
+  const selectionSeq = useRef(0);
+
   const selectSource = useCallback(
     async (sourceId: string, args?: DataSourceArgs) => {
       log.debug(`Select Source: ${sourceId}`);
+      const seq = ++selectionSeq.current;
 
       const foundSource = playerSources.find(
         (source) => (source.id === sourceId || source.legacyIds?.includes(sourceId)) ?? false,
@@ -242,6 +253,42 @@ export default function PlayerManager(
 
         setBasePlayer(newPlayer);
         writeLastFile(undefined);
+
+        // Show the sample in the layout made for it. Its id is remembered per source, so an
+        // edited or renamed copy is reopened and same-named layouts are never picked up.
+        if (foundSource.sampleLayout) {
+          const storageKey = `lichtblick.sampleLayoutId.${foundSource.id}`;
+          let savedId = sampleLayoutIds.current.get(storageKey);
+          try {
+            savedId ??= (localStorage.getItem(storageKey) as LayoutID | null) ?? undefined;
+          } catch (error) {
+            log.warn("Could not read the saved sample layout id", error);
+          }
+          try {
+            const existing = savedId ? await layoutManager.getLayout(savedId) : undefined;
+            const layout =
+              existing ??
+              (await layoutManager.saveNewLayout({
+                name: foundSource.displayName,
+                data: foundSource.sampleLayout,
+                permission: "CREATOR_WRITE",
+              }));
+            sampleLayoutIds.current.set(storageKey, layout.id);
+            try {
+              localStorage.setItem(storageKey, layout.id);
+            } catch (error) {
+              log.warn("Could not save the sample layout id; it is kept for this session", error);
+            }
+            if (isMounted() && seq === selectionSeq.current) {
+              setSelectedLayoutId(layout.id);
+            }
+          } catch (error) {
+            log.error(error);
+            enqueueSnackbar(`Could not open the sample layout: ${String(error)}`, {
+              variant: "error",
+            });
+          }
+        }
         return;
       }
 
@@ -340,7 +387,15 @@ export default function PlayerManager(
         enqueueSnackbar((error as Error).message, { variant: "error" });
       }
     },
-    [playerSources, metricsCollector, enqueueSnackbar, isMounted, addRecent],
+    [
+      playerSources,
+      metricsCollector,
+      enqueueSnackbar,
+      isMounted,
+      addRecent,
+      layoutManager,
+      setSelectedLayoutId,
+    ],
   );
 
   // Select a recent entry by id

@@ -7,7 +7,6 @@
 
 import { PopoverPosition, PopoverReference } from "@mui/material";
 import * as _ from "lodash-es";
-import { userEvent, within } from "storybook/test";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import PlayerSelectionContext, {
@@ -25,7 +24,6 @@ type StoryArgs = {
   anchorPosition?: PopoverPosition;
   disablePortal?: boolean;
   open: boolean;
-  testId?: string;
 };
 
 export default {
@@ -39,7 +37,7 @@ export default {
     handleClose: _.noop,
   },
   decorators: [
-    (Story, { args: { testId: _testId, ...args } }): React.JSX.Element => (
+    (Story, { args }): React.JSX.Element => (
       <MockCurrentLayoutProvider>
         <WorkspaceContextProvider>
           <PlayerSelectionContext.Provider value={playerSelection}>
@@ -49,13 +47,6 @@ export default {
       </MockCurrentLayoutProvider>
     ),
   ],
-  play: async ({ canvasElement, args }) => {
-    if (!args.testId) {
-      return;
-    }
-    const canvas = within(canvasElement);
-    await userEvent.hover(await canvas.findByTestId(args.testId));
-  },
 } satisfies Meta<StoryArgs>;
 
 // Connection
@@ -90,94 +81,10 @@ const playerSelection: PlayerSelection = {
 
 type Story = StoryObj<StoryArgs>;
 
-export const Default: Story = {};
-
-export const FileMenuDark: Story = {
-  args: { testId: "app-menu-file" },
+export const Dark: Story = {
   parameters: { colorScheme: "dark" },
 };
 
-export const FileMenuDarkChinese: Story = {
-  args: { testId: "app-menu-file" },
-  parameters: { colorScheme: "dark", forceLanguage: "zh" },
-};
-
-export const FileMenuDarkJapanese: Story = {
-  args: { testId: "app-menu-file" },
-  parameters: { colorScheme: "dark", forceLanguage: "ja" },
-};
-
-export const FileMenuLight: Story = {
-  args: { testId: "app-menu-file" },
+export const Light: Story = {
   parameters: { colorScheme: "light" },
-};
-
-export const FileMenuLightChinese: Story = {
-  args: { testId: "app-menu-file" },
-  parameters: { colorScheme: "light", forceLanguage: "zh" },
-};
-
-export const FileMenuLightJapanese: Story = {
-  args: { testId: "app-menu-file" },
-  parameters: { colorScheme: "light", forceLanguage: "ja" },
-};
-
-export const ViewMenuDark: Story = {
-  args: { testId: "app-menu-view" },
-  parameters: { colorScheme: "dark" },
-};
-
-export const ViewMenuDarkChinese: Story = {
-  args: { testId: "app-menu-view" },
-  parameters: { colorScheme: "dark", forceLanguage: "zh" },
-};
-
-export const ViewMenuDarkJapanese: Story = {
-  args: { testId: "app-menu-view" },
-  parameters: { colorScheme: "dark", forceLanguage: "ja" },
-};
-
-export const ViewMenuLight: Story = {
-  args: { testId: "app-menu-view" },
-  parameters: { colorScheme: "light" },
-};
-
-export const ViewMenuLightChinese: Story = {
-  args: { testId: "app-menu-view" },
-  parameters: { colorScheme: "light", forceLanguage: "zh" },
-};
-
-export const ViewMenuLightJapanese: Story = {
-  ...ViewMenuLight,
-  parameters: { colorScheme: "light", forceLanguage: "ja" },
-};
-
-export const HelpMenuDark: Story = {
-  args: { testId: "app-menu-help" },
-  parameters: { colorScheme: "dark" },
-};
-
-export const HelpMenuDarkChinese: Story = {
-  args: { testId: "app-menu-help" },
-  parameters: { colorScheme: "dark", forceLanguage: "zh" },
-};
-
-export const HelpMenuDarkJapanese: Story = {
-  args: { testId: "app-menu-help" },
-  parameters: { colorScheme: "dark", forceLanguage: "ja" },
-};
-
-export const HelpMenuLight: Story = {
-  args: { testId: "app-menu-help" },
-  parameters: { colorScheme: "light" },
-};
-
-export const HelpMenuLightChinese: Story = {
-  args: { testId: "app-menu-help" },
-  parameters: { colorScheme: "light", forceLanguage: "zh" },
-};
-
-export const HelpMenuLightJapanese: Story = {
-  args: { testId: "app-menu-help" },
-  parameters: { colorScheme: "light", forceLanguage: "ja" },
 };

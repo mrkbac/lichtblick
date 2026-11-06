@@ -3,9 +3,21 @@
 
 import { makeStyles } from "tss-react/mui";
 
-export const useStyles = makeStyles()({
+export const useStyles = makeStyles()((theme) => ({
   menuList: {
-    minWidth: 180,
-    maxWidth: 220,
+    minWidth: 240,
+    maxWidth: 300,
   },
-});
+  menuItem: {
+    justifyContent: "space-between",
+    gap: theme.spacing(2),
+    kbd: {
+      font: "inherit",
+      color: theme.palette.text.disabled,
+    },
+  },
+  subheader: {
+    lineHeight: 2.5,
+    backgroundColor: "transparent",
+  },
+}));

@@ -189,7 +189,7 @@ Reusable UI abstractions live in `e2e/page-objects/`. They encapsulate common in
 | `PlayerControls`   | Playback controls               | `play()`, `pause()`, `seekForward()`, `setSpeed()`, `getTimestampValue()`, `getPlayButton()`, `getSlider()`            |
 | `LayoutManager`    | Layout CRUD                     | `openDefaultLayout()`, `createNewLayout()`, `selectPanel()`, `revertLayout()`, `getLayoutListItem()`                   |
 | `ExtensionManager` | Extension workflows             | `open()`, `search()`, `findExtension()`, `uninstall()`, `getSearchBar()`                                               |
-| `AppMenu`          | App menu navigation             | `openFile()`, `openViewMenu()`, `importLayoutFromMenu()`, `getMenuButton()`                                            |
+| `AppMenu`          | App menu navigation             | `openMenu()`, `openFile()`, `importLayoutFromMenu()`, `getMenuButton()`                                                |
 | `Panels`           | Panel operations                | `addPanel()`, `addPanelFromSearch()`, `setTopicPath()`, `splitPanelDown()`, `getAddPanelButton()`, `getLogPanelRoot()` |
 
 ### Usage Example

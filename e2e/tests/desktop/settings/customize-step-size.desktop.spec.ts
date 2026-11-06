@@ -36,8 +36,8 @@ test("Should update the step size value via settings and verify that change bein
   expect(await playerStartingTime.inputValue()).toContain(initialTime);
 
   //When
-  await mainWindow.getByTestId("user-button").click();
-  await mainWindow.getByText("Visualization settings").click();
+  await mainWindow.getByTestId("AppMenuButton").click();
+  await mainWindow.getByTestId("menu-item-settings").click();
 
   await mainWindow.locator("#stepSizeInput").fill("400");
   await mainWindow.getByText("Done").click();
