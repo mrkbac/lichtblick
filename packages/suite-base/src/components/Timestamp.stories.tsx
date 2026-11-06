@@ -34,7 +34,12 @@ function TimestampStory(props: PropsWithChildren<Props>): React.JSX.Element {
 
   return (
     <AppConfigurationContext.Provider value={value}>
-      <Stack padding={2} spacing={2}>
+      <Stack
+        spacing={2}
+        sx={{
+          padding: 2,
+        }}
+      >
         <Timestamp horizontal time={time} />
         <Timestamp time={time} />
         <Timestamp disableDate time={time} />

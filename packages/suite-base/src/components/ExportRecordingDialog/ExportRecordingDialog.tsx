@@ -105,7 +105,7 @@ export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Eleme
     >
       <DialogTitle>
         {t("title")}
-        <Typography variant="body2" color="text.secondary" noWrap>
+        <Typography variant="body2" noWrap color="textSecondary">
           {file.name}
         </Typography>
       </DialogTitle>
@@ -303,9 +303,9 @@ function ExportForm({
   return (
     <>
       <DialogContent className={classes.content}>
-        <Stack gap={2} className={classes.fill}>
+        <Stack className={classes.fill} spacing={2} useFlexGap>
           {/* Aligned to the inputs' bottom edge, since this theme draws labels above them. */}
-          <Stack direction="row" gap={1.5} alignItems="flex-end">
+          <Stack direction="row" spacing={1.5} useFlexGap style={{ alignItems: "flex-end" }}>
             {(["start", "end"] as const).map((which) => (
               <Tooltip key={which} title={t("timeInputHelp")} placement="top" enterDelay={600}>
                 <TextField
@@ -354,9 +354,9 @@ function ExportForm({
             ))}
             <Typography
               variant="body2"
-              color="text.secondary"
               noWrap
               className={classes.rangeSummary}
+              color="textSecondary"
             >
               {t("rangeSummary", {
                 duration: toSecondsText(endNs - startNs),
@@ -365,7 +365,7 @@ function ExportForm({
             </Typography>
           </Stack>
 
-          <Stack direction="row" gap={1} alignItems="center">
+          <Stack direction="row" spacing={1} useFlexGap style={{ alignItems: "center" }}>
             <TextField
               size="small"
               placeholder={t("filterTopics")}
@@ -393,7 +393,7 @@ function ExportForm({
             >
               {t("selectNone")}
             </Button>
-            <Typography variant="body2" color="text.secondary" noWrap>
+            <Typography variant="body2" noWrap color="textSecondary">
               {t("topicsSelected", { selected: topics.size, total: rows.length })}
               {" · "}
               {t(

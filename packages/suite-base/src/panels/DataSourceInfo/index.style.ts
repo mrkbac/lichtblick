@@ -331,6 +331,9 @@ export const useStyles = makeStyles()((theme) => ({
       fontWeight: 600,
     },
   },
+  emptyNote: { padding: theme.spacing(2) },
+  emptyNoteY: { paddingBlock: theme.spacing(2) },
+  subheading: { marginTop: theme.spacing(2), marginBottom: theme.spacing(1) },
   footer: {
     display: "flex",
     alignItems: "center",

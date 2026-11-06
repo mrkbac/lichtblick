@@ -89,7 +89,7 @@ export const PathLegend = React.memo(function PathLegend(props: PathLegendProps)
   );
 
   return (
-    <Stack className={classes.chartOverlay} position="absolute" paddingTop={0.5}>
+    <Stack className={classes.chartOverlay}>
       {(paths.length === 0 ? [DEFAULT_STATE_TRANSITION_PATH] : paths).map(
         (path: StateTransitionPath, index: number) => (
           <div

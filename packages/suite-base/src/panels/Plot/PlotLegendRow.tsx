@@ -236,10 +236,10 @@ export function PlotLegendRow({
       >
         <Typography
           noWrap={showPlotValuesInLegend}
-          flex="auto"
           variant="body2"
           className={cx({ [classes.disabledPathLabel]: !path.enabled })}
           data-testid="plot-legend-row-path-label"
+          style={{ flex: "auto" }}
         >
           {isAddSeriesRow ? t("clickToAddASeries") : plotPathDisplayName(path, index)}
         </Typography>
@@ -257,7 +257,7 @@ export function PlotLegendRow({
           <Typography
             variant="body2"
             align="right"
-            color={valueSource === "hover" ? "warning.main" : "text.secondary"}
+            color={valueSource === "hover" ? "warning" : "textSecondary"}
           >
             {renderValue(value)}
           </Typography>

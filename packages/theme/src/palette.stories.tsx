@@ -18,41 +18,69 @@ export const Palette: StoryObj = {
     const theme = useTheme();
     return (
       <Stack
-        height="100%"
-        width="100%"
-        flexWrap="wrap"
-        padding={2}
-        gap={6}
-        bgcolor="background.paper"
+        sx={{
+          height: "100%",
+          width: "100%",
+          flexWrap: "wrap",
+          padding: 2,
+          gap: 6,
+          bgcolor: "background.paper",
+        }}
       >
-        <Stack direction="row" gap={6}>
-          <Stack gap={1}>
+        <Stack
+          direction="row"
+          sx={{
+            gap: 6,
+          }}
+        >
+          <Stack
+            sx={{
+              gap: 1,
+            }}
+          >
             <Typography variant="overline">Palette</Typography>
-            <Stack direction="row" alignItems="center" gap={1}>
+            <Stack
+              direction="row"
+              sx={{
+                alignItems: "center",
+                gap: 1,
+              }}
+            >
               {["dark", "main", "light"].map((variant) => (
                 <Box
-                  display="flex"
                   key={variant}
-                  width={32}
-                  alignItems="center"
-                  justifyContent="center"
+                  sx={{
+                    display: "flex",
+                    width: 32,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
                 >
                   {variant}
                 </Box>
               ))}
             </Stack>
             {["primary", "secondary", "error", "warning", "info", "success"].map((color) => (
-              <Stack key={color} direction="row" alignItems="center" gap={1}>
+              <Stack
+                key={color}
+                direction="row"
+                sx={{
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
                 {["dark", "main", "light"].map((variant) => (
                   <Box
-                    display="flex"
                     key={`${color}.${variant}`}
-                    width={32}
-                    height={32}
-                    bgcolor={`${color}.${variant}`}
-                    color={`${color}.contrastText`}
-                    alignItems="center"
-                    justifyContent="center"
+                    sx={{
+                      display: "flex",
+                      width: 32,
+                      height: 32,
+                      bgcolor: `${color}.${variant}`,
+                      color: `${color}.contrastText`,
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
                   >
                     Aa
                   </Box>
@@ -62,17 +90,30 @@ export const Palette: StoryObj = {
             ))}
           </Stack>
 
-          <Stack gap={1}>
+          <Stack
+            sx={{
+              gap: 1,
+            }}
+          >
             <Typography variant="overline">Action</Typography>
             {["hover", "focus", "selected", "disabled", "active"].map((color) => (
-              <Stack direction="row" key={color} alignItems="center" gap={1}>
+              <Stack
+                direction="row"
+                key={color}
+                sx={{
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
                 <Box
-                  display="flex"
-                  width={32}
-                  height={32}
-                  bgcolor={`action.${color}`}
-                  alignItems="center"
-                  justifyContent="center"
+                  sx={{
+                    display: "flex",
+                    width: 32,
+                    height: 32,
+                    bgcolor: `action.${color}`,
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
                 >
                   Aa
                 </Box>
@@ -81,30 +122,45 @@ export const Palette: StoryObj = {
             ))}
           </Stack>
 
-          <Stack gap={1}>
+          <Stack
+            sx={{
+              gap: 1,
+            }}
+          >
             <Typography variant="overline">Background</Typography>
             {Object.keys(theme.palette.background).map((bgcolor) => (
-              <Stack key={bgcolor} direction="row" alignItems="center" gap={1}>
+              <Stack
+                key={bgcolor}
+                direction="row"
+                sx={{
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
                 <Box
-                  display="flex"
-                  width={32}
-                  height={32}
-                  bgcolor={`background.${bgcolor}`}
-                  alignItems="center"
-                  justifyContent="center"
-                  border="1px solid"
-                  borderColor="divider"
+                  sx={{
+                    display: "flex",
+                    width: 32,
+                    height: 32,
+                    bgcolor: `background.${bgcolor}`,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid",
+                    borderColor: "divider",
+                  }}
                 >
                   Aa
                 </Box>
                 <Box
-                  display="flex"
-                  width={32}
-                  height={32}
-                  bgcolor={`background.${bgcolor}`}
-                  alignItems="center"
-                  justifyContent="center"
-                  boxShadow={8}
+                  sx={{
+                    display: "flex",
+                    width: 32,
+                    height: 32,
+                    bgcolor: `background.${bgcolor}`,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: 8,
+                  }}
                 >
                   Aa
                 </Box>
@@ -114,20 +170,38 @@ export const Palette: StoryObj = {
           </Stack>
         </Stack>
 
-        <Stack gap={1}>
+        <Stack
+          sx={{
+            gap: 1,
+          }}
+        >
           <Typography variant="overline">Grey (with Divider border)</Typography>
-          <Stack gap={1} direction="row" alignItems="center">
+          <Stack
+            direction="row"
+            sx={{
+              gap: 1,
+              alignItems: "center",
+            }}
+          >
             {Object.keys(theme.palette.grey).map((key) => (
-              <Stack key={key} alignItems="center" gap={1}>
+              <Stack
+                key={key}
+                sx={{
+                  alignItems: "center",
+                  gap: 1,
+                }}
+              >
                 <Box
-                  display="flex"
-                  width={32}
-                  height={32}
-                  bgcolor={`grey.${key}`}
-                  alignItems="center"
-                  justifyContent="center"
-                  border="1px solid"
-                  borderColor="divider"
+                  sx={{
+                    display: "flex",
+                    width: 32,
+                    height: 32,
+                    bgcolor: `grey.${key}`,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: "1px solid",
+                    borderColor: "divider",
+                  }}
                 >
                   Aa
                 </Box>

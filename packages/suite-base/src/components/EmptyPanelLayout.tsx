@@ -29,6 +29,7 @@ import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentL
 import { getPanelIdForType } from "@lichtblick/suite-base/util/layout";
 
 const useStyles = makeStyles()((theme) => ({
+  hint: { padding: theme.spacing(2, 2, 0) },
   root: {
     backgroundColor: theme.palette.background.paper,
     width: "100%",
@@ -100,7 +101,7 @@ export const EmptyPanelLayout = (): React.JSX.Element => {
     >
       <div className={classes.root}>
         <Stack paddingBottom={2}>
-          <Typography variant="body2" paddingX={2} paddingTop={2}>
+          <Typography variant="body2" className={classes.hint}>
             {t("selectPanelToAddToLayout")}{" "}
           </Typography>
           <PanelCatalog mode="grid" onPanelSelect={onPanelSelect} />

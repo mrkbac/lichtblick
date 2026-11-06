@@ -205,7 +205,12 @@ describe("useHandleFiles", () => {
 
   it("selects the source with handles when they are given, so the file lands in recents", async () => {
     const { handleFiles, files } = setup();
-    const handles = files.map((file) => ({ name: file.name }) as FileSystemFileHandle);
+    const handles = files.map(
+      (file) =>
+        ({
+          name: file.name,
+        }) as FileSystemFileHandle,
+    );
 
     await act(async () => {
       await handleFiles(files, "local", handles);

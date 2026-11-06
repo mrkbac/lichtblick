@@ -203,7 +203,7 @@ export default function Variable(props: {
               }}
             >
               <MenuItem onClick={deleteVariable}>
-                <Typography color="error.main" variant="inherit">
+                <Typography variant="inherit" color="error">
                   Delete variable
                 </Typography>
               </MenuItem>
@@ -260,8 +260,8 @@ export default function Variable(props: {
             slotProps={{
               primary: {
                 component: "div",
-                fontWeight: 600,
                 variant: "body2",
+                style: { fontWeight: 600 },
               },
             }}
           />

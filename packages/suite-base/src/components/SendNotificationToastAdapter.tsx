@@ -54,9 +54,9 @@ export default function SendNotificationToastAdapter(): React.JSX.Element {
                 setNotificationDetails({ message, details, severity });
               }}
               variant="inherit"
-              fontStyle="italic"
               color="inherit"
               underline="hover"
+              style={{ fontStyle: "italic" }}
             >
               (see details)
             </Link>

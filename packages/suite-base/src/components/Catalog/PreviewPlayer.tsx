@@ -155,7 +155,7 @@ export function PreviewPlayer({ recording, loadPreview }: Props): React.JSX.Elem
               setIndex(value);
             }}
           />
-          <Typography variant="caption" color="text.secondary" className={classes.time}>
+          <Typography variant="caption" className={classes.time} color="textSecondary">
             {frame ? formatDuration(fromSec(frame.offsetSec)) : ""}
             {speedUp != undefined && ` · ${t("speedUp", { factor: Math.round(speedUp) })}`}
           </Typography>

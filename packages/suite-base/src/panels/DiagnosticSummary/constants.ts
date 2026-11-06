@@ -34,10 +34,10 @@ export const ALLOWED_DATATYPES: string[] = [
 ];
 
 export const MESSAGE_COLORS: Record<number, string> = {
-  [LEVELS.OK]: "success.main",
-  [LEVELS.ERROR]: "error.main",
-  [LEVELS.WARN]: "warning.main",
-  [LEVELS.STALE]: "text.secondary",
+  [LEVELS.OK]: "success",
+  [LEVELS.ERROR]: "error",
+  [LEVELS.WARN]: "warning",
+  [LEVELS.STALE]: "textSecondary",
 };
 
 export const DEFAULT_CONFIG: DiagnosticSummaryConfig = {

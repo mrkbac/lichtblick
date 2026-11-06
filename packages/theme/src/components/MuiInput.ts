@@ -34,8 +34,10 @@ export const MuiInput: OverrideComponentReturn<"MuiInput"> = {
     input: ({ theme }) => ({
       padding: theme.spacing(1, 1.125),
     }),
-    inputSizeSmall: ({ theme }) => ({
-      padding: theme.spacing(0.75, 1),
+    sizeSmall: ({ theme }) => ({
+      [`& > .${inputClasses.input}`]: {
+        padding: theme.spacing(0.75, 1),
+      },
     }),
   },
 };

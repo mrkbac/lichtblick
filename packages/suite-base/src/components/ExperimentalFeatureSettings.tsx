@@ -84,8 +84,8 @@ function ExperimentalFeatureItem(props: { feature: Feature }) {
       }
       label={
         <Stack gap={0.25} paddingLeft={0.5}>
-          <Typography fontWeight={600}>{feature.name}</Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography style={{ fontWeight: 600 }}>{feature.name}</Typography>
+          <Typography variant="body2" color="textSecondary">
             {feature.description}
           </Typography>
         </Stack>
@@ -100,7 +100,7 @@ export const ExperimentalFeatureSettings = (): React.ReactElement => {
   return (
     <Stack gap={2}>
       {features.length === 0 && (
-        <Typography fontStyle="italic">{t("noExperimentalFeatures")}</Typography>
+        <Typography style={{ fontStyle: "italic" }}>{t("noExperimentalFeatures")}</Typography>
       )}
       {features.map((feature) => (
         <ExperimentalFeatureItem key={feature.key} feature={feature} />

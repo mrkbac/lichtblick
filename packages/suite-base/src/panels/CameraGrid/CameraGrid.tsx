@@ -279,10 +279,10 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
       <div className={classes.root}>
         <div className={classes.empty}>
           {config.tiles.length > 0 ? (
-            <Typography color="text.secondary">{t("allCamerasHidden")}</Typography>
+            <Typography color="textSecondary">{t("allCamerasHidden")}</Typography>
           ) : imageTopics.length > 0 ? (
             <>
-              <Typography color="text.secondary">{t("emptyIntro")}</Typography>
+              <Typography color="textSecondary">{t("emptyIntro")}</Typography>
               <Button
                 variant="contained"
                 onClick={() => {
@@ -293,7 +293,7 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
               </Button>
             </>
           ) : (
-            <Typography color="text.secondary">{t("waitingForImageTopics")}</Typography>
+            <Typography color="textSecondary">{t("waitingForImageTopics")}</Typography>
           )}
         </div>
       </div>

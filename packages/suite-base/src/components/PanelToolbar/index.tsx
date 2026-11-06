@@ -95,7 +95,7 @@ export default React.memo<PanelToolbarProps>(function PanelToolbar({
     >
       {children ??
         (title && (
-          <Typography noWrap variant="body2" color="text.secondary" flex="auto">
+          <Typography noWrap variant="body2" color="textSecondary" style={{ flex: "auto" }}>
             {title}
           </Typography>
         ))}

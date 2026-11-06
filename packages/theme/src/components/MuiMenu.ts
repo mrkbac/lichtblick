@@ -14,8 +14,7 @@ import { OverrideComponentReturn } from "../types";
 
 export const MuiMenu: OverrideComponentReturn<"MuiMenu"> = {
   defaultProps: {
-    // oxlint-disable-next-line typescript/no-deprecated -- MUI deprecated theme default prop; migrate to slots/slotProps separately
-    TransitionComponent: Fade,
+    slots: { transition: Fade },
   },
   styleOverrides: {
     paper: ({ theme }) => ({

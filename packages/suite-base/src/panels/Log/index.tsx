@@ -340,7 +340,7 @@ const LogPanel = React.memo(({ config, saveConfig }: Props) => {
             saveConfig({ regex: !regex });
           }}
         >
-          <Typography variant="caption" fontFamily="monospace" lineHeight={1}>
+          <Typography variant="caption" style={{ fontFamily: "monospace", lineHeight: 1 }}>
             .*
           </Typography>
         </ToggleButton>
@@ -374,10 +374,10 @@ const LogPanel = React.memo(({ config, saveConfig }: Props) => {
         </Tooltip>
         <Typography
           variant="caption"
-          color="text.secondary"
           noWrap
-          flex="none"
           data-testid="log-count"
+          color="textSecondary"
+          style={{ flex: "none" }}
         >
           {filteredItems.length === items.length
             ? items.length.toLocaleString()

@@ -478,7 +478,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     return (
       <SidebarContent disablePadding={selectedLayoutId != undefined} title={tAddPanel("addPanel")}>
         {selectedLayoutId == undefined ? (
-          <Typography color="text.secondary">
+          <Typography color="textSecondary">
             <Trans
               t={tAddPanel}
               i18nKey="noLayoutSelected"

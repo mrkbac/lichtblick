@@ -51,7 +51,12 @@ export const BasicCard: StoryObj = {
       />
       <Divider />
       <CardContent>
-        <Typography color="text.secondary" gutterBottom>
+        <Typography
+          gutterBottom
+          sx={{
+            color: "text.secondary",
+          }}
+        >
           adjective
         </Typography>
         <Typography variant="body2">

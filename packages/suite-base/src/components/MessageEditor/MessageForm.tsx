@@ -4,7 +4,7 @@
 import { MessageDefinitionField } from "@foxglove/message-definition";
 import AddIcon from "@mui/icons-material/Add";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import DeleteIcon from "@mui/icons-material/DeleteOutline";
+import DeleteIcon from "@mui/icons-material/DeleteOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { Autocomplete, Checkbox, IconButton, TextField, Tooltip, Typography } from "@mui/material";
 import {
@@ -179,7 +179,7 @@ export function MessageForm({
 
   if (!definition || definition.fields.length === 0) {
     return (
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" color="textSecondary">
         {definition ? "This message has no fields." : `Unknown schema ${schemaName}`}
       </Typography>
     );
@@ -495,7 +495,7 @@ function EnumInput(props: {
       renderOption={({ key, ...optionProps }, option) => (
         <li key={key} {...optionProps}>
           {nameByValue.get(option)}&nbsp;
-          <Typography variant="caption" color="text.secondary">
+          <Typography variant="caption" color="textSecondary">
             = {option}
           </Typography>
         </li>
@@ -503,7 +503,10 @@ function EnumInput(props: {
       renderInput={(params) => (
         <TextField
           {...params}
-          slotProps={{ htmlInput: { ...params.inputProps, "aria-label": name } }}
+          slotProps={{
+            ...params.slotProps,
+            htmlInput: { ...params.slotProps.htmlInput, "aria-label": name },
+          }}
         />
       )}
     />

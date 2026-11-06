@@ -167,7 +167,7 @@ export function OpenUrlInput({
   );
 
   const hint = connects ? (
-    <Typography variant="caption" color={source ? "text.secondary" : "error"} noWrap>
+    <Typography variant="caption" color={source ? "textSecondary" : "error"} noWrap>
       {source == undefined
         ? t("unrecognizedUrl")
         : hasUrlField(source)
@@ -175,7 +175,7 @@ export function OpenUrlInput({
           : t("enterOpens", { name: source.displayName })}
     </Typography>
   ) : topMatch != undefined && trimmed !== "" ? (
-    <Typography variant="caption" color="text.secondary" noWrap className={classes.topMatch}>
+    <Typography variant="caption" noWrap className={classes.topMatch} color="textSecondary">
       {t("enterOpens", { name: topMatch })}
     </Typography>
   ) : undefined;

@@ -9,9 +9,8 @@ import { OverrideComponentReturn } from "../types";
 
 export const MuiDialog: OverrideComponentReturn<"MuiDialog"> = {
   defaultProps: {
-    // oxlint-disable-next-line typescript/no-deprecated -- MUI deprecated theme default prop; migrate to slots/slotProps separately
-    PaperProps: {
-      elevation: 4,
+    slotProps: {
+      paper: { elevation: 4 },
     },
   },
   styleOverrides: {

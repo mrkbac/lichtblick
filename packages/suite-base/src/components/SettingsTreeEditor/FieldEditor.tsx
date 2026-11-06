@@ -388,9 +388,9 @@ function FieldLabel({
         <Typography
           title={field.label}
           variant="subtitle2"
-          color="text.secondary"
           noWrap
-          flex="auto"
+          color="textSecondary"
+          style={{ flex: "auto" }}
         >
           {field.label}
         </Typography>
@@ -399,10 +399,9 @@ function FieldLabel({
             key={label}
             title={field.label}
             variant="subtitle2"
-            color="text.secondary"
             noWrap
-            style={{ gridColumn: index === 0 ? "span 1" : "2 / span 1" }}
-            flex="auto"
+            color="textSecondary"
+            style={{ gridColumn: index === 0 ? "span 1" : "2 / span 1", flex: "auto" }}
           >
             {label}
           </Typography>
@@ -416,9 +415,9 @@ function FieldLabel({
         <Typography
           title={field.label}
           variant="subtitle2"
-          color="text.secondary"
           noWrap
-          flex="auto"
+          color="textSecondary"
+          style={{ flex: "auto" }}
         >
           {field.label}
         </Typography>
@@ -427,10 +426,9 @@ function FieldLabel({
             key={label}
             title={field.label}
             variant="subtitle2"
-            color="text.secondary"
             noWrap
-            style={{ gridColumn: index === 0 ? "span 1" : "2 / span 1" }}
-            flex="auto"
+            color="textSecondary"
+            style={{ gridColumn: index === 0 ? "span 1" : "2 / span 1", flex: "auto" }}
           >
             {label}
           </Typography>

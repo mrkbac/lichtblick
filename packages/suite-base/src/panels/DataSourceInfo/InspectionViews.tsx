@@ -124,7 +124,7 @@ export function SchemaFields({
   const fields = datatypes.get(activeSchema)?.definitions;
   if (!fields) {
     return (
-      <Typography variant="body2" color="text.secondary">
+      <Typography variant="body2" color="textSecondary">
         No decoded field definitions available.
       </Typography>
     );
@@ -132,7 +132,7 @@ export function SchemaFields({
   return (
     <>
       <div className={classes.chartHeading}>
-        <Typography variant="caption" color="text.secondary">
+        <Typography variant="caption" color="textSecondary">
           {activeSchema}
         </Typography>
         {activeSchema !== schemaName && (
@@ -176,7 +176,7 @@ export function SchemaFields({
                   )}
                 </td>
                 <td>
-                  <Typography variant="caption" color="text.secondary">
+                  <Typography variant="caption" color="textSecondary">
                     {field.isConstant === true
                       ? `Constant ${field.valueText ?? String(field.value ?? "")}`
                       : field.isArray === true
@@ -189,7 +189,7 @@ export function SchemaFields({
           </tbody>
         </table>
         {fields.length === 0 && (
-          <Typography padding={2} color="text.secondary" variant="body2">
+          <Typography variant="body2" color="textSecondary" className={classes.emptyNote}>
             This schema has no fields.
           </Typography>
         )}
@@ -206,7 +206,7 @@ export function ContainerDetails({
   const { classes } = useStyles();
   if (files.length === 0) {
     return (
-      <Typography paddingY={2} color="text.secondary">
+      <Typography color="textSecondary" className={classes.emptyNoteY}>
         File details are available for indexed MCAP files.
       </Typography>
     );
@@ -241,7 +241,7 @@ export function ContainerDetails({
                     : "—",
               }}
             />
-            <Typography variant="subtitle2" marginTop={2} marginBottom={1}>
+            <Typography variant="subtitle2" className={classes.subheading}>
               Compression
             </Typography>
             <div className={classes.tableWrap}>
@@ -274,7 +274,7 @@ export function ContainerDetails({
             </div>
             {file.attachments.length > 0 && (
               <>
-                <Typography variant="subtitle2" marginTop={2} marginBottom={1}>
+                <Typography variant="subtitle2" className={classes.subheading}>
                   Attachments
                 </Typography>
                 <div className={classes.tableWrap}>

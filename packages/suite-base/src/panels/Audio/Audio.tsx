@@ -54,6 +54,12 @@ const useStyles = makeStyles()((theme) => ({
     // Playing resumes the audio clock within a few ms; only show this when the browser blocks it
     animation: `${fadeIn} 0.15s ease 0.4s forwards`,
   },
+  status: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+    minWidth: 0,
+  },
 }));
 
 const selectSetSubscriptions = (ctx: MessagePipelineContext) => ctx.setSubscriptions;
@@ -211,7 +217,7 @@ export function Audio({ config, saveConfig }: Props): React.JSX.Element {
             alignItems="center"
             justifyContent="center"
           >
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="textSecondary">
               {t("waiting", { topic })}
             </Typography>
           </Stack>
@@ -221,7 +227,7 @@ export function Audio({ config, saveConfig }: Props): React.JSX.Element {
             <Button variant="contained" onClick={() => player?.resume()}>
               {t("enableAudio")}
             </Button>
-            <Typography variant="caption" color="text.secondary">
+            <Typography variant="caption" color="textSecondary">
               {t("enableAudioHint")}
             </Typography>
           </div>
@@ -260,13 +266,10 @@ export function Audio({ config, saveConfig }: Props): React.JSX.Element {
         />
         <Typography
           variant="caption"
-          color={error == undefined ? "text.secondary" : "error"}
+          color={error == undefined ? "textSecondary" : "error"}
           noWrap
           title={error ?? info}
-          display="flex"
-          alignItems="center"
-          gap={0.5}
-          minWidth={0}
+          className={classes.status}
         >
           {error != undefined && <ErrorCircle20Regular style={{ flexShrink: 0 }} />}
           {error ?? [schemaName, info].filter(Boolean).join(" · ")}

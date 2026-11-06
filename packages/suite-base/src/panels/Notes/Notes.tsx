@@ -199,13 +199,13 @@ export function Notes({ config, saveConfig }: Props): React.JSX.Element {
     body = (
       <div className={classes.content} onDoubleClick={startEditing}>
         <Stack fullHeight alignItems="center" justifyContent="center" gap={1}>
-          <Typography variant="body2" color="text.secondary" align="center">
+          <Typography variant="body2" align="center" color="textSecondary">
             {t("emptyTitle")}
           </Typography>
           <Button variant="contained" size="small" onClick={startEditing}>
             {t("startWriting")}
           </Button>
-          <Typography variant="caption" color="text.disabled">
+          <Typography variant="caption" color="textDisabled">
             {t("emptyHint")}
           </Typography>
         </Stack>

@@ -11,7 +11,12 @@ import {
 import { formatOffset, topicTargets } from "./useAppCommands";
 
 const cmd = (id: string, title: string, extra: Partial<Command> = {}): Command =>
-  ({ id, title, run: vi.fn(), ...extra }) as Command;
+  ({
+    id,
+    title,
+    run: vi.fn(),
+    ...extra,
+  }) as Command;
 
 describe("rankCommands", () => {
   const commands = [

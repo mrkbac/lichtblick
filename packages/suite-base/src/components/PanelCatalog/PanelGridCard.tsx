@@ -65,7 +65,7 @@ export function PanelGridCard(props: Props): React.JSX.Element {
                 <TextHighlight targetStr={targetString} searchText={searchQuery} />
               </span>
             </Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography variant="body2" color="textSecondary">
               <TextHighlight targetStr={panel.description ?? ""} searchText={searchQuery} />
             </Typography>
           </CardContent>

@@ -1,5 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
+import { tabsClasses } from "@mui/material";
 import { makeStyles } from "tss-react/mui";
 
 export const useStyles = makeStyles()((theme) => ({
@@ -11,7 +12,7 @@ export const useStyles = makeStyles()((theme) => ({
   tabs: {
     flexGrow: 1,
 
-    ".MuiTabs-flexContainerVertical": {
+    [`&.${tabsClasses.vertical} .${tabsClasses.list}`]: {
       height: "100%",
     },
   },

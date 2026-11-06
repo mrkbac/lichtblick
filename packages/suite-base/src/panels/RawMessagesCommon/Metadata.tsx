@@ -58,7 +58,7 @@ export default function Metadata({
   return (
     <Stack alignItems="flex-start" paddingInline={0.25} paddingBlockStart={0.75}>
       <Stack direction="row" alignItems="center" gap={0.5}>
-        <Typography variant="caption" lineHeight={1.2} color="text.secondary">
+        <Typography variant="caption" color="textSecondary" style={{ lineHeight: 1.2 }}>
           {(() => {
             if (diffMessage) {
               return "base";
@@ -90,8 +90,8 @@ export default function Metadata({
           <Stack direction="row" alignItems="center" gap={0.5}>
             <Typography
               variant="caption"
-              lineHeight={1.2}
-              color="text.secondary"
+              color="textSecondary"
+              style={{ lineHeight: 1.2 }}
             >{`diff @ ${formatTimeRaw(diffMessage.receiveTime)} sec `}</Typography>
             <CopyButton
               size="small"

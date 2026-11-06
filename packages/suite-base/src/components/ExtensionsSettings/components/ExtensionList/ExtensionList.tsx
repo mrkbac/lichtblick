@@ -76,7 +76,8 @@ const COLUMN_WEIGHTS: Record<string, number> = {
   actions: 20,
 };
 
-const useStyles = makeStyles()({
+const useStyles = makeStyles()((theme) => ({
+  selectedCount: { alignSelf: "center", paddingBlock: theme.spacing(1) },
   table: {
     tableLayout: "fixed",
     "& td, & th": {
@@ -88,7 +89,7 @@ const useStyles = makeStyles()({
   row: {
     cursor: "pointer",
   },
-});
+}));
 
 export default function ExtensionList({
   namespace,
@@ -225,12 +226,11 @@ export default function ExtensionList({
         <Stack direction="row" gap={1} paddingX={2}>
           <Typography
             variant="body2"
-            color="text.secondary"
-            alignSelf="center"
-            paddingY={1}
             style={{
               visibility: selectedInstalled.length > 0 ? "visible" : "hidden",
             }}
+            color="textSecondary"
+            className={classes.selectedCount}
           >
             {selectedExtensions.length} selected
           </Typography>
@@ -358,7 +358,7 @@ export default function ExtensionList({
   return (
     <Stack key={namespace} gap={1} paddingBottom={2}>
       <Stack paddingY={0} paddingX={2}>
-        <Typography component="div" variant="overline" color="text.secondary">
+        <Typography component="div" variant="overline" color="textSecondary">
           {displayNameForNamespace(namespace)}
         </Typography>
       </Stack>

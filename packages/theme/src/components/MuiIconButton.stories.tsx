@@ -35,7 +35,14 @@ export default {
 
 export const Default: StoryObj = {
   render: () => (
-    <Stack direction="row" justifyContent="center" alignItems="center" padding={2}>
+    <Stack
+      direction="row"
+      sx={{
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 2,
+      }}
+    >
       <MuiIconButton aria-label="delete">
         <Delete20Regular />
       </MuiIconButton>
@@ -54,7 +61,14 @@ export const Default: StoryObj = {
 
 export const Sizes: StoryObj = {
   render: () => (
-    <Stack direction="row" justifyContent="center" alignItems="center" padding={2}>
+    <Stack
+      direction="row"
+      sx={{
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 2,
+      }}
+    >
       <MuiIconButton aria-label="delete" size="small">
         <Delete12Regular />
       </MuiIconButton>
@@ -73,7 +87,14 @@ export const Sizes: StoryObj = {
 
 export const Color: StoryObj = {
   render: () => (
-    <Stack direction="row" justifyContent="center" alignItems="center" padding={2}>
+    <Stack
+      direction="row"
+      sx={{
+        justifyContent: "center",
+        alignItems: "center",
+        padding: 2,
+      }}
+    >
       {colors.map((color) => (
         <MuiIconButton {...{ color }} key={color}>
           <Fingerprint20Regular />

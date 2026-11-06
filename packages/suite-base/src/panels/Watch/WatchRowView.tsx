@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutline";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
 import LibraryAddOutlinedIcon from "@mui/icons-material/LibraryAddOutlined";

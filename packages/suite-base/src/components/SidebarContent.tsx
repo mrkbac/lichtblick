@@ -50,7 +50,7 @@ export function SidebarContent({
               ))}
             </div>
           )}
-          <Typography component="h2" variant="h4" fontWeight={800} flex="auto">
+          <Typography component="h2" variant="h4" style={{ fontWeight: 800, flex: "auto" }}>
             {title}
           </Typography>
           {trailingItems != undefined && (

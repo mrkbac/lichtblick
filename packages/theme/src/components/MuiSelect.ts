@@ -18,9 +18,9 @@ export const MuiSelect: OverrideComponentReturn<"MuiSelect"> = {
       [`&.${selectClasses.select}`]: {
         paddingInlineEnd: theme.spacing(4),
       },
-    }),
-    iconStandard: ({ theme }) => ({
-      right: theme.spacing(0.75),
+      [`& ~ .${selectClasses.icon}`]: {
+        right: theme.spacing(0.75),
+      },
     }),
   },
 };

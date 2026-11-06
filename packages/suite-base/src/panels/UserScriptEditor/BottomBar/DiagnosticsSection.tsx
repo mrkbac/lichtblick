@@ -53,7 +53,7 @@ const DiagnosticsSection = ({ diagnostics }: Props): ReactElement => {
   if (diagnostics.length === 0) {
     return (
       <Stack gap={0.5} padding={2}>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" color="textSecondary">
           No alerts to display.
         </Typography>
       </Stack>
@@ -84,7 +84,7 @@ const DiagnosticsSection = ({ diagnostics }: Props): ReactElement => {
               secondary={`${source} ${errorLoc}`}
               slotProps={{
                 secondary: {
-                  color: "text.secondary",
+                  color: "textSecondary",
                 },
               }}
             />

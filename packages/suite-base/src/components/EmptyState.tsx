@@ -41,7 +41,7 @@ export default function EmptyState({
       fullHeight
       paddingX={1}
     >
-      <Typography variant="body2" color="text.secondary" lineHeight={1.4} align="center">
+      <Typography variant="body2" align="center" color="textSecondary" style={{ lineHeight: 1.4 }}>
         {children}
       </Typography>
     </Stack>

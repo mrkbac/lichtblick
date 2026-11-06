@@ -115,10 +115,10 @@ function DiagnosticNodeRow(props: Readonly<NodeRowProps>) {
         {levelSince && (
           <Typography
             variant="caption"
-            color="text.secondary"
             className={classes.levelSince}
             title={levelSince.title}
             data-testid="diagnostic-row-level-since"
+            color="textSecondary"
           >
             {levelSince.text}
           </Typography>

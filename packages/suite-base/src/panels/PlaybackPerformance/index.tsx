@@ -51,7 +51,7 @@ function PlaybackPerformanceItem(props: PlaybackPerformanceItemProps): ReactElem
           {(_.last(props.points) ?? { value: 0 }).value.toFixed(props.decimalPlaces)}
           {props.label}
         </Typography>
-        <Typography variant="body2" color="text.secondary">
+        <Typography variant="body2" color="textSecondary">
           {(_.sumBy(props.points, "value") / props.points.length).toFixed(props.decimalPlaces)} avg
         </Typography>
       </Stack>

@@ -27,7 +27,10 @@ describe("usePanning", () => {
   function setup({ withCanvas = true, withCoordinator = true } = {}) {
     const canvasDiv = withCanvas ? document.createElement("div") : null;
     if (canvasDiv) {
-      canvasDiv.getBoundingClientRect = () => ({ toJSON: () => boundingClientRect }) as DOMRect;
+      canvasDiv.getBoundingClientRect = () =>
+        ({
+          toJSON: () => boundingClientRect,
+        }) as DOMRect;
     }
     const addInteractionEvent = vi.fn();
     const coordinator = withCoordinator

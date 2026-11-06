@@ -180,8 +180,8 @@ export const ParameterRow = memo(function ParameterRowImpl(props: ParameterRowPr
           <Typography
             variant="body2"
             className={classes.readonly}
-            color="text.secondary"
             title={formatValue(shown)}
+            color="textSecondary"
           >
             {formatValue(shown)}
           </Typography>
