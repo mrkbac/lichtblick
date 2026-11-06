@@ -20,6 +20,7 @@
     "react-refresh": "0.18.0",
     "storybook-react-rsbuild": "3.6.1",
     "tss-react": "4.9.21",
+    "typescript": "6.0.3",
     "workbox-build": "7.4.1"
   }
 }

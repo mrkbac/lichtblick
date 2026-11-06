@@ -1,7 +1,8 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   // Vitest reads `@jest-environment jsdom` docblocks; knip maps them to this package
-  "ignoreDependencies": ["jest-environment-jsdom"],
+  // tslib: helpers for `importHelpers` in @lichtblick/tsconfig
+  "ignoreDependencies": ["jest-environment-jsdom", "tslib"],
   // Exports only used in their own file are fine
   "ignoreExportsUsedInFile": true,
   "ignoreIssues": {
@@ -38,7 +39,8 @@
         "rspack.desktop.config.ts",
         "desktop/*/index.{ts,tsx}",
         "**/*.test.{ts,tsx}",
-        "e2e/**/*.spec.ts"
+        "e2e/**/*.spec.ts",
+        "e2e/playwright.config.ts"
       ],
       // A second @playwright/test copy can't be loaded in one process; the spec glob covers it
       "playwright": false,
@@ -60,7 +62,6 @@
         // Injected by rspack.ts (ProvidePlugin and resolve.fallback)
         "src/util/process.ts",
         "src/util/shims/url.ts",
-        "loaders/*.cjs",
         // Monaco's TypeScript modules, aliased in rspack.ts
         "src/panels/UserScriptEditor/monacoTypescript{,Libs}.ts"
       ],
@@ -68,8 +69,8 @@
       "ignore": ["src/services/migrateLayout/{index,migratePanelsState}.ts"],
       // Named as strings in rspack.ts (loaders and resolve.fallback polyfills)
       "ignoreDependencies": [
-        // Browser polyfill for `import assert from "assert"`; knip sees the Node built-in instead
-        "assert",
+        // ProvidePlugin
+        "buffer",
         "@svgr/webpack",
         "css-loader",
         "nearley-loader",
@@ -90,9 +91,6 @@
     "packages/message-path": {
       // Ambient `*.ne` module declaration
       "entry": ["src/typings/extensions.ts"]
-    },
-    "packages/hooks": {
-      "entry": ["test/setup.ts"]
     }
   }
 }

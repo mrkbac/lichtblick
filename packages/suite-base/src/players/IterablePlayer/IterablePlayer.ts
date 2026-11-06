@@ -16,7 +16,6 @@ import {
   toRFC3339String,
   toString,
 } from "@foxglove/rostime";
-import assert from "assert";
 import * as _ from "lodash-es";
 
 import { debouncePromise } from "@lichtblick/den/async";
@@ -1269,7 +1268,9 @@ export class IterablePlayer implements Player {
   }
 
   async #stateIdle() {
-    assert(this.#abort == undefined, "Invariant: some other abort controller exists");
+    if (this.#abort != undefined) {
+      throw new Error("Invariant: some other abort controller exists");
+    }
 
     this.#isPlaying = false;
     this.#presence = PlayerPresence.PRESENT;

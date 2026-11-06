@@ -23,6 +23,7 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { parseMessagePath } from "@lichtblick/message-path";
+import { OnClickArg as OnChartClickArgs } from "@lichtblick/suite-base/components/Chart";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import useMessagesByPath from "@lichtblick/suite-base/components/MessagePathSyntax/useMessagesByPath";
 import {
@@ -56,7 +57,6 @@ import { computeDeltaDisplay } from "@lichtblick/suite-base/panels/shared/deltaM
 import { createMeasureModeEscapeHandler } from "@lichtblick/suite-base/panels/shared/measureModeEscapeHandler";
 import useAppendOnlyKey from "@lichtblick/suite-base/panels/shared/useAppendOnlyKey";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
-import { OnClickArg as OnChartClickArgs } from "@lichtblick/suite-base/src/components/Chart";
 
 import { StateTransitionConfig, StateTransitionPanelProps } from "./types";
 

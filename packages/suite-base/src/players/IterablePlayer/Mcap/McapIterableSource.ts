@@ -249,8 +249,13 @@ export class McapIterableSource implements ISerializedIterableSource {
         this.#source.type === "file"
           ? this.#source.file.size
           : Number(await opened.readable?.size());
+      const { start, end } = init;
+      const name = sourceName(this.#source);
       init.recordingFiles = init.recordingFiles.map((file) => ({
         ...file,
+        name,
+        start,
+        end,
         sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : undefined,
       }));
     }
@@ -321,5 +326,21 @@ export class McapIterableSource implements ISerializedIterableSource {
     // (see #persistentReadable) and is only closed when the whole source is torn down.
     this.#persistentReadable?.close();
     this.#persistentReadable = undefined;
+  }
+}
+
+function sourceName(source: McapSource): string | undefined {
+  if (source.type === "file") {
+    return source.file instanceof File ? source.file.name : undefined;
+  }
+  const lastSegment = source.url.split(/[?#]/, 1)[0]?.split("/").pop();
+  if (!lastSegment) {
+    return undefined;
+  }
+  try {
+    return decodeURIComponent(lastSegment);
+  } catch {
+    // Malformed percent-encoding: show the segment as-is.
+    return lastSegment;
   }
 }
