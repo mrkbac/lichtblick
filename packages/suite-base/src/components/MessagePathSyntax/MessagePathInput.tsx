@@ -261,9 +261,10 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
         const target = event.target as HTMLInputElement;
         const newCursorPosition = target.selectionEnd ?? 0;
         value = `${value.slice(0, newCursorPosition)}}${value.slice(newCursorPosition)}`;
-        setImmediate(() => {
+        // After React commits the new value, which would otherwise reset the cursor
+        setTimeout(() => {
           target.setSelectionRange(newCursorPosition, newCursorPosition);
-        });
+        }, 0);
       }
 
       onChangeProp(value, propsIndex);
@@ -307,9 +308,10 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
         value.includes("(")
       ) {
         const newCursorPosition = autocompleteRange.start + value.length;
-        setImmediate(() => {
+        // After React commits the new value, which would otherwise reset the cursor
+        setTimeout(() => {
           autocomplete.setSelectionRange(newCursorPosition, newCursorPosition);
-        });
+        }, 0);
       } else {
         autocomplete.blur();
       }

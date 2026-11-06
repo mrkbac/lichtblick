@@ -59,8 +59,7 @@
       "entry": [
         "src/test/{globals,setup,setupTestFramework}.ts",
         "src/test/mocks/{MockSvg.tsx,fileMock.ts}",
-        // Injected by rspack.ts (ProvidePlugin and resolve.fallback)
-        "src/util/process.ts",
+        // Injected by rspack.ts (resolve.fallback)
         "src/util/shims/url.ts",
         // Monaco's TypeScript modules, aliased in rspack.ts
         "src/panels/UserScriptEditor/monacoTypescript{,Libs}.ts"

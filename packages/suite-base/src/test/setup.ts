@@ -14,8 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import setImmediate from "@lichtblick/suite-base/util/setImmediate";
-
 process.env.WASM_LZ4_ENVIRONMENT = "NODE";
 
 function noOp() {
@@ -26,10 +24,6 @@ if (typeof window !== "undefined") {
   if (typeof window.URL.createObjectURL === "undefined") {
     Object.defineProperty(window.URL, "createObjectURL", { value: noOp });
   }
-
-  // jsdom removes Node's setImmediate from global, but we have tests & app code that use it
-  // https://github.com/facebook/jest/pull/11222
-  (window as { setImmediate?: typeof setImmediate }).setImmediate ??= setImmediate;
 }
 
 // jsdom does not include ResizeObserver.
