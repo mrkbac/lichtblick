@@ -21,6 +21,8 @@
     ".": {
       "entry": [
         "ci/*.ts",
+        // Loaded by Chrome from chrome-extension/manifest.json
+        "chrome-extension/*.js",
         "lint-test.ts",
         "vitest.config.ts",
         "e2e/**/*.spec.ts",
