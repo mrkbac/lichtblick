@@ -186,9 +186,12 @@ describe("useSubscriptions", () => {
       ]);
     });
 
-    it("should subscribe to a series' custom timestamp field on time plots", () => {
+    it("should subscribe to a series' custom timestamp field on its own topic only", () => {
       (isReferenceLinePlotPathType as Mock).mockImplementation(() => false);
-      (parseMessagePath as Mock).mockImplementation((path: string) => ({ path }));
+      (parseMessagePath as Mock).mockImplementation((path: string) => ({
+        path,
+        topicName: path.split(".")[0],
+      }));
       (fillInGlobalVariablesInPath as Mock).mockImplementation((parsed: unknown) => parsed);
       (pathToSubscribePayload as Mock).mockImplementation((parsed: { path: string }) => ({
         topic: parsed.path,
@@ -202,6 +205,11 @@ describe("useSubscriptions", () => {
               timestampMethod: "customField",
               timestampPath: " /odom.stamp ",
             }),
+            PlotBuilder.path({
+              value: "/imu.a",
+              timestampMethod: "customField",
+              timestampPath: "/other.stamp",
+            }),
           ],
           xAxisVal: "timestamp",
         },
@@ -209,6 +217,7 @@ describe("useSubscriptions", () => {
 
       expect(setSubscriptions).toHaveBeenCalledWith(subscriberId, [
         { topic: "/odom.v" },
+        { topic: "/imu.a" },
         { topic: "/odom.stamp" },
       ]);
     });

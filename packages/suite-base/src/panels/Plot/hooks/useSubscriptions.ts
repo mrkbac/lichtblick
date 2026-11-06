@@ -81,8 +81,10 @@ const useSubscriptions = (config: PlotConfig, subscriberId: string): void => {
         !isReferenceLinePlotPathType(item)
           ? parseMessagePath(timestampPath)
           : undefined;
+      // A field on another topic is never read (settings show an error), so don't load that topic
       const timeSub =
         parsedTimePath &&
+        parsedTimePath.topicName === parseMessagePath(item.value)?.topicName &&
         pathToSubscribePayload(
           fillInGlobalVariablesInPath(parsedTimePath, globalVariables),
           preloadType,
