@@ -88,12 +88,7 @@ export default class VirtualLRUBuffer {
     while (position < range.end) {
       const { blockIndex, positionInBlock, remainingBytesInBlock } =
         this.#calculatePosition(position);
-      copy(
-        source,
-        this.#getBlock(blockIndex),
-        positionInBlock,
-        position - targetStart,
-      );
+      copy(source, this.#getBlock(blockIndex), positionInBlock, position - targetStart);
       position += remainingBytesInBlock;
     }
 
