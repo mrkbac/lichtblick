@@ -1169,6 +1169,52 @@ describe("renderState", () => {
     });
   });
 
+  it("should rebuild allFrames as blocks load and after the topic config changes", () => {
+    // GIVEN a converter that reads the topic config, and a block cache that grows
+    const buildRenderState = initRenderStateBuilder();
+    const block = (sec: number) => ({
+      sizeInBytes: 0,
+      messagesByTopic: { test: [makeBlock("test", { sec, nsec: 0 })] },
+    });
+    const block0 = block(0);
+    const input = (blocks: unknown[], config: { topics: Record<string, unknown> }) =>
+      ({
+        ...makeInitialState(),
+        watchedFields: new Set(["allFrames"]),
+        currentFrame: undefined,
+        subscriptions: [{ topic: "test", convertTo: "otherSchema", preload: true }],
+        messageConverters: [
+          {
+            fromSchemaName: "schema",
+            toSchemaName: "otherSchema",
+            converter: (_msg: unknown, event: { topicConfig?: unknown }) => event.topicConfig,
+          },
+        ],
+        playerState: {
+          ...makeInitialState().playerState!,
+          progress: { messageCache: { startTime: { sec: 0, nsec: 0 }, blocks } },
+        },
+        config,
+      }) as BuilderRenderStateInput;
+    const configA = { topics: { test: "a" } };
+
+    // WHEN blocks load one after another
+    buildRenderState(input([block0, undefined], configA));
+    const state = buildRenderState(input([block0, block(1)], configA));
+
+    // THEN allFrames holds every block in order
+    expect(state?.allFrames?.map((m) => [m.receiveTime.sec, m.message])).toEqual([
+      [0, "a"],
+      [1, "a"],
+    ]);
+
+    // WHEN the topic config changes and the next block arrives
+    const next = buildRenderState(input([block0, block(1), block(2)], { topics: { test: "b" } }));
+
+    // THEN already loaded blocks are converted again with the new config
+    expect(next?.allFrames?.map((m) => m.message)).toEqual(["b", "b", "b"]);
+  });
+
   it("should correctly avoid rendering when current frame stops changing", () => {
     const buildRenderState = initRenderStateBuilder();
 
