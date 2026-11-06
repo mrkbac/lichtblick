@@ -41,9 +41,13 @@ import { ParameterValue } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
-import { LiveHistoryBuffer } from "@lichtblick/suite-base/players/liveHistory/LiveHistoryBuffer";
 import {
-  LIVE_HISTORY_MAX_BYTES,
+  HeapUsage,
+  heapLimitBytes,
+  LiveHistoryBuffer,
+} from "@lichtblick/suite-base/players/liveHistory/LiveHistoryBuffer";
+import {
+  formatLiveHistoryMemory,
   liveHistorySettings,
 } from "@lichtblick/suite-base/players/liveHistory/liveHistorySettings";
 import { estimateObjectSize } from "@lichtblick/suite-base/players/messageMemoryEstimation";
@@ -109,7 +113,15 @@ const HISTORY_TICK_MS = 16;
 /** A server clock that hasn't ticked for this long, while messages arrive, is reported as stale. */
 const CLOCK_STALE_MS = 3000;
 
+/** How often the browser heap is checked, in ms. */
+const HEAP_CHECK_MS = 5000;
+const MIB = 1024 * 1024;
+
 const secToNs = (sec: number) => BigInt(Math.round(sec * 1e9));
+
+/** Chrome-only (`performance.memory`); undefined elsewhere. */
+const readHeapUsage = (): HeapUsage | undefined =>
+  (performance as { memory?: HeapUsage } | undefined)?.memory;
 
 export default class FoxgloveWebSocketPlayer implements Player {
   readonly #sourceId: string;
@@ -156,8 +168,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
   /** Rolling history of received messages, to pause, seek and play in while connected. */
   #history = new LiveHistoryBuffer({
     windowNs: secToNs(liveHistorySettings.getState().windowSec),
-    maxBytes: LIVE_HISTORY_MAX_BYTES,
+    maxBytes: liveHistorySettings.getState().maxMiB * MIB,
   });
+  /** Limit imposed on the history while the browser heap is nearly full. */
+  #heapLimitBytes?: number;
+  #lastHeapCheckMs = 0;
   #unsubscribeHistorySettings: () => void;
   /** Playback position while reviewing history; undefined while live. */
   #historyCursor?: Time;
@@ -216,6 +231,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     };
     this.#unsubscribeHistorySettings = liveHistorySettings.subscribe(({ windowSec }) => {
       this.#history.setWindow(secToNs(windowSec));
+      this.#applyHistoryMemoryLimit();
       this.#emitState();
     });
     this.#open();
@@ -1010,6 +1026,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     let currentTime = this.#getCurrentTime();
     if (!this.#serverControlsPlayback) {
       const latest = currentTime;
+      this.#checkHeap();
       if (this.#clockTime != undefined) {
         this.#history.trim(latest);
       }
@@ -1437,6 +1454,27 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#emitState();
   };
 
+  /** Give history memory back while the browser heap is nearly full, before the tab crashes. */
+  #checkHeap(): void {
+    const nowMs = Date.now();
+    if (nowMs - this.#lastHeapCheckMs < HEAP_CHECK_MS) {
+      return;
+    }
+    this.#lastHeapCheckMs = nowMs;
+    this.#heapLimitBytes = heapLimitBytes(
+      readHeapUsage(),
+      this.#history.sizeBytes(),
+      this.#heapLimitBytes,
+    );
+    this.#applyHistoryMemoryLimit();
+  }
+
+  #applyHistoryMemoryLimit(): void {
+    this.#history.setMaxBytes(
+      Math.min(liveHistorySettings.getState().maxMiB * MIB, this.#heapLimitBytes ?? Infinity),
+    );
+  }
+
   #clearHistory(): void {
     this.#history.clear();
     this.#stopHistoryTick();
@@ -1483,15 +1521,19 @@ export default class FoxgloveWebSocketPlayer implements Player {
         : undefined,
     );
     const windowSec = Number(this.#history.windowNs()) / 1e9;
+    const limitMiB = Math.round(this.#history.maxBytes() / MIB);
+    const heapLimited = this.#heapLimitBytes != undefined;
     this.#setAlert(
       "liveHistory:memory-cap",
       this.#history.capLimited()
         ? {
             severity: "warn",
-            message: `History shorter than ${windowSec} s: memory limit of ${
-              this.#history.maxBytes() / (1024 * 1024)
-            } MiB reached`,
-            tip: "The oldest messages are dropped early. Subscribe to fewer or smaller topics, or shorten the history.",
+            message: heapLimited
+              ? `History shorter than ${windowSec} s: browser memory nearly full, history limited to ${formatLiveHistoryMemory(limitMiB)}`
+              : `History shorter than ${windowSec} s: memory limit of ${formatLiveHistoryMemory(limitMiB)} reached`,
+            tip: heapLimited
+              ? "The browser tab is close to running out of memory, so the history gives memory back. Close other heavy panels or tabs, or shorten the history."
+              : "The oldest messages are dropped early. Raise the memory limit in Settings, subscribe to fewer or smaller topics, or shorten the history.",
           }
         : undefined,
     );

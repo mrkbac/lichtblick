@@ -25,6 +25,11 @@ export const appSettings = {
   light: "Light",
   messageRate: "Message rate",
   stepSize: "Step size",
+  liveHistory: "Live history",
+  liveHistoryDescription:
+    "Kept while connected to a live source, so you can pause and seek. The memory limit shortens the history when reached; it also shrinks on its own if the browser runs low on memory.",
+  liveHistoryLength: "Length",
+  liveHistoryMemory: "Memory limit",
   memoryUseIndicator: "Memory use indicator",
   memoryUseIndicatorDescription: "Show the app memory use in the sidebar.",
   syncLichtblickInstances: "Sync Lichtblick instances",

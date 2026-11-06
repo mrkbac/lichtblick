@@ -16,7 +16,11 @@ import {
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
-import { liveHistorySettings } from "@lichtblick/suite-base/players/liveHistory/liveHistorySettings";
+import {
+  formatLiveHistoryWindow,
+  LIVE_HISTORY_WINDOW_OPTIONS_SEC,
+  liveHistorySettings,
+} from "@lichtblick/suite-base/players/liveHistory/liveHistorySettings";
 import { Player } from "@lichtblick/suite-base/players/types";
 
 const useStyles = makeStyles()((theme) => ({
@@ -27,11 +31,6 @@ const useStyles = makeStyles()((theme) => ({
     "&.Mui-disabled": { color: theme.palette.error.main },
   },
 }));
-
-const WINDOW_OPTIONS_SEC = [1, 5, 10, 30, 60, 120, 300, 600, 1800, 3600];
-
-export const formatWindow = (sec: number): string =>
-  sec < 60 ? `${sec} s` : sec < 3600 ? `${sec / 60} min` : `${sec / 3600} h`;
 
 /** Live = playing at the newest received data. */
 const selectIsLive = ({ playerState }: MessagePipelineContext) => {
@@ -82,7 +81,7 @@ export function LiveHistoryControls({
       </Button>
       <HoverableIconButton
         size="small"
-        title={`History kept while connected: ${formatWindow(windowSec)}`}
+        title={`History kept while connected: ${formatLiveHistoryWindow(windowSec)}`}
         icon={<History20Regular />}
         onClick={(event) => {
           setAnchorEl(event.currentTarget);
@@ -101,7 +100,7 @@ export function LiveHistoryControls({
         <MenuItem disabled dense>
           <ListItemText inset>Keep history for</ListItemText>
         </MenuItem>
-        {WINDOW_OPTIONS_SEC.map((sec) => (
+        {LIVE_HISTORY_WINDOW_OPTIONS_SEC.map((sec) => (
           <MenuItem
             key={sec}
             dense
@@ -116,7 +115,7 @@ export function LiveHistoryControls({
                 <CheckIcon fontSize="small" />
               </ListItemIcon>
             )}
-            <ListItemText inset={sec !== windowSec}>{formatWindow(sec)}</ListItemText>
+            <ListItemText inset={sec !== windowSec}>{formatLiveHistoryWindow(sec)}</ListItemText>
           </MenuItem>
         ))}
       </Menu>

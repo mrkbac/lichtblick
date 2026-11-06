@@ -75,6 +75,12 @@ export class LiveHistoryBuffer {
     this.#windowNs = windowNs;
   }
 
+  /** Applies right away, so a lower limit frees memory even before the clock moves on. */
+  public setMaxBytes(maxBytes: number): void {
+    this.#maxBytes = maxBytes;
+    this.trim(undefined);
+  }
+
   public windowNs(): bigint {
     return this.#windowNs;
   }
@@ -102,26 +108,32 @@ export class LiveHistoryBuffer {
     this.trim(msg.receiveTime);
   }
 
-  /** Expire messages older than the window ending at `now`, then enforce the memory cap. */
-  public trim(now: Time): void {
-    const nowNs = toNanoSec(now);
-    const cutoffNs = nowNs - this.#windowNs;
-    this.#completeFromNs =
-      this.#completeFromNs == undefined
-        ? nowNs
-        : this.#completeFromNs > cutoffNs
-          ? this.#completeFromNs
-          : cutoffNs;
+  /**
+   * Expire messages older than the window ending at `now`, then enforce the memory cap. Without
+   * `now` (no clock yet), only the memory cap is enforced.
+   */
+  public trim(now: Time | undefined): void {
+    let cutoffNs: bigint | undefined;
+    if (now != undefined) {
+      const nowNs = toNanoSec(now);
+      cutoffNs = nowNs - this.#windowNs;
+      this.#completeFromNs =
+        this.#completeFromNs == undefined
+          ? nowNs
+          : this.#completeFromNs > cutoffNs
+            ? this.#completeFromNs
+            : cutoffNs;
+    }
     let evictedForTime = false;
     let evictedForCap = false;
     while (this.#head < this.#messages.length) {
       const oldest = this.#messages[this.#head]!;
-      if (toNanoSec(oldest.receiveTime) < cutoffNs) {
+      if (cutoffNs != undefined && toNanoSec(oldest.receiveTime) < cutoffNs) {
         evictedForTime = true;
       } else if (this.#bytes > this.#maxBytes && this.size() > 1) {
         evictedForCap = true;
         const evictedNs = toNanoSec(oldest.receiveTime) + 1n;
-        if (evictedNs > this.#completeFromNs) {
+        if (this.#completeFromNs == undefined || evictedNs > this.#completeFromNs) {
           this.#completeFromNs = evictedNs;
         }
       } else {
@@ -246,4 +258,34 @@ export class LiveHistoryBuffer {
 
 function seedKeys(msg: MessageEvent): readonly string[] {
   return transformChildFrames(msg.message) ?? [WHOLE_MESSAGE];
+}
+
+/** Browser JS heap use (fraction of its limit) above which the history gives memory back. */
+export const HEAP_HIGH_WATER = 0.85;
+/** Heap use below which the history may grow back to its configured limit. */
+export const HEAP_LOW_WATER = 0.7;
+/** The history never shrinks below this for heap pressure. */
+export const HEAP_MIN_HISTORY_BYTES = 16 * 1024 * 1024;
+
+export type HeapUsage = { usedJSHeapSize: number; jsHeapSizeLimit: number };
+
+/**
+ * Memory limit to impose on the history because the whole tab is close to running out of heap,
+ * or undefined for none. Shrinks the history by a quarter each time the heap is above the high
+ * water mark, and lifts the limit once it falls below the low water mark.
+ */
+export function heapLimitBytes(
+  heap: HeapUsage | undefined,
+  historyBytes: number,
+  currentLimit: number | undefined,
+): number | undefined {
+  if (!heap || heap.jsHeapSizeLimit <= 0) {
+    return undefined;
+  }
+  const used = heap.usedJSHeapSize / heap.jsHeapSizeLimit;
+  if (used > HEAP_HIGH_WATER) {
+    const shrunk = Math.max(HEAP_MIN_HISTORY_BYTES, Math.floor(historyBytes * 0.75));
+    return Math.min(shrunk, currentLimit ?? Number.POSITIVE_INFINITY);
+  }
+  return used < HEAP_LOW_WATER ? undefined : currentLimit;
 }

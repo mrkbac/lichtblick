@@ -5,7 +5,12 @@ import { fromSec } from "@foxglove/rostime";
 
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
-import { LiveHistoryBuffer, transformChildFrames } from "./LiveHistoryBuffer";
+import {
+  HEAP_MIN_HISTORY_BYTES,
+  heapLimitBytes,
+  LiveHistoryBuffer,
+  transformChildFrames,
+} from "./LiveHistoryBuffer";
 
 const SEC = 1_000_000_000n;
 
@@ -183,5 +188,42 @@ describe("transformChildFrames", () => {
     expect(transformChildFrames({ child_frame_id: "c", pose: {} })).toBeUndefined();
     expect(transformChildFrames({ transforms: [{ x: 1 }] })).toBeUndefined();
     expect(transformChildFrames(undefined)).toBeUndefined();
+  });
+});
+
+describe("heapLimitBytes", () => {
+  const MIB = 1024 * 1024;
+  const heap = (fraction: number) => ({ usedJSHeapSize: fraction * 1000, jsHeapSizeLimit: 1000 });
+
+  it("imposes no limit without heap info or with room to spare", () => {
+    expect(heapLimitBytes(undefined, 100 * MIB, undefined)).toBeUndefined();
+    expect(heapLimitBytes(heap(0.5), 100 * MIB, undefined)).toBeUndefined();
+  });
+
+  it("shrinks the history by a quarter while the heap is nearly full", () => {
+    const first = heapLimitBytes(heap(0.9), 100 * MIB, undefined);
+    expect(first).toBe(75 * MIB);
+    expect(heapLimitBytes(heap(0.9), 75 * MIB, first)).toBe(Math.floor(75 * MIB * 0.75));
+  });
+
+  it("never shrinks below the floor", () => {
+    expect(heapLimitBytes(heap(0.95), 1 * MIB, undefined)).toBe(HEAP_MIN_HISTORY_BYTES);
+  });
+
+  it("keeps the limit between the water marks and lifts it once the heap recovers", () => {
+    expect(heapLimitBytes(heap(0.8), 75 * MIB, 75 * MIB)).toBe(75 * MIB);
+    expect(heapLimitBytes(heap(0.6), 75 * MIB, 75 * MIB)).toBeUndefined();
+  });
+});
+
+describe("LiveHistoryBuffer.setMaxBytes", () => {
+  it("applies a lower memory limit right away", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 100n * SEC, maxBytes: 1e9 });
+    for (let t = 1; t <= 10; t++) {
+      buffer.add(msg("/a", t));
+    }
+    buffer.setMaxBytes(30); // no trim with a clock needed
+    expect(buffer.size()).toBe(3);
+    expect(buffer.capLimited()).toBe(true);
   });
 });

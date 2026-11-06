@@ -16,6 +16,7 @@ import {
   Divider,
   FormControl,
   FormControlLabel,
+  FormHelperText,
   FormLabel,
   MenuItem,
   Select,
@@ -28,6 +29,7 @@ import {
 import { MouseEvent, useCallback, useEffect, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
+import { useStore } from "zustand";
 
 import { filterMap } from "@lichtblick/den/collection";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
@@ -36,6 +38,13 @@ import Stack from "@lichtblick/suite-base/components/Stack";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks/useAppConfigurationValue";
 import { Language } from "@lichtblick/suite-base/i18n";
+import {
+  formatLiveHistoryMemory,
+  formatLiveHistoryWindow,
+  LIVE_HISTORY_MEMORY_OPTIONS_MIB,
+  LIVE_HISTORY_WINDOW_OPTIONS_SEC,
+  liveHistorySettings,
+} from "@lichtblick/suite-base/players/liveHistory/liveHistorySettings";
 import { reportError } from "@lichtblick/suite-base/reportError";
 import { LaunchPreferenceValue } from "@lichtblick/suite-base/types/LaunchPreferenceValue";
 import { TimeDisplayMethod } from "@lichtblick/suite-base/types/panels";
@@ -297,6 +306,58 @@ export function MessageFramerate(): React.ReactElement {
           </MenuItem>
         ))}
       </Select>
+    </Stack>
+  );
+}
+
+/** Options for a select: the presets, plus the current value if it isn't one (e.g. saved earlier). */
+const withCurrent = (options: readonly number[], current: number) =>
+  options.includes(current) ? options : [...options, current].sort((a, b) => a - b);
+
+export function LiveHistorySettings(): React.ReactElement {
+  const { t } = useTranslation("appSettings");
+  const { windowSec, maxMiB, setWindowSec, setMaxMiB } = useStore(liveHistorySettings);
+
+  return (
+    <Stack gap={1}>
+      <FormLabel>{t("liveHistory")}:</FormLabel>
+      <Stack direction="row" gap={1}>
+        <Stack flex={1}>
+          <FormLabel>{t("liveHistoryLength")}</FormLabel>
+          <Select
+            value={windowSec}
+            fullWidth
+            onChange={(event) => {
+              setWindowSec(Number(event.target.value));
+            }}
+            data-testid="live-history-length"
+          >
+            {withCurrent(LIVE_HISTORY_WINDOW_OPTIONS_SEC, windowSec).map((sec) => (
+              <MenuItem key={sec} value={sec}>
+                {formatLiveHistoryWindow(sec)}
+              </MenuItem>
+            ))}
+          </Select>
+        </Stack>
+        <Stack flex={1}>
+          <FormLabel>{t("liveHistoryMemory")}</FormLabel>
+          <Select
+            value={maxMiB}
+            fullWidth
+            onChange={(event) => {
+              setMaxMiB(Number(event.target.value));
+            }}
+            data-testid="live-history-memory"
+          >
+            {withCurrent(LIVE_HISTORY_MEMORY_OPTIONS_MIB, maxMiB).map((mib) => (
+              <MenuItem key={mib} value={mib}>
+                {formatLiveHistoryMemory(mib)}
+              </MenuItem>
+            ))}
+          </Select>
+        </Stack>
+      </Stack>
+      <FormHelperText>{t("liveHistoryDescription")}</FormHelperText>
     </Stack>
   );
 }
