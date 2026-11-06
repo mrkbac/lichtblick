@@ -58,6 +58,7 @@ const selectTopicStats = (ctx: MessagePipelineContext) => ctx.playerState.active
 const selectSeekPlayback = (ctx: MessagePipelineContext) => ctx.seekPlayback;
 const selectPausePlayback = (ctx: MessagePipelineContext) => ctx.pausePlayback;
 const selectGetBatchIterator = (ctx: MessagePipelineContext) => ctx.getBatchIterator;
+const selectNothing = () => undefined;
 
 enableMapSet();
 
@@ -89,10 +90,11 @@ export function useTopicMessageNavigation({
     return controller.signal;
   }, []);
 
-  const currentTime = useMessagePipeline(selectCurrentTime);
-  const startTime = useMessagePipeline(selectStartTime);
-  const endTime = useMessagePipeline(selectEndTime);
-  const topicStats = useMessagePipeline(selectTopicStats);
+  // Only the selected row can navigate; other rows skip these per-tick subscriptions.
+  const currentTime = useMessagePipeline(selected ? selectCurrentTime : selectNothing);
+  const startTime = useMessagePipeline(selected ? selectStartTime : selectNothing);
+  const endTime = useMessagePipeline(selected ? selectEndTime : selectNothing);
+  const topicStats = useMessagePipeline(selected ? selectTopicStats : selectNothing);
   const seekPlayback = useMessagePipeline(selectSeekPlayback);
   const pausePlayback = useMessagePipeline(selectPausePlayback);
   const getBatchIterator = useMessagePipeline(selectGetBatchIterator);
