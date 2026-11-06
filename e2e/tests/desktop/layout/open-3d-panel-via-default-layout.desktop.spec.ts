@@ -22,7 +22,7 @@ test("open 3D panel when clicking on Layouts > layout", { tag: "@smoke" }, async
 
   // When
   await sidebar.openPanelSettingsTab();
-  await mainWindow.getByText("3D").nth(0).click();
+  await mainWindow.getByText("3D").filter({ visible: true }).first().click();
 
   // Then
   await expect(mainWindow.getByText("3D panel", { exact: true }).count()).resolves.toBe(1);

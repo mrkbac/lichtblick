@@ -22,7 +22,7 @@ test("open Image panel when clicking on Layouts > layout", { tag: "@smoke" }, as
 
   // When
   await sidebar.openPanelSettingsTab();
-  await mainWindow.getByText("Image").nth(0).click();
+  await mainWindow.getByText("Image").filter({ visible: true }).first().click();
 
   // Then
   // The State Transitions panel settings are shown
