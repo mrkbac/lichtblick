@@ -88,7 +88,7 @@ describe("LiveHistoryBuffer", () => {
     expect(buffer.sizeBytes()).toBeLessThanOrEqual(50);
     expect(buffer.size()).toBe(5);
     expect(buffer.capLimited()).toBe(true);
-    expect(buffer.startTime(fromSec(10))).toEqual(fromSec(6));
+    expect(buffer.startTime(fromSec(10))).toEqual({ sec: 5, nsec: 1 }); // after the last evicted
   });
 
   it("clears the cap warning once the window, not memory, limits the history", () => {
@@ -103,6 +103,19 @@ describe("LiveHistoryBuffer", () => {
     buffer.setWindow(2n * SEC);
     buffer.trim(fromSec(10));
     expect(buffer.capLimited()).toBe(false);
+  });
+
+  it("grows the range gradually after the window is enlarged", () => {
+    const buffer = new LiveHistoryBuffer({ windowNs: 10n * SEC, maxBytes: 1e9 });
+    for (let t = 1; t <= 100; t++) {
+      buffer.add(msg("/a", t));
+    }
+    buffer.setWindow(60n * SEC);
+    expect(buffer.startTime(fromSec(100))).toEqual(fromSec(90)); // only 10 s are held
+    buffer.add(msg("/a", 120));
+    expect(buffer.startTime(fromSec(120))).toEqual(fromSec(90));
+    buffer.trim(fromSec(200));
+    expect(buffer.startTime(fromSec(200))).toEqual(fromSec(140));
   });
 
   it("keeps the last expired message per topic as a seed for backfill", () => {

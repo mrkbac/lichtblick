@@ -53,7 +53,11 @@ export class LiveHistoryBuffer {
   #head = 0;
   #bytes = 0;
   #seeds = new Map<string, Map<string, MessageEvent>>();
-  #firstTimeNs?: bigint;
+  /**
+   * The history holds every message received since this time: the first trim after `clear()`,
+   * advanced by each age cutoff and memory-cap eviction. Enlarging the window can't move it back.
+   */
+  #completeFromNs?: bigint;
   #capLimited = false;
 
   public constructor({
@@ -101,8 +105,13 @@ export class LiveHistoryBuffer {
   /** Expire messages older than the window ending at `now`, then enforce the memory cap. */
   public trim(now: Time): void {
     const nowNs = toNanoSec(now);
-    this.#firstTimeNs ??= nowNs;
     const cutoffNs = nowNs - this.#windowNs;
+    this.#completeFromNs =
+      this.#completeFromNs == undefined
+        ? nowNs
+        : this.#completeFromNs > cutoffNs
+          ? this.#completeFromNs
+          : cutoffNs;
     let evictedForTime = false;
     let evictedForCap = false;
     while (this.#head < this.#messages.length) {
@@ -111,6 +120,10 @@ export class LiveHistoryBuffer {
         evictedForTime = true;
       } else if (this.#bytes > this.#maxBytes && this.size() > 1) {
         evictedForCap = true;
+        const evictedNs = toNanoSec(oldest.receiveTime) + 1n;
+        if (evictedNs > this.#completeFromNs) {
+          this.#completeFromNs = evictedNs;
+        }
       } else {
         break;
       }
@@ -127,22 +140,12 @@ export class LiveHistoryBuffer {
     }
   }
 
-  /**
-   * Start of the seekable range at `now`: the window start, but never before the first message
-   * seen, and the oldest retained message when the memory cap cut the window short.
-   */
+  /** Start of the seekable range at `now`: the window start, but never before the history is complete. */
   public startTime(now: Time): Time {
     const nowNs = toNanoSec(now);
     let startNs = nowNs - this.#windowNs;
-    if (this.#firstTimeNs != undefined && this.#firstTimeNs > startNs) {
-      startNs = this.#firstTimeNs;
-    }
-    const oldest = this.#messages[this.#head];
-    if (this.#capLimited && oldest) {
-      const oldestNs = toNanoSec(oldest.receiveTime);
-      if (oldestNs > startNs) {
-        startNs = oldestNs;
-      }
+    if (this.#completeFromNs != undefined && this.#completeFromNs > startNs) {
+      startNs = this.#completeFromNs;
     }
     if (startNs > nowNs) {
       startNs = nowNs;
@@ -163,6 +166,8 @@ export class LiveHistoryBuffer {
   public backfill(at: Time, topics: ReadonlySet<string>): MessageEvent[] {
     const found = new Map<string, Set<string>>();
     const result = new Set<MessageEvent>();
+    // Topics whose whole-message state is found; transform topics never are, as frames vary.
+    let complete = 0;
     const take = (msg: MessageEvent, keys: readonly string[]) => {
       let seen = found.get(msg.topic);
       if (!seen) {
@@ -174,13 +179,16 @@ export class LiveHistoryBuffer {
         if (!seen.has(key)) {
           seen.add(key);
           isNew = true;
+          if (key === WHOLE_MESSAGE) {
+            complete++;
+          }
         }
       }
       if (isNew) {
         result.add(msg);
       }
     };
-    for (let i = this.#upperBound(at) - 1; i >= this.#head; i--) {
+    for (let i = this.#upperBound(at) - 1; i >= this.#head && complete < topics.size; i--) {
       const msg = this.#messages[i]!;
       if (topics.has(msg.topic) && found.get(msg.topic)?.has(WHOLE_MESSAGE) !== true) {
         take(msg, seedKeys(msg));
@@ -201,7 +209,7 @@ export class LiveHistoryBuffer {
     this.#head = 0;
     this.#bytes = 0;
     this.#seeds.clear();
-    this.#firstTimeNs = undefined;
+    this.#completeFromNs = undefined;
     this.#capLimited = false;
   }
 

@@ -41,7 +41,7 @@ import {
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
+import { isRecordingSource, PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { Topic } from "@lichtblick/suite-base/players/types";
 import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
 
@@ -382,7 +382,10 @@ export function RecordingInspector(): React.JSX.Element {
         </div>
         {!isRecording && (
           <Alert severity="info">
-            Live source: counts are observed messages. Recording scans and seeking are unavailable.
+            Live source: counts are observed messages. Recording scans
+            {capabilities.includes(PLAYER_CAPABILITIES.liveHistory)
+              ? " are unavailable; seeking is limited to the recent history kept while connected."
+              : " and seeking are unavailable."}
           </Alert>
         )}
         {error && (

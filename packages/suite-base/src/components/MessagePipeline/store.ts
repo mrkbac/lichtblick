@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Time } from "@foxglove/rostime";
+import { compare, Time } from "@foxglove/rostime";
 import * as _ from "lodash-es";
 import { RefObject } from "react";
 import { createStore, StoreApi } from "zustand";
@@ -315,11 +315,14 @@ function updateSubscriberAction(
     }
   }
 
-  // Inject the last message on new topics for this subscriber
+  // Inject the last message on new topics for this subscriber. A live source with a rolling
+  // history can be seeked back behind its cached messages; never hand out one from after the
+  // current time.
+  const currentTime = prevState.public.playerState.activeData?.currentTime;
   const messagesForSubscriber = [];
   for (const topic of newTopicsForId) {
     const msgEvent = lastMessageEventByTopic.get(topic);
-    if (msgEvent) {
+    if (msgEvent && (!currentTime || compare(msgEvent.receiveTime, currentTime) <= 0)) {
       messagesForSubscriber.push(msgEvent);
     }
   }
