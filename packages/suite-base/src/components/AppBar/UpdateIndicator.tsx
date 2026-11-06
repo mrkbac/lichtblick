@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { ArrowSync20Regular } from "@fluentui/react-icons";
+import { ArrowSyncCircle24Filled } from "@fluentui/react-icons";
 import { useTheme } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
@@ -37,7 +37,8 @@ export function UpdateIndicator(): React.JSX.Element | undefined {
         applyServiceWorkerUpdate(waiting);
       }}
     >
-      <ArrowSync20Regular primaryFill={theme.palette.appBar.primary} />
+      {/* the accent color: the muted app bar color is nearly invisible on the dark bar */}
+      <ArrowSyncCircle24Filled primaryFill={theme.palette.primary.main} />
     </AppBarIconButton>
   );
 }
