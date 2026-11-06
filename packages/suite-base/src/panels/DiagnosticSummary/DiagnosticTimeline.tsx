@@ -7,6 +7,10 @@ import React, { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
+import {
+  TimelineHoverCursor,
+  usePublishPlaybackHover,
+} from "@lichtblick/suite-base/components/TimelineHoverCursor";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import {
   LEVEL_NAMES,
@@ -59,6 +63,7 @@ function DiagnosticTimeline(props: DiagnosticTimelineProps): React.JSX.Element {
   const { t } = useTranslation("diagnostics");
   const { formatTime } = useAppTimeFormat();
   const [hoverTime, setHoverTime] = useState<number>();
+  const publishHover = usePublishPlaybackHover();
 
   const colors: Record<number, string> = {
     [LEVELS.OK]: theme.palette.success.main,
@@ -100,10 +105,13 @@ function DiagnosticTimeline(props: DiagnosticTimelineProps): React.JSX.Element {
         style={{ width }}
         data-testid="diagnostic-timeline"
         onMouseMove={(event) => {
-          setHoverTime(timeAt(event));
+          const time = timeAt(event);
+          setHoverTime(time);
+          publishHover(time - start);
         }}
         onMouseLeave={() => {
           setHoverTime(undefined);
+          publishHover(undefined);
         }}
         onClick={(event) => {
           event.stopPropagation();
@@ -128,6 +136,7 @@ function DiagnosticTimeline(props: DiagnosticTimelineProps): React.JSX.Element {
           ))}
         </svg>
         {playhead != undefined && <div className={classes.playhead} style={{ left: playhead }} />}
+        <TimelineHoverCursor durationSec={span} />
       </div>
     </Tooltip>
   );
