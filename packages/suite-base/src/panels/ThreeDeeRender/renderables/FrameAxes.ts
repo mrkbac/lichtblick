@@ -362,6 +362,9 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     ];
   }
 
+  #settingsTime: bigint | undefined;
+  #settingsTransformsVersion = -1;
+
   #throttledUpdateSettingsTree = _.throttle(() => {
     this.updateSettingsTree();
     /**
@@ -380,10 +383,17 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     // Keep the material's `resolution` uniform in sync with the actual canvas size
     this.#lineMaterial.resolution = this.renderer.input.canvasSize;
 
-    // Update all the transforms settings nodes each frame since they contain
-    // fields that change when currentTime changes
-    this.#throttledUpdateSettingsTree();
-    // this.updateSettingsTree();
+    // The transforms settings nodes show age/translation/rotation, which only change with
+    // currentTime or the transform tree; skip rebuilding them for e.g. camera moves while paused
+    const transformsVersion = this.renderer.transformTree.version;
+    if (
+      currentTime !== this.#settingsTime ||
+      transformsVersion !== this.#settingsTransformsVersion
+    ) {
+      this.#settingsTime = currentTime;
+      this.#settingsTransformsVersion = transformsVersion;
+      this.#throttledUpdateSettingsTree();
+    }
 
     super.startFrame(currentTime, renderFrameId, fixedFrameId);
 

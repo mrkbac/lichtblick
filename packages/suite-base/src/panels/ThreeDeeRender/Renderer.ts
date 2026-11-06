@@ -233,6 +233,9 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   readonly #staticTransformCache = new Map<string, StaticTransform>();
 
   public coordinateFrameList: SelectEntry[] = [];
+  // While > 0, transform tree changes are collected and announced once at the end of the batch
+  #transformTreeBatchDepth = 0;
+  #transformTreeDirty = false;
   public currentTime = 0n;
   public fixedFrameId: string | undefined;
   public followFrameId: string | undefined;
@@ -537,14 +540,16 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
 
   #reapplyStaticTransforms(): void {
     const cache = this.#staticTransformCache;
-    for (const [childFrameId, { parentFrameId, stamp, translation, rotation }] of cache) {
-      const result = this.addTransform(parentFrameId, childFrameId, stamp, translation, rotation);
-      if (result === AddTransformResult.CYCLE_DETECTED) {
-        // The cached transform no longer fits the tree (e.g. an intervening dynamic transform
-        // now makes it cyclic); drop it so later backward seeks stop retrying it.
-        cache.delete(childFrameId);
+    this.#batchTransformTreeUpdates(() => {
+      for (const [childFrameId, { parentFrameId, stamp, translation, rotation }] of cache) {
+        const result = this.addTransform(parentFrameId, childFrameId, stamp, translation, rotation);
+        if (result === AddTransformResult.CYCLE_DETECTED) {
+          // The cached transform no longer fits the tree (e.g. an intervening dynamic transform
+          // now makes it cyclic); drop it so later backward seeks stop retrying it.
+          cache.delete(childFrameId);
+        }
       }
-    }
+    });
   }
 
   /**
@@ -1225,9 +1230,34 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     const normalizedFrameId = this.normalizeFrameId(frameId);
     if (!this.transformTree.hasFrame(normalizedFrameId)) {
       this.transformTree.getOrCreateFrame(normalizedFrameId);
-      this.coordinateFrameList = this.transformTree.frameList();
-      // log.debug(`Added coordinate frame "${normalizedFrameId}"`);
-      this.emit("transformTreeUpdated", this);
+      this.#transformTreeUpdated();
+    }
+  }
+
+  #transformTreeUpdated(): void {
+    if (this.#transformTreeBatchDepth > 0) {
+      this.#transformTreeDirty = true;
+      return;
+    }
+    this.coordinateFrameList = this.transformTree.frameList();
+    this.emit("transformTreeUpdated", this);
+  }
+
+  /**
+   * Runs `fn` and announces transform tree changes once afterwards. Every listener rebuilds
+   * settings trees and frameList() sorts all frames, so per-transform updates are O(n²) for
+   * bursts like re-adding all static transforms after a seek.
+   */
+  #batchTransformTreeUpdates(fn: () => void): void {
+    this.#transformTreeBatchDepth++;
+    try {
+      fn();
+    } finally {
+      this.#transformTreeBatchDepth--;
+      if (this.#transformTreeBatchDepth === 0 && this.#transformTreeDirty) {
+        this.#transformTreeDirty = false;
+        this.#transformTreeUpdated();
+      }
     }
   }
 
@@ -1315,8 +1345,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     const status = this.transformTree.addTransform(childFrameId, parentFrameId, stamp, transform);
 
     if (status === AddTransformResult.UPDATED) {
-      this.coordinateFrameList = this.transformTree.frameList();
-      this.emit("transformTreeUpdated", this);
+      this.#transformTreeUpdated();
     }
 
     if (status === AddTransformResult.CYCLE_DETECTED) {
@@ -1349,8 +1378,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
 
   public removeTransform(childFrameId: string, parentFrameId: string, stamp: bigint): void {
     this.transformTree.removeTransform(childFrameId, parentFrameId, stamp);
-    this.coordinateFrameList = this.transformTree.frameList();
-    this.emit("transformTreeUpdated", this);
+    this.#transformTreeUpdated();
   }
 
   // Callback handlers
@@ -1399,7 +1427,9 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   #frameHandler = (currentTime: bigint): void => {
     this.#rendering = true;
     this.currentTime = currentTime;
-    this.#handleSubscriptionQueues();
+    this.#batchTransformTreeUpdates(() => {
+      this.#handleSubscriptionQueues();
+    });
     this.#updateFrameErrors();
     this.#updateFixedFrameId();
     this.#updateResolution();
@@ -1562,7 +1592,10 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     for (const selection of selections) {
       selection.renderable.visible = true;
     }
-    this.animationFrame();
+    // Picking renders offscreen; only the hide-and-repick renders above touch the canvas
+    if (selections.length > 0) {
+      this.animationFrame();
+    }
     this.emit("renderableHovered", selections, cursorCoords, this);
   };
 
