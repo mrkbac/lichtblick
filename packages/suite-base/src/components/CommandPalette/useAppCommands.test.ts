@@ -40,9 +40,12 @@ describe("useAppCommands", () => {
   const changePanelLayout = vi.fn<(payload: ChangePanelLayoutPayload) => void>();
   const setSelectedPanelIds = vi.fn();
   const openPanelSettings = vi.fn();
+  // The layout at the time a command runs
+  let currentLayout: LayoutNode;
 
   beforeEach(() => {
     vi.clearAllMocks();
+    currentLayout = layout;
     vi.mocked(usePlayerSelection).mockReturnValue({
       availableSources: [],
       recentSources: [],
@@ -55,6 +58,9 @@ describe("useAppCommands", () => {
     } as unknown as ReturnType<typeof useWorkspaceActions>);
     vi.mocked(useCurrentLayoutActions).mockReturnValue({
       changePanelLayout,
+      getCurrentLayoutState: () => ({
+        selectedLayout: { data: { layout: currentLayout, configById: {} } },
+      }),
     } as unknown as ReturnType<typeof useCurrentLayoutActions>);
     vi.mocked(useSelectedPanels).mockReturnValue({
       setSelectedPanelIds,
@@ -71,11 +77,12 @@ describe("useAppCommands", () => {
     );
   });
 
-  async function pick(parentId: string, panelId: string) {
+  async function pick(parentId: string, panelId: string, beforeRun = () => {}) {
     const { result } = renderHook(() => useAppCommands());
     const parent = result.current.commands.find((command) => command.id === parentId)!;
     const children = await parent.children!();
     const child = children.find((command: Command) => command.id === `${parentId}.${panelId}`)!;
+    beforeRun();
     child.run!();
   }
 
@@ -90,4 +97,25 @@ describe("useAppCommands", () => {
       expect(setSelectedPanelIds).toHaveBeenLastCalledWith(["Plot!c"]);
     },
   );
+
+  it("uses the layout at the time the panel is picked", async () => {
+    const withNewPanel: LayoutNode = {
+      direction: "row",
+      children: [{ panels: ["Plot!a", "Map!d"] }, { panels: ["Log!b", "Plot!c"], active: "Log!b" }],
+    };
+    await pick("panel.focus", "Plot!c", () => {
+      currentLayout = withNewPanel;
+    });
+    const newLayout = vi.mocked(changePanelLayout).mock.lastCall?.[0].layout;
+    expect(getPanelIds(newLayout)).toContain("Map!d");
+    expect(findGroup(newLayout, "Plot!c")?.active).toBe("Plot!c");
+  });
+
+  it("does nothing for a panel removed meanwhile", async () => {
+    await pick("panel.focus", "Plot!c", () => {
+      currentLayout = { panels: ["Plot!a"] };
+    });
+    expect(changePanelLayout).not.toHaveBeenCalled();
+    expect(setSelectedPanelIds).not.toHaveBeenCalled();
+  });
 });

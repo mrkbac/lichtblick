@@ -163,7 +163,8 @@ export function useAppCommands(): {
   const leftSidebarOpen = useWorkspaceStore(selectLeftSidebarOpen);
   const leftSidebarItem = useWorkspaceStore(selectLeftSidebarItem);
   const layoutManager = useLayoutManager();
-  const { setSelectedLayoutId, setPlaybackConfig, changePanelLayout } = useCurrentLayoutActions();
+  const { setSelectedLayoutId, setPlaybackConfig, changePanelLayout, getCurrentLayoutState } =
+    useCurrentLayoutActions();
   const { setSelectedPanelIds } = useSelectedPanels();
   const selectedLayout = useCurrentLayoutSelector(selectLayout);
   const panelCatalog = usePanelCatalog();
@@ -305,10 +306,13 @@ export function useAppCommands(): {
     if (layoutData) {
       const panelIds = layoutData.layout != undefined ? getPanelIds(layoutData.layout) : [];
       // Selecting a panel in a background tab would leave it hidden, so bring its tab to front too
+      // Reads the layout when picked: it may have changed since the list was built.
       const revealPanel = (id: string) => {
-        if (layoutData.layout != undefined) {
-          changePanelLayout({ layout: setActivePanel(layoutData.layout, id) });
+        const layout = getCurrentLayoutState().selectedLayout?.data?.layout;
+        if (layout == undefined || !getPanelIds(layout).includes(id)) {
+          return; // removed meanwhile
         }
+        changePanelLayout({ layout: setActivePanel(layout, id) });
         setSelectedPanelIds([id]);
       };
       const panelCommands = (idPrefix: string, onPick: (id: string) => void) => () =>
@@ -535,6 +539,7 @@ export function useAppCommands(): {
     selectedLayout,
     setPlaybackConfig,
     changePanelLayout,
+    getCurrentLayoutState,
     setSelectedLayoutId,
     setSelectedPanelIds,
     setSpeed,
