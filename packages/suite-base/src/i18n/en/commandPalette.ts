@@ -66,11 +66,4 @@ export const commandPalette = {
   about: "About Lichtblick",
   version: "Version {{version}}",
   keyboardShortcuts: "Keyboard shortcuts…",
-  keyboardShortcutsPlaceholder: "Search shortcuts",
-  shortcutCommandPalette: "Open command palette",
-  shortcutOpenFile: "Open local file",
-  shortcutOpenConnection: "Open connection",
-  shortcutPlayPause: "Play / pause",
-  shortcutStep: "Step backward / forward",
-  shortcutSelectAllPanels: "Select all panels",
 };

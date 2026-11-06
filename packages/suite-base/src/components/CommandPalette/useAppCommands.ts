@@ -2,11 +2,15 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { Time, subtract, toSec } from "@foxglove/rostime";
-import { TFunction } from "i18next";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import Logger from "@lichtblick/log";
+import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
+import {
+  APP_SHORTCUTS,
+  PLAYBACK_SHORTCUTS,
+} from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -33,8 +37,8 @@ import useAddPanel from "@lichtblick/suite-base/hooks/useAddPanel";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
 import { PlayerPresence, Topic } from "@lichtblick/suite-base/players/types";
 import { PanelConfig } from "@lichtblick/suite-base/types/panels";
-import { formatKeyboardShortcut } from "@lichtblick/suite-base/util/formatKeyboardShortcut";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
+import { shortcutLabel } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { PANEL_TITLE_CONFIG_KEY, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import { getPanelIds, setActivePanel } from "@lichtblick/suite-base/util/layoutTree";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
@@ -129,31 +133,6 @@ function catchErrors(action: () => Promise<unknown>): () => void {
   };
 }
 
-/** Lists the global keyboard shortcuts as read-only palette entries. */
-function shortcutCommands(t: TFunction<"commandPalette">): Command[] {
-  const noop = () => {};
-  const entries: [string, string][] = [
-    [t("shortcutCommandPalette"), formatKeyboardShortcut("K", ["Meta"])],
-    [t("shortcutOpenFile"), formatKeyboardShortcut("O", ["Meta"])],
-    [t("shortcutOpenConnection"), formatKeyboardShortcut("O", ["Meta", "Shift"])],
-    [t("shortcutPlayPause"), "Space"],
-    [t("shortcutStep"), "← / →"],
-    [t("toggleLeftSidebar"), "["],
-    [t("toggleRightSidebar"), "]"],
-    [t("togglePanelSettings"), ","],
-    ...LAYOUT_SHORTCUTS.flatMap((s): [string, string][] => {
-      const shortcut = s.shortcut();
-      return shortcut != undefined ? [[t(s.titleKey), shortcut]] : [];
-    }),
-  ];
-  return entries.map(([title, shortcut]) => ({
-    id: `shortcut:${title}`,
-    title,
-    shortcut,
-    run: noop,
-  }));
-}
-
 /**
  * Builds the app's built-in commands from current state. Only commands that apply right now are
  * returned, e.g. playback commands need a loaded data source and panel commands need a layout.
@@ -163,6 +142,7 @@ export function useAppCommands(): {
   queryCommands: (query: string) => Command[];
 } {
   const { t } = useTranslation("commandPalette");
+  const showShortcuts = useKeyboardShortcutsStore((state) => state.show);
   const { recentSources, selectRecent } = usePlayerSelection();
   const { dialogActions, sidebarActions, openPanelSettings } = useWorkspaceActions();
   const leftSidebarOpen = useWorkspaceStore(selectLeftSidebarOpen);
@@ -202,7 +182,7 @@ export function useAppCommands(): {
         id: "open.file",
         title: t("openFile"),
         keywords: ["mcap", "bag", "recording"],
-        shortcut: formatKeyboardShortcut("O", ["Meta"]),
+        shortcut: shortcutLabel(APP_SHORTCUTS, "app.openFile"),
         run: catchErrors(dialogActions.openFile.open),
       },
       {
@@ -404,7 +384,7 @@ export function useAppCommands(): {
         id: "playback.toggle",
         title: isPlaying ? t("pause") : t("play"),
         keywords: ["play", "pause", "resume", "stop"],
-        shortcut: "Space",
+        shortcut: shortcutLabel(PLAYBACK_SHORTCUTS, "playback.playPause"),
         run: isPlaying ? pause : play,
       });
     }
@@ -452,7 +432,7 @@ export function useAppCommands(): {
       {
         id: "view.left-sidebar",
         title: t("toggleLeftSidebar"),
-        shortcut: "[",
+        shortcut: shortcutLabel(APP_SHORTCUTS, "app.toggleLeftSidebar"),
         run: () => {
           sidebarActions.left.setOpen((open) => !open);
         },
@@ -460,7 +440,7 @@ export function useAppCommands(): {
       {
         id: "view.right-sidebar",
         title: t("toggleRightSidebar"),
-        shortcut: "]",
+        shortcut: shortcutLabel(APP_SHORTCUTS, "app.toggleRightSidebar"),
         run: () => {
           sidebarActions.right.setOpen((open) => !open);
         },
@@ -468,7 +448,7 @@ export function useAppCommands(): {
       {
         id: "view.panel-settings",
         title: t("togglePanelSettings"),
-        shortcut: ",",
+        shortcut: shortcutLabel(APP_SHORTCUTS, "app.togglePanelSettings"),
         run: () => {
           sidebarActions.left.selectItem(
             leftSidebarOpen && leftSidebarItem === "panel-settings" ? undefined : "panel-settings",
@@ -509,8 +489,8 @@ export function useAppCommands(): {
         id: "help.shortcuts",
         title: t("keyboardShortcuts"),
         keywords: ["hotkeys", "keys", "keybindings"],
-        placeholder: t("keyboardShortcutsPlaceholder"),
-        children: () => shortcutCommands(t),
+        shortcut: shortcutLabel(APP_SHORTCUTS, "app.showShortcuts"),
+        run: showShortcuts,
       },
     );
     return list;
@@ -540,6 +520,7 @@ export function useAppCommands(): {
     setSelectedLayoutId,
     setSelectedPanelIds,
     setSpeed,
+    showShortcuts,
     sidebarActions,
     startTime,
     t,

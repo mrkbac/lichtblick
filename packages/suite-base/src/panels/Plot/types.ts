@@ -188,10 +188,11 @@ export type UseHoverHandlersHook = {
   onClick: (event: React.MouseEvent<HTMLElement>) => void;
   onClickPath: (index: number) => void;
   focusedPath: string[] | undefined;
+  /** Runners for {@link PLOT_SHORTCUTS}, by shortcut id. */
   keyDownHandlers: {
-    v: () => void;
-    b: () => void;
-    r: () => boolean;
+    "plot.zoomY": () => void;
+    "plot.zoomXY": () => void;
+    "plot.resetView": () => boolean;
   };
   keyUpHandlers: {
     v: () => void;

@@ -29,6 +29,7 @@ import { useMountedState } from "react-use";
 import { useShallowMemo } from "@lichtblick/hooks";
 import { useConfigById } from "@lichtblick/suite-base/PanelAPI";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
+import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import { useStyles } from "@lichtblick/suite-base/components/Panel.style";
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import PanelErrorBoundary from "@lichtblick/suite-base/components/PanelErrorBoundary";
@@ -59,6 +60,7 @@ import {
   setPanelDropConfig,
 } from "@lichtblick/suite-base/services/messagePathDragging/panelDropRegistry";
 import { OpenSiblingPanel, PanelConfig, SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import { getSiblingGroup } from "@lichtblick/suite-base/util/layoutTree";
 
@@ -343,12 +345,7 @@ export default function Panel<
           },
         },
         keyDownHandlers: {
-          a: (e: KeyboardEvent) => {
-            e.preventDefault();
-            if (e.metaKey) {
-              selectAllPanels();
-            }
-          },
+          ...shortcutKeyHandlers(APP_SHORTCUTS, { "app.selectAllPanels": selectAllPanels }),
           Backquote: () => {
             setQuickActionsKeyPressed(true);
           },

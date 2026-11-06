@@ -51,12 +51,14 @@ import { usePanelSettings } from "@lichtblick/suite-base/panels/StateTransitions
 import useStateTransitionsData from "@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsData";
 import useStateTransitionsDeltaMode from "@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsDeltaMode";
 import useStateTransitionsTime from "@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsTime";
+import { STATE_TRANSITIONS_SHORTCUTS } from "@lichtblick/suite-base/panels/StateTransitions/shortcuts";
 import { DeltaOverlay } from "@lichtblick/suite-base/panels/shared/DeltaOverlay";
 import { MeasureModeToolbarButton } from "@lichtblick/suite-base/panels/shared/MeasureModeToolbarButton";
 import { computeDeltaDisplay } from "@lichtblick/suite-base/panels/shared/deltaMarkers";
 import { createMeasureModeEscapeHandler } from "@lichtblick/suite-base/panels/shared/measureModeEscapeHandler";
 import useAppendOnlyKey from "@lichtblick/suite-base/panels/shared/useAppendOnlyKey";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
+import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 import { StateTransitionConfig, StateTransitionPanelProps } from "./types";
 
@@ -198,24 +200,16 @@ function StateTransitions(props: StateTransitionPanelProps) {
   }, [previousMatch, seekToSeconds]);
 
   const keyDownHandlers = useMemo(
-    () => ({
-      escape: createMeasureModeEscapeHandler(deltaMode),
-      // ponytail: global listener, so every panel with a condition seeks on N; scope it to the
-      // focused panel if several condition panels get confusing.
-      ...(hasCondition && {
-        n: (event: KeyboardEvent) => {
-          if (event.metaKey || event.ctrlKey || event.altKey) {
-            return false;
-          }
-          if (event.shiftKey) {
-            seekToPreviousMatch();
-          } else {
-            seekToNextMatch();
-          }
-          return true;
-        },
+    () =>
+      shortcutKeyHandlers(STATE_TRANSITIONS_SHORTCUTS, {
+        "stateTransitions.exitMeasure": createMeasureModeEscapeHandler(deltaMode),
+        // ponytail: global listener, so every panel with a condition seeks on N; scope it to the
+        // focused panel if several condition panels get confusing.
+        ...(hasCondition && {
+          "stateTransitions.next": seekToNextMatch,
+          "stateTransitions.previous": seekToPreviousMatch,
+        }),
       }),
-    }),
     [deltaMode, hasCondition, seekToNextMatch, seekToPreviousMatch],
   );
 

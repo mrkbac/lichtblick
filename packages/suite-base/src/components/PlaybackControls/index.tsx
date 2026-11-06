@@ -43,6 +43,7 @@ import {
 } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
+import { PLAYBACK_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -61,6 +62,7 @@ import {
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { Player, PlayerPresence } from "@lichtblick/suite-base/players/types";
 import BroadcastManager from "@lichtblick/suite-base/util/broadcast/BroadcastManager";
+import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 import { DataSourceInfoButton } from "./DataSourceInfoButton";
 import PlaybackTimeDisplay from "./PlaybackTimeDisplay";
@@ -190,28 +192,25 @@ export default function PlaybackControls({
   });
 
   const keyDownHandlers = useMemo(
-    () => ({
-      " ": togglePlayPause,
-      ArrowLeft: (ev: KeyboardEvent) => {
-        seekBackwardAction(ev);
-      },
-      ArrowRight: (ev: KeyboardEvent) => {
-        seekForwardAction(ev);
-      },
-      Home: () => {
-        const { start } = getPlayableRange();
-        if (start) {
-          seek(start);
-        }
-      },
-      End: () => {
-        const { end } = getPlayableRange();
-        if (end) {
-          seek(end);
-        }
-      },
-      ...trimKeyHandlers,
-    }),
+    () =>
+      shortcutKeyHandlers(PLAYBACK_SHORTCUTS, {
+        "playback.playPause": togglePlayPause,
+        "playback.stepBackward": seekBackwardAction,
+        "playback.stepForward": seekForwardAction,
+        "playback.seekStart": () => {
+          const { start } = getPlayableRange();
+          if (start) {
+            seek(start);
+          }
+        },
+        "playback.seekEnd": () => {
+          const { end } = getPlayableRange();
+          if (end) {
+            seek(end);
+          }
+        },
+        ...trimKeyHandlers,
+      }),
     [
       getPlayableRange,
       seek,

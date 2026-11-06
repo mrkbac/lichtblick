@@ -38,6 +38,7 @@ import {
   isTransformPreloadEnabled,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
+import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 import type { IRenderer, ImageModeConfig, RendererConfig, RendererSubscription } from "./IRenderer";
 import type { Path } from "./LayerErrors";
@@ -59,6 +60,7 @@ import {
 import type { LayerSettingsTransform } from "./renderables/FrameAxes";
 import { PublishClickEventMap } from "./renderables/PublishClickTool";
 import { DEFAULT_PUBLISH_SETTINGS } from "./renderables/PublishSettings";
+import { THREE_DEE_SHORTCUTS } from "./shortcuts";
 import { Shared3DPanelState, ThreeDeeRenderProps } from "./types";
 import { useWebGLContextRecovery } from "./useWebGLContextRecovery";
 
@@ -1062,7 +1064,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
 
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      if (event.key === "3" && !(event.metaKey || event.ctrlKey)) {
+      if (findShortcut(THREE_DEE_SHORTCUTS, event)?.id === "3d.togglePerspective") {
         onTogglePerspective();
         event.stopPropagation();
         event.preventDefault();

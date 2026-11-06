@@ -15,6 +15,8 @@ import { useCommandPaletteStore } from "@lichtblick/suite-base/components/Comman
 import { LAYOUT_SHORTCUTS } from "@lichtblick/suite-base/components/CommandPalette/layoutShortcuts";
 import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
 import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
+import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
+import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
@@ -25,7 +27,7 @@ import { useInteractionCapture } from "@lichtblick/suite-base/hooks/useInteracti
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
 import { checkForServiceWorkerUpdate } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
-import { formatKeyboardShortcut } from "@lichtblick/suite-base/util/formatKeyboardShortcut";
+import { shortcutLabel } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 import { AppMenuProps } from "./types";
 
@@ -44,6 +46,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
   const exportableFile = useExportableFile();
   const openExport = useTrimStore((state) => state.openExport);
   const showCommandPalette = useCommandPaletteStore((state) => state.show);
+  const showShortcuts = useKeyboardShortcutsStore((state) => state.show);
   const { dialogActions } = useWorkspaceActions();
   const { importLayout, exportLayout } = useLayoutTransfer();
   const installApp = useInstallPrompt();
@@ -136,7 +139,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
           await dialogActions.openFile.open();
         },
         {
-          shortcut: formatKeyboardShortcut("O", ["Meta"]),
+          shortcut: shortcutLabel(APP_SHORTCUTS, "app.openFile"),
         },
       )}
       {item("export-recording", t("exportRecording"), openExport, {
@@ -173,7 +176,10 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
 
       <Divider />
       {item("command-palette", t("commandPalette"), showCommandPalette, {
-        shortcut: formatKeyboardShortcut("K", ["Meta"]),
+        shortcut: shortcutLabel(APP_SHORTCUTS, "app.commandPalette"),
+      })}
+      {item("keyboard-shortcuts", t("keyboardShortcuts"), showShortcuts, {
+        shortcut: shortcutLabel(APP_SHORTCUTS, "app.showShortcuts"),
       })}
       {item("settings", t("settings"), () => {
         dialogActions.preferences.open();

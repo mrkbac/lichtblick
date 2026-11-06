@@ -10,6 +10,7 @@ import { ComponentType, createContext, useContext } from "react";
 import { PanelStatics } from "@lichtblick/suite-base/components/types";
 import { Namespace } from "@lichtblick/suite-base/types";
 import { PanelConfig } from "@lichtblick/suite-base/types/panels";
+import { KeyboardShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 export type PanelComponent = ComponentType<{ childId?: string; tabId?: string }> &
   PanelStatics<PanelConfig>;
@@ -26,6 +27,9 @@ export type PanelInfo = {
 
   /** Keep the panel loadable from saved layouts but don't offer it in the panel list. */
   hidden?: boolean;
+
+  /** Keyboard shortcuts, listed in the shortcut overlay (`?`) when the panel is in the layout. */
+  shortcuts?: readonly KeyboardShortcut[];
 
   /**
    * The panel module is a function to load the panel.

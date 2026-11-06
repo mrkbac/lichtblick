@@ -46,6 +46,8 @@ import DataSourceSidebar from "@lichtblick/suite-base/components/DataSourceSideb
 import DocumentDropListener from "@lichtblick/suite-base/components/DocumentDropListener";
 import { EventsList } from "@lichtblick/suite-base/components/EventsList";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
+import { KeyboardShortcuts } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
+import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import LayoutBrowser from "@lichtblick/suite-base/components/LayoutBrowser";
 import { LayoutTemplateCommands } from "@lichtblick/suite-base/components/LayoutTemplates";
 import {
@@ -108,6 +110,7 @@ import { InjectedSidebarItem, Namespace, WorkspaceProps } from "@lichtblick/suit
 import { parseAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import useBroadcast from "@lichtblick/suite-base/util/broadcast/useBroadcast";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
+import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 import { useWorkspaceActions } from "./context/Workspace/useWorkspaceActions";
 import { severityToBadgeColor } from "./utils";
@@ -468,9 +471,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     return items;
   }, [enableDebugMode, showEventsTab, PerformanceSidebarComponent]);
 
-  const keyboardEventHasModifier = (event: KeyboardEvent) =>
-    navigator.userAgent.includes("Mac") ? event.metaKey : event.ctrlKey;
-
   function AddPanel() {
     const addPanel = useAddPanel();
     const { openLayoutBrowser } = useWorkspaceActions();
@@ -506,45 +506,42 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     );
   }
 
-  const keyDownHandlers = useMemo(() => {
-    return {
-      "[": () => {
-        sidebarActions.left.setOpen((oldValue) => !oldValue);
-      },
-      "]": () => {
-        sidebarActions.right.setOpen((oldValue) => !oldValue);
-      },
-      ",": () => {
-        sidebarActions.left.selectItem(
-          leftSidebarOpen && leftSidebarItem === "panel-settings" ? undefined : "panel-settings",
-        );
-      },
-      o: (ev: KeyboardEvent) => {
-        if (!keyboardEventHasModifier(ev)) {
-          return;
-        }
-        ev.preventDefault();
-        if (ev.shiftKey) {
+  const keyDownHandlers = useMemo(
+    () =>
+      shortcutKeyHandlers(APP_SHORTCUTS, {
+        "app.toggleLeftSidebar": () => {
+          sidebarActions.left.setOpen((oldValue) => !oldValue);
+        },
+        "app.toggleRightSidebar": () => {
+          sidebarActions.right.setOpen((oldValue) => !oldValue);
+        },
+        "app.togglePanelSettings": () => {
+          sidebarActions.left.selectItem(
+            leftSidebarOpen && leftSidebarItem === "panel-settings" ? undefined : "panel-settings",
+          );
+        },
+        "app.openConnection": () => {
           dialogActions.dataSource.open("start");
           // autoFocus only applies on mount, so focus the bar when the page is already open
           requestAnimationFrame(() => {
             document.getElementById(START_ADDRESS_INPUT_ID)?.focus();
           });
-          return;
-        }
-        void dialogActions.openFile.open().catch((err: unknown) => {
-          console.error(err);
-        });
-      },
-    };
-  }, [
-    dialogActions.dataSource,
-    dialogActions.openFile,
-    leftSidebarItem,
-    leftSidebarOpen,
-    sidebarActions.left,
-    sidebarActions.right,
-  ]);
+        },
+        "app.openFile": () => {
+          void dialogActions.openFile.open().catch((err: unknown) => {
+            console.error(err);
+          });
+        },
+      }),
+    [
+      dialogActions.dataSource,
+      dialogActions.openFile,
+      leftSidebarItem,
+      leftSidebarOpen,
+      sidebarActions.left,
+      sidebarActions.right,
+    ],
+  );
 
   const targetUrlState = useMemo(() => {
     const deepLinks = props.deepLinks ?? [];
@@ -766,6 +763,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       <LayoutShortcutListener />
       <CommandPalette />
       <LayoutTemplateCommands />
+      <KeyboardShortcuts />
       <div className={classes.container} ref={containerRef} tabIndex={0}>
         {appBar}
         <Sidebars

@@ -76,7 +76,7 @@ const selectStartTime = (ctx: MessagePipelineContext) => ctx.playerState.activeD
 const selectEndTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
 const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
 const selectHasCurrentTime = (ctx: MessagePipelineContext) => selectCurrentTime(ctx) != undefined;
-const NO_KEY_HANDLERS: Record<string, () => boolean> = {};
+const NO_KEY_HANDLERS = {};
 
 /** Reads the playhead on demand, so callers don't re-render on every playback tick. */
 function usePlayheadGetter(): () => bigint | undefined {
@@ -278,7 +278,10 @@ export function TrimBar(): React.JSX.Element | null {
 }
 
 /** Keyboard handlers for setting in and out points at the playhead while trimming. */
-export function useTrimKeyHandlers(): Record<string, () => boolean> {
+export function useTrimKeyHandlers(): {
+  "playback.trimIn"?: () => boolean;
+  "playback.trimOut"?: () => boolean;
+} {
   const editing = useTrimStore((state) => state.editing);
   const getPlayhead = usePlayheadGetter();
   const getPipeline = useMessagePipelineGetter();
@@ -298,7 +301,7 @@ export function useTrimKeyHandlers(): Record<string, () => boolean> {
         : { playhead, start: s, end: e, setRange };
     };
     return {
-      i: () => {
+      "playback.trimIn": () => {
         const r = resolve();
         if (!r) {
           return false;
@@ -306,7 +309,7 @@ export function useTrimKeyHandlers(): Record<string, () => boolean> {
         r.setRange(r.playhead, r.playhead > r.end ? r.playhead : r.end);
         return true;
       },
-      o: () => {
+      "playback.trimOut": () => {
         const r = resolve();
         if (!r) {
           return false;
