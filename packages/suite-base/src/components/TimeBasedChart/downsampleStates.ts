@@ -162,10 +162,16 @@ export function downsampleStates(
       continue;
     }
 
-    // Unlabelled points (gap markers, segment ends) close the open interval first so output
-    // stays in x order and a same-state segment after a gap isn't merged into the one before.
+    // Unlabelled points repeat the previous state (shown points, segment ends) or mark a gap
+    // (y = NaN). A repeat inside the open interval is already covered by it. Anything else closes
+    // the interval first so output stays in x order and a same-state segment after a gap isn't
+    // merged into the one before.
     if (label == undefined) {
-      finishInterval(x);
+      const isGap = Number.isNaN(datum.y);
+      if (!isGap && interval?.xPixel === Math.trunc(x * pixelPerXValue)) {
+        continue;
+      }
+      finishInterval(isGap ? x : undefined);
       interval = undefined;
       indices.push({
         x,

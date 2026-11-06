@@ -127,4 +127,17 @@ describe("downsampleStates", () => {
       { x: 50.04, index: 2 },
     ]);
   });
+
+  it("keeps the multi-state summary when a repeated state point is in the interval", () => {
+    // A, repeated A (no label, e.g. with "show points"), B within one interval
+    const data: Datum[] = [
+      { x: 50, y: 0, label: A },
+      { x: 50.01, y: 0 },
+      { x: 50.02, y: 0, label: B },
+      { x: 100, y: 0, label: B },
+    ];
+
+    const result = downsampleStates(iterateObjects(data), bounds, numPoints);
+    expect(result[0]).toEqual({ x: 50, index: undefined, states: [A, B] });
+  });
 });
