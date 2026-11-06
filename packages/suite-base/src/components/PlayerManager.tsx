@@ -215,9 +215,13 @@ export default function PlayerManager(
   const [selectedSource, setSelectedSource] = useState<IDataSourceFactory | undefined>();
   const [selectedFiles, setSelectedFiles] = useState<readonly File[] | undefined>();
 
+  // Bumped by every select/close so an in-flight async selection can tell it was superseded.
+  const selectionGen = useRef(0);
+
   const selectSource = useCallback(
     async (sourceId: string, args?: DataSourceArgs) => {
       log.debug(`Select Source: ${sourceId}`);
+      const gen = ++selectionGen.current;
 
       const foundSource = playerSources.find(
         (source) => (source.id === sourceId || source.legacyIds?.includes(sourceId)) ?? false,
@@ -289,7 +293,7 @@ export default function PlayerManager(
                 const permission = await handle.queryPermission({
                   mode: "read",
                 });
-                if (!isMounted()) {
+                if (!isMounted() || gen !== selectionGen.current) {
                   return;
                 }
 
@@ -303,7 +307,7 @@ export default function PlayerManager(
                 }
               }
               files = await Promise.all(handles.map(async (f) => await f.getFile()));
-              if (!isMounted()) {
+              if (!isMounted() || gen !== selectionGen.current) {
                 return;
               }
             }
@@ -399,11 +403,14 @@ export default function PlayerManager(
   }, [recentsLoaded, recents, selectSource, enqueueSnackbar, closeSnackbar]);
 
   const closeSource = useCallback(() => {
+    selectionGen.current++;
     // Dropping the player makes MessagePipelineProvider close() it (e.g. closes the websocket).
     setBasePlayer(undefined);
     setSelectedSource(undefined);
     setSelectedFiles(undefined);
     setCurrentRecentId(undefined);
+    // Forget the last opened file so a reload doesn't reopen it (the recent entry stays).
+    writeLastFile(undefined);
     // Drop ds/time from the URL so a reload doesn't reconnect.
     const url = updateAppURLState(new URL(window.location.href), {
       ds: undefined,
