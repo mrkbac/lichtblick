@@ -1270,6 +1270,44 @@ describe("ThreeDeeRender", () => {
       );
     });
 
+    it("finishes loading when the source has no range to preload", async () => {
+      // Given: a live source, the range subscription never calls back
+      const topics = [RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" })];
+      const customRendererInstance = createMockRenderer({
+        schemaSubscriptions: new Map([["tf2_msgs/TFMessage", [{ preload: true }]]]),
+      });
+      vi.mocked(Renderer).mockImplementationOnce(function () {
+        return customRendererInstance as any;
+      });
+      const mockContext = createPreloadingContext({
+        initialState: {
+          scene: { enableStats: true },
+          topics: { "/tf": { visible: true } },
+        },
+      });
+      const props = setup({}, mockContext);
+
+      // When
+      const { container } = render(<ThreeDeeRender {...props} />);
+      await waitFor(() => {
+        expect(mockContext.onRender).toBeDefined();
+      });
+      act(() => {
+        mockContext.onRender!(
+          { topics, currentFrame: [], currentTime: { sec: 100, nsec: 0 } },
+          vi.fn(),
+        );
+      });
+
+      // Then
+      await waitFor(() => {
+        expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledTimes(1);
+      });
+      await waitFor(() => {
+        expect(container.querySelector('[class*="loadingTransforms"]')).not.toBeInTheDocument();
+      });
+    });
+
     it("does not show loading indicator when render stats is disabled", async () => {
       // Given
       const topicName = "/tf";

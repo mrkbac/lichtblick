@@ -524,7 +524,15 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     const lastUpdateTimeRef = { current: 0 };
     const UPDATE_DEBOUNCE_MS = 50; // Update UI every 50ms during loading
 
+    // Set to false on cleanup so a stale iterator can't overwrite the next preload's state
+    const effectState = { active: true };
+    // Topics whose source has a range; live sources never call back, so there's nothing to preload
+    const topicsWithRange = new Set<string>();
+
     const updateAllFrames = (options?: { isComplete?: boolean }) => {
+      if (!effectState.active) {
+        return;
+      }
       if (messageBuffer.length === 0) {
         setIsLoadingTransforms(false);
         return;
@@ -547,7 +555,11 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
           topic: topic.topic,
           convertTo: topic.convertTo,
           onNewRangeIterator: async (batchIterator) => {
+            topicsWithRange.add(topic.topic);
             for await (const batch of batchIterator) {
+              if (!effectState.active) {
+                break;
+              }
               if (batch.length > 0) {
                 messageBuffer.push(...batch);
 
@@ -562,17 +574,25 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
             resolve();
           },
         });
+        if (!topicsWithRange.has(topic.topic)) {
+          resolve();
+        }
         unsubscriptions.push(unsubscribe);
       });
       subscriptionPromises.push(promise);
     }
 
-    // Final update after all topics complete
-    void Promise.all(subscriptionPromises).then(() => {
-      updateAllFrames({ isComplete: true });
-    });
+    if (topicsWithRange.size === 0) {
+      setIsLoadingTransforms(false);
+    } else {
+      // Final update after all topics complete
+      void Promise.all(subscriptionPromises).then(() => {
+        updateAllFrames({ isComplete: true });
+      });
+    }
 
     return () => {
+      effectState.active = false;
       for (const unsubscribe of unsubscriptions) {
         unsubscribe();
       }
