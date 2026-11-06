@@ -20,6 +20,7 @@ import { DEFAULT_ANNOTATION } from "@lichtblick/suite-base/panels/Plot/constants
 import { getChartOptions } from "@lichtblick/suite-base/panels/Plot/utils/getChartOptions";
 import { Bounds, Bounds1D } from "@lichtblick/suite-base/types/Bounds";
 import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
+import { fontMonospace } from "@lichtblick/theme";
 
 import {
   ChartRendererProps,
@@ -144,6 +145,19 @@ export class ChartRenderer {
       }
     }
 
+    for (const [scaleId, log] of [
+      ["y", action.yLogScale],
+      ["y2", action.y2LogScale],
+    ] as const) {
+      if (log == undefined) {
+        continue;
+      }
+      const scaleOption = this.#chartInstance.options.scales?.[scaleId];
+      if (scaleOption) {
+        scaleOption.type = log ? "logarithmic" : "linear";
+      }
+    }
+
     if (action.showXAxisGrid != undefined) {
       const grid = this.#chartInstance.options.scales?.x?.grid;
       if (grid) {
@@ -219,11 +233,23 @@ export class ChartRenderer {
       }
 
       const newAnnotations: AnnotationOptions[] = action.referenceLines.map((config) => {
+        const vertical = config.scaleID === "x";
         return {
           ...DEFAULT_ANNOTATION,
           scaleID: config.scaleID ?? "y",
           borderColor: config.color,
           value: config.value,
+          label: config.label
+            ? {
+                display: true,
+                content: config.label,
+                position: vertical ? "start" : "end",
+                backgroundColor: config.color,
+                color: "#fff",
+                font: { family: fontMonospace, size: 10 },
+                padding: 3,
+              }
+            : undefined,
         };
       });
 
@@ -454,6 +480,7 @@ export class ChartRenderer {
     return {
       min: yScale.min,
       max: yScale.max,
+      log: yScale.type === "logarithmic",
       top: yScale.top,
       bottom: yScale.bottom,
     };

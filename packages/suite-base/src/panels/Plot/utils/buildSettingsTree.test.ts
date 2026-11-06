@@ -334,4 +334,27 @@ describe("buildSettingsTree", () => {
       expect(child0?.icon).toBe("DragHandle");
     });
   });
+
+  it("offers a log scale on both y axes", () => {
+    const config = PlotBuilder.config({ yAxisLogScale: true });
+
+    const tree = buildSettingsTree(config, t);
+
+    expect(tree.yAxis?.fields?.yAxisLogScale?.value).toBe(true);
+    expect(tree.y2Axis?.fields?.y2AxisLogScale?.value).toBe(false);
+  });
+
+  it("offers an orientation only for reference lines", () => {
+    const config = PlotBuilder.config({
+      paths: [
+        PlotBuilder.path({ value: "5", referenceLineAxis: "x" }),
+        PlotBuilder.path({ value: "/topic.field" }),
+      ],
+    });
+
+    const children = buildSettingsTree(config, t).paths?.children;
+
+    expect(children?.["0"]?.fields?.referenceLineAxis?.value).toBe("x");
+    expect(children?.["1"]?.fields?.referenceLineAxis).toBeUndefined();
+  });
 });

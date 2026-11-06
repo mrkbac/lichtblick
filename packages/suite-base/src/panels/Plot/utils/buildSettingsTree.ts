@@ -12,6 +12,7 @@ import { DEFAULT_PLOT_PATH } from "@lichtblick/suite-base/panels/Plot/constants"
 import { MakeRootSeriesNode, MakeSeriesNode } from "@lichtblick/suite-base/panels/Plot/types";
 import {
   getTimeWindow,
+  isReferenceLinePlotPathType,
   PlotConfig,
   PlotPath,
   plotPathDisplayName,
@@ -97,6 +98,17 @@ const makeSeriesNode = memoizeWeak(
           ],
           value: path.axis ?? "primary",
         },
+        ...(isReferenceLinePlotPathType(path) && {
+          referenceLineAxis: {
+            input: "select",
+            label: t("orientation"),
+            options: [
+              { label: t("horizontal"), value: "y" },
+              { label: t("vertical"), value: "x" },
+            ],
+            value: path.referenceLineAxis ?? "y",
+          },
+        }),
         timestampMethod: {
           input: "select",
           label: t("timestamp"),
@@ -274,6 +286,11 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
           input: "boolean",
           value: config.showYAxisGrid ?? true,
         },
+        yAxisLogScale: {
+          label: t("logScale"),
+          input: "boolean",
+          value: config.yAxisLogScale ?? false,
+        },
       },
     },
     y2Axis: {
@@ -307,6 +324,11 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
           label: t("showGridLines"),
           input: "boolean",
           value: config.showY2AxisGrid ?? false,
+        },
+        y2AxisLogScale: {
+          label: t("logScale"),
+          input: "boolean",
+          value: config.y2AxisLogScale ?? false,
         },
       },
     },

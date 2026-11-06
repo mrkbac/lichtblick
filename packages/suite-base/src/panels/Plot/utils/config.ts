@@ -28,8 +28,11 @@ export type PlotPath = BasePlotPath & {
   xValue?: string;
   /** Trailing moving-average window in samples for timestamp plots. 0 or unset disables it. */
   smoothing?: number;
+  /** Reference lines only: "x" draws a vertical line at the value instead of a horizontal one. */
+  referenceLineAxis?: PlotReferenceLineAxis;
 };
 
+export type PlotReferenceLineAxis = "y" | "x";
 export type PlotInterpolation = "linear" | "step";
 export type PlotYAxis = "primary" | "secondary";
 export type PlotTimeWindow = "automatic" | "sliding" | "fixed";
@@ -99,12 +102,15 @@ export type PlotConfig = DeprecatedPlotConfig & {
   yAxisLabel?: string;
   showXAxisGrid?: boolean;
   showYAxisGrid?: boolean;
+  /** Logarithmic primary y-axis */
+  yAxisLogScale?: boolean;
   /** Secondary y-axis settings. The axis shows when at least one series uses it. */
   y2AxisLabel?: string;
   showY2AxisLabels?: boolean;
   showY2AxisGrid?: boolean;
   minY2Value?: number;
   maxY2Value?: number;
+  y2AxisLogScale?: boolean;
   /** Unset on older layouts; see getTimeWindow. */
   timeWindow?: PlotTimeWindow;
   playheadPosition?: PlotPlayheadPosition;

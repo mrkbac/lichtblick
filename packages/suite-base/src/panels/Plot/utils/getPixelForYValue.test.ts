@@ -83,4 +83,11 @@ describe("getPixelForYValue", () => {
     // Then
     expect(result).toBeUndefined();
   });
+
+  it("places values by their logarithm on a log scale", () => {
+    const logScale: YScale = { top: 0, bottom: 100, min: 1, max: 100, log: true };
+
+    expect(getPixelForYValue(logScale, 10)).toBeCloseTo(50);
+    expect(getPixelForYValue(logScale, 100)).toBeCloseTo(0);
+  });
 });

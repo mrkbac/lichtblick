@@ -290,10 +290,17 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
         return;
       }
 
+      const label = path.label?.trim();
       return {
         color: getLineColor(path.color, idx),
         value,
-        scaleID: path.axis === "secondary" ? ("y2" as const) : ("y" as const),
+        scaleID:
+          path.referenceLineAxis === "x"
+            ? ("x" as const)
+            : path.axis === "secondary"
+              ? ("y2" as const)
+              : ("y" as const),
+        label: label === "" ? undefined : label,
       };
     });
 
@@ -302,6 +309,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     this.updateAction.xAxisLabel = config.xAxisLabel;
     this.updateAction.yAxisLabel = config.yAxisLabel;
     this.updateAction.referenceLines = referenceLines;
+    this.updateAction.yLogScale = config.yAxisLogScale ?? false;
+    this.updateAction.y2LogScale = config.y2AxisLogScale ?? false;
     this.updateAction.showXAxisGrid = config.showXAxisGrid ?? true;
     this.updateAction.showYAxisGrid = config.showYAxisGrid ?? true;
     this.updateAction.y2Axis = {
