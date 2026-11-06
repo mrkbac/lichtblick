@@ -304,7 +304,8 @@ export default function Panel<
       connectMessagePathDropTarget,
       dropMessage,
       setMessagePathDropConfig: setLocalMessagePathDropConfig,
-    } = useMessagePathDrop();
+      // Panels without a real id must not share an owner id, or they'd reject each other's drags.
+    } = useMessagePathDrop(childId === FALLBACK_PANEL_ID ? undefined : childId);
 
     // Also register the drop config globally so the topic list can drop onto this panel on double-click
     const setMessagePathDropConfig = useCallback(

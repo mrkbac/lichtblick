@@ -22,6 +22,7 @@ import {
   decodeRGB8,
   decodeRGBA8,
   decodeUYVY,
+  decodeYUV420,
   decodeYUYV,
 } from "@lichtblick/den/image";
 import {
@@ -209,6 +210,16 @@ export function decodeRawImage(
     case "yuv422_yuy2":
     case "yuyv":
       decodeYUYV(rawData, width, height, step, output);
+      break;
+    case "yuv420":
+    case "i420":
+      decodeYUV420(rawData, width, height, step, "i420", output);
+      break;
+    case "nv12":
+      decodeYUV420(rawData, width, height, step, "nv12", output);
+      break;
+    case "nv21":
+      decodeYUV420(rawData, width, height, step, "nv21", output);
       break;
     case "rgb8":
       decodeRGB8(rawData, width, height, step, output);

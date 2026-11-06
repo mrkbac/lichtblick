@@ -14,6 +14,7 @@ export const plot = {
   axisScales: "Axis scales",
   center: "Center",
   clickToAddASeries: "Click to add a series",
+  dragSeriesHint: "Drag onto another panel to add this series",
   closeMeasureMode: "Close measure mode",
   color: "Color",
   count: "Count",

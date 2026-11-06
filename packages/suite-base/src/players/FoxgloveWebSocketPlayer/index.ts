@@ -14,7 +14,6 @@ import {
   fromNanoSec,
   isGreaterThan,
   isLessThan,
-  subtract,
   Time,
   toNanoSec,
 } from "@foxglove/rostime";
@@ -57,8 +56,6 @@ import {
   Topic,
   TopicStats,
 } from "@lichtblick/suite-base/players/types";
-import { HIGH_FREQUENCY_ALERT } from "@lichtblick/suite-base/players/utils/constants";
-import { isTopicHighFrequency } from "@lichtblick/suite-base/players/utils/isTopicHighFrequency";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { ros2CommonDatatypes } from "@lichtblick/suite-base/util/ros2CommonDatatypes";
 import rosDatatypesToMessageDefinition from "@lichtblick/suite-base/util/rosDatatypesToMessageDefinition";
@@ -167,7 +164,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #fetchedAssets = new Map<string, Promise<Asset>>();
   #parameterTypeByName = new Map<string, Parameter["type"]>();
   #messageSizeEstimateByTopic: Record<string, number> = {};
-  #ishighFrequencyMessage = false;
 
   public constructor({
     url,
@@ -258,7 +254,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#serviceTypes = new Map();
       this.#datatypes = new Map();
       this.#parameters = new Map();
-      this.#ishighFrequencyMessage = false;
     });
 
     this.#client.on("error", (err) => {
@@ -621,23 +616,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
         }
         stats.numMessages++;
         this.#topicsStats = topicStats;
-
-        if (!this.#ishighFrequencyMessage) {
-          const duration =
-            this.#startTime && this.#endTime ? subtract(this.#endTime, this.#startTime) : undefined;
-          this.#ishighFrequencyMessage = isTopicHighFrequency({
-            topicStats: this.#topicsStats,
-            topic: { name: topic, schemaName: chanInfo.channel.schemaName },
-            duration,
-          });
-          if (this.#ishighFrequencyMessage) {
-            this.#alerts.addAlert(HIGH_FREQUENCY_ALERT.id, {
-              severity: HIGH_FREQUENCY_ALERT.severity,
-              message: HIGH_FREQUENCY_ALERT.message,
-              error: new Error(HIGH_FREQUENCY_ALERT.errorMessage),
-            });
-          }
-        }
       } catch (error) {
         this.#alerts.addAlert(`message:${chanInfo.channel.topic}`, {
           severity: "error",

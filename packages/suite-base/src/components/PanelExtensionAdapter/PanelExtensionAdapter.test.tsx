@@ -20,6 +20,7 @@ import {
   MessageEvent,
   Immutable,
   Subscription,
+  SettingsTreeAction,
 } from "@lichtblick/suite";
 import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";
 import { AlertsContext, AlertsContextStore } from "@lichtblick/suite-base/context/AlertsContext";
@@ -67,6 +68,83 @@ describe("PanelExtensionAdapter", () => {
     // force a re-render to make sure we do not call init panel again
     handle.rerender(<Wrapper />);
     await sig;
+  });
+
+  it("routes nested converter settings through the panel updater", () => {
+    // GIVEN a panel that handles converter settings updates
+    const saveConfig = vi.fn();
+    const updateSettingsTree = vi.fn();
+    const settingsTreeSpy = vi
+      .spyOn(PanelStateContextProvider, "usePanelSettingsTreeUpdate")
+      .mockReturnValue(updateSettingsTree);
+    const config = { topics: { topic: { child: { enabled: false } } } };
+    const panelActionHandler = vi.fn();
+    const extensionHandler = vi.fn();
+    const updateTopicSettings = vi.fn((updateSettings) => updateSettings(config));
+    const initPanel = (context: BuiltinPanelExtensionContext) => {
+      context.updatePanelSettingsEditor(
+        { actionHandler: panelActionHandler, nodes: {} },
+        updateTopicSettings,
+      );
+    };
+
+    const view = render(
+      <MockPanelContextProvider type="3D">
+        <PanelSetup
+          fixture={{
+            topics: [{ name: "topic", schemaName: "test.Schema" }],
+            messageConverters: [
+              {
+                fromSchemaName: "test.Schema",
+                toSchemaName: "foxglove.SceneUpdate",
+                converter: () => ({}),
+                panelSettings: {
+                  "3D": {
+                    settings: () => ({}),
+                    handler: extensionHandler,
+                  },
+                },
+              },
+            ],
+          }}
+        >
+          <PanelExtensionAdapter config={{}} saveConfig={saveConfig} initPanel={initPanel} />
+        </PanelSetup>
+      </MockPanelContextProvider>,
+    );
+
+    // WHEN a nested setting is enabled
+    const action: SettingsTreeAction = {
+      action: "update",
+      payload: { path: ["topics", "topic", "child", "enabled"], input: "boolean", value: true },
+    };
+    act(() => {
+      updateSettingsTree.mock.calls[0]![0].actionHandler(action);
+    });
+
+    // THEN the panel applies the edit once without a duplicate adapter save
+    expect(updateTopicSettings).toHaveBeenCalledTimes(1);
+    expect(extensionHandler).toHaveBeenCalledWith(action, config.topics.topic);
+    expect(extensionHandler).toHaveBeenCalledTimes(1);
+    expect(saveConfig).not.toHaveBeenCalled();
+
+    // WHEN a normal panel setting is changed
+    const panelAction: SettingsTreeAction = {
+      action: "update",
+      payload: { path: ["scene", "enableStats"], input: "boolean", value: true },
+    };
+    act(() => {
+      updateSettingsTree.mock.calls.at(-1)![0].actionHandler(panelAction);
+    });
+
+    // THEN only the panel handler receives the edit without another converter update or save
+    expect(panelActionHandler).toHaveBeenLastCalledWith(panelAction);
+    expect(panelActionHandler).toHaveBeenCalledTimes(2);
+    expect(updateTopicSettings).toHaveBeenCalledTimes(1);
+    expect(extensionHandler).toHaveBeenCalledTimes(1);
+    expect(saveConfig).not.toHaveBeenCalled();
+    view.unmount();
+    settingsTreeSpy.mockRestore();
   });
 
   it("should expose point-in-time message lookups through the panel context", async () => {
@@ -872,6 +950,165 @@ describe("PanelExtensionAdapter", () => {
     mockRAF.mockRestore();
   });
 
+  describe("last message injected when a panel subscribes to a topic (live source)", () => {
+    const msg = (topic: string, sec: number): MessageEvent => ({
+      topic,
+      receiveTime: { sec, nsec: 0 },
+      sizeInBytes: 0,
+      message: sec,
+      schemaName: "foo",
+    });
+
+    function setup({ watchCurrentFrame = true }: { watchCurrentFrame?: boolean } = {}) {
+      const renderStates: Immutable<RenderState>[] = [];
+      const held: (() => void)[] = [];
+      const panel: { context?: PanelExtensionContext; hold: boolean } = { hold: false };
+      const initPanel = vi.fn((context: PanelExtensionContext) => {
+        panel.context = context;
+        if (watchCurrentFrame) {
+          context.watch("currentFrame");
+          context.subscribe([
+            { topic: "fast", preload: false },
+            { topic: "latched", preload: false },
+          ]);
+        } else {
+          context.watch("topics");
+        }
+        context.onRender = (renderState, done) => {
+          renderStates.push({ ...renderState });
+          if (panel.hold) {
+            held.push(done);
+          } else {
+            done();
+          }
+        };
+      });
+      const Wrapper = ({ frame }: { frame: Record<string, MessageEvent[]> }) => (
+        <ThemeProvider isDark>
+          <MockPanelContextProvider>
+            <PanelSetup
+              fixture={{
+                topics: [
+                  { name: "fast", schemaName: "foo" },
+                  { name: "latched", schemaName: "foo" },
+                ],
+                frame,
+              }}
+              // The real pipeline applies subscription updates immediately and only holds the next
+              // player frame until panels finish rendering; the mock would also hold subscription
+              // updates, so don't register render promises with it.
+              pauseFrame={() => () => {}}
+            >
+              <PanelExtensionAdapter config={{}} saveConfig={() => {}} initPanel={initPanel} />
+            </PanelSetup>
+          </MockPanelContextProvider>
+        </ThemeProvider>
+      );
+      const delivered = () =>
+        renderStates.flatMap((state) =>
+          (state.currentFrame ?? []).map((ev) => `${ev.topic}@${ev.receiveTime.sec}`),
+        );
+      const subscribe = (topics: string[]) => {
+        act(() => {
+          panel.context!.subscribe(topics.map((topic) => ({ topic, preload: false })));
+        });
+      };
+      return { Wrapper, panel, held, delivered, subscribe };
+    }
+
+    async function settle() {
+      for (let i = 0; i < 5; i++) {
+        await act(async () => {
+          await Promise.resolve();
+        });
+      }
+    }
+
+    // Tab switch: the old tab's panel held /tf_static and leaves, the new tab's 3D panel subscribes
+    // while it is still rendering its first frame. The pipeline injects the cached message into
+    // that moment's frame, which the adapter used to drop because the panel was busy; a live
+    // source never sends /tf_static again.
+    it("is delivered after the panel finishes the frame it was rendering", async () => {
+      // Given a panel that got the latched message once and is now busy rendering a frame
+      const { Wrapper, panel, held, delivered, subscribe } = setup();
+      render(<Wrapper frame={{ fast: [msg("fast", 1)], latched: [msg("latched", 2)] }} />);
+      await settle();
+      expect(delivered().filter((d) => d === "latched@2")).toHaveLength(1);
+
+      panel.hold = true;
+      subscribe(["fast"]);
+      await settle();
+      expect(held.length).toBeGreaterThan(0); // the panel is busy rendering
+
+      // When it subscribes to the latched topic while busy, then finishes rendering
+      subscribe(["fast", "latched"]);
+      await settle();
+      expect(delivered().filter((d) => d === "latched@2")).toHaveLength(1);
+
+      panel.hold = false;
+      act(() => {
+        held.splice(0).forEach((done) => {
+          done();
+        });
+      });
+      await settle();
+
+      // Then the latched message is delivered with the next rendered frame
+      expect(delivered().filter((d) => d === "latched@2")).toHaveLength(2);
+    });
+
+    // The injected message used to arrive before the adapter's local subscriptions included the
+    // topic, so the render state builder filtered it out and never saw that frame again.
+    it("is delivered once when the panel is not busy", async () => {
+      // Given a panel that got the latched message once and then unsubscribed from it
+      const { Wrapper, delivered, subscribe } = setup();
+      render(<Wrapper frame={{ fast: [msg("fast", 1)], latched: [msg("latched", 2)] }} />);
+      await settle();
+      subscribe(["fast"]);
+      await settle();
+
+      // When it subscribes to the latched topic again and keeps rendering
+      subscribe(["fast", "latched"]);
+      await settle();
+      subscribe(["fast", "latched"]);
+      await settle();
+
+      // Then the latched message is delivered exactly once more
+      expect(delivered().filter((d) => d === "latched@2")).toHaveLength(2);
+    });
+
+    // The render-done callback belongs to the render that started it. If the panel starts watching
+    // currentFrame and subscribes while that render is in progress, the effect holds the injected
+    // message but cannot render; finishing the render must still deliver it.
+    it("is delivered when the panel starts watching currentFrame while rendering", async () => {
+      // Given a panel that watches only the topic list and is busy rendering it
+      const { Wrapper, panel, held, delivered, subscribe } = setup({ watchCurrentFrame: false });
+      panel.hold = true;
+      render(<Wrapper frame={{ fast: [msg("fast", 1)], latched: [msg("latched", 2)] }} />);
+      await settle();
+      expect(held.length).toBeGreaterThan(0);
+
+      // When it starts watching currentFrame and subscribes to the latched topic while busy, then
+      // finishes rendering
+      act(() => {
+        panel.context!.watch("currentFrame");
+      });
+      subscribe(["fast", "latched"]);
+      await settle();
+      expect(delivered()).toEqual([]);
+      panel.hold = false;
+      act(() => {
+        held.splice(0).forEach((done) => {
+          done();
+        });
+      });
+      await settle();
+
+      // Then the latched message is delivered without waiting for another frame
+      expect(delivered()).toContain("latched@2");
+    });
+  });
+
   it("should call pause frame with new frame and resume after rendering", async () => {
     const renderStates: Immutable<RenderState>[] = [];
 
@@ -979,6 +1216,68 @@ describe("PanelExtensionAdapter", () => {
     expect(mockSetSubscriptions.mock.calls).toEqual([
       [expect.any(String), [{ preloadType: "full", topic: "x" }]],
       [expect.any(String), []],
+    ]);
+  });
+
+  it("ignores a late unsubscribeAll from a previous panel instance", async () => {
+    // Like a panel rendered with createSyncRoot: its cleanup runs in a microtask, after the next
+    // instance has already subscribed.
+    const makeInitPanel = (topic: string) => (context: PanelExtensionContext) => {
+      context.subscribe([{ topic }]);
+      return () => {
+        queueMicrotask(() => {
+          context.unsubscribeAll();
+        });
+      };
+    };
+    const mockSetSubscriptions = vi.fn();
+    const renderAdapter = (initPanel: ReturnType<typeof makeInitPanel>) => (
+      <ThemeProvider isDark>
+        <MockPanelContextProvider>
+          <PanelSetup fixture={{ setSubscriptions: mockSetSubscriptions }}>
+            <PanelExtensionAdapter config={{}} saveConfig={() => {}} initPanel={initPanel} />
+          </PanelSetup>
+        </MockPanelContextProvider>
+      </ThemeProvider>
+    );
+
+    const { rerender } = render(renderAdapter(makeInitPanel("old")));
+    rerender(renderAdapter(makeInitPanel("new")));
+    await act(async () => undefined);
+
+    expect(mockSetSubscriptions.mock.calls.at(-1)).toEqual([
+      expect.any(String),
+      [{ preloadType: "partial", topic: "new" }],
+    ]);
+  });
+
+  it("does not carry a previous panel instance's advertisements into the next one", async () => {
+    const makeInitPanel = (topic: string) => (context: PanelExtensionContext) => {
+      context.advertise?.(topic, "some_datatype");
+    };
+    const mockSetPublishers = vi.fn();
+    const renderAdapter = (initPanel: ReturnType<typeof makeInitPanel>) => (
+      <ThemeProvider isDark>
+        <MockPanelContextProvider>
+          <PanelSetup
+            fixture={{
+              capabilities: [PLAYER_CAPABILITIES.advertise],
+              setPublishers: mockSetPublishers,
+            }}
+          >
+            <PanelExtensionAdapter config={{}} saveConfig={() => {}} initPanel={initPanel} />
+          </PanelSetup>
+        </MockPanelContextProvider>
+      </ThemeProvider>
+    );
+
+    const { rerender } = render(renderAdapter(makeInitPanel("/old")));
+    rerender(renderAdapter(makeInitPanel("/new")));
+    await act(async () => undefined);
+
+    expect(mockSetPublishers.mock.calls.at(-1)).toEqual([
+      expect.any(String),
+      [{ topic: "/new", schemaName: "some_datatype", options: undefined }],
     ]);
   });
 

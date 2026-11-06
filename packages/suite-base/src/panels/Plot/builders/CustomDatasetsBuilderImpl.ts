@@ -218,14 +218,16 @@ export class CustomDatasetsBuilderImpl {
     const allData: FullDatum[] = [];
 
     if (series.config.xParsed) {
-      for (const item of [...series.full, ...series.current]) {
-        allData.push({
-          x: item.x ?? NaN,
-          y: item.value,
-          index: allData.length,
-          receiveTime: item.receiveTime,
-          value: item.originalValue,
-        });
+      for (const items of [series.full, series.current]) {
+        for (const item of items) {
+          allData.push({
+            x: item.x ?? NaN,
+            y: item.value,
+            index: allData.length,
+            receiveTime: item.receiveTime,
+            value: item.originalValue,
+          });
+        }
       }
       return allData;
     }

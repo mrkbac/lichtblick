@@ -430,6 +430,26 @@ describe("decodeRawImage", () => {
     expect(Array.from(output)).toEqual([0, 0, 0, 255, 128, 128, 128, 255, 255, 255, 255, 255]);
   });
 
+  it.each(["yuv420", "i420", "nv12", "nv21"])("decodes 4:2:0 encoding %s", (encoding) => {
+    // GIVEN a 2x2 4:2:0 image with neutral chroma (6 bytes for every layout)
+    const mockImage = createMockROSImage({
+      encoding,
+      width: 2,
+      height: 2,
+      step: 2,
+      data: new Uint8Array([10, 20, 30, 40, 128, 128]),
+    });
+    const output = new Uint8ClampedArray(2 * 2 * 4);
+
+    // WHEN it is decoded
+    decodeRawImage(mockImage, {}, output);
+
+    // THEN the luma comes through as gray
+    expect(Array.from(output)).toEqual([
+      10, 10, 10, 255, 20, 20, 20, 255, 30, 30, 30, 255, 40, 40, 40, 255,
+    ]);
+  });
+
   it("should throw an error for unsupported encoding", () => {
     // GIVEN a raw ROS image with an unsupported encoding
     const mockImage = createMockROSImage({

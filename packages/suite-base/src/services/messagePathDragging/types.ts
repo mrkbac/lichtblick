@@ -17,4 +17,6 @@ export type MessagePathDragParams = {
    * Whether this item is currently selected.
    */
   selected: boolean;
+  /** The panel the drag starts in, if any. That panel ignores the drop (see `isSelfDrop`). */
+  sourcePanelId?: string;
 };

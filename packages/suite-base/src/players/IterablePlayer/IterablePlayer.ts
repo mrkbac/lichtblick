@@ -16,7 +16,6 @@ import {
   toRFC3339String,
   toString,
 } from "@foxglove/rostime";
-import assert from "assert";
 import * as _ from "lodash-es";
 
 import { debouncePromise } from "@lichtblick/den/async";
@@ -28,7 +27,6 @@ import { DeserializingIterableSource } from "@lichtblick/suite-base/players/Iter
 import { freezeMetadata } from "@lichtblick/suite-base/players/IterablePlayer/freezeMetadata";
 import NoopMetricsCollector from "@lichtblick/suite-base/players/NoopMetricsCollector";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
-import { subtractTimes } from "@lichtblick/suite-base/players/UserScriptPlayer/transformerWorker/typescript/userUtils/time";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { applySamplingGuardToSubscriptions } from "@lichtblick/suite-base/players/samplingGuard";
 import {
@@ -46,8 +44,6 @@ import {
   TopicSelection,
   TopicStats,
 } from "@lichtblick/suite-base/players/types";
-import { HIGH_FREQUENCY_ALERT } from "@lichtblick/suite-base/players/utils/constants";
-import { isTopicHighFrequency } from "@lichtblick/suite-base/players/utils/isTopicHighFrequency";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import delay from "@lichtblick/suite-base/util/delay";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
@@ -706,9 +702,7 @@ export class IterablePlayer implements Player {
       // Studio does not like duplicate topics or topics with different datatypes
       // Check for duplicates or for mismatched datatypes
       const uniqueTopics = new Map<string, Topic>();
-      const duration = subtractTimes(this.#end, this.#start);
       this.#providerTopicStats = topicStats;
-      let hasHighFrequencyTopic = false;
 
       for (const topic of topics) {
         const existingTopic = uniqueTopics.get(topic.name);
@@ -721,22 +715,6 @@ export class IterablePlayer implements Player {
           continue;
         }
         uniqueTopics.set(topic.name, topic);
-
-        if (!hasHighFrequencyTopic) {
-          hasHighFrequencyTopic = isTopicHighFrequency({
-            topicStats,
-            topic,
-            duration,
-          });
-
-          if (hasHighFrequencyTopic) {
-            this.#alertManager.addAlert(HIGH_FREQUENCY_ALERT.id, {
-              severity: HIGH_FREQUENCY_ALERT.severity,
-              message: HIGH_FREQUENCY_ALERT.message,
-              error: new Error(HIGH_FREQUENCY_ALERT.errorMessage),
-            });
-          }
-        }
       }
 
       this.#providerTopics = Array.from(uniqueTopics.values());
@@ -1269,7 +1247,9 @@ export class IterablePlayer implements Player {
   }
 
   async #stateIdle() {
-    assert(this.#abort == undefined, "Invariant: some other abort controller exists");
+    if (this.#abort != undefined) {
+      throw new Error("Invariant: some other abort controller exists");
+    }
 
     this.#isPlaying = false;
     this.#presence = PlayerPresence.PRESENT;

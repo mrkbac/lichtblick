@@ -65,6 +65,10 @@ const setup = (overrides = {}) => {
   );
 };
 
+vi.mock("@lichtblick/suite-base/panels/shared/useSeriesDrag", () => ({
+  useSeriesDrag: () => ({ dragRef: undefined, isDragging: false }),
+}));
+
 vi.mock("@lichtblick/hooks", () => ({
   useGuaranteedContext: vi.fn(() => ({
     setState: vi.fn(),

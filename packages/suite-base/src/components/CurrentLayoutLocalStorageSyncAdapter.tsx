@@ -5,7 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import assert from "assert";
 import { useEffect, useRef } from "react";
 import { useAsync } from "react-use";
 import { useDebounce } from "use-debounce";
@@ -54,7 +53,9 @@ export function CurrentLayoutLocalStorageSyncAdapter(): React.JSX.Element {
     }
 
     const serializedLayoutData = JSON.stringify(debouncedLayoutData);
-    assert(serializedLayoutData);
+    if (serializedLayoutData == undefined) {
+      throw new Error("Failed to serialize layout data");
+    }
     localStorage.setItem(LOCAL_STORAGE_STUDIO_LAYOUT_KEY, serializedLayoutData);
   }, [debouncedLayoutData]);
 

@@ -13,6 +13,10 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { PathLegend } from "./PathLegend";
 
+vi.mock("@lichtblick/suite-base/panels/shared/useSeriesDrag", () => ({
+  useSeriesDrag: () => ({ dragRef: undefined, isDragging: false }),
+}));
+
 vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext");
 vi.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions");
 
