@@ -4,6 +4,7 @@
 import { Time, toNanoSec } from "@foxglove/rostime";
 
 import { VideoPlayer, canonicalVideoCodec, isVideoKeyframe } from "@lichtblick/den/video";
+import Logger from "@lichtblick/log";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 import { PartialMessage } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtension";
 import { normalizeAnnotations } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/annotations/normalizeAnnotations";
@@ -42,6 +43,8 @@ import {
   panBy,
   zoomAt,
 } from "./view";
+
+const log = Logger.getLogger(__filename);
 
 export type TileElements = {
   canvas: HTMLCanvasElement;
@@ -124,6 +127,8 @@ export class GridRenderer {
   #linkedView: View = { ...DEFAULT_VIEW };
   #linkZoom = false;
   #syncAnnotations = false;
+  /** Topics already warned about, so a broken stream logs once instead of every frame. */
+  #malformedAnnotationTopics = new Set<string>();
 
   /** `waitingText` is shown on a tile until its first image is drawn. */
   public constructor(onAspectChange: () => void, waitingText: string) {
@@ -137,11 +142,16 @@ export class GridRenderer {
     for (const event of messages) {
       const history = this.#annotations.get(event.topic);
       if (history) {
-        history.push(makeAnnotationEntry(normalizeAnnotations(event.message, event.schemaName)));
-        if (history.length > ANNOTATION_HISTORY) {
-          history.shift();
+        // A malformed message must not stop the rest of the frame (and `done()`) from running.
+        try {
+          history.push(makeAnnotationEntry(normalizeAnnotations(event.message, event.schemaName)));
+          if (history.length > ANNOTATION_HISTORY) {
+            history.shift();
+          }
+          (annotated ??= new Set()).add(event.topic);
+        } catch (error) {
+          this.#warnMalformed(event.topic, error);
         }
-        (annotated ??= new Set()).add(event.topic);
       }
       const tile = this.#tiles.get(event.topic);
       if (!tile) {
@@ -284,6 +294,13 @@ export class GridRenderer {
     const tile = this.#tiles.get(topic);
     if (tile) {
       this.#draw(tile);
+    }
+  }
+
+  #warnMalformed(topic: string, error: unknown): void {
+    if (!this.#malformedAnnotationTopics.has(topic)) {
+      this.#malformedAnnotationTopics.add(topic);
+      log.warn(`Ignoring malformed annotations on ${topic}`, error);
     }
   }
 
@@ -593,7 +610,12 @@ export class GridRenderer {
         sync: this.#syncAnnotations,
       });
       if (entry) {
-        drawAnnotations(ctx, entry.annotations, matrix, tile.geometry.scale);
+        // Normalization doesn't validate fields (e.g. missing `points`); skip what can't be drawn.
+        try {
+          drawAnnotations(ctx, entry.annotations, matrix, tile.geometry.scale);
+        } catch (error) {
+          this.#warnMalformed(topic, error);
+        }
       }
     }
   }
