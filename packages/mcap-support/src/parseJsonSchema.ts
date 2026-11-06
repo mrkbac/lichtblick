@@ -10,6 +10,26 @@ import { MessageDefinitionField } from "@foxglove/message-definition";
 import { MessageDefinitionMap } from "./types";
 
 /**
+ * Reduce a JSON Schema `type` union (e.g. `["number", "null"]`) to a single type: `null` is
+ * dropped (a missing value), `integer | number` widens to `number`. Any other mix can't map to one
+ * field type and returns "mixed", so the field is left out of the datatypes instead of failing
+ * the whole channel.
+ */
+function resolveType(type: unknown): unknown {
+  if (!Array.isArray(type)) {
+    return type;
+  }
+  const types = [...new Set(type.filter((t) => t !== "null"))];
+  if (types.length === 1) {
+    return types[0];
+  }
+  if (types.length === 2 && types.includes("number") && types.includes("integer")) {
+    return "number";
+  }
+  return types.length === 0 ? "null" : "mixed";
+}
+
+/**
  * Parse a JSON Schema and produce datatypes and a deserializer function.
  */
 export function parseJsonSchema(
@@ -33,7 +53,7 @@ export function parseJsonSchema(
   ): (value: Record<string, unknown>) => unknown {
     let postprocessObject: (value: Record<string, unknown>) => unknown = (value) => value;
     const fields: MessageDefinitionField[] = [];
-    if (schema.type !== "object") {
+    if (resolveType(schema.type) !== "object") {
       throw new Error(
         `Expected "type": "object" for schema ${typeName}, got ${JSON.stringify(schema.type)}`,
       );
@@ -60,7 +80,15 @@ export function parseJsonSchema(
           );
         }
       }
-      switch (fieldSchema.type) {
+      const fieldType = resolveType(fieldSchema.type);
+      const itemType =
+        fieldType === "array"
+          ? resolveType((fieldSchema.items as Record<string, unknown> | undefined)?.type)
+          : undefined;
+      if (fieldType === "mixed" || itemType === "mixed") {
+        continue;
+      }
+      switch (fieldType) {
         case "boolean":
           fields.push({ name: fieldName, type: "bool" });
           break;
@@ -123,7 +151,7 @@ export function parseJsonSchema(
         }
         case "array": {
           const itemSchema = fieldSchema.items as Record<string, unknown>;
-          switch (itemSchema.type) {
+          switch (itemType) {
             case "boolean":
               fields.push({ name: fieldName, type: "bool", isArray: true });
               break;
@@ -163,7 +191,12 @@ export function parseJsonSchema(
               postprocessObject = (value) => {
                 const arr = value[fieldName];
                 if (Array.isArray(arr)) {
-                  value[fieldName] = arr.map(postprocessArrayItem);
+                  value[fieldName] = arr.map((item: unknown) =>
+                    // items may be null when the item type is ["object", "null"]
+                    item != undefined && typeof item === "object"
+                      ? postprocessArrayItem(item as Record<string, unknown>)
+                      : item,
+                  );
                 }
                 return prevPostprocess(value);
               };
