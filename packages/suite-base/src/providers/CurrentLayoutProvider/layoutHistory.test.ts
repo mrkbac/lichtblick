@@ -6,8 +6,9 @@ import {
   PanelsActions,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
 import { LayoutNode } from "@lichtblick/suite-base/types/layouts";
+import { findGroup } from "@lichtblick/suite-base/util/layoutTree";
 
-import { COALESCE_MS, HISTORY_LIMIT, LayoutHistory, reopenPlacement } from "./layoutHistory";
+import { COALESCE_MS, HISTORY_LIMIT, LayoutHistory, reopenPlacements } from "./layoutHistory";
 
 const initial: LayoutData = {
   configById: { "Plot!a": { title: "a" }, "Table!b": { title: "b" } },
@@ -181,27 +182,72 @@ describe("LayoutHistory", () => {
     const reopened = h.reopenClosedPanel(a, 2000)!;
     expect(reopened.configById["Plot!a"]).toEqual({ title: "a" });
   });
+
+  describe("when the anchor panels have changed", () => {
+    const tabs: LayoutData = {
+      ...initial,
+      configById: { ...initial.configById, "Map!c": {}, "Map!d": {} },
+      layout: {
+        direction: "row",
+        children: [{ panels: ["Plot!a", "Map!c", "Map!d"] }, { panels: ["Table!b"] }],
+      },
+    };
+    const relayout = (layout: LayoutNode): PanelsActions => ({
+      type: "CHANGE_PANEL_LAYOUT",
+      payload: { layout, trimConfigById: false },
+    });
+
+    it("falls back to another tab mate that is still there", () => {
+      const h = new LayoutHistory();
+      const closed = h.apply(tabs, { type: "CLOSE_PANEL", payload: { id: "Plot!a" } }, 0)!;
+      const moved = h.apply(
+        closed,
+        relayout({ direction: "row", children: [{ panels: ["Map!d"] }, { panels: ["Table!b"] }] }),
+        1000,
+      )!;
+      const reopened = h.reopenClosedPanel(moved, 2000)!;
+      expect(findGroup(reopened.layout, "Plot!a")?.panels).toEqual(["Map!d", "Plot!a"]);
+    });
+
+    it("goes to the right edge instead of tabbing into an unrelated group", () => {
+      const h = new LayoutHistory();
+      const closed = h.apply(tabs, { type: "CLOSE_PANEL", payload: { id: "Plot!a" } }, 0)!;
+      // All former tab mates left without being closed; only an unrelated group remains.
+      const others = h.apply(closed, relayout({ panels: ["Table!b"] }), 1000)!;
+      const reopened = h.reopenClosedPanel(others, 2000)!;
+      expect(findGroup(reopened.layout, "Plot!a")?.panels).toEqual(["Plot!a"]);
+      expect(reopened.layout).toMatchObject({
+        direction: "row",
+        children: [{ panels: ["Table!b"] }, { panels: ["Plot!a"] }],
+      });
+    });
+  });
 });
 
-describe("reopenPlacement", () => {
+describe("reopenPlacements", () => {
   const layout: LayoutNode = {
     direction: "row",
     children: [
-      { panels: ["A!1", "A!2"] },
-      { direction: "column", children: [{ panels: ["B!1"] }, { panels: ["C!1"] }] },
+      { panels: ["A!1", "A!2", "A!3"] },
+      { direction: "column", children: [{ panels: ["B!1"] }, { panels: ["C!1", "C!2"] }] },
     ],
   };
 
-  it("goes back as a tab next to its tab mates", () => {
-    expect(reopenPlacement(layout, "A!2")).toEqual({ position: "center", targetPanelId: "A!1" });
+  it("goes back as a tab next to any of its tab mates", () => {
+    expect(reopenPlacements(layout, "A!2")).toEqual([
+      { position: "center", targetPanelId: "A!1" },
+      { position: "center", targetPanelId: "A!3" },
+    ]);
   });
 
   it("goes back beside its neighbour", () => {
-    expect(reopenPlacement(layout, "B!1")).toEqual({ position: "top", targetPanelId: "C!1" });
-    expect(reopenPlacement(layout, "C!1")).toEqual({ position: "bottom", targetPanelId: "B!1" });
+    expect(reopenPlacements(layout, "B!1")).toEqual([
+      { position: "top", targetPanelId: "C!1" },
+      { position: "top", targetPanelId: "C!2" },
+    ]);
   });
 
-  it("falls back to the right edge", () => {
-    expect(reopenPlacement({ panels: ["A!1"] }, "A!1")).toEqual({ position: "right" });
+  it("has no anchor when it was alone", () => {
+    expect(reopenPlacements({ panels: ["A!1"] }, "A!1")).toEqual([]);
   });
 });

@@ -17,12 +17,14 @@ export const HISTORY_LIMIT = 100;
 /** Edits of the same kind closer together than this become one undo step (typing, slider drags). */
 export const COALESCE_MS = 500;
 
+export type Placement = { position: LayoutDropPosition; targetPanelId: string };
+
 type ClosedPanel = {
   id: string;
   /** Configs of the panel and of anything that left the layout with it. */
   configs: Record<string, PanelConfig>;
-  position: LayoutDropPosition;
-  targetPanelId?: string;
+  /** Best first; the first whose target is still in the layout wins. */
+  placements: Placement[];
 };
 
 /** Edits with the same key coalesce; discrete edits (close, split, add, …) never do. */
@@ -53,38 +55,33 @@ function fillsDefaults(data: LayoutData, action: PanelsActions): boolean {
 }
 
 /**
- * Where to put a closed panel back: as a tab next to its former tab mates, else beside its former
- * neighbour in the split, else along the right edge.
+ * Where a closed panel could go back, best first: as a tab next to one of its former tab mates,
+ * else beside its former neighbour in the split. Each placement is anchored on a panel id, so the
+ * caller can skip anchors that have since left the layout. Empty means the right edge.
  */
-export function reopenPlacement(
-  node: LayoutNode | undefined,
-  panelId: string,
-): Pick<ClosedPanel, "position" | "targetPanelId"> {
+export function reopenPlacements(node: LayoutNode | undefined, panelId: string): Placement[] {
   if (node == undefined) {
-    return { position: "right" };
+    return [];
   }
   if (isLayoutGroup(node)) {
-    const mate = node.panels.find((id) => id !== panelId);
-    return mate != undefined ? { position: "center", targetPanelId: mate } : { position: "right" };
+    return node.panels
+      .filter((id) => id !== panelId)
+      .map((targetPanelId) => ({ position: "center", targetPanelId }));
   }
   const index = node.children.findIndex((child) => getPanelIds(child).includes(panelId));
   const child = node.children[index];
   if (child == undefined) {
-    return { position: "right" };
+    return [];
   }
   if (!isLayoutGroup(child) || child.panels.length > 1) {
-    return reopenPlacement(child, panelId);
+    return reopenPlacements(child, panelId);
   }
   const after = node.children[index + 1];
   const neighbour = after ?? node.children[index - 1];
-  const targetPanelId = neighbour ? getPanelIds(neighbour)[0] : undefined;
-  if (targetPanelId == undefined) {
-    return { position: "right" };
-  }
   const row = node.direction === "row";
   // We were before `after`, or after the previous child.
   const position = after ? (row ? "left" : "top") : row ? "right" : "bottom";
-  return { position, targetPanelId };
+  return getPanelIds(neighbour).map((targetPanelId) => ({ position, targetPanelId }));
 }
 
 /**
@@ -128,7 +125,7 @@ export class LayoutHistory {
       this.#closed.push({
         id,
         configs: _.omit(data.configById, Object.keys(next.configById)),
-        ...reopenPlacement(data.layout, id),
+        placements: reopenPlacements(data.layout, id),
       });
       if (this.#closed.length > HISTORY_LIMIT) {
         this.#closed.shift();
@@ -180,15 +177,12 @@ export class LayoutHistory {
         })),
       },
     });
-    const { id, position, targetPanelId } = closed;
+    // An anchor that left the layout must not be used: without a target, "center" would add the
+    // panel as a tab to whatever group is at the root.
+    const placement = closed.placements.find(({ targetPanelId }) => present.has(targetPanelId));
     const next = panelsReducer(withConfigs, {
       type: "ADD_PANEL",
-      payload: {
-        id,
-        position,
-        targetPanelId:
-          targetPanelId != undefined && present.has(targetPanelId) ? targetPanelId : undefined,
-      },
+      payload: { id: closed.id, ...(placement ?? { position: "right" }) },
     });
     this.#record(data, next, undefined, now);
     return next;
