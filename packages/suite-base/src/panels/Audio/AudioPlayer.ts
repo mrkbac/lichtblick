@@ -91,9 +91,9 @@ export class AudioPlayer {
    */
   public push(chunk: AudioChunk, delaySec: number, speed: number): void {
     if (speed !== this.#speed) {
-      // Queued buffers keep the playback rate they started with: re-sync at the new speed
+      // Queued and still-decoding audio has the old rate baked in: re-sync at the new speed
       this.#speed = speed;
-      this.#fadeOut();
+      this.cut();
     }
     if (!this.isRunning()) {
       return;
