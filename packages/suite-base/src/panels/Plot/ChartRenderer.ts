@@ -22,7 +22,8 @@ import { buildThresholdFills } from "@lichtblick/suite-base/panels/Plot/utils/th
 import { Bounds, Bounds1D } from "@lichtblick/suite-base/types/Bounds";
 import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
 import { isLight, parseColor } from "@lichtblick/suite-base/util/parseColor";
-import { fontMonospace } from "@lichtblick/theme";
+// Not the package index: it pulls MUI component styles and icons, which crash in a worker
+import { fontMonospace } from "@lichtblick/theme/src/typography";
 
 import {
   ChartRendererProps,

@@ -42,7 +42,8 @@ import {
   removeEventListener,
 } from "@lichtblick/suite-base/components/Chart/worker/eventHandler";
 import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
-import { fontMonospace } from "@lichtblick/theme";
+// Not the package index: it pulls MUI component styles and icons, which crash in a worker
+import { fontMonospace } from "@lichtblick/theme/src/typography";
 
 import { lineSegmentLabelColor } from "./lineSegments";
 import { proxyTyped } from "./proxy";

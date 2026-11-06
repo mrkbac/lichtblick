@@ -4,7 +4,8 @@
 import { ChartOptions } from "chart.js";
 
 import { ChartOptionsPlot } from "@lichtblick/suite-base/panels/Plot/types";
-import { fontMonospace } from "@lichtblick/theme";
+// Not the package index: it pulls MUI component styles and icons, which crash in a worker
+import { fontMonospace } from "@lichtblick/theme/src/typography";
 
 export const getChartOptions = ({
   devicePixelRatio,
