@@ -5,17 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import checker from "license-checker";
-import path from "path";
-import { promisify } from "util";
+import { execFileSync } from "node:child_process";
 
-const initChecker = promisify(checker.init);
-
+// A license passes if it contains any of these (substring match, e.g. "BSD" covers "0BSD").
 const ALLOWED_LICENSES = [
   "MPL-2.0",
   "MIT",
   "BSD",
-  "BSD-2-clause",
   "Apache",
   "ISC",
   "Python-2.0",
@@ -29,23 +25,34 @@ const ALLOWED_LICENSES = [
   "BlueOak-1.0.0",
 ];
 
-const EXCLUDED_PACKAGES = ["gl-vec3@1.1.3"];
+// Reported as "Unknown" (no license field in package.json); their LICENSE file is the Unlicense.
+// Pinned to the verified versions so a new version or a license change fails the check.
+const UNKNOWN_LICENSE_EXCEPTIONS = ["fast-shallow-equal@1.0.0", "react-universal-interface@0.6.2"];
 
-async function main() {
-  const output = await initChecker({
-    start: path.join(import.meta.dirname, ".."),
-    summary: true,
-    onlyAllow: ALLOWED_LICENSES.join(";"),
-    excludePackages: EXCLUDED_PACKAGES.join(";"),
-    excludePrivatePackages: true,
-    color: false,
-  });
+type PackageInfo = { name: string; versions: string[] };
 
-  // eslint-disable-next-line
-  console.log((checker as any).asSummary(output));
+const byLicense = JSON.parse(
+  execFileSync("pnpm", ["licenses", "list", "--json"], {
+    encoding: "utf8",
+    maxBuffer: 64 * 1024 * 1024,
+  }),
+) as Record<string, PackageInfo[]>;
+
+let failed = false;
+for (const [license, packages] of Object.entries(byLicense)) {
+  const allowed = ALLOWED_LICENSES.some((allowedLicense) => license.includes(allowedLicense));
+  for (const pkg of packages) {
+    const excepted =
+      license === "Unknown" &&
+      pkg.versions.every((version) =>
+        UNKNOWN_LICENSE_EXCEPTIONS.includes(`${pkg.name}@${version}`),
+      );
+    if (!allowed && !excepted) {
+      console.error(`${pkg.name}@${pkg.versions.join(",")} has disallowed license "${license}"`);
+      failed = true;
+    }
+  }
+  console.log(`${license}: ${packages.length}`);
 }
 
-main().catch((err: unknown) => {
-  console.error(err);
-  process.exit(1);
-});
+process.exitCode = failed ? 1 : 0;

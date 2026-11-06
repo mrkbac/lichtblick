@@ -243,6 +243,82 @@ export function downsampleTimeseries(
   return [...indices, ...finishDownsample(state)];
 }
 
+/**
+ * `downsampleTimeseries` over columnar x/y arrays, rows [start, end). Same output, without
+ * allocating a point object per row. Returns absolute row indices.
+ */
+export function downsampleTimeseriesColumns(
+  xs: ArrayLike<number>,
+  ys: ArrayLike<number>,
+  start: number,
+  end: number,
+  view: PlotViewport,
+  maxPoints?: number,
+): number[] {
+  const { pixelPerXValue, pixelPerYValue } = calculateIntervals(
+    view,
+    POINTS_PER_INTERVAL,
+    maxPoints,
+  );
+  const indices: number[] = [];
+  let intX = Number.NaN;
+  let firstY = 0;
+  let lastY = 0;
+  let lastI = -1;
+  let minY = 0;
+  let minI = -1;
+  let maxY = 0;
+  let maxI = -1;
+
+  // add min/max/last of the finished interval when they differ from its first (and last) value
+  const finishInterval = () => {
+    if (lastI < 0) {
+      return;
+    }
+    const addMin = minY !== firstY && minY !== lastY;
+    const addMax = maxY !== firstY && maxY !== lastY;
+    if (addMin && addMax && maxI < minI) {
+      indices.push(maxI, minI);
+    } else {
+      if (addMin) {
+        indices.push(minI);
+      }
+      if (addMax) {
+        indices.push(maxI);
+      }
+    }
+    if (firstY !== lastY) {
+      indices.push(lastI);
+    }
+  };
+
+  for (let i = start; i < end; i++) {
+    const x = Math.trunc(xs[i]! * pixelPerXValue);
+    const y = Math.trunc(ys[i]! * pixelPerYValue);
+    if (lastI < 0 || x !== intX) {
+      finishInterval();
+      // always add the first datum of a new interval
+      indices.push(i);
+      intX = x;
+      firstY = lastY = minY = maxY = y;
+      lastI = minI = maxI = i;
+      continue;
+    }
+    lastY = y;
+    lastI = i;
+    if (y < minY) {
+      minY = y;
+      minI = i;
+    }
+    if (y > maxY) {
+      maxY = y;
+      maxI = i;
+    }
+  }
+  finishInterval();
+  return indices;
+}
+
 export function downsampleScatter(points: Iterable<Point>, view: PlotViewport): number[] {
   const { bounds, width, height } = view;
 

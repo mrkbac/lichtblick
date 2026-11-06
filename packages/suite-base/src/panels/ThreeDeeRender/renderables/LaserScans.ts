@@ -32,6 +32,7 @@ import { normalizeFloat32Array, normalizeTime, normalizePose } from "../normaliz
 import { LASERSCAN_DATATYPES as ROS_LASERSCAN_DATATYPES, LaserScan as RosLaserScan } from "../ros";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { Pose } from "../transforms";
+import { MISSING_TRANSFORM } from "./transforms";
 
 type LayerSettingsLaserScan = LayerSettingsPointExtension;
 const DEFAULT_SETTINGS = DEFAULT_POINT_SETTINGS;
@@ -310,7 +311,9 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
 
   public startFrame(currentTime: bigint, renderFrameId: string, fixedFrameId: string): void {
     this.#pointsHistory.updateHistoryFromCurrentTime(currentTime);
-    this.#pointsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId);
+    if (this.#pointsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId)) {
+      this.renderer.settings.errors.remove(this.userData.settingsPath, MISSING_TRANSFORM);
+    }
     const pixelRatio = this.renderer.getPixelRatio();
     this.#pointsHistory.forEach((entry) => {
       entry.renderable.setPixelRatio(pixelRatio);

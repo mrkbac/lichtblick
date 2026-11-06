@@ -556,7 +556,11 @@ export class RenderObjectHistory<TRenderable extends DisposableObject> {
     }
   }
 
-  public updatePoses(currentTime: bigint, renderFrameId: string, fixedFrameId: string): void {
+  /**
+   * Returns whether every entry found its transform. Adds the MISSING_TRANSFORM error when one
+   * doesn't; the caller clears it once all histories sharing its settings path resolve.
+   */
+  public updatePoses(currentTime: bigint, renderFrameId: string, fixedFrameId: string): boolean {
     // Update the pose on each entry
     let hadTfError = false;
     for (const entry of this.#history) {
@@ -581,6 +585,7 @@ export class RenderObjectHistory<TRenderable extends DisposableObject> {
         hadTfError = true;
       }
     }
+    return !hadTfError;
   }
 
   public latest(): HistoryEntry<TRenderable> {

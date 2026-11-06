@@ -26,7 +26,11 @@ const selectSelectedEventId = (store: EventsStore) => store.selectedEventId;
 
 function updateUrl(newState: AppURLState) {
   const newStateUrl = updateAppURLState(new URL(window.location.href), newState);
-  window.history.replaceState(undefined, "", decodeURIComponent(newStateUrl.href));
+  // Never decodeURIComponent the whole href: a data-source URL with its own query string
+  // (e.g. a presigned URL) would spill its `&…` params into ours and break on reload.
+  // Only unescape `:`, `/` and `,`, which are literal in a query and keep times/URLs readable.
+  newStateUrl.search = newStateUrl.search.replace(/%(3A|2F|2C)/gi, (m) => decodeURIComponent(m));
+  window.history.replaceState(undefined, "", newStateUrl.href);
 }
 
 /**

@@ -77,6 +77,17 @@ describe("formatTime.formatDuration", () => {
     expect(formatTime.formatDuration({ sec: -1, nsec: 0 })).toEqual("-0:00:01.000");
     expect(formatTime.formatDuration({ sec: 0, nsec: -1000000 })).toEqual("-0:00:00.001");
   });
+
+  it("counts days once the duration reaches a day", () => {
+    expect(formatTime.formatDuration({ sec: 23 * 3600 + 59 * 60 + 59, nsec: 0 })).toEqual(
+      "23:59:59.000",
+    );
+    expect(formatTime.formatDuration({ sec: 86_400, nsec: 0 })).toEqual("1d 0:00:00.000");
+    expect(formatTime.formatDuration({ sec: 106 * 86_400 + 7 * 3600 + 124, nsec: 3e8 })).toEqual(
+      "106d 7:02:04.300",
+    );
+    expect(formatTime.formatDuration({ sec: -2 * 86_400 - 1, nsec: 0 })).toEqual("-2d 0:00:01.000");
+  });
 });
 
 describe("formatTime.formatTime", () => {
