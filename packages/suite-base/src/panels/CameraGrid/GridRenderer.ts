@@ -6,6 +6,7 @@ import { Time } from "@foxglove/rostime";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 import { PartialMessage } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtension";
 import { WorkerImageDecoder } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/WorkerImageDecoder";
+import { isCompressedDepthFormat } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/decodeCompressedDepth";
 import { decodeCompressedImageToBitmap } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/decodeImage";
 import {
   normalizeCompressedImage,
@@ -220,6 +221,10 @@ export class GridRenderer {
             ? normalizeRosCompressedImage(message)
             : normalizeCompressedImage(message);
         const stamp = "header" in image ? image.header.stamp : image.timestamp;
+        if (isCompressedDepthFormat(image.format)) {
+          this.#worker ??= new WorkerImageDecoder();
+          return { bitmap: await createImageBitmap(await this.#worker.decode(image, {})), stamp };
+        }
         return { bitmap: await decodeCompressedImageToBitmap(image), stamp };
       }
       case "raw-ros":

@@ -117,6 +117,20 @@ describe("ImageRenderable", () => {
     expect(renderable.getDecodedImage()).toBeInstanceOf(ImageBitmap);
   });
 
+  it("decodes compressedDepth images in the worker with the color settings", async () => {
+    const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
+    const decoded = new ImageData(1, 1);
+    const decode = vi.fn().mockResolvedValue(decoded);
+    (renderable as unknown as { decoder: { decode: Mock } }).decoder = { decode };
+    const depthImage = { ...sampleImage, format: "16UC1; compressedDepth png" };
+
+    // @ts-expect-error decodeImage is protected, but ok to use on tests
+    const result = await renderable.decodeImage(depthImage, 100);
+
+    expect(result).toBe(decoded);
+    expect(decode).toHaveBeenCalledWith(depthImage, renderable.userData.settings);
+  });
+
   it("should dispose resources", () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
     renderable.userData.texture = new THREE.Texture();

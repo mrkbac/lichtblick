@@ -10,6 +10,7 @@ import { RawImage } from "@foxglove/schemas";
 
 import { ComlinkWrap } from "@lichtblick/den/worker";
 
+import type { CompressedImageTypes } from "./ImageTypes";
 import type { RawImageOptions } from "./decodeImage";
 import { Image as RosImage } from "../../ros";
 
@@ -37,9 +38,10 @@ export class WorkerImageDecoder {
 
   /**
    * Copies `image` to the worker, and transfers the decoded result back to the main thread.
+   * Compressed images must be compressedDepth images (see `isCompressedDepthFormat`).
    */
   public async decode(
-    image: RosImage | RawImage,
+    image: RosImage | RawImage | CompressedImageTypes,
     options: Partial<RawImageOptions>,
   ): Promise<ImageData> {
     return await this.#remote.decode(image, options);

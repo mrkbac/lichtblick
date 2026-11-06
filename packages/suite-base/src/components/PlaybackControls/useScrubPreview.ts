@@ -14,6 +14,7 @@ import {
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
 import { PartialMessage } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtension";
 import { WorkerImageDecoder } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/WorkerImageDecoder";
+import { isCompressedDepthFormat } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/decodeCompressedDepth";
 import { decodeCompressedImageToBitmap } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/decodeImage";
 import {
   normalizeCompressedImage,
@@ -61,6 +62,9 @@ async function decodeThumbnail(
     const image = normalizeCompressedImage(
       message as PartialMessage<{ format: string; data: Uint8Array }>,
     );
+    if (isCompressedDepthFormat(image.format)) {
+      return await createImageBitmap(await getWorker().decode(image, {}), { resizeWidth });
+    }
     return await decodeCompressedImageToBitmap(image, resizeWidth);
   }
   if (RAW_IMAGE_SCHEMAS.has(schemaName)) {

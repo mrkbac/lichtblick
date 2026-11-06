@@ -31,6 +31,7 @@ import { projectPixel } from "@lichtblick/suite-base/panels/ThreeDeeRender/rende
 import { RosValue } from "@lichtblick/suite-base/players/types";
 
 import { AnyImage, CompressedVideo } from "./ImageTypes";
+import { isCompressedDepthFormat } from "./decodeCompressedDepth";
 import {
   decodeCompressedImageToBitmap,
   decodeCompressedVideoToBitmap,
@@ -666,6 +667,12 @@ export class ImageRenderable extends Renderable<ImageUserData> {
   ): Promise<ImageBitmap | ImageData> {
     if ("format" in image) {
       if (this.#codec == undefined) {
+        if (isCompressedDepthFormat(image.format)) {
+          return await (this.decoder ??= new WorkerImageDecoder()).decode(
+            image,
+            this.userData.settings,
+          );
+        }
         return await decodeCompressedImageToBitmap(image, resizeWidth);
       } else {
         const frameMsg = image as CompressedVideo;

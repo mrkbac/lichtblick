@@ -8,10 +8,17 @@
 import * as Comlink from "@foxglove/comlink";
 import type { RawImage } from "@foxglove/schemas";
 
+import type { CompressedImageTypes } from "./ImageTypes";
+import { decodeCompressedDepth } from "./decodeCompressedDepth";
 import { decodeRawImage, RawImageOptions } from "./decodeImage";
 import type { Image as RosImage } from "../../ros";
 
-function decode(image: RosImage | RawImage, options: Partial<RawImageOptions>): ImageData {
+async function decode(
+  input: RosImage | RawImage | CompressedImageTypes,
+  options: Partial<RawImageOptions>,
+): Promise<ImageData> {
+  // Compressed images only reach the worker when they are compressedDepth images
+  const image = "format" in input ? await decodeCompressedDepth(input) : input;
   const result = new ImageData(image.width, image.height);
   decodeRawImage(image, options, result.data);
   return Comlink.transfer(result, [result.data.buffer]);
