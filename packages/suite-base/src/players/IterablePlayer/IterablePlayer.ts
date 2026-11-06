@@ -187,6 +187,8 @@ export class IterablePlayer implements Player {
   #preloadTopics: TopicSelection = new Map();
 
   #progress: Progress = {};
+  // Set by the idle loadedRangesChange handler; progress is refreshed once per emit, not per change
+  #loadedRangesChanged = false;
   #id: string = randomUUID();
   #messages: Immutable<MessageEvent[]> = [];
   #receivedBytes: number = 0;
@@ -1029,6 +1031,18 @@ export class IterablePlayer implements Player {
       return;
     }
 
+    if (this.#loadedRangesChanged) {
+      this.#loadedRangesChanged = false;
+      this.#progress = {
+        fullyLoadedFractionRanges: this.#bufferImpl.loadedRanges(),
+        messageCache: this.#progress.messageCache,
+        memoryInfo: {
+          ...this.#progress.memoryInfo,
+          [MEMORY_INFO_BUFFERED_MSGS]: this.#bufferImpl.getCacheSize(),
+        },
+      };
+    }
+
     if (this.#hasError) {
       await this.#listener({
         name: this.#name,
@@ -1267,14 +1281,7 @@ export class IterablePlayer implements Player {
     });
 
     const rangeChangeHandler = () => {
-      this.#progress = {
-        fullyLoadedFractionRanges: this.#bufferImpl.loadedRanges(),
-        messageCache: this.#progress.messageCache,
-        memoryInfo: {
-          ...this.#progress.memoryInfo,
-          [MEMORY_INFO_BUFFERED_MSGS]: this.#bufferImpl.getCacheSize(),
-        },
-      };
+      this.#loadedRangesChanged = true;
       this.#queueEmitState();
     };
 
