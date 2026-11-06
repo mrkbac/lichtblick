@@ -120,7 +120,12 @@ export default function PanelLogs({
                   primary={`[${log.error ? "ERROR" : "INFO"}] ${log.message}`}
                   secondary={
                     <>
-                      <Typography variant="caption" display="block">
+                      <Typography
+                        variant="caption"
+                        sx={{
+                          display: "block",
+                        }}
+                      >
                         {log.timestamp}
                       </Typography>
                       {log.error && (

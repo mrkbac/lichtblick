@@ -330,7 +330,13 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }): React.JSX.E
                   <HighlightChars str={command.title} indices={positions} />
                 </Typography>
                 {command.detail != undefined && (
-                  <Typography variant="caption" color="text.secondary" noWrap>
+                  <Typography
+                    variant="caption"
+                    noWrap
+                    sx={{
+                      color: "text.secondary",
+                    }}
+                  >
                     {command.detail}
                   </Typography>
                 )}

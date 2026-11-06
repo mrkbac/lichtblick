@@ -179,7 +179,12 @@ export function MessageForm({
 
   if (!definition || definition.fields.length === 0) {
     return (
-      <Typography variant="body2" color="text.secondary">
+      <Typography
+        variant="body2"
+        sx={{
+          color: "text.secondary",
+        }}
+      >
         {definition ? "This message has no fields." : `Unknown schema ${schemaName}`}
       </Typography>
     );
@@ -495,7 +500,12 @@ function EnumInput(props: {
       renderOption={({ key, ...optionProps }, option) => (
         <li key={key} {...optionProps}>
           {nameByValue.get(option)}&nbsp;
-          <Typography variant="caption" color="text.secondary">
+          <Typography
+            variant="caption"
+            sx={{
+              color: "text.secondary",
+            }}
+          >
             = {option}
           </Typography>
         </li>
@@ -503,7 +513,10 @@ function EnumInput(props: {
       renderInput={(params) => (
         <TextField
           {...params}
-          slotProps={{ htmlInput: { ...params.inputProps, "aria-label": name } }}
+          slotProps={{
+            ...params.slotProps,
+            htmlInput: { ...params.slotProps.htmlInput, "aria-label": name },
+          }}
         />
       )}
     />

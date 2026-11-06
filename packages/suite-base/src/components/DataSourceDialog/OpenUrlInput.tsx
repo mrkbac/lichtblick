@@ -175,7 +175,14 @@ export function OpenUrlInput({
           : t("enterOpens", { name: source.displayName })}
     </Typography>
   ) : topMatch != undefined && trimmed !== "" ? (
-    <Typography variant="caption" color="text.secondary" noWrap className={classes.topMatch}>
+    <Typography
+      variant="caption"
+      noWrap
+      className={classes.topMatch}
+      sx={{
+        color: "text.secondary",
+      }}
+    >
       {t("enterOpens", { name: topMatch })}
     </Typography>
   ) : undefined;

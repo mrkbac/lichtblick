@@ -191,7 +191,12 @@ function ValidatedInputBase({
       {error.length > 0 && (
         <Stack direction="row" alignItems="center" gap={0.25} padding={0.5}>
           <ErrorIcon fontSize="inherit" color="error" />
-          <Typography variant="caption" color="error.main">
+          <Typography
+            variant="caption"
+            sx={{
+              color: "error.main",
+            }}
+          >
             {error}
           </Typography>
         </Stack>

@@ -28,7 +28,15 @@ export default {
   decorators: [
     (Story) => {
       return (
-        <Stack direction="row" padding={2} gap={1} justifyContent="center" alignItems="center">
+        <Stack
+          direction="row"
+          sx={{
+            padding: 2,
+            gap: 1,
+            justifyContent: "center",
+            alignItems: "center",
+          }}
+        >
           <Story />
         </Stack>
       );
@@ -115,9 +123,20 @@ export const Color: StoryObj = {
 
 export const Sizes: StoryObj = {
   render: () => (
-    <Stack gap={2}>
+    <Stack
+      sx={{
+        gap: 2,
+      }}
+    >
       {variants.map((variant) => (
-        <Stack key={variant} direction="row" alignItems="center" gap={2}>
+        <Stack
+          key={variant}
+          direction="row"
+          sx={{
+            alignItems: "center",
+            gap: 2,
+          }}
+        >
           {sizes.map((size) => (
             <Button {...{ size, variant }} key={size}>
               {size}

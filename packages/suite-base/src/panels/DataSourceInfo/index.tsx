@@ -370,11 +370,21 @@ export function RecordingInspector(): React.JSX.Element {
             ],
           ].map(([label, value, detail]) => (
             <div className={classes.metric} key={label}>
-              <Typography variant="overline" color="text.secondary">
+              <Typography
+                variant="overline"
+                sx={{
+                  color: "text.secondary",
+                }}
+              >
                 {label}
               </Typography>
               <Typography variant="h6">{value}</Typography>
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                }}
+              >
                 {detail}
               </Typography>
             </div>
@@ -425,7 +435,12 @@ export function RecordingInspector(): React.JSX.Element {
               )}
               Message activity
             </button>
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+              }}
+            >
               {inspections.size > 0
                 ? `${measuredCount.toLocaleString()} measured messages · ${inspections.size}/${topics.length} topics`
                 : "Summary loaded · scan to inspect activity"}
@@ -620,7 +635,12 @@ export function RecordingInspector(): React.JSX.Element {
                                 <KeyboardArrowDownIcon fontSize="small" />
                               )}
                               <span>{row.path}</span>{" "}
-                              <Typography variant="caption" color="text.secondary">
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: "text.secondary",
+                                }}
+                              >
                                 {row.count} {row.count === 1 ? "topic" : "topics"}
                               </Typography>
                             </button>
@@ -656,8 +676,10 @@ export function RecordingInspector(): React.JSX.Element {
                                 {formatByteSize(totals.bytes)}
                                 <Typography
                                   variant="caption"
-                                  color="text.secondary"
-                                  display="block"
+                                  sx={{
+                                    color: "text.secondary",
+                                    display: "block",
+                                  }}
                                 >
                                   {totals.complete && durationSeconds > 0
                                     ? `${(((totals.bytes / durationSeconds) * 3600) / 1e9).toFixed(3)} GB/h`
@@ -743,7 +765,13 @@ export function RecordingInspector(): React.JSX.Element {
                               ? `${rateBasis === "median" && data?.timing?.medianEstimated === true ? "≈ " : ""}${rate.toFixed(2)} Hz`
                               : "—"}
                             {rateBasis !== "median" && data?.timing?.medianHz != undefined && (
-                              <Typography variant="caption" color="text.secondary" display="block">
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: "text.secondary",
+                                  display: "block",
+                                }}
+                              >
                                 {data.timing.medianEstimated ? "≈ " : ""}
                                 {data.timing.medianHz.toFixed(2)} Hz median
                               </Typography>
@@ -799,7 +827,13 @@ export function RecordingInspector(): React.JSX.Element {
                               "—"
                             )}
                             {data?.timing && (
-                              <Typography variant="caption" color="text.secondary" display="block">
+                              <Typography
+                                variant="caption"
+                                sx={{
+                                  color: "text.secondary",
+                                  display: "block",
+                                }}
+                              >
                                 {(data.timing.jitterNs / 1e6).toFixed(3)} ms jitter
                               </Typography>
                             )}
@@ -811,7 +845,12 @@ export function RecordingInspector(): React.JSX.Element {
                               <div className={classes.heading}>
                                 <div>
                                   <Typography variant="subtitle2">{topic.name}</Typography>
-                                  <Typography variant="caption" color="text.secondary">
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      color: "text.secondary",
+                                    }}
+                                  >
                                     Topic details · times relative to recording start
                                   </Typography>
                                 </div>
@@ -883,7 +922,12 @@ export function RecordingInspector(): React.JSX.Element {
                                     ],
                                   ].map(([label, value]) => (
                                     <div key={label}>
-                                      <Typography variant="caption" color="text.secondary">
+                                      <Typography
+                                        variant="caption"
+                                        sx={{
+                                          color: "text.secondary",
+                                        }}
+                                      >
                                         {label}
                                       </Typography>
                                       <Typography variant="h6">{value}</Typography>
@@ -917,7 +961,12 @@ export function RecordingInspector(): React.JSX.Element {
               </table>
             </div>
             {filtered.length === 0 && (
-              <Typography padding={2} color="text.secondary">
+              <Typography
+                sx={{
+                  padding: 2,
+                  color: "text.secondary",
+                }}
+              >
                 No topics match your search.
               </Typography>
             )}
@@ -958,7 +1007,13 @@ export function RecordingInspector(): React.JSX.Element {
                   <details className={classes.details} key={`${fileIndex}:${channel.id}`}>
                     <summary>
                       {channel.topic}{" "}
-                      <Typography component="span" variant="caption" color="text.secondary">
+                      <Typography
+                        component="span"
+                        variant="caption"
+                        sx={{
+                          color: "text.secondary",
+                        }}
+                      >
                         {" "}
                         · channel {channel.id}
                         {files.length > 1 ? ` · file ${fileIndex + 1}` : ""} ·{" "}
@@ -974,7 +1029,12 @@ export function RecordingInspector(): React.JSX.Element {
                     />
                     {Object.keys(channel.metadata).length > 0 && (
                       <>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            color: "text.secondary",
+                          }}
+                        >
                           Channel metadata
                         </Typography>
                         <KeyValueTable values={channel.metadata} />
@@ -984,7 +1044,12 @@ export function RecordingInspector(): React.JSX.Element {
                 )),
             )}
             {channelCount === 0 && (
-              <Typography paddingY={2} color="text.secondary">
+              <Typography
+                sx={{
+                  paddingY: 2,
+                  color: "text.secondary",
+                }}
+              >
                 Channel details are available for indexed MCAP files.
               </Typography>
             )}
@@ -996,7 +1061,13 @@ export function RecordingInspector(): React.JSX.Element {
               <details className={classes.details} key={schema}>
                 <summary>
                   {schema}{" "}
-                  <Typography component="span" variant="caption" color="text.secondary">
+                  <Typography
+                    component="span"
+                    variant="caption"
+                    sx={{
+                      color: "text.secondary",
+                    }}
+                  >
                     {" "}
                     · {datatypes.get(schema)?.definitions.length ?? "—"} fields
                   </Typography>
@@ -1023,7 +1094,13 @@ export function RecordingInspector(): React.JSX.Element {
               </section>
             ))}
             {metadata.length === 0 && (
-              <Typography color="text.secondary">No recording metadata available.</Typography>
+              <Typography
+                sx={{
+                  color: "text.secondary",
+                }}
+              >
+                No recording metadata available.
+              </Typography>
             )}
           </Stack>
         )}

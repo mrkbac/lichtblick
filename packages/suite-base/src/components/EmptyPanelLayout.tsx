@@ -100,7 +100,13 @@ export const EmptyPanelLayout = (): React.JSX.Element => {
     >
       <div className={classes.root}>
         <Stack paddingBottom={2}>
-          <Typography variant="body2" paddingX={2} paddingTop={2}>
+          <Typography
+            variant="body2"
+            sx={{
+              paddingX: 2,
+              paddingTop: 2,
+            }}
+          >
             {t("selectPanelToAddToLayout")}{" "}
           </Typography>
           <PanelCatalog mode="grid" onPanelSelect={onPanelSelect} />

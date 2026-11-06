@@ -70,7 +70,12 @@ export default function LayoutSection({
           <ArrowDropDownIcon
             className={cx(classes.arrow, { [classes.arrowCollapsed]: !expanded })}
           />
-          <Typography variant="overline" color="text.secondary">
+          <Typography
+            variant="overline"
+            sx={{
+              color: "text.secondary",
+            }}
+          >
             {title}
           </Typography>
         </ButtonBase>
@@ -79,7 +84,12 @@ export default function LayoutSection({
         <List disablePadding={disablePadding}>
           {items?.length === 0 && (
             <Stack paddingX={2}>
-              <Typography variant="body2" color="text.secondary">
+              <Typography
+                variant="body2"
+                sx={{
+                  color: "text.secondary",
+                }}
+              >
                 {emptyText}
               </Typography>
             </Stack>

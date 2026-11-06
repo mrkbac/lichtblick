@@ -601,8 +601,10 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
                       variant="caption"
                       color={command.turbo ? "warning.main" : "text.secondary"}
                       noWrap
-                      flexShrink={0}
                       style={{ minWidth: "9ch", textAlign: "left" }}
+                      sx={{
+                        flexShrink: 0,
+                      }}
                     >
                       {command.turbo ? "Turbo" : "Speed"} {speedPercent}%
                     </Typography>
@@ -619,7 +621,14 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
                     />
                   </>
                 ) : (
-                  <Typography variant="caption" color="text.secondary" flex="auto" textAlign="left">
+                  <Typography
+                    variant="caption"
+                    sx={{
+                      color: "text.secondary",
+                      flex: "auto",
+                      textAlign: "left",
+                    }}
+                  >
                     sensor_msgs/Joy
                   </Typography>
                 )}
@@ -659,9 +668,11 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
               )}
               <Typography
                 variant="caption"
-                fontFamily="monospace"
                 color={buildMessage(config, command).active ? "primary" : "text.secondary"}
                 noWrap
+                sx={{
+                  fontFamily: "monospace",
+                }}
               >
                 {formatCommand(config, command)}
               </Typography>

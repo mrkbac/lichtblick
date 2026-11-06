@@ -62,13 +62,27 @@ export default function WssErrorModal(
         </IconButton>
       </DialogTitle>
       <DialogContent>
-        <Stack gap={2}>
-          <Typography variant="body1" color="text.secondary">
+        <Stack
+          sx={{
+            gap: 2,
+          }}
+        >
+          <Typography
+            variant="body1"
+            sx={{
+              color: "text.secondary",
+            }}
+          >
             By default, Chrome prevents a secure <code>https://</code> page from connecting to an
             insecure <code>ws://</code> WebSocket server. To allow the connection, enable
             &quot;Unsafe Scripts&quot; for this page.
           </Typography>
-          <Typography variant="body1" color="text.secondary">
+          <Typography
+            variant="body1"
+            sx={{
+              color: "text.secondary",
+            }}
+          >
             Click the shield icon at the end of your address bar, and then click &quot;Load Unsafe
             Scripts.&quot;
           </Typography>

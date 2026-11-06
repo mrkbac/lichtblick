@@ -53,7 +53,12 @@ const DiagnosticsSection = ({ diagnostics }: Props): ReactElement => {
   if (diagnostics.length === 0) {
     return (
       <Stack gap={0.5} padding={2}>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+          }}
+        >
           No alerts to display.
         </Typography>
       </Stack>

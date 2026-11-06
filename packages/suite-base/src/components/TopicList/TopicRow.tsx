@@ -146,9 +146,11 @@ export function TopicRow({
         {topic.schemaName != undefined && (
           <Typography
             variant="caption"
-            color="text.secondary"
             noWrap
             className={classes.textContent}
+            sx={{
+              color: "text.secondary",
+            }}
           >
             <HighlightChars
               str={topic.schemaName}

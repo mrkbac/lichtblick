@@ -206,7 +206,13 @@ export function CreateEventDialog(props: { onClose: () => void }): React.JSX.Ele
         <div className={classes.grid}>
           <FormControl>
             <FormLabel>Start Time</FormLabel>
-            <Typography paddingY={1}>{formattedStartTime}</Typography>
+            <Typography
+              sx={{
+                paddingY: 1,
+              }}
+            >
+              {formattedStartTime}
+            </Typography>
           </FormControl>
           <TextField
             value={event.duration ?? ""}

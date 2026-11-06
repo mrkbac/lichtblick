@@ -203,7 +203,12 @@ export default function Variable(props: {
               }}
             >
               <MenuItem onClick={deleteVariable}>
-                <Typography color="error.main" variant="inherit">
+                <Typography
+                  variant="inherit"
+                  sx={{
+                    color: "error.main",
+                  }}
+                >
                   Delete variable
                 </Typography>
               </MenuItem>

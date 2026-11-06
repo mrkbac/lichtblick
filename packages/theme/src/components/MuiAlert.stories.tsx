@@ -18,7 +18,12 @@ export default {
   },
   decorators: [
     (_, { args: { showTitle, ...args } }) => (
-      <Stack gap={2} padding={2}>
+      <Stack
+        sx={{
+          gap: 2,
+          padding: 2,
+        }}
+      >
         {severities.map((severity) => (
           <MuiAlert key={severity} variant={args.variant} severity={severity}>
             {showTitle === true && <AlertTitle>{severity}</AlertTitle>}

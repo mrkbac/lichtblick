@@ -66,7 +66,12 @@ export default function AccountInfo(props: { currentUser?: User }): React.JSX.El
           <BlockheadFilledIcon className={classes.icon} />
           <Stack justifyContent="center">
             <Typography variant="subtitle1">{props.currentUser.email}</Typography>
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+              }}
+            >
               {props.currentUser.orgDisplayName ?? props.currentUser.orgSlug}
             </Typography>
           </Stack>

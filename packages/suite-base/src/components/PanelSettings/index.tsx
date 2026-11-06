@@ -239,7 +239,13 @@ export default function PanelSettings({
               justifyContent="center"
               paddingX={enableNewTopNav ? 1 : 0}
             >
-              <Typography variant="body2" color="text.secondary" align="center">
+              <Typography
+                variant="body2"
+                align="center"
+                sx={{
+                  color: "text.secondary",
+                }}
+              >
                 {t("panelDoesNotHaveSettings")}
               </Typography>
             </Stack>

@@ -225,11 +225,13 @@ export default function ExtensionList({
         <Stack direction="row" gap={1} paddingX={2}>
           <Typography
             variant="body2"
-            color="text.secondary"
-            alignSelf="center"
-            paddingY={1}
             style={{
               visibility: selectedInstalled.length > 0 ? "visible" : "hidden",
+            }}
+            sx={{
+              color: "text.secondary",
+              alignSelf: "center",
+              paddingY: 1,
             }}
           >
             {selectedExtensions.length} selected
@@ -358,7 +360,13 @@ export default function ExtensionList({
   return (
     <Stack key={namespace} gap={1} paddingBottom={2}>
       <Stack paddingY={0} paddingX={2}>
-        <Typography component="div" variant="overline" color="text.secondary">
+        <Typography
+          component="div"
+          variant="overline"
+          sx={{
+            color: "text.secondary",
+          }}
+        >
           {displayNameForNamespace(namespace)}
         </Typography>
       </Stack>

@@ -58,12 +58,14 @@ const message = (
   ({
     topic: "/foo",
     receiveTime: receiveTimeSeconds == undefined ? undefined : { sec: receiveTimeSeconds, nsec: 1 },
+
     message: {
       header:
         headerStampSeconds == undefined
           ? undefined
           : { stamp: { sec: headerStampSeconds, nsec: 1 } },
     },
+
     schemaName: "visualization_msgs/Marker",
     sizeInBytes: 0,
   }) as MessageEvent;

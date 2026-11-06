@@ -211,7 +211,12 @@ export default function Start(): React.JSX.Element {
       </div>
 
       {view === "recent" && recentSources.length === 0 && (
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+          }}
+        >
           {t("noRecents")}
         </Typography>
       )}
@@ -219,7 +224,12 @@ export default function Start(): React.JSX.Element {
       {showRecents && (
         <Stack gap={0.5} className={view === "recent" ? classes.recentsFull : classes.recents}>
           <Stack direction="row" alignItems="center" gap={1}>
-            <Typography variant="subtitle2" flex="auto">
+            <Typography
+              variant="subtitle2"
+              sx={{
+                flex: "auto",
+              }}
+            >
               {t("recentDataSources")}
             </Typography>
             {recentSources.some((recent) => recent.pinned !== true) && (
@@ -229,7 +239,12 @@ export default function Start(): React.JSX.Element {
             )}
           </Stack>
           {filteredRecents.length === 0 && (
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+              }}
+            >
               {t("noRecentMatches")}
             </Typography>
           )}
@@ -290,7 +305,13 @@ export default function Start(): React.JSX.Element {
                     {match && <RecordingThumbnail recording={match} />}
                     <RecentSourceLabel recent={recent} hidePinIndicator />
                     {summary !== "" && (
-                      <Typography variant="caption" color="text.secondary" noWrap>
+                      <Typography
+                        variant="caption"
+                        noWrap
+                        sx={{
+                          color: "text.secondary",
+                        }}
+                      >
                         {summary}
                       </Typography>
                     )}
@@ -324,7 +345,12 @@ export default function Start(): React.JSX.Element {
       )}
 
       <footer className={classes.footer}>
-        <Typography variant="body2" color="text.secondary">
+        <Typography
+          variant="body2"
+          sx={{
+            color: "text.secondary",
+          }}
+        >
           {t("newToLichtblick")}
         </Typography>
         <Button
@@ -341,7 +367,12 @@ export default function Start(): React.JSX.Element {
         </Button>
         <div className={classes.spacer} />
         <DontShowThisAgainCheckbox />
-        <Typography variant="caption" color="text.secondary">
+        <Typography
+          variant="caption"
+          sx={{
+            color: "text.secondary",
+          }}
+        >
           {t("version", { version: APP_CONFIG.version })}
         </Typography>
       </footer>

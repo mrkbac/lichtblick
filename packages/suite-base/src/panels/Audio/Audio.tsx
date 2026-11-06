@@ -211,7 +211,12 @@ export function Audio({ config, saveConfig }: Props): React.JSX.Element {
             alignItems="center"
             justifyContent="center"
           >
-            <Typography variant="body2" color="text.secondary">
+            <Typography
+              variant="body2"
+              sx={{
+                color: "text.secondary",
+              }}
+            >
               {t("waiting", { topic })}
             </Typography>
           </Stack>
@@ -221,7 +226,12 @@ export function Audio({ config, saveConfig }: Props): React.JSX.Element {
             <Button variant="contained" onClick={() => player?.resume()}>
               {t("enableAudio")}
             </Button>
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+              }}
+            >
               {t("enableAudioHint")}
             </Typography>
           </div>
@@ -263,10 +273,12 @@ export function Audio({ config, saveConfig }: Props): React.JSX.Element {
           color={error == undefined ? "text.secondary" : "error"}
           noWrap
           title={error ?? info}
-          display="flex"
-          alignItems="center"
-          gap={0.5}
-          minWidth={0}
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 0.5,
+            minWidth: 0,
+          }}
         >
           {error != undefined && <ErrorCircle20Regular style={{ flexShrink: 0 }} />}
           {error ?? [schemaName, info].filter(Boolean).join(" · ")}

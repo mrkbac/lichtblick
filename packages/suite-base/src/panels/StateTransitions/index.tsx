@@ -303,8 +303,10 @@ function StateTransitions(props: StateTransitionPanelProps) {
             </ToolbarIconButton>
             <Typography
               variant="caption"
-              color="text.secondary"
               data-testid="state-transitions-match-count"
+              sx={{
+                color: "text.secondary",
+              }}
             >
               {matchesSoFar}/{matchStarts.length}
             </Typography>

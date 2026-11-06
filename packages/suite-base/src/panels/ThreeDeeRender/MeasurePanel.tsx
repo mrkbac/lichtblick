@@ -160,11 +160,23 @@ export function MeasurePanel({ renderer }: { renderer: IRenderer }): React.JSX.E
           </ToggleButton>
         ))}
       </ToggleButtonGroup>
-      <Typography variant="caption" color="text.secondary">
+      <Typography
+        variant="caption"
+        sx={{
+          color: "text.secondary",
+        }}
+      >
         {t("measureHelp")}
       </Typography>
       <div className={classes.row}>
-        <Typography variant="caption" color="text.secondary" noWrap flexShrink={0}>
+        <Typography
+          variant="caption"
+          noWrap
+          sx={{
+            color: "text.secondary",
+            flexShrink: 0,
+          }}
+        >
           {t("measureResultsIn")}
         </Typography>
         <Select

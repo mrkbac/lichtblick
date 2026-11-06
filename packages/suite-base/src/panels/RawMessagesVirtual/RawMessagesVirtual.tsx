@@ -165,7 +165,12 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
           {canStep && (
             // Keep the step buttons reachable before the first message, e.g. to jump to it.
             <Stack direction="row" alignItems="center" paddingInline={1} paddingBlockStart={0.75}>
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                }}
+              >
                 No message yet
               </Typography>
               <StepButtons stepping={stepping} />
@@ -189,9 +194,11 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
         return (
           <Typography
             variant="body1"
-            fontSize={fontSize}
-            whiteSpace="pre-wrap"
             style={{ wordWrap: "break-word" }}
+            sx={{
+              fontSize: fontSize,
+              whiteSpace: "pre-wrap",
+            }}
           >
             <MaybeCollapsedValue itemLabel={String(singleVal)} />
           </Typography>

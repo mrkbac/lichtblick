@@ -822,15 +822,33 @@ export function MapToolbar(props: Props): React.JSX.Element {
         </Paper>
         {tool && (
           <Paper className={classes.result}>
-            <Typography variant="body2" fontWeight={600}>
+            <Typography
+              variant="body2"
+              sx={{
+                fontWeight: 600,
+              }}
+            >
               {summary?.title ?? TOOLS.find((t) => t.tool === tool)?.title}
             </Typography>
             {summary?.lines.map((line) => (
-              <Typography key={line} variant="caption" display="block" color="text.secondary">
+              <Typography
+                key={line}
+                variant="caption"
+                sx={{
+                  display: "block",
+                  color: "text.secondary",
+                }}
+              >
                 {line}
               </Typography>
             ))}
-            <Typography variant="caption" display="block" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                display: "block",
+                color: "text.secondary",
+              }}
+            >
               {hint} Drag points to move
               {activeRules?.editableShape === true ? ", click a midpoint to insert" : ""},
               right-click a point to delete. Click a point to select its measurement; Delete removes

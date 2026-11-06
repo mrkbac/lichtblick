@@ -12,7 +12,10 @@ const nodeAction = (id: string, path: string[]): SettingsTreeAction => ({
   payload: { id, path },
 });
 const update = (path: string[], value: unknown): SettingsTreeAction =>
-  ({ action: "update", payload: { path, input: "select", value } }) as SettingsTreeAction;
+  ({
+    action: "update",
+    payload: { path, input: "select", value },
+  }) as SettingsTreeAction;
 
 describe("settingsReducer", () => {
   const config: CameraGridConfig = { ...DEFAULT_CONFIG, tiles: ["/a", "/b", "/c"].map(makeTile) };

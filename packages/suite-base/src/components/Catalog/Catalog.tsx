@@ -360,7 +360,12 @@ export default function Catalog({
         <Stack className={classes.empty}>
           <FolderOpenOutlinedIcon color="primary" className={classes.emptyIcon} />
           <Typography variant="h5">{t("emptyTitle")}</Typography>
-          <Typography variant="body2" color="text.secondary">
+          <Typography
+            variant="body2"
+            sx={{
+              color: "text.secondary",
+            }}
+          >
             {t("emptyDescription")}
           </Typography>
           <Stack direction="row" gap={1}>
@@ -397,7 +402,13 @@ export default function Catalog({
             <span className={classes.folderName}>{folder.name}</span>
           </Button>
         </Tooltip>
-        <Typography variant="body2" color="text.secondary" noWrap>
+        <Typography
+          variant="body2"
+          noWrap
+          sx={{
+            color: "text.secondary",
+          }}
+        >
           {query.trim() === "" && !area
             ? t("recordingCount", { count: recordings.length })
             : t("shownCount", {
@@ -407,7 +418,13 @@ export default function Catalog({
         </Typography>
         {progress && (
           <>
-            <Typography variant="body2" color="text.secondary" noWrap>
+            <Typography
+              variant="body2"
+              noWrap
+              sx={{
+                color: "text.secondary",
+              }}
+            >
               {t("indexing", progress)}
             </Typography>
             <LinearProgress
@@ -492,7 +509,12 @@ export default function Catalog({
         ) : view === "grid" ? (
           <div className={classes.grid}>
             {shown.length === 0 && progress == undefined && (
-              <Typography color="text.secondary" className={classes.message}>
+              <Typography
+                className={classes.message}
+                sx={{
+                  color: "text.secondary",
+                }}
+              >
                 {recordings.length === 0 ? t("noRecordings") : t("noMatches")}
               </Typography>
             )}
@@ -521,7 +543,13 @@ export default function Catalog({
                     </Tooltip>
                   )}
                 </Stack>
-                <Typography variant="caption" color="text.secondary" noWrap>
+                <Typography
+                  variant="caption"
+                  noWrap
+                  sx={{
+                    color: "text.secondary",
+                  }}
+                >
                   {recordingCaption(r)}
                 </Typography>
               </ButtonBase>
@@ -540,7 +568,12 @@ export default function Catalog({
             </div>
             <div ref={scrollRef} className={classes.scroller}>
               {shown.length === 0 && progress == undefined && (
-                <Typography color="text.secondary" className={classes.message}>
+                <Typography
+                  className={classes.message}
+                  sx={{
+                    color: "text.secondary",
+                  }}
+                >
                   {recordings.length === 0 ? t("noRecordings") : t("noMatches")}
                 </Typography>
               )}
@@ -595,7 +628,13 @@ export default function Catalog({
                           )}
                         </Stack>
                         {caption !== "" && (
-                          <Typography variant="caption" color="text.secondary" noWrap>
+                          <Typography
+                            variant="caption"
+                            noWrap
+                            sx={{
+                              color: "text.secondary",
+                            }}
+                          >
                             {caption}
                           </Typography>
                         )}

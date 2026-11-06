@@ -60,7 +60,13 @@ function MessagePathInputStory(props: {
 
   return (
     <PanelSetup fixture={(props.heavy ?? false) ? heavyFixture : MessagePathInputStoryFixture}>
-      <Stack direction="row" flex="auto" margin={1.25}>
+      <Stack
+        direction="row"
+        sx={{
+          flex: "auto",
+          margin: 1.25,
+        }}
+      >
         <MessagePathInput
           path={path}
           validTypes={props.validTypes}

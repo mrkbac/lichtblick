@@ -28,7 +28,13 @@ export default {
   },
   decorators: [
     (Story) => (
-      <Stack direction="row" gap={2} padding={2}>
+      <Stack
+        direction="row"
+        sx={{
+          gap: 2,
+          padding: 2,
+        }}
+      >
         <Story />
       </Stack>
     ),

@@ -27,7 +27,13 @@ export default {
   decorators: [
     (Story) => {
       return (
-        <Stack padding={2} gap={2} alignItems="center">
+        <Stack
+          sx={{
+            padding: 2,
+            gap: 2,
+            alignItems: "center",
+          }}
+        >
           <Story />
         </Stack>
       );
@@ -93,7 +99,12 @@ export const Sizes: StoryObj = {
 
 export const Orientation: StoryObj = {
   render: () => (
-    <Stack direction="row" gap={2}>
+    <Stack
+      direction="row"
+      sx={{
+        gap: 2,
+      }}
+    >
       {variants.map((variant) => (
         <ButtonGroup
           orientation="vertical"

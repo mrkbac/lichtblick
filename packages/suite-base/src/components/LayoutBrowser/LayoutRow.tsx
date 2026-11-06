@@ -405,9 +405,11 @@ export default React.memo(function LayoutRow({
           <Typography
             component="span"
             variant="inherit"
-            color="inherit"
             noWrap
             style={{ display: editingName ? "none" : "block" }}
+            sx={{
+              color: "inherit",
+            }}
           >
             {layout.name}
           </Typography>

@@ -164,7 +164,12 @@ export function EventsList(): React.JSX.Element {
       )}
       {events.value?.length === 0 && (
         <Stack flex="auto" padding={2} fullHeight alignItems="center" justifyContent="center">
-          <Typography align="center" color="text.secondary">
+          <Typography
+            align="center"
+            sx={{
+              color: "text.secondary",
+            }}
+          >
             No Events
           </Typography>
         </Stack>

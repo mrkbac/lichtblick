@@ -20,7 +20,12 @@ function Wrapper({ children }: { children: ReactNode }): React.JSX.Element {
 export const Variants: StoryObj = {
   render: function Story() {
     return (
-      <Stack gap={1} padding={1}>
+      <Stack
+        sx={{
+          gap: 1,
+          padding: 1,
+        }}
+      >
         <Wrapper>
           <MuiTypography variant="h1" gutterBottom>
             h1. Heading
@@ -78,17 +83,35 @@ export const Variants: StoryObj = {
           </MuiTypography>
         </Wrapper>
         <Wrapper>
-          <MuiTypography variant="button" display="block" gutterBottom>
+          <MuiTypography
+            variant="button"
+            gutterBottom
+            sx={{
+              display: "block",
+            }}
+          >
             button text
           </MuiTypography>
         </Wrapper>
         <Wrapper>
-          <MuiTypography variant="caption" display="block" gutterBottom>
+          <MuiTypography
+            variant="caption"
+            gutterBottom
+            sx={{
+              display: "block",
+            }}
+          >
             caption text
           </MuiTypography>
         </Wrapper>
         <Wrapper>
-          <MuiTypography variant="overline" display="block" gutterBottom>
+          <MuiTypography
+            variant="overline"
+            gutterBottom
+            sx={{
+              display: "block",
+            }}
+          >
             overline text
           </MuiTypography>
         </Wrapper>

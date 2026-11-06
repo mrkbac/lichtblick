@@ -236,10 +236,12 @@ export function PlotLegendRow({
       >
         <Typography
           noWrap={showPlotValuesInLegend}
-          flex="auto"
           variant="body2"
           className={cx({ [classes.disabledPathLabel]: !path.enabled })}
           data-testid="plot-legend-row-path-label"
+          sx={{
+            flex: "auto",
+          }}
         >
           {isAddSeriesRow ? t("clickToAddASeries") : plotPathDisplayName(path, index)}
         </Typography>

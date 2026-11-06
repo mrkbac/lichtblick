@@ -88,7 +88,12 @@ export function ExtensionDetails({
         >
           Back
         </Button>
-        <Typography variant="h3" fontWeight={500}>
+        <Typography
+          variant="h3"
+          sx={{
+            fontWeight: 500,
+          }}
+        >
           {extension.name}
         </Typography>
       </div>
@@ -107,13 +112,25 @@ export function ExtensionDetails({
             </Link>
             <Typography
               variant="caption"
-              color="text.secondary"
+              sx={{
+                color: "text.secondary",
+              }}
             >{`v${extension.version}`}</Typography>
-            <Typography variant="caption" color="text.secondary">
+            <Typography
+              variant="caption"
+              sx={{
+                color: "text.secondary",
+              }}
+            >
               {extension.license}
             </Typography>
             {extension.size != undefined && (
-              <Typography variant="caption" color="text.secondary">
+              <Typography
+                variant="caption"
+                sx={{
+                  color: "text.secondary",
+                }}
+              >
                 {formatByteSize(extension.size)}
               </Typography>
             )}

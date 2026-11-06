@@ -37,7 +37,10 @@ describe("Watch settings", () => {
 
   it("adds, duplicates and removes rows", () => {
     const action = (id: string, path: string[]) =>
-      ({ action: "perform-node-action", payload: { id, path } }) as const;
+      ({
+        action: "perform-node-action",
+        payload: { id, path },
+      }) as const;
     const added = settingsReducer(config, action("add", ["rows"]));
     expect(added.rows).toHaveLength(4);
     const duplicated = settingsReducer(config, action("duplicate", ["rows", "b"]));
