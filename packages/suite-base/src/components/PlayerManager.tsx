@@ -65,6 +65,7 @@ import {
 import UserScriptPlayer from "@lichtblick/suite-base/players/UserScriptPlayer";
 import { Player } from "@lichtblick/suite-base/players/types";
 import { UserScripts } from "@lichtblick/suite-base/types/panels";
+import { updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import { mergeMultipleFileNames } from "@lichtblick/suite-base/util/mergeMultipleFileName";
 
 import { useTrustedUserScripts } from "./useTrustedUserScripts";
@@ -221,7 +222,8 @@ export default function PlayerManager(
 
   // Sample layout ids for this session, used when localStorage is unavailable.
   const sampleLayoutIds = useRef(new Map<string, LayoutID>());
-  // Bumped on every selectSource call, so a slow earlier call can't apply its layout late.
+  // Bumped on every selectSource/closeSource call, so a slow earlier selection can tell it was
+  // superseded and won't apply its player or layout late.
   const selectionSeq = useRef(0);
 
   const selectSource = useCallback(
@@ -335,7 +337,7 @@ export default function PlayerManager(
                 const permission = await handle.queryPermission({
                   mode: "read",
                 });
-                if (!isMounted()) {
+                if (!isMounted() || seq !== selectionSeq.current) {
                   return;
                 }
 
@@ -343,13 +345,16 @@ export default function PlayerManager(
                   const newPerm = await handle.requestPermission({
                     mode: "read",
                   });
+                  if (!isMounted() || seq !== selectionSeq.current) {
+                    return;
+                  }
                   if (newPerm !== "granted") {
                     throw new Error(`Permission denied: ${handle.name}`);
                   }
                 }
               }
               files = await Promise.all(handles.map(async (f) => await f.getFile()));
-              if (!isMounted()) {
+              if (!isMounted() || seq !== selectionSeq.current) {
                 return;
               }
             }
@@ -384,7 +389,10 @@ export default function PlayerManager(
 
         enqueueSnackbar("Unable to initialize player", { variant: "error" });
       } catch (error) {
-        enqueueSnackbar((error as Error).message, { variant: "error" });
+        // A superseded selection (closed or replaced meanwhile) shouldn't surface its error
+        if (seq === selectionSeq.current) {
+          enqueueSnackbar((error as Error).message, { variant: "error" });
+        }
       }
     },
     [
@@ -414,6 +422,11 @@ export default function PlayerManager(
     }
     restoredLastFile.current = true;
 
+    // Only restore into an untouched session: the user may have picked or closed a source
+    // before recents finished loading.
+    if (selectionSeq.current !== 0) {
+      return;
+    }
     const lastFile = readLastFile();
     if (!lastFile || new URL(window.location.href).searchParams.has("ds")) {
       return;
@@ -425,10 +438,15 @@ export default function PlayerManager(
       return;
     }
 
+    const seq = selectionSeq.current;
     void (async () => {
       const permissions = await Promise.all(
         recent.handles.map(async (h) => await h.queryPermission({ mode: "read" })),
       );
+      // The user opened or closed a source meanwhile: don't override that with the restore
+      if (seq !== selectionSeq.current) {
+        return;
+      }
       if (permissions.every((p) => p === "granted")) {
         void selectSource(recent.sourceId, { type: "file", handles: recent.handles });
         return;
@@ -452,6 +470,25 @@ export default function PlayerManager(
     })();
   }, [recentsLoaded, recents, selectSource, enqueueSnackbar, closeSnackbar]);
 
+  const closeSource = useCallback(() => {
+    selectionSeq.current++;
+    // Dropping the player makes MessagePipelineProvider close() it (e.g. closes the websocket).
+    setBasePlayer(undefined);
+    setSelectedSource(undefined);
+    setSelectedFiles(undefined);
+    setCurrentRecentId(undefined);
+    // Forget the last opened file so a reload doesn't reopen it (the recent entry stays).
+    writeLastFile(undefined);
+    // Drop ds/time/mcap-bundle from the URL so a reload doesn't reconnect.
+    const url = updateAppURLState(new URL(window.location.href), {
+      ds: undefined,
+      dsParams: {},
+      time: undefined,
+    });
+    url.searchParams.delete("mcap-bundle");
+    window.history.replaceState(undefined, "", url.href);
+  }, []);
+
   // Make a RecentSources array for the PlayerSelectionContext
   const recentSources = useMemo(() => {
     const sources = recents.map(
@@ -472,6 +509,7 @@ export default function PlayerManager(
 
   const value: PlayerSelection = {
     selectSource,
+    closeSource,
     selectRecent,
     removeRecent,
     togglePinRecent,
