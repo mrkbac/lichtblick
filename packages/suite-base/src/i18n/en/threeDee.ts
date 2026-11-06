@@ -61,9 +61,11 @@ export const threeDee = {
   translationOffset: "Translation offset",
   translationOffsetHelp: "Added to the recorded translation, along the parent frame's axes (m)",
   rotationOffsetHelp:
-    "Roll, pitch and yaw in degrees around this frame's own axes, applied after the recorded rotation",
+    "Roll, pitch and yaw in degrees around this frame's own axes (intrinsic XYZ), applied after the recorded rotation",
   recordedTranslation: "Recorded translation",
   recordedRotation: "Recorded rotation",
+  rotationHelp:
+    "Roll, pitch and yaw in degrees, intrinsic XYZ: around the frame's own axes, each turn applied to the already rotated axes. ROS tools (tf2 getRPY, URDF rpy, the Transform Tree panel) use extrinsic xyz around fixed axes, so their numbers differ when more than one angle is set.",
   resultTranslation: "Result translation",
   resultRotation: "Result rotation",
   resultHelp:

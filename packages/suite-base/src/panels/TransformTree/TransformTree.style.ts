@@ -165,4 +165,12 @@ export const useStyles = makeStyles()((theme) => ({
   spacer: {
     flex: "auto",
   },
+  infoIcon: {
+    display: "inline-flex",
+    verticalAlign: "middle",
+    marginRight: theme.spacing(0.25),
+    color: theme.palette.text.secondary,
+    cursor: "help",
+    "& svg": { width: 12, height: 12 },
+  },
 }));

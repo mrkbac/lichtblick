@@ -35,7 +35,7 @@ import { MessageEvent, SubscribePayload } from "@lichtblick/suite-base/players/t
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
-import { OffsetEditor } from "./OffsetEditor";
+import { OffsetEditor, RotationConventionInfo } from "./OffsetEditor";
 import { useStyles } from "./TransformTree.style";
 import { buildSettingsTree, resolveTopics, settingsActionReducer } from "./settings";
 import { isTransformSchema, quaternionToRpy } from "./transforms";
@@ -70,7 +70,7 @@ const VALUE_COLUMNS = [
   { key: "x", chars: 10, groupStart: true },
   { key: "y", chars: 10, groupStart: false },
   { key: "z", chars: 10, groupStart: false },
-  { key: "roll", chars: 9, groupStart: true },
+  { key: "roll", chars: 11, groupStart: true }, // +2 for the convention ⓘ in its header
   { key: "pitch", chars: 9, groupStart: false },
   { key: "yaw", chars: 9, groupStart: false },
   { key: "age", chars: 9, groupStart: true },
@@ -364,6 +364,9 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
                 <th>{t("columns.frame")}</th>
                 {VALUE_COLUMNS.map((column) => (
                   <th key={column.key} className={cx({ [classes.groupStart]: column.groupStart })}>
+                    {column.key === "roll" && (
+                      <RotationConventionInfo text={t("rotationConvention")} />
+                    )}
                     {t(`columns.${column.key}`)}
                   </th>
                 ))}

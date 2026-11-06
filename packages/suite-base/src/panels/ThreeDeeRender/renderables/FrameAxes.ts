@@ -749,6 +749,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
       };
       fields.rpy = {
         label: t("threeDee:recordedRotation"),
+        help: t("threeDee:rotationHelp"),
         input: "vec3",
         precision: PRECISION_ADJUST_DEGREES,
         labels: ["R", "P", "Y"],
@@ -793,7 +794,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     };
     fields.resultRpy = {
       label: adjusted ? t("threeDee:resultRotation") : t("threeDee:rotation"),
-      help: editable ? t("threeDee:resultHelp") : undefined,
+      help: editable ? t("threeDee:resultHelp") : t("threeDee:rotationHelp"),
       input: "vec3",
       precision: PRECISION_ADJUST_DEGREES,
       step: step.degrees,

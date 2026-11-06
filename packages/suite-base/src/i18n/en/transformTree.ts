@@ -13,6 +13,8 @@ export const transformTree = {
   warningCount_one: "{{count}} warning",
   warningCount_other: "{{count}} warnings",
   adjustedCount: "{{count}} adjusted",
+  rotationConvention:
+    "Roll, pitch and yaw turn around the parent's fixed axes: x, then y, then z (extrinsic xyz, as in tf2 getRPY and URDF rpy).\nThe 3D panel's transform settings use intrinsic XYZ (around the frame's own, already rotated axes), so its numbers differ when more than one angle is set.",
   showingOriginal: "showing original",
   columns: {
     frame: "Frame",
@@ -46,6 +48,8 @@ export const transformTree = {
     result: "Result",
     resultHelp:
       "The transform that is rendered. Type a value here and the offset is computed for you. Roll, pitch and yaw turn around the parent's fixed axes (ROS convention), like the table.",
+    rotationConvention:
+      "Offset: turns around the frame's own axes after the recorded rotation (intrinsic XYZ), the same values as the 3D panel's Rotation offset.\nResult: turns around the parent's fixed axes (extrinsic xyz, as in tf2 getRPY and URDF rpy), like the table.",
     showOriginal: "Show original",
     showOriginalHelp: "Render the recorded transforms in every panel, ignoring all offsets",
     reset: "Reset",

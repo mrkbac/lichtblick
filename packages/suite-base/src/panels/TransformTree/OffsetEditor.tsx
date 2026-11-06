@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Dismiss12Regular } from "@fluentui/react-icons";
+import { Dismiss12Regular, Info16Regular } from "@fluentui/react-icons";
 import {
   Button,
   Checkbox,
@@ -11,6 +11,7 @@ import {
   MenuItem,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
 } from "@mui/material";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -42,6 +43,18 @@ const STEPS: readonly AdjustStep[] = ["fine", "medium", "coarse"];
 const COLUMNS = { xyz: ["x", "y", "z"], rpy: ["roll", "pitch", "yaw"] } as const;
 
 type Part = "xyz" | "rpy";
+
+/** ⓘ that explains which roll/pitch/yaw convention a set of angles uses */
+export function RotationConventionInfo({ text }: { text: string }): React.JSX.Element {
+  const { classes } = useStyles();
+  return (
+    <Tooltip title={<span style={{ whiteSpace: "pre-line" }}>{text}</span>}>
+      <span className={classes.infoIcon} role="img" aria-label={text}>
+        <Info16Regular />
+      </span>
+    </Tooltip>
+  );
+}
 
 type Props = {
   frame: string;
@@ -130,7 +143,7 @@ export function OffsetEditor({
   // Translation and rotation in separate blocks so each input is wide enough for its value
   const block = (part: Part, offsetValues: Readonly<Vec3>, resultValues: Readonly<Vec3>) => (
     <>
-      <span />
+      {part === "rpy" ? <RotationConventionInfo text={t("editor.rotationConvention")} /> : <span />}
       {COLUMNS[part].map((column) => (
         <span key={column} className={classes.editorColumn}>
           {t(`columns.${column}`)}
