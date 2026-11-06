@@ -146,7 +146,8 @@ export class GridRenderer {
     tile.elements = elements;
     tile.config = config;
     tile.drawn = undefined;
-    this.#showStatus(tile, this.#waitingText);
+    // A remounted tile shows its last frame (redrawn on the first resize) instead of waiting text.
+    this.#showStatus(tile, tile.bitmap ? undefined : this.#waitingText);
     this.#resizeObserver ??= new ResizeObserver((entries) => {
       this.#handleResize(entries);
     });
@@ -158,13 +159,11 @@ export class GridRenderer {
     if (!tile?.elements) {
       return;
     }
+    // Keep the last frame and the video decoder, so a tile unmounted by maximizing another one
+    // reappears unchanged even while paused. Both are released in setTopics and dispose.
     this.#resizeObserver?.unobserve(tile.elements.canvas);
     tile.elements = undefined;
     tile.drawn = undefined;
-    tile.bitmap?.close();
-    tile.bitmap = undefined;
-    tile.video?.player?.close();
-    tile.video = undefined;
   }
 
   public setTileConfig(config: TileConfig): void {
@@ -176,8 +175,8 @@ export class GridRenderer {
   }
 
   /**
-   * Stops the decode worker. Tiles release their bitmaps and observers on detach, and the renderer
-   * stays usable (the worker is recreated on demand) so effect re-runs don't lose tile state.
+   * Stops the decode worker and video decoders and releases all bitmaps. The renderer stays usable
+   * (both are recreated on demand), so effect re-runs don't lose the tiles' latest messages.
    */
   public dispose(): void {
     // Decodes pending in the terminated worker never settle; don't let them block their tiles.
@@ -187,6 +186,8 @@ export class GridRenderer {
     this.#worker?.terminate();
     this.#worker = undefined;
     for (const tile of this.#tiles.values()) {
+      tile.bitmap?.close();
+      tile.bitmap = undefined;
       tile.video?.player?.close();
       tile.video = undefined;
     }
