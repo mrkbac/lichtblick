@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
+import {
+  LayoutData,
+  PanelsActions,
+} from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
 import { LayoutNode } from "@lichtblick/suite-base/types/layouts";
 
 import { COALESCE_MS, HISTORY_LIMIT, LayoutHistory, reopenPlacement } from "./layoutHistory";
@@ -10,11 +13,14 @@ const initial: LayoutData = {
   configById: { "Plot!a": { title: "a" }, "Table!b": { title: "b" } },
   globalVariables: {},
   userNodes: {},
+  playbackConfig: { speed: 1 },
   layout: { direction: "row", children: [{ panels: ["Plot!a"] }, { panels: ["Table!b"] }] },
 };
 
-const setTitle = (id: string, title: string) =>
-  ({ type: "SAVE_PANEL_CONFIGS", payload: { configs: [{ id, config: { title } }] } }) as const;
+const setTitle = (id: string, title: string): PanelsActions => ({
+  type: "SAVE_PANEL_CONFIGS",
+  payload: { configs: [{ id, config: { title } }] },
+});
 
 describe("LayoutHistory", () => {
   it("undoes and redoes", () => {
@@ -81,6 +87,39 @@ describe("LayoutHistory", () => {
     h.undo(b);
     const c = h.apply(a, setTitle("Table!b", "y"), 1001)!;
     expect(h.undo(c)).toBe(a);
+  });
+
+  it("does not record panels filling in their defaults", () => {
+    const h = new LayoutHistory();
+    const a = h.apply(initial, setTitle("Plot!a", "x"), 0)!;
+    const filled = h.apply(
+      a,
+      {
+        type: "SAVE_PANEL_CONFIGS",
+        payload: { configs: [{ id: "Table!b", config: { extra: 1 } }], fillsDefaults: true },
+      },
+      1000,
+    )!;
+    // A brand-new panel saving its first config counts as filling defaults too.
+    const added = h.apply(filled, setTitle("Plot!new", "n"), 2000)!;
+    expect(added.configById["Plot!new"]).toEqual({ title: "n" });
+    expect(h.undo(added)).toBe(initial);
+    expect(h.canUndo()).toBe(false);
+  });
+
+  it("keeps redo when a panel fills in its defaults after undo", () => {
+    const h = new LayoutHistory();
+    const a = h.apply(initial, setTitle("Plot!a", "x"), 0)!;
+    h.undo(a);
+    const filled = h.apply(
+      initial,
+      {
+        type: "SAVE_PANEL_CONFIGS",
+        payload: { configs: [{ id: "Plot!a", config: { extra: 1 } }], fillsDefaults: true },
+      },
+      1000,
+    )!;
+    expect(h.redo(filled)).toBe(a);
   });
 
   it("is bounded", () => {

@@ -43,6 +43,15 @@ function coalesceKey(action: PanelsActions): string | undefined {
   }
 }
 
+/** Panels saving their initial config (defaults, or their first config ever) on mount. */
+function fillsDefaults(data: LayoutData, action: PanelsActions): boolean {
+  return (
+    action.type === "SAVE_PANEL_CONFIGS" &&
+    (action.payload.fillsDefaults === true ||
+      action.payload.configs.every(({ id }) => _.isEmpty(data.configById[id])))
+  );
+}
+
 /**
  * Where to put a closed panel back: as a tab next to its former tab mates, else beside its former
  * neighbour in the split, else along the right edge.
@@ -108,6 +117,12 @@ export class LayoutHistory {
       return undefined;
     }
     this.#sync(data);
+    if (fillsDefaults(data, action)) {
+      // Fold into the current state: no undo step to get stuck on (the panel would save its
+      // defaults again right away), and redo stays intact when undo remounts a panel.
+      this.#current = next;
+      return next;
+    }
     if (action.type === "CLOSE_PANEL") {
       const { id } = action.payload;
       this.#closed.push({

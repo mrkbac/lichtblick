@@ -53,6 +53,8 @@ export type ChangePanelLayoutPayload = {
 };
 export type SaveConfigsPayload = {
   configs: ConfigsPayload[];
+  /** A panel filling in its default config on mount: not a user edit, so not an undo step. */
+  fillsDefaults?: boolean;
 };
 
 type PerPanelFunc<Config> = (arg0: Config) => Config;
