@@ -92,6 +92,28 @@ describe("buildSettingsTree", () => {
     );
   });
 
+  it("asks for a timestamp field on the series' topic for the custom field method", () => {
+    const config = PlotBuilder.config({
+      paths: [
+        PlotBuilder.path({ value: "/a.v", timestampMethod: "customField" }),
+        PlotBuilder.path({
+          value: "/a.v",
+          timestampMethod: "customField",
+          timestampPath: "/b.t",
+        }),
+        PlotBuilder.path({ value: "/a.v", timestampMethod: "customField", timestampPath: "/a.t" }),
+        PlotBuilder.path({ value: "/a.v", timestampMethod: "receiveTime" }),
+      ],
+    });
+
+    const children = buildSettingsTree(config, t).paths?.children;
+
+    expect(children?.["0"]?.fields?.timestampPath?.error).toBe("timestampFieldMissing");
+    expect(children?.["1"]?.fields?.timestampPath?.error).toBe("timestampFieldTopicError");
+    expect(children?.["2"]?.fields?.timestampPath?.error).toBeUndefined();
+    expect(children?.["3"]?.fields?.timestampPath).toBeUndefined();
+  });
+
   it("should add a default plot path in the node when no paths", () => {
     const config: PlotConfig = PlotBuilder.config({ paths: [] });
 
@@ -333,27 +355,5 @@ describe("buildSettingsTree", () => {
       expect(child0?.reorderable).toBe(true);
       expect(child0?.icon).toBe("DragHandle");
     });
-  });
-
-  it("asks for a timestamp field on the series' topic for the custom field method", () => {
-    const config = PlotBuilder.config({
-      paths: [
-        PlotBuilder.path({ value: "/a.v", timestampMethod: "customField" }),
-        PlotBuilder.path({
-          value: "/a.v",
-          timestampMethod: "customField",
-          timestampPath: "/b.t",
-        }),
-        PlotBuilder.path({ value: "/a.v", timestampMethod: "customField", timestampPath: "/a.t" }),
-        PlotBuilder.path({ value: "/a.v", timestampMethod: "receiveTime" }),
-      ],
-    });
-
-    const children = buildSettingsTree(config, t).paths?.children;
-
-    expect(children?.["0"]?.fields?.timestampPath?.error).toBe("timestampFieldMissing");
-    expect(children?.["1"]?.fields?.timestampPath?.error).toBe("timestampFieldTopicError");
-    expect(children?.["2"]?.fields?.timestampPath?.error).toBeUndefined();
-    expect(children?.["3"]?.fields?.timestampPath).toBeUndefined();
   });
 });

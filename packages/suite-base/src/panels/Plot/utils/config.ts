@@ -32,14 +32,14 @@ export type PlotPath = BasePlotPath & {
   smoothing?: number;
 };
 
-/** Where a series' x value comes from on a time plot */
-export type PlotTimestampMethod = TimestampMethod | "customField";
 export type PlotInterpolation = "linear" | "step";
 export type PlotYAxis = "primary" | "secondary";
 export type PlotTimeWindow = "automatic" | "sliding" | "fixed";
 export type PlotPlayheadPosition = "right" | "center";
 export type PlotTimestampFormat = "relative" | "absolute";
 export type PlotAxisScales = "independent" | "equal";
+/** Where a series' x value comes from on a time plot */
+export type PlotTimestampMethod = TimestampMethod | "customField";
 
 export type PlotXAxisVal =
   // x-axis is either receive time since start or header stamp since start
