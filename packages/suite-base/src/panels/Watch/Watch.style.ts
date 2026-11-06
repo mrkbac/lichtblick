@@ -36,8 +36,9 @@ export const useStyles = makeStyles()((theme) => ({
   },
   dropTarget: { boxShadow: `inset 0 2px 0 ${theme.palette.primary.main}` },
   expandButton: { padding: 0, margin: theme.spacing(0, -0.5) },
+  // The name takes the free space; the value is only as wide as its text
   name: {
-    flex: "0 1 40%",
+    flex: "1 1 auto",
     minWidth: 60,
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -48,8 +49,9 @@ export const useStyles = makeStyles()((theme) => ({
   },
   invalid: { color: theme.palette.error.main },
   value: {
-    flex: "1 1 0",
-    minWidth: "7ch", // the sparkline gives way first
+    flex: "0 1 auto",
+    minWidth: "min(10ch, 40%)", // typical numbers keep one width; the sparkline gives way first
+    maxWidth: "50%", // long array and object summaries leave room for the name
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
