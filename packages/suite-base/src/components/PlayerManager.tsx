@@ -36,9 +36,11 @@ import { MessagePipelineProvider } from "@lichtblick/suite-base/components/Messa
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
   LayoutState,
+  useCurrentLayoutActions,
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { ExtensionCatalogContext } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
+import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import { usePerformance } from "@lichtblick/suite-base/context/PerformanceContext";
 import PlayerSelectionContext, {
   DataSourceArgs,
@@ -150,6 +152,8 @@ export default function PlayerManager(
 
   const globalVariables = useCurrentLayoutSelector(globalVariablesSelector);
   const isLayoutLoading = useCurrentLayoutSelector(isLayoutLoadingSelector);
+  const layoutManager = useLayoutManager();
+  const { setSelectedLayoutId } = useCurrentLayoutActions();
 
   const topicAliasPlayer = useMemo(() => {
     if (!basePlayer) {
@@ -242,6 +246,22 @@ export default function PlayerManager(
 
         setBasePlayer(newPlayer);
         writeLastFile(undefined);
+
+        // Show the sample in the layout made for it. Reuse an existing copy so edits survive.
+        if (foundSource.sampleLayout) {
+          const name = foundSource.displayName;
+          const existing = (await layoutManager.getLayouts()).find((l) => l.name === name);
+          const layout =
+            existing ??
+            (await layoutManager.saveNewLayout({
+              name,
+              data: foundSource.sampleLayout,
+              permission: "CREATOR_WRITE",
+            }));
+          if (isMounted()) {
+            setSelectedLayoutId(layout.id);
+          }
+        }
         return;
       }
 
@@ -340,7 +360,15 @@ export default function PlayerManager(
         enqueueSnackbar((error as Error).message, { variant: "error" });
       }
     },
-    [playerSources, metricsCollector, enqueueSnackbar, isMounted, addRecent],
+    [
+      playerSources,
+      metricsCollector,
+      enqueueSnackbar,
+      isMounted,
+      addRecent,
+      layoutManager,
+      setSelectedLayoutId,
+    ],
   );
 
   // Select a recent entry by id
