@@ -30,6 +30,9 @@ import {
   looksLikeHost,
 } from "@lichtblick/suite-base/util/recentSources";
 
+/** id of the address bar, so the open-connection shortcut can focus it while the page is open. */
+export const START_ADDRESS_INPUT_ID = "start-address-input";
+
 const SEARCH_FILTER = /^(topic|schema|path|since|until|duration|size|status|has)[:<>]/i;
 
 type Props = {
@@ -180,6 +183,7 @@ export function OpenUrlInput({
         <TextField
           autoFocus
           inputRef={inputRef}
+          id={START_ADDRESS_INPUT_ID}
           type="search"
           size="small"
           className={classes.input}

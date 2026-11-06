@@ -40,6 +40,7 @@ import {
   DataSourceDialog,
   DataSourceDialogItem,
 } from "@lichtblick/suite-base/components/DataSourceDialog";
+import { START_ADDRESS_INPUT_ID } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
 import DataSourceSidebar from "@lichtblick/suite-base/components/DataSourceSidebar/DataSourceSidebar";
 import DocumentDropListener from "@lichtblick/suite-base/components/DocumentDropListener";
 import { EventsList } from "@lichtblick/suite-base/components/EventsList";
@@ -523,6 +524,10 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         ev.preventDefault();
         if (ev.shiftKey) {
           dialogActions.dataSource.open("start");
+          // autoFocus only applies on mount, so focus the bar when the page is already open
+          requestAnimationFrame(() => {
+            document.getElementById(START_ADDRESS_INPUT_ID)?.focus();
+          });
           return;
         }
         void dialogActions.openFile.open().catch((err: unknown) => {
