@@ -985,4 +985,47 @@ describe("CachingIterableSource", () => {
       },
     ]);
   });
+
+  it("should emit loadedRangesChange once until the ranges are read", async () => {
+    const source = new TestSource();
+    const bufferedSource = new CachingIterableSource(source);
+    await bufferedSource.initialize();
+
+    source.messageIterator = async function* messageIterator(
+      _args: MessageIteratorArgs,
+    ): AsyncIterableIterator<Readonly<IteratorResult>> {
+      for (let i = 0; i < 8; ++i) {
+        yield {
+          type: "message-event",
+          msgEvent: {
+            topic: "a",
+            receiveTime: { sec: i, nsec: 0 },
+            message: undefined,
+            sizeInBytes: 0,
+            schemaName: "foo",
+          },
+        };
+      }
+    };
+
+    const onChange = vi.fn();
+    bufferedSource.on("loadedRangesChange", onChange);
+    const messageIterator = bufferedSource.messageIterator({ topics: mockTopicSelection("a") });
+
+    await messageIterator.next();
+    await messageIterator.next();
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(bufferedSource.loadedRanges()).toEqual([{ start: 0, end: 0.0999999999 }]);
+
+    await messageIterator.next();
+    expect(onChange).toHaveBeenCalledTimes(2);
+    expect(bufferedSource.loadedRanges()).toEqual([{ start: 0, end: 0.1999999999 }]);
+
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    for await (const _ of messageIterator) {
+      // drain
+    }
+    expect(onChange).toHaveBeenCalledTimes(3);
+    expect(bufferedSource.loadedRanges()).toEqual([{ start: 0, end: 1 }]);
+  });
 });

@@ -95,6 +95,9 @@ export class TopicEntities extends Renderable<EntityTopicUserData> {
       return;
     }
 
+    // Report missing transforms once per frame (see TopicMarkers.startFrame)
+    let missingTransform: string | undefined;
+    let anyUpdated = false;
     for (const renderables of this.#renderablesById.values()) {
       for (const renderable of Object.values(renderables)) {
         const entity = renderable.userData.entity;
@@ -121,14 +124,18 @@ export class TopicEntities extends Renderable<EntityTopicUserData> {
           srcTime,
         );
         renderable.visible = updated;
-        const topic = this.userData.topic;
         if (!updated) {
-          const message = missingTransformMessage(renderFrameId, fixedFrameId, frameId);
-          this.renderer.settings.errors.addToTopic(topic, MISSING_TRANSFORM, message);
+          missingTransform ??= missingTransformMessage(renderFrameId, fixedFrameId, frameId);
         } else {
-          this.renderer.settings.errors.removeFromTopic(topic, MISSING_TRANSFORM);
+          anyUpdated = true;
         }
       }
+    }
+    const topic = this.userData.topic;
+    if (missingTransform != undefined) {
+      this.renderer.settings.errors.addToTopic(topic, MISSING_TRANSFORM, missingTransform);
+    } else if (anyUpdated) {
+      this.renderer.settings.errors.removeFromTopic(topic, MISSING_TRANSFORM);
     }
   }
 

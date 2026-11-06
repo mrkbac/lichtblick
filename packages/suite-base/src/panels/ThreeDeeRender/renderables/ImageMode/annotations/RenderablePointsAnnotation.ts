@@ -141,12 +141,11 @@ export class RenderablePointsAnnotation extends Renderable<BaseUserData, /*TRend
     if (this.#annotationNeedsUpdate || this.#scaleNeedsUpdate) {
       this.#scaleNeedsUpdate = false;
       const { thickness } = this.#annotation;
-      // thickness specifies radius, PointsMaterial.size specifies diameter
+      // thickness specifies radius, PointsMaterial.size specifies diameter. Both sizes are uniforms,
+      // so no shader rebuild.
       this.#pointsMaterial.size = thickness * 2 * this.#scale;
-      this.#pointsMaterial.needsUpdate = true;
       // PointsMaterial automatically adjusts for pixel ratio, ShaderMaterial does not
       this.#pickingMaterial.uniforms.size!.value = thickness * 2 * this.#scale * this.#pixelRatio;
-      this.#pickingMaterial.needsUpdate = true;
     }
 
     if (this.#annotationNeedsUpdate || this.#cameraModelNeedsUpdate) {

@@ -246,7 +246,7 @@ describe("useTopicMessageNavigation", () => {
       // When
       const { result } = setup({
         topicName,
-        selected: false,
+        selected: true,
         pipelineData: {
           currentTime: t1,
           topicStats: new Map([[topicName, { numMessages: 2, lastMessageTime: t2 }]]),
@@ -435,7 +435,7 @@ describe("useTopicMessageNavigation", () => {
 
       const { result, pausePlayback, seekPlayback } = setup({
         topicName,
-        selected: false,
+        selected: true,
         pipelineData: {
           currentTime: t1,
           topicStats: new Map([[topicName, { numMessages: 2 }]]),
@@ -488,7 +488,7 @@ describe("useTopicMessageNavigation", () => {
 
       const { result, pausePlayback, seekPlayback } = setup({
         topicName,
-        selected: false,
+        selected: true,
         pipelineData: {
           currentTime: t2,
           topicStats: new Map([[topicName, { numMessages: 2 }]]),
@@ -540,7 +540,7 @@ describe("useTopicMessageNavigation", () => {
 
       const { result, pausePlayback, seekPlayback } = setup({
         topicName,
-        selected: false,
+        selected: true,
         pipelineData: {
           startTime,
           currentTime,
@@ -568,7 +568,7 @@ describe("useTopicMessageNavigation", () => {
 
       const { result, getBatchIterator } = setup({
         topicName,
-        selected: false,
+        selected: true,
         pipelineData: {
           startTime,
           currentTime,
@@ -678,7 +678,7 @@ describe("useTopicMessageNavigation", () => {
 
       const { result, pausePlayback, seekPlayback } = setup({
         topicName,
-        selected: false,
+        selected: true,
         pipelineData: {
           currentTime,
           // The iterator will yield a valid message, then one at the current time

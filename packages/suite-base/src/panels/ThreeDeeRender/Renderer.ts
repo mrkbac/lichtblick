@@ -233,6 +233,9 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   readonly #staticTransformCache = new Map<string, StaticTransform>();
 
   public coordinateFrameList: SelectEntry[] = [];
+  // While > 0, transform tree changes are collected and announced once at the end of the batch
+  #transformTreeBatchDepth = 0;
+  #transformTreeDirty = false;
   public currentTime = 0n;
   public fixedFrameId: string | undefined;
   public followFrameId: string | undefined;
@@ -444,6 +447,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     }
 
     this.#watchDevicePixelRatio();
+    document.addEventListener("visibilitychange", this.#onVisibilityChange);
 
     this.setCameraState(config.cameraState);
     this.animationFrame();
@@ -452,6 +456,12 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   #onHUDItemsChange = () => {
     this.hudItems = this.hud.getHUDItems();
     this.emit("hudItemsChanged", this);
+  };
+
+  #onVisibilityChange = () => {
+    if (document.visibilityState === "visible") {
+      this.queueAnimationFrame();
+    }
   };
 
   #onDevicePixelRatioChange = () => {
@@ -472,6 +482,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   public dispose(): void {
     log.warn(`Disposing renderer`);
     this.#devicePixelRatioMediaQuery?.removeEventListener("change", this.#onDevicePixelRatioChange);
+    document.removeEventListener("visibilitychange", this.#onVisibilityChange);
     this.removeAllListeners();
 
     this.settings.removeAllListeners();
@@ -537,14 +548,16 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
 
   #reapplyStaticTransforms(): void {
     const cache = this.#staticTransformCache;
-    for (const [childFrameId, { parentFrameId, stamp, translation, rotation }] of cache) {
-      const result = this.addTransform(parentFrameId, childFrameId, stamp, translation, rotation);
-      if (result === AddTransformResult.CYCLE_DETECTED) {
-        // The cached transform no longer fits the tree (e.g. an intervening dynamic transform
-        // now makes it cyclic); drop it so later backward seeks stop retrying it.
-        cache.delete(childFrameId);
+    this.#batchTransformTreeUpdates(() => {
+      for (const [childFrameId, { parentFrameId, stamp, translation, rotation }] of cache) {
+        const result = this.addTransform(parentFrameId, childFrameId, stamp, translation, rotation);
+        if (result === AddTransformResult.CYCLE_DETECTED) {
+          // The cached transform no longer fits the tree (e.g. an intervening dynamic transform
+          // now makes it cyclic); drop it so later backward seeks stop retrying it.
+          cache.delete(childFrameId);
+        }
       }
-    }
+    });
   }
 
   /**
@@ -1225,9 +1238,34 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     const normalizedFrameId = this.normalizeFrameId(frameId);
     if (!this.transformTree.hasFrame(normalizedFrameId)) {
       this.transformTree.getOrCreateFrame(normalizedFrameId);
-      this.coordinateFrameList = this.transformTree.frameList();
-      // log.debug(`Added coordinate frame "${normalizedFrameId}"`);
-      this.emit("transformTreeUpdated", this);
+      this.#transformTreeUpdated();
+    }
+  }
+
+  #transformTreeUpdated(): void {
+    if (this.#transformTreeBatchDepth > 0) {
+      this.#transformTreeDirty = true;
+      return;
+    }
+    this.coordinateFrameList = this.transformTree.frameList();
+    this.emit("transformTreeUpdated", this);
+  }
+
+  /**
+   * Runs `fn` and announces transform tree changes once afterwards. Every listener rebuilds
+   * settings trees and frameList() sorts all frames, so per-transform updates are O(n²) for
+   * bursts like re-adding all static transforms after a seek.
+   */
+  #batchTransformTreeUpdates(fn: () => void): void {
+    this.#transformTreeBatchDepth++;
+    try {
+      fn();
+    } finally {
+      this.#transformTreeBatchDepth--;
+      if (this.#transformTreeBatchDepth === 0 && this.#transformTreeDirty) {
+        this.#transformTreeDirty = false;
+        this.#transformTreeUpdated();
+      }
     }
   }
 
@@ -1315,8 +1353,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     const status = this.transformTree.addTransform(childFrameId, parentFrameId, stamp, transform);
 
     if (status === AddTransformResult.UPDATED) {
-      this.coordinateFrameList = this.transformTree.frameList();
-      this.emit("transformTreeUpdated", this);
+      this.#transformTreeUpdated();
     }
 
     if (status === AddTransformResult.CYCLE_DETECTED) {
@@ -1348,9 +1385,11 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   }
 
   public removeTransform(childFrameId: string, parentFrameId: string, stamp: bigint): void {
+    const prevVersion = this.transformTree.version;
     this.transformTree.removeTransform(childFrameId, parentFrameId, stamp);
-    this.coordinateFrameList = this.transformTree.frameList();
-    this.emit("transformTreeUpdated", this);
+    if (this.transformTree.version !== prevVersion) {
+      this.#transformTreeUpdated();
+    }
   }
 
   // Callback handlers
@@ -1399,12 +1438,19 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   #frameHandler = (currentTime: bigint): void => {
     this.#rendering = true;
     this.currentTime = currentTime;
-    this.#handleSubscriptionQueues();
+    this.#batchTransformTreeUpdates(() => {
+      this.#handleSubscriptionQueues();
+    });
     this.#updateFrameErrors();
     this.#updateFixedFrameId();
     this.#updateResolution();
 
-    this.gl.clear();
+    // A hidden tab shows nothing, but live data keeps driving frames: keep the scene state current
+    // and skip the GPU work. #onVisibilityChange repaints when the tab is shown again.
+    const draw = document.visibilityState !== "hidden";
+    if (draw) {
+      this.gl.clear();
+    }
     this.emit("startFrame", currentTime, this);
 
     const camera = this.cameraHandler.getActiveCamera();
@@ -1422,9 +1468,11 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
       sceneExtension.startFrame(currentTime, renderFrameId, fixedFrameId);
     }
 
-    this.gl.render(this.#scene, camera);
+    if (draw) {
+      this.gl.render(this.#scene, camera);
+    }
 
-    if (this.#selectedRenderable) {
+    if (draw && this.#selectedRenderable) {
       this.gl.render(this.#selectionBackdropScene, camera);
       this.gl.clearDepth();
       camera.layers.set(LAYER_SELECTED);
@@ -1562,7 +1610,10 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     for (const selection of selections) {
       selection.renderable.visible = true;
     }
-    this.animationFrame();
+    // Picking renders offscreen; only the hide-and-repick renders above touch the canvas
+    if (selections.length > 0) {
+      this.animationFrame();
+    }
     this.emit("renderableHovered", selections, cursorCoords, this);
   };
 

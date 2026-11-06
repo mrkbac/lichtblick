@@ -88,6 +88,8 @@ class CachingIterableSource<MessageType = unknown>
 
   // Cache of loaded ranges. Ranges correspond to the cache blocks and are normalized in [0, 1];
   #loadedRangesCache: Range[] = [{ start: 0, end: 0 }];
+  // Set when the cache changed since #loadedRangesCache was computed; see #markLoadedRangesDirty
+  #loadedRangesDirty = false;
 
   #initResult?: Initialization;
 
@@ -124,6 +126,10 @@ class CachingIterableSource<MessageType = unknown>
   }
 
   public loadedRanges(): Range[] {
+    if (this.#loadedRangesDirty) {
+      this.#loadedRangesDirty = false;
+      this.#recomputeLoadedRangeCache();
+    }
     return this.#loadedRangesCache;
   }
 
@@ -153,7 +159,7 @@ class CachingIterableSource<MessageType = unknown>
       this.#cachedSkimInterval = args.skimInterval;
       this.#cache.length = 0;
       this.#totalSizeBytes = 0;
-      this.#recomputeLoadedRangeCache();
+      this.#markLoadedRangesDirty();
     }
 
     // Where we want to read messages from. As we move through blocks and messages, the read head
@@ -286,7 +292,7 @@ class CachingIterableSource<MessageType = unknown>
           this.#cache.splice(insertIndex, 0, newBlock);
 
           block = newBlock;
-          this.#recomputeLoadedRangeCache();
+          this.#markLoadedRangesDirty();
         }
 
         // When receiving a message event or stamp, we update our known time on the block to the
@@ -318,7 +324,7 @@ class CachingIterableSource<MessageType = unknown>
             block.end = subtract(receiveTime, { sec: 0, nsec: 1 });
 
             lastTime = receiveTimeNs;
-            this.#recomputeLoadedRangeCache();
+            this.#markLoadedRangesDirty();
           }
         }
 
@@ -339,7 +345,7 @@ class CachingIterableSource<MessageType = unknown>
             sizeInBytes,
           })
         ) {
-          this.#recomputeLoadedRangeCache();
+          this.#markLoadedRangesDirty();
         }
 
         // As we add items to pending we also consider them as part of the total size
@@ -366,7 +372,7 @@ class CachingIterableSource<MessageType = unknown>
           block.size += pendingSizeInBytes;
         }
 
-        this.#recomputeLoadedRangeCache();
+        this.#markLoadedRangesDirty();
       } else {
         // We don't have a block after finishing our source. This can happen if the last
         // thing we read in the source made our block be over size and we cycled to a new block.
@@ -394,7 +400,7 @@ class CachingIterableSource<MessageType = unknown>
         const insertIndex = _.sortedIndexBy(this.#cache, newBlock, (item) => toNanoSec(item.start));
         this.#cache.splice(insertIndex, 0, newBlock);
 
-        this.#recomputeLoadedRangeCache();
+        this.#markLoadedRangesDirty();
       }
 
       // We've read everything there was to read for this source, so our next read will be after
@@ -499,6 +505,16 @@ class CachingIterableSource<MessageType = unknown>
     return out;
   }
 
+  // Recomputing is O(blocks), and the cache changes on every new message timestamp. Defer the work
+  // to loadedRanges() and emit once until the ranges are read again.
+  #markLoadedRangesDirty(): void {
+    if (this.#loadedRangesDirty) {
+      return;
+    }
+    this.#loadedRangesDirty = true;
+    this.emit("loadedRangesChange");
+  }
+
   #recomputeLoadedRangeCache(): void {
     if (!this.#initResult) {
       throw new Error("Invariant: uninitialized");
@@ -510,13 +526,11 @@ class CachingIterableSource<MessageType = unknown>
     const rangeNs = Number(toNanoSec(subtract(this.#initResult.end, this.#initResult.start)));
     if (rangeNs === 0) {
       this.#loadedRangesCache = [{ start: 0, end: 1 }];
-      this.emit("loadedRangesChange");
       return;
     }
 
     if (this.#cache.length === 0) {
       this.#loadedRangesCache = [{ start: 0, end: 0 }];
-      this.emit("loadedRangesChange");
       return;
     }
 
@@ -550,7 +564,6 @@ class CachingIterableSource<MessageType = unknown>
     }
 
     this.#loadedRangesCache = ranges;
-    this.emit("loadedRangesChange");
   }
 
   /**

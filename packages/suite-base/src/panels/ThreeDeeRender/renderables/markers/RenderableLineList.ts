@@ -19,6 +19,7 @@ import {
 import type { IRenderer } from "../../IRenderer";
 import { LineMaterialWithAlphaVertex } from "../../LineMaterialWithAlphaVertex";
 import { Marker } from "../../ros";
+import { setLinePositions } from "../../setLinePositions";
 
 export class RenderableLineList extends RenderableMarker {
   #geometry: LineSegmentsGeometry;
@@ -112,10 +113,7 @@ export class RenderableLineList extends RenderableMarker {
 
     this.#setPositions(marker, pointsLength);
     this.#setColors(marker, pointsLength);
-
-    // These both update the same `LineSegmentsGeometry` reference, so no need to call both
-    // this.linePrepass.computeLineDistances();
-    this.#line.computeLineDistances();
+    // No computeLineDistances(): line distances are only read by dashed materials (unused here)
   }
 
   #setPositions(marker: Marker, pointsLength: number): void {
@@ -131,7 +129,7 @@ export class RenderableLineList extends RenderableMarker {
       positions[offset + 2] = point.z;
     }
 
-    this.#geometry.setPositions(positions);
+    setLinePositions(this.#geometry, positions);
     this.#geometry.instanceCount = pointsLength >>> 1;
   }
 

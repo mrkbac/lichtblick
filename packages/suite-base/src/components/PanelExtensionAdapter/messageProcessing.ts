@@ -29,7 +29,7 @@ type ConvertMessageContext = {
 //
 // The string key uses a newline delimeter to avoid producting the same key for topic/schema name
 // values that might concatenate to the same string. i.e. "topic" "schema" and "topics" "chema".
-function converterKey(topic: string, schema: string): ConverterKey {
+export function converterKey(topic: string, schema: string): ConverterKey {
   return (topic + "\n" + schema) as ConverterKey;
 }
 

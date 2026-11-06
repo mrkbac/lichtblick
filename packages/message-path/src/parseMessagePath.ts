@@ -44,14 +44,19 @@ function isStreamModifier(part: MessagePathPart): boolean {
   return part.type === "modifier" && part.args.length === 0 && STREAM_MODIFIERS.includes(part.name);
 }
 
-const CacheMessagePath: Record<string, MessagePath> = {};
+// Caches invalid paths (undefined) too, so they aren't re-parsed on every call
+const CacheMessagePath = new Map<string, MessagePath | undefined>();
 
 const parseMessagePath = (path: string): MessagePath | undefined => {
-  // Cache the parsed message path to avoid re-parsing the same path
-  if (CacheMessagePath[path]) {
-    return CacheMessagePath[path];
+  if (CacheMessagePath.has(path)) {
+    return CacheMessagePath.get(path);
   }
+  const result = parseUncached(path);
+  CacheMessagePath.set(path, result);
+  return result;
+};
 
+function parseUncached(path: string): MessagePath | undefined {
   const parser = new Parser(grammarObj);
   try {
     const result: MessagePath | undefined = parser.feed(path).results[0];
@@ -70,14 +75,11 @@ const parseMessagePath = (path: string): MessagePath | undefined => {
       }
       result.messagePath = parts.slice(0, index);
     }
-    if (result) {
-      CacheMessagePath[path] = result;
-    }
     return result;
   } catch (err: unknown) {
     console.error("Error parsing message path", err);
     return undefined;
   }
-};
+}
 
 export { parseMessagePath };

@@ -19,6 +19,7 @@ import { LineMaterialWithAlphaVertex } from "@lichtblick/suite-base/panels/Three
 import { RenderablePrimitive } from "./RenderablePrimitive";
 import type { IRenderer } from "../../IRenderer";
 import { makeRgba, rgbToThreeColor, SRGBToLinear, stringToRgba } from "../../color";
+import { setLinePositions } from "../../setLinePositions";
 import { LayerSettingsEntity } from "../../settings";
 
 const tempRgba = makeRgba();
@@ -215,7 +216,7 @@ class LinePrimitiveRenderable extends THREE.Object3D {
 
       // setPosition requires the position array to be >= 6 length or else it will error
       // we skip primitives with empty points before calling this function
-      this.#geometry.setPositions(this.#positionBuffer);
+      setLinePositions(this.#geometry, this.#positionBuffer);
     }
 
     if (this.#colorChanged || this.#primitiveChanged) {
@@ -234,7 +235,11 @@ class LinePrimitiveRenderable extends THREE.Object3D {
         if (this.#colorBuffer == undefined || this.#colorBuffer.length < necessaryColorBufferSize) {
           this.#colorBuffer = new Float32Array(necessaryColorBufferSize);
         }
-        this.#material.vertexColors = true;
+        // vertexColors is compiled into the shader, so only rebuild it when the value changes
+        if (!this.#material.vertexColors) {
+          this.#material.vertexColors = true;
+          this.#material.needsUpdate = true;
+        }
         (this.#material.color as THREE.Color).setRGB(1, 1, 1); // any non-white color will tint the vertex colors
         this.#material.opacity = 1;
         this.#material.uniforms.opacity!.value = 1;
@@ -257,7 +262,10 @@ class LinePrimitiveRenderable extends THREE.Object3D {
           new THREE.InterleavedBufferAttribute(instanceColorBuffer, 4, 4),
         );
       } else {
-        this.#material.vertexColors = false;
+        if (this.#material.vertexColors) {
+          this.#material.vertexColors = false;
+          this.#material.needsUpdate = true;
+        }
         const color = this.#material.color as THREE.Color;
         rgbToThreeColor(color, singleColor);
         this.#material.setOpacity(singleColor.a);
@@ -276,8 +284,8 @@ class LinePrimitiveRenderable extends THREE.Object3D {
     }
     this.#material.lineWidth = this.#primitive.thickness;
     this.#material.transparent = this.#transparent;
+    // worldUnits flags a shader rebuild itself when it changes; lineWidth is a uniform
     this.#material.worldUnits = !this.#primitive.scale_invariant;
-    this.#material.needsUpdate = true;
 
     this.#pickingMaterial.worldUnits = !this.#primitive.scale_invariant;
     // make sure thin, scale invariant lines are still pickable
@@ -285,7 +293,6 @@ class LinePrimitiveRenderable extends THREE.Object3D {
       ? Math.max(this.#primitive.thickness, MIN_PICKING_LINE_WIDTH_PX)
       : this.#primitive.thickness;
     this.#pickingMaterial.uniformsNeedUpdate = true;
-    this.#pickingMaterial.needsUpdate = true;
   }
 
   public override dispose(): void {

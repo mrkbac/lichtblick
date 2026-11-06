@@ -815,6 +815,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
         }
         canvasTexture?.dispose();
         this.userData.texture = createCanvasTexture(decodedImage);
+        this.#materialNeedsUpdate = true;
       } else {
         canvasTexture.image = decodedImage;
         canvasTexture.needsUpdate = true;
@@ -831,12 +832,14 @@ export class ImageRenderable extends Renderable<ImageUserData> {
         dataTexture?.dispose();
         dataTexture = createDataTexture(decodedImage);
         this.userData.texture = dataTexture;
+        this.#materialNeedsUpdate = true;
       } else {
         dataTexture.image = decodedImage;
         dataTexture.needsUpdate = true;
       }
     }
-    this.#materialNeedsUpdate = true;
+    // Reusing the texture only needs `texture.needsUpdate`. `material.needsUpdate` would make
+    // three.js re-resolve the shader program for every image.
   }
 
   #updateMaterial(): void {

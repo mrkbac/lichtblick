@@ -8,7 +8,7 @@
 import { Dismiss16Regular } from "@fluentui/react-icons";
 import { toNanoSec } from "@foxglove/rostime";
 import { Button, IconButton, Tooltip, Typography } from "@mui/material";
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -16,6 +16,7 @@ import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingD
 import {
   MessagePipelineContext,
   useMessagePipeline,
+  useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import Stack from "@lichtblick/suite-base/components/Stack";
 
@@ -74,6 +75,20 @@ const useStyles = makeStyles()((theme) => ({
 const selectStartTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
 const selectEndTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
 const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
+const selectHasCurrentTime = (ctx: MessagePipelineContext) => selectCurrentTime(ctx) != undefined;
+const NO_KEY_HANDLERS: Record<string, () => boolean> = {};
+
+/** Reads the playhead on demand, so callers don't re-render on every playback tick. */
+function usePlayheadGetter(): () => bigint | undefined {
+  const getPipeline = useMessagePipelineGetter();
+  return useMemo(
+    () => () => {
+      const currentTime = selectCurrentTime(getPipeline());
+      return currentTime ? toNanoSec(currentTime) : undefined;
+    },
+    [getPipeline],
+  );
+}
 
 function useRecordingBounds(): { start: bigint; end: bigint } | undefined {
   const startTime = useMessagePipeline(selectStartTime);
@@ -196,13 +211,13 @@ export function TrimBar(): React.JSX.Element | null {
   const setRange = useTrimStore((state) => state.setRange);
   const clear = useTrimStore((state) => state.clear);
   const openExport = useTrimStore((state) => state.openExport);
-  const currentTime = useMessagePipeline(selectCurrentTime);
+  const hasPlayhead = useMessagePipeline(selectHasCurrentTime);
+  const getPlayhead = usePlayheadGetter();
   const { bounds, start, end } = useTrimRange();
 
   if (!editing || !bounds || start == undefined || end == undefined) {
     return null;
   }
-  const playhead = currentTime ? toNanoSec(currentTime) : undefined;
 
   return (
     <Stack direction="row" alignItems="center" gap={1} className={classes.bar}>
@@ -217,9 +232,12 @@ export function TrimBar(): React.JSX.Element | null {
         <span>
           <Button
             size="small"
-            disabled={playhead == undefined}
+            disabled={!hasPlayhead}
             onClick={() => {
-              setRange(playhead!, playhead! > end ? playhead! : end);
+              const playhead = getPlayhead();
+              if (playhead != undefined) {
+                setRange(playhead, playhead > end ? playhead : end);
+              }
             }}
           >
             {t("setIn")}
@@ -230,9 +248,12 @@ export function TrimBar(): React.JSX.Element | null {
         <span>
           <Button
             size="small"
-            disabled={playhead == undefined}
+            disabled={!hasPlayhead}
             onClick={() => {
-              setRange(playhead! < start ? playhead! : start, playhead!);
+              const playhead = getPlayhead();
+              if (playhead != undefined) {
+                setRange(playhead < start ? playhead : start, playhead);
+              }
             }}
           >
             {t("setOut")}
@@ -257,21 +278,42 @@ export function TrimBar(): React.JSX.Element | null {
 }
 
 /** Keyboard handlers for setting in and out points at the playhead while trimming. */
-export function useTrimKeyHandlers(): Record<string, () => void> {
+export function useTrimKeyHandlers(): Record<string, () => boolean> {
   const editing = useTrimStore((state) => state.editing);
-  const setRange = useTrimStore((state) => state.setRange);
-  const currentTime = useMessagePipeline(selectCurrentTime);
-  const { start, end } = useTrimRange();
-  if (!editing || !currentTime || start == undefined || end == undefined) {
-    return {};
-  }
-  const playhead = toNanoSec(currentTime);
-  return {
-    i: () => {
-      setRange(playhead, playhead > end ? playhead : end);
-    },
-    o: () => {
-      setRange(playhead < start ? playhead : start, playhead);
-    },
-  };
+  const getPlayhead = usePlayheadGetter();
+  const getPipeline = useMessagePipelineGetter();
+  return useMemo(() => {
+    if (!editing) {
+      return NO_KEY_HANDLERS;
+    }
+    // Resolve everything at key press; return false (keep the default) when there is nothing to set.
+    const resolve = () => {
+      const { start, end, setRange } = useTrimStore.getState();
+      const activeData = getPipeline().playerState.activeData;
+      const playhead = getPlayhead();
+      const s = start ?? (activeData?.startTime ? toNanoSec(activeData.startTime) : undefined);
+      const e = end ?? (activeData?.endTime ? toNanoSec(activeData.endTime) : undefined);
+      return playhead == undefined || s == undefined || e == undefined
+        ? undefined
+        : { playhead, start: s, end: e, setRange };
+    };
+    return {
+      i: () => {
+        const r = resolve();
+        if (!r) {
+          return false;
+        }
+        r.setRange(r.playhead, r.playhead > r.end ? r.playhead : r.end);
+        return true;
+      },
+      o: () => {
+        const r = resolve();
+        if (!r) {
+          return false;
+        }
+        r.setRange(r.playhead < r.start ? r.playhead : r.start, r.playhead);
+        return true;
+      },
+    };
+  }, [editing, getPipeline, getPlayhead]);
 }

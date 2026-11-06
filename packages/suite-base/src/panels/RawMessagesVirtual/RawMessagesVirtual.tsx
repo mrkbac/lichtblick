@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 import { Checkbox, FormControlLabel, InputBase, Typography } from "@mui/material";
 import * as _ from "lodash-es";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
@@ -121,33 +121,46 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
   const hideWrappingArray =
     baseItem?.queriedData.length === 1 && typeof baseItem.queriedData[0]?.value === "object";
 
-  const renderValue = (node: TreeNode): React.ReactNode => {
-    if (diffEnabled) {
-      if (node.isExpandable) {
-        // Items matched by an id field show that id (from DiffStats) instead of a preview.
-        const hasId = diffLabels.ID.labelText in (node.value as DiffObject);
-        return (
-          <>
-            {!hasId && <ObjectSummary value={node.value} />}
-            <DiffStats data={node.value as DiffObject} itemType={undefined} />
-          </>
-        );
+  // Stable across playback ticks so the memoized VirtualizedTree can skip re-rendering.
+  const renderValue = useCallback(
+    (node: TreeNode): React.ReactNode => {
+      if (diffEnabled) {
+        if (node.isExpandable) {
+          // Items matched by an id field show that id (from DiffStats) instead of a preview.
+          const hasId = diffLabels.ID.labelText in (node.value as DiffObject);
+          return (
+            <>
+              {!hasId && <ObjectSummary value={node.value} />}
+              <DiffStats data={node.value as DiffObject} itemType={undefined} />
+            </>
+          );
+        }
+        // Changed leaves already hold a formatted "before -> after" string.
+        const label =
+          node.diffStatus === "changed" ? String(node.value) : getValueString(node.value);
+        return renderDiffLabel(label, node.value);
       }
-      // Changed leaves already hold a formatted "before -> after" string.
-      const label = node.diffStatus === "changed" ? String(node.value) : getValueString(node.value);
-      return renderDiffLabel(label, node.value);
-    }
 
-    return valueRenderer(
+      return valueRenderer(
+        rootStructureItem,
+        hideWrappingArray ? [data] : (data as unknown[]),
+        baseItem?.queriedData ?? [],
+        getValueString(node.value),
+        node.value,
+        ...node.keyPath,
+        ...(hideWrappingArray ? [0] : []),
+      );
+    },
+    [
+      baseItem,
+      data,
+      diffEnabled,
+      hideWrappingArray,
+      renderDiffLabel,
       rootStructureItem,
-      hideWrappingArray ? [data] : (data as unknown[]),
-      baseItem?.queriedData ?? [],
-      getValueString(node.value),
-      node.value,
-      ...node.keyPath,
-      ...(hideWrappingArray ? [0] : []),
-    );
-  };
+      valueRenderer,
+    ],
+  );
 
   const renderOutput = () => {
     if (topicPath.length === 0) {

@@ -62,6 +62,8 @@ import { OpenSiblingPanel, PanelConfig, SaveConfig } from "@lichtblick/suite-bas
 import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import { getSiblingGroup } from "@lichtblick/suite-base/util/layoutTree";
 
+const MAX_PANEL_LOGS = 1000;
+
 /** Used in storybook when panels are renered outside of a <PanelLayout/> */
 const FALLBACK_PANEL_ID = "$unknown_id";
 
@@ -83,7 +85,11 @@ export default function Panel<
     const [showLogs, setShowLogs] = useState(false);
 
     const addLog = useCallback((message: string, error?: Error) => {
-      setLogs((prev) => [...prev, { timestamp: new Date().toLocaleString(), message, error }]);
+      // Keep only the newest entries: an unbounded log copies an ever-growing array per append
+      setLogs((prev) => [
+        ...prev.slice(-(MAX_PANEL_LOGS - 1)),
+        { timestamp: new Date().toLocaleString(), message, error },
+      ]);
     }, []);
     const { childId = FALLBACK_PANEL_ID, overrideConfig, ...otherProps } = props;
     const { classes, cx, theme } = useStyles();

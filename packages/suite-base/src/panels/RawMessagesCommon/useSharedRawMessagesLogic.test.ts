@@ -29,6 +29,7 @@ vi.mock("@lichtblick/suite-base/PanelAPI", () => ({
 }));
 vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   useMessagePipeline: (selector: (ctx: typeof mockPipeline) => unknown) => selector(mockPipeline),
+  useMessagePipelineGetter: () => () => mockPipeline,
 }));
 vi.mock(
   "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems",

@@ -193,7 +193,6 @@ export type UseSharedRawMessagesLogicResult = {
   setExpansion: (
     expansion: NodeExpansion | ((old: NodeExpansion | undefined) => NodeExpansion),
   ) => void;
-  nodes: Set<string>;
   canExpandAll: boolean;
 
   onTopicPathChange: (newTopicPath: string) => void;

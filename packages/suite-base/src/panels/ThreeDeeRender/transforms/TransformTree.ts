@@ -52,6 +52,8 @@ const DEFAULT_FRAME_IDS = ["base_link", "odom", "map", "earth"];
  */
 export class TransformTree {
   #frames = new Map<string, CoordinateFrame>();
+  /** Bumped whenever transforms are added, removed or cleared, so readers can skip unchanged trees */
+  public version = 0;
   #maxStorageTime: Duration;
   #maxCapacityPerFrame: number;
   #transformPool: ObjectPool<Transform>;
@@ -82,6 +84,7 @@ export class TransformTree {
     time: Time,
     transform: Transform,
   ): AddTransformResult {
+    this.version++;
     let updated = !this.hasFrame(frameId);
     let cycleDetected = false;
     const frame = this.getOrCreateFrame(frameId);
@@ -120,6 +123,7 @@ export class TransformTree {
       return;
     }
     child.removeTransformAt(stamp);
+    this.version++;
     this.#removeEmptyAncestors(child);
   }
 
@@ -180,6 +184,7 @@ export class TransformTree {
   }
 
   public clear(): void {
+    this.version++;
     this.#frames.clear();
   }
 
@@ -333,6 +338,7 @@ export class TransformTree {
       tree.#maxCapacityPerFrame,
     );
     newTree.#frames = tree.#frames;
+    newTree.version = tree.version;
     return newTree;
   }
 }

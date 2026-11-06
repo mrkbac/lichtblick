@@ -14,7 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { Time, isLessThan, subtract as subtractTimes, toSec } from "@foxglove/rostime";
+import { Time, isLessThan } from "@foxglove/rostime";
 
 import Logger from "@lichtblick/log";
 import { PlayerState, MessageEvent, PlayerAlert } from "@lichtblick/suite-base/players/types";
@@ -78,8 +78,10 @@ class MessageOrderTracker {
         // The first emit after a seek occurs from a backfill. This backfill might produce messages
         // much older than the seek time.
         if (!didSeek) {
-          const currentTimeDrift = Math.abs(toSec(subtractTimes(messageTime, currentTime)));
-          if (currentTimeDrift > DRIFT_THRESHOLD_SEC) {
+          // Drift in nanoseconds without allocating Time objects per message
+          const currentTimeDriftNs =
+            (messageTime.sec - currentTime.sec) * 1e9 + (messageTime.nsec - currentTime.nsec);
+          if (Math.abs(currentTimeDriftNs) > DRIFT_THRESHOLD_SEC * 1e9) {
             if (this.#trackIncorrectMessages) {
               this.#incorrectMessages.push(message);
             }
