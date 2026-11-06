@@ -32,6 +32,8 @@ export type MeasurementInfo = {
   summary: MeasureSummary;
   /** False while the measurement is still being placed */
   complete: boolean;
+  /** True while a transform it needs is missing at the current time; `summary` has no values then */
+  unavailable: boolean;
 };
 
 const MEASURE_KIND_KEYS = {
@@ -134,6 +136,8 @@ type Measurement = {
   /** frameId → result frame transform the summary was computed with */
   resultMatrix: THREE.Matrix4;
   dirty: boolean;
+  /** A transform needed for the summary is missing at the current time */
+  unavailable: boolean;
 };
 
 interface MeasurementToolEventMap extends THREE.Object3DEventMap {
@@ -312,7 +316,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   public copyText(id?: number): string {
     const frame = this.resultFrameName();
     return this.measurements
-      .filter((info) => info.complete && (id == undefined || info.id === id))
+      .filter((info) => info.complete && !info.unavailable && (id == undefined || info.id === id))
       .map(({ kind, summary }) =>
         [
           `${measureKindLabel(kind)}: ${summary.label}`,
@@ -388,33 +392,52 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       currentTime,
     );
     if (!group.visible) {
+      this.#markUnavailable(item, this.#renderFrameId);
       return;
     }
     group.updateMatrixWorld(true);
+    const resultFrameId = this.resultFrameId ?? this.#renderFrameId;
     const ok = frameTransform(
       tempMatrix,
-      this.renderer.transformTree,
-      this.resultFrameId ?? this.#renderFrameId,
+      tree,
+      resultFrameId,
       this.#fixedFrameId,
       item.frameId,
       currentTime,
     );
     if (!ok) {
       // Don't show values from another frame under the selected frame's name
-      const unavailable = i18next.t("threeDee:measureFrameUnavailable");
-      if (item.summary.label !== unavailable) {
-        item.summary = { label: unavailable, segmentLabels: [], details: [] };
-        this.#rebuildLabels(item);
-        this.#changed ||= item.complete;
-      }
-      item.dirty = true;
+      this.#markUnavailable(item, resultFrameId);
       return;
     }
-    if (item.dirty || !tempMatrix.equals(item.resultMatrix)) {
+    if (item.dirty || item.unavailable || !tempMatrix.equals(item.resultMatrix)) {
+      item.unavailable = false;
       item.resultMatrix.copy(tempMatrix);
       item.dirty = false;
       this.#recompute(item);
     }
+  }
+
+  /**
+   * Replace the summary with a placeholder naming the missing frame, so stale values from before
+   * a seek can't be read or copied. The next frame with the transform recomputes it.
+   */
+  #markUnavailable(item: Measurement, dstFrameId: AnyFrameId): void {
+    item.dirty = true;
+    const tree = this.renderer.transformTree;
+    // Name the first frame missing from the tree; else the path exists, just not at this time
+    const candidates: AnyFrameId[] = [item.frameId, dstFrameId, this.#fixedFrameId];
+    const missing = candidates.find((id) => !tree.hasFrame(id)) ?? item.frameId;
+    const label = i18next.t("threeDee:measureMissingTransform", {
+      frame: typeof missing === "string" ? missing : "",
+    });
+    if (item.unavailable && item.summary.label === label) {
+      return;
+    }
+    item.unavailable = true;
+    item.summary = { label, segmentLabels: [], details: [] };
+    this.#rebuildLabels(item);
+    this.#changed ||= item.complete;
   }
 
   /** Recompute values, geometry and labels after points or frames changed (not every frame) */
@@ -635,6 +658,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       summary: { label: "", segmentLabels: [], details: [] },
       resultMatrix: new THREE.Matrix4(),
       dirty: true,
+      unavailable: false,
     };
   }
 
@@ -795,6 +819,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       kind: item.kind,
       summary: item.summary,
       complete: item.complete,
+      unavailable: item.unavailable,
     }));
     this.dispatchEvent({ type: "foxglove.measure-change" });
   }

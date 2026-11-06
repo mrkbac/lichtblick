@@ -206,7 +206,7 @@ export const threeDee = {
   measureResultsIn: "Results in",
   measureDisplayFrame: "Display frame",
   measureFrame: "Frame",
-  measureFrameUnavailable: "Frame unavailable",
+  measureMissingTransform: "— (missing transform {{frame}})",
   measureCopy: "Copy",
   measureDelete: "Delete",
   measureCopyAll: "Copy all",
