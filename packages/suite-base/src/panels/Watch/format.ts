@@ -157,3 +157,23 @@ export function toPlottable(value: unknown): number | undefined {
       return undefined;
   }
 }
+
+/** Compact age of a value: "0.1 s", "4.2 s", "12 s", "3 min", "2 h". */
+export function formatAge(seconds: number): string {
+  const sec = Math.max(0, seconds);
+  if (sec < 10) {
+    return `${sec.toFixed(1)} s`;
+  }
+  if (sec < 60) {
+    return `${Math.floor(sec)} s`;
+  }
+  if (sec < 3600) {
+    return `${Math.floor(sec / 60)} min`;
+  }
+  return `${Math.floor(sec / 3600)} h`;
+}
+
+/** Whether a value received `ageSec` ago counts as frozen. */
+export function isStale(ageSec: number, staleAfterSec: number): boolean {
+  return ageSec > staleAfterSec;
+}

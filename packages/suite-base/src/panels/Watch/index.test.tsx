@@ -10,7 +10,7 @@ import type { Mock } from "vitest";
 
 import * as stories from "./index.stories";
 
-const { Default, Empty } = composeStories(stories);
+const { Default, Empty, Stale } = composeStories(stories);
 
 describe("Watch", () => {
   it("shows the latest value of each row", async () => {
@@ -69,6 +69,16 @@ describe("Watch", () => {
     } finally {
       vi.unstubAllGlobals();
     }
+  });
+
+  it("marks stale values even with the age column hidden", async () => {
+    render(<Stale />);
+    await waitFor(() => {
+      expect(screen.getAllByTestId("watch-row")[0]).toHaveAttribute("data-stale", "true");
+    });
+    expect(document.querySelector("[data-age]")).toBeNull();
+    // The invalid path is logged by the parser
+    (console.error as Mock).mockClear();
   });
 
   it("explains how to add rows when empty", () => {

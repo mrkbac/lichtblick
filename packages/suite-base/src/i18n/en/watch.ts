@@ -15,10 +15,15 @@ export const watch = {
   collapse: "Collapse",
   invalidPath: "Invalid message path",
   addedRows: "Added {{count}} rows",
+  ageTooltip: "Time since the message with this value",
+  staleTooltip: "No update for {{age}}",
 
   // Settings
   general: "General",
   sparklines: "Sparklines",
+  showAge: "Show value age",
+  staleAfter: "Stale after (s)",
+  staleAfterHelp: "Values that haven't updated for longer are dimmed and marked",
   rows: "Rows",
   addRow: "Add row",
   duplicate: "Duplicate",

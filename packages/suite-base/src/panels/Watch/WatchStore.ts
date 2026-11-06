@@ -22,6 +22,8 @@ export type CompiledRow = {
 export type RowState = {
   value: unknown;
   error?: string;
+  /** Receive time (seconds) of the message that last updated the value */
+  time?: number;
   /** Ring buffer of recent plottable values */
   history: Float64Array;
   historyStart: number;
@@ -101,6 +103,32 @@ function applyStreamModifier(
 }
 
 /**
+ * Current playback time in seconds. While playing it advances with the wall clock between player
+ * updates, so values keep aging when a live stream stalls.
+ */
+export type Playback = {
+  /** Player time in seconds */
+  current: number | undefined;
+  isPlaying: boolean;
+  speed: number;
+};
+
+export function createPlaybackClock(): (playback: Playback, wallSec: number) => number | undefined {
+  let last: number | undefined;
+  let wallAtLast = 0;
+  return ({ current, isPlaying, speed }, wallSec) => {
+    if (current !== last) {
+      last = current;
+      wallAtLast = wallSec;
+    }
+    if (current == undefined) {
+      return undefined;
+    }
+    return isPlaying ? current + (wallSec - wallAtLast) * speed : current;
+  };
+}
+
+/**
  * Latest value per watch row. Fed with every message of the subscribed topics; the UI reads the
  * rows marked dirty once per animation frame, so messages never trigger React renders.
  */
@@ -110,6 +138,8 @@ export class WatchStore {
   #keys = new Map<string, string>();
   #lastByTopic = new Map<string, MessageEvent>();
   #dirty = new Set<string>();
+  /** Current playback or live time in seconds, to compute value ages */
+  public now: number | undefined;
 
   public setRows(rows: readonly CompiledRow[]): void {
     const ids = new Set(rows.map((row) => row.id));
@@ -188,6 +218,7 @@ export class WatchStore {
       }
       state.value = value;
       state.error = undefined;
+      state.time = toSec(event.receiveTime);
       const y = toPlottable(value);
       if (y != undefined) {
         pushHistory(state, y);

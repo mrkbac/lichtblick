@@ -14,13 +14,16 @@ import { useTranslation } from "react-i18next";
 import { useStyles } from "./Watch.style";
 import { HISTORY_SIZE, WatchStore, historyValues } from "./WatchStore";
 import { WatchRow } from "./config";
-import { EnumNames, formatExpanded, formatValue, isExpandable } from "./format";
+import { EnumNames, formatAge, formatExpanded, formatValue, isExpandable, isStale } from "./format";
 
 export const DRAG_TYPE = "application/x-lichtblick-watch-row";
 const FLASH_MS = 600;
 
-/** Called by the panel once per animation frame for rows whose value changed. */
-export type Painters = Map<string, () => void>;
+/**
+ * Called by the panel once per animation frame for rows whose value changed, and with "age"
+ * when only the playback time moved on.
+ */
+export type Painters = Map<string, (what?: "all" | "age") => void>;
 
 export type RowAction = "openInPlot" | "copy" | "duplicate" | "remove";
 
@@ -31,6 +34,8 @@ type Props = {
   enumNames: EnumNames | undefined;
   invalid: boolean;
   sparklines: boolean;
+  showAge: boolean;
+  staleAfterSec: number;
   isDropTarget: boolean;
   onAction: (action: RowAction, id: string) => void;
   onDragOverRow: (id: string) => void;
@@ -86,6 +91,8 @@ export const WatchRowView = memo(function WatchRowViewInner({
   enumNames,
   invalid,
   sparklines,
+  showAge,
+  staleAfterSec,
   isDropTarget,
   onAction,
   onDragOverRow,
@@ -99,11 +106,40 @@ export const WatchRowView = memo(function WatchRowViewInner({
   const rootRef = useRef<HTMLDivElement>(null);
   const valueRef = useRef<HTMLSpanElement>(null);
   const sparkRef = useRef<HTMLCanvasElement>(null);
+  const ageRef = useRef<HTMLSpanElement>(null);
   const expandedRef = useRef<HTMLPreElement>(null);
   const hadValue = useRef(false);
 
   const flashColor = alpha(theme.palette.primary.main, 0.2);
   const lineColor = theme.palette.primary.main;
+
+  // Stale rows are marked even when the age column is hidden
+  const paintAge = useCallback(() => {
+    const root = rootRef.current;
+    if (!root) {
+      return;
+    }
+    const ageEl = ageRef.current;
+    const time = store.get(row.id)?.time;
+    const now = store.now;
+    if (time == undefined || now == undefined) {
+      if (ageEl) {
+        ageEl.textContent = "";
+      }
+      root.dataset.stale = "false";
+      return;
+    }
+    const age = now - time;
+    const text = formatAge(age);
+    const stale = isStale(age, staleAfterSec);
+    if (ageEl) {
+      if (ageEl.textContent !== text) {
+        ageEl.textContent = text;
+      }
+      ageEl.title = stale ? t("staleTooltip", { age: text }) : t("ageTooltip");
+    }
+    root.dataset.stale = String(stale);
+  }, [row.id, staleAfterSec, store, t]);
 
   // Writes straight to the DOM: values change far more often than React should render
   const paint = useCallback(() => {
@@ -136,15 +172,22 @@ export const WatchRowView = memo(function WatchRowViewInner({
     if (expandedRef.current) {
       expandedRef.current.textContent = isExpandable(value) ? formatExpanded(value) : text;
     }
-  }, [enumNames, flashColor, lineColor, row.id, row.precision, store]);
+    paintAge();
+  }, [enumNames, flashColor, lineColor, paintAge, row.id, row.precision, store]);
 
   useLayoutEffect(() => {
-    painters.set(row.id, paint);
+    painters.set(row.id, (what = "all") => {
+      if (what === "age") {
+        paintAge();
+      } else {
+        paint();
+      }
+    });
     paint();
     return () => {
       painters.delete(row.id);
     };
-  }, [expanded, paint, painters, row.id, sparklines]);
+  }, [expanded, paint, paintAge, painters, row.id, showAge, sparklines]);
 
   const onDragStart = useCallback(
     (event: React.DragEvent) => {
@@ -223,6 +266,7 @@ export const WatchRowView = memo(function WatchRowViewInner({
         <span ref={valueRef} data-value className={classes.value} />
         {row.unit != undefined && <span className={classes.unit}>{row.unit}</span>}
         {sparklines && <canvas ref={sparkRef} className={classes.sparkline} />}
+        {showAge && <span ref={ageRef} data-age className={classes.age} />}
         <span data-actions className={classes.actions}>
           <Tooltip title={t("copyValue")}>
             <IconButton
