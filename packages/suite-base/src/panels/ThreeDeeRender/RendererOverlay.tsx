@@ -284,12 +284,12 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
   const stopFramePicking = useCallback(() => {
     setFramePicking(false);
   }, []);
-  // Point measuring and frame picking both take over clicks; only one at a time
+  // Point measuring, publishing and frame picking all take over clicks; only one at a time
   useEffect(() => {
-    if (props.measureActive) {
+    if (props.measureActive || props.publishActive) {
       setFramePicking(false);
     }
-  }, [props.measureActive]);
+  }, [props.measureActive, props.publishActive]);
 
   const [showResetViewButton, setShowResetViewButton] = useState(renderer?.canResetView() ?? false);
   useRendererEvent(
@@ -560,6 +560,9 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
                 onClick={() => {
                   if (!framePicking && props.measureActive) {
                     props.onClickMeasure();
+                  }
+                  if (!framePicking && props.publishActive) {
+                    props.onClickPublish();
                   }
                   setFramePicking(!framePicking);
                 }}

@@ -53,11 +53,22 @@ vi.mock("@lichtblick/suite-base/panels/ThreeDeeRender/HUD", () => {
   };
 });
 
+const mockFramePicking = { current: false };
 // Covered by FrameMeasureOverlay.test.tsx; needs a renderer with layout variables and a TF tree
 vi.mock("./FrameMeasureOverlay", () => {
   return {
     __esModule: true,
-    FrameMeasureOverlay: () => undefined,
+    FrameMeasureOverlay: (props: { picking: boolean }) => {
+      mockFramePicking.current = props.picking;
+      return undefined;
+    },
+  };
+});
+
+vi.mock("./MeasurePanel", () => {
+  return {
+    __esModule: true,
+    MeasurePanel: () => undefined,
   };
 });
 
@@ -381,5 +392,57 @@ describe("<RendererOverlay /> download image button", () => {
   it("is not shown in 3d mode", () => {
     const { queryByTestId } = renderOverlay("3d");
     expect(queryByTestId("download-image-button")).toBeNull();
+  });
+});
+
+describe("<RendererOverlay /> frame picking", () => {
+  function renderOverlay(props: { measureActive: boolean; publishActive: boolean }) {
+    const onClickMeasure = vi.fn();
+    const onClickPublish = vi.fn();
+    const element = (active: typeof props) => (
+      <ThemeProvider isDark={false}>
+        <RendererOverlay
+          addPanel={vi.fn() as any}
+          canPublish
+          canvas={null}
+          enableStats={false}
+          interfaceMode="3d"
+          measureActive={active.measureActive}
+          onChangePublishClickType={vi.fn()}
+          onClickMeasure={onClickMeasure}
+          onClickPublish={onClickPublish}
+          onShowTopicSettings={vi.fn()}
+          onTogglePerspective={vi.fn()}
+          perspective={false}
+          publishActive={active.publishActive}
+          publishClickType="point"
+          timezone={undefined}
+        />
+      </ThemeProvider>
+    );
+    const result = render(element(props));
+    return { ...result, element, onClickMeasure, onClickPublish };
+  }
+
+  it("stops publishing and measuring when frame picking starts", () => {
+    const { getByTestId, onClickMeasure, onClickPublish } = renderOverlay({
+      measureActive: true,
+      publishActive: true,
+    });
+    fireEvent.click(getByTestId("measure-frames-button"));
+    expect(onClickMeasure).toHaveBeenCalledTimes(1);
+    expect(onClickPublish).toHaveBeenCalledTimes(1);
+    expect(mockFramePicking.current).toBe(true);
+  });
+
+  it("stops frame picking when publishing starts", () => {
+    const { getByTestId, rerender, element } = renderOverlay({
+      measureActive: false,
+      publishActive: false,
+    });
+    fireEvent.click(getByTestId("measure-frames-button"));
+    expect(mockFramePicking.current).toBe(true);
+    rerender(element({ measureActive: false, publishActive: true }));
+    expect(mockFramePicking.current).toBe(false);
   });
 });
