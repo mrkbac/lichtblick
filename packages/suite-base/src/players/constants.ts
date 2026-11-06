@@ -48,9 +48,21 @@ export const PLAYER_CAPABILITIES = {
   // Ability to play, pause, and seek in time.
   playbackControl: "playbackControl",
 
+  // Live source that keeps a rolling history to pause, seek and play in. Comes with
+  // playbackControl; the newest data is "live".
+  liveHistory: "liveHistory",
+
   // List and retrieve values for configuration key/value pairs
   getParameters: "getParameters",
 
   // Set values for configuration key/value pairs
   setParameters: "setParameters",
 };
+
+/**
+ * A seekable recording, as opposed to a live source. Live sources with a rolling history can be
+ * paused and seeked too, but otherwise behave live (stats, latched messages, URL state).
+ */
+export const isRecordingSource = (capabilities: readonly string[]): boolean =>
+  capabilities.includes(PLAYER_CAPABILITIES.playbackControl) &&
+  !capabilities.includes(PLAYER_CAPABILITIES.liveHistory);

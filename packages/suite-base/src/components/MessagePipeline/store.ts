@@ -17,7 +17,7 @@ import {
   makeSubscriptionMemoizer,
   mergeSubscriptions,
 } from "@lichtblick/suite-base/components/MessagePipeline/subscriptions";
-import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { isRecordingSource, PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import {
   AdvertiseOptions,
   Player,
@@ -306,9 +306,7 @@ function updateSubscriberAction(
   // A live source has no seek-backfill and never re-sends a latched message (e.g. /tf_static), so
   // the cached message is the only way a panel that subscribes later can get it. This matters on a
   // tab switch: the old tab's panels unsubscribe before the new tab's panels subscribe.
-  const canSeekBackfill = prevState.public.playerState.capabilities.includes(
-    PLAYER_CAPABILITIES.playbackControl,
-  );
+  const canSeekBackfill = isRecordingSource(prevState.public.playerState.capabilities);
   if (canSeekBackfill) {
     for (const topic of prevTopics) {
       if (!subscriberIdsByTopic.has(topic)) {
@@ -459,7 +457,10 @@ export function reducer(
       return updateSubscriberAction(prevState, action);
 
     case "set-publishers": {
-      const newPublishersById = { ...prevState.publishersById, [action.id]: action.payloads };
+      const newPublishersById = {
+        ...prevState.publishersById,
+        [action.id]: action.payloads,
+      };
 
       return {
         ...prevState,

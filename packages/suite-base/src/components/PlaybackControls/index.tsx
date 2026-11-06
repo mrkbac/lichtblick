@@ -59,10 +59,12 @@ import {
   useWorkspaceStore,
 } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
+import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { Player, PlayerPresence } from "@lichtblick/suite-base/players/types";
 import BroadcastManager from "@lichtblick/suite-base/util/broadcast/BroadcastManager";
 
 import { DataSourceInfoButton } from "./DataSourceInfoButton";
+import { LiveHistoryControls } from "./LiveHistoryControls";
 import PlaybackTimeDisplay from "./PlaybackTimeDisplay";
 import { RepeatAdapter } from "./RepeatAdapter";
 import { ScrubPreviewMenu } from "./ScrubPreviewMenu";
@@ -70,6 +72,8 @@ import Scrubber from "./Scrubber";
 import { TrimBar, useTrimKeyHandlers } from "./TrimRange";
 
 const selectPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
+const selectHasLiveHistory = (ctx: MessagePipelineContext) =>
+  ctx.playerState.capabilities.includes(PLAYER_CAPABILITIES.liveHistory);
 const selectEventsSupported = (store: EventsStore) => store.eventsSupported;
 const selectPlaybackRepeat = (store: WorkspaceContextStore) => store.playbackControls.repeat;
 
@@ -91,6 +95,7 @@ export default function PlaybackControls({
   getTimeInfo,
 }: PlaybackControlsProps): React.JSX.Element {
   const presence = useMessagePipeline(selectPresence);
+  const hasLiveHistory = useMessagePipeline(selectHasLiveHistory);
   const { t } = useTranslation("exportRecording");
 
   const { classes } = useStyles();
@@ -130,7 +135,11 @@ export default function PlaybackControls({
     [playUntil],
   );
   /** Start and end of what can be played: the cut, or the whole recording. */
-  const getPlayableRange = useCallback((): { start?: Time; end?: Time; current?: Time } => {
+  const getPlayableRange = useCallback((): {
+    start?: Time;
+    end?: Time;
+    current?: Time;
+  } => {
     const { startTime, endTime, currentTime } = getTimeInfo();
     const cut = useTrimStore.getState();
     return {
@@ -170,8 +179,8 @@ export default function PlaybackControls({
         time: current!,
       });
     } else {
-      // if we are at the end, we need to go back to start
-      if (current && end && start && compare(current, end) >= 0) {
+      // if we are at the end, we need to go back to start (on a live source the end is live)
+      if (!hasLiveHistory && current && end && start && compare(current, end) >= 0) {
         seek(start);
       }
       play();
@@ -181,7 +190,7 @@ export default function PlaybackControls({
         time: current!,
       });
     }
-  }, [isPlaying, pause, getPlayableRange, play, seek]);
+  }, [isPlaying, pause, getPlayableRange, play, seek, hasLiveHistory]);
 
   const { seekForwardAction, seekBackwardAction } = useDirectionalSeek({
     seek: seekInCut,
@@ -231,7 +240,12 @@ export default function PlaybackControls({
 
   return (
     <>
-      <RepeatAdapter play={play} pause={pause} seek={seek} repeatEnabled={repeat} />
+      <RepeatAdapter
+        play={play}
+        pause={pause}
+        seek={seek}
+        repeatEnabled={repeat && !hasLiveHistory}
+      />
       <KeyListener global keyDownHandlers={keyDownHandlers} />
       <div className={classes.root}>
         <div className={classes.scrubberWrapper}>
@@ -262,6 +276,7 @@ export default function PlaybackControls({
               />
             )}
             <PlaybackTimeDisplay onSeek={seekInCut} onPause={pause} />
+            {hasLiveHistory && <LiveHistoryControls play={play} seek={seek} />}
           </Stack>
           <Stack direction="row" alignItems="center" gap={1}>
             <HoverableIconButton
@@ -299,13 +314,15 @@ export default function PlaybackControls({
           <Stack direction="row" flex={1} alignItems="center" justifyContent="flex-end" gap={0.5}>
             <SyncInstanceToggle />
             <ScrubPreviewMenu />
-            <HoverableIconButton
-              size="small"
-              title="Loop playback"
-              color={repeat ? "primary" : "inherit"}
-              onClick={toggleRepeat}
-              icon={repeat ? <ArrowRepeatAll20Regular /> : <ArrowRepeatAllOff20Regular />}
-            />
+            {!hasLiveHistory && (
+              <HoverableIconButton
+                size="small"
+                title="Loop playback"
+                color={repeat ? "primary" : "inherit"}
+                onClick={toggleRepeat}
+                icon={repeat ? <ArrowRepeatAll20Regular /> : <ArrowRepeatAllOff20Regular />}
+              />
+            )}
             <PlaybackSpeedControls />
           </Stack>
         </Stack>

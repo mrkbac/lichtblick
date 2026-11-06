@@ -30,6 +30,10 @@ export default class PlayerAlertManager {
     this.#alerts = undefined;
   }
 
+  public getAlert(id: string): PlayerAlert | undefined {
+    return this.#alertsById.get(id);
+  }
+
   public hasAlert(id: string): boolean {
     return this.#alertsById.has(id);
   }

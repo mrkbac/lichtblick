@@ -41,7 +41,7 @@ import {
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import { Topic } from "@lichtblick/suite-base/players/types";
 import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
 
@@ -121,7 +121,7 @@ export function RecordingInspector(): React.JSX.Element {
   const [error, setError] = useState<string>();
   const controller = useRef<AbortController>(undefined);
   const metadata = getMetadata();
-  const isRecording = capabilities.includes(PLAYER_CAPABILITIES.playbackControl);
+  const isRecording = isRecordingSource(capabilities);
   const schemas = [
     ...new Set(topics.flatMap((topic) => (topic.schemaName ? [topic.schemaName] : []))),
   ];
@@ -506,7 +506,9 @@ export function RecordingInspector(): React.JSX.Element {
                   select
                   size="small"
                   value={sort}
-                  slotProps={{ select: { SelectDisplayProps: { "aria-label": "Sort by" } } }}
+                  slotProps={{
+                    select: { SelectDisplayProps: { "aria-label": "Sort by" } },
+                  }}
                   onChange={(event) => {
                     setSort(event.target.value as SortKey);
                     setAscending(event.target.value === "topic" || event.target.value === "schema");
@@ -540,7 +542,11 @@ export function RecordingInspector(): React.JSX.Element {
                 <TextField
                   select
                   size="small"
-                  slotProps={{ select: { SelectDisplayProps: { "aria-label": "Rate basis" } } }}
+                  slotProps={{
+                    select: {
+                      SelectDisplayProps: { "aria-label": "Rate basis" },
+                    },
+                  }}
                   value={rateBasis}
                   onChange={(event) => {
                     setRateBasis(event.target.value);

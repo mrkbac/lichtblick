@@ -1,0 +1,239 @@
+// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
+// SPDX-License-Identifier: MPL-2.0
+
+import type { Mock } from "vitest";
+
+import NoopMetricsCollector from "@lichtblick/suite-base/players/NoopMetricsCollector";
+import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { liveHistorySettings } from "@lichtblick/suite-base/players/liveHistory/liveHistorySettings";
+import { PlayerState } from "@lichtblick/suite-base/players/types";
+
+import FoxgloveWebSocketPlayer from "./index";
+
+class MockWebSocket {
+  public static lastInstance: MockWebSocket | undefined;
+  public binaryType = "";
+  public protocol = "foxglove.sdk.v1";
+  public onerror?: (event: unknown) => void;
+  public onopen?: (event: unknown) => void;
+  public onclose?: (event: unknown) => void;
+  public onmessage?: (event: unknown) => void;
+  public close = vi.fn();
+  public send = vi.fn();
+
+  public constructor() {
+    MockWebSocket.lastInstance = this;
+  }
+
+  public receive(data: unknown): void {
+    this.onmessage?.({ data });
+  }
+}
+
+const SEC = 1_000_000_000n;
+const SCHEMA = JSON.stringify({
+  type: "object",
+  properties: { v: { type: "number" } },
+});
+
+function timeMessage(sec: number): ArrayBuffer {
+  const buffer = new ArrayBuffer(9);
+  const view = new DataView(buffer);
+  view.setUint8(0, 0x02);
+  view.setBigUint64(1, BigInt(sec * 1000) * (SEC / 1000n), true);
+  return buffer;
+}
+
+function dataMessage(subscriptionId: number, payload: unknown): ArrayBuffer {
+  const json = new TextEncoder().encode(JSON.stringify(payload));
+  const buffer = new ArrayBuffer(13 + json.byteLength);
+  const view = new DataView(buffer);
+  view.setUint8(0, 0x01);
+  view.setUint32(1, subscriptionId, true);
+  view.setBigUint64(5, 0n, true);
+  new Uint8Array(buffer, 13).set(json);
+  return buffer;
+}
+
+const flush = async () => {
+  for (let i = 0; i < 10; i++) {
+    await Promise.resolve();
+  }
+};
+
+describe("FoxgloveWebSocketPlayer live history", () => {
+  let player: FoxgloveWebSocketPlayer;
+  let ws: MockWebSocket;
+  let states: PlayerState[];
+
+  const last = () => states.at(-1)!.activeData!;
+  const values = (from: number) =>
+    states
+      .slice(from)
+      .flatMap((s) => s.activeData?.messages ?? [])
+      .map((m) => (m.message as { v: number }).v);
+
+  async function tick(sec: number, value?: number, subscriptionId = 0) {
+    ws.receive(timeMessage(sec));
+    if (value != undefined) {
+      ws.receive(dataMessage(subscriptionId, { v: value }));
+    }
+    await flush();
+  }
+
+  function connect() {
+    ws.onopen?.({});
+    ws.receive(
+      JSON.stringify({
+        op: "serverInfo",
+        name: "test",
+        capabilities: ["time"],
+      }),
+    );
+    ws.receive(
+      JSON.stringify({
+        op: "advertise",
+        channels: [
+          {
+            id: 1,
+            topic: "/a",
+            encoding: "json",
+            schemaName: "S",
+            schema: SCHEMA,
+          },
+        ],
+      }),
+    );
+  }
+
+  beforeEach(async () => {
+    liveHistorySettings.getState().setWindowSec(30);
+    (global as { WebSocket?: unknown }).WebSocket = MockWebSocket;
+    states = [];
+    player = new FoxgloveWebSocketPlayer({
+      url: "ws://localhost:8765",
+      metricsCollector: new NoopMetricsCollector(),
+      sourceId: "foxglove-websocket",
+    });
+    player.setListener(async (state) => {
+      states.push(state);
+    });
+    ws = MockWebSocket.lastInstance!;
+    connect();
+    player.setSubscriptions([{ topic: "/a" }]);
+    for (let t = 10; t <= 12; t++) {
+      await tick(t, t);
+    }
+  });
+
+  afterEach(() => {
+    player.close();
+    vi.useRealTimers();
+    delete (global as { WebSocket?: unknown }).WebSocket;
+  });
+
+  it("is live by default and exposes the buffered range", () => {
+    expect(states.at(-1)!.capabilities).toEqual(
+      expect.arrayContaining([
+        PLAYER_CAPABILITIES.playbackControl,
+        PLAYER_CAPABILITIES.liveHistory,
+      ]),
+    );
+    expect(last().startTime).toEqual({ sec: 10, nsec: 0 });
+    expect(last().endTime).toEqual({ sec: 12, nsec: 0 });
+    expect(last().currentTime).toEqual({ sec: 12, nsec: 0 });
+    expect(values(0)).toEqual([10, 11, 12]);
+  });
+
+  it("freezes on pause while reception continues", async () => {
+    player.pausePlayback();
+    await flush();
+    const from = states.length;
+    await tick(13, 13);
+    expect(values(from)).toEqual([]);
+    expect(last().currentTime).toEqual({ sec: 12, nsec: 0 });
+    expect(last().endTime).toEqual({ sec: 13, nsec: 0 });
+    expect(last().isPlaying).toBe(false);
+  });
+
+  it("seeks into the history with the state at that time", async () => {
+    player.pausePlayback();
+    const seeks = last().lastSeekTime;
+    const from = states.length;
+    player.seekPlayback({ sec: 11, nsec: 500 });
+    await flush();
+    expect(last().currentTime).toEqual({ sec: 11, nsec: 500 });
+    expect(last().lastSeekTime).toBe(seeks + 1);
+    expect(values(from)).toEqual([11]);
+  });
+
+  it("clamps seeks to the buffered range", async () => {
+    player.pausePlayback();
+    player.seekPlayback({ sec: 1, nsec: 0 });
+    await flush();
+    expect(last().currentTime).toEqual({ sec: 10, nsec: 0 });
+  });
+
+  it("goes live again when playing from the newest data", async () => {
+    player.pausePlayback();
+    await tick(13, 13);
+    player.seekPlayback(last().endTime);
+    player.startPlayback();
+    await flush();
+    const from = states.length;
+    await tick(14, 14);
+    expect(values(from)).toEqual([14]);
+    expect(last().currentTime).toEqual({ sec: 14, nsec: 0 });
+    expect(last().isPlaying).toBe(true);
+  });
+
+  it("plays through the history and catches up to live", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    player.pausePlayback();
+    player.seekPlayback({ sec: 10, nsec: 0 });
+    await flush();
+    const from = states.length;
+    player.startPlayback();
+    await vi.advanceTimersByTimeAsync(1500);
+    await flush();
+    expect(values(from)).toEqual([11]);
+    expect(last().currentTime.sec).toBe(11);
+
+    await vi.advanceTimersByTimeAsync(1000);
+    await flush();
+    expect(values(from)).toEqual([11, 12]);
+    expect(last().currentTime).toEqual(last().endTime); // live
+
+    await tick(13, 13);
+    expect(values(from)).toEqual([11, 12, 13]);
+  });
+
+  it("clears the history when the server clock resets", async () => {
+    player.pausePlayback();
+    await tick(2, 2);
+    expect(last().startTime).toEqual({ sec: 2, nsec: 0 });
+    expect(last().isPlaying).toBe(false);
+    const from = states.length;
+    player.seekPlayback({ sec: 0, nsec: 0 });
+    await flush();
+    expect(values(from)).toEqual([2]);
+  });
+
+  it("warns when the paused position has expired", async () => {
+    liveHistorySettings.getState().setWindowSec(1);
+    player.pausePlayback();
+    player.seekPlayback({ sec: 11, nsec: 0 });
+    await tick(20, 20);
+    expect(states.at(-1)!.alerts?.map((a) => a.message)).toContain(
+      "Paused position is no longer in the history",
+    );
+    expect(last().startTime).toEqual({ sec: 19, nsec: 0 });
+    (console.warn as Mock).mockClear();
+  });
+
+  it("clears the history on reconnect", async () => {
+    connect();
+    await tick(50, 50, 1);
+    expect(last().startTime).toEqual({ sec: 50, nsec: 0 });
+  });
+});

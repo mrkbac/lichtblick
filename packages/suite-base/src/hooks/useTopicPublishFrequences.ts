@@ -13,7 +13,7 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
-import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import { TopicStats } from "@lichtblick/suite-base/players/types";
 import { calculateStaticItemFrequency } from "@lichtblick/suite-base/util/calculateStaticItemFrequency";
 
@@ -71,7 +71,7 @@ export function useTopicPublishFrequencies(): Immutable<FrequenciesByTopic> {
   const samplesByTopic = useRef<Record<string, StatSample>>({});
 
   const playerIsStaticSource = useMemo(
-    () => playerCapabilities.includes(PLAYER_CAPABILITIES.playbackControl),
+    () => isRecordingSource(playerCapabilities),
     [playerCapabilities],
   );
   // Static frequencies don't depend on the playhead, so only live sources update every tick.
