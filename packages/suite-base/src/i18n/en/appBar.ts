@@ -31,7 +31,6 @@ export const appBar = {
   networkStatusOnline: "Online",
   noDataSource: "No data source",
   open: "Open…",
-  openConnection: "Open connection…",
   openDataSources: "Open data sources",
   openLocalFiles: "Open local file(s)…",
   recentDataSources: "Recent data sources",

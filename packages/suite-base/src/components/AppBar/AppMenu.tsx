@@ -108,17 +108,6 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
       },
       {
         type: "item",
-        label: t("openConnection"),
-        key: "open-connection",
-        shortcut: formatKeyboardShortcut("O", ["Meta", "Shift"]),
-        dataTestId: "menu-item-open-connection",
-        onClick: () => {
-          dialogActions.dataSource.open("connection");
-          handleNestedMenuClose();
-        },
-      },
-      {
-        type: "item",
         label: t("exportRecording"),
         key: "export-recording",
         disabled: !exportableFile,

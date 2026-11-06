@@ -9,7 +9,6 @@
 export type ForwardedMenuEvent =
   | "open"
   | "open-file"
-  | "open-connection"
   | "open-demo"
   | "open-help-about"
   | "open-help-docs"

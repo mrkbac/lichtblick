@@ -273,14 +273,6 @@ function buildMenu(browserWindow: BrowserWindow): Menu {
           sendNativeAppMenuEvent("open-file", browserWindow);
         },
       },
-      {
-        id: "openConnection",
-        label: t("appBar:openConnection"),
-        click: async () => {
-          await simulateUserClick(browserWindow);
-          sendNativeAppMenuEvent("open-connection", browserWindow);
-        },
-      },
       { type: "separator" },
       closeMenuItem,
     ],

@@ -522,7 +522,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         }
         ev.preventDefault();
         if (ev.shiftKey) {
-          dialogActions.dataSource.open("connection");
+          dialogActions.dataSource.open("start");
           return;
         }
         void dialogActions.openFile.open().catch((err: unknown) => {

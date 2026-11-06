@@ -158,7 +158,7 @@ export function useAppCommands(): {
   queryCommands: (query: string) => Command[];
 } {
   const { t } = useTranslation("commandPalette");
-  const { availableSources, recentSources, selectRecent } = usePlayerSelection();
+  const { recentSources, selectRecent } = usePlayerSelection();
   const { dialogActions, sidebarActions, openPanelSettings } = useWorkspaceActions();
   const leftSidebarOpen = useWorkspaceStore(selectLeftSidebarOpen);
   const leftSidebarItem = useWorkspaceStore(selectLeftSidebarItem);
@@ -190,7 +190,6 @@ export function useAppCommands(): {
     };
 
     // ---- Open ----
-    const remoteFile = availableSources.find((source) => source.id === "remote-file");
     push(
       t("groupOpen"),
       {
@@ -208,31 +207,6 @@ export function useAppCommands(): {
         },
       },
     );
-    if (remoteFile) {
-      push(t("groupOpen"), {
-        id: "open.url",
-        title: t("openUrl"),
-        keywords: ["remote", "http"],
-        run: () => {
-          dialogActions.dataSource.open("connection", remoteFile);
-        },
-      });
-    }
-    for (const source of availableSources) {
-      if (source.type !== "connection" || source.hidden === true || source === remoteFile) {
-        continue;
-      }
-      push(t("groupOpen"), {
-        id: `open.connection.${source.id}`,
-        title: t("openConnection", { name: source.displayName }),
-        detail: source.description,
-        keywords: ["connect", "live"],
-        shortcut: formatKeyboardShortcut("O", ["Meta", "Shift"]),
-        run: () => {
-          dialogActions.dataSource.open("connection", source);
-        },
-      });
-    }
     if (recentSources.length > 0) {
       push(t("groupOpen"), {
         id: "open.recent",
@@ -524,7 +498,6 @@ export function useAppCommands(): {
     return list;
   }, [
     addPanel,
-    availableSources,
     dialogActions,
     endTime,
     exportLayout,

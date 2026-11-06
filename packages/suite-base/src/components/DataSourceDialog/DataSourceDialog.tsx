@@ -5,8 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import CloseIcon from "@mui/icons-material/Close";
-import { Dialog, IconButton } from "@mui/material";
+import { Dialog } from "@mui/material";
 import { lazy, Suspense, useCallback, useLayoutEffect, useMemo, useRef } from "react";
 import { useMountedState } from "react-use";
 import { makeStyles } from "tss-react/mui";
@@ -22,7 +21,6 @@ import {
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 
-import Connection from "./Connection";
 import Start from "./Start";
 
 // Lazy so three.js stays out of the startup bundle.
@@ -30,17 +28,13 @@ const Snow = lazy(
   async () => await import("@lichtblick/suite-base/components/DataSourceDialog/Snow"),
 );
 
-export type DataSourceDialogItem = "start" | "file" | "demo" | "remote" | "connection";
+export type DataSourceDialogItem = "start" | "file" | "demo" | "remote";
 
 type DataSourceDialogProps = {
   backdropAnimation?: boolean;
 };
 
-const useStyles = makeStyles()((theme) => ({
-  paper: {
-    position: "relative",
-    maxWidth: `calc(min(${theme.breakpoints.values.md}px, 100% - ${theme.spacing(4)}))`,
-  },
+const useStyles = makeStyles()(() => ({
   fullScreenPaper: {
     // The theme caps dialog height; a full-screen page should fill the window.
     maxHeight: "none",
@@ -49,12 +43,6 @@ const useStyles = makeStyles()((theme) => ({
   // drag region of an installed app's title bar.
   belowAppBar: {
     top: APP_BAR_HEIGHT,
-  },
-  closeButton: {
-    position: "absolute",
-    right: 0,
-    top: 0,
-    margin: theme.spacing(3),
   },
 }));
 
@@ -124,59 +112,30 @@ export function DataSourceDialog(props: DataSourceDialogProps): React.JSX.Elemen
     return;
   }, [backdropAnimation]);
 
-  const view = useMemo(() => {
-    switch (activeView) {
-      case "demo": {
-        return {
-          title: "",
-          component: <></>,
-        };
-      }
-      case "connection":
-        return {
-          title: "Open new connection",
-          component: <Connection />,
-        };
-      default:
-        return {
-          title: "Get started",
-          component: <Start />,
-        };
-    }
-  }, [activeView]);
-
-  // The start page fills the window; connection forms stay a small dialog.
-  const fullScreen = activeView !== "connection";
-
   return (
     <Dialog
       data-testid="DataSourceDialog"
       open
       onClose={onModalClose}
       fullWidth
-      fullScreen={fullScreen}
-      className={fullScreen ? classes.belowAppBar : undefined}
+      fullScreen
+      className={classes.belowAppBar}
       maxWidth="lg"
       slotProps={{
         backdrop: {
           children: backdrop,
-          className: fullScreen ? classes.belowAppBar : undefined,
+          className: classes.belowAppBar,
         },
         paper: {
           square: false,
           elevation: 4,
-          className: fullScreen ? classes.fullScreenPaper : classes.paper,
+          className: classes.fullScreenPaper,
         },
       }}
     >
       {/* The full-page start screen is left by opening something (or Escape), not a close button. */}
-      {!fullScreen && (
-        <IconButton className={classes.closeButton} onClick={onModalClose} edge="end">
-          <CloseIcon data-testid="CloseIcon" />
-        </IconButton>
-      )}
       <Stack flexGrow={1} fullHeight justifyContent="space-between" overflow="hidden">
-        {view.component}
+        {activeView !== "demo" && <Start />}
       </Stack>
     </Dialog>
   );
