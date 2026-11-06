@@ -1,142 +1,92 @@
-/** @jest-environment jsdom */
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Topic } from "@lichtblick/suite";
-import { buildSettingsTreeTeleop } from "@lichtblick/suite-base/panels/Teleop/buildSettingsTree";
-import { DEFAULT_CONFIG, geometryMsgOptions } from "@lichtblick/suite-base/panels/Teleop/constants";
-import { TeleopConfig } from "@lichtblick/suite-base/panels/Teleop/types";
+import { SettingsTreeAction, Topic } from "@lichtblick/suite";
+import {
+  applySettingsAction,
+  buildSettingsTreeTeleop,
+} from "@lichtblick/suite-base/panels/Teleop/buildSettingsTree";
+import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Teleop/constants";
 import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
-import { BasicBuilder } from "@lichtblick/test-builders";
 
-describe("buildSettingsTree for TeleopPanel", () => {
-  const publishRate = BasicBuilder.number();
-  const topic = BasicBuilder.string();
-  const defaultConfig: TeleopConfig = {
-    ...DEFAULT_CONFIG,
-    publishRate,
-    topic,
-    upButton: { field: "linear.x", value: 1 },
-    downButton: { field: "linear.x", value: -1 },
-    leftButton: { field: "angular.z", value: 1 },
-    rightButton: { field: "angular.z", value: -1 },
-  };
+function update(path: string[], value: unknown): SettingsTreeAction {
+  return { action: "update", payload: { path, value, input: "string" } } as SettingsTreeAction;
+}
 
-  const sampleTopics = [
-    PlayerBuilder.topic({ name: "topic1", schemaName: "geometry_msgs/Twist" }),
-    PlayerBuilder.topic({ name: "topic2", schemaName: "geometry_msgs/Twist" }),
-  ] as Readonly<Topic[]>;
-
-  it("should build settings tree with valid config and topics", () => {
-    // Given
-    const config = { ...defaultConfig };
-
-    // When
-    const result = buildSettingsTreeTeleop(config, sampleTopics);
-
-    // Then
-    expect(result.general).toBeDefined();
-    expect(result.general?.fields?.publishRate).toMatchObject({ value: publishRate });
-    expect(result.general?.fields?.topic).toEqual({
-      label: "Topic",
-      input: "autocomplete",
-      value: topic,
-      items: ["topic1", "topic2"],
-    });
-    expect(result.general?.fields?.frameId).toBeUndefined();
-  });
-
-  it("lists velocity command topics first", () => {
+describe("buildSettingsTreeTeleop", () => {
+  it("lists topics of the selected message type first", () => {
     const topics = [
       PlayerBuilder.topic({ name: "/scan", schemaName: "sensor_msgs/LaserScan" }),
+      PlayerBuilder.topic({ name: "/joy", schemaName: "sensor_msgs/msg/Joy" }),
       PlayerBuilder.topic({ name: "/cmd", schemaName: "geometry_msgs/msg/TwistStamped" }),
-    ] as Readonly<Topic[]>;
-    const result = buildSettingsTreeTeleop(defaultConfig, topics);
-    expect((result.general?.fields?.topic as { items: string[] }).items).toEqual(["/cmd", "/scan"]);
+    ] as readonly Topic[];
+
+    const twist = buildSettingsTreeTeleop(DEFAULT_CONFIG, topics);
+    const joy = buildSettingsTreeTeleop({ ...DEFAULT_CONFIG, messageType: "Joy" }, topics);
+
+    expect((twist.general?.fields?.topic as { items: string[] }).items[0]).toBe("/cmd");
+    expect((joy.general?.fields?.topic as { items: string[] }).items[0]).toBe("/joy");
   });
 
-  it("shows stamped and gamepad options only when relevant", () => {
-    const stamped = buildSettingsTreeTeleop(
-      { ...defaultConfig, messageType: "TwistStamped", gamepad: false },
+  it("shows velocity mapping and gamepad actions only for Twist output", () => {
+    const twist = buildSettingsTreeTeleop(DEFAULT_CONFIG, []);
+    expect(twist.mapping?.fields?.["linear-x"]).toMatchObject({ value: "leftY" });
+    expect(twist.mapping?.fields?.["linear-x-max"]).toMatchObject({ value: 1 });
+    // unmapped fields hide their max
+    expect(twist.mapping?.fields?.["linear-y-max"]).toBeUndefined();
+    expect(twist.gamepad?.fields?.turboButton).toMatchObject({ value: "rb" });
+    expect(twist.general?.fields?.joyEnableButton).toBeUndefined();
+
+    const joy = buildSettingsTreeTeleop({ ...DEFAULT_CONFIG, messageType: "Joy" }, []);
+    expect(joy.mapping).toBeUndefined();
+    expect(joy.gamepad?.fields?.turboButton).toBeUndefined();
+    expect(joy.general?.fields?.joyEnableButton).toBeDefined();
+    expect(joy.general?.fields?.frameId).toBeDefined();
+  });
+
+  it("offers connected gamepads and keeps an unplugged saved one selectable", () => {
+    const tree = buildSettingsTreeTeleop(
+      { ...DEFAULT_CONFIG, gamepadId: "Old pad" },
       [],
+      ["New pad"],
     );
-    expect(stamped.general?.fields?.frameId).toBeDefined();
-    expect(stamped.general?.fields?.gamepadDeadzone).toBeUndefined();
+    const options = (tree.gamepad?.fields?.gamepadId as { options: { value: string }[] }).options;
+    expect(options.map((option) => option.value)).toEqual(["", "New pad", "Old pad"]);
   });
 
-  it("should configure all directional buttons correctly", () => {
-    // Given
-    const customConfig: TeleopConfig = {
-      ...defaultConfig,
-      upButton: { field: "linear.x", value: 1.5 },
-      downButton: { field: "linear.y", value: -2.0 },
-      leftButton: { field: "angular.z", value: 3.0 },
-      rightButton: { field: "linear.z", value: -4.0 },
-    };
+  it("hides gamepad details when the gamepad is disabled", () => {
+    const tree = buildSettingsTreeTeleop({ ...DEFAULT_CONFIG, gamepad: false }, []);
+    expect(tree.gamepad?.fields?.gamepadDeadzone).toBeUndefined();
+  });
+});
 
-    // When
-    const result = buildSettingsTreeTeleop(customConfig, sampleTopics);
-
-    // Then
-    const { children } = result.general!;
-    expect(children).toBeDefined();
-
-    // Check each button configuration
-    const buttons = ["upButton", "downButton", "leftButton", "rightButton"] as const;
-    const expectedValues = [1.5, -2.0, 3.0, -4.0];
-    const expectedFields = ["linear.x", "linear.y", "angular.z", "linear.z"];
-    const expectedLabels = ["Up / forward", "Down / backward", "Left", "Right"];
-
-    buttons.forEach((button, index) => {
-      expect(children!).toBeDefined();
-      expect(children![button]).toEqual({
-        label: expectedLabels[index],
-        fields: {
-          field: {
-            label: "Field",
-            input: "select",
-            value: expectedFields[index],
-            options: geometryMsgOptions,
-          },
-          value: {
-            label: "Max value",
-            input: "number",
-            value: expectedValues[index],
-          },
-        },
-      });
-    });
+describe("applySettingsAction", () => {
+  it("updates plain fields without touching the previous config", () => {
+    const next = applySettingsAction(DEFAULT_CONFIG, update(["controls", "mode"], "dual"));
+    expect(next.mode).toBe("dual");
+    expect(DEFAULT_CONFIG.mode).toBe("joystick");
   });
 
-  it("should handle empty topics array", () => {
-    // Given
-    const config = defaultConfig;
-
-    // When
-    const result = buildSettingsTreeTeleop(config, []);
-
-    // Then
-    expect(result.general!.fields!.topic).toEqual({
-      label: "Topic",
-      input: "autocomplete",
-      value: topic,
-      items: [],
-    });
+  it("updates mapping inputs and max values", () => {
+    let next = applySettingsAction(DEFAULT_CONFIG, update(["mapping", "linear-y"], "rightX"));
+    next = applySettingsAction(next, update(["mapping", "linear-y-max"], 0.4));
+    expect(next.mapping["linear-y"]).toEqual({ input: "rightX", max: 0.4 });
+    expect(DEFAULT_CONFIG.mapping["linear-y"].input).toBe("none");
   });
 
-  it("should include correct geometry message options in all button fields", () => {
-    // Given
-    const config = defaultConfig;
+  it("stores a cleared topic as an empty string", () => {
+    const next = applySettingsAction(DEFAULT_CONFIG, update(["general", "topic"], undefined));
+    expect(next.topic).toBe("");
+  });
 
-    // When
-    const result = buildSettingsTreeTeleop(config, []);
+  it("switches a default topic along with the message type but keeps custom ones", () => {
+    const joy = applySettingsAction(DEFAULT_CONFIG, update(["general", "messageType"], "Joy"));
+    expect(joy.topic).toBe("/joy");
 
-    // Then
-    const buttons = ["upButton", "downButton", "leftButton", "rightButton"] as const;
-    buttons.forEach((button) => {
-      const buttonField: any = result.general?.children?.[button]?.fields?.field;
-      expect(buttonField?.input).toBe("select");
-      expect(buttonField?.options).toBe(geometryMsgOptions);
-    });
+    const custom = applySettingsAction(
+      { ...DEFAULT_CONFIG, topic: "/robot/drive" },
+      update(["general", "messageType"], "Joy"),
+    );
+    expect(custom.topic).toBe("/robot/drive");
   });
 });

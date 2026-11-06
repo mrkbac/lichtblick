@@ -13,7 +13,7 @@ const KNOB_RADIUS = 36;
 // how far the knob center travels for a full deflection
 const TRAVEL = BASE_RADIUS - KNOB_RADIUS;
 
-function Joystick({ vector, onChange }: Readonly<JoystickProps>): React.JSX.Element {
+function Joystick({ vector, onChange, label }: Readonly<JoystickProps>): React.JSX.Element {
   const theme = useTheme();
   const dragging = useRef(false);
 
@@ -46,6 +46,7 @@ function Joystick({ vector, onChange }: Readonly<JoystickProps>): React.JSX.Elem
   return (
     <svg
       data-testid="teleop-joystick"
+      aria-label={label ?? "Joystick"}
       viewBox="0 0 256 256"
       style={{ maxWidth: "100%", maxHeight: "100%", touchAction: "none", cursor: "grab" }}
       onPointerDown={(event) => {

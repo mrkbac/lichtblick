@@ -4,66 +4,118 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
+import { MessageDefinition } from "@foxglove/message-definition";
 import { ros1 } from "@foxglove/rosmsg-msgs-common";
-import { Slider, Typography } from "@mui/material";
+import { Button, Slider, Typography } from "@mui/material";
 import * as _ from "lodash-es";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { DeepPartial } from "ts-essentials";
 
 import { SettingsTreeAction, Topic } from "@lichtblick/suite";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import DirectionalPad from "@lichtblick/suite-base/panels/Teleop/DirectionalPad";
+import FaceButtons from "@lichtblick/suite-base/panels/Teleop/FaceButtons";
 import Joystick from "@lichtblick/suite-base/panels/Teleop/Joystick";
-import { buildSettingsTreeTeleop } from "@lichtblick/suite-base/panels/Teleop/buildSettingsTree";
-import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Teleop/constants";
+import {
+  applySettingsAction,
+  buildSettingsTreeTeleop,
+} from "@lichtblick/suite-base/panels/Teleop/buildSettingsTree";
+import { BUTTON_LABELS } from "@lichtblick/suite-base/panels/Teleop/constants";
 import {
   actionToVector,
-  applyDeadzone,
+  combinePads,
   computeTwist,
+  hasButton,
   isActive,
+  isNeutral,
+  isZeroTwist,
+  keysToPad,
+  KEY_STICKS,
+  migrateConfig,
+  NEUTRAL_PAD,
+  padsEqual,
+  readGamepad,
+  toJoy,
   ZERO_VECTOR,
 } from "@lichtblick/suite-base/panels/Teleop/twist";
 import {
-  TeleopConfig,
+  ButtonName,
   DirectionalPadAction,
+  PadState,
+  TeleopConfig,
   TeleopPanelProps,
   TeleopVector,
 } from "@lichtblick/suite-base/panels/Teleop/types";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { ros2CommonDatatypes } from "@lichtblick/suite-base/util/ros2CommonDatatypes";
 
-const KEY_ACTIONS: Record<string, DirectionalPadAction> = {
-  w: DirectionalPadAction.UP,
-  arrowup: DirectionalPadAction.UP,
-  s: DirectionalPadAction.DOWN,
-  arrowdown: DirectionalPadAction.DOWN,
-  a: DirectionalPadAction.LEFT,
-  arrowleft: DirectionalPadAction.LEFT,
-  d: DirectionalPadAction.RIGHT,
-  arrowright: DirectionalPadAction.RIGHT,
-};
+const SCHEMAS = {
+  Twist: "geometry_msgs/Twist",
+  TwistStamped: "geometry_msgs/TwistStamped",
+  Joy: "sensor_msgs/Joy",
+} as const;
 
 type InputSources = {
-  /** On-screen joystick / d-pad, held with mouse or touch */
-  pointer?: TeleopVector;
-  keys: Set<DirectionalPadAction>;
-  gamepad?: TeleopVector;
+  /** On-screen controls, held with mouse, touch or pen */
+  pointerLeft?: TeleopVector;
+  pointerRight?: TeleopVector;
+  pointerButtons: Set<ButtonName>;
+  /** Lowercased `KeyboardEvent.key` values currently held */
+  keys: Set<string>;
+  gamepad: PadState;
 };
 
-function keysToVector(keys: ReadonlySet<DirectionalPadAction>): TeleopVector {
-  let x = 0;
-  let y = 0;
-  for (const key of keys) {
-    const vector = actionToVector(key);
-    x += vector.x;
-    y += vector.y;
-  }
-  return { x, y };
+/** The command being sent, as last computed from the inputs */
+type Command = {
+  pad: PadState;
+  turbo: boolean;
+  /** Stopped until every control is released */
+  latched: boolean;
+  /** Gamepad sticks move but the enable button isn't held */
+  needsEnable: boolean;
+};
+
+const IDLE: Command = { pad: NEUTRAL_PAD, turbo: false, latched: false, needsEnable: false };
+
+function emptySources(): InputSources {
+  return { pointerButtons: new Set(), keys: new Set(), gamepad: NEUTRAL_PAD };
 }
 
-function formatTwist(config: TeleopConfig, vector: TeleopVector): string {
-  const twist = computeTwist(config, vector);
+function speedOf(config: TeleopConfig, { turbo }: Pick<Command, "turbo">): number {
+  return turbo ? 1 : config.speedScale;
+}
+
+function buildMessage(config: TeleopConfig, { pad, turbo }: Pick<Command, "pad" | "turbo">) {
+  const now = Date.now();
+  // ponytail: wall-clock stamp; robots running on sim time (/clock) may reject it
+  const header = {
+    stamp: { sec: Math.floor(now / 1000), nsec: (now % 1000) * 1e6 },
+    frame_id: config.frameId,
+  };
+  if (config.messageType === "Joy") {
+    const joy = toJoy(pad, config.joyEnableButton);
+    const active = joy.axes.some((value) => value !== 0) || joy.buttons.some(Boolean);
+    return { active, message: { header, ...joy } };
+  }
+  const twist = computeTwist(config.mapping, pad, speedOf(config, { turbo }));
+  return {
+    active: !isZeroTwist(twist),
+    message: config.messageType === "TwistStamped" ? { header, twist } : twist,
+  };
+}
+
+function formatCommand(config: TeleopConfig, command: Command): string {
+  if (config.messageType === "Joy") {
+    const { axes, buttons } = toJoy(command.pad, config.joyEnableButton);
+    const axisParts = ["LX", "LY", "RX", "RY", "LT", "RT"]
+      .map((name, index) => [name, axes[index] ?? 0] as const)
+      .filter(([, value]) => value !== 0)
+      .map(([name, value]) => `${name} ${value.toFixed(2)}`);
+    const buttonParts = buttons.flatMap((value, index) => (value === 1 ? [`b${index}`] : []));
+    const parts = [...axisParts, ...buttonParts];
+    return parts.length > 0 ? parts.join("  ") : "Idle";
+  }
+  const twist = computeTwist(config.mapping, command.pad, speedOf(config, command));
   const parts = (["linear", "angular"] as const).flatMap((kind) =>
     (["x", "y", "z"] as const)
       .filter((axis) => twist[kind][axis] !== 0)
@@ -72,30 +124,24 @@ function formatTwist(config: TeleopConfig, vector: TeleopVector): string {
   return parts.length > 0 ? parts.join("  ") : "Stopped";
 }
 
+/** "Xbox Wireless Controller (STANDARD GAMEPAD Vendor: …)" → "Xbox Wireless Controller" */
+function shortGamepadName(id: string): string {
+  return id.replace(/\s*\(.*\)\s*$/, "") || id;
+}
+
 function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
   const { context } = props;
   const { saveState } = context;
 
   const [topics, setTopics] = useState<readonly Topic[]>([]);
+  const [gamepadIds, setGamepadIds] = useState<readonly string[]>([]);
 
-  // resolve an initial config which may have some missing fields into a full config
-  const [config, setConfig] = useState<TeleopConfig>(() =>
-    _.merge(
-      _.cloneDeep(DEFAULT_CONFIG),
-      context.initialState as DeepPartial<TeleopConfig> | undefined,
-    ),
-  );
+  // everything the user can change lives in the config, which is saved with the layout, so
+  // reopening the panel or switching layout tabs restores it exactly
+  const [config, setConfig] = useState<TeleopConfig>(() => migrateConfig(context.initialState));
 
   const settingsActionHandler = useCallback((action: SettingsTreeAction) => {
-    if (action.action !== "update") {
-      return;
-    }
-
-    setConfig((previous) => {
-      const newConfig = { ...previous };
-      _.set(newConfig, action.payload.path.slice(1), action.payload.value);
-      return newConfig;
-    });
+    setConfig((previous) => applySettingsAction(previous, action));
   }, []);
 
   // setup context render handler and render done handling
@@ -115,15 +161,17 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
   }, [context]);
 
   useEffect(() => {
-    const tree = buildSettingsTreeTeleop(config, topics);
     context.updatePanelSettingsEditor({
       actionHandler: settingsActionHandler,
-      nodes: tree,
+      nodes: buildSettingsTreeTeleop(config, topics, gamepadIds),
     });
-    saveState(config);
-  }, [config, context, saveState, settingsActionHandler, topics]);
+  }, [config, context, gamepadIds, settingsActionHandler, topics]);
 
-  const { topic: currentTopic } = config;
+  useEffect(() => {
+    saveState(config);
+  }, [config, saveState]);
+
+  const { topic: currentTopic, messageType } = config;
   useEffect(() => {
     context.setDefaultPanelTitle(currentTopic ? `Teleop ${currentTopic}` : undefined);
   }, [context, currentTopic]);
@@ -139,28 +187,17 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
     latest.current = { config, enabled };
   }, [config, enabled]);
 
-  // last command actually sent; cleanup stops it even when stopOnRelease skipped the zero
-  const lastPublishedRef = useRef<TeleopVector>(ZERO_VECTOR);
-  const publishVector = useCallback(
-    (vector: TeleopVector) => {
+  // whether the last message sent moved the robot; cleanup stops it even when stopOnRelease
+  // skipped the zero
+  const lastPublishedActive = useRef(false);
+  const publishCommand = useCallback(
+    (command: Pick<Command, "pad" | "turbo">) => {
       const { config: cfg, enabled: canSend } = latest.current;
       if (!canSend || !cfg.topic) {
         return;
       }
-      const twist = computeTwist(cfg, vector);
-      const now = Date.now();
-      // ponytail: wall-clock stamp; robots running on sim time (/clock) may reject it
-      const message =
-        cfg.messageType === "TwistStamped"
-          ? {
-              header: {
-                stamp: { sec: Math.floor(now / 1000), nsec: (now % 1000) * 1e6 },
-                frame_id: cfg.frameId,
-              },
-              twist,
-            }
-          : twist;
-      lastPublishedRef.current = vector;
+      const { active, message } = buildMessage(cfg, command);
+      lastPublishedActive.current = active;
       try {
         context.publish?.(cfg.topic, message);
       } catch (error) {
@@ -169,45 +206,99 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
     },
     [context],
   );
+  const publishStop = useCallback(() => {
+    publishCommand(IDLE);
+  }, [publishCommand]);
 
-  const sources = useRef<InputSources>({ keys: new Set<DirectionalPadAction>() });
-  const vectorRef = useRef<TeleopVector>(ZERO_VECTOR);
-  const [vector, setVector] = useState<TeleopVector>(ZERO_VECTOR);
+  const sources = useRef<InputSources>(emptySources());
+  const latched = useRef(false);
+  const commandRef = useRef<Command>(IDLE);
+  const activeRef = useRef(false);
+  const [command, setCommand] = useState<Command>(IDLE);
 
-  // Combine the input sources (pointer wins over keyboard, keyboard over gamepad) and publish
-  // immediately on start and stop instead of waiting for the next tick.
-  const updateVector = useCallback(() => {
-    const { pointer, keys, gamepad } = sources.current;
-    const next = pointer ?? (keys.size > 0 ? keysToVector(keys) : (gamepad ?? ZERO_VECTOR));
-    const prev = vectorRef.current;
-    if (prev.x === next.x && prev.y === next.y) {
+  // Merge every input source into one virtual gamepad and publish immediately on start and stop
+  // instead of waiting for the next tick.
+  const updateCommand = useCallback(() => {
+    const { config: cfg } = latest.current;
+    const isTwist = cfg.messageType !== "Joy";
+    const { pointerLeft, pointerRight, pointerButtons, keys, gamepad } = sources.current;
+    const pointer: PadState = {
+      ...NEUTRAL_PAD,
+      left: pointerLeft ?? ZERO_VECTOR,
+      right: pointerRight ?? ZERO_VECTOR,
+      buttons: pointerButtons,
+    };
+    const keyboard = keysToPad(keys);
+    const raw = combinePads([pointer, keyboard, gamepad]);
+    if (latched.current && isNeutral(raw)) {
+      latched.current = false;
+    }
+    const gamepadMoves =
+      isActive(gamepad.left) || isActive(gamepad.right) || gamepad.lt + gamepad.rt > 0;
+    const needsEnable =
+      isTwist && cfg.enableButton !== "none" && !hasButton(gamepad, cfg.enableButton);
+    const gamepadDrive = needsEnable ? { ...NEUTRAL_PAD, buttons: gamepad.buttons } : gamepad;
+    const next: Command = {
+      pad: latched.current ? NEUTRAL_PAD : combinePads([pointer, keyboard, gamepadDrive]),
+      turbo: isTwist && (keys.has("shift") || hasButton(gamepad, cfg.turboButton)),
+      latched: latched.current,
+      needsEnable: needsEnable && gamepadMoves,
+    };
+    const prev = commandRef.current;
+    const wasActive = activeRef.current;
+    // also depends on the config: a speed or mapping change can start or stop a held command
+    const active = buildMessage(cfg, next).active;
+    if (
+      active === wasActive &&
+      padsEqual(prev.pad, next.pad) &&
+      prev.turbo === next.turbo &&
+      prev.latched === next.latched &&
+      prev.needsEnable === next.needsEnable
+    ) {
       return;
     }
-    vectorRef.current = next;
-    setVector(next);
-    if (isActive(next) && !isActive(prev)) {
-      publishVector(next);
-    } else if (!isActive(next) && isActive(prev) && latest.current.config.stopOnRelease) {
-      publishVector(ZERO_VECTOR);
+    commandRef.current = next;
+    setCommand(next);
+    activeRef.current = active;
+    if (active && !wasActive) {
+      publishCommand(next);
+    } else if (!active && wasActive && cfg.stopOnRelease) {
+      publishStop();
     }
-  }, [publishVector]);
+  }, [publishCommand, publishStop]);
 
-  // bumping this remounts the joystick, dropping its drag and pointer capture so a held mouse
-  // can't resume driving after a stop
+  // bumping this remounts the on-screen controls, dropping their drag and pointer capture so a
+  // mouse whose release we never saw can't keep driving
   const [releaseCount, setReleaseCount] = useState(0);
   const releaseAll = useCallback(() => {
-    sources.current = { keys: new Set<DirectionalPadAction>() };
+    sources.current = { ...emptySources(), gamepad: sources.current.gamepad };
     setReleaseCount((count) => count + 1);
-    updateVector();
-  }, [updateVector]);
+    updateCommand();
+  }, [updateCommand]);
 
   const emergencyStop = useCallback(() => {
-    releaseAll();
-    publishVector(ZERO_VECTOR);
-  }, [publishVector, releaseAll]);
+    latched.current = true;
+    updateCommand();
+    activeRef.current = false;
+    publishStop();
+  }, [publishStop, updateCommand]);
+
+  const changeSpeed = useCallback((delta: number) => {
+    setConfig((previous) => ({
+      ...previous,
+      speedScale: _.clamp(Math.round((previous.speedScale + delta) * 100) / 100, 0.05, 1),
+    }));
+  }, []);
+  const setSpeed = useCallback((speedScale: number) => {
+    setConfig((previous) => ({ ...previous, speedScale }));
+  }, []);
+
+  // speed changes the published values of a held command
+  useEffect(() => {
+    updateCommand();
+  }, [config, updateCommand]);
 
   // advertise topic
-  const { messageType } = config;
   const isInitialMount = useRef(true);
   useLayoutEffect(() => {
     if (!currentTopic) {
@@ -215,33 +306,39 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
     }
 
     const isRos2 = context.dataSourceProfile === "ros2";
-    const datatypes = isRos2 ? ros2CommonDatatypes() : ros1;
-    const rootType = `geometry_msgs/${messageType}` as const;
+    const definitions: Record<string, MessageDefinition> = isRos2 ? ros2CommonDatatypes() : ros1;
+    const rootType = SCHEMAS[messageType];
     // ROS 2 schema names include "/msg/"; the definition maps use the short names
-    const schemaName = isRos2 ? `geometry_msgs/msg/${messageType}` : rootType;
-    context.advertise?.(currentTopic, schemaName, {
-      datatypes: new Map([
-        ...[
-          "geometry_msgs/Vector3",
-          "geometry_msgs/Twist",
-          "geometry_msgs/TwistStamped",
-          "std_msgs/Header",
-        ].map((name) => [name, datatypes[name as keyof typeof datatypes]] as const),
-        [schemaName, datatypes[rootType]],
-      ]),
-    });
+    const schemaName = isRos2 ? rootType.replace("/", "/msg/") : rootType;
+    const rootDefinition = definitions[rootType];
+    if (!rootDefinition) {
+      return;
+    }
+    const datatypes = new Map<string, MessageDefinition>([[schemaName, rootDefinition]]);
+    for (const name of [
+      rootType,
+      "geometry_msgs/Vector3",
+      "geometry_msgs/Twist",
+      "std_msgs/Header",
+    ]) {
+      const definition = definitions[name];
+      if (definition) {
+        datatypes.set(name, definition);
+      }
+    }
+    context.advertise?.(currentTopic, schemaName, { datatypes });
 
     return () => {
       // never leave the robot driving on a topic we stop publishing to
-      if (isActive(lastPublishedRef.current)) {
-        publishVector(ZERO_VECTOR);
+      if (lastPublishedActive.current) {
+        publishStop();
       }
       if (!isInitialMount.current) {
         context.unadvertise?.(currentTopic);
       }
       isInitialMount.current = false;
     };
-  }, [context, currentTopic, messageType, publishVector]);
+  }, [context, currentTopic, messageType, publishStop]);
 
   // keep publishing while a command is held so the robot's command timeout doesn't trip
   useEffect(() => {
@@ -249,14 +346,14 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
       return;
     }
     const intervalHandle = setInterval(() => {
-      if (isActive(vectorRef.current)) {
-        publishVector(vectorRef.current);
+      if (activeRef.current) {
+        publishCommand(commandRef.current);
       }
     }, 1000 / config.publishRate);
     return () => {
       clearInterval(intervalHandle);
     };
-  }, [enabled, config.publishRate, publishVector]);
+  }, [enabled, config.publishRate, publishCommand]);
 
   // key-up and pointer-up events get lost when the window loses focus, so stop instead of driving
   // on with a stuck input
@@ -275,59 +372,91 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
   }, [releaseAll]);
 
   const [gamepadName, setGamepadName] = useState<string | undefined>();
-  const { gamepad: gamepadEnabled, gamepadDeadzone } = config;
+  const [gamepadNonStandard, setGamepadNonStandard] = useState(false);
+  const gamepadEnabled = config.gamepad;
   useEffect(() => {
     if (!gamepadEnabled || typeof navigator.getGamepads !== "function") {
       return;
     }
     let frame = 0;
     const poll = () => {
-      const pad = navigator.getGamepads().find((candidate) => candidate?.connected === true);
+      const { config: cfg } = latest.current;
+      const pads = navigator.getGamepads().filter((pad): pad is Gamepad => pad?.connected === true);
+      const ids = pads.map((pad) => pad.id);
+      setGamepadIds((previous) => (_.isEqual(previous, ids) ? previous : ids));
+      const pad = cfg.gamepadId ? pads.find((p) => p.id === cfg.gamepadId) : pads[0];
       setGamepadName(pad?.id);
-      // left stick, like teleop_twist_joy; browser y axis points down
-      const next =
-        pad && document.hasFocus()
-          ? applyDeadzone(pad.axes[0] ?? 0, -(pad.axes[1] ?? 0), gamepadDeadzone)
-          : ZERO_VECTOR;
-      const prev = sources.current.gamepad ?? ZERO_VECTOR;
-      if (next.x !== prev.x || next.y !== prev.y) {
-        sources.current.gamepad = isActive(next) ? next : undefined;
-        updateVector();
+      setGamepadNonStandard(pad != undefined && pad.mapping !== "standard");
+
+      const next = pad && document.hasFocus() ? readGamepad(pad, cfg.gamepadDeadzone) : NEUTRAL_PAD;
+      const prev = sources.current.gamepad;
+      if (!padsEqual(next, prev)) {
+        sources.current.gamepad = next;
+        const pressed = (button: ButtonName | "none") =>
+          button !== "none" && next.buttons.has(button) && !prev.buttons.has(button);
+        if (cfg.messageType !== "Joy") {
+          if (pressed(cfg.speedUpButton)) {
+            changeSpeed(0.1);
+          }
+          if (pressed(cfg.speedDownButton)) {
+            changeSpeed(-0.1);
+          }
+        }
+        if (cfg.messageType !== "Joy" && pressed(cfg.stopButton)) {
+          emergencyStop();
+        } else {
+          updateCommand();
+        }
       }
       frame = requestAnimationFrame(poll);
     };
     frame = requestAnimationFrame(poll);
     return () => {
       cancelAnimationFrame(frame);
-      sources.current.gamepad = undefined;
+      sources.current.gamepad = NEUTRAL_PAD;
       setGamepadName(undefined);
-      updateVector();
+      updateCommand();
     };
-  }, [gamepadEnabled, gamepadDeadzone, updateVector]);
+  }, [gamepadEnabled, changeSpeed, emergencyStop, updateCommand]);
 
-  const setPointer = useCallback(
+  const setPointerLeft = useCallback(
     (next?: TeleopVector) => {
-      sources.current.pointer = next;
-      updateVector();
+      sources.current.pointerLeft = next;
+      updateCommand();
     },
-    [updateVector],
+    [updateCommand],
   );
-
+  const setPointerRight = useCallback(
+    (next?: TeleopVector) => {
+      sources.current.pointerRight = next;
+      updateCommand();
+    },
+    [updateCommand],
+  );
   const onDirectionalPadAction = useCallback(
     (action?: DirectionalPadAction) => {
-      setPointer(action == undefined ? undefined : actionToVector(action));
+      setPointerLeft(action == undefined ? undefined : actionToVector(action));
     },
-    [setPointer],
+    [setPointerLeft],
+  );
+  const pressFaceButton = useCallback(
+    (button: ButtonName) => {
+      sources.current.pointerButtons.add(button);
+      updateCommand();
+    },
+    [updateCommand],
+  );
+  const releaseFaceButton = useCallback(
+    (button: ButtonName) => {
+      if (sources.current.pointerButtons.delete(button)) {
+        updateCommand();
+      }
+    },
+    [updateCommand],
   );
 
-  const setSpeedScale = useCallback((speedScale: number) => {
-    setConfig((previous) => ({
-      ...previous,
-      speedScale: _.clamp(Math.round(speedScale * 100) / 100, 0.05, 1),
-    }));
-  }, []);
-
   const [focused, setFocused] = useState(false);
+  const isTwist = messageType !== "Joy";
 
   const onKeyDown = (event: React.KeyboardEvent) => {
     if (
@@ -345,23 +474,21 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
       emergencyStop();
       return;
     }
-    if (key === "+" || key === "=" || key === "-") {
-      setSpeedScale(config.speedScale + (key === "-" ? -0.1 : 0.1));
+    if (isTwist && (key === "+" || key === "=" || key === "-")) {
+      changeSpeed(key === "-" ? -0.1 : 0.1);
       return;
     }
-    const action = KEY_ACTIONS[key];
-    if (action == undefined) {
+    if (KEY_STICKS[key] == undefined && key !== "shift") {
       return;
     }
     event.preventDefault();
-    sources.current.keys.add(action);
-    updateVector();
+    sources.current.keys.add(key);
+    updateCommand();
   };
 
   const onKeyUp = (event: React.KeyboardEvent) => {
-    const action = KEY_ACTIONS[event.key.toLowerCase()];
-    if (action != undefined && sources.current.keys.delete(action)) {
-      updateVector();
+    if (sources.current.keys.delete(event.key.toLowerCase())) {
+      updateCommand();
     }
   };
 
@@ -370,10 +497,58 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
   }, [renderDone]);
 
   const hints = [
+    command.latched && "Stopped · release all controls to drive again",
+    command.needsEnable &&
+      config.enableButton !== "none" &&
+      `Hold ${BUTTON_LABELS[config.enableButton]} to drive`,
     config.keyboard &&
-      (focused ? "WASD / arrows · Space stop · +/− speed" : "Click panel for keyboard control"),
-    gamepadName && `Gamepad: ${gamepadName}`,
+      (focused
+        ? `WASD · Q/E${isTwist ? " · Shift turbo · +/− speed" : ""} · Space stop`
+        : "Click the panel to use the keyboard"),
+    config.gamepad &&
+      (gamepadName
+        ? `Gamepad: ${shortGamepadName(gamepadName)}${gamepadNonStandard ? " (unknown layout, sticks may be swapped)" : ""}`
+        : "Press a gamepad button to connect it"),
   ].filter(Boolean);
+
+  const controls = [
+    config.mode === "joystick" && (
+      <Joystick key={`left-${releaseCount}`} vector={command.pad.left} onChange={setPointerLeft} />
+    ),
+    config.mode === "dual" && (
+      <Joystick
+        key={`left-${releaseCount}`}
+        label="Left stick"
+        vector={command.pad.left}
+        onChange={setPointerLeft}
+      />
+    ),
+    config.mode === "dual" && (
+      <Joystick
+        key={`right-${releaseCount}`}
+        label="Right stick"
+        vector={command.pad.right}
+        onChange={setPointerRight}
+      />
+    ),
+    config.mode === "dpad" && (
+      <DirectionalPad
+        key={`dpad-${releaseCount}`}
+        onAction={onDirectionalPadAction}
+        vector={command.pad.left}
+      />
+    ),
+    !isTwist && config.mode !== "none" && (
+      <FaceButtons
+        key={`buttons-${releaseCount}`}
+        pressed={command.pad.buttons}
+        onPress={pressFaceButton}
+        onRelease={releaseFaceButton}
+      />
+    ),
+  ].filter(Boolean);
+
+  const speedPercent = Math.round(speedOf(config, command) * 100);
 
   return (
     <ThemeProvider isDark={colorScheme === "dark"}>
@@ -389,7 +564,8 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
         onBlur={(event) => {
           if (event.target === event.currentTarget) {
             setFocused(false);
-            releaseAll();
+            sources.current.keys.clear();
+            updateCommand();
           }
         }}
       >
@@ -409,47 +585,86 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
           {enabled && (
             <>
               <Stack direction="row" alignItems="center" gap={1.5} fullWidth paddingX={1}>
-                <Typography variant="caption" color="text.secondary" noWrap flexShrink={0}>
-                  Speed {Math.round(config.speedScale * 100)}%
-                </Typography>
-                <Slider
-                  size="small"
-                  aria-label="Speed"
-                  min={0.05}
-                  max={1}
-                  step={0.05}
-                  value={config.speedScale}
-                  onChange={(_event, value) => {
-                    setSpeedScale(value);
-                  }}
-                />
-              </Stack>
-              <Stack
-                flex="auto"
-                fullWidth
-                justifyContent="center"
-                alignItems="center"
-                overflow="hidden"
-              >
-                {config.mode === "dpad" ? (
-                  <DirectionalPad onAction={onDirectionalPadAction} vector={vector} />
+                {isTwist ? (
+                  <>
+                    <Typography
+                      variant="caption"
+                      color={command.turbo ? "warning.main" : "text.secondary"}
+                      noWrap
+                      flexShrink={0}
+                      style={{ minWidth: "9ch", textAlign: "left" }}
+                    >
+                      {command.turbo ? "Turbo" : "Speed"} {speedPercent}%
+                    </Typography>
+                    <Slider
+                      size="small"
+                      aria-label="Speed"
+                      min={0.05}
+                      max={1}
+                      step={0.05}
+                      value={config.speedScale}
+                      onChange={(_event, value) => {
+                        setSpeed(value);
+                      }}
+                    />
+                  </>
                 ) : (
-                  <Joystick key={releaseCount} vector={vector} onChange={setPointer} />
+                  <Typography variant="caption" color="text.secondary" flex="auto" textAlign="left">
+                    sensor_msgs/Joy
+                  </Typography>
                 )}
+                <Button
+                  size="small"
+                  variant={command.latched ? "contained" : "outlined"}
+                  color="error"
+                  onClick={emergencyStop}
+                  style={{ flexShrink: 0 }}
+                >
+                  Stop
+                </Button>
               </Stack>
+              {controls.length > 0 && (
+                <Stack
+                  direction="row"
+                  flex="auto"
+                  fullWidth
+                  gap={1}
+                  justifyContent="center"
+                  alignItems="center"
+                  overflow="hidden"
+                >
+                  {controls.map((control, index) => (
+                    <Stack
+                      key={index}
+                      flex="1 1 0"
+                      fullHeight
+                      justifyContent="center"
+                      alignItems="center"
+                      style={{ minWidth: 0 }}
+                    >
+                      {control}
+                    </Stack>
+                  ))}
+                </Stack>
+              )}
               <Typography
                 variant="caption"
                 fontFamily="monospace"
-                color={isActive(vector) ? "primary" : "text.secondary"}
+                color={buildMessage(config, command).active ? "primary" : "text.secondary"}
                 noWrap
               >
-                {formatTwist(config, vector)}
+                {formatCommand(config, command)}
               </Typography>
-              {hints.length > 0 && (
-                <Typography variant="caption" color="text.secondary" noWrap>
-                  {hints.join(" · ")}
+              {hints.map((hint, index) => (
+                <Typography
+                  key={index}
+                  variant="caption"
+                  color={index === 0 && command.latched ? "error" : "text.secondary"}
+                  noWrap
+                >
+                  {hint}
                 </Typography>
-              )}
+              ))}
             </>
           )}
         </Stack>

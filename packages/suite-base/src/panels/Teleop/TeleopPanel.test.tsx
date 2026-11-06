@@ -2,56 +2,55 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 import "@testing-library/jest-dom/vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import type { Mock } from "vitest";
 
-import { Topic } from "@lichtblick/suite";
-import { buildSettingsTreeTeleop } from "@lichtblick/suite-base/panels/Teleop/buildSettingsTree";
 import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Teleop/constants";
 import {
   DirectionalPadAction,
   DirectionalPadProps,
   TeleopConfig,
 } from "@lichtblick/suite-base/panels/Teleop/types";
-import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
-import { BasicBuilder } from "@lichtblick/test-builders";
 
 import TeleopPanel from "./TeleopPanel";
 
-// Mocks
-function MockDirectionalPad({ onAction, disabled }: DirectionalPadProps): React.JSX.Element {
+function MockDirectionalPad({ onAction }: DirectionalPadProps): React.JSX.Element {
   return (
-    <div data-testid="directional-pad" data-disabled={(disabled ?? false).toString()}>
+    <div data-testid="directional-pad">
       <button onClick={() => onAction?.(DirectionalPadAction.UP)}>UP</button>
-      <button onClick={() => onAction?.(DirectionalPadAction.DOWN)}>DOWN</button>
       <button onClick={() => onAction?.(DirectionalPadAction.LEFT)}>LEFT</button>
-      <button onClick={() => onAction?.(DirectionalPadAction.RIGHT)}>RIGHT</button>
       <button onClick={() => onAction?.()}>RELEASE</button>
     </div>
   );
 }
 
-vi.mock("./DirectionalPad", () => ({
-  __esModule: true,
-  default: MockDirectionalPad,
-}));
+vi.mock("./DirectionalPad", () => ({ __esModule: true, default: MockDirectionalPad }));
 
 vi.mock("@lichtblick/suite-base/theme/ThemeProvider", () => ({
   __esModule: true,
-  default: ({ children }: any) => <div>{children}</div>,
+  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
 vi.mock("@lichtblick/suite-base/components/EmptyState", () => ({
   __esModule: true,
-  default: ({ children }: any) => <div data-testid="empty-state">{children}</div>,
+  default: ({ children }: { children: React.ReactNode }) => (
+    <div data-testid="empty-state">{children}</div>
+  ),
 }));
 
 vi.mock("@lichtblick/suite-base/components/Stack", () => ({
   __esModule: true,
-  default: ({ children }: any) => <div>{children}</div>,
+  default: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
 }));
 
-function getMockContext(overrides: any = {}) {
+const ZERO = { linear: { x: 0, y: 0, z: 0 }, angular: { x: 0, y: 0, z: 0 } };
+
+function twist(linearX: number, angularZ = 0) {
+  return { linear: { x: linearX, y: 0, z: 0 }, angular: { x: 0, y: 0, z: angularZ } };
+}
+
+// the mocked d-pad and speed 1 keep published values equal to the configured max
+function getMockContext(overrides: Record<string, unknown> = {}) {
   const { initialState, ...rest } = overrides;
   return {
     saveState: vi.fn(),
@@ -63,689 +62,114 @@ function getMockContext(overrides: any = {}) {
     publish: vi.fn(),
     onRender: undefined,
     ...rest,
-    // the mocked directional pad is only shown in d-pad mode
-    initialState: { mode: "dpad", ...initialState },
+    initialState: {
+      topic: "/cmd",
+      mode: "dpad",
+      speedScale: 1,
+      publishRate: 10,
+      ...(initialState as Partial<TeleopConfig>),
+    },
+  } as unknown as Parameters<typeof TeleopPanel>[0]["context"] & {
+    publish: Mock;
+    advertise: Mock;
+    unadvertise: Mock;
+    saveState: Mock;
+    updatePanelSettingsEditor: Mock;
   };
+}
+
+function setup(initialState: Partial<TeleopConfig> = {}, overrides: Record<string, unknown> = {}) {
+  const context = getMockContext({ ...overrides, initialState });
+  const result = render(<TeleopPanel context={context} />);
+  const root = result.container.querySelector<HTMLElement>("[tabindex]")!;
+  return { ...result, context, publish: context.publish, root };
+}
+
+/** What the layout storage gives back: JSON drops undefined fields */
+function layoutRoundTrip(config: TeleopConfig): unknown {
+  return JSON.parse(JSON.stringify(config) ?? "{}");
+}
+
+function lastSavedConfig(context: { saveState: Mock }): TeleopConfig {
+  return context.saveState.mock.calls.at(-1)![0] as TeleopConfig;
 }
 
 describe("TeleopPanel", () => {
   beforeEach(() => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.useFakeTimers();
   });
 
   afterEach(() => {
-    (console.error as Mock).mockRestore();
-  });
-
-  it("renders EmptyState when publish is not available", () => {
-    const context = getMockContext({ publish: undefined });
-    render(<TeleopPanel context={context} />);
-    expect(screen.getByTestId("empty-state")).toHaveTextContent(
-      "Connect to a data source that supports publishing",
-    );
-  });
-
-  it("renders EmptyState when topic is missing", () => {
-    const context = getMockContext({ publish: vi.fn() });
-    render(<TeleopPanel context={context} />);
-    expect(screen.getByTestId("empty-state")).toHaveTextContent(
-      "Select a publish topic in the panel settings",
-    );
-  });
-
-  it("renders DirectionalPad when canPublish and hasTopic", () => {
-    const context = getMockContext({
-      publish: vi.fn(),
-      initialState: { topic: BasicBuilder.string() },
-    });
-    render(<TeleopPanel context={context} />);
-    expect(screen.queryByTestId("directional-pad")).toBeInTheDocument();
-  });
-
-  it("does not publish if publishRate is zero", () => {
-    const publish = vi.fn();
-    const context = getMockContext({
-      publish,
-      initialState: { topic: BasicBuilder.string(), publishRate: 0 },
-    });
-    render(<TeleopPanel context={context} />);
-    expect(publish).not.toHaveBeenCalled();
-  });
-
-  it("publishes message when DirectionalPad action is triggered", () => {
-    vi.useFakeTimers();
-    const publish = vi.fn();
-    const initialState: Partial<TeleopConfig> = { topic: BasicBuilder.string(), publishRate: 1 };
-    const context = getMockContext({
-      publish,
-      initialState,
-    });
-    render(<TeleopPanel context={context} />);
-    fireEvent.click(screen.getByText("UP"));
-    vi.runOnlyPendingTimers();
-    expect(publish).toHaveBeenCalledWith(
-      initialState.topic,
-      expect.objectContaining({
-        linear: expect.any(Object),
-        angular: expect.any(Object),
-      }),
-    );
     vi.useRealTimers();
+    vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
-  it("calls advertise and unadvertise (but not on the first render), when topic changes", () => {
-    const advertise = vi.fn();
-    const unadvertise = vi.fn();
-    const initialState: Partial<TeleopConfig> = { topic: BasicBuilder.string() };
-    const context = getMockContext({
-      publish: vi.fn(),
-      advertise,
-      unadvertise,
-      initialState,
-    });
-    const { rerender } = render(<TeleopPanel context={context} />);
-    expect(advertise).toHaveBeenCalledWith(
-      initialState.topic,
-      "geometry_msgs/Twist",
-      expect.objectContaining({
-        datatypes: expect.any(Map),
-      }),
-    );
-    rerender(
-      <TeleopPanel
-        context={getMockContext({
-          publish: vi.fn(),
-          advertise,
-          unadvertise,
-          initialState,
-        })}
-      />,
-    );
-
-    expect(unadvertise).not.toHaveBeenCalled();
-    rerender(
-      <TeleopPanel
-        context={getMockContext({
-          publish: vi.fn(),
-          advertise,
-          unadvertise,
-          initialState,
-        })}
-      />,
-    );
-    expect(unadvertise).toHaveBeenCalled();
-  });
-
-  it("initializes config with defaults when initialState is partial", () => {
-    const initialState: Partial<TeleopConfig> = {
-      publishRate: BasicBuilder.number(),
-      upButton: {
-        field: BasicBuilder.string(),
-        value: 0,
-      },
-    };
-    const context = getMockContext({
-      initialState,
-      publish: vi.fn(),
-    });
-    render(<TeleopPanel context={context} />);
-    expect(screen.getByTestId("empty-state")).toHaveTextContent(
-      "Select a publish topic in the panel settings",
-    );
-
-    const handler = context.updatePanelSettingsEditor.mock.calls[0]![0].actionHandler;
-    expect(() =>
-      handler({
-        action: "setFieldValue",
-        payload: { path: ["general", "downButton", "field"], value: "linear-x" },
-      }),
-    ).not.toThrow();
-
-    expect(() =>
-      handler({
-        action: "setFieldValue",
-        payload: { path: ["general", "rightButton", "field"], value: "angular-z" },
-      }),
-    ).not.toThrow();
-  });
-
-  it("settingsActionHandler updates config", () => {
-    const context = getMockContext({
-      publish: vi.fn(),
-      initialState: { topic: BasicBuilder.string() },
-    });
-    render(<TeleopPanel context={context} />);
-    const handler = context.updatePanelSettingsEditor.mock.calls[0]![0].actionHandler;
-    expect(() =>
-      handler({
-        action: "update",
-        payload: { path: ["general", "publishRate"], value: 10 },
-      }),
-    ).not.toThrow();
-  });
-
-  it("buildSettingsTree returns correct structure", () => {
-    const config: TeleopConfig = {
-      ...DEFAULT_CONFIG,
-      topic: BasicBuilder.string(),
-      publishRate: 2,
-      upButton: { field: "linear-x", value: 1 },
-      downButton: { field: "linear-x", value: -1 },
-      leftButton: { field: "angular-z", value: 1 },
-      rightButton: { field: "angular-z", value: -1 },
-    };
-    const topics = [
-      PlayerBuilder.topic({ schemaName: "geometry_msgs/Twist" }),
-      PlayerBuilder.topic({ schemaName: "geometry_msgs/Twist" }),
-    ] as Readonly<Topic[]>;
-
-    const tree = buildSettingsTreeTeleop(config, topics);
-    expect(tree.general?.fields?.publishRate?.value).toBe(2);
-    expect(tree.general?.fields?.topic?.input).toEqual("autocomplete");
-    expect(tree.general?.children?.upButton?.fields?.field?.value).toBe("linear-x");
-  });
-
-  describe("DirectionalPad Actions and Field Value Setting", () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
+  describe("setup", () => {
+    it("asks for a data source that supports publishing", () => {
+      setup({}, { publish: undefined });
+      expect(screen.getByTestId("empty-state")).toHaveTextContent(
+        "Connect to a data source that supports publishing",
+      );
     });
 
-    afterEach(() => {
-      vi.useRealTimers();
+    it("asks for a topic once the topic is cleared", () => {
+      setup({ topic: "" });
+      expect(screen.getByTestId("empty-state")).toHaveTextContent("Select a publish topic");
     });
 
-    describe("Given a TeleopPanel with a configured topic and publish capability", () => {
-      const setupTestEnvironment = (buttonConfig: Partial<TeleopConfig> = {}) => {
-        const publish = vi.fn();
-        const topic = "test/cmd_vel";
-        const defaultConfig: TeleopConfig = {
-          ...DEFAULT_CONFIG,
-          mode: "dpad",
-          topic,
-          publishRate: 10,
-          upButton: { field: "linear-x", value: 2.0 },
-          downButton: { field: "linear-x", value: -2.0 },
-          leftButton: { field: "angular-z", value: 1.5 },
-          rightButton: { field: "angular-z", value: -1.5 },
-          ...buttonConfig,
-        };
-
-        const context = getMockContext({
-          publish,
-          initialState: defaultConfig,
-        });
-
-        return { context, publish, topic, config: defaultConfig };
-      };
-
-      describe("When UP action is triggered", () => {
-        it("Then should set linear-x field with upButton value", () => {
-          // Given
-          const { context, publish } = setupTestEnvironment({
-            upButton: { field: "linear-x", value: 3.0 },
-          });
-
-          // When
-          render(<TeleopPanel context={context} />);
-          fireEvent.click(screen.getByText("UP"));
-          vi.runOnlyPendingTimers();
-
-          // Then
-          expect(publish).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({
-              linear: expect.objectContaining({ x: 3.0, y: 0, z: 0 }),
-              angular: expect.objectContaining({ x: 0, y: 0, z: 0 }),
-            }),
-          );
-        });
-
-        it("Then should set linear-y field with upButton value", () => {
-          // Given
-          const { context, publish } = setupTestEnvironment({
-            upButton: { field: "linear-y", value: 1.5 },
-          });
-
-          // When
-          render(<TeleopPanel context={context} />);
-          fireEvent.click(screen.getByText("UP"));
-          vi.runOnlyPendingTimers();
-
-          // Then
-          expect(publish).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({
-              linear: expect.objectContaining({ x: 0, y: 1.5, z: 0 }),
-              angular: expect.objectContaining({ x: 0, y: 0, z: 0 }),
-            }),
-          );
-        });
-
-        it("Then should set linear-z field with upButton value", () => {
-          // Given
-          const { context, publish } = setupTestEnvironment({
-            upButton: { field: "linear-z", value: 0.8 },
-          });
-
-          // When
-          render(<TeleopPanel context={context} />);
-          fireEvent.click(screen.getByText("UP"));
-          vi.runOnlyPendingTimers();
-
-          // Then
-          expect(publish).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({
-              linear: expect.objectContaining({ x: 0, y: 0, z: 0.8 }),
-              angular: expect.objectContaining({ x: 0, y: 0, z: 0 }),
-            }),
-          );
-        });
-      });
-
-      describe("When DOWN action is triggered", () => {
-        it("Then should set linear-x field with downButton value", () => {
-          // Given
-          const { context, publish } = setupTestEnvironment({
-            downButton: { field: "linear-x", value: -2.5 },
-          });
-
-          // When
-          render(<TeleopPanel context={context} />);
-          fireEvent.click(screen.getByText("DOWN"));
-          vi.runOnlyPendingTimers();
-
-          // Then
-          expect(publish).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({
-              linear: expect.objectContaining({ x: -2.5, y: 0, z: 0 }),
-              angular: expect.objectContaining({ x: 0, y: 0, z: 0 }),
-            }),
-          );
-        });
-
-        it("Then should set angular-x field with downButton value", () => {
-          // Given
-          const { context, publish } = setupTestEnvironment({
-            downButton: { field: "angular-x", value: -1.2 },
-          });
-
-          // When
-          render(<TeleopPanel context={context} />);
-          fireEvent.click(screen.getByText("DOWN"));
-          vi.runOnlyPendingTimers();
-
-          // Then
-          expect(publish).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({
-              linear: expect.objectContaining({ x: 0, y: 0, z: 0 }),
-              angular: expect.objectContaining({ x: -1.2, y: 0, z: 0 }),
-            }),
-          );
-        });
-      });
-
-      describe("When LEFT action is triggered", () => {
-        it("Then should set angular-z field with leftButton value", () => {
-          // Given
-          const { context, publish } = setupTestEnvironment({
-            leftButton: { field: "angular-z", value: 2.0 },
-          });
-
-          // When
-          render(<TeleopPanel context={context} />);
-          fireEvent.click(screen.getByText("LEFT"));
-          vi.runOnlyPendingTimers();
-
-          // Then
-          expect(publish).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({
-              linear: expect.objectContaining({ x: 0, y: 0, z: 0 }),
-              angular: expect.objectContaining({ x: 0, y: 0, z: 2.0 }),
-            }),
-          );
-        });
-
-        it("Then should set angular-y field with leftButton value", () => {
-          // Given
-          const { context, publish } = setupTestEnvironment({
-            leftButton: { field: "angular-y", value: 0.9 },
-          });
-
-          // When
-          render(<TeleopPanel context={context} />);
-          fireEvent.click(screen.getByText("LEFT"));
-          vi.runOnlyPendingTimers();
-
-          // Then
-          expect(publish).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({
-              linear: expect.objectContaining({ x: 0, y: 0, z: 0 }),
-              angular: expect.objectContaining({ x: 0, y: 0.9, z: 0 }),
-            }),
-          );
-        });
-      });
-
-      describe("When RIGHT action is triggered", () => {
-        it("Then should set angular-z field with rightButton value", () => {
-          // Given
-          const { context, publish } = setupTestEnvironment({
-            rightButton: { field: "angular-z", value: -1.8 },
-          });
-
-          // When
-          render(<TeleopPanel context={context} />);
-          fireEvent.click(screen.getByText("RIGHT"));
-          vi.runOnlyPendingTimers();
-
-          // Then
-          expect(publish).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({
-              linear: expect.objectContaining({ x: 0, y: 0, z: 0 }),
-              angular: expect.objectContaining({ x: 0, y: 0, z: -1.8 }),
-            }),
-          );
-        });
-
-        it("Then should set linear-y field with rightButton value", () => {
-          // Given
-          const { context, publish } = setupTestEnvironment({
-            rightButton: { field: "linear-y", value: -0.7 },
-          });
-
-          // When
-          render(<TeleopPanel context={context} />);
-          fireEvent.click(screen.getByText("RIGHT"));
-          vi.runOnlyPendingTimers();
-
-          // Then
-          expect(publish).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({
-              linear: expect.objectContaining({ x: 0, y: -0.7, z: 0 }),
-              angular: expect.objectContaining({ x: 0, y: 0, z: 0 }),
-            }),
-          );
-        });
-      });
-
-      describe("When testing all field combinations", () => {
-        const fieldCombinations = [
-          { field: "linear-x", expectedPath: "linear.x" },
-          { field: "linear-y", expectedPath: "linear.y" },
-          { field: "linear-z", expectedPath: "linear.z" },
-          { field: "angular-x", expectedPath: "angular.x" },
-          { field: "angular-y", expectedPath: "angular.y" },
-          { field: "angular-z", expectedPath: "angular.z" },
-        ];
-
-        fieldCombinations.forEach(({ field, expectedPath }) => {
-          it(`Then should correctly set ${field} field value in message`, () => {
-            // Given
-            const testValue = Math.random() * 10;
-            const { context, publish } = setupTestEnvironment({
-              upButton: { field, value: testValue },
-            });
-
-            // When
-            render(<TeleopPanel context={context} />);
-            fireEvent.click(screen.getByText("UP"));
-            vi.runOnlyPendingTimers();
-
-            // Then
-            const publishedMessage = publish.mock.calls[0]![1];
-            const actualValue = expectedPath
-              .split(".")
-              .reduce((obj, key) => obj[key], publishedMessage);
-            expect(actualValue).toBe(testValue);
-          });
-        });
-      });
-
-      describe("When multiple actions are triggered in sequence", () => {
-        it("Then should publish correct values for each action", () => {
-          // Given
-          const { context, publish } = setupTestEnvironment({
-            upButton: { field: "linear-x", value: 1.0 },
-            downButton: { field: "linear-x", value: -1.0 },
-            leftButton: { field: "angular-z", value: 0.5 },
-            rightButton: { field: "angular-z", value: -0.5 },
-          });
-
-          // When
-          render(<TeleopPanel context={context} />);
-
-          // Trigger UP
-          fireEvent.click(screen.getByText("UP"));
-          vi.runOnlyPendingTimers();
-
-          // Clear previous calls and trigger DOWN
-          publish.mockClear();
-          fireEvent.click(screen.getByText("DOWN"));
-          vi.runOnlyPendingTimers();
-
-          // Clear previous calls and trigger LEFT
-          publish.mockClear();
-          fireEvent.click(screen.getByText("LEFT"));
-          vi.runOnlyPendingTimers();
-
-          // Clear previous calls and trigger RIGHT
-          publish.mockClear();
-          fireEvent.click(screen.getByText("RIGHT"));
-          vi.runOnlyPendingTimers();
-
-          // Then
-          expect(publish).toHaveBeenCalledWith(
-            expect.any(String),
-            expect.objectContaining({
-              linear: expect.objectContaining({ x: 0, y: 0, z: 0 }),
-              angular: expect.objectContaining({ x: 0, y: 0, z: -0.5 }),
-            }),
-          );
-        });
-      });
-
-      describe("When publishRate affects message timing", () => {
-        it("Then should publish at correct intervals based on publishRate", () => {
-          // Given
-          const { context, publish } = setupTestEnvironment({
-            publishRate: 5, // 5 Hz = 200ms intervals
-          });
-
-          // When
-          render(<TeleopPanel context={context} />);
-          fireEvent.click(screen.getByText("UP"));
-
-          // Advance time by 200ms (one interval)
-          vi.advanceTimersByTime(200);
-
-          // Then
-          expect(publish).toHaveBeenCalledTimes(2); // Initial + one interval
-
-          // When advancing another 200ms
-          vi.advanceTimersByTime(200);
-
-          // Then
-          expect(publish).toHaveBeenCalledTimes(3); // Initial + two intervals
-        });
-      });
-    });
-  });
-
-  describe("onRender callback functionality", () => {
-    const setupRenderTestEnvironment = () => {
-      const context = getMockContext({
-        publish: vi.fn(),
-        initialState: { topic: "test/topic" },
-      });
-      return { context };
-    };
-
-    describe("When onRender is called with topics", () => {
-      it("Then should set topics from renderState", () => {
-        // Given
-        const { context } = setupRenderTestEnvironment();
-        const mockTopics: Topic[] = [
-          {
-            ...PlayerBuilder.topic({ schemaName: "geometry_msgs/Twist", name: "cmd_vel" }),
-            schemaName: "geometry_msgs/Twist",
-          },
-          {
-            ...PlayerBuilder.topic({ schemaName: "sensor_msgs/LaserScan", name: "scan" }),
-            schemaName: "sensor_msgs/LaserScan",
-          },
-        ] as Topic[];
-
-        // When
-        render(<TeleopPanel context={context} />);
-        const onRenderCallback = context.onRender;
-        expect(onRenderCallback).toBeDefined();
-
-        // Simulate onRender call with topics
-        onRenderCallback?.({ topics: mockTopics }, vi.fn());
-
-        // Then
-        // Verify that updatePanelSettingsEditor is called with the new topics
-        // The buildSettingsTreeTeleop function uses the topics to build the settings tree
-        expect(context.updatePanelSettingsEditor).toHaveBeenCalledWith(
-          expect.objectContaining({
-            nodes: expect.any(Object),
-          }),
-        );
-      });
-    });
-
-    describe("When onRender is called with colorScheme", () => {
-      it("Then should set colorScheme to dark when provided", () => {
-        // Given
-        const { context } = setupRenderTestEnvironment();
-
-        // When
-        const { container } = render(<TeleopPanel context={context} />);
-        const onRenderCallback = context.onRender;
-
-        // Simulate onRender call with dark color scheme
-        onRenderCallback?.({ colorScheme: "dark" }, vi.fn());
-
-        // Then
-        expect(container).toBeInTheDocument();
-      });
-    });
-  });
-
-  describe("Error handling for publish failures", () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-    });
-
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    it("should catch and log error when initial publish fails", () => {
-      // Given
-      const publishError = new Error("Topic not advertised");
-      const publish = vi.fn().mockImplementationOnce(() => {
-        throw publishError;
-      });
-      const context = getMockContext({
-        publish,
-        initialState: { topic: BasicBuilder.string(), publishRate: 1 },
-      });
-
-      // When
+    it("works out of the box on /cmd_vel", () => {
+      const context = getMockContext();
+      // a brand-new panel has no saved topic
+      (context.initialState as Partial<TeleopConfig>).topic = undefined;
       render(<TeleopPanel context={context} />);
-      fireEvent.click(screen.getByText("UP"));
-      vi.runOnlyPendingTimers();
-
-      // Then
-      expect(console.error).toHaveBeenCalledWith("Failed to publish message:", publishError);
+      expect(context.advertise).toHaveBeenCalledWith(
+        "/cmd_vel",
+        "geometry_msgs/Twist",
+        expect.objectContaining({ datatypes: expect.any(Map) }),
+      );
     });
 
-    it("should not crash the component when publish throws an error", () => {
-      // Given
-      const publish = vi.fn().mockImplementationOnce(() => {
-        throw new Error("Publish failed");
-      });
-      const context = getMockContext({
-        publish,
-        initialState: { topic: BasicBuilder.string(), publishRate: 1 },
-      });
-
-      // When
-      const { container } = render(<TeleopPanel context={context} />);
-      fireEvent.click(screen.getByText("UP"));
-      vi.runOnlyPendingTimers();
-
-      // Then
-      expect(container).toBeInTheDocument();
-      expect(screen.getByTestId("directional-pad")).toBeInTheDocument();
+    it("unadvertises the old topic when the topic changes (but not on the first render)", () => {
+      const advertise = vi.fn();
+      const unadvertise = vi.fn();
+      const make = () => getMockContext({ advertise, unadvertise });
+      const { rerender } = render(<TeleopPanel context={make()} />);
+      rerender(<TeleopPanel context={make()} />);
+      expect(unadvertise).not.toHaveBeenCalled();
+      rerender(<TeleopPanel context={make()} />);
+      expect(unadvertise).toHaveBeenCalledWith("/cmd");
     });
 
-    it("should catch error in interval publish attempts", () => {
-      // Given
-      const publishError = new Error("Interval publish failed");
-      const publish = vi
-        .fn()
-        .mockImplementationOnce(() => undefined)
-        .mockImplementationOnce(() => {
-          throw publishError;
-        });
-      const context = getMockContext({
-        publish,
-        initialState: { topic: BasicBuilder.string(), publishRate: 10 },
-      });
-
-      // When
-      render(<TeleopPanel context={context} />);
-      fireEvent.click(screen.getByText("UP"));
-      vi.runOnlyPendingTimers();
-      vi.advanceTimersByTime(100);
-
-      // Then
-      expect(console.error).toHaveBeenCalledWith("Failed to publish message:", publishError);
+    it("advertises ROS 2 schema names with ROS 2 definitions", () => {
+      const { context } = setup({ messageType: "TwistStamped" }, { dataSourceProfile: "ros2" });
+      const [, schemaName, options] = context.advertise.mock.calls[0]!;
+      expect(schemaName).toBe("geometry_msgs/msg/TwistStamped");
+      // ROS 2 headers have no seq field
+      expect(
+        options.datatypes.get("std_msgs/Header").definitions.map((d: { name: string }) => d.name),
+      ).toEqual(["stamp", "frame_id"]);
     });
   });
-  describe("Safety and input sources", () => {
-    beforeEach(() => {
-      vi.useFakeTimers();
-    });
 
-    afterEach(() => {
-      vi.useRealTimers();
-    });
-
-    const zero = { linear: { x: 0, y: 0, z: 0 }, angular: { x: 0, y: 0, z: 0 } };
-
-    function setup(initialState: Partial<TeleopConfig> = {}) {
-      const publish = vi.fn();
-      const context = getMockContext({
-        publish,
-        initialState: { topic: "/cmd", publishRate: 10, ...initialState },
-      });
-      const result = render(<TeleopPanel context={context} />);
-      const root = result.container.querySelector<HTMLElement>("[tabindex]")!;
-      return { publish, context, root };
-    }
-
-    it("publishes a zero command when the control is released", () => {
+  describe("publishing", () => {
+    it("publishes on press, repeats while held and stops on release", () => {
       const { publish } = setup();
       fireEvent.click(screen.getByText("UP"));
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(1));
+
       publish.mockClear();
+      vi.advanceTimersByTime(1000);
+      expect(publish).toHaveBeenCalledTimes(10);
+
       fireEvent.click(screen.getByText("RELEASE"));
-      expect(publish).toHaveBeenCalledWith("/cmd", zero);
+      expect(publish).toHaveBeenLastCalledWith("/cmd", ZERO);
       publish.mockClear();
       vi.advanceTimersByTime(1000);
       expect(publish).not.toHaveBeenCalled();
     });
 
-    it("does not publish a zero command on release when stopOnRelease is off", () => {
+    it("skips the zero command on release when stopOnRelease is off", () => {
       const { publish } = setup({ stopOnRelease: false });
       fireEvent.click(screen.getByText("UP"));
       publish.mockClear();
@@ -753,21 +177,100 @@ describe("TeleopPanel", () => {
       expect(publish).not.toHaveBeenCalled();
     });
 
+    it("publishes nothing when the publish rate is zero", () => {
+      const { publish } = setup({ publishRate: 0 });
+      expect(screen.getByTestId("empty-state")).toBeInTheDocument();
+      expect(publish).not.toHaveBeenCalled();
+    });
+
+    it("logs publish errors without crashing", () => {
+      const error = new Error("Topic not advertised");
+      const { publish } = setup();
+      publish.mockImplementation(() => {
+        throw error;
+      });
+      fireEvent.click(screen.getByText("UP"));
+      vi.advanceTimersByTime(200);
+      expect(console.error).toHaveBeenCalledWith("Failed to publish message:", error);
+      expect(screen.getByTestId("directional-pad")).toBeInTheDocument();
+      (console.error as Mock).mockClear();
+      // let the stop on unmount succeed
+      publish.mockReset();
+    });
+
+    it("publishes TwistStamped with a header", () => {
+      const { publish } = setup({ messageType: "TwistStamped", frameId: "base_link" });
+      fireEvent.click(screen.getByText("UP"));
+      expect(publish).toHaveBeenCalledWith("/cmd", {
+        header: {
+          stamp: { sec: expect.any(Number), nsec: expect.any(Number) },
+          frame_id: "base_link",
+        },
+        twist: twist(1),
+      });
+    });
+
+    it("publishes Joy in the ROS 2 joy layout with on-screen buttons", () => {
+      Element.prototype.setPointerCapture = vi.fn();
+      const { publish, context } = setup(
+        { messageType: "Joy", topic: "/joy", joyEnableButton: "lb" },
+        { dataSourceProfile: "ros2" },
+      );
+      expect(context.advertise.mock.calls[0]![1]).toBe("sensor_msgs/msg/Joy");
+
+      // driving holds the configured enable button (index 9 = LB)
+      fireEvent.click(screen.getByText("UP"));
+      const joy = publish.mock.calls.at(-1)![1];
+      expect(joy.axes).toEqual([0, 1, 0, 0, 0, 0]);
+      expect(joy.buttons[9]).toBe(1);
+      fireEvent.click(screen.getByText("RELEASE"));
+
+      // the on-screen A button is Joy button 0
+      fireEvent.pointerDown(screen.getByRole("button", { name: "A" }));
+      expect(publish.mock.calls.at(-1)![1].buttons[0]).toBe(1);
+      fireEvent.pointerUp(screen.getByRole("button", { name: "A" }));
+      expect(publish.mock.calls.at(-1)![1]).toMatchObject({
+        axes: [0, 0, 0, 0, 0, 0],
+        buttons: Array(21).fill(0),
+      });
+    });
+  });
+
+  describe("keyboard", () => {
     it("drives with combined keys and stops when they are released", () => {
       const { publish, root } = setup();
       fireEvent.keyDown(root, { key: "w" });
       fireEvent.keyDown(root, { key: "ArrowLeft" });
       vi.advanceTimersByTime(100);
-      expect(publish).toHaveBeenLastCalledWith("/cmd", {
-        linear: { x: 1, y: 0, z: 0 },
-        angular: { x: 0, y: 0, z: 1 },
-      });
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(1, 1.5));
       fireEvent.keyUp(root, { key: "w" });
       fireEvent.keyUp(root, { key: "ArrowLeft" });
-      expect(publish).toHaveBeenLastCalledWith("/cmd", zero);
+      expect(publish).toHaveBeenLastCalledWith("/cmd", ZERO);
     });
 
-    it("ignores drive keys with modifiers and when keyboard is disabled", () => {
+    it("turns the right stick with Q/E", () => {
+      const { publish, root } = setup({
+        mapping: { ...DEFAULT_CONFIG.mapping, "angular-z": { input: "rightX", max: 2 } },
+      });
+      fireEvent.keyDown(root, { key: "q" });
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(0, 2));
+    });
+
+    it("drives at full speed while Shift is held and adjusts speed with +/-", () => {
+      const { publish, root, context } = setup({ speedScale: 0.5 });
+      fireEvent.keyDown(root, { key: "w" });
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(0.5));
+      fireEvent.keyDown(root, { key: "Shift" });
+      vi.advanceTimersByTime(100);
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(1));
+      fireEvent.keyUp(root, { key: "Shift" });
+      fireEvent.keyDown(root, { key: "+" });
+      vi.advanceTimersByTime(100);
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(0.6));
+      expect(lastSavedConfig(context).speedScale).toBe(0.6);
+    });
+
+    it("ignores drive keys with modifiers and when the keyboard is disabled", () => {
       const { publish, root } = setup();
       fireEvent.keyDown(root, { key: "w", metaKey: true });
       expect(publish).not.toHaveBeenCalled();
@@ -776,106 +279,64 @@ describe("TeleopPanel", () => {
       fireEvent.keyDown(other.root, { key: "w" });
       expect(other.publish).not.toHaveBeenCalled();
     });
+  });
 
-    it("stops on Space and when the window loses focus", () => {
+  describe("safety", () => {
+    it("stops on Space and stays stopped until every control is released", () => {
       const { publish, root } = setup();
       fireEvent.keyDown(root, { key: "w" });
       publish.mockClear();
       fireEvent.keyDown(root, { key: " " });
-      expect(publish).toHaveBeenCalledWith("/cmd", zero);
+      expect(publish).toHaveBeenLastCalledWith("/cmd", ZERO);
+      expect(screen.getByText(/release all controls/)).toBeInTheDocument();
 
+      // still holding W does not drive
+      publish.mockClear();
+      fireEvent.keyDown(root, { key: "w" });
+      vi.advanceTimersByTime(1000);
+      expect(publish).not.toHaveBeenCalled();
+
+      // after releasing everything, W drives again
+      fireEvent.keyUp(root, { key: "w" });
+      fireEvent.keyDown(root, { key: "w" });
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(1));
+    });
+
+    it("stops from the on-screen Stop button", () => {
+      const { publish, root } = setup();
+      fireEvent.keyDown(root, { key: "w" });
+      fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+      expect(publish).toHaveBeenLastCalledWith("/cmd", ZERO);
+    });
+
+    it("stops when the window loses focus", () => {
+      const { publish, root } = setup();
       fireEvent.keyDown(root, { key: "w" });
       publish.mockClear();
       fireEvent.blur(window);
-      expect(publish).toHaveBeenCalledWith("/cmd", zero);
+      expect(publish).toHaveBeenCalledWith("/cmd", ZERO);
     });
 
-    it("scales the command with the speed keys", () => {
-      const { publish, root } = setup({ speedScale: 0.5 });
-      fireEvent.keyDown(root, { key: "+" });
-      fireEvent.keyDown(root, { key: "w" });
-      expect(publish).toHaveBeenLastCalledWith(
-        "/cmd",
-        expect.objectContaining({ linear: { x: 0.6, y: 0, z: 0 } }),
-      );
-    });
-
-    it("publishes TwistStamped with a header", () => {
-      const { publish, context } = setup({ messageType: "TwistStamped", frameId: "base_link" });
-      expect(context.advertise).toHaveBeenCalledWith(
-        "/cmd",
-        "geometry_msgs/TwistStamped",
-        expect.anything(),
-      );
-      fireEvent.click(screen.getByText("UP"));
-      expect(publish).toHaveBeenCalledWith("/cmd", {
-        header: {
-          stamp: { sec: expect.any(Number), nsec: expect.any(Number) },
-          frame_id: "base_link",
-        },
-        twist: expect.objectContaining({ linear: { x: 1, y: 0, z: 0 } }),
-      });
-    });
-
-    it("stops the robot when unmounted while driving", () => {
-      const publish = vi.fn();
-      const context = getMockContext({ publish, initialState: { topic: "/cmd" } });
-      const { unmount } = render(<TeleopPanel context={context} />);
-      fireEvent.click(screen.getByText("UP"));
-      publish.mockClear();
-      unmount();
-      expect(publish).toHaveBeenCalledWith("/cmd", zero);
-    });
-
-    it("stops the robot on unmount after a release that skipped the zero command", () => {
-      // Given stopOnRelease is off and the last published command was nonzero
-      const publish = vi.fn();
-      const context = getMockContext({
-        publish,
-        initialState: { topic: "/cmd", stopOnRelease: false },
-      });
-      const { unmount } = render(<TeleopPanel context={context} />);
+    it("stops the robot when unmounted while driving, even if stopOnRelease is off", () => {
+      const { publish, unmount } = setup({ stopOnRelease: false });
       fireEvent.click(screen.getByText("UP"));
       fireEvent.click(screen.getByText("RELEASE"));
       publish.mockClear();
-
-      // When the panel unmounts
       unmount();
-
-      // Then a zero command is published
-      expect(publish).toHaveBeenCalledWith("/cmd", zero);
-    });
-    it("advertises the ROS 2 schema name for ROS 2 data sources", () => {
-      const advertise = vi.fn();
-      const context = getMockContext({
-        publish: vi.fn(),
-        advertise,
-        dataSourceProfile: "ros2",
-        initialState: { topic: "/cmd", messageType: "TwistStamped" },
-      });
-      render(<TeleopPanel context={context} />);
-      const [, schemaName, options] = advertise.mock.calls[0]!;
-      expect(schemaName).toBe("geometry_msgs/msg/TwistStamped");
-      // ROS 2 headers have no seq field
-      expect(options.datatypes.get(schemaName).definitions[0].name).toBe("header");
-      expect(
-        options.datatypes.get("std_msgs/Header").definitions.map((d: { name: string }) => d.name),
-      ).toEqual(["stamp", "frame_id"]);
+      expect(publish).toHaveBeenCalledWith("/cmd", ZERO);
     });
 
-    it("does not resume driving from a held joystick after an emergency stop", () => {
+    it("does not resume driving from a held joystick after a stop", () => {
       Element.prototype.setPointerCapture = vi.fn();
-      const publish = vi.fn();
-      const context = getMockContext({
-        publish,
-        initialState: { topic: "/cmd", mode: "joystick" },
-      });
-      const { container } = render(<TeleopPanel context={context} />);
-      const root = container.querySelector<HTMLElement>("[tabindex]")!;
-      const rect = { left: 0, top: 0, width: 256, height: 256 } as DOMRect;
+      const { publish, root } = setup({ mode: "joystick" });
       const joystick = () => {
         const element = screen.getByTestId("teleop-joystick");
-        vi.spyOn(element, "getBoundingClientRect").mockReturnValue(rect);
+        vi.spyOn(element, "getBoundingClientRect").mockReturnValue({
+          left: 0,
+          top: 0,
+          width: 256,
+          height: 256,
+        } as DOMRect);
         return element;
       };
       // jsdom's PointerEvent drops clientX/clientY
@@ -883,16 +344,170 @@ describe("TeleopPanel", () => {
         new MouseEvent(type, { bubbles: true, clientX: 128, clientY: 0 });
 
       fireEvent(joystick(), pointer("pointerdown"));
-      expect(publish).toHaveBeenLastCalledWith(
-        "/cmd",
-        expect.objectContaining({ linear: { x: 1, y: 0, z: 0 } }),
-      );
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(1));
 
       fireEvent.keyDown(root, { key: " " });
       publish.mockClear();
       fireEvent(joystick(), pointer("pointermove"));
       vi.advanceTimersByTime(1000);
       expect(publish).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("gamepad", () => {
+    let frames: FrameRequestCallback[] = [];
+    let gamepads: Gamepad[] = [];
+
+    function makeGamepad(
+      axes: number[],
+      pressed: number[] = [],
+      id = "Test pad (STANDARD GAMEPAD)",
+    ) {
+      return {
+        id,
+        connected: true,
+        mapping: "standard",
+        axes,
+        buttons: Array.from({ length: 17 }, (_unused, index) => ({
+          pressed: pressed.includes(index),
+          touched: pressed.includes(index),
+          value: pressed.includes(index) ? 1 : 0,
+        })),
+      } as unknown as Gamepad;
+    }
+
+    function step(...pads: Gamepad[]) {
+      gamepads = pads;
+      const pending = frames;
+      frames = [];
+      act(() => {
+        pending.forEach((frame) => {
+          frame(0);
+        });
+      });
+    }
+
+    beforeEach(() => {
+      frames = [];
+      gamepads = [];
+      vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+        frames.push(callback);
+        return frames.length;
+      });
+      vi.stubGlobal("cancelAnimationFrame", () => {});
+      Object.defineProperty(navigator, "getGamepads", {
+        configurable: true,
+        value: () => gamepads,
+      });
+      vi.spyOn(document, "hasFocus").mockReturnValue(true);
+    });
+
+    it("prompts for a button press and then shows the connected gamepad", () => {
+      setup();
+      step();
+      expect(screen.getByText("Press a gamepad button to connect it")).toBeInTheDocument();
+      step(makeGamepad([0, 0, 0, 0]));
+      expect(screen.getByText("Gamepad: Test pad")).toBeInTheDocument();
+    });
+
+    it("drives with the left stick", () => {
+      const { publish } = setup();
+      step(makeGamepad([0, -1, 0, 0]));
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(1));
+      step(makeGamepad([0, 0, 0, 0]));
+      expect(publish).toHaveBeenLastCalledWith("/cmd", ZERO);
+    });
+
+    it("only drives while the enable button is held", () => {
+      const { publish } = setup({ enableButton: "lb" });
+      step(makeGamepad([0, -1, 0, 0]));
+      expect(publish).not.toHaveBeenCalled();
+      expect(screen.getByText("Hold LB / L1 to drive")).toBeInTheDocument();
+      step(makeGamepad([0, -1, 0, 0], [4]));
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(1));
+    });
+
+    it("stops with the stop button, boosts with turbo and changes speed with the d-pad", () => {
+      const { publish, context } = setup({ speedScale: 0.5 });
+      step(makeGamepad([0, -1, 0, 0]));
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(0.5));
+
+      // RB = turbo
+      step(makeGamepad([0, -1, 0, 0], [5]));
+      vi.advanceTimersByTime(100);
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(1));
+
+      // B = stop, latched while the stick is still held
+      step(makeGamepad([0, -1, 0, 0], [1]));
+      expect(publish).toHaveBeenLastCalledWith("/cmd", ZERO);
+      publish.mockClear();
+      step(makeGamepad([0, -1, 0, 0]));
+      vi.advanceTimersByTime(500);
+      expect(publish).not.toHaveBeenCalled();
+
+      // d-pad up = speed up
+      step(makeGamepad([0, 0, 0, 0]));
+      step(makeGamepad([0, 0, 0, 0], [12]));
+      expect(lastSavedConfig(context).speedScale).toBe(0.6);
+    });
+
+    it("reads only the selected gamepad", () => {
+      const { publish } = setup({ gamepadId: "Second" });
+      step(makeGamepad([0, -1, 0, 0], [], "First"));
+      expect(publish).not.toHaveBeenCalled();
+      step(makeGamepad([0, -1, 0, 0], [], "First"), makeGamepad([0, -1, 0, 0], [], "Second"));
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(1));
+    });
+  });
+
+  describe("persistence", () => {
+    it("restores every setting after the panel is closed and reopened", () => {
+      // Given a panel whose settings and speed were changed
+      const first = setup({ speedScale: 0.5 });
+      const handler = first.context.updatePanelSettingsEditor.mock.calls.at(-1)![0].actionHandler;
+      act(() => {
+        handler({
+          action: "update",
+          payload: { path: ["controls", "mode"], input: "select", value: "dual" },
+        });
+        handler({
+          action: "update",
+          payload: { path: ["mapping", "linear-y"], input: "select", value: "rightX" },
+        });
+      });
+      fireEvent.keyDown(first.root, { key: "+" });
+      const saved = lastSavedConfig(first.context);
+      first.unmount();
+
+      // When it is mounted again from the saved layout state (e.g. after switching tabs)
+      const context = getMockContext();
+      (context as { initialState: unknown }).initialState = layoutRoundTrip(saved);
+      render(<TeleopPanel context={context} />);
+
+      // Then nothing was lost
+      expect(lastSavedConfig(context)).toEqual(saved);
+      expect(saved).toMatchObject({ mode: "dual", speedScale: 0.6 });
+      expect(saved.mapping["linear-y"].input).toBe("rightX");
+      expect(screen.getAllByTestId("teleop-joystick")).toHaveLength(2);
+      expect(screen.getByText("Speed 60%")).toBeInTheDocument();
+    });
+
+    it("keeps a cleared topic cleared after a reload", () => {
+      const first = setup();
+      const handler = first.context.updatePanelSettingsEditor.mock.calls.at(-1)![0].actionHandler;
+      act(() => {
+        handler({
+          action: "update",
+          payload: { path: ["general", "topic"], input: "autocomplete", value: undefined },
+        });
+      });
+      const saved = layoutRoundTrip(lastSavedConfig(first.context));
+      first.unmount();
+
+      const context = getMockContext();
+      (context as { initialState: unknown }).initialState = saved;
+      render(<TeleopPanel context={context} />);
+      expect(screen.getByTestId("empty-state")).toHaveTextContent("Select a publish topic");
     });
   });
 });
