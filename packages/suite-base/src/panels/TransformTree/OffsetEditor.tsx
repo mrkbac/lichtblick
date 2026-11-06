@@ -64,6 +64,8 @@ type Props = {
   frame: string;
   parent: string;
   recorded: { position: Vec3; rotation: Quat };
+  /** False while there is no sample at the current time (e.g. right after a seek) */
+  resultEditable: boolean;
   offset: FrameOffset | undefined;
   showOriginal: boolean;
   step: AdjustStep;
@@ -82,6 +84,7 @@ export function OffsetEditor({
   frame,
   parent,
   recorded,
+  resultEditable,
   offset,
   showOriginal,
   step,
@@ -128,6 +131,7 @@ export function OffsetEditor({
     help: string,
     values: Readonly<Vec3>,
     onValue: (part: Part, index: number, value: number | undefined) => void,
+    { disabled = false }: { disabled?: boolean } = {},
   ) => (
     <>
       <span className={classes.editorLabel} title={help}>
@@ -140,6 +144,7 @@ export function OffsetEditor({
           size="small"
           variant="filled"
           fullWidth
+          disabled={disabled}
           precision={part === "xyz" ? PRECISION_METERS : PRECISION_DEGREES}
           step={part === "xyz" ? meters : degrees}
           value={value}
@@ -165,7 +170,14 @@ export function OffsetEditor({
         </span>
       ))}
       {inputs(part, t("editor.offset"), t("editor.offsetHelp"), offsetValues, setOffsetPart)}
-      {inputs(part, t("editor.result"), t("editor.resultHelp"), resultValues, setResultPart)}
+      {inputs(
+        part,
+        t("editor.result"),
+        resultEditable ? t("editor.resultHelp") : t("editor.resultNoData"),
+        resultValues,
+        setResultPart,
+        { disabled: !resultEditable },
+      )}
     </>
   );
 

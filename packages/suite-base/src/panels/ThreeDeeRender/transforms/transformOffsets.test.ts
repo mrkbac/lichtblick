@@ -14,6 +14,7 @@ import {
   formatStaticTransformPublisher,
   formatUrdfJoint,
   formatYaml,
+  frameOffset,
   nudge,
   offsetForResult,
   parseTransformOffsets,
@@ -158,5 +159,21 @@ describe("transformOffsets", () => {
     expect(q[3]).toBeCloseTo(expected.w, 9);
     // and it differs from the offsets' intrinsic XYZ convention when several angles are set
     expect(quatToRpyDegrees(q)[0]).not.toBeCloseTo(10, 3);
+  });
+
+  it("ignores inherited properties as frame ids", () => {
+    // Given
+    const offsets = parseTransformOffsets({
+      frames: { __proto__: { xyz: [1, 0, 0], rpy: [0, 0, 0] } },
+    });
+
+    // When / Then
+    expect(frameOffset(offsets, "constructor")).toBeUndefined();
+    expect(
+      frameOffset(withFrameOffset(offsets, "__proto__", undefined), "toString"),
+    ).toBeUndefined();
+    const set = withFrameOffset(offsets, "__proto__", { xyz: [1, 0, 0], rpy: [0, 0, 0] });
+    expect(frameOffset(set, "__proto__")?.xyz).toEqual([1, 0, 0]);
+    expect(Object.getPrototypeOf(set.frames)).toBe(Object.prototype);
   });
 });

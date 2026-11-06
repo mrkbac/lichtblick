@@ -26,6 +26,7 @@ import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables"
 import {
   applyOffset,
   FrameOffset,
+  frameOffset,
   quatToEulerDegrees,
   RotationConvention,
   parseTransformOffsets,
@@ -323,7 +324,10 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
   const warningCount = allRows.filter((row) => row.warnings.length > 0).length;
   const notYetPublishedCount = allRows.filter((row) => row.notYetPublished).length;
   const adjustedCount = Object.keys(offsets.frames).length;
-  const selectedEntry = selectedFrame != undefined ? known.get(selectedFrame) : undefined;
+  // Result edits must be based on the transform at the current time, not one from before a seek
+  const selectedCurrentEntry = selectedFrame != undefined ? current.get(selectedFrame) : undefined;
+  const selectedEntry =
+    selectedCurrentEntry ?? (selectedFrame != undefined ? known.get(selectedFrame) : undefined);
 
   let body: React.ReactNode;
   if (resolvedTopics.length === 0) {
@@ -386,8 +390,10 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
                   row={row}
                   collapsed={collapsed.has(row.frame)}
                   onToggle={toggleCollapsed}
-                  offset={offsets.showOriginal === true ? undefined : offsets.frames[row.frame]}
-                  adjusted={offsets.frames[row.frame] != undefined}
+                  offset={
+                    offsets.showOriginal === true ? undefined : frameOffset(offsets, row.frame)
+                  }
+                  adjusted={frameOffset(offsets, row.frame) != undefined}
                   selected={row.frame === selectedFrame}
                   onSelect={selectFrame}
                   convention={convention}
@@ -401,6 +407,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
           <OffsetEditor
             frame={selectedFrame}
             parent={selectedEntry.parent}
+            resultEditable={selectedCurrentEntry != undefined}
             recorded={{
               position: [
                 selectedEntry.translation.x,
@@ -414,7 +421,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
                 selectedEntry.rotation.w,
               ],
             }}
-            offset={offsets.frames[selectedFrame]}
+            offset={frameOffset(offsets, selectedFrame)}
             showOriginal={offsets.showOriginal === true}
             step={config.adjustStep ?? "medium"}
             convention={convention}

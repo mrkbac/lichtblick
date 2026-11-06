@@ -50,6 +50,7 @@ export const transformTree = {
     offsetHelp:
       "Applied on top of the recorded transform: translation along the parent's axes, then the rotation around the frame's own origin.",
     result: "Result",
+    resultNoData: "No transform at the current time yet; edit the offset or wait for data.",
     resultHelp:
       "The transform that is rendered. Type a value here and the offset is computed for you.",
     rotationConvention: {

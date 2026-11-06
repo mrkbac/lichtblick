@@ -53,6 +53,24 @@ export function isZeroVec3(v: Readonly<Vec3>): boolean {
   return v[0] === 0 && v[1] === 0 && v[2] === 0;
 }
 
+/**
+ * Offset of one frame. Frame ids come from recordings, so only own keys count: a frame named
+ * "constructor" must not pick up an inherited property.
+ */
+export function frameOffset(offsets: TransformOffsets, frameId: string): FrameOffset | undefined {
+  return Object.hasOwn(offsets.frames, frameId) ? offsets.frames[frameId] : undefined;
+}
+
+/** Plain assignment of "__proto__" would replace the prototype instead of adding a frame */
+function setFrame(frames: Record<string, FrameOffset>, frameId: string, offset: FrameOffset): void {
+  Object.defineProperty(frames, frameId, {
+    value: offset,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 /** Validate a layout variable value; anything malformed is dropped */
 export function parseTransformOffsets(value: unknown): TransformOffsets {
   if (value == undefined || typeof value !== "object" || Array.isArray(value)) {
@@ -67,7 +85,7 @@ export function parseTransformOffsets(value: unknown): TransformOffsets {
     for (const [frameId, offset] of Object.entries(frames as Record<string, unknown>)) {
       const { xyz, rpy } = (offset ?? {}) as Record<string, unknown>;
       if (isVec3(xyz) && isVec3(rpy)) {
-        result.frames[frameId] = { xyz: [...xyz], rpy: [...rpy] };
+        setFrame(result.frames, frameId, { xyz: [...xyz], rpy: [...rpy] });
       }
     }
   }
@@ -84,10 +102,10 @@ export function withFrameOffset(
   if (offset == undefined || (isZeroVec3(offset.xyz) && isZeroVec3(offset.rpy))) {
     delete frames[frameId];
   } else {
-    frames[frameId] = {
+    setFrame(frames, frameId, {
       xyz: offset.xyz.map(clean) as Vec3,
       rpy: offset.rpy.map(clean) as Vec3,
-    };
+    });
   }
   return { ...offsets, frames };
 }

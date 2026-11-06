@@ -38,6 +38,7 @@ import {
   applyOffset,
   EMPTY_OFFSETS,
   FrameOffset,
+  frameOffset,
   formatStaticTransformPublisher,
   formatUrdfJoint,
   formatYaml,
@@ -694,7 +695,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
 
   /** Offset in effect for a frame: layout-wide, or a legacy per-panel one while editable */
   #offsetFor(frameId: string): FrameOffset | undefined {
-    const shared = this.#offsets.frames[frameId];
+    const shared = frameOffset(this.#offsets, frameId);
     if (shared) {
       return shared;
     }
@@ -1134,7 +1135,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     }
 
     // Layout-wide offsets apply in every panel, unless comparing against the original
-    const shared = this.#offsets.frames[frameId];
+    const shared = frameOffset(this.#offsets, frameId);
     if (this.#offsets.showOriginal === true || shared) {
       frame.offsetPosition = shared && this.#offsets.showOriginal !== true ? shared.xyz : undefined;
       frame.offsetEulerDegrees =

@@ -25,6 +25,7 @@ function setup(offset?: FrameOffset, convention: RotationConvention = "extrinsic
       parent="base"
       // pitched 60 deg in the recording
       recorded={{ position: [1, 0, 2], rotation: rpyDegreesToQuat([0, 60, 0]) }}
+      resultEditable
       offset={offset}
       showOriginal={false}
       step="fine"
