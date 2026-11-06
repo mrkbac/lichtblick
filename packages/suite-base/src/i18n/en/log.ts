@@ -16,6 +16,8 @@ export const log = {
   nothingToCopy: "Nothing to copy",
   searchPlaceholder: "Search (-term to exclude)",
   showAll: "Show all",
+  loadFailed: "Failed to load logs\n{{error}}",
+  retry: "Retry",
   invalidRegex: "Invalid regular expression: {{terms}}",
   matchCase: "Match case",
   nextProblem: "Next warning or error",

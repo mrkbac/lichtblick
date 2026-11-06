@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { compare } from "@foxglove/rostime";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useMessagesByTopic } from "@lichtblick/suite-base/PanelAPI";
 import {
@@ -19,6 +19,9 @@ import { NormalizedLogMessage } from "./types";
 export const LIVE_HISTORY_SIZE = 50_000;
 const FLUSH_INTERVAL_MS = 250;
 const EMPTY: readonly string[] = [];
+
+const pickKeys = (record: Readonly<Record<string, string>>, keys: ReadonlySet<string>) =>
+  Object.fromEntries(Object.entries(record).filter(([key]) => keys.has(key)));
 
 type ByTopic = Record<string, readonly NormalizedLogMessage[]>;
 
@@ -82,6 +85,10 @@ const selectReady = (ctx: MessagePipelineContext) =>
 export function useLogMessages(topics: readonly string[]): {
   items: readonly NormalizedLogMessage[];
   loading: boolean;
+  /** Why loading a topic failed, if one did */
+  error: string | undefined;
+  /** Reload the topics that failed */
+  retry: () => void;
 } {
   const playerId = useMessagePipeline(selectPlayerId);
   const ready = useMessagePipeline(selectReady);
@@ -89,6 +96,9 @@ export function useLogMessages(topics: readonly string[]): {
 
   const [rangeByTopic, setRangeByTopic] = useState<ByTopic>({});
   const [loadingTopics, setLoadingTopics] = useState<ReadonlySet<string>>(new Set());
+  const [errorByTopic, setErrorByTopic] = useState<Readonly<Record<string, string>>>({});
+  // Bumped by retry() to resubscribe the failed topics
+  const [retryCount, setRetryCount] = useState(0);
 
   // Active range subscriptions, keyed by topic. Reset when the player changes.
   const subsRef = useRef(new Map<string, () => void>());
@@ -115,24 +125,32 @@ export function useLogMessages(topics: readonly string[]): {
           const messages: NormalizedLogMessage[] = [];
           acc[topic] = messages;
           setLoadingTopics((prev) => new Set(prev).add(topic));
-          for await (const batch of iterator) {
-            if (cancelled) {
-              return;
+          try {
+            for await (const batch of iterator) {
+              if (cancelled) {
+                return;
+              }
+              for (const event of batch) {
+                messages.push(normalizeLogEvent(event));
+              }
+              flushTimerRef.current ??= setTimeout(flush, FLUSH_INTERVAL_MS);
             }
-            for (const event of batch) {
-              messages.push(normalizeLogEvent(event));
+          } catch (err) {
+            if (!cancelled) {
+              const message = err instanceof Error ? err.message : String(err);
+              setErrorByTopic((prev) => ({ ...prev, [topic]: message }));
             }
-            flushTimerRef.current ??= setTimeout(flush, FLUSH_INTERVAL_MS);
+          } finally {
+            if (!cancelled) {
+              // Also shows what was read before a failure
+              setRangeByTopic(snapshot(acc));
+              setLoadingTopics((prev) => {
+                const next = new Set(prev);
+                next.delete(topic);
+                return next;
+              });
+            }
           }
-          if (cancelled) {
-            return;
-          }
-          setRangeByTopic(snapshot(acc));
-          setLoadingTopics((prev) => {
-            const next = new Set(prev);
-            next.delete(topic);
-            return next;
-          });
         },
       });
       // onNewRangeIterator runs synchronously when the source supports ranges. Topics without
@@ -156,13 +174,14 @@ export function useLogMessages(topics: readonly string[]): {
     }
     if (removed.length > 0) {
       setLoadingTopics((prev) => new Set([...prev].filter((topic) => wanted.has(topic))));
+      setErrorByTopic((prev) => pickKeys(prev, wanted));
     }
     if (added || removed.length > 0) {
       // Publish new (still empty) range topics right away so they skip the live subscription
       setRangeByTopic(snapshot(acc));
     }
     // playerId: resubscribe after the reset effect below cleared everything
-  }, [topics, ready, subscribeMessageRange, playerId]);
+  }, [topics, ready, subscribeMessageRange, playerId, retryCount]);
 
   // A new player invalidates everything loaded so far
   useEffect(() => {
@@ -182,8 +201,22 @@ export function useLogMessages(topics: readonly string[]): {
       }
       setRangeByTopic({});
       setLoadingTopics(new Set());
+      setErrorByTopic({});
     };
   }, [playerId]);
+
+  const retry = useCallback(() => {
+    const subs = subsRef.current;
+    const acc = accumulatedRef.current;
+    for (const topic of Object.keys(errorByTopic)) {
+      subs.get(topic)?.();
+      subs.delete(topic);
+      delete acc[topic];
+    }
+    setErrorByTopic({});
+    setRangeByTopic(snapshot(acc));
+    setRetryCount((count) => count + 1);
+  }, [errorByTopic]);
 
   const liveTopics = useMemo(() => {
     const live = topics.filter((topic) => rangeByTopic[topic] == undefined);
@@ -211,5 +244,8 @@ export function useLogMessages(topics: readonly string[]): {
     return mergeByReceiveTime(arrays);
   }, [topics, rangeByTopic, liveByTopic]);
 
-  return { items, loading: loadingTopics.size > 0 };
+  const error = Object.entries(errorByTopic)
+    .map(([topic, message]) => `${topic}: ${message}`)
+    .join("\n");
+  return { items, loading: loadingTopics.size > 0, error: error === "" ? undefined : error, retry };
 }

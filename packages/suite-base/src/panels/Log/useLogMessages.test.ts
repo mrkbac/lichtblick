@@ -48,7 +48,7 @@ describe("mergeByReceiveTime", () => {
 
 describe("useLogMessages", () => {
   let ctx: { playerState: { playerId: string; presence: PlayerPresence } };
-  let rangeIterators: Map<string, (batch: MessageEvent[] | "done") => void>;
+  let rangeIterators: Map<string, (batch: MessageEvent[] | "done" | Error) => void>;
   let cancelByTopic: Map<string, Mock>;
 
   beforeEach(() => {
@@ -69,7 +69,7 @@ describe("useLogMessages", () => {
   function withRange() {
     const subscribe = vi.fn(({ topic, onNewRangeIterator }: SubscribeMessageRangeArgs) => {
       // Async iterator fed by the test
-      const queue: (MessageEvent[] | "done")[] = [];
+      const queue: (MessageEvent[] | "done" | Error)[] = [];
       const waiting: (() => void)[] = [];
       const waitForBatch = async () => {
         await new Promise<void>((resolve) => waiting.push(resolve));
@@ -89,6 +89,9 @@ describe("useLogMessages", () => {
             const next = queue.shift()!;
             if (next === "done") {
               return;
+            }
+            if (next instanceof Error) {
+              throw next;
             }
             yield next;
           }
@@ -123,6 +126,41 @@ describe("useLogMessages", () => {
 
     expect(result.current.items.map((m) => m.message)).toEqual(["/a@1", "/b@2", "/a@3"]);
     expect(result.current.loading).toBe(false);
+  });
+
+  it("stops loading and reports the error when reading fails, and can retry", async () => {
+    const subscribe = withRange();
+    const { result } = renderHook(() => useLogMessages(SINGLE_TOPIC));
+
+    await act(async () => {
+      rangeIterators.get("/a")!([event(1, "/a")]);
+      rangeIterators.get("/a")!(new Error("read failed"));
+      await vi.runAllTimersAsync();
+    });
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.error).toBe("/a: read failed");
+    // What was read before the failure stays visible
+    expect(result.current.items).toHaveLength(1);
+
+    const firstCancel = cancelByTopic.get("/a")!;
+    act(() => {
+      result.current.retry();
+    });
+
+    expect(firstCancel).toHaveBeenCalledTimes(1);
+    expect(subscribe).toHaveBeenCalledTimes(2);
+    expect(result.current.error).toBeUndefined();
+    expect(result.current.loading).toBe(true);
+
+    await act(async () => {
+      rangeIterators.get("/a")!([event(1, "/a"), event(2, "/a")]);
+      rangeIterators.get("/a")!("done");
+      await vi.runAllTimersAsync();
+    });
+
+    expect(result.current.loading).toBe(false);
+    expect(result.current.items.map((m) => m.message)).toEqual(["/a@1", "/a@2"]);
   });
 
   it("publishes a new items array on every flush for a single topic", async () => {
