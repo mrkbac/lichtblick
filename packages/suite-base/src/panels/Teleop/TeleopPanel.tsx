@@ -388,8 +388,9 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
     if (!gamepadEnabled || typeof navigator.getGamepads !== "function") {
       return;
     }
-    let frame = 0;
+    let frame: number | undefined;
     const poll = () => {
+      frame = undefined;
       const { config: cfg } = latest.current;
       const pads = navigator.getGamepads().filter((pad): pad is Gamepad => pad?.connected === true);
       const ids = pads.map((pad) => pad.id);
@@ -418,11 +419,23 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
           updateCommand();
         }
       }
-      frame = requestAnimationFrame(poll);
+      // with no gamepad there is nothing to read: idle until "gamepadconnected" instead of every frame
+      if (pads.length > 0) {
+        frame = requestAnimationFrame(poll);
+      }
     };
-    frame = requestAnimationFrame(poll);
+    const start = () => {
+      frame ??= requestAnimationFrame(poll);
+    };
+    start();
+    window.addEventListener("gamepadconnected", start);
+    window.addEventListener("gamepaddisconnected", start);
     return () => {
-      cancelAnimationFrame(frame);
+      window.removeEventListener("gamepadconnected", start);
+      window.removeEventListener("gamepaddisconnected", start);
+      if (frame != undefined) {
+        cancelAnimationFrame(frame);
+      }
       sources.current.gamepad = NEUTRAL_PAD;
       setGamepadName(undefined);
       updateCommand();
