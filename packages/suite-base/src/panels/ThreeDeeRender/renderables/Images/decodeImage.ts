@@ -36,6 +36,7 @@ import {
 
 import { CompressedImageTypes, CompressedVideo } from "./ImageTypes";
 import { PreparedVideoFrame, PreparedVideoFrameStatus, PrepareVideoFrameContext } from "./types";
+import { makeRgba, rgbaGradient, stringToRgba } from "../../color";
 import { Image as RosImage } from "../../ros";
 import { ColorModeSettings, getColorConverter } from "../colorMode";
 
@@ -161,9 +162,81 @@ export const IMAGE_DEFAULT_COLOR_MODE_SETTINGS: Required<
   colorMap: "turbo",
   explicitAlpha: 0,
 };
+const MIN_MAX_8_BIT = { minValue: 0, maxValue: 255 };
 const MIN_MAX_16_BIT = { minValue: 0, maxValue: 65535 };
 
 export type RawImageOptions = ColorModeSettings;
+
+// Linear -> sRGB transfer function, sampled; index with round(linear * (SIZE - 1))
+const LINEAR_TO_SRGB_SIZE = 4096;
+const LINEAR_TO_SRGB = Float32Array.from({ length: LINEAR_TO_SRGB_SIZE }, (_v, i) => {
+  const c = i / (LINEAR_TO_SRGB_SIZE - 1);
+  return c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+});
+function linearToSrgb(c: number): number {
+  return LINEAR_TO_SRGB[Math.round(Math.min(Math.max(c, 0), 1) * (LINEAR_TO_SRGB_SIZE - 1))]!;
+}
+
+/**
+ * Maps a single-channel value to a color using the panel's gradient/colormap and value range.
+ * Returns undefined for color modes that don't apply to single-channel images (flat, rgba-fields).
+ * Packed rgb/rgba modes decode the value bits as a color (kept for mono16 compatibility).
+ *
+ * The output is sRGB: image textures are uploaded as-is and the image shader does no color space
+ * conversion (same as for compressed images), whereas `getColorConverter` produces linear colors
+ * for the 3D scene. So gradients are interpolated between the sRGB colors the user picked (the
+ * default black -> white gradient is plain grayscale) and colormap colors are converted back.
+ */
+function monoColorConverter(
+  options: Partial<RawImageOptions>,
+  defaultRange: { minValue: number; maxValue: number },
+): ((value: number) => { r: number; g: number; b: number; a: number }) | undefined {
+  // lodash merge replaces undefined values in options with defaults, whereas a spread would let
+  // undefined overwrite them
+  const settings = _.merge({}, IMAGE_DEFAULT_COLOR_MODE_SETTINGS, defaultRange, options);
+  const { minValue, maxValue } = settings;
+  const tempColor = { r: 0, g: 0, b: 0, a: 0 };
+  switch (settings.colorMode) {
+    case "gradient": {
+      const minColor = stringToRgba(makeRgba(), settings.gradient[0]);
+      const maxColor = stringToRgba(makeRgba(), settings.gradient[1]);
+      const valueDelta = Math.max(maxValue - minValue, Number.EPSILON);
+      return (value: number) => {
+        const frac = Math.max(0, Math.min((value - minValue) / valueDelta, 1));
+        return rgbaGradient(tempColor, minColor, maxColor, frac);
+      };
+    }
+    case "colormap": {
+      const converter = getColorConverter(
+        { ...settings, colorMode: "colormap" },
+        minValue,
+        maxValue,
+      );
+      return (value: number) => {
+        converter(tempColor, value);
+        tempColor.r = linearToSrgb(tempColor.r);
+        tempColor.g = linearToSrgb(tempColor.g);
+        tempColor.b = linearToSrgb(tempColor.b);
+        return tempColor;
+      };
+    }
+    case "rgb":
+    case "rgba": {
+      // Packed colors are read straight from the value bits (no linear conversion), as before
+      const converter = getColorConverter(
+        { ...settings, colorMode: settings.colorMode },
+        minValue,
+        maxValue,
+      );
+      return (value: number) => {
+        converter(tempColor, value);
+        return tempColor;
+      };
+    }
+    default:
+      return undefined;
+  }
+}
 
 /**
  * See also:
@@ -226,34 +299,21 @@ export function decodeRawImage(
       break;
     case "mono8":
     case "8UC1":
-      decodeMono8(rawData, width, height, step, output);
+      decodeMono8(rawData, width, height, step, output, {
+        // Only gradient and colormap apply to 8-bit values; other modes fall back to grayscale
+        colorConverter:
+          (options.colorMode ?? "gradient") === "gradient" || options.colorMode === "colormap"
+            ? monoColorConverter(options, MIN_MAX_8_BIT)
+            : undefined,
+      });
       break;
     case "mono16":
     case "16UC1": {
-      // combine options with defaults. lodash merge makes sure undefined values in options are replaced with defaults
-      // whereas a normal spread would allow undefined values to overwrite defaults
-      const settings = _.merge({}, IMAGE_DEFAULT_COLOR_MODE_SETTINGS, MIN_MAX_16_BIT, options);
-      if (settings.colorMode === "rgba-fields" || settings.colorMode === "flat") {
-        throw Error(`${settings.colorMode} color mode is not supported for mono16 images`);
+      const colorConverter = monoColorConverter(options, MIN_MAX_16_BIT);
+      if (!colorConverter) {
+        throw Error(`${options.colorMode} color mode is not supported for mono16 images`);
       }
-      const min = settings.minValue;
-      const max = settings.maxValue;
-      const tempColor = { r: 0, g: 0, b: 0, a: 0 };
-      const converter = getColorConverter(
-        settings as ColorModeSettings & {
-          colorMode: typeof settings.colorMode;
-        },
-        min,
-        max,
-      );
-      decodeMono16(rawData, width, height, step, is_bigendian, output, {
-        minValue: options.minValue,
-        maxValue: options.maxValue,
-        colorConverter: (value: number) => {
-          converter(tempColor, value);
-          return tempColor;
-        },
-      });
+      decodeMono16(rawData, width, height, step, is_bigendian, output, { colorConverter });
       break;
     }
     default:

@@ -275,6 +275,13 @@ describe("decodeMono8", () => {
       ]),
     );
   });
+  it("maps values through the color converter", () => {
+    const output = new Uint8ClampedArray(2 * 4);
+    decodeMono8(new Uint8Array([0, 255]), 2, 1, 2, output, {
+      colorConverter: (value) => ({ r: value / 255, g: 0, b: 1 - value / 255, a: 1 }),
+    });
+    expect(output).toEqual(new Uint8ClampedArray([0, 0, 255, 255, 255, 0, 0, 255]));
+  });
   it("rejects invalid row step", () => {
     const width = 4;
     const height = 2;

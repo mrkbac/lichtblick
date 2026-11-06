@@ -392,6 +392,133 @@ describe("decodeRawImage", () => {
     }).not.toThrow();
   });
 
+  it.each(["mono8", "8UC1"])("applies min/max and gradient to %s images", (encoding) => {
+    // GIVEN an 8-bit mono image and a custom value range and gradient
+    const mockImage = createMockROSImage({
+      encoding,
+      width: 3,
+      height: 1,
+      step: 3,
+      data: new Uint8Array([10, 15, 20]),
+    });
+    const output = new Uint8ClampedArray(3 * 4);
+
+    // WHEN it is decoded with those settings
+    decodeRawImage(
+      mockImage,
+      { colorMode: "gradient", gradient: ["#ff0000", "#0000ff"], minValue: 10, maxValue: 20 },
+      output,
+    );
+
+    // THEN values are normalized to the range and mapped onto the gradient
+    expect(Array.from(output.slice(0, 4))).toEqual([255, 0, 0, 255]);
+    expect(output[4]).toBeGreaterThan(0);
+    expect(output[6]).toBeGreaterThan(0);
+    expect(Array.from(output.slice(8, 12))).toEqual([0, 0, 255, 255]);
+  });
+
+  it.each(["flat", "rgba-fields"] as const)(
+    "falls back to grayscale for mono8 in %s color mode",
+    (colorMode) => {
+      const mockImage = createMockROSImage({
+        encoding: "mono8",
+        width: 3,
+        height: 1,
+        step: 3,
+        data: new Uint8Array([0, 128, 255]),
+      });
+      const output = new Uint8ClampedArray(3 * 4);
+      decodeRawImage(mockImage, { colorMode }, output);
+      expect(Array.from(output)).toEqual([0, 0, 0, 255, 128, 128, 128, 255, 255, 255, 255, 255]);
+    },
+  );
+
+  it("decodes mono16 values as packed colors in rgb mode", () => {
+    // 0x00ff = blue channel only in BGRA-packed rgb mode
+    const mockImage = createMockROSImage({
+      encoding: "mono16",
+      width: 1,
+      height: 1,
+      step: 2,
+      data: new Uint8Array(new Uint16Array([0x00ff]).buffer),
+    });
+    const output = new Uint8ClampedArray(4);
+    decodeRawImage(mockImage, { colorMode: "rgb" }, output);
+    expect(Array.from(output)).toEqual([0, 0, 255, 255]);
+  });
+
+  it.each(["rgb", "rgba"] as const)("keeps grayscale for mono8 in %s mode", (colorMode) => {
+    const mockImage = createMockROSImage({
+      encoding: "mono8",
+      width: 2,
+      height: 1,
+      step: 2,
+      data: new Uint8Array([0, 200]),
+    });
+    const output = new Uint8ClampedArray(2 * 4);
+    decodeRawImage(mockImage, { colorMode }, output);
+    expect(Array.from(output)).toEqual([0, 0, 0, 255, 200, 200, 200, 255]);
+  });
+
+  it("still rejects flat color mode for mono16", () => {
+    const mockImage = createMockROSImage({ encoding: "mono16", width: 1, height: 1, step: 2 });
+    expect(() => {
+      decodeRawImage(mockImage, { colorMode: "flat" }, new Uint8ClampedArray(4));
+    }).toThrow("flat color mode is not supported for mono16 images");
+  });
+
+  it.each([
+    ["mono8", new Uint8Array([0, 100, 200])],
+    ["mono16", new Uint8Array(new Uint16Array([0, 100, 200]).buffer)],
+  ])("writes sRGB gradient colors for %s (mid-gray stays mid-gray)", (encoding, data) => {
+    // GIVEN a black -> #808080 gradient over the range 0..200
+    const mockImage = createMockROSImage({
+      encoding,
+      width: 3,
+      height: 1,
+      step: encoding === "mono8" ? 3 : 6,
+      data,
+    });
+    const output = new Uint8ClampedArray(3 * 4);
+
+    // WHEN it is decoded
+    decodeRawImage(
+      mockImage,
+      { colorMode: "gradient", gradient: ["#000000", "#808080"], minValue: 0, maxValue: 200 },
+      output,
+    );
+
+    // THEN the max value is #808080 (128), not its linear value (55), and half is half of that
+    expect(Array.from(output)).toEqual([0, 0, 0, 255, 64, 64, 64, 255, 128, 128, 128, 255]);
+  });
+
+  it("writes sRGB turbo colormap colors", () => {
+    const mockImage = createMockROSImage({
+      encoding: "mono8",
+      width: 1,
+      height: 1,
+      step: 1,
+      data: new Uint8Array([0]),
+    });
+    const output = new Uint8ClampedArray(4);
+    decodeRawImage(mockImage, { colorMode: "colormap", colorMap: "turbo" }, output);
+    // The turbo polynomial at 0 is sRGB (45, 29, 58); its linear value would be about (7, 3, 11)
+    expect(Array.from(output)).toEqual([45, 29, 58, 255]);
+  });
+
+  it("keeps plain grayscale for mono8 with default settings", () => {
+    const mockImage = createMockROSImage({
+      encoding: "mono8",
+      width: 3,
+      height: 1,
+      step: 3,
+      data: new Uint8Array([0, 128, 255]),
+    });
+    const output = new Uint8ClampedArray(3 * 4);
+    decodeRawImage(mockImage, {}, output);
+    expect(Array.from(output)).toEqual([0, 0, 0, 255, 128, 128, 128, 255, 255, 255, 255, 255]);
+  });
+
   it.each(["yuv420", "i420", "nv12", "nv21"])("decodes 4:2:0 encoding %s", (encoding) => {
     // GIVEN a 2x2 4:2:0 image with neutral chroma (6 bytes for every layout)
     const mockImage = createMockROSImage({
