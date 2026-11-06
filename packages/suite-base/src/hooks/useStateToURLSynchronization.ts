@@ -15,11 +15,11 @@ import {
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { EventsStore, useEvents } from "@lichtblick/suite-base/context/EventsContext";
-import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import { AppURLState, updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
 
 const selectCanSeek = (ctx: MessagePipelineContext) =>
-  ctx.playerState.capabilities.includes(PLAYER_CAPABILITIES.playbackControl);
+  isRecordingSource(ctx.playerState.capabilities);
 const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
 const selectUrlState = (ctx: MessagePipelineContext) => ctx.playerState.urlState;
 const selectSelectedEventId = (store: EventsStore) => store.selectedEventId;
@@ -41,7 +41,9 @@ export function useStateToURLSynchronization(): void {
   const stablePlayerUrlState = useDeepMemo(playerUrlState);
   const canSeek = useMessagePipeline(selectCanSeek);
   const currentTime = useMessagePipeline(selectCurrentTime);
-  const [debouncedCurrentTime] = useDebounce(currentTime, 500, { maxWait: 500 });
+  const [debouncedCurrentTime] = useDebounce(currentTime, 500, {
+    maxWait: 500,
+  });
   const selectedEventId = useEvents(selectSelectedEventId);
 
   // Sync current time with the url.

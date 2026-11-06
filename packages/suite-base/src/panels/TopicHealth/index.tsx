@@ -40,7 +40,7 @@ import {
   TopicTreeRow,
   topicTreeRows,
 } from "@lichtblick/suite-base/panels/DataSourceInfo/topicTree";
-import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import { Topic, TopicStats } from "@lichtblick/suite-base/players/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
@@ -192,7 +192,7 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
   const getPipeline = useMessagePipelineGetter();
   const { openSiblingPanel } = usePanelContext();
   const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
-  const isRecording = capabilities.includes(PLAYER_CAPABILITIES.playbackControl);
+  const isRecording = isRecordingSource(capabilities);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<TopicHealthStatus>();
   const [collapsed, setCollapsed] = useState(new Set<string>());

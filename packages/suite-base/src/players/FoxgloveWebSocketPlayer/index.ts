@@ -41,6 +41,11 @@ import { ParameterValue } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { LiveHistoryBuffer } from "@lichtblick/suite-base/players/liveHistory/LiveHistoryBuffer";
+import {
+  LIVE_HISTORY_MAX_BYTES,
+  liveHistorySettings,
+} from "@lichtblick/suite-base/players/liveHistory/liveHistorySettings";
 import { estimateObjectSize } from "@lichtblick/suite-base/players/messageMemoryEstimation";
 import {
   AdvertiseOptions,
@@ -99,6 +104,13 @@ import {
 const log = Log.getLogger(__dirname);
 const textEncoder = new TextEncoder();
 
+/** How often history playback advances, in ms. */
+const HISTORY_TICK_MS = 16;
+/** A server clock that hasn't ticked for this long, while messages arrive, is reported as stale. */
+const CLOCK_STALE_MS = 3000;
+
+const secToNs = (sec: number) => BigInt(Math.round(sec * 1e9));
+
 export default class FoxgloveWebSocketPlayer implements Player {
   readonly #sourceId: string;
 
@@ -140,6 +152,19 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #serverControlsPlayback = false;
   #isPlaying = true;
   #speed = 1;
+
+  /** Rolling history of received messages, to pause, seek and play in while connected. */
+  #history = new LiveHistoryBuffer({
+    windowNs: secToNs(liveHistorySettings.getState().windowSec),
+    maxBytes: LIVE_HISTORY_MAX_BYTES,
+  });
+  #unsubscribeHistorySettings: () => void;
+  /** Playback position while reviewing history; undefined while live. */
+  #historyCursor?: Time;
+  #historyTimer?: ReturnType<typeof setTimeout>;
+  #historyTickMs = 0;
+  /** Wall time of the last server time message (or of connecting), to detect a stale clock. */
+  #lastClockWallMs = Date.now();
 
   #unresolvedSubscriptions = new Set<string>();
   #resolvedSubscriptionsByTopic = new Map<string, SubscriptionId>();
@@ -189,6 +214,10 @@ export default class FoxgloveWebSocketPlayer implements Player {
       sourceId: this.#sourceId,
       parameters: { url: this.#url },
     };
+    this.#unsubscribeHistorySettings = liveHistorySettings.subscribe(({ windowSec }) => {
+      this.#history.setWindow(secToNs(windowSec));
+      this.#emitState();
+    });
     this.#open();
   }
 
@@ -417,6 +446,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         dataEndTime != undefined &&
         compare(dataStartTime, dataEndTime) <= 0;
       if (this.#serverControlsPlayback) {
+        this.#clearHistory();
         this.#startTime = dataStartTime;
         this.#endTime = dataEndTime;
         this.#clockTime ??= dataStartTime;
@@ -424,9 +454,16 @@ export default class FoxgloveWebSocketPlayer implements Player {
           PLAYER_CAPABILITIES.playbackControl,
           PLAYER_CAPABILITIES.setSpeed,
         );
-      } else if (wasControllingPlayback) {
-        this.#startTime = undefined;
-        this.#endTime = undefined;
+      } else {
+        if (wasControllingPlayback) {
+          this.#startTime = undefined;
+          this.#endTime = undefined;
+        }
+        this.#playerCapabilities = this.#playerCapabilities.concat(
+          PLAYER_CAPABILITIES.playbackControl,
+          PLAYER_CAPABILITIES.setSpeed,
+          PLAYER_CAPABILITIES.liveHistory,
+        );
       }
 
       this.#emitState();
@@ -501,7 +538,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
           }
           parsedChannel = parseChannel({
             messageEncoding: channel.encoding,
-            schema: { name: channel.schemaName, encoding: schemaEncoding, data: schemaData },
+            schema: {
+              name: channel.schemaName,
+              encoding: schemaEncoding,
+              data: schemaData,
+            },
           });
         } catch (error) {
           this.#unsupportedChannelIds.add(channel.id);
@@ -587,14 +628,21 @@ export default class FoxgloveWebSocketPlayer implements Player {
         }
 
         const sizeInBytes = Math.max(data.byteLength, msgSizeEstimate);
-        this.#parsedMessages.push({
+        const msgEvent: MessageEvent = {
           topic,
           receiveTime,
           message: deserializedMessage,
           sizeInBytes,
           schemaName: chanInfo.channel.schemaName,
-        });
-        this.#parsedMessagesBytes += sizeInBytes;
+        };
+        if (!this.#serverControlsPlayback) {
+          this.#history.add(msgEvent);
+        }
+        // While reviewing history, new messages only go into the history.
+        if (this.#historyCursor == undefined) {
+          this.#parsedMessages.push(msgEvent);
+          this.#parsedMessagesBytes += sizeInBytes;
+        }
         if (this.#parsedMessagesBytes > CURRENT_FRAME_MAXIMUM_SIZE_BYTES) {
           this.#alerts.addAlert(`webSocketPlayer:parsedMessageCacheFull`, {
             severity: "error",
@@ -641,10 +689,19 @@ export default class FoxgloveWebSocketPlayer implements Player {
       }
 
       const time = fromNanoSec(timestamp);
+      this.#lastClockWallMs = Date.now();
       if (this.#clockTime != undefined && isLessThan(time, this.#clockTime)) {
         this.#numTimeSeeks++;
         this.#parsedMessages = [];
         this.#parsedMessagesBytes = 0;
+        // The clock was reset (e.g. a simulation or bag restarted): the history no longer fits.
+        if (!this.#serverControlsPlayback) {
+          this.#clearHistory();
+          this.#startTime = undefined;
+          if (!this.#isPlaying) {
+            this.#historyCursor = time; // stay paused, at the new clock
+          }
+        }
       }
 
       // Override any previous start/end time when we set a clockTime for the first time which means
@@ -950,14 +1007,16 @@ export default class FoxgloveWebSocketPlayer implements Player {
       });
     }
 
-    const currentTime = this.#getCurrentTime();
+    let currentTime = this.#getCurrentTime();
     if (!this.#serverControlsPlayback) {
-      if (!this.#startTime || isLessThan(currentTime, this.#startTime)) {
-        this.#startTime = currentTime;
+      const latest = currentTime;
+      if (this.#clockTime != undefined) {
+        this.#history.trim(latest);
       }
-      if (!this.#endTime || isGreaterThan(currentTime, this.#endTime)) {
-        this.#endTime = currentTime;
-      }
+      this.#startTime = this.#history.startTime(latest);
+      this.#endTime = latest;
+      currentTime = this.#historyCursor ?? latest;
+      this.#updateHistoryAlerts();
     }
 
     const messages = this.#parsedMessages;
@@ -1006,6 +1065,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
   public close(): void {
     this.#closed = true;
+    this.#unsubscribeHistorySettings();
+    this.#clearHistory();
     this.#client?.close();
     if (this.#openTimeout != undefined) {
       clearTimeout(this.#openTimeout);
@@ -1265,17 +1326,37 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
   public startPlayback(): void {
     this.#isPlaying = true;
-    this.#sendPlaybackControl();
+    if (this.#serverControlsPlayback) {
+      this.#sendPlaybackControl();
+      return;
+    }
+    const cursor = this.#historyCursor;
+    if (cursor != undefined && compare(cursor, this.#getCurrentTime()) >= 0) {
+      this.#historyCursor = undefined; // at the newest data: live again
+    } else {
+      this.#scheduleHistoryTick();
+    }
+    this.#emitState();
   }
 
   public pausePlayback(): void {
     this.#isPlaying = false;
-    this.#sendPlaybackControl();
+    if (this.#serverControlsPlayback) {
+      this.#sendPlaybackControl();
+      return;
+    }
+    this.#historyCursor ??= this.#getCurrentTime();
+    this.#stopHistoryTick();
+    this.#emitState();
   }
 
   public setPlaybackSpeed(speed: number): void {
     this.#speed = speed;
-    this.#sendPlaybackControl();
+    if (this.#serverControlsPlayback) {
+      this.#sendPlaybackControl();
+      return;
+    }
+    this.#emitState();
   }
 
   public seekPlayback(time: Time): void {
@@ -1283,7 +1364,148 @@ export default class FoxgloveWebSocketPlayer implements Player {
     if (seekTimeNs < 0n) {
       return;
     }
-    this.#sendPlaybackControl(seekTimeNs);
+    if (this.#serverControlsPlayback) {
+      this.#sendPlaybackControl(seekTimeNs);
+      return;
+    }
+    this.#seekHistory(time);
+  }
+
+  /** Jump to `time` inside the history, giving panels the state at that time. */
+  #seekHistory(time: Time): void {
+    const latest = this.#getCurrentTime();
+    const start = this.#history.startTime(latest);
+    const target = isLessThan(time, start) ? start : isGreaterThan(time, latest) ? latest : time;
+    this.#numTimeSeeks++;
+    this.#parsedMessages = [];
+    this.#parsedMessagesBytes = 0;
+    this.#queueMessages(
+      this.#history.backfill(target, new Set(this.#resolvedSubscriptionsByTopic.keys())),
+    );
+    this.#historyCursor = target;
+    if (this.#isPlaying) {
+      this.#scheduleHistoryTick();
+    }
+    this.#emitState();
+  }
+
+  #queueMessages(messages: readonly MessageEvent[]): void {
+    for (const msg of messages) {
+      this.#parsedMessages.push(msg);
+      this.#parsedMessagesBytes += msg.sizeInBytes;
+    }
+  }
+
+  #scheduleHistoryTick(): void {
+    if (this.#historyTimer != undefined || this.#historyCursor == undefined) {
+      return;
+    }
+    this.#historyTickMs = performance.now();
+    this.#historyTimer = setTimeout(this.#historyTick, HISTORY_TICK_MS);
+  }
+
+  #stopHistoryTick(): void {
+    clearTimeout(this.#historyTimer);
+    this.#historyTimer = undefined;
+  }
+
+  /** Advance the history cursor by the elapsed time times speed; go live on reaching the newest data. */
+  #historyTick = (): void => {
+    this.#historyTimer = undefined;
+    const cursor = this.#historyCursor;
+    if (this.#closed || !this.#isPlaying || cursor == undefined) {
+      return;
+    }
+    const nowMs = performance.now();
+    const latest = this.#getCurrentTime();
+    if (isLessThan(cursor, this.#history.startTime(latest))) {
+      // Played slower than the history expires: continue from the oldest kept data.
+      this.#seekHistory(cursor);
+      return;
+    }
+    const next = fromNanoSec(
+      toNanoSec(cursor) + BigInt(Math.round((nowMs - this.#historyTickMs) * 1e6 * this.#speed)),
+    );
+    if (compare(next, latest) >= 0) {
+      this.#queueMessages(this.#history.range(cursor, latest));
+      this.#historyCursor = undefined;
+    } else {
+      this.#queueMessages(this.#history.range(cursor, next));
+      this.#historyCursor = next;
+      this.#scheduleHistoryTick();
+    }
+    this.#emitState();
+  };
+
+  #clearHistory(): void {
+    this.#history.clear();
+    this.#stopHistoryTick();
+    this.#historyCursor = undefined;
+  }
+
+  #setAlert(id: string, alert: PlayerAlert | undefined): void {
+    if (!alert) {
+      this.#alerts.removeAlert(id);
+      return;
+    }
+    const existing = this.#alerts.getAlert(id);
+    if (existing?.message !== alert.message || existing.severity !== alert.severity) {
+      this.#alerts.addAlert(id, alert);
+    }
+  }
+
+  #updateHistoryAlerts(): void {
+    const reviewing = this.#historyCursor != undefined;
+    this.#setAlert(
+      "liveHistory:no-clock",
+      this.#serverPublishesTime
+        ? undefined
+        : {
+            severity: reviewing ? "warn" : "info",
+            message: "No server clock: history uses local receive time",
+            tip: "The server doesn't publish time, so messages are placed on the timeline by when they arrive here. Publish a clock on the server (e.g. use_sim_time) for exact timing.",
+          },
+    );
+    const clockAgeMs = Date.now() - this.#lastClockWallMs;
+    this.#setAlert(
+      "liveHistory:stale-clock",
+      this.#serverPublishesTime &&
+        this.#presence === PlayerPresence.PRESENT &&
+        clockAgeMs > CLOCK_STALE_MS
+        ? {
+            severity: "warn",
+            message:
+              this.#clockTime == undefined
+                ? "Waiting for the server clock"
+                : `Server clock stale: no time update for ${Math.floor(clockAgeMs / 1000)} s`,
+            tip: "Messages keep arriving but the server's time doesn't advance, so they pile up at one point on the timeline.",
+          }
+        : undefined,
+    );
+    const windowSec = Number(this.#history.windowNs()) / 1e9;
+    this.#setAlert(
+      "liveHistory:memory-cap",
+      this.#history.capLimited()
+        ? {
+            severity: "warn",
+            message: `History shorter than ${windowSec} s: memory limit of ${
+              this.#history.maxBytes() / (1024 * 1024)
+            } MiB reached`,
+            tip: "The oldest messages are dropped early. Subscribe to fewer or smaller topics, or shorten the history.",
+          }
+        : undefined,
+    );
+    const cursor = this.#historyCursor;
+    this.#setAlert(
+      "liveHistory:expired",
+      cursor != undefined && isLessThan(cursor, this.#startTime ?? cursor)
+        ? {
+            severity: "warn",
+            message: "Paused position is no longer in the history",
+            tip: "Panels still show the paused state. Play or seek to continue from the oldest kept data, or press Live.",
+          }
+        : undefined,
+    );
   }
 
   public setGlobalVariables(): void {}
@@ -1437,7 +1659,10 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
   #dropPlaybackCapabilities(): void {
     this.#playerCapabilities = this.#playerCapabilities.filter(
-      (cap) => cap !== PLAYER_CAPABILITIES.playbackControl && cap !== PLAYER_CAPABILITIES.setSpeed,
+      (cap) =>
+        cap !== PLAYER_CAPABILITIES.playbackControl &&
+        cap !== PLAYER_CAPABILITIES.setSpeed &&
+        cap !== PLAYER_CAPABILITIES.liveHistory,
     );
   }
 
@@ -1453,6 +1678,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#topicsStatsChanged = true;
     this.#parsedMessages = [];
     this.#receivedBytes = 0;
+    this.#clearHistory();
+    this.#lastClockWallMs = Date.now();
     this.#alerts.clear();
     this.#parameters = new Map();
     this.#fetchedAssets.clear();

@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Time } from "@foxglove/rostime";
+import { compare, Time } from "@foxglove/rostime";
 import * as _ from "lodash-es";
 import { RefObject } from "react";
 import { createStore, StoreApi } from "zustand";
@@ -17,7 +17,7 @@ import {
   makeSubscriptionMemoizer,
   mergeSubscriptions,
 } from "@lichtblick/suite-base/components/MessagePipeline/subscriptions";
-import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { isRecordingSource, PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import {
   AdvertiseOptions,
   Player,
@@ -306,9 +306,7 @@ function updateSubscriberAction(
   // A live source has no seek-backfill and never re-sends a latched message (e.g. /tf_static), so
   // the cached message is the only way a panel that subscribes later can get it. This matters on a
   // tab switch: the old tab's panels unsubscribe before the new tab's panels subscribe.
-  const canSeekBackfill = prevState.public.playerState.capabilities.includes(
-    PLAYER_CAPABILITIES.playbackControl,
-  );
+  const canSeekBackfill = isRecordingSource(prevState.public.playerState.capabilities);
   if (canSeekBackfill) {
     for (const topic of prevTopics) {
       if (!subscriberIdsByTopic.has(topic)) {
@@ -317,11 +315,14 @@ function updateSubscriberAction(
     }
   }
 
-  // Inject the last message on new topics for this subscriber
+  // Inject the last message on new topics for this subscriber. A live source with a rolling
+  // history can be seeked back behind its cached messages; never hand out one from after the
+  // current time.
+  const currentTime = prevState.public.playerState.activeData?.currentTime;
   const messagesForSubscriber = [];
   for (const topic of newTopicsForId) {
     const msgEvent = lastMessageEventByTopic.get(topic);
-    if (msgEvent) {
+    if (msgEvent && (!currentTime || compare(msgEvent.receiveTime, currentTime) <= 0)) {
       messagesForSubscriber.push(msgEvent);
     }
   }
@@ -459,7 +460,10 @@ export function reducer(
       return updateSubscriberAction(prevState, action);
 
     case "set-publishers": {
-      const newPublishersById = { ...prevState.publishersById, [action.id]: action.payloads };
+      const newPublishersById = {
+        ...prevState.publishersById,
+        [action.id]: action.payloads,
+      };
 
       return {
         ...prevState,

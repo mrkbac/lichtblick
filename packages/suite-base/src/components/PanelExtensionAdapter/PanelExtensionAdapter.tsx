@@ -59,7 +59,7 @@ import {
   useSetHoverValue,
 } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
-import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { isRecordingSource, PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import {
   AdvertiseOptions,
   InternalSubscribePayload,
@@ -111,7 +111,9 @@ function getConverterForSubscription(
   return convertersForTopic.find((conv) => conv.toSchemaName === sub.convertTo);
 }
 
-type VersionedPanelConfig = Record<string, unknown> & { [VERSION_CONFIG_KEY]: number };
+type VersionedPanelConfig = Record<string, unknown> & {
+  [VERSION_CONFIG_KEY]: number;
+};
 
 export const VERSION_CONFIG_KEY = "foxgloveConfigVersion";
 
@@ -301,7 +303,7 @@ function PanelExtensionAdapter(
   // Messages are held on any live source: like the local subscriptions, the watched fields are
   // React state, so the injected frame can arrive before a watch of currentFrame takes effect. They
   // are handed to the panel once it watches currentFrame.
-  const keepUndelivered = !capabilities.includes(PLAYER_CAPABILITIES.playbackControl);
+  const keepUndelivered = !isRecordingSource(capabilities);
   const deliverHeld = keepUndelivered && watchedFields.has("currentFrame");
   // The render-done callback belongs to the render that started it; read the current gate, since
   // the panel may start watching currentFrame while that render is in progress.

@@ -93,6 +93,7 @@ describe("FoxgloveWebSocketPlayer playback control", () => {
     expect(state.capabilities).toEqual(
       expect.arrayContaining([PLAYER_CAPABILITIES.playbackControl, PLAYER_CAPABILITIES.setSpeed]),
     );
+    expect(state.capabilities).not.toContain(PLAYER_CAPABILITIES.liveHistory);
     expect(state.activeData?.startTime).toEqual({ sec: 10, nsec: 0 });
     expect(state.activeData?.endTime).toEqual({ sec: 20, nsec: 0 });
     // before the first playback state the current time starts at the range start
@@ -129,7 +130,12 @@ describe("FoxgloveWebSocketPlayer playback control", () => {
 
   it("applies playback state from the server", async () => {
     ws.receive(
-      playbackStateMessage({ status: 1, timeNs: 12_000_000_000n, speed: 2, didSeek: true }),
+      playbackStateMessage({
+        status: 1,
+        timeNs: 12_000_000_000n,
+        speed: 2,
+        didSeek: true,
+      }),
     );
     await Promise.resolve();
 
@@ -146,7 +152,12 @@ describe("FoxgloveWebSocketPlayer playback control", () => {
 
   it.each([8n, 22n])("keeps the server range for a playback time of %ss", async (sec) => {
     ws.receive(
-      playbackStateMessage({ status: 0, timeNs: sec * 1_000_000_000n, speed: 1, didSeek: false }),
+      playbackStateMessage({
+        status: 0,
+        timeNs: sec * 1_000_000_000n,
+        speed: 1,
+        didSeek: false,
+      }),
     );
     await Promise.resolve();
 
@@ -165,7 +176,7 @@ describe("FoxgloveWebSocketPlayer playback control", () => {
       }),
     );
     await Promise.resolve();
-    expect(states.at(-1)!.capabilities).not.toContain(PLAYER_CAPABILITIES.playbackControl);
+    expect(states.at(-1)!.capabilities).toContain(PLAYER_CAPABILITIES.liveHistory);
   });
 
   it("does not send playback control to a reconnecting socket that is not open yet", () => {
@@ -197,24 +208,37 @@ describe("FoxgloveWebSocketPlayer playback control", () => {
     await Promise.resolve();
 
     const state = states.at(-1)!;
-    expect(state.capabilities).not.toContain(PLAYER_CAPABILITIES.playbackControl);
-    expect(state.capabilities).not.toContain(PLAYER_CAPABILITIES.setSpeed);
+    // without server playback, the player falls back to its own live history
+    expect(state.capabilities).toContain(PLAYER_CAPABILITIES.liveHistory);
   });
 
   it("uses server playback time instead of wall time when the server has no time capability", async () => {
     ws.onopen?.({});
     ws.receive(JSON.stringify({ ...serverInfo, capabilities: ["playbackControl"] }));
     ws.receive(
-      playbackStateMessage({ status: 0, timeNs: 12_000_000_000n, speed: 1, didSeek: false }),
+      playbackStateMessage({
+        status: 0,
+        timeNs: 12_000_000_000n,
+        speed: 1,
+        didSeek: false,
+      }),
     );
     await Promise.resolve();
 
-    expect(states.at(-1)!.activeData?.currentTime).toEqual({ sec: 12, nsec: 0 });
+    expect(states.at(-1)!.activeData?.currentTime).toEqual({
+      sec: 12,
+      nsec: 0,
+    });
   });
 
   it("ignores a non-finite playback speed from the server", async () => {
     ws.receive(
-      playbackStateMessage({ status: 0, timeNs: 12_000_000_000n, speed: NaN, didSeek: false }),
+      playbackStateMessage({
+        status: 0,
+        timeNs: 12_000_000_000n,
+        speed: NaN,
+        didSeek: false,
+      }),
     );
     await Promise.resolve();
 
@@ -238,13 +262,18 @@ describe("FoxgloveWebSocketPlayer playback control", () => {
     ws.onopen?.({});
     ws.receive(JSON.stringify({ ...serverInfo, capabilities: ["time"] }));
     ws.receive(
-      playbackStateMessage({ status: 1, timeNs: 12_000_000_000n, speed: 2, didSeek: true }),
+      playbackStateMessage({
+        status: 1,
+        timeNs: 12_000_000_000n,
+        speed: 2,
+        didSeek: true,
+      }),
     );
     await Promise.resolve();
 
     const state = states.at(-1)!;
-    expect(state.capabilities).not.toContain(PLAYER_CAPABILITIES.playbackControl);
-    expect(state.capabilities).not.toContain(PLAYER_CAPABILITIES.setSpeed);
+    // without server playback, the player falls back to its own live history
+    expect(state.capabilities).toContain(PLAYER_CAPABILITIES.liveHistory);
     expect(state.activeData?.speed).toBe(1);
   });
 
@@ -254,8 +283,14 @@ describe("FoxgloveWebSocketPlayer playback control", () => {
     const requestId = new TextDecoder().decode(new Uint8Array(request, 19));
     expect(requestId).toHaveLength(36);
     expect(
-      decodePlaybackState(playbackStateMessage({ status: 0, timeNs: 0n, speed: 1, didSeek: false }))
-        .requestId,
+      decodePlaybackState(
+        playbackStateMessage({
+          status: 0,
+          timeNs: 0n,
+          speed: 1,
+          didSeek: false,
+        }),
+      ).requestId,
     ).toBe("");
   });
 });
