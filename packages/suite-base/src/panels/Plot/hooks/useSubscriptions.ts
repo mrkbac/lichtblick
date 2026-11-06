@@ -72,22 +72,20 @@ const useSubscriptions = (config: PlotConfig, subscriberId: string): void => {
       }
     }
 
-    // A custom time field is read from the same messages as the series
-    if (xAxisVal === "timestamp") {
-      for (const item of paths) {
-        const parsedTimePath =
-          item.timestampMethod === "customField" && item.timestampPath
-            ? parseMessagePath(item.timestampPath)
-            : undefined;
-        const timeSub =
-          parsedTimePath &&
-          pathToSubscribePayload(
-            fillInGlobalVariablesInPath(parsedTimePath, globalVariables),
-            preloadType,
-          );
-        if (timeSub) {
-          subscriptions.push(timeSub);
-        }
+    // A custom time field is read from the same messages as the series (data and legend values)
+    for (const item of paths) {
+      const parsedTimePath =
+        item.timestampMethod === "customField" && item.timestampPath
+          ? parseMessagePath(item.timestampPath)
+          : undefined;
+      const timeSub =
+        parsedTimePath &&
+        pathToSubscribePayload(
+          fillInGlobalVariablesInPath(parsedTimePath, globalVariables),
+          preloadType,
+        );
+      if (timeSub) {
+        subscriptions.push(timeSub);
       }
     }
 
