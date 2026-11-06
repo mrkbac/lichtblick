@@ -1,11 +1,15 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import {
+  Quat,
+  Vec3,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms/transformOffsets";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 import { samplesFromMessage } from "./transforms";
-import { addTransformEvents, buildRows, mergeEntries } from "./tree";
-import { FrameEntries } from "./types";
+import { addTransformEvents, buildRows, measureBetween, mergeEntries } from "./tree";
+import { FrameEntries, FrameEntry } from "./types";
 
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
 
@@ -234,5 +238,44 @@ describe("mergeEntries", () => {
     expect(merged.get("base_link")?.parent).toBe("odom");
     expect(merged.get("base_link")?.parents).toEqual(["base_footprint", "odom"]);
     expect(merged.get("base_link")?.firstReceiveTime).toBe(0);
+  });
+});
+
+describe("measureBetween", () => {
+  // Every transform is (1, 2, 3) with no rotation: map -> base -> lidar, base -> cam; rig -> imu
+  const entries = addTransformEvents(new Map(), [
+    rosTf("/tf", 1, [
+      ["map", "base"],
+      ["base", "lidar"],
+      ["base", "cam"],
+      ["rig", "imu"],
+    ]),
+  ]);
+  const recorded = (entry: FrameEntry) => ({
+    position: [entry.translation.x, entry.translation.y, entry.translation.z] as Vec3,
+    rotation: [0, 0, 0, 1] as Quat,
+  });
+
+  it("should compose each chain up to the common root", () => {
+    expect(measureBetween(entries, "map", "lidar", recorded).pose?.position).toEqual([2, 4, 6]);
+    expect(measureBetween(entries, "lidar", "map", recorded).pose?.position).toEqual([-2, -4, -6]);
+    expect(measureBetween(entries, "cam", "lidar", recorded).pose?.position).toEqual([0, 0, 0]);
+  });
+
+  it("should use the shown transform, e.g. with an offset", () => {
+    const shifted = (entry: FrameEntry) => {
+      const pose = recorded(entry);
+      return entry.child === "lidar" ? { ...pose, position: [0, 0, 0] as Vec3 } : pose;
+    };
+    expect(measureBetween(entries, "base", "lidar", shifted).pose?.position).toEqual([0, 0, 0]);
+  });
+
+  it("should name what is missing instead of measuring", () => {
+    expect(measureBetween(entries, "lidar", "gps", recorded)).toEqual({
+      missing: { frame: "gps" },
+    });
+    expect(measureBetween(entries, "lidar", "imu", recorded)).toEqual({
+      missing: { between: ["map", "rig"] },
+    });
   });
 });

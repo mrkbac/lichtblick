@@ -55,6 +55,10 @@ export const useStyles = makeStyles()((theme) => ({
     "tbody tr:hover": {
       backgroundColor: theme.palette.action.hover,
     },
+    // Row actions only show on the hovered or focused row
+    "tbody tr:not(:hover):not(:focus-within) [data-measure-actions]": {
+      visibility: "hidden",
+    },
   },
   groupStart: {
     paddingLeft: `${theme.spacing(2.5)} !important`,
@@ -177,6 +181,37 @@ export const useStyles = makeStyles()((theme) => ({
   },
   spacer: {
     flex: "auto",
+  },
+  measureRow: {
+    fontWeight: 600,
+  },
+  measureBadge: {
+    flex: "none",
+    fontSize: theme.typography.caption.fontSize,
+  },
+  measureActions: {
+    display: "inline-flex",
+    gap: theme.spacing(0.25),
+    marginLeft: "auto",
+    flex: "none",
+  },
+  measureButton: {
+    padding: theme.spacing(0, 0.5),
+    border: `1px solid ${theme.palette.divider}`,
+    borderRadius: theme.shape.borderRadius,
+    background: theme.palette.background.paper,
+    color: theme.palette.text.secondary,
+    font: "inherit",
+    lineHeight: 1.4,
+    cursor: "pointer",
+    "&:hover": { color: theme.palette.text.primary, borderColor: theme.palette.text.secondary },
+  },
+  measureCard: {
+    width: "auto",
+    flex: "none",
+    boxShadow: "none",
+    borderRadius: 0,
+    borderTop: `1px solid ${theme.palette.divider}`,
   },
   infoIcon: {
     display: "inline-flex",
