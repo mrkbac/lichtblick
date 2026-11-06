@@ -1104,6 +1104,10 @@ describe("ThreeDeeRender", () => {
 
       // Then
       expect(trimmedMessages).toHaveLength(customMaxMessages);
+      expect(mockContext.unstable_setAlert).toHaveBeenLastCalledWith(
+        "transform-preload",
+        expect.objectContaining({ severity: "warn" }),
+      );
     });
 
     it("updates loading indicator during progressive loading", async () => {
@@ -1354,12 +1358,9 @@ describe("ThreeDeeRender", () => {
       return calls.at(-1)?.[1];
     };
 
-    it("surfaces an info alert when a transform topic exists and preloading is disabled", async () => {
-      // Given
-      const topics = [
-        RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" }),
-        RenderStateBuilder.topic({ name: "/other", schemaName: "std_msgs/String" }),
-      ];
+    it("does not nag about preloading when transform topics exist", async () => {
+      // Given: preloading is on by default, nothing was dropped
+      const topics = [RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" })];
       const mockContext = createMockContext();
       const props = setup({}, mockContext);
 
@@ -1367,43 +1368,6 @@ describe("ThreeDeeRender", () => {
       await waitFor(() => {
         expect(mockContext.onRender).toBeDefined();
       });
-
-      // When
-      act(() => {
-        mockContext.onRender!({ topics }, vi.fn());
-      });
-
-      // Then
-      await waitFor(() => {
-        expect(lastAlertFor(mockContext, TRANSFORM_ALERT_ID)).toEqual(
-          expect.objectContaining({
-            severity: "info",
-            message: expect.any(String),
-            tip: expect.any(String),
-          }),
-        );
-      });
-    });
-
-    it("clears the alert when a transform topic exists but preloading is enabled", async () => {
-      // Given
-      const topics = [RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" })];
-      const mockContext = createMockContext({
-        initialState: {
-          scene: {
-            transforms: {
-              enablePreloading: true,
-            },
-          },
-        },
-      });
-      const props = setup({}, mockContext);
-
-      render(<ThreeDeeRender {...props} />);
-      await waitFor(() => {
-        expect(mockContext.onRender).toBeDefined();
-      });
-      (mockContext.unstable_setAlert as Mock).mockClear();
 
       // When
       act(() => {
