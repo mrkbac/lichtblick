@@ -89,11 +89,53 @@ export function playAlertSound(sound: IndicatorAlertSound | undefined): void {
   }
 }
 
-export function requestNotificationPermission(): void {
-  // oxlint-disable-next-line typescript/prefer-optional-chain -- `Notification?.x` throws where the global is missing
-  if (typeof Notification !== "undefined" && Notification.permission === "default") {
-    void Notification.requestPermission();
+/** Browser notification permission, or "unsupported" where the browser has no notifications. */
+export type NotificationPermissionState = NotificationPermission | "unsupported";
+
+export function getNotificationPermission(): NotificationPermissionState {
+  return typeof Notification === "undefined" ? "unsupported" : Notification.permission;
+}
+
+/** How the settings show a permission state, and what the user can do about it. */
+export function describeNotificationPermission(state: NotificationPermissionState): {
+  label: string;
+  help: string;
+  canRequest: boolean;
+} {
+  switch (state) {
+    case "granted":
+      return {
+        label: "Granted",
+        help: "Rules with Notify show browser notifications",
+        canRequest: false,
+      };
+    case "denied":
+      return {
+        label: "Denied",
+        help: "Blocked for this site. Allow notifications in the browser's site settings (the icon left of the address), then reload",
+        canRequest: false,
+      };
+    case "default":
+      return {
+        label: "Not asked yet",
+        help: "Use Request permission so Notify can show browser notifications",
+        canRequest: true,
+      };
+    case "unsupported":
+      return {
+        label: "Unsupported",
+        help: "This browser can't show notifications; sounds still play",
+        canRequest: false,
+      };
   }
+}
+
+/** Asks for notification permission if it wasn't asked yet; resolves to the resulting state. */
+export async function requestNotificationPermission(): Promise<NotificationPermissionState> {
+  if (getNotificationPermission() === "default") {
+    return await Notification.requestPermission();
+  }
+  return getNotificationPermission();
 }
 
 /** `tag` should identify the panel so its notifications replace each other instead of stacking. */
@@ -106,5 +148,17 @@ export function showAlertNotification(title: string, body: string, tag: string):
       // e.g. Chrome on Android only allows notifications from a service worker
       console.warn("Indicator notification failed", error);
     }
+  }
+}
+
+/** Fire a rule's sound and notification right away, so users can check alerts work. */
+export async function sendTestAlert(
+  rule: IndicatorRule,
+  title: string,
+  tag: string,
+): Promise<void> {
+  playAlertSound(rule.alertSound);
+  if (rule.alertNotify === true && (await requestNotificationPermission()) === "granted") {
+    showAlertNotification(title, `Test alert: ${rule.label}`, tag);
   }
 }

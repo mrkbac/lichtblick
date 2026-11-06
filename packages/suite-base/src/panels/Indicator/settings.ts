@@ -18,6 +18,7 @@ import {
   SettingsTreeNodes,
 } from "@lichtblick/suite";
 
+import { NotificationPermissionState, describeNotificationPermission, hasAlert } from "./alerts";
 import { IndicatorConfig, IndicatorRule } from "./types";
 
 function ruleToString(rule: IndicatorRule): string {
@@ -94,6 +95,7 @@ export function settingsActionReducer(
 const memoizedCreateRuleNode = memoizeWeak(
   (rule: IndicatorRule, i: number, rules: readonly IndicatorRule[]): SettingsTreeNode => {
     const actions: (SettingsTreeNodeAction | false)[] = [
+      hasAlert(rule) && { type: "action", id: "test-alert", label: "Send test alert" },
       { type: "action", id: "delete-rule", label: "Delete rule", icon: "Delete" },
       i > 0 && { type: "action", id: "move-up", label: "Move up", icon: "MoveUp" },
       i < rules.length - 1 && {
@@ -159,10 +161,37 @@ const memoizedCreateRuleNode = memoizeWeak(
   },
 );
 
+/** Notification permission status and actions, shown while a rule uses notifications. */
+export function notificationSettings(
+  rules: readonly IndicatorRule[],
+  permission: NotificationPermissionState,
+): Pick<SettingsTreeNode, "fields" | "actions"> {
+  if (!rules.some((rule) => rule.alertNotify === true)) {
+    return {};
+  }
+  const { label, help, canRequest } = describeNotificationPermission(permission);
+  return {
+    fields: {
+      notificationPermission: {
+        label: "Browser notifications",
+        input: "string",
+        readonly: true,
+        value: label,
+        help,
+        error: permission === "denied" ? help : undefined,
+      },
+    },
+    actions: canRequest
+      ? [{ type: "action", id: "request-notification-permission", label: "Request permission" }]
+      : [],
+  };
+}
+
 export function useSettingsTree(
   config: IndicatorConfig,
   pathParseError: string | undefined,
   error: string | undefined,
+  notificationPermission: NotificationPermissionState,
 ): SettingsTreeNodes {
   const { path, style, rules } = config;
   const generalSettings: SettingsTreeNode = useMemo(
@@ -191,10 +220,18 @@ export function useSettingsTree(
   );
 
   const { fallbackColor, fallbackLabel } = config;
+  const notifications = useMemo(
+    () => notificationSettings(rules, notificationPermission),
+    [notificationPermission, rules],
+  );
   const ruleSettings: SettingsTreeNode = useMemo(
     () => ({
       label: "Rules (first matching rule wins)",
-      actions: [{ type: "action", id: "add-rule", label: "Add rule", icon: "Add" }],
+      ...notifications,
+      actions: [
+        { type: "action", id: "add-rule", label: "Add rule", icon: "Add" },
+        ...(notifications.actions ?? []),
+      ],
       children: Object.fromEntries(
         rules
           .map((rule, i) => [i.toString(), memoizedCreateRuleNode(rule, i, rules)])
@@ -225,7 +262,7 @@ export function useSettingsTree(
           ]),
       ),
     }),
-    [fallbackColor, fallbackLabel, rules],
+    [fallbackColor, fallbackLabel, notifications, rules],
   );
 
   return useShallowMemo({

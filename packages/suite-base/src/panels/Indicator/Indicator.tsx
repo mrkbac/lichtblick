@@ -31,9 +31,11 @@ import { GaugeAndIndicatorState } from "@lichtblick/suite-base/panels/shared/typ
 import {
   AlertSnapshot,
   getAlertRule,
+  getNotificationPermission,
   hasAlert,
   playAlertSound,
   requestNotificationPermission,
+  sendTestAlert,
   showAlertNotification,
 } from "./alerts";
 import { getMatchingRule } from "./getMatchingRule";
@@ -107,6 +109,38 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
     };
   }, [context, dispatch]);
 
+  // unique across tabs so panels in different tabs don't replace each other's notifications
+  const [notificationTag] = useState(() => Math.random().toString(36).slice(2));
+
+  // Shown in the settings; also follows changes made in the browser's site settings
+  const [notificationPermission, setNotificationPermission] = useState(getNotificationPermission);
+  useEffect(() => {
+    let status: PermissionStatus | undefined;
+    let unmounted = false;
+    const update = () => {
+      setNotificationPermission(getNotificationPermission());
+    };
+    // Missing in some browsers and test environments
+    if ("permissions" in navigator) {
+      navigator.permissions
+        .query({ name: "notifications" })
+        .then((result) => {
+          if (!unmounted) {
+            status = result;
+            status.addEventListener("change", update);
+          }
+        })
+        .catch(() => {});
+    }
+    return () => {
+      unmounted = true;
+      status?.removeEventListener("change", update);
+    };
+  }, []);
+  const requestPermission = useCallback(() => {
+    void requestNotificationPermission().then(setNotificationPermission);
+  }, []);
+
   const settingsActionHandler = useCallback(
     (action: SettingsTreeAction) => {
       if (action.action === "update" && action.payload.path[0] === "rules") {
@@ -114,15 +148,36 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
         if (path[2] === "alertSound") {
           playAlertSound(value as IndicatorAlertSound); // preview the selected tone
         } else if (path[2] === "alertNotify" && value === true) {
-          requestNotificationPermission();
+          requestPermission();
+        }
+      }
+      if (action.action === "perform-node-action") {
+        const { id, path } = action.payload;
+        if (id === "request-notification-permission") {
+          requestPermission();
+          return;
+        }
+        if (id === "test-alert") {
+          const rule = config.rules[Number(path[1])];
+          if (rule) {
+            void sendTestAlert(rule, config.path, notificationTag).then(() => {
+              setNotificationPermission(getNotificationPermission());
+            });
+          }
+          return;
         }
       }
       setConfig((prevConfig) => settingsActionReducer(prevConfig, action));
     },
-    [setConfig],
+    [config.path, config.rules, notificationTag, requestPermission],
   );
 
-  const settingsTree = useSettingsTree(config, pathParseError, error?.message);
+  const settingsTree = useSettingsTree(
+    config,
+    pathParseError,
+    error?.message,
+    notificationPermission,
+  );
   useEffect(() => {
     context.updatePanelSettingsEditor({
       actionHandler: settingsActionHandler,
@@ -157,8 +212,6 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
 
   // Alert only on transitions into a rule; seeks, rule edits and missing data just reset the baseline.
   const prevSnapshot = useRef<AlertSnapshot | undefined>(undefined);
-  // unique across tabs so panels in different tabs don't replace each other's notifications
-  const [notificationTag] = useState(() => Math.random().toString(36).slice(2));
   useEffect(() => {
     const snapshot: AlertSnapshot = {
       ruleIndex:
