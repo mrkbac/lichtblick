@@ -12,6 +12,7 @@ import { iterateObjects } from "@lichtblick/suite-base/components/Chart/datasets
 import {
   MINIMUM_PIXEL_DISTANCE,
   downsampleTimeseries,
+  downsampleTimeseriesColumns,
   initDownsample,
   continueDownsample,
   finishDownsample,
@@ -169,5 +170,30 @@ describe("downsampleScatter", () => {
       bounds,
     );
     expect(result).toEqual([0, 2]);
+  });
+});
+
+describe("downsampleTimeseriesColumns", () => {
+  it("matches downsampleTimeseries on noisy data with gaps", () => {
+    // GIVEN noisy data with NaN gaps
+    let seed = 1;
+    const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const xs = new Float64Array(20_000);
+    const ys = new Float64Array(20_000);
+    for (let i = 0; i < xs.length; i++) {
+      xs[i] = i / 10;
+      ys[i] = random() < 0.01 ? NaN : Math.sin(i / 300) * 50 + random() * 10;
+    }
+    const view = {
+      width: 800,
+      height: 400,
+      bounds: { x: { min: 100, max: 1900 }, y: { min: -60, max: 60 } },
+    };
+    const points = Array.from(xs, (x, i) => ({ x, y: ys[i]!, index: i })).slice(1000, 19_000);
+
+    // THEN the columnar version returns the same indices
+    expect(downsampleTimeseriesColumns(xs, ys, 1000, 19_000, view, 1000)).toEqual(
+      downsampleTimeseries(points, view, 1000),
+    );
   });
 });
