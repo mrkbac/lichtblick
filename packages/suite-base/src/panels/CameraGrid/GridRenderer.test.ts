@@ -8,11 +8,13 @@ import { enqueueVideoFrame } from "./GridRenderer";
 const KEY = new Uint8Array([0, 0, 0, 1, 0x65, 0x88, 0x84, 0x21]); // H.264 IDR
 const DELTA = new Uint8Array([0, 0, 0, 1, 0x61, 0x88, 0x84, 0x21]);
 
+let nextSec = 0;
+/** Each frame gets its own receive time, so equal-looking frames stay distinguishable. */
 function frame(data: Uint8Array): Immutable<MessageEvent> {
   return {
     topic: "/video",
     schemaName: "foxglove.CompressedVideo",
-    receiveTime: { sec: 0, nsec: 0 },
+    receiveTime: { sec: nextSec++, nsec: 0 },
     sizeInBytes: data.byteLength,
     message: { format: "h264", data },
   };

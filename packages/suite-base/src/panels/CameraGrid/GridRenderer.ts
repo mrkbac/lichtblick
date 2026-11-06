@@ -64,6 +64,8 @@ type TileState = {
   drawn?: Immutable<MessageEvent>;
   decoding: boolean;
   bitmap?: ImageBitmap;
+  /** Formatted timestamp of `bitmap`, restored when the tile remounts. */
+  stampText?: string;
   elements?: TileElements;
   config?: TileConfig;
   video?: VideoState;
@@ -146,6 +148,7 @@ export class GridRenderer {
     tile.elements = elements;
     tile.config = config;
     tile.drawn = undefined;
+    elements.timestamp.textContent = tile.stampText ?? "";
     // A remounted tile shows its last frame (redrawn on the first resize) instead of waiting text.
     this.#showStatus(tile, tile.bitmap ? undefined : this.#waitingText);
     this.#resizeObserver ??= new ResizeObserver((entries) => {
@@ -188,6 +191,7 @@ export class GridRenderer {
     for (const tile of this.#tiles.values()) {
       tile.bitmap?.close();
       tile.bitmap = undefined;
+      tile.stampText = undefined;
       tile.video?.player?.close();
       tile.video = undefined;
     }
@@ -336,7 +340,8 @@ export class GridRenderer {
     tile.bitmap?.close();
     tile.bitmap = bitmap;
     tile.drawn = event;
-    elements.timestamp.textContent = formatTimeRaw(stamp);
+    tile.stampText = formatTimeRaw(stamp);
+    elements.timestamp.textContent = tile.stampText;
     this.#showStatus(tile, undefined);
     this.#draw(tile);
     const aspect = bitmap.width / bitmap.height;
