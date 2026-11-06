@@ -358,7 +358,6 @@ describe("TeleopPanel", () => {
     let frames: FrameRequestCallback[] = [];
     let gamepads: Gamepad[] = [];
 
-    let timestamp = 0;
     function makeGamepad(
       axes: number[],
       pressed: number[] = [],
@@ -367,7 +366,8 @@ describe("TeleopPanel", () => {
       return {
         id,
         connected: true,
-        timestamp: (timestamp += 1),
+        // constant on purpose: some browsers never advance it, so input must not depend on it
+        timestamp: 0,
         mapping: "standard",
         axes,
         buttons: Array.from({ length: 17 }, (_unused, index) => ({
