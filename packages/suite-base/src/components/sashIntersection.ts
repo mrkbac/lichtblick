@@ -56,6 +56,13 @@ export function updateJunctionCursor(event: PointerEvent): void {
   event.target.style.cursor = atJunction ? "move" : "";
 }
 
+/** Drops a sash's junction cursor once the pointer leaves it. Call on `pointerout`. */
+export function clearJunctionCursor(event: PointerEvent): void {
+  if (isSash(event.target)) {
+    event.target.style.removeProperty("cursor");
+  }
+}
+
 /**
  * Starts a sash drag: drags the other sashes of a junction along with the pressed one, and keeps
  * the resize cursor while the pointer moves off the sash (e.g. past a panel's minimum size). Call
@@ -95,6 +102,8 @@ export function startSashDrag(event: PointerEvent): void {
   const end = () => {
     for (const sash of [pressed, ...others]) {
       sash.classList.remove(JUNCTION_ACTIVE_CLASS);
+      // The junction moved with the drag; the next hover recomputes the cursor.
+      sash.style.removeProperty("cursor");
     }
     shell?.style.removeProperty("cursor");
     shell?.removeAttribute(SASH_DRAG_ATTRIBUTE);
