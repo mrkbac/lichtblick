@@ -54,6 +54,8 @@ type Interval = {
   labels: Immutable<Label[]>;
   // The index of the point that started the interval
   index: number;
+  // The last unlabelled repeat of the state in this interval, which ends its band
+  lastRepeat?: StatePoint;
 };
 
 /**
@@ -108,7 +110,7 @@ export function downsampleStates(
    * * One at the x-value of the end of the interval (which is not a real point)
    * This allows the renderer to draw a gray line segment between these two points.
    */
-  const finishInterval = () => {
+  const finishInterval = (gapX?: number) => {
     if (interval == undefined) {
       return;
     }
@@ -129,11 +131,16 @@ export function downsampleStates(
     });
 
     if (!haveMultiple) {
+      // Keep where the state was last seen so its band reaches up to a following gap or end.
+      if (interval.lastRepeat) {
+        indices.push(interval.lastRepeat);
+      }
       return;
     }
 
     indices.push({
-      x: endX,
+      // Don't let the synthetic end run past a gap that starts within the same pixel.
+      x: gapX != undefined ? Math.min(endX, gapX) : endX,
       index: last.index,
     });
   };
@@ -161,9 +168,18 @@ export function downsampleStates(
       continue;
     }
 
-    // This only seems to occur when we've inserted a dummy final point, which
-    // we need to add
+    // Unlabelled points repeat the previous state (shown points, segment ends) or mark a gap
+    // (y = NaN). A repeat inside the open interval is folded into it. Anything else closes
+    // the interval first so output stays in x order and a same-state segment after a gap isn't
+    // merged into the one before.
     if (label == undefined) {
+      const isGap = Number.isNaN(datum.y);
+      if (!isGap && interval?.xPixel === Math.trunc(x * pixelPerXValue)) {
+        interval.lastRepeat = { x, index };
+        continue;
+      }
+      finishInterval(isGap ? x : undefined);
+      interval = undefined;
       indices.push({
         x,
         index,

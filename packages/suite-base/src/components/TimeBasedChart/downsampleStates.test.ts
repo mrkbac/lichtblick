@@ -96,4 +96,62 @@ describe("downsampleStates", () => {
       { x: 100, index: 4 },
     ]);
   });
+
+  it("keeps the segment after a gap when the state is the same on both sides", () => {
+    // in:  A gap A-- (gap within one interval)
+    const gapData: Datum[] = [
+      { x: 50, y: 0, label: A },
+      { x: 50.1, y: Number.NaN },
+      { x: 50.2, y: 0, label: A },
+      { x: 100, y: 0, label: A },
+    ];
+
+    expect(downsampleStates(iterateObjects(gapData), bounds, numPoints)).toEqual([
+      { x: 50, index: 0 },
+      { x: 50.1, index: 1 },
+      { x: 50.2, index: 2 },
+      { x: 100, index: 3 },
+    ]);
+  });
+
+  it("ends a multi-state interval at a gap in the same pixel", () => {
+    const gapData: Datum[] = [
+      { x: 50, y: 0, label: A },
+      { x: 50.02, y: 0, label: B },
+      { x: 50.04, y: Number.NaN },
+    ];
+
+    expect(downsampleStates(iterateObjects(gapData), bounds, numPoints)).toEqual([
+      { x: 50, index: undefined, states: [A, B] },
+      { x: 50.04, index: 1 },
+      { x: 50.04, index: 2 },
+    ]);
+  });
+
+  it("keeps the multi-state summary when a repeated state point is in the interval", () => {
+    // A, repeated A (no label, e.g. with "show points"), B within one interval
+    const data: Datum[] = [
+      { x: 50, y: 0, label: A },
+      { x: 50.01, y: 0 },
+      { x: 50.02, y: 0, label: B },
+      { x: 100, y: 0, label: B },
+    ];
+
+    const result = downsampleStates(iterateObjects(data), bounds, numPoints);
+    expect(result[0]).toEqual({ x: 50, index: undefined, states: [A, B] });
+  });
+
+  it("keeps the last repeat of a state before a gap in the same interval", () => {
+    const data: Datum[] = [
+      { x: 50, y: 0, label: A },
+      { x: 50.01, y: 0 },
+      { x: 50.02, y: Number.NaN },
+    ];
+
+    expect(downsampleStates(iterateObjects(data), bounds, numPoints)).toEqual([
+      { x: 50, index: 0 },
+      { x: 50.01, index: 1 },
+      { x: 50.02, index: 2 },
+    ]);
+  });
 });
