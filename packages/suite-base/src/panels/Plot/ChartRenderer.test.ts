@@ -463,6 +463,21 @@ describe("ChartRenderer", () => {
       expect(chart.options.scales?.y?.type).toBe("linear");
     });
 
+    it("uses dark label text on light reference lines", () => {
+      const { chartRenderer, chart } = setupWithAnnotations();
+
+      chartRenderer.update({
+        type: "update",
+        referenceLines: [{ value: 1, color: "#ffffff", label: "max" }],
+      });
+
+      const annotations = chart.options.plugins?.annotation?.annotations as Record<
+        string,
+        unknown
+      >[];
+      expect(annotations[0]).toMatchObject({ label: { color: "#000" } });
+    });
+
     it("draws vertical reference lines and labels the ones that have a label", () => {
       const { chartRenderer, chart } = setupWithAnnotations();
 
@@ -481,7 +496,7 @@ describe("ChartRenderer", () => {
       expect(annotations[0]).toMatchObject({
         scaleID: "x",
         value: 3,
-        label: { display: true, content: "start", backgroundColor: "#f00" },
+        label: { display: true, content: "start", backgroundColor: "#f00", color: "#fff" },
       });
       expect(annotations[1]).toMatchObject({ scaleID: "y", value: 1, label: undefined });
     });

@@ -9,6 +9,7 @@ import { Zoom as ZoomPlugin } from "@foxglove/chartjs-plugin-zoom";
 import { Chart, Scale as ChartScale, Ticks } from "chart.js";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
 import EventEmitter from "eventemitter3";
+import tinycolor from "tinycolor2";
 
 import { unwrap } from "@lichtblick/den/monads";
 import { Immutable } from "@lichtblick/suite";
@@ -245,7 +246,7 @@ export class ChartRenderer {
                 content: config.label,
                 position: vertical ? "start" : "end",
                 backgroundColor: config.color,
-                color: "#fff",
+                color: tinycolor(config.color).isLight() ? "#000" : "#fff",
                 font: { family: fontMonospace, size: 10 },
                 padding: 3,
               }
@@ -311,7 +312,8 @@ export class ChartRenderer {
     // NOTE: "none" disables animations - this is important for chart performance because we update
     // the entire data set which does not preserve history for the chart animations
     this.#chartInstance.update("none");
-    if (!this.#equalAxes) {
+    // 1:1 scaling is linear, so a log y axis keeps its own fit
+    if (!this.#equalAxes || this.#chartInstance.scales.y?.type === "logarithmic") {
       return;
     }
 
