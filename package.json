@@ -86,7 +86,7 @@
     "@biomejs/biome": "2.6.5",
     "@foxglove/ws-protocol": "0.8.0",
     "@lichtblick/tsconfig": "1.1.2",
-    "@mui/material": "7.3.11",
+    "@mui/material": "9.5.0",
     "@playwright/mcp": "0.0.84",
     "@playwright/test": "1.65.0",
     "@rsbuild/core": "2.3.1",

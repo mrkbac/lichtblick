@@ -11,7 +11,7 @@
     "@lichtblick/log": "workspace:*",
     "@lichtblick/test-builders": "1.0.1",
     "@lichtblick/theme": "workspace:*",
-    "@mui/material": "7.3.11",
+    "@mui/material": "9.5.0",
     "@rspack/core": "2.3.1",
     "@rspack/plugin-react-refresh": "2.0.2",
     "@testing-library/react": "16.3.3",
