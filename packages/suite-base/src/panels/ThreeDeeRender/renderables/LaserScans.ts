@@ -148,7 +148,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
 
     const geometry = createLaserScanGeometry(
       topic,
-      isDecay ? THREE.DynamicDrawUsage : THREE.StaticDrawUsage,
+      isDecay ? THREE.StaticDrawUsage : THREE.DynamicDrawUsage,
     );
     const points = new LaserScanRenderable(
       topic,
