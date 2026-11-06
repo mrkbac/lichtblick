@@ -26,6 +26,7 @@ import {
 import { LineMaterialWithAlphaVertex } from "../../../LineMaterialWithAlphaVertex";
 import { BaseUserData, Renderable } from "../../../Renderable";
 import { SRGBToLinear } from "../../../color";
+import { setLinePositions } from "../../../setLinePositions";
 
 const tempVec3 = new THREE.Vector3();
 
@@ -380,7 +381,7 @@ export class RenderableLineAnnotation extends Renderable<BaseUserData, /*TRender
       }
       this.#lineMaterial.needsUpdate = true;
 
-      this.#geometry.setPositions(positions);
+      setLinePositions(this.#geometry, positions);
 
       switch (style) {
         // These should represent the number of lines, not the number of points

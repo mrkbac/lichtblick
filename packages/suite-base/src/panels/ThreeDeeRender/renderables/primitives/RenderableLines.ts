@@ -19,6 +19,7 @@ import { LineMaterialWithAlphaVertex } from "@lichtblick/suite-base/panels/Three
 import { RenderablePrimitive } from "./RenderablePrimitive";
 import type { IRenderer } from "../../IRenderer";
 import { makeRgba, rgbToThreeColor, SRGBToLinear, stringToRgba } from "../../color";
+import { setLinePositions } from "../../setLinePositions";
 import { LayerSettingsEntity } from "../../settings";
 
 const tempRgba = makeRgba();
@@ -215,7 +216,7 @@ class LinePrimitiveRenderable extends THREE.Object3D {
 
       // setPosition requires the position array to be >= 6 length or else it will error
       // we skip primitives with empty points before calling this function
-      this.#geometry.setPositions(this.#positionBuffer);
+      setLinePositions(this.#geometry, this.#positionBuffer);
     }
 
     if (this.#colorChanged || this.#primitiveChanged) {

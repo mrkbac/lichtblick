@@ -19,6 +19,7 @@ import {
 import type { IRenderer } from "../../IRenderer";
 import { LineMaterialWithAlphaVertex } from "../../LineMaterialWithAlphaVertex";
 import { Marker } from "../../ros";
+import { setLinePositions } from "../../setLinePositions";
 
 export class RenderableLineList extends RenderableMarker {
   #geometry: LineSegmentsGeometry;
@@ -131,7 +132,7 @@ export class RenderableLineList extends RenderableMarker {
       positions[offset + 2] = point.z;
     }
 
-    this.#geometry.setPositions(positions);
+    setLinePositions(this.#geometry, positions);
     this.#geometry.instanceCount = pointsLength >>> 1;
   }
 
