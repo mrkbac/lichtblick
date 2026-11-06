@@ -29,6 +29,10 @@ vi.mock("@lichtblick/suite-base/panels/StateTransitions/openSiblingStateTransiti
   openSiblingStateTransitionsPanel: vi.fn(),
 }));
 
+vi.mock("@lichtblick/suite-base/panels/shared/useSeriesDrag", () => ({
+  useSeriesDrag: () => ({ dragRef: undefined, isDragging: false }),
+}));
+
 vi.mock("./HighlightedValue", () => ({
   __esModule: true,
   default: ({ itemLabel }: { itemLabel: string }) => (

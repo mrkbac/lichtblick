@@ -103,4 +103,5 @@ export const useStylesValue = makeStyles()({
     gap: "inherit",
     visibility: "hidden",
   },
+  draggable: { cursor: "grab" },
 });

@@ -26,6 +26,7 @@ import {
 import { TRANSITIONABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/StateTransitions/constants";
 import { openSiblingStateTransitionsPanel } from "@lichtblick/suite-base/panels/StateTransitions/openSiblingStateTransitionsPanel";
 import { PLOTABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/shared/constants";
+import { useSeriesDrag } from "@lichtblick/suite-base/panels/shared/useSeriesDrag";
 import clipboard from "@lichtblick/suite-base/util/clipboard";
 import { getValueColor } from "@lichtblick/suite-base/util/globalConstants";
 
@@ -152,6 +153,11 @@ function Value(props: PropsValue): React.JSX.Element {
   }, [availableActions.length]);
   const { classes, cx } = useStylesValue();
 
+  // Drag a field onto another panel, e.g. a Watch or Plot
+  const { dragRef } = useSeriesDrag(
+    valueAction ? `${basePath}${valueAction.singleSlicePath}` : undefined,
+  );
+
   useEffect(() => {
     return () => {
       if (timeOutID.current != undefined) {
@@ -179,7 +185,11 @@ function Value(props: PropsValue): React.JSX.Element {
         setPointerOver(false);
       }}
     >
-      <span style={valueColor ? { color: valueColor } : undefined}>
+      <span
+        ref={dragRef}
+        className={dragRef ? classes.draggable : undefined}
+        style={valueColor ? { color: valueColor } : undefined}
+      >
         <HighlightedValue itemLabel={itemLabel} />
       </span>
       {arrLabel}
