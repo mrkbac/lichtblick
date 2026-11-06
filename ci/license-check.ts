@@ -25,8 +25,9 @@ const ALLOWED_LICENSES = [
   "BlueOak-1.0.0",
 ];
 
-// No license field in package.json; their LICENSE file is the Unlicense.
-const EXCLUDED_PACKAGES = ["fast-shallow-equal", "react-universal-interface"];
+// Reported as "Unknown" (no license field in package.json); their LICENSE file is the Unlicense.
+// Pinned to the verified versions so a new version or a license change fails the check.
+const UNKNOWN_LICENSE_EXCEPTIONS = ["fast-shallow-equal@1.0.0", "react-universal-interface@0.6.2"];
 
 type PackageInfo = { name: string; versions: string[] };
 
@@ -41,7 +42,10 @@ let failed = false;
 for (const [license, packages] of Object.entries(byLicense)) {
   const allowed = ALLOWED_LICENSES.some((allowedLicense) => license.includes(allowedLicense));
   for (const pkg of packages) {
-    if (!allowed && !EXCLUDED_PACKAGES.includes(pkg.name)) {
+    const excepted =
+      license === "Unknown" &&
+      pkg.versions.every((version) => UNKNOWN_LICENSE_EXCEPTIONS.includes(`${pkg.name}@${version}`));
+    if (!allowed && !excepted) {
       console.error(`${pkg.name}@${pkg.versions.join(",")} has disallowed license "${license}"`);
       failed = true;
     }
