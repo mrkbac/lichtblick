@@ -43,6 +43,8 @@ type VideoState = {
   lastTime?: bigint;
   /** Delta frames are skipped until a keyframe (re)initializes the decoder. */
   waitingForKeyframe: boolean;
+  /** Bumped on every reset, so frames decoded before a seek are never painted after it. */
+  epoch: number;
 };
 
 /** Queues a video frame, dropping everything a keyframe makes unnecessary. */
@@ -97,7 +99,7 @@ export class GridRenderer {
         continue;
       }
       if (imageKind(event.schemaName) === "video") {
-        tile.video ??= { queue: [], waitingForKeyframe: true };
+        tile.video ??= { queue: [], waitingForKeyframe: true, epoch: 0 };
         enqueueVideoFrame(tile.video.queue, event);
       } else {
         tile.latest = event;
@@ -306,6 +308,7 @@ export class GridRenderer {
         video.firstTime = time;
       }
       const firstTime = video.firstTime ?? time;
+      const epoch = video.epoch;
       frame = await video.player.decode(
         prepared.data,
         Number((time - firstTime) / 1000n),
@@ -313,7 +316,12 @@ export class GridRenderer {
       );
       // Intermediate frames only keep the decoder's reference chain intact.
       if (frame && video.queue.length === 0) {
-        this.#show(tile, event, elements, await createImageBitmap(frame), message.timestamp);
+        const bitmap = await createImageBitmap(frame);
+        if (video.epoch !== epoch) {
+          bitmap.close(); // a seek happened meanwhile; this frame is from before it
+          return;
+        }
+        this.#show(tile, event, elements, bitmap, message.timestamp);
       }
     } catch (error) {
       if (tile.elements === elements) {
@@ -417,7 +425,9 @@ export class GridRenderer {
   }
 }
 
+/** Restarts decoding at the next keyframe and invalidates frames still being decoded. */
 function resetVideo(video: VideoState): void {
+  video.epoch++;
   video.player?.resetForSeek();
   video.waitingForKeyframe = true;
   video.firstTime = undefined;
