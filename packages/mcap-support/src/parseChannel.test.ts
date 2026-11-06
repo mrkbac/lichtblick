@@ -145,6 +145,30 @@ describe("parseChannel", () => {
     expect(obj).toEqual({ stamp: { value: 7 }, header_stamp: { sec: 1, nanosec: 2 } });
   });
 
+  it("resolves a bare ros2 type when dependencies omit /msg/ from the package", () => {
+    const channel = parseChannel({
+      messageEncoding: "cdr",
+      schema: {
+        name: "foo_msgs/msg/Bar",
+        encoding: "ros2msg",
+        data: new TextEncoder().encode(
+          [
+            "Time stamp",
+            "================================================================================",
+            "MSG: builtin_interfaces/Time",
+            "int32 sec",
+            "uint32 nanosec",
+            "================================================================================",
+            "MSG: foo_msgs/Time",
+            "uint8 value",
+          ].join("\n"),
+        ),
+      },
+    });
+
+    expect(channel.datatypes.get("foo_msgs/msg/Bar")?.definitions[0]?.type).toBe("foo_msgs/Time");
+  });
+
   it("works with ros2idl", () => {
     const channel = parseChannel({
       messageEncoding: "cdr",

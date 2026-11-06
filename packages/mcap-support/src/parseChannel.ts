@@ -61,13 +61,23 @@ function parseIDLDefinitionsToDatatypes(
 /**
  * Give the root definition a `MSG:` header like every nested definition has, so bare field types
  * in it (e.g. `Time`) resolve within its own package instead of matching every `<pkg>/Time`.
+ * The header uses the spelling of the package's own dependencies (`pkg/msg/Name` or `pkg/Name`),
+ * since writers differ. Without such dependencies there is nothing to resolve, so no header.
  */
 function parseMessageDefinition(
   schema: string,
   schemaName: string,
   options?: { ros2?: boolean },
 ): MessageDefinition[] {
-  return parseRosmsg(`MSG: ${schemaName}\n${schema}`, options);
+  const parts = schemaName.split("/");
+  const pkg = parts[0]!;
+  const namespace = /^\w+(\/\w+)*$/.test(schemaName)
+    ? [`${pkg}/msg`, pkg].find((ns) => schema.includes(`\nMSG: ${ns}/`))
+    : undefined;
+  return parseRosmsg(
+    namespace == undefined ? schema : `MSG: ${namespace}/${parts.at(-1)}\n${schema}`,
+    options,
+  );
 }
 
 function parsedDefinitionsToDatatypes(
