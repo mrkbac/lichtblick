@@ -479,24 +479,17 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   }
 
   /** Get the entire data for all series */
-  public async getCsvData(): Promise<CsvDataset[]> {
+  public async getCsvData(xRange?: Immutable<Bounds1D>): Promise<CsvDataset[]> {
     if (this.isDestroyed()) {
       return [];
     }
-    return await this.datasetsBuilder.getCsvData();
+    return await this.datasetsBuilder.getCsvData(xRange);
   }
 
   /** The data of all series within the visible x range */
   public async getVisibleCsvData(): Promise<CsvDataset[]> {
     const scale = this.latestXScale;
-    const datasets = await this.getCsvData();
-    if (!scale) {
-      return datasets;
-    }
-    return datasets.map((dataset) => ({
-      ...dataset,
-      data: dataset.data.filter((datum) => datum.x >= scale.min && datum.x <= scale.max),
-    }));
+    return await this.getCsvData(scale ? { min: scale.min, max: scale.max } : undefined);
   }
 
   private updateCurrentSeconds(secondsSinceStart: number): void {

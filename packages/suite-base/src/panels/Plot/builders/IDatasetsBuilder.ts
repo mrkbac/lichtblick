@@ -131,7 +131,8 @@ interface IDatasetsBuilder {
 
   getViewportDatasets(viewport: Immutable<Viewport>): Promise<GetViewportDatasetsResult>;
 
-  getCsvData(): Promise<CsvDataset[]>;
+  /** All data, or only the samples whose x is within `xRange` (filtered where the data lives). */
+  getCsvData(xRange?: Immutable<Bounds1D>): Promise<CsvDataset[]>;
 }
 
 export type { IDatasetsBuilder };

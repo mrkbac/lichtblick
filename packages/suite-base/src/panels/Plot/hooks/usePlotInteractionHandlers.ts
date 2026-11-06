@@ -3,6 +3,7 @@
 
 import { add as addTimes, fromSec, isTime, toSec } from "@foxglove/rostime";
 import { useCallback, useRef, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useMountedState } from "react-use";
 
 import { debouncePromise } from "@lichtblick/den/async";
@@ -53,6 +54,7 @@ const usePlotInteractionHandlers = ({
   const setGlobalBounds = useTimelineInteractionState(selectSetGlobalBounds);
   const getMessagePipelineState = useMessagePipelineGetter();
   const [focusedPath, setFocusedPath] = useState<undefined | string[]>(undefined);
+  const { t } = useTranslation("plot");
   /** x value and tooltip rows under the cursor, for "Copy values at cursor" */
   const cursorValuesRef = useRef<{ x?: number; items: TimeBasedChartTooltipData[] }>({
     items: [],
@@ -290,37 +292,39 @@ const usePlotInteractionHandlers = ({
     const items: PanelContextMenuItem[] = [
       {
         type: "item",
-        label: "Copy values at cursor",
+        label: t("copyValuesAtCursor"),
         disabled: cursorText == undefined,
         onclick: () => {
           if (cursorText != undefined) {
-            void clipboard.copy(cursorText);
+            clipboard.copy(cursorText).catch((err: unknown) => {
+              console.error(err);
+            });
           }
         },
       },
       { type: "divider" },
       {
         type: "item",
-        label: "Download plot data as CSV",
+        label: t("downloadCsv"),
         onclick: () => {
           onDownloadCsvClick("all");
         },
       },
       {
         type: "item",
-        label: "Download visible range as CSV",
+        label: t("downloadVisibleCsv"),
         onclick: () => {
           onDownloadCsvClick("visible");
         },
       },
       {
         type: "item",
-        label: "Save as PNG",
+        label: t("savePng"),
         onclick: onSavePngClick,
       },
     ];
     return items;
-  }, [config.paths, onDownloadCsvClick, onSavePngClick, xAxisMode]);
+  }, [config.paths, onDownloadCsvClick, onSavePngClick, t, xAxisMode]);
 
   return {
     onMouseMove,

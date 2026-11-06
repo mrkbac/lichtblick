@@ -60,6 +60,17 @@ describe("TimestampDatasetsBuilderImpl", () => {
     expect(data.map((item) => item.value)).toEqual([1, 1.5, 2, 3, 4]);
   });
 
+  it("returns only the samples inside the requested x range", () => {
+    const builder = build([seriesItem("0", { smoothing: 2 })]);
+    builder.applyAction({ type: "append-full", series: key, items: items([1, 2, 3, 4, 5]) });
+
+    const data = builder.getCsvData({ min: 2, max: 4 })[0]!.data;
+
+    expect(data.map((item) => item.x)).toEqual([2, 3, 4]);
+    // Derived values still use the samples before the range
+    expect(data.map((item) => item.y)).toEqual([1.5, 2.5, 3.5]);
+  });
+
   it("restarts the moving average window after a line break", () => {
     // GIVEN a NaN line break between two runs, smoothed over 2 samples
     const ys = [10, 20, NaN, 1, 3];

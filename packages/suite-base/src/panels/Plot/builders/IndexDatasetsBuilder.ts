@@ -94,7 +94,7 @@ export class IndexDatasetsBuilder implements IDatasetsBuilder {
     return buildViewportDatasets(this.#seriesByKey);
   }
 
-  public async getCsvData(): Promise<CsvDataset[]> {
+  public async getCsvData(xRange?: Immutable<Bounds1D>): Promise<CsvDataset[]> {
     const datasets: CsvDataset[] = [];
     for (const series of this.#seriesByKey.values()) {
       if (!series.enabled) {
@@ -104,7 +104,9 @@ export class IndexDatasetsBuilder implements IDatasetsBuilder {
       datasets.push({
         label: series.messagePath,
         configIndex: series.configIndex,
-        data: series.dataset.data,
+        data: xRange
+          ? series.dataset.data.filter((datum) => datum.x >= xRange.min && datum.x <= xRange.max)
+          : series.dataset.data,
       });
     }
 

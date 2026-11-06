@@ -1190,27 +1190,23 @@ describe("PlotCoordinator", () => {
   });
 
   describe("getVisibleCsvData", () => {
-    const datum = (x: number) => ({
-      x,
-      y: x,
-      receiveTime: { sec: x, nsec: 0 },
-      value: x,
-    });
-    const data = [{ label: "/a.x", configIndex: 0, data: [datum(1), datum(5), datum(9)] }];
+    it("asks for all data before the chart has an x scale", async () => {
+      const getCsvData = vi.fn().mockResolvedValue([]);
+      datasetsBuilder.getCsvData = getCsvData;
 
-    it("returns all data before the chart has an x scale", async () => {
-      datasetsBuilder.getCsvData = vi.fn().mockResolvedValue(data);
+      await plotCoordinator.getVisibleCsvData();
 
-      expect(await plotCoordinator.getVisibleCsvData()).toEqual(data);
+      expect(getCsvData).toHaveBeenCalledWith(undefined);
     });
 
-    it("keeps only the samples inside the visible x range", async () => {
-      datasetsBuilder.getCsvData = vi.fn().mockResolvedValue(data);
+    it("asks the builder for the visible x range only", async () => {
+      const getCsvData = vi.fn().mockResolvedValue([]);
+      datasetsBuilder.getCsvData = getCsvData;
       plotCoordinator["latestXScale"] = { min: 2, max: 9, left: 0, right: 100 };
 
-      const result = await plotCoordinator.getVisibleCsvData();
+      await plotCoordinator.getVisibleCsvData();
 
-      expect(result[0]!.data.map((d) => d.x)).toEqual([5, 9]);
+      expect(getCsvData).toHaveBeenCalledWith({ min: 2, max: 9 });
     });
   });
 });

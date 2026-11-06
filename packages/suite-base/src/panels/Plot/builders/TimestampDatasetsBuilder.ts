@@ -12,6 +12,7 @@ import { ComlinkWrap } from "@lichtblick/den/worker";
 import { MessagePath } from "@lichtblick/message-path";
 import { Immutable, MessageEvent, Time } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
+import type { Bounds1D } from "@lichtblick/suite-base/components/TimeBasedChart/types";
 import { PlayerState } from "@lichtblick/suite-base/players/types";
 import { TimestampMethod, getTimestampForMessage } from "@lichtblick/suite-base/util/time";
 
@@ -142,8 +143,8 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
     return { datasetsByConfigIndex: datasets, pathsWithMismatchedDataLengths: emptyPaths };
   }
 
-  public async getCsvData(): Promise<CsvDataset[]> {
-    return await this.#datasetsBuilderRemote.getCsvData();
+  public async getCsvData(xRange?: Immutable<Bounds1D>): Promise<CsvDataset[]> {
+    return await this.#datasetsBuilderRemote.getCsvData(xRange);
   }
 }
 

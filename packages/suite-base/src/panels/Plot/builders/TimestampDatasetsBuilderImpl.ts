@@ -13,6 +13,7 @@ import {
   downsampleScatter,
   downsampleTimeseriesColumns,
 } from "@lichtblick/suite-base/components/TimeBasedChart/downsample";
+import type { Bounds1D } from "@lichtblick/suite-base/components/TimeBasedChart/types";
 
 import { CsvDataset, SeriesConfigKey, SeriesItem, Viewport } from "./IDatasetsBuilder";
 import { MAX_CURRENT_DATUMS_PER_SERIES, buildDatasetStyle } from "./utils";
@@ -514,7 +515,7 @@ export class TimestampDatasetsBuilderImpl {
     return datasets;
   }
 
-  public getCsvData(): CsvDataset[] {
+  public getCsvData(xRange?: Immutable<Bounds1D>): CsvDataset[] {
     const datasets: CsvDataset[] = [];
     for (const series of this.#seriesByKey.values()) {
       if (!series.config.enabled) {
@@ -526,8 +527,12 @@ export class TimestampDatasetsBuilderImpl {
       const valueAt = this.#valueGetter(series, ys);
       const data: CsvDataset["data"] = [];
       for (let i = 0; i < points.length; i++) {
+        const x = points.x[i]!;
+        if (xRange && (x < xRange.min || x > xRange.max)) {
+          continue;
+        }
         data.push({
-          x: points.x[i]!,
+          x,
           y: ys[i]!,
           receiveTime: points.receiveTime(i),
           headerStamp: points.headerStamp(i),

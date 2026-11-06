@@ -206,8 +206,8 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
     return await this.#datasetsBuilderRemote.getViewportDatasets(viewport);
   }
 
-  public async getCsvData(): Promise<CsvDataset[]> {
-    return await this.#datasetsBuilderRemote.getCsvData();
+  public async getCsvData(xRange?: Immutable<Bounds1D>): Promise<CsvDataset[]> {
+    return await this.#datasetsBuilderRemote.getCsvData(xRange);
   }
 }
 
