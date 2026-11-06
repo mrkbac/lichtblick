@@ -424,14 +424,17 @@ describe("<RendererOverlay /> frame picking", () => {
     return { ...result, element, onClickMeasure, onClickPublish };
   }
 
-  it("stops publishing and measuring when frame picking starts", () => {
-    const { getByTestId, onClickMeasure, onClickPublish } = renderOverlay({
-      measureActive: true,
-      publishActive: true,
-    });
+  it.each([
+    { measureActive: true, publishActive: false },
+    { measureActive: false, publishActive: true },
+  ])("stops the other click tool when frame picking starts (%o)", (active) => {
+    const { getByTestId, rerender, element, onClickMeasure, onClickPublish } =
+      renderOverlay(active);
     fireEvent.click(getByTestId("measure-frames-button"));
-    expect(onClickMeasure).toHaveBeenCalledTimes(1);
-    expect(onClickPublish).toHaveBeenCalledTimes(1);
+    expect(onClickMeasure).toHaveBeenCalledTimes(active.measureActive ? 1 : 0);
+    expect(onClickPublish).toHaveBeenCalledTimes(active.publishActive ? 1 : 0);
+    // The panel then reports the stopped tool as inactive; frame picking stays on
+    rerender(element({ measureActive: false, publishActive: false }));
     expect(mockFramePicking.current).toBe(true);
   });
 
