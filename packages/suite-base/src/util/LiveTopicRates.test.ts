@@ -65,6 +65,13 @@ describe("LiveTopicRates", () => {
     expect(rates.update(71_000, stats(n)).get("/topic")).toEqual({ hz: 1, stale: false });
   });
 
+  it("starts fresh for a topic that went away and came back", () => {
+    const rates = new LiveTopicRates();
+    const n = publish(rates, 10, 0, 1000);
+    rates.update(1100, new Map());
+    expect(rates.update(9000, stats(n)).get("/topic")).toEqual({ hz: undefined, stale: false });
+  });
+
   it("starts over when the count restarts", () => {
     const rates = new LiveTopicRates();
     publish(rates, 10, 0, 1000);

@@ -73,6 +73,13 @@ export class LiveTopicRates {
         stale: false,
       });
     }
+    // Forget topics that went away, so a returning topic starts fresh
+    for (const topic of this.#samples.keys()) {
+      if (!stats.has(topic)) {
+        this.#samples.delete(topic);
+        this.#intervalMs.delete(topic);
+      }
+    }
     return result;
   }
 
