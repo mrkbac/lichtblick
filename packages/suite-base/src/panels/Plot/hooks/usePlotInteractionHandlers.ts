@@ -223,14 +223,14 @@ const usePlotInteractionHandlers = ({
   const { keyDownHandlers, keyUpHandlers } = useMemo(() => {
     return {
       keyDownHandlers: {
-        v: () => {
+        "plot.zoomY": () => {
           coordinator?.setZoomMode("y");
         },
-        b: () => {
+        "plot.zoomXY": () => {
           coordinator?.setZoomMode("xy");
         },
         // Reset the hovered plot. Other keys and plots keep the event.
-        r: () => {
+        "plot.resetView": () => {
           if (!mousePresentRef.current) {
             return false;
           }

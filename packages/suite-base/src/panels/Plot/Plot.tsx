@@ -38,6 +38,7 @@ import { VerticalBars } from "@lichtblick/suite-base/panels/Plot/VerticalBars";
 import useDeltaMeasureMode from "@lichtblick/suite-base/panels/Plot/hooks/useDeltaMeasureMode";
 import usePanning from "@lichtblick/suite-base/panels/Plot/hooks/usePanning";
 import usePlotInteractionHandlers from "@lichtblick/suite-base/panels/Plot/hooks/usePlotInteractionHandlers";
+import { PLOT_SHORTCUTS } from "@lichtblick/suite-base/panels/Plot/shortcuts";
 import {
   PixelRect,
   PlotProps,
@@ -49,6 +50,7 @@ import { MeasureModeToolbarButton } from "@lichtblick/suite-base/panels/shared/M
 import { createMeasureModeEscapeHandler } from "@lichtblick/suite-base/panels/shared/measureModeEscapeHandler";
 import useAppendOnlyKey from "@lichtblick/suite-base/panels/shared/useAppendOnlyKey";
 import { enumValuesByDatatypeAndField } from "@lichtblick/suite-base/util/enums";
+import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { BoxZoomOverlay } from "./BoxZoomOverlay";
@@ -201,24 +203,24 @@ const Plot = (props: PlotProps): React.JSX.Element => {
 
   const mergedKeyDownHandlers = useMemo(() => {
     const measureEscape = createMeasureModeEscapeHandler(deltaMeasureMode);
-    return {
+    return shortcutKeyHandlers(PLOT_SHORTCUTS, {
       ...keyDownHandlers,
       // Toggle the zoom tool of the hovered plot
-      z: () => {
+      "plot.boxZoom": () => {
         if (!isHovered()) {
           return false;
         }
         toggleBoxZoom();
         return true;
       },
-      escape: () => {
+      "plot.cancel": () => {
         if (boxZoomActive) {
           setBoxZoomActive(false);
           return true;
         }
         return measureEscape();
       },
-    };
+    });
   }, [boxZoomActive, deltaMeasureMode, isHovered, keyDownHandlers, toggleBoxZoom]);
 
   useEffect(() => {

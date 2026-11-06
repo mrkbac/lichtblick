@@ -96,7 +96,7 @@ const mockInteractionHandlers = {
   onClick: vi.fn(),
   onClickPath: vi.fn(),
   focusedPath: undefined,
-  keyDownHandlers: { v: vi.fn(), b: vi.fn() },
+  keyDownHandlers: { "plot.zoomY": vi.fn(), "plot.zoomXY": vi.fn(), "plot.resetView": vi.fn() },
   keyUphandlers: { v: vi.fn(), b: vi.fn() },
   getPanelContextMenuItems: vi.fn(function () {
     return [];

@@ -10,6 +10,8 @@ import { TFunction } from "i18next";
 import { PanelInfo } from "@lichtblick/suite-base/context/PanelCatalogContext";
 
 import audioThumbnail from "./Audio/thumbnail.png";
+import { CALL_SERVICE_SHORTCUTS } from "./CallService/shortcuts";
+import { CAMERA_GRID_SHORTCUTS } from "./CameraGrid/shortcuts";
 import cameraGridThumbnail from "./CameraGrid/thumbnail.png";
 import dataSourceInfoThumbnail from "./DataSourceInfo/thumbnail.png";
 import diagnosticStatusThumbnail from "./DiagnosticStatus/assets/diagnostic-status.png";
@@ -18,16 +20,24 @@ import gaugeThumbnail from "./Gauge/thumbnail.png";
 import imageThumbnail from "./Image/thumbnail.png";
 import indicatorThumbnail from "./Indicator/thumbnail.png";
 import logThumbnail from "./Log/thumbnail.png";
+import { MAP_SHORTCUTS } from "./Map/shortcuts";
 import mapThumbnail from "./Map/thumbnail.png";
+import { NOTES_SHORTCUTS } from "./Notes/shortcuts";
 import notesThumbnail from "./Notes/thumbnail.png";
 import parametersThumbnail from "./Parameters/thumbnail.png";
 import pieChartThumbnail from "./PieChart/thumbnail.png";
+import { PLOT_SHORTCUTS } from "./Plot/shortcuts";
 import plotThumbnail from "./Plot/thumbnail.png";
+import { PUBLISH_SHORTCUTS } from "./Publish/shortcuts";
 import publishThumbnail from "./Publish/thumbnail.png";
 import rawMessagesThumbnail from "./RawMessages/thumbnail.png";
+import { RAW_MESSAGES_SHORTCUTS } from "./RawMessagesVirtual/shortcuts";
+import { STATE_TRANSITIONS_SHORTCUTS } from "./StateTransitions/shortcuts";
 import stateTransitionsThumbnail from "./StateTransitions/thumbnail.png";
 import tableThumbnail from "./Table/thumbnail.png";
+import { TELEOP_SHORTCUTS } from "./Teleop/shortcuts";
 import teleopThumbnail from "./Teleop/thumbnail.png";
+import { THREE_DEE_SHORTCUTS } from "./ThreeDeeRender/shortcuts";
 import threeDeeRenderThumbnail from "./ThreeDeeRender/thumbnail.png";
 import topicGraphThumbnail from "./TopicGraph/thumbnail.png";
 import topicHealthThumbnail from "./TopicHealth/thumbnail.png";
@@ -42,6 +52,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("3DPanelDescription"),
     thumbnail: threeDeeRenderThumbnail,
     module: async () => await import("./ThreeDeeRender"),
+    shortcuts: THREE_DEE_SHORTCUTS,
   },
   {
     title: t("ROSDiagnosticsDetail"),
@@ -72,6 +83,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("cameraGridDescription"),
     thumbnail: cameraGridThumbnail,
     module: async () => await import("./CameraGrid"),
+    shortcuts: CAMERA_GRID_SHORTCUTS,
   },
   {
     title: t("indicator"),
@@ -93,6 +105,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("teleopDescription"),
     thumbnail: teleopThumbnail,
     module: async () => await import("./Teleop"),
+    shortcuts: TELEOP_SHORTCUTS,
   },
   {
     title: t("map"),
@@ -100,6 +113,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("mapDescription"),
     thumbnail: mapThumbnail,
     module: async () => await import("./Map"),
+    shortcuts: MAP_SHORTCUTS,
   },
   {
     title: t("parameters"),
@@ -114,6 +128,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("plotDescription"),
     thumbnail: plotThumbnail,
     module: async () => await import("./Plot"),
+    shortcuts: PLOT_SHORTCUTS,
   },
   {
     title: t("pieChart"),
@@ -128,6 +143,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("publishDescription"),
     thumbnail: publishThumbnail,
     module: async () => await import("./Publish"),
+    shortcuts: PUBLISH_SHORTCUTS,
   },
   {
     title: t("callService"),
@@ -135,6 +151,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("callServiceDescription"),
     thumbnail: publishThumbnail,
     module: async () => await import("./CallService"),
+    shortcuts: CALL_SERVICE_SHORTCUTS,
   },
   {
     title: t("rawMessages"),
@@ -142,6 +159,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("rawMessagesDescription"),
     thumbnail: rawMessagesThumbnail,
     module: async () => await import("./RawMessages"),
+    shortcuts: RAW_MESSAGES_SHORTCUTS,
     hasCustomToolbar: true,
   },
   {
@@ -151,6 +169,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("rawMessagesDescription"),
     thumbnail: rawMessagesThumbnail,
     module: async () => await import("./RawMessagesVirtual"),
+    shortcuts: RAW_MESSAGES_SHORTCUTS,
     hasCustomToolbar: true,
     hidden: true,
   },
@@ -174,6 +193,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("stateTransitionsDescription"),
     thumbnail: stateTransitionsThumbnail,
     module: async () => await import("./StateTransitions"),
+    shortcuts: STATE_TRANSITIONS_SHORTCUTS,
   },
   {
     title: t("table"),
@@ -209,6 +229,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("notesDescription"),
     thumbnail: notesThumbnail,
     module: async () => await import("./Notes"),
+    shortcuts: NOTES_SHORTCUTS,
   },
   {
     title: t("topicHealth"),

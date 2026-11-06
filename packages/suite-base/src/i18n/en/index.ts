@@ -21,6 +21,7 @@ export * from "./gauge";
 export * from "./general";
 export * from "./httpErrors";
 export * from "./incompatibleLayoutVersion";
+export * from "./keyboardShortcuts";
 export * from "./layoutTemplates";
 export * from "./log";
 export * from "./notes";

@@ -19,6 +19,7 @@ export const appBar = {
   updateAvailableDescription: "Reload to update. You'll be right back where you are.",
   exportLayoutToFile: "Export layout to file…",
   commandPalette: "Command palette…",
+  keyboardShortcuts: "Keyboard shortcuts",
   exportRecording: "Export recording…",
   extensions: "Extensions…",
   hideLeftSidebar: "Hide left sidebar",

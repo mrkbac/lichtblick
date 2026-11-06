@@ -21,6 +21,8 @@ import { create } from "zustand";
 import Logger from "@lichtblick/log";
 import { HighlightChars } from "@lichtblick/suite-base/components/HighlightChars";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
+import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
+import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { customTypography } from "@lichtblick/theme";
 
 import {
@@ -113,15 +115,7 @@ export function CommandPalette(): React.JSX.Element {
   const toggle = useCommandPaletteStore((state) => state.toggle);
   const close = useCommandPaletteStore((state) => state.hide);
   const keyDownHandlers = useMemo(
-    () => ({
-      k: (ev: KeyboardEvent) => {
-        if (!(ev.metaKey || ev.ctrlKey) || ev.shiftKey || ev.altKey) {
-          return false;
-        }
-        toggle();
-        return true;
-      },
-    }),
+    () => shortcutKeyHandlers(APP_SHORTCUTS, { "app.commandPalette": toggle }),
     [toggle],
   );
   return (

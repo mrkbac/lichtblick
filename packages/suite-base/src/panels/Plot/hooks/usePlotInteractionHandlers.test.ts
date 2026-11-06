@@ -480,7 +480,7 @@ describe("usePlotInteractionHandlers", () => {
       const { result, props } = setup({ coordinator: mockCoordinator });
 
       act(() => {
-        result.current.keyDownHandlers.v();
+        result.current.keyDownHandlers["plot.zoomY"]();
       });
 
       expect(props.coordinator?.setZoomMode).toHaveBeenCalledWith("y");
@@ -490,7 +490,7 @@ describe("usePlotInteractionHandlers", () => {
       const { result, props } = setup({ coordinator: mockCoordinator });
 
       act(() => {
-        result.current.keyDownHandlers.b();
+        result.current.keyDownHandlers["plot.zoomXY"]();
       });
 
       expect(props.coordinator?.setZoomMode).toHaveBeenCalledWith("xy");
