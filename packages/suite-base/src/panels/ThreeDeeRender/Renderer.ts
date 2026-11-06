@@ -1377,8 +1377,11 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   }
 
   public removeTransform(childFrameId: string, parentFrameId: string, stamp: bigint): void {
+    const prevVersion = this.transformTree.version;
     this.transformTree.removeTransform(childFrameId, parentFrameId, stamp);
-    this.#transformTreeUpdated();
+    if (this.transformTree.version !== prevVersion) {
+      this.#transformTreeUpdated();
+    }
   }
 
   // Callback handlers
