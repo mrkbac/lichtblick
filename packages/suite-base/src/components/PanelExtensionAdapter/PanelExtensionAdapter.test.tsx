@@ -1141,6 +1141,68 @@ describe("PanelExtensionAdapter", () => {
     ]);
   });
 
+  it("ignores a late unsubscribeAll from a previous panel instance", async () => {
+    // Like a panel rendered with createSyncRoot: its cleanup runs in a microtask, after the next
+    // instance has already subscribed.
+    const makeInitPanel = (topic: string) => (context: PanelExtensionContext) => {
+      context.subscribe([{ topic }]);
+      return () => {
+        queueMicrotask(() => {
+          context.unsubscribeAll();
+        });
+      };
+    };
+    const mockSetSubscriptions = vi.fn();
+    const renderAdapter = (initPanel: ReturnType<typeof makeInitPanel>) => (
+      <ThemeProvider isDark>
+        <MockPanelContextProvider>
+          <PanelSetup fixture={{ setSubscriptions: mockSetSubscriptions }}>
+            <PanelExtensionAdapter config={{}} saveConfig={() => {}} initPanel={initPanel} />
+          </PanelSetup>
+        </MockPanelContextProvider>
+      </ThemeProvider>
+    );
+
+    const { rerender } = render(renderAdapter(makeInitPanel("old")));
+    rerender(renderAdapter(makeInitPanel("new")));
+    await act(async () => undefined);
+
+    expect(mockSetSubscriptions.mock.calls.at(-1)).toEqual([
+      expect.any(String),
+      [{ preloadType: "partial", topic: "new" }],
+    ]);
+  });
+
+  it("does not carry a previous panel instance's advertisements into the next one", async () => {
+    const makeInitPanel = (topic: string) => (context: PanelExtensionContext) => {
+      context.advertise?.(topic, "some_datatype");
+    };
+    const mockSetPublishers = vi.fn();
+    const renderAdapter = (initPanel: ReturnType<typeof makeInitPanel>) => (
+      <ThemeProvider isDark>
+        <MockPanelContextProvider>
+          <PanelSetup
+            fixture={{
+              capabilities: [PLAYER_CAPABILITIES.advertise],
+              setPublishers: mockSetPublishers,
+            }}
+          >
+            <PanelExtensionAdapter config={{}} saveConfig={() => {}} initPanel={initPanel} />
+          </PanelSetup>
+        </MockPanelContextProvider>
+      </ThemeProvider>
+    );
+
+    const { rerender } = render(renderAdapter(makeInitPanel("/old")));
+    rerender(renderAdapter(makeInitPanel("/new")));
+    await act(async () => undefined);
+
+    expect(mockSetPublishers.mock.calls.at(-1)).toEqual([
+      expect.any(String),
+      [{ topic: "/new", schemaName: "some_datatype", options: undefined }],
+    ]);
+  });
+
   it("should read metadata correctly", async () => {
     expect.assertions(2);
 
