@@ -66,6 +66,7 @@ import { useStyles } from "./PanelLayout.style";
 import { PanelRemounter } from "./PanelRemounter";
 import { NewTabDropTarget, PanelTab } from "./PanelTab";
 import { UnknownPanel } from "./UnknownPanel";
+import { startSashDrag, updateJunctionCursor } from "./sashIntersection";
 import "dockview-react/dist/styles/dockview.css";
 import { useInstallingExtensionsStore } from "../hooks/useInstallingExtensionsStore";
 
@@ -254,7 +255,15 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
       {loadingComponent}
       <PanelComponentsContext.Provider value={panelComponents}>
         {layout == undefined && <EmptyPanelLayout />}
-        <div style={{ display: layout == undefined ? "none" : "contents" }}>
+        <div
+          style={{ display: layout == undefined ? "none" : "contents" }}
+          onPointerDownCapture={(event) => {
+            startSashDrag(event.nativeEvent);
+          }}
+          onPointerMove={(event) => {
+            updateJunctionCursor(event.nativeEvent);
+          }}
+        >
           <DockviewReact
             components={DOCK_COMPONENTS}
             onReady={onReady}

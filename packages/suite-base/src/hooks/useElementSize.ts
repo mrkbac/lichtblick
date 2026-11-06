@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 
 type ElementSize<T> = {
   /** Callback ref to attach to the element. */
@@ -12,8 +13,9 @@ type ElementSize<T> = {
 };
 
 /**
- * Tracks an element's content-box size with a ResizeObserver. Updates are applied on the next
- * animation frame so layout work done in response can't trigger a "ResizeObserver loop" error.
+ * Tracks an element's content-box size with a ResizeObserver. The new size is rendered
+ * synchronously, before the browser paints, so content follows its container in the same frame
+ * (e.g. while dragging a panel split) instead of one frame behind.
  */
 export function useElementSize<T extends Element>(): ElementSize<T> {
   const [element, setElement] = useState<T | null>(null);
@@ -23,17 +25,12 @@ export function useElementSize<T extends Element>(): ElementSize<T> {
     if (!element) {
       return;
     }
-    let frame: number | undefined;
     const observer = new ResizeObserver(([entry]) => {
       if (!entry) {
         return;
       }
       const { width, height } = entry.contentRect;
-      if (frame != undefined) {
-        cancelAnimationFrame(frame);
-      }
-      frame = requestAnimationFrame(() => {
-        frame = undefined;
+      flushSync(() => {
         setSize((prev) =>
           prev.width === width && prev.height === height ? prev : { width, height },
         );
@@ -42,9 +39,6 @@ export function useElementSize<T extends Element>(): ElementSize<T> {
     observer.observe(element);
     return () => {
       observer.disconnect();
-      if (frame != undefined) {
-        cancelAnimationFrame(frame);
-      }
     };
   }, [element]);
 

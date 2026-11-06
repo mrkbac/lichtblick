@@ -9,6 +9,10 @@ import { alpha } from "@mui/material";
 import { PropsWithChildren } from "react";
 import { makeStyles } from "tss-react/mui";
 
+import {
+  JUNCTION_ACTIVE_CLASS,
+  SASH_DRAG_ATTRIBUTE,
+} from "@lichtblick/suite-base/components/sashIntersection";
 import "@lichtblick/suite-base/styles/assets/inter.css";
 import "@lichtblick/suite-base/styles/assets/plex-mono.css";
 import { customTypography } from "@lichtblick/theme";
@@ -124,6 +128,15 @@ const useStyles = makeStyles()(({ palette, shape, typography }) => ({
       "--dv-floating-group-border": "none",
       "--dv-drag-over-border": "none",
       "--dv-transition-duration": "0.1s",
+
+      // A sash dragged along with another at a junction shows as active, like the pressed one.
+      [`.dv-sash.${JUNCTION_ACTIVE_CLASS}`]: {
+        backgroundColor: "var(--dv-active-sash-color)",
+      },
+      // While a split is dragged, its cursor shows wherever the pointer goes.
+      [`&[${SASH_DRAG_ATTRIBUTE}] *`]: {
+        cursor: "inherit !important",
+      },
 
       // Panels fill their group, like they did in the mosaic window body.
       ".dv-react-part": {
