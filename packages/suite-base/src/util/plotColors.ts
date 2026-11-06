@@ -14,9 +14,10 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { colord } from "colord";
 import * as _ from "lodash-es";
-import tinycolor from "tinycolor2";
 
+import { parseColor, toHex6 } from "@lichtblick/suite-base/util/parseColor";
 import { toolsColorScheme } from "@lichtblick/suite-base/util/toolsColorScheme";
 
 // Inspired by the "light" scheme from https://personal.sron.nl/~pault/#sec:qualitative
@@ -33,9 +34,7 @@ export const lineColors = [
 
 const colorExpansion = lineColors.map((color) => [
   color,
-  ...tinycolor(color)
-    .tetrad()
-    .map((acolor) => acolor.toHexString()),
+  ...[0, 90, 180, 270].map((deg) => toHex6(parseColor(color).rotate(deg))),
 ]);
 
 export const expandedLineColors = _.uniq(
@@ -44,12 +43,19 @@ export const expandedLineColors = _.uniq(
     .flat(),
 );
 
+// RGB brightening by a percent of 255; colord only has HSL lighten.
+function brighten(color: string, percent: number): string {
+  const { r, g, b, a } = parseColor(color).toRgb();
+  const step = Math.round((255 * percent) / 100);
+  return colord({ r: r + step, g: g + step, b: b + step, a }).toHex();
+}
+
 export const lightColor: (_: string) => string = _.memoize((color: string): string =>
-  tinycolor(color).brighten(15).toString(),
+  brighten(color, 15),
 );
 
 export const darkColor: (_: string) => string = _.memoize((color: string): string =>
-  tinycolor(color).darken(30).toString(),
+  parseColor(color).darken(0.3).toHex(),
 );
 
 export function getLineColor(color: string | undefined, index: number): string {

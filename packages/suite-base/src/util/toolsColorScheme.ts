@@ -14,8 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import tinycolor from "tinycolor2";
-
 export const toolsColorScheme = {
   base: {
     dark: "#1F1E27",
@@ -64,4 +62,4 @@ export const toolsColorScheme = {
   },
 };
 
-export const grey = tinycolor(`hsv(0, 0%, 60%)`).toHexString();
+export const grey = "#999999"; // hsv(0, 0%, 60%)

@@ -574,9 +574,6 @@ importers:
       '@types/three':
         specifier: 0.187.0
         version: 0.187.0
-      '@types/tinycolor2':
-        specifier: 1.4.6
-        version: 1.4.6
       '@types/wicg-file-system-access':
         specifier: 2023.10.7
         version: 2023.10.7
@@ -598,6 +595,9 @@ importers:
       chartjs-plugin-datalabels:
         specifier: 2.2.0
         version: 2.2.0(chart.js@4.6.1)
+      colord:
+        specifier: 2.10.0
+        version: 2.10.0
       css-loader:
         specifier: 6.8.1
         version: 6.8.1
@@ -739,9 +739,6 @@ importers:
       three:
         specifier: 0.187.0
         version: 0.187.0
-      tinycolor2:
-        specifier: 1.6.0
-        version: 1.6.0
       ts-essentials:
         specifier: 9.4.0
         version: 9.4.0(typescript@6.0.3)
@@ -823,9 +820,6 @@ importers:
       '@types/pngjs':
         specifier: ^6.0.5
         version: 6.0.5
-      '@types/tinycolor2':
-        specifier: 1.4.6
-        version: 1.4.6
       '@types/utif':
         specifier: ^3.0.6
         version: 3.0.6
@@ -838,6 +832,9 @@ importers:
       builder-util:
         specifier: '*'
         version: 26.16.0
+      colord:
+        specifier: 2.10.0
+        version: 2.10.0
       dotenv:
         specifier: 17.2.2
         version: 17.2.2
@@ -889,9 +886,6 @@ importers:
       storybook-react-rsbuild:
         specifier: 3.6.1
         version: 3.6.1(@rsbuild/core@2.3.0)(@rspack/core@2.3.0(@swc/helpers@0.5.23))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(rollup@4.67.4)(storybook@10.6.5(@types/react@19.3.0)(prettier@3.9.10)(react@19.3.1))(typescript@6.0.3)
-      tinycolor2:
-        specifier: 1.6.0
-        version: 1.6.0
       tss-react:
         specifier: 4.9.21
         version: 4.9.21(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@mui/material@7.3.11(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@types/react@19.3.0)(react@19.3.1)
@@ -4201,9 +4195,6 @@ packages:
   '@types/three@0.187.0':
     resolution: {integrity: sha512-v+vKNarUtk4n2QRZ4+CN5ygMM0ARUjXjIQl0R/unMUfmStFeVqGbgqarbrpoGTXRZoulSH16ePrVJVxPJEbMUA==}
 
-  '@types/tinycolor2@1.4.6':
-    resolution: {integrity: sha512-iEN8J0BoMnsWBqjVbWH/c0G0Hh7O21lpR2/+PrvAVgWdzL7eexIFm4JN/Wn10PTcmNdtS6U67r499mlWMXOxNw==}
-
   '@types/tough-cookie@4.0.5':
     resolution: {integrity: sha512-/Ad8+nIOV7Rl++6f1BdKxFSMgmoqEoYbHRpPcx3JEfv8VRsQe9Z4mCXeJBzxs7mbHY/XOZZuXlRNfhpVPbs6ZA==}
 
@@ -4843,6 +4834,9 @@ packages:
   color@4.2.3:
     resolution: {integrity: sha512-1rXeuUUiGGrykh+CeBdu5Ie7OJwinCgQY0bc7GCRxy5xVHy+moaqkpL/jqQq0MtQOeYcrqEz4abc5f0KtU7W4A==}
     engines: {node: '>=12.5.0'}
+
+  colord@2.10.0:
+    resolution: {integrity: sha512-AidJptpBJmjTclAp9BkLwJi0T93fo5epJnbaZslpg6QVzpHjAiveF55mE9AcUJiGMqRHgMDY8soMsQtuNYMHfw==}
 
   colorette@1.4.0:
     resolution: {integrity: sha512-Y2oEozpomLn7Q3HFP7dpww7AtMJplbM9lGZP6RDfHqmbeRjiwRg4n6VM6j4KLmRke85uWEI7JqF17f3pqdRA0g==}
@@ -7892,9 +7886,6 @@ packages:
   tinybench@6.2.3:
     resolution: {integrity: sha512-Al01C2JIBnO2CXCAPbpAl6sUiOZHeThGtHYNTa51JRw9PyWOCdr+9Ong05R4qg/Sk3+H645E8ov1h2c58ityNw==}
     engines: {node: '>=20.0.0'}
-
-  tinycolor2@1.6.0:
-    resolution: {integrity: sha512-XPaBkWQJdsf3pLKJV9p4qN/S+fm2Oj8AIPo1BTUhg5oxkvm9+SVEGFdhyOz7tTdUTfvxMiAs4sp6/eZO2Ew+pw==}
 
   tinyexec@1.3.1:
     resolution: {integrity: sha512-GCvB3aoys96IuDFBMcTB46JOR6mdMtAToqwiW8JlWhsoh1mhHi/xn9ss/Dg7N555GiJyEt2qzoG/NHCwM6h1EA==}
@@ -11597,8 +11588,6 @@ snapshots:
       fflate: 0.8.3
       meshoptimizer: 1.1.1
 
-  '@types/tinycolor2@1.4.6': {}
-
   '@types/tough-cookie@4.0.5': {}
 
   '@types/trusted-types@2.0.7': {}
@@ -12257,6 +12246,8 @@ snapshots:
     dependencies:
       color-convert: 2.0.1
       color-string: 1.9.1
+
+  colord@2.10.0: {}
 
   colorette@1.4.0: {}
 
@@ -15974,8 +15965,6 @@ snapshots:
   tiny-typed-emitter@2.1.0: {}
 
   tinybench@6.2.3: {}
-
-  tinycolor2@1.6.0: {}
 
   tinyexec@1.3.1: {}
 

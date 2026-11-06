@@ -6,13 +6,14 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Theme } from "@mui/material";
-import tinycolor from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 
+import { parseColor, toHex6 } from "@lichtblick/suite-base/util/parseColor";
+
 function calculateBorderColor(theme: Theme, color: string): string {
-  const parsedColor = tinycolor(color);
+  const parsedColor = parseColor(color);
   return parsedColor.isValid()
-    ? theme.palette.getContrastText(parsedColor.toHexString())
+    ? theme.palette.getContrastText(toHex6(parsedColor))
     : theme.palette.text.primary;
 }
 

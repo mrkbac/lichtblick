@@ -5,12 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { colord } from "colord";
 import { ReactNode } from "react";
-import tinycolor from "tinycolor2";
 
 import { filterMap } from "@lichtblick/den/collection";
 import { isTypicalFilterName } from "@lichtblick/suite-base/components/MessagePathSyntax/isTypicalFilterName";
 import { format, formatDuration } from "@lichtblick/suite-base/util/formatTime";
+import { toHex8 } from "@lichtblick/suite-base/util/parseColor";
 import { quatToEuler } from "@lichtblick/suite-base/util/quatToEuler";
 
 const DURATION_20_YEARS_SEC = 20 * 365 * 24 * 60 * 60;
@@ -101,8 +102,12 @@ export function getItemString(
       typeof b === "number" &&
       typeof a === "number"
     ) {
-      // print the color as hex
-      return <span>{tinycolor({ r: r * 255, g: g * 255, b: b * 255, a }).toHex8String()}</span>;
+      // print the color as hex; out-of-range alpha is shown as opaque
+      return (
+        <span>
+          {toHex8(colord({ r: r * 255, g: g * 255, b: b * 255, a: a >= 0 && a <= 1 ? a : 1 }))}
+        </span>
+      );
     }
   }
 
