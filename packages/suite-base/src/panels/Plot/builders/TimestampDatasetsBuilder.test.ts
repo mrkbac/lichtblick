@@ -81,6 +81,26 @@ function buildPlayerState(
 }
 
 describe("TimestampDatasetsBuilder", () => {
+  it("exports data that has not been drawn yet", async () => {
+    const builder = new TimestampDatasetsBuilder();
+    builder.setSeries(buildSeriesItems([{ value: "/foo.val" }]));
+    builder.handleMessageRange(
+      [1, 2].map((sec) => ({
+        topic: "/foo",
+        schemaName: "foo",
+        receiveTime: { sec, nsec: 0 },
+        sizeInBytes: 0,
+        message: { val: sec * 10 },
+      })),
+      { isReset: true },
+      { sec: 0, nsec: 0 },
+    );
+
+    const csv = await builder.getCsvData();
+
+    expect(csv[0]?.data.map((datum) => datum.y)).toEqual([10, 20]);
+  });
+
   it("should process current messages into a dataset", async () => {
     const builder = new TimestampDatasetsBuilder();
 

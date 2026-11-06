@@ -133,18 +133,24 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
   public async getViewportDatasets(
     viewport: Immutable<Viewport>,
   ): Promise<GetViewportDatasetsResult> {
-    const dispatch = this.#pendingDispatch;
-    if (dispatch.length > 0) {
-      this.#pendingDispatch = [];
-      await this.#datasetsBuilderRemote.applyActions(dispatch);
-    }
+    await this.#flushPendingDispatch();
 
     const datasets = await this.#datasetsBuilderRemote.getViewportDatasets(viewport);
     return { datasetsByConfigIndex: datasets, pathsWithMismatchedDataLengths: emptyPaths };
   }
 
   public async getCsvData(xRange?: Immutable<Bounds1D>): Promise<CsvDataset[]> {
+    await this.#flushPendingDispatch();
     return await this.#datasetsBuilderRemote.getCsvData(xRange);
+  }
+
+  /** Send queued updates to the worker so reads see the latest series and data */
+  async #flushPendingDispatch(): Promise<void> {
+    const dispatch = this.#pendingDispatch;
+    if (dispatch.length > 0) {
+      this.#pendingDispatch = [];
+      await this.#datasetsBuilderRemote.applyActions(dispatch);
+    }
   }
 }
 
