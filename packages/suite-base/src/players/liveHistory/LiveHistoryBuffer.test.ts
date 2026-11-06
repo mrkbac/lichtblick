@@ -217,13 +217,12 @@ describe("heapLimitBytes", () => {
 });
 
 describe("LiveHistoryBuffer.setMaxBytes", () => {
-  it("applies a lower memory limit on the next trim", () => {
+  it("applies a lower memory limit right away", () => {
     const buffer = new LiveHistoryBuffer({ windowNs: 100n * SEC, maxBytes: 1e9 });
     for (let t = 1; t <= 10; t++) {
       buffer.add(msg("/a", t));
     }
-    buffer.setMaxBytes(30);
-    buffer.trim(fromSec(10));
+    buffer.setMaxBytes(30); // no trim with a clock needed
     expect(buffer.size()).toBe(3);
     expect(buffer.capLimited()).toBe(true);
   });

@@ -75,8 +75,10 @@ export class LiveHistoryBuffer {
     this.#windowNs = windowNs;
   }
 
+  /** Applies right away, so a lower limit frees memory even before the clock moves on. */
   public setMaxBytes(maxBytes: number): void {
     this.#maxBytes = maxBytes;
+    this.trim(undefined);
   }
 
   public windowNs(): bigint {
@@ -106,26 +108,32 @@ export class LiveHistoryBuffer {
     this.trim(msg.receiveTime);
   }
 
-  /** Expire messages older than the window ending at `now`, then enforce the memory cap. */
-  public trim(now: Time): void {
-    const nowNs = toNanoSec(now);
-    const cutoffNs = nowNs - this.#windowNs;
-    this.#completeFromNs =
-      this.#completeFromNs == undefined
-        ? nowNs
-        : this.#completeFromNs > cutoffNs
-          ? this.#completeFromNs
-          : cutoffNs;
+  /**
+   * Expire messages older than the window ending at `now`, then enforce the memory cap. Without
+   * `now` (no clock yet), only the memory cap is enforced.
+   */
+  public trim(now: Time | undefined): void {
+    let cutoffNs: bigint | undefined;
+    if (now != undefined) {
+      const nowNs = toNanoSec(now);
+      cutoffNs = nowNs - this.#windowNs;
+      this.#completeFromNs =
+        this.#completeFromNs == undefined
+          ? nowNs
+          : this.#completeFromNs > cutoffNs
+            ? this.#completeFromNs
+            : cutoffNs;
+    }
     let evictedForTime = false;
     let evictedForCap = false;
     while (this.#head < this.#messages.length) {
       const oldest = this.#messages[this.#head]!;
-      if (toNanoSec(oldest.receiveTime) < cutoffNs) {
+      if (cutoffNs != undefined && toNanoSec(oldest.receiveTime) < cutoffNs) {
         evictedForTime = true;
       } else if (this.#bytes > this.#maxBytes && this.size() > 1) {
         evictedForCap = true;
         const evictedNs = toNanoSec(oldest.receiveTime) + 1n;
-        if (evictedNs > this.#completeFromNs) {
+        if (this.#completeFromNs == undefined || evictedNs > this.#completeFromNs) {
           this.#completeFromNs = evictedNs;
         }
       } else {
