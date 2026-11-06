@@ -9,7 +9,7 @@ import { MessageDefinition, MessageDefinitionField } from "@foxglove/message-def
 import { IDLMessageDefinition, parseIDL } from "@foxglove/omgidl-parser";
 import { MessageReader as OmgidlMessageReader } from "@foxglove/omgidl-serialization";
 import { parseRos2idl } from "@foxglove/ros2idl-parser";
-import { parse as parseMessageDefinition } from "@foxglove/rosmsg";
+import { parse as parseRosmsg } from "@foxglove/rosmsg";
 import { MessageReader } from "@foxglove/rosmsg-serialization";
 import { MessageReader as ROS2MessageReader } from "@foxglove/rosmsg2-serialization";
 
@@ -56,6 +56,27 @@ function parseIDLDefinitionsToDatatypes(
 
   const standardDefs: MessageDefinition[] = parsedDefinitions.map(convertUnionToMessageDefinition);
   return parsedDefinitionsToDatatypes(standardDefs, rootName);
+}
+
+/**
+ * The root definition in a ROS schema has no name, so a bare field type like `Time` in it is
+ * matched against every `<pkg>/Time` in the schema and fails when there are several (e.g.
+ * `builtin_interfaces/Time` and the package's own `Time`). On that failure, name the root after the
+ * schema so bare types resolve within its package, as ROS does.
+ */
+function parseMessageDefinition(
+  schema: string,
+  schemaName: string,
+  options?: { ros2?: boolean },
+): MessageDefinition[] {
+  try {
+    return parseRosmsg(schema, options);
+  } catch (error) {
+    if (!(error instanceof Error) || !error.message.startsWith("Cannot unambiguously")) {
+      throw error;
+    }
+    return parseRosmsg(`MSG: ${schemaName}\n${schema}`, options);
+  }
 }
 
 function parsedDefinitionsToDatatypes(
@@ -166,7 +187,7 @@ export function parseChannel(
       );
     }
     const schema = new TextDecoder().decode(channel.schema.data);
-    const parsedDefinitions = parseMessageDefinition(schema);
+    const parsedDefinitions = parseMessageDefinition(schema, channel.schema.name);
     const reader = new MessageReader(parsedDefinitions);
     return {
       datatypes: parsedDefinitionsToDatatypes(parsedDefinitions, channel.schema.name),
@@ -202,7 +223,7 @@ export function parseChannel(
 
       const parsedDefinitions = isIdl
         ? parseRos2idl(schema)
-        : parseMessageDefinition(schema, { ros2: true });
+        : parseMessageDefinition(schema, channel.schema.name, { ros2: true });
 
       const reader = new ROS2MessageReader(parsedDefinitions);
 
