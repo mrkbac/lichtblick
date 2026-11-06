@@ -178,9 +178,7 @@ export default function DiagnosticTable(props: DiagnosticTableProps): React.JSX.
               className={classes.valueText}
               color={color}
               variant="inherit"
-              sx={{
-                fontWeight: 800,
-              }}
+              style={{ fontWeight: 800 }}
             >
               {info.status.message || "\xa0"}
             </Typography>
@@ -339,22 +337,13 @@ function HeaderCell(props: {
           variant="subtitle1"
           noWrap
           data-testid="DiagnosticTable-display-name"
-          sx={{
-            fontWeight: 800,
-          }}
+          style={{ fontWeight: 800 }}
         >
           {info.displayName}
         </Typography>
       </Tooltip>
       {levelSince && (
-        <Typography
-          variant="caption"
-          title={levelSince.title}
-          noWrap
-          sx={{
-            color: "text.secondary",
-          }}
-        >
+        <Typography variant="caption" title={levelSince.title} noWrap color="textSecondary">
           {levelSince.text}
         </Typography>
       )}

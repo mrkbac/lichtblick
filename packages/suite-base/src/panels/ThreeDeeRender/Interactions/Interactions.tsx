@@ -93,13 +93,7 @@ const InteractionsBaseComponent = React.memo<Props>(function InteractionsBaseCom
               />
             </>
           ) : (
-            <Typography
-              variant="body2"
-              gutterBottom
-              sx={{
-                color: "text.disabled",
-              }}
-            >
+            <Typography variant="body2" gutterBottom color="textDisabled">
               Click an object in the 3D view to select it.
             </Typography>
           )}

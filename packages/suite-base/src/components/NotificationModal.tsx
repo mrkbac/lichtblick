@@ -76,15 +76,7 @@ export default function NotificationModal({
     <Dialog classes={{ paper: classes.paper }} fullWidth open onClose={() => onRequestClose?.()}>
       <DialogTitle color={displayPropsBySeverity[severity]}>{message}</DialogTitle>
       <div className={classes.container}>
-        {subText && (
-          <Typography
-            sx={{
-              mb: 3,
-            }}
-          >
-            {subText}
-          </Typography>
-        )}
+        {subText && <Typography style={{ marginBottom: theme.spacing(3) }}>{subText}</Typography>}
         {detailsElement}
       </div>
       <IconButton

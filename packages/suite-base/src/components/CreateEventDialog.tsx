@@ -54,6 +54,7 @@ const fadeInAnimation = keyframes`
 `;
 
 const useStyles = makeStyles<void, "toggleButton">()((theme, _params, classes) => ({
+  startTime: { paddingBlock: theme.spacing(1) },
   grid: {
     alignItems: "center",
     display: "grid",
@@ -206,13 +207,7 @@ export function CreateEventDialog(props: { onClose: () => void }): React.JSX.Ele
         <div className={classes.grid}>
           <FormControl>
             <FormLabel>Start Time</FormLabel>
-            <Typography
-              sx={{
-                paddingY: 1,
-              }}
-            >
-              {formattedStartTime}
-            </Typography>
+            <Typography className={classes.startTime}>{formattedStartTime}</Typography>
           </FormControl>
           <TextField
             value={event.duration ?? ""}

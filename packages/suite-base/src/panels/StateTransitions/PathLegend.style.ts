@@ -7,6 +7,8 @@ import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 
 export default makeStyles()((theme) => ({
   chartOverlay: {
+    position: "absolute",
+    paddingTop: theme.spacing(0.5),
     top: 0,
     left: 0,
     right: 0,

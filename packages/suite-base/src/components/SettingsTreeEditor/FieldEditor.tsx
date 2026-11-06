@@ -389,10 +389,8 @@ function FieldLabel({
           title={field.label}
           variant="subtitle2"
           noWrap
-          sx={{
-            color: "text.secondary",
-            flex: "auto",
-          }}
+          color="textSecondary"
+          style={{ flex: "auto" }}
         >
           {field.label}
         </Typography>
@@ -402,11 +400,8 @@ function FieldLabel({
             title={field.label}
             variant="subtitle2"
             noWrap
-            style={{ gridColumn: index === 0 ? "span 1" : "2 / span 1" }}
-            sx={{
-              color: "text.secondary",
-              flex: "auto",
-            }}
+            color="textSecondary"
+            style={{ gridColumn: index === 0 ? "span 1" : "2 / span 1", flex: "auto" }}
           >
             {label}
           </Typography>
@@ -421,10 +416,8 @@ function FieldLabel({
           title={field.label}
           variant="subtitle2"
           noWrap
-          sx={{
-            color: "text.secondary",
-            flex: "auto",
-          }}
+          color="textSecondary"
+          style={{ flex: "auto" }}
         >
           {field.label}
         </Typography>
@@ -434,11 +427,8 @@ function FieldLabel({
             title={field.label}
             variant="subtitle2"
             noWrap
-            style={{ gridColumn: index === 0 ? "span 1" : "2 / span 1" }}
-            sx={{
-              color: "text.secondary",
-              flex: "auto",
-            }}
+            color="textSecondary"
+            style={{ gridColumn: index === 0 ? "span 1" : "2 / span 1", flex: "auto" }}
           >
             {label}
           </Typography>

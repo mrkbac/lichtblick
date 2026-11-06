@@ -105,26 +105,14 @@ function ErrorDisplay(props: ErrorDisplayProps): React.JSX.Element {
 
     return (
       <div>
-        <Typography
-          sx={{
-            fontWeight: "bold",
-          }}
-        >
-          Error stack:
-        </Typography>
+        <Typography style={{ fontWeight: "bold" }}>Error stack:</Typography>
         <ErrorStacktrace
           stack={stackWithoutMessage}
           hideSourceLocations={hideErrorSourceLocations}
         />
         {errorInfo && (
           <>
-            <Typography
-              sx={{
-                fontWeight: "bold",
-              }}
-            >
-              Component stack:
-            </Typography>
+            <Typography style={{ fontWeight: "bold" }}>Component stack:</Typography>
             <ErrorStacktrace
               stack={`${errorInfo.componentStack}`}
               hideSourceLocations={hideErrorSourceLocations}
@@ -145,13 +133,7 @@ function ErrorDisplay(props: ErrorDisplayProps): React.JSX.Element {
           <Typography variant="body1">{props.content}</Typography>
         </Stack>
         <Divider />
-        <Typography
-          variant="subtitle2"
-          component="code"
-          sx={{
-            fontWeight: "bold",
-          }}
-        >
+        <Typography variant="subtitle2" component="code" style={{ fontWeight: "bold" }}>
           {error?.message}
         </Typography>
         <Link

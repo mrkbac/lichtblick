@@ -68,20 +68,10 @@ const LogsSection = ({ logs }: { logs: readonly UserScriptLog[] }): React.JSX.El
   if (logs.length === 0) {
     return (
       <Stack gap={0.5} padding={2}>
-        <Typography
-          variant="body2"
-          sx={{
-            color: "text.secondary",
-          }}
-        >
+        <Typography variant="body2" color="textSecondary">
           No logs to display.
         </Typography>
-        <Typography
-          variant="body2"
-          sx={{
-            color: "text.secondary",
-          }}
-        >
+        <Typography variant="body2" color="textSecondary">
           Invoke <code>log(someValue)</code> in your Lichtblick Suite node code to see data printed
           here.
         </Typography>
@@ -97,13 +87,7 @@ const LogsSection = ({ logs }: { logs: readonly UserScriptLog[] }): React.JSX.El
             disablePadding
             key={`${idx}${source}`}
             secondaryAction={
-              <Link
-                underline="always"
-                variant="body2"
-                sx={{
-                  color: "text.secondary",
-                }}
-              >
+              <Link underline="always" variant="body2" color="textSecondary">
                 {source}
               </Link>
             }
@@ -120,7 +104,7 @@ const LogsSection = ({ logs }: { logs: readonly UserScriptLog[] }): React.JSX.El
                   }
                   slotProps={{
                     primary: {
-                      color: valueColorMap[typeof value] ?? "text.primary",
+                      style: { color: valueColorMap[typeof value] },
                     },
                   }}
                 />

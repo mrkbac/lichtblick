@@ -80,13 +80,7 @@ export function MessagePathRow({
             offset={messagePathResult.item.offset}
           />
         </Typography>
-        <Typography
-          variant="caption"
-          noWrap
-          sx={{
-            color: "text.secondary",
-          }}
-        >
+        <Typography variant="caption" noWrap color="textSecondary">
           {type}
         </Typography>
       </Stack>

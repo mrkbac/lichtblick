@@ -56,9 +56,7 @@ export default function SendNotificationToastAdapter(): React.JSX.Element {
               variant="inherit"
               color="inherit"
               underline="hover"
-              sx={{
-                fontStyle: "italic",
-              }}
+              style={{ fontStyle: "italic" }}
             >
               (see details)
             </Link>

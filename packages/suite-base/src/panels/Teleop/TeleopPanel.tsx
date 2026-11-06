@@ -599,12 +599,9 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
                   <>
                     <Typography
                       variant="caption"
-                      color={command.turbo ? "warning.main" : "text.secondary"}
+                      color={command.turbo ? "warning" : "textSecondary"}
                       noWrap
-                      style={{ minWidth: "9ch", textAlign: "left" }}
-                      sx={{
-                        flexShrink: 0,
-                      }}
+                      style={{ minWidth: "9ch", textAlign: "left", flexShrink: 0 }}
                     >
                       {command.turbo ? "Turbo" : "Speed"} {speedPercent}%
                     </Typography>
@@ -623,11 +620,8 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
                 ) : (
                   <Typography
                     variant="caption"
-                    sx={{
-                      color: "text.secondary",
-                      flex: "auto",
-                      textAlign: "left",
-                    }}
+                    color="textSecondary"
+                    style={{ flex: "auto", textAlign: "left" }}
                   >
                     sensor_msgs/Joy
                   </Typography>
@@ -668,11 +662,9 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
               )}
               <Typography
                 variant="caption"
-                color={buildMessage(config, command).active ? "primary" : "text.secondary"}
+                color={buildMessage(config, command).active ? "primary" : "textSecondary"}
                 noWrap
-                sx={{
-                  fontFamily: "monospace",
-                }}
+                style={{ fontFamily: "monospace" }}
               >
                 {formatCommand(config, command)}
               </Typography>
@@ -680,7 +672,7 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
                 <Typography
                   key={index}
                   variant="caption"
-                  color={index === 0 && command.latched ? "error" : "text.secondary"}
+                  color={index === 0 && command.latched ? "error" : "textSecondary"}
                   noWrap
                 >
                   {hint}

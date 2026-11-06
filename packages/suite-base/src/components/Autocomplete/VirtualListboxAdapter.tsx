@@ -21,7 +21,10 @@ const Constants = Object.freeze({
 const useStyles = makeStyles()((theme) => ({
   // Plain span with dense MenuItem look: MUI 9 MenuItem throws outside Menu/MenuList.
   item: {
-    ...theme.typography.body2,
+    fontFamily: theme.typography.body2.fontFamily,
+    fontSize: theme.typography.body2.fontSize,
+    fontWeight: theme.typography.body2.fontWeight,
+    letterSpacing: theme.typography.body2.letterSpacing,
     display: "flex",
     alignItems: "center",
     position: "relative",

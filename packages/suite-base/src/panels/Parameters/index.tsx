@@ -362,13 +362,7 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
           endAdornment={
             <>
               {query !== "" && (
-                <Typography
-                  variant="caption"
-                  noWrap
-                  sx={{
-                    color: "text.secondary",
-                  }}
-                >
+                <Typography variant="caption" noWrap color="textSecondary">
                   {visibleNames.length} / {allNames.length}
                 </Typography>
               )}

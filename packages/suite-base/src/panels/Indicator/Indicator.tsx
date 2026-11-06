@@ -298,7 +298,7 @@ const Background = memo(({ label, textColor }: { label: string; textColor: strin
 
   return (
     <Stack className={classes.stack} testId="background-indicator">
-      <Typography className={classes.typography} color={textColor}>
+      <Typography className={classes.typography} style={{ color: textColor }}>
         {label}
       </Typography>
     </Stack>

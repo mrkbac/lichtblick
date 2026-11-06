@@ -107,12 +107,7 @@ export function RecordingDetails({
       />
       <div className={classes.topics}>
         {topics.length === 0 && (
-          <Typography
-            variant="body2"
-            sx={{
-              color: "text.secondary",
-            }}
-          >
+          <Typography variant="body2" color="textSecondary">
             {recording.topics ? t("noTopicMatches") : t("noTopics")}
           </Typography>
         )}
@@ -124,23 +119,10 @@ export function RecordingDetails({
             <Typography variant="body2" className={classes.numeric}>
               {topic.messages?.toLocaleString() ?? "–"}
             </Typography>
-            <Typography
-              variant="caption"
-              noWrap
-              title={topic.schema}
-              sx={{
-                color: "text.secondary",
-              }}
-            >
+            <Typography variant="caption" noWrap title={topic.schema} color="textSecondary">
               {topic.schema}
             </Typography>
-            <Typography
-              variant="caption"
-              className={classes.numeric}
-              sx={{
-                color: "text.secondary",
-              }}
-            >
+            <Typography variant="caption" className={classes.numeric} color="textSecondary">
               {topic.messages != undefined && durationSec != undefined && durationSec > 0
                 ? t("hz", { hz: (topic.messages / durationSec).toFixed(1) })
                 : ""}

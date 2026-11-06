@@ -118,9 +118,7 @@ function DiagnosticNodeRow(props: Readonly<NodeRowProps>) {
             className={classes.levelSince}
             title={levelSince.title}
             data-testid="diagnostic-row-level-since"
-            sx={{
-              color: "text.secondary",
-            }}
+            color="textSecondary"
           >
             {levelSince.text}
           </Typography>

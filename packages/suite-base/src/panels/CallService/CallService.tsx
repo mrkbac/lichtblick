@@ -262,12 +262,7 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
 
   const requestPane = (
     <Stack flex="1 1 0" overflow="hidden" gap={0.5}>
-      <Typography
-        variant="overline"
-        sx={{
-          lineHeight: 1,
-        }}
-      >
+      <Typography variant="overline" style={{ lineHeight: 1 }}>
         Request
       </Typography>
       <MessageEditor
@@ -299,13 +294,7 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
   const responsePane = (
     <Stack flex="1 1 0" overflow="hidden" gap={0.5}>
       <Stack direction="row" alignItems="center" gap={0.5}>
-        <Typography
-          variant="overline"
-          sx={{
-            lineHeight: 1,
-            flex: "none",
-          }}
-        >
+        <Typography variant="overline" style={{ lineHeight: 1, flex: "none" }}>
           Response
         </Typography>
         <Stack flex="auto" />
@@ -404,13 +393,7 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
           </Stack>
           <Stack direction="row" justifyContent="flex-end" alignItems="center" gap={1.5}>
             {statusMessage && (
-              <Typography
-                variant="caption"
-                noWrap
-                sx={{
-                  color: "text.secondary",
-                }}
-              >
+              <Typography variant="caption" noWrap color="textSecondary">
                 {statusMessage}
               </Typography>
             )}

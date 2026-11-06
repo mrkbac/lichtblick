@@ -181,9 +181,7 @@ export const ParameterRow = memo(function ParameterRowImpl(props: ParameterRowPr
             variant="body2"
             className={classes.readonly}
             title={formatValue(shown)}
-            sx={{
-              color: "text.secondary",
-            }}
+            color="textSecondary"
           >
             {formatValue(shown)}
           </Typography>

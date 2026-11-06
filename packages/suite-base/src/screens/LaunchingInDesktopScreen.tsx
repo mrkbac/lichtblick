@@ -70,21 +70,10 @@ export function LaunchingInDesktopScreen(): ReactElement {
         gap={2.5}
         style={{ maxWidth: 480 }}
       >
-        <Typography
-          align="center"
-          variant="h2"
-          sx={{
-            fontWeight: 600,
-          }}
-        >
+        <Typography align="center" variant="h2" style={{ fontWeight: 600 }}>
           Launching Lichtblick…
         </Typography>
-        <Typography
-          align="center"
-          sx={{
-            fontWeight: 600,
-          }}
-        >
+        <Typography align="center" style={{ fontWeight: 600 }}>
           We’ve directed you to the desktop app.
         </Typography>
         <Stack gap={0.5}>

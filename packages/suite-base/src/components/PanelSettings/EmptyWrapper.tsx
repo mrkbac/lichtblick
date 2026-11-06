@@ -24,12 +24,7 @@ export const EmptyWrapper = ({
 
   return (
     <SidebarContent title={t("panelSettings")}>
-      <Typography
-        variant="body2"
-        sx={{
-          color: "text.secondary",
-        }}
-      >
+      <Typography variant="body2" color="textSecondary">
         {children}
       </Typography>
     </SidebarContent>

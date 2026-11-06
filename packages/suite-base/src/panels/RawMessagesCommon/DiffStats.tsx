@@ -45,22 +45,12 @@ export default function DiffStats({
         {(counts[ADDED.labelText] !== 0 || counts[DELETED.labelText] !== 0) && (
           <div className={classes.badge}>
             {counts[ADDED.labelText] !== 0 && (
-              <Typography
-                variant="caption"
-                sx={{
-                  color: "success.main",
-                }}
-              >
+              <Typography variant="caption" color="success">
                 {`${diffLabels.ADDED.indicator}${counts[ADDED.labelText]}`}
               </Typography>
             )}
             {counts[DELETED.labelText] !== 0 && (
-              <Typography
-                variant="caption"
-                sx={{
-                  color: "error.main",
-                }}
-              >
+              <Typography variant="caption" color="error">
                 {`${diffLabels.DELETED.indicator}${counts[DELETED.labelText]}`}
               </Typography>
             )}

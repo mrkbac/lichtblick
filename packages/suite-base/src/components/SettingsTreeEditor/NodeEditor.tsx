@@ -460,11 +460,8 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
             <Typography
               noWrap={true}
               variant="subtitle2"
-              color={visible ? "text.primary" : "text.disabled"}
-              sx={{
-                flex: "1 1 auto",
-                fontWeight: indent < 2 ? 600 : 400,
-              }}
+              color={visible ? "textPrimary" : "textDisabled"}
+              style={{ flex: "1 1 auto", fontWeight: indent < 2 ? 600 : 400 }}
             >
               <HighlightedText text={settings.label ?? t("general")} highlight={filter} />
             </Typography>

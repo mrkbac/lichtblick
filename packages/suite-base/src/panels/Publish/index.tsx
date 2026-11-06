@@ -265,7 +265,7 @@ function Publish(props: Props) {
                 variant="caption"
                 noWrap
                 title={error ?? statusMessage}
-                color={error ? "error" : "text.secondary"}
+                color={error ? "error" : "textSecondary"}
               >
                 {error ?? statusMessage}
               </Typography>

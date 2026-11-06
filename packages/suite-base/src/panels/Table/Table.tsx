@@ -355,14 +355,7 @@ export default function Table({
             >
               <KeyboardArrowLeftIcon fontSize="small" />
             </IconButton>
-            <Typography
-              variant="inherit"
-              align="center"
-              noWrap
-              sx={{
-                flex: "auto",
-              }}
-            >
+            <Typography variant="inherit" align="center" noWrap style={{ flex: "auto" }}>
               Page{" "}
               <strong>
                 {table.state.pagination.pageIndex + 1} of {table.getPageOptions().length}

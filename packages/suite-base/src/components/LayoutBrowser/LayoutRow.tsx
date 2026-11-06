@@ -407,9 +407,6 @@ export default React.memo(function LayoutRow({
             variant="inherit"
             noWrap
             style={{ display: editingName ? "none" : "block" }}
-            sx={{
-              color: "inherit",
-            }}
           >
             {layout.name}
           </Typography>

@@ -50,14 +50,7 @@ export function RecentSourceLabel({ recent, hidePinIndicator = false }: Props): 
             {primary}
           </Typography>
           {secondary !== "" && (
-            <Typography
-              variant="caption"
-              noWrap
-              component="div"
-              sx={{
-                color: "text.secondary",
-              }}
-            >
+            <Typography variant="caption" noWrap component="div" color="textSecondary">
               {secondary}
             </Typography>
           )}

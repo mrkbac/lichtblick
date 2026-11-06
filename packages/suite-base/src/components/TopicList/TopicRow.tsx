@@ -148,9 +148,7 @@ export function TopicRow({
             variant="caption"
             noWrap
             className={classes.textContent}
-            sx={{
-              color: "text.secondary",
-            }}
+            color="textSecondary"
           >
             <HighlightChars
               str={topic.schemaName}

@@ -105,13 +105,7 @@ export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Eleme
     >
       <DialogTitle>
         {t("title")}
-        <Typography
-          variant="body2"
-          noWrap
-          sx={{
-            color: "text.secondary",
-          }}
-        >
+        <Typography variant="body2" noWrap color="textSecondary">
           {file.name}
         </Typography>
       </DialogTitle>
@@ -309,20 +303,9 @@ function ExportForm({
   return (
     <>
       <DialogContent className={classes.content}>
-        <Stack
-          className={classes.fill}
-          sx={{
-            gap: 2,
-          }}
-        >
+        <Stack className={classes.fill} spacing={2} useFlexGap>
           {/* Aligned to the inputs' bottom edge, since this theme draws labels above them. */}
-          <Stack
-            direction="row"
-            sx={{
-              gap: 1.5,
-              alignItems: "flex-end",
-            }}
-          >
+          <Stack direction="row" spacing={1.5} useFlexGap style={{ alignItems: "flex-end" }}>
             {(["start", "end"] as const).map((which) => (
               <Tooltip key={which} title={t("timeInputHelp")} placement="top" enterDelay={600}>
                 <TextField
@@ -373,9 +356,7 @@ function ExportForm({
               variant="body2"
               noWrap
               className={classes.rangeSummary}
-              sx={{
-                color: "text.secondary",
-              }}
+              color="textSecondary"
             >
               {t("rangeSummary", {
                 duration: toSecondsText(endNs - startNs),
@@ -384,13 +365,7 @@ function ExportForm({
             </Typography>
           </Stack>
 
-          <Stack
-            direction="row"
-            sx={{
-              gap: 1,
-              alignItems: "center",
-            }}
-          >
+          <Stack direction="row" spacing={1} useFlexGap style={{ alignItems: "center" }}>
             <TextField
               size="small"
               placeholder={t("filterTopics")}
@@ -418,13 +393,7 @@ function ExportForm({
             >
               {t("selectNone")}
             </Button>
-            <Typography
-              variant="body2"
-              noWrap
-              sx={{
-                color: "text.secondary",
-              }}
-            >
+            <Typography variant="body2" noWrap color="textSecondary">
               {t("topicsSelected", { selected: topics.size, total: rows.length })}
               {" · "}
               {t(

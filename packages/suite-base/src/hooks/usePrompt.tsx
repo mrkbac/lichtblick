@@ -98,22 +98,11 @@ function ModalPrompt({
     >
       <form onSubmit={onSubmitAction}>
         <Stack paddingX={3} paddingTop={2}>
-          <Typography
-            variant="h4"
-            gutterBottom
-            sx={{
-              fontWeight: 600,
-            }}
-          >
+          <Typography variant="h4" gutterBottom style={{ fontWeight: 600 }}>
             {title}
           </Typography>
           {subText && (
-            <Typography
-              variant="body1"
-              sx={{
-                color: "text.secondary",
-              }}
-            >
+            <Typography variant="body1" color="textSecondary">
               {subText}
             </Typography>
           )}

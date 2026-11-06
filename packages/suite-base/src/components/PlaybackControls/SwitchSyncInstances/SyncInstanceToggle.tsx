@@ -43,12 +43,7 @@ const SyncInstanceToggle = (): React.JSX.Element => {
           </Typography>
           <Typography variant="body2">{description}</Typography>
           {!alone && (
-            <Typography
-              variant="caption"
-              sx={{
-                color: "text.secondary",
-              }}
-            >
+            <Typography variant="caption" color="textSecondary">
               {t("timestampHint")}
             </Typography>
           )}
