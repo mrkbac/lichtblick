@@ -311,4 +311,17 @@ describe("TimestampDatasetsBuilderImpl", () => {
     builder.getViewportDatasets({ ...viewport, analysis });
     expect(computeHistogram).toHaveBeenCalledTimes(2);
   });
+
+  it("keeps every histogram corner when there are more bins than pixels", () => {
+    const builder = build([seriesItem("0")]);
+    builder.applyAction({ type: "append-full", series: key, items: items(range(0, 2000)) });
+
+    const data = builder.getViewportDatasets({
+      size: { width: 100, height: 100 },
+      bounds: {},
+      analysis: { mode: "histogram", bins: 500 },
+    })[0]!.data;
+
+    expect(data).toHaveLength(2 * 500 + 2);
+  });
 });
