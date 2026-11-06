@@ -19,7 +19,13 @@ import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRend
 import { DEFAULT_PUBLISH_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PublishSettings";
 
 import { RendererConfig } from "../IRenderer";
+import { Transform } from "../transforms";
 import { FrameAxes } from "./FrameAxes";
+import {
+  rpyDegreesToQuat,
+  TRANSFORM_OFFSETS_VARIABLE,
+  TransformOffsets,
+} from "../transforms/transformOffsets";
 
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
 
@@ -438,6 +444,131 @@ describe("FrameAxes", () => {
 
       // Then: Config should be updated
       expect(renderer.config.transforms["frame:test_frame"]?.visible).toBe(false);
+    });
+  });
+
+  describe("manual calibration", () => {
+    let frameAxes: FrameAxes;
+    let published: TransformOffsets[];
+
+    const update = (path: string[], value: unknown) => {
+      frameAxes.handleSettingsAction({
+        action: "update",
+        payload: { path, value, input: "vec3" } as SettingsTreeAction["payload"] & {
+          input: "vec3";
+        },
+      });
+    };
+    const lastPublished = () => published[published.length - 1]!;
+
+    beforeEach(() => {
+      document.body.appendChild(parent);
+      // sensor is pitched 60 deg in the recording
+      renderer.transformTree.addTransform(
+        "sensor",
+        "base",
+        0n,
+        new Transform([1, 0, 2], rpyDegreesToQuat([0, 60, 0])),
+      );
+      renderer.coordinateFrameList = renderer.transformTree.frameList();
+      renderer.emit("transformTreeUpdated", renderer);
+      // the mocked WebGLRenderer has no canvas; key handling looks up the panel through it
+      Object.assign(renderer.gl, { domElement: canvas });
+      renderer.updateConfig((draft) => {
+        draft.scene.transforms = { editable: true, adjustStep: "fine" };
+      });
+      frameAxes = renderer.sceneExtensions.get("foxglove.FrameAxes") as FrameAxes;
+      published = [];
+      renderer.on("setVariable", (name, value) => {
+        if (name === TRANSFORM_OFFSETS_VARIABLE) {
+          published.push(value as TransformOffsets);
+        }
+      });
+    });
+
+    afterEach(() => {
+      parent.remove();
+    });
+
+    it("sets the offset from a typed result: 60 deg recorded, 61 deg typed -> 1 deg offset", () => {
+      update(["transforms", "frame:sensor", "resultRpy"], [0, 61, 0]);
+
+      const offset = lastPublished().frames.sensor!;
+      expect(offset.xyz).toEqual([0, 0, 0]);
+      expect(offset.rpy[1]).toBeCloseTo(1, 6);
+      expect(renderer.transformTree.frame("sensor")?.offsetEulerDegrees?.[1]).toBeCloseTo(1, 6);
+    });
+
+    it("applies offsets published by another panel and can show the original", () => {
+      const fromOtherPanel = { frames: { sensor: { xyz: [0.1, 0, 0], rpy: [0, 0, 0] } } };
+      renderer.setVariables(new Map([[TRANSFORM_OFFSETS_VARIABLE, fromOtherPanel]]));
+      expect(renderer.transformTree.frame("sensor")?.offsetPosition).toEqual([0.1, 0, 0]);
+
+      renderer.setVariables(
+        new Map([[TRANSFORM_OFFSETS_VARIABLE, { ...fromOtherPanel, showOriginal: true }]]),
+      );
+      expect(renderer.transformTree.frame("sensor")?.offsetPosition).toBeUndefined();
+    });
+
+    it("ignores stale echoes of its own edits", () => {
+      update(["transforms", "frame:sensor", "xyzOffset"], [0.1, 0, 0]);
+      const first = lastPublished();
+      update(["transforms", "frame:sensor", "xyzOffset"], [0.2, 0, 0]);
+      renderer.setVariables(new Map([[TRANSFORM_OFFSETS_VARIABLE, first]]));
+      expect(renderer.transformTree.frame("sensor")?.offsetPosition).toEqual([0.2, 0, 0]);
+    });
+
+    it("nudges the keyboard frame with arrow keys and undoes with Ctrl+Z", () => {
+      renderer.updateConfig((draft) => {
+        draft.scene.transforms!.keyboardFrame = "sensor";
+      });
+      // jsdom has no pointer; treat the panel as hovered
+      const matches = parent.matches.bind(parent);
+      vi.spyOn(parent, "matches").mockImplementation((selector) =>
+        selector === ":hover" ? true : matches(selector),
+      );
+      const press = (init: KeyboardEventInit) => {
+        canvas.dispatchEvent(new KeyboardEvent("keydown", { bubbles: true, ...init }));
+      };
+
+      press({ key: "ArrowUp" });
+      expect(lastPublished().frames.sensor?.xyz).toEqual([0.001, 0, 0]);
+      press({ key: "ArrowLeft", altKey: true, shiftKey: true });
+      expect(lastPublished().frames.sensor?.rpy).toEqual([0, 0, 0.1]);
+
+      // rotation keys step the result angles shown in the settings: pitch 60 -> 60.01
+      press({ key: "ArrowUp", altKey: true });
+      const node = frameAxes.settingsNodes()[0]!.node.children!["frame:sensor"]!;
+      const resultRpy = node.fields?.resultRpy?.value as number[];
+      expect(resultRpy[0]).toBeCloseTo(0, 6);
+      expect(resultRpy[1]).toBeCloseTo(60.01, 6);
+      expect(resultRpy[2]).toBeCloseTo(0.1, 6);
+
+      // presses within the coalescing window form one undo step
+      press({ key: "z", ctrlKey: true });
+      expect(lastPublished().frames).toEqual({});
+    });
+
+    it("moves a legacy per-panel offset into the shared offsets on first edit", () => {
+      renderer.updateConfig((draft) => {
+        draft.transforms["frame:sensor"] = { xyzOffset: [0.5, 0, 0] };
+      });
+      renderer.emit("transformTreeUpdated", renderer);
+      expect(renderer.transformTree.frame("sensor")?.offsetPosition).toEqual([0.5, 0, 0]);
+
+      update(["transforms", "frame:sensor", "rpyCoefficient"], [0, 0, 2]);
+
+      expect(lastPublished().frames.sensor).toEqual({ xyz: [0.5, 0, 0], rpy: [0, 0, 2] });
+      expect(renderer.config.transforms["frame:sensor"]?.xyzOffset).toBeUndefined();
+    });
+
+    it("shows recorded, offset and result values in the settings", () => {
+      update(["transforms", "frame:sensor", "rpyCoefficient"], [0, 1, 0]);
+      const node = frameAxes.settingsNodes()[0]!.node.children!["frame:sensor"]!;
+      expect(node.label?.trim()).toBe("sensor (adjusted)");
+      expect(node.fields?.rpy?.value).toEqual([0, 60, 0]);
+      const resultRpy = node.fields?.resultRpy?.value as number[];
+      expect(resultRpy[1]).toBeCloseTo(61, 3);
     });
   });
 });

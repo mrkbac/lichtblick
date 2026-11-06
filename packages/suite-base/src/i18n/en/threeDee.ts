@@ -59,6 +59,37 @@ export const threeDee = {
   transforms: "Transforms",
   translation: "Translation",
   translationOffset: "Translation offset",
+  translationOffsetHelp: "Added to the recorded translation, along the parent frame's axes (m)",
+  rotationOffsetHelp:
+    "Roll, pitch and yaw in degrees around this frame's own axes, applied after the recorded rotation",
+  recordedTranslation: "Recorded translation",
+  recordedRotation: "Recorded rotation",
+  resultTranslation: "Result translation",
+  resultRotation: "Result rotation",
+  resultHelp:
+    "Recorded transform plus offset: what is rendered. Type a value to set it directly. Rotation is roll, pitch, yaw in degrees (intrinsic XYZ).",
+  adjusted: "adjusted",
+  adjustStep: "Adjust step",
+  adjustStepFine: "Fine (1 mm, 0.01°)",
+  adjustStepMedium: "Medium (1 cm, 0.1°)",
+  adjustStepCoarse: "Coarse (10 cm, 1°)",
+  keyboardFrame: "Keyboard adjusts",
+  keyboardFrameHelp:
+    "With the pointer over the panel, keys step the result values: arrows move X/Y, PageUp/PageDown move Z, hold Alt to change pitch/yaw/roll, Shift for 10× steps, O shows the original, Ctrl/Cmd+Z undoes",
+  keyboardFrameNone: "None",
+  showOriginal: "Show original",
+  showOriginalHelp:
+    "Render recorded transforms without adjustments, in every panel of this layout (key: O)",
+  adjustWithKeyboard: "Adjust with keyboard",
+  resetAdjustment: "Reset adjustment",
+  resetAllAdjustments: "Reset all adjustments",
+  undoAdjustment: "Undo adjustment",
+  copyAsUrdf: "Copy result as URDF joint",
+  copyAsStaticTransformPublisher: "Copy result as static_transform_publisher",
+  copyAsYaml: "Copy result as YAML",
+  keyboardHud:
+    "Adjusting {{frame}} · arrows, PgUp/PgDn move · Alt rotates · Shift ×10 · O original · Ctrl/Cmd+Z undo",
+  showingOriginalHud: "Showing recorded transforms without adjustments · press O to switch back",
 
   // Scene
   background: "Background",

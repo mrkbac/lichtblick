@@ -47,6 +47,7 @@ import { MarkerPool } from "./renderables/markers/MarkerPool";
 import { Quaternion, Vector3 } from "./ros";
 import { BaseSettings, CustomLayerSettings, SelectEntry } from "./settings";
 import { AddTransformResult, TransformTree } from "./transforms";
+import type { AdjustStep } from "./transforms/transformOffsets";
 import { InterfaceMode } from "./types";
 
 export type RendererEvents = {
@@ -69,6 +70,9 @@ export type RendererEvents = {
     parameters: ReadonlyMap<string, ParameterValue> | undefined,
     renderer: IRenderer,
   ) => void;
+  variablesChange: (variables: ReadonlyMap<string, VariableValue>, renderer: IRenderer) => void;
+  /** Request to write a layout variable; the panel forwards it to `context.setVariable` */
+  setVariable: (name: string, value: VariableValue, renderer: IRenderer) => void;
   /** Fired when the structure of the transform tree changes ie: new frame added/removed or frame assigned new parent */
   transformTreeUpdated: (renderer: IRenderer) => void;
   settingsTreeChange: (renderer: IRenderer) => void;
@@ -159,6 +163,10 @@ export type RendererConfig = {
       enablePreloading?: boolean;
       /** Maximum number of transform messages to keep when preloading (default: 10000) */
       maxPreloadMessages?: number;
+      /** Step size for offset inputs and keyboard nudging */
+      adjustStep?: AdjustStep;
+      /** Frame moved by the keyboard (arrows, PageUp/PageDown) while editable */
+      keyboardFrame?: string;
     };
     /** Sync camera with other 3d panels */
     syncCamera?: boolean;
@@ -369,6 +377,8 @@ export interface IRenderer extends EventEmitter<RendererEvents> {
   setTopics(topics: ReadonlyArray<Topic> | undefined): void;
 
   setParameters(parameters: Immutable<Map<string, ParameterValue>> | undefined): void;
+
+  setVariables(variables: ReadonlyMap<string, VariableValue>): void;
 
   updateCustomLayersCount(): void;
 

@@ -25,6 +25,7 @@ import {
   SettingsTreeNodes,
   Subscription,
   Topic,
+  VariableValue,
 } from "@lichtblick/suite";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { TopicSettingsUpdater } from "@lichtblick/suite-base/components/PanelExtensionAdapter/types";
@@ -202,6 +203,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const [parameters, setParameters] = useState<
     Immutable<Map<string, ParameterValue>> | undefined
   >();
+  const [variables, setVariables] = useState<ReadonlyMap<string, VariableValue> | undefined>();
   const [currentFrameMessages, setCurrentFrameMessages] = useState<
     ReadonlyArray<MessageEvent> | undefined
   >();
@@ -305,6 +307,14 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     [context],
   );
   useRendererEvent("selectedRenderable", updateSelectedRenderable, renderer);
+
+  const setVariable = useCallback(
+    (name: string, value: VariableValue) => {
+      context.setVariable(name, value);
+    },
+    [context],
+  );
+  useRendererEvent("setVariable", setVariable, renderer);
 
   // Clear preloaded buffer when action button is clicked
   const handleClearPreloadBuffer = useCallback(() => {
@@ -639,6 +649,11 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       // Watch for any changes in the map of observed parameters
       setParameters(renderState.parameters);
 
+      if (renderState.variables) {
+        // Immutable<Map> is structurally the same map; the renderer only reads it
+        setVariables(renderState.variables as ReadonlyMap<string, VariableValue>);
+      }
+
       // currentFrame has messages on subscribed topics since the last render call
       setCurrentFrameMessages(renderState.currentFrame);
     };
@@ -648,6 +663,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     context.watch("currentTime");
     context.watch("didSeek");
     context.watch("parameters");
+    context.watch("variables");
     context.watch("sharedPanelState");
     context.watch("topics");
     context.watch("appSettings");
@@ -745,6 +761,12 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       renderer.setParameters(parameters);
     }
   }, [parameters, renderer]);
+
+  useEffect(() => {
+    if (renderer && variables) {
+      renderer.setVariables(variables);
+    }
+  }, [variables, renderer]);
 
   // Keep the renderer currentTime up to date and handle seeking
   useEffect(() => {
