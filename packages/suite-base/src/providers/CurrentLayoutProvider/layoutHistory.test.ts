@@ -107,6 +107,22 @@ describe("LayoutHistory", () => {
     expect(h.canUndo()).toBe(false);
   });
 
+  it("records edits to and from an empty config", () => {
+    const h = new LayoutHistory();
+    const cleared = h.apply(
+      initial,
+      {
+        type: "SAVE_PANEL_CONFIGS",
+        payload: { configs: [{ id: "Plot!a", config: {}, override: true }] },
+      },
+      0,
+    )!;
+    expect(cleared.configById["Plot!a"]).toEqual({});
+    const set = h.apply(cleared, setTitle("Plot!a", "x"), 1000)!;
+    expect(h.undo(set)).toBe(cleared);
+    expect(h.undo(cleared)).toBe(initial);
+  });
+
   it("keeps redo when a panel fills in its defaults after undo", () => {
     const h = new LayoutHistory();
     const a = h.apply(initial, setTitle("Plot!a", "x"), 0)!;

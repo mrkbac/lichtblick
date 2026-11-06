@@ -43,12 +43,12 @@ function coalesceKey(action: PanelsActions): string | undefined {
   }
 }
 
-/** Panels saving their initial config (defaults, or their first config ever) on mount. */
+/** Panels saving their initial config on mount: flagged defaults, or a panel without any config yet. */
 function fillsDefaults(data: LayoutData, action: PanelsActions): boolean {
   return (
     action.type === "SAVE_PANEL_CONFIGS" &&
     (action.payload.fillsDefaults === true ||
-      action.payload.configs.every(({ id }) => _.isEmpty(data.configById[id])))
+      action.payload.configs.every(({ id }) => data.configById[id] == undefined))
   );
 }
 
