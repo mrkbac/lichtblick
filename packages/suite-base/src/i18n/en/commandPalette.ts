@@ -22,8 +22,6 @@ export const commandPalette = {
 
   openFile: "Open local file…",
   openDataSource: "Open data source…",
-  openUrl: "Open URL…",
-  openConnection: "Open connection: {{name}}",
   openRecent: "Open recent…",
   openRecentPlaceholder: "Search recent data sources",
   newTab: "Open new tab",

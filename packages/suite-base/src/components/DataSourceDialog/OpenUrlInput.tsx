@@ -3,19 +3,35 @@
 
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import MoreHorizIcon from "@mui/icons-material/MoreHoriz";
-import { Button, IconButton, InputAdornment, TextField, Tooltip, Typography } from "@mui/material";
-import { useMemo, useState } from "react";
+import {
+  Button,
+  IconButton,
+  InputAdornment,
+  Menu,
+  MenuItem,
+  TextField,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { FormField } from "@lichtblick/suite-base/components/DataSourceDialog/FormField";
 import { useStyles } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput.style";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import {
+  IDataSourceFactory,
+  usePlayerSelection,
+} from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import {
   detectConnection,
   hostUrl,
   looksLikeHost,
 } from "@lichtblick/suite-base/util/recentSources";
+
+/** id of the address bar, so the open-connection shortcut can focus it while the page is open. */
+export const START_ADDRESS_INPUT_ID = "start-address-input";
 
 const SEARCH_FILTER = /^(topic|schema|path|since|until|duration|size|status|has)[:<>]/i;
 
@@ -29,8 +45,9 @@ type Props = {
 
 /**
  * Address bar of the start page: a URL or a bare host opens that source (the source type is
- * detected and can be changed), anything else searches recents and the catalog, and Enter opens
- * the top result. Hints sit inside the box so typing never shifts the page.
+ * detected, or picked from the ⋯ menu along with any extra fields it needs), anything else
+ * searches recents and the catalog, and Enter opens the top result. Hints sit inside the box so
+ * typing never shifts the page.
  */
 export function OpenUrlInput({
   value,
@@ -44,16 +61,21 @@ export function OpenUrlInput({
   const { dialogActions } = useWorkspaceActions();
 
   const [error, setError] = useState<string | undefined>();
+  // Source picked from the ⋯ menu; undefined detects it from the input
+  const [pickedId, setPickedId] = useState<string | undefined>();
+  // Values and errors of the picked source's fields other than the URL
+  const [fieldValues, setFieldValues] = useState<Record<string, string | undefined>>({});
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string | undefined>>({});
+  const [menuAnchor, setMenuAnchor] = useState<HTMLElement | undefined>();
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  // Connection sources that are opened with just a URL
-  const urlSources = useMemo(
+  const connectionSources = useMemo(
     () =>
       availableSources.filter(
         (source) =>
           source.type === "connection" &&
           source.hidden !== true &&
-          source.disabledReason == undefined &&
-          (source.formConfig?.fields.some((field) => field.id === "url") ?? false),
+          source.disabledReason == undefined,
       ),
     [availableSources],
   );
@@ -76,31 +98,61 @@ export function OpenUrlInput({
   const recentMatch = recentSources.find(
     (recent) => recent.type === "connection" && recent.title === url,
   );
+  const picked = connectionSources.find((s) => s.id === pickedId);
+  const fields = picked?.formConfig?.fields ?? [];
+  const defaultUrlOf = (s: IDataSourceFactory | undefined) =>
+    s?.formConfig?.fields.find((field) => field.id === "url")?.defaultValue;
+  const hasUrlField = (s: IDataSourceFactory) =>
+    s.formConfig?.fields.some((field) => field.id === "url") ?? false;
   const sourceId = recentMatch?.sourceId ?? detected?.sourceId;
-  const source = isUrl ? urlSources.find((s) => s.id === sourceId) : undefined;
+  const source =
+    picked ??
+    (isUrl ? connectionSources.find((s) => s.id === sourceId && hasUrlField(s)) : undefined);
+  const connects = picked != undefined || isUrl;
+  // Extra fields only show for a picked source, so a detected one opens with their defaults
+  const extraFields = fields.filter((field) => field.id !== "url");
+  const hasFieldErrors = Object.values(fieldErrors).some((err) => err != undefined);
 
-  const openUrl = () => {
-    if (!source) {
+  const pick = (next: IDataSourceFactory | undefined) => {
+    setMenuAnchor(undefined);
+    setPickedId(next?.id);
+    setFieldValues({});
+    setFieldErrors({});
+    setError(undefined);
+    const defaultUrl = defaultUrlOf(next);
+    // Keep a URL the user typed, but replace another source's prefilled default
+    const isDefault = connectionSources.some((s) => defaultUrlOf(s) === trimmed);
+    if (defaultUrl != undefined && (!isUrl || isDefault)) {
+      onChange(defaultUrl);
+    }
+    inputRef.current?.focus();
+  };
+
+  const connect = () => {
+    if (!source || hasFieldErrors) {
       return;
     }
-    if (recentMatch?.sourceId === source.id) {
+    if (recentMatch?.sourceId === source.id && extraFields.length === 0) {
       selectRecent(recentMatch.id);
       return;
     }
-    const fields = source.formConfig?.fields ?? [];
-    const urlError = fields.find((field) => field.id === "url")?.validate?.(url);
+    const sourceFields = source.formConfig?.fields ?? [];
+    const urlField = sourceFields.find((field) => field.id === "url");
+    const urlError = urlField?.validate?.(url);
     if (urlError instanceof Error) {
       setError(urlError.message);
       return;
     }
-    const defaults = Object.fromEntries(fields.map((field) => [field.id, field.defaultValue]));
+    const defaults = Object.fromEntries(
+      sourceFields.map((field) => [field.id, field.defaultValue]),
+    );
     selectSource(source.id, {
       type: "connection",
-      params: { ...defaults, url },
+      params: { ...defaults, ...fieldValues, ...(urlField ? { url } : {}) },
     });
   };
 
-  const open = isUrl ? openUrl : onOpenTopMatch;
+  const open = connects ? connect : onOpenTopMatch;
 
   const help = (
     <Stack gap={1} className={classes.help}>
@@ -114,12 +166,14 @@ export function OpenUrlInput({
     </Stack>
   );
 
-  const hint = isUrl ? (
-    <>
-      <Typography variant="caption" color={source ? "text.secondary" : "error"} noWrap>
-        {source ? t("enterOpensUrl", { url, type: source.displayName }) : t("unrecognizedUrl")}
-      </Typography>
-    </>
+  const hint = connects ? (
+    <Typography variant="caption" color={source ? "text.secondary" : "error"} noWrap>
+      {source == undefined
+        ? t("unrecognizedUrl")
+        : hasUrlField(source)
+          ? t("enterOpensUrl", { url, type: source.displayName })
+          : t("enterOpens", { name: source.displayName })}
+    </Typography>
   ) : topMatch != undefined && trimmed !== "" ? (
     <Typography variant="caption" color="text.secondary" noWrap className={classes.topMatch}>
       {t("enterOpens", { name: topMatch })}
@@ -132,6 +186,8 @@ export function OpenUrlInput({
       <Stack direction="row" gap={1} alignItems="stretch">
         <TextField
           autoFocus
+          inputRef={inputRef}
+          id={START_ADDRESS_INPUT_ID}
           type="search"
           size="small"
           className={classes.input}
@@ -159,6 +215,10 @@ export function OpenUrlInput({
           onChange={(event) => {
             onChange(event.target.value);
             setError(undefined);
+            // Clearing the box goes back to searching
+            if (event.target.value === "") {
+              setPickedId(undefined);
+            }
           }}
           onKeyDown={(event) => {
             if (event.key === "Enter") {
@@ -170,7 +230,7 @@ export function OpenUrlInput({
           className={classes.button}
           variant="contained"
           size="small"
-          disabled={isUrl ? !source : topMatch == undefined}
+          disabled={connects ? !source || hasFieldErrors : topMatch == undefined}
           onClick={open}
         >
           {t("open")}
@@ -185,18 +245,63 @@ export function OpenUrlInput({
         >
           {t("openLocalFiles")}
         </Button>
-        <Tooltip title={t("moreConnectionOptions")}>
+        <Tooltip title={t("connectionType")}>
           <IconButton
             size="small"
-            aria-label={t("moreConnectionOptions")}
-            onClick={() => {
-              dialogActions.dataSource.open("connection");
+            aria-label={t("connectionType")}
+            onClick={(event) => {
+              setMenuAnchor(event.currentTarget);
             }}
           >
             <MoreHorizIcon />
           </IconButton>
         </Tooltip>
+        <Menu
+          anchorEl={menuAnchor}
+          open={menuAnchor != undefined}
+          onClose={() => {
+            setMenuAnchor(undefined);
+          }}
+        >
+          <MenuItem
+            selected={picked == undefined}
+            onClick={() => {
+              pick(undefined);
+            }}
+          >
+            {t("detectConnectionType")}
+          </MenuItem>
+          {connectionSources.map((s) => (
+            <MenuItem
+              key={s.id}
+              selected={s === picked}
+              onClick={() => {
+                pick(s);
+              }}
+            >
+              {s.displayName}
+            </MenuItem>
+          ))}
+        </Menu>
       </Stack>
+      {extraFields.length > 0 && (
+        <Stack direction="row" gap={1} key={picked?.id}>
+          {extraFields.map((field) => (
+            <FormField
+              key={field.id}
+              field={field}
+              disabled={false}
+              onError={(message) => {
+                setFieldErrors((old) => ({ ...old, [field.id]: message }));
+              }}
+              onChange={(newValue) => {
+                setFieldErrors((old) => ({ ...old, [field.id]: undefined }));
+                setFieldValues((old) => ({ ...old, [field.id]: newValue }));
+              }}
+            />
+          ))}
+        </Stack>
+      )}
       {error != undefined && (
         <Typography variant="caption" color="error">
           {error}

@@ -184,7 +184,7 @@ Reusable UI abstractions live in `e2e/page-objects/`. They encapsulate common in
 
 | POM                | Purpose                         | Key Methods                                                                                                            |
 | ------------------ | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `DataSourceDialog` | Data source dialog interactions | `close()`, `openConnection()`, `isVisible()`, `getLocator()`                                                           |
+| `DataSourceDialog` | Data source dialog interactions | `close()`, `connect(url)`, `openConnectionTypeMenu()`, `isVisible()`, `getLocator()`                                   |
 | `Sidebar`          | Left/right sidebar tabs         | `openLayoutsTab()`, `openTopicsTab()`, `toggleLeftSidebar()`, `getLeftSidebar()`, `getPanelSettingsTab()`              |
 | `PlayerControls`   | Playback controls               | `play()`, `pause()`, `seekForward()`, `setSpeed()`, `getTimestampValue()`, `getPlayButton()`, `getSlider()`            |
 | `LayoutManager`    | Layout CRUD                     | `openDefaultLayout()`, `createNewLayout()`, `selectPanel()`, `revertLayout()`, `getLayoutListItem()`                   |
