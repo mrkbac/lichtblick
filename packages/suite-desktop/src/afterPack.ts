@@ -15,6 +15,8 @@ import path from "path";
 import * as plist from "plist";
 import { fileURLToPath } from "url";
 
+type PlistObject = Record<string, plist.PlistValue>;
+
 async function getKeychainFile(context: AfterPackContext): Promise<string | undefined> {
   // Ensure it's a macOS packager
   if (context.packager.platform.name !== "mac") {
@@ -128,19 +130,19 @@ async function configureQuickLookExtension(context: AfterPackContext) {
 
   const originalInfo = plist.parse(
     await fs.readFile(appexInfoPlist, { encoding: "utf-8" }),
-  ) as plist.PlistObject;
+  ) as PlistObject;
   const newInfo = {
     ...originalInfo,
     CFBundleIdentifier: `${appBundleId}.quicklook`,
     NSExtension: {
-      ...(originalInfo.NSExtension as plist.PlistObject),
+      ...(originalInfo.NSExtension as PlistObject),
       NSExtensionAttributes: {
         QLSupportedContentTypes: ["org.ros.bag", "dev.mcap.mcap"],
         QLSupportsSearchableItems: false,
       },
     },
     QLJS: {
-      ...(originalInfo.QLJS as plist.PlistObject),
+      ...(originalInfo.QLJS as PlistObject),
       pagePath: "index.html",
     },
   };
