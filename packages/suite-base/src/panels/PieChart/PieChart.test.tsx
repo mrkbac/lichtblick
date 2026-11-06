@@ -71,12 +71,16 @@ describe("PieChart", () => {
   });
 
   it("maps chart data to a doughnut config", () => {
+    // Given
     const data = [
       { name: "A", value: 25, color: "red" },
       { name: "B", value: 75, color: "blue" },
     ];
+
+    // When
     const config = buildChartConfig(data, new Float32Array([1, 3]));
 
+    // Then
     expect(config.type).toBe("doughnut");
     expect(config.data.labels).toEqual(["A", "B"]);
     expect(config.data.datasets[0]?.data).toEqual([25, 75]);

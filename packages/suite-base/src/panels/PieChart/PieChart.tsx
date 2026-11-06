@@ -157,7 +157,7 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
     if (chartRef.current) {
       chartRef.current.data = chartConfig.data;
       chartRef.current.options = chartConfig.options ?? {};
-      chartRef.current.update();
+      chartRef.current.update("none");
     } else {
       chartRef.current = new Chart(canvas, chartConfig);
     }
