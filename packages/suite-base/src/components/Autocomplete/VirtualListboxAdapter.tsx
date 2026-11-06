@@ -41,6 +41,10 @@ const useStyles = makeStyles()((theme) => ({
     "&:hover": {
       backgroundColor: theme.palette.action.hover,
     },
+    // Autocomplete marks the keyboard-active option with this class on the DOM node.
+    "&.Mui-focusVisible": {
+      backgroundColor: theme.palette.action.focus,
+    },
 
     // re-establish the <mark /> styles because the autocomplete is in a Portal
     mark: {

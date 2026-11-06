@@ -261,7 +261,7 @@ export default function Variable(props: {
               primary: {
                 component: "div",
                 variant: "body2",
-                sx: { fontWeight: 600 },
+                style: { fontWeight: 600 },
               },
             }}
           />
