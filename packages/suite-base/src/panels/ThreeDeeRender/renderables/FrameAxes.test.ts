@@ -527,6 +527,13 @@ describe("FrameAxes", () => {
       expect(renderer.transformTree.frame("sensor")?.offsetPosition).toEqual([0.1, 0, 0]);
     });
 
+    it("applies another panel's write that arrives before its own echo", () => {
+      update(["transforms", "frame:sensor", "xyzOffset"], [0.1, 0, 0]);
+      const fromOtherPanel = { frames: { sensor: { xyz: [0.5, 0, 0], rpy: [0, 0, 0] } } };
+      renderer.setVariables(new Map([[TRANSFORM_OFFSETS_VARIABLE, fromOtherPanel]]));
+      expect(renderer.transformTree.frame("sensor")?.offsetPosition).toEqual([0.5, 0, 0]);
+    });
+
     it("ignores stale echoes of its own edits", () => {
       update(["transforms", "frame:sensor", "xyzOffset"], [0.1, 0, 0]);
       const first = lastPublished();

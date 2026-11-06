@@ -77,7 +77,7 @@ const NUDGE_KEYS = new Set<string>([
 /** Edits closer together than this form one undo step (key repeat, dragging a field) */
 const UNDO_COALESCE_MS = 500;
 const MAX_UNDO_STEPS = 100;
-/** Ignore our own stale variable echoes for at most this long */
+/** How long our own published values count as possible stale echoes */
 const ECHO_TIMEOUT_MS = 2000;
 const KEYBOARD_HUD_ID = "transforms-keyboard-adjust";
 const ORIGINAL_HUD_ID = "transforms-show-original";
@@ -137,8 +137,8 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
 
   /** Layout-wide offsets, shared with every 3D and Image panel through a layout variable */
   #offsets: TransformOffsets = EMPTY_OFFSETS;
-  /** Last value we published; older echoes of our own edits are ignored until it comes back */
-  #pendingEcho: { value: TransformOffsets; time: number } | undefined;
+  /** Values this panel published recently; a late echo of an older one must not undo newer edits */
+  #published: { value: TransformOffsets; time: number }[] = [];
   #history: TransformOffsets[] = [];
   #lastHistoryTime = 0;
   #hudFrameId: string | undefined;
@@ -936,7 +936,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
       }
       this.#lastHistoryTime = now;
     }
-    this.#pendingEcho = { value: next, time: Date.now() };
+    this.#published.push({ value: next, time: Date.now() });
     this.#applyOffsets(next);
     this.renderer.emit("setVariable", TRANSFORM_OFFSETS_VARIABLE, next, this.renderer);
   }
@@ -969,14 +969,16 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
 
   #handleVariablesChange = (): void => {
     const next = parseTransformOffsets(this.renderer.variables.get(TRANSFORM_OFFSETS_VARIABLE));
-    if (this.#pendingEcho) {
-      const { value, time } = this.#pendingEcho;
-      if (_.isEqual(next, value) || Date.now() - time > ECHO_TIMEOUT_MS) {
-        this.#pendingEcho = undefined;
-      } else {
-        return; // an older echo of our own edits, the newer value is already applied
-      }
+    const now = Date.now();
+    this.#published = this.#published.filter(({ time }) => now - time <= ECHO_TIMEOUT_MS);
+    const index = _.findLastIndex(this.#published, ({ value }) => _.isEqual(value, next));
+    if (index >= 0 && index < this.#published.length - 1) {
+      // A late echo of an older edit of ours; the newer value is already applied
+      this.#published = this.#published.slice(index + 1);
+      return;
     }
+    // Our latest value came back, or another panel wrote: apply whatever is newest
+    this.#published = [];
     if (!_.isEqual(next, this.#offsets)) {
       this.#applyOffsets(next);
     }
