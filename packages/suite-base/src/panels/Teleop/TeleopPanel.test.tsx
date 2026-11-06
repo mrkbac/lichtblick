@@ -444,6 +444,30 @@ describe("TeleopPanel", () => {
       Object.defineProperty(document, "hidden", { configurable: true, value: false });
     });
 
+    it("keeps a Stop engaged across a hidden tab while the stick is still held", () => {
+      const { publish } = setup();
+      step(makeGamepad([0, -1, 0, 0]));
+      // B = stop while the stick is held
+      step(makeGamepad([0, -1, 0, 0], [1]));
+      expect(publish).toHaveBeenLastCalledWith("/cmd", ZERO);
+
+      Object.defineProperty(document, "hidden", { configurable: true, value: true });
+      fireEvent(document, new Event("visibilitychange"));
+      Object.defineProperty(document, "hidden", { configurable: true, value: false });
+
+      // back in the tab with the stick still forward: must not drive
+      publish.mockClear();
+      step(makeGamepad([0, -1, 0, 0]));
+      vi.advanceTimersByTime(500);
+      expect(publish).not.toHaveBeenCalled();
+      expect(screen.getByText(/release all controls/)).toBeInTheDocument();
+
+      // released, then pushed again: drives
+      step(makeGamepad([0, 0, 0, 0]));
+      step(makeGamepad([0, -1, 0, 0]));
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(1));
+    });
+
     it("only drives while the enable button is held", () => {
       const { publish } = setup({ enableButton: "lb" });
       step(makeGamepad([0, -1, 0, 0]));

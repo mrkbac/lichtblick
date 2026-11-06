@@ -274,9 +274,13 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
   // polling pauses in a hidden tab and would otherwise keep its last state. Always ends with a
   // stop, even when stopOnRelease is off: we no longer see what the operator is doing.
   const releaseAll = useCallback(() => {
+    // inputs vanish because we lost sight of them, not because the operator let go, so an engaged
+    // Stop stays engaged until the controls are seen in neutral again
+    const wasLatched = latched.current;
     sources.current = emptySources();
     setReleaseCount((count) => count + 1);
     updateCommand();
+    latched.current = wasLatched;
     if (lastPublishedActive.current) {
       publishStop();
     }
