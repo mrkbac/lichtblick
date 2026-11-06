@@ -44,6 +44,10 @@ const COLUMNS = { xyz: ["x", "y", "z"], rpy: ["roll", "pitch", "yaw"] } as const
 
 type Part = "xyz" | "rpy";
 
+/** Shown values are rounded so a focused input never shows float noise; edits use exact values */
+const roundTo = (values: Readonly<Vec3>, digits: number): Vec3 =>
+  values.map((value) => Number(value.toFixed(digits))) as Vec3;
+
 /** ⓘ that explains which roll/pitch/yaw convention a set of angles uses */
 export function RotationConventionInfo({ text }: { text: string }): React.JSX.Element {
   const { classes } = useStyles();
@@ -187,8 +191,8 @@ export function OffsetEditor({
         </IconButton>
       </div>
       <div className={classes.editorGrid}>
-        {block("xyz", current.xyz, result.position)}
-        {block("rpy", current.rpy, resultRpy)}
+        {block("xyz", current.xyz, roundTo(result.position, PRECISION_METERS))}
+        {block("rpy", current.rpy, roundTo(resultRpy, PRECISION_DEGREES))}
       </div>
       <div className={classes.editorActions}>
         <FormControlLabel

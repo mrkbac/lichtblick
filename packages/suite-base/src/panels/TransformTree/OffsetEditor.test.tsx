@@ -37,21 +37,27 @@ function setup(offset?: FrameOffset) {
 
 describe("OffsetEditor", () => {
   it("computes the offset from a typed result: 60 deg recorded, 61 deg typed -> 1 deg", () => {
+    // Given: a frame pitched 60 deg in the recording, without an offset
     const { onChange } = setup();
 
+    // When
     fireEvent.change(screen.getByLabelText("Result Pitch (°)"), { target: { value: "61" } });
 
+    // Then
     const offset = onChange.mock.lastCall?.[0] as FrameOffset;
     expect(offset.xyz).toEqual([0, 0, 0]);
     expect(offset.rpy[1]).toBeCloseTo(1, 6);
   });
 
   it("shows the result of an existing offset and resets it", () => {
+    // Given
     const { onChange } = setup({ xyz: [0.5, 0, 0], rpy: [0, 0, 0] });
-
     expect(screen.getByLabelText("Result x (m)")).toHaveValue(1.5);
 
+    // When
     fireEvent.click(screen.getByRole("button", { name: "Reset" }));
+
+    // Then
     expect(onChange).toHaveBeenLastCalledWith(undefined);
   });
 });

@@ -104,6 +104,10 @@ export const useStyles = makeStyles()((theme) => ({
   },
   selectableRow: {
     cursor: "pointer",
+    "&:focus-visible": {
+      outline: `1px solid ${theme.palette.primary.main}`,
+      outlineOffset: -1,
+    },
   },
   selectedRow: {
     backgroundColor: `${theme.palette.action.selected} !important`,

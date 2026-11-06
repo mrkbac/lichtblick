@@ -507,11 +507,26 @@ const FrameTableRow = memo(function FrameTableRowImpl({
         [classes.selectableRow]: entry != undefined,
         [classes.selectedRow]: selected,
       })}
-      aria-selected={selected}
+      aria-current={selected ? "true" : undefined}
+      tabIndex={entry ? 0 : undefined}
       onClick={
         entry
           ? () => {
               onSelect(row.frame);
+            }
+          : undefined
+      }
+      onKeyDown={
+        entry
+          ? (event) => {
+              // Only the row itself; the collapse button inside handles its own keys
+              if (
+                event.target === event.currentTarget &&
+                (event.key === "Enter" || event.key === " ")
+              ) {
+                event.preventDefault();
+                onSelect(row.frame);
+              }
             }
           : undefined
       }
