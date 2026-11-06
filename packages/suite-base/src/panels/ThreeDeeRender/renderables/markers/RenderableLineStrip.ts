@@ -19,6 +19,7 @@ import {
 import type { IRenderer } from "../../IRenderer";
 import { LineMaterialWithAlphaVertex } from "../../LineMaterialWithAlphaVertex";
 import { Marker } from "../../ros";
+import { setLinePositions } from "../../setLinePositions";
 
 const tempTuple4: THREE.Vector4Tuple = [0, 0, 0, 0];
 
@@ -137,7 +138,7 @@ export class RenderableLineStrip extends RenderableMarker {
       positions[offset + 2] = point.z;
     }
 
-    this.#geometry.setPositions(positions);
+    setLinePositions(this.#geometry, positions);
     this.#geometry.instanceCount = pointsLength - 1;
   }
 

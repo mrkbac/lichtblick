@@ -512,6 +512,10 @@ export class LineMaterialWithAlphaVertex extends ShaderMaterial {
   }
 
   public set worldUnits(value) {
+    // WORLD_UNITS is a shader define, so a change needs a program rebuild (like three's LineMaterial)
+    if (value !== this.worldUnits) {
+      this.needsUpdate = true;
+    }
     if (value) {
       this.defines.WORLD_UNITS = "";
     } else {

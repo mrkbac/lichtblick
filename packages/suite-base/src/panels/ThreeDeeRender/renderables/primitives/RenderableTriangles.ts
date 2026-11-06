@@ -164,10 +164,13 @@ export class RenderableTriangles extends RenderablePrimitive {
           !material.color.equals(newColor) ||
           mesh.material.opacity !== singleColor.a;
         if (materialNeedsUpdate) {
-          material.vertexColors = false;
+          // Color and opacity are uniforms; only vertexColors is compiled into the shader
+          if (material.vertexColors) {
+            material.vertexColors = false;
+            material.needsUpdate = true;
+          }
           material.color.copy(tempColor);
           mesh.material.opacity = singleColor.a;
-          material.needsUpdate = true;
         }
       }
 

@@ -447,6 +447,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     }
 
     this.#watchDevicePixelRatio();
+    document.addEventListener("visibilitychange", this.#onVisibilityChange);
 
     this.setCameraState(config.cameraState);
     this.animationFrame();
@@ -455,6 +456,12 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   #onHUDItemsChange = () => {
     this.hudItems = this.hud.getHUDItems();
     this.emit("hudItemsChanged", this);
+  };
+
+  #onVisibilityChange = () => {
+    if (document.visibilityState === "visible") {
+      this.queueAnimationFrame();
+    }
   };
 
   #onDevicePixelRatioChange = () => {
@@ -475,6 +482,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   public dispose(): void {
     log.warn(`Disposing renderer`);
     this.#devicePixelRatioMediaQuery?.removeEventListener("change", this.#onDevicePixelRatioChange);
+    document.removeEventListener("visibilitychange", this.#onVisibilityChange);
     this.removeAllListeners();
 
     this.settings.removeAllListeners();
@@ -1437,7 +1445,12 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     this.#updateFixedFrameId();
     this.#updateResolution();
 
-    this.gl.clear();
+    // A hidden tab shows nothing, but live data keeps driving frames: keep the scene state current
+    // and skip the GPU work. #onVisibilityChange repaints when the tab is shown again.
+    const draw = document.visibilityState !== "hidden";
+    if (draw) {
+      this.gl.clear();
+    }
     this.emit("startFrame", currentTime, this);
 
     const camera = this.cameraHandler.getActiveCamera();
@@ -1455,9 +1468,11 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
       sceneExtension.startFrame(currentTime, renderFrameId, fixedFrameId);
     }
 
-    this.gl.render(this.#scene, camera);
+    if (draw) {
+      this.gl.render(this.#scene, camera);
+    }
 
-    if (this.#selectedRenderable) {
+    if (draw && this.#selectedRenderable) {
       this.gl.render(this.#selectionBackdropScene, camera);
       this.gl.clearDepth();
       camera.layers.set(LAYER_SELECTED);
