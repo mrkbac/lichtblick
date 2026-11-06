@@ -36,6 +36,7 @@ import {
 
 import { CompressedImageTypes, CompressedVideo } from "./ImageTypes";
 import { PreparedVideoFrame, PreparedVideoFrameStatus, PrepareVideoFrameContext } from "./types";
+import { makeRgba, rgbaGradient, stringToRgba } from "../../color";
 import { Image as RosImage } from "../../ros";
 import { ColorModeSettings, getColorConverter } from "../colorMode";
 
@@ -166,9 +167,24 @@ const MIN_MAX_16_BIT = { minValue: 0, maxValue: 65535 };
 
 export type RawImageOptions = ColorModeSettings;
 
+// Linear -> sRGB transfer function, sampled; index with round(linear * (SIZE - 1))
+const LINEAR_TO_SRGB_SIZE = 4096;
+const LINEAR_TO_SRGB = Float32Array.from({ length: LINEAR_TO_SRGB_SIZE }, (_v, i) => {
+  const c = i / (LINEAR_TO_SRGB_SIZE - 1);
+  return c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+});
+function linearToSrgb(c: number): number {
+  return LINEAR_TO_SRGB[Math.round(Math.min(Math.max(c, 0), 1) * (LINEAR_TO_SRGB_SIZE - 1))]!;
+}
+
 /**
  * Maps a single-channel value to a color using the panel's gradient/colormap and value range.
  * Returns undefined for color modes that don't apply to single-channel images (flat, rgba-fields).
+ *
+ * The output is sRGB: image textures are uploaded as-is and the image shader does no color space
+ * conversion (same as for compressed images), whereas `getColorConverter` produces linear colors
+ * for the 3D scene. So gradients are interpolated between the sRGB colors the user picked (the
+ * default black -> white gradient is plain grayscale) and colormap colors are converted back.
  */
 function monoColorConverter(
   options: Partial<RawImageOptions>,
@@ -177,19 +193,35 @@ function monoColorConverter(
   // lodash merge replaces undefined values in options with defaults, whereas a spread would let
   // undefined overwrite them
   const settings = _.merge({}, IMAGE_DEFAULT_COLOR_MODE_SETTINGS, defaultRange, options);
-  if (settings.colorMode === "rgba-fields" || settings.colorMode === "flat") {
-    return undefined;
-  }
-  const converter = getColorConverter(
-    settings as ColorModeSettings & { colorMode: typeof settings.colorMode },
-    settings.minValue,
-    settings.maxValue,
-  );
+  const { minValue, maxValue } = settings;
   const tempColor = { r: 0, g: 0, b: 0, a: 0 };
-  return (value: number) => {
-    converter(tempColor, value);
-    return tempColor;
-  };
+  switch (settings.colorMode) {
+    case "gradient": {
+      const minColor = stringToRgba(makeRgba(), settings.gradient[0]);
+      const maxColor = stringToRgba(makeRgba(), settings.gradient[1]);
+      const valueDelta = Math.max(maxValue - minValue, Number.EPSILON);
+      return (value: number) => {
+        const frac = Math.max(0, Math.min((value - minValue) / valueDelta, 1));
+        return rgbaGradient(tempColor, minColor, maxColor, frac);
+      };
+    }
+    case "colormap": {
+      const converter = getColorConverter(
+        { ...settings, colorMode: "colormap" },
+        minValue,
+        maxValue,
+      );
+      return (value: number) => {
+        converter(tempColor, value);
+        tempColor.r = linearToSrgb(tempColor.r);
+        tempColor.g = linearToSrgb(tempColor.g);
+        tempColor.b = linearToSrgb(tempColor.b);
+        return tempColor;
+      };
+    }
+    default:
+      return undefined;
+  }
 }
 
 /**

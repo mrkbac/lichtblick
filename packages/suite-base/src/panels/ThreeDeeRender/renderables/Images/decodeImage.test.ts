@@ -440,6 +440,45 @@ describe("decodeRawImage", () => {
     }).toThrow("flat color mode is not supported for mono16 images");
   });
 
+  it.each([
+    ["mono8", new Uint8Array([0, 100, 200])],
+    ["mono16", new Uint8Array(new Uint16Array([0, 100, 200]).buffer)],
+  ])("writes sRGB gradient colors for %s (mid-gray stays mid-gray)", (encoding, data) => {
+    // GIVEN a black -> #808080 gradient over the range 0..200
+    const mockImage = createMockROSImage({
+      encoding,
+      width: 3,
+      height: 1,
+      step: encoding === "mono8" ? 3 : 6,
+      data,
+    });
+    const output = new Uint8ClampedArray(3 * 4);
+
+    // WHEN it is decoded
+    decodeRawImage(
+      mockImage,
+      { colorMode: "gradient", gradient: ["#000000", "#808080"], minValue: 0, maxValue: 200 },
+      output,
+    );
+
+    // THEN the max value is #808080 (128), not its linear value (55), and half is half of that
+    expect(Array.from(output)).toEqual([0, 0, 0, 255, 64, 64, 64, 255, 128, 128, 128, 255]);
+  });
+
+  it("writes sRGB turbo colormap colors", () => {
+    const mockImage = createMockROSImage({
+      encoding: "mono8",
+      width: 1,
+      height: 1,
+      step: 1,
+      data: new Uint8Array([0]),
+    });
+    const output = new Uint8ClampedArray(4);
+    decodeRawImage(mockImage, { colorMode: "colormap", colorMap: "turbo" }, output);
+    // The turbo polynomial at 0 is sRGB (45, 29, 58); its linear value would be about (7, 3, 11)
+    expect(Array.from(output)).toEqual([45, 29, 58, 255]);
+  });
+
   it("keeps plain grayscale for mono8 with default settings", () => {
     const mockImage = createMockROSImage({
       encoding: "mono8",
