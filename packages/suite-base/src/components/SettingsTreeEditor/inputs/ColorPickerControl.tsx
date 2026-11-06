@@ -9,11 +9,11 @@ import TagIcon from "@mui/icons-material/Tag";
 import { TextField } from "@mui/material";
 import { useCallback, useState, useMemo } from "react";
 import { HexAlphaColorPicker, HexColorPicker } from "react-colorful";
-import tinycolor from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 import { useDebouncedCallback } from "use-debounce";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { parseColor, toHex6, toHex8 } from "@lichtblick/suite-base/util/parseColor";
 import { customTypography } from "@lichtblick/theme";
 
 const useStyles = makeStyles()((theme) => ({
@@ -136,10 +136,10 @@ function isValidHexColor(color: string, alphaType: "none" | "alpha") {
 export function useColorPickerControl(props: ColorPickerProps) {
   const { alphaType, onChange, value } = props;
 
-  const parsedValue = useMemo(() => (value ? tinycolor(value) : undefined), [value]);
-  const hex = alphaType === "alpha" ? parsedValue?.toHex8() : parsedValue?.toHex();
+  const parsedValue = useMemo(() => (value ? parseColor(value) : undefined), [value]);
   const displayValue =
-    alphaType === "alpha" ? parsedValue?.toHex8String() : parsedValue?.toHexString();
+    parsedValue && (alphaType === "alpha" ? toHex8(parsedValue) : toHex6(parsedValue));
+  const hex = displayValue?.slice(1);
   const swatchColor = displayValue ?? "#00000044";
 
   const [editedValue, setEditedValue] = useState(hex ?? "");
@@ -155,8 +155,8 @@ export function useColorPickerControl(props: ColorPickerProps) {
   // un-prefixed values so it can update the edited field
   const updatePrefixedColor = useCallback(
     (newValue: string) => {
-      const parsed = tinycolor(newValue);
-      updateColor(alphaType === "alpha" ? parsed.toHex8() : parsed.toHex());
+      const parsed = parseColor(newValue);
+      updateColor((alphaType === "alpha" ? toHex8(parsed) : toHex6(parsed)).slice(1));
     },
     [alphaType, updateColor],
   );
@@ -167,8 +167,8 @@ export function useColorPickerControl(props: ColorPickerProps) {
 
       // if it is a valid color then we can emit the new value
       if (isValidHexColor(newValue, alphaType)) {
-        const parsed = tinycolor(newValue);
-        const settingValue = alphaType === "alpha" ? parsed.toHex8String() : parsed.toHexString();
+        const parsed = parseColor(newValue);
+        const settingValue = alphaType === "alpha" ? toHex8(parsed) : toHex6(parsed);
         onChange(settingValue);
       }
     },

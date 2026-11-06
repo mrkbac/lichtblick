@@ -6,12 +6,12 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { FrameTransform, LineType, SceneEntity, SceneUpdate } from "@foxglove/schemas";
+import { colord } from "colord";
 import { useEffect, useMemo, useState } from "react";
 import { StoryObj } from "storybook-react-rsbuild";
 import * as THREE from "three";
 import { STLExporter } from "three/examples/jsm/exporters/STLExporter.js";
 import { TeapotGeometry } from "three/examples/jsm/geometries/TeapotGeometry.js";
-import tinycolor from "tinycolor2";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { ColorRGBA } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
@@ -169,7 +169,7 @@ const primitives = {
         })),
         color: makeColor("#7995fb", 0.8),
         colors: new Array(10).fill(0).map((_, i, { length }) => {
-          const { r, g, b, a } = tinycolor.fromRatio({ h: i / (length - 1), s: 1, v: 1 }).toRgb();
+          const { r, g, b, a } = colord({ h: (360 * i) / (length - 1), s: 100, v: 100 }).toRgb();
           return { r: r / 255, g: g / 255, b: b / 255, a };
         }),
         indices: [],
@@ -190,7 +190,7 @@ const primitives = {
         color: makeColor("#7995fb", 0.8),
         colors: rearrange(
           new Array(10).fill(0).map((_, i, { length }) => {
-            const { r, g, b, a } = tinycolor.fromRatio({ h: i / (length - 1), s: 1, v: 1 }).toRgb();
+            const { r, g, b, a } = colord({ h: (360 * i) / (length - 1), s: 100, v: 100 }).toRgb();
             return { r: r / 255, g: g / 255, b: b / 255, a };
           }),
         ),

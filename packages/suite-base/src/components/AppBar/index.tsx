@@ -16,7 +16,6 @@ import {
 import { Avatar, IconButton, Tooltip } from "@mui/material";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import tc from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
@@ -36,6 +35,7 @@ import {
 } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
+import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 import { customTypography } from "@lichtblick/theme";
 
 import { AddPanelMenu } from "./AddPanelMenu";
@@ -72,7 +72,7 @@ const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()(
           fontSize: "1em",
         },
         "&:hover": {
-          backgroundColor: tc(theme.palette.appBar.text).setAlpha(0.08).toRgbString(),
+          backgroundColor: parseColor(theme.palette.appBar.text).alpha(0.08).toRgbString(),
         },
         "&.Mui-selected": {
           backgroundColor: theme.palette.appBar.primary,
@@ -117,7 +117,7 @@ const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()(
       },
       keyEquivalent: {
         fontFamily: customTypography.fontMonospace,
-        background: tc(theme.palette.appBar.text).darken(45).toString(),
+        background: parseColor(theme.palette.appBar.text).darken(0.45).toHex(),
         padding: theme.spacing(0, 0.5),
         aspectRatio: 1,
         borderRadius: theme.shape.borderRadius,
@@ -128,7 +128,7 @@ const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()(
       },
       avatar: {
         color: theme.palette.appBar.text,
-        backgroundColor: tc(theme.palette.appBar.main).lighten().toString(),
+        backgroundColor: parseColor(theme.palette.appBar.main).lighten().toHex(),
         height: theme.spacing(3.5),
         width: theme.spacing(3.5),
       },
@@ -137,17 +137,17 @@ const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()(
         borderRadius: 0,
 
         "&:hover": {
-          backgroundColor: tc(theme.palette.appBar.text).setAlpha(0.08).toString(),
+          backgroundColor: parseColor(theme.palette.appBar.text).alpha(0.08).toRgbString(),
 
           [`.${classes.avatar}`]: {
-            backgroundColor: tc(theme.palette.appBar.main).lighten(20).toString(),
+            backgroundColor: parseColor(theme.palette.appBar.main).lighten(0.2).toHex(),
           },
         },
         "&.Mui-selected": {
           backgroundColor: theme.palette.appBar.primary,
 
           [`.${classes.avatar}`]: {
-            backgroundColor: tc(theme.palette.appBar.main).setAlpha(0.3).toString(),
+            backgroundColor: parseColor(theme.palette.appBar.main).alpha(0.3).toRgbString(),
           },
         },
       },

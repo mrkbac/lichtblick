@@ -7,9 +7,9 @@
 
 import { Popover, TextField, useTheme } from "@mui/material";
 import { useCallback, useState } from "react";
-import tinycolor from "tinycolor2";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 
 import { ColorPickerControl, useColorPickerControl } from "./ColorPickerControl";
 import { ColorSwatch } from "./ColorSwatch";
@@ -59,8 +59,8 @@ export function ColorGradientInput({
 
   const leftColor = colors?.[0] ?? "#000000";
   const rightColor = colors?.[1] ?? "#FFFFFF";
-  const safeLeftColor = tinycolor(leftColor).isValid() ? leftColor : "#000000";
-  const safeRightColor = tinycolor(rightColor).isValid() ? rightColor : "#FFFFFF";
+  const safeLeftColor = parseColor(leftColor).isValid() ? leftColor : "#000000";
+  const safeRightColor = parseColor(rightColor).isValid() ? rightColor : "#FFFFFF";
 
   const theme = useTheme();
 

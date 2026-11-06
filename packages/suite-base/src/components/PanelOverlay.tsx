@@ -16,19 +16,19 @@ import {
 } from "@mui/material";
 import * as _ from "lodash-es";
 import { forwardRef, ReactElement } from "react";
-import tc from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 
 import { PANEL_ROOT_CLASS_NAME } from "@lichtblick/suite-base/components/PanelRoot";
 import { PANEL_TOOLBAR_MIN_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
+import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 
 const useStyles = makeStyles<void, "buttonGroup">()((theme, _params, classes) => {
-  const transparentBackground = tc(theme.palette.background.default).setAlpha(0).toRgbString();
-  const hoverBackground = tc(theme.palette.background.default)
-    .setAlpha(1 - theme.palette.action.disabledOpacity)
+  const transparentBackground = parseColor(theme.palette.background.default).alpha(0).toRgbString();
+  const hoverBackground = parseColor(theme.palette.background.default)
+    .alpha(1 - theme.palette.action.disabledOpacity)
     .toRgbString();
-  const hoverPrimary = tc(theme.palette.primary.main)
-    .setAlpha(theme.palette.action.hoverOpacity)
+  const hoverPrimary = parseColor(theme.palette.primary.main)
+    .alpha(theme.palette.action.hoverOpacity)
     .toRgbString();
 
   return {

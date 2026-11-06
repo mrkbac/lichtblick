@@ -12,9 +12,9 @@ import {
   PointsAnnotationType,
   SceneUpdate,
 } from "@foxglove/schemas";
+import { colord } from "colord";
 import { screen, userEvent, within } from "storybook/test";
 import { StoryObj } from "storybook-react-rsbuild";
-import tinycolor from "tinycolor2";
 
 import { MessageEvent } from "@lichtblick/suite";
 import { ImageModeConfig } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
@@ -433,9 +433,11 @@ function makeSceneUpdate({
                 })),
                 color: makeColor("#7995fb", 0.8),
                 colors: new Array(10).fill(0).map((_, i, { length }) => {
-                  const { r, g, b, a } = tinycolor
-                    .fromRatio({ h: i / (length - 1), s: 1, v: 1 })
-                    .toRgb();
+                  const { r, g, b, a } = colord({
+                    h: (360 * i) / (length - 1),
+                    s: 100,
+                    v: 100,
+                  }).toRgb();
                   return { r: r / 255, g: g / 255, b: b / 255, a };
                 }),
                 indices: [],
@@ -456,9 +458,11 @@ function makeSceneUpdate({
                 color: makeColor("#7995fb", 0.8),
                 colors: rearrange(
                   new Array(10).fill(0).map((_, i, { length }) => {
-                    const { r, g, b, a } = tinycolor
-                      .fromRatio({ h: i / (length - 1), s: 1, v: 1 })
-                      .toRgb();
+                    const { r, g, b, a } = colord({
+                      h: (360 * i) / (length - 1),
+                      s: 100,
+                      v: 100,
+                    }).toRgb();
                     return { r: r / 255, g: g / 255, b: b / 255, a };
                   }),
                 ),
