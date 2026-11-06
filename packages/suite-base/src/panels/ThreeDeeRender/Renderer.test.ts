@@ -340,6 +340,40 @@ describe("3D Renderer", () => {
     renderer.dispose();
   });
 
+  it("skips GPU work while the tab is hidden and repaints when it is shown", () => {
+    const visibility = vi.spyOn(document, "visibilityState", "get");
+    const requestAnimationFrameSpy = vi
+      .spyOn(window, "requestAnimationFrame")
+      .mockImplementation(function () {
+        return 1;
+      });
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    const render = vi.spyOn(renderer.gl, "render");
+
+    try {
+      visibility.mockReturnValue("hidden");
+      render.mockClear();
+      renderer.addMessageEventBatch([createTFMessageEvent("parent", "child", 1n, [1n])]);
+      renderer.animationFrame();
+      expect(render).not.toHaveBeenCalled();
+      // Messages are still processed, so the queues don't grow while hidden
+      expect(renderer.transformTree.hasFrame("child")).toBe(true);
+      const queues = renderer.schemaSubscriptions.get("tf2_msgs/TFMessage")!;
+      expect(queues.every((subscription) => subscription.queue == undefined)).toBe(true);
+
+      visibility.mockReturnValue("visible");
+      requestAnimationFrameSpy.mockClear();
+      document.dispatchEvent(new Event("visibilitychange"));
+      expect(requestAnimationFrameSpy).toHaveBeenCalledWith(renderer.animationFrame);
+      renderer.animationFrame();
+      expect(render).toHaveBeenCalled();
+    } finally {
+      renderer.dispose();
+      visibility.mockRestore();
+      requestAnimationFrameSpy.mockRestore();
+    }
+  });
+
   it("enables and disables picking mode", () => {
     // Given: A renderer instance
     const renderer = new Renderer({ ...defaultRendererProps, canvas });
