@@ -40,6 +40,7 @@ import { getPanelIds, setActivePanel } from "@lichtblick/suite-base/util/layoutT
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
 
 import { Command, parseSeekInput } from "./commands";
+import { LAYOUT_SHORTCUTS } from "./layoutShortcuts";
 
 const log = Logger.getLogger(__filename);
 
@@ -140,6 +141,10 @@ function shortcutCommands(t: TFunction<"commandPalette">): Command[] {
     [t("toggleLeftSidebar"), "["],
     [t("toggleRightSidebar"), "]"],
     [t("togglePanelSettings"), ","],
+    ...LAYOUT_SHORTCUTS.flatMap((s): [string, string][] => {
+      const shortcut = s.shortcut();
+      return shortcut != undefined ? [[t(s.titleKey), shortcut]] : [];
+    }),
   ];
   return entries.map(([title, shortcut]) => ({
     id: `shortcut:${title}`,
@@ -163,8 +168,9 @@ export function useAppCommands(): {
   const leftSidebarOpen = useWorkspaceStore(selectLeftSidebarOpen);
   const leftSidebarItem = useWorkspaceStore(selectLeftSidebarItem);
   const layoutManager = useLayoutManager();
+  const layoutActions = useCurrentLayoutActions();
   const { setSelectedLayoutId, setPlaybackConfig, changePanelLayout, getCurrentLayoutState } =
-    useCurrentLayoutActions();
+    layoutActions;
   const { setSelectedPanelIds } = useSelectedPanels();
   const selectedLayout = useCurrentLayoutSelector(selectLayout);
   const panelCatalog = usePanelCatalog();
@@ -268,11 +274,23 @@ export function useAppCommands(): {
       },
     );
     if (selectedLayout) {
-      push(t("groupLayout"), {
-        id: "layout.export",
-        title: t("exportLayout"),
-        run: catchErrors(exportLayout),
-      });
+      push(
+        t("groupLayout"),
+        {
+          id: "layout.export",
+          title: t("exportLayout"),
+          run: catchErrors(exportLayout),
+        },
+        ...LAYOUT_SHORTCUTS.map((s) => ({
+          id: s.id,
+          title: t(s.titleKey),
+          keywords: ["history"],
+          shortcut: s.shortcut(),
+          run: () => {
+            s.run(layoutActions);
+          },
+        })),
+      );
     }
 
     // ---- Panels ----
@@ -503,6 +521,7 @@ export function useAppCommands(): {
     exportLayout,
     importLayout,
     isPlaying,
+    layoutActions,
     layoutManager,
     leftSidebarItem,
     leftSidebarOpen,

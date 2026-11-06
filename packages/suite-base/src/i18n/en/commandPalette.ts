@@ -32,6 +32,9 @@ export const commandPalette = {
   importLayout: "Import layout from file…",
   exportLayout: "Export layout to file…",
   browseLayouts: "Browse layouts",
+  undoLayoutChange: "Undo layout change",
+  redoLayoutChange: "Redo layout change",
+  reopenClosedPanel: "Reopen closed panel",
 
   addPanel: "Add panel…",
   addPanelPlaceholder: "Search panels",

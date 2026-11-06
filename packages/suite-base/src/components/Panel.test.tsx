@@ -80,7 +80,10 @@ describe("Panel", () => {
       // first one is from PanelSetup
       {
         type: "SAVE_PANEL_CONFIGS",
-        payload: { configs: [{ id: childId, config: { someString: "hello world" } }] },
+        payload: {
+          configs: [{ id: childId, config: { someString: "hello world" } }],
+          fillsDefaults: true,
+        },
       },
     ]);
   });
@@ -145,6 +148,7 @@ describe("Panel", () => {
         type: "SAVE_PANEL_CONFIGS",
         payload: {
           configs: [{ id: childId, config: { someNumber: 42, someString: "hello world" } }],
+          fillsDefaults: true,
         },
       },
     ]);

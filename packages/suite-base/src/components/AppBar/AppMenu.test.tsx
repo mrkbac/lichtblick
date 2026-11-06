@@ -32,6 +32,10 @@ vi.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => ({
   useWorkspaceActions: vi.fn(),
 }));
 
+vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
+  useCurrentLayoutActions: () => ({}),
+}));
+
 vi.mock("@lichtblick/suite-base/hooks/useLayoutTransfer", () => ({
   useLayoutTransfer: vi.fn(),
 }));

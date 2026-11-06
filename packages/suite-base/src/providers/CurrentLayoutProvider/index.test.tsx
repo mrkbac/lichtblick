@@ -301,6 +301,61 @@ describe("CurrentLayoutProvider", () => {
     expect(result.current.actions.savePanelConfigs).toBe(actions.savePanelConfigs);
   });
 
+  it("undoes and redoes layout edits", async () => {
+    mockLayoutManager.getLayouts.mockImplementation(async () => [
+      {
+        id: "example",
+        name: "Test layout",
+        data: { data: TEST_LAYOUT },
+        permission: "CREATOR_WRITE",
+      },
+    ]);
+    mockLayoutManager.getLayout.mockResolvedValue({
+      id: "example",
+      name: "Test layout",
+      baseline: { data: TEST_LAYOUT, updatedAt: new Date(10).toISOString() },
+    });
+    mockLayoutManager.updateLayout.mockImplementation(async () => ({
+      id: "example",
+      name: "Test layout",
+      baseline: { data: TEST_LAYOUT, updatedAt: new Date(10).toISOString() },
+    }));
+    mockUserProfile.getUserProfile.mockResolvedValue({ currentLayoutId: "example" });
+
+    const { result } = renderTest({ mockLayoutManager, mockUserProfile });
+    await act(async () => {
+      await result.current.childMounted;
+    });
+    const config = () => result.current.layoutState.selectedLayout?.data?.configById;
+    await waitFor(() => {
+      expect(config()).toEqual({});
+    });
+
+    const save = (foo: string) => {
+      act(() => {
+        result.current.actions.savePanelConfigs({
+          configs: [{ id: "ExamplePanel!1", config: { foo } }],
+        });
+      });
+    };
+    // The panel's first config is its initial state, not an undo step.
+    save("initial");
+    save("changed");
+    expect(config()).toEqual({ "ExamplePanel!1": { foo: "changed" } });
+    act(() => {
+      result.current.actions.undoLayoutChange();
+    });
+    expect(config()).toEqual({ "ExamplePanel!1": { foo: "initial" } });
+    act(() => {
+      result.current.actions.undoLayoutChange();
+    });
+    expect(config()).toEqual({ "ExamplePanel!1": { foo: "initial" } });
+    act(() => {
+      result.current.actions.redoLayoutChange();
+    });
+    expect(config()).toEqual({ "ExamplePanel!1": { foo: "changed" } });
+  });
+
   it("selects the first layout in alphabetic order, when there is no selected layout", async () => {
     mockLayoutManager.getLayouts.mockImplementation(async () => {
       return [

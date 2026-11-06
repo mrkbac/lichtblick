@@ -102,6 +102,11 @@ export interface ICurrentLayout {
     swapPanel: (payload: SwapPanelPayload) => void;
     addPanel: (payload: AddPanelPayload) => void;
     groupPanels: (payload: GroupPanelsPayload) => void;
+    /** Steps back through layout edits of the current layout. */
+    undoLayoutChange: () => void;
+    redoLayoutChange: () => void;
+    /** Puts the most recently closed panel back, with its config. */
+    reopenClosedPanel: () => void;
   };
 }
 
