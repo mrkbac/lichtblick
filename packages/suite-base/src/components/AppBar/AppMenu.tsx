@@ -24,7 +24,7 @@ import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/us
 import { useInstallPrompt } from "@lichtblick/suite-base/hooks/useInstallPrompt";
 import { useInteractionCapture } from "@lichtblick/suite-base/hooks/useInteractionCapture";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
-import { checkForServiceWorkerUpdate } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdatePrompt";
+import { checkForServiceWorkerUpdate } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { formatKeyboardShortcut } from "@lichtblick/suite-base/util/formatKeyboardShortcut";
 
@@ -269,9 +269,9 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
     handleNestedMenuClose();
     checkForServiceWorkerUpdate()
       .then((found) => {
-        if (!found) {
-          enqueueSnackbar(t("noUpdateAvailable"), { variant: "success" });
-        }
+        enqueueSnackbar(t(found ? "updateReady" : "noUpdateAvailable"), {
+          variant: found ? "info" : "success",
+        });
       })
       .catch((error: unknown) => {
         console.error(error);
