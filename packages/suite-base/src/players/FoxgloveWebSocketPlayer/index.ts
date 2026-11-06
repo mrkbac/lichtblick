@@ -61,6 +61,10 @@ import { ros2CommonDatatypes } from "@lichtblick/suite-base/util/ros2CommonDatat
 import rosDatatypesToMessageDefinition from "@lichtblick/suite-base/util/rosDatatypesToMessageDefinition";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
+import ExtensionProxySocket, {
+  needsExtensionProxy,
+  PROXY_MISSING_REASON,
+} from "./ExtensionProxySocket";
 import { JsonMessageWriter } from "./JsonMessageWriter";
 import WorkerSocketAdapter from "./WorkerSocketAdapter";
 import {
@@ -204,8 +208,9 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
     const subprotocols = [FoxgloveClient.SUPPORTED_SUBPROTOCOL, "foxglove.sdk.v1"];
 
-    const ws =
-      typeof Worker !== "undefined"
+    const ws = needsExtensionProxy(this.#url)
+      ? new ExtensionProxySocket(this.#url, subprotocols)
+      : typeof Worker !== "undefined"
         ? new WorkerSocketAdapter(this.#url, subprotocols)
         : (new WebSocket(this.#url, subprotocols) as IWebSocket);
     this.#ws = ws;
@@ -299,9 +304,12 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#alerts.addAlert("ws:connection-failed", {
         severity: "error",
         message: "Connection failed",
-        tip: `Check that the WebSocket server at ${
-          this.#url
-        } is reachable and supports protocol version one of: ${subprotocols.join(", ")}.`,
+        tip:
+          (event as { reason?: unknown } | undefined)?.reason === PROXY_MISSING_REASON
+            ? `Browsers block ws:// from an https page. Install the WebSocket proxy extension (chrome-extension/ in the Lichtblick repo), or use wss://.`
+            : `Check that the WebSocket server at ${
+                this.#url
+              } is reachable and supports protocol version one of: ${subprotocols.join(", ")}.`,
       });
 
       this.#emitState();
