@@ -425,12 +425,14 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   #markUnavailable(item: Measurement, dstFrameId: AnyFrameId): void {
     item.dirty = true;
     const tree = this.renderer.transformTree;
-    // Name the first frame missing from the tree; else the path exists, just not at this time
+    // Name the first frame missing from the tree; if all exist, a link between them has no
+    // transform at this time, and naming one of the present frames would mislead
     const candidates: AnyFrameId[] = [item.frameId, dstFrameId, this.#fixedFrameId];
-    const missing = candidates.find((id) => !tree.hasFrame(id)) ?? item.frameId;
-    const label = i18next.t("threeDee:measureMissingTransform", {
-      frame: typeof missing === "string" ? missing : "",
-    });
+    const missing = candidates.find((id) => !tree.hasFrame(id));
+    const label =
+      typeof missing === "string"
+        ? i18next.t("threeDee:measureMissingTransform", { frame: missing })
+        : i18next.t("threeDee:measureTransformUnavailable");
     if (item.unavailable && item.summary.label === label) {
       return;
     }

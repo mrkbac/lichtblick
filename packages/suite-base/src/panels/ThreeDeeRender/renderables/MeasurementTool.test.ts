@@ -79,4 +79,15 @@ describe("MeasurementTool", () => {
     expect(tool.measurements[0]!.unavailable).toBe(false);
     expect(tool.copyText()).toBe(copied);
   });
+
+  it("does not name a present frame when only the path between frames is missing", () => {
+    const { tool, transformTree, frame } = setup();
+    // Every frame exists, but the result frame isn't connected to the measurement's frame
+    transformTree.addTransform("other", "elsewhere", 0n, Transform.Identity());
+    tool.setResultFrame("other");
+    frame();
+    expect(tool.measurements[0]!.unavailable).toBe(true);
+    expect(tool.measurements[0]!.summary.label).toBe("— (transform unavailable)");
+    expect(tool.copyText()).toBe("");
+  });
 });
