@@ -16,6 +16,14 @@ import { CompressedImageTypes, getFrameIdFromImage, getTimestampFromImage } from
  * https://github.com/ros-perception/image_transport_plugins/blob/rolling/compressed_depth_image_transport/src/codec.cpp
  */
 const CONFIG_HEADER_SIZE = 12;
+// Far above any depth sensor; stops a corrupt header from allocating gigabytes in the worker
+const MAX_PIXELS = 1 << 26;
+
+function checkSize(width: number, height: number): void {
+  if (width === 0 || height === 0 || width * height > MAX_PIXELS) {
+    throw new Error(`compressedDepth image has invalid size ${width}x${height}`);
+  }
+}
 
 export function isCompressedDepthFormat(format: string): boolean {
   return /;\s*compresseddepth\b/i.test(format);
@@ -37,9 +45,13 @@ export async function decodeCompressedDepth(image: CompressedImageTypes): Promis
   if (codec === "png") {
     depth = await decodeGray16Png(payload);
   } else if (codec === "rvl") {
+    if (payload.byteLength < 8) {
+      throw new Error("compressedDepth RVL image is missing its size header");
+    }
     const view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
     const width = view.getUint32(0, true);
     const height = view.getUint32(4, true);
+    checkSize(width, height);
     depth = { width, height, data: decodeRvl(payload.subarray(8), width * height) };
   } else {
     throw new Error(`Unsupported compressedDepth codec "${codec}", expected png or rvl`);
@@ -93,6 +105,7 @@ async function decodeGray16Png(png: Uint8Array): Promise<{
   }
   const width = view.getUint32(16);
   const height = view.getUint32(20);
+  checkSize(width, height);
   const bitDepth = png[24]!;
   const colorType = png[25]!;
   const interlace = png[28]!;

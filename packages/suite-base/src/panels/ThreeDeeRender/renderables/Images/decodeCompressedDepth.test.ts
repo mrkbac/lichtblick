@@ -180,6 +180,18 @@ describe("decodeCompressedDepth", () => {
     await expect(
       decodeCompressedDepth(makeImage("16UC1; compressedDepth png", new Uint8Array(40))),
     ).rejects.toThrow("not a PNG image");
+    await expect(
+      decodeCompressedDepth(makeImage("16UC1; compressedDepth rvl", new Uint8Array(4))),
+    ).rejects.toThrow("missing its size header");
+    const hugeSize = new Uint8Array(8);
+    new DataView(hugeSize.buffer).setUint32(0, 100_000, true);
+    new DataView(hugeSize.buffer).setUint32(4, 100_000, true);
+    await expect(
+      decodeCompressedDepth(makeImage("16UC1; compressedDepth rvl", hugeSize)),
+    ).rejects.toThrow("invalid size 100000x100000");
+    await expect(
+      decodeCompressedDepth(makeImage("16UC1; compressedDepth png", makePng(0, 1, []))),
+    ).rejects.toThrow("invalid size 0x1");
   });
 });
 
