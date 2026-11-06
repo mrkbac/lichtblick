@@ -19,6 +19,8 @@ export type WatchConfig = {
   rows: WatchRow[];
   /** Show a sparkline of recent numeric values next to each row */
   sparklines: boolean;
+  /** Briefly highlight a row when its value changes */
+  flashChanges: boolean;
   /** Show how long ago each value's message arrived */
   showAge: boolean;
   /** Values older than this many seconds are shown as stale */
@@ -28,6 +30,7 @@ export type WatchConfig = {
 export const DEFAULT_CONFIG: WatchConfig = {
   rows: [],
   sparklines: true,
+  flashChanges: true,
   showAge: true,
   staleAfterSec: 2,
 };
@@ -88,6 +91,8 @@ export function migrateConfig(raw: unknown): WatchConfig {
     rows,
     sparklines:
       typeof input.sparklines === "boolean" ? input.sparklines : DEFAULT_CONFIG.sparklines,
+    flashChanges:
+      typeof input.flashChanges === "boolean" ? input.flashChanges : DEFAULT_CONFIG.flashChanges,
     showAge: typeof input.showAge === "boolean" ? input.showAge : DEFAULT_CONFIG.showAge,
     staleAfterSec: validStaleAfter(input.staleAfterSec) ?? DEFAULT_CONFIG.staleAfterSec,
   };

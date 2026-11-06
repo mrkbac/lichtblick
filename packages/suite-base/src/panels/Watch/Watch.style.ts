@@ -33,11 +33,14 @@ export const useStyles = makeStyles()((theme) => ({
     // Frozen values: dim the value, highlight the age
     "&[data-stale='true'][data-error='false'] [data-value]": { color: theme.palette.text.disabled },
     "&[data-stale='true'] [data-age]": { color: theme.palette.warning.main },
+    // The editor needs the whole row; the hover actions would cover it
+    "&[data-editing='true'] [data-actions]": { display: "none" },
   },
   dropTarget: { boxShadow: `inset 0 2px 0 ${theme.palette.primary.main}` },
   expandButton: { padding: 0, margin: theme.spacing(0, -0.5) },
+  // The name takes the free space; the value is only as wide as its text
   name: {
-    flex: "0 1 40%",
+    flex: "1 1 auto",
     minWidth: 60,
     overflow: "hidden",
     textOverflow: "ellipsis",
@@ -46,10 +49,12 @@ export const useStyles = makeStyles()((theme) => ({
     color: theme.palette.text.secondary,
     "&:hover": { color: theme.palette.primary.main, textDecoration: "underline" },
   },
+  nameEditor: { flex: "1 1 auto", minWidth: 120 },
   invalid: { color: theme.palette.error.main },
   value: {
-    flex: "1 1 0",
-    minWidth: 0,
+    flex: "0 1 auto",
+    minWidth: "min(10ch, 40%)", // typical numbers keep one width; the sparkline gives way first
+    maxWidth: "50%", // long array and object summaries leave room for the name
     overflow: "hidden",
     textOverflow: "ellipsis",
     whiteSpace: "nowrap",
@@ -68,10 +73,12 @@ export const useStyles = makeStyles()((theme) => ({
     whiteSpace: "nowrap",
     "@container (max-width: 220px)": { display: "none" },
   },
+  // Grows with the panel: the trend is often what the row is watched for
   sparkline: {
-    width: 64,
-    height: 18,
-    flex: "none",
+    width: "clamp(64px, 30cqi, 240px)",
+    minWidth: 40,
+    height: 22,
+    flex: "0 1 auto",
     "@container (max-width: 280px)": { display: "none" },
   },
   // Overlays the end of the row on hover, so it takes no space from values

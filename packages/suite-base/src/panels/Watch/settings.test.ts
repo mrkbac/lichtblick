@@ -4,10 +4,11 @@
 import { TFunction } from "i18next";
 
 import { WatchConfig } from "./config";
-import { buildSettingsTree, settingsReducer } from "./settings";
+import { buildSettingsTree, replaceRowPaths, settingsReducer } from "./settings";
 
 const config: WatchConfig = {
   sparklines: true,
+  flashChanges: true,
   showAge: true,
   staleAfterSec: 2,
   rows: [
@@ -61,6 +62,7 @@ describe("Watch settings", () => {
     expect(update(["rows", "a", "unit"], "m").rows[0]!.unit).toBe("m");
     expect(update(["general", "sparklines"], false).sparklines).toBe(false);
     expect(update(["general", "showAge"], false).showAge).toBe(false);
+    expect(update(["general", "flashChanges"], false).flashChanges).toBe(false);
   });
 
   it("sets the stale threshold per panel and per row", () => {
@@ -79,5 +81,15 @@ describe("Watch settings", () => {
     ).toBeUndefined();
     const nodes = buildSettingsTree(config, new Map(), t);
     expect(nodes.rows!.children!.a!.fields!.staleAfterSec!).toMatchObject({ placeholder: "2" });
+  });
+});
+
+describe("replaceRowPaths", () => {
+  it("edits the row in place and adds the other paths after it", () => {
+    const rows = replaceRowPaths(config.rows, "b", ["/b.y", "/b.z"]);
+    expect(rows.map((row) => row.path)).toEqual(["/a.x", "/b.y", "/b.z", "/c.x"]);
+    expect(rows[1]).toMatchObject({ id: "b", label: undefined }); // the label named the old path
+    expect(rows[2]!.id).not.toBe("b");
+    expect(replaceRowPaths(config.rows, "b", ["/b.x"])[1]!.label).toBe("B");
   });
 });

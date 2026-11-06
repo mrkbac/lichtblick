@@ -6,7 +6,9 @@ import {
   MessagePathStructureItem,
   MessagePathStructureItemMessage,
   parseMessagePath,
+  quoteFieldNameIfNeeded,
 } from "@lichtblick/message-path";
+import { traverseStructure } from "@lichtblick/suite-base/components/MessagePathSyntax/messagePathsForDatatype";
 import { resolveEnumNamesInPath } from "@lichtblick/suite-base/components/MessagePathSyntax/resolveEnumNames";
 import { fillInGlobalVariablesInPath } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
@@ -53,6 +55,78 @@ export function enumNamesForPath(path: MessagePath, schema: Schema): EnumNames |
     return undefined;
   }
   return schema.enumValues[container]?.[field];
+}
+
+/** The structure a path ends on, or undefined if the path or its topic is unknown. */
+function structureAt(path: string, schema: Schema): MessagePathStructureItem | undefined {
+  // A trailing stream modifier like `.@derivative` keeps the field's shape
+  const parsed = parseMessagePath(path);
+  if (!parsed) {
+    return undefined;
+  }
+  const schemaName = schema.schemaNames.get(parsed.topicName);
+  const root = schemaName != undefined ? schema.structures[schemaName] : undefined;
+  const result = traverseStructure(root, parsed.messagePath);
+  return result.valid ? result.structureItem : undefined;
+}
+
+/** Whether a path ends on a single field (not a message), so it is ready to watch. */
+export function isLeafPath(path: string, schema: Schema): boolean {
+  return structureAt(path, schema)?.structureType === "primitive";
+}
+
+/**
+ * Every field below a path that ends on a message, in definition order, e.g. `.roll`, `.pitch`
+ * and `.yaw` for `/imu.orientation.@rpy`. Arrays are skipped: their length varies, rows don't.
+ * Empty for a single field or an unknown path.
+ */
+export function childPaths(path: string, schema: Schema): string[] {
+  const paths: string[] = [];
+  const visit = (item: MessagePathStructureItem, prefix: string) => {
+    if (item.structureType === "primitive") {
+      paths.push(prefix);
+    } else if (item.structureType === "message") {
+      for (const [name, next] of Object.entries(item.nextByName)) {
+        visit(next, `${prefix}.${quoteFieldNameIfNeeded(name)}`);
+      }
+    }
+  };
+  const item = structureAt(path, schema);
+  if (item?.structureType === "message") {
+    visit(item, path);
+  }
+  return paths;
+}
+
+/**
+ * What Enter in a path input adds: the path itself, or with Shift every field below it. `picked`
+ * is set when the same Enter accepted an autocomplete suggestion; it then only adds a finished
+ * field, so a completion that ends on a message keeps the input open for typing further.
+ * Undefined means Enter does nothing here.
+ */
+export function pathsForEnter(
+  path: string,
+  { shiftKey, picked }: { shiftKey: boolean; picked: boolean },
+  schema: Schema,
+): string[] | undefined {
+  const trimmed = path.trim();
+  const parsed = parseMessagePath(trimmed);
+  // A half-typed path like `/topic.field.` would only add a broken row. Topics without a known
+  // schema (not published so far, no schema name, unknown datatype) can't be checked, so any
+  // parsed path is fine there.
+  if (!parsed) {
+    return undefined;
+  }
+  const schemaName = schema.schemaNames.get(parsed.topicName);
+  const known = schemaName != undefined && schema.structures[schemaName] != undefined;
+  if (known && structureAt(trimmed, schema) == undefined) {
+    return undefined;
+  }
+  if (shiftKey) {
+    const children = childPaths(trimmed, schema);
+    return children.length > 0 ? children : [trimmed];
+  }
+  return picked && !isLeafPath(trimmed, schema) ? undefined : [trimmed];
 }
 
 export type CompileResult = {

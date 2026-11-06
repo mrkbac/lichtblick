@@ -29,13 +29,19 @@ import clipboard from "@lichtblick/suite-base/util/clipboard";
 import { enumValuesByDatatypeAndField } from "@lichtblick/suite-base/util/enums";
 
 import { useStyles } from "./Watch.style";
-import { Painters, RowAction, WatchRowView } from "./WatchRowView";
+import { Painters, RowAction, WatchRowView, isCompositionEnter } from "./WatchRowView";
 import { Playback, WatchStore, createPlaybackClock } from "./WatchStore";
-import { compileRows, subscriptionsFor } from "./compile";
+import { compileRows, pathsForEnter, subscriptionsFor } from "./compile";
 import { DEFAULT_CONFIG, WatchConfig, migrateConfig, newRow, parsePastedPaths } from "./config";
 import { copyText } from "./format";
 import { createFrameScheduler } from "./frameScheduler";
-import { buildSettingsTree, duplicateRow, moveRow, settingsReducer } from "./settings";
+import {
+  buildSettingsTree,
+  duplicateRow,
+  moveRow,
+  replaceRowPaths,
+  settingsReducer,
+} from "./settings";
 
 const AGE_TICK_MS = 250;
 
@@ -56,7 +62,7 @@ type Props = {
 
 function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
   const config = useMemo(() => migrateConfig(rawConfig), [rawConfig]);
-  const { rows, sparklines, showAge, staleAfterSec } = config;
+  const { rows, sparklines, flashChanges, showAge, staleAfterSec } = config;
   const { t } = useTranslation("watch");
   const { classes } = useStyles();
   const { enqueueSnackbar } = useSnackbar();
@@ -204,6 +210,18 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
     });
   }, [addPaths, setMessagePathDropConfig]);
 
+  // Edit a row's path in place; a duplicate opens its editor right away
+  const [editingId, setEditingId] = useState<string | undefined>();
+  const onEditDone = useCallback(
+    (id: string, paths: string[] | undefined) => {
+      setEditingId(undefined);
+      if (paths) {
+        updateConfig((prev) => ({ ...prev, rows: replaceRowPaths(prev.rows, id, paths) }));
+      }
+    },
+    [updateConfig],
+  );
+
   const onAction = useCallback(
     (action: RowAction, id: string) => {
       const row = rows.find((item) => item.id === id);
@@ -221,9 +239,15 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
             enqueueSnackbar(t("copied"), { variant: "success", autoHideDuration: 1000 });
           });
           break;
-        case "duplicate":
-          updateConfig((prev) => ({ ...prev, rows: duplicateRow(prev.rows, id) }));
+        case "edit":
+          setEditingId(id);
           break;
+        case "duplicate": {
+          const copyId = newRow("").id;
+          updateConfig((prev) => ({ ...prev, rows: duplicateRow(prev.rows, id, copyId) }));
+          setEditingId(copyId);
+          break;
+        }
         case "remove":
           updateConfig((prev) => ({ ...prev, rows: prev.rows.filter((item) => item.id !== id) }));
           break;
@@ -242,20 +266,41 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
     [updateConfig],
   );
 
-  // Add rows: type a path and press Enter, or paste several paths at once
-  const [draft, setDraft] = useState("");
+  // Add rows: type a path and press Enter (Shift+Enter adds every field below it), or paste
+  // several paths at once
+  const [draft, setDraftState] = useState("");
+  // Picking a suggestion with Enter updates the draft during that same key event
+  const draftRef = useRef("");
+  const setDraft = useCallback((value: string) => {
+    draftRef.current = value;
+    setDraftState(value);
+  }, []);
+  // The add button works like Enter
   const submitDraft = useCallback(() => {
-    addPaths(parsePastedPaths(draft));
-    setDraft("");
-  }, [addPaths, draft]);
+    const paths = pathsForEnter(draftRef.current, { shiftKey: false, picked: false }, schema);
+    if (paths) {
+      addPaths(paths);
+      setDraft("");
+    }
+  }, [addPaths, schema, setDraft]);
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
+      if (event.key !== "Enter" || isCompositionEnter(event)) {
+        return;
+      }
       // A prevented Enter picked an autocomplete suggestion
-      if (event.key === "Enter" && !event.defaultPrevented) {
-        submitDraft();
+      const paths = pathsForEnter(
+        draftRef.current,
+        { shiftKey: event.shiftKey, picked: event.defaultPrevented },
+        schema,
+      );
+      if (paths) {
+        event.preventDefault();
+        addPaths(paths);
+        setDraft("");
       }
     },
-    [submitDraft],
+    [addPaths, schema, setDraft],
   );
   const onPaste = useCallback(
     (event: React.ClipboardEvent) => {
@@ -299,9 +344,13 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
             enumNames={enumNames.get(row.id)}
             invalid={invalid.has(row.id)}
             sparklines={sparklines}
+            flashChanges={flashChanges}
             showAge={showAge}
             staleAfterSec={row.staleAfterSec ?? staleAfterSec}
             isDropTarget={dropTarget === row.id}
+            editing={editingId === row.id}
+            schema={schema}
+            onEditDone={onEditDone}
             onAction={onAction}
             onDragOverRow={setDropTarget}
             onDropRow={onDropRow}

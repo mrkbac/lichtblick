@@ -22,6 +22,7 @@ describe("migrateConfig", () => {
     });
     expect(config).toEqual({
       sparklines: false,
+      flashChanges: true,
       showAge: true,
       staleAfterSec: 2,
       rows: [

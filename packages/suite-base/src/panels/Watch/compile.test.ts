@@ -7,7 +7,7 @@ import { messagePathStructures } from "@lichtblick/suite-base/components/Message
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { enumValuesByDatatypeAndField } from "@lichtblick/suite-base/util/enums";
 
-import { Schema, compileRows, subscriptionsFor } from "./compile";
+import { Schema, childPaths, compileRows, pathsForEnter, subscriptionsFor } from "./compile";
 
 const datatypes: RosDatatypes = new Map([
   [
@@ -21,12 +21,28 @@ const datatypes: RosDatatypes = new Map([
       ],
     },
   ],
+  [
+    "example/Quat",
+    {
+      definitions: ["x", "y", "z", "w"].map((name) => ({ name, type: "float64" })),
+    },
+  ],
+  [
+    "example/Imu",
+    {
+      definitions: [{ name: "orientation", type: "example/Quat", isComplex: true }],
+    },
+  ],
 ]);
 
 const schema: Schema = {
   structures: messagePathStructures(datatypes),
   enumValues: enumValuesByDatatypeAndField(datatypes),
-  schemaNames: new Map([["/state", "example/State"]]),
+  schemaNames: new Map([
+    ["/state", "example/State"],
+    ["/imu", "example/Imu"],
+    ["/noschema", ""],
+  ]),
 };
 
 describe("compileRows", () => {
@@ -103,5 +119,54 @@ describe("subscriptionsFor", () => {
   it("subscribes to whole messages when a row needs them", () => {
     expect(subs(["/a.x", "/a"])).toEqual([{ topic: "/a", preloadType: "partial" }]);
     expect(subs(["/a", "/a.x"])).toEqual([{ topic: "/a", preloadType: "partial" }]);
+  });
+});
+
+describe("childPaths", () => {
+  it("lists the fields below a message, including a modifier's result", () => {
+    expect(childPaths("/imu.orientation.@rpy", schema)).toEqual([
+      "/imu.orientation.@rpy.roll",
+      "/imu.orientation.@rpy.pitch",
+      "/imu.orientation.@rpy.yaw",
+    ]);
+    expect(childPaths("/imu", schema)).toEqual([
+      "/imu.orientation.x",
+      "/imu.orientation.y",
+      "/imu.orientation.z",
+      "/imu.orientation.w",
+    ]);
+  });
+
+  it("is empty for a single field or an unknown path", () => {
+    expect(childPaths("/state.speed", schema)).toEqual([]);
+    expect(childPaths("/unknown.a", schema)).toEqual([]);
+  });
+});
+
+describe("pathsForEnter", () => {
+  const enter = { shiftKey: false, picked: false };
+
+  it("adds the typed path, or with Shift every field below it", () => {
+    expect(pathsForEnter(" /state.speed ", enter, schema)).toEqual(["/state.speed"]);
+    expect(pathsForEnter("/imu.orientation", { ...enter, shiftKey: true }, schema)).toHaveLength(4);
+    // Shift+Enter on a single field adds that field
+    expect(pathsForEnter("/state.speed", { ...enter, shiftKey: true }, schema)).toEqual([
+      "/state.speed",
+    ]);
+    expect(pathsForEnter("  ", enter, schema)).toBeUndefined();
+    expect(pathsForEnter("/state.", enter, schema)).toBeUndefined();
+    expect(pathsForEnter("/state.nope", enter, schema)).toBeUndefined();
+    expect(pathsForEnter("/state.speed.@derivative", enter, schema)).toEqual([
+      "/state.speed.@derivative",
+    ]);
+    // Topics without a known schema can still be watched
+    expect(pathsForEnter("/later.value", enter, schema)).toEqual(["/later.value"]);
+    expect(pathsForEnter("/noschema.value", enter, schema)).toEqual(["/noschema.value"]);
+  });
+
+  it("after picking a suggestion, adds only a finished field", () => {
+    const picked = { shiftKey: false, picked: true };
+    expect(pathsForEnter("/state.speed", picked, schema)).toEqual(["/state.speed"]);
+    expect(pathsForEnter("/imu.orientation", picked, schema)).toBeUndefined();
   });
 });

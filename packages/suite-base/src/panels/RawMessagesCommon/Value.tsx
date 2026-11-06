@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import ErrorIcon from "@mui/icons-material/Error";
 import { Tooltip, useTheme } from "@mui/material";
 import React, { useCallback, useMemo, useState, useRef, useEffect } from "react";
@@ -26,6 +27,7 @@ import {
 import { TRANSITIONABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/StateTransitions/constants";
 import { openSiblingStateTransitionsPanel } from "@lichtblick/suite-base/panels/StateTransitions/openSiblingStateTransitionsPanel";
 import { PLOTABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/shared/constants";
+import { useSeriesDrag } from "@lichtblick/suite-base/panels/shared/useSeriesDrag";
 import clipboard from "@lichtblick/suite-base/util/clipboard";
 import { getValueColor } from "@lichtblick/suite-base/util/globalConstants";
 
@@ -152,6 +154,11 @@ function Value(props: PropsValue): React.JSX.Element {
   }, [availableActions.length]);
   const { classes, cx } = useStylesValue();
 
+  // Drag a field onto another panel, e.g. a Watch or Plot
+  const { dragRef } = useSeriesDrag(
+    valueAction ? `${basePath}${valueAction.singleSlicePath}` : undefined,
+  );
+
   useEffect(() => {
     return () => {
       if (timeOutID.current != undefined) {
@@ -183,6 +190,14 @@ function Value(props: PropsValue): React.JSX.Element {
         <HighlightedValue itemLabel={itemLabel} />
       </span>
       {arrLabel}
+      {/* A grip instead of the whole value, so the value text stays selectable */}
+      {pointerOver && dragRef && (
+        <Tooltip arrow title="Drag to a panel" placement="top">
+          <span ref={dragRef} className={classes.dragHandle}>
+            <DragIndicatorIcon fontSize="inherit" />
+          </span>
+        </Tooltip>
+      )}
       {pointerOver &&
         availableActions.map((action) => (
           <Tooltip key={action.key} arrow title={action.tooltip} placement="top">
