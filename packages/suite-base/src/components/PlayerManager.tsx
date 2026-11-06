@@ -381,10 +381,15 @@ export default function PlayerManager(
       return;
     }
 
+    const gen = selectionGen.current;
     void (async () => {
       const permissions = await Promise.all(
         recent.handles.map(async (h) => await h.queryPermission({ mode: "read" })),
       );
+      // The user opened or closed a source meanwhile: don't override that with the restore
+      if (gen !== selectionGen.current) {
+        return;
+      }
       if (permissions.every((p) => p === "granted")) {
         void selectSource(recent.sourceId, { type: "file", handles: recent.handles });
         return;
