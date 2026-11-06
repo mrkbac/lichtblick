@@ -240,7 +240,8 @@ describe("NodeEditor childNodes filtering", () => {
 
     const { props } = await renderComponent({ settings: { label, visible: true } });
 
-    const toggle = screen.getByRole("checkbox");
+    // Hidden until hover on fine-pointer devices (jsdom applies the media query).
+    const toggle = screen.getByRole("checkbox", { hidden: true });
     fireEvent.click(toggle);
 
     expect(props.actionHandler).toHaveBeenCalledWith({
@@ -269,7 +270,7 @@ describe("NodeEditor childNodes filtering", () => {
       settings: { label, visible: true, renamable: true },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: /rename/i }));
+    fireEvent.click(screen.getByTitle("Rename"));
 
     const input = screen.getByRole("textbox");
 
@@ -292,7 +293,7 @@ describe("NodeEditor childNodes filtering", () => {
 
     await renderComponent({ settings: { label: nodeLabel, renamable: true } });
 
-    await user.click(screen.getByRole("button", { name: /rename/i }));
+    await user.click(screen.getByTitle("Rename"));
 
     await user.keyboard(key);
 
@@ -306,7 +307,7 @@ describe("NodeEditor childNodes filtering", () => {
 
     await renderComponent({ settings: { label: nodeLabel, renamable: true } });
 
-    fireEvent.click(screen.getByRole("button", { name: /rename/i }));
+    fireEvent.click(screen.getByTitle("Rename"));
 
     const textbox = screen.getByRole("textbox");
     expect(textbox).toBeInTheDocument();
@@ -327,7 +328,7 @@ describe("NodeEditor childNodes filtering", () => {
 
     await renderComponent({ settings: { label: nodeLabel, renamable: true } });
 
-    fireEvent.click(screen.getByRole("button", { name: /rename/i }));
+    fireEvent.click(screen.getByTitle("Rename"));
 
     // When: The CheckIcon button is clicked with event
     const confirmButton = screen.getByTestId("check-icon-button");
@@ -357,7 +358,7 @@ describe("NodeEditor childNodes filtering", () => {
     });
 
     // Enter editing mode
-    fireEvent.click(screen.getByRole("button", { name: /rename/i }));
+    fireEvent.click(screen.getByTitle("Rename"));
     expect(screen.getByRole("textbox")).toBeInTheDocument();
 
     // When: Clicking the toggle area while in editing mode
