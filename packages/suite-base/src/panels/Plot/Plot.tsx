@@ -345,8 +345,8 @@ const Plot = (props: PlotProps): React.JSX.Element => {
         )}
         {legendDisplay !== "none" && (
           <ToolbarIconButton
-            title={t(showLegend ? "hideLegend" : "showLegend")}
-            aria-label={t(showLegend ? "hideLegend" : "showLegend")}
+            title={t("legend")}
+            aria-label={t("legend")}
             aria-pressed={showLegend}
             color={showLegend ? "primary" : "default"}
             onClick={toggleLegend}
