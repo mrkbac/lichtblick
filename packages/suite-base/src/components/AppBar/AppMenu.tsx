@@ -12,10 +12,12 @@ import { useTranslation } from "react-i18next";
 
 import { useStyles } from "@lichtblick/suite-base/components/AppBar/AppMenu.style";
 import { useCommandPaletteStore } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
+import { LAYOUT_SHORTCUTS } from "@lichtblick/suite-base/components/CommandPalette/layoutShortcuts";
 import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
 import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
+import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { useInstallPrompt } from "@lichtblick/suite-base/hooks/useInstallPrompt";
@@ -45,6 +47,8 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
   const { dialogActions } = useWorkspaceActions();
   const { importLayout, exportLayout } = useLayoutTransfer();
   const installApp = useInstallPrompt();
+  const { t: tCommands } = useTranslation("commandPalette");
+  const layoutActions = useCurrentLayoutActions();
 
   // Only the web build registers a service worker (not desktop or the dev server). Check the
   // registration, not `controller`: a hard reload or the very first load runs uncontrolled.
@@ -154,6 +158,16 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
       )}
 
       <ListSubheader className={classes.subheader}>{t("layout")}</ListSubheader>
+      {LAYOUT_SHORTCUTS.map((shortcut) =>
+        item(
+          shortcut.id,
+          tCommands(shortcut.titleKey),
+          () => {
+            shortcut.run(layoutActions);
+          },
+          { shortcut: shortcut.shortcut() },
+        ),
+      )}
       {item("import-layout", t("importLayoutFromFile"), importLayout)}
       {item("export-layout", t("exportLayoutToFile"), exportLayout)}
 

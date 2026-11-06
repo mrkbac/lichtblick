@@ -27,6 +27,7 @@ import {
   ChangePanelLayoutPayload,
   ClosePanelPayload,
   GroupPanelsPayload,
+  LayoutData,
   PanelsActions,
   SaveConfigsPayload,
   SplitPanelPayload,
@@ -43,8 +44,8 @@ import {
   ORG_PERMISSION_PREFIX,
 } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/constants";
 import useUpdateSharedPanelState from "@lichtblick/suite-base/providers/CurrentLayoutProvider/hooks/useUpdateSharedPanelState";
+import { LayoutHistory } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/layoutHistory";
 import { loadDefaultLayouts } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/loadDefaultLayouts";
-import panelsReducer from "@lichtblick/suite-base/providers/CurrentLayoutProvider/reducers";
 import { findFavoriteLayout } from "@lichtblick/suite-base/providers/CurrentLayoutProvider/utils";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { LayoutLoader } from "@lichtblick/suite-base/services/ILayoutLoader";
@@ -190,21 +191,17 @@ export default function CurrentLayoutProvider({
     [enqueueSnackbar, isMounted, layoutManager, setLayoutState, setUserProfile],
   );
 
-  const performAction = useCallback(
-    (action: PanelsActions) => {
-      if (
-        layoutStateRef.current.selectedLayout?.data == undefined ||
-        layoutStateRef.current.selectedLayout.loading === true
-      ) {
+  const history = useRef(new LayoutHistory());
+
+  /** Every layout edit goes through here, so undo/redo sees all of them. */
+  const commitLayoutData = useCallback(
+    (edit: (history: LayoutHistory, data: LayoutData) => LayoutData | undefined) => {
+      const selected = layoutStateRef.current.selectedLayout;
+      if (selected?.data == undefined || selected.loading === true) {
         return;
       }
-      const oldData = layoutStateRef.current.selectedLayout.data;
-      const newData = panelsReducer(oldData, action);
-
-      // The panel state did not change, so no need to perform layout state
-      // updates or layout manager updates.
-      if (_.isEqual(oldData, newData)) {
-        log.warn("Panel action resulted in identical config:", action);
+      const newData = edit(history.current, selected.data);
+      if (newData == undefined) {
         return;
       }
 
@@ -215,14 +212,21 @@ export default function CurrentLayoutProvider({
         // discared shared panel state for panel types that are no longer in the layout
         sharedPanelState: _.pick(layoutStateRef.current.sharedPanelState, panelTypesInUse),
         selectedLayout: {
-          id: layoutStateRef.current.selectedLayout.id,
+          id: selected.id,
           data: newData,
-          name: layoutStateRef.current.selectedLayout.name,
+          name: selected.name,
           edited: true,
         },
       });
     },
     [setLayoutState],
+  );
+
+  const performAction = useCallback(
+    (action: PanelsActions) => {
+      commitLayoutData((h, data) => h.apply(data, action, performance.now()));
+    },
+    [commitLayoutData],
   );
 
   /**
@@ -448,8 +452,24 @@ export default function CurrentLayoutProvider({
         performAction({ type: "GROUP_PANELS", payload });
         setSelectedPanelIds([]);
       },
+      undoLayoutChange: () => {
+        commitLayoutData((h, data) => h.undo(data));
+      },
+      redoLayoutChange: () => {
+        commitLayoutData((h, data) => h.redo(data));
+      },
+      reopenClosedPanel: () => {
+        commitLayoutData((h, data) => h.reopenClosedPanel(data, performance.now()));
+      },
     }),
-    [analytics, performAction, setSelectedLayoutId, setSelectedPanelIds, updateSharedPanelState],
+    [
+      analytics,
+      commitLayoutData,
+      performAction,
+      setSelectedLayoutId,
+      setSelectedPanelIds,
+      updateSharedPanelState,
+    ],
   );
 
   const value: ICurrentLayout = useShallowMemo({

@@ -153,6 +153,9 @@ export default function MockCurrentLayoutProvider({
       groupPanels: (payload) => {
         performAction({ type: "GROUP_PANELS", payload });
       },
+      undoLayoutChange: () => {},
+      redoLayoutChange: () => {},
+      reopenClosedPanel: () => {},
     }),
     [performAction, setCurrentLayout, updateSharedPanelState],
   );

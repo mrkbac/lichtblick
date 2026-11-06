@@ -36,6 +36,7 @@ import AccountSettings from "@lichtblick/suite-base/components/AccountSettingsSi
 import { AlertsList } from "@lichtblick/suite-base/components/AlertList/AlertsList";
 import { AppBar } from "@lichtblick/suite-base/components/AppBar";
 import { CommandPalette } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
+import { LayoutShortcutListener } from "@lichtblick/suite-base/components/CommandPalette/layoutShortcuts";
 import {
   DataSourceDialog,
   DataSourceDialogItem,
@@ -761,6 +762,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       <DocumentDropListener onDrop={dropHandler} allowedExtensions={allowedDropExtensions} />
       <SyncAdapters />
       <KeyListener global keyDownHandlers={keyDownHandlers} />
+      <LayoutShortcutListener />
       <CommandPalette />
       <div className={classes.container} ref={containerRef} tabIndex={0}>
         {appBar}
