@@ -5,6 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { outlinedInputClasses } from "@mui/material";
+
 import { OverrideComponentReturn } from "../types";
 
 export const MuiOutlinedInput: OverrideComponentReturn<"MuiOutlinedInput"> = {
@@ -16,8 +18,10 @@ export const MuiOutlinedInput: OverrideComponentReturn<"MuiOutlinedInput"> = {
       boxSizing: "content-box",
       padding: theme.spacing(1, 1.25),
     }),
-    inputSizeSmall: ({ theme }) => ({
-      padding: theme.spacing(0.75, 1),
+    sizeSmall: ({ theme }) => ({
+      [`& > .${outlinedInputClasses.input}`]: {
+        padding: theme.spacing(0.75, 1),
+      },
     }),
   },
 };

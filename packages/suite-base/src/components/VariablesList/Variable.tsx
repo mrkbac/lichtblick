@@ -265,8 +265,8 @@ export default function Variable(props: {
             slotProps={{
               primary: {
                 component: "div",
-                fontWeight: 600,
                 variant: "body2",
+                sx: { fontWeight: 600 },
               },
             }}
           />

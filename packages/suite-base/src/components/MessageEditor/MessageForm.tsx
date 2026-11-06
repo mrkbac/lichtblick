@@ -4,7 +4,7 @@
 import { MessageDefinitionField } from "@foxglove/message-definition";
 import AddIcon from "@mui/icons-material/Add";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
-import DeleteIcon from "@mui/icons-material/DeleteOutline";
+import DeleteIcon from "@mui/icons-material/DeleteOutlined";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { Autocomplete, Checkbox, IconButton, TextField, Tooltip, Typography } from "@mui/material";
 import {

@@ -26,6 +26,9 @@ export const MuiInputBase: OverrideComponentReturn<"MuiInputBase"> = {
       },
     }),
     sizeSmall: ({ theme }) => ({
+      [`& > .${inputBaseClasses.input}`]: {
+        fontSize: theme.typography.body2.fontSize,
+      },
       [`&.${inputBaseClasses.adornedStart}`]: {
         paddingInlineStart: theme.spacing(1),
       },
@@ -45,8 +48,5 @@ export const MuiInputBase: OverrideComponentReturn<"MuiInputBase"> = {
         opacity: 0.6,
       },
     },
-    inputSizeSmall: ({ theme }) => ({
-      fontSize: theme.typography.body2.fontSize,
-    }),
   },
 };

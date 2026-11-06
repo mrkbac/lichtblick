@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import BookmarksIcon from "@mui/icons-material/BookmarksOutlined";
-import DeleteIcon from "@mui/icons-material/DeleteOutline";
+import DeleteIcon from "@mui/icons-material/DeleteOutlined";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import {
   Button,

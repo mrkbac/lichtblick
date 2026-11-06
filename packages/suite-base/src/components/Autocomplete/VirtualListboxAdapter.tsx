@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { AutocompleteRenderOptionState } from "@mui/material/Autocomplete";
-import MenuItem from "@mui/material/MenuItem";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { FzfResultItem } from "fzf";
 import React, { useMemo, useRef } from "react";
@@ -20,13 +19,25 @@ const Constants = Object.freeze({
 });
 
 const useStyles = makeStyles()((theme) => ({
+  // Plain span with dense MenuItem look: MUI 9 MenuItem throws outside Menu/MenuList.
   item: {
+    ...theme.typography.body2,
+    display: "flex",
+    alignItems: "center",
+    position: "relative",
+    boxSizing: "border-box",
+    whiteSpace: "nowrap",
+    userSelect: "none",
     padding: 6,
     cursor: "pointer",
     minHeight: "100%",
     lineHeight: "calc(100% - 10px)",
     overflowWrap: "break-word",
     color: theme.palette.text.primary,
+
+    "&:hover": {
+      backgroundColor: theme.palette.action.hover,
+    },
 
     // re-establish the <mark /> styles because the autocomplete is in a Portal
     mark: {
@@ -112,10 +123,8 @@ export const VirtualListboxAdapter = React.forwardRef<
                   transform: `translateY(${virtualRow.start}px)`,
                 }}
               >
-                <MenuItem
+                <span
                   {...optProps}
-                  dense
-                  component="span"
                   data-highlighted={opt.selected}
                   data-testid="autocomplete-item"
                   className={cx(classes.item, {
@@ -123,7 +132,7 @@ export const VirtualListboxAdapter = React.forwardRef<
                   })}
                 >
                   <HighlightChars str={item.item} indices={item.positions} />
-                </MenuItem>
+                </span>
               </div>
             );
           })}

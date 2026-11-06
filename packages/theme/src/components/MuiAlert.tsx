@@ -12,6 +12,8 @@ import {
   Warning20Regular,
 } from "@fluentui/react-icons";
 
+import { alertClasses } from "@mui/material";
+
 import { OverrideComponentReturn } from "../types";
 
 export const MuiAlert: OverrideComponentReturn<"MuiAlert"> = {
@@ -27,20 +29,12 @@ export const MuiAlert: OverrideComponentReturn<"MuiAlert"> = {
     message: {
       lineHeight: "1.5",
     },
-    standard: {
+    standard: ({ theme }) => ({
       border: "1px solid",
-    },
-    standardWarning: ({ theme }) => ({
-      borderColor: theme.palette.warning.main,
-    }),
-    standardError: ({ theme }) => ({
-      borderColor: theme.palette.error.main,
-    }),
-    standardInfo: ({ theme }) => ({
-      borderColor: theme.palette.info.main,
-    }),
-    standardSuccess: ({ theme }) => ({
-      borderColor: theme.palette.success.main,
+      [`&.${alertClasses.colorWarning}`]: { borderColor: theme.palette.warning.main },
+      [`&.${alertClasses.colorError}`]: { borderColor: theme.palette.error.main },
+      [`&.${alertClasses.colorInfo}`]: { borderColor: theme.palette.info.main },
+      [`&.${alertClasses.colorSuccess}`]: { borderColor: theme.palette.success.main },
     }),
   },
 };

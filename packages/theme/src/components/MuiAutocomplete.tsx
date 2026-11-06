@@ -13,8 +13,7 @@ import { OverrideComponentReturn } from "../types";
 export const MuiAutocomplete: OverrideComponentReturn<"MuiAutocomplete"> = {
   defaultProps: {
     clearIcon: <CancelIcon fontSize="inherit" />,
-    // oxlint-disable-next-line typescript/no-deprecated -- MUI deprecated theme default prop; migrate to slots/slotProps separately
-    componentsProps: {
+    slotProps: {
       clearIndicator: {
         size: "small",
       },
