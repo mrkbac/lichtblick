@@ -113,26 +113,31 @@ export const WatchRowView = memo(function WatchRowViewInner({
   const flashColor = alpha(theme.palette.primary.main, 0.2);
   const lineColor = theme.palette.primary.main;
 
+  // Stale rows are marked even when the age column is hidden
   const paintAge = useCallback(() => {
     const root = rootRef.current;
-    const ageEl = ageRef.current;
-    if (!root || !ageEl) {
+    if (!root) {
       return;
     }
+    const ageEl = ageRef.current;
     const time = store.get(row.id)?.time;
     const now = store.now;
     if (time == undefined || now == undefined) {
-      ageEl.textContent = "";
+      if (ageEl) {
+        ageEl.textContent = "";
+      }
       root.dataset.stale = "false";
       return;
     }
     const age = now - time;
     const text = formatAge(age);
     const stale = isStale(age, staleAfterSec);
-    if (ageEl.textContent !== text) {
-      ageEl.textContent = text;
+    if (ageEl) {
+      if (ageEl.textContent !== text) {
+        ageEl.textContent = text;
+      }
+      ageEl.title = stale ? t("staleTooltip", { age: text }) : t("ageTooltip");
     }
-    ageEl.title = stale ? t("staleTooltip", { age: text }) : t("ageTooltip");
     root.dataset.stale = String(stale);
   }, [row.id, staleAfterSec, store, t]);
 

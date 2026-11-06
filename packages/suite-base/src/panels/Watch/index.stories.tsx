@@ -93,3 +93,14 @@ export const Empty: StoryObj = {
     </PanelSetup>
   ),
 };
+
+/** Paused 30 s after the only message: every value is stale. */
+export const Stale: StoryObj = {
+  render: () => (
+    <PanelSetup
+      fixture={{ ...fixture, activeData: { currentTime: { sec: 40, nsec: 0 }, isPlaying: false } }}
+    >
+      <Watch overrideConfig={{ ...config, showAge: false }} />
+    </PanelSetup>
+  ),
+};

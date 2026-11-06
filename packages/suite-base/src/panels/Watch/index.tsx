@@ -120,9 +120,6 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
   // Age values against the playback time without re-rendering: repaint only the age badges
   const getPipeline = useMessagePipelineGetter();
   useEffect(() => {
-    if (!showAge) {
-      return;
-    }
     const clock = createPlaybackClock();
     const tick = () => {
       const now = clock(playbackOf(getPipeline()), performance.now() / 1000);
@@ -138,7 +135,7 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
     return () => {
       clearInterval(timer);
     };
-  }, [getPipeline, painters, showAge, store]);
+  }, [getPipeline, painters, store]);
 
   useLayoutEffect(() => {
     store.setRows(compiled);

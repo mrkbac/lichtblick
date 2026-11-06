@@ -31,7 +31,7 @@ export const useStyles = makeStyles()((theme) => ({
     "&[data-expandable='false'][data-expanded='false'] [data-expand]": { visibility: "hidden" },
     "&[data-error='true'] [data-value]": { color: theme.palette.error.main },
     // Frozen values: dim the value, highlight the age
-    "&[data-stale='true'] [data-value]": { color: theme.palette.text.disabled },
+    "&[data-stale='true'][data-error='false'] [data-value]": { color: theme.palette.text.disabled },
     "&[data-stale='true'] [data-age]": { color: theme.palette.warning.main },
   },
   dropTarget: { boxShadow: `inset 0 2px 0 ${theme.palette.primary.main}` },
