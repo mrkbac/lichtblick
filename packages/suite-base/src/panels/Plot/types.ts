@@ -35,6 +35,8 @@ export type Scale = {
 export type YScale = {
   min: number;
   max: number;
+  /** Logarithmic scale */
+  log?: boolean;
   top: number;
   bottom: number;
 };
@@ -94,7 +96,13 @@ export type HoverElement = {
 /** Canvas-pixel rectangle */
 export type PixelRect = { left: number; right: number; top: number; bottom: number };
 
-export type ReferenceLine = { color: string; value: number; scaleID?: "y" | "y2" };
+export type ReferenceLine = {
+  color: string;
+  value: number;
+  /** "x" draws a vertical line */
+  scaleID?: "x" | "y" | "y2";
+  label?: string;
+};
 
 export type SecondaryYAxisOptions = {
   display: boolean;
@@ -114,6 +122,9 @@ export type UpdateAction = {
   yBounds?: Partial<Bounds1D>;
   y2Bounds?: Partial<Bounds1D>;
   y2Axis?: SecondaryYAxisOptions;
+  /** Logarithmic y axes */
+  yLogScale?: boolean;
+  y2LogScale?: boolean;
   showXAxisGrid?: boolean;
   showYAxisGrid?: boolean;
   /** Format x ticks as wall-clock time: seconds of the plot's x = 0. Undefined shows relative seconds. */

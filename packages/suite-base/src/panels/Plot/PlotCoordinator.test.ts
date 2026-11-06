@@ -799,6 +799,27 @@ describe("PlotCoordinator", () => {
       });
     });
 
+    it("sends log scales and reference line orientation and labels", () => {
+      const config = PlotBuilder.config({
+        yAxisLogScale: true,
+        paths: [
+          PlotBuilder.path({ value: "2", enabled: true, referenceLineAxis: "x", label: " go " }),
+          PlotBuilder.path({ value: "4", enabled: true, axis: "secondary", label: "" }),
+        ],
+      });
+      vi.spyOn(plotCoordinator as any, "queueDispatchRender").mockImplementation(() => {});
+
+      plotCoordinator.handleConfig(config, "light", {});
+
+      const action = plotCoordinator["updateAction"];
+      expect(action.yLogScale).toBe(true);
+      expect(action.y2LogScale).toBe(false);
+      expect(action.referenceLines).toMatchObject([
+        { value: 2, scaleID: "x", label: "go" },
+        { value: 4, scaleID: "y2", label: undefined },
+      ]);
+    });
+
     it("should pass xAxisLabel through to updateAction", () => {
       const config = PlotBuilder.config({ xAxisLabel: "Time (s)", paths: [] });
       vi.spyOn(plotCoordinator as any, "queueDispatchRender").mockImplementation(() => {});

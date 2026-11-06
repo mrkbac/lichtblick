@@ -9,6 +9,7 @@ import { Zoom as ZoomPlugin } from "@foxglove/chartjs-plugin-zoom";
 import { Chart, Scale as ChartScale, Ticks } from "chart.js";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
 import EventEmitter from "eventemitter3";
+import tinycolor from "tinycolor2";
 
 import { unwrap } from "@lichtblick/den/monads";
 import { Immutable } from "@lichtblick/suite";
@@ -20,6 +21,7 @@ import { DEFAULT_ANNOTATION } from "@lichtblick/suite-base/panels/Plot/constants
 import { getChartOptions } from "@lichtblick/suite-base/panels/Plot/utils/getChartOptions";
 import { Bounds, Bounds1D } from "@lichtblick/suite-base/types/Bounds";
 import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
+import { fontMonospace } from "@lichtblick/theme";
 
 import {
   ChartRendererProps,
@@ -144,6 +146,19 @@ export class ChartRenderer {
       }
     }
 
+    for (const [scaleId, log] of [
+      ["y", action.yLogScale],
+      ["y2", action.y2LogScale],
+    ] as const) {
+      if (log == undefined) {
+        continue;
+      }
+      const scaleOption = this.#chartInstance.options.scales?.[scaleId];
+      if (scaleOption) {
+        scaleOption.type = log ? "logarithmic" : "linear";
+      }
+    }
+
     if (action.showXAxisGrid != undefined) {
       const grid = this.#chartInstance.options.scales?.x?.grid;
       if (grid) {
@@ -219,11 +234,23 @@ export class ChartRenderer {
       }
 
       const newAnnotations: AnnotationOptions[] = action.referenceLines.map((config) => {
+        const vertical = config.scaleID === "x";
         return {
           ...DEFAULT_ANNOTATION,
           scaleID: config.scaleID ?? "y",
           borderColor: config.color,
           value: config.value,
+          label: config.label
+            ? {
+                display: true,
+                content: config.label,
+                position: vertical ? "start" : "end",
+                backgroundColor: config.color,
+                color: tinycolor(config.color).isLight() ? "#000" : "#fff",
+                font: { family: fontMonospace, size: 10 },
+                padding: 3,
+              }
+            : undefined,
         };
       });
 
@@ -285,7 +312,8 @@ export class ChartRenderer {
     // NOTE: "none" disables animations - this is important for chart performance because we update
     // the entire data set which does not preserve history for the chart animations
     this.#chartInstance.update("none");
-    if (!this.#equalAxes) {
+    // 1:1 scaling is linear, so a log y axis keeps its own fit
+    if (!this.#equalAxes || this.#chartInstance.scales.y?.type === "logarithmic") {
       return;
     }
 
@@ -454,6 +482,7 @@ export class ChartRenderer {
     return {
       min: yScale.min,
       max: yScale.max,
+      log: yScale.type === "logarithmic",
       top: yScale.top,
       bottom: yScale.bottom,
     };

@@ -26,5 +26,9 @@ export function getPixelForYValue(
     return undefined;
   }
 
-  return scale.bottom - ((yValue - scale.min) / (scale.max - scale.min)) * pixelRange;
+  const fraction =
+    scale.log === true
+      ? (Math.log(yValue) - Math.log(scale.min)) / (Math.log(scale.max) - Math.log(scale.min))
+      : (yValue - scale.min) / (scale.max - scale.min);
+  return scale.bottom - fraction * pixelRange;
 }
