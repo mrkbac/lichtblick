@@ -266,7 +266,6 @@ export default class RosbridgePlayer implements Player {
       const topicsMissingDatatypes: string[] = [];
       const topics: TopicWithSchemaName[] = [];
       const datatypeDescriptions = [];
-      const messageReaders: Record<string, ROS1MessageReader | ROS2MessageReader> = {};
 
       // Automatically detect the ROS version based on the datatypes.
       // The rosbridge server itself publishes /rosout so the topic should be reliably present.
@@ -295,6 +294,18 @@ export default class RosbridgePlayer implements Player {
         }
         topics.push({ name: topicName, schemaName: type });
         datatypeDescriptions.push({ type, messageDefinition });
+      }
+
+      // We call requestTopics on a timeout to check for new topics. If there are no changes to topics
+      // we want to bail and avoid parsing definitions, updating readers, subscribers, etc.
+      // However, during a re-connect, we _do_ want to refresh this list and re-subscribe
+      const sortedTopics = _.sortBy(topics, "name");
+      if (!forceUpdate && !this.#topicsChanged(sortedTopics)) {
+        return;
+      }
+
+      const messageReaders: Record<string, ROS1MessageReader | ROS2MessageReader> = {};
+      for (const { type, messageDefinition } of datatypeDescriptions) {
         const parsedDefinition = parseMessageDefinition(messageDefinition, {
           ros2: this.#rosVersion === 2,
         });
@@ -303,14 +314,6 @@ export default class RosbridgePlayer implements Player {
           this.#rosVersion !== 2
             ? new ROS1MessageReader(parsedDefinition)
             : new ROS2MessageReader(parsedDefinition);
-      }
-
-      // We call requestTopics on a timeout to check for new topics. If there are no changes to topics
-      // we want to bail and avoid updating readers, subscribers, etc.
-      // However, during a re-connect, we _do_ want to refresh this list and re-subscribe
-      const sortedTopics = _.sortBy(topics, "name");
-      if (!forceUpdate && !this.#topicsChanged(sortedTopics)) {
-        return;
       }
 
       if (topicsMissingDatatypes.length > 0) {
