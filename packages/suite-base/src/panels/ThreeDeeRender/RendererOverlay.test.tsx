@@ -53,6 +53,14 @@ vi.mock("@lichtblick/suite-base/panels/ThreeDeeRender/HUD", () => {
   };
 });
 
+// Covered by FrameMeasureOverlay.test.tsx; needs a renderer with layout variables and a TF tree
+vi.mock("./FrameMeasureOverlay", () => {
+  return {
+    __esModule: true,
+    FrameMeasureOverlay: () => undefined,
+  };
+});
+
 vi.mock("./Stats", () => {
   return {
     __esModule: true,

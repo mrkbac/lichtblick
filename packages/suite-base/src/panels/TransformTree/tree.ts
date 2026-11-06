@@ -4,6 +4,13 @@
 import { toSec } from "@foxglove/rostime";
 
 import { Immutable } from "@lichtblick/suite";
+import {
+  composePoses,
+  findMissingLink,
+  MissingLink,
+  Pose,
+  relativePose,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms/frameMeasurement";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 import { samplesFromMessage } from "./transforms";
@@ -161,4 +168,37 @@ export function buildRows({
     visit(frame, 0);
   }
   return rows;
+}
+
+/**
+ * Pose of `to` expressed in `from`, composing each frame's transform up to their common root.
+ * `transformOf` gives the transform that is shown for an entry (e.g. with its offset applied).
+ */
+export function measureBetween(
+  entries: FrameEntries,
+  from: string,
+  to: string,
+  transformOf: (entry: FrameEntry) => Pose,
+): { pose: Pose; missing?: undefined } | { pose?: undefined; missing: MissingLink } {
+  const parents = new Set([...entries.values()].map((entry) => entry.parent));
+  const missing = findMissingLink(
+    from,
+    to,
+    (frame) => entries.get(frame)?.parent,
+    (frame) => entries.has(frame) || parents.has(frame),
+  );
+  if (missing) {
+    return { missing };
+  }
+  const poseInRoot = (frame: string) => {
+    const chain: Pose[] = [];
+    const seen = new Set<string>();
+    for (let entry = entries.get(frame); entry && !seen.has(entry.child); ) {
+      seen.add(entry.child);
+      chain.unshift(transformOf(entry));
+      entry = entries.get(entry.parent);
+    }
+    return composePoses(chain);
+  };
+  return { pose: relativePose(poseInRoot(from), poseInRoot(to)) };
 }

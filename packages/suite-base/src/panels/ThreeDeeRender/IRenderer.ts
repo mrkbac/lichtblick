@@ -287,6 +287,10 @@ export interface IRenderer extends EventEmitter<RendererEvents> {
   measurementTool: MeasurementTool;
   /** Nearest pickable surface point under the cursor, in render frame coordinates */
   pickPoint(cursorCoords: THREE.Vector2, out: THREE.Vector3): boolean;
+  /** The topmost object under the cursor, or undefined for the background */
+  pickObject(cursorCoords: THREE.Vector2): THREE.Object3D | undefined;
+  /** True while clicks pick frames for the frame-to-frame measurement instead of selecting */
+  framePicking: boolean;
   publishClickTool: PublishClickTool;
 
   /** only public for testing - prefer to use `getCameraState` instead */

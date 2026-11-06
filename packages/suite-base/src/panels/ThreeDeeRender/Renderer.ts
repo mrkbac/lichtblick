@@ -208,6 +208,8 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
 
   public measurementTool: MeasurementTool;
   public publishClickTool: PublishClickTool;
+  /** True while clicks pick frames for the frame-to-frame measurement instead of selecting */
+  public framePicking = false;
 
   // Are we connected to a ROS data source? Normalize coordinate frames if so by
   // stripping any leading "/" prefix. See `normalizeFrameId()` for details.
@@ -1551,7 +1553,11 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     }
 
     // Disable picking while a tool is active
-    if (this.measurementTool.state !== "idle" || this.publishClickTool.state !== "idle") {
+    if (
+      this.measurementTool.state !== "idle" ||
+      this.publishClickTool.state !== "idle" ||
+      this.framePicking
+    ) {
       return;
     }
 
@@ -1594,7 +1600,11 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
       return;
     }
     // Disable hover picking while a tool is active
-    if (this.measurementTool.state !== "idle" || this.publishClickTool.state !== "idle") {
+    if (
+      this.measurementTool.state !== "idle" ||
+      this.publishClickTool.state !== "idle" ||
+      this.framePicking
+    ) {
       return;
     }
 
@@ -1732,6 +1742,17 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
       .set((cursorCoords.x / width) * 2 - 1, -(cursorCoords.y / height) * 2 + 1, depth * 2 - 1)
       .unproject(camera);
     return true;
+  }
+
+  /** The topmost object under the cursor, or undefined for the background */
+  public pickObject(cursorCoords: THREE.Vector2): THREE.Object3D | undefined {
+    const objectId = this.#picker.pick(
+      cursorCoords.x,
+      cursorCoords.y,
+      this.cameraHandler.getActiveCamera(),
+      { disableSetViewOffset: this.interfaceMode === "image" },
+    );
+    return objectId === -1 ? undefined : this.#scene.getObjectById(objectId);
   }
 
   #pickSingleObject(cursorCoords: THREE.Vector2): PickedRenderable | undefined {

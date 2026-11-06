@@ -24,6 +24,18 @@ import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import {
+  FROM_COLOR,
+  FrameMeasureCard,
+  TO_COLOR,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/FrameMeasureCard";
+import {
+  clearFrames,
+  FRAME_MEASUREMENT_VARIABLE,
+  FrameMeasurement,
+  parseFrameMeasurement,
+  setEnd,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms/frameMeasurement";
+import {
   applyOffset,
   FrameOffset,
   frameOffset,
@@ -47,7 +59,7 @@ import {
   settingsActionReducer,
 } from "./settings";
 import { isTransformSchema } from "./transforms";
-import { addTransformEvents, buildRows, mergeEntries } from "./tree";
+import { addTransformEvents, buildRows, measureBetween, mergeEntries } from "./tree";
 import { FrameEntries, FrameEntry, FrameRow, FrameWarning, TransformTreeConfig } from "./types";
 
 type Props = {
@@ -257,6 +269,39 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
     },
     [setGlobalVariables],
   );
+  // Frame-to-frame measurement shared with every 3D and Transform Tree panel of the layout
+  const measurementValue = globalVariables[FRAME_MEASUREMENT_VARIABLE];
+  const measurement = useMemo(() => parseFrameMeasurement(measurementValue), [measurementValue]);
+  const setMeasurement = useCallback(
+    (next: FrameMeasurement) => {
+      setGlobalVariables({ [FRAME_MEASUREMENT_VARIABLE]: next });
+    },
+    [setGlobalVariables],
+  );
+  const setMeasureEnd = useCallback(
+    (frame: string, end: "from" | "to") => {
+      setMeasurement(setEnd(measurement, end, frame));
+    },
+    [measurement, setMeasurement],
+  );
+  // Only transforms at the current time, so a seek never shows numbers from before it
+  const measured = useMemo(() => {
+    const { from, to } = measurement;
+    if (from == undefined || to == undefined) {
+      return undefined;
+    }
+    return measureBetween(current, from, to, (entry) => {
+      const { translation, rotation } = displayedTransform(
+        entry,
+        offsets.showOriginal === true ? undefined : frameOffset(offsets, entry.child),
+      );
+      return {
+        position: [translation.x, translation.y, translation.z],
+        rotation: [rotation.x, rotation.y, rotation.z, rotation.w],
+      };
+    });
+  }, [current, measurement, offsets]);
+
   const [selectedFrame, setSelectedFrame] = useState<string | undefined>();
   const selectFrame = useCallback((frame: string) => {
     setSelectedFrame((previous) => (previous === frame ? undefined : frame));
@@ -276,6 +321,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
         : buildRows({ current, known, now, collapsed: NO_COLLAPSED, staticTopics }),
     [rows, collapsed.size, current, known, now, staticTopics],
   );
+  const frameNames = useMemo(() => allRows.map((row) => row.frame).sort(), [allRows]);
   const roots = useMemo(
     () => allRows.filter((row) => row.depth === 0).map((row) => row.frame),
     [allRows],
@@ -431,12 +477,33 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
                   selected={row.frame === selectedFrame}
                   onSelect={selectFrame}
                   convention={convention}
+                  measureEnd={
+                    row.frame === measurement.from
+                      ? "from"
+                      : row.frame === measurement.to
+                        ? "to"
+                        : undefined
+                  }
+                  onMeasure={setMeasureEnd}
                   className={cx({ [classes.warningRow]: row.warnings.length > 0 })}
                 />
               ))}
             </tbody>
           </table>
         </div>
+        {(measurement.from != undefined || measurement.to != undefined) && (
+          <FrameMeasureCard
+            className={classes.measureCard}
+            frames={frameNames}
+            measurement={measurement}
+            onChange={setMeasurement}
+            onClose={() => {
+              setMeasurement(clearFrames(measurement));
+            }}
+            pose={measured?.pose}
+            missing={measured?.missing}
+          />
+        )}
         {selectedFrame != undefined && selectedEntry && (
           <OffsetEditor
             frame={selectedFrame}
@@ -495,6 +562,8 @@ const FrameTableRow = memo(function FrameTableRowImpl({
   selected,
   onSelect,
   convention,
+  measureEnd,
+  onMeasure,
   className,
 }: {
   row: FrameRow;
@@ -506,10 +575,14 @@ const FrameTableRow = memo(function FrameTableRowImpl({
   selected: boolean;
   onSelect: (frame: string) => void;
   convention: RotationConvention;
+  /** This frame's end of the frame-to-frame measurement, if it is one */
+  measureEnd: "from" | "to" | undefined;
+  onMeasure: (frame: string, end: "from" | "to") => void;
   className?: string;
 }) {
   const { classes, cx } = useStyles();
   const { t } = useTranslation("transformTree");
+  const { t: tThreeDee } = useTranslation("threeDee");
   const { entry: recordedEntry, age, rate } = row;
   const entry = recordedEntry && { ...recordedEntry, ...displayedTransform(recordedEntry, offset) };
   const hasData = !row.notYetPublished && !row.warnings.includes("noData");
@@ -563,7 +636,13 @@ const FrameTableRow = memo(function FrameTableRowImpl({
       className={cx(className, {
         [classes.selectableRow]: entry != undefined,
         [classes.selectedRow]: selected,
+        [classes.measureRow]: measureEnd != undefined,
       })}
+      style={
+        measureEnd
+          ? { boxShadow: `inset 3px 0 ${measureEnd === "from" ? FROM_COLOR : TO_COLOR}` }
+          : undefined
+      }
       aria-current={selected ? "true" : undefined}
       tabIndex={entry ? 0 : undefined}
       onClick={
@@ -619,12 +698,42 @@ const FrameTableRow = memo(function FrameTableRowImpl({
               {row.frame}
             </span>
           </Tooltip>
+          {measureEnd && (
+            <span
+              className={classes.measureBadge}
+              style={{ color: measureEnd === "from" ? FROM_COLOR : TO_COLOR }}
+            >
+              {tThreeDee(measureEnd === "from" ? "frameMeasureFromBadge" : "frameMeasureToBadge")}
+            </span>
+          )}
           {adjusted && <span className={classes.adjustedBadge}>{t("adjusted")}</span>}
           {row.warnings.length > 0 && (
             <WarningIcon
               text={row.warnings.map((warning) => warningMessage(t, row, warning)).join("\n")}
             />
           )}
+          <span className={classes.measureActions} data-measure-actions>
+            {(["from", "to"] as const).map((end) => (
+              <Tooltip
+                key={end}
+                title={tThreeDee(end === "from" ? "frameMeasureFromHere" : "frameMeasureToHere")}
+              >
+                <button
+                  type="button"
+                  className={classes.measureButton}
+                  aria-label={tThreeDee(
+                    end === "from" ? "frameMeasureFromHere" : "frameMeasureToHere",
+                  )}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onMeasure(row.frame, end);
+                  }}
+                >
+                  {tThreeDee(end === "from" ? "frameMeasureFromBadge" : "frameMeasureToBadge")}
+                </button>
+              </Tooltip>
+            ))}
+          </span>
         </div>
       </td>
       {/* Values can be wider than their column and get clipped, so the title has the full text. */}

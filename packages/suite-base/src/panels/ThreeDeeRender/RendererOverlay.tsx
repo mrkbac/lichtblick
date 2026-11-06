@@ -7,6 +7,8 @@
 
 import {
   ArrowDownload20Regular,
+  ArrowRouting20Filled,
+  ArrowRouting20Regular,
   PointScan20Regular,
   PointScan20Filled,
 } from "@fluentui/react-icons";
@@ -39,6 +41,7 @@ import { HUD } from "@lichtblick/suite-base/panels/ThreeDeeRender/HUD";
 import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 import { customTypography } from "@lichtblick/theme";
 
+import { FrameMeasureOverlay } from "./FrameMeasureOverlay";
 import { InteractionContextMenu, Interactions, SelectionObject, TabType } from "./Interactions";
 import { HoverTooltip } from "./Interactions/HoverTooltip";
 import type { HoverEntityInfo } from "./Interactions/types";
@@ -100,6 +103,12 @@ const useStyles = makeStyles()((theme) => ({
     aspectRatio: 1,
     borderRadius: theme.shape.borderRadius,
     marginLeft: theme.spacing(1),
+  },
+  frameMeasure: {
+    position: "absolute",
+    left: theme.spacing(1),
+    bottom: theme.spacing(1),
+    pointerEvents: "none",
   },
 }));
 
@@ -270,6 +279,17 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
       [getHoverEntityId],
     ),
   );
+
+  const [framePicking, setFramePicking] = useState(false);
+  const stopFramePicking = useCallback(() => {
+    setFramePicking(false);
+  }, []);
+  // Point measuring and frame picking both take over clicks; only one at a time
+  useEffect(() => {
+    if (props.measureActive) {
+      setFramePicking(false);
+    }
+  }, [props.measureActive]);
 
   const [showResetViewButton, setShowResetViewButton] = useState(renderer?.canResetView() ?? false);
   useRendererEvent(
@@ -527,6 +547,27 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
               </IconButton>
             </Tooltip>
 
+            <Tooltip
+              placement="left"
+              title={framePicking ? t("stopMeasuringFrames") : t("measureFrames")}
+            >
+              <IconButton
+                data-testid="measure-frames-button"
+                aria-label={framePicking ? t("stopMeasuringFrames") : t("measureFrames")}
+                className={classes.iconButton}
+                size="small"
+                color={framePicking ? "info" : "inherit"}
+                onClick={() => {
+                  if (!framePicking && props.measureActive) {
+                    props.onClickMeasure();
+                  }
+                  setFramePicking(!framePicking);
+                }}
+              >
+                {framePicking ? <ArrowRouting20Filled /> : <ArrowRouting20Regular />}
+              </IconButton>
+            </Tooltip>
+
             {publishControls}
           </Paper>
         )}
@@ -552,6 +593,18 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
       )}
       {props.interfaceMode === "3d" && props.measureActive && renderer && (
         <MeasurePanel renderer={renderer} />
+      )}
+      {props.interfaceMode === "3d" && renderer && (
+        <div
+          className={classes.frameMeasure}
+          style={props.measureActive ? { left: 296 } : undefined}
+        >
+          <FrameMeasureOverlay
+            renderer={renderer}
+            picking={framePicking}
+            onStopPicking={stopFramePicking}
+          />
+        </div>
       )}
       <HUD renderer={renderer} />
       <HoverTooltip entities={hoveredEntities} position={hoverPosition} canvas={props.canvas} />

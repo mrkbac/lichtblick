@@ -127,6 +127,7 @@ class FrameAxisRenderable extends Renderable<FrameAxisUserData> {
 
 const tempVec = new THREE.Vector3();
 const tempVecB = new THREE.Vector3();
+const tempColor = new THREE.Color();
 const tempLower: [Duration, Transform] = [0n, Transform.Identity()];
 const tempUpper: [Duration, Transform] = [0n, Transform.Identity()];
 const tempTfPath: [string, string] = ["transforms", ""];
@@ -148,6 +149,8 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
   #history: TransformOffsets[] = [];
   #lastHistoryTime = 0;
   #hudFrameId: string | undefined;
+  /** Label colors of the frame-to-frame measurement ends and the frame under the cursor */
+  #labelHighlights: ReadonlyMap<string, string> = new Map();
 
   public constructor(
     renderer: IRenderer,
@@ -475,17 +478,54 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     }
 
     for (const renderable of this.renderables.values()) {
-      renderable.userData.label.setColor(
-        this.#labelForegroundColor,
-        this.#labelForegroundColor,
-        this.#labelForegroundColor,
-      );
-      renderable.userData.label.setBackgroundColor(
-        this.#labelBackgroundColor.r,
-        this.#labelBackgroundColor.g,
-        this.#labelBackgroundColor.b,
-      );
+      this.#updateLabelColors(renderable);
     }
+  }
+
+  #updateLabelColors(renderable: FrameAxisRenderable): void {
+    const label = renderable.userData.label;
+    const highlight = this.#labelHighlights.get(renderable.userData.frameId);
+    if (highlight != undefined) {
+      const color = stringToRgb(tempColor, highlight);
+      label.setColor(0, 0, 0);
+      label.setBackgroundColor(color.r, color.g, color.b);
+      return;
+    }
+    const foreground = this.#labelForegroundColor;
+    label.setColor(foreground, foreground, foreground);
+    const background = this.#labelBackgroundColor;
+    label.setBackgroundColor(background.r, background.g, background.b);
+  }
+
+  /** Color the labels of these frames (frame id -> CSS color); all others get the default */
+  public setLabelHighlights(highlights: ReadonlyMap<string, string>): void {
+    const changed = new Set([...this.#labelHighlights.keys(), ...highlights.keys()]);
+    this.#labelHighlights = highlights;
+    for (const frameId of changed) {
+      const renderable = this.renderables.get(frameId);
+      if (renderable) {
+        this.#updateLabelColors(renderable);
+      }
+    }
+    this.renderer.queueAnimationFrame();
+  }
+
+  /** The frame whose axes or label `object` belongs to; not the line to its parent */
+  public frameIdOf(object: THREE.Object3D | undefined): string | undefined {
+    for (let current = object; current; current = current.parent ?? undefined) {
+      if (current instanceof FrameAxisRenderable) {
+        return this.renderables.get(current.userData.frameId) === current
+          ? current.userData.frameId
+          : undefined;
+      }
+      if (
+        current.parent instanceof FrameAxisRenderable &&
+        current === current.parent.userData.parentLine
+      ) {
+        return undefined;
+      }
+    }
+    return undefined;
   }
 
   #setLabelSize(size: number): void {
@@ -643,16 +683,6 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     label.setBillboard(true);
     label.setText(text);
     label.setLineHeight(config.scene.transforms?.labelSize ?? DEFAULT_TF_LABEL_SIZE);
-    label.setColor(
-      this.#labelForegroundColor,
-      this.#labelForegroundColor,
-      this.#labelForegroundColor,
-    );
-    label.setBackgroundColor(
-      this.#labelBackgroundColor.r,
-      this.#labelBackgroundColor.g,
-      this.#labelBackgroundColor.b,
-    );
 
     // Set the initial settings from default values merged with any user settings
     const frameKey = `frame:${frameId}`;
@@ -689,6 +719,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
 
     this.add(renderable);
     this.renderables.set(frameId, renderable);
+    this.#updateLabelColors(renderable);
 
     this.#updateFrameAxis(renderable);
   }
