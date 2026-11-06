@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import EventEmitter from "eventemitter3";
-import * as _ from "lodash-es";
 import * as THREE from "three";
 import { Key } from "ts-key-enum";
 
@@ -71,10 +70,10 @@ export class Input extends EventEmitter<InputEvents> {
     this.canvasSize = new THREE.Vector2();
     this.#onResize([]);
 
-    // Calling the resize observer too often causes Chrome to throw an exception
-    // so we debounce it.
-    const debouncedOnResize = _.debounce(this.#onResize);
-    this.#resizeObserver = new ResizeObserver(debouncedOnResize);
+    // Resize synchronously, so the canvas is redrawn at its new size in the same frame the panel
+    // resizes (a debounce paints one frame of the old canvas in the new box while dragging a split).
+    // The canvas is absolutely positioned, so resizing it can't resize the observed parent.
+    this.#resizeObserver = new ResizeObserver(this.#onResize);
     this.#resizeObserver.observe(parentEl);
 
     canvas.addEventListener("mousedown", this.#onMouseDown);
