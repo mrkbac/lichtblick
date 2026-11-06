@@ -182,7 +182,7 @@ const SYMBOL_WORDS: Record<string, string> = {
 };
 
 function searchText(row: ShortcutRow, groupTitle: string): string {
-  const keys = row.keys.join(" ").replace(/[⌘⌃⌥⇧+←→↑↓]/g, (symbol) => SYMBOL_WORDS[symbol]!);
+  const keys = row.keys.join(" ").replace(/./gu, (char) => SYMBOL_WORDS[char] ?? char);
   return `${groupTitle} ${row.title} ${keys} ${row.keys.join(" ")}`.toLowerCase();
 }
 
