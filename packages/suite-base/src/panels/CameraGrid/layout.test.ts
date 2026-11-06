@@ -18,6 +18,7 @@ describe("imageTopicNames", () => {
       "/cam/front",
       "/cam/left/compressed",
       "/cam/right/image",
+      "/video",
     ]);
     expect(imageTopicNames(undefined)).toEqual([]);
   });
@@ -27,6 +28,7 @@ describe("imageTopicNames", () => {
     expect(imageKind("foxglove_msgs/msg/RawImage")).toBe("raw-foxglove");
     expect(imageKind("sensor_msgs/msg/CompressedImage")).toBe("compressed-ros");
     expect(imageKind("foxglove.CompressedImage")).toBe("compressed-foxglove");
+    expect(imageKind("foxglove_msgs/msg/CompressedVideo")).toBe("video");
     expect(imageKind("std_msgs/String")).toBeUndefined();
   });
 });

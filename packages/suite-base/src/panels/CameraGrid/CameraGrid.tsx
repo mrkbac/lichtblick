@@ -19,7 +19,7 @@ import { useElementSize } from "@lichtblick/suite-base/hooks/useElementSize";
 import { fontMonospace } from "@lichtblick/theme";
 
 import { GridRenderer } from "./GridRenderer";
-import { autoColumns, imageTopicNames } from "./layout";
+import { autoColumns, imageKind, imageTopicNames } from "./layout";
 import { addAllTopics, buildSettingsTree, settingsReducer } from "./settings";
 import { CameraGridConfig, DEFAULT_CONFIG, TileConfig } from "./types";
 
@@ -176,6 +176,11 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
   const imageTopics = useMemo(() => imageTopicNames(topics), [topics]);
   const visibleTiles = useMemo(() => config.tiles.filter((tile) => tile.visible), [config.tiles]);
   const subscribedKey = visibleTiles.map((tile) => tile.topic).join("\n");
+  // Video decoding needs every frame since the last keyframe, so only still images are sampled.
+  const videoTopicsKey = (topics ?? [])
+    .filter((topic) => imageKind(topic.schemaName) === "video")
+    .map((topic) => topic.name)
+    .join("\n");
 
   useEffect(() => {
     return () => {
@@ -186,6 +191,9 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
   useLayoutEffect(() => {
     context.onRender = (renderState, done) => {
       setTopics(renderState.topics);
+      if (renderState.didSeek === true) {
+        renderer.seek();
+      }
       if (renderState.currentFrame) {
         renderer.setFrame(renderState.currentFrame);
       }
@@ -194,6 +202,7 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
     };
     context.watch("topics");
     context.watch("currentFrame");
+    context.watch("didSeek");
     return () => {
       context.onRender = undefined;
     };
@@ -201,11 +210,16 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
 
   useEffect(() => {
     const subscribed = subscribedKey === "" ? [] : subscribedKey.split("\n");
+    const videoTopics = new Set(videoTopicsKey.split("\n"));
     renderer.setTopics(subscribed);
     context.subscribe(
-      subscribed.map((topic) => ({ topic, sampling: { mode: "latest-per-render-tick" as const } })),
+      subscribed.map((topic) =>
+        videoTopics.has(topic)
+          ? { topic }
+          : { topic, sampling: { mode: "latest-per-render-tick" as const } },
+      ),
     );
-  }, [context, renderer, subscribedKey]);
+  }, [context, renderer, subscribedKey, videoTopicsKey]);
 
   useEffect(() => {
     context.saveState(config);
