@@ -53,6 +53,24 @@ export function isZeroVec3(v: Readonly<Vec3>): boolean {
   return v[0] === 0 && v[1] === 0 && v[2] === 0;
 }
 
+/**
+ * Offset of one frame. Frame ids come from recordings, so only own keys count: a frame named
+ * "constructor" must not pick up an inherited property.
+ */
+export function frameOffset(offsets: TransformOffsets, frameId: string): FrameOffset | undefined {
+  return Object.hasOwn(offsets.frames, frameId) ? offsets.frames[frameId] : undefined;
+}
+
+/** Plain assignment of "__proto__" would replace the prototype instead of adding a frame */
+function setFrame(frames: Record<string, FrameOffset>, frameId: string, offset: FrameOffset): void {
+  Object.defineProperty(frames, frameId, {
+    value: offset,
+    enumerable: true,
+    writable: true,
+    configurable: true,
+  });
+}
+
 /** Validate a layout variable value; anything malformed is dropped */
 export function parseTransformOffsets(value: unknown): TransformOffsets {
   if (value == undefined || typeof value !== "object" || Array.isArray(value)) {
@@ -67,7 +85,7 @@ export function parseTransformOffsets(value: unknown): TransformOffsets {
     for (const [frameId, offset] of Object.entries(frames as Record<string, unknown>)) {
       const { xyz, rpy } = (offset ?? {}) as Record<string, unknown>;
       if (isVec3(xyz) && isVec3(rpy)) {
-        result.frames[frameId] = { xyz: [...xyz], rpy: [...rpy] };
+        setFrame(result.frames, frameId, { xyz: [...xyz], rpy: [...rpy] });
       }
     }
   }
@@ -84,10 +102,10 @@ export function withFrameOffset(
   if (offset == undefined || (isZeroVec3(offset.xyz) && isZeroVec3(offset.rpy))) {
     delete frames[frameId];
   } else {
-    frames[frameId] = {
+    setFrame(frames, frameId, {
       xyz: offset.xyz.map(clean) as Vec3,
       rpy: offset.rpy.map(clean) as Vec3,
-    };
+    });
   }
   return { ...offsets, frames };
 }
@@ -101,6 +119,42 @@ export function rpyDegreesToQuat(rpy: Readonly<Vec3>): Quat {
 export function quatToRpyDegrees(q: Readonly<Quat>): Vec3 {
   tempEuler.setFromQuaternion(tempQuatA.fromArray(q), "XYZ");
   return [tempEuler.x * RAD2DEG, tempEuler.y * RAD2DEG, tempEuler.z * RAD2DEG];
+}
+
+/** ROS roll/pitch/yaw in degrees: around the parent's fixed X, Y, Z axes (tf2 getRPY, URDF rpy) */
+export function quatToRosRpyDegrees(q: Readonly<Quat>): Vec3 {
+  tempEuler.setFromQuaternion(tempQuatA.fromArray(q), "ZYX");
+  return [tempEuler.x * RAD2DEG, tempEuler.y * RAD2DEG, tempEuler.z * RAD2DEG];
+}
+
+export function rosRpyDegreesToQuat(rpy: Readonly<Vec3>): Quat {
+  tempEuler.set(rpy[0] * DEG2RAD, rpy[1] * DEG2RAD, rpy[2] * DEG2RAD, "ZYX");
+  return tempQuatA.setFromEuler(tempEuler).toArray();
+}
+
+/**
+ * How roll/pitch/yaw are shown and typed:
+ * - "extrinsic": around the parent's fixed axes x, then y, then z (ROS: tf2 getRPY, URDF rpy)
+ * - "intrinsic": around the frame's own axes X, then Y, then Z, each turn on the rotated axes
+ * Stored offsets are always intrinsic XYZ; only display and input are converted.
+ */
+export type RotationConvention = "extrinsic" | "intrinsic";
+
+export function quatToEulerDegrees(q: Readonly<Quat>, convention: RotationConvention): Vec3 {
+  return convention === "extrinsic" ? quatToRosRpyDegrees(q) : quatToRpyDegrees(q);
+}
+
+export function eulerDegreesToQuat(rpy: Readonly<Vec3>, convention: RotationConvention): Quat {
+  return convention === "extrinsic" ? rosRpyDegreesToQuat(rpy) : rpyDegreesToQuat(rpy);
+}
+
+/** Convert angles between conventions (same rotation, different numbers) */
+export function convertEulerDegrees(
+  rpy: Readonly<Vec3>,
+  from: RotationConvention,
+  to: RotationConvention,
+): Vec3 {
+  return from === to ? [...rpy] : quatToEulerDegrees(eulerDegreesToQuat(rpy, from), to);
 }
 
 /** The transform that is actually rendered: recorded transform with the offset applied */

@@ -14,11 +14,14 @@ import {
   formatStaticTransformPublisher,
   formatUrdfJoint,
   formatYaml,
+  frameOffset,
   nudge,
   offsetForResult,
   parseTransformOffsets,
   Quat,
+  quatToRosRpyDegrees,
   quatToRpyDegrees,
+  rosRpyDegreesToQuat,
   rpyDegreesToQuat,
   Vec3,
   withFrameOffset,
@@ -142,5 +145,35 @@ describe("transformOffsets", () => {
       expect(yaml).toContain(`rotation: {x: ${q[0]}, y: ${q[1]}, z: ${q[2]}, w: ${q[3]}}`);
       expect(yaml).toContain("rotation_euler_xyz_deg: [0, 15, 90]");
     });
+  });
+
+  it("converts ROS roll/pitch/yaw (fixed axes) both ways, matching the Transform Tree table", () => {
+    const q = rosRpyDegreesToQuat([10, 20, 30]);
+    quatToRosRpyDegrees(q).forEach((value, i) => {
+      expect(value).toBeCloseTo([10, 20, 30][i]!, 9);
+    });
+    // Fixed-axes yaw is applied last: same as intrinsic Z, then Y, then X
+    const expected = new THREE.Quaternion().setFromEuler(
+      new THREE.Euler(Math.PI / 18, Math.PI / 9, Math.PI / 6, "ZYX"), // 10, 20, 30 degrees
+    );
+    expect(q[3]).toBeCloseTo(expected.w, 9);
+    // and it differs from the offsets' intrinsic XYZ convention when several angles are set
+    expect(quatToRpyDegrees(q)[0]).not.toBeCloseTo(10, 3);
+  });
+
+  it("ignores inherited properties as frame ids", () => {
+    // Given
+    const offsets = parseTransformOffsets({
+      frames: { __proto__: { xyz: [1, 0, 0], rpy: [0, 0, 0] } },
+    });
+
+    // When / Then
+    expect(frameOffset(offsets, "constructor")).toBeUndefined();
+    expect(
+      frameOffset(withFrameOffset(offsets, "__proto__", undefined), "toString"),
+    ).toBeUndefined();
+    const set = withFrameOffset(offsets, "__proto__", { xyz: [1, 0, 0], rpy: [0, 0, 0] });
+    expect(frameOffset(set, "__proto__")?.xyz).toEqual([1, 0, 0]);
+    expect(Object.getPrototypeOf(set.frames)).toBe(Object.prototype);
   });
 });

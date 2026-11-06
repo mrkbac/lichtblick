@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type {
+  AdjustStep,
+  RotationConvention,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms/transformOffsets";
 import { Quaternion, Vector3 } from "@lichtblick/suite-base/util/geometry";
 
 /** One parent->child transform extracted from a TF message. */
@@ -59,6 +63,10 @@ export type TopicConfig = {
 
 export type TransformTreeConfig = {
   collapsed?: string[];
+  /** Step size of the offset editor's arrows and scrubbing */
+  adjustStep?: AdjustStep;
+  /** How roll/pitch/yaw are shown and typed in the table and editor */
+  rotationConvention?: RotationConvention;
   /** Per-topic settings, keyed by topic name. Topics without an entry use the defaults. */
   topics?: Record<string, TopicConfig>;
 };

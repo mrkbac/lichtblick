@@ -6,6 +6,7 @@ import { produce } from "immer";
 import * as _ from "lodash-es";
 
 import { SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
+import type { RotationConvention } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms/transformOffsets";
 
 import { defaultIsStatic } from "./transforms";
 import { TransformTreeConfig } from "./types";
@@ -39,11 +40,30 @@ export function resolveTopics(
   });
 }
 
+/** ROS convention, like tf2 getRPY and URDF rpy */
+export const DEFAULT_ROTATION_CONVENTION: RotationConvention = "extrinsic";
+
 export function buildSettingsTree(
   topics: readonly ResolvedTopic[],
+  convention: RotationConvention,
   t: TFunction<"transformTree">,
 ): SettingsTreeNodes {
   return {
+    general: {
+      label: t("settings.general"),
+      fields: {
+        rotationConvention: {
+          input: "select",
+          label: t("settings.rotationConvention"),
+          help: t(`rotationConvention.${convention}`),
+          value: convention,
+          options: [
+            { label: t("settings.extrinsic"), value: "extrinsic" },
+            { label: t("settings.intrinsic"), value: "intrinsic" },
+          ],
+        },
+      },
+    },
     topics: {
       label: t("settings.topics"),
       enableVisibilityFilter: true,
@@ -69,7 +89,10 @@ export function buildSettingsTree(
   };
 }
 
-/** Handles `["topics", <topic>, "visible" | "static"]` updates from the settings tree. */
+/**
+ * Handles `["topics", <topic>, "visible" | "static"]` and `["general", "rotationConvention"]`
+ * updates from the settings tree.
+ */
 export function settingsActionReducer(
   config: TransformTreeConfig,
   action: SettingsTreeAction,
@@ -78,6 +101,9 @@ export function settingsActionReducer(
     return config;
   }
   const { path, value } = action.payload;
+  if (path[0] === "general" && path[1] === "rotationConvention") {
+    return { ...config, rotationConvention: value as RotationConvention };
+  }
   if (path[0] !== "topics" || path.length !== 3) {
     return config;
   }

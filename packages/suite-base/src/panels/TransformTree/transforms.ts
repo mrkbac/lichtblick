@@ -86,11 +86,3 @@ export function samplesFromMessage(schemaName: string, message: unknown): Transf
   }
   return [];
 }
-
-/** Roll, pitch, yaw in radians (ROS convention: fixed axes X, Y, Z). */
-export function quaternionToRpy({ x, y, z, w }: Quaternion): Vector3 {
-  const roll = Math.atan2(2 * (w * x + y * z), 1 - 2 * (x * x + y * y));
-  const pitch = Math.asin(Math.max(-1, Math.min(1, 2 * (w * y - z * x))));
-  const yaw = Math.atan2(2 * (w * z + x * y), 1 - 2 * (y * y + z * z));
-  return { x: roll, y: pitch, z: yaw };
-}
