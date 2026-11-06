@@ -219,6 +219,8 @@ export default function PlayerManager(
   const [selectedSource, setSelectedSource] = useState<IDataSourceFactory | undefined>();
   const [selectedFiles, setSelectedFiles] = useState<readonly File[] | undefined>();
 
+  // Sample layout ids for this session, used when localStorage is unavailable.
+  const sampleLayoutIds = useRef(new Map<string, LayoutID>());
   // Bumped on every selectSource call, so a slow earlier call can't apply its layout late.
   const selectionSeq = useRef(0);
 
@@ -256,8 +258,13 @@ export default function PlayerManager(
         // edited or renamed copy is reopened and same-named layouts are never picked up.
         if (foundSource.sampleLayout) {
           const storageKey = `lichtblick.sampleLayoutId.${foundSource.id}`;
+          let savedId = sampleLayoutIds.current.get(storageKey);
           try {
-            const savedId = localStorage.getItem(storageKey) as LayoutID | null;
+            savedId ??= (localStorage.getItem(storageKey) as LayoutID | null) ?? undefined;
+          } catch (error) {
+            log.warn("Could not read the saved sample layout id", error);
+          }
+          try {
             const existing = savedId ? await layoutManager.getLayout(savedId) : undefined;
             const layout =
               existing ??
@@ -266,7 +273,12 @@ export default function PlayerManager(
                 data: foundSource.sampleLayout,
                 permission: "CREATOR_WRITE",
               }));
-            localStorage.setItem(storageKey, layout.id);
+            sampleLayoutIds.current.set(storageKey, layout.id);
+            try {
+              localStorage.setItem(storageKey, layout.id);
+            } catch (error) {
+              log.warn("Could not save the sample layout id; it is kept for this session", error);
+            }
             if (isMounted() && seq === selectionSeq.current) {
               setSelectedLayoutId(layout.id);
             }
