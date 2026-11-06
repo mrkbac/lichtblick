@@ -16,6 +16,7 @@ import {
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
+import { create } from "zustand";
 
 import Logger from "@lichtblick/log";
 import { HighlightChars } from "@lichtblick/suite-base/components/HighlightChars";
@@ -87,24 +88,42 @@ const useStyles = makeStyles()((theme) => ({
   empty: { padding: theme.spacing(2), color: theme.palette.text.secondary },
 }));
 
+/** Whether the palette is open, so menus can open it too. */
+export const useCommandPaletteStore = create<{
+  open: boolean;
+  show: () => void;
+  hide: () => void;
+  toggle: () => void;
+}>()((set) => ({
+  open: false,
+  show: () => {
+    set({ open: true });
+  },
+  hide: () => {
+    set({ open: false });
+  },
+  toggle: () => {
+    set((state) => ({ open: !state.open }));
+  },
+}));
+
 /** Mounts the Cmd/Ctrl+K shortcut; the palette itself only renders while open. */
 export function CommandPalette(): React.JSX.Element {
-  const [open, setOpen] = useState(false);
+  const open = useCommandPaletteStore((state) => state.open);
+  const toggle = useCommandPaletteStore((state) => state.toggle);
+  const close = useCommandPaletteStore((state) => state.hide);
   const keyDownHandlers = useMemo(
     () => ({
       k: (ev: KeyboardEvent) => {
         if (!(ev.metaKey || ev.ctrlKey) || ev.shiftKey || ev.altKey) {
           return false;
         }
-        setOpen((value) => !value);
+        toggle();
         return true;
       },
     }),
-    [],
+    [toggle],
   );
-  const close = useCallback(() => {
-    setOpen(false);
-  }, []);
   return (
     <>
       <KeyListener global keyDownHandlers={keyDownHandlers} />

@@ -10,7 +10,6 @@ import { DeepPartial } from "ts-essentials";
 import { StoreApi } from "zustand";
 
 import { Immutable, SettingsTreeField, SettingsTreeNode } from "@lichtblick/suite";
-import { AppBarMenuItem } from "@lichtblick/suite-base/components/AppBar/types";
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { WorkspaceContextStore } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
 import type { SceneExtensionConfig } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtensionConfig";
@@ -18,7 +17,6 @@ import type { Player } from "@lichtblick/suite-base/players/types";
 
 interface IAppContext {
   appBarLayoutButton?: React.JSX.Element;
-  appBarMenuItems?: readonly AppBarMenuItem[];
   createEvent?: (args: {
     deviceId: string;
     timestamp: string;

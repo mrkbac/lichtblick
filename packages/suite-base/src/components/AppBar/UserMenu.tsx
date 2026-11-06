@@ -5,23 +5,14 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  Divider,
-  ListSubheader,
-  Menu,
-  MenuItem,
-  PaperProps,
-  PopoverPosition,
-  PopoverReference,
-} from "@mui/material";
-import { useCallback } from "react";
-import { useTranslation } from "react-i18next";
+import { ListSubheader, Menu, MenuItem, PaperProps } from "@mui/material";
 import { makeStyles } from "tss-react/mui";
 
 import { isSafeUrl } from "@lichtblick/suite-base/api/organization/client";
-import { AppSettingsTab } from "@lichtblick/suite-base/components/AppSettingsDialog/types";
-import { useOrganization } from "@lichtblick/suite-base/context/OrganizationContext";
-import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
+import {
+  OrganizationState,
+  useOrganization,
+} from "@lichtblick/suite-base/context/OrganizationContext";
 
 const useStyles = makeStyles()({
   menuList: {
@@ -29,77 +20,48 @@ const useStyles = makeStyles()({
   },
 });
 
-type SettingsMenuProps = {
-  handleClose: () => void;
-  anchorEl?: HTMLElement;
-  anchorReference?: PopoverReference;
-  anchorPosition?: PopoverPosition;
-  disablePortal?: boolean;
-  open: boolean;
-};
-
-export function SettingsMenu({
-  anchorEl,
-  anchorReference,
-  anchorPosition,
-  disablePortal,
-  handleClose,
-  open,
-}: SettingsMenuProps): React.JSX.Element {
-  const { classes } = useStyles();
-  const { t } = useTranslation("appBar");
-
-  const { dialogActions } = useWorkspaceActions();
-
-  const onSettingsClick = useCallback(
-    (tab?: AppSettingsTab) => {
-      dialogActions.preferences.open(tab);
-    },
-    [dialogActions.preferences],
-  );
-  const organizationItems = useOrganizationMenuItems();
+/** Whether the account menu has anything to show; without it the avatar button is hidden. */
+export function hasUserMenu(organization: OrganizationState): boolean {
   return (
-    <>
-      <Menu
-        anchorEl={anchorEl}
-        anchorReference={anchorReference}
-        anchorPosition={anchorPosition}
-        disablePortal={disablePortal}
-        id="user-menu"
-        open={open}
-        onClose={handleClose}
-        onClick={handleClose}
-        slotProps={{
-          list: {
-            className: classes.menuList,
-            dense: true,
-          },
-          paper: {
-            "data-tourid": "user-menu",
-          } as Partial<PaperProps & { "data-tourid"?: string }>,
-        }}
-      >
-        {organizationItems}
-        <MenuItem
-          onClick={() => {
-            onSettingsClick();
-          }}
-        >
-          {t("settings")}
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
-            onSettingsClick("extensions");
-          }}
-        >
-          {t("extensions")}
-        </MenuItem>
-      </Menu>
-    </>
+    organization.status === "authenticated" ||
+    organization.status === "unavailable" ||
+    (organization.status === "unauthenticated" && organization.login != undefined)
   );
 }
 
-/** Login, the signed-in user, the server's links and logout, when an organization API is set. */
+type UserMenuProps = {
+  handleClose: () => void;
+  anchorEl?: HTMLElement;
+  open: boolean;
+};
+
+/** The account menu: login, the signed-in user, the server's links and logout. */
+export function UserMenu({ anchorEl, handleClose, open }: UserMenuProps): React.JSX.Element {
+  const { classes } = useStyles();
+  const organizationItems = useOrganizationMenuItems();
+  return (
+    <Menu
+      anchorEl={anchorEl}
+      id="user-menu"
+      open={open}
+      onClose={handleClose}
+      onClick={handleClose}
+      slotProps={{
+        list: {
+          className: classes.menuList,
+          dense: true,
+        },
+        paper: {
+          "data-tourid": "user-menu",
+        } as Partial<PaperProps & { "data-tourid"?: string }>,
+      }}
+    >
+      {organizationItems}
+    </Menu>
+  );
+}
+
+/** Menu items for the organization status; empty when there is nothing to show. */
 function useOrganizationMenuItems(): React.JSX.Element[] {
   const organization = useOrganization();
   switch (organization.status) {
@@ -111,7 +73,6 @@ function useOrganizationMenuItems(): React.JSX.Element[] {
         <MenuItem key="unavailable" disabled>
           Organization server unavailable
         </MenuItem>,
-        <Divider key="divider" />,
       ];
     case "unauthenticated": {
       const { login } = organization;
@@ -122,7 +83,6 @@ function useOrganizationMenuItems(): React.JSX.Element[] {
         <MenuItem key="login" onClick={() => void login()}>
           Log in
         </MenuItem>,
-        <Divider key="divider" />,
       ];
     }
     case "authenticated": {
@@ -153,7 +113,6 @@ function useOrganizationMenuItems(): React.JSX.Element[] {
         <MenuItem key="logout" onClick={logout}>
           Log out
         </MenuItem>,
-        <Divider key="divider" />,
       ];
     }
   }

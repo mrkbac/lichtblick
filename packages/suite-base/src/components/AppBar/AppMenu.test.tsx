@@ -9,10 +9,10 @@ import { useTranslation } from "react-i18next";
 import type { Mock } from "vitest";
 
 import { AppMenuProps } from "@lichtblick/suite-base/components/AppBar/types";
+import { useCommandPaletteStore } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
 import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
 import AnalyticsContext from "@lichtblick/suite-base/context/AnalyticsContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import { useWorkspaceStore } from "@lichtblick/suite-base/context/Workspace/WorkspaceContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
@@ -26,10 +26,6 @@ vi.mock("react-i18next", () => ({
 
 vi.mock("@lichtblick/suite-base/context/PlayerSelectionContext", () => ({
   usePlayerSelection: vi.fn(),
-}));
-
-vi.mock("@lichtblick/suite-base/context/Workspace/WorkspaceContext", () => ({
-  useWorkspaceStore: vi.fn(),
 }));
 
 vi.mock("@lichtblick/suite-base/context/Workspace/useWorkspaceActions", () => ({
@@ -47,14 +43,9 @@ describe("AppMenu", () => {
     openFile: { open: vi.fn() },
     preferences: { open: vi.fn() },
   };
-  const mockSidebarActions = {
-    left: { setOpen: vi.fn() },
-    right: { setOpen: vi.fn() },
-  };
   const mockImportLayout = vi.fn();
   const mockExportLayout = vi.fn();
   const mockSelectRecent = vi.fn();
-  const mockClearRecents = vi.fn();
   const logEvent = vi.fn();
   const mockAnalytics: IAnalytics = { logEvent };
 
@@ -67,18 +58,10 @@ describe("AppMenu", () => {
     (usePlayerSelection as Mock).mockReturnValue({
       recentSources: [{ id: "1", title: "Recent Source 1" }],
       selectRecent: mockSelectRecent,
-      clearRecents: mockClearRecents,
       availableSources: [],
     });
 
-    (useWorkspaceStore as Mock).mockImplementation((selector) =>
-      selector({
-        sidebars: { left: { open: false }, right: { open: true } },
-      }),
-    );
-
     (useWorkspaceActions as Mock).mockReturnValue({
-      sidebarActions: mockSidebarActions,
       dialogActions: mockDialogActions,
     });
 
@@ -99,18 +82,18 @@ describe("AppMenu", () => {
       </AnalyticsContext.Provider>,
     );
 
-  it("renders the menu with File, View, and Help sections", () => {
+  it("shows every action in one flat list", () => {
     renderAppMenu();
 
-    expect(screen.getByText("file")).toBeInTheDocument();
-    expect(screen.getByText("view")).toBeInTheDocument();
-    expect(screen.getByText("help")).toBeInTheDocument();
+    expect(screen.getByText("open")).toBeInTheDocument();
+    expect(screen.getByText("importLayoutFromFile")).toBeInTheDocument();
+    expect(screen.getByText("settings")).toBeInTheDocument();
+    expect(screen.getByText("about")).toBeInTheDocument();
   });
 
-  it("handles File menu actions", () => {
+  it("opens the start dialog", () => {
     renderAppMenu();
 
-    fireEvent.pointerEnter(screen.getByText("file"));
     fireEvent.click(screen.getByText("open"));
 
     expect(mockDialogActions.dataSource.open).toHaveBeenCalledWith("start");
@@ -122,7 +105,6 @@ describe("AppMenu", () => {
     renderAppMenu();
 
     // When
-    fireEvent.pointerEnter(screen.getByText("file"));
     fireEvent.click(screen.getByText("open"));
 
     // Then
@@ -131,36 +113,38 @@ describe("AppMenu", () => {
     });
   });
 
-  it("handles View menu actions", () => {
+  it("opens settings, extensions and about", () => {
     renderAppMenu();
 
-    fireEvent.pointerEnter(screen.getByText("view"));
-    fireEvent.click(screen.getByText("showLeftSidebar"));
-
-    expect(mockSidebarActions.left.setOpen).toHaveBeenCalledWith(true);
-    expect(mockHandleClose).toHaveBeenCalled();
-  });
-
-  it("handles Help menu actions", () => {
-    renderAppMenu();
-
-    fireEvent.pointerEnter(screen.getByText("help"));
+    fireEvent.click(screen.getByText("settings"));
+    fireEvent.click(screen.getByText("extensions"));
     fireEvent.click(screen.getByText("about"));
 
-    expect(mockDialogActions.preferences.open).toHaveBeenCalledWith("about");
+    expect(mockDialogActions.preferences.open).toHaveBeenNthCalledWith(1);
+    expect(mockDialogActions.preferences.open).toHaveBeenNthCalledWith(2, "extensions");
+    expect(mockDialogActions.preferences.open).toHaveBeenNthCalledWith(3, "about");
+  });
+
+  it("opens the command palette", () => {
+    useCommandPaletteStore.getState().hide();
+    renderAppMenu();
+
+    fireEvent.click(screen.getByText("commandPalette"));
+
+    expect(useCommandPaletteStore.getState().open).toBe(true);
     expect(mockHandleClose).toHaveBeenCalled();
   });
 
-  it("handles recent sources in File menu", () => {
+  it("opens a recent source", () => {
     renderAppMenu();
 
-    fireEvent.pointerEnter(screen.getByText("file"));
     fireEvent.click(screen.getByText("Recent Source 1"));
 
     expect(mockSelectRecent).toHaveBeenCalledWith("1");
     expect(mockHandleClose).toHaveBeenCalled();
   });
-  it("shows the file name of recent URLs and clears unpinned recents", () => {
+
+  it("shows the file name and location of recent URLs", () => {
     (usePlayerSelection as Mock).mockReturnValue({
       recentSources: [
         {
@@ -170,43 +154,35 @@ describe("AppMenu", () => {
         },
       ],
       selectRecent: mockSelectRecent,
-      clearRecents: mockClearRecents,
       availableSources: [],
     });
     renderAppMenu();
 
-    fireEvent.pointerEnter(screen.getByText("file"));
     expect(screen.getByText("example.mcap")).toBeInTheDocument();
     expect(screen.getByText("localhost:8765/dir")).toBeInTheDocument();
-
-    fireEvent.click(screen.getByText("clearRecentDataSources"));
-    expect(mockClearRecents).toHaveBeenCalled();
   });
 
-  it("opens the start dialog to see all recents", () => {
+  it("hides the recent heading without recent sources", () => {
+    (usePlayerSelection as Mock).mockReturnValue({
+      recentSources: [],
+      selectRecent: mockSelectRecent,
+      availableSources: [],
+    });
     renderAppMenu();
 
-    fireEvent.pointerEnter(screen.getByText("file"));
-    fireEvent.click(screen.getByText("allRecentDataSources"));
-
-    expect(mockDialogActions.dataSource.open).toHaveBeenCalledWith("start");
+    expect(screen.queryByText("recentDataSources")).not.toBeInTheDocument();
   });
 
-  it("handles layout import and export in View menu", async () => {
+  it("imports and exports layouts", async () => {
     renderAppMenu();
 
-    fireEvent.pointerEnter(screen.getByText("view"));
     fireEvent.click(screen.getByText("importLayoutFromFile"));
-    await Promise.resolve();
-
-    expect(mockImportLayout).toHaveBeenCalled();
-    expect(mockHandleClose).toHaveBeenCalled();
-
     fireEvent.click(screen.getByText("exportLayoutToFile"));
     await Promise.resolve();
 
+    expect(mockImportLayout).toHaveBeenCalled();
     expect(mockExportLayout).toHaveBeenCalled();
-    expect(mockHandleClose).toHaveBeenCalled();
+    expect(mockHandleClose).toHaveBeenCalledTimes(2);
   });
 
   it("opens documentation link in Help menu", () => {
@@ -215,7 +191,6 @@ describe("AppMenu", () => {
 
     renderAppMenu();
 
-    fireEvent.pointerEnter(screen.getByText("help"));
     fireEvent.click(screen.getByText("documentation"));
 
     expect(window.open).toHaveBeenCalledWith(

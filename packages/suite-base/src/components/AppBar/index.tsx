@@ -45,8 +45,8 @@ import { AppMenu } from "./AppMenu";
 import { CustomWindowControls, CustomWindowControlsProps } from "./CustomWindowControls";
 import { DataSource } from "./DataSource";
 import { NetworkStatusIndicator } from "./NetworkStatusIndicator";
-import { SettingsMenu } from "./SettingsMenu";
 import { UpdateIndicator } from "./UpdateIndicator";
+import { UserMenu, hasUserMenu } from "./UserMenu";
 
 const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()(
   (theme, { debugDragRegion = false }, classes) => {
@@ -198,6 +198,7 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
 
   const organization = useOrganization();
   const user = organization.status === "authenticated" ? organization.session.user : undefined;
+  const showUserMenu = hasUserMenu(organization);
 
   const appMenuOpen = Boolean(appMenuEl);
   const userMenuOpen = Boolean(userAnchorEl);
@@ -301,39 +302,41 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                   {rightSidebarOpen ? <PanelRight24Filled /> : <PanelRight24Regular />}
                 </AppBarIconButton>
               </Stack>
-              <Tooltip
-                classes={{ tooltip: classes.tooltip }}
-                title={user?.displayName ?? "Profile"}
-                arrow={false}
-              >
-                <IconButton
-                  className={cx(classes.iconButton, { "Mui-selected": userMenuOpen })}
-                  aria-label="User profile menu button"
-                  color="inherit"
-                  id="user-button"
-                  data-tourid="user-button"
-                  aria-controls={userMenuOpen ? "user-menu" : undefined}
-                  aria-haspopup="true"
-                  aria-expanded={userMenuOpen ? "true" : undefined}
-                  onClick={(event) => {
-                    setUserAnchorEl(event.currentTarget);
-                  }}
-                  data-testid="user-button"
+              {showUserMenu && (
+                <Tooltip
+                  classes={{ tooltip: classes.tooltip }}
+                  title={user?.displayName ?? "Profile"}
+                  arrow={false}
                 >
-                  <Avatar
-                    className={classes.avatar}
-                    variant="rounded"
-                    src={
-                      user?.avatarUrl != undefined && isSafeUrl(user.avatarUrl)
-                        ? user.avatarUrl
-                        : undefined
-                    }
-                    alt={user?.displayName}
+                  <IconButton
+                    className={cx(classes.iconButton, { "Mui-selected": userMenuOpen })}
+                    aria-label="User profile menu button"
+                    color="inherit"
+                    id="user-button"
+                    data-tourid="user-button"
+                    aria-controls={userMenuOpen ? "user-menu" : undefined}
+                    aria-haspopup="true"
+                    aria-expanded={userMenuOpen ? "true" : undefined}
+                    onClick={(event) => {
+                      setUserAnchorEl(event.currentTarget);
+                    }}
+                    data-testid="user-button"
                   >
-                    {user?.displayName.slice(0, 1).toUpperCase()}
-                  </Avatar>
-                </IconButton>
-              </Tooltip>
+                    <Avatar
+                      className={classes.avatar}
+                      variant="rounded"
+                      src={
+                        user?.avatarUrl != undefined && isSafeUrl(user.avatarUrl)
+                          ? user.avatarUrl
+                          : undefined
+                      }
+                      alt={user?.displayName}
+                    >
+                      {user?.displayName.slice(0, 1).toUpperCase()}
+                    </Avatar>
+                  </IconButton>
+                </Tooltip>
+              )}
               {showCustomWindowControls && (
                 <CustomWindowControls
                   onMinimizeWindow={onMinimizeWindow}
@@ -354,9 +357,9 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
           setPanelAnchorEl(undefined);
         }}
       />
-      <SettingsMenu
+      <UserMenu
         anchorEl={userAnchorEl}
-        open={userMenuOpen}
+        open={userMenuOpen && showUserMenu}
         handleClose={() => {
           setUserAnchorEl(undefined);
         }}
