@@ -203,15 +203,20 @@ export function MeasurePanel({ renderer }: { renderer: IRenderer }): React.JSX.E
                   {info.summary.label}
                 </Typography>
                 <Tooltip title={t("measureCopy")}>
-                  <IconButton
-                    size="small"
-                    onClick={(event) => {
-                      event.stopPropagation();
-                      copy(info.id);
-                    }}
-                  >
-                    <Copy16Regular />
-                  </IconButton>
+                  {/* span: a disabled button fires no events, so the tooltip needs a wrapper */}
+                  <span>
+                    <IconButton
+                      size="small"
+                      aria-label={t("measureCopy")}
+                      disabled={info.unavailable}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        copy(info.id);
+                      }}
+                    >
+                      <Copy16Regular />
+                    </IconButton>
+                  </span>
                 </Tooltip>
                 <Tooltip title={t("measureDelete")}>
                   <IconButton
@@ -240,6 +245,7 @@ export function MeasurePanel({ renderer }: { renderer: IRenderer }): React.JSX.E
           <Button
             size="small"
             startIcon={<Copy16Regular />}
+            disabled={tool.measurements.every((info) => info.unavailable)}
             onClick={() => {
               copy();
             }}
