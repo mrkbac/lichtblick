@@ -98,8 +98,17 @@ export const useStyles = makeStyles()((theme) => ({
   staticBadge: {
     color: theme.palette.text.secondary,
   },
+  /** Tooltip text with one item per line */
+  multiline: {
+    whiteSpace: "pre-line",
+    display: "block",
+    // Long warning lists scroll inside the tooltip, which stays open while hovered
+    maxHeight: "50vh",
+    overflowY: "auto",
+  },
   warningIcon: {
     color: theme.palette.warning.main,
+    display: "inline-flex",
     flex: "none",
   },
   selectableRow: {

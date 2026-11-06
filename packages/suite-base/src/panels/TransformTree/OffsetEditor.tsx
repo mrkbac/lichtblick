@@ -52,7 +52,7 @@ const roundTo = (values: Readonly<Vec3>, digits: number): Vec3 =>
 export function RotationConventionInfo({ text }: { text: string }): React.JSX.Element {
   const { classes } = useStyles();
   return (
-    <Tooltip title={<span style={{ whiteSpace: "pre-line" }}>{text}</span>}>
+    <Tooltip title={<span className={classes.multiline}>{text}</span>}>
       <span className={classes.infoIcon} role="img" aria-label={text}>
         <Info16Regular />
       </span>
@@ -151,6 +151,15 @@ export function OffsetEditor({
           onChange={(next) => {
             onValue(part, index, next);
           }}
+          // ↑/↓ nudge by the step like the ‹ › buttons, Shift for 10 steps
+          onKeyDown={(event) => {
+            if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+              return;
+            }
+            event.preventDefault();
+            const delta = (part === "xyz" ? meters : degrees) * (event.shiftKey ? 10 : 1);
+            onValue(part, index, value + (event.key === "ArrowUp" ? delta : -delta));
+          }}
         />
       ))}
     </>
@@ -187,7 +196,15 @@ export function OffsetEditor({
   };
 
   return (
-    <div className={classes.editor} data-testid="offset-editor">
+    <div
+      className={classes.editor}
+      data-testid="offset-editor"
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          onClose();
+        }
+      }}
+    >
       <div className={classes.editorHeader}>
         <span className={classes.editorTitle} title={`${parent} → ${frame}`}>
           {t("editor.title", { frame })}

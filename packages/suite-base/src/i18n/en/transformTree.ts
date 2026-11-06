@@ -40,7 +40,7 @@ export const transformTree = {
   notYetPublished: "Not published yet at this point in the recording; values are from later on",
   adjusted: "adjusted",
   adjustedDetails: "Adjusted: values include an offset. Recorded x, y, z: {{xyz}}",
-  selectToAdjust: "Click to adjust",
+  selectToAdjust: "Click or press Enter to adjust, Esc to close",
   editor: {
     title: "Adjust {{frame}}",
     stepLabel: "Step size",
@@ -48,11 +48,11 @@ export const transformTree = {
     close: "Close",
     offset: "Offset",
     offsetHelp:
-      "Applied on top of the recorded transform: translation along the parent's axes, then the rotation around the frame's own origin.",
+      "Applied on top of the recorded transform: translation along the parent's axes, then the rotation around the frame's own origin. ↑/↓ change a value by the step size, Shift+↑/↓ by 10 steps, Esc closes.",
     result: "Result",
     resultNoData: "No transform at the current time yet; edit the offset or wait for data.",
     resultHelp:
-      "The transform that is rendered. Type a value here and the offset is computed for you.",
+      "The transform that is rendered. Type a value here and the offset is computed for you. ↑/↓ change a value by the step size, Shift+↑/↓ by 10 steps, Esc closes.",
     rotationConvention: {
       extrinsic:
         "Offset and Result angles turn around the parent's fixed axes: x, then y, then z (extrinsic xyz, as in tf2 getRPY and URDF rpy). Change it in the panel settings.",
