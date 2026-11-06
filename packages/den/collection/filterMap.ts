@@ -15,23 +15,20 @@
 //   You may not use this file except in compliance with the License.
 
 /**
- * filterMap creates a new array populated with the results of calling a provided function on every
- * element in the calling array. Results which resolve to a javascript "false" value are discarded
- * from the array.
+ * Maps every value and drops the results that are `undefined` or `null`. Other falsy results
+ * (0, "", false, NaN) are kept.
  *
- * This is a more efficient version of [...values].map(mapFn).filter(Boolean) that avoids two
- * iterations of the array.
+ * One pass instead of [...values].map(mapFn).filter(...).
  */
 export default function filterMap<T, U>(
   values: Iterable<T>,
   mapFn: (arg0: T, arg1: number) => U | undefined,
-): U[] {
-  const results: Array<U> = [];
+): NonNullable<U>[] {
+  const results: NonNullable<U>[] = [];
   let index = 0;
   for (const item of values) {
     const mappedItem = mapFn(item, index++);
-    // eslint-disable-next-line @typescript-eslint/strict-boolean-expressions
-    if (mappedItem) {
+    if (mappedItem != undefined) {
       results.push(mappedItem);
     }
   }

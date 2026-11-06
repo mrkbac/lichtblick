@@ -478,7 +478,8 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
                     noMultiSlices,
                     messagePath: rosPath.messagePath,
                   }),
-                  (item) => item.path,
+                  // The message itself has path "", which is not a completion
+                  (item) => (item.path === "" ? undefined : item.path),
                 ),
 
           autocompleteRange: {
