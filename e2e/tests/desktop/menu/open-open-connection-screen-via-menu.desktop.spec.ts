@@ -25,3 +25,19 @@ test("Display the open a new connection dialog when clicking File > Open... > Op
   // Then
   await expect(mainWindow.getByText("Open a new connection", { exact: true })).toBeVisible();
 });
+
+test("Display the open a new connection dialog when clicking File > Open connection…", {
+  tag: "@smoke",
+}, async ({ mainWindow }) => {
+  const dialog = new DataSourceDialog(mainWindow);
+  const appMenu = new AppMenu(mainWindow);
+
+  // Given
+  await dialog.close();
+
+  // When
+  await appMenu.openConnection();
+
+  // Then
+  await expect(mainWindow.getByText("Open a new connection", { exact: true })).toBeVisible();
+});
