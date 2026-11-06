@@ -479,12 +479,13 @@ export default function PlayerManager(
     setCurrentRecentId(undefined);
     // Forget the last opened file so a reload doesn't reopen it (the recent entry stays).
     writeLastFile(undefined);
-    // Drop ds/time from the URL so a reload doesn't reconnect.
+    // Drop ds/time/mcap-bundle from the URL so a reload doesn't reconnect.
     const url = updateAppURLState(new URL(window.location.href), {
       ds: undefined,
       dsParams: {},
       time: undefined,
     });
+    url.searchParams.delete("mcap-bundle");
     window.history.replaceState(undefined, "", url.href);
   }, []);
 
