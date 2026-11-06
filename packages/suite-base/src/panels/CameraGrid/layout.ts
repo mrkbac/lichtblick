@@ -4,6 +4,7 @@
 import { Topic } from "@lichtblick/suite";
 import {
   COMPRESSED_IMAGE_DATATYPES as FOXGLOVE_COMPRESSED_IMAGE_DATATYPES,
+  COMPRESSED_VIDEO_DATATYPES,
   RAW_IMAGE_DATATYPES as FOXGLOVE_RAW_IMAGE_DATATYPES,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/foxglove";
 import {
@@ -11,7 +12,12 @@ import {
   IMAGE_DATATYPES as ROS_IMAGE_DATATYPES,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
 
-export type ImageKind = "raw-ros" | "raw-foxglove" | "compressed-ros" | "compressed-foxglove";
+export type ImageKind =
+  | "raw-ros"
+  | "raw-foxglove"
+  | "compressed-ros"
+  | "compressed-foxglove"
+  | "video";
 
 export function imageKind(schemaName: string): ImageKind | undefined {
   if (ROS_IMAGE_DATATYPES.has(schemaName)) {
@@ -25,6 +31,9 @@ export function imageKind(schemaName: string): ImageKind | undefined {
   }
   if (FOXGLOVE_COMPRESSED_IMAGE_DATATYPES.has(schemaName)) {
     return "compressed-foxglove";
+  }
+  if (COMPRESSED_VIDEO_DATATYPES.has(schemaName)) {
+    return "video";
   }
   return undefined;
 }
