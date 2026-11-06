@@ -41,7 +41,10 @@ describe("compileRows", () => {
       schema,
     );
     expect(compiled.map((row) => row.id)).toEqual(["a"]);
-    expect(compiled[0]!.path.messagePath.at(-1)).toMatchObject({ type: "modifier", args: [3] });
+    expect(compiled[0]!.path.messagePath.at(-1)).toMatchObject({
+      type: "modifier",
+      args: [3],
+    });
     expect([...invalid]).toEqual(["b"]);
     // The parser logs the invalid path
     (console.error as Mock).mockClear();
@@ -52,6 +55,16 @@ describe("compileRows", () => {
     const first = compileRows(rows, { k: 1 }, schema).compiled[0]!.key;
     expect(compileRows(rows, { k: 1 }, schema).compiled[0]!.key).toBe(first);
     expect(compileRows(rows, { k: 2 }, schema).compiled[0]!.key).not.toBe(first);
+  });
+
+  it("keys paths with numeric filters", () => {
+    const key = (path: string, vars = {}) =>
+      compileRows([{ id: "a", path }], vars, schema).compiled[0]!.key;
+    const numeric = key("/state{mode==1}.speed");
+    expect(numeric).toBe(key("/state{mode==1}.speed"));
+    expect(numeric).not.toBe(key("/state{mode==2}.speed"));
+    expect(numeric).not.toBe(key("/state{mode==$k}.speed", { k: 1 }));
+    expect(numeric).not.toBe(key('/state{mode=="1n"}.speed'));
   });
 
   it("finds enum names for the field a path ends on", () => {

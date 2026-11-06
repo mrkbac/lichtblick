@@ -62,6 +62,14 @@ export type CompileResult = {
   enumNames: ReadonlyMap<string, EnumNames>;
 };
 
+/** Stable key of a parsed path. Filter values like `{mode==1}` parse to bigints. */
+function pathKey(path: MessagePath): string {
+  return JSON.stringify(path, (_key, value: unknown) =>
+    // An object so `1n` differs from the number 1 and the string "1n"
+    typeof value === "bigint" ? { bigint: value.toString() } : value,
+  )!;
+}
+
 export function compileRows(
   rows: readonly WatchRow[],
   globalVariables: GlobalVariables,
@@ -86,7 +94,7 @@ export function compileRows(
       schema.enumValues,
       schema.schemaNames.get(filled.topicName),
     );
-    compiled.push({ id: row.id, path, key: JSON.stringify(path) ?? "" });
+    compiled.push({ id: row.id, path, key: pathKey(path) });
     const names = enumNamesForPath(path, schema);
     if (names) {
       enumNames.set(row.id, names);
