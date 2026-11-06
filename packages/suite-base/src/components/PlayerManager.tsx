@@ -35,6 +35,7 @@ import { Immutable } from "@lichtblick/suite";
 import { MessagePipelineProvider } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
+  LayoutID,
   LayoutState,
   useCurrentLayoutActions,
   useCurrentLayoutSelector,
@@ -218,9 +219,13 @@ export default function PlayerManager(
   const [selectedSource, setSelectedSource] = useState<IDataSourceFactory | undefined>();
   const [selectedFiles, setSelectedFiles] = useState<readonly File[] | undefined>();
 
+  // Bumped on every selectSource call, so a slow earlier call can't apply its layout late.
+  const selectionSeq = useRef(0);
+
   const selectSource = useCallback(
     async (sourceId: string, args?: DataSourceArgs) => {
       log.debug(`Select Source: ${sourceId}`);
+      const seq = ++selectionSeq.current;
 
       const foundSource = playerSources.find(
         (source) => (source.id === sourceId || source.legacyIds?.includes(sourceId)) ?? false,
@@ -247,19 +252,29 @@ export default function PlayerManager(
         setBasePlayer(newPlayer);
         writeLastFile(undefined);
 
-        // Show the sample in the layout made for it. Reuse an existing copy so edits survive.
+        // Show the sample in the layout made for it. Its id is remembered per source, so an
+        // edited or renamed copy is reopened and same-named layouts are never picked up.
         if (foundSource.sampleLayout) {
-          const name = foundSource.displayName;
-          const existing = (await layoutManager.getLayouts()).find((l) => l.name === name);
-          const layout =
-            existing ??
-            (await layoutManager.saveNewLayout({
-              name,
-              data: foundSource.sampleLayout,
-              permission: "CREATOR_WRITE",
-            }));
-          if (isMounted()) {
-            setSelectedLayoutId(layout.id);
+          const storageKey = `lichtblick.sampleLayoutId.${foundSource.id}`;
+          try {
+            const savedId = localStorage.getItem(storageKey) as LayoutID | null;
+            const existing = savedId ? await layoutManager.getLayout(savedId) : undefined;
+            const layout =
+              existing ??
+              (await layoutManager.saveNewLayout({
+                name: foundSource.displayName,
+                data: foundSource.sampleLayout,
+                permission: "CREATOR_WRITE",
+              }));
+            localStorage.setItem(storageKey, layout.id);
+            if (isMounted() && seq === selectionSeq.current) {
+              setSelectedLayoutId(layout.id);
+            }
+          } catch (error) {
+            log.error(error);
+            enqueueSnackbar(`Could not open the sample layout: ${String(error)}`, {
+              variant: "error",
+            });
           }
         }
         return;
