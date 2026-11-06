@@ -5,7 +5,13 @@ import { TFunction } from "i18next";
 
 import { SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
 
-import { AUDIO_FORMATS, AudioFormat } from "./decode";
+import {
+  AUDIO_FORMATS,
+  AudioFormat,
+  MAX_CHANNELS,
+  MAX_SAMPLE_RATE,
+  MIN_SAMPLE_RATE,
+} from "./decode";
 import { AudioConfig } from "./types";
 
 export const FORMAT_LABELS: Record<AudioFormat, string> = {
@@ -54,8 +60,8 @@ export function buildSettingsTree(
           help: t("sampleRateHelp"),
           input: "number",
           value: config.sampleRate,
-          min: 3000,
-          max: 768000,
+          min: MIN_SAMPLE_RATE,
+          max: MAX_SAMPLE_RATE,
           step: 1000,
         },
         channels: {
@@ -64,7 +70,7 @@ export function buildSettingsTree(
           input: "number",
           value: config.channels,
           min: 1,
-          max: 32,
+          max: MAX_CHANNELS,
           step: 1,
         },
         volume: {

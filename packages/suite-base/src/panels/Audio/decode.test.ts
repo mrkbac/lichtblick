@@ -54,6 +54,26 @@ describe("extractAudioChunk", () => {
     expect(extractAudioChunk({ data: new Uint8Array() }, overrides)).toEqual({
       error: expect.stringContaining("no `format`"),
     });
+    expect(
+      extractAudioChunk(
+        { data: new Uint8Array(), format: "pcm-s16", number_of_channels: 2 ** 31 },
+        overrides,
+      ),
+    ).toEqual({ error: `Unsupported channel count ${2 ** 31}.` });
+    expect(
+      extractAudioChunk(
+        { data: new Uint8Array(), format: "pcm-s16" },
+        { ...overrides, channels: 0 },
+      ),
+    ).toEqual({
+      error: "Unsupported channel count 0.",
+    });
+    expect(
+      extractAudioChunk(
+        { data: new Uint8Array(), format: "pcm-s16" },
+        { ...overrides, sampleRate: 100 },
+      ),
+    ).toEqual({ error: "Unsupported sample rate 100 Hz." });
     expect(extractAudioChunk({ data: new Uint8Array(), format: "dts" }, overrides)).toEqual({
       error: 'Unsupported audio format "dts".',
     });

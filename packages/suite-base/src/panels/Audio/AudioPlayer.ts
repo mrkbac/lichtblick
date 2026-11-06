@@ -26,6 +26,8 @@ export class AudioPlayer {
   #decoder: AudioDecoder | undefined;
   #decoderKey = "";
   #fallbackQueue = Promise.resolve();
+  /** Bumped by cut() so decodes that finish afterwards are dropped. */
+  #epoch = 0;
   /** Partial MP3/AAC frame left over from the previous message, and when it should play. */
   #pending = new Uint8Array(0);
   #pendingStart = 0;
@@ -61,6 +63,7 @@ export class AudioPlayer {
 
   /** Fades out and drops everything queued or still decoding, e.g. on seek. */
   public cut(): void {
+    this.#epoch++;
     this.#fadeOut();
     this.#decoder?.close();
     this.#decoder = undefined;
@@ -87,7 +90,11 @@ export class AudioPlayer {
    * start of the chunk; `speed` is the playback speed.
    */
   public push(chunk: AudioChunk, delaySec: number, speed: number): void {
-    this.#speed = speed;
+    if (speed !== this.#speed) {
+      // Queued buffers keep the playback rate they started with: re-sync at the new speed
+      this.#speed = speed;
+      this.#fadeOut();
+    }
     if (!this.isRunning()) {
       return;
     }
@@ -104,9 +111,16 @@ export class AudioPlayer {
     }
     // Containers (wav, flac, ...) or no WebCodecs: each message must be a decodable file
     const bytes = chunk.data.slice().buffer;
+    const epoch = this.#epoch;
     this.#fallbackQueue = this.#fallbackQueue
       .then(async () => {
+        if (epoch !== this.#epoch) {
+          return;
+        }
         const buffer = await this.#ctx.decodeAudioData(bytes);
+        if (epoch !== this.#epoch) {
+          return;
+        }
         const planes = Array.from({ length: buffer.numberOfChannels }, (_, ch) =>
           buffer.getChannelData(ch),
         );

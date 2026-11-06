@@ -72,6 +72,10 @@ export function isPcm(format: AudioFormat): format is PcmFormat {
   return !["opus", "mp3", "aac", "vorbis", "flac", "wav"].includes(format);
 }
 
+export const MIN_SAMPLE_RATE = 3000;
+export const MAX_SAMPLE_RATE = 768000;
+export const MAX_CHANNELS = 32;
+
 export type AudioChunk = {
   format: AudioFormat;
   /** Sample rate in Hz, from the message or the panel's fallback. */
@@ -133,12 +137,16 @@ export function extractAudioChunk(
     return { error: "Message has no `format` field. Choose a format in the panel settings." };
   }
 
-  return {
-    format,
-    sampleRate: positiveInt(msg.sample_rate) ?? overrides.sampleRate,
-    channels: positiveInt(msg.number_of_channels) ?? overrides.channels,
-    data,
-  };
+  const sampleRate = positiveInt(msg.sample_rate) ?? overrides.sampleRate;
+  const channels = positiveInt(msg.number_of_channels) ?? overrides.channels;
+  // Web Audio's limits; also keeps a corrupt header from allocating billions of channels
+  if (!(sampleRate >= MIN_SAMPLE_RATE && sampleRate <= MAX_SAMPLE_RATE)) {
+    return { error: `Unsupported sample rate ${sampleRate} Hz.` };
+  }
+  if (!(Number.isInteger(channels) && channels >= 1 && channels <= MAX_CHANNELS)) {
+    return { error: `Unsupported channel count ${channels}.` };
+  }
+  return { format, sampleRate, channels, data };
 }
 
 const BYTES_PER_SAMPLE: Record<PcmFormat, number> = {
