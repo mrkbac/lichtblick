@@ -13,7 +13,8 @@ import { IWebSocket } from "@foxglove/ws-protocol";
 
 const OPEN_TYPE = "licht-ws-proxy:open";
 const ATTACH_TIMEOUT_MS = 1000;
-export const PROXY_MISSING_REASON = "WebSocket proxy extension not installed";
+// Also sent by chrome-extension/content.js when the extension was reloaded or removed.
+export const PROXY_MISSING_REASON = "WebSocket proxy extension unavailable";
 
 type FromProxy =
   | { ev: "attached" }

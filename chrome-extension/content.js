@@ -27,7 +27,11 @@ window.addEventListener("message", (event) => {
     worker = chrome.runtime.connect({ name: "ws" });
   } catch {
     // Extension was reloaded or removed; this page's script is orphaned.
-    pagePort.postMessage({ ev: "close", code: 1011, reason: "Proxy extension unavailable" });
+    pagePort.postMessage({
+      ev: "close",
+      code: 1011,
+      reason: "WebSocket proxy extension unavailable",
+    });
     pagePort.close();
     return;
   }
