@@ -486,6 +486,19 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     return await this.datasetsBuilder.getCsvData();
   }
 
+  /** The data of all series within the visible x range */
+  public async getVisibleCsvData(): Promise<CsvDataset[]> {
+    const scale = this.latestXScale;
+    const datasets = await this.getCsvData();
+    if (!scale) {
+      return datasets;
+    }
+    return datasets.map((dataset) => ({
+      ...dataset,
+      data: dataset.data.filter((datum) => datum.x >= scale.min && datum.x <= scale.max),
+    }));
+  }
+
   private updateCurrentSeconds(secondsSinceStart: number): void {
     const moved = secondsSinceStart !== this.currentSeconds;
     // Set the time first: queueDispatchRender may start rendering right away and reads it.

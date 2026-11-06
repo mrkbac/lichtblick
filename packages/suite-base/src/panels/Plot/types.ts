@@ -94,6 +94,9 @@ export type HoverElement = {
 /** Canvas-pixel rectangle */
 export type PixelRect = { left: number; right: number; top: number; bottom: number };
 
+/** A series shown in the legend of an exported image */
+export type ImageLegendEntry = { label: string; color: string };
+
 export type ReferenceLine = { color: string; value: number; scaleID?: "y" | "y2" };
 
 export type SecondaryYAxisOptions = {

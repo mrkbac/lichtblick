@@ -20,10 +20,12 @@ import { DEFAULT_ANNOTATION } from "@lichtblick/suite-base/panels/Plot/constants
 import { getChartOptions } from "@lichtblick/suite-base/panels/Plot/utils/getChartOptions";
 import { Bounds, Bounds1D } from "@lichtblick/suite-base/types/Bounds";
 import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
+import { fontMonospace } from "@lichtblick/theme";
 
 import {
   ChartRendererProps,
   ChartType,
+  ImageLegendEntry,
   Dataset,
   Datum,
   HoverElement,
@@ -531,6 +533,47 @@ export class ChartRenderer {
       zoomOptions.mode = mode;
       zoomOptions.overScaleMode = overScaleMode;
     }
+  }
+
+  /**
+   * The chart as a PNG on an opaque background, with a legend of `legend` drawn in the top-left
+   * corner of the chart area.
+   */
+  public async getImageBlob(backgroundColor: string, legend: ImageLegendEntry[]): Promise<Blob> {
+    const chart = this.#chartInstance;
+    const source = chart.canvas as unknown as OffscreenCanvas;
+    const image = new OffscreenCanvas(source.width, source.height);
+    const ctx = unwrap(image.getContext("2d"));
+    ctx.fillStyle = backgroundColor;
+    ctx.fillRect(0, 0, image.width, image.height);
+    ctx.drawImage(source, 0, 0);
+
+    if (legend.length > 0) {
+      const dpr = chart.currentDevicePixelRatio;
+      ctx.scale(dpr, dpr);
+      const fontSize = 12;
+      const rowHeight = fontSize + 4;
+      const pad = 6;
+      const swatch = 12;
+      ctx.font = `${fontSize}px ${fontMonospace}`;
+      ctx.textBaseline = "middle";
+      const textWidth = Math.max(...legend.map((entry) => ctx.measureText(entry.label).width));
+      const left = chart.chartArea.left + pad;
+      const top = chart.chartArea.top + pad;
+      ctx.globalAlpha = 0.85;
+      ctx.fillStyle = backgroundColor;
+      ctx.fillRect(left, top, pad * 3 + swatch + textWidth, pad * 2 + rowHeight * legend.length);
+      ctx.globalAlpha = 1;
+      legend.forEach((entry, i) => {
+        const y = top + pad + rowHeight * i + rowHeight / 2;
+        ctx.fillStyle = entry.color;
+        ctx.fillRect(left + pad, y - 1.5, swatch, 3);
+        ctx.fillStyle = this.#titleColor;
+        ctx.fillText(entry.label, left + pad * 2 + swatch, y);
+      });
+    }
+
+    return await image.convertToBlob({ type: "image/png" });
   }
 
   /**

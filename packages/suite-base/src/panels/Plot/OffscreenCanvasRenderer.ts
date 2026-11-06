@@ -14,7 +14,16 @@ import { Bounds } from "@lichtblick/suite-base/types/Bounds";
 
 import { ChartRenderer } from "./ChartRenderer";
 import type { Service } from "./ChartRenderer.worker";
-import { Dataset, HoverElement, PixelRect, Scale, UpdateAction, YScale, ZoomMode } from "./types";
+import {
+  Dataset,
+  HoverElement,
+  ImageLegendEntry,
+  PixelRect,
+  Scale,
+  UpdateAction,
+  YScale,
+  ZoomMode,
+} from "./types";
 
 // If the datasets builder is garbage collected we also need to cleanup the worker
 // This registry ensures the worker is cleaned up when the builder is garbage collected
@@ -67,6 +76,11 @@ export class OffscreenCanvasRenderer {
 
   public async zoomToRect(rect: PixelRect, mode: ZoomMode): Promise<Bounds | undefined> {
     return await (await this.#remote).zoomToRect(rect, mode);
+  }
+
+  /** PNG of the chart on the panel background */
+  public async getImageBlob(legend: ImageLegendEntry[]): Promise<Blob> {
+    return await (await this.#remote).getImageBlob(this.#theme.palette.background.paper, legend);
   }
 
   public async updateDatasets(datasets: Dataset[]): Promise<{ x?: Scale; y?: YScale }> {

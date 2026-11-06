@@ -1188,4 +1188,29 @@ describe("PlotCoordinator", () => {
       expect(getCsvDataSpy).toHaveBeenCalled();
     });
   });
+
+  describe("getVisibleCsvData", () => {
+    const datum = (x: number) => ({
+      x,
+      y: x,
+      receiveTime: { sec: x, nsec: 0 },
+      value: x,
+    });
+    const data = [{ label: "/a.x", configIndex: 0, data: [datum(1), datum(5), datum(9)] }];
+
+    it("returns all data before the chart has an x scale", async () => {
+      datasetsBuilder.getCsvData = vi.fn().mockResolvedValue(data);
+
+      expect(await plotCoordinator.getVisibleCsvData()).toEqual(data);
+    });
+
+    it("keeps only the samples inside the visible x range", async () => {
+      datasetsBuilder.getCsvData = vi.fn().mockResolvedValue(data);
+      plotCoordinator["latestXScale"] = { min: 2, max: 9, left: 0, right: 100 };
+
+      const result = await plotCoordinator.getVisibleCsvData();
+
+      expect(result[0]!.data.map((d) => d.x)).toEqual([5, 9]);
+    });
+  });
 });
