@@ -44,7 +44,9 @@ for (const [license, packages] of Object.entries(byLicense)) {
   for (const pkg of packages) {
     const excepted =
       license === "Unknown" &&
-      pkg.versions.every((version) => UNKNOWN_LICENSE_EXCEPTIONS.includes(`${pkg.name}@${version}`));
+      pkg.versions.every((version) =>
+        UNKNOWN_LICENSE_EXCEPTIONS.includes(`${pkg.name}@${version}`),
+      );
     if (!allowed && !excepted) {
       console.error(`${pkg.name}@${pkg.versions.join(",")} has disallowed license "${license}"`);
       failed = true;
