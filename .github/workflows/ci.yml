@@ -79,9 +79,6 @@ jobs:
           exit $failed
 
   e2e-desktop:
-    # Not on PRs for now: the smoke suite is red on licht and needs its own fix. It still runs on
-    # every licht push here and nightly in e2e-regression.yml.
-    if: github.event_name == 'push'
     runs-on: ubuntu-latest
 
     # Run smoke tests in parallel across 2 shards
