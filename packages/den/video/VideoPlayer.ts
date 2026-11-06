@@ -353,16 +353,11 @@ export class VideoPlayer extends EventEmitter<VideoPlayerEventTypes> {
     }
 
     try {
-      const chunkData =
-        data.byteOffset !== 0 || data.byteLength !== data.buffer.byteLength ? data.slice() : data;
       this.#currentDecodeTimestampMicros = timestampMicros;
-      const chunkInit: EncodedVideoChunkInit & { transfer?: ArrayBuffer[] } = {
-        type,
-        data: chunkData,
-        timestamp: timestampMicros,
-        transfer: chunkData.buffer instanceof ArrayBuffer ? [chunkData.buffer] : undefined,
-      };
-      this.#decoder.decode(new EncodedVideoChunk(chunkInit));
+      // Never pass `transfer`: `data` usually belongs to a message that other panels, the message
+      // cache and seek backfill still read, and transferring would detach it. Without `transfer`
+      // the EncodedVideoChunk constructor copies the bytes, so this costs one copy per frame.
+      this.#decoder.decode(new EncodedVideoChunk({ type, data, timestamp: timestampMicros }));
       this.#lastSubmittedTimestampMicros = timestampMicros;
       return true;
     } catch (unk) {

@@ -10,10 +10,19 @@ class MockEncodedVideoChunk {
   public readonly data: Uint8Array;
   public readonly timestamp: number;
 
-  public constructor(init: { type: "key" | "delta"; data: Uint8Array; timestamp: number }) {
+  // Mirrors the WebCodecs spec: the chunk copies `data`, and every buffer in `transfer` is detached.
+  public constructor(init: {
+    type: "key" | "delta";
+    data: Uint8Array;
+    timestamp: number;
+    transfer?: ArrayBuffer[];
+  }) {
     this.type = init.type;
-    this.data = init.data;
+    this.data = init.data.slice();
     this.timestamp = init.timestamp;
+    if (init.transfer) {
+      structuredClone(undefined, { transfer: init.transfer });
+    }
   }
 }
 
@@ -616,5 +625,32 @@ describe("VideoPlayer", () => {
     await expect(first).resolves.toMatchObject({ type: "target" });
     await expect(second).resolves.toMatchObject({ type: "target" });
     await expect(third).resolves.toMatchObject({ type: "target" });
+  });
+
+  it.each([
+    // Annex B: SPS, PPS, IDR slice
+    [
+      "H.264",
+      "avc1.42001e",
+      [0, 0, 0, 1, 0x67, 0x42, 0, 0x1e, 0, 0, 0, 1, 0x68, 0xce, 0, 0, 0, 1, 0x65, 0x88],
+    ],
+    // Temporal delimiter, OBU_FRAME key frame
+    ["AV1", "av01.0.04M.08", [0x12, 0x00, 0x32, 0x01, 0x14]],
+    ["VP9", "vp09.00.10.08", [0x82, 0x49, 0x83, 0x42, 0x00, 0x03, 0xf0, 0x02, 0xf6, 0x06]],
+  ])("keeps the source message data intact after decoding %s", async (_name, codec, bytes) => {
+    // Given a message whose data spans its whole ArrayBuffer, as shared by panels and caches
+    const { player, outputFrames } = setup({ trackDecodes: true });
+    await player.init({ codec });
+    const message = { data: new Uint8Array(bytes) };
+
+    // When the frame is decoded
+    const promise = player.decode(message.data, 1, "key");
+    await Promise.resolve();
+    outputFrames.get(1)?.(createFrame(1));
+    await promise;
+
+    // Then the message buffer is still attached and unchanged
+    expect(message.data.buffer.byteLength).toBe(bytes.length);
+    expect(Array.from(message.data)).toEqual(bytes);
   });
 });
