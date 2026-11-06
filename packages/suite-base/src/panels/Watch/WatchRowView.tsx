@@ -61,6 +61,13 @@ type Props = {
   onDropRow: (fromId: string, toId: string) => void;
 };
 
+/** Enter that confirms an IME composition, which must not submit a path. */
+export function isCompositionEnter(event: React.KeyboardEvent): boolean {
+  // Safari may report only keyCode 229 for it, with isComposing false
+  // eslint-disable-next-line @typescript-eslint/no-deprecated
+  return event.nativeEvent.isComposing || event.keyCode === 229;
+}
+
 /** Edits a row's path in place; Enter and Shift+Enter work as in the add input. */
 function PathEditor({
   initialPath,
@@ -103,7 +110,7 @@ function PathEditor({
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           finish(undefined);
-        } else if (event.key === "Enter" && !event.nativeEvent.isComposing) {
+        } else if (event.key === "Enter" && !isCompositionEnter(event)) {
           // A prevented Enter picked an autocomplete suggestion
           const paths = pathsForEnter(
             pathRef.current,

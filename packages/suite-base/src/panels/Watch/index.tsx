@@ -29,7 +29,7 @@ import clipboard from "@lichtblick/suite-base/util/clipboard";
 import { enumValuesByDatatypeAndField } from "@lichtblick/suite-base/util/enums";
 
 import { useStyles } from "./Watch.style";
-import { Painters, RowAction, WatchRowView } from "./WatchRowView";
+import { Painters, RowAction, WatchRowView, isCompositionEnter } from "./WatchRowView";
 import { Playback, WatchStore, createPlaybackClock } from "./WatchStore";
 import { compileRows, pathsForEnter, subscriptionsFor } from "./compile";
 import { DEFAULT_CONFIG, WatchConfig, migrateConfig, newRow, parsePastedPaths } from "./config";
@@ -285,8 +285,7 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
   }, [addPaths, schema, setDraft]);
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      // Enter that confirms an IME composition is not a submit
-      if (event.key !== "Enter" || event.nativeEvent.isComposing) {
+      if (event.key !== "Enter" || isCompositionEnter(event)) {
         return;
       }
       // A prevented Enter picked an autocomplete suggestion
