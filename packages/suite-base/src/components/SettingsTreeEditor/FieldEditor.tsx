@@ -70,10 +70,10 @@ function FieldInput({
           value={field.value}
           disabled={field.disabled}
           readOnly={field.readonly}
-          renderOption={({ key, ...props }, option) => (
-            <li key={key} {...props}>
+          renderOption={({ key, ...props }, option, { selected }) => (
+            <MenuItem key={key} selected={selected} {...props}>
               {option}
-            </li>
+            </MenuItem>
           )}
           slotProps={{
             clearIndicator: {
