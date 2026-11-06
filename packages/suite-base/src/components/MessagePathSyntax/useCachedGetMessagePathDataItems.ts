@@ -383,8 +383,14 @@ export function useDecodeMessagePathsForMessagesByTopic(
   const cachedGetMessagePathDataItems = useCachedGetMessagePathDataItems(memoizedPaths);
   // Note: Let callers define their own memoization scheme for messagesByTopic. For regular playback
   // useMemo might be appropriate, but weakMemo will likely better for blocks.
-  return useCallback(
-    (messagesByTopic) => {
+  return useMemo(() => {
+    // Decoded items per path and message, so a growing history only decodes new messages. Tied to
+    // this callback instance, which changes whenever paths, structures or variables change.
+    const decodedByPath = new Map<
+      string,
+      WeakMap<MessageEvent, MessagePathDataItem[] | undefined>
+    >();
+    return (messagesByTopic: { [topicName: string]: readonly MessageEvent[] }) => {
       const obj: { [path: string]: MessageAndData[] } = {};
       for (const path of memoizedPaths) {
         // Create an array for invalid paths, and valid paths with entries in messagesByTopic
@@ -405,16 +411,24 @@ export function useDecodeMessagePathsForMessagesByTopic(
         const messagesForThisPath: MessageAndData[] = [];
         obj[path] = messagesForThisPath;
 
+        let decoded = decodedByPath.get(path);
+        if (!decoded) {
+          decoded = new WeakMap();
+          decodedByPath.set(path, decoded);
+        }
         for (const message of messages) {
+          let queriedData = decoded.get(message);
+          if (!decoded.has(message)) {
+            queriedData = cachedGetMessagePathDataItems(path, message);
+            decoded.set(message, queriedData);
+          }
           // Add the item (if it exists) to the array.
-          const queriedData = cachedGetMessagePathDataItems(path, message);
           if (queriedData) {
             messagesForThisPath.push({ messageEvent: message, queriedData });
           }
         }
       }
       return obj;
-    },
-    [memoizedPaths, cachedGetMessagePathDataItems],
-  );
+    };
+  }, [memoizedPaths, cachedGetMessagePathDataItems]);
 }
