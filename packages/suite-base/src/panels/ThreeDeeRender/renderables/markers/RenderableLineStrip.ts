@@ -120,9 +120,8 @@ export class RenderableLineStrip extends RenderableMarker {
 
     this.#setPositions(marker, pointsLength);
     this.#setColors(marker, pointsLength);
-
-    this.#linePrepass.computeLineDistances();
-    this.#line.computeLineDistances();
+    // No computeLineDistances(): it allocates and uploads a new buffer per update, and line
+    // distances are only read by dashed materials, which markers never use
   }
 
   #setPositions(marker: Marker, pointsLength: number): void {
