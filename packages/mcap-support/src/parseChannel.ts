@@ -59,24 +59,15 @@ function parseIDLDefinitionsToDatatypes(
 }
 
 /**
- * The root definition in a ROS schema has no name, so a bare field type like `Time` in it is
- * matched against every `<pkg>/Time` in the schema and fails when there are several (e.g.
- * `builtin_interfaces/Time` and the package's own `Time`). On that failure, name the root after the
- * schema so bare types resolve within its package, as ROS does.
+ * Give the root definition a `MSG:` header like every nested definition has, so bare field types
+ * in it (e.g. `Time`) resolve within its own package instead of matching every `<pkg>/Time`.
  */
 function parseMessageDefinition(
   schema: string,
   schemaName: string,
   options?: { ros2?: boolean },
 ): MessageDefinition[] {
-  try {
-    return parseRosmsg(schema, options);
-  } catch (error) {
-    if (!(error instanceof Error) || !error.message.startsWith("Cannot unambiguously")) {
-      throw error;
-    }
-    return parseRosmsg(`MSG: ${schemaName}\n${schema}`, options);
-  }
+  return parseRosmsg(`MSG: ${schemaName}\n${schema}`, options);
 }
 
 function parsedDefinitionsToDatatypes(
