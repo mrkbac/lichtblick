@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
-import ErrorIcon from "@mui/icons-material/Error";
 import { Tooltip, useTheme } from "@mui/material";
 import React, { useCallback, useMemo, useState, useRef, useEffect } from "react";
 import { withStyles } from "tss-react/mui";
@@ -40,14 +39,6 @@ const StyledIconButton = withStyles(HoverableIconButton, (theme) => ({
     },
   },
 }));
-
-const emptyAction: ValueActionItem = {
-  key: "",
-  tooltip: "",
-  icon: <ErrorIcon fontSize="inherit" />,
-};
-
-const MAX_ACTION_ITEMS = 4;
 
 function Value(props: PropsValue): React.JSX.Element {
   const timeOutID = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -144,15 +135,7 @@ function Value(props: PropsValue): React.JSX.Element {
     valueAction,
   ]);
 
-  // need to keep space to prevent resizing and wrapping on hover
-  const placeholderActionsForSpacing = useMemo(() => {
-    const actions: ValueActionItem[] = [];
-    for (let i = availableActions.length; i < MAX_ACTION_ITEMS; i++) {
-      actions.push({ ...emptyAction, key: `empty-${i}` });
-    }
-    return actions;
-  }, [availableActions.length]);
-  const { classes, cx } = useStylesValue();
+  const { classes } = useStylesValue();
 
   // Drag a field onto another panel, e.g. a Watch or Plot
   const { dragRef } = useSeriesDrag(
@@ -179,6 +162,7 @@ function Value(props: PropsValue): React.JSX.Element {
       direction="row"
       alignItems="center"
       gap={0.25}
+      className={classes.root}
       onPointerEnter={() => {
         setPointerOver(true);
       }}
@@ -190,34 +174,30 @@ function Value(props: PropsValue): React.JSX.Element {
         <HighlightedValue itemLabel={itemLabel} />
       </span>
       {arrLabel}
-      {/* A grip instead of the whole value, so the value text stays selectable */}
-      {pointerOver && dragRef && (
-        <Tooltip arrow title="Drag to a panel" placement="top">
-          <span ref={dragRef} className={classes.dragHandle}>
-            <DragIndicatorIcon fontSize="inherit" />
-          </span>
-        </Tooltip>
-      )}
-      {pointerOver &&
-        availableActions.map((action) => (
-          <Tooltip key={action.key} arrow title={action.tooltip} placement="top">
-            <StyledIconButton
-              size="small"
-              activeColor={action.activeColor}
-              onClick={action.onClick}
-              color="inherit"
-              icon={action.icon}
-            />
-          </Tooltip>
-        ))}
-      <span className={cx(classes.placeholderActionContainer)}>
-        {pointerOver &&
-          placeholderActionsForSpacing.map((action) => (
+      {/* Out of the layout, so hovering never moves or wraps the value */}
+      {pointerOver && (
+        <span className={classes.hoverActions}>
+          {/* A grip instead of the whole value, so the value text stays selectable */}
+          {dragRef && (
+            <Tooltip arrow title="Drag to a panel" placement="top">
+              <span ref={dragRef} className={classes.dragHandle}>
+                <DragIndicatorIcon fontSize="inherit" />
+              </span>
+            </Tooltip>
+          )}
+          {availableActions.map((action) => (
             <Tooltip key={action.key} arrow title={action.tooltip} placement="top">
-              <StyledIconButton size="small" color="inherit" icon={action.icon} />
+              <StyledIconButton
+                size="small"
+                activeColor={action.activeColor}
+                onClick={action.onClick}
+                color="inherit"
+                icon={action.icon}
+              />
             </Tooltip>
           ))}
-      </span>
+        </span>
+      )}
     </Stack>
   );
 }
