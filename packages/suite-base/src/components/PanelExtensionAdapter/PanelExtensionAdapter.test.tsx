@@ -1916,4 +1916,39 @@ describe("PanelExtensionAdapter", () => {
     });
     expect(hoverValue).toBeUndefined();
   });
+
+  it("clears its preview time when the panel unmounts", async () => {
+    // GIVEN a panel that previews a time
+    let panel: PanelExtensionContext | undefined;
+    const initPanel = (context: PanelExtensionContext) => {
+      panel = context;
+    };
+    let hoverValue: ReturnType<typeof useHoverValue>;
+    const HoverProbe = () => {
+      hoverValue = useHoverValue();
+      return <></>;
+    };
+    const Wrapper = ({ showPanel }: { showPanel: boolean }) => (
+      <ThemeProvider isDark>
+        <MockPanelContextProvider>
+          <PanelSetup fixture={{ activeData: { startTime: { sec: 100, nsec: 0 } } }}>
+            {showPanel && (
+              <PanelExtensionAdapter config={{}} saveConfig={() => {}} initPanel={initPanel} />
+            )}
+            <HoverProbe />
+          </PanelSetup>
+        </MockPanelContextProvider>
+      </ThemeProvider>
+    );
+    const view = render(<Wrapper showPanel />);
+    await act(async () => undefined);
+    act(() => {
+      panel!.setPreviewTime(105);
+    });
+    expect(hoverValue).toMatchObject({ type: "PLAYBACK_SECONDS", value: 5 });
+
+    // WHEN the panel is removed without clearing THEN its hover is gone
+    view.rerender(<Wrapper showPanel={false} />);
+    expect(hoverValue).toBeUndefined();
+  });
 });

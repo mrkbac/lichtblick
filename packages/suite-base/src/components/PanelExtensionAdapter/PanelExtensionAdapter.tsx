@@ -932,6 +932,14 @@ function PanelExtensionAdapter(
     undelivered,
   ]);
 
+  // Drop this panel's preview time on unmount; no other panel can clear it.
+  useEffect(
+    () => () => {
+      clearHoverValue(hoverComponentId);
+    },
+    [clearHoverValue, hoverComponentId],
+  );
+
   // Clear this panel's alerts on unmount.
   useEffect(() => {
     const panelAlertIds = panelAlertIdsRef.current;
