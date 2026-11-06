@@ -73,11 +73,11 @@ export class LiveTopicRates {
         stale: false,
       });
     }
-    // Forget topics that went away, so a returning topic starts fresh
+    // Forget the samples of topics that went away, so a returning topic starts a fresh window.
+    // Its known interval stays, so a slow topic isn't called stale between normal messages.
     for (const topic of this.#samples.keys()) {
       if (!stats.has(topic)) {
         this.#samples.delete(topic);
-        this.#intervalMs.delete(topic);
       }
     }
     return result;
