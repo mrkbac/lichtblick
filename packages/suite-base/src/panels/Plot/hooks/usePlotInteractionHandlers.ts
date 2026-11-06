@@ -58,7 +58,8 @@ export function liveTimeAgo(playerState: Immutable<PlayerState>, x: number): str
   if (playerState.capabilities.includes(PLAYER_CAPABILITIES.playbackControl)) {
     return undefined;
   }
-  if (!startTime || !endTime) {
+  // x < 0 is before the data, or the coordinator's "no scale yet" -1
+  if (!startTime || !endTime || x < 0) {
     return undefined;
   }
   const ago = toSec(subtract(endTime, startTime)) - x;

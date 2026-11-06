@@ -832,6 +832,10 @@ describe("liveTimeAgo", () => {
     expect(liveTimeAgo(state([PLAYER_CAPABILITIES.playbackControl]), 4)).toBeUndefined();
   });
 
+  it("is empty before the data or without an x scale", () => {
+    expect(liveTimeAgo(state([]), -1)).toBeUndefined();
+  });
+
   it("is empty past the newest data", () => {
     expect(liveTimeAgo(state([]), 11)).toBeUndefined();
   });
