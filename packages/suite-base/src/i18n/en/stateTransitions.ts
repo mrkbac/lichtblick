@@ -7,6 +7,7 @@
 
 export const stateTransitions = {
   addSeriesButton: "Click to add a series",
+  dragSeriesHint: "Drag onto another panel to add this series",
   conditionErrorMessage: 'Use one comparison, e.g. > 2 or == "ERROR"',
   delta: "Delta",
   labels: {

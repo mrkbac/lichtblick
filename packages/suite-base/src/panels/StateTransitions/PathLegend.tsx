@@ -33,6 +33,7 @@ function SeriesButton({
   path: StateTransitionPath | undefined;
   onClick: (index: number) => void;
 }>): React.JSX.Element {
+  const { t } = useTranslation("stateTransitions");
   const { classes, cx } = useStyles();
   const { dragRef, isDragging } = useSeriesDrag(path?.value);
   return (
@@ -40,7 +41,7 @@ function SeriesButton({
       // Firefox can't drag <button> elements.
       component="div"
       ref={dragRef}
-      title={dragRef ? "Drag onto another panel to add this series" : undefined}
+      title={dragRef ? t("dragSeriesHint") : undefined}
       className={cx({ [classes.dragging]: isDragging })}
       data-testid={`edit-topic-button-${index}`}
       endIcon={path == undefined && <Add16Regular />}

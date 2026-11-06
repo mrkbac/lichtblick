@@ -227,7 +227,7 @@ export function PlotLegendRow({
       </div>
       <div
         ref={dragRef}
-        title={dragRef ? "Drag onto another panel to add this series" : undefined}
+        title={dragRef ? t("dragSeriesHint") : undefined}
         className={cx(classes.plotName, {
           [classes.draggable]: dragRef != undefined,
           [classes.dragging]: isDragging,
