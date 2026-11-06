@@ -120,6 +120,18 @@ function formatDuration(seconds: number): string {
   return seconds < 1 ? `${Math.round(seconds * 1000)} ms` : `${seconds.toFixed(1)} s`;
 }
 
+/** ⚠ whose tooltip lists the problems */
+function WarningIcon({ text }: { text: string }): React.JSX.Element {
+  const { classes } = useStyles();
+  return (
+    <Tooltip title={<span style={{ whiteSpace: "pre-line" }}>{text}</span>}>
+      <span className={classes.warningIcon} role="img" aria-label={text}>
+        <Warning16Filled />
+      </span>
+    </Tooltip>
+  );
+}
+
 function warningMessage(
   t: TFunction<"transformTree">,
   row: FrameRow,
@@ -322,6 +334,11 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
   const rootCount = roots.length;
   const maxDepth = rows.reduce((max, row) => Math.max(max, row.depth), 0);
   const warningCount = allRows.filter((row) => row.warnings.length > 0).length;
+  const warningDetails = allRows
+    .flatMap((row) =>
+      row.warnings.map((warning) => `${row.frame}: ${warningMessage(t, row, warning)}`),
+    )
+    .join("\n");
   const notYetPublishedCount = allRows.filter((row) => row.notYetPublished).length;
   const adjustedCount = Object.keys(offsets.frames).length;
   // Result edits must be based on the transform at the current time, not one from before a seek
@@ -346,14 +363,18 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
             <span>{t("notYetPublishedCount", { count: notYetPublishedCount })}</span>
           )}
           {rootCount > 1 && (
-            <span className={classes.warningText}>
-              <Warning16Filled /> {t("multipleRoots", { count: rootCount })}
-            </span>
+            <Tooltip title={roots.join(", ")}>
+              <span className={classes.warningText}>
+                <Warning16Filled /> {t("multipleRoots", { count: rootCount })}
+              </span>
+            </Tooltip>
           )}
           {warningCount > 0 && (
-            <span className={classes.warningText}>
-              <Warning16Filled /> {t("warningCount", { count: warningCount })}
-            </span>
+            <Tooltip title={<span style={{ whiteSpace: "pre-line" }}>{warningDetails}</span>}>
+              <span className={classes.warningText}>
+                <Warning16Filled /> {t("warningCount", { count: warningCount })}
+              </span>
+            </Tooltip>
           )}
           {adjustedCount > 0 && (
             <span className={classes.adjusted}>
@@ -542,6 +563,10 @@ const FrameTableRow = memo(function FrameTableRowImpl({
       onKeyDown={
         entry
           ? (event) => {
+              if (event.key === "Escape" && selected) {
+                onSelect(row.frame);
+                return;
+              }
               // Only the row itself; the collapse button inside handles its own keys
               if (
                 event.target === event.currentTarget &&
@@ -585,7 +610,11 @@ const FrameTableRow = memo(function FrameTableRowImpl({
             </span>
           </Tooltip>
           {adjusted && <span className={classes.adjustedBadge}>{t("adjusted")}</span>}
-          {row.warnings.length > 0 && <Warning16Filled className={classes.warningIcon} />}
+          {row.warnings.length > 0 && (
+            <WarningIcon
+              text={row.warnings.map((warning) => warningMessage(t, row, warning)).join("\n")}
+            />
+          )}
         </div>
       </td>
       {/* Values can be wider than their column and get clipped, so the title has the full text. */}

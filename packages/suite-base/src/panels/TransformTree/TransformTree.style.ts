@@ -100,6 +100,7 @@ export const useStyles = makeStyles()((theme) => ({
   },
   warningIcon: {
     color: theme.palette.warning.main,
+    display: "inline-flex",
     flex: "none",
   },
   selectableRow: {

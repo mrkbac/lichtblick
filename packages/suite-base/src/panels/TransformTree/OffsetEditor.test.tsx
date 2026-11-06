@@ -65,6 +65,18 @@ describe("OffsetEditor", () => {
     expect(onChange).toHaveBeenLastCalledWith(undefined);
   });
 
+  it("nudges a value by the step with the arrow keys, 10 steps with Shift", () => {
+    // Given: step "fine" is 1 mm
+    const { onChange } = setup({ xyz: [0.5, 0, 0], rpy: [0, 0, 0] });
+    const input = screen.getByLabelText("Offset x (m)");
+
+    // When / Then
+    fireEvent.keyDown(input, { key: "ArrowUp" });
+    expect((onChange.mock.lastCall?.[0] as FrameOffset).xyz[0]).toBeCloseTo(0.501, 6);
+    fireEvent.keyDown(input, { key: "ArrowDown", shiftKey: true });
+    expect((onChange.mock.lastCall?.[0] as FrameOffset).xyz[0]).toBeCloseTo(0.49, 6);
+  });
+
   const shownOffsetRpy = () =>
     ["Offset Roll (°)", "Offset Pitch (°)", "Offset Yaw (°)"].map((label) =>
       Number(screen.getByLabelText<HTMLInputElement>(label).value),
