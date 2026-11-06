@@ -595,8 +595,17 @@ export class TimestampDatasetsBuilderImpl {
         downsampleInto(dataset, x, y, x.length, 0, 0, valueAt, viewport);
       } else {
         // Downsampling would drop bin corners and draw diagonals. Bins are capped (2 points each),
-        // so the outline is drawn as is.
-        for (let i = 0; i < x.length; i++) {
+        // so the visible part of the outline is drawn as is, plus one point on either side so
+        // lines leave the view at the right height.
+        const viewMin = viewport.bounds.x?.min;
+        const viewMax = viewport.bounds.x?.max;
+        const start =
+          viewMin != undefined ? Math.max(lowerBound(x, 0, x.length, viewMin) - 1, 0) : 0;
+        const end =
+          viewMax != undefined
+            ? Math.min(upperBound(x, 0, x.length, viewMax) + 1, x.length)
+            : x.length;
+        for (let i = start; i < end; i++) {
           dataset.data.push({ x: x[i]!, y: y[i]!, value: valueAt(i) });
         }
       }

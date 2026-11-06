@@ -324,4 +324,21 @@ describe("TimestampDatasetsBuilderImpl", () => {
 
     expect(data).toHaveLength(2 * 500 + 2);
   });
+
+  it("sends only the visible part of a histogram, plus one point on either side", () => {
+    // GIVEN 4 bins over 0..4: edges 0, 1, 2, 3, 4
+    const builder = build([seriesItem("0")]);
+    builder.applyAction({ type: "append-full", series: key, items: items([0, 1, 2, 3, 4]) });
+
+    // WHEN zoomed to the third bin
+    const data = builder.getViewportDatasets({
+      size: { width: 100, height: 100 },
+      bounds: { x: { min: 2.2, max: 2.8 } },
+      analysis: { mode: "histogram", bins: 4 },
+    })[0]!.data;
+
+    // THEN only that bin's top is sent; its corners reach past both view edges
+    expect(data.map(({ x }) => x)).toEqual([2, 3]);
+    expect(data).toHaveLength(2);
+  });
 });
