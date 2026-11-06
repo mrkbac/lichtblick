@@ -84,6 +84,32 @@ describe("useStateToURLSynchronization", () => {
     );
   });
 
+  it("keeps a data-source url with its own query string intact", () => {
+    const signed =
+      "https://example.com/bucket/example.mcap?X-Amz-Credential=key%2F20260101%2Fus-east-1" +
+      "&X-Amz-Expires=3600&X-Amz-Signature=deadbeef";
+    const spy = vi.spyOn(window.history, "replaceState");
+
+    (useMessagePipeline as Mock).mockImplementation((selector) =>
+      selector({
+        playerState: {
+          activeData: { currentTime: { sec: 1, nsec: 1 } },
+          capabilities: ["playbackControl"],
+          urlState: { sourceId: "remote-file", parameters: { url: signed } },
+        },
+      }),
+    );
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <EventsProvider>{children}</EventsProvider>
+    );
+    renderHook(useStateToURLSynchronization, { wrapper });
+
+    const written = new URL(spy.mock.calls[spy.mock.calls.length - 1]![2] as string);
+    expect(written.searchParams.get("ds.url")).toBe(signed);
+    expect(written.searchParams.get("X-Amz-Signature")).toBeNull();
+  });
+
   it("suppresses ds param writeback when mcap-bundle is present in the URL", () => {
     const spy = vi.spyOn(window.history, "replaceState");
 

@@ -19,7 +19,6 @@ import {
   Cut20Filled,
   Cut20Regular,
   ArrowRepeatAllOff20Regular,
-  Info20Regular,
   Next20Filled,
   Next20Regular,
   Pause20Filled,
@@ -30,12 +29,10 @@ import {
   Previous20Regular,
 } from "@fluentui/react-icons";
 import { Time, compare, fromNanoSec, toNanoSec } from "@foxglove/rostime";
-import { Tooltip } from "@mui/material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CreateEventDialog } from "@lichtblick/suite-base/components/CreateEventDialog";
-import { DataSourceInfoView } from "@lichtblick/suite-base/components/DataSourceInfoView";
 import EventIcon from "@lichtblick/suite-base/components/EventIcon";
 import EventOutlinedIcon from "@lichtblick/suite-base/components/EventOutlinedIcon";
 import { ExportRecordingDialog } from "@lichtblick/suite-base/components/ExportRecordingDialog/ExportRecordingDialog";
@@ -65,6 +62,7 @@ import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/us
 import { Player, PlayerPresence } from "@lichtblick/suite-base/players/types";
 import BroadcastManager from "@lichtblick/suite-base/util/broadcast/BroadcastManager";
 
+import { DataSourceInfoButton } from "./DataSourceInfoButton";
 import PlaybackTimeDisplay from "./PlaybackTimeDisplay";
 import { RepeatAdapter } from "./RepeatAdapter";
 import { ScrubPreviewMenu } from "./ScrubPreviewMenu";
@@ -95,7 +93,7 @@ export default function PlaybackControls({
   const presence = useMessagePipeline(selectPresence);
   const { t } = useTranslation("exportRecording");
 
-  const { classes, cx } = useStyles();
+  const { classes } = useStyles();
   const repeat = useWorkspaceStore(selectPlaybackRepeat);
   const [createEventDialogOpen, setCreateEventDialogOpen] = useState(false);
   const { currentUserType } = useCurrentUser();
@@ -251,29 +249,7 @@ export default function PlaybackControls({
                 onClick={toggleCreateEventDialog}
               />
             )}
-            <Tooltip
-              // A desired workflow is the ability to copy data source info text (start, end, duration)
-              // from the tooltip. However, there's a UX quirk where the tooltip will close if the user
-              // clicks on the <HoverableIconButton> and then goes to copy text from the tooltip.
-              //
-              // Disabling the focus listener fixes this quirk and the tooltip behaves as expected.
-              // https://mui.com/material-ui/api/tooltip/#prop-disableFocusListener
-              disableFocusListener
-              classes={{ popper: classes.popper }}
-              title={
-                <Stack paddingY={0.75}>
-                  <DataSourceInfoView disableSource />
-                </Stack>
-              }
-            >
-              <HoverableIconButton
-                className={cx(classes.dataSourceInfoButton, {
-                  [classes.disabled]: disableControls,
-                })}
-                size="small"
-                icon={<Info20Regular />}
-              />
-            </Tooltip>
+            <DataSourceInfoButton disabled={disableControls} />
             {exportableFile && (
               <HoverableIconButton
                 size="small"

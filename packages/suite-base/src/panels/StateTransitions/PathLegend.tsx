@@ -20,6 +20,39 @@ import {
   PathLegendProps,
   StateTransitionPath,
 } from "@lichtblick/suite-base/panels/StateTransitions/types";
+import { useSeriesDrag } from "@lichtblick/suite-base/panels/shared/useSeriesDrag";
+
+/** The series label; dragging it copies the series onto another panel. */
+function SeriesButton({
+  index,
+  path,
+  onClick,
+  children,
+}: React.PropsWithChildren<{
+  index: number;
+  path: StateTransitionPath | undefined;
+  onClick: (index: number) => void;
+}>): React.JSX.Element {
+  const { t } = useTranslation("stateTransitions");
+  const { classes, cx } = useStyles();
+  const { dragRef, isDragging } = useSeriesDrag(path?.value);
+  return (
+    <Button
+      // Firefox can't drag <button> elements.
+      component="div"
+      ref={dragRef}
+      title={dragRef ? t("dragSeriesHint") : undefined}
+      className={cx({ [classes.dragging]: isDragging })}
+      data-testid={`edit-topic-button-${index}`}
+      endIcon={path == undefined && <Add16Regular />}
+      onClick={() => {
+        onClick(index);
+      }}
+    >
+      {children}
+    </Button>
+  );
+}
 
 export const PathLegend = React.memo(function PathLegend(props: PathLegendProps) {
   const { t } = useTranslation("stateTransitions");
@@ -71,17 +104,15 @@ export const PathLegend = React.memo(function PathLegend(props: PathLegendProps)
               variant="contained"
               className={classes.buttonGroup}
             >
-              <Button
-                data-testid={`edit-topic-button-${index}`}
-                endIcon={paths.length === 0 && <Add16Regular />}
-                onClick={() => {
-                  handleEditTopic(index);
-                }}
+              <SeriesButton
+                index={index}
+                path={paths.length === 0 ? undefined : path}
+                onClick={handleEditTopic}
               >
                 {paths.length === 0
                   ? t("addSeriesButton")
                   : stateTransitionPathDisplayName(path, index)}
-              </Button>
+              </SeriesButton>
               {paths.length > 0 && (
                 <Button
                   data-testid={`delete-topic-button-${index}`}

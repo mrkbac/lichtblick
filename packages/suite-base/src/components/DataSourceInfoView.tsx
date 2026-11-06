@@ -5,185 +5,319 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { subtract as subtractTimes, Time } from "@foxglove/rostime";
+import { compare, subtract, Time, toMillis } from "@foxglove/rostime";
 import { Skeleton, Typography } from "@mui/material";
-import React, { RefObject, useEffect, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
+import { formatByteSize } from "@lichtblick/den/format";
+import { Immutable } from "@lichtblick/suite";
+import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import TextMiddleTruncate from "@lichtblick/suite-base/components/TextMiddleTruncate";
 import Timestamp from "@lichtblick/suite-base/components/Timestamp";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
-import { PlayerPresence } from "@lichtblick/suite-base/players/types";
+import { PlayerPresence, RecordingFileInfo } from "@lichtblick/suite-base/players/types";
 import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
+import { formatTimeAgo } from "@lichtblick/suite-base/util/recentSources";
 import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
 import { customTypography } from "@lichtblick/theme";
 
 import { MultilineMiddleTruncate } from "./MultilineMiddleTruncate";
 
-const useStyles = makeStyles()(() => ({
-  overline: {
+const useStyles = makeStyles<void, "copyButton">()((theme, _params, classes) => ({
+  label: {
     opacity: 0.6,
   },
-  numericValue: {
+  numeric: {
     fontFeatureSettings: `${customTypography.fontFeatureSettings}, "zero"`,
+  },
+  field: {
+    [`&:hover .${classes.copyButton}, & .${classes.copyButton}:focus-visible`]: {
+      opacity: 1,
+    },
+  },
+  copyButton: {
+    opacity: 0,
+    padding: 0,
+  },
+  secondary: {
+    color: theme.palette.text.secondary,
   },
 }));
 
+const selectPlayerName = (ctx: MessagePipelineContext) => ctx.playerState.name;
+const selectPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
 const selectStartTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
 const selectEndTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
-const selectPlayerName = (ctx: MessagePipelineContext) => ctx.playerState.name;
-const selectPlayerPresence = ({ playerState }: MessagePipelineContext) => playerState.presence;
-const selectSeek = (ctx: MessagePipelineContext) => ctx.seekPlayback;
+const selectIsLive = (ctx: MessagePipelineContext) => ctx.seekPlayback == undefined;
+const selectTopics = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.topics;
+const selectTopicStats = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.topicStats;
+const selectRecordingFiles = (ctx: MessagePipelineContext) =>
+  ctx.playerState.activeData?.recordingFiles;
 
-function DataSourceInfoContent(props: {
-  disableSource?: boolean;
-  durationRef: RefObject<null | HTMLDivElement>;
-  endTimeRef: RefObject<null | HTMLDivElement>;
-  playerName?: string;
-  playerPresence: PlayerPresence;
-  startTime?: Time;
-  isLiveConnection: boolean;
-}): React.JSX.Element {
-  const {
-    disableSource = false,
-    durationRef,
-    endTimeRef,
-    playerName,
-    playerPresence,
-    startTime,
-  } = props;
+const RELATIVE_TIME_REFRESH_MS = 10_000;
+
+/** Wall-clock time that re-renders the caller every `intervalMs`. */
+function useNow(intervalMs: number): number {
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setNow(Date.now());
+    }, intervalMs);
+    return () => {
+      clearInterval(id);
+    };
+  }, [intervalMs]);
+  return now;
+}
+
+function EmptyValue(): React.JSX.Element {
   const { classes } = useStyles();
-  const { t } = useTranslation("dataSourceInfo");
-
-  const isLiveConnection = props.isLiveConnection;
-
   return (
-    <Stack gap={1.5}>
-      {!disableSource && (
-        <Stack>
-          <Typography className={classes.overline} display="block" variant="overline">
-            {t("currentSource")}
-          </Typography>
-          {playerPresence === PlayerPresence.INITIALIZING ? (
-            <Typography variant="inherit">
-              <Skeleton animation="wave" width="40%" />
-            </Typography>
-          ) : playerPresence === PlayerPresence.RECONNECTING ? (
-            <Typography variant="inherit">{t("waitingForConnection")}</Typography>
-          ) : playerName ? (
-            <Typography variant="inherit" component="span">
-              <MultilineMiddleTruncate text={playerName} />
-            </Typography>
-          ) : (
-            <Typography className={classes.numericValue} variant="inherit">
-              &mdash;
-            </Typography>
-          )}
+    <Typography className={classes.numeric} variant="inherit">
+      &mdash;
+    </Typography>
+  );
+}
+
+/** A labelled value. Hovering it reveals a copy button when `copyText` is set. */
+function Field(props: {
+  label: string;
+  copyText?: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  const { label, copyText, children } = props;
+  const { t } = useTranslation("dataSourceInfo");
+  const { classes } = useStyles();
+  return (
+    <Stack className={classes.field}>
+      <Typography className={classes.label} variant="overline">
+        {label}
+      </Typography>
+      <Stack direction="row" alignItems="flex-start" gap={0.5}>
+        <Stack flex="auto" overflow="hidden">
+          {children}
         </Stack>
-      )}
-
-      <Stack>
-        <Typography className={classes.overline} variant="overline">
-          {t("startTime")}
-        </Typography>
-        {playerPresence === PlayerPresence.INITIALIZING ? (
-          <Skeleton animation="wave" width="50%" />
-        ) : startTime ? (
-          <Timestamp horizontal time={startTime} />
-        ) : (
-          <Typography className={classes.numericValue} variant="inherit">
-            &mdash;
-          </Typography>
-        )}
-      </Stack>
-
-      {!isLiveConnection && (
-        <Stack>
-          <Typography className={classes.overline} variant="overline">
-            {t("endTime")}
-          </Typography>
-          {playerPresence === PlayerPresence.INITIALIZING ? (
-            <Skeleton animation="wave" width="50%" />
-          ) : (
-            <Typography className={classes.numericValue} variant="inherit" ref={endTimeRef}>
-              &mdash;
-            </Typography>
-          )}
-        </Stack>
-      )}
-
-      <Stack>
-        <Typography className={classes.overline} variant="overline">
-          {t("duration")}
-        </Typography>
-        {playerPresence === PlayerPresence.INITIALIZING ? (
-          <Skeleton animation="wave" width={100} />
-        ) : (
-          <Typography className={classes.numericValue} variant="inherit" ref={durationRef}>
-            &mdash;
-          </Typography>
+        {copyText != undefined && (
+          <CopyButton
+            className={classes.copyButton}
+            size="small"
+            iconSize="small"
+            color="inherit"
+            aria-label={t("copyValue", { label })}
+            getText={() => copyText}
+          />
         )}
       </Stack>
     </Stack>
   );
 }
 
-const MemoDataSourceInfoContent = React.memo(DataSourceInfoContent);
+function SourceField(): React.JSX.Element {
+  const { t } = useTranslation("dataSourceInfo");
+  const playerName = useMessagePipeline(selectPlayerName);
+  const presence = useMessagePipeline(selectPresence);
 
-const EmDash = "\u2014";
+  let value: React.ReactNode;
+  if (presence === PlayerPresence.INITIALIZING) {
+    value = <Skeleton animation="wave" width="40%" />;
+  } else if (presence === PlayerPresence.RECONNECTING) {
+    value = t("waitingForConnection");
+  } else if (playerName) {
+    value = <MultilineMiddleTruncate text={playerName} />;
+  } else {
+    value = <EmptyValue />;
+  }
+  return (
+    <Field label={t("currentSource")} copyText={playerName === "" ? undefined : playerName}>
+      <Typography variant="inherit" component="div">
+        {value}
+      </Typography>
+    </Field>
+  );
+}
 
+function StartTimeField({ startTime }: { startTime?: Time }): React.JSX.Element {
+  const { t, i18n } = useTranslation("dataSourceInfo");
+  const { classes } = useStyles();
+  const now = useNow(RELATIVE_TIME_REFRESH_MS);
+
+  return (
+    <Field label={t("startTime")} copyText={startTime && formatTimeRaw(startTime)}>
+      {startTime ? (
+        <>
+          <Timestamp horizontal time={startTime} />
+          {isAbsoluteTime(startTime) && (
+            <Typography className={classes.secondary} variant="inherit">
+              {formatTimeAgo(toMillis(startTime), now, i18n.language)}
+            </Typography>
+          )}
+        </>
+      ) : (
+        <EmptyValue />
+      )}
+    </Field>
+  );
+}
+
+function EndTimeAndDurationFields(props: { startTime?: Time; isLive: boolean }): React.JSX.Element {
+  const { startTime, isLive } = props;
+  const { t } = useTranslation("dataSourceInfo");
+  const { classes } = useStyles();
+  const endTime = useMessagePipeline(selectEndTime);
+  const duration = startTime && endTime ? subtract(endTime, startTime) : undefined;
+
+  return (
+    <>
+      {!isLive && (
+        <Field label={t("endTime")} copyText={endTime && formatTimeRaw(endTime)}>
+          {endTime ? <Timestamp horizontal time={endTime} /> : <EmptyValue />}
+        </Field>
+      )}
+      <Field label={t("duration")} copyText={duration && formatTimeRaw(duration)}>
+        {duration ? (
+          <Typography className={classes.numeric} variant="inherit">
+            {formatDuration(duration)}
+          </Typography>
+        ) : (
+          <EmptyValue />
+        )}
+      </Field>
+    </>
+  );
+}
+
+function ContentsFields(): React.JSX.Element {
+  const { t, i18n } = useTranslation("dataSourceInfo");
+  const { classes } = useStyles();
+  const topics = useMessagePipeline(selectTopics);
+  const topicStats = useMessagePipeline(selectTopicStats);
+
+  const counts = useMemo(() => {
+    let messages = 0;
+    for (const stats of topicStats?.values() ?? []) {
+      messages += stats.numMessages;
+    }
+    return [
+      { label: t("topics"), value: topics?.length },
+      { label: t("messages"), value: topicStats && topicStats.size > 0 ? messages : undefined },
+      {
+        label: t("schemas"),
+        value: topics && new Set(topics.flatMap((topic) => topic.schemaName ?? [])).size,
+      },
+    ];
+  }, [t, topics, topicStats]);
+
+  return (
+    <Stack direction="row" gap={2}>
+      {counts.map(({ label, value }) => (
+        <Field key={label} label={label}>
+          <Typography className={classes.numeric} variant="inherit">
+            {value == undefined ? "—" : value.toLocaleString(i18n.language)}
+          </Typography>
+        </Field>
+      ))}
+    </Stack>
+  );
+}
+
+function FileRow(props: {
+  file: Immutable<RecordingFileInfo>;
+  recordingStart?: Time;
+}): React.JSX.Element {
+  const { file, recordingStart } = props;
+  const { classes, cx } = useStyles();
+  const { formatDate, formatTime } = useAppTimeFormat();
+
+  // Offsets from the recording start make gaps and overlaps between files easy to spot.
+  const range =
+    recordingStart && file.start && file.end
+      ? `+${formatDuration(subtract(file.start, recordingStart))} – +${formatDuration(subtract(file.end, recordingStart))}`
+      : undefined;
+  const absoluteRange =
+    file.start && file.end && isAbsoluteTime(file.start)
+      ? `${formatDate(file.start)} ${formatTime(file.start)} – ${formatDate(file.end)} ${formatTime(file.end)}`
+      : undefined;
+  const details = [range, file.sizeBytes != undefined ? formatByteSize(file.sizeBytes) : undefined]
+    .filter(Boolean)
+    .join(" · ");
+
+  return (
+    <Stack title={absoluteRange}>
+      <Typography variant="inherit" component="div">
+        <TextMiddleTruncate text={file.name ?? file.library} />
+      </Typography>
+      {details && (
+        <Typography className={cx(classes.numeric, classes.secondary)} variant="inherit">
+          {details}
+        </Typography>
+      )}
+    </Stack>
+  );
+}
+
+function FilesField({ startTime }: { startTime?: Time }): React.JSX.Element | null {
+  const { t } = useTranslation("dataSourceInfo");
+  const files = useMessagePipeline(selectRecordingFiles);
+
+  const sortedFiles = useMemo(
+    () => files && [...files].sort((a, b) => (a.start && b.start ? compare(a.start, b.start) : 0)),
+    [files],
+  );
+
+  if (!sortedFiles || sortedFiles.length === 0) {
+    return null;
+  }
+  // With a single file the range would only repeat start, end and duration.
+  const recordingStart = sortedFiles.length > 1 ? startTime : undefined;
+  return (
+    <Field label={t("files")}>
+      <Stack gap={0.75}>
+        {sortedFiles.map((file, index) => (
+          <FileRow key={`${file.name}-${index}`} file={file} recordingStart={recordingStart} />
+        ))}
+      </Stack>
+    </Field>
+  );
+}
+
+/**
+ * Summary of the open data source: name, time range, contents and files. Values can be copied
+ * from a hover button; times are copied as raw `sec.nsec`.
+ */
 export function DataSourceInfoView({
-  disableSource,
+  disableSource = false,
 }: {
   disableSource?: boolean;
 }): React.JSX.Element {
+  const presence = useMessagePipeline(selectPresence);
   const startTime = useMessagePipeline(selectStartTime);
-  const endTime = useMessagePipeline(selectEndTime);
-  const playerName = useMessagePipeline(selectPlayerName);
-  const playerPresence = useMessagePipeline(selectPlayerPresence);
-  const seek = useMessagePipeline(selectSeek);
+  const isLive = useMessagePipeline(selectIsLive);
 
-  const durationRef = useRef<HTMLDivElement>(null);
-  const endTimeRef = useRef<HTMLDivElement>(null);
-  const { formatDate, formatTime } = useAppTimeFormat();
-
-  // We bypass react and update the DOM elements directly for better performance here.
-  useEffect(() => {
-    if (durationRef.current) {
-      const duration = endTime && startTime ? subtractTimes(endTime, startTime) : undefined;
-      if (duration) {
-        const durationStr = formatDuration(duration);
-        durationRef.current.innerText = durationStr;
-      } else {
-        durationRef.current.innerText = EmDash;
-      }
-    }
-    if (endTimeRef.current) {
-      if (endTime) {
-        const date = formatDate(endTime);
-        endTimeRef.current.innerText = !isAbsoluteTime(endTime)
-          ? formatTimeRaw(endTime)
-          : `${date} ${formatTime(endTime)}`;
-      } else {
-        endTimeRef.current.innerHTML = EmDash;
-      }
-    }
-  }, [endTime, formatTime, startTime, playerPresence, formatDate]);
+  if (presence === PlayerPresence.INITIALIZING) {
+    return (
+      <Stack gap={1.5}>
+        {!disableSource && <SourceField />}
+        <Skeleton animation="wave" width="60%" />
+        <Skeleton animation="wave" width="60%" />
+        <Skeleton animation="wave" width={100} />
+      </Stack>
+    );
+  }
 
   return (
-    <MemoDataSourceInfoContent
-      disableSource={disableSource}
-      durationRef={durationRef}
-      endTimeRef={endTimeRef}
-      playerName={playerName}
-      playerPresence={playerPresence}
-      startTime={startTime}
-      isLiveConnection={seek == undefined}
-    />
+    <Stack gap={1.5}>
+      {!disableSource && <SourceField />}
+      <StartTimeField startTime={startTime} />
+      <EndTimeAndDurationFields startTime={startTime} isLive={isLive} />
+      <ContentsFields />
+      <FilesField startTime={startTime} />
+    </Stack>
   );
 }

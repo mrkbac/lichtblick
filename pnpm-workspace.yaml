@@ -5,47 +5,22 @@ packages:
   - web
   - benchmark
 
+# Dependencies are pinned to exact versions; `pnpm add` should keep doing that.
 savePrefix: ""
-# Like Yarn: don't install missing peer dependencies (e.g. electron-builder's optional Squirrel target).
+# Don't install missing peers: the default would pull in webpack (we build with rspack) and
+# electron-builder's optional Squirrel.Windows target.
 autoInstallPeers: false
 
 overrides:
-  "@types/node": 26.6.6
-  "@types/react": 19.3.0
-  "@xmldom/xmldom": 0.9.12
-  brace-expansion@^2.0.1: 2.1.7
-  brace-expansion@^2.0.2: 2.1.7
-  brace-expansion@^5.0.5: 5.0.12
-  browserslist: 4.28.9
-  compression: 1.8.2
-  dompurify: 3.4.17
-  esbuild: 0.28.1
-  fast-uri: 3.1.7
-  flatted: 3.4.2
-  http-cache-semantics: 4.3.0
-  js-cookie: 3.0.7
-  js-yaml: 4.3.2
-  plist: 4.0.0
-  proxy-addr: 2.0.8
-  qs: 6.15.2
-  shell-quote: 1.12.0
-  source-map-js: 1.2.2
-  svgo: 3.3.5
-  tar: 7.5.22
-  undici: 6.29.1
-  uuid: 14.0.0
-  webpack-dev-middleware@^6.1.2: 7.4.5
+  # monaco-editor pins a vulnerable dompurify (GHSA-cg2g-xh64-v4q7, GHSA-mrv2-3pqr-j5jr).
+  "dompurify@<3.4.17": 3.4.17
+  # @actions/tool-cache 2.x pulls undici 5 (several high advisories, e.g. GHSA-2m5v-pch6-74hx).
+  "undici@<6.29.1": 6.29.1
 
-auditConfig:
-  ignoreGhsas:
-    # braces: disputed, no fix planned (https://github.com/micromatch/braces/issues/85)
-    - GHSA-vfj7-8cjw-p6xm
-
-# Dependency install scripts are off by default. Allow only the ones we need.
-onlyBuiltDependencies:
-  - esbuild # checks the platform binary
+# esbuild (only used by Storybook) works without its postinstall check; listing it silences the
+# "ignored build scripts" warning.
 ignoredBuiltDependencies:
-  - unrs-resolver # its prebuilt binary comes from an optional dependency
+  - esbuild
 
 # TypeScript looks for @types packages in parent node_modules folders. Hoist them to the root so
 # each workspace doesn't have to repeat the shared ones. Runtime packages stay strict (isolated).

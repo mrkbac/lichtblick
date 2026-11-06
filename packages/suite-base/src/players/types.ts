@@ -252,7 +252,12 @@ export type Topic = {
 export type TopicWithSchemaName = Topic & { schemaName: string };
 
 export type RecordingFileInfo = {
+  /** File name, or the last path segment of a remote URL. */
+  name?: string;
   sizeBytes?: number;
+  /** Time range of this file's messages. */
+  start?: Time;
+  end?: Time;
   library: string;
   channels: {
     id: number;
