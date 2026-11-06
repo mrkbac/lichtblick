@@ -103,6 +103,17 @@ export function quatToRpyDegrees(q: Readonly<Quat>): Vec3 {
   return [tempEuler.x * RAD2DEG, tempEuler.y * RAD2DEG, tempEuler.z * RAD2DEG];
 }
 
+/** ROS roll/pitch/yaw in degrees: around the parent's fixed X, Y, Z axes (tf2 getRPY, URDF rpy) */
+export function quatToRosRpyDegrees(q: Readonly<Quat>): Vec3 {
+  tempEuler.setFromQuaternion(tempQuatA.fromArray(q), "ZYX");
+  return [tempEuler.x * RAD2DEG, tempEuler.y * RAD2DEG, tempEuler.z * RAD2DEG];
+}
+
+export function rosRpyDegreesToQuat(rpy: Readonly<Vec3>): Quat {
+  tempEuler.set(rpy[0] * DEG2RAD, rpy[1] * DEG2RAD, rpy[2] * DEG2RAD, "ZYX");
+  return tempQuatA.setFromEuler(tempEuler).toArray();
+}
+
 /** The transform that is actually rendered: recorded transform with the offset applied */
 export function applyOffset(
   position: Readonly<Vec3>,

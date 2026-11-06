@@ -102,4 +102,67 @@ export const useStyles = makeStyles()((theme) => ({
     color: theme.palette.warning.main,
     flex: "none",
   },
+  selectableRow: {
+    cursor: "pointer",
+  },
+  selectedRow: {
+    backgroundColor: `${theme.palette.action.selected} !important`,
+  },
+  adjusted: {
+    color: theme.palette.info.main,
+  },
+  adjustedBadge: {
+    flex: "none",
+    color: theme.palette.info.main,
+    fontSize: theme.typography.caption.fontSize,
+  },
+  editor: {
+    flex: "none",
+    display: "flex",
+    flexDirection: "column",
+    gap: theme.spacing(0.5),
+    padding: theme.spacing(0.5, 1),
+    borderTop: `1px solid ${theme.palette.divider}`,
+  },
+  editorHeader: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(1),
+  },
+  editorTitle: {
+    flex: "auto",
+    minWidth: 0,
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap",
+    fontWeight: 600,
+  },
+  stepButton: {
+    padding: theme.spacing(0, 1),
+    textTransform: "none",
+  },
+  editorGrid: {
+    display: "grid",
+    gridTemplateColumns: "max-content repeat(3, minmax(0, 1fr))",
+    gap: theme.spacing(0.25),
+    alignItems: "center",
+    "& > *": { minWidth: 0 },
+  },
+  editorColumn: {
+    textAlign: "center",
+    color: theme.palette.text.secondary,
+    fontSize: theme.typography.caption.fontSize,
+  },
+  editorLabel: {
+    paddingRight: theme.spacing(1),
+    color: theme.palette.text.secondary,
+  },
+  editorActions: {
+    display: "flex",
+    alignItems: "center",
+    gap: theme.spacing(0.5),
+  },
+  spacer: {
+    flex: "auto",
+  },
 }));

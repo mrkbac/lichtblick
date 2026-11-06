@@ -12,6 +12,8 @@ export const transformTree = {
   notYetPublishedCount: "{{count}} not published yet",
   warningCount_one: "{{count}} warning",
   warningCount_other: "{{count}} warnings",
+  adjustedCount: "{{count}} adjusted",
+  showingOriginal: "showing original",
   columns: {
     frame: "Frame",
     x: "x (m)",
@@ -30,6 +32,28 @@ export const transformTree = {
   topic: "Topic: {{topic}}",
   quaternion: "Quaternion (x, y, z, w): {{value}}",
   notYetPublished: "Not published yet at this point in the recording; values are from later on",
+  adjusted: "adjusted",
+  adjustedDetails: "Adjusted: values include an offset. Recorded x, y, z: {{xyz}}",
+  selectToAdjust: "Click to adjust",
+  editor: {
+    title: "Adjust {{frame}}",
+    stepLabel: "Step size",
+    step: { fine: "1 mm · 0.01°", medium: "1 cm · 0.1°", coarse: "10 cm · 1°" },
+    close: "Close",
+    offset: "Offset",
+    offsetHelp:
+      "Added to the recorded transform. Translation is along the parent's axes; roll, pitch and yaw turn around the frame's own axes (intrinsic XYZ).",
+    result: "Result",
+    resultHelp:
+      "The transform that is rendered. Type a value here and the offset is computed for you. Roll, pitch and yaw turn around the parent's fixed axes (ROS convention), like the table.",
+    showOriginal: "Show original",
+    showOriginalHelp: "Render the recorded transforms in every panel, ignoring all offsets",
+    reset: "Reset",
+    copy: "Copy as…",
+    copyUrdf: "URDF joint",
+    copyStaticTransformPublisher: "ROS 2 static_transform_publisher",
+    copyYaml: "YAML",
+  },
   settings: {
     topics: "Topics",
     static: "Static",

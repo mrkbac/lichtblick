@@ -594,5 +594,18 @@ describe("FrameAxes", () => {
       const resultRpy = node.fields?.resultRpy?.value as number[];
       expect(resultRpy[1]).toBeCloseTo(61, 3);
     });
+
+    it("shows one editable translation and rotation for a frame without an offset", () => {
+      const node = frameAxes.settingsNodes()[0]!.node.children!["frame:sensor"]!;
+      expect(Object.keys(node.fields ?? {})).toEqual([
+        "parent",
+        "age",
+        "historySize",
+        "resultXyz",
+        "resultRpy",
+      ]);
+      expect(node.fields?.resultXyz?.label).toBe("Translation");
+      expect(node.fields?.resultXyz?.readonly).toBe(false);
+    });
   });
 });

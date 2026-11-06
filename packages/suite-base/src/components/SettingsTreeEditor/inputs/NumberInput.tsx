@@ -75,6 +75,8 @@ export function NumberInput(
     step?: number;
     value?: number;
     onChange: (value: undefined | number) => void;
+    /** Accessible name of the input element itself */
+    inputAriaLabel?: string;
   } & Omit<TextFieldProps, "onChange">,
 ): React.JSX.Element {
   const { classes, cx } = useStyles();
@@ -89,6 +91,8 @@ export function NumberInput(
     disabled,
     readOnly,
     precision = 100,
+    inputAriaLabel,
+    ...textFieldProps
   } = props;
 
   const inputRef = useRef<HTMLInputElement>(null);
@@ -158,7 +162,8 @@ export function NumberInput(
 
   return (
     <TextField
-      {...props}
+      {...textFieldProps}
+      disabled={disabled}
       value={displayValue ?? ""}
       onChange={(event) => {
         updateValue(event.target.value.length > 0 ? Number(event.target.value) : undefined);
@@ -168,6 +173,7 @@ export function NumberInput(
       slotProps={{
         htmlInput: {
           ref: inputRef,
+          "aria-label": inputAriaLabel,
           step,
           onPointerDown,
           onPointerUp,

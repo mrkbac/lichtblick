@@ -5,7 +5,7 @@ import { ChevronDown12Filled, ChevronRight12Filled, Warning16Filled } from "@flu
 import { toSec } from "@foxglove/rostime";
 import { Tooltip } from "@mui/material";
 import { TFunction } from "i18next";
-import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { Immutable, SettingsTreeAction } from "@lichtblick/suite";
@@ -22,15 +22,25 @@ import {
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
+import {
+  applyOffset,
+  FrameOffset,
+  parseTransformOffsets,
+  TRANSFORM_OFFSETS_VARIABLE,
+  TransformOffsets,
+  withFrameOffset,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms/transformOffsets";
 import { MessageEvent, SubscribePayload } from "@lichtblick/suite-base/players/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
+import { OffsetEditor } from "./OffsetEditor";
 import { useStyles } from "./TransformTree.style";
 import { buildSettingsTree, resolveTopics, settingsActionReducer } from "./settings";
 import { isTransformSchema, quaternionToRpy } from "./transforms";
 import { addTransformEvents, buildRows, mergeEntries } from "./tree";
-import { FrameEntries, FrameRow, FrameWarning, TransformTreeConfig } from "./types";
+import { FrameEntries, FrameEntry, FrameRow, FrameWarning, TransformTreeConfig } from "./types";
 
 type Props = {
   config: TransformTreeConfig;
@@ -82,6 +92,22 @@ const tableMinWidth = (maxDepth: number) =>
 function formatFixed(value: number, digits: number): string {
   const text = value.toFixed(digits);
   return /^-0\.?0*$/.test(text) ? text.slice(1) : text;
+}
+
+/** The transform that is rendered: the recorded one plus the layout-wide offset, if any */
+function displayedTransform(
+  entry: FrameEntry,
+  offset: FrameOffset | undefined,
+): Pick<FrameEntry, "translation" | "rotation"> {
+  if (!offset) {
+    return entry;
+  }
+  const { translation: t, rotation: q } = entry;
+  const { position, rotation } = applyOffset([t.x, t.y, t.z], [q.x, q.y, q.z, q.w], offset);
+  return {
+    translation: { x: position[0], y: position[1], z: position[2] },
+    rotation: { x: rotation[0], y: rotation[1], z: rotation[2], w: rotation[3] },
+  };
 }
 
 function formatDuration(seconds: number): string {
@@ -201,6 +227,21 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
   const currentTime = useMessagePipeline(selectCurrentTime);
   const now = currentTime ? toSec(currentTime) : undefined;
 
+  // Manual adjustments shared with every 3D and Image panel of the layout
+  const { globalVariables, setGlobalVariables } = useGlobalVariables();
+  const offsetsValue = globalVariables[TRANSFORM_OFFSETS_VARIABLE];
+  const offsets = useMemo(() => parseTransformOffsets(offsetsValue), [offsetsValue]);
+  const setOffsets = useCallback(
+    (next: TransformOffsets) => {
+      setGlobalVariables({ [TRANSFORM_OFFSETS_VARIABLE]: next });
+    },
+    [setGlobalVariables],
+  );
+  const [selectedFrame, setSelectedFrame] = useState<string | undefined>();
+  const selectFrame = useCallback((frame: string) => {
+    setSelectedFrame((previous) => (previous === frame ? undefined : frame));
+  }, []);
+
   const collapsed = useMemo(() => new Set(config.collapsed), [config.collapsed]);
   const rows = useMemo(
     () => buildRows({ current, known, now, collapsed, staticTopics }),
@@ -274,6 +315,8 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
   const maxDepth = rows.reduce((max, row) => Math.max(max, row.depth), 0);
   const warningCount = allRows.filter((row) => row.warnings.length > 0).length;
   const notYetPublishedCount = allRows.filter((row) => row.notYetPublished).length;
+  const adjustedCount = Object.keys(offsets.frames).length;
+  const selectedEntry = selectedFrame != undefined ? known.get(selectedFrame) : undefined;
 
   let body: React.ReactNode;
   if (resolvedTopics.length === 0) {
@@ -299,6 +342,12 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
           {warningCount > 0 && (
             <span className={classes.warningText}>
               <Warning16Filled /> {t("warningCount", { count: warningCount })}
+            </span>
+          )}
+          {adjustedCount > 0 && (
+            <span className={classes.adjusted}>
+              {t("adjustedCount", { count: adjustedCount })}
+              {offsets.showOriginal === true && ` (${t("showingOriginal")})`}
             </span>
           )}
         </div>
@@ -327,12 +376,51 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
                   row={row}
                   collapsed={collapsed.has(row.frame)}
                   onToggle={toggleCollapsed}
+                  offset={offsets.showOriginal === true ? undefined : offsets.frames[row.frame]}
+                  adjusted={offsets.frames[row.frame] != undefined}
+                  selected={row.frame === selectedFrame}
+                  onSelect={selectFrame}
                   className={cx({ [classes.warningRow]: row.warnings.length > 0 })}
                 />
               ))}
             </tbody>
           </table>
         </div>
+        {selectedFrame != undefined && selectedEntry && (
+          <OffsetEditor
+            frame={selectedFrame}
+            parent={selectedEntry.parent}
+            recorded={{
+              position: [
+                selectedEntry.translation.x,
+                selectedEntry.translation.y,
+                selectedEntry.translation.z,
+              ],
+              rotation: [
+                selectedEntry.rotation.x,
+                selectedEntry.rotation.y,
+                selectedEntry.rotation.z,
+                selectedEntry.rotation.w,
+              ],
+            }}
+            offset={offsets.frames[selectedFrame]}
+            showOriginal={offsets.showOriginal === true}
+            step={config.adjustStep ?? "medium"}
+            onChange={(offset) => {
+              setOffsets(withFrameOffset(offsets, selectedFrame, offset));
+            }}
+            onShowOriginalChange={({ showOriginal }) => {
+              const { showOriginal: _old, ...rest } = offsets;
+              setOffsets(showOriginal ? { ...rest, showOriginal } : rest);
+            }}
+            onStepChange={(adjustStep) => {
+              saveConfig({ adjustStep });
+            }}
+            onClose={() => {
+              setSelectedFrame(undefined);
+            }}
+          />
+        )}
       </>
     );
   }
@@ -349,16 +437,26 @@ const FrameTableRow = memo(function FrameTableRowImpl({
   row,
   collapsed,
   onToggle,
+  offset,
+  adjusted,
+  selected,
+  onSelect,
   className,
 }: {
   row: FrameRow;
   collapsed: boolean;
   onToggle: (frame: string) => void;
+  /** Offset to apply to the shown values; undefined when not adjusted or showing the original */
+  offset: FrameOffset | undefined;
+  adjusted: boolean;
+  selected: boolean;
+  onSelect: (frame: string) => void;
   className?: string;
 }) {
   const { classes, cx } = useStyles();
   const { t } = useTranslation("transformTree");
-  const { entry, age, rate } = row;
+  const { entry: recordedEntry, age, rate } = row;
+  const entry = recordedEntry && { ...recordedEntry, ...displayedTransform(recordedEntry, offset) };
   const hasData = !row.notYetPublished && !row.warnings.includes("noData");
 
   const details = [
@@ -372,6 +470,20 @@ const FrameTableRow = memo(function FrameTableRowImpl({
               .map((value) => value.toFixed(4))
               .join(", "),
           }),
+          ...(adjusted
+            ? [
+                t("adjustedDetails", {
+                  xyz: [
+                    recordedEntry.translation.x,
+                    recordedEntry.translation.y,
+                    recordedEntry.translation.z,
+                  ]
+                    .map((value) => value.toFixed(3))
+                    .join(", "),
+                }),
+              ]
+            : []),
+          t("selectToAdjust"),
           ...(row.notYetPublished ? [t("notYetPublished")] : []),
           ...row.warnings.map((warning) => warningMessage(t, row, warning)),
         ]
@@ -379,12 +491,28 @@ const FrameTableRow = memo(function FrameTableRowImpl({
   ].join("\n");
 
   const rpy = entry ? quaternionToRpy(entry.rotation) : undefined;
-  const valueClass = cx({ [classes.muted]: !hasData });
+  const valueClass = cx({
+    [classes.muted]: !hasData,
+    [classes.adjusted]: hasData && offset != undefined,
+  });
   const ageText = !row.isStatic && age != undefined ? formatFixed(age, 3) : undefined;
   const rateText = !row.isStatic && rate != undefined ? formatFixed(rate, 1) : undefined;
 
   return (
-    <tr className={className}>
+    <tr
+      className={cx(className, {
+        [classes.selectableRow]: entry != undefined,
+        [classes.selectedRow]: selected,
+      })}
+      aria-selected={selected}
+      onClick={
+        entry
+          ? () => {
+              onSelect(row.frame);
+            }
+          : undefined
+      }
+    >
       <td>
         <div className={classes.frameCell} style={{ paddingLeft: row.depth * INDENT_PX }}>
           {row.hasChildren ? (
@@ -392,7 +520,8 @@ const FrameTableRow = memo(function FrameTableRowImpl({
               type="button"
               className={classes.toggle}
               aria-label={collapsed ? t("expand") : t("collapse")}
-              onClick={() => {
+              onClick={(event) => {
+                event.stopPropagation();
                 onToggle(row.frame);
               }}
             >
@@ -414,6 +543,7 @@ const FrameTableRow = memo(function FrameTableRowImpl({
               {row.frame}
             </span>
           </Tooltip>
+          {adjusted && <span className={classes.adjustedBadge}>{t("adjusted")}</span>}
           {row.warnings.length > 0 && <Warning16Filled className={classes.warningIcon} />}
         </div>
       </td>

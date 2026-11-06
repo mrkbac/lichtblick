@@ -717,7 +717,10 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
       ageValue =
         transformTime < currentTime ? formatShortDuration(currentTime - transformTime) : "0 ns";
     }
-    const showAdjust = editable || offset != undefined;
+    // Unadjusted frames show one Translation/Rotation pair, editable when adjusting is on. Only
+    // adjusted frames need the full Recorded / Offset / Result breakdown.
+    const adjusted = offset != undefined;
+    const result = recorded ? applyOffset(recorded.position, recorded.rotation, offset) : undefined;
 
     const fields: SettingsTreeFields = {
       parent: {
@@ -733,16 +736,19 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
         readonly: true,
         value: String(frame.transformsSize()),
       },
-      xyz: {
-        label: showAdjust ? t("threeDee:recordedTranslation") : t("threeDee:translation"),
+    };
+
+    if (adjusted) {
+      fields.xyz = {
+        label: t("threeDee:recordedTranslation"),
         input: "vec3",
         precision: PRECISION_DISTANCE,
         labels: ["X", "Y", "Z"],
         readonly: true,
         value: recorded ? roundVec3(recorded.position, PRECISION_DISTANCE) : undefined,
-      },
-      rpy: {
-        label: showAdjust ? t("threeDee:recordedRotation") : t("threeDee:rotation"),
+      };
+      fields.rpy = {
+        label: t("threeDee:recordedRotation"),
         input: "vec3",
         precision: PRECISION_ADJUST_DEGREES,
         labels: ["R", "P", "Y"],
@@ -750,58 +756,53 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
         value: recorded
           ? roundVec3(quatToRpyDegrees(recorded.rotation), PRECISION_ADJUST_DEGREES)
           : undefined,
-      },
-    };
-
-    if (!showAdjust) {
-      return fields;
-    }
-
-    fields.xyzOffset = {
-      label: t("threeDee:translationOffset"),
-      help: t("threeDee:translationOffsetHelp"),
-      input: "vec3",
-      precision: PRECISION_DISTANCE,
-      step: step.meters,
-      labels: ["X", "Y", "Z"],
-      readonly: !editable,
-      value: offset?.xyz,
-    };
-    fields.rpyCoefficient = {
-      label: t("threeDee:rotationOffset"),
-      help: t("threeDee:rotationOffsetHelp"),
-      input: "vec3",
-      precision: PRECISION_ADJUST_DEGREES,
-      step: step.degrees,
-      min: -180,
-      max: 180,
-      labels: ["R", "P", "Y"],
-      readonly: !editable,
-      value: offset?.rpy,
-    };
-    if (recorded) {
-      const result = applyOffset(recorded.position, recorded.rotation, offset);
-      fields.resultXyz = {
-        label: t("threeDee:resultTranslation"),
-        help: t("threeDee:resultHelp"),
+      };
+      fields.xyzOffset = {
+        label: t("threeDee:translationOffset"),
+        help: t("threeDee:translationOffsetHelp"),
         input: "vec3",
         precision: PRECISION_DISTANCE,
         step: step.meters,
         labels: ["X", "Y", "Z"],
         readonly: !editable,
-        value: roundVec3(result.position, PRECISION_DISTANCE),
+        value: offset.xyz,
       };
-      fields.resultRpy = {
-        label: t("threeDee:resultRotation"),
-        help: t("threeDee:resultHelp"),
+      fields.rpyCoefficient = {
+        label: t("threeDee:rotationOffset"),
+        help: t("threeDee:rotationOffsetHelp"),
         input: "vec3",
         precision: PRECISION_ADJUST_DEGREES,
         step: step.degrees,
+        min: -180,
+        max: 180,
         labels: ["R", "P", "Y"],
         readonly: !editable,
-        value: roundVec3(quatToRpyDegrees(result.rotation), PRECISION_ADJUST_DEGREES),
+        value: offset.rpy,
       };
     }
+
+    fields.resultXyz = {
+      label: adjusted ? t("threeDee:resultTranslation") : t("threeDee:translation"),
+      help: editable ? t("threeDee:resultHelp") : undefined,
+      input: "vec3",
+      precision: PRECISION_DISTANCE,
+      step: step.meters,
+      labels: ["X", "Y", "Z"],
+      readonly: !editable || !result,
+      value: result ? roundVec3(result.position, PRECISION_DISTANCE) : undefined,
+    };
+    fields.resultRpy = {
+      label: adjusted ? t("threeDee:resultRotation") : t("threeDee:rotation"),
+      help: editable ? t("threeDee:resultHelp") : undefined,
+      input: "vec3",
+      precision: PRECISION_ADJUST_DEGREES,
+      step: step.degrees,
+      labels: ["R", "P", "Y"],
+      readonly: !editable || !result,
+      value: result
+        ? roundVec3(quatToRpyDegrees(result.rotation), PRECISION_ADJUST_DEGREES)
+        : undefined,
+    };
     return fields;
   }
 
