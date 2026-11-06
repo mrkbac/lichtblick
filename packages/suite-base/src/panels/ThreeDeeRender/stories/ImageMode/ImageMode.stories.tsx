@@ -13,11 +13,11 @@ import {
   PointsAnnotationType,
   RawImage,
 } from "@foxglove/schemas";
+import { colord } from "colord";
 import { useCallback, useMemo, useState } from "react";
 import { useAsync } from "react-use";
 import { fireEvent, screen, userEvent, waitFor } from "storybook/test";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
-import tinycolor from "tinycolor2";
 
 import { MessageEvent } from "@lichtblick/suite";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -1028,7 +1028,7 @@ export const RationalPolynomialDistortion: StoryObj = {
         const y = inset + Math.round((height - 2 * inset) * (row / rows));
         points.points.push({ x, y });
         lines.points.push({ x, y });
-        const { r, g, b } = tinycolor({
+        const { r, g, b } = colord({
           h: ((row / rows + col / cols) / 2) * 360,
           s: 100,
           v: 100,

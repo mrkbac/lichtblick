@@ -10,8 +10,23 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { badgeClasses } from "@mui/material";
-import tc from "tinycolor2";
+import { colord } from "colord";
 import { makeStyles } from "tss-react/mui";
+
+import { parseColor } from "@lichtblick/suite-base/util/parseColor";
+
+// Linear RGB blend (colord's mix plugin blends in LAB, which gives a different color).
+function mixRgb(from: string, to: string, amount: number): string {
+  const a = parseColor(from).toRgb();
+  const b = parseColor(to).toRgb();
+  const lerp = (x: number, y: number) => x + (y - x) * amount;
+  return colord({
+    r: lerp(a.r, b.r),
+    g: lerp(a.g, b.g),
+    b: lerp(a.b, b.b),
+    a: lerp(a.a, b.a),
+  }).toRgbString();
+}
 
 type TreeClasses = "dragHandle" | "row" | "isDragging" | "selected";
 
@@ -37,13 +52,11 @@ export const useTopicListStyles = makeStyles<void, TreeClasses>()((theme, _, cla
     },
     [`&.${classes.selected}, &.${classes.isDragging}:active`]: {
       // use opaque color for better drag preview
-      backgroundColor: tc
-        .mix(
-          theme.palette.background.paper,
-          theme.palette.primary.main,
-          100 * theme.palette.action.selectedOpacity,
-        )
-        .toString(),
+      backgroundColor: mixRgb(
+        theme.palette.background.paper,
+        theme.palette.primary.main,
+        theme.palette.action.selectedOpacity,
+      ),
 
       ...(theme.palette.mode === "dark" && {
         ":after": {

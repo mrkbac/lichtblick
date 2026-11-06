@@ -13,12 +13,12 @@ import {
 import { Divider, Paper, Tab, Tabs, tabClasses, tabsClasses } from "@mui/material";
 import * as monacoApi from "monaco-editor/editor/editor.api.js";
 import { SyntheticEvent, useCallback, useMemo, useState } from "react";
-import tc from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { Script } from "@lichtblick/suite-base/panels/UserScriptEditor/script";
 import { UserScript, UserScripts } from "@lichtblick/suite-base/types/panels";
+import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 
 import { ScriptsList } from "./ScriptsList";
 import { Templates } from "./Templates";
@@ -34,9 +34,9 @@ const useStyles = makeStyles()((theme) => ({
       padding: theme.spacing(1, 1.25),
     },
     [`.${tabsClasses.indicator}`]: {
-      backgroundColor: tc(theme.palette.primary.main)
-        .setAlpha(theme.palette.action.selectedOpacity)
-        .toString(),
+      backgroundColor: parseColor(theme.palette.primary.main)
+        .alpha(theme.palette.action.selectedOpacity)
+        .toRgbString(),
       right: 0,
       width: "100%",
       borderRadius: theme.shape.borderRadius,

@@ -9,7 +9,6 @@ import { Zoom as ZoomPlugin } from "@foxglove/chartjs-plugin-zoom";
 import { Chart, Scale as ChartScale, Ticks } from "chart.js";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
 import EventEmitter from "eventemitter3";
-import tinycolor from "tinycolor2";
 
 import { unwrap } from "@lichtblick/den/monads";
 import { Immutable } from "@lichtblick/suite";
@@ -21,6 +20,7 @@ import { DEFAULT_ANNOTATION } from "@lichtblick/suite-base/panels/Plot/constants
 import { getChartOptions } from "@lichtblick/suite-base/panels/Plot/utils/getChartOptions";
 import { Bounds, Bounds1D } from "@lichtblick/suite-base/types/Bounds";
 import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
+import { isLight, parseColor } from "@lichtblick/suite-base/util/parseColor";
 import { fontMonospace } from "@lichtblick/theme";
 
 import {
@@ -247,7 +247,7 @@ export class ChartRenderer {
                 content: config.label,
                 position: vertical ? "start" : "end",
                 backgroundColor: config.color,
-                color: tinycolor(config.color).isLight() ? "#000" : "#fff",
+                color: isLight(parseColor(config.color)) ? "#000" : "#fff",
                 font: { family: fontMonospace, size: 10 },
                 padding: 3,
               }
