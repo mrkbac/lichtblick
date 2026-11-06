@@ -587,9 +587,18 @@ export class TimestampDatasetsBuilderImpl {
         data: [],
       };
       datasets[series.config.configIndex] = dataset;
-      if (result) {
-        const { x, y, valueAt } = result;
+      if (!result) {
+        continue;
+      }
+      const { x, y, valueAt } = result;
+      if (analysis.mode === "fft") {
         downsampleInto(dataset, x, y, x.length, 0, 0, valueAt, viewport);
+      } else {
+        // Downsampling would drop bin corners and draw diagonals. Bins are capped (2 points each),
+        // so the outline is drawn as is.
+        for (let i = 0; i < x.length; i++) {
+          dataset.data.push({ x: x[i]!, y: y[i]!, value: valueAt(i) });
+        }
       }
     }
     return datasets;
