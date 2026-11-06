@@ -11,6 +11,8 @@ export type TileConfig = {
   rotation: Rotation;
   flipHorizontal: boolean;
   flipVertical: boolean;
+  /** Annotation topics drawn over the image; undefined uses the ones matched to `topic`. */
+  annotationTopics?: string[];
 };
 
 export type CameraGridConfig = {
@@ -19,12 +21,18 @@ export type CameraGridConfig = {
   columns?: number;
   showLabels: boolean;
   showTimestamps: boolean;
+  /** Zoom and pan all tiles together. */
+  linkZoom: boolean;
+  /** Only draw annotations stamped like the image, as the Image panel's "Sync annotations". */
+  syncAnnotations: boolean;
 };
 
 export const DEFAULT_CONFIG: CameraGridConfig = {
   tiles: [],
   showLabels: true,
   showTimestamps: false,
+  linkZoom: false,
+  syncAnnotations: false,
 };
 
 export function makeTile(topic: string): TileConfig {

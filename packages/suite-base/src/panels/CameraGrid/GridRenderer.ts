@@ -4,8 +4,10 @@
 import { Time, toNanoSec } from "@foxglove/rostime";
 
 import { VideoPlayer, canonicalVideoCodec, isVideoKeyframe } from "@lichtblick/den/video";
+import Logger from "@lichtblick/log";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 import { PartialMessage } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtension";
+import { normalizeAnnotations } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/annotations/normalizeAnnotations";
 import { WorkerImageDecoder } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/WorkerImageDecoder";
 import { isCompressedDepthFormat } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/decodeCompressedDepth";
 import {
@@ -22,8 +24,27 @@ import {
 import { PreparedVideoFrameStatus } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/types";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
 
+import {
+  ANNOTATION_HISTORY,
+  AnnotationEntry,
+  drawAnnotations,
+  makeAnnotationEntry,
+  pickAnnotations,
+} from "./annotations";
 import { imageKind } from "./layout";
 import { TileConfig } from "./types";
+import {
+  DEFAULT_VIEW,
+  Geometry,
+  Matrix,
+  View,
+  computeTransform,
+  isDefaultView,
+  panBy,
+  zoomAt,
+} from "./view";
+
+const log = Logger.getLogger(__filename);
 
 export type TileElements = {
   canvas: HTMLCanvasElement;
@@ -74,10 +95,20 @@ type TileState = {
   bitmap?: ImageBitmap;
   /** Formatted timestamp of `bitmap`, restored when the tile remounts. */
   stampText?: string;
+  /** Stamp of `bitmap`, to sync annotations with. */
+  stampNs?: bigint;
   elements?: TileElements;
   config?: TileConfig;
   video?: VideoState;
+  annotationTopics: readonly string[];
+  /** Transform of the last draw, reused so drawing allocates nothing. */
+  matrix: Matrix;
+  geometry?: Geometry;
 };
+
+function newTile(): TileState {
+  return { decoding: false, annotationTopics: [], matrix: { a: 1, b: 0, c: 0, d: 1, e: 0, f: 0 } };
+}
 
 /**
  * Decodes and draws the latest image of each topic onto a plain 2D canvas, outside of React so
@@ -90,6 +121,14 @@ export class GridRenderer {
   #resizeObserver?: ResizeObserver;
   #onAspectChange: () => void;
   #waitingText: string;
+  /** Recent normalized messages per annotation topic, oldest first. */
+  #annotations = new Map<string, AnnotationEntry[]>();
+  #views = new Map<string, View>();
+  #linkedView: View = { ...DEFAULT_VIEW };
+  #linkZoom = false;
+  #syncAnnotations = false;
+  /** Topics already warned about, so a broken stream logs once instead of every frame. */
+  #malformedAnnotationTopics = new Set<string>();
 
   /** `waitingText` is shown on a tile until its first image is drawn. */
   public constructor(onAspectChange: () => void, waitingText: string) {
@@ -99,7 +138,21 @@ export class GridRenderer {
 
   public setFrame(messages: Immutable<MessageEvent[]>): void {
     const updated = new Set<TileState>();
+    let annotated: Set<string> | undefined;
     for (const event of messages) {
+      const history = this.#annotations.get(event.topic);
+      if (history) {
+        // A malformed message must not stop the rest of the frame (and `done()`) from running.
+        try {
+          history.push(makeAnnotationEntry(normalizeAnnotations(event.message, event.schemaName)));
+          if (history.length > ANNOTATION_HISTORY) {
+            history.shift();
+          }
+          (annotated ??= new Set()).add(event.topic);
+        } catch (error) {
+          this.#warnMalformed(event.topic, error);
+        }
+      }
       const tile = this.#tiles.get(event.topic);
       if (!tile) {
         continue;
@@ -115,10 +168,21 @@ export class GridRenderer {
     for (const tile of updated) {
       void this.#update(tile);
     }
+    if (annotated) {
+      for (const tile of this.#tiles.values()) {
+        // Tiles with a new image redraw once it is decoded.
+        if (!updated.has(tile) && tile.annotationTopics.some((topic) => annotated.has(topic))) {
+          this.#draw(tile);
+        }
+      }
+    }
   }
 
   /** Drops queued video frames and restarts decoding at the next keyframe (the player backfills it). */
   public seek(): void {
+    for (const history of this.#annotations.values()) {
+      history.length = 0;
+    }
     for (const tile of this.#tiles.values()) {
       if (tile.video) {
         resetVideo(tile.video);
@@ -133,8 +197,14 @@ export class GridRenderer {
     return bitmap && bitmap.height > 0 ? bitmap.width / bitmap.height : undefined;
   }
 
-  /** Keeps state (including the latest message) only for these topics. */
-  public setTopics(topics: readonly string[]): void {
+  /**
+   * Keeps state (including the latest message) only for these image topics, each drawn with the
+   * annotation topics `annotationTopics` maps it to.
+   */
+  public setTopics(
+    topics: readonly string[],
+    annotationTopics: ReadonlyMap<string, readonly string[]>,
+  ): void {
     const keep = new Set(topics);
     for (const [topic, tile] of this.#tiles) {
       if (!keep.has(topic)) {
@@ -145,13 +215,103 @@ export class GridRenderer {
     }
     for (const topic of keep) {
       if (!this.#tiles.has(topic)) {
-        this.#tiles.set(topic, { decoding: false });
+        this.#tiles.set(topic, newTile());
+      }
+    }
+    const keepAnnotations = new Set<string>();
+    for (const [topic, tile] of this.#tiles) {
+      tile.annotationTopics = annotationTopics.get(topic) ?? [];
+      for (const annotationTopic of tile.annotationTopics) {
+        keepAnnotations.add(annotationTopic);
+        if (!this.#annotations.has(annotationTopic)) {
+          this.#annotations.set(annotationTopic, []);
+        }
+      }
+      this.#draw(tile);
+    }
+    for (const topic of this.#annotations.keys()) {
+      if (!keepAnnotations.has(topic)) {
+        this.#annotations.delete(topic);
       }
     }
   }
 
+  public setOptions(options: { linkZoom: boolean; syncAnnotations: boolean }): void {
+    if (options.linkZoom === this.#linkZoom && options.syncAnnotations === this.#syncAnnotations) {
+      return;
+    }
+    this.#linkZoom = options.linkZoom;
+    this.#syncAnnotations = options.syncAnnotations;
+    for (const tile of this.#tiles.values()) {
+      this.#draw(tile);
+    }
+  }
+
+  /** Zooms `topic`'s tile (or all, when linked) by `factor` around CSS pixel (`x`, `y`). */
+  public zoomAt(topic: string, factor: number, x: number, y: number): void {
+    const tile = this.#tiles.get(topic);
+    const ratio = this.#canvasRatio(tile);
+    if (tile?.geometry && ratio != undefined) {
+      this.#setView(topic, zoomAt(this.#view(topic), factor, x * ratio, y * ratio, tile.geometry));
+    }
+  }
+
+  /** Pans `topic`'s tile (or all, when linked) by CSS pixels. */
+  public panBy(topic: string, dx: number, dy: number): void {
+    const tile = this.#tiles.get(topic);
+    const ratio = this.#canvasRatio(tile);
+    if (tile?.geometry && ratio != undefined) {
+      this.#setView(topic, panBy(this.#view(topic), dx * ratio, dy * ratio, tile.geometry));
+    }
+  }
+
+  /** Resets zoom and pan; returns false if there was nothing to reset. */
+  public resetView(topic: string): boolean {
+    if (isDefaultView(this.#view(topic))) {
+      return false;
+    }
+    this.#setView(topic, { ...DEFAULT_VIEW });
+    return true;
+  }
+
+  public isZoomed(topic: string): boolean {
+    return this.#view(topic).zoom > 1;
+  }
+
+  #view(topic: string): Readonly<View> {
+    return this.#linkZoom ? this.#linkedView : (this.#views.get(topic) ?? DEFAULT_VIEW);
+  }
+
+  #setView(topic: string, view: View): void {
+    if (this.#linkZoom) {
+      this.#linkedView = view;
+      for (const tile of this.#tiles.values()) {
+        this.#draw(tile);
+      }
+      return;
+    }
+    this.#views.set(topic, view);
+    const tile = this.#tiles.get(topic);
+    if (tile) {
+      this.#draw(tile);
+    }
+  }
+
+  #warnMalformed(topic: string, error: unknown): void {
+    if (!this.#malformedAnnotationTopics.has(topic)) {
+      this.#malformedAnnotationTopics.add(topic);
+      log.warn(`Ignoring malformed annotations on ${topic}`, error);
+    }
+  }
+
+  /** Canvas pixels per CSS pixel. */
+  #canvasRatio(tile: TileState | undefined): number | undefined {
+    const canvas = tile?.elements?.canvas;
+    return canvas && canvas.clientWidth > 0 ? canvas.width / canvas.clientWidth : undefined;
+  }
+
   public attach(topic: string, elements: TileElements, config: TileConfig): void {
-    const tile = this.#tiles.get(topic) ?? { decoding: false };
+    const tile = this.#tiles.get(topic) ?? newTile();
     this.#tiles.set(topic, tile);
     tile.elements = elements;
     tile.config = config;
@@ -362,6 +522,7 @@ export class GridRenderer {
     tile.bitmap = bitmap;
     tile.drawn = event;
     tile.stampText = formatTimeRaw(stamp);
+    tile.stampNs = toNanoSec(stamp);
     elements.timestamp.textContent = tile.stampText;
     this.#showStatus(tile, undefined);
     this.#draw(tile);
@@ -412,7 +573,7 @@ export class GridRenderer {
   }
 
   #draw(tile: TileState): void {
-    const { elements, bitmap, config } = tile;
+    const { elements, bitmap, config, matrix } = tile;
     const ctx = elements?.canvas.getContext("2d");
     if (!ctx || !config) {
       return;
@@ -420,21 +581,43 @@ export class GridRenderer {
     const { width, height } = ctx.canvas;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, width, height);
-    if (!bitmap) {
+    if (!bitmap || width === 0 || height === 0) {
       return;
     }
-    const quarterTurn = config.rotation === 90 || config.rotation === 270;
-    const rotatedWidth = quarterTurn ? bitmap.height : bitmap.width;
-    const rotatedHeight = quarterTurn ? bitmap.width : bitmap.height;
-    const scale = (config.fit === "fill" ? Math.max : Math.min)(
-      width / rotatedWidth,
-      height / rotatedHeight,
+    tile.geometry ??= {
+      canvasWidth: 0,
+      canvasHeight: 0,
+      displayWidth: 0,
+      displayHeight: 0,
+      scale: 1,
+    };
+    computeTransform(
+      matrix,
+      tile.geometry,
+      width,
+      height,
+      bitmap.width,
+      bitmap.height,
+      config,
+      this.#view(config.topic),
     );
     ctx.imageSmoothingQuality = "medium";
-    ctx.translate(width / 2, height / 2);
-    ctx.rotate((config.rotation * Math.PI) / 180);
-    ctx.scale(scale * (config.flipHorizontal ? -1 : 1), scale * (config.flipVertical ? -1 : 1));
-    ctx.drawImage(bitmap, -bitmap.width / 2, -bitmap.height / 2);
+    ctx.setTransform(matrix.a, matrix.b, matrix.c, matrix.d, matrix.e, matrix.f);
+    ctx.drawImage(bitmap, 0, 0);
+    // Annotation sizes are in image pixels, so they scale with the image like in the Image panel.
+    for (const topic of tile.annotationTopics) {
+      const entry = pickAnnotations(this.#annotations.get(topic), tile.stampNs, {
+        sync: this.#syncAnnotations,
+      });
+      if (entry) {
+        // Normalization doesn't validate fields (e.g. missing `points`); skip what can't be drawn.
+        try {
+          drawAnnotations(ctx, entry.annotations, matrix, tile.geometry.scale);
+        } catch (error) {
+          this.#warnMalformed(topic, error);
+        }
+      }
+    }
   }
 }
 

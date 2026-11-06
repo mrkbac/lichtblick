@@ -5,7 +5,9 @@ import { TFunction } from "i18next";
 import { produce } from "immer";
 
 import { SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
+import { sortPrefixMatchesToFront } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/topicPrefixMatching";
 
+import { tileAnnotationTopics } from "./annotations";
 import { CameraGridConfig, Rotation, TileConfig, makeTile } from "./types";
 
 export const ADD_ALL_ACTION = "add-all";
@@ -22,6 +24,7 @@ export function addAllTopics(config: CameraGridConfig, imageTopics: string[]): C
 export function buildSettingsTree(
   config: CameraGridConfig,
   imageTopics: string[],
+  annotationTopics: string[],
   t: TFunction<"cameraGrid">,
 ): SettingsTreeNodes {
   const shown = new Set(config.tiles.map((tile) => tile.topic));
@@ -30,6 +33,14 @@ export function buildSettingsTree(
   const tiles: SettingsTreeNodes = {};
   config.tiles.forEach((tile, index) => {
     const topicOptions = [tile.topic, ...addable].map((topic) => ({ label: topic, value: topic }));
+    const shownAnnotations = new Set(tileAnnotationTopics(tile, annotationTopics));
+    // Same order as the Image panel: topics next to the image topic first.
+    const annotationOptions = [...annotationTopics];
+    sortPrefixMatchesToFront(annotationOptions, tile.topic, (topic) => topic);
+    const annotationNodes: SettingsTreeNodes = {};
+    for (const topic of annotationOptions) {
+      annotationNodes[topic] = { label: topic, visible: shownAnnotations.has(topic) };
+    }
     tiles[String(index)] = {
       label: tile.topic,
       visible: tile.visible,
@@ -82,6 +93,16 @@ export function buildSettingsTree(
         },
         flipVertical: { label: t("flipVertical"), input: "boolean", value: tile.flipVertical },
       },
+      children:
+        annotationOptions.length > 0
+          ? {
+              annotations: {
+                label: t("annotations"),
+                enableVisibilityFilter: true,
+                children: annotationNodes,
+              },
+            }
+          : undefined,
     };
   });
 
@@ -122,6 +143,18 @@ export function buildSettingsTree(
           input: "boolean",
           value: config.showTimestamps,
         },
+        linkZoom: {
+          label: t("linkZoom"),
+          input: "boolean",
+          value: config.linkZoom,
+          help: t("linkZoomHelp"),
+        },
+        syncAnnotations: {
+          label: t("syncAnnotations"),
+          input: "boolean",
+          value: config.syncAnnotations,
+          help: t("syncAnnotationsHelp"),
+        },
       },
     },
     topics: { label: t("cameras"), children: tiles },
@@ -139,6 +172,7 @@ export function settingsReducer(
   config: CameraGridConfig,
   action: SettingsTreeAction,
   imageTopics: string[],
+  annotationTopics: string[] = [],
 ): CameraGridConfig {
   const { path } = action.payload;
   if (action.action === "reorder-node") {
@@ -172,6 +206,8 @@ export function settingsReducer(
           break;
         case "showLabels":
         case "showTimestamps":
+        case "linkZoom":
+        case "syncAnnotations":
           draft[path[1]] = value === true;
           break;
       }
@@ -203,6 +239,13 @@ export function settingsReducer(
     }
 
     const { value } = action.payload;
+    if (path[2] === "annotations" && path[3] != undefined && path[4] === "visible") {
+      // The first toggle turns the automatic match into the tile's own list.
+      const topic = path[3];
+      const shown = tileAnnotationTopics(tile, annotationTopics).filter((other) => other !== topic);
+      tile.annotationTopics = value === true ? [...shown, topic] : shown;
+      return;
+    }
     switch (path[2]) {
       case "topic":
         // Each topic is shown at most once, so ignore picking a topic that's already in the grid.

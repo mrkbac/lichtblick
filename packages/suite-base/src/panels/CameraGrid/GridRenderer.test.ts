@@ -3,7 +3,7 @@
 
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 
-import { enqueueVideoFrame } from "./GridRenderer";
+import { GridRenderer, enqueueVideoFrame } from "./GridRenderer";
 
 const KEY = new Uint8Array([0, 0, 0, 1, 0x65, 0x88, 0x84, 0x21]); // H.264 IDR
 const DELTA = new Uint8Array([0, 0, 0, 1, 0x61, 0x88, 0x84, 0x21]);
@@ -69,5 +69,29 @@ describe("enqueueVideoFrame", () => {
 
     // Then the older frame is dropped
     expect(queue).toEqual([key]);
+  });
+});
+
+describe("GridRenderer annotations", () => {
+  it("skips a malformed annotation message without failing the frame", () => {
+    // Given a tile drawing annotations from one topic
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const renderer = new GridRenderer(() => {}, "");
+    renderer.setTopics(["/image"], new Map([["/image", ["/annotations"]]]));
+    const malformed: Immutable<MessageEvent> = {
+      topic: "/annotations",
+      schemaName: "foxglove.ImageAnnotations",
+      receiveTime: { sec: 0, nsec: 0 },
+      sizeInBytes: 0,
+      message: { circles: [null] },
+    };
+
+    // When a message that can't be normalized arrives, twice
+    renderer.setFrame([malformed]);
+    renderer.setFrame([malformed]);
+
+    // Then the frame completes and the topic is reported once
+    expect(warn).toHaveBeenCalledTimes(1);
+    warn.mockRestore();
   });
 });

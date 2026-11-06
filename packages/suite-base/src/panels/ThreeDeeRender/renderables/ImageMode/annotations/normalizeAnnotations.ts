@@ -18,6 +18,25 @@ import {
 import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuallyBePartial";
 
 import type { Annotation, PathKey, PointsAnnotation } from "./types";
+import { IMAGE_ANNOTATIONS_DATATYPES } from "../../../foxglove";
+import { IMAGE_MARKER_ARRAY_DATATYPES, IMAGE_MARKER_DATATYPES } from "../../../ros";
+
+/** For backwards compatibility with previously published type definitions, older studio versions, and webviz */
+const LEGACY_ANNOTATION_SCHEMAS = new Set([
+  "foxglove_msgs/ImageMarkerArray",
+  "foxglove_msgs/msg/ImageMarkerArray",
+  "studio_msgs/ImageMarkerArray",
+  "studio_msgs/msg/ImageMarkerArray",
+  "webviz_msgs/ImageMarkerArray",
+]);
+
+/** Every schema `normalizeAnnotations` understands (shared by the Image panel and Camera Grid). */
+export const ALL_SUPPORTED_ANNOTATION_SCHEMAS = new Set([
+  ...IMAGE_ANNOTATIONS_DATATYPES,
+  ...IMAGE_MARKER_DATATYPES,
+  ...IMAGE_MARKER_ARRAY_DATATYPES,
+  ...LEGACY_ANNOTATION_SCHEMAS,
+]);
 
 // Should mirror TextAnnotation.font_size default value
 const DEFAULT_FONT_SIZE = 12;
