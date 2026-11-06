@@ -25,6 +25,7 @@ import {
   rpyDegreesToQuat,
   TRANSFORM_OFFSETS_VARIABLE,
   TransformOffsets,
+  Vec3,
 } from "../transforms/transformOffsets";
 
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
@@ -593,6 +594,26 @@ describe("FrameAxes", () => {
       expect(node.fields?.rpy?.value).toEqual([0, 60, 0]);
       const resultRpy = node.fields?.resultRpy?.value as number[];
       expect(resultRpy[1]).toBeCloseTo(61, 3);
+    });
+
+    it("shows and takes rotations in the extrinsic convention when set", () => {
+      // Given: an intrinsic roll 10, pitch 20 offset, shown as extrinsic (ROS) angles
+      update(["transforms", "frame:sensor", "rpyCoefficient"], [10, 20, 0]);
+      renderer.updateConfig((draft) => {
+        draft.scene.transforms = { ...draft.scene.transforms, rotationConvention: "extrinsic" };
+      });
+
+      // When
+      const node = frameAxes.settingsNodes()[0]!.node.children!["frame:sensor"]!;
+      const shownOffset = node.fields?.rpyCoefficient?.value as Vec3;
+      update(["transforms", "frame:sensor", "rpyCoefficient"], shownOffset);
+
+      // Then: the same rotation, so the stored intrinsic offset is unchanged
+      expect(shownOffset[2]).not.toBeCloseTo(0, 1);
+      const stored = lastPublished().frames.sensor!.rpy;
+      expect(stored[0]).toBeCloseTo(10, 2);
+      expect(stored[1]).toBeCloseTo(20, 2);
+      expect(stored[2]).toBeCloseTo(0, 2);
     });
 
     it("shows one editable translation and rotation for a frame without an offset", () => {

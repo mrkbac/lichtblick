@@ -26,6 +26,8 @@ import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables"
 import {
   applyOffset,
   FrameOffset,
+  quatToEulerDegrees,
+  RotationConvention,
   parseTransformOffsets,
   TRANSFORM_OFFSETS_VARIABLE,
   TransformOffsets,
@@ -37,8 +39,13 @@ import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
 import { OffsetEditor, RotationConventionInfo } from "./OffsetEditor";
 import { useStyles } from "./TransformTree.style";
-import { buildSettingsTree, resolveTopics, settingsActionReducer } from "./settings";
-import { isTransformSchema, quaternionToRpy } from "./transforms";
+import {
+  buildSettingsTree,
+  DEFAULT_ROTATION_CONVENTION,
+  resolveTopics,
+  settingsActionReducer,
+} from "./settings";
+import { isTransformSchema } from "./transforms";
 import { addTransformEvents, buildRows, mergeEntries } from "./tree";
 import { FrameEntries, FrameEntry, FrameRow, FrameWarning, TransformTreeConfig } from "./types";
 
@@ -56,8 +63,6 @@ const onlyTopics = (entries: FrameEntries, topics: ReadonlySet<string>): FrameEn
   new Map([...entries].filter(([, entry]) => topics.has(entry.topic)));
 
 const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
-
-const RAD_TO_DEG = 180 / Math.PI;
 
 const NO_COLLAPSED: ReadonlySet<string> = new Set();
 
@@ -160,6 +165,8 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
   const visibleTopicSet = useMemo(() => new Set(visibleTopics), [visibleTopics]);
   const staticTopics = useMemo(() => new Set(staticKey ? staticKey.split("\n") : []), [staticKey]);
 
+  const convention = config.rotationConvention ?? DEFAULT_ROTATION_CONVENTION;
+
   const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
   const settingsActionHandler = useCallback(
     (action: SettingsTreeAction) => {
@@ -170,9 +177,9 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
   useEffect(() => {
     updatePanelSettingsTree({
       actionHandler: settingsActionHandler,
-      nodes: buildSettingsTree(resolvedTopics, t),
+      nodes: buildSettingsTree(resolvedTopics, convention, t),
     });
-  }, [resolvedTopics, settingsActionHandler, t, updatePanelSettingsTree]);
+  }, [convention, resolvedTopics, settingsActionHandler, t, updatePanelSettingsTree]);
 
   // Entries remember every parent a frame had, including from topics that are now hidden, so
   // start over when the visible topics change. useMessageReducer calls `restore` on a seek and
@@ -365,7 +372,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
                 {VALUE_COLUMNS.map((column) => (
                   <th key={column.key} className={cx({ [classes.groupStart]: column.groupStart })}>
                     {column.key === "roll" && (
-                      <RotationConventionInfo text={t("rotationConvention")} />
+                      <RotationConventionInfo text={t(`rotationConvention.${convention}`)} />
                     )}
                     {t(`columns.${column.key}`)}
                   </th>
@@ -383,6 +390,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
                   adjusted={offsets.frames[row.frame] != undefined}
                   selected={row.frame === selectedFrame}
                   onSelect={selectFrame}
+                  convention={convention}
                   className={cx({ [classes.warningRow]: row.warnings.length > 0 })}
                 />
               ))}
@@ -409,6 +417,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
             offset={offsets.frames[selectedFrame]}
             showOriginal={offsets.showOriginal === true}
             step={config.adjustStep ?? "medium"}
+            convention={convention}
             onChange={(offset) => {
               setOffsets(withFrameOffset(offsets, selectedFrame, offset));
             }}
@@ -444,6 +453,7 @@ const FrameTableRow = memo(function FrameTableRowImpl({
   adjusted,
   selected,
   onSelect,
+  convention,
   className,
 }: {
   row: FrameRow;
@@ -454,6 +464,7 @@ const FrameTableRow = memo(function FrameTableRowImpl({
   adjusted: boolean;
   selected: boolean;
   onSelect: (frame: string) => void;
+  convention: RotationConvention;
   className?: string;
 }) {
   const { classes, cx } = useStyles();
@@ -493,7 +504,12 @@ const FrameTableRow = memo(function FrameTableRowImpl({
       : []),
   ].join("\n");
 
-  const rpy = entry ? quaternionToRpy(entry.rotation) : undefined;
+  const rpy = entry
+    ? quatToEulerDegrees(
+        [entry.rotation.x, entry.rotation.y, entry.rotation.z, entry.rotation.w],
+        convention,
+      )
+    : undefined;
   const valueClass = cx({
     [classes.muted]: !hasData,
     [classes.adjusted]: hasData && offset != undefined,
@@ -578,8 +594,8 @@ const FrameTableRow = memo(function FrameTableRowImpl({
           </td>
         );
       })}
-      {[rpy?.x, rpy?.y, rpy?.z].map((value, i) => {
-        const text = value != undefined ? formatFixed(value * RAD_TO_DEG, 1) : undefined;
+      {[rpy?.[0], rpy?.[1], rpy?.[2]].map((value, i) => {
+        const text = value != undefined ? formatFixed(value, 1) : undefined;
         return (
           <td
             key={`r${i}`}

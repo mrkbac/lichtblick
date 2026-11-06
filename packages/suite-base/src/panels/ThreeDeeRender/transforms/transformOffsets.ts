@@ -114,6 +114,31 @@ export function rosRpyDegreesToQuat(rpy: Readonly<Vec3>): Quat {
   return tempQuatA.setFromEuler(tempEuler).toArray();
 }
 
+/**
+ * How roll/pitch/yaw are shown and typed:
+ * - "extrinsic": around the parent's fixed axes x, then y, then z (ROS: tf2 getRPY, URDF rpy)
+ * - "intrinsic": around the frame's own axes X, then Y, then Z, each turn on the rotated axes
+ * Stored offsets are always intrinsic XYZ; only display and input are converted.
+ */
+export type RotationConvention = "extrinsic" | "intrinsic";
+
+export function quatToEulerDegrees(q: Readonly<Quat>, convention: RotationConvention): Vec3 {
+  return convention === "extrinsic" ? quatToRosRpyDegrees(q) : quatToRpyDegrees(q);
+}
+
+export function eulerDegreesToQuat(rpy: Readonly<Vec3>, convention: RotationConvention): Quat {
+  return convention === "extrinsic" ? rosRpyDegreesToQuat(rpy) : rpyDegreesToQuat(rpy);
+}
+
+/** Convert angles between conventions (same rotation, different numbers) */
+export function convertEulerDegrees(
+  rpy: Readonly<Vec3>,
+  from: RotationConvention,
+  to: RotationConvention,
+): Vec3 {
+  return from === to ? [...rpy] : quatToEulerDegrees(eulerDegreesToQuat(rpy, from), to);
+}
+
 /** The transform that is actually rendered: recorded transform with the offset applied */
 export function applyOffset(
   position: Readonly<Vec3>,

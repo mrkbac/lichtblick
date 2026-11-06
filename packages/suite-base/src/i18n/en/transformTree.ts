@@ -13,8 +13,12 @@ export const transformTree = {
   warningCount_one: "{{count}} warning",
   warningCount_other: "{{count}} warnings",
   adjustedCount: "{{count}} adjusted",
-  rotationConvention:
-    "Roll, pitch and yaw turn around the parent's fixed axes: x, then y, then z (extrinsic xyz, as in tf2 getRPY and URDF rpy).\nThe 3D panel's transform settings use intrinsic XYZ (around the frame's own, already rotated axes), so its numbers differ when more than one angle is set.",
+  rotationConvention: {
+    extrinsic:
+      "Roll, pitch and yaw turn around the parent's fixed axes: x, then y, then z (extrinsic xyz, as in tf2 getRPY and URDF rpy). Change it in the panel settings.",
+    intrinsic:
+      "Roll, pitch and yaw turn around the frame's own axes: X, then Y, then Z, each turn on the already rotated axes (intrinsic XYZ). Change it in the panel settings.",
+  },
   showingOriginal: "showing original",
   columns: {
     frame: "Frame",
@@ -44,12 +48,16 @@ export const transformTree = {
     close: "Close",
     offset: "Offset",
     offsetHelp:
-      "Added to the recorded transform. Translation is along the parent's axes; roll, pitch and yaw turn around the frame's own axes (intrinsic XYZ).",
+      "Applied on top of the recorded transform: translation along the parent's axes, then the rotation around the frame's own origin.",
     result: "Result",
     resultHelp:
-      "The transform that is rendered. Type a value here and the offset is computed for you. Roll, pitch and yaw turn around the parent's fixed axes (ROS convention), like the table.",
-    rotationConvention:
-      "Offset: turns around the frame's own axes after the recorded rotation (intrinsic XYZ), the same values as the 3D panel's Rotation offset.\nResult: turns around the parent's fixed axes (extrinsic xyz, as in tf2 getRPY and URDF rpy), like the table.",
+      "The transform that is rendered. Type a value here and the offset is computed for you.",
+    rotationConvention: {
+      extrinsic:
+        "Offset and Result angles turn around the parent's fixed axes: x, then y, then z (extrinsic xyz, as in tf2 getRPY and URDF rpy). Change it in the panel settings.",
+      intrinsic:
+        "Offset and Result angles turn around the frame's own axes: X, then Y, then Z, each turn on the already rotated axes (intrinsic XYZ). Change it in the panel settings.",
+    },
     showOriginal: "Show original",
     showOriginalHelp: "Render the recorded transforms in every panel, ignoring all offsets",
     reset: "Reset",
@@ -59,6 +67,10 @@ export const transformTree = {
     copyYaml: "YAML",
   },
   settings: {
+    general: "General",
+    rotationConvention: "Rotation angles",
+    extrinsic: "Extrinsic xyz (ROS, fixed axes)",
+    intrinsic: "Intrinsic XYZ (own axes)",
     topics: "Topics",
     static: "Static",
     staticHelp:

@@ -3,7 +3,7 @@
 
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
-import { quaternionToRpy, samplesFromMessage } from "./transforms";
+import { samplesFromMessage } from "./transforms";
 import { addTransformEvents, buildRows, mergeEntries } from "./tree";
 import { FrameEntries } from "./types";
 
@@ -74,21 +74,6 @@ describe("samplesFromMessage", () => {
 
     // Then
     expect(samples).toMatchObject([{ parent: "base_link", child: "lidar", stamp: 2.5 }]);
-  });
-});
-
-describe("quaternionToRpy", () => {
-  it("should return a 90° yaw when given a 90° rotation around z", () => {
-    // Given
-    const rotation = { x: 0, y: 0, z: Math.SQRT1_2, w: Math.SQRT1_2 };
-
-    // When
-    const rpy = quaternionToRpy(rotation);
-
-    // Then
-    expect(rpy.x).toBeCloseTo(0);
-    expect(rpy.y).toBeCloseTo(0);
-    expect(rpy.z).toBeCloseTo(Math.PI / 2);
   });
 });
 

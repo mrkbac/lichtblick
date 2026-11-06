@@ -47,7 +47,7 @@ import { MarkerPool } from "./renderables/markers/MarkerPool";
 import { Quaternion, Vector3 } from "./ros";
 import { BaseSettings, CustomLayerSettings, SelectEntry } from "./settings";
 import { AddTransformResult, TransformTree } from "./transforms";
-import type { AdjustStep } from "./transforms/transformOffsets";
+import type { AdjustStep, RotationConvention } from "./transforms/transformOffsets";
 import { InterfaceMode } from "./types";
 
 export type RendererEvents = {
@@ -165,6 +165,8 @@ export type RendererConfig = {
       maxPreloadMessages?: number;
       /** Step size for offset inputs and keyboard nudging */
       adjustStep?: AdjustStep;
+      /** How roll/pitch/yaw are shown and typed (offsets are stored as intrinsic XYZ) */
+      rotationConvention?: RotationConvention;
       /** Frame moved by the keyboard (arrows, PageUp/PageDown) while editable */
       keyboardFrame?: string;
     };

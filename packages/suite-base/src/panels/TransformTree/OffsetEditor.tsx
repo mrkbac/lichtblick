@@ -27,9 +27,9 @@ import {
   formatYaml,
   offsetForResult,
   Quat,
-  quatToRosRpyDegrees,
-  quatToRpyDegrees,
-  rosRpyDegreesToQuat,
+  convertEulerDegrees,
+  quatToEulerDegrees,
+  RotationConvention,
   Vec3,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms/transformOffsets";
 import clipboard from "@lichtblick/suite-base/util/clipboard";
@@ -67,6 +67,7 @@ type Props = {
   offset: FrameOffset | undefined;
   showOriginal: boolean;
   step: AdjustStep;
+  convention: RotationConvention;
   onChange: (offset: FrameOffset | undefined) => void;
   onShowOriginalChange: (change: { showOriginal: boolean }) => void;
   onStepChange: (step: AdjustStep) => void;
@@ -84,6 +85,7 @@ export function OffsetEditor({
   offset,
   showOriginal,
   step,
+  convention,
   onChange,
   onShowOriginalChange,
   onStepChange,
@@ -95,21 +97,26 @@ export function OffsetEditor({
 
   const current = offset ?? { xyz: ZERO, rpy: ZERO };
   const result = applyOffset(recorded.position, recorded.rotation, offset);
-  // Same convention as the table: ROS roll/pitch/yaw around the parent's fixed axes
-  const resultRpy = quatToRosRpyDegrees(result.rotation);
+  // Angles in the panel's convention; offsets are stored as intrinsic XYZ
+  const offsetRpy = convertEulerDegrees(current.rpy, "intrinsic", convention);
+  const resultRpy = quatToEulerDegrees(result.rotation, convention);
   const { meters, degrees } = ADJUST_STEPS[step];
 
   const setOffsetPart = (part: Part, index: number, value: number | undefined) => {
-    const next: FrameOffset = { xyz: [...current.xyz], rpy: [...current.rpy] };
+    const next: FrameOffset = { xyz: [...current.xyz], rpy: [...offsetRpy] };
     next[part][index] = value ?? 0;
-    onChange(next);
+    onChange(
+      part === "xyz"
+        ? { ...next, rpy: current.rpy }
+        : { ...next, rpy: convertEulerDegrees(next.rpy, convention, "intrinsic") },
+    );
   };
   const setResultPart = (part: Part, index: number, value: number | undefined) => {
     const xyz: Vec3 = [...result.position];
     const rpy: Vec3 = [...resultRpy];
     (part === "xyz" ? xyz : rpy)[index] = value ?? 0;
     // offsetForResult takes the offsets' own convention (intrinsic XYZ)
-    const intrinsicRpy = quatToRpyDegrees(rosRpyDegreesToQuat(rpy));
+    const intrinsicRpy = convertEulerDegrees(rpy, convention, "intrinsic");
     const next = offsetForResult(recorded.position, recorded.rotation, xyz, intrinsicRpy);
     // Keep the untouched half exactly as it was instead of a recomputed approximation
     onChange(part === "xyz" ? { ...current, xyz: next.xyz } : { ...current, rpy: next.rpy });
@@ -147,7 +154,11 @@ export function OffsetEditor({
   // Translation and rotation in separate blocks so each input is wide enough for its value
   const block = (part: Part, offsetValues: Readonly<Vec3>, resultValues: Readonly<Vec3>) => (
     <>
-      {part === "rpy" ? <RotationConventionInfo text={t("editor.rotationConvention")} /> : <span />}
+      {part === "rpy" ? (
+        <RotationConventionInfo text={t(`editor.rotationConvention.${convention}`)} />
+      ) : (
+        <span />
+      )}
       {COLUMNS[part].map((column) => (
         <span key={column} className={classes.editorColumn}>
           {t(`columns.${column}`)}
@@ -192,7 +203,7 @@ export function OffsetEditor({
       </div>
       <div className={classes.editorGrid}>
         {block("xyz", current.xyz, roundTo(result.position, PRECISION_METERS))}
-        {block("rpy", current.rpy, roundTo(resultRpy, PRECISION_DEGREES))}
+        {block("rpy", roundTo(offsetRpy, PRECISION_DEGREES), roundTo(resultRpy, PRECISION_DEGREES))}
       </div>
       <div className={classes.editorActions}>
         <FormControlLabel

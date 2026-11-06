@@ -46,7 +46,10 @@ import {
   offsetForResult,
   parseTransformOffsets,
   Quat,
+  convertEulerDegrees,
+  quatToEulerDegrees,
   quatToRpyDegrees,
+  RotationConvention,
   TRANSFORM_OFFSETS_VARIABLE,
   TransformOffsets,
   Vec3,
@@ -64,6 +67,8 @@ const PI_2 = Math.PI / 2;
 
 const DEFAULT_EDITABLE = false;
 const DEFAULT_ADJUST_STEP: AdjustStep = "medium";
+// Intrinsic XYZ was the only convention before it became a setting
+const DEFAULT_ROTATION_CONVENTION: RotationConvention = "intrinsic";
 /** Precision of the offset and result rotation fields, finer than PRECISION_DEGREES */
 const PRECISION_ADJUST_DEGREES = 3;
 const NUDGE_KEYS = new Set<string>([
@@ -244,6 +249,16 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
               value: this.#offsets.showOriginal === true,
             },
           }),
+          rotationConvention: {
+            label: t("threeDee:rotationConvention"),
+            help: this.#rotationHelp(),
+            input: "select",
+            value: this.#convention(),
+            options: [
+              { label: t("threeDee:rotationConventionExtrinsic"), value: "extrinsic" },
+              { label: t("threeDee:rotationConventionIntrinsic"), value: "intrinsic" },
+            ],
+          },
           showLabel: {
             label: t("threeDee:labels"),
             input: "boolean",
@@ -667,6 +682,16 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     this.#updateFrameAxis(renderable);
   }
 
+  #rotationHelp(): string {
+    return this.#convention() === "extrinsic"
+      ? t("threeDee:rotationConventionHelpExtrinsic")
+      : t("threeDee:rotationConventionHelpIntrinsic");
+  }
+
+  #convention(): RotationConvention {
+    return this.renderer.config.scene.transforms?.rotationConvention ?? DEFAULT_ROTATION_CONVENTION;
+  }
+
   /** Offset in effect for a frame: layout-wide, or a legacy per-panel one while editable */
   #offsetFor(frameId: string): FrameOffset | undefined {
     const shared = this.#offsets.frames[frameId];
@@ -709,6 +734,8 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     const config = this.renderer.config;
     const editable = config.scene.transforms?.editable ?? DEFAULT_EDITABLE;
     const step = ADJUST_STEPS[config.scene.transforms?.adjustStep ?? DEFAULT_ADJUST_STEP];
+    const convention = this.#convention();
+    const rotationHelp = this.#rotationHelp();
     const currentTime = this.renderer.currentTime;
     const recorded = this.#recorded(frame);
     let ageValue: string | undefined;
@@ -749,13 +776,13 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
       };
       fields.rpy = {
         label: t("threeDee:recordedRotation"),
-        help: t("threeDee:rotationHelp"),
+        help: rotationHelp,
         input: "vec3",
         precision: PRECISION_ADJUST_DEGREES,
         labels: ["R", "P", "Y"],
         readonly: true,
         value: recorded
-          ? roundVec3(quatToRpyDegrees(recorded.rotation), PRECISION_ADJUST_DEGREES)
+          ? roundVec3(quatToEulerDegrees(recorded.rotation, convention), PRECISION_ADJUST_DEGREES)
           : undefined,
       };
       fields.xyzOffset = {
@@ -770,7 +797,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
       };
       fields.rpyCoefficient = {
         label: t("threeDee:rotationOffset"),
-        help: t("threeDee:rotationOffsetHelp"),
+        help: `${t("threeDee:rotationOffsetHelp")} ${rotationHelp}`,
         input: "vec3",
         precision: PRECISION_ADJUST_DEGREES,
         step: step.degrees,
@@ -778,7 +805,10 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
         max: 180,
         labels: ["R", "P", "Y"],
         readonly: !editable,
-        value: offset.rpy,
+        value: roundVec3(
+          convertEulerDegrees(offset.rpy, "intrinsic", convention),
+          PRECISION_ADJUST_DEGREES,
+        ),
       };
     }
 
@@ -794,14 +824,14 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     };
     fields.resultRpy = {
       label: adjusted ? t("threeDee:resultRotation") : t("threeDee:rotation"),
-      help: editable ? t("threeDee:resultHelp") : t("threeDee:rotationHelp"),
+      help: editable ? `${t("threeDee:resultHelp")} ${rotationHelp}` : rotationHelp,
       input: "vec3",
       precision: PRECISION_ADJUST_DEGREES,
       step: step.degrees,
       labels: ["R", "P", "Y"],
       readonly: !editable || !result,
       value: result
-        ? roundVec3(quatToRpyDegrees(result.rotation), PRECISION_ADJUST_DEGREES)
+        ? roundVec3(quatToEulerDegrees(result.rotation, convention), PRECISION_ADJUST_DEGREES)
         : undefined,
     };
     return fields;
@@ -889,7 +919,11 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     if (field === "xyzOffset") {
       this.#editFrame(frameId, { ...offset, xyz: vec });
     } else if (field === "rpyCoefficient") {
-      this.#editFrame(frameId, { ...offset, rpy: vec });
+      // Typed in the panel's convention, stored as intrinsic XYZ
+      this.#editFrame(frameId, {
+        ...offset,
+        rpy: convertEulerDegrees(vec, this.#convention(), "intrinsic"),
+      });
     } else {
       const recorded = this.#recorded(this.renderer.transformTree.frame(frameId));
       if (!recorded) {
@@ -897,7 +931,10 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
       }
       const result = applyOffset(recorded.position, recorded.rotation, offset);
       const resultXyz = field === "resultXyz" ? vec : result.position;
-      const resultRpy = field === "resultRpy" ? vec : quatToRpyDegrees(result.rotation);
+      const resultRpy =
+        field === "resultRpy"
+          ? convertEulerDegrees(vec, this.#convention(), "intrinsic")
+          : quatToRpyDegrees(result.rotation);
       const next = offsetForResult(recorded.position, recorded.rotation, resultXyz, resultRpy);
       // Keep the untouched half exactly as it was instead of a recomputed approximation
       this.#editFrame(
@@ -1038,12 +1075,18 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     // Step the result values the user reads in the settings, not the offset: pitch 60 -> 60.1
     const offset = this.#offsetFor(frameId) ?? { xyz: [0, 0, 0], rpy: [0, 0, 0] };
     const result = applyOffset(recorded.position, recorded.rotation, offset);
+    const convention = this.#convention();
     const next = nudge(
-      { xyz: result.position, rpy: quatToRpyDegrees(result.rotation) },
+      { xyz: result.position, rpy: quatToEulerDegrees(result.rotation, convention) },
       key as NudgeKey,
       { rotate, amount },
     );
-    const nextOffset = offsetForResult(recorded.position, recorded.rotation, next.xyz, next.rpy);
+    const nextOffset = offsetForResult(
+      recorded.position,
+      recorded.rotation,
+      next.xyz,
+      convertEulerDegrees(next.rpy, convention, "intrinsic"),
+    );
     this.#editFrame(
       frameId,
       rotate ? { ...offset, rpy: nextOffset.rpy } : { ...offset, xyz: nextOffset.xyz },

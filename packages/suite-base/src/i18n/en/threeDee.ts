@@ -61,15 +61,19 @@ export const threeDee = {
   translationOffset: "Translation offset",
   translationOffsetHelp: "Added to the recorded translation, along the parent frame's axes (m)",
   rotationOffsetHelp:
-    "Roll, pitch and yaw in degrees around this frame's own axes (intrinsic XYZ), applied after the recorded rotation",
+    "Rotation applied after the recorded rotation, around the frame's own origin.",
   recordedTranslation: "Recorded translation",
   recordedRotation: "Recorded rotation",
-  rotationHelp:
-    "Roll, pitch and yaw in degrees, intrinsic XYZ: around the frame's own axes, each turn applied to the already rotated axes. ROS tools (tf2 getRPY, URDF rpy, the Transform Tree panel) use extrinsic xyz around fixed axes, so their numbers differ when more than one angle is set.",
+  rotationConvention: "Rotation angles",
+  rotationConventionExtrinsic: "Extrinsic xyz (ROS, fixed axes)",
+  rotationConventionIntrinsic: "Intrinsic XYZ (own axes)",
+  rotationConventionHelpExtrinsic:
+    "Roll, pitch and yaw in degrees around the parent's fixed axes: x, then y, then z (extrinsic xyz, as in tf2 getRPY and URDF rpy).",
+  rotationConventionHelpIntrinsic:
+    "Roll, pitch and yaw in degrees around the frame's own axes: X, then Y, then Z, each turn on the already rotated axes (intrinsic XYZ).",
   resultTranslation: "Result translation",
   resultRotation: "Result rotation",
-  resultHelp:
-    "Recorded transform plus offset: what is rendered. Type a value to set it directly. Rotation is roll, pitch, yaw in degrees (intrinsic XYZ).",
+  resultHelp: "Recorded transform plus offset: what is rendered. Type a value to set it directly.",
   adjusted: "adjusted",
   adjustStep: "Adjust step",
   adjustStepFine: "Fine (1 mm, 0.01°)",
