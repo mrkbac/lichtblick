@@ -1291,5 +1291,26 @@ describe("PlotCoordinator", () => {
 
       expect(getCsvData).toHaveBeenCalledWith({ min: 2, max: 9 });
     });
+
+    it("exports the analyzed time window of a spectrum, not its frequency range", async () => {
+      const getCsvData = vi.fn().mockResolvedValue([]);
+      datasetsBuilder.getCsvData = getCsvData;
+      const config = PlotBuilder.config({
+        xAxisVal: "timestamp",
+        plotMode: "fft",
+        timeWindow: "fixed",
+        minXValue: 1,
+        maxXValue: 3,
+        paths: [],
+      });
+      plotCoordinator.handleConfig(config, "light", {});
+      plotCoordinator["latestXScale"] = { min: 0, max: 50, left: 0, right: 100 };
+
+      await plotCoordinator.getVisibleCsvData();
+      plotCoordinator.handleConfig({ ...config, analysisRange: "all" }, "light", {});
+      await plotCoordinator.getVisibleCsvData();
+
+      expect(getCsvData.mock.calls).toEqual([[{ min: 1, max: 3 }], [undefined]]);
+    });
   });
 });

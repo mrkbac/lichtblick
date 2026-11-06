@@ -574,6 +574,13 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   /** The data of all series within the visible x range */
   /** Undefined until the chart has drawn an x axis, since the visible range is unknown before. */
   public async getVisibleCsvData(): Promise<CsvDataset[] | undefined> {
+    // A spectrum's or histogram's x is not time: export the samples it analyzes
+    if (this.analysis) {
+      const timeRange = this.getAnalysis()?.timeRange;
+      return await this.getCsvData(
+        timeRange && { min: timeRange.min ?? -Infinity, max: timeRange.max ?? Infinity },
+      );
+    }
     const scale = this.latestXScale;
     if (!scale) {
       return undefined;

@@ -6,6 +6,12 @@ import { parseMessagePath } from "@lichtblick/message-path";
 
 import { SeriesConfigKey, SeriesItem } from "./IDatasetsBuilder";
 import { DataItem, TimestampDatasetsBuilderImpl } from "./TimestampDatasetsBuilderImpl";
+import { computeHistogram } from "../utils/analysis";
+
+vi.mock("../utils/analysis", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../utils/analysis")>();
+  return { ...actual, computeHistogram: vi.fn(actual.computeHistogram) };
+});
 
 function seriesItem(
   key: string,
@@ -288,5 +294,21 @@ describe("TimestampDatasetsBuilderImpl", () => {
       [1, 0],
     ]);
     expect(data[1]!.value).toBe("2 in [-1, 0]");
+  });
+
+  it("keeps the analysis when an append changes no data", () => {
+    const builder = build([seriesItem("0")]);
+    builder.applyAction({ type: "append-full", series: key, items: items(range(0, 50)) });
+    const analysis = { mode: "histogram" as const };
+    vi.mocked(computeHistogram).mockClear();
+
+    builder.getViewportDatasets({ ...viewport, analysis });
+    builder.applyAction({ type: "append-current", series: key, items: [] });
+    builder.getViewportDatasets({ ...viewport, analysis });
+    expect(computeHistogram).toHaveBeenCalledTimes(1);
+
+    builder.applyAction({ type: "append-current", series: key, items: items([60]) });
+    builder.getViewportDatasets({ ...viewport, analysis });
+    expect(computeHistogram).toHaveBeenCalledTimes(2);
   });
 });

@@ -750,7 +750,10 @@ export class TimestampDatasetsBuilderImpl {
   }
 
   public applyAction(action: Immutable<UpdateDataAction>): void {
-    this.#dataVersion += 1;
+    // Appends bump the version themselves, only when they change data
+    if (action.type !== "append-current") {
+      this.#dataVersion += 1;
+    }
     switch (action.type) {
       case "reset-current": {
         const series = this.#seriesByKey.get(action.series);
@@ -802,6 +805,9 @@ export class TimestampDatasetsBuilderImpl {
           points.insert(fullLength, items, points.length);
         } else {
           points.insert(points.length, items);
+        }
+        if (cullSize > 0 || items.length > 0) {
+          this.#dataVersion += 1;
         }
         break;
       }
