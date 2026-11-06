@@ -146,6 +146,23 @@ describe("downsampleScatter", () => {
     bounds: { x: { min: 0, max: 100 }, y: { min: 0, max: 100 } },
   };
 
+  it.each([
+    ["x", (i: number) => ({ x: -3, y: i, value: i })],
+    ["y", (i: number) => ({ x: i, y: -3, value: -3 })],
+  ])("keeps every point when %s is constant", (axis, point) => {
+    const points = [0, 1, 2].map(point);
+    const constant = { min: -3, max: -3 };
+    const varying = { min: 0, max: 2 };
+
+    const result = downsampleScatter(iterateObjects(points), {
+      width: 100,
+      height: 100,
+      bounds: axis === "x" ? { x: constant, y: varying } : { x: varying, y: constant },
+    });
+
+    expect(result).toEqual([0, 1, 2]);
+  });
+
   it("ignores out of bounds points", () => {
     const result = downsampleScatter(
       iterateObjects([
