@@ -270,11 +270,17 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
   // bumping this remounts the on-screen controls, dropping their drag and pointer capture so a
   // mouse whose release we never saw can't keep driving
   const [releaseCount, setReleaseCount] = useState(0);
+  // Used when the window loses focus or the tab is hidden. The gamepad is cleared too, because
+  // polling pauses in a hidden tab and would otherwise keep its last state. Always ends with a
+  // stop, even when stopOnRelease is off: we no longer see what the operator is doing.
   const releaseAll = useCallback(() => {
-    sources.current = { ...emptySources(), gamepad: sources.current.gamepad };
+    sources.current = emptySources();
     setReleaseCount((count) => count + 1);
     updateCommand();
-  }, [updateCommand]);
+    if (lastPublishedActive.current) {
+      publishStop();
+    }
+  }, [publishStop, updateCommand]);
 
   const emergencyStop = useCallback(() => {
     latched.current = true;

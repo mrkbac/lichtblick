@@ -317,6 +317,14 @@ describe("TeleopPanel", () => {
       expect(publish).toHaveBeenCalledWith("/cmd", ZERO);
     });
 
+    it("stops on focus loss even when stopOnRelease is off", () => {
+      const { publish, root } = setup({ stopOnRelease: false });
+      fireEvent.keyDown(root, { key: "w" });
+      publish.mockClear();
+      fireEvent.blur(window);
+      expect(publish).toHaveBeenCalledWith("/cmd", ZERO);
+    });
+
     it("stops the robot when unmounted while driving, even if stopOnRelease is off", () => {
       const { publish, unmount } = setup({ stopOnRelease: false });
       fireEvent.click(screen.getByText("UP"));
@@ -418,6 +426,22 @@ describe("TeleopPanel", () => {
       expect(publish).toHaveBeenLastCalledWith("/cmd", twist(1));
       step(makeGamepad([0, 0, 0, 0]));
       expect(publish).toHaveBeenLastCalledWith("/cmd", ZERO);
+    });
+
+    it("stops a held stick when the tab is hidden, while polling is paused", () => {
+      const { publish } = setup();
+      step(makeGamepad([0, -1, 0, 0]));
+      expect(publish).toHaveBeenLastCalledWith("/cmd", twist(1));
+
+      Object.defineProperty(document, "hidden", { configurable: true, value: true });
+      fireEvent(document, new Event("visibilitychange"));
+      expect(publish).toHaveBeenLastCalledWith("/cmd", ZERO);
+
+      // no frames run while hidden, so the timer must not resend the old stick state
+      publish.mockClear();
+      vi.advanceTimersByTime(1000);
+      expect(publish).not.toHaveBeenCalled();
+      Object.defineProperty(document, "hidden", { configurable: true, value: false });
     });
 
     it("only drives while the enable button is held", () => {

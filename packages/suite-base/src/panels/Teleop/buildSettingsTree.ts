@@ -247,8 +247,8 @@ export function applySettingsAction(
     }
     if (key === "messageType") {
       const next = value as OutputType;
-      // follow the type with the default topic unless the user picked their own
-      if (draft.topic === DEFAULT_TOPICS[draft.messageType] || !draft.topic) {
+      // follow the type with the default topic unless the user picked their own or cleared it
+      if (draft.topic === DEFAULT_TOPICS[draft.messageType]) {
         draft.topic = DEFAULT_TOPICS[next];
       }
       draft.messageType = next;

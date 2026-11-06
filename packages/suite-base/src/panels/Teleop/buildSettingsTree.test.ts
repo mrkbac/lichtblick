@@ -88,5 +88,11 @@ describe("applySettingsAction", () => {
       update(["general", "messageType"], "Joy"),
     );
     expect(custom.topic).toBe("/robot/drive");
+
+    const cleared = applySettingsAction(
+      { ...DEFAULT_CONFIG, topic: "" },
+      update(["general", "messageType"], "Joy"),
+    );
+    expect(cleared.topic).toBe("");
   });
 });
