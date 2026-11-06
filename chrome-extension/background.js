@@ -79,7 +79,11 @@ chrome.runtime.onConnect.addListener((port) => {
       if (ws?.readyState !== WebSocket.OPEN) {
         return;
       }
-      ws.send(msg.text ?? Uint8Array.fromBase64(msg.b64));
+      if (typeof msg.text === "string") {
+        ws.send(msg.text);
+      } else if (typeof msg.b64 === "string") {
+        ws.send(Uint8Array.fromBase64(msg.b64));
+      }
     }
   });
 
