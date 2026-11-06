@@ -11,6 +11,13 @@ export const PANEL_STYLE: React.CSSProperties = {
 // Limit the amount of transform messages stored to avoid excessive memory usage
 export const MAX_TRANSFORM_MESSAGES = 10_000;
 
+/** Transform preloading is on unless the layout turned it off explicitly. */
+export function isTransformPreloadEnabled(config: {
+  scene: { transforms?: { enablePreloading?: boolean } };
+}): boolean {
+  return config.scene.transforms?.enablePreloading ?? true;
+}
+
 export const DEFAULT_FOLLOW_MODE = "follow-pose";
 
 // Throttle hover GPU picking to reduce load (10 Hz)

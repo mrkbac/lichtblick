@@ -26,6 +26,7 @@ import { BaseUserData, Renderable } from "../Renderable";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { getLuminance, stringToRgb } from "../color";
+import { isTransformPreloadEnabled, MAX_TRANSFORM_MESSAGES } from "../constants";
 import { BaseSettings, fieldSize, PRECISION_DEGREES, PRECISION_DISTANCE } from "../settings";
 import { CoordinateFrame, Duration, makePose, MAX_DURATION, Transform } from "../transforms";
 import { Axis, AXIS_LENGTH } from "./Axis";
@@ -192,7 +193,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
           enablePreloading: {
             label: t("threeDee:enablePreloading"),
             input: "boolean",
-            value: config.scene.transforms?.enablePreloading ?? false,
+            value: isTransformPreloadEnabled(config),
             tooltip: t("threeDee:enablePreloadingTooltip"),
           },
           maxPreloadMessages: {
@@ -201,22 +202,21 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
             min: 1000,
             max: 50000,
             step: 1000,
-            value: config.scene.transforms?.maxPreloadMessages ?? 10000,
+            value: config.scene.transforms?.maxPreloadMessages ?? MAX_TRANSFORM_MESSAGES,
             tooltip: t("threeDee:maxPreloadMessagesTooltip"),
-            disabled: !(config.scene.transforms?.enablePreloading ?? false),
+            disabled: !isTransformPreloadEnabled(config),
           },
         },
-        actions:
-          config.scene.transforms?.enablePreloading === true
-            ? [
-                {
-                  id: "clear-preload-buffer",
-                  type: "action",
-                  label: t("threeDee:clearPreloadBuffer"),
-                  display: "menu",
-                },
-              ]
-            : undefined,
+        actions: isTransformPreloadEnabled(config)
+          ? [
+              {
+                id: "clear-preload-buffer",
+                type: "action",
+                label: t("threeDee:clearPreloadBuffer"),
+                display: "menu",
+              },
+            ]
+          : undefined,
       },
     };
 

@@ -33,14 +33,14 @@ export const threeDee = {
   editable: "Editable",
   enablePreloading: "Enable preloading",
   enablePreloadingTooltip:
-    "Please be aware that performance may be impacted when turning preloading on.",
+    "Load transforms for the whole recording so frames are correct right after seeking. Turn off to save memory on very large recordings.",
   maxPreloadMessages: "Max preload messages",
   maxPreloadMessagesTooltip:
     "Maximum number of transform messages to keep in memory when preloading is enabled. Higher values provide more history but use more memory.",
   clearPreloadBuffer: "Clear preload buffer",
-  transformPreloadAlert: "Transform topics detected",
-  transformPreloadAlertTip:
-    "Activating preloading (3D/Image panel -> Transforms -> Settings) is recommended for accurate visualization of transform topics. NOTE: this may impact performance.",
+  transformPreloadTruncatedAlert: "{{count}} transform messages not preloaded",
+  transformPreloadTruncatedAlertTip:
+    'The preload buffer is full, so transforms near the end of the recording may be wrong after seeking. Raise "Max preload messages" in Transforms settings.',
   fixed: "Fixed",
   followMode: "Follow mode",
   followModeHelp: "Change the camera behavior during playback to follow the display frame or not.",

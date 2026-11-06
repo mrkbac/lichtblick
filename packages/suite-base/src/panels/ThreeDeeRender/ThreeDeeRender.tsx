@@ -34,15 +34,8 @@ import {
   DEFAULT_FOLLOW_MODE,
   PANEL_STYLE,
   MAX_TRANSFORM_MESSAGES,
+  isTransformPreloadEnabled,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
-import {
-  FRAME_TRANSFORM_DATATYPES,
-  FRAME_TRANSFORMS_DATATYPES,
-} from "@lichtblick/suite-base/panels/ThreeDeeRender/foxglove";
-import {
-  TF_DATATYPES,
-  TRANSFORM_STAMPED_DATATYPES,
-} from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
 import type { IRenderer, ImageModeConfig, RendererConfig, RendererSubscription } from "./IRenderer";
@@ -67,17 +60,6 @@ import { PublishClickEventMap } from "./renderables/PublishClickTool";
 import { DEFAULT_PUBLISH_SETTINGS } from "./renderables/PublishSettings";
 import { Shared3DPanelState, ThreeDeeRenderProps } from "./types";
 import { useWebGLContextRecovery } from "./useWebGLContextRecovery";
-
-/**
- * Schemas that carry coordinate frame transforms. Topics with one of these schemas generally
- * require preloading so that transforms are available across the whole playback range.
- */
-const TRANSFORM_TOPIC_SCHEMAS = new Set<string>([
-  ...FRAME_TRANSFORM_DATATYPES,
-  ...FRAME_TRANSFORMS_DATATYPES,
-  ...TF_DATATYPES,
-  ...TRANSFORM_STAMPED_DATATYPES,
-]);
 
 const log = Logger.getLogger(__filename);
 
@@ -438,24 +420,21 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     }
   }, [topics, renderer]);
 
-  const hasTransformTopics = useMemo(
-    () => topics?.some((topic) => TRANSFORM_TOPIC_SCHEMAS.has(topic.schemaName)) ?? false,
-    [topics],
-  );
-  const isPreloadingEnabled = config.scene.transforms?.enablePreloading === true;
+  const isPreloadingEnabled = isTransformPreloadEnabled(config);
+  // Number of transform messages dropped because the preload buffer is full
+  const [droppedTransformCount, setDroppedTransformCount] = useState(0);
   useEffect(() => {
-    // Surface an informational alert whenever there's a transform topic
     setPanelAlert?.(
       "transform-preload",
-      hasTransformTopics && !isPreloadingEnabled
+      droppedTransformCount > 0
         ? {
-            severity: "info",
-            message: t("transformPreloadAlert"),
-            tip: t("transformPreloadAlertTip"),
+            severity: "warn",
+            message: t("transformPreloadTruncatedAlert", { count: droppedTransformCount }),
+            tip: t("transformPreloadTruncatedAlertTip"),
           }
         : undefined,
     );
-  }, [hasTransformTopics, isPreloadingEnabled, setPanelAlert, t]);
+  }, [droppedTransformCount, setPanelAlert, t]);
 
   // Tell the renderer if we are connected to a ROS data source
   useEffect(() => {
@@ -529,11 +508,13 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       setAllFrames([]);
       setIsLoadingTransforms(false);
       setLoadedTransformCount(0);
+      setDroppedTransformCount(0);
       return;
     }
 
     setIsLoadingTransforms(true);
     setLoadedTransformCount(0);
+    setDroppedTransformCount(0);
 
     const messageBuffer: MessageEvent[] = [];
     const unsubscriptions: (() => void)[] = [];
@@ -543,7 +524,15 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     const lastUpdateTimeRef = { current: 0 };
     const UPDATE_DEBOUNCE_MS = 50; // Update UI every 50ms during loading
 
+    // Set to false on cleanup so a stale iterator can't overwrite the next preload's state
+    const effectState = { active: true };
+    // Topics whose source has a range; live sources never call back, so there's nothing to preload
+    const topicsWithRange = new Set<string>();
+
     const updateAllFrames = (options?: { isComplete?: boolean }) => {
+      if (!effectState.active) {
+        return;
+      }
       if (messageBuffer.length === 0) {
         setIsLoadingTransforms(false);
         return;
@@ -556,6 +545,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
 
       setAllFrames([...trimmedMessages]);
       setLoadedTransformCount(trimmedMessages.length);
+      setDroppedTransformCount(messageBuffer.length - trimmedMessages.length);
       setIsLoadingTransforms(options?.isComplete !== true);
     };
 
@@ -565,7 +555,11 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
           topic: topic.topic,
           convertTo: topic.convertTo,
           onNewRangeIterator: async (batchIterator) => {
+            topicsWithRange.add(topic.topic);
             for await (const batch of batchIterator) {
+              if (!effectState.active) {
+                break;
+              }
               if (batch.length > 0) {
                 messageBuffer.push(...batch);
 
@@ -580,17 +574,25 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
             resolve();
           },
         });
+        if (!topicsWithRange.has(topic.topic)) {
+          resolve();
+        }
         unsubscriptions.push(unsubscribe);
       });
       subscriptionPromises.push(promise);
     }
 
-    // Final update after all topics complete
-    void Promise.all(subscriptionPromises).then(() => {
-      updateAllFrames({ isComplete: true });
-    });
+    if (topicsWithRange.size === 0) {
+      setIsLoadingTransforms(false);
+    } else {
+      // Final update after all topics complete
+      void Promise.all(subscriptionPromises).then(() => {
+        updateAllFrames({ isComplete: true });
+      });
+    }
 
     return () => {
+      effectState.active = false;
       for (const unsubscribe of unsubscriptions) {
         unsubscribe();
       }
@@ -598,7 +600,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     // in this case context is static, we're just using it to subscribe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    config.scene.transforms?.enablePreloading,
+    isPreloadingEnabled,
     config.scene.transforms?.maxPreloadMessages,
     transformTopicsToPreload,
     reloadPreloadTrigger,

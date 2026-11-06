@@ -1104,6 +1104,10 @@ describe("ThreeDeeRender", () => {
 
       // Then
       expect(trimmedMessages).toHaveLength(customMaxMessages);
+      expect(mockContext.unstable_setAlert).toHaveBeenLastCalledWith(
+        "transform-preload",
+        expect.objectContaining({ severity: "warn" }),
+      );
     });
 
     it("updates loading indicator during progressive loading", async () => {
@@ -1266,6 +1270,44 @@ describe("ThreeDeeRender", () => {
       );
     });
 
+    it("finishes loading when the source has no range to preload", async () => {
+      // Given: a live source, the range subscription never calls back
+      const topics = [RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" })];
+      const customRendererInstance = createMockRenderer({
+        schemaSubscriptions: new Map([["tf2_msgs/TFMessage", [{ preload: true }]]]),
+      });
+      vi.mocked(Renderer).mockImplementationOnce(function () {
+        return customRendererInstance as any;
+      });
+      const mockContext = createPreloadingContext({
+        initialState: {
+          scene: { enableStats: true },
+          topics: { "/tf": { visible: true } },
+        },
+      });
+      const props = setup({}, mockContext);
+
+      // When
+      const { container } = render(<ThreeDeeRender {...props} />);
+      await waitFor(() => {
+        expect(mockContext.onRender).toBeDefined();
+      });
+      act(() => {
+        mockContext.onRender!(
+          { topics, currentFrame: [], currentTime: { sec: 100, nsec: 0 } },
+          vi.fn(),
+        );
+      });
+
+      // Then
+      await waitFor(() => {
+        expect(mockContext.unstable_subscribeMessageRange).toHaveBeenCalledTimes(1);
+      });
+      await waitFor(() => {
+        expect(container.querySelector('[class*="loadingTransforms"]')).not.toBeInTheDocument();
+      });
+    });
+
     it("does not show loading indicator when render stats is disabled", async () => {
       // Given
       const topicName = "/tf";
@@ -1354,12 +1396,9 @@ describe("ThreeDeeRender", () => {
       return calls.at(-1)?.[1];
     };
 
-    it("surfaces an info alert when a transform topic exists and preloading is disabled", async () => {
-      // Given
-      const topics = [
-        RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" }),
-        RenderStateBuilder.topic({ name: "/other", schemaName: "std_msgs/String" }),
-      ];
+    it("does not nag about preloading when transform topics exist", async () => {
+      // Given: preloading is on by default, nothing was dropped
+      const topics = [RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" })];
       const mockContext = createMockContext();
       const props = setup({}, mockContext);
 
@@ -1367,43 +1406,6 @@ describe("ThreeDeeRender", () => {
       await waitFor(() => {
         expect(mockContext.onRender).toBeDefined();
       });
-
-      // When
-      act(() => {
-        mockContext.onRender!({ topics }, vi.fn());
-      });
-
-      // Then
-      await waitFor(() => {
-        expect(lastAlertFor(mockContext, TRANSFORM_ALERT_ID)).toEqual(
-          expect.objectContaining({
-            severity: "info",
-            message: expect.any(String),
-            tip: expect.any(String),
-          }),
-        );
-      });
-    });
-
-    it("clears the alert when a transform topic exists but preloading is enabled", async () => {
-      // Given
-      const topics = [RenderStateBuilder.topic({ name: "/tf", schemaName: "tf2_msgs/TFMessage" })];
-      const mockContext = createMockContext({
-        initialState: {
-          scene: {
-            transforms: {
-              enablePreloading: true,
-            },
-          },
-        },
-      });
-      const props = setup({}, mockContext);
-
-      render(<ThreeDeeRender {...props} />);
-      await waitFor(() => {
-        expect(mockContext.onRender).toBeDefined();
-      });
-      (mockContext.unstable_setAlert as Mock).mockClear();
 
       // When
       act(() => {
