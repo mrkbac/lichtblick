@@ -83,12 +83,13 @@ const useSubscriptions = (config: PlotConfig, subscriberId: string): void => {
           : undefined;
       // A field on another topic is never read (settings show an error), so don't load that topic
       const timeSub =
-        parsedTimePath &&
-        parsedTimePath.topicName === parseMessagePath(item.value)?.topicName &&
-        pathToSubscribePayload(
-          fillInGlobalVariablesInPath(parsedTimePath, globalVariables),
-          preloadType,
-        );
+        parsedTimePath != undefined &&
+        parsedTimePath.topicName === parseMessagePath(item.value)?.topicName
+          ? pathToSubscribePayload(
+              fillInGlobalVariablesInPath(parsedTimePath, globalVariables),
+              preloadType,
+            )
+          : undefined;
       if (timeSub) {
         subscriptions.push(timeSub);
       }
