@@ -180,6 +180,7 @@ function linearToSrgb(c: number): number {
 /**
  * Maps a single-channel value to a color using the panel's gradient/colormap and value range.
  * Returns undefined for color modes that don't apply to single-channel images (flat, rgba-fields).
+ * Packed rgb/rgba modes decode the value bits as a color (kept for mono16 compatibility).
  *
  * The output is sRGB: image textures are uploaded as-is and the image shader does no color space
  * conversion (same as for compressed images), whereas `getColorConverter` produces linear colors
@@ -216,6 +217,19 @@ function monoColorConverter(
         tempColor.r = linearToSrgb(tempColor.r);
         tempColor.g = linearToSrgb(tempColor.g);
         tempColor.b = linearToSrgb(tempColor.b);
+        return tempColor;
+      };
+    }
+    case "rgb":
+    case "rgba": {
+      // Packed colors are read straight from the value bits (no linear conversion), as before
+      const converter = getColorConverter(
+        { ...settings, colorMode: settings.colorMode },
+        minValue,
+        maxValue,
+      );
+      return (value: number) => {
+        converter(tempColor, value);
         return tempColor;
       };
     }
@@ -286,8 +300,11 @@ export function decodeRawImage(
     case "mono8":
     case "8UC1":
       decodeMono8(rawData, width, height, step, output, {
-        // Unsupported color modes fall back to plain grayscale
-        colorConverter: monoColorConverter(options, MIN_MAX_8_BIT),
+        // Only gradient and colormap apply to 8-bit values; other modes fall back to grayscale
+        colorConverter:
+          (options.colorMode ?? "gradient") === "gradient" || options.colorMode === "colormap"
+            ? monoColorConverter(options, MIN_MAX_8_BIT)
+            : undefined,
       });
       break;
     case "mono16":

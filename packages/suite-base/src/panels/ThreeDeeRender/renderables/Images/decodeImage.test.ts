@@ -433,6 +433,33 @@ describe("decodeRawImage", () => {
     },
   );
 
+  it("decodes mono16 values as packed colors in rgb mode", () => {
+    // 0x00ff = blue channel only in BGRA-packed rgb mode
+    const mockImage = createMockROSImage({
+      encoding: "mono16",
+      width: 1,
+      height: 1,
+      step: 2,
+      data: new Uint8Array(new Uint16Array([0x00ff]).buffer),
+    });
+    const output = new Uint8ClampedArray(4);
+    decodeRawImage(mockImage, { colorMode: "rgb" }, output);
+    expect(Array.from(output)).toEqual([0, 0, 255, 255]);
+  });
+
+  it.each(["rgb", "rgba"] as const)("keeps grayscale for mono8 in %s mode", (colorMode) => {
+    const mockImage = createMockROSImage({
+      encoding: "mono8",
+      width: 2,
+      height: 1,
+      step: 2,
+      data: new Uint8Array([0, 200]),
+    });
+    const output = new Uint8ClampedArray(2 * 4);
+    decodeRawImage(mockImage, { colorMode }, output);
+    expect(Array.from(output)).toEqual([0, 0, 0, 255, 200, 200, 200, 255]);
+  });
+
   it("still rejects flat color mode for mono16", () => {
     const mockImage = createMockROSImage({ encoding: "mono16", width: 1, height: 1, step: 2 });
     expect(() => {
