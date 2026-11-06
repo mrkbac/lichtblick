@@ -13,6 +13,10 @@ import {
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  TimelineHoverCursor,
+  usePublishPlaybackHover,
+} from "@lichtblick/suite-base/components/TimelineHoverCursor";
 
 import { LogLevel, NormalizedLogMessage } from "./types";
 
@@ -146,18 +150,35 @@ export function SeverityTimeline({
     [items, start, durationSec, palette],
   );
 
-  const onClick = useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      if (!onSeek || !start) {
-        return;
-      }
+  // Seconds since start under the pointer, using the exact (not rounded) duration
+  const secondsAt = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>, from: Time) => {
       const rect = event.currentTarget.getBoundingClientRect();
       const fraction = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-      const exactSec = exactDurationSec(start, selectEndTime(getPipeline()));
-      onSeek(addTimes(start, fromSec(fraction * exactSec)));
+      return fraction * exactDurationSec(from, selectEndTime(getPipeline()));
     },
-    [onSeek, start, getPipeline],
+    [getPipeline],
   );
+
+  const onClick = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      if (onSeek && start) {
+        onSeek(addTimes(start, fromSec(secondsAt(event, start))));
+      }
+    },
+    [onSeek, start, secondsAt],
+  );
+
+  const publishHover = usePublishPlaybackHover();
+  const onMouseMove = useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      publishHover(start ? secondsAt(event, start) : undefined);
+    },
+    [publishHover, start, secondsAt],
+  );
+  const onMouseLeave = useCallback(() => {
+    publishHover(undefined);
+  }, [publishHover]);
 
   if (!start || durationSec <= 0) {
     return null;
@@ -167,10 +188,13 @@ export function SeverityTimeline({
     <div
       className={cx(classes.root, { [classes.seekable]: onSeek != undefined })}
       onClick={onClick}
+      onMouseMove={onMouseMove}
+      onMouseLeave={onMouseLeave}
       data-testid="log-severity-timeline"
     >
       <AutoSizingCanvas draw={draw} />
       <Playhead start={start} />
+      <TimelineHoverCursor durationSec={durationSec} />
     </div>
   );
 }

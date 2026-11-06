@@ -78,4 +78,28 @@ describe("DiagnosticNodeRow", () => {
     expect(onSeek).toHaveBeenCalledWith(2.5);
     expect(onClick).not.toHaveBeenCalled();
   });
+
+  it("shares the hovered time as a cursor and clears it on leave", () => {
+    render(
+      <PanelSetup>
+        <DiagnosticNodeRow
+          {...mockProps}
+          showHistory
+          history={{ changes: [{ t: 0, level: 0 }], lastSeen: 10 }}
+          range={{ start: 100, end: 110, current: 105 }}
+        />
+      </PanelSetup>,
+    );
+
+    const timeline = screen.getByTestId("diagnostic-timeline");
+    vi.spyOn(timeline, "getBoundingClientRect").mockReturnValue({ left: 0, width: 100 } as DOMRect);
+    const cursor = screen.getByTestId("timeline-hover-cursor");
+
+    fireEvent.mouseMove(timeline, { clientX: 25 });
+    expect(cursor.style.display).toBe("block");
+    expect(cursor.style.left).toBe("25%");
+
+    fireEvent.mouseLeave(timeline);
+    expect(cursor.style.display).toBe("none");
+  });
 });
