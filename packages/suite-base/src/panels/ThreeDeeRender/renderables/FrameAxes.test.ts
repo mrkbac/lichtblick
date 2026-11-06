@@ -510,6 +510,23 @@ describe("FrameAxes", () => {
       expect(renderer.transformTree.frame("sensor")?.offsetPosition).toBeUndefined();
     });
 
+    it("re-applies shared offsets to frames re-created after a clear, even when not editable", () => {
+      renderer.updateConfig((draft) => {
+        draft.scene.transforms = { editable: false };
+      });
+      const shared = { frames: { sensor: { xyz: [0.1, 0, 0], rpy: [0, 0, 0] } } };
+      renderer.setVariables(new Map([[TRANSFORM_OFFSETS_VARIABLE, shared]]));
+
+      // backward seek: the tree is cleared, the frame comes back as a new object
+      renderer.transformTree.clear();
+      renderer.emit("transformTreeUpdated", renderer);
+      expect(renderer.transformTree.frame("sensor")).toBeUndefined(); // not re-created early
+      renderer.transformTree.addTransform("sensor", "base", 0n, Transform.Identity());
+      renderer.emit("transformTreeUpdated", renderer);
+
+      expect(renderer.transformTree.frame("sensor")?.offsetPosition).toEqual([0.1, 0, 0]);
+    });
+
     it("ignores stale echoes of its own edits", () => {
       update(["transforms", "frame:sensor", "xyzOffset"], [0.1, 0, 0]);
       const first = lastPublished();

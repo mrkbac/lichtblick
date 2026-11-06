@@ -591,8 +591,10 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     for (const frameId of this.renderer.transformTree.frames().keys()) {
       this.#addFrameAxis(frameId);
     }
-    const config = this.renderer.config;
-    if (config.scene.transforms?.editable === true) {
+    // Frames are re-created after a clear (e.g. backward seek); give them their offsets again
+    const hasShared =
+      this.#offsets.showOriginal === true || Object.keys(this.#offsets.frames).length > 0;
+    if (this.renderer.config.scene.transforms?.editable === true || hasShared) {
       this.#updateFrameAxes();
     }
     this.updateSettingsTree();
@@ -1078,7 +1080,11 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
 
   #updateFrameAxis(renderable: FrameAxisRenderable): void {
     const frameId = renderable.userData.frameId;
-    const frame = this.renderer.transformTree.getOrCreateFrame(frameId);
+    // Don't re-create frames that were cleared and haven't come back yet
+    const frame = this.renderer.transformTree.frame(frameId);
+    if (!frame) {
+      return;
+    }
 
     // Layout-wide offsets apply in every panel, unless comparing against the original
     const shared = this.#offsets.frames[frameId];

@@ -106,6 +106,19 @@ describe("transformOffsets", () => {
     expect(nudge(undefined, "PageUp", { rotate: true, amount: 0.1 }).rpy).toEqual([0.1, 0, 0]);
   });
 
+  it("escapes frame ids from recordings in every format", () => {
+    const evil = `a;rm -rf ~ "x" <y> 'z'`;
+    expect(formatStaticTransformPublisher("base", evil, [0, 0, 0], [0, 0, 0, 1])).toContain(
+      `--child-frame-id 'a;rm -rf ~ "x" <y> '\\''z'\\'''`,
+    );
+    expect(formatUrdfJoint("base", evil, [0, 0, 0], [0, 0, 0, 1])).toContain(
+      `<child link="a;rm -rf ~ &quot;x&quot; &lt;y&gt; 'z'"/>`,
+    );
+    expect(formatYaml("base", evil, [0, 0, 0], [0, 0, 0, 1])).toContain(
+      `child_frame: "a;rm -rf ~ \\"x\\" <y> 'z'"`,
+    );
+  });
+
   describe("formats", () => {
     const rotation: Quat = rpyDegreesToQuat([0, 15, 90]);
     const position: Vec3 = [1, 0, 2];

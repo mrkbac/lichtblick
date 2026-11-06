@@ -168,6 +168,11 @@ export function nudge(
 }
 
 const fmt = (v: number) => String(clean(Number(v.toFixed(6))));
+// Frame ids come from recordings: escape them for each output format
+const xmlAttr = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+const shellQuote = (s: string) => (/^[\w./-]+$/.test(s) ? s : `'${s.replace(/'/g, "'\\''")}'`);
+const yamlString = (s: string) => JSON.stringify(s);
 
 /** URDF fixed joint; URDF `rpy` is extrinsic XYZ (= intrinsic ZYX) in radians */
 export function formatUrdfJoint(
@@ -179,9 +184,9 @@ export function formatUrdfJoint(
   tempEuler.setFromQuaternion(tempQuatA.fromArray(rotation), "ZYX");
   const rpy = [tempEuler.x, tempEuler.y, tempEuler.z];
   return [
-    `<joint name="${parent}_to_${child}" type="fixed">`,
-    `  <parent link="${parent}"/>`,
-    `  <child link="${child}"/>`,
+    `<joint name="${xmlAttr(`${parent}_to_${child}`)}" type="fixed">`,
+    `  <parent link="${xmlAttr(parent)}"/>`,
+    `  <child link="${xmlAttr(child)}"/>`,
     `  <origin xyz="${position.map(fmt).join(" ")}" rpy="${rpy.map(fmt).join(" ")}"/>`,
     `</joint>`,
   ].join("\n");
@@ -198,7 +203,7 @@ export function formatStaticTransformPublisher(
   return (
     `ros2 run tf2_ros static_transform_publisher --x ${x} --y ${y} --z ${z}` +
     ` --qx ${qx} --qy ${qy} --qz ${qz} --qw ${qw}` +
-    ` --frame-id ${parent} --child-frame-id ${child}`
+    ` --frame-id ${shellQuote(parent)} --child-frame-id ${shellQuote(child)}`
   );
 }
 
@@ -208,8 +213,8 @@ export function formatYaml(parent: string, child: string, position: Vec3, rotati
   const [qx, qy, qz, qw] = rotation.map(fmt);
   const [r, p, yaw] = quatToRpyDegrees(rotation).map(fmt);
   return [
-    `parent_frame: ${parent}`,
-    `child_frame: ${child}`,
+    `parent_frame: ${yamlString(parent)}`,
+    `child_frame: ${yamlString(child)}`,
     `translation: {x: ${x}, y: ${y}, z: ${z}}`,
     `rotation: {x: ${qx}, y: ${qy}, z: ${qz}, w: ${qw}}`,
     `# intrinsic XYZ Euler angles, degrees`,
