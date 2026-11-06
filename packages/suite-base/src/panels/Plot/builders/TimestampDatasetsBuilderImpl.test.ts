@@ -241,4 +241,52 @@ describe("TimestampDatasetsBuilderImpl", () => {
     // THEN the points in view plus one on each side are drawn
     expect(data.map((item) => item.x)).toEqual(range(10, 22));
   });
+
+  it("plots the spectrum of the samples in the analyzed time range", () => {
+    // GIVEN a 5 Hz sine sampled at 100 Hz for 2 s, then a 20 Hz sine for 2 s
+    const builder = build([seriesItem("0")]);
+    const xs = range(0, 400).map((i) => i / 100);
+    builder.applyAction({
+      type: "append-full",
+      series: key,
+      items: items(xs, (x) => Math.sin(2 * Math.PI * (x < 2 ? 5 : 20) * x)),
+    });
+
+    // WHEN analyzing only the first two seconds
+    const dataset = builder.getViewportDatasets({
+      ...viewport,
+      analysis: { mode: "fft", timeRange: { min: 0, max: 1.99 } },
+    })[0]!;
+
+    // THEN the peak is at 5 Hz and the tooltip names the frequency
+    const peak = dataset.data.reduce((a, b) => (b.y > a.y ? b : a));
+    expect(peak.x).toBeCloseTo(5, 0);
+    expect(peak.value).toMatch(/ @ 5(\.\d+)? Hz$/);
+    expect(dataset.showLine).toBe(true);
+    expect(dataset.pointRadius).toBe(0);
+  });
+
+  it("plots a histogram outline with the requested bin count", () => {
+    const builder = build([seriesItem("0")]);
+    builder.applyAction({
+      type: "append-full",
+      series: key,
+      items: items([1, 2, 3, 4], (x) => (x < 3 ? -1 : 1)),
+    });
+
+    const data = builder.getViewportDatasets({
+      ...viewport,
+      analysis: { mode: "histogram", bins: 2 },
+    })[0]!.data;
+
+    expect(data.map(({ x, y }) => [x, y])).toEqual([
+      [-1, 0],
+      [-1, 2],
+      [0, 2],
+      [0, 2],
+      [1, 2],
+      [1, 0],
+    ]);
+    expect(data[1]!.value).toBe("2 in [-1, 0]");
+  });
 });

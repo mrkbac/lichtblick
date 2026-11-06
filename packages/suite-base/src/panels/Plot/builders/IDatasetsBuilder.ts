@@ -67,6 +67,19 @@ export type Viewport = {
   };
   /** The pixel size of the viewport */
   size: Size;
+  /**
+   * Plot each series' spectrum or histogram instead of the series itself (time plots only). The
+   * x/y bounds above then are frequency/value and magnitude/count bounds.
+   */
+  analysis?: PlotAnalysis;
+};
+
+export type PlotAnalysis = {
+  mode: "fft" | "histogram";
+  /** Samples whose x (time) is in this range; all samples when undefined */
+  timeRange?: Partial<Bounds1D>;
+  /** Histogram bin count; automatic when undefined */
+  bins?: number;
 };
 
 export type CsvDataset = {

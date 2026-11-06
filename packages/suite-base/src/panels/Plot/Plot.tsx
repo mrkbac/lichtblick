@@ -44,6 +44,7 @@ import {
   TooltipStateSetter,
   ZoomMode,
 } from "@lichtblick/suite-base/panels/Plot/types";
+import { getPlotMode } from "@lichtblick/suite-base/panels/Plot/utils/config";
 import { MeasureModeToolbarButton } from "@lichtblick/suite-base/panels/shared/MeasureModeToolbarButton";
 import { createMeasureModeEscapeHandler } from "@lichtblick/suite-base/panels/shared/measureModeEscapeHandler";
 import useAppendOnlyKey from "@lichtblick/suite-base/panels/shared/useAppendOnlyKey";
@@ -60,6 +61,10 @@ import usePlotDataHandling from "./hooks/usePlotDataHandling";
 import usePlotPanelSettings from "./hooks/usePlotPanelSettings";
 import useRenderer from "./hooks/useRenderer";
 import useSubscriptions from "./hooks/useSubscriptions";
+
+/** The user's axis label, or the fallback when there is none */
+const labelOr = (label: string | undefined, fallback: string): string =>
+  label != undefined && label !== "" ? label : fallback;
 
 const Plot = (props: PlotProps): React.JSX.Element => {
   const { saveConfig, config } = props;
@@ -88,6 +93,19 @@ const Plot = (props: PlotProps): React.JSX.Element => {
   const [canvasDiv, setCanvasDiv] = useState<HTMLDivElement | null>(null);
   const [coordinator, setCoordinator] = useState<PlotCoordinator | undefined>(undefined);
   const shouldSync = config.isSynced;
+  const plotMode = getPlotMode(config);
+  // A spectrum or histogram names its axes unless the user did
+  const coordinatorConfig = useMemo(
+    () =>
+      plotMode === "time"
+        ? config
+        : {
+            ...config,
+            xAxisLabel: labelOr(config.xAxisLabel, t(plotMode === "fft" ? "frequencyHz" : "value")),
+            yAxisLabel: labelOr(config.yAxisLabel, t(plotMode === "fft" ? "amplitude" : "count")),
+          },
+    [config, plotMode, t],
+  );
   const renderer = useRenderer(canvasDiv, theme);
   const { globalVariables } = useGlobalVariables();
   const { topics, datatypes } = PanelAPI.useDataSourceInfo();
@@ -142,7 +160,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
     [config.paths],
   );
   const stableSeriesKey = useAppendOnlyKey(seriesValues);
-  const deltaMeasureModeResetKey = `${xAxisMode}|${config.xAxisPath?.value ?? ""}|${stableSeriesKey}`;
+  const deltaMeasureModeResetKey = `${xAxisMode}|${plotMode}|${config.xAxisPath?.value ?? ""}|${stableSeriesKey}`;
   const deltaMeasureMode = useDeltaMeasureMode({
     coordinator,
     renderer,
@@ -160,7 +178,12 @@ const Plot = (props: PlotProps): React.JSX.Element => {
     [deltaMeasureMode, onClick],
   );
   const isHoveringSelectablePoint = deltaMeasureMode.active && activeTooltip != undefined;
-  const rangeStats = useRangeStats(coordinator, deltaMeasureMode.markerA, deltaMeasureMode.markerB);
+  // Range statistics are over time; markers on a spectrum or histogram are not times
+  const rangeStats = useRangeStats(
+    plotMode === "time" ? coordinator : undefined,
+    deltaMeasureMode.markerA,
+    deltaMeasureMode.markerB,
+  );
 
   const toggleLegend = useCallback(() => {
     saveConfig({ showLegend: !showLegend });
@@ -223,7 +246,12 @@ const Plot = (props: PlotProps): React.JSX.Element => {
   }, [saveConfig, setMessagePathDropConfig]);
 
   useEffect(() => {
-    coordinator?.handleConfig(config, theme.palette.mode, globalVariables, resolveEnumNames);
+    coordinator?.handleConfig(
+      coordinatorConfig,
+      theme.palette.mode,
+      globalVariables,
+      resolveEnumNames,
+    );
 
     // When config changes (e.g., series reordering) and the player is paused,
     // we need to re-process the current player state to update the rendered data
@@ -232,7 +260,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
     }
   }, [
     coordinator,
-    config,
+    coordinatorConfig,
     globalVariables,
     resolveEnumNames,
     theme.palette.mode,
@@ -414,7 +442,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
             <VerticalBars
               coordinator={coordinator}
               hoverComponentId={subscriberId}
-              xAxisIsPlaybackTime={xAxisMode === "timestamp"}
+              xAxisIsPlaybackTime={xAxisMode === "timestamp" && plotMode === "time"}
             />
             <DeltaMarkerBars
               coordinator={coordinator}
@@ -423,7 +451,15 @@ const Plot = (props: PlotProps): React.JSX.Element => {
               markerB={deltaMeasureMode.markerB}
               colorsByDatasetIndex={colorsByDatasetIndex}
               deltaRowLabel={t("delta")}
-              xColumnLabel={xAxisMode === "timestamp" ? t("timestamp") : t("xAxis")}
+              xColumnLabel={
+                plotMode === "fft"
+                  ? t("frequencyHz")
+                  : plotMode === "histogram"
+                    ? t("value")
+                    : xAxisMode === "timestamp"
+                      ? t("timestamp")
+                      : t("xAxis")
+              }
               yColumnLabel={t("yAxis")}
               markerALabel={t("markerA")}
               markerBLabel={t("markerB")}

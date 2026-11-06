@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { getTimeWindow, isReferenceLinePlotPathType, PlotConfig } from "./config";
+import { getPlotMode, getTimeWindow, isReferenceLinePlotPathType, PlotConfig } from "./config";
 
 describe("isReferenceLinePlotPathType", () => {
   it.each(["0", "1.2", "1e6"])("returns true for '%s'", (value) => {
@@ -47,5 +47,19 @@ describe("getTimeWindow", () => {
 
   it("is automatic without any range settings", () => {
     expect(getTimeWindow(base)).toBe("automatic");
+  });
+});
+
+describe("getPlotMode", () => {
+  it("plots the time series on older layouts without a mode", () => {
+    expect(getPlotMode({ xAxisVal: "timestamp" })).toBe("time");
+  });
+
+  it("uses the configured mode on time plots", () => {
+    expect(getPlotMode({ xAxisVal: "timestamp", plotMode: "histogram" })).toBe("histogram");
+  });
+
+  it("ignores the mode when x is not time", () => {
+    expect(getPlotMode({ xAxisVal: "custom", plotMode: "fft" })).toBe("time");
   });
 });

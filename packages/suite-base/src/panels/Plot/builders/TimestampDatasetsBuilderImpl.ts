@@ -15,9 +15,16 @@ import {
 } from "@lichtblick/suite-base/components/TimeBasedChart/downsample";
 import type { Bounds1D } from "@lichtblick/suite-base/components/TimeBasedChart/types";
 
-import { CsvDataset, SeriesConfigKey, SeriesItem, Viewport } from "./IDatasetsBuilder";
+import {
+  CsvDataset,
+  PlotAnalysis,
+  SeriesConfigKey,
+  SeriesItem,
+  Viewport,
+} from "./IDatasetsBuilder";
 import { MAX_CURRENT_DATUMS_PER_SERIES, buildDatasetStyle } from "./utils";
 import { Dataset } from "../types";
+import { AnalysisColumns, computeHistogram, computeSpectrum } from "../utils/analysis";
 import { Datum, OriginalValue } from "../utils/datum";
 
 export type DataItem = Datum & {
@@ -268,6 +275,11 @@ export type UpdateDataAction =
   | UpdateSeriesCurrentAction
   | UpdateSeriesFullAction;
 
+type AnalysisResult = AnalysisColumns & { valueAt: (i: number) => OriginalValue };
+
+/** Four significant digits, without trailing zeros */
+const formatNumber = (value: number): string => String(Number(value.toPrecision(4)));
+
 const compareDatum = (a: Immutable<Datum>, b: Immutable<Datum>) => a.x - b.x;
 
 /** Cross-message modifiers whose first datum has no previous datum to compare against. */
@@ -373,10 +385,146 @@ function* iteratePoints(xs: Float64Array, ys: Float64Array, start: number, end: 
   }
 }
 
+/**
+ * Fill `dataset` with the rows of sorted columns that are in the viewport, downsampled to what the
+ * viewport can show. Rows before `firstIdx` are skipped. `fullLength` is the number of preloaded
+ * rows; a gap separates them from the current rows that follow.
+ */
+function downsampleInto(
+  dataset: Dataset,
+  xs: Float64Array,
+  ys: Float64Array,
+  count: number,
+  firstIdx: number,
+  fullLength: number,
+  valueAt: (i: number) => OriginalValue,
+  viewport: Immutable<Viewport>,
+): void {
+  // Trim the dataset down to the view area. Include one point on either side so it appears
+  // to extend out of the view area. Points are sorted by x.
+  const viewMin = viewport.bounds.x?.min;
+  const viewMax = viewport.bounds.x?.max;
+  const firstInView = viewMin != undefined ? lowerBound(xs, 0, count, viewMin) : 0;
+  const afterView = viewMax != undefined ? upperBound(xs, 0, count, viewMax) : count;
+  const startIdx = Math.max(firstIdx, firstInView - 1);
+  const endIdx = Math.min(afterView + 1, count);
+
+  const needBounds =
+    viewMin == undefined ||
+    viewMax == undefined ||
+    viewport.bounds.y?.min == undefined ||
+    viewport.bounds.y.max == undefined;
+  // Bounds skip the point before the view; plain locals keep this hot loop fast
+  // MIN_VALUE is the smallest positive number, so all-negative data needs -MAX_VALUE here
+  let xMin = Number.MAX_VALUE;
+  let xMax = -Number.MAX_VALUE;
+  let yMin = Number.MAX_VALUE;
+  let yMax = -Number.MAX_VALUE;
+  let hasNaN = false;
+  for (let i = startIdx; i < endIdx; i++) {
+    const y = ys[i]!;
+    if (Number.isNaN(y)) {
+      hasNaN = true;
+    } else if (needBounds && i >= firstInView) {
+      yMin = y < yMin ? y : yMin;
+      yMax = y > yMax ? y : yMax;
+    }
+    const x = xs[i]!;
+    if (needBounds && i >= firstInView && !Number.isNaN(x)) {
+      xMin = x < xMin ? x : xMin;
+      xMax = x > xMax ? x : xMax;
+    }
+  }
+
+  const downsampleViewport = {
+    width: viewport.size.width,
+    height: viewport.size.height,
+    bounds: {
+      x: { min: viewMin ?? xMin, max: viewMax ?? xMax },
+      y: {
+        min: viewport.bounds.y?.min ?? yMin,
+        max: viewport.bounds.y?.max ?? yMax,
+      },
+    },
+  };
+
+  // Each series gets its own budget: dividing a shared budget between series made plots with
+  // many series coarse and jittery. The downsampler also caps points by pixel width.
+  const maxPoints = MAX_POINTS;
+
+  // We already have fewer items than the viewport width so there's no need to downsample
+  //
+  // Points could still "overlap" but we don't care because we are under our threshold for
+  // the number of points we want to return for a dataset.
+  //
+  // This avoids situations where downsampling might resolve datums to the same pixel at
+  // different zoom levels (due to pixel rounding for datums) as we zoom in and cause us to
+  // remove data points and hide dots. This creates a counter-intuitive UX where dots can
+  // dissapear when zooming in.
+  const min = Math.min(downsampleViewport.width, maxPoints);
+  const numItems = Math.max(0, endIdx - startIdx);
+
+  let downsampledIndices: number[];
+  if (numItems < min) {
+    downsampledIndices = [];
+    for (let i = startIdx; i < endIdx; i++) {
+      downsampledIndices.push(i);
+    }
+  } else {
+    // first/min/max/last per pixel column keeps spikes, and every drawn point is a real
+    // sample, so tooltips on downsampled data show real values
+    downsampledIndices =
+      dataset.showLine === true
+        ? downsampleTimeseriesColumns(xs, ys, startIdx, endIdx, downsampleViewport, maxPoints)
+        : downsampleScatter(iteratePoints(xs, ys, startIdx, endIdx), downsampleViewport);
+  }
+
+  if (dataset.showLine === true && hasNaN && downsampledIndices.length < numItems) {
+    // Keep every gap so lines break where the data does
+    const downsampledIndexSet = new Set(downsampledIndices);
+    for (let i = startIdx; i < endIdx; i++) {
+      if (Number.isNaN(ys[i]!) && !downsampledIndexSet.has(i)) {
+        downsampledIndices.push(i);
+      }
+    }
+    downsampledIndices.sort((a, b) => a - b);
+  }
+
+  // When a series is downsampled the points are disabled as a visual indicator that
+  // data is downsampled.
+  //
+  // If show line is false then we must show points otherwise nothing will be displayed
+  if (downsampledIndices.length < numItems && dataset.showLine === true) {
+    dataset.pointRadius = 0;
+  }
+
+  // We only need to add the NaN entry if using lines and there is both full and current data
+  // to create a discontinuity after the full data.
+  let shouldAddNan = dataset.showLine === true && fullLength > 0;
+
+  for (const index of downsampledIndices) {
+    // Add a NaN entry to create a discontinuity between the full data and the current data and
+    // avoid the "long interpolated line" during preloading if the current playback head is
+    // later in the data
+    if (shouldAddNan && index >= fullLength) {
+      shouldAddNan = false;
+      dataset.data.push({ x: NaN, y: NaN, value: NaN });
+    }
+
+    dataset.data.push({ x: xs[index]!, y: ys[index]!, value: valueAt(index) });
+  }
+}
+
 export class TimestampDatasetsBuilderImpl {
   #seriesByKey = new Map<SeriesConfigKey, Series>();
+  /** Bumped on every data or series change; keys the analysis cache */
+  #dataVersion = 0;
+  #analysisCache?: { key: string; results: Map<SeriesConfigKey, AnalysisResult | undefined> };
 
   public getViewportDatasets(viewport: Immutable<Viewport>): Dataset[] {
+    if (viewport.analysis) {
+      return this.#getAnalysisDatasets(viewport, viewport.analysis);
+    }
     const datasets: Dataset[] = [];
     for (const series of this.#seriesByKey.values()) {
       if (!series.config.enabled) {
@@ -389,130 +537,98 @@ export class TimestampDatasetsBuilderImpl {
 
       datasets[series.config.configIndex] = dataset;
 
-      const { points } = series;
-      const count = points.length;
-      const xs = points.x;
       const ys = this.#getY(series);
-      const valueAt = this.#valueGetter(series, ys);
-
-      // The first datum has no previous datum, so it has no value
-      const firstIdx = NEEDS_PREVIOUS.includes(series.config.parsed.modifier ?? "") ? 1 : 0;
-
-      // Trim the dataset down to the view area. Include one point on either side so it appears
-      // to extend out of the view area. Points are sorted by x.
-      const viewMin = viewport.bounds.x?.min;
-      const viewMax = viewport.bounds.x?.max;
-      const firstInView = viewMin != undefined ? lowerBound(xs, 0, count, viewMin) : 0;
-      const afterView = viewMax != undefined ? upperBound(xs, 0, count, viewMax) : count;
-      const startIdx = Math.max(firstIdx, firstInView - 1);
-      const endIdx = Math.min(afterView + 1, count);
-
-      const needBounds =
-        viewMin == undefined ||
-        viewMax == undefined ||
-        viewport.bounds.y?.min == undefined ||
-        viewport.bounds.y.max == undefined;
-      // Bounds skip the point before the view; plain locals keep this hot loop fast
-      let xMin = Number.MAX_VALUE;
-      let xMax = Number.MIN_VALUE;
-      let yMin = Number.MAX_VALUE;
-      let yMax = Number.MIN_VALUE;
-      let hasNaN = false;
-      for (let i = startIdx; i < endIdx; i++) {
-        const y = ys[i]!;
-        if (Number.isNaN(y)) {
-          hasNaN = true;
-        } else if (needBounds && i >= firstInView) {
-          yMin = y < yMin ? y : yMin;
-          yMax = y > yMax ? y : yMax;
-        }
-        const x = xs[i]!;
-        if (needBounds && i >= firstInView && !Number.isNaN(x)) {
-          xMin = x < xMin ? x : xMin;
-          xMax = x > xMax ? x : xMax;
-        }
-      }
-
-      const downsampleViewport = {
-        width: viewport.size.width,
-        height: viewport.size.height,
-        bounds: {
-          x: { min: viewMin ?? xMin, max: viewMax ?? xMax },
-          y: {
-            min: viewport.bounds.y?.min ?? yMin,
-            max: viewport.bounds.y?.max ?? yMax,
-          },
-        },
-      };
-
-      // Each series gets its own budget: dividing a shared budget between series made plots with
-      // many series coarse and jittery. The downsampler also caps points by pixel width.
-      const maxPoints = MAX_POINTS;
-
-      // We already have fewer items than the viewport width so there's no need to downsample
-      //
-      // Points could still "overlap" but we don't care because we are under our threshold for
-      // the number of points we want to return for a dataset.
-      //
-      // This avoids situations where downsampling might resolve datums to the same pixel at
-      // different zoom levels (due to pixel rounding for datums) as we zoom in and cause us to
-      // remove data points and hide dots. This creates a counter-intuitive UX where dots can
-      // dissapear when zooming in.
-      const min = Math.min(downsampleViewport.width, maxPoints);
-      const numItems = Math.max(0, endIdx - startIdx);
-
-      let downsampledIndices: number[];
-      if (numItems < min) {
-        downsampledIndices = [];
-        for (let i = startIdx; i < endIdx; i++) {
-          downsampledIndices.push(i);
-        }
-      } else {
-        // first/min/max/last per pixel column keeps spikes, and every drawn point is a real
-        // sample, so tooltips on downsampled data show real values
-        downsampledIndices =
-          dataset.showLine === true
-            ? downsampleTimeseriesColumns(xs, ys, startIdx, endIdx, downsampleViewport, maxPoints)
-            : downsampleScatter(iteratePoints(xs, ys, startIdx, endIdx), downsampleViewport);
-      }
-
-      if (dataset.showLine === true && hasNaN && downsampledIndices.length < numItems) {
-        // Keep every gap so lines break where the data does
-        const downsampledIndexSet = new Set(downsampledIndices);
-        for (let i = startIdx; i < endIdx; i++) {
-          if (Number.isNaN(ys[i]!) && !downsampledIndexSet.has(i)) {
-            downsampledIndices.push(i);
-          }
-        }
-        downsampledIndices.sort((a, b) => a - b);
-      }
-
-      // When a series is downsampled the points are disabled as a visual indicator that
-      // data is downsampled.
-      //
-      // If show line is false then we must show points otherwise nothing will be displayed
-      if (downsampledIndices.length < numItems && dataset.showLine === true) {
-        dataset.pointRadius = 0;
-      }
-
-      // We only need to add the NaN entry if using lines and there is both full and current data
-      // to create a discontinuity after the full data.
-      let shouldAddNan = dataset.showLine === true && series.fullLength > 0;
-
-      for (const index of downsampledIndices) {
-        // Add a NaN entry to create a discontinuity between the full data and the current data and
-        // avoid the "long interpolated line" during preloading if the current playback head is
-        // later in the data
-        if (shouldAddNan && index >= series.fullLength) {
-          shouldAddNan = false;
-          dataset.data.push({ x: NaN, y: NaN, value: NaN });
-        }
-
-        dataset.data.push({ x: xs[index]!, y: ys[index]!, value: valueAt(index) });
-      }
+      downsampleInto(
+        dataset,
+        series.points.x,
+        ys,
+        series.points.length,
+        this.#firstIdx(series),
+        series.fullLength,
+        this.#valueGetter(series, ys),
+        viewport,
+      );
     }
 
     return datasets;
+  }
+
+  /** The first datum of a cross-message modifier has no previous datum, so it has no value */
+  #firstIdx(series: Series): number {
+    return NEEDS_PREVIOUS.includes(series.config.parsed.modifier ?? "") ? 1 : 0;
+  }
+
+  /** Spectrum or histogram lines; cached until data, series or analysis settings change. */
+  #getAnalysisDatasets(
+    viewport: Immutable<Viewport>,
+    analysis: Immutable<PlotAnalysis>,
+  ): Dataset[] {
+    const key = JSON.stringify([this.#dataVersion, analysis]) ?? "";
+    let cache = this.#analysisCache;
+    if (cache?.key !== key) {
+      cache = { key, results: new Map() };
+      this.#analysisCache = cache;
+    }
+    const { results } = cache;
+    const datasets: Dataset[] = [];
+    for (const series of this.#seriesByKey.values()) {
+      if (!series.config.enabled) {
+        continue;
+      }
+      if (!results.has(series.config.key)) {
+        results.set(series.config.key, this.#analyze(series, analysis));
+      }
+      const result = results.get(series.config.key);
+      const dataset: Dataset = {
+        ...buildDatasetStyle(series.config),
+        showLine: true,
+        stepped: false,
+        pointRadius: 0,
+        data: [],
+      };
+      datasets[series.config.configIndex] = dataset;
+      if (result) {
+        const { x, y, valueAt } = result;
+        downsampleInto(dataset, x, y, x.length, 0, 0, valueAt, viewport);
+      }
+    }
+    return datasets;
+  }
+
+  #analyze(series: Series, analysis: Immutable<PlotAnalysis>): AnalysisResult | undefined {
+    const ys = this.#getY(series);
+    const { x: xs, length } = series.points;
+    const min = analysis.timeRange?.min;
+    const max = analysis.timeRange?.max;
+    const start = Math.max(
+      this.#firstIdx(series),
+      min != undefined ? lowerBound(xs, 0, length, min) : 0,
+    );
+    const end = max != undefined ? upperBound(xs, 0, length, max) : length;
+
+    if (analysis.mode === "fft") {
+      const spectrum = computeSpectrum(xs, ys, start, end);
+      return (
+        spectrum && {
+          ...spectrum,
+          valueAt: (i) => `${formatNumber(spectrum.y[i]!)} @ ${formatNumber(spectrum.x[i]!)} Hz`,
+        }
+      );
+    }
+    const histogram = computeHistogram(ys, start, end, analysis.bins);
+    if (!histogram) {
+      return undefined;
+    }
+    const { edges, counts } = histogram;
+    return {
+      x: histogram.x,
+      y: histogram.y,
+      valueAt: (i) => {
+        // Outline points 2b+1 and 2b+2 are the top corners of bin b
+        const bin = Math.min(Math.max((i - 1) >> 1, 0), counts.length - 1);
+        return `${counts[bin]} in [${formatNumber(edges[bin]!)}, ${formatNumber(edges[bin + 1]!)}]`;
+      },
+    };
   }
 
   public getCsvData(xRange?: Immutable<Bounds1D>): CsvDataset[] {
@@ -634,6 +750,7 @@ export class TimestampDatasetsBuilderImpl {
   }
 
   public applyAction(action: Immutable<UpdateDataAction>): void {
+    this.#dataVersion += 1;
     switch (action.type) {
       case "reset-current": {
         const series = this.#seriesByKey.get(action.series);

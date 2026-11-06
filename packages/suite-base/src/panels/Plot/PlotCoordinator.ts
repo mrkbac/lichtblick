@@ -27,6 +27,7 @@ import { OffscreenCanvasRenderer } from "./OffscreenCanvasRenderer";
 import {
   CsvDataset,
   IDatasetsBuilder,
+  PlotAnalysis,
   SeriesConfigKey,
   SeriesItem,
   Viewport,
@@ -42,7 +43,13 @@ import {
   YScale,
   ZoomMode,
 } from "./types";
-import { getTimeWindow, isReferenceLinePlotPathType, PlotConfig } from "./utils/config";
+import {
+  getPlotMode,
+  getTimeWindow,
+  isReferenceLinePlotPathType,
+  PlotAnalysisRange,
+  PlotConfig,
+} from "./utils/config";
 import { getSeriesTimestamp } from "./utils/seriesTimestamp";
 import { pathToSubscribePayload } from "./utils/subscription";
 
@@ -83,6 +90,9 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   private shouldResetY = false;
   private updateAction: UpdateAction = { type: "update" };
   private isTimeseriesPlot: boolean = false;
+  /** FFT or histogram settings; undefined plots the time series. x/y then are frequency or value. */
+  private analysis?: Omit<PlotAnalysis, "timeRange">;
+  private analysisRange: PlotAnalysisRange = "visible";
   private currentSeconds?: number;
   private viewport: Viewport = {
     size: { width: 0, height: 0 },
@@ -263,6 +273,18 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       return;
     }
     this.isTimeseriesPlot = config.xAxisVal === "timestamp";
+    const plotMode = getPlotMode(config);
+    const analysis =
+      plotMode === "time"
+        ? undefined
+        : { mode: plotMode, bins: plotMode === "histogram" ? config.histogramBins : undefined };
+    if (analysis?.mode !== this.analysis?.mode) {
+      // Zoom on a time axis means nothing on a frequency or value axis, and vice versa
+      this.interactionBounds = undefined;
+      this.shouldResetY = true;
+    }
+    this.analysis = analysis;
+    this.analysisRange = config.analysisRange ?? "visible";
     if (!this.isTimeseriesPlot) {
       this.currentSeconds = undefined;
     }
@@ -273,7 +295,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
         ? (config.followingViewWidth ?? DEFAULT_SLIDING_WINDOW_SECONDS)
         : undefined;
     this.playheadCenter = config.playheadPosition === "center";
-    this.absoluteTimeTicks = this.isTimeseriesPlot && config.timestampFormat === "absolute";
+    this.absoluteTimeTicks =
+      this.isTimeseriesPlot && !this.analysis && config.timestampFormat === "absolute";
     this.updateTickFormat();
 
     const isPathXAxis = config.xAxisVal === "custom" || config.xAxisVal === "currentCustom";
@@ -292,17 +315,20 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
               min: config.minXValue,
             }
           : {},
-      y: {
-        max: config.maxYValue == undefined ? undefined : +config.maxYValue,
-        min: config.minYValue == undefined ? undefined : +config.minYValue,
-      },
+      // Configured y bounds are for the time series, not for magnitudes or counts
+      y: this.analysis
+        ? {}
+        : {
+            max: config.maxYValue == undefined ? undefined : +config.maxYValue,
+            min: config.minYValue == undefined ? undefined : +config.minYValue,
+          },
     };
     const configYBoundsChanged =
       this.configBounds.y.min !== newConfigBounds.y.min ||
       this.configBounds.y.max !== newConfigBounds.y.max;
     this.configBounds = newConfigBounds;
 
-    const newY2Bounds = { min: config.minY2Value, max: config.maxY2Value };
+    const newY2Bounds = this.analysis ? {} : { min: config.minY2Value, max: config.maxY2Value };
     if (!_.isEqual(newY2Bounds, this.configY2Bounds)) {
       this.configY2Bounds = newY2Bounds;
       this.updateAction.y2Bounds = newY2Bounds;
@@ -334,8 +360,9 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
 
     this.updateAction.showXAxisLabels = config.showXAxisLabels;
     this.updateAction.showYAxisLabels = config.showYAxisLabels;
-    this.updateAction.xAxisLabel = config.xAxisLabel;
-    this.updateAction.yAxisLabel = config.yAxisLabel;
+    // An empty label clears one shown before, e.g. a mode's default label after switching modes
+    this.updateAction.xAxisLabel = config.xAxisLabel ?? "";
+    this.updateAction.yAxisLabel = config.yAxisLabel ?? "";
     this.updateAction.referenceLines = referenceLines;
     this.updateAction.yLogScale = config.yAxisLogScale ?? false;
     this.updateAction.y2LogScale = config.y2AxisLogScale ?? false;
@@ -457,8 +484,11 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
 
   public setGlobalBounds(bounds: Immutable<Bounds1D> | undefined): void {
     this.globalBounds = bounds;
-    this.interactionBounds = undefined;
-    if (bounds == undefined) {
+    // Synced time bounds pick the analyzed window; the zoom of a spectrum or histogram stays
+    if (!this.analysis) {
+      this.interactionBounds = undefined;
+    }
+    if (bounds == undefined && !this.analysis) {
       // This happens when "reset view" is clicked in a different panel or otherwise cleared the global bounds
       this.shouldResetY = true;
     }
@@ -485,7 +515,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       return;
     }
     this.interactionBounds = bounds;
-    if (this.shouldSync && mode !== "y") {
+    if (this.shouldSync && mode !== "y" && !this.analysis) {
       this.emit("timeseriesBounds", bounds.x);
     }
     this.queueDispatchRender();
@@ -493,7 +523,10 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
 
   public resetBounds(): void {
     this.interactionBounds = undefined;
-    this.globalBounds = undefined;
+    // Resetting a spectrum or histogram zoom keeps the synced time window it analyzes
+    if (!this.analysis) {
+      this.globalBounds = undefined;
+    }
     this.shouldResetY = true;
     this.queueDispatchRender();
   }
@@ -556,7 +589,10 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     // (file playback) never changes the dataset range, so nothing else would re-render the axis
     // and it would stay where the panel was first drawn. A zoomed/panned or synced x-axis does not
     // follow the time, so there is nothing to re-render then.
-    if (this.followRange != undefined && moved && !this.interactionBounds && !this.globalBounds) {
+    const zoomed = this.analysis
+      ? this.analysisRange === "all"
+      : this.interactionBounds != undefined;
+    if (this.followRange != undefined && moved && !zoomed && !this.globalBounds) {
       this.queueDispatchRender();
     }
   }
@@ -574,6 +610,9 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   private canReset(): boolean {
     if (this.interactionBounds) {
       return true;
+    }
+    if (this.analysis) {
+      return false;
     }
 
     if (this.globalBounds) {
@@ -601,11 +640,30 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   }
 
   private getXBounds(): Partial<Bounds1D> {
+    if (this.analysis) {
+      return { min: this.interactionBounds?.x.min, max: this.interactionBounds?.x.max };
+    }
     const resetBounds = this.getXResetBounds();
     return {
       min: this.interactionBounds?.x.min ?? this.globalBounds?.min ?? resetBounds.min,
       max: this.interactionBounds?.x.max ?? this.globalBounds?.max ?? resetBounds.max,
     };
+  }
+
+  /** The analyzed samples: the time window a time plot would show, or everything */
+  private getAnalysis(): PlotAnalysis | undefined {
+    if (!this.analysis) {
+      return undefined;
+    }
+    if (this.analysisRange === "all") {
+      return this.analysis;
+    }
+    const resetBounds = this.getXResetBounds();
+    const timeRange = {
+      min: this.globalBounds?.min ?? resetBounds.min,
+      max: this.globalBounds?.max ?? resetBounds.max,
+    };
+    return { ...this.analysis, timeRange };
   }
 
   private async dispatchRender(): Promise<void> {
@@ -636,7 +694,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       this.interactionBounds = bounds;
     }
 
-    if (haveInteractionEvents && bounds && this.shouldSync) {
+    if (haveInteractionEvents && bounds && this.shouldSync && !this.analysis) {
       this.emit("timeseriesBounds", bounds.x);
     }
 
@@ -645,9 +703,15 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     // The viewport has changed from some render interactions so we need to consider new datasets
     const x = this.getXBounds();
     const y = this.interactionBounds?.y ?? this.configBounds.y;
-    if (!_.isEqual(this.viewport.bounds.x, x) || !_.isEqual(this.viewport.bounds.y, y)) {
+    const analysis = this.getAnalysis();
+    if (
+      !_.isEqual(this.viewport.bounds.x, x) ||
+      !_.isEqual(this.viewport.bounds.y, y) ||
+      !_.isEqual(this.viewport.analysis, analysis)
+    ) {
       this.viewport.bounds.x = x;
       this.viewport.bounds.y = y;
+      this.viewport.analysis = analysis;
       this.queueDispatchDownsample();
     }
   }

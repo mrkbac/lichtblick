@@ -11,6 +11,7 @@ import { DEFAULT_SLIDING_WINDOW_SECONDS } from "@lichtblick/suite-base/panels/Pl
 import { DEFAULT_PLOT_PATH } from "@lichtblick/suite-base/panels/Plot/constants";
 import { MakeRootSeriesNode, MakeSeriesNode } from "@lichtblick/suite-base/panels/Plot/types";
 import {
+  getPlotMode,
   getTimeWindow,
   isReferenceLinePlotPathType,
   PlotConfig,
@@ -270,6 +271,7 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
       label: t("general"),
       fields: {
         isSynced: { label: t("syncWithOtherPlots"), input: "boolean", value: config.isSynced },
+        ...plotModeFields(config, t),
       },
     },
     legend: {
@@ -420,6 +422,49 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
       supportsStreamModifiers: config.xAxisVal === "timestamp",
       t,
       xAxisVal: config.xAxisVal,
+    }),
+  };
+}
+
+/** Time plots can show each series' frequency spectrum or value histogram instead */
+function plotModeFields(config: PlotConfig, t: MakeSeriesNode["t"]): SettingsTreeFields {
+  if (config.xAxisVal !== "timestamp") {
+    return {};
+  }
+  const plotMode = getPlotMode(config);
+  return {
+    plotMode: {
+      label: t("display"),
+      input: "select",
+      value: plotMode,
+      options: [
+        { label: t("timeSeries"), value: "time" },
+        { label: t("frequencySpectrum"), value: "fft" },
+        { label: t("histogram"), value: "histogram" },
+      ],
+    },
+    ...(plotMode !== "time" && {
+      analysisRange: {
+        label: t("analyzedData"),
+        input: "select",
+        value: config.analysisRange ?? "visible",
+        options: [
+          { label: t("visibleTimeWindow"), value: "visible" },
+          { label: t("allLoadedData"), value: "all" },
+        ],
+      },
+    }),
+    ...(plotMode === "histogram" && {
+      histogramBins: {
+        label: t("histogramBins"),
+        input: "number",
+        value: config.histogramBins,
+        min: 1,
+        max: 10_000,
+        step: 1,
+        precision: 0,
+        placeholder: "auto",
+      },
     }),
   };
 }
