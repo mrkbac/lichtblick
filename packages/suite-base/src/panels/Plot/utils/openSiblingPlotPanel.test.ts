@@ -69,4 +69,14 @@ describe("openSiblingPlotPanel", () => {
 
     openSiblingPlotPanel(openSiblingPanel, topicName);
   });
+
+  it("adds several paths at once", () => {
+    const config = PlotBuilder.config({ paths: [] });
+    openSiblingPanel.mockImplementation(({ siblingConfigCreator }) => {
+      const updatedConfig = siblingConfigCreator(config) as typeof config;
+      expect(updatedConfig.paths.map((path) => path.value)).toEqual(["/a.x", "/a.y"]);
+    });
+
+    openSiblingPlotPanel(openSiblingPanel, ["/a.x", "/a.y"]);
+  });
 });

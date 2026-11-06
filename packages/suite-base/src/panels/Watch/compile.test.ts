@@ -144,7 +144,7 @@ describe("childPaths", () => {
 });
 
 describe("pathsForEnter", () => {
-  const enter = { shiftKey: false, picked: false };
+  const enter = { shiftKey: false };
 
   it("adds the typed path, or with Shift every field below it", () => {
     expect(pathsForEnter(" /state.speed ", enter, schema)).toEqual(["/state.speed"]);
@@ -162,11 +162,5 @@ describe("pathsForEnter", () => {
     // Topics without a known schema can still be watched
     expect(pathsForEnter("/later.value", enter, schema)).toEqual(["/later.value"]);
     expect(pathsForEnter("/noschema.value", enter, schema)).toEqual(["/noschema.value"]);
-  });
-
-  it("after picking a suggestion, adds only a finished field", () => {
-    const picked = { shiftKey: false, picked: true };
-    expect(pathsForEnter("/state.speed", picked, schema)).toEqual(["/state.speed"]);
-    expect(pathsForEnter("/imu.orientation", picked, schema)).toBeUndefined();
   });
 });

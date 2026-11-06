@@ -31,7 +31,7 @@ import { enumValuesByDatatypeAndField } from "@lichtblick/suite-base/util/enums"
 import { useStyles } from "./Watch.style";
 import { Painters, RowAction, WatchRowView, isCompositionEnter } from "./WatchRowView";
 import { Playback, WatchStore, createPlaybackClock } from "./WatchStore";
-import { compileRows, pathsForEnter, subscriptionsFor } from "./compile";
+import { childPaths, compileRows, pathsForEnter, subscriptionsFor } from "./compile";
 import { DEFAULT_CONFIG, WatchConfig, migrateConfig, newRow, parsePastedPaths } from "./config";
 import { copyText } from "./format";
 import { createFrameScheduler } from "./frameScheduler";
@@ -230,8 +230,10 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
       }
       switch (action) {
         case "openInPlot":
+          // A message plots every field below it, e.g. roll, pitch and yaw of `.@rpy`
           if (!invalid.has(id) && row.path !== "") {
-            openSiblingPlotPanel(openSiblingPanel, row.path);
+            const fields = childPaths(row.path, schema);
+            openSiblingPlotPanel(openSiblingPanel, fields.length > 0 ? fields : row.path);
           }
           break;
         case "copy":
@@ -253,7 +255,21 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
           break;
       }
     },
-    [enqueueSnackbar, invalid, openSiblingPanel, rows, store, t, updateConfig],
+    [enqueueSnackbar, invalid, openSiblingPanel, rows, schema, store, t, updateConfig],
+  );
+
+  // Pull a field out of an expanded row into its own row below it; with Shift every field below
+  const onAddPath = useCallback(
+    (afterId: string, path: string, { shiftKey }: { shiftKey: boolean }) => {
+      const children = shiftKey ? childPaths(path, schema) : [];
+      const added = (children.length > 0 ? children : [path]).map(newRow);
+      updateConfig((prev) => {
+        const next = [...prev.rows];
+        next.splice(next.findIndex((item) => item.id === afterId) + 1, 0, ...added);
+        return { ...prev, rows: next };
+      });
+    },
+    [schema, updateConfig],
   );
 
   // Reorder by dragging rows
@@ -277,7 +293,7 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
   }, []);
   // The add button works like Enter
   const submitDraft = useCallback(() => {
-    const paths = pathsForEnter(draftRef.current, { shiftKey: false, picked: false }, schema);
+    const paths = pathsForEnter(draftRef.current, { shiftKey: false }, schema);
     if (paths) {
       addPaths(paths);
       setDraft("");
@@ -288,12 +304,13 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
       if (event.key !== "Enter" || isCompositionEnter(event)) {
         return;
       }
-      // A prevented Enter picked an autocomplete suggestion
-      const paths = pathsForEnter(
-        draftRef.current,
-        { shiftKey: event.shiftKey, picked: event.defaultPrevented },
-        schema,
-      );
+      // A prevented Enter picked an autocomplete suggestion: it only fills the input, which the
+      // pick blurred. The next Enter adds.
+      if (event.defaultPrevented) {
+        (event.target as HTMLElement).focus();
+        return;
+      }
+      const paths = pathsForEnter(draftRef.current, { shiftKey: event.shiftKey }, schema);
       if (paths) {
         event.preventDefault();
         addPaths(paths);
@@ -352,6 +369,7 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
             schema={schema}
             onEditDone={onEditDone}
             onAction={onAction}
+            onAddPath={onAddPath}
             onDragOverRow={setDropTarget}
             onDropRow={onDropRow}
           />
