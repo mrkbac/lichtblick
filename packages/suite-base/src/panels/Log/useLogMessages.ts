@@ -72,6 +72,8 @@ function mergeTwo(
 }
 
 const selectPlayerId = (ctx: MessagePipelineContext) => ctx.playerState.playerId;
+const selectLastSeekTime = (ctx: MessagePipelineContext) =>
+  ctx.playerState.activeData?.lastSeekTime;
 const selectReady = (ctx: MessagePipelineContext) =>
   ctx.playerState.presence === PlayerPresence.PRESENT ||
   ctx.playerState.presence === PlayerPresence.BUFFERING;
@@ -224,10 +226,33 @@ export function useLogMessages(topics: readonly string[]): {
     return live.length > 0 ? live : EMPTY;
   }, [topics, rangeByTopic]);
 
-  const liveByTopic = useMessagesByTopic({
+  const latestLiveByTopic = useMessagesByTopic({
     topics: liveTopics,
     historySize: LIVE_HISTORY_SIZE,
   });
+  // Re-merging and re-filtering the whole live history per message batch is costly, so take
+  // live updates at most every FLUSH_INTERVAL_MS (right away after a quiet period).
+  // A seek or topic change replaces the history, so show that right away.
+  const lastSeekTime = useMessagePipeline(selectLastSeekTime);
+  const [liveByTopic, setLiveByTopic] = useState(latestLiveByTopic);
+  const lastLiveFlushRef = useRef({ at: 0, liveTopics, lastSeekTime });
+  useEffect(() => {
+    if (latestLiveByTopic === liveByTopic) {
+      return;
+    }
+    const last = lastLiveFlushRef.current;
+    const reset = last.liveTopics !== liveTopics || last.lastSeekTime !== lastSeekTime;
+    const timer = setTimeout(
+      () => {
+        lastLiveFlushRef.current = { at: Date.now(), liveTopics, lastSeekTime };
+        setLiveByTopic(latestLiveByTopic);
+      },
+      reset ? 0 : Math.max(0, last.at + FLUSH_INTERVAL_MS - Date.now()),
+    );
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [latestLiveByTopic, liveByTopic, liveTopics, lastSeekTime]);
 
   const items = useMemo(() => {
     const arrays: (readonly NormalizedLogMessage[])[] = [];

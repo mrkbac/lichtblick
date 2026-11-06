@@ -11,6 +11,7 @@ import AutoSizingCanvas from "@lichtblick/suite-base/components/AutoSizingCanvas
 import {
   MessagePipelineContext,
   useMessagePipeline,
+  useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 
 import { LogLevel, NormalizedLogMessage } from "./types";
@@ -39,8 +40,27 @@ const useStyles = makeStyles()((theme) => ({
 }));
 
 const selectStartTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
-const selectEndTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
+/**
+ * Duration rounded up to a power-of-two step of at most 1/1024 of it, so a live source's growing
+ * end time redraws only when columns could actually shift (by under one at 1024 px), not every tick.
+ * Exported for tests.
+ */
+export function roundUpDuration(durationSec: number): number {
+  if (durationSec <= 0) {
+    return 0;
+  }
+  const step = 2 ** Math.floor(Math.log2(durationSec / 1024));
+  return Math.ceil(durationSec / step) * step;
+}
+
+const selectDurationSec = (ctx: MessagePipelineContext) => {
+  const { startTime, endTime } = ctx.playerState.activeData ?? {};
+  return roundUpDuration(startTime && endTime ? toSec(subtractTimes(endTime, startTime)) : 0);
+};
 const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
+const selectEndTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
+const exactDurationSec = (start: Time, end: Time | undefined) =>
+  end ? toSec(subtractTimes(end, start)) : 0;
 
 /**
  * Highest log level per horizontal pixel column, for items in [start, start + duration].
@@ -69,9 +89,11 @@ export function binLevels(
   return bins;
 }
 
-function Playhead({ start, durationSec }: { start: Time; durationSec: number }) {
+function Playhead({ start }: { start: Time }) {
   const { classes } = useStyles();
   const currentTime = useMessagePipeline(selectCurrentTime);
+  // Re-renders every tick anyway, so position it with the exact duration
+  const durationSec = exactDurationSec(start, useMessagePipeline(selectEndTime));
   if (currentTime == undefined) {
     return null;
   }
@@ -93,8 +115,9 @@ export function SeverityTimeline({
   const { classes, cx } = useStyles();
   const { palette } = useTheme();
   const start = useMessagePipeline(selectStartTime);
-  const end = useMessagePipeline(selectEndTime);
-  const durationSec = start && end ? toSec(subtractTimes(end, start)) : 0;
+  // Rounded so live sources redraw only when columns move; seeking and the playhead use the exact end
+  const durationSec = useMessagePipeline(selectDurationSec);
+  const getPipeline = useMessagePipelineGetter();
 
   const draw = useCallback(
     (ctx: CanvasRenderingContext2D, width: number, height: number) => {
@@ -130,9 +153,10 @@ export function SeverityTimeline({
       }
       const rect = event.currentTarget.getBoundingClientRect();
       const fraction = Math.min(1, Math.max(0, (event.clientX - rect.left) / rect.width));
-      onSeek(addTimes(start, fromSec(fraction * durationSec)));
+      const exactSec = exactDurationSec(start, selectEndTime(getPipeline()));
+      onSeek(addTimes(start, fromSec(fraction * exactSec)));
     },
-    [onSeek, start, durationSec],
+    [onSeek, start, getPipeline],
   );
 
   if (!start || durationSec <= 0) {
@@ -146,7 +170,7 @@ export function SeverityTimeline({
       data-testid="log-severity-timeline"
     >
       <AutoSizingCanvas draw={draw} />
-      <Playhead start={start} durationSec={durationSec} />
+      <Playhead start={start} />
     </div>
   );
 }
