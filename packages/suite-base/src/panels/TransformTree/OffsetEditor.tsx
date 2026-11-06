@@ -52,7 +52,7 @@ const roundTo = (values: Readonly<Vec3>, digits: number): Vec3 =>
 export function RotationConventionInfo({ text }: { text: string }): React.JSX.Element {
   const { classes } = useStyles();
   return (
-    <Tooltip title={<span style={{ whiteSpace: "pre-line" }}>{text}</span>}>
+    <Tooltip title={<span className={classes.multiline}>{text}</span>}>
       <span className={classes.infoIcon} role="img" aria-label={text}>
         <Info16Regular />
       </span>

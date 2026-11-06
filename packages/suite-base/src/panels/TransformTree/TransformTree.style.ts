@@ -98,6 +98,10 @@ export const useStyles = makeStyles()((theme) => ({
   staticBadge: {
     color: theme.palette.text.secondary,
   },
+  /** Tooltip text with one item per line */
+  multiline: {
+    whiteSpace: "pre-line",
+  },
   warningIcon: {
     color: theme.palette.warning.main,
     display: "inline-flex",

@@ -124,8 +124,8 @@ function formatDuration(seconds: number): string {
 function WarningIcon({ text }: { text: string }): React.JSX.Element {
   const { classes } = useStyles();
   return (
-    <Tooltip title={<span style={{ whiteSpace: "pre-line" }}>{text}</span>}>
-      <span className={classes.warningIcon} role="img" aria-label={text}>
+    <Tooltip title={<span className={classes.multiline}>{text}</span>}>
+      <span className={classes.warningIcon} role="img" aria-label={text} tabIndex={0}>
         <Warning16Filled />
       </span>
     </Tooltip>
@@ -364,14 +364,14 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
           )}
           {rootCount > 1 && (
             <Tooltip title={roots.join(", ")}>
-              <span className={classes.warningText}>
+              <span className={classes.warningText} tabIndex={0}>
                 <Warning16Filled /> {t("multipleRoots", { count: rootCount })}
               </span>
             </Tooltip>
           )}
           {warningCount > 0 && (
-            <Tooltip title={<span style={{ whiteSpace: "pre-line" }}>{warningDetails}</span>}>
-              <span className={classes.warningText}>
+            <Tooltip title={<span className={classes.multiline}>{warningDetails}</span>}>
+              <span className={classes.warningText} tabIndex={0}>
                 <Warning16Filled /> {t("warningCount", { count: warningCount })}
               </span>
             </Tooltip>
@@ -596,10 +596,7 @@ const FrameTableRow = memo(function FrameTableRowImpl({
           ) : (
             <span className={classes.togglePlaceholder} />
           )}
-          <Tooltip
-            title={<span style={{ whiteSpace: "pre-line" }}>{details}</span>}
-            placement="right"
-          >
+          <Tooltip title={<span className={classes.multiline}>{details}</span>} placement="right">
             <span
               className={cx(classes.frameName, {
                 [classes.root]: !entry,

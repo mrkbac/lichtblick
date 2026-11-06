@@ -70,7 +70,7 @@ describe("OffsetEditor", () => {
     const { onChange } = setup({ xyz: [0.5, 0, 0], rpy: [0, 0, 0] });
     const input = screen.getByLabelText("Offset x (m)");
 
-    // When / Then
+    // When / Then: onChange is a mock, so each key steps from the shown 0.5
     fireEvent.keyDown(input, { key: "ArrowUp" });
     expect((onChange.mock.lastCall?.[0] as FrameOffset).xyz[0]).toBeCloseTo(0.501, 6);
     fireEvent.keyDown(input, { key: "ArrowDown", shiftKey: true });
