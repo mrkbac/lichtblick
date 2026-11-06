@@ -111,12 +111,15 @@ export function pathsForEnter(
 ): string[] | undefined {
   const trimmed = path.trim();
   const parsed = parseMessagePath(trimmed);
-  // A half-typed path like `/topic.field.` would only add a broken row. Topics that are not
-  // known yet (e.g. not published so far) can't be checked, so any parsed path is fine there.
-  if (
-    !parsed ||
-    (schema.schemaNames.has(parsed.topicName) && structureAt(trimmed, schema) == undefined)
-  ) {
+  // A half-typed path like `/topic.field.` would only add a broken row. Topics without a known
+  // schema (not published so far, no schema name, unknown datatype) can't be checked, so any
+  // parsed path is fine there.
+  if (!parsed) {
+    return undefined;
+  }
+  const schemaName = schema.schemaNames.get(parsed.topicName);
+  const known = schemaName != undefined && schema.structures[schemaName] != undefined;
+  if (known && structureAt(trimmed, schema) == undefined) {
     return undefined;
   }
   if (shiftKey) {

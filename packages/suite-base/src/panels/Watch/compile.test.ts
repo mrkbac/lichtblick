@@ -41,6 +41,7 @@ const schema: Schema = {
   schemaNames: new Map([
     ["/state", "example/State"],
     ["/imu", "example/Imu"],
+    ["/noschema", ""],
   ]),
 };
 
@@ -158,8 +159,9 @@ describe("pathsForEnter", () => {
     expect(pathsForEnter("/state.speed.@derivative", enter, schema)).toEqual([
       "/state.speed.@derivative",
     ]);
-    // Topics that are not known yet can still be watched
+    // Topics without a known schema can still be watched
     expect(pathsForEnter("/later.value", enter, schema)).toEqual(["/later.value"]);
+    expect(pathsForEnter("/noschema.value", enter, schema)).toEqual(["/noschema.value"]);
   });
 
   it("after picking a suggestion, adds only a finished field", () => {

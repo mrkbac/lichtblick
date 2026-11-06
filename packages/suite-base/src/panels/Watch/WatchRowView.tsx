@@ -103,7 +103,7 @@ function PathEditor({
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           finish(undefined);
-        } else if (event.key === "Enter") {
+        } else if (event.key === "Enter" && !event.nativeEvent.isComposing) {
           // A prevented Enter picked an autocomplete suggestion
           const paths = pathsForEnter(
             pathRef.current,
@@ -117,10 +117,14 @@ function PathEditor({
         }
       }}
       onBlur={(event) => {
-        // Clicking away keeps the edit; an emptied path cancels it
+        // Clicking away keeps a changed path that Enter would accept; anything else cancels
         if (!event.currentTarget.contains(event.relatedTarget)) {
           const trimmed = pathRef.current.trim();
-          finish(trimmed === "" ? undefined : [trimmed]);
+          finish(
+            trimmed === initialPath
+              ? undefined
+              : pathsForEnter(trimmed, { shiftKey: false, picked: false }, schema),
+          );
         }
       }}
     >

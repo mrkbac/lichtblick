@@ -285,7 +285,8 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
   }, [addPaths, schema, setDraft]);
   const onKeyDown = useCallback(
     (event: React.KeyboardEvent) => {
-      if (event.key !== "Enter") {
+      // Enter that confirms an IME composition is not a submit
+      if (event.key !== "Enter" || event.nativeEvent.isComposing) {
         return;
       }
       // A prevented Enter picked an autocomplete suggestion
