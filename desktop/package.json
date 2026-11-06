@@ -4,6 +4,6 @@
   "devDependencies": {
     "@lichtblick/suite-base": "workspace:*",
     "@lichtblick/suite-desktop": "workspace:*",
-    "@rspack/core": "2.3.0"
+    "@rspack/core": "2.3.1"
   }
 }

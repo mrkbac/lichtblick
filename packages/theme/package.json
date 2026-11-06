@@ -21,7 +21,7 @@
     "@mui/x-data-grid": "9.17.0",
     "@types/react": "19.3.0",
     "react": "19.3.1",
-    "storybook-react-rsbuild": "3.6.1",
+    "storybook-react-rsbuild": "3.6.2",
     "typescript": "6.0.3"
   }
 }
