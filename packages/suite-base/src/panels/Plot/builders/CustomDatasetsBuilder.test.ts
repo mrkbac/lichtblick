@@ -116,6 +116,20 @@ describe("CustomDatasetsBuilder", () => {
     ]);
   });
 
+  it("fits the x range to all-negative x values", () => {
+    // GIVEN x path values from -5 to -2
+    const builder = new CustomDatasetsBuilder();
+    builder.setXPath(unwrap(parseMessagePath("/pose.x")));
+    builder.setSeries(buildSeriesItems([{ value: "/pose.y" }]));
+    builder.handleMessageRange(
+      poseMessages(0, 4).map((event) => ({ ...event, message: { x: event.message.x - 5, y: 0 } })),
+      { isReset: true },
+    );
+
+    // THEN the range ends at the largest x, not at 0
+    expect(builder.handlePlayerState(buildPlayerState())?.range).toEqual({ min: -5, max: -2 });
+  });
+
   it("reads y series from the x-axis topic's range batches too", async () => {
     // GIVEN a panel x path on the same topic as the series
     const builder = new CustomDatasetsBuilder();
