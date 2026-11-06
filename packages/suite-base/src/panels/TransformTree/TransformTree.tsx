@@ -333,7 +333,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
   const staticCount = [...known.values()].filter((entry) => staticTopics.has(entry.topic)).length;
   const rootCount = roots.length;
   const maxDepth = rows.reduce((max, row) => Math.max(max, row.depth), 0);
-  const warningCount = allRows.filter((row) => row.warnings.length > 0).length;
+  const warningCount = allRows.reduce((sum, row) => sum + row.warnings.length, 0);
   const warningDetails = allRows
     .flatMap((row) =>
       row.warnings.map((warning) => `${row.frame}: ${warningMessage(t, row, warning)}`),
@@ -363,14 +363,17 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
             <span>{t("notYetPublishedCount", { count: notYetPublishedCount })}</span>
           )}
           {rootCount > 1 && (
-            <Tooltip title={roots.join(", ")}>
+            <Tooltip describeChild title={roots.join(", ")}>
               <span className={classes.warningText} tabIndex={0}>
                 <Warning16Filled /> {t("multipleRoots", { count: rootCount })}
               </span>
             </Tooltip>
           )}
           {warningCount > 0 && (
-            <Tooltip title={<span className={classes.multiline}>{warningDetails}</span>}>
+            <Tooltip
+              describeChild
+              title={<span className={classes.multiline}>{warningDetails}</span>}
+            >
               <span className={classes.warningText} tabIndex={0}>
                 <Warning16Filled /> {t("warningCount", { count: warningCount })}
               </span>
