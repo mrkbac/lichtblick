@@ -364,7 +364,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
           )}
           {rootCount > 1 && (
             <Tooltip describeChild title={roots.join(", ")}>
-              <span className={classes.warningText} tabIndex={0}>
+              <span className={classes.warningText} role="note" tabIndex={0}>
                 <Warning16Filled /> {t("multipleRoots", { count: rootCount })}
               </span>
             </Tooltip>
@@ -374,7 +374,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
               describeChild
               title={<span className={classes.multiline}>{warningDetails}</span>}
             >
-              <span className={classes.warningText} tabIndex={0}>
+              <span className={classes.warningText} role="note" tabIndex={0}>
                 <Warning16Filled /> {t("warningCount", { count: warningCount })}
               </span>
             </Tooltip>
