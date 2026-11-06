@@ -24,7 +24,6 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useLongPress } from "react-use";
-import tc from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 
 import { LayoutActions } from "@lichtblick/suite";
@@ -37,6 +36,7 @@ import PublishPointIcon from "@lichtblick/suite-base/components/PublishPointIcon
 import PublishPoseEstimateIcon from "@lichtblick/suite-base/components/PublishPoseEstimateIcon";
 import { usePanelMousePresence } from "@lichtblick/suite-base/hooks/usePanelMousePresence";
 import { HUD } from "@lichtblick/suite-base/panels/ThreeDeeRender/HUD";
+import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 import { customTypography } from "@lichtblick/theme";
 
 import { InteractionContextMenu, Interactions, SelectionObject, TabType } from "./Interactions";
@@ -95,7 +95,7 @@ const useStyles = makeStyles()((theme) => ({
   },
   kbd: {
     fontFamily: customTypography.fontMonospace,
-    background: tc(theme.palette.common.white).darken(45).toString(),
+    background: parseColor(theme.palette.common.white).darken(0.45).toHex(),
     padding: theme.spacing(0, 0.5),
     aspectRatio: 1,
     borderRadius: theme.shape.borderRadius,

@@ -52,6 +52,7 @@ export default {
 // Connection
 const playerSelection: PlayerSelection = {
   selectSource: () => {},
+  closeSource: () => {},
   selectRecent: () => {},
   removeRecent: () => {},
   togglePinRecent: () => {},

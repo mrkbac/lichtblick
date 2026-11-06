@@ -29,6 +29,8 @@ export const appBar = {
   networkStatusOfflineDescription:
     "You are currently offline. Remote features like layouts, extensions and MCAP files from namespace '{{namespace}}' may not work properly. Please check your internet connection.",
   networkStatusOnline: "Online",
+  closeDataSource: "Close data source",
+  disconnect: "Disconnect",
   noDataSource: "No data source",
   open: "Open…",
   openConnection: "Open connection…",

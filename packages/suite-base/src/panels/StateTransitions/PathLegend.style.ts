@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 import { buttonClasses } from "@mui/material";
-import tinycolor from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
+
+import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 
 export default makeStyles()((theme) => ({
   chartOverlay: {
@@ -30,7 +31,7 @@ export default makeStyles()((theme) => ({
     maxWidth: "100%",
 
     [`.${buttonClasses.root}`]: {
-      backgroundColor: tinycolor(theme.palette.background.paper).setAlpha(0.67).toString(),
+      backgroundColor: parseColor(theme.palette.background.paper).alpha(0.67).toRgbString(),
       paddingBlock: theme.spacing(0.25),
       borderColor: theme.palette.background.paper,
 
