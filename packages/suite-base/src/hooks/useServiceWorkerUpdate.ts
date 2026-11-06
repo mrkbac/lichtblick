@@ -37,12 +37,26 @@ export async function checkForServiceWorkerUpdate(): Promise<boolean> {
       onStateChange(); // it may have finished installing before the listener was attached
     });
   }
-  return registration.waiting != undefined && navigator.serviceWorker.controller != undefined;
+  // `active` (not this page's `controller`, null after a force refresh) tells an update from a first install
+  return registration.waiting != undefined && registration.active != undefined;
+}
+
+/**
+ * Activate a waiting worker. Controlled windows reload on controllerchange (see below); a
+ * force-refreshed window has no controller, so it reloads itself once the worker is active.
+ */
+export function applyServiceWorkerUpdate(worker: ServiceWorker): void {
+  worker.addEventListener("statechange", () => {
+    if (worker.state === "activated" && !navigator.serviceWorker.controller) {
+      window.location.reload();
+    }
+  });
+  worker.postMessage({ type: "SKIP_WAITING" });
 }
 
 /**
  * Returns the installed-and-waiting new service worker, if any. Never applies it on its own:
- * post `{ type: "SKIP_WAITING" }` to it to update. Once it takes over, every open window reloads
+ * pass it to applyServiceWorkerUpdate to update. Once it takes over, every open window reloads
  * (on controllerchange) because the old precache is deleted and lazy chunks would fail to load.
  * The reload restores the session: layout (local storage), data source and time (URL), and the
  * open file (session storage, see PlayerManager).
@@ -67,9 +81,9 @@ export function useServiceWorkerUpdate(): ServiceWorker | undefined {
     container.addEventListener("controllerchange", onControllerChange);
 
     let registration: ServiceWorkerRegistration | undefined;
-    // `controller` is null on the very first install, which is not an update
+    // no `active` worker means the very first install, which is not an update
     const check = () => {
-      if (registration?.waiting && container.controller) {
+      if (registration?.waiting && registration.active) {
         setWaiting(registration.waiting);
       }
     };

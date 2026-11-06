@@ -5,7 +5,10 @@ import { ArrowSync20Regular } from "@fluentui/react-icons";
 import { useTheme } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
-import { useServiceWorkerUpdate } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
+import {
+  applyServiceWorkerUpdate,
+  useServiceWorkerUpdate,
+} from "@lichtblick/suite-base/hooks/useServiceWorkerUpdate";
 
 import { AppBarIconButton } from "./AppBarIconButton";
 
@@ -31,7 +34,7 @@ export function UpdateIndicator(): React.JSX.Element | undefined {
       aria-label={t("updateAvailable")}
       data-testid="update-indicator"
       onClick={() => {
-        waiting.postMessage({ type: "SKIP_WAITING" });
+        applyServiceWorkerUpdate(waiting);
       }}
     >
       <ArrowSync20Regular primaryFill={theme.palette.appBar.primary} />

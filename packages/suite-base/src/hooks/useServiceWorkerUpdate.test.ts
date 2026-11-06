@@ -15,6 +15,7 @@ const fakeWorker = (state: string): FakeWorker =>
 // `update()` finds a new worker in `installing`, which then moves to `finalState`
 function mockRegistration(finalState: string | undefined) {
   const registration = {
+    active: fakeWorker("activated"),
     installing: undefined as FakeWorker | undefined,
     waiting: undefined as FakeWorker | undefined,
     update: vi.fn(async () => {
@@ -33,7 +34,7 @@ function mockRegistration(finalState: string | undefined) {
   };
   Object.defineProperty(navigator, "serviceWorker", {
     configurable: true,
-    value: { controller: {}, getRegistration: async () => registration },
+    value: { controller: undefined, getRegistration: async () => registration },
   });
   return registration;
 }
