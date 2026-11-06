@@ -75,6 +75,10 @@ export class LiveHistoryBuffer {
     this.#windowNs = windowNs;
   }
 
+  public setMaxBytes(maxBytes: number): void {
+    this.#maxBytes = maxBytes;
+  }
+
   public windowNs(): bigint {
     return this.#windowNs;
   }
@@ -246,4 +250,34 @@ export class LiveHistoryBuffer {
 
 function seedKeys(msg: MessageEvent): readonly string[] {
   return transformChildFrames(msg.message) ?? [WHOLE_MESSAGE];
+}
+
+/** Browser JS heap use (fraction of its limit) above which the history gives memory back. */
+export const HEAP_HIGH_WATER = 0.85;
+/** Heap use below which the history may grow back to its configured limit. */
+export const HEAP_LOW_WATER = 0.7;
+/** The history never shrinks below this for heap pressure. */
+export const HEAP_MIN_HISTORY_BYTES = 16 * 1024 * 1024;
+
+export type HeapUsage = { usedJSHeapSize: number; jsHeapSizeLimit: number };
+
+/**
+ * Memory limit to impose on the history because the whole tab is close to running out of heap,
+ * or undefined for none. Shrinks the history by a quarter each time the heap is above the high
+ * water mark, and lifts the limit once it falls below the low water mark.
+ */
+export function heapLimitBytes(
+  heap: HeapUsage | undefined,
+  historyBytes: number,
+  currentLimit: number | undefined,
+): number | undefined {
+  if (!heap || heap.jsHeapSizeLimit <= 0) {
+    return undefined;
+  }
+  const used = heap.usedJSHeapSize / heap.jsHeapSizeLimit;
+  if (used > HEAP_HIGH_WATER) {
+    const shrunk = Math.max(HEAP_MIN_HISTORY_BYTES, Math.floor(historyBytes * 0.75));
+    return Math.min(shrunk, currentLimit ?? Number.POSITIVE_INFINITY);
+  }
+  return used < HEAP_LOW_WATER ? undefined : currentLimit;
 }

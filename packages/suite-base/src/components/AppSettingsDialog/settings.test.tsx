@@ -8,8 +8,9 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import type { Mock } from "vitest";
 
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks/useAppConfigurationValue";
+import { liveHistorySettings } from "@lichtblick/suite-base/players/liveHistory/liveHistorySettings";
 
-import { AutoUpdate, StepSize } from "./settings";
+import { AutoUpdate, LiveHistorySettings, StepSize } from "./settings";
 
 vi.mock("@lichtblick/suite-base/hooks/useAppConfigurationValue", () => ({
   useAppConfigurationValue: vi.fn(),
@@ -55,5 +56,26 @@ describe("AutoUpdate component", () => {
     render(<AutoUpdate />);
     const input: HTMLInputElement = screen.getByRole("checkbox");
     expect(input.checked).toBe(true);
+  });
+});
+
+describe("LiveHistorySettings component", () => {
+  beforeEach(() => {
+    liveHistorySettings.getState().setWindowSec(30);
+    liveHistorySettings.getState().setMaxMiB(128);
+  });
+
+  it("shows and changes the saved history length and memory limit", () => {
+    render(<LiveHistorySettings />);
+    expect(screen.getByText("30 s")).toBeInTheDocument();
+    expect(screen.getByText("128 MiB")).toBeInTheDocument();
+
+    fireEvent.mouseDown(screen.getAllByRole("combobox")[0]!);
+    fireEvent.click(screen.getByRole("option", { name: "5 min" }));
+    expect(liveHistorySettings.getState().windowSec).toBe(300);
+
+    fireEvent.mouseDown(screen.getAllByRole("combobox")[1]!);
+    fireEvent.click(screen.getByRole("option", { name: "1 GiB" }));
+    expect(liveHistorySettings.getState().maxMiB).toBe(1024);
   });
 });
