@@ -3,18 +3,21 @@
 
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
 import LibraryAddOutlinedIcon from "@mui/icons-material/LibraryAddOutlined";
 import { IconButton, Tooltip } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
-import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import MessagePathInput from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput";
 import { useSeriesDrag } from "@lichtblick/suite-base/panels/shared/useSeriesDrag";
 
 import { useStyles } from "./Watch.style";
 import { HISTORY_SIZE, WatchStore, historyValues } from "./WatchStore";
+import { Schema, pathsForEnter } from "./compile";
 import { WatchRow } from "./config";
 import {
   EnumNames,
@@ -35,7 +38,7 @@ const FLASH_MS = 600;
  */
 export type Painters = Map<string, (what?: "all" | "age") => void>;
 
-export type RowAction = "openInPlot" | "copy" | "duplicate" | "remove";
+export type RowAction = "openInPlot" | "copy" | "edit" | "duplicate" | "remove";
 
 type Props = {
   row: WatchRow;
@@ -48,10 +51,88 @@ type Props = {
   showAge: boolean;
   staleAfterSec: number;
   isDropTarget: boolean;
+  /** The path is being edited in place */
+  editing: boolean;
+  schema: Schema;
+  /** Ends editing: the paths to put in place of the row (several with Shift+Enter), or undefined to cancel */
+  onEditDone: (id: string, paths: string[] | undefined) => void;
   onAction: (action: RowAction, id: string) => void;
   onDragOverRow: (id: string) => void;
   onDropRow: (fromId: string, toId: string) => void;
 };
+
+/** Edits a row's path in place; Enter and Shift+Enter work as in the add input. */
+function PathEditor({
+  initialPath,
+  schema,
+  onDone,
+}: {
+  initialPath: string;
+  schema: Schema;
+  onDone: (paths: string[] | undefined) => void;
+}): React.JSX.Element {
+  const { classes } = useStyles();
+  const [path, setPathState] = useState(initialPath);
+  // Picking a suggestion with Enter updates the path during that same key event
+  const pathRef = useRef(initialPath);
+  const setPath = useCallback((value: string) => {
+    pathRef.current = value;
+    setPathState(value);
+  }, []);
+  const finished = useRef(false);
+  const finish = useCallback(
+    (paths: string[] | undefined) => {
+      if (!finished.current) {
+        finished.current = true;
+        onDone(paths);
+      }
+    },
+    [onDone],
+  );
+  const containerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const input = containerRef.current?.querySelector("input");
+    input?.focus();
+    input?.select();
+  }, []);
+
+  return (
+    <div
+      ref={containerRef}
+      className={classes.nameEditor}
+      onKeyDown={(event) => {
+        if (event.key === "Escape") {
+          finish(undefined);
+        } else if (event.key === "Enter") {
+          // A prevented Enter picked an autocomplete suggestion
+          const paths = pathsForEnter(
+            pathRef.current,
+            { shiftKey: event.shiftKey, picked: event.defaultPrevented },
+            schema,
+          );
+          if (paths) {
+            event.preventDefault();
+            finish(paths);
+          }
+        }
+      }}
+      onBlur={(event) => {
+        // Clicking away keeps the edit; an emptied path cancels it
+        if (!event.currentTarget.contains(event.relatedTarget)) {
+          const trimmed = pathRef.current.trim();
+          finish(trimmed === "" ? undefined : [trimmed]);
+        }
+      }}
+    >
+      <MessagePathInput
+        path={path}
+        onChange={setPath}
+        supportsMathModifiers
+        supportsStreamModifiers
+      />
+    </div>
+  );
+}
 
 function drawSparkline(canvas: HTMLCanvasElement, values: readonly number[], color: string): void {
   const dpr = window.devicePixelRatio;
@@ -106,6 +187,9 @@ export const WatchRowView = memo(function WatchRowViewInner({
   showAge,
   staleAfterSec,
   isDropTarget,
+  editing,
+  schema,
+  onEditDone,
   onAction,
   onDragOverRow,
   onDropRow,
@@ -217,7 +301,8 @@ export const WatchRowView = memo(function WatchRowViewInner({
   }, [expanded, paint, paintAge, painters, row.id, showAge, sparklines]);
 
   // Dragging a row reorders it here, and adds its path to other panels (e.g. a Plot)
-  const { dragRef } = useSeriesDrag(invalid ? undefined : row.path);
+  // Not while editing, so the mouse can select text in the input
+  const { dragRef } = useSeriesDrag(invalid || editing ? undefined : row.path);
   const setRoot = useCallback(
     (element: HTMLDivElement | null) => {
       rootRef.current = element;
@@ -261,7 +346,8 @@ export const WatchRowView = memo(function WatchRowViewInner({
         data-testid="watch-row"
         data-expandable="false"
         data-expanded={expanded}
-        draggable
+        data-editing={editing}
+        draggable={!editing}
         onDragStart={onDragStart}
         onDragOver={onDragOver}
         onDrop={onDrop}
@@ -281,24 +367,34 @@ export const WatchRowView = memo(function WatchRowViewInner({
             <KeyboardArrowRightIcon fontSize="small" />
           )}
         </IconButton>
-        <Tooltip title={invalid ? t("invalidPath") : `${row.path} — ${t("openInPlot")}`}>
-          <span
-            role="button"
-            tabIndex={0}
-            className={cx(classes.name, { [classes.invalid]: invalid })}
-            onClick={() => {
-              onAction("openInPlot", row.id);
+        {editing ? (
+          <PathEditor
+            initialPath={row.path}
+            schema={schema}
+            onDone={(paths) => {
+              onEditDone(row.id, paths);
             }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
+          />
+        ) : (
+          <Tooltip title={invalid ? t("invalidPath") : `${row.path} — ${t("openInPlot")}`}>
+            <span
+              role="button"
+              tabIndex={0}
+              className={cx(classes.name, { [classes.invalid]: invalid })}
+              onClick={() => {
                 onAction("openInPlot", row.id);
-              }
-            }}
-          >
-            {row.label ?? row.path}
-          </span>
-        </Tooltip>
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  onAction("openInPlot", row.id);
+                }
+              }}
+            >
+              {row.label ?? row.path}
+            </span>
+          </Tooltip>
+        )}
         <span ref={valueRef} data-value className={classes.value} />
         {row.unit != undefined && <span className={classes.unit}>{row.unit}</span>}
         {sparklines && <canvas ref={sparkRef} className={classes.sparkline} />}
@@ -312,6 +408,16 @@ export const WatchRowView = memo(function WatchRowViewInner({
               }}
             >
               <ContentCopyIcon fontSize="inherit" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={t("editPath")}>
+            <IconButton
+              size="small"
+              onClick={() => {
+                onAction("edit", row.id);
+              }}
+            >
+              <EditOutlinedIcon fontSize="inherit" />
             </IconButton>
           </Tooltip>
           <Tooltip title={t("duplicate")}>

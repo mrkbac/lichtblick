@@ -27,6 +27,7 @@ export const watch = {
   staleAfterHelp: "Values that haven't updated for longer are dimmed and marked",
   rows: "Rows",
   addRow: "Add row",
+  editPath: "Edit path",
   duplicate: "Duplicate",
   remove: "Remove",
   path: "Message path",

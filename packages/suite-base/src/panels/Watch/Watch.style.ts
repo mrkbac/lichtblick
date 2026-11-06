@@ -33,6 +33,8 @@ export const useStyles = makeStyles()((theme) => ({
     // Frozen values: dim the value, highlight the age
     "&[data-stale='true'][data-error='false'] [data-value]": { color: theme.palette.text.disabled },
     "&[data-stale='true'] [data-age]": { color: theme.palette.warning.main },
+    // The editor needs the whole row; the hover actions would cover it
+    "&[data-editing='true'] [data-actions]": { display: "none" },
   },
   dropTarget: { boxShadow: `inset 0 2px 0 ${theme.palette.primary.main}` },
   expandButton: { padding: 0, margin: theme.spacing(0, -0.5) },
@@ -47,6 +49,7 @@ export const useStyles = makeStyles()((theme) => ({
     color: theme.palette.text.secondary,
     "&:hover": { color: theme.palette.primary.main, textDecoration: "underline" },
   },
+  nameEditor: { flex: "1 1 auto", minWidth: 120 },
   invalid: { color: theme.palette.error.main },
   value: {
     flex: "0 1 auto",

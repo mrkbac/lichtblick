@@ -91,14 +91,35 @@ export function moveRow(rows: readonly WatchRow[], fromId: string, toId: string)
   return next;
 }
 
-export function duplicateRow(rows: readonly WatchRow[], id: string): WatchRow[] {
+export function duplicateRow(
+  rows: readonly WatchRow[],
+  id: string,
+  newId: string = newRow("").id,
+): WatchRow[] {
   const index = rows.findIndex((row) => row.id === id);
   if (index === -1) {
     return [...rows];
   }
   const next = [...rows];
-  next.splice(index + 1, 0, { ...rows[index]!, id: newRow("").id });
+  next.splice(index + 1, 0, { ...rows[index]!, id: newId });
   return next;
+}
+
+/** Put `paths` in place of a row: the first keeps the row's settings, the rest follow as new rows. */
+export function replaceRowPaths(
+  rows: readonly WatchRow[],
+  id: string,
+  paths: readonly string[],
+): WatchRow[] {
+  return rows.flatMap((row) => {
+    if (row.id !== id || paths.length === 0) {
+      return [row];
+    }
+    const [first, ...rest] = paths;
+    // A label named the old path, so it goes when the path changes
+    const label = first === row.path ? row.label : undefined;
+    return [{ ...row, path: first!, label }, ...rest.map(newRow)];
+  });
 }
 
 export function settingsReducer(config: WatchConfig, action: SettingsTreeAction): WatchConfig {
