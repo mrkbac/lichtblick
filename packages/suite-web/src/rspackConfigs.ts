@@ -107,7 +107,7 @@ export const mainConfig =
     if (!isDev && !isServe) {
       // Precache the whole build so the installed PWA works fully offline, including lazy-loaded
       // panels, workers and wasm. The new version activates once all app windows are closed, or
-      // when the user accepts the update prompt (see registerServiceWorker.ts).
+      // when the user clicks the update button in the app bar (see useServiceWorkerUpdate.ts).
       plugins.push({
         apply: (compiler) => {
           compiler.hooks.afterEmit.tapPromise("GenerateSW", async () => {

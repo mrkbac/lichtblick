@@ -96,7 +96,6 @@ import useElectronFilesToOpen from "@lichtblick/suite-base/hooks/useElectronFile
 import { useHandleFiles } from "@lichtblick/suite-base/hooks/useHandleFiles";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
 import useSeekTimeFromCLI from "@lichtblick/suite-base/hooks/useSeekTimeFromCLI";
-import { useServiceWorkerUpdatePrompt } from "@lichtblick/suite-base/hooks/useServiceWorkerUpdatePrompt";
 import { useStructureItemsStoreManager } from "@lichtblick/suite-base/panels/Plot/hooks/useStructureItemsStoreManager";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { PanelStateContextProvider } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
@@ -183,7 +182,6 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
   const { enqueueSnackbar } = useSnackbar();
   const { dialogActions, sidebarActions } = useWorkspaceActions();
-  useServiceWorkerUpdatePrompt();
 
   const { handleFiles } = useHandleFiles({
     availableSources,

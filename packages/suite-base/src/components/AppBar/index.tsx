@@ -46,6 +46,7 @@ import { CustomWindowControls, CustomWindowControlsProps } from "./CustomWindowC
 import { DataSource } from "./DataSource";
 import { NetworkStatusIndicator } from "./NetworkStatusIndicator";
 import { SettingsMenu } from "./SettingsMenu";
+import { UpdateIndicator } from "./UpdateIndicator";
 
 const useStyles = makeStyles<{ debugDragRegion?: boolean }, "avatar">()(
   (theme, { debugDragRegion = false }, classes) => {
@@ -263,6 +264,7 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
           <div className={classes.end}>
             <div className={classes.endInner}>
               <NetworkStatusIndicator />
+              <UpdateIndicator />
               {enableMemoryUseIndicator && <MemoryUseIndicator />}
               {appBarLayoutButton}
               <Stack direction="row" alignItems="center" data-tourid="sidebar-button-group">

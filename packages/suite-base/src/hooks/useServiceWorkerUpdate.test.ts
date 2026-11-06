@@ -5,7 +5,7 @@
 
 import type { Mock } from "vitest";
 
-import { checkForServiceWorkerUpdate } from "./useServiceWorkerUpdatePrompt";
+import { checkForServiceWorkerUpdate } from "./useServiceWorkerUpdate";
 
 type FakeWorker = EventTarget & { state: string; postMessage: Mock };
 
@@ -15,6 +15,7 @@ const fakeWorker = (state: string): FakeWorker =>
 // `update()` finds a new worker in `installing`, which then moves to `finalState`
 function mockRegistration(finalState: string | undefined) {
   const registration = {
+    active: fakeWorker("activated"),
     installing: undefined as FakeWorker | undefined,
     waiting: undefined as FakeWorker | undefined,
     update: vi.fn(async () => {
@@ -33,7 +34,7 @@ function mockRegistration(finalState: string | undefined) {
   };
   Object.defineProperty(navigator, "serviceWorker", {
     configurable: true,
-    value: { controller: {}, getRegistration: async () => registration },
+    value: { controller: undefined, getRegistration: async () => registration },
   });
   return registration;
 }
@@ -44,10 +45,10 @@ describe("checkForServiceWorkerUpdate", () => {
     await expect(checkForServiceWorkerUpdate()).resolves.toBe(false);
   });
 
-  it("activates the update once it has installed", async () => {
+  it("downloads the update without applying it", async () => {
     const registration = mockRegistration("installed");
     await expect(checkForServiceWorkerUpdate()).resolves.toBe(true);
-    expect(registration.waiting?.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" });
+    expect(registration.waiting?.postMessage).not.toHaveBeenCalled();
   });
 
   it("rejects when the update fails to install", async () => {
