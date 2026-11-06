@@ -7,8 +7,9 @@
 
 import { IconButton, IconButtonProps, Tooltip } from "@mui/material";
 import { forwardRef } from "react";
-import tinycolor from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
+
+import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 
 const useStyles = makeStyles()((theme) => ({
   tooltip: {
@@ -23,7 +24,7 @@ const useStyles = makeStyles()((theme) => ({
       fontSize: "1em",
     },
     "&:hover": {
-      backgroundColor: tinycolor(theme.palette.appBar.text).setAlpha(0.08).toRgbString(),
+      backgroundColor: parseColor(theme.palette.appBar.text).alpha(0.08).toRgbString(),
     },
     "&.Mui-selected": {
       backgroundColor: theme.palette.appBar.primary,

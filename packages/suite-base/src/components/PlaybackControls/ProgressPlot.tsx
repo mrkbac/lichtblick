@@ -9,12 +9,12 @@ import { keyframes } from "@emotion/react";
 import { simplify } from "intervals-fn";
 import * as _ from "lodash-es";
 import { useMemo } from "react";
-import tinycolor from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 
 import { filterMap } from "@lichtblick/den/collection";
 import { Immutable } from "@lichtblick/suite";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { parseColor, toHex6 } from "@lichtblick/suite-base/util/parseColor";
 import { Range } from "@lichtblick/suite-base/util/ranges";
 
 type ProgressProps = Immutable<{
@@ -51,8 +51,8 @@ const useStyles = makeStyles()((theme) => ({
     position: "absolute",
     backgroundColor:
       theme.palette.mode === "dark"
-        ? tinycolor(theme.palette.text.secondary).darken(25).toHexString()
-        : tinycolor(theme.palette.text.secondary).lighten(25).toHexString(),
+        ? toHex6(parseColor(theme.palette.text.secondary).darken(0.25))
+        : toHex6(parseColor(theme.palette.text.secondary).lighten(0.25)),
     height: "100%",
   },
 }));

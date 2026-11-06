@@ -8,11 +8,11 @@
 import { Chip } from "@mui/material";
 import * as _ from "lodash-es";
 import * as React from "react";
-import tc from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import { IRenderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
+import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 
 import { HUDItem } from "./HUDItemManager";
 import { useRendererProperty } from "./RendererContext";
@@ -32,7 +32,7 @@ const useStyles = makeStyles()((theme) => ({
     gap: theme.spacing(1),
   },
   chip: {
-    backgroundColor: tc(theme.palette.background.paper).setAlpha(0.8).toString(),
+    backgroundColor: parseColor(theme.palette.background.paper).alpha(0.8).toRgbString(),
   },
   attribution: {
     position: "absolute",
@@ -43,7 +43,7 @@ const useStyles = makeStyles()((theme) => ({
     pointerEvents: "none",
     fontSize: theme.typography.caption.fontSize,
     color: theme.palette.text.secondary,
-    backgroundColor: tc(theme.palette.background.paper).setAlpha(0.6).toString(),
+    backgroundColor: parseColor(theme.palette.background.paper).alpha(0.6).toRgbString(),
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",

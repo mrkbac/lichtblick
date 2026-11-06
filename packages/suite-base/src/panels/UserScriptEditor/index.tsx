@@ -32,7 +32,6 @@ import {
   Separator as PanelResizeHandle,
   Panel as ResizablePanel,
 } from "react-resizable-panels";
-import tc from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 
 import { SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
@@ -53,6 +52,7 @@ import BottomBar from "@lichtblick/suite-base/panels/UserScriptEditor/BottomBar"
 import { Sidebar } from "@lichtblick/suite-base/panels/UserScriptEditor/Sidebar";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig, UserScripts } from "@lichtblick/suite-base/types/panels";
+import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import Config from "./Config";
@@ -123,8 +123,8 @@ const useStyles = makeStyles()((theme) => ({
       ].join(",")})`,
       boxShadow: `0 2px 0 0 ${
         theme.palette.mode === "dark"
-          ? tc(theme.palette.divider).lighten().toString()
-          : tc(theme.palette.divider).darken().toString()
+          ? parseColor(theme.palette.divider).lighten().toHex()
+          : parseColor(theme.palette.divider).darken().toHex()
       }`,
     },
   },

@@ -6,7 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as THREE from "three";
-import tinycolor from "tinycolor2";
+
+import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 
 import { lerp } from "./math";
 import { ColorRGB, ColorRGBA } from "./ros";
@@ -41,7 +42,7 @@ export function SRGBToLinearRGBLUT(output: ColorRGB, r: number, g: number, b: nu
 }
 
 export function stringToRgba(output: ColorRGBA, colorStr: string): ColorRGBA {
-  const color = tinycolor(colorStr);
+  const color = parseColor(colorStr);
   if (!color.isValid()) {
     output.r = output.g = output.b = output.a = 1;
     return output;
@@ -50,7 +51,7 @@ export function stringToRgba(output: ColorRGBA, colorStr: string): ColorRGBA {
   output.r = rgb.r / 255;
   output.g = rgb.g / 255;
   output.b = rgb.b / 255;
-  output.a = rgb.a;
+  output.a = color.rgba.a; // toRgb() rounds alpha to 3 decimals
   return output;
 }
 
@@ -63,7 +64,7 @@ export function makeRgb(): ColorRGB {
 }
 
 export function stringToRgb<T extends ColorRGB | THREE.Color>(output: T, colorStr: string): T {
-  const color = tinycolor(colorStr);
+  const color = parseColor(colorStr);
   if (!color.isValid()) {
     output.r = output.g = output.b = 1;
     return output;

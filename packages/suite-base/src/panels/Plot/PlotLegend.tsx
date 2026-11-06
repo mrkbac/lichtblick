@@ -7,12 +7,12 @@
 
 import * as _ from "lodash-es";
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import tinycolor from "tinycolor2";
 import { makeStyles } from "tss-react/mui";
 
 import { Immutable } from "@lichtblick/suite";
 import { DEFAULT_PLOT_PATH } from "@lichtblick/suite-base/panels/Plot/constants";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { parseColor, toHex8 } from "@lichtblick/suite-base/util/parseColor";
 
 import type { PlotCoordinator } from "./PlotCoordinator";
 import { PlotLegendRow, ROW_HEIGHT } from "./PlotLegendRow";
@@ -60,10 +60,10 @@ const useStyles = makeStyles<void, "grid">()(
         gridTemplateColumns: "auto repeat(2, minmax(max-content, auto)) auto",
         backgroundImage: `linear-gradient(${[
           "0deg",
-          tinycolor(palette.background.default).setAlpha(0.2).toHex8String(),
-          tinycolor(palette.background.default).setAlpha(0.2).toHex8String(),
+          toHex8(parseColor(palette.background.default).alpha(0.2)),
+          toHex8(parseColor(palette.background.default).alpha(0.2)),
         ].join(" ,")})`,
-        backgroundColor: tinycolor(palette.background.paper).setAlpha(0.8).toHex8String(),
+        backgroundColor: toHex8(parseColor(palette.background.paper).alpha(0.8)),
         backdropFilter: "blur(3px)",
         boxShadow: shadows[3],
       },
