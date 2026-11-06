@@ -9,6 +9,7 @@ import { TFunction } from "i18next";
 
 import { PanelInfo } from "@lichtblick/suite-base/context/PanelCatalogContext";
 
+import audioThumbnail from "./Audio/thumbnail.png";
 import cameraGridThumbnail from "./CameraGrid/thumbnail.png";
 import dataSourceInfoThumbnail from "./DataSourceInfo/thumbnail.png";
 import diagnosticStatusThumbnail from "./DiagnosticStatus/assets/diagnostic-status.png";
@@ -152,6 +153,13 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     module: async () => await import("./RawMessagesVirtual"),
     hasCustomToolbar: true,
     hidden: true,
+  },
+  {
+    title: t("audio"),
+    type: "Audio",
+    description: t("audioDescription"),
+    thumbnail: audioThumbnail,
+    module: async () => await import("./Audio"),
   },
   {
     title: t("log"),
