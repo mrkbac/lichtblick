@@ -223,17 +223,14 @@ export class RenderableLineAnnotation extends Renderable<BaseUserData, /*TRender
     const isLineList = style === "line_list";
     const useVertexColors = outlineColors.length > 0;
 
-    // Update line width if thickness or scale has changed
+    // Update line width if thickness or scale has changed. Both are uniforms, so no shader rebuild.
     if (this.#annotationNeedsUpdate || this.#scaleNeedsUpdate) {
       this.#lineMaterial.resolution.set(this.#canvasWidth, this.#canvasHeight);
       this.#lineMaterial.lineWidth = thickness * this.#scale;
-      this.#lineMaterial.needsUpdate = true;
       this.#linePrepassMaterial.resolution.set(this.#canvasWidth, this.#canvasHeight);
       this.#linePrepassMaterial.lineWidth = thickness * this.#scale;
-      this.#linePrepassMaterial.needsUpdate = true;
       this.#linePickingMaterial.resolution.set(this.#canvasWidth, this.#canvasHeight);
       this.#linePickingMaterial.lineWidth = thickness * this.#scale;
-      this.#linePickingMaterial.needsUpdate = true;
       this.#scaleNeedsUpdate = false;
     }
 
@@ -355,7 +352,6 @@ export class RenderableLineAnnotation extends Renderable<BaseUserData, /*TRender
           .setRGB(shapeFillColor.r, shapeFillColor.g, shapeFillColor.b)
           .convertSRGBToLinear();
         this.#fillMaterial.opacity = shapeFillColor.a;
-        this.#fillMaterial.needsUpdate = true;
       } else {
         this.#fillGeometry?.dispose();
         this.#fillMaterial?.dispose();
@@ -365,6 +361,11 @@ export class RenderableLineAnnotation extends Renderable<BaseUserData, /*TRender
         this.#fill = undefined;
       }
 
+      // vertexColors is compiled into the shader; color and opacity are uniforms
+      if (this.#lineMaterial.vertexColors !== useVertexColors) {
+        this.#linePrepassMaterial.needsUpdate = true;
+        this.#lineMaterial.needsUpdate = true;
+      }
       if (useVertexColors) {
         this.#linePrepassMaterial.vertexColors = true;
         this.#lineMaterial.vertexColors = true;
@@ -379,7 +380,6 @@ export class RenderableLineAnnotation extends Renderable<BaseUserData, /*TRender
         this.#lineMaterial.color.setRGB(color.r, color.g, color.b).convertSRGBToLinear();
         this.#lineMaterial.setOpacity(color.a);
       }
-      this.#lineMaterial.needsUpdate = true;
 
       setLinePositions(this.#geometry, positions);
 
