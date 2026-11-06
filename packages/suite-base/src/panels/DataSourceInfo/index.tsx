@@ -95,9 +95,16 @@ export function RecordingInspector(): React.JSX.Element {
   // Live sources show the recent rate, which drops to 0 when a publisher stops
   const [liveRates, setLiveRates] = useState(new Map<string, LiveRate>());
   useEffect(() => {
-    const tracker = new LiveTopicRates();
+    let tracker = new LiveTopicRates();
+    let trackedPlayerId: string | undefined;
     const id = setInterval(() => {
-      const stats = selectStats(getPipeline());
+      const pipeline = getPipeline();
+      const stats = selectStats(pipeline);
+      // Start over for a new player, so its rates don't build on the previous player's samples
+      if (pipeline.playerState.playerId !== trackedPlayerId) {
+        trackedPlayerId = pipeline.playerState.playerId;
+        tracker = new LiveTopicRates();
+      }
       setTopicStats(stats);
       if (stats) {
         setLiveRates(tracker.update(Date.now(), stats));

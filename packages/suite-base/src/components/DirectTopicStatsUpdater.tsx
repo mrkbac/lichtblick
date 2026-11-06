@@ -122,11 +122,13 @@ export function DirectTopicStatsUpdater({
   }, [updateStats, interval, topicStats, playerIsStaticSource]);
 
   // Repaint right away when a topic goes stale or recovers, even if nothing else changed
-  const staleCount = useRef(0);
+  const staleTopics = useRef("");
   useEffect(() => {
-    const count = Object.values(frequenciesByTopic).filter((value) => value === 0).length;
-    if (count !== staleCount.current) {
-      staleCount.current = count;
+    const stale = Object.keys(frequenciesByTopic)
+      .filter((topic) => frequenciesByTopic[topic] === 0)
+      .join("\n");
+    if (stale !== staleTopics.current) {
+      staleTopics.current = stale;
       updateStats();
     }
   }, [frequenciesByTopic, updateStats]);

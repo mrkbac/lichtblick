@@ -36,7 +36,15 @@ export class LiveTopicRates {
         this.#samples.set(topic, samples);
       }
       let last = samples[samples.length - 1]!;
-      if (numMessages > last.count) {
+      const recovering =
+        this.#intervalMs.has(topic) && nowMs - last.timeMs > this.#staleAfterMs(topic);
+      if (numMessages > last.count && recovering) {
+        // First message after a stale gap: the gap is not the usual interval, so keep the known
+        // estimate and measure the rate from here on
+        last = { timeMs: nowMs, count: numMessages };
+        samples = [last];
+        this.#samples.set(topic, samples);
+      } else if (numMessages > last.count) {
         last = { timeMs: nowMs, count: numMessages };
         samples.push(last);
         // Keep the newest sample at or before the window start as baseline, and at least two samples
@@ -54,8 +62,7 @@ export class LiveTopicRates {
       }
 
       const silentMs = nowMs - last.timeMs;
-      const staleAfterMs = Math.max(LIVE_RATE_WINDOW_MS, 2 * (this.#intervalMs.get(topic) ?? 0));
-      if (silentMs > staleAfterMs) {
+      if (silentMs > this.#staleAfterMs(topic)) {
         result.set(topic, { hz: 0, stale: true });
         continue;
       }
@@ -67,5 +74,9 @@ export class LiveTopicRates {
       });
     }
     return result;
+  }
+
+  #staleAfterMs(topic: string): number {
+    return Math.max(LIVE_RATE_WINDOW_MS, 2 * (this.#intervalMs.get(topic) ?? 0));
   }
 }

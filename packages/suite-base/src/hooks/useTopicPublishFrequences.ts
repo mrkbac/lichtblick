@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { subtract as subtractTimes, Time } from "@foxglove/rostime";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { Immutable } from "@lichtblick/suite";
 import {
@@ -32,6 +32,7 @@ const selectEndTime = ({ playerState }: MessagePipelineContext) => playerState.a
 const selectTopicStats = (ctx: MessagePipelineContext) =>
   ctx.playerState.activeData?.topicStats ?? EMPTY_TOPIC_STATS;
 const selectPlayerCapabilities = (ctx: MessagePipelineContext) => ctx.playerState.capabilities;
+const selectPlayerId = (ctx: MessagePipelineContext) => ctx.playerState.playerId;
 
 type FrequenciesByTopic = Record<string, undefined | number>;
 const EMPTY_FREQUENCIES: FrequenciesByTopic = {};
@@ -50,7 +51,12 @@ export function useTopicPublishFrequencies(): Immutable<FrequenciesByTopic> {
     [endTime, startTime],
   );
 
-  const liveRates = useRef(new LiveTopicRates());
+  const playerId = useMessagePipeline(selectPlayerId);
+  // Start over for a new player, so its rates don't build on the previous player's samples
+  const liveRates = useMemo(() => {
+    void playerId;
+    return new LiveTopicRates();
+  }, [playerId]);
 
   const playerIsStaticSource = useMemo(
     () => playerCapabilities.includes(PLAYER_CAPABILITIES.playbackControl),
@@ -81,7 +87,7 @@ export function useTopicPublishFrequencies(): Immutable<FrequenciesByTopic> {
     }
     if (!playerIsStaticSource) {
       const result: FrequenciesByTopic = {};
-      for (const [topic, rate] of liveRates.current.update(Date.now(), topicStats)) {
+      for (const [topic, rate] of liveRates.update(Date.now(), topicStats)) {
         result[topic] = rate.hz;
       }
       return result;
@@ -99,7 +105,7 @@ export function useTopicPublishFrequencies(): Immutable<FrequenciesByTopic> {
     }
 
     return result;
-  }, [playerCurrentTime, duration, playerIsStaticSource, topicStats, tick]);
+  }, [playerCurrentTime, duration, playerIsStaticSource, topicStats, tick, liveRates]);
 
   return frequencies;
 }

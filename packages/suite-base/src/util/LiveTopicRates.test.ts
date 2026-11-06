@@ -51,6 +51,20 @@ describe("LiveTopicRates", () => {
     expect(rates.update(15_100, stats(n)).get("/topic")).toEqual({ hz: 0, stale: true });
   });
 
+  it("keeps the usual interval across a stale gap", () => {
+    const rates = new LiveTopicRates();
+    // 1 Hz, then silent for 60 s, then one message and silent again
+    let n = publish(rates, 1, 0, 5000);
+    expect(rates.update(60_000, stats(n)).get("/topic")!.stale).toBe(true);
+    rates.update(65_000, stats(++n));
+    expect(rates.update(66_000, stats(n)).get("/topic")).toEqual({ hz: undefined, stale: false });
+    // Stale again after the 2 s window, not after twice the 60 s gap
+    expect(rates.update(67_100, stats(n)).get("/topic")).toEqual({ hz: 0, stale: true });
+    // and learns the rate again from the following messages
+    n = publish(rates, 1, 68_000, 71_000, n);
+    expect(rates.update(71_000, stats(n)).get("/topic")).toEqual({ hz: 1, stale: false });
+  });
+
   it("starts over when the count restarts", () => {
     const rates = new LiveTopicRates();
     publish(rates, 10, 0, 1000);
