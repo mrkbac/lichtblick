@@ -6,7 +6,7 @@ import { StoryObj } from "storybook-react-rsbuild";
 import Watch from "@lichtblick/suite-base/panels/Watch";
 import PanelSetup, { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";
 
-import { WatchConfig } from "./config";
+import { DEFAULT_CONFIG, WatchConfig } from "./config";
 
 const datatypes: Fixture["datatypes"] = new Map([
   [
@@ -59,6 +59,7 @@ const fixture: Fixture = {
 };
 
 const config: WatchConfig = {
+  ...DEFAULT_CONFIG,
   sparklines: true,
   rows: [
     { id: "a", path: "/state.speed", label: "Speed", precision: 2, unit: "m/s" },

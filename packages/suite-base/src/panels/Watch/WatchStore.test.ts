@@ -4,7 +4,13 @@
 import { parseMessagePath } from "@lichtblick/message-path";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
-import { CompiledRow, HISTORY_SIZE, WatchStore, historyValues } from "./WatchStore";
+import {
+  CompiledRow,
+  HISTORY_SIZE,
+  WatchStore,
+  createPlaybackClock,
+  historyValues,
+} from "./WatchStore";
 
 function row(id: string, path: string): CompiledRow {
   const parsed = parseMessagePath(path)!;
@@ -27,6 +33,15 @@ describe("WatchStore", () => {
     // Each row reported once, however many messages arrived
     expect(store.takeDirty().sort()).toEqual(["a", "b"]);
     expect(store.takeDirty()).toEqual([]);
+  });
+
+  it("remembers when each value last updated", () => {
+    const store = new WatchStore();
+    store.setRows([row("a", "/a.items[:]{id==2}.v")]);
+    store.addMessages([msg("/a", { items: [{ id: 2, v: 5 }] }, 3)]);
+    // A message that does not update the value keeps its age running
+    store.addMessages([msg("/a", { items: [{ id: 3, v: 7 }] }, 8)]);
+    expect(store.get("a")?.time).toBe(3);
   });
 
   it("keeps the previous value when a filter does not match", () => {
@@ -99,5 +114,24 @@ describe("WatchStore", () => {
     expect(history).toHaveLength(HISTORY_SIZE);
     expect(history[0]).toBe(5);
     expect(history.at(-1)).toBe(HISTORY_SIZE + 4);
+  });
+});
+
+describe("createPlaybackClock", () => {
+  it("follows the player, and keeps running while playing without updates", () => {
+    const clock = createPlaybackClock();
+    expect(clock({ current: undefined, isPlaying: true, speed: 1 }, 100)).toBeUndefined();
+    expect(clock({ current: 10, isPlaying: true, speed: 1 }, 100)).toBe(10);
+    // Live stream stalled: no new player time, but values keep aging
+    expect(clock({ current: 10, isPlaying: true, speed: 1 }, 103)).toBe(13);
+    expect(clock({ current: 10, isPlaying: true, speed: 2 }, 104)).toBe(18);
+    // New player time takes over
+    expect(clock({ current: 11, isPlaying: true, speed: 1 }, 104.5)).toBe(11);
+  });
+
+  it("stands still while paused", () => {
+    const clock = createPlaybackClock();
+    expect(clock({ current: 10, isPlaying: false, speed: 1 }, 100)).toBe(10);
+    expect(clock({ current: 10, isPlaying: false, speed: 1 }, 160)).toBe(10);
   });
 });

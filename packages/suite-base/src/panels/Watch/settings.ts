@@ -5,7 +5,7 @@ import { TFunction } from "i18next";
 
 import { SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
 
-import { WatchConfig, WatchRow, newRow } from "./config";
+import { WatchConfig, WatchRow, newRow, validStaleAfter } from "./config";
 
 export function buildSettingsTree(
   config: WatchConfig,
@@ -43,6 +43,14 @@ export function buildSettingsTree(
           value: row.precision,
         },
         unit: { label: t("unit"), input: "string", value: row.unit },
+        staleAfterSec: {
+          label: t("staleAfter"),
+          input: "number",
+          min: 0,
+          step: 1,
+          placeholder: String(config.staleAfterSec),
+          value: row.staleAfterSec,
+        },
       },
     };
   }
@@ -51,6 +59,15 @@ export function buildSettingsTree(
       label: t("general"),
       fields: {
         sparklines: { label: t("sparklines"), input: "boolean", value: config.sparklines },
+        showAge: { label: t("showAge"), input: "boolean", value: config.showAge },
+        staleAfterSec: {
+          label: t("staleAfter"),
+          help: t("staleAfterHelp"),
+          input: "number",
+          min: 0,
+          step: 1,
+          value: config.staleAfterSec,
+        },
       },
     },
     rows: {
@@ -101,8 +118,16 @@ export function settingsReducer(config: WatchConfig, action: SettingsTreeAction)
   }
 
   const { value } = action.payload;
-  if (path[0] === "general" && path[1] === "sparklines") {
-    return { ...config, sparklines: value === true };
+  if (path[0] === "general") {
+    switch (path[1]) {
+      case "sparklines":
+        return { ...config, sparklines: value === true };
+      case "showAge":
+        return { ...config, showAge: value === true };
+      case "staleAfterSec":
+        return { ...config, staleAfterSec: validStaleAfter(value) ?? config.staleAfterSec };
+    }
+    return config;
   }
   if (path[0] !== "rows") {
     return config;
@@ -123,6 +148,8 @@ export function settingsReducer(config: WatchConfig, action: SettingsTreeAction)
           precision:
             typeof value === "number" && value >= 0 ? Math.min(Math.round(value), 15) : undefined,
         };
+      case "staleAfterSec":
+        return { ...row, staleAfterSec: validStaleAfter(value) };
     }
     return row;
   });

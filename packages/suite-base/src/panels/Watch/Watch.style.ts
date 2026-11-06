@@ -30,6 +30,9 @@ export const useStyles = makeStyles()((theme) => ({
     // Stays visible while expanded, so a value that turned scalar can still be collapsed
     "&[data-expandable='false'][data-expanded='false'] [data-expand]": { visibility: "hidden" },
     "&[data-error='true'] [data-value]": { color: theme.palette.error.main },
+    // Frozen values: dim the value, highlight the age
+    "&[data-stale='true'] [data-value]": { color: theme.palette.text.disabled },
+    "&[data-stale='true'] [data-age]": { color: theme.palette.warning.main },
   },
   dropTarget: { boxShadow: `inset 0 2px 0 ${theme.palette.primary.main}` },
   expandButton: { padding: 0, margin: theme.spacing(0, -0.5) },
@@ -55,6 +58,16 @@ export const useStyles = makeStyles()((theme) => ({
     fontVariantNumeric: "tabular-nums",
   },
   unit: { color: theme.palette.text.secondary, whiteSpace: "nowrap" },
+  age: {
+    flex: "none",
+    minWidth: 44,
+    textAlign: "right",
+    color: theme.palette.text.secondary,
+    fontSize: theme.typography.caption.fontSize,
+    fontVariantNumeric: "tabular-nums",
+    whiteSpace: "nowrap",
+    "@container (max-width: 220px)": { display: "none" },
+  },
   sparkline: {
     width: 64,
     height: 18,

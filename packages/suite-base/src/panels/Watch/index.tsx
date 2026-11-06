@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { toSec } from "@foxglove/rostime";
 import AddIcon from "@mui/icons-material/Add";
 import { IconButton, Tooltip } from "@mui/material";
 import { useSnackbar } from "notistack";
@@ -12,6 +13,10 @@ import { SettingsTreeAction } from "@lichtblick/suite";
 import { useDataSourceInfo, useMessageReducer } from "@lichtblick/suite-base/PanelAPI";
 import MessagePathInput from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput";
 import { messagePathStructures } from "@lichtblick/suite-base/components/MessagePathSyntax/messagePathsForDatatype";
+import {
+  MessagePipelineContext,
+  useMessagePipelineGetter,
+} from "@lichtblick/suite-base/components/MessagePipeline";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
@@ -25,12 +30,24 @@ import { enumValuesByDatatypeAndField } from "@lichtblick/suite-base/util/enums"
 
 import { useStyles } from "./Watch.style";
 import { Painters, RowAction, WatchRowView } from "./WatchRowView";
-import { WatchStore } from "./WatchStore";
+import { Playback, WatchStore, createPlaybackClock } from "./WatchStore";
 import { compileRows, subscriptionsFor } from "./compile";
 import { DEFAULT_CONFIG, WatchConfig, migrateConfig, newRow, parsePastedPaths } from "./config";
 import { copyText } from "./format";
 import { createFrameScheduler } from "./frameScheduler";
 import { buildSettingsTree, duplicateRow, moveRow, settingsReducer } from "./settings";
+
+const AGE_TICK_MS = 250;
+
+/** Playback inputs of the clock that ages values. */
+function playbackOf(ctx: MessagePipelineContext): Playback {
+  const data = ctx.playerState.activeData;
+  return {
+    current: data ? toSec(data.currentTime) : undefined,
+    isPlaying: data?.isPlaying === true,
+    speed: data?.speed ?? 1,
+  };
+}
 
 type Props = {
   config: WatchConfig;
@@ -39,7 +56,7 @@ type Props = {
 
 function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
   const config = useMemo(() => migrateConfig(rawConfig), [rawConfig]);
-  const { rows, sparklines } = config;
+  const { rows, sparklines, showAge, staleAfterSec } = config;
   const { t } = useTranslation("watch");
   const { classes } = useStyles();
   const { enqueueSnackbar } = useSnackbar();
@@ -99,6 +116,29 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
       observer.disconnect();
     };
   }, [painters]);
+
+  // Age values against the playback time without re-rendering: repaint only the age badges
+  const getPipeline = useMessagePipelineGetter();
+  useEffect(() => {
+    if (!showAge) {
+      return;
+    }
+    const clock = createPlaybackClock();
+    const tick = () => {
+      const now = clock(playbackOf(getPipeline()), performance.now() / 1000);
+      if (now !== store.now) {
+        store.now = now;
+        for (const paint of painters.values()) {
+          paint("age");
+        }
+      }
+    };
+    tick();
+    const timer = setInterval(tick, AGE_TICK_MS);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [getPipeline, painters, showAge, store]);
 
   useLayoutEffect(() => {
     store.setRows(compiled);
@@ -262,6 +302,8 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
             enumNames={enumNames.get(row.id)}
             invalid={invalid.has(row.id)}
             sparklines={sparklines}
+            showAge={showAge}
+            staleAfterSec={row.staleAfterSec ?? staleAfterSec}
             isDropTarget={dropTarget === row.id}
             onAction={onAction}
             onDragOverRow={setDropTarget}

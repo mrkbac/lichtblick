@@ -22,9 +22,25 @@ describe("migrateConfig", () => {
     });
     expect(config).toEqual({
       sparklines: false,
+      showAge: true,
+      staleAfterSec: 2,
       rows: [
-        { id: "a", path: "/a.x", label: "X", precision: 2, unit: "m" },
-        { id: "b", path: "/b", label: undefined, precision: undefined, unit: undefined },
+        {
+          id: "a",
+          path: "/a.x",
+          label: "X",
+          precision: 2,
+          unit: "m",
+          staleAfterSec: undefined,
+        },
+        {
+          id: "b",
+          path: "/b",
+          label: undefined,
+          precision: undefined,
+          unit: undefined,
+          staleAfterSec: undefined,
+        },
       ],
     });
   });
@@ -36,6 +52,19 @@ describe("migrateConfig", () => {
     expect(rows.map((row) => row.path)).toEqual(["/a.x", "/b", "/c"]);
     expect(new Set(rows.map((row) => row.id)).size).toBe(3);
     expect(rows[1]!.id).toBe("x");
+  });
+
+  it("keeps only positive stale thresholds", () => {
+    const config = migrateConfig({
+      staleAfterSec: 5,
+      rows: [
+        { path: "/a", staleAfterSec: 0.5 },
+        { path: "/b", staleAfterSec: 0 },
+      ],
+    });
+    expect(config.staleAfterSec).toBe(5);
+    expect(config.rows.map((row) => row.staleAfterSec)).toEqual([0.5, undefined]);
+    expect(migrateConfig({ staleAfterSec: -1 }).staleAfterSec).toBe(2);
   });
 
   it("clamps precision", () => {

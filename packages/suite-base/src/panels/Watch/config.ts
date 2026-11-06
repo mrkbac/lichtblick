@@ -11,15 +11,30 @@ export type WatchRow = {
   /** Fixed number of decimals; automatic when unset */
   precision?: number;
   unit?: string;
+  /** Overrides the panel's `staleAfterSec` for this row */
+  staleAfterSec?: number;
 };
 
 export type WatchConfig = {
   rows: WatchRow[];
   /** Show a sparkline of recent numeric values next to each row */
   sparklines: boolean;
+  /** Show how long ago each value's message arrived */
+  showAge: boolean;
+  /** Values older than this many seconds are shown as stale */
+  staleAfterSec: number;
 };
 
-export const DEFAULT_CONFIG: WatchConfig = { rows: [], sparklines: true };
+export const DEFAULT_CONFIG: WatchConfig = {
+  rows: [],
+  sparklines: true,
+  showAge: true,
+  staleAfterSec: 2,
+};
+
+/** A positive number of seconds, or undefined. */
+export const validStaleAfter = (value: unknown): number | undefined =>
+  typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 
 export function newRow(path: string): WatchRow {
   return { id: randomUUID(), path };
@@ -66,11 +81,14 @@ export function migrateConfig(raw: unknown): WatchConfig {
           ? Math.min(precision, 15)
           : undefined,
       unit: optionalString(obj.unit),
+      staleAfterSec: validStaleAfter(obj.staleAfterSec),
     });
   }
   return {
     rows,
     sparklines:
       typeof input.sparklines === "boolean" ? input.sparklines : DEFAULT_CONFIG.sparklines,
+    showAge: typeof input.showAge === "boolean" ? input.showAge : DEFAULT_CONFIG.showAge,
+    staleAfterSec: validStaleAfter(input.staleAfterSec) ?? DEFAULT_CONFIG.staleAfterSec,
   };
 }

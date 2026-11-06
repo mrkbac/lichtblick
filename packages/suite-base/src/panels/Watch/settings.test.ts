@@ -8,6 +8,8 @@ import { buildSettingsTree, settingsReducer } from "./settings";
 
 const config: WatchConfig = {
   sparklines: true,
+  showAge: true,
+  staleAfterSec: 2,
   rows: [
     { id: "a", path: "/a.x" },
     { id: "b", path: "/b.x", label: "B" },
@@ -55,5 +57,24 @@ describe("Watch settings", () => {
     expect(update(["rows", "a", "precision"], 2.6).rows[0]!.precision).toBe(3);
     expect(update(["rows", "a", "unit"], "m").rows[0]!.unit).toBe("m");
     expect(update(["general", "sparklines"], false).sparklines).toBe(false);
+    expect(update(["general", "showAge"], false).showAge).toBe(false);
+  });
+
+  it("sets the stale threshold per panel and per row", () => {
+    const update = (path: string[], value: unknown) =>
+      settingsReducer(config, {
+        action: "update",
+        payload: { path, value, input: "number" },
+      } as Parameters<typeof settingsReducer>[1]);
+    expect(update(["general", "staleAfterSec"], 10).staleAfterSec).toBe(10);
+    // Cleared or invalid: keep the panel threshold
+    expect(update(["general", "staleAfterSec"], undefined).staleAfterSec).toBe(2);
+    expect(update(["rows", "a", "staleAfterSec"], 0.5).rows[0]!.staleAfterSec).toBe(0.5);
+    // Cleared: fall back to the panel threshold
+    expect(
+      update(["rows", "a", "staleAfterSec"], undefined).rows[0]!.staleAfterSec,
+    ).toBeUndefined();
+    const nodes = buildSettingsTree(config, new Map(), t);
+    expect(nodes.rows!.children!.a!.fields!.staleAfterSec!).toMatchObject({ placeholder: "2" });
   });
 });
