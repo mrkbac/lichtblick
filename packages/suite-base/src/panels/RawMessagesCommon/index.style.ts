@@ -96,12 +96,18 @@ export const useStylesToolbar = makeStyles()((theme) => ({
 }));
 
 export const useStylesValue = makeStyles()({
-  // always hidden, just used to keep space and prevent resizing on hover
-  placeholderActionContainer: {
-    alignItems: "inherit",
-    display: "inherit",
-    gap: "inherit",
-    visibility: "hidden",
+  root: { position: "relative" },
+  // Just after the value, out of the layout: a fixed-height tree row must not wrap on hover
+  hoverActions: {
+    position: "absolute",
+    left: "100%",
+    top: 0,
+    bottom: 0,
+    display: "flex",
+    alignItems: "center",
+    gap: 2,
+    paddingLeft: 4,
+    whiteSpace: "nowrap",
   },
   dragHandle: { display: "inline-flex", cursor: "grab", opacity: 0.6, fontSize: 16 },
 });

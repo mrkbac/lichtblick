@@ -43,7 +43,8 @@ vi.mock("./HighlightedValue", () => ({
 vi.mock("./index.style", () => ({
   useStylesValue: () => ({
     classes: {
-      placeholderActionContainer: "mock-placeholder-container",
+      root: "mock-root",
+      hoverActions: "mock-hover-actions",
     },
     cx: (...args: string[]) => args.join(" "),
   }),
