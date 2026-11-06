@@ -27,8 +27,7 @@ import Stack from "@lichtblick/suite-base/components/Stack";
 import { IAppTimeFormat } from "@lichtblick/suite-base/hooks/useAppTimeFormat";
 import { TimeDisplayMethod } from "@lichtblick/suite-base/types/panels";
 import {
-  formatDate,
-  formatTime,
+  format,
   getValidatedTimeAndMethodFromString,
 } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
@@ -200,10 +199,7 @@ export function UnconnectedPlaybackTimeDisplay({
     [currentTime],
   );
   const timeOfDayString = useMemo(
-    () =>
-      currentTime
-        ? `${formatDate(currentTime, timezone)} ${formatTime(currentTime, timezone)}`
-        : undefined,
+    () => (currentTime ? format(currentTime, timezone) : undefined),
     [currentTime, timezone],
   );
   const currentTimeString = useMemo(
