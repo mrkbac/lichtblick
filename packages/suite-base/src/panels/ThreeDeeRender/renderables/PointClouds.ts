@@ -58,6 +58,7 @@ import {
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose, Pose } from "../transforms";
 import { FieldReader, getReader, isSupportedField } from "./pointClouds/fieldReaders";
+import { MISSING_TRANSFORM } from "./transforms";
 
 type PointCloudFieldReaders = {
   xReader: FieldReader;
@@ -371,13 +372,17 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
 
   public startFrame(currentTime: bigint, renderFrameId: string, fixedFrameId: string): void {
     this.#pointsHistory.updateHistoryFromCurrentTime(currentTime);
-    this.#pointsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId);
+    let posesResolved = this.#pointsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId);
     this.#pointsHistory.forEach((entry) => {
       entry.renderable.syncCubes();
     });
     if (this.userData.settings.stixelsEnabled) {
       this.#stixelsHistory.updateHistoryFromCurrentTime(currentTime);
-      this.#stixelsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId);
+      posesResolved =
+        this.#stixelsHistory.updatePoses(currentTime, renderFrameId, fixedFrameId) && posesResolved;
+    }
+    if (posesResolved) {
+      this.renderer.settings.errors.remove(this.userData.settingsPath, MISSING_TRANSFORM);
     }
   }
 

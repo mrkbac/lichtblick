@@ -3,7 +3,10 @@
 
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
 import { IRenderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
+import { LayerErrors } from "@lichtblick/suite-base/panels/ThreeDeeRender/LayerErrors";
+import { MISSING_TRANSFORM } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/transforms";
 import { PointCloud2, PointFieldType } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
+import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updatePose";
 
 import { createStixelMaterial, PointCloudHistoryRenderable } from "./PointClouds";
 import { ColorModeSettings, getColorConverter } from "./colorMode";
@@ -13,6 +16,10 @@ import {
   DEFAULT_POINT_SETTINGS,
   pointCloudMaterial,
 } from "./pointExtensionUtils";
+
+vi.mock("@lichtblick/suite-base/panels/ThreeDeeRender/updatePose", () => ({
+  updatePose: vi.fn(),
+}));
 
 const STRIDE = 16;
 const POSITIONS = [
@@ -73,7 +80,7 @@ type Settings = typeof DEFAULT_POINT_SETTINGS & {
   colorFieldComputed: undefined;
 };
 
-function decode(cloud: PointCloud2, overrides: Partial<Settings>) {
+function decode(cloud: PointCloud2, overrides: Partial<Settings>, rendererOverride = renderer) {
   const settings: Settings = {
     ...DEFAULT_POINT_SETTINGS,
     visible: true,
@@ -81,7 +88,7 @@ function decode(cloud: PointCloud2, overrides: Partial<Settings>) {
     colorFieldComputed: undefined,
     ...overrides,
   };
-  const renderable = new PointCloudHistoryRenderable("/points", renderer, {
+  const renderable = new PointCloudHistoryRenderable("/points", rendererOverride, {
     receiveTime: 0n,
     messageTime: 0n,
     frameId: "lidar",
@@ -107,6 +114,7 @@ function decode(cloud: PointCloud2, overrides: Partial<Settings>) {
     positions: Array.from(geometry.attributes.position!.array),
     colors: Array.from(geometry.attributes.color!.array),
     settings,
+    renderable,
   };
 }
 
@@ -191,5 +199,28 @@ describe("PointCloudHistoryRenderable buffers", () => {
       colors,
       expectedColors({ ...settings, colorMode: "gradient" }, INTENSITIES, 10, 50),
     );
+  });
+});
+
+describe("PointCloudHistoryRenderable missing transform error", () => {
+  it("clears only once both points and stixels resolve their transforms", () => {
+    const errors = new LayerErrors();
+    const path = ["topics", "/points"];
+    const { renderable } = decode(makeCloud(), { stixelsEnabled: true }, {
+      ...renderer,
+      transformTree: {},
+      settings: { errors },
+    } as unknown as IRenderer);
+
+    // points fail, stixels resolve: the error must stay
+    vi.mocked(updatePose).mockReturnValueOnce(false).mockReturnValue(true);
+    renderable.startFrame(0n, "map", "map");
+    expect(errors.hasError(path, MISSING_TRANSFORM)).toBe(true);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    vi.mocked(console.warn).mockClear();
+
+    // both resolve: the error clears
+    renderable.startFrame(0n, "map", "map");
+    expect(errors.hasError(path, MISSING_TRANSFORM)).toBe(false);
   });
 });
