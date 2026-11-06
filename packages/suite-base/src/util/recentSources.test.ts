@@ -32,9 +32,14 @@ describe("splitRecentTitle", () => {
 
 describe("formatTimeAgo", () => {
   const now = 1_700_000_000_000;
-  it("picks the largest fitting unit", () => {
+  const day = 24 * 60 * 60 * 1000;
+  it("picks the largest unit that fits at least twice", () => {
     expect(formatTimeAgo(now - 3 * 60 * 60 * 1000, now, "en")).toBe("3 hours ago");
-    expect(formatTimeAgo(now - 24 * 60 * 60 * 1000, now, "en")).toBe("yesterday");
+    expect(formatTimeAgo(now - day, now, "en")).toBe("24 hours ago");
+    expect(formatTimeAgo(now - 2 * day, now, "en")).toBe("2 days ago");
+    expect(formatTimeAgo(now - 17 * 30 * day, now, "en")).toBe("17 months ago");
+    expect(formatTimeAgo(now - 3 * 365 * day, now, "en")).toBe("3 years ago");
+    expect(formatTimeAgo(now - 1000, now, "en")).toBe("now");
     expect(formatTimeAgo(now, now, "en")).toBe("now");
   });
 });

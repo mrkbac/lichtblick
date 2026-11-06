@@ -6,10 +6,15 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 export const dataSourceInfo = {
+  copyValue: "Copy {{label}}",
   currentSource: "Current source",
   dataSource: "Data source",
   duration: "Duration",
   endTime: "End time",
+  files: "Files",
+  messages: "Messages",
+  schemas: "Schemas",
   startTime: "Start time",
+  topics: "Topics",
   waitingForConnection: "Waiting for connection…",
 };

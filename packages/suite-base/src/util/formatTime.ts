@@ -95,8 +95,17 @@ export function formatTime(stamp: Time, timezone?: string): string {
   return `${p.hour}:${p.minute}:${p.second}.${p.fractionalSecond} ${p.dayPeriod} ${p.timeZoneName}`;
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** h:mm:ss.SSS, with a day count in front once it reaches a day, e.g. "106d 7:02:04.300". */
 export function formatDuration(stamp: Time): string {
-  return formatHms(Math.round(stamp.sec * 1000 + stamp.nsec / 1e6));
+  const totalMs = Math.round(stamp.sec * 1000 + stamp.nsec / 1e6);
+  const days = Math.floor(Math.abs(totalMs) / DAY_MS);
+  if (days === 0) {
+    return formatHms(totalMs);
+  }
+  const sign = totalMs < 0 ? "-" : "";
+  return `${sign}${days}d ${formatHms(Math.abs(totalMs) % DAY_MS)}`;
 }
 
 const timeStrRegex =
