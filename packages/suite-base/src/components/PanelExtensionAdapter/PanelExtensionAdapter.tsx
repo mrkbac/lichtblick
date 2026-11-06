@@ -207,8 +207,10 @@ function PanelExtensionAdapter(
 
   const { globalVariables, setGlobalVariables } = useGlobalVariables();
 
+  // Per instance, so one panel clearing its preview time never drops another panel's hover
+  const hoverComponentId = `PanelExtensionAdapter:${panelId}`;
   const hoverValue = useHoverValue({
-    componentId: `PanelExtensionAdapter:${panelId}`,
+    componentId: hoverComponentId,
     isPlaybackSeconds: true,
     // Don't re-render on every timeline hover move unless the panel uses previewTime.
     disableUpdates: !watchedFields.has("previewTime"),
@@ -526,7 +528,7 @@ function PanelExtensionAdapter(
           return;
         }
         if (stamp == undefined) {
-          clearHoverValue("PanelExtensionAdatper");
+          clearHoverValue(hoverComponentId);
         } else {
           const ctx = getMessagePipelineContext();
           const startTime = ctx.playerState.activeData?.startTime;
@@ -538,7 +540,7 @@ function PanelExtensionAdapter(
           const secondsFromStart = stamp - toSec(startTime);
           setHoverValue({
             type: "PLAYBACK_SECONDS",
-            componentId: "PanelExtensionAdatper",
+            componentId: hoverComponentId,
             value: secondsFromStart,
           });
         }
@@ -815,6 +817,7 @@ function PanelExtensionAdapter(
     getMessagePipelineContext,
     setGlobalVariables,
     clearHoverValue,
+    hoverComponentId,
     setHoverValue,
     setSubscriptions,
     undelivered,
