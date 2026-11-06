@@ -112,7 +112,8 @@ export const useStyles = makeStyles()((theme) => ({
     whiteSpace: "nowrap",
     cursor: "grab",
     "&:hover": { backgroundColor: theme.palette.action.hover },
-    "&:hover [data-actions]": { visibility: "visible" },
+    // Shown on hover and while focused, so the add button can be reached with Tab
+    "&:hover [data-actions], &:focus-within [data-actions]": { opacity: 1, pointerEvents: "auto" },
   },
   treeSpacer: { width: 16, flex: "none" },
   treeName: { color: theme.palette.text.secondary, flex: "none" },
@@ -124,7 +125,8 @@ export const useStyles = makeStyles()((theme) => ({
     fontVariantNumeric: "tabular-nums",
   },
   treeActions: {
-    visibility: "hidden",
+    opacity: 0,
+    pointerEvents: "none",
     position: "absolute",
     right: 0,
     display: "flex",

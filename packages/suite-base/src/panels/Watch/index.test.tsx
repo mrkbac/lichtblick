@@ -112,7 +112,8 @@ describe("Watch", () => {
   });
 
   it("shows an expanded message as a tree whose fields can become rows", async () => {
-    const user = userEvent.setup();
+    // The add buttons are revealed on hover, which jsdom doesn't apply
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
     render(<Empty />);
     const input = screen.getByPlaceholderText("Add message path…");
     await user.type(input, "/state.pose{Enter}/state.ok{Enter}");

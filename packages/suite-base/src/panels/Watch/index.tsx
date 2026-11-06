@@ -214,7 +214,8 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
   const [editingId, setEditingId] = useState<string | undefined>();
   const onEditDone = useCallback(
     (id: string, paths: string[] | undefined) => {
-      setEditingId(undefined);
+      // An editor closes on blur a moment later; by then another row's editor may be open
+      setEditingId((current) => (current === id ? undefined : current));
       if (paths) {
         updateConfig((prev) => ({ ...prev, rows: replaceRowPaths(prev.rows, id, paths) }));
       }
