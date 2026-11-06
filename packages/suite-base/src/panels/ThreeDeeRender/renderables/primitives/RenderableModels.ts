@@ -389,9 +389,12 @@ export class RenderableModels extends RenderablePrimitive {
       rgbToThreeColor(renderable.material.color, overrideColor);
       const transparent = overrideColor.a < 1;
       renderable.material.opacity = overrideColor.a;
-      renderable.material.transparent = transparent;
-      renderable.material.depthWrite = !transparent;
-      renderable.material.needsUpdate = true;
+      // Color and opacity are uniforms; only a transparency change needs a shader rebuild
+      if (renderable.material.transparent !== transparent) {
+        renderable.material.transparent = transparent;
+        renderable.material.depthWrite = !transparent;
+        renderable.material.needsUpdate = true;
+      }
     } else if (renderable.material) {
       // We already discarded the original materials, need to re-clone them from the original model
       renderable.model = cloneAndPrepareModel(renderable.cachedModel);
