@@ -487,9 +487,13 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   }
 
   /** The data of all series within the visible x range */
-  public async getVisibleCsvData(): Promise<CsvDataset[]> {
+  /** Undefined until the chart has drawn an x axis, since the visible range is unknown before. */
+  public async getVisibleCsvData(): Promise<CsvDataset[] | undefined> {
     const scale = this.latestXScale;
-    return await this.getCsvData(scale ? { min: scale.min, max: scale.max } : undefined);
+    if (!scale) {
+      return undefined;
+    }
+    return await this.getCsvData({ min: scale.min, max: scale.max });
   }
 
   private updateCurrentSeconds(secondsSinceStart: number): void {

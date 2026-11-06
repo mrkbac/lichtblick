@@ -1190,13 +1190,12 @@ describe("PlotCoordinator", () => {
   });
 
   describe("getVisibleCsvData", () => {
-    it("asks for all data before the chart has an x scale", async () => {
+    it("exports nothing before the chart has an x scale", async () => {
       const getCsvData = vi.fn().mockResolvedValue([]);
       datasetsBuilder.getCsvData = getCsvData;
 
-      await plotCoordinator.getVisibleCsvData();
-
-      expect(getCsvData).toHaveBeenCalledWith(undefined);
+      expect(await plotCoordinator.getVisibleCsvData()).toBeUndefined();
+      expect(getCsvData).not.toHaveBeenCalled();
     });
 
     it("asks the builder for the visible x range only", async () => {
