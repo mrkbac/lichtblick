@@ -35,10 +35,13 @@ import { Immutable } from "@lichtblick/suite";
 import { MessagePipelineProvider } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
+  LayoutID,
   LayoutState,
+  useCurrentLayoutActions,
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { ExtensionCatalogContext } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
+import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import { usePerformance } from "@lichtblick/suite-base/context/PerformanceContext";
 import PlayerSelectionContext, {
   DataSourceArgs,
@@ -151,6 +154,8 @@ export default function PlayerManager(
 
   const globalVariables = useCurrentLayoutSelector(globalVariablesSelector);
   const isLayoutLoading = useCurrentLayoutSelector(isLayoutLoadingSelector);
+  const layoutManager = useLayoutManager();
+  const { setSelectedLayoutId } = useCurrentLayoutActions();
 
   const topicAliasPlayer = useMemo(() => {
     if (!basePlayer) {
@@ -215,13 +220,16 @@ export default function PlayerManager(
   const [selectedSource, setSelectedSource] = useState<IDataSourceFactory | undefined>();
   const [selectedFiles, setSelectedFiles] = useState<readonly File[] | undefined>();
 
-  // Bumped by every select/close so an in-flight async selection can tell it was superseded.
-  const selectionGen = useRef(0);
+  // Sample layout ids for this session, used when localStorage is unavailable.
+  const sampleLayoutIds = useRef(new Map<string, LayoutID>());
+  // Bumped on every selectSource/closeSource call, so a slow earlier selection can tell it was
+  // superseded and won't apply its player or layout late.
+  const selectionSeq = useRef(0);
 
   const selectSource = useCallback(
     async (sourceId: string, args?: DataSourceArgs) => {
       log.debug(`Select Source: ${sourceId}`);
-      const gen = ++selectionGen.current;
+      const seq = ++selectionSeq.current;
 
       const foundSource = playerSources.find(
         (source) => (source.id === sourceId || source.legacyIds?.includes(sourceId)) ?? false,
@@ -247,6 +255,42 @@ export default function PlayerManager(
 
         setBasePlayer(newPlayer);
         writeLastFile(undefined);
+
+        // Show the sample in the layout made for it. Its id is remembered per source, so an
+        // edited or renamed copy is reopened and same-named layouts are never picked up.
+        if (foundSource.sampleLayout) {
+          const storageKey = `lichtblick.sampleLayoutId.${foundSource.id}`;
+          let savedId = sampleLayoutIds.current.get(storageKey);
+          try {
+            savedId ??= (localStorage.getItem(storageKey) as LayoutID | null) ?? undefined;
+          } catch (error) {
+            log.warn("Could not read the saved sample layout id", error);
+          }
+          try {
+            const existing = savedId ? await layoutManager.getLayout(savedId) : undefined;
+            const layout =
+              existing ??
+              (await layoutManager.saveNewLayout({
+                name: foundSource.displayName,
+                data: foundSource.sampleLayout,
+                permission: "CREATOR_WRITE",
+              }));
+            sampleLayoutIds.current.set(storageKey, layout.id);
+            try {
+              localStorage.setItem(storageKey, layout.id);
+            } catch (error) {
+              log.warn("Could not save the sample layout id; it is kept for this session", error);
+            }
+            if (isMounted() && seq === selectionSeq.current) {
+              setSelectedLayoutId(layout.id);
+            }
+          } catch (error) {
+            log.error(error);
+            enqueueSnackbar(`Could not open the sample layout: ${String(error)}`, {
+              variant: "error",
+            });
+          }
+        }
         return;
       }
 
@@ -293,7 +337,7 @@ export default function PlayerManager(
                 const permission = await handle.queryPermission({
                   mode: "read",
                 });
-                if (!isMounted() || gen !== selectionGen.current) {
+                if (!isMounted() || seq !== selectionSeq.current) {
                   return;
                 }
 
@@ -301,7 +345,7 @@ export default function PlayerManager(
                   const newPerm = await handle.requestPermission({
                     mode: "read",
                   });
-                  if (!isMounted() || gen !== selectionGen.current) {
+                  if (!isMounted() || seq !== selectionSeq.current) {
                     return;
                   }
                   if (newPerm !== "granted") {
@@ -310,7 +354,7 @@ export default function PlayerManager(
                 }
               }
               files = await Promise.all(handles.map(async (f) => await f.getFile()));
-              if (!isMounted() || gen !== selectionGen.current) {
+              if (!isMounted() || seq !== selectionSeq.current) {
                 return;
               }
             }
@@ -346,12 +390,20 @@ export default function PlayerManager(
         enqueueSnackbar("Unable to initialize player", { variant: "error" });
       } catch (error) {
         // A superseded selection (closed or replaced meanwhile) shouldn't surface its error
-        if (gen === selectionGen.current) {
+        if (seq === selectionSeq.current) {
           enqueueSnackbar((error as Error).message, { variant: "error" });
         }
       }
     },
-    [playerSources, metricsCollector, enqueueSnackbar, isMounted, addRecent],
+    [
+      playerSources,
+      metricsCollector,
+      enqueueSnackbar,
+      isMounted,
+      addRecent,
+      layoutManager,
+      setSelectedLayoutId,
+    ],
   );
 
   // Select a recent entry by id
@@ -370,6 +422,11 @@ export default function PlayerManager(
     }
     restoredLastFile.current = true;
 
+    // Only restore into an untouched session: the user may have picked or closed a source
+    // before recents finished loading.
+    if (selectionSeq.current !== 0) {
+      return;
+    }
     const lastFile = readLastFile();
     if (!lastFile || new URL(window.location.href).searchParams.has("ds")) {
       return;
@@ -381,13 +438,13 @@ export default function PlayerManager(
       return;
     }
 
-    const gen = selectionGen.current;
+    const seq = selectionSeq.current;
     void (async () => {
       const permissions = await Promise.all(
         recent.handles.map(async (h) => await h.queryPermission({ mode: "read" })),
       );
       // The user opened or closed a source meanwhile: don't override that with the restore
-      if (gen !== selectionGen.current) {
+      if (seq !== selectionSeq.current) {
         return;
       }
       if (permissions.every((p) => p === "granted")) {
@@ -414,7 +471,7 @@ export default function PlayerManager(
   }, [recentsLoaded, recents, selectSource, enqueueSnackbar, closeSnackbar]);
 
   const closeSource = useCallback(() => {
-    selectionGen.current++;
+    selectionSeq.current++;
     // Dropping the player makes MessagePipelineProvider close() it (e.g. closes the websocket).
     setBasePlayer(undefined);
     setSelectedSource(undefined);
