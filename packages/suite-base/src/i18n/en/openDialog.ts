@@ -57,6 +57,7 @@ export const openDialog = {
   tabAll: "All",
   tabCatalog: "Catalog",
   tabRecent: "Recent",
+  tabRecordings: "Recordings",
   catalogView: "Catalog view",
   catalogList: "List",
   catalogGrid: "Grid",

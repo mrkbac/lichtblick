@@ -31,6 +31,7 @@ import { useCatalogFolder } from "@lichtblick/suite-base/components/Catalog/useC
 import DontShowThisAgainCheckbox from "@lichtblick/suite-base/components/DataSourceDialog/DontShowThisAgainCheckbox";
 import { OpenUrlInput } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
 import { useStyles } from "@lichtblick/suite-base/components/DataSourceDialog/index.style";
+import { LiveRecordingsList } from "@lichtblick/suite-base/components/LiveRecordingsDialog";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
@@ -47,7 +48,7 @@ import { splitRecentTitle } from "@lichtblick/suite-base/util/recentSources";
 // Number of recents listed on the All tab, unless searching
 const RECENTS_PREVIEW_COUNT = 5;
 
-type View = "all" | "catalog" | "recent";
+type View = "all" | "catalog" | "recent" | "recordings";
 type Kind = "all" | "file" | "remote" | "live";
 type CatalogView = "list" | "grid" | "map";
 
@@ -129,7 +130,8 @@ export default function Start(): React.JSX.Element {
       ? filteredRecents
       : filteredRecents.slice(0, RECENTS_PREVIEW_COUNT);
   const showRecents =
-    view !== "catalog" && (filteredRecents.length > 0 || (searching && recentSources.length > 0));
+    (view === "all" || view === "recent") &&
+    (filteredRecents.length > 0 || (searching && recentSources.length > 0));
   const showCatalog = view === "catalog" || (view === "all" && (kind === "all" || kind === "file"));
 
   // Enter in the search box opens the first recent listed, else the first catalog match.
@@ -173,6 +175,7 @@ export default function Start(): React.JSX.Element {
           <ToggleButton value="all">{t("tabAll")}</ToggleButton>
           <ToggleButton value="catalog">{t("tabCatalog")}</ToggleButton>
           <ToggleButton value="recent">{t("tabRecent")}</ToggleButton>
+          <ToggleButton value="recordings">{t("tabRecordings")}</ToggleButton>
         </ToggleButtonGroup>
         <div className={classes.spacer} />
         {view === "catalog" && folder.name != undefined && (
@@ -312,6 +315,8 @@ export default function Start(): React.JSX.Element {
           )}
         </Stack>
       )}
+
+      {view === "recordings" && <LiveRecordingsList />}
 
       {showCatalog && (
         <Catalog
