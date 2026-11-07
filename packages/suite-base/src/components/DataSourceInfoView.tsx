@@ -330,7 +330,7 @@ function LiveFields(): React.JSX.Element | null {
       // ponytail: whole file built in memory, bounded by the history memory limit.
       const file = new TempBuffer();
       await exportLiveHistory(file);
-      downloadFiles([{ blob: new Blob([file.get().slice()]), fileName }]);
+      downloadFiles([{ blob: new Blob([file.get() as Uint8Array<ArrayBuffer>]), fileName }]);
       setSaveState({ status: "saved" });
     } catch (err) {
       setSaveState({ status: "failed", error: String(err) });
