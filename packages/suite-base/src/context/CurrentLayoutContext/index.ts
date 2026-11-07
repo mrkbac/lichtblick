@@ -17,7 +17,7 @@ import Logger from "@lichtblick/log";
 import { RenderState, VariableValue } from "@lichtblick/suite";
 import useShouldNotChangeOften from "@lichtblick/suite-base/hooks/useShouldNotChangeOften";
 import { PanelConfig, PlaybackConfig, UserScripts } from "@lichtblick/suite-base/types/panels";
-import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
+import { getAllPanelIds } from "@lichtblick/suite-base/util/tabLayout";
 
 import {
   AddPanelPayload,
@@ -202,7 +202,8 @@ export function useSelectedPanels(): SelectedPanelActions {
   const { getCurrentLayoutState: getCurrentLayout } = useCurrentLayoutActions();
 
   const selectAllPanels = useCallback(() => {
-    const panelIds = getPanelIds(getCurrentLayout().selectedLayout?.data?.layout);
+    const data = getCurrentLayout().selectedLayout?.data;
+    const panelIds = data ? getAllPanelIds(data) : [];
     setSelectedPanelIds(panelIds);
   }, [getCurrentLayout, setSelectedPanelIds]);
 

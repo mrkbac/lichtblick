@@ -50,6 +50,8 @@ export type ConfigsPayload = {
 export type ChangePanelLayoutPayload = {
   layout?: LayoutNode;
   trimConfigById?: boolean;
+  /** Replace the layout of this tab of a Tab panel instead of the root layout. */
+  tab?: { panelId: string; index: number };
 };
 export type SaveConfigsPayload = {
   configs: ConfigsPayload[];
@@ -114,6 +116,8 @@ export type AddPanelPayload = {
   position?: LayoutDropPosition;
   /** Place the panel relative to the group holding this panel instead of the whole layout. */
   targetPanelId?: string;
+  /** Without a target panel: put the panel into the shown tab of this Tab panel. */
+  tabId?: string;
 };
 export type ADD_PANEL = { type: "ADD_PANEL"; payload: AddPanelPayload };
 

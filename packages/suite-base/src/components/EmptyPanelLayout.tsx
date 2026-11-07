@@ -15,10 +15,12 @@
 //   You may not use this file except in compliance with the License.
 
 import { Typography } from "@mui/material";
-import { useCallback, useState } from "react";
+import { getPanelData } from "dockview-react";
+import { useCallback, useContext, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
+import { LayoutTabContext } from "@lichtblick/suite-base/components/LayoutTabContext";
 import { PanelCatalog, PanelSelection } from "@lichtblick/suite-base/components/PanelCatalog";
 import {
   getPanelDragData,
@@ -61,33 +63,42 @@ export const EmptyPanelLayout = (): React.JSX.Element => {
   const { addPanel } = useCurrentLayoutActions();
   const { t } = useTranslation("addPanel");
   const [isOver, setIsOver] = useState(false);
+  // In an empty tab of a Tab panel, panels go into that tab.
+  const tabPath = useContext(LayoutTabContext);
+  const tabId = tabPath.at(-1);
 
   const onPanelSelect = useCallback(
     ({ type, config }: PanelSelection) => {
-      addPanel({ id: getPanelIdForType(type), config });
+      addPanel({ id: getPanelIdForType(type), config, tabId });
     },
-    [addPanel],
+    [addPanel, tabId],
   );
 
-  const onDragOver = useCallback((event: React.DragEvent) => {
-    if (isPanelDrag(event.dataTransfer)) {
+  // A panel moved here from elsewhere in the layout; a Tab panel can't go into its own tab.
+  const movedPanelId = () => {
+    const panelId = getPanelData()?.panelId ?? undefined;
+    return panelId != undefined && !tabPath.includes(panelId) ? panelId : undefined;
+  };
+
+  const onDragOver = (event: React.DragEvent) => {
+    if (isPanelDrag(event.dataTransfer) || movedPanelId() != undefined) {
       event.preventDefault();
-      event.dataTransfer.dropEffect = "copy";
       setIsOver(true);
     }
-  }, []);
+  };
 
-  const onDrop = useCallback(
-    (event: React.DragEvent) => {
-      setIsOver(false);
-      const selection = getPanelDragData(event.dataTransfer);
-      if (selection) {
-        event.preventDefault();
-        onPanelSelect(selection);
-      }
-    },
-    [onPanelSelect],
-  );
+  const onDrop = (event: React.DragEvent) => {
+    setIsOver(false);
+    const selection = getPanelDragData(event.dataTransfer);
+    const movedId = movedPanelId();
+    if (selection) {
+      event.preventDefault();
+      onPanelSelect(selection);
+    } else if (movedId != undefined) {
+      event.preventDefault();
+      addPanel({ id: movedId, tabId });
+    }
+  };
 
   return (
     <div

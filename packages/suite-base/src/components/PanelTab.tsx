@@ -67,9 +67,18 @@ export function useDragHoverActivation(
   return { onDragEnter, onDragLeave, onDrop: cancel };
 }
 
-/** Whether `dataTransfer` carries a panel: one from the catalog, or a panel being moved. */
-function isPanelBeingDragged(dataTransfer: DataTransfer | null | undefined, dockId: string) {
-  return isPanelDrag(dataTransfer) || getPanelData()?.viewId === dockId;
+/**
+ * Whether `dataTransfer` carries a panel: one from the catalog, or a panel being moved (also one
+ * from another layout, such as the root layout and the layout in a tab of a Tab panel).
+ */
+export function isPanelBeingDragged(dataTransfer: DataTransfer | null | undefined): boolean {
+  return isPanelDrag(dataTransfer) || getPanelData()?.panelId != undefined;
+}
+
+/** The panel being moved from another dockview (e.g. from the root layout into a tab), if any. */
+export function getForeignPanelId(dockId: string): string | undefined {
+  const data = getPanelData();
+  return data?.viewId !== dockId ? (data?.panelId ?? undefined) : undefined;
 }
 
 // Whether a panel is being dragged anywhere. Data types are only readable once the drag has
@@ -134,14 +143,11 @@ function useDropIntoGroup(
 } {
   const { addPanel } = useCurrentLayoutActions();
 
-  const onDragOver = useCallback(
-    (event: DragEvent<HTMLElement>) => {
-      if (isPanelBeingDragged(event.dataTransfer, containerApi.id)) {
-        event.preventDefault();
-      }
-    },
-    [containerApi],
-  );
+  const onDragOver = useCallback((event: DragEvent<HTMLElement>) => {
+    if (isPanelBeingDragged(event.dataTransfer)) {
+      event.preventDefault();
+    }
+  }, []);
 
   const onDrop = useCallback(
     (event: DragEvent<HTMLElement>) => {
@@ -155,6 +161,12 @@ function useDropIntoGroup(
           position: "center",
           targetPanelId,
         });
+        return;
+      }
+      const foreignPanelId = getForeignPanelId(containerApi.id);
+      if (foreignPanelId != undefined) {
+        event.preventDefault();
+        addPanel({ id: foreignPanelId, position: "center", targetPanelId });
         return;
       }
       const data = getPanelData();
@@ -177,18 +189,20 @@ function useDropIntoGroup(
   return { onDragOver, onDrop };
 }
 
-/** Inline editor for a tab's title. Saves on Enter or blur, cancels on Escape. */
-function TabTitleInput({
-  panelId,
+/**
+ * Inline editor for a tab's title. Enter or blur calls `onSave` with the trimmed title when it
+ * changed; Escape cancels. `onDone` is called either way.
+ */
+export function TabTitleInput({
   initialTitle,
+  onSave,
   onDone,
 }: {
-  panelId: string;
   initialTitle: string;
+  onSave: (title: string) => void;
   onDone: () => void;
 }): React.JSX.Element {
   const { classes } = useStyles();
-  const { savePanelConfigs } = useCurrentLayoutActions();
   const doneRef = useRef(false);
 
   const finish = (title: string | undefined) => {
@@ -197,10 +211,7 @@ function TabTitleInput({
     }
     doneRef.current = true;
     if (title != undefined && title.trim() !== initialTitle) {
-      // An empty title falls back to the panel type's title.
-      savePanelConfigs({
-        configs: [{ id: panelId, config: { [PANEL_TITLE_CONFIG_KEY]: title.trim() } }],
-      });
+      onSave(title.trim());
     }
     onDone();
   };
@@ -208,10 +219,9 @@ function TabTitleInput({
   // The tab is a drag source; text selection inside the input must not start a tab drag.
   const tabRef = useCallback((input: HTMLInputElement | null) => {
     const tab = input?.closest<HTMLElement>(".dv-tab");
-    if (!input || !tab) {
+    if (!tab) {
       return undefined;
     }
-    input.select();
     tab.draggable = false;
     return () => {
       tab.draggable = true;
@@ -225,6 +235,9 @@ function TabTitleInput({
       aria-label="Tab title"
       defaultValue={initialTitle}
       autoFocus
+      onFocus={(event) => {
+        event.currentTarget.select();
+      }}
       size={Math.max(initialTitle.length, 4)}
       onBlur={(event) => {
         finish(event.currentTarget.value);
@@ -253,6 +266,14 @@ function TabTitleInput({
 export function PanelTab(props: IDockviewPanelHeaderProps): React.JSX.Element {
   const { api, containerApi } = props;
   const [editing, setEditing] = useState(false);
+  const { savePanelConfigs } = useCurrentLayoutActions();
+  const saveTitle = useCallback(
+    (title: string) => {
+      // An empty title falls back to the panel type's title.
+      savePanelConfigs({ configs: [{ id: api.id, config: { [PANEL_TITLE_CONFIG_KEY]: title } }] });
+    },
+    [api.id, savePanelConfigs],
+  );
   const activate = useCallback(() => {
     if (!api.isVisible) {
       api.setActive();
@@ -272,8 +293,8 @@ export function PanelTab(props: IDockviewPanelHeaderProps): React.JSX.Element {
   if (editing) {
     return (
       <TabTitleInput
-        panelId={api.id}
         initialTitle={api.title ?? ""}
+        onSave={saveTitle}
         onDone={() => {
           setEditing(false);
         }}

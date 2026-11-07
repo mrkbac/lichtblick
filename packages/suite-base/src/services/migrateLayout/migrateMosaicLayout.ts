@@ -2,111 +2,85 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import type { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
-import type { LayoutGroup, LayoutNode } from "@lichtblick/suite-base/types/layouts";
+import type { LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import type { SavedProps } from "@lichtblick/suite-base/types/panels";
-import { PANEL_TITLE_CONFIG_KEY, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import {
   MosaicNode,
-  getGroups,
-  isLayoutGroup,
   isLayoutNode,
   isMosaicNode,
   normalizeLayout,
 } from "@lichtblick/suite-base/util/layoutTree";
+import { isTabPanel } from "@lichtblick/suite-base/util/tabLayout";
 
-/** Panel type of the retired Tab panel, which nested a whole layout per tab. */
-const LEGACY_TAB_PANEL_TYPE = "Tab";
+function convert(node: MosaicNode): LayoutNode | undefined {
+  if (typeof node === "string") {
+    return { panels: [node] };
+  }
+  const first = node.splitPercentage ?? 50;
+  const parts = [
+    { tree: convert(node.first), size: first },
+    { tree: convert(node.second), size: 100 - first },
+  ].filter((part): part is { tree: LayoutNode; size: number } => part.tree != undefined);
+  return normalizeLayout({
+    direction: node.direction,
+    children: parts.map((part) => part.tree),
+    sizes: parts.map((part) => part.size),
+  });
+}
 
-type LegacyTabConfig = { activeTabIdx?: unknown; tabs?: unknown };
+/** Whether a Tab panel config still holds react-mosaic-component tab layouts. */
+function hasMosaicTabs(config: Record<string, unknown> | undefined): boolean {
+  return (
+    Array.isArray(config?.tabs) &&
+    config.tabs.some(
+      (tab: unknown) =>
+        typeof tab === "object" &&
+        tab != undefined &&
+        "layout" in tab &&
+        tab.layout != undefined &&
+        !isLayoutNode(tab.layout),
+    )
+  );
+}
 
 /**
- * Convert a layout saved by react-mosaic-component (binary splits, nested Tab panels) into a layout
- * tree. Tab panels become groups of tabs: the active tab's arrangement is kept, and the panels of
- * the other tabs are stacked as tabs onto the groups in the same position (so tabs with the same
- * arrangement line up). Every panel and its config is kept; only the Tab panels go away.
+ * Convert a layout saved by react-mosaic-component (binary splits) into a layout tree, including
+ * the layout in each tab of a Tab panel. Tab layouts that are malformed (e.g. from a hand-edited
+ * file) become empty tabs.
  */
 export function migrateMosaicLayout(data: LayoutData): LayoutData {
   const legacy: unknown = data.layout;
-  const hasTabConfigs = Object.keys(data.configById).some(
-    (id) => getPanelTypeFromId(id) === LEGACY_TAB_PANEL_TYPE,
+  const tabIds = Object.keys(data.configById).filter(
+    (id) => isTabPanel(id) && hasMosaicTabs(data.configById[id]),
   );
-  if (!isMosaicNode(legacy) && !hasTabConfigs) {
+  if (!isMosaicNode(legacy) && tabIds.length === 0) {
     // Drop a malformed tree (e.g. from a hand-edited file) instead of failing on it later.
     return legacy == undefined || isLayoutNode(legacy) ? data : { ...data, layout: undefined };
   }
 
   const configById: SavedProps = { ...data.configById };
-
-  function convert(node: MosaicNode): LayoutNode | undefined {
-    if (typeof node === "string") {
-      return getPanelTypeFromId(node) === LEGACY_TAB_PANEL_TYPE
-        ? convertTabPanel(node)
-        : { panels: [node] };
-    }
-    const first = node.splitPercentage ?? 50;
-    const parts = [
-      { tree: convert(node.first), size: first },
-      { tree: convert(node.second), size: 100 - first },
-    ].filter((part): part is { tree: LayoutNode; size: number } => part.tree != undefined);
-    return normalizeLayout({
-      direction: node.direction,
-      children: parts.map((part) => part.tree),
-      sizes: parts.map((part) => part.size),
-    });
-  }
-
-  function convertTabPanel(tabPanelId: string): LayoutNode | undefined {
-    const config = configById[tabPanelId] as LegacyTabConfig | undefined;
-    delete configById[tabPanelId];
-    // Configs come from saved files; skip anything that isn't a list of tab objects
-    const rawTabs: unknown[] = Array.isArray(config?.tabs) ? config.tabs : [];
-    const tabs = rawTabs.flatMap((rawTab, index) => {
+  for (const id of tabIds) {
+    const config = configById[id]!;
+    const tabs = (config.tabs as unknown[]).flatMap((rawTab, index) => {
       if (typeof rawTab !== "object" || rawTab == undefined) {
         return [];
       }
-      const tab = rawTab as { title?: unknown; layout?: unknown };
-      const tree = isMosaicNode(tab.layout) ? convert(tab.layout) : undefined;
-      return tree == undefined ? [] : [{ title: tab.title, tree, index }];
+      const { title, layout } = rawTab as { title?: unknown; layout?: unknown };
+      const tree = isMosaicNode(layout)
+        ? convert(layout)
+        : isLayoutNode(layout)
+          ? layout
+          : undefined;
+      return [
+        {
+          title: typeof title === "string" ? title : `${index + 1}`,
+          ...(tree != undefined ? { layout: tree } : {}),
+        },
+      ];
     });
-    const base = tabs.find((tab) => tab.index === (config?.activeTabIdx ?? 0)) ?? tabs[0];
-    if (base == undefined) {
-      return undefined;
-    }
-
-    // A tab holding a single panel shows its tab title, unless the panel has its own title.
-    for (const { title, tree } of tabs) {
-      if (isLayoutGroup(tree) && tree.panels.length === 1 && typeof title === "string" && title) {
-        const panelId = tree.panels[0]!;
-        const panelConfig = configById[panelId] ?? {};
-        if (panelConfig[PANEL_TITLE_CONFIG_KEY] == undefined) {
-          configById[panelId] = { ...panelConfig, [PANEL_TITLE_CONFIG_KEY]: title };
-        }
-      }
-    }
-
-    const result = structuredClone(base.tree);
-    const targets: LayoutGroup[] = getGroups(result);
-    const activePanels = targets.map((group) => group.active ?? group.panels[0]);
-    for (const group of targets) {
-      group.panels = [];
-    }
-    for (const { tree } of tabs) {
-      getGroups(tree).forEach((group, index) => {
-        targets[index % targets.length]!.panels.push(...group.panels);
-      });
-    }
-    targets.forEach((group, index) => {
-      group.active = activePanels[index];
-    });
-    return normalizeLayout(result);
+    configById[id] = { ...config, tabs };
   }
 
   const layout = isMosaicNode(legacy) ? convert(legacy) : isLayoutNode(legacy) ? legacy : undefined;
-  // Tab panels that are no longer in the layout only leave orphaned configs behind.
-  for (const id of Object.keys(configById)) {
-    if (getPanelTypeFromId(id) === LEGACY_TAB_PANEL_TYPE) {
-      delete configById[id];
-    }
-  }
   return { ...data, layout, configById };
 }
