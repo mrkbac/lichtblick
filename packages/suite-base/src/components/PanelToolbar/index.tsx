@@ -14,6 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import { Typography } from "@mui/material";
@@ -91,8 +92,22 @@ export default React.memo<PanelToolbarProps>(function PanelToolbar({
       className={cx(classes.root, className)}
       data-testid="mosaic-drag-handle"
       ref={rootDragRef}
-      style={{ backgroundColor, cursor: rootDragRef != undefined ? "grab" : "auto" }}
+      style={{
+        backgroundColor,
+        cursor: rootDragRef != undefined ? "grab" : "auto",
+      }}
     >
+      {!isUnknownPanel && panelContext?.connectToolbarDragHandle != undefined && (
+        // Every panel gets a visible grip, even when its toolbar is full of controls.
+        <span
+          className={classes.grip}
+          ref={panelContext.connectToolbarDragHandle}
+          title="Drag to move panel"
+          data-testid="panel-drag-grip"
+        >
+          <DragIndicatorIcon fontSize="inherit" />
+        </span>
+      )}
       {children ??
         (title && (
           <Typography noWrap variant="body2" color="textSecondary" style={{ flex: "auto" }}>

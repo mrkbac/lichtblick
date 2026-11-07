@@ -24,9 +24,11 @@ vi.mock("dockview-react", () => ({
     onDragLeave,
     onDragOver,
     onDrop,
+    onDoubleClick,
   }: React.HTMLAttributes<HTMLDivElement>) => (
     <div
       data-testid="dockview-tab"
+      onDoubleClick={onDoubleClick}
       onDragEnter={onDragEnter}
       onDragLeave={onDragLeave}
       onDragOver={onDragOver}
@@ -109,6 +111,7 @@ describe("PanelTab", () => {
   function renderTab(onAction: (action: PanelsActions) => void) {
     const api = {
       id: "Plot!a",
+      title: "Plot",
       isVisible: false,
       setActive: vi.fn(),
       group: { activePanel: { id: "Plot!a" }, panels: [{ id: "Plot!a" }] },
@@ -144,6 +147,26 @@ describe("PanelTab", () => {
     });
   });
 
+  it("renames the tab on double-click and Enter, and cancels on Escape", () => {
+    const onAction = vi.fn();
+    renderTab(onAction);
+
+    fireEvent.doubleClick(screen.getByTestId("dockview-tab"));
+    fireEvent.keyDown(screen.getByLabelText("Tab title"), { key: "Escape" });
+    expect(onAction).not.toHaveBeenCalled();
+
+    fireEvent.doubleClick(screen.getByTestId("dockview-tab"));
+    const input = screen.getByLabelText("Tab title");
+    fireEvent.change(input, { target: { value: "  Speed " } });
+    fireEvent.keyDown(input, { key: "Enter" });
+    expect(onAction).toHaveBeenCalledTimes(1);
+    expect(onAction).toHaveBeenCalledWith({
+      type: "SAVE_PANEL_CONFIGS",
+      payload: { configs: [{ id: "Plot!a", config: { lichtblickPanelTitle: "Speed" } }] },
+    });
+    expect(screen.getByTestId("dockview-tab")).toBeTruthy();
+  });
+
   it("opens a background tab after a drag rests on it", () => {
     vi.useFakeTimers();
     const api = renderTab(vi.fn());
@@ -170,6 +193,7 @@ describe("NewTabDropTarget", () => {
     const onAction = vi.fn();
     renderTarget(onAction);
     expect(screen.queryByTestId("new-tab-drop-target")).toBeNull();
+    expect(screen.getByTestId("new-tab-button")).toBeTruthy();
 
     const dataTransfer = fakeDataTransfer();
     setPanelDragData(dataTransfer, { type: "Gauge" });
