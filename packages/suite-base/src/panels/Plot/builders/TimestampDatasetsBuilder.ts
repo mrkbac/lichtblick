@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as Comlink from "@foxglove/comlink";
-import { toSec, subtract as subtractTime } from "@foxglove/rostime";
+import { compare, toSec, subtract as subtractTime } from "@foxglove/rostime";
 
 import { ComlinkWrap } from "@lichtblick/den/worker";
 import { Immutable, MessageEvent, Time } from "@lichtblick/suite";
@@ -40,6 +40,8 @@ const registry = new FinalizationRegistry<() => void>((dispose) => {
 
 const emptyPaths = new Set<string>();
 
+type ReceiveMark = { time: Immutable<Time>; count: number };
+
 type TimestampSeriesItem = {
   config: Immutable<SeriesItem>;
 };
@@ -57,6 +59,16 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
   #pendingDispatch: Immutable<UpdateDataAction>[] = [];
 
   #lastSeekTime = 0;
+
+  #startTime: Immutable<Time> | undefined;
+
+  /**
+   * Receive time of the newest message seen per topic and how many arrived at exactly that time
+   * (a coarse server clock gives many messages the same time). Live sources only.
+   */
+  #lastReceiveByTopic = new Map<string, ReceiveMark>();
+  /** After a seek: messages up to these marks are replays of stored points */
+  #replayUntilByTopic = new Map<string, ReceiveMark>();
 
   #series: Immutable<TimestampSeriesItem[]> = [];
   // True once handleMessageRange has been called — indicates a range-capable source (file/bag).
@@ -81,8 +93,24 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
     const didSeek = activeData.lastSeekTime !== this.#lastSeekTime;
     this.#lastSeekTime = activeData.lastSeekTime;
 
-    const msgEvents = activeData.messages;
+    // Live sources slide their start time along with the history window. x is relative to it, so
+    // move what is already stored or old and new points disagree and the line jumps.
+    if (this.#startTime && compare(this.#startTime, activeData.startTime) !== 0) {
+      this.#pendingDispatch.push({
+        type: "shift-x",
+        delta: toSec(subtractTime(activeData.startTime, this.#startTime)),
+      });
+    }
+    this.#startTime = activeData.startTime;
+
+    let msgEvents = activeData.messages;
     let datasetsChanged = false;
+    if (!this.#hasRangeSource) {
+      if (didSeek) {
+        this.#handleLiveSeek(activeData.endTime);
+      }
+      msgEvents = this.#dropReplayed(msgEvents);
+    }
     if (!this.#hasRangeSource && msgEvents.length > 0) {
       const { actions: seriesActions, datasetsChanged: seriesChanged } = buildCurrentSeriesActions(
         this.#series,
@@ -97,6 +125,60 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
       range: { min: 0, max: toSec(subtractTime(activeData.endTime, activeData.startTime)) },
       datasetsChanged,
     };
+  }
+
+  /**
+   * Live sources replay what they already sent when seeking inside their history (e.g. clicking the
+   * plot). Those points are stored already; appending them again draws the line back in time.
+   */
+  #handleLiveSeek(endTime: Immutable<Time>): void {
+    let newest: Immutable<Time> | undefined;
+    for (const { time } of this.#lastReceiveByTopic.values()) {
+      if (!newest || compare(time, newest) > 0) {
+        newest = time;
+      }
+    }
+    if (newest && compare(endTime, newest) < 0) {
+      // The source clock went back (e.g. a simulation restarted): the stored points are from the
+      // old timeline
+      this.#lastReceiveByTopic.clear();
+      for (const { config } of this.#series) {
+        this.#pendingDispatch.push({ type: "reset-current", series: config.key });
+      }
+    }
+    this.#replayUntilByTopic = new Map(
+      [...this.#lastReceiveByTopic].map(([topic, mark]) => [topic, { ...mark }]),
+    );
+  }
+
+  /** Drops replayed messages after a seek and records the newest receive time per topic */
+  #dropReplayed(events: Immutable<MessageEvent[]>): Immutable<MessageEvent[]> {
+    const replayUntil = this.#replayUntilByTopic;
+    const out =
+      replayUntil.size === 0
+        ? events
+        : events.filter((event) => {
+            const until = replayUntil.get(event.topic);
+            if (!until) {
+              return true;
+            }
+            const order = compare(event.receiveTime, until.time);
+            if (order < 0 || (order === 0 && until.count > 0)) {
+              until.count -= order === 0 ? 1 : 0;
+              return false;
+            }
+            replayUntil.delete(event.topic);
+            return true;
+          });
+    for (const event of out) {
+      const last = this.#lastReceiveByTopic.get(event.topic);
+      if (last && compare(last.time, event.receiveTime) === 0) {
+        last.count += 1;
+      } else {
+        this.#lastReceiveByTopic.set(event.topic, { time: event.receiveTime, count: 1 });
+      }
+    }
+    return out;
   }
 
   public handleMessageRange(

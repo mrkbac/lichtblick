@@ -80,7 +80,148 @@ function buildPlayerState(
   };
 }
 
+/** A /foo message received at `sec` whose value is `sec` */
+function buildFooMessage(sec: number) {
+  return {
+    topic: "/foo",
+    schemaName: "foo",
+    receiveTime: { sec, nsec: 0 },
+    sizeInBytes: 0,
+    message: { val: sec },
+  };
+}
+
+/** x of the first series' stored points */
+async function storedXs(builder: TimestampDatasetsBuilder): Promise<number[] | undefined> {
+  return (await builder.getCsvData())[0]?.data.map(({ x }) => x);
+}
+
 describe("TimestampDatasetsBuilder", () => {
+  describe("live sources", () => {
+    it("keeps stored x consistent when the start time slides", async () => {
+      // Given a live point stored relative to a start time of 10 s
+      const builder = new TimestampDatasetsBuilder();
+      builder.setSeries(buildSeriesItems([{ value: "/foo.val" }]));
+      builder.handlePlayerState(
+        buildPlayerState({ startTime: { sec: 10, nsec: 0 }, messages: [buildFooMessage(12)] }),
+      );
+
+      // When the history window drops its oldest second
+      builder.handlePlayerState(
+        buildPlayerState({ startTime: { sec: 11, nsec: 0 }, messages: [buildFooMessage(13)] }),
+      );
+
+      // Then the stored point moves with the start time
+      expect(await storedXs(builder)).toEqual([1, 2]);
+    });
+
+    it("skips messages replayed after seeking back in the history", async () => {
+      // Given points up to 3 s
+      const builder = new TimestampDatasetsBuilder();
+      builder.setSeries(buildSeriesItems([{ value: "/foo.val" }]));
+      const endTime = { sec: 3, nsec: 0 };
+      builder.handlePlayerState(
+        buildPlayerState({ endTime, messages: [1, 2, 3].map(buildFooMessage) }),
+      );
+
+      // When clicking at 1 s: the source backfills and replays from there, then goes live again
+      builder.handlePlayerState(
+        buildPlayerState({ lastSeekTime: 2, endTime, messages: [buildFooMessage(1)] }),
+      );
+      builder.handlePlayerState(
+        buildPlayerState({ lastSeekTime: 2, endTime, messages: [2, 3, 4].map(buildFooMessage) }),
+      );
+
+      // Then each point is stored once, in order
+      expect(await storedXs(builder)).toEqual([1, 2, 3, 4]);
+    });
+
+    it("keeps new messages that arrive in the seek frame with replayed ones", async () => {
+      // Given points up to 3 s
+      const builder = new TimestampDatasetsBuilder();
+      builder.setSeries(buildSeriesItems([{ value: "/foo.val" }]));
+      const endTime = { sec: 4, nsec: 0 };
+      builder.handlePlayerState(
+        buildPlayerState({ endTime, messages: [1, 2, 3].map(buildFooMessage) }),
+      );
+
+      // When the seek frame holds a replayed message and a new one
+      builder.handlePlayerState(
+        buildPlayerState({ lastSeekTime: 2, endTime, messages: [2, 4].map(buildFooMessage) }),
+      );
+
+      // Then the stored points stay and only the new one is added
+      expect(await storedXs(builder)).toEqual([1, 2, 3, 4]);
+    });
+
+    it("keeps unplotted messages that share the replay boundary time", async () => {
+      // Given two points received at the same coarse clock time
+      const builder = new TimestampDatasetsBuilder();
+      builder.setSeries(buildSeriesItems([{ value: "/foo.val" }]));
+      const endTime = { sec: 3, nsec: 0 };
+      const atThree = (val: number) => ({ ...buildFooMessage(3), message: { val } });
+      builder.handlePlayerState(buildPlayerState({ endTime, messages: [atThree(1), atThree(2)] }));
+
+      // When a seek replays them along with one that arrived at that time while paused
+      builder.handlePlayerState(
+        buildPlayerState({
+          lastSeekTime: 2,
+          endTime,
+          messages: [atThree(1), atThree(2), atThree(3)],
+        }),
+      );
+
+      // Then the paused arrival is added once
+      const csv = await builder.getCsvData();
+      expect(csv[0]?.data.map(({ y }) => y)).toEqual([1, 2, 3]);
+    });
+
+    it("keeps cached derivatives right after the start time slides", async () => {
+      // Given derivatives computed and cached for preloaded rows
+      const builder = new TimestampDatasetsBuilder();
+      builder.setSeries(buildSeriesItems([{ value: "/foo.val.@derivative" }]));
+      builder.handlePlayerState(buildPlayerState());
+      builder.handleMessageRange(
+        [1, 2].map(buildFooMessage),
+        { isReset: true },
+        {
+          sec: 0,
+          nsec: 0,
+        },
+      );
+      await builder.getCsvData();
+
+      // When the start time moves and a later batch extends the rows
+      builder.handlePlayerState(buildPlayerState({ startTime: { sec: 1, nsec: 0 } }));
+      builder.handleMessageRange([buildFooMessage(3)], { isReset: false }, { sec: 1, nsec: 0 });
+
+      // Then the new row's derivative uses the shifted previous x
+      const csv = await builder.getCsvData();
+      expect(csv[0]?.data.map(({ y }) => y)).toEqual([NaN, 1, 1]);
+    });
+
+    it("starts over when the source clock goes back", async () => {
+      // Given points at 4 s and 5 s
+      const builder = new TimestampDatasetsBuilder();
+      builder.setSeries(buildSeriesItems([{ value: "/foo.val" }]));
+      builder.handlePlayerState(
+        buildPlayerState({ endTime: { sec: 5, nsec: 0 }, messages: [4, 5].map(buildFooMessage) }),
+      );
+
+      // When the source clock restarts at 1 s
+      builder.handlePlayerState(
+        buildPlayerState({
+          lastSeekTime: 2,
+          endTime: { sec: 2, nsec: 0 },
+          messages: [1, 2].map(buildFooMessage),
+        }),
+      );
+
+      // Then only the new timeline is kept
+      expect(await storedXs(builder)).toEqual([1, 2]);
+    });
+  });
+
   it("exports data that has not been drawn yet", async () => {
     const builder = new TimestampDatasetsBuilder();
     builder.setSeries(buildSeriesItems([{ value: "/foo.val" }]));
