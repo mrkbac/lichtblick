@@ -143,8 +143,12 @@ describe("McapIterableSource", () => {
       messageEncoding: "json",
       metadata: new Map(),
     });
-    await addMessage(writer, channelId, { data: new TextEncoder().encode("{}") });
-    await addMessage(writer, channelId, { data: new TextEncoder().encode("{}") });
+    for (let i = 1; i <= 3; i++) {
+      await addMessage(writer, channelId, {
+        logTime: BigInt(i) * 1_000_000_000n,
+        data: new TextEncoder().encode(JSON.stringify({ v: i })),
+      });
+    }
     // no writer.end(): the tab closed while recording
 
     const source = new McapIterableSource({
@@ -153,6 +157,17 @@ describe("McapIterableSource", () => {
     });
     const { topics } = await source.initialize();
     expect(topics.map(({ name }) => name)).toEqual(["/cut"]);
+
+    const values = [];
+    for await (const result of source.messageIterator({
+      topics: new Map([["/cut", PlayerBuilder.subscribePayload({ topic: "/cut" })]]),
+    })) {
+      if (result.type === "message-event") {
+        values.push(JSON.parse(new TextDecoder().decode(result.msgEvent.message)).v);
+      }
+    }
+    // each message went into its own chunk; all complete chunks are recovered
+    expect(values).toEqual([1, 2, 3]);
   });
 
   it("loads decompression handlers before creating an indexed reader for an indexed file", async () => {
