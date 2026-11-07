@@ -967,7 +967,8 @@ describe("PlotCoordinator", () => {
 
     it("forgets the held y range when the series change", () => {
       vi.spyOn(plotCoordinator as any, "queueDispatchRender").mockImplementation(() => {});
-      (parseMessagePath as Mock).mockReturnValue(BasicBuilder.string());
+      (parseMessagePath as Mock).mockReturnValue({ topicName: "/topic", messagePath: [] });
+      (fillInGlobalVariablesInPath as Mock).mockImplementation((parsed) => parsed);
       (stringifyMessagePath as Mock).mockReturnValue("");
       const config = PlotBuilder.config({ yRangeMode: "hold" });
 
