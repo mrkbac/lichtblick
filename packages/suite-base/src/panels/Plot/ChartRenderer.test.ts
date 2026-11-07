@@ -783,6 +783,33 @@ describe("ChartRenderer", () => {
       });
     });
   });
+  it("holds the x padding through its afterFit hook until label visibility flips", () => {
+    // Given a renderer and its x scale fit hook
+    const { chartRenderer, chartOptions } = setup();
+    const afterFit = (
+      chartOptions.scales.x as { afterFit?: (scale: Record<string, number>) => void }
+    ).afterFit!;
+    const fit = (paddingLeft: number, paddingRight: number) => {
+      const scale = { min: -34.97, max: 25.03, paddingLeft, paddingRight };
+      afterFit(scale);
+      return [scale.paddingLeft, scale.paddingRight];
+    };
+
+    chartRenderer.update({ type: "update", showXAxisLabels: true });
+
+    // When the same-span window refits with shorter edge labels
+    expect(fit(10, 15)).toEqual([10, 15]);
+    // Then both paddings keep their widest value
+    expect(fit(8, 12)).toEqual([10, 15]);
+
+    // When the same label visibility is sent again, Then nothing resets
+    chartRenderer.update({ type: "update", showXAxisLabels: true });
+    expect(fit(8, 12)).toEqual([10, 15]);
+
+    // When labels are hidden, Then the padding is sized afresh
+    chartRenderer.update({ type: "update", showXAxisLabels: false });
+    expect(fit(0, 0)).toEqual([0, 0]);
+  });
 });
 
 describe("holdXPadding", () => {
