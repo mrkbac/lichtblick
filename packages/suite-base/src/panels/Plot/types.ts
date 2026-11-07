@@ -141,6 +141,10 @@ export type UpdateAction = {
   zoomMode?: ZoomMode;
   referenceLines?: ReferenceLine[];
   interactionEvents?: InteractionEvent[];
+  /** Auto-scaled y axes never shrink: they keep the widest data range seen since the last reset */
+  holdYRange?: boolean;
+  /** Forget the held y ranges, e.g. after a seek or a view reset */
+  resetHeldYRange?: boolean;
 };
 
 // allows us to override the chart.ctx instance field which zoom plugin uses for adding event listeners

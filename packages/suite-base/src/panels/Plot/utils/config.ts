@@ -97,6 +97,9 @@ type DeprecatedPlotConfig = {
   sidebarWidth?: number;
 };
 
+/** "auto" fits the visible data; "hold" never shrinks the axes while the view slides */
+export type PlotYRangeMode = "auto" | "hold";
+
 export type PlotLegendDisplay = "floating" | "top" | "left" | "none";
 
 export type PlotConfig = DeprecatedPlotConfig & {
@@ -105,6 +108,8 @@ export type PlotConfig = DeprecatedPlotConfig & {
   maxXValue?: number;
   minYValue?: string | number;
   maxYValue?: string | number;
+  /** Auto-scaling of the y axes; unset is "auto" */
+  yRangeMode?: PlotYRangeMode;
   showLegend: boolean;
   legendDisplay: PlotLegendDisplay;
   showPlotValuesInLegend: boolean;

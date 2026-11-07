@@ -102,6 +102,11 @@ export const plot = {
   xValue: "X value",
   xValueTopicError: "The X value must be on the same topic as the message path.",
   yAxis: "Y Axis",
+  yRange: "Range",
+  yRangeAuto: "Fit visible data",
+  yRangeHelp:
+    "Hold max range never shrinks the y axes when old values leave the window. It grows with new data and resets on seek or reset view. Min and max still apply.",
+  yRangeHold: "Hold max range",
   zoomTool: "Zoom tool (Z). Drag to zoom; Alt/Option zooms only X, Shift only Y.",
   allLoadedData: "All loaded data",
   amplitude: "Amplitude",
