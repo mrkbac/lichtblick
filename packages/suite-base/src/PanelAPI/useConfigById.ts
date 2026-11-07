@@ -64,6 +64,11 @@ export default function useConfigById<Config extends Record<string, unknown>>(
       }
 
       const stateConfig = maybeCast<Config>(state.selectedLayout?.data?.configById[panelId]);
+      // Panels that keep `topics` as a list (e.g. Diagnostics) don't use per-topic settings;
+      // merging would turn the array into an object like `{ 0: "/a" }`.
+      if (Array.isArray(stateConfig?.topics)) {
+        return stateConfig;
+      }
       const customSettings = _.merge({}, customSettingsByTopic, stateConfig?.topics);
 
       // Avoid returning a new object if nothing has changed
