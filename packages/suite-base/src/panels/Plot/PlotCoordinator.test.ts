@@ -168,6 +168,8 @@ describe("PlotCoordinator", () => {
           activeData: PlayerBuilder.activeData({
             startTime: RosTimeBuilder.time({ sec: 100, nsec: 0 }),
             currentTime: RosTimeBuilder.time({ sec: 100 + seconds, nsec: 0 }),
+            // Playback, not a seek
+            lastSeekTime: 1,
           }),
         });
 
@@ -764,6 +766,44 @@ describe("PlotCoordinator", () => {
       expect(plotCoordinator["interactionBounds"]).toBeUndefined();
       expect(plotCoordinator["globalBounds"]).toBeUndefined();
     });
+
+    it("forgets the held y range on reset view", async () => {
+      const update = vi.spyOn(renderer, "update");
+      plotCoordinator.resetBounds();
+      await plotCoordinator["dispatchRender"]();
+
+      expect(update).toHaveBeenCalledWith(expect.objectContaining({ resetHeldYRange: true }));
+    });
+
+    it("offers reset view while holding the y range", async () => {
+      vi.spyOn(plotCoordinator as any, "queueDispatchRender").mockImplementation(() => {});
+      plotCoordinator.handleConfig(
+        PlotBuilder.config({ paths: [], yRangeMode: "hold" }),
+        "light",
+        {},
+      );
+      const viewportChange = vi.fn();
+      plotCoordinator.on("viewportChange", viewportChange);
+
+      await plotCoordinator["dispatchRender"]();
+
+      expect(viewportChange).toHaveBeenCalledWith(true);
+    });
+
+    it("forgets the held y range on seek", () => {
+      vi.spyOn(plotCoordinator as any, "queueDispatchRender").mockImplementation(() => {});
+      const seekTo = (lastSeekTime: number) => {
+        plotCoordinator.handlePlayerState(
+          PlayerBuilder.playerState({ activeData: PlayerBuilder.activeData({ lastSeekTime }) }),
+        );
+      };
+      seekTo(1);
+      expect(plotCoordinator["updateAction"].resetHeldYRange).toBeUndefined();
+
+      seekTo(2);
+
+      expect(plotCoordinator["updateAction"].resetHeldYRange).toBe(true);
+    });
   });
 
   describe("handleConfig", () => {
@@ -833,6 +873,36 @@ describe("PlotCoordinator", () => {
         min: config.minYValue,
         max: config.maxYValue,
       });
+    });
+
+    it("sends the hold y range mode only when it changes", () => {
+      vi.spyOn(plotCoordinator as any, "queueDispatchRender").mockImplementation(() => {});
+      const config = PlotBuilder.config({ paths: [], yRangeMode: "hold" });
+
+      plotCoordinator.handleConfig(config, "light", {});
+      expect(plotCoordinator["updateAction"].holdYRange).toBe(true);
+
+      plotCoordinator["updateAction"] = { type: "update" };
+      plotCoordinator.handleConfig(config, "light", {});
+      expect(plotCoordinator["updateAction"].holdYRange).toBeUndefined();
+
+      plotCoordinator.handleConfig({ ...config, yRangeMode: undefined }, "light", {});
+      expect(plotCoordinator["updateAction"].holdYRange).toBe(false);
+    });
+
+    it("forgets the held y range when the series change", () => {
+      vi.spyOn(plotCoordinator as any, "queueDispatchRender").mockImplementation(() => {});
+      (parseMessagePath as Mock).mockReturnValue(BasicBuilder.string());
+      (stringifyMessagePath as Mock).mockReturnValue("");
+      const config = PlotBuilder.config({ yRangeMode: "hold" });
+
+      plotCoordinator.handleConfig(config, "light", {});
+      plotCoordinator["updateAction"] = { type: "update" };
+      plotCoordinator.handleConfig(config, "light", {});
+      expect(plotCoordinator["updateAction"].resetHeldYRange).toBeUndefined();
+
+      plotCoordinator.handleConfig({ ...config, paths: config.paths.slice(1) }, "light", {});
+      expect(plotCoordinator["updateAction"].resetHeldYRange).toBe(true);
     });
 
     it("sends log scales and reference line orientation and labels", () => {

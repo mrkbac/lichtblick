@@ -408,6 +408,16 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
           input: "boolean",
           value: config.showYAxisLabels,
         },
+        yRangeMode: {
+          label: t("yRange"),
+          help: t("yRangeHelp"),
+          input: "select",
+          value: config.yRangeMode ?? "auto",
+          options: [
+            { value: "auto", label: t("yRangeAuto") },
+            { value: "hold", label: t("yRangeHold") },
+          ],
+        },
         minYValue: {
           label: t("min"),
           input: "number",

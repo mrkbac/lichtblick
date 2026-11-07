@@ -358,6 +358,18 @@ describe("buildSettingsTree", () => {
     });
   });
 
+  it("offers a y range mode next to min and max, defaulting to auto", () => {
+    const fields = buildSettingsTree(PlotBuilder.config({ yRangeMode: undefined }), t).yAxis
+      ?.fields;
+    expect(fields?.yRangeMode?.value).toBe("auto");
+    expect(Object.keys(fields ?? {})).toEqual(
+      expect.arrayContaining(["yRangeMode", "minYValue", "maxYValue"]),
+    );
+
+    const held = buildSettingsTree(PlotBuilder.config({ yRangeMode: "hold" }), t);
+    expect(held.yAxis?.fields?.yRangeMode?.value).toBe("hold");
+  });
+
   it("offers a log scale on both y axes", () => {
     const config = PlotBuilder.config({ yAxisLogScale: true });
 

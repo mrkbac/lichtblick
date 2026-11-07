@@ -68,6 +68,9 @@ export class ChartRenderer {
   #referenceLines: Immutable<ReferenceLine[]> = [];
   /** Threshold fill datasets at the end of the chart's datasets */
   #fillCount = 0;
+  #holdYRange = false;
+  /** Widest data range per y axis since the last reset, while holding the y range */
+  #heldYRange: Partial<Record<"y" | "y2", Bounds1D>> = {};
 
   public constructor(args: ChartRendererProps) {
     const fakeNode = {
@@ -188,6 +191,13 @@ export class ChartRenderer {
 
     if (action.equalAxes != undefined) {
       this.#equalAxes = action.equalAxes;
+    }
+
+    if (action.holdYRange != undefined || action.resetHeldYRange === true) {
+      this.#holdYRange = action.holdYRange ?? this.#holdYRange;
+      this.#heldYRange = {};
+      // Fit the current data again; held ranges build back up from the next datasets
+      this.#applyHeldYRange();
     }
 
     if (action.showYAxisLabels != undefined) {
@@ -477,6 +487,10 @@ export class ChartRenderer {
   public updateDatasets(datasets: Dataset[]): { x?: Scale; y?: YScale } {
     this.#seriesDatasets = datasets;
     this.#setDatasets();
+    if (this.#holdYRange) {
+      this.#extendHeldYRange();
+      this.#applyHeldYRange();
+    }
 
     // While the chartjs API doesn't indicate update should be called after resize, in practice
     // we've found that performing a resize after an update sometimes results in a blank chart.
@@ -489,6 +503,42 @@ export class ChartRenderer {
     this.#fillCount = fills.length;
     this.#chartInstance.data.datasets =
       fills.length > 0 ? [...this.#seriesDatasets, ...fills] : this.#seriesDatasets;
+  }
+
+  #extendHeldYRange(): void {
+    for (const dataset of this.#seriesDatasets) {
+      const scaleId = dataset.yAxisID === "y2" ? "y2" : "y";
+      const log = this.#chartInstance.options.scales?.[scaleId]?.type === "logarithmic";
+      let range = this.#heldYRange[scaleId];
+      for (const { y } of dataset.data) {
+        // NaN entries are line breaks; a log axis drops values <= 0
+        if (!Number.isFinite(y) || (log && y <= 0)) {
+          continue;
+        }
+        if (!range) {
+          range = { min: y, max: y };
+        } else if (y < range.min) {
+          range.min = y;
+        } else if (y > range.max) {
+          range.max = y;
+        }
+      }
+      this.#heldYRange[scaleId] = range;
+    }
+  }
+
+  /**
+   * Suggested bounds widen an auto-scaled axis to the held range but give way to data beyond it,
+   * and fixed min/max options still win over them.
+   */
+  #applyHeldYRange(): void {
+    for (const scaleId of ["y", "y2"] as const) {
+      const scaleOption = this.#chartInstance.options.scales?.[scaleId];
+      if (scaleOption) {
+        scaleOption.suggestedMin = this.#heldYRange[scaleId]?.min;
+        scaleOption.suggestedMax = this.#heldYRange[scaleId]?.max;
+      }
+    }
   }
 
   #getXScale(): Scale | undefined {

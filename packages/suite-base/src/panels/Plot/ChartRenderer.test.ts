@@ -753,6 +753,77 @@ describe("ChartRenderer", () => {
     });
   });
 
+  describe("hold y range", () => {
+    function setupHold() {
+      (Chart as unknown as Mock).mockImplementationOnce(function () {
+        return {
+          update: vi.fn(),
+          data: { datasets: [] },
+          scales: SCALES_CHART,
+          options: {
+            scales: { x: {}, y: { type: "linear" }, y2: { type: "linear" } },
+            plugins: {},
+          } as unknown as ChartOptions,
+        };
+      });
+      const { chartRenderer } = setup();
+      const chart = (
+        chartRenderer as unknown as { getChartInstance: () => ChartType }
+      ).getChartInstance();
+      const suggested = (scaleId: "y" | "y2") => {
+        const scale = chart.options.scales?.[scaleId];
+        return [scale?.suggestedMin, scale?.suggestedMax];
+      };
+      const datasets = (y: number[], y2: number[] = []): Dataset[] => [
+        { data: y.map((value, x) => ({ x, y: value })) },
+        { yAxisID: "y2", data: y2.map((value, x) => ({ x, y: value })) },
+      ];
+      return { chartRenderer, suggested, datasets };
+    }
+
+    it("keeps the widest range per axis and grows with new extremes", () => {
+      const { chartRenderer, suggested, datasets } = setupHold();
+      chartRenderer.update({ type: "update", holdYRange: true });
+
+      chartRenderer.updateDatasets(datasets([-2, 5], [100]));
+      // The extremes slid out of the window
+      chartRenderer.updateDatasets(datasets([1, NaN, 2], [50]));
+      expect(suggested("y")).toEqual([-2, 5]);
+      expect(suggested("y2")).toEqual([50, 100]);
+
+      chartRenderer.updateDatasets(datasets([9], [50]));
+      expect(suggested("y")).toEqual([-2, 9]);
+    });
+
+    it("fits the current data again after a reset", () => {
+      const { chartRenderer, suggested, datasets } = setupHold();
+      chartRenderer.update({ type: "update", holdYRange: true });
+      chartRenderer.updateDatasets(datasets([-2, 5]));
+
+      chartRenderer.update({ type: "update", resetHeldYRange: true });
+      expect(suggested("y")).toEqual([undefined, undefined]);
+      chartRenderer.updateDatasets(datasets([1, 2]));
+      expect(suggested("y")).toEqual([1, 2]);
+    });
+
+    it("ignores values a log axis can't show", () => {
+      const { chartRenderer, suggested, datasets } = setupHold();
+      chartRenderer.update({ type: "update", holdYRange: true, yLogScale: true });
+      chartRenderer.updateDatasets(datasets([0, -1, 0.5, 10]));
+      expect(suggested("y")).toEqual([0.5, 10]);
+    });
+
+    it("holds nothing in auto mode", () => {
+      const { chartRenderer, suggested, datasets } = setupHold();
+      chartRenderer.update({ type: "update", holdYRange: true });
+      chartRenderer.updateDatasets(datasets([-2, 5]));
+
+      chartRenderer.update({ type: "update", holdYRange: false });
+      chartRenderer.updateDatasets(datasets([1, 2]));
+      expect(suggested("y")).toEqual([undefined, undefined]);
+    });
+  });
+
   describe("updateDatasets", () => {
     it("should update dataset and disable animations", () => {
       const { chartRenderer } = setup();

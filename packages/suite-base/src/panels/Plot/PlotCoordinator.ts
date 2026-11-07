@@ -88,6 +88,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   private currentValueTimesByConfigIndex: (Time | undefined)[] = [];
   /** Flag indicating that new Y bounds should be sent to the renderer because the bounds have been reset */
   private shouldResetY = false;
+  private holdYRange = false;
   private updateAction: UpdateAction = { type: "update" };
   private isTimeseriesPlot: boolean = false;
   /** FFT or histogram settings; undefined plots the time series. x/y then are frequency or value. */
@@ -192,6 +193,11 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     if (lastSeekTime !== this.lastSeekTime) {
       this.currentValuesByConfigIndex = [];
       this.currentValueTimesByConfigIndex = [];
+      // The first player state is no seek: there is no held range yet
+      if (!Number.isNaN(this.lastSeekTime)) {
+        this.updateAction.resetHeldYRange = true;
+        this.queueDispatchRender();
+      }
       this.lastSeekTime = lastSeekTime;
     }
 
@@ -390,6 +396,12 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       showGrid: config.showY2AxisGrid ?? false,
     };
 
+    const holdYRange = config.yRangeMode === "hold";
+    if (holdYRange !== this.holdYRange) {
+      this.holdYRange = holdYRange;
+      this.updateAction.holdYRange = holdYRange;
+    }
+
     if (configYBoundsChanged) {
       // Config changes to yBounds always takes precedence over user interaction changes like pan/zoom
       this.updateAction.yBounds = this.configBounds.y;
@@ -397,7 +409,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     const newSeriesKeysByTopic = new Map<string, Set<SeriesConfigKey>>();
     const newCurrentValuesByConfigIndex: unknown[] = [];
     const newCurrentValueTimesByConfigIndex: (Time | undefined)[] = [];
-    this.series = filterMap(config.paths, (path, idx): Immutable<SeriesItem> | undefined => {
+    const newSeries = filterMap(config.paths, (path, idx): Immutable<SeriesItem> | undefined => {
       if (isReferenceLinePlotPathType(path)) {
         return;
       }
@@ -484,6 +496,19 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     }
 
     this.seriesKeysByTopic = newSeriesKeysByTopic;
+    const seriesChanged =
+      newSeries.length !== this.series.length ||
+      newSeries.some((item, idx) => {
+        const old = this.series[idx];
+        return (
+          item.key !== old?.key || item.enabled !== old.enabled || item.yAxisID !== old.yAxisID
+        );
+      });
+    if (seriesChanged) {
+      // A removed or moved series' old extremes no longer belong on the axis
+      this.updateAction.resetHeldYRange = true;
+    }
+    this.series = newSeries;
 
     this.currentValuesByConfigIndex = newCurrentValuesByConfigIndex;
     this.currentValueTimesByConfigIndex = newCurrentValueTimesByConfigIndex;
@@ -630,7 +655,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   }
 
   private canReset(): boolean {
-    if (this.interactionBounds) {
+    // Reset view also forgets a held y range
+    if (this.interactionBounds || this.holdYRange) {
       return true;
     }
     if (this.analysis) {
@@ -699,6 +725,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       const yMax = this.interactionBounds?.y.max ?? this.configBounds.y.max;
       this.updateAction.yBounds = { min: yMin, max: yMax };
       this.updateAction.y2Bounds = this.configY2Bounds;
+      this.updateAction.resetHeldYRange = true;
       this.shouldResetY = false;
     }
 
