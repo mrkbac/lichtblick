@@ -13,9 +13,16 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 describe("getDiagnosticsWithStales", () => {
   const staleTime: Time = { sec: 100, nsec: 0 };
 
-  const createDiagnosticInfo = (receiveTime: Time, level: number = LEVELS.WARN): DiagnosticInfo =>
+  const TOPIC = "/diagnostics";
+
+  const createDiagnosticInfo = (
+    receiveTime: Time,
+    level: number = LEVELS.WARN,
+    topic: string = TOPIC,
+  ): DiagnosticInfo =>
     DiagnosticsBuilder.info({
       receiveTime,
+      topic,
       // header stamp from a broken robot clock must not matter
       stamp: { sec: 0, nsec: 0 },
       status: { ...DiagnosticsBuilder.statusMessage(), level },
@@ -27,7 +34,7 @@ describe("getDiagnosticsWithStales", () => {
       [id, createDiagnosticInfo({ sec: 50, nsec: 0 }, LEVELS.ERROR)],
     ]);
 
-    const result = getDiagnosticsWithStales(diagnostics, staleTime);
+    const result = getDiagnosticsWithStales(diagnostics, staleTime, [TOPIC]);
 
     expect(result.get(id)?.status.level).toBe(LEVELS.STALE);
     // input untouched
@@ -39,16 +46,27 @@ describe("getDiagnosticsWithStales", () => {
     const fresh = createDiagnosticInfo({ sec: 150, nsec: 0 }, LEVELS.OK);
     const diagnostics: DiagnosticsById = new Map([[id, fresh]]);
 
-    const result = getDiagnosticsWithStales(diagnostics, staleTime);
+    const result = getDiagnosticsWithStales(diagnostics, staleTime, [TOPIC]);
 
     expect(result.get(id)).toBe(fresh);
   });
 
-  it("returns the input when staleness is disabled", () => {
+  it("keeps every entry as is when staleness is disabled", () => {
+    const id = BasicBuilder.string();
+    const old = createDiagnosticInfo({ sec: 1, nsec: 0 });
+    const diagnostics: DiagnosticsById = new Map([[id, old]]);
+
+    expect(getDiagnosticsWithStales(diagnostics, undefined, [TOPIC]).get(id)).toBe(old);
+  });
+
+  it("drops diagnostics from topics that are no longer shown", () => {
     const diagnostics: DiagnosticsById = new Map([
-      [BasicBuilder.string(), createDiagnosticInfo({ sec: 1, nsec: 0 })],
+      ["shown", createDiagnosticInfo({ sec: 150, nsec: 0 }, LEVELS.OK, "/a")],
+      ["hidden", createDiagnosticInfo({ sec: 150, nsec: 0 }, LEVELS.OK, "/b")],
     ]);
 
-    expect(getDiagnosticsWithStales(diagnostics, undefined)).toBe(diagnostics);
+    const result = getDiagnosticsWithStales(diagnostics, staleTime, ["/a"]);
+
+    expect([...result.keys()]).toEqual(["shown"]);
   });
 });

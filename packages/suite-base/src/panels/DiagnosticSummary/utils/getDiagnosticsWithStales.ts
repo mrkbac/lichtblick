@@ -7,20 +7,22 @@ import { LEVELS } from "@lichtblick/suite-base/panels/DiagnosticSummary/constant
 import { DiagnosticsById } from "@lichtblick/suite-base/panels/DiagnosticSummary/types";
 
 /**
- * Marks diagnostics received before `staleTime` as STALE. Compares receive times (not header
- * stamps) so a publisher with a wrong or zero clock isn't reported stale. Entries that aren't
- * stale keep their identity so memoized rows don't re-render.
+ * Keeps only diagnostics from `topics` (statuses from topics the user has hidden stay in the
+ * reducer state) and marks those received before `staleTime` as STALE. Compares receive times
+ * (not header stamps) so a publisher with a wrong or zero clock isn't reported stale. Entries that
+ * aren't stale keep their identity so memoized rows don't re-render.
  */
 export function getDiagnosticsWithStales(
   diagnostics: DiagnosticsById,
   staleTime: Time | undefined,
+  topics: readonly string[],
 ): DiagnosticsById {
-  if (!staleTime) {
-    return diagnostics;
-  }
   const ret: DiagnosticsById = new Map();
   for (const [id, diagnostic] of diagnostics) {
-    const stale = compare(diagnostic.receiveTime, staleTime) < 0;
+    if (!topics.includes(diagnostic.topic)) {
+      continue;
+    }
+    const stale = staleTime != undefined && compare(diagnostic.receiveTime, staleTime) < 0;
     ret.set(
       id,
       stale ? { ...diagnostic, status: { ...diagnostic.status, level: LEVELS.STALE } } : diagnostic,

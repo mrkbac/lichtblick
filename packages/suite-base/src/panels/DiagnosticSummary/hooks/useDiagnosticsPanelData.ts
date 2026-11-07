@@ -54,9 +54,9 @@ export function useDiagnosticsPanelData(
 
   const staleTime = getStaleTime(current, secondsUntilStale);
   const diagnostics = useMemo(
-    () => getDiagnosticsWithStales(latest, staleTime),
+    () => getDiagnosticsWithStales(latest, staleTime, topics.subscribed),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [latest, staleTime?.sec, staleTime?.nsec],
+    [latest, topics.subscribed, staleTime?.sec, staleTime?.nsec],
   );
 
   const startSec = start ? toSec(start) : undefined;

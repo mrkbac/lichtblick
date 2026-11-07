@@ -179,7 +179,7 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
   }, [actionHandler, config, topics, t, updatePanelSettingsTree]);
 
   return (
-    <Stack flex="auto">
+    <Stack flex="auto" overflow="hidden">
       <PanelToolbar>
         <Stack flex="auto" direction="row" gap={1}>
           <Select
@@ -211,7 +211,9 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
           />
         </Stack>
       </PanelToolbar>
-      <Stack flex="auto">{summary}</Stack>
+      <Stack flex="auto" overflow="hidden">
+        {summary}
+      </Stack>
     </Stack>
   );
 };
