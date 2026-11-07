@@ -151,7 +151,7 @@ export function normalizeLayout(node: LayoutNode | undefined): LayoutNode | unde
   };
 }
 
-function mapGroups(
+export function mapGroups(
   node: LayoutNode,
   fn: (group: LayoutGroup) => LayoutNode | undefined,
 ): LayoutNode | undefined {

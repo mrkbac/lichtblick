@@ -34,7 +34,6 @@ import {
   insertPanel,
   removePanels,
   replacePanel,
-  setActivePanel,
 } from "@lichtblick/suite-base/util/layoutTree";
 import {
   findActiveTabTree,
@@ -44,7 +43,9 @@ import {
   getTabs,
   isTabPanel,
   mapLayoutTrees,
+  normalizeTabs,
   setLayoutTree,
+  showPanel,
 } from "@lichtblick/suite-base/util/tabLayout";
 
 export const defaultPlaybackConfig: PlaybackConfig = {
@@ -62,6 +63,11 @@ function trimConfigs(state: LayoutData): LayoutData {
   return keepAll ? state : { ...state, configById: _.pick(state.configById, [...panelIds]) };
 }
 
+/** Bring tabs into shape (stacked panels become a Tab panel), then drop orphaned configs. */
+function finish(state: LayoutData): LayoutData {
+  return trimConfigs(normalizeTabs(state));
+}
+
 function changePanelLayout(
   state: LayoutData,
   { layout, trimConfigById = true, tab }: ChangePanelLayoutPayload,
@@ -71,7 +77,7 @@ function changePanelLayout(
       ? { ancestors: [] }
       : { tabPanelId: tab.panelId, tabIndex: tab.index, ancestors: [] };
   const changed = setLayoutTree(state, location, layout);
-  return trimConfigById ? trimConfigs(changed) : changed;
+  return trimConfigById ? finish(changed) : normalizeTabs(changed);
 }
 
 function savePanelConfigs(state: LayoutData, payload: SaveConfigsPayload): LayoutData {
@@ -181,7 +187,7 @@ const swapPanel = (
 ): LayoutData => {
   const newId = getPanelIdForType(type);
   const withConfig = savePanelConfigs(panelsState, { configs: [{ id: newId, config }] });
-  return trimConfigs(mapLayoutTrees(withConfig, (tree) => replacePanel(tree, originalId, newId)));
+  return finish(mapLayoutTrees(withConfig, (tree) => replacePanel(tree, originalId, newId)));
 };
 
 /**
@@ -191,12 +197,27 @@ const swapPanel = (
  */
 function addPanel(
   panelsState: LayoutData,
-  { id, config, position = "left", targetPanelId, tabId }: AddPanelPayload,
+  { id, config, position = "left", targetPanelId: requestedTarget, tabId }: AddPanelPayload,
 ): LayoutData {
   const withConfig = config
     ? savePanelConfigs(panelsState, { configs: [{ id, config }] })
     : panelsState;
-  const target = targetPanelId != undefined ? findLayoutTree(withConfig, targetPanelId) : undefined;
+  // A panel dropped onto itself stays where it is.
+  if (requestedTarget === id) {
+    return panelsState;
+  }
+  let targetPanelId = requestedTarget;
+  let target = targetPanelId != undefined ? findLayoutTree(withConfig, targetPanelId) : undefined;
+  // Stacking onto a panel that fills a whole tab adds a tab to that Tab panel instead of nesting
+  // another Tab panel in the tab.
+  while (
+    position === "center" &&
+    target?.location.tabPanelId != undefined &&
+    _.isEqual(target.tree, { panels: [targetPanelId] })
+  ) {
+    targetPanelId = target.location.tabPanelId;
+    target = findLayoutTree(withConfig, targetPanelId);
+  }
   const location = target?.location ??
     (tabId != undefined ? findActiveTabTree(withConfig, tabId)?.location : undefined) ?? {
       ancestors: [],
@@ -212,7 +233,7 @@ function addPanel(
     position,
     target != undefined ? targetPanelId : undefined,
   );
-  return trimConfigs(setLayoutTree(removed, location, tree));
+  return finish(setLayoutTree(removed, location, tree));
 }
 
 /** Move `panelIds` into the group holding `targetPanelId` as tabs. */
@@ -232,10 +253,7 @@ function groupPanels(
       result = addPanel(result, { id, position: "center", targetPanelId });
     }
   }
-  const target = findLayoutTree(result, targetPanelId);
-  return target == undefined
-    ? result
-    : setLayoutTree(result, target.location, setActivePanel(target.tree, targetPanelId));
+  return showPanel(result, targetPanelId);
 }
 
 export default function (panelsState: Readonly<LayoutData>, action: PanelsActions): LayoutData {
@@ -253,7 +271,7 @@ export default function (panelsState: Readonly<LayoutData>, action: PanelsAction
       const tabPanelChanged = action.payload.configs.some(
         ({ id }) => isTabPanel(id) && present.has(id),
       );
-      return tabPanelChanged ? trimConfigs(saved) : saved;
+      return tabPanelChanged ? finish(saved) : saved;
     }
 
     case "SAVE_FULL_PANEL_CONFIG":
@@ -305,9 +323,7 @@ export default function (panelsState: Readonly<LayoutData>, action: PanelsAction
         },
       };
     case "CLOSE_PANEL":
-      return trimConfigs(
-        mapLayoutTrees(panelsState, (tree) => removePanels(tree, [action.payload.id])),
-      );
+      return finish(mapLayoutTrees(panelsState, (tree) => removePanels(tree, [action.payload.id])));
 
     case "SPLIT_PANEL":
       return splitPanel(panelsState, action.payload);

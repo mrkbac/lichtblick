@@ -29,6 +29,7 @@ import NoopMetricsCollector from "@lichtblick/suite-base/players/NoopMetricsColl
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { applySamplingGuardToSubscriptions } from "@lichtblick/suite-base/players/samplingGuard";
+import { sameTopicSelection } from "@lichtblick/suite-base/players/subscriptionEquality";
 import {
   AdvertiseOptions,
   Player,
@@ -449,7 +450,10 @@ export class IterablePlayer implements Player {
     );
 
     // If there are no changes to topics there's no reason to perform a "seek" to trigger loading
-    if (_.isEqual(allTopics, this.#allTopics) && _.isEqual(preloadTopics, this.#preloadTopics)) {
+    if (
+      sameTopicSelection(allTopics, this.#allTopics) &&
+      sameTopicSelection(preloadTopics, this.#preloadTopics)
+    ) {
       return;
     }
 
