@@ -3,6 +3,8 @@
 
 import { useMemo, useSyncExternalStore } from "react";
 
+import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
+
 // https://developer.mozilla.org/en-US/docs/Web/API/BeforeInstallPromptEvent (Chromium only)
 type BeforeInstallPromptEvent = Event & {
   prompt(): Promise<{ outcome: "accepted" | "dismissed" }>;
@@ -42,15 +44,28 @@ const subscribe = (listener: () => void) => {
  */
 export function useInstallPrompt(): (() => void) | undefined {
   const event = useSyncExternalStore(subscribe, () => deferredPrompt);
+  const installed =
+    isDesktopApp() ||
+    window.matchMedia("(display-mode: standalone), (display-mode: window-controls-overlay)")
+      .matches ||
+    (navigator as Navigator & { standalone?: boolean }).standalone === true;
   return useMemo(
     () =>
-      event
+      event && !installed
         ? () => {
             // the event can only prompt once; the browser fires a new one if the user dismisses it
             setDeferredPrompt(undefined);
-            void event.prompt();
+            // Keep the installability event as the gate, including on browsers with Web Install.
+            const browser = navigator as Navigator & { install?: () => Promise<unknown> };
+            const prompt =
+              typeof browser.install === "function" ? browser.install() : event.prompt();
+            void prompt.catch((error: unknown) => {
+              if (!(error instanceof DOMException && error.name === "AbortError")) {
+                console.error("App installation failed", error);
+              }
+            });
           }
         : undefined,
-    [event],
+    [event, installed],
   );
 }
