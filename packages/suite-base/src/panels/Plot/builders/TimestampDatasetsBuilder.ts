@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as Comlink from "@foxglove/comlink";
-import { toSec, subtract as subtractTime } from "@foxglove/rostime";
+import { compare, toSec, subtract as subtractTime } from "@foxglove/rostime";
 
 import { ComlinkWrap } from "@lichtblick/den/worker";
 import { Immutable, MessageEvent, Time } from "@lichtblick/suite";
@@ -58,6 +58,13 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
 
   #lastSeekTime = 0;
 
+  #startTime: Immutable<Time> | undefined;
+
+  /** Receive time of the newest message seen per topic (live sources only) */
+  #lastReceiveByTopic = new Map<string, Immutable<Time>>();
+  /** After a seek: messages up to these receive times are replays of stored points */
+  #replayUntilByTopic = new Map<string, Immutable<Time>>();
+
   #series: Immutable<TimestampSeriesItem[]> = [];
   // True once handleMessageRange has been called — indicates a range-capable source (file/bag).
   // When true, handlePlayerState skips append-current since the full history comes from the range.
@@ -81,8 +88,24 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
     const didSeek = activeData.lastSeekTime !== this.#lastSeekTime;
     this.#lastSeekTime = activeData.lastSeekTime;
 
-    const msgEvents = activeData.messages;
+    // Live sources slide their start time along with the history window. x is relative to it, so
+    // move what is already stored or old and new points disagree and the line jumps.
+    if (this.#startTime && compare(this.#startTime, activeData.startTime) !== 0) {
+      this.#pendingDispatch.push({
+        type: "shift-x",
+        delta: toSec(subtractTime(activeData.startTime, this.#startTime)),
+      });
+    }
+    this.#startTime = activeData.startTime;
+
+    let msgEvents = activeData.messages;
     let datasetsChanged = false;
+    if (!this.#hasRangeSource) {
+      if (didSeek) {
+        this.#handleLiveSeek(activeData.endTime);
+      }
+      msgEvents = this.#dropReplayed(msgEvents);
+    }
     if (!this.#hasRangeSource && msgEvents.length > 0) {
       const { actions: seriesActions, datasetsChanged: seriesChanged } = buildCurrentSeriesActions(
         this.#series,
@@ -97,6 +120,50 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
       range: { min: 0, max: toSec(subtractTime(activeData.endTime, activeData.startTime)) },
       datasetsChanged,
     };
+  }
+
+  /**
+   * Live sources replay what they already sent when seeking inside their history (e.g. clicking the
+   * plot). Those points are stored already; appending them again draws the line back in time.
+   */
+  #handleLiveSeek(endTime: Immutable<Time>): void {
+    let newest: Immutable<Time> | undefined;
+    for (const time of this.#lastReceiveByTopic.values()) {
+      if (!newest || compare(time, newest) > 0) {
+        newest = time;
+      }
+    }
+    if (newest && compare(endTime, newest) < 0) {
+      // The source clock went back (e.g. a simulation restarted): the stored points are from the
+      // old timeline
+      this.#lastReceiveByTopic.clear();
+      for (const { config } of this.#series) {
+        this.#pendingDispatch.push({ type: "reset-current", series: config.key });
+      }
+    }
+    this.#replayUntilByTopic = new Map(this.#lastReceiveByTopic);
+  }
+
+  #dropReplayed(events: Immutable<MessageEvent[]>): Immutable<MessageEvent[]> {
+    const replayUntil = this.#replayUntilByTopic;
+    const out =
+      replayUntil.size === 0
+        ? events
+        : events.filter((event) => {
+            const until = replayUntil.get(event.topic);
+            if (!until) {
+              return true;
+            }
+            if (compare(event.receiveTime, until) <= 0) {
+              return false;
+            }
+            replayUntil.delete(event.topic);
+            return true;
+          });
+    for (const event of out) {
+      this.#lastReceiveByTopic.set(event.topic, event.receiveTime);
+    }
+    return out;
   }
 
   public handleMessageRange(

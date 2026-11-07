@@ -263,6 +263,12 @@ type UpdateSeriesFullAction = {
   items: DataItem[];
 };
 
+/** The player's start time moved by `delta` seconds; x is relative to it, so shift every row. */
+type ShiftXAction = {
+  type: "shift-x";
+  delta: number;
+};
+
 type UpdateSeriesConfigAction = {
   type: "update-series-config";
   seriesItems: SeriesItem[];
@@ -270,6 +276,7 @@ type UpdateSeriesConfigAction = {
 
 export type UpdateDataAction =
   | UpdateSeriesConfigAction
+  | ShiftXAction
   | ResetSeriesFullAction
   | ResetSeriesCurrentAction
   | UpdateSeriesCurrentAction
@@ -855,6 +862,15 @@ export class TimestampDatasetsBuilderImpl {
             idx += 1;
           }
           points.remove(fullLength, idx);
+        }
+        break;
+      }
+      case "shift-x": {
+        // Stream modifiers and smoothing only use x differences, so derived values stay valid
+        for (const { points } of this.#seriesByKey.values()) {
+          for (let i = 0; i < points.length; i++) {
+            points.x[i]! -= action.delta;
+          }
         }
         break;
       }

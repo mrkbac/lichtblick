@@ -81,6 +81,93 @@ function buildPlayerState(
 }
 
 describe("TimestampDatasetsBuilder", () => {
+  describe("live seeks", () => {
+    const message = (sec: number) => ({
+      topic: "/foo",
+      schemaName: "foo",
+      receiveTime: { sec, nsec: 0 },
+      sizeInBytes: 0,
+      message: { val: sec },
+    });
+    const xs = async (builder: TimestampDatasetsBuilder) =>
+      (await builder.getCsvData())[0]?.data.map(({ x }) => x);
+
+    it("skips messages replayed after seeking back in the history", async () => {
+      const builder = new TimestampDatasetsBuilder();
+      builder.setSeries(buildSeriesItems([{ value: "/foo.val" }]));
+      const end = { sec: 3, nsec: 0 };
+      builder.handlePlayerState(
+        buildPlayerState({ endTime: end, messages: [1, 2, 3].map(message) }),
+      );
+      // clicking at 1 s: the source backfills and replays from there, then goes live again
+      builder.handlePlayerState(
+        buildPlayerState({
+          lastSeekTime: 2,
+          endTime: end,
+          messages: [message(1)],
+        }),
+      );
+      builder.handlePlayerState(
+        buildPlayerState({
+          lastSeekTime: 2,
+          endTime: end,
+          messages: [2, 3, 4].map(message),
+        }),
+      );
+
+      expect(await xs(builder)).toEqual([1, 2, 3, 4]);
+    });
+
+    it("starts over when the source clock goes back", async () => {
+      const builder = new TimestampDatasetsBuilder();
+      builder.setSeries(buildSeriesItems([{ value: "/foo.val" }]));
+      builder.handlePlayerState(
+        buildPlayerState({
+          endTime: { sec: 5, nsec: 0 },
+          messages: [4, 5].map(message),
+        }),
+      );
+      builder.handlePlayerState(
+        buildPlayerState({
+          lastSeekTime: 2,
+          endTime: { sec: 2, nsec: 0 },
+          messages: [1, 2].map(message),
+        }),
+      );
+
+      expect(await xs(builder)).toEqual([1, 2]);
+    });
+  });
+
+  it("keeps stored x consistent when a live start time slides", async () => {
+    const builder = new TimestampDatasetsBuilder();
+    builder.setSeries(buildSeriesItems([{ value: "/foo.val" }]));
+    const message = (sec: number) => ({
+      topic: "/foo",
+      schemaName: "foo",
+      receiveTime: { sec, nsec: 0 },
+      sizeInBytes: 0,
+      message: { val: sec },
+    });
+
+    builder.handlePlayerState(
+      buildPlayerState({
+        startTime: { sec: 10, nsec: 0 },
+        messages: [message(12)],
+      }),
+    );
+    // the history window drops its oldest second
+    builder.handlePlayerState(
+      buildPlayerState({
+        startTime: { sec: 11, nsec: 0 },
+        messages: [message(13)],
+      }),
+    );
+
+    const csv = await builder.getCsvData();
+    expect(csv[0]?.data.map(({ x }) => x)).toEqual([1, 2]);
+  });
+
   it("exports data that has not been drawn yet", async () => {
     const builder = new TimestampDatasetsBuilder();
     builder.setSeries(buildSeriesItems([{ value: "/foo.val" }]));
