@@ -6,8 +6,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { render, waitFor } from "@testing-library/react";
-import { useState } from "react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { useEffect, useState } from "react";
 import type { Mock } from "vitest";
 
 import { MessagePipelineProvider } from "@lichtblick/suite-base/components/MessagePipeline";
@@ -24,6 +24,7 @@ import WorkspaceContextProvider from "@lichtblick/suite-base/providers/Workspace
 import { LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
 import { makeMockAppConfiguration } from "@lichtblick/suite-base/util/makeMockAppConfiguration";
+import * as containerSize from "@lichtblick/suite-base/util/observeContainerSize";
 
 import { UnconnectedPanelLayout } from "./PanelLayout";
 
@@ -37,6 +38,31 @@ class MockPanelCatalog implements PanelCatalog {
   }
 }
 
+/** Provide the real layout contexts with a small panel catalog. */
+function wrapperFor(panelCatalog: PanelCatalog) {
+  return function Wrapper({ children }: React.PropsWithChildren) {
+    const [config] = useState(() => makeMockAppConfiguration());
+
+    return (
+      <WorkspaceContextProvider>
+        <AppConfigurationContext.Provider value={config}>
+          <MockCurrentLayoutProvider>
+            <MessagePipelineProvider>
+              <PanelStateContextProvider>
+                <ExtensionCatalogProvider loaders={[]}>
+                  <PanelCatalogContext.Provider value={panelCatalog}>
+                    {children}
+                  </PanelCatalogContext.Provider>
+                </ExtensionCatalogProvider>
+              </PanelStateContextProvider>
+            </MessagePipelineProvider>
+          </MockCurrentLayoutProvider>
+        </AppConfigurationContext.Provider>
+      </WorkspaceContextProvider>
+    );
+  };
+}
+
 describe("UnconnectedPanelLayout", () => {
   beforeEach(() => {
     // jsdom can't parse our @container CSS so we have to silence console.error for this test.
@@ -47,10 +73,79 @@ describe("UnconnectedPanelLayout", () => {
     (console.error as Mock).mockRestore();
   });
 
+  it("observes the replacement Dockview after dismissing a layout error", async () => {
+    // Given
+    const cleanup = vi.fn();
+    const observe = vi.spyOn(containerSize, "observeContainerSize").mockReturnValue(cleanup);
+    const catalog = new MockPanelCatalog([
+      {
+        type: "recover",
+        title: "Recover",
+        module: async () => ({
+          default: Panel(
+            Object.assign(() => <div>Recovered panel</div>, {
+              panelType: "recover",
+              defaultConfig: {},
+            }),
+          ),
+        }),
+      },
+    ]);
+    let crash = false;
+    /** Trigger error recovery while the parent layout component remains mounted. */
+    function LoadingComponent() {
+      if (crash) {
+        throw new Error("Layout error for recovery test");
+      }
+      return <></>;
+    }
+    const props = { layout: { panels: ["recover"] }, onChange: vi.fn() };
+    const { rerender, unmount } = render(
+      <UnconnectedPanelLayout {...props} loadingComponent={<LoadingComponent />} />,
+      { wrapper: wrapperFor(catalog) },
+    );
+    await screen.findByText("Recovered panel");
+    expect(observe).toHaveBeenCalledTimes(1);
+    const first = observe.mock.calls[0]!;
+
+    // When
+    crash = true;
+    rerender(<UnconnectedPanelLayout {...props} loadingComponent={<LoadingComponent />} />);
+    const dismiss = await screen.findByRole("button", { name: "Dismiss" });
+    expect(cleanup).toHaveBeenCalledTimes(1);
+    crash = false;
+    fireEvent.click(dismiss);
+
+    // Then
+    await screen.findByText("Recovered panel");
+    expect(observe).toHaveBeenCalledTimes(2);
+    expect(observe.mock.calls[1]![0]).not.toBe(first[0]);
+    expect(observe.mock.calls[1]![1]).not.toBe(first[1]);
+    unmount();
+    expect(cleanup).toHaveBeenCalledTimes(2);
+  });
+
   it("does not remount panels when the layout changes", async () => {
     // vi.spyOn(console, "error").mockImplementation(() => undefined);
 
-    const renderA = vi.fn().mockReturnValue(<>A</>);
+    const mountA = vi.fn();
+    const unmountA = vi.fn();
+    const renderA = vi.fn(function StatefulPanel() {
+      const [value, setValue] = useState("");
+      useEffect(() => {
+        mountA();
+        return unmountA;
+      }, []);
+      return (
+        <input
+          aria-label="Panel A state"
+          value={value}
+          onChange={(event) => {
+            setValue(event.target.value);
+          }}
+        />
+      );
+    });
     const moduleA = vi.fn().mockResolvedValue({
       default: Panel(Object.assign(renderA, { panelType: "a", defaultConfig: {} })),
     });
@@ -85,27 +180,7 @@ describe("UnconnectedPanelLayout", () => {
         onChange={onChange}
       />,
       {
-        wrapper: function Wrapper({ children }: React.PropsWithChildren) {
-          const [config] = useState(() => makeMockAppConfiguration());
-
-          return (
-            <WorkspaceContextProvider>
-              <AppConfigurationContext.Provider value={config}>
-                <MockCurrentLayoutProvider>
-                  <MessagePipelineProvider>
-                    <PanelStateContextProvider>
-                      <ExtensionCatalogProvider loaders={[]}>
-                        <PanelCatalogContext.Provider value={panelCatalog}>
-                          {children}
-                        </PanelCatalogContext.Provider>
-                      </ExtensionCatalogProvider>
-                    </PanelStateContextProvider>
-                  </MessagePipelineProvider>
-                </MockCurrentLayoutProvider>
-              </AppConfigurationContext.Provider>
-            </WorkspaceContextProvider>
-          );
-        },
+        wrapper: wrapperFor(panelCatalog),
       },
     );
 
@@ -117,6 +192,20 @@ describe("UnconnectedPanelLayout", () => {
     expect(moduleB).toHaveBeenCalledTimes(1);
     expect(moduleC).toHaveBeenCalledTimes(0);
     expect(renderC).toHaveBeenCalledTimes(0);
+    const input = await screen.findByRole("textbox", { name: "Panel A state" });
+    fireEvent.change(input, { target: { value: "unsaved panel state" } });
+    for (const active of ["b", "a", "b", "a"]) {
+      rerender(
+        <UnconnectedPanelLayout layout={{ panels: ["a", "b"], active }} onChange={onChange} />,
+      );
+      await waitFor(() => {
+        expect(input.isConnected).toBe(active === "a");
+      });
+      expect(unmountA).not.toHaveBeenCalled();
+    }
+    expect(screen.getByRole("textbox", { name: "Panel A state" })).toBe(input);
+    expect((input as HTMLInputElement).value).toBe("unsaved panel state");
+    expect(mountA).toHaveBeenCalledTimes(1);
     // Showing an outside layout may only report adjusted split sizes back, never other panels.
     const panelsReported = (from: number) =>
       onChange.mock.calls.slice(from).map(([reported]) => getPanelIds(reported));
@@ -148,5 +237,6 @@ describe("UnconnectedPanelLayout", () => {
     }
 
     unmount();
+    expect(unmountA).toHaveBeenCalledTimes(1);
   });
 });

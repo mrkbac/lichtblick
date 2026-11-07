@@ -30,6 +30,7 @@ import React, {
   useEffect,
   useMemo,
   useRef,
+  useState,
 } from "react";
 
 import { DockPanelContext } from "@lichtblick/suite-base/components/DockPanelContext";
@@ -61,6 +62,7 @@ import {
   getPanelTypeFromId,
 } from "@lichtblick/suite-base/util/layout";
 import { layoutsEqual } from "@lichtblick/suite-base/util/layoutTree";
+import { observeContainerSize } from "@lichtblick/suite-base/util/observeContainerSize";
 
 import ErrorBoundary from "./ErrorBoundary";
 import { useStyles } from "./PanelLayout.style";
@@ -171,6 +173,7 @@ type Props = {
   tabId?: string;
 };
 
+/** Synchronize a root or nested Dockview layout and resize each mounted container before paint. */
 export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactElement {
   const { layout, onChange, loadingComponent, tabId } = props;
   const { addPanel, getCurrentLayoutState } = useCurrentLayoutActions();
@@ -191,8 +194,9 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
     [panelCatalog],
   );
 
-  const apiRef = useRef<DockviewApi | undefined>(undefined);
+  const [dockviewApi, setDockviewApi] = useState<DockviewApi>();
   const rootRef = useRef<HTMLDivElement>(null);
+  const [dockviewElement, setDockviewElement] = useState<HTMLDivElement | null>(null);
   // The layout dockview currently shows, to tell our own changes from the user's.
   const shownLayoutRef = useRef<LayoutNode | undefined>(undefined);
   const latestRef = useRef({ layout, onChange });
@@ -221,7 +225,7 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
 
   const onReady = useCallback(
     ({ api }: { api: DockviewApi }) => {
-      apiRef.current = api;
+      setDockviewApi(api);
       showLayout(api, latestRef.current.layout);
 
       api.onDidLayoutChange(() => {
@@ -274,13 +278,19 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
     [showLayout],
   );
 
+  useEffect(() => {
+    if (dockviewElement && dockviewApi) {
+      return observeContainerSize(dockviewElement, dockviewApi);
+    }
+    return undefined;
+  }, [dockviewElement, dockviewApi]);
+
   // Apply layout changes that did not come from dockview (adding a panel, undo, loading a layout).
   useEffect(() => {
-    const api = apiRef.current;
-    if (api != undefined && !layoutsEqual(layout, shownLayoutRef.current)) {
-      showLayout(api, layout);
+    if (dockviewApi != undefined && !layoutsEqual(layout, shownLayoutRef.current)) {
+      showLayout(dockviewApi, layout);
     }
-  }, [layout, showLayout]);
+  }, [layout, showLayout, dockviewApi]);
 
   const onDidDrop = useCallback(
     (event: DockviewDidDropEvent) => {
@@ -325,6 +335,8 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
             }}
           >
             <DockviewReact
+              ref={setDockviewElement}
+              disableAutoResizing
               components={DOCK_COMPONENTS}
               onReady={onReady}
               onDidDrop={onDidDrop}
@@ -332,8 +344,8 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
               disableFloatingGroups
               singleTabMode="fullwidth"
               scrollbars="native"
-              // Background tabs stay mounted and in the DOM, so switching tabs only toggles visibility.
-              defaultRenderer="always"
+              // Render in the group's slot so content follows resizing without a deferred overlay.
+              defaultRenderer="onlyWhenVisible"
             />
           </div>
         </PanelComponentsContext.Provider>
