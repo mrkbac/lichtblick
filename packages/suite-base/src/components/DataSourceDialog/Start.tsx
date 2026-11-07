@@ -31,7 +31,7 @@ import { useCatalogFolder } from "@lichtblick/suite-base/components/Catalog/useC
 import DontShowThisAgainCheckbox from "@lichtblick/suite-base/components/DataSourceDialog/DontShowThisAgainCheckbox";
 import { OpenUrlInput } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
 import { useStyles } from "@lichtblick/suite-base/components/DataSourceDialog/index.style";
-import { LiveRecordingsList } from "@lichtblick/suite-base/components/LiveRecordingsDialog";
+import { LiveRecordingsList } from "@lichtblick/suite-base/components/LiveRecordingsList";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
