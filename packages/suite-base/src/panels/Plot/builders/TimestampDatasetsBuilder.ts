@@ -40,6 +40,8 @@ const registry = new FinalizationRegistry<() => void>((dispose) => {
 
 const emptyPaths = new Set<string>();
 
+type ReceiveMark = { time: Immutable<Time>; count: number };
+
 type TimestampSeriesItem = {
   config: Immutable<SeriesItem>;
 };
@@ -60,10 +62,13 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
 
   #startTime: Immutable<Time> | undefined;
 
-  /** Receive time of the newest message seen per topic (live sources only) */
-  #lastReceiveByTopic = new Map<string, Immutable<Time>>();
-  /** After a seek: messages up to these receive times are replays of stored points */
-  #replayUntilByTopic = new Map<string, Immutable<Time>>();
+  /**
+   * Receive time of the newest message seen per topic and how many arrived at exactly that time
+   * (a coarse server clock gives many messages the same time). Live sources only.
+   */
+  #lastReceiveByTopic = new Map<string, ReceiveMark>();
+  /** After a seek: messages up to these marks are replays of stored points */
+  #replayUntilByTopic = new Map<string, ReceiveMark>();
 
   #series: Immutable<TimestampSeriesItem[]> = [];
   // True once handleMessageRange has been called — indicates a range-capable source (file/bag).
@@ -128,7 +133,7 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
    */
   #handleLiveSeek(endTime: Immutable<Time>): void {
     let newest: Immutable<Time> | undefined;
-    for (const time of this.#lastReceiveByTopic.values()) {
+    for (const { time } of this.#lastReceiveByTopic.values()) {
       if (!newest || compare(time, newest) > 0) {
         newest = time;
       }
@@ -141,7 +146,9 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
         this.#pendingDispatch.push({ type: "reset-current", series: config.key });
       }
     }
-    this.#replayUntilByTopic = new Map(this.#lastReceiveByTopic);
+    this.#replayUntilByTopic = new Map(
+      [...this.#lastReceiveByTopic].map(([topic, mark]) => [topic, { ...mark }]),
+    );
   }
 
   #dropReplayed(events: Immutable<MessageEvent[]>): Immutable<MessageEvent[]> {
@@ -154,14 +161,21 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
             if (!until) {
               return true;
             }
-            if (compare(event.receiveTime, until) <= 0) {
+            const order = compare(event.receiveTime, until.time);
+            if (order < 0 || (order === 0 && until.count > 0)) {
+              until.count -= order === 0 ? 1 : 0;
               return false;
             }
             replayUntil.delete(event.topic);
             return true;
           });
     for (const event of out) {
-      this.#lastReceiveByTopic.set(event.topic, event.receiveTime);
+      const last = this.#lastReceiveByTopic.get(event.topic);
+      if (last && compare(last.time, event.receiveTime) === 0) {
+        last.count += 1;
+      } else {
+        this.#lastReceiveByTopic.set(event.topic, { time: event.receiveTime, count: 1 });
+      }
     }
     return out;
   }

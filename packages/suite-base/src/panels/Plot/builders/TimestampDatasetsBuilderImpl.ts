@@ -867,9 +867,13 @@ export class TimestampDatasetsBuilderImpl {
       }
       case "shift-x": {
         // Stream modifiers and smoothing only use x differences, so derived values stay valid
-        for (const { points } of this.#seriesByKey.values()) {
+        for (const { points, derived } of this.#seriesByKey.values()) {
           for (let i = 0; i < points.length; i++) {
             points.x[i]! -= action.delta;
+          }
+          // the cached running state continues from the last derived row
+          if (derived) {
+            derived.state.prevX -= action.delta;
           }
         }
         break;

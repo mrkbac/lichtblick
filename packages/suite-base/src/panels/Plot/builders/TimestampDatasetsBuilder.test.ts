@@ -153,6 +153,52 @@ describe("TimestampDatasetsBuilder", () => {
       expect(await storedXs(builder)).toEqual([1, 2, 3, 4]);
     });
 
+    it("keeps unplotted messages that share the replay boundary time", async () => {
+      // Given two points received at the same coarse clock time
+      const builder = new TimestampDatasetsBuilder();
+      builder.setSeries(buildSeriesItems([{ value: "/foo.val" }]));
+      const endTime = { sec: 3, nsec: 0 };
+      const atThree = (val: number) => ({ ...buildFooMessage(3), message: { val } });
+      builder.handlePlayerState(buildPlayerState({ endTime, messages: [atThree(1), atThree(2)] }));
+
+      // When a seek replays them along with one that arrived at that time while paused
+      builder.handlePlayerState(
+        buildPlayerState({
+          lastSeekTime: 2,
+          endTime,
+          messages: [atThree(1), atThree(2), atThree(3)],
+        }),
+      );
+
+      // Then the paused arrival is added once
+      const csv = await builder.getCsvData();
+      expect(csv[0]?.data.map(({ y }) => y)).toEqual([1, 2, 3]);
+    });
+
+    it("keeps cached derivatives right after the start time slides", async () => {
+      // Given derivatives computed and cached for preloaded rows
+      const builder = new TimestampDatasetsBuilder();
+      builder.setSeries(buildSeriesItems([{ value: "/foo.val.@derivative" }]));
+      builder.handlePlayerState(buildPlayerState());
+      builder.handleMessageRange(
+        [1, 2].map(buildFooMessage),
+        { isReset: true },
+        {
+          sec: 0,
+          nsec: 0,
+        },
+      );
+      await builder.getCsvData();
+
+      // When the start time moves and a later batch extends the rows
+      builder.handlePlayerState(buildPlayerState({ startTime: { sec: 1, nsec: 0 } }));
+      builder.handleMessageRange([buildFooMessage(3)], { isReset: false }, { sec: 1, nsec: 0 });
+
+      // Then the new row's derivative uses the shifted previous x
+      const csv = await builder.getCsvData();
+      expect(csv[0]?.data.map(({ y }) => y)).toEqual([NaN, 1, 1]);
+    });
+
     it("starts over when the source clock goes back", async () => {
       // Given points at 4 s and 5 s
       const builder = new TimestampDatasetsBuilder();
