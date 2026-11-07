@@ -68,6 +68,17 @@ describe("useConfigById", () => {
     expect(extensionSettings).toEqual({});
   });
 
+  it("keeps a topics list as an array", () => {
+    const panelConfig = { topics: ["/a", "/b"] };
+    mockUseCurrentLayoutSelector.mockImplementation((selector) =>
+      selector({ selectedLayout: { data: { configById: { "panel-1": panelConfig } } } }),
+    );
+
+    const { result } = renderHook(() => useConfigById<{ topics?: string[] }>("panel-1"));
+
+    expect(result.current[0]).toBe(panelConfig);
+  });
+
   it("calls savePanelConfigs with a plain object config", () => {
     const { result } = renderHook(() =>
       useConfigById<{ topics?: Record<string, string> }>("panel-1"),
