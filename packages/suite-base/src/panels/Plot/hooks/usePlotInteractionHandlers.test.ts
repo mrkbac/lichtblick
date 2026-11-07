@@ -24,6 +24,7 @@ import { PlotConfig } from "@lichtblick/suite-base/panels/Plot/utils/config";
 import { downloadCSV } from "@lichtblick/suite-base/panels/Plot/utils/csv";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { PlayerState } from "@lichtblick/suite-base/players/types";
+import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
 import PlotBuilder from "@lichtblick/suite-base/testing/builders/PlotBuilder";
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
@@ -841,10 +842,14 @@ describe("liveTimeAgo", () => {
   });
 
   it("measures from the current time on any source when labelled relative to now", () => {
-    const playback = {
+    const playback = PlayerBuilder.playerState({
       capabilities: [PLAYER_CAPABILITIES.playbackControl],
-      activeData: { ...activeData, currentTime: { sec: 107, nsec: 0 } },
-    } as unknown as PlayerState;
+      activeData: PlayerBuilder.activeData({
+        startTime: { sec: 100, nsec: 0 },
+        currentTime: { sec: 107, nsec: 0 },
+        endTime: { sec: 110, nsec: 0 },
+      }),
+    });
     expect(liveTimeAgo(playback, 4, { relativeToNow: true })).toBe("3.00 s ago");
   });
 });
