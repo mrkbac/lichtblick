@@ -62,13 +62,20 @@ async function serial<T>(run: () => Promise<T>): Promise<T> {
 async function start(name: string, profile: string): Promise<void> {
   const compress = await compressZstd;
   let releaseLock!: () => void;
+  // Never wait for or take over a recording that is in use, and never overwrite one.
   const locked = new Promise<void>((resolve, reject) => {
     void navigator.locks
-      .request(liveRecordingLockName(name), async () => {
-        resolve();
-        await new Promise<void>((release) => {
+      .request(liveRecordingLockName(name), { ifAvailable: true }, async (lock) => {
+        if (!lock) {
+          reject(new Error(`Recording ${name} is already in use`));
+          return;
+        }
+        // Assigned before resolve(), so the caller can always release.
+        const held = new Promise<void>((release) => {
           releaseLock = release;
         });
+        resolve();
+        await held;
       })
       .catch(reject);
   });
@@ -76,9 +83,15 @@ async function start(name: string, profile: string): Promise<void> {
   try {
     const root = await navigator.storage.getDirectory();
     const dir = await root.getDirectoryHandle(LIVE_RECORDINGS_DIR, { create: true });
+    const exists = await dir.getFileHandle(name).then(
+      () => true,
+      () => false,
+    );
+    if (exists) {
+      throw new Error(`Recording ${name} already exists`);
+    }
     const file = await dir.getFileHandle(name, { create: true });
     const handle = await file.createSyncAccessHandle();
-    handle.truncate(0);
     let position = 0n;
     const writer = new McapWriter({
       writable: {
