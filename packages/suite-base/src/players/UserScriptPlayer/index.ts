@@ -15,6 +15,7 @@
 //   You may not use this file except in compliance with the License.
 
 import { Time, compare } from "@foxglove/rostime";
+import type { IWritable } from "@mcap/core";
 import { Mutex } from "async-mutex";
 import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
@@ -1371,5 +1372,9 @@ export default class UserScriptPlayer implements Player {
 
   public seekPlayback(time: Time): void {
     this.#player.seekPlayback?.(time);
+  }
+
+  public async exportLiveHistory(writable: IWritable): Promise<void> {
+    await this.#player.exportLiveHistory?.(writable);
   }
 }

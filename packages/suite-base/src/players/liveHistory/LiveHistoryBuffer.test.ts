@@ -154,6 +154,21 @@ describe("LiveHistoryBuffer", () => {
     ]);
   });
 
+  it("snapshots seeds before the retained messages", () => {
+    const buffer = new LiveHistoryBuffer({
+      windowNs: 10n * SEC,
+      maxBytes: 1e9,
+    });
+    buffer.add(msg("/latched", 1));
+    for (let t = 15; t <= 20; t++) {
+      buffer.add(msg("/a", t));
+    }
+    expect(buffer.snapshot().map((e) => [e.topic, e.receiveTime.sec])).toEqual([
+      ["/latched", 1],
+      ...[15, 16, 17, 18, 19, 20].map((t) => ["/a", t]),
+    ]);
+  });
+
   it("only backfills requested topics", () => {
     const buffer = new LiveHistoryBuffer({
       windowNs: 10n * SEC,

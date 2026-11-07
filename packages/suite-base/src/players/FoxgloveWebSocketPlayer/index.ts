@@ -32,6 +32,7 @@ import {
   BinaryOpcode,
   IWebSocket,
 } from "@foxglove/ws-protocol";
+import { IWritable, McapWriter } from "@mcap/core";
 import * as _ from "lodash-es";
 
 import { debouncePromise } from "@lichtblick/den/async";
@@ -46,10 +47,12 @@ import {
   heapLimitBytes,
   LiveHistoryBuffer,
 } from "@lichtblick/suite-base/players/liveHistory/LiveHistoryBuffer";
+import { LiveRecorder } from "@lichtblick/suite-base/players/liveHistory/LiveRecorder";
 import {
   formatLiveHistoryMemory,
   liveHistorySettings,
 } from "@lichtblick/suite-base/players/liveHistory/liveHistorySettings";
+import { supportsLiveRecording } from "@lichtblick/suite-base/players/liveHistory/liveRecordings";
 import { estimateObjectSize } from "@lichtblick/suite-base/players/messageMemoryEstimation";
 import {
   AdvertiseOptions,
@@ -176,6 +179,14 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #unsubscribeHistorySettings: () => void;
   /** Playback position while reviewing history; undefined while live. */
   #historyCursor?: Time;
+  /** Raw payload of each history message, released together with the message. */
+  #rawByMessage = new WeakMap<MessageEvent, { data: Uint8Array; channel: ResolvedChannel }>();
+  /** Wall time of the current connection, for session stats. */
+  #connectedAtMs?: number;
+  /** Records the current connection to browser storage; one file per connection. */
+  #recorder?: LiveRecorder;
+  /** Set once the recorder couldn't be started, so it isn't retried for every message. */
+  #recorderUnavailable = false;
   /** Newest message handed to panels, to catch them up after a pause. */
   #lastDelivered?: MessageEvent;
   #historyTimer?: ReturnType<typeof setTimeout>;
@@ -231,7 +242,10 @@ export default class FoxgloveWebSocketPlayer implements Player {
       sourceId: this.#sourceId,
       parameters: { url: this.#url },
     };
-    this.#unsubscribeHistorySettings = liveHistorySettings.subscribe(({ windowSec }) => {
+    this.#unsubscribeHistorySettings = liveHistorySettings.subscribe(({ windowSec, diskMiB }) => {
+      if (diskMiB === 0) {
+        this.#stopRecording();
+      }
       this.#history.setWindow(secToNs(windowSec));
       this.#applyHistoryMemoryLimit();
       this.#emitState();
@@ -288,6 +302,9 @@ export default class FoxgloveWebSocketPlayer implements Player {
       }
       this.#presence = PlayerPresence.PRESENT;
       this.#resetSessionState();
+      this.#connectedAtMs = Date.now();
+      this.#stopRecording();
+      this.#recorderUnavailable = false; // a new connection tries recording again
       this.#alerts.clear();
       this.#channelsById.clear();
       this.#channelsByTopic.clear();
@@ -337,6 +354,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#client.on("close", (event) => {
       log.info("Connection closed:", event);
       this.#presence = PlayerPresence.RECONNECTING;
+      this.#stopRecording();
+      this.#connectedAtMs = undefined;
 
       if (this.#getParameterInterval != undefined) {
         clearInterval(this.#getParameterInterval);
@@ -514,6 +533,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#client.on("advertise", (newChannels) => {
       for (const channel of newChannels) {
         let parsedChannel;
+        let schema;
         try {
           let schemaEncoding;
           let schemaData;
@@ -554,14 +574,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
               : `Unsupported message encoding ${channel.encoding}`;
             throw new Error(msg);
           }
-          parsedChannel = parseChannel({
-            messageEncoding: channel.encoding,
-            schema: {
-              name: channel.schemaName,
-              encoding: schemaEncoding,
-              data: schemaData,
-            },
-          });
+          schema = { name: channel.schemaName, encoding: schemaEncoding, data: schemaData };
+          parsedChannel = parseChannel({ messageEncoding: channel.encoding, schema });
         } catch (error) {
           this.#unsupportedChannelIds.add(channel.id);
           this.#alerts.addAlert(`schema:${channel.topic}`, {
@@ -581,7 +595,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
           this.#emitState();
           continue;
         }
-        const resolvedChannel = { channel, parsedChannel };
+        const resolvedChannel = {
+          channel,
+          parsedChannel,
+          record: { topic: channel.topic, messageEncoding: channel.encoding, schema },
+        };
         this.#channelsById.set(channel.id, resolvedChannel);
         this.#channelsByTopic.set(channel.topic, resolvedChannel);
       }
@@ -645,7 +663,10 @@ export default class FoxgloveWebSocketPlayer implements Player {
           this.#messageSizeEstimateByTopic[topic] = msgSizeEstimate;
         }
 
-        const sizeInBytes = Math.max(data.byteLength, msgSizeEstimate);
+        // The history also keeps the received bytes (for export and recording), so count both.
+        const sizeInBytes = this.#serverControlsPlayback
+          ? Math.max(data.byteLength, msgSizeEstimate)
+          : msgSizeEstimate + data.byteLength;
         const msgEvent: MessageEvent = {
           topic,
           receiveTime,
@@ -655,6 +676,10 @@ export default class FoxgloveWebSocketPlayer implements Player {
         };
         if (!this.#serverControlsPlayback) {
           this.#history.add(msgEvent);
+          // ponytail: raw bytes aren't counted in the history memory limit; the heap guard covers it.
+          const raw = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+          this.#rawByMessage.set(msgEvent, { data: raw, channel: chanInfo });
+          this.#recordingFor()?.record(chanInfo.record, receiveTime, raw);
         }
         // While reviewing history, new messages only go into the history.
         if (this.#historyCursor == undefined) {
@@ -1081,6 +1106,14 @@ export default class FoxgloveWebSocketPlayer implements Player {
         subscribedTopics: this.#subscribedTopics,
         services: this.#advertisedServices,
         serviceTypes: this.#serviceTypes,
+        liveStats: this.#serverControlsPlayback
+          ? undefined
+          : {
+              connectedAtMs: this.#connectedAtMs,
+              historyMessages: this.#history.size(),
+              historyBytes: this.#history.sizeBytes(),
+              historyLimitBytes: this.#history.maxBytes(),
+            },
       },
     });
   });
@@ -1092,6 +1125,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
   public close(): void {
     this.#closed = true;
+    this.#stopRecording();
     this.#unsubscribeHistorySettings();
     this.#clearHistory();
     this.#client?.close();
@@ -1481,6 +1515,84 @@ export default class FoxgloveWebSocketPlayer implements Player {
     }
     this.#emitState();
   };
+
+  /** The recorder for this connection, started on first use while recording is on. */
+  #recordingFor(): LiveRecorder | undefined {
+    if (
+      !this.#recorder &&
+      !this.#recorderUnavailable &&
+      liveHistorySettings.getState().diskMiB > 0 &&
+      supportsLiveRecording() &&
+      typeof Worker !== "undefined"
+    ) {
+      const onError = (error: unknown) => {
+        this.#alerts.addAlert("liveRecording:failed", {
+          severity: "warn",
+          message: "Recording to browser storage stopped",
+          tip: "The connection and its history in memory are unaffected. Free up disk space or lower the recording budget in Settings.",
+          error: toError(error),
+        });
+        this.#emitState();
+      };
+      try {
+        this.#recorder = new LiveRecorder({ profile: this.#profile, onError });
+      } catch (error) {
+        this.#recorderUnavailable = true;
+        onError(error);
+      }
+    }
+    return this.#recorder;
+  }
+
+  #stopRecording(): void {
+    const recorder = this.#recorder;
+    this.#recorder = undefined;
+    void recorder?.stop().catch((error: unknown) => {
+      log.error("Failed to finish the live recording", error);
+    });
+  }
+
+  /** Write everything in the live history to an MCAP file. */
+  public async exportLiveHistory(writable: IWritable): Promise<void> {
+    const messages = this.#history.snapshot();
+    const writer = new McapWriter({ writable });
+    await writer.start({ profile: this.#profile ?? "", library: "Lichtblick live history" });
+    const schemaIds = new Map<string, number>();
+    const channelIds = new Map<ResolvedChannel, number>();
+    let sequence = 0;
+    for (const msg of messages) {
+      const raw = this.#rawByMessage.get(msg);
+      if (!raw) {
+        continue;
+      }
+      let channelId = channelIds.get(raw.channel);
+      if (channelId == undefined) {
+        const { channel, record } = raw.channel;
+        const schemaKey = `${record.schema.encoding}\0${record.schema.name}\0${channel.schema}`;
+        let schemaId = schemaIds.get(schemaKey);
+        if (schemaId == undefined) {
+          schemaId = await writer.registerSchema(record.schema);
+          schemaIds.set(schemaKey, schemaId);
+        }
+        channelId = await writer.registerChannel({
+          topic: record.topic,
+          messageEncoding: record.messageEncoding,
+          schemaId,
+          metadata: new Map(),
+        });
+        channelIds.set(raw.channel, channelId);
+      }
+      const time = toNanoSec(msg.receiveTime);
+      await writer.addMessage({
+        channelId,
+        sequence: sequence++,
+        logTime: time,
+        publishTime: time,
+        data: raw.data,
+      });
+    }
+    await writer.end();
+  }
 
   /** Give history memory back while the browser heap is nearly full, before the tab crashes. */
   #checkHeap(): void {

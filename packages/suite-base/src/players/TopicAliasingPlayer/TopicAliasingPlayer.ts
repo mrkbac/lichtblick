@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time } from "@foxglove/rostime";
+import type { IWritable } from "@mcap/core";
 import * as _ from "lodash-es";
 
 import { MutexLocked } from "@lichtblick/den/async";
@@ -143,6 +144,10 @@ export class TopicAliasingPlayer implements Player {
 
   public seekPlayback?(time: Time): void {
     this.#player.seekPlayback?.(time);
+  }
+
+  public async exportLiveHistory(writable: IWritable): Promise<void> {
+    await this.#player.exportLiveHistory?.(writable);
   }
 
   public playUntil?(time: Time): void {

@@ -17,6 +17,7 @@ import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecor
 import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
+import { useLiveRecordingsDialog } from "@lichtblick/suite-base/components/LiveRecordingsDialog";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
@@ -45,6 +46,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
   const { recentSources, selectRecent } = usePlayerSelection();
   const exportableFile = useExportableFile();
   const openExport = useTrimStore((state) => state.openExport);
+  const showLiveRecordings = useLiveRecordingsDialog((state) => state.show);
   const showCommandPalette = useCommandPaletteStore((state) => state.show);
   const showShortcuts = useKeyboardShortcutsStore((state) => state.show);
   const { dialogActions } = useWorkspaceActions();
@@ -145,6 +147,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
       {item("export-recording", t("exportRecording"), openExport, {
         disabled: !exportableFile,
       })}
+      {item("live-recordings", t("liveRecordings"), showLiveRecordings)}
 
       {recents.length > 0 && (
         <ListSubheader className={classes.subheader}>{t("recentDataSources")}</ListSubheader>
