@@ -77,8 +77,13 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   /** Wheel zoom mode without modifier keys: x for time/index plots, xy for path x-axis plots */
   private defaultZoomMode: ZoomMode = "x";
   private absoluteTimeTicks = false;
+  /** Label x ticks as seconds before the current time */
+  private relativeToNowTicks = false;
   /** Start of the x-axis tick format last sent to the renderer; NaN = never sent */
   private sentTickStartSec: number | undefined = NaN;
+  private sentRelativeToNow = false;
+  /** Current time last sent for relative-to-now ticks */
+  private sentTickNowSec?: number;
   private globalBounds?: Immutable<Partial<Bounds1D>>;
   private datasetRange?: Bounds1D;
   private followRange?: number;
@@ -359,6 +364,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     this.playheadCenter = config.playheadPosition === "center";
     this.absoluteTimeTicks =
       this.isTimeseriesPlot && !this.analysis && config.timestampFormat === "absolute";
+    this.relativeToNowTicks =
+      this.isTimeseriesPlot && !this.analysis && config.timestampFormat === "relativeToNow";
     this.updateTickFormat();
 
     const isPathXAxis = config.xAxisVal === "custom" || config.xAxisVal === "currentCustom";
@@ -695,6 +702,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     const moved = secondsSinceStart !== this.currentSeconds;
     // Set the time first: queueDispatchRender may start rendering right away and reads it.
     this.currentSeconds = secondsSinceStart;
+    this.updateTickFormat();
     // In follow mode the x-axis window ends at the current time. A source with a fixed range
     // (file playback) never changes the dataset range, so nothing else would re-render the axis
     // and it would stay where the panel was first drawn. A zoomed/panned or synced x-axis does not
@@ -707,12 +715,27 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     }
   }
 
-  /** Send the x tick format when the absolute-time setting or the data start changes. */
+  /**
+   * Send the x tick format when the timestamp format or the data start changes, and the current
+   * time when it moves with relative-to-now ticks. The format (a layout change) is sent only when
+   * it changes, the current time apart so moving it every frame does not count as one.
+   */
   private updateTickFormat(): void {
     const startSec = this.absoluteTimeTicks && this.startTime ? toSec(this.startTime) : undefined;
-    if (startSec !== this.sentTickStartSec) {
+    if (startSec !== this.sentTickStartSec || this.relativeToNowTicks !== this.sentRelativeToNow) {
       this.sentTickStartSec = startSec;
-      this.updateAction.xTickFormat = { absoluteStartSec: startSec };
+      this.sentRelativeToNow = this.relativeToNowTicks;
+      this.sentTickNowSec = undefined;
+      this.updateAction.xTickFormat = {
+        absoluteStartSec: startSec,
+        relativeToNow: this.relativeToNowTicks,
+      };
+      this.queueDispatchRender();
+    }
+    const nowSec = this.relativeToNowTicks ? this.currentSeconds : undefined;
+    if (nowSec != undefined && nowSec !== this.sentTickNowSec) {
+      this.sentTickNowSec = nowSec;
+      this.updateAction.xNowSec = nowSec;
       this.queueDispatchRender();
     }
   }

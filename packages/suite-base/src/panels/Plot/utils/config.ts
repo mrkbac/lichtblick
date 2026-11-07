@@ -46,7 +46,8 @@ export type PlotInterpolation = "linear" | "step";
 export type PlotYAxis = "primary" | "secondary";
 export type PlotTimeWindow = "automatic" | "sliding" | "fixed";
 export type PlotPlayheadPosition = "right" | "center";
-export type PlotTimestampFormat = "relative" | "absolute";
+/** x labels: seconds since start, wall-clock time, or seconds before the current time */
+export type PlotTimestampFormat = "relative" | "absolute" | "relativeToNow";
 export type PlotAxisScales = "independent" | "equal";
 /** "fft" plots each series' frequency spectrum, "histogram" its value distribution */
 export type PlotMode = "time" | "fft" | "histogram";

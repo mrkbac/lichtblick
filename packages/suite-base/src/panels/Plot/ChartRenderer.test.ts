@@ -5,7 +5,11 @@ import { Chart, ChartOptions, Element, InteractionItem, Scale } from "chart.js";
 import type { Mock } from "vitest";
 
 import { Immutable } from "@lichtblick/suite";
-import { ChartRenderer, holdXPadding } from "@lichtblick/suite-base/panels/Plot/ChartRenderer";
+import {
+  alignTicksTo,
+  ChartRenderer,
+  holdXPadding,
+} from "@lichtblick/suite-base/panels/Plot/ChartRenderer";
 import { DEFAULT_ANNOTATION } from "@lichtblick/suite-base/panels/Plot/constants";
 import { getChartOptions } from "@lichtblick/suite-base/panels/Plot/utils/getChartOptions";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -55,6 +59,7 @@ vi.mock("chart.js", () => {
   };
 
   return {
+    Ticks: { formatters: { numeric: (value: number) => String(value) } },
     Chart: vi.fn().mockImplementation(function () {
       return {
         update: vi.fn(),
@@ -101,6 +106,33 @@ global.OffscreenCanvas = class {
 type ChartRendererTestSetup = {
   actionOverride?: Partial<UpdateAction>;
 };
+
+describe("alignTicksTo", () => {
+  it("keeps the step and moves the ticks to whole steps from the origin", () => {
+    // chart.js ticks for 270.4–300.4, with includeBounds' short first step
+    const ticks = [270.4, 275, 280, 285, 290, 295, 300].map((value) => ({ value }));
+    const aligned = alignTicksTo(ticks, 270.4, 300.4, 300.4).map((tick) => tick.value);
+    expect(aligned).toHaveLength(7);
+    aligned.forEach((value, i) => {
+      expect(value).toBeCloseTo(270.4 + i * 5);
+    });
+  });
+
+  it("ignores a tick chart.js moved onto the axis max", () => {
+    // step 2, with the 30 tick moved onto the max 30.9
+    const ticks = [20.9, 22, 24, 26, 28, 30.9].map((value) => ({ value }));
+    const aligned = alignTicksTo(ticks, 20.9, 30.9, 30.9).map((tick) => tick.value);
+    expect(aligned).toHaveLength(6);
+    aligned.forEach((value, i) => {
+      expect(value).toBeCloseTo(20.9 + i * 2);
+    });
+  });
+
+  it("leaves too few ticks to find the step alone", () => {
+    const ticks = [{ value: 0 }, { value: 1 }, { value: 2 }];
+    expect(alignTicksTo(ticks, 0, 2, 0.5)).toEqual(ticks);
+  });
+});
 
 describe("ChartRenderer", () => {
   beforeEach(() => {
@@ -159,6 +191,35 @@ describe("ChartRenderer", () => {
   });
 
   describe("update", () => {
+    it("labels x ticks as seconds before the current time", () => {
+      // GIVEN relative-to-now ticks at 300.4 s since start
+      const { chartRenderer, chartOptions } = setup();
+      chartRenderer.update({
+        type: "update",
+        xTickFormat: { relativeToNow: true },
+        xNowSec: 300.4,
+      });
+      const x = chartOptions.scales.x as unknown as {
+        afterBuildTicks: (scale: unknown) => void;
+        ticks: { callback: (value: number, index: number, ticks: { value: number }[]) => string };
+      };
+
+      // WHEN chart.js builds ticks for a 30 s window
+      const scale = {
+        min: 270.4,
+        max: 300.4,
+        ticks: [275, 280, 285, 290, 295, 300].map((value) => ({ value })),
+      };
+      x.afterBuildTicks(scale);
+      const labels = scale.ticks.map((tick, i) => x.ticks.callback(tick.value, i, scale.ticks));
+
+      // THEN they read -30 … 0
+      expect(labels.map(Number)).toEqual(
+        [-30, -25, -20, -15, -10, -5, 0].map((v) => expect.closeTo(v)),
+      );
+      expect(labels.at(-1)).toBe("0");
+    });
+
     it("should update chart dimensions on update action", () => {
       const { action, chartRenderer } = setup({
         actionOverride: {

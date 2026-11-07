@@ -80,6 +80,30 @@ export function holdXPadding(
   scale.paddingRight = held.right;
 }
 
+/**
+ * Move chart.js's x ticks so they sit a whole number of tick steps from `origin` (the current
+ * time), keeping its step. Labels relative to the origin then read -30, -25 … 0 instead of
+ * -29.63, -24.63 …, and the ticks scroll with the data.
+ */
+export function alignTicksTo(
+  ticks: readonly { value: number }[],
+  min: number,
+  max: number,
+  origin: number,
+): { value: number }[] {
+  // chart.js adds the axis min/max as ticks, or moves the nearest tick onto them, so only the
+  // gaps between inner ticks are its step
+  const step = ticks.length >= 4 ? ticks[2]!.value - ticks[1]!.value : 0;
+  if (!(step > 0) || !Number.isFinite(origin)) {
+    return [...ticks];
+  }
+  const aligned = [];
+  for (let k = Math.ceil((min - origin) / step); origin + k * step <= max; k++) {
+    aligned.push({ value: origin + k * step });
+  }
+  return aligned;
+}
+
 export class ChartRenderer {
   #chartInstance: ChartType;
   #fakeNodeEvents = new EventEmitter();
@@ -87,6 +111,8 @@ export class ChartRenderer {
   readonly #titleColor: string;
   #absoluteStartSec?: number;
   #xPadding: XPadding = { span: Number.NaN, left: 0, right: 0 };
+  #relativeToNow = false;
+  #nowSec?: number;
   #equalAxes = false;
   /** Series datasets by config index; the chart's datasets also hold threshold fills after them */
   #seriesDatasets: Dataset[] = [];
@@ -116,19 +142,39 @@ export class ChartRenderer {
       titleColor: args.titleColor,
     });
 
+    const getNowSec = () => (this.#relativeToNow ? this.#nowSec : undefined);
     const xTicks = chartOptions.scales?.x?.ticks;
     if (xTicks) {
       const getStartSec = () => this.#absoluteStartSec;
       xTicks.callback = function (this: ChartScale, value, index, ticks) {
         const startSec = getStartSec();
-        return startSec == undefined || typeof value !== "number"
-          ? Ticks.formatters.numeric.call(this, value as number, index, ticks)
-          : formatClockTime(startSec + value);
+        const nowSec = getNowSec();
+        if (typeof value === "number" && startSec != undefined) {
+          return formatClockTime(startSec + value);
+        }
+        if (typeof value === "number" && nowSec != undefined) {
+          const rel = value - nowSec;
+          // the tick at the current time differs from it by float rounding: show "0", not "-0"
+          const step = ticks.length > 1 ? Math.abs(ticks[1]!.value - ticks[0]!.value) : 1;
+          return Ticks.formatters.numeric.call(
+            this,
+            Math.abs(rel) < step * 1e-6 ? 0 : rel,
+            index,
+            ticks,
+          );
+        }
+        return Ticks.formatters.numeric.call(this, value as number, index, ticks);
       };
     }
 
     const xScaleOptions = chartOptions.scales?.x;
     if (xScaleOptions) {
+      xScaleOptions.afterBuildTicks = (scale) => {
+        const nowSec = getNowSec();
+        if (nowSec != undefined) {
+          scale.ticks = alignTicksTo(scale.ticks, scale.min, scale.max, nowSec);
+        }
+      };
       xScaleOptions.afterFit = (scale) => {
         holdXPadding(this.#xPadding, scale);
       };
@@ -219,8 +265,14 @@ export class ChartRenderer {
 
     if (action.xTickFormat) {
       this.#absoluteStartSec = action.xTickFormat.absoluteStartSec;
-      // labels change length with the format: size the padding afresh
+      this.#relativeToNow = action.xTickFormat.relativeToNow ?? false;
+      // labels change length with the format: size the padding afresh. xTickFormat is sent only
+      // when the format changes; the current time for relative-to-now ticks comes in xNowSec.
       this.#xPadding.span = Number.NaN;
+    }
+
+    if (action.xNowSec != undefined) {
+      this.#nowSec = action.xNowSec;
     }
 
     if (action.equalAxes != undefined) {

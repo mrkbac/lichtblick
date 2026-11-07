@@ -628,6 +628,7 @@ function xRangeFields(
       options: [
         { label: t("relative"), value: "relative" },
         { label: t("absolute"), value: "absolute" },
+        { label: t("relativeToNow"), value: "relativeToNow" },
       ],
     },
     timeWindow: {

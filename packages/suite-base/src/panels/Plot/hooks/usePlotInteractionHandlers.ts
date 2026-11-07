@@ -52,17 +52,26 @@ export function formatTimeAgo(seconds: number): string {
   return `${Math.floor(seconds / 3600)} h ${Math.floor((seconds % 3600) / 60)} min ago`;
 }
 
-/** Age of plot time `x` (seconds since start) on a live source; undefined for recordings. */
-export function liveTimeAgo(playerState: Immutable<PlayerState>, x: number): string | undefined {
-  const { startTime, endTime } = playerState.activeData ?? {};
-  if (playerState.capabilities.includes(PLAYER_CAPABILITIES.playbackControl)) {
+/**
+ * Age of plot time `x` (seconds since start) on a live source; undefined for recordings. With
+ * `relativeToNow` (the "Relative to now" x labels) it is the age before the current time, on any
+ * source, so it matches the axis.
+ */
+export function liveTimeAgo(
+  playerState: Immutable<PlayerState>,
+  x: number,
+  { relativeToNow = false }: { relativeToNow?: boolean } = {},
+): string | undefined {
+  const { startTime, endTime, currentTime } = playerState.activeData ?? {};
+  if (!relativeToNow && playerState.capabilities.includes(PLAYER_CAPABILITIES.playbackControl)) {
     return undefined;
   }
+  const now = relativeToNow ? currentTime : endTime;
   // x < 0 is before the data, or the coordinator's "no scale yet" -1
-  if (!startTime || !endTime || x < 0) {
+  if (!startTime || !now || x < 0) {
     return undefined;
   }
-  const ago = toSec(subtract(endTime, startTime)) - x;
+  const ago = toSec(subtract(now, startTime)) - x;
   // Past the newest data there is nothing to age
   return ago >= 0 ? formatTimeAgo(ago) : undefined;
 }
@@ -133,6 +142,7 @@ const usePlotInteractionHandlers = ({
           ? liveTimeAgo(
               getMessagePipelineState().playerState,
               coordinator.getXValueAtPixel(pixel.x),
+              { relativeToNow: config.timestampFormat === "relativeToNow" },
             )
           : undefined;
       setActiveTooltip({
@@ -142,7 +152,15 @@ const usePlotInteractionHandlers = ({
         ...(header != undefined && { header }),
       });
     });
-  }, [renderer, isMounted, setActiveTooltip, isTimeAxis, coordinator, getMessagePipelineState]);
+  }, [
+    renderer,
+    isMounted,
+    setActiveTooltip,
+    isTimeAxis,
+    coordinator,
+    getMessagePipelineState,
+    config.timestampFormat,
+  ]);
 
   // Extract the bounding client rect from currentTarget before calling the debounced function
   // because react re-uses the SyntheticEvent objects.
