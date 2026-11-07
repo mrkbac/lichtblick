@@ -41,6 +41,8 @@ export class LiveRecorder {
   #postTimer?: ReturnType<typeof setInterval>;
   #evictTimer?: ReturnType<typeof setInterval>;
   #failed = false;
+  /** Set once stop() begins, so a late batch result can't start a new file. */
+  #stopped = false;
   #profile: string;
   #onError: (error: unknown) => void;
 
@@ -88,6 +90,7 @@ export class LiveRecorder {
 
   /** Write what is pending, finish the file and move it to the recording folder if there is one. */
   public async stop(): Promise<void> {
+    this.#stopped = true;
     clearInterval(this.#postTimer);
     clearInterval(this.#evictTimer);
     if (this.#started) {
@@ -115,7 +118,7 @@ export class LiveRecorder {
       if (file === this.#file) {
         this.#activeBytes = size;
         const budget = budgetBytes();
-        if (budget > 0 && size > budget / 2) {
+        if (!this.#stopped && budget > 0 && size > budget / 2) {
           this.#rotate();
         }
       }
@@ -143,7 +146,12 @@ export class LiveRecorder {
 
   /** Evict older recordings so they and the file being written fit the budget. */
   async #enforceBudget(): Promise<void> {
-    await evictLiveRecordings(Math.max(0, budgetBytes() - this.#activeBytes)).catch(() => {});
+    const budget = budgetBytes();
+    // Off (0) means don't record, not "delete every recording".
+    if (budget <= 0) {
+      return;
+    }
+    await evictLiveRecordings(Math.max(0, budget - this.#activeBytes)).catch(() => {});
   }
 
   /** Run worker calls in order; after the first failure, report it and drop the rest. */

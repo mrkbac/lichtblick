@@ -83,6 +83,16 @@ describe("LiveRecorder", () => {
     ]);
   });
 
+  it("keeps recordings when recording is turned off", async () => {
+    const recorder = new LiveRecorder({ profile: "", onError: () => {} });
+    recorder.record(channel, { sec: 1, nsec: 0 }, new Uint8Array(1));
+    await flush();
+    vi.mocked(evictLiveRecordings).mockClear();
+    liveHistorySettings.getState().setDiskMiB(0);
+    await recorder.stop();
+    expect(evictLiveRecordings).not.toHaveBeenCalled();
+  });
+
   it("counts the file being written toward the budget when evicting", async () => {
     const recorder = new LiveRecorder({ profile: "", onError: () => {} });
     recorder.record(channel, { sec: 1, nsec: 0 }, new Uint8Array(1));
