@@ -146,6 +146,13 @@ describe("isEmptyMcap", () => {
     await expect(isEmptyMcap(await mcap(0))).resolves.toBe(true);
   });
 
+  it("keeps files whose records don't add up, or that aren't MCAP", async () => {
+    const header = new Uint8Array(await (await mcap(0)).arrayBuffer());
+    const cutOff = header.slice(0, header.length - 1);
+    await expect(isEmptyMcap(new Blob([cutOff]))).resolves.toBe(false);
+    await expect(isEmptyMcap(new Blob([new Uint8Array(20)]))).resolves.toBe(false);
+  });
+
   it("is false once a message was written", async () => {
     await expect(isEmptyMcap(await mcap(1))).resolves.toBe(false);
   });

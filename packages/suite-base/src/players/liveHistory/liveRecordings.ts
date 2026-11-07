@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Opcode } from "@mcap/core";
+import { MCAP_MAGIC, Opcode } from "@mcap/core";
 
 import { createKeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
 
@@ -62,14 +62,25 @@ export async function isEmptyMcap(file: Blob): Promise<boolean> {
     return false;
   }
   const bytes = new Uint8Array(await file.arrayBuffer());
+  if (!MCAP_MAGIC.every((byte, i) => bytes[i] === byte)) {
+    return false;
+  }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  // magic (8), then records: opcode (1), content length (8), content
-  for (let offset = 8; offset + 9 <= bytes.length; ) {
+  // Records follow the magic: opcode (1), content length (8), content. Anything that doesn't add
+  // up exactly counts as data, since an empty file gets deleted.
+  for (let offset = MCAP_MAGIC.length; offset < bytes.length; ) {
+    if (offset + 9 > bytes.length) {
+      return false;
+    }
     const opcode = bytes[offset]!;
     if (opcode === Opcode.MESSAGE || opcode === Opcode.CHUNK) {
       return false;
     }
-    offset += 9 + Number(view.getBigUint64(offset + 1, true));
+    const end = BigInt(offset) + 9n + view.getBigUint64(offset + 1, true);
+    if (end > BigInt(bytes.length)) {
+      return false;
+    }
+    offset = Number(end);
   }
   return true;
 }
