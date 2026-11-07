@@ -26,3 +26,6 @@ ignoredBuiltDependencies:
 # each workspace doesn't have to repeat the shared ones. Runtime packages stay strict (isolated).
 publicHoistPattern:
   - "@types/*"
+
+patchedDependencies:
+  dockview-core@8.8.3: patches/dockview-core@8.8.3.patch

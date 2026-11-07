@@ -8,6 +8,11 @@ overrides:
   dompurify@<3.4.17: 3.4.17
   undici@<6.29.1: 6.29.1
 
+patchedDependencies:
+  dockview-core@8.8.3:
+    hash: 03610655ac806d48c5e717b92c3f3f6a727407d4c2551fad0e8bcf3132201541
+    path: patches/dockview-core@8.8.3.patch
+
 importers:
 
   .:
@@ -11935,7 +11940,7 @@ snapshots:
     dependencies:
       '@leichtgewicht/ip-codec': 2.0.5
 
-  dockview-core@8.8.3: {}
+  dockview-core@8.8.3(patch_hash=03610655ac806d48c5e717b92c3f3f6a727407d4c2551fad0e8bcf3132201541): {}
 
   dockview-react@8.8.3(react-dom@19.3.1(react@19.3.1))(react@19.3.1):
     dependencies:
@@ -11945,7 +11950,7 @@ snapshots:
 
   dockview@8.8.3:
     dependencies:
-      dockview-core: 8.8.3
+      dockview-core: 8.8.3(patch_hash=03610655ac806d48c5e717b92c3f3f6a727407d4c2551fad0e8bcf3132201541)
 
   doctrine@2.1.0:
     dependencies:

@@ -1,0 +1,76 @@
+diff --git a/dist/package/main.cjs.js b/dist/package/main.cjs.js
+index 7a02322dc06ce250275cd99c22eb539331b5bc0b..24f5ead10f451390f813bf4990ceed647b2cb72b 100644
+--- a/dist/package/main.cjs.js
++++ b/dist/package/main.cjs.js
+@@ -15009,21 +15009,14 @@ var OverlayRenderContainer = class extends CompositeDisposable {
+ 			const scheduling = this.map[panelId];
+ 			if ((scheduling === null || scheduling === void 0 ? void 0 : scheduling.generation) !== generation) return;
+ 			if (scheduling.pendingUpdate !== void 0) return;
+-			/**
+-			* Claim the slot *before* scheduling. `requestAnimationFrame` is
+-			* shimmed to run inline by some hosts (and by several suites here),
+-			* in which case the callback below clears `pendingUpdate` while
+-			* this call is still on the stack — assigning the handle afterwards
+-			* would resurrect a slot that is already spent and block every
+-			* later reposition. The sentinel is replaced by the real handle
+-			* only if the frame has not already run.
+-			*/
++			// Coalesce layout writes before paint, including resizes delivered by ResizeObserver.
+ 			scheduling.pendingUpdate = SCHEDULED;
+-			const handle = requestAnimationFrame(() => {
++			this.positionCache.invalidate();
++			queueMicrotask(() => {
+ 				var _entry$forceVisible;
+ 				const entry = this.map[panelId];
+-				if (entry) entry.pendingUpdate = void 0;
+ 				if (this.isDisposed || (entry === null || entry === void 0 ? void 0 : entry.generation) !== generation) return;
++				entry.pendingUpdate = void 0;
+ 				const forceVisible = (_entry$forceVisible = entry.forceVisible) !== null && _entry$forceVisible !== void 0 ? _entry$forceVisible : false;
+ 				const clip = entry.clip;
+ 				const collapsedEdge = isInCollapsedEdgeGroup(panel);
+@@ -15081,7 +15074,6 @@ var OverlayRenderContainer = class extends CompositeDisposable {
+ 				} else focusContainer.style.clipPath = "";
+ 				toggleClass(focusContainer, "dv-render-overlay-float", panel.group.api.location.type === "floating");
+ 			});
+-			if (scheduling.pendingUpdate === SCHEDULED) scheduling.pendingUpdate = handle;
+ 		};
+ 		const visibilityChanged = () => {
+ 			var _this$map$panel$api$i;
+diff --git a/dist/package/main.esm.mjs b/dist/package/main.esm.mjs
+index 7da3ab2db8120c6bc02bb8e624dfd2b9b272798f..1cb336bf3f6bc23789d1996f31d8b9e59d0d1a76 100644
+--- a/dist/package/main.esm.mjs
++++ b/dist/package/main.esm.mjs
+@@ -15007,21 +15007,14 @@ var OverlayRenderContainer = class extends CompositeDisposable {
+ 			const scheduling = this.map[panelId];
+ 			if ((scheduling === null || scheduling === void 0 ? void 0 : scheduling.generation) !== generation) return;
+ 			if (scheduling.pendingUpdate !== void 0) return;
+-			/**
+-			* Claim the slot *before* scheduling. `requestAnimationFrame` is
+-			* shimmed to run inline by some hosts (and by several suites here),
+-			* in which case the callback below clears `pendingUpdate` while
+-			* this call is still on the stack — assigning the handle afterwards
+-			* would resurrect a slot that is already spent and block every
+-			* later reposition. The sentinel is replaced by the real handle
+-			* only if the frame has not already run.
+-			*/
++			// Coalesce layout writes before paint, including resizes delivered by ResizeObserver.
+ 			scheduling.pendingUpdate = SCHEDULED;
+-			const handle = requestAnimationFrame(() => {
++			this.positionCache.invalidate();
++			queueMicrotask(() => {
+ 				var _entry$forceVisible;
+ 				const entry = this.map[panelId];
+-				if (entry) entry.pendingUpdate = void 0;
+ 				if (this.isDisposed || (entry === null || entry === void 0 ? void 0 : entry.generation) !== generation) return;
++				entry.pendingUpdate = void 0;
+ 				const forceVisible = (_entry$forceVisible = entry.forceVisible) !== null && _entry$forceVisible !== void 0 ? _entry$forceVisible : false;
+ 				const clip = entry.clip;
+ 				const collapsedEdge = isInCollapsedEdgeGroup(panel);
+@@ -15079,7 +15072,6 @@ var OverlayRenderContainer = class extends CompositeDisposable {
+ 				} else focusContainer.style.clipPath = "";
+ 				toggleClass(focusContainer, "dv-render-overlay-float", panel.group.api.location.type === "floating");
+ 			});
+-			if (scheduling.pendingUpdate === SCHEDULED) scheduling.pendingUpdate = handle;
+ 		};
+ 		const visibilityChanged = () => {
+ 			var _this$map$panel$api$i;

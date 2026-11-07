@@ -61,6 +61,7 @@ import {
   getPanelTypeFromId,
 } from "@lichtblick/suite-base/util/layout";
 import { layoutsEqual } from "@lichtblick/suite-base/util/layoutTree";
+import { observeContainerSize } from "@lichtblick/suite-base/util/observeContainerSize";
 
 import ErrorBoundary from "./ErrorBoundary";
 import { useStyles } from "./PanelLayout.style";
@@ -170,6 +171,7 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
 
   const apiRef = useRef<DockviewApi | undefined>(undefined);
   const rootRef = useRef<HTMLDivElement>(null);
+  const dockviewRef = useRef<HTMLDivElement>(null);
   // The layout dockview currently shows, to tell our own changes from the user's.
   const shownLayoutRef = useRef<LayoutNode | undefined>(undefined);
   const latestRef = useRef({ layout, onChange });
@@ -248,6 +250,15 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
     [showLayout],
   );
 
+  useEffect(() => {
+    const element = dockviewRef.current;
+    const api = apiRef.current;
+    if (element && api) {
+      return observeContainerSize(element, api);
+    }
+    return undefined;
+  }, []);
+
   // Apply layout changes that did not come from dockview (adding a panel, undo, loading a layout).
   useEffect(() => {
     const api = apiRef.current;
@@ -304,6 +315,8 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
             }}
           >
             <DockviewReact
+              ref={dockviewRef}
+              disableAutoResizing
               components={DOCK_COMPONENTS}
               onReady={onReady}
               onDidDrop={onDidDrop}

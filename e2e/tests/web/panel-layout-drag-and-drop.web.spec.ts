@@ -115,6 +115,94 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
     await expect.poll(async () => await groups(page)).toEqual(["3D|Image", "Raw Messages"]);
   }
 
+  for (const nested of [false, true]) {
+    test(`fills panel slots before paint during sidebar resizing${nested ? " inside a Tab panel" : ""}`, async ({
+      page,
+    }) => {
+      const resizeErrors: string[] = [];
+      page.on("pageerror", (error) => {
+        if (error.message.includes("ResizeObserver")) {
+          resizeErrors.push(error.message);
+        }
+      });
+      if (nested) {
+        await drag(page, await catalogItem(page, "Tab"), inGroup(page, "3D", 0.5, 0.5));
+        await expect(page.getByTestId("add-tab")).toBeVisible();
+        const tabPanel = page.locator('[data-testid^="panel-mouseenter-container Tab!"]');
+        await drag(page, async () => await toolbarOf(page, "Image"), centerOf(tabPanel));
+        await expect(page.locator("[data-panel-layout] .dv-dockview")).toHaveCount(2);
+      }
+
+      const measurements = await page.evaluateHandle(() => {
+        const gaps: number[] = [];
+        const observer = new ResizeObserver((entries) => {
+          // Other observers lay out the grid; their microtasks position its panel contents.
+          queueMicrotask(() => {
+            for (const { target } of entries) {
+              if (!(target instanceof HTMLElement) || !target.offsetParent) {
+                continue;
+              }
+              const layout = target.parentElement!;
+              const ownElements = (selector: string) =>
+                [...target.querySelectorAll<HTMLElement>(selector)].filter(
+                  (element) => element.closest("[data-panel-layout]") === layout,
+                );
+              const grid = ownElements(".dv-dockview")[0];
+              gaps.push(Math.abs(target.clientWidth - grid.clientWidth));
+              gaps.push(Math.abs(target.clientHeight - grid.clientHeight));
+              const slots = ownElements(".dv-content-container").map((element) =>
+                element.getBoundingClientRect(),
+              );
+              for (const overlay of ownElements(".dv-render-overlay")) {
+                if (getComputedStyle(overlay).visibility !== "visible") {
+                  continue;
+                }
+                const box = overlay.getBoundingClientRect();
+                gaps.push(
+                  Math.min(
+                    ...slots.map((slot) =>
+                      Math.max(
+                        Math.abs(box.left - slot.left),
+                        Math.abs(box.top - slot.top),
+                        Math.abs(box.width - slot.width),
+                        Math.abs(box.height - slot.height),
+                      ),
+                    ),
+                  ),
+                );
+              }
+            }
+          });
+        });
+        for (const layout of document.querySelectorAll("[data-panel-layout]")) {
+          observer.observe(layout.firstElementChild!);
+        }
+        return { gaps, observer };
+      });
+
+      const handle = page.locator('[role="separator"][aria-orientation="vertical"]').first();
+      const box = (await handle.boundingBox())!;
+      await page.mouse.move(box.x, box.y + 100);
+      await page.mouse.down();
+      await page.mouse.move(box.x - 160, box.y + 100, { steps: 20 });
+      await page.mouse.move(box.x + 80, box.y + 100, { steps: 20 });
+      await page.mouse.up();
+      await page.setViewportSize({ width: 1400, height: 850 });
+      // Let the viewport resize reach its observers before reading their measurements.
+      await page.evaluate(async () => {
+        await new Promise(requestAnimationFrame);
+      });
+      const gaps = await measurements.evaluate((measurement) => {
+        measurement.observer.disconnect();
+        return measurement.gaps;
+      });
+      await measurements.dispose();
+      expect(gaps.length).toBeGreaterThan(20);
+      expect(Math.max(...gaps)).toBeLessThanOrEqual(1);
+      expect(resizeErrors).toEqual([]);
+    });
+  }
+
   test("stacks a panel dropped on the middle of another as tabs", async ({ page }) => {
     await stackImageOn3D(page);
   });
