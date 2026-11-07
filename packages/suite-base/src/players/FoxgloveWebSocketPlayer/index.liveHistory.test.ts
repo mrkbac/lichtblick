@@ -11,6 +11,26 @@ import { PlayerState } from "@lichtblick/suite-base/players/types";
 
 import FoxgloveWebSocketPlayer from "./index";
 
+const recorder = vi.hoisted(() => ({ enabled: false, failNext: 0, record: vi.fn() }));
+vi.mock("@lichtblick/suite-base/players/liveHistory/LiveRecorder", () => ({
+  LiveRecorder: class {
+    public record = recorder.record;
+    public constructor() {
+      if (recorder.failNext > 0) {
+        recorder.failNext--;
+        throw new Error("Workers are blocked");
+      }
+    }
+    public async stop() {}
+  },
+}));
+vi.mock("@lichtblick/suite-base/players/liveHistory/liveRecordings", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@lichtblick/suite-base/players/liveHistory/liveRecordings")
+  >()),
+  supportsLiveRecording: () => recorder.enabled,
+}));
+
 class MockWebSocket {
   public static lastInstance: MockWebSocket | undefined;
   public binaryType = "";
@@ -284,6 +304,34 @@ describe("FoxgloveWebSocketPlayer live history", () => {
     );
     expect(last().startTime).toEqual({ sec: 19, nsec: 0 });
     (console.warn as Mock).mockClear();
+  });
+
+  it("keeps delivering messages if recording can't start, and retries on reconnect", async () => {
+    recorder.enabled = true;
+    recorder.failNext = 1;
+    (global as { Worker?: unknown }).Worker = vi.fn();
+    try {
+      const from = states.length;
+      await tick(13, 13);
+      await tick(14, 14);
+      expect(values(from)).toEqual([13, 14]);
+      expect(last().topicStats.get("/a")?.numMessages).toBe(5);
+      expect(states.at(-1)!.alerts?.map(({ message }) => message)).toContain(
+        "Recording to browser storage stopped",
+      );
+      expect(recorder.record).not.toHaveBeenCalled();
+      // the alert is also logged once
+      expect((console.warn as Mock).mock.calls.length).toBe(1);
+      (console.warn as Mock).mockClear();
+
+      connect();
+      await tick(50, 50, 1);
+      expect(recorder.record).toHaveBeenCalledTimes(1);
+    } finally {
+      recorder.enabled = false;
+      recorder.record.mockClear();
+      delete (global as { Worker?: unknown }).Worker;
+    }
   });
 
   it("clears the history on reconnect", async () => {
