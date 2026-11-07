@@ -185,6 +185,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #connectedAtMs?: number;
   /** Records the current connection to browser storage; one file per connection. */
   #recorder?: LiveRecorder;
+  /** Set once the recorder couldn't be started, so it isn't retried for every message. */
+  #recorderUnavailable = false;
   /** Newest message handed to panels, to catch them up after a pause. */
   #lastDelivered?: MessageEvent;
   #historyTimer?: ReturnType<typeof setTimeout>;
@@ -352,6 +354,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
       log.info("Connection closed:", event);
       this.#presence = PlayerPresence.RECONNECTING;
       this.#stopRecording();
+      this.#connectedAtMs = undefined;
 
       if (this.#getParameterInterval != undefined) {
         clearInterval(this.#getParameterInterval);
@@ -1513,22 +1516,26 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #recordingFor(): LiveRecorder | undefined {
     if (
       !this.#recorder &&
+      !this.#recorderUnavailable &&
       liveHistorySettings.getState().diskMiB > 0 &&
       supportsLiveRecording() &&
       typeof Worker !== "undefined"
     ) {
-      this.#recorder = new LiveRecorder({
-        profile: this.#profile,
-        onError: (error) => {
-          this.#alerts.addAlert("liveRecording:failed", {
-            severity: "warn",
-            message: "Recording to browser storage stopped",
-            tip: "The connection and its history in memory are unaffected. Free up disk space or lower the recording budget in Settings.",
-            error: toError(error),
-          });
-          this.#emitState();
-        },
-      });
+      const onError = (error: unknown) => {
+        this.#alerts.addAlert("liveRecording:failed", {
+          severity: "warn",
+          message: "Recording to browser storage stopped",
+          tip: "The connection and its history in memory are unaffected. Free up disk space or lower the recording budget in Settings.",
+          error: toError(error),
+        });
+        this.#emitState();
+      };
+      try {
+        this.#recorder = new LiveRecorder({ profile: this.#profile, onError });
+      } catch (error) {
+        this.#recorderUnavailable = true;
+        onError(error);
+      }
     }
     return this.#recorder;
   }

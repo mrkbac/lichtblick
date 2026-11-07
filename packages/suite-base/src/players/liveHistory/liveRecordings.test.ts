@@ -62,8 +62,8 @@ describe("evictLiveRecordings", () => {
 
 describe("liveRecordingName", () => {
   it("sorts by start time and is a valid file name", () => {
-    expect(liveRecordingName(new Date("2026-11-07T10:30:00.123Z"))).toBe(
-      "live-2026-11-07T10-30-00.mcap",
+    expect(liveRecordingName(new Date("2026-11-07T10:30:00.123Z"), "ab12")).toBe(
+      "live-2026-11-07T10-30-00-123-ab12.mcap",
     );
   });
 });

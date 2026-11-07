@@ -9,9 +9,15 @@ export const LIVE_RECORDINGS_DIR = "live-recordings";
 /** Web lock held while a recording is written, so moving and evicting skip it. */
 export const liveRecordingLockName = (name: string): string => `lichtblick.live-recording:${name}`;
 
-/** "live-2026-11-07T10-30-00.mcap" */
-export function liveRecordingName(now: Date): string {
-  return `live-${now.toISOString().slice(0, 19).replace(/:/g, "-")}.mcap`;
+/**
+ * "live-2026-11-07T10-30-00-123-k3f9.mcap": sorts by start time, and the random suffix keeps two
+ * recordings started in the same millisecond (two tabs, a quick reconnect) apart.
+ */
+export function liveRecordingName(
+  now: Date,
+  suffix = Math.random().toString(36).slice(2, 6),
+): string {
+  return `live-${now.toISOString().slice(0, 23).replace(/[:.]/g, "-")}-${suffix}.mcap`;
 }
 
 export type LiveRecording = {
@@ -114,7 +120,12 @@ export async function listLiveRecordings(): Promise<LiveRecording[]> {
     : [];
   const folder = await writableRecordingFolder();
   if (folder) {
-    recordings.push(...(await listDirectory(folder, "folder")));
+    try {
+      recordings.push(...(await listDirectory(folder, "folder")));
+    } catch (error) {
+      // E.g. the folder was moved or deleted; recordings in browser storage stay usable.
+      console.warn("Could not list the recording folder", error);
+    }
   }
   return recordings.sort((a, b) => b.name.localeCompare(a.name));
 }

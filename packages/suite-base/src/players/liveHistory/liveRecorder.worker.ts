@@ -8,6 +8,8 @@
 import * as Comlink from "@foxglove/comlink";
 import { McapWriter } from "@mcap/core";
 
+import { loadRewriteChunkDeps } from "@lichtblick/mcap-support";
+
 import { LIVE_RECORDINGS_DIR, liveRecordingLockName } from "./liveRecordings";
 
 /** fsync on this cadence; a reload keeps what was written even without it. */
@@ -34,6 +36,8 @@ export type RecorderMessage = {
 
 type Session = {
   handle: FileSystemSyncAccessHandle;
+  /** Bytes written to the file so far. */
+  size: () => number;
   writer: McapWriter;
   channelIds: Map<number, number>;
   schemaIds: Map<string, number>;
@@ -41,10 +45,7 @@ type Session = {
   releaseLock: () => void;
 };
 
-const zstd = import("@foxglove/wasm-zstd").then(async (module) => {
-  await module.isLoaded;
-  return module;
-});
+const compressZstd = loadRewriteChunkDeps().then((deps) => deps.compressZstd);
 
 let session: Session | undefined;
 // Calls are queued: the writer must see them one at a time, in order.
@@ -59,7 +60,7 @@ async function serial<T>(run: () => Promise<T>): Promise<T> {
 }
 
 async function start(name: string, profile: string): Promise<void> {
-  const { compress } = await zstd;
+  const compress = await compressZstd;
   let releaseLock!: () => void;
   const locked = new Promise<void>((resolve, reject) => {
     void navigator.locks
@@ -93,6 +94,7 @@ async function start(name: string, profile: string): Promise<void> {
     await writer.start({ profile, library: "Lichtblick live recording" });
     session = {
       handle,
+      size: () => Number(position),
       writer,
       channelIds: new Map(),
       schemaIds: new Map(),
@@ -127,9 +129,10 @@ async function addChannel(key: number, channel: RecorderChannel): Promise<void> 
   session.channelIds.set(key, channelId);
 }
 
-async function append(messages: RecorderMessage[]): Promise<void> {
+/** Returns the size of the file so far. */
+async function append(messages: RecorderMessage[]): Promise<number> {
   if (!session) {
-    return;
+    return 0;
   }
   for (const msg of messages) {
     const channelId = session.channelIds.get(msg.channel);
@@ -143,6 +146,7 @@ async function append(messages: RecorderMessage[]): Promise<void> {
       });
     }
   }
+  return session.size();
 }
 
 async function stop(): Promise<void> {
@@ -172,11 +176,7 @@ const api = {
       await addChannel(key, channel);
     });
   },
-  append: async (messages: RecorderMessage[]) => {
-    await serial(async () => {
-      await append(messages);
-    });
-  },
+  append: async (messages: RecorderMessage[]) => await serial(async () => await append(messages)),
   stop: async () => {
     await serial(stop);
   },

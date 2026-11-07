@@ -18,22 +18,25 @@ const POST_INTERVAL_MS = 500;
 const EVICT_INTERVAL_MS = 60_000;
 const MIB = 1024 * 1024;
 
-const enforceBudget = async (): Promise<void> => {
-  await evictLiveRecordings(liveHistorySettings.getState().diskMiB * MIB);
-};
+const budgetBytes = (): number => liveHistorySettings.getState().diskMiB * MIB;
 
 /**
- * Records one live session to an MCAP file in browser storage. Starts on the first message; the
- * caller stops it when the connection ends. Failures are reported once through `onError` and
- * recording stops; the connection itself is unaffected.
+ * Records one live session to MCAP files in browser storage. Starts on the first message; the
+ * caller stops it when the connection ends. A file that grows past half the disk budget is closed
+ * and recording continues in a new one, so the oldest part of a long session can be evicted.
+ * Failures are reported once through `onError` and recording stops; the connection is unaffected.
  */
 export class LiveRecorder {
-  public readonly name = liveRecordingName(new Date());
+  #name = liveRecordingName(new Date());
   #worker = new Worker(new URL("./liveRecorder.worker", import.meta.url));
   #remote = Comlink.wrap<LiveRecorderWorker>(this.#worker);
   #channelKeys = new Map<RecorderChannel, number>();
   #pending: RecorderMessage[] = [];
   #sequence = 0;
+  /** Size of the file being written, as last reported by the worker. */
+  #activeBytes = 0;
+  /** Bumped per file, so sizes reported for a closed file are ignored. */
+  #file = 0;
   #started?: Promise<void>;
   #postTimer?: ReturnType<typeof setInterval>;
   #evictTimer?: ReturnType<typeof setInterval>;
@@ -58,12 +61,13 @@ export class LiveRecorder {
       return;
     }
     if (!this.#started) {
+      const name = this.#name;
       this.#started = this.#call(async () => {
-        await this.#remote.start(this.name, this.#profile);
+        await this.#remote.start(name, this.#profile);
       });
       this.#postTimer = setInterval(this.#post, POST_INTERVAL_MS);
-      this.#evictTimer = setInterval(() => void enforceBudget().catch(() => {}), EVICT_INTERVAL_MS);
-      void enforceBudget().catch(() => {});
+      this.#evictTimer = setInterval(() => void this.#enforceBudget(), EVICT_INTERVAL_MS);
+      void this.#enforceBudget();
     }
     let key = this.#channelKeys.get(channel);
     if (key == undefined) {
@@ -91,8 +95,9 @@ export class LiveRecorder {
       await this.#call(async () => {
         await this.#remote.stop();
       });
+      this.#activeBytes = 0;
       await moveLiveRecordingsToFolder().catch(() => {});
-      await enforceBudget().catch(() => {});
+      await this.#enforceBudget();
     }
     this.#remote[Comlink.releaseProxy]();
     this.#worker.terminate();
@@ -104,10 +109,42 @@ export class LiveRecorder {
     }
     const messages = this.#pending;
     this.#pending = [];
+    const file = this.#file;
     void this.#call(async () => {
-      await this.#remote.append(messages);
+      const size = await this.#remote.append(messages);
+      if (file === this.#file) {
+        this.#activeBytes = size;
+        const budget = budgetBytes();
+        if (budget > 0 && size > budget / 2) {
+          this.#rotate();
+        }
+      }
     });
   };
+
+  /** Close the current file and continue in a new one. */
+  #rotate(): void {
+    this.#post();
+    this.#file++;
+    this.#activeBytes = 0;
+    this.#channelKeys.clear();
+    const name = liveRecordingName(new Date());
+    this.#name = name;
+    void this.#call(async () => {
+      // Sent together, so the worker runs them back to back, before any later batch.
+      const stopped = this.#remote.stop();
+      const started = this.#remote.start(name, this.#profile);
+      await stopped;
+      await started;
+      await moveLiveRecordingsToFolder().catch(() => {});
+      await this.#enforceBudget();
+    });
+  }
+
+  /** Evict older recordings so they and the file being written fit the budget. */
+  async #enforceBudget(): Promise<void> {
+    await evictLiveRecordings(Math.max(0, budgetBytes() - this.#activeBytes)).catch(() => {});
+  }
 
   /** Run worker calls in order; after the first failure, report it and drop the rest. */
   async #call(run: () => Promise<void>): Promise<void> {
