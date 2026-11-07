@@ -26,9 +26,9 @@ test("opens independent panel windows and restores both on close", { tag: "@smok
   await expect(page.getByTestId("panel-menu")).toHaveCount(2);
   await expect(page.locator(".dv-groupview:visible")).toHaveCount(2);
   const remaining = await page
-    .getByTestId("panel-menu")
+    .getByTestId(/^panel-mouseenter-container/)
+    .filter({ has: page.getByTestId("panel-menu") })
     .first()
-    .locator("xpath=ancestor::*[@data-telemetry-id='panel']")
     .boundingBox();
   const workspace = await page.locator(".dockview-theme-lichtblick").first().boundingBox();
   expect(remaining!.x).toBeCloseTo(workspace!.x, 0);

@@ -274,3 +274,32 @@ it.each([false, true])(
     }
   },
 );
+
+it("can retry after window initialization fails before the close handlers are attached", async () => {
+  // Given
+  const { child, close } = childWindow();
+  const open = vi.spyOn(window, "open").mockReturnValue(child);
+  vi.spyOn(child.document, "title", "set").mockImplementationOnce(() => {
+    throw new Error("Initialization failed");
+  });
+  render(
+    <PanelWindow title="Monitor">
+      <Content />
+    </PanelWindow>,
+  );
+  // When
+  fireEvent.click(screen.getByText("Pop out"));
+  // Then
+  await waitFor(() => {
+    expect(screen.getByRole("alert")).toBeDefined();
+  });
+  expect(close).toHaveBeenCalledOnce();
+  expect(screen.getByTestId("content")).toBeDefined();
+  // When
+  fireEvent.click(screen.getByText("Pop out"));
+  // Then
+  await waitFor(() => {
+    expect(child.document.querySelector('[data-testid="content"]')).not.toBeNull();
+  });
+  expect(open).toHaveBeenCalledTimes(2);
+});

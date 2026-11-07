@@ -213,6 +213,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
         void open()
           .catch(() => {
             windowRef.current?.close();
+            windowRef.current = undefined;
             if (live.current) {
               setFailed(true);
             }
