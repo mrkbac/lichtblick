@@ -1079,7 +1079,10 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const canPublish = context.publish != undefined && isRosDataSource;
 
   return (
-    <ThemeProvider isDark={colorScheme === "dark"}>
+    <ThemeProvider
+      isDark={colorScheme === "dark"}
+      ownerDocument={context.panelElement.ownerDocument}
+    >
       <div style={PANEL_STYLE} onKeyDown={onKeyDown}>
         <canvas
           key={canvasKey}

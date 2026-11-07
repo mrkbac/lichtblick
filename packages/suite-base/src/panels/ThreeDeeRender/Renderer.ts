@@ -161,6 +161,7 @@ function isStaticTransformTopic(topic: string): boolean {
 export class Renderer extends EventEmitter<RendererEvents> implements IRenderer {
   public readonly interfaceMode: InterfaceMode;
   #canvas: HTMLCanvasElement;
+  readonly #ownerWindow: Window & typeof globalThis;
   // The label atlas never shrinks, so an overflow stays true across clear()
   #labelAtlasError: string | undefined;
   public readonly gl: THREE.WebGLRenderer;
@@ -277,6 +278,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
 
     const interfaceMode = (this.interfaceMode = args.interfaceMode);
     const canvas = (this.#canvas = args.canvas);
+    this.#ownerWindow = canvas.ownerDocument.defaultView ?? window;
     const config = (this.config = args.config);
     this.#fetchAsset = args.fetchAsset;
     this.testOptions = args.testOptions;
@@ -306,7 +308,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     this.gl.info.autoReset = false;
     this.gl.shadowMap.type = THREE.VSMShadowMap;
     this.gl.sortObjects = true;
-    this.gl.setPixelRatio(window.devicePixelRatio);
+    this.gl.setPixelRatio(this.#ownerWindow.devicePixelRatio);
 
     let width = canvas.width;
     let height = canvas.height;
@@ -449,7 +451,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     }
 
     this.#watchDevicePixelRatio();
-    document.addEventListener("visibilitychange", this.#onVisibilityChange);
+    this.#canvas.ownerDocument.addEventListener("visibilitychange", this.#onVisibilityChange);
 
     this.setCameraState(config.cameraState);
     this.animationFrame();
@@ -461,20 +463,20 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   };
 
   #onVisibilityChange = () => {
-    if (document.visibilityState === "visible") {
+    if (this.#canvas.ownerDocument.visibilityState === "visible") {
       this.queueAnimationFrame();
     }
   };
 
   #onDevicePixelRatioChange = () => {
-    log.debug(`devicePixelRatio changed to ${window.devicePixelRatio}`);
+    log.debug(`devicePixelRatio changed to ${this.#ownerWindow.devicePixelRatio}`);
     this.#resizeHandler(this.input.canvasSize);
     this.#watchDevicePixelRatio();
   };
 
   #watchDevicePixelRatio() {
-    this.#devicePixelRatioMediaQuery = window.matchMedia(
-      `(resolution: ${window.devicePixelRatio}dppx)`,
+    this.#devicePixelRatioMediaQuery = this.#ownerWindow.matchMedia(
+      `(resolution: ${this.#ownerWindow.devicePixelRatio}dppx)`,
     );
     this.#devicePixelRatioMediaQuery.addEventListener("change", this.#onDevicePixelRatioChange, {
       once: true,
@@ -484,7 +486,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   public dispose(): void {
     log.warn(`Disposing renderer`);
     this.#devicePixelRatioMediaQuery?.removeEventListener("change", this.#onDevicePixelRatioChange);
-    document.removeEventListener("visibilitychange", this.#onVisibilityChange);
+    this.#canvas.ownerDocument.removeEventListener("visibilitychange", this.#onVisibilityChange);
     this.removeAllListeners();
 
     this.settings.removeAllListeners();
@@ -1402,7 +1404,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     // directly in the same tick) the queued rAF would otherwise fire on the next tick and paint a
     // redundant second frame.
     if (this.#animationFrame != undefined) {
-      cancelAnimationFrame(this.#animationFrame);
+      this.#ownerWindow.cancelAnimationFrame(this.#animationFrame);
       this.#animationFrame = undefined;
     }
     if (!this.#rendering) {
@@ -1412,7 +1414,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   };
 
   public queueAnimationFrame(): void {
-    this.#animationFrame ??= requestAnimationFrame(this.animationFrame);
+    this.#animationFrame ??= this.#ownerWindow.requestAnimationFrame(this.animationFrame);
   }
 
   public async settleVideoDecodes(): Promise<void> {
@@ -1449,7 +1451,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
 
     // A hidden tab shows nothing, but live data keeps driving frames: keep the scene state current
     // and skip the GPU work. #onVisibilityChange repaints when the tab is shown again.
-    const draw = document.visibilityState !== "hidden";
+    const draw = this.#canvas.ownerDocument.visibilityState !== "hidden";
     if (draw) {
       this.gl.clear();
     }
@@ -1537,9 +1539,9 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   }
 
   #resizeHandler = (size: THREE.Vector2): void => {
-    this.gl.setPixelRatio(window.devicePixelRatio);
+    this.gl.setPixelRatio(this.#ownerWindow.devicePixelRatio);
     this.gl.setSize(size.width, size.height);
-    this.cameraHandler.handleResize(size.width, size.height, window.devicePixelRatio);
+    this.cameraHandler.handleResize(size.width, size.height, this.#ownerWindow.devicePixelRatio);
 
     const renderSize = this.gl.getDrawingBufferSize(tempVec2);
     log.debug(`Resized renderer to ${renderSize.width}x${renderSize.height}`);

@@ -73,7 +73,8 @@ export class Input extends EventEmitter<InputEvents> {
     // Resize synchronously, so the canvas is redrawn at its new size in the same frame the panel
     // resizes (a debounce paints one frame of the old canvas in the new box while dragging a split).
     // The canvas is absolutely positioned, so resizing it can't resize the observed parent.
-    this.#resizeObserver = new ResizeObserver(this.#onResize);
+    const Observer = canvas.ownerDocument.defaultView?.ResizeObserver ?? ResizeObserver;
+    this.#resizeObserver = new Observer(this.#onResize);
     this.#resizeObserver.observe(parentEl);
 
     canvas.addEventListener("mousedown", this.#onMouseDown);
@@ -114,11 +115,12 @@ export class Input extends EventEmitter<InputEvents> {
       this.#updateCursorCoords(event);
       onUpdate(this.#cursorCoords);
     };
-    window.addEventListener("mousemove", listener);
-    window.addEventListener(
+    const ownerWindow = this.#canvas.ownerDocument.defaultView ?? window;
+    ownerWindow.addEventListener("mousemove", listener);
+    ownerWindow.addEventListener(
       "mouseup",
       () => {
-        window.removeEventListener("mousemove", listener);
+        ownerWindow.removeEventListener("mousemove", listener);
       },
       { once: true },
     );
@@ -220,7 +222,7 @@ export class Input extends EventEmitter<InputEvents> {
 }
 
 function innerSize(node: HTMLElement) {
-  const cs = getComputedStyle(node);
+  const cs = (node.ownerDocument.defaultView ?? window).getComputedStyle(node);
 
   const paddingX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
   const paddingY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);

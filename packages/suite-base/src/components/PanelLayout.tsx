@@ -66,6 +66,7 @@ import ErrorBoundary from "./ErrorBoundary";
 import { useStyles } from "./PanelLayout.style";
 import { PanelRemounter } from "./PanelRemounter";
 import { NewTabDropTarget, PanelTab, getForeignPanelId } from "./PanelTab";
+import { PanelWindow } from "./PanelWindow";
 import { UnknownPanel } from "./UnknownPanel";
 import { clearJunctionCursor, startSashDrag, updateJunctionCursor } from "./sashIntersection";
 import "dockview-react/dist/styles/dockview.css";
@@ -118,13 +119,15 @@ function DockPanel({ api, containerApi }: IDockviewPanelProps): React.JSX.Elemen
           </EmptyState>
         }
       >
-        <PanelRemounter id={id}>
-          {PanelComponent ? (
-            <PanelComponent childId={id} />
-          ) : (
-            <UnknownPanel childId={id} overrideConfig={{ type, id }} />
-          )}
-        </PanelRemounter>
+        <PanelWindow title={title}>
+          <PanelRemounter id={id}>
+            {PanelComponent ? (
+              <PanelComponent childId={id} />
+            ) : (
+              <UnknownPanel childId={id} overrideConfig={{ type, id }} />
+            )}
+          </PanelRemounter>
+        </PanelWindow>
       </Suspense>
     </DockPanelContext.Provider>
   );

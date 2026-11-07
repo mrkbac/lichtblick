@@ -3,7 +3,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Dialog, Menu, darken } from "@mui/material";
+import { Button, Dialog, Menu, darken } from "@mui/material";
 import { render, waitFor } from "@testing-library/react";
 
 import * as palette from "@lichtblick/theme/src/palette";
@@ -55,4 +55,22 @@ describe("ThemeProvider theme-color", () => {
     expect(themeColor()).toBe(appBar);
     rect.mockRestore();
   });
+});
+
+it("styles a panel document without changing the opener's theme", () => {
+  document.documentElement.dataset.colorMode = "light";
+  const iframe = document.createElement("iframe");
+  document.body.appendChild(iframe);
+  const child = iframe.contentDocument!;
+  const view = render(
+    <ThemeProvider isDark ownerDocument={child}>
+      <Button>Child control</Button>
+    </ThemeProvider>,
+    { container: child.body },
+  );
+  expect(child.documentElement.dataset.colorMode).toBe("dark");
+  expect(document.documentElement.dataset.colorMode).toBe("light");
+  expect(child.head.querySelector("style[data-emotion]")).not.toBeNull();
+  view.unmount();
+  iframe.remove();
 });

@@ -10,6 +10,7 @@ import { CacheProvider } from "@emotion/react";
 import { ThemeProvider as MuiThemeProvider, darken } from "@mui/material";
 import * as React from "react";
 import { useEffect, useLayoutEffect, useMemo } from "react";
+import { TssCacheProvider } from "tss-react";
 
 import { createMuiTheme } from "@lichtblick/theme";
 
@@ -28,25 +29,39 @@ ThemeContainer.displayName = "ThemeContainer";
 export default function ThemeProvider({
   children,
   isDark,
-}: React.PropsWithChildren<{ isDark: boolean }>): React.ReactElement | null {
+  ownerDocument = document,
+}: React.PropsWithChildren<{
+  isDark: boolean;
+  ownerDocument?: Document;
+}>): React.ReactElement | null {
+  const windowCaches = useMemo(
+    () =>
+      ownerDocument === document
+        ? undefined
+        : {
+            mui: createCache({ key: "mui", prepend: true, container: ownerDocument.head }),
+            tss: createCache({ key: "tss", container: ownerDocument.head }),
+          },
+    [ownerDocument],
+  );
   useEffect(() => {
     // Trick CodeEditor into sync with our theme
-    document.documentElement.setAttribute("data-color-mode", isDark ? "dark" : "light");
+    ownerDocument.documentElement.setAttribute("data-color-mode", isDark ? "dark" : "light");
 
     // remove styles set to prevent browser flash on init
-    document.querySelector("#loading-styles")?.remove();
-  }, [isDark]);
+    ownerDocument.querySelector("#loading-styles")?.remove();
+  }, [isDark, ownerDocument]);
 
   const muiTheme = useMemo(() => createMuiTheme(isDark ? "dark" : "light"), [isDark]);
 
   useLayoutEffect(() => {
     // Match the app bar, which the installed PWA draws in the title bar next to the browser's
     // own controls. Update the existing tag: browsers only read the first theme-color meta.
-    let meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
+    let meta = ownerDocument.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
     if (!meta) {
-      meta = document.createElement("meta");
+      meta = ownerDocument.createElement("meta");
       meta.name = "theme-color";
-      document.head.appendChild(meta);
+      ownerDocument.head.appendChild(meta);
     }
     const appBar = muiTheme.palette.appBar.main ?? "";
     // A dialog's backdrop (black at 0.4, see MuiBackdrop) dims the app bar when it covers it; dim
@@ -55,7 +70,9 @@ export default function ThemeProvider({
     // is. Menus and popovers use invisible backdrops and leave the color alone.
     const dimmed = darken(appBar, 0.4);
     const update = () => {
-      const backdrops = document.querySelectorAll(".MuiBackdrop-root:not(.MuiBackdrop-invisible)");
+      const backdrops = ownerDocument.querySelectorAll(
+        ".MuiBackdrop-root:not(.MuiBackdrop-invisible)",
+      );
       const covered = [...backdrops].some((el) => el.getBoundingClientRect().top <= 0);
       meta.content = covered ? dimmed : appBar;
     };
@@ -69,7 +86,7 @@ export default function ThemeProvider({
         update();
       });
     });
-    observer.observe(document.body, {
+    observer.observe(ownerDocument.body, {
       childList: true,
       subtree: true,
       attributes: true,
@@ -81,11 +98,16 @@ export default function ThemeProvider({
         cancelAnimationFrame(frame);
       }
     };
-  }, [muiTheme]);
+  }, [muiTheme, ownerDocument]);
 
-  return (
-    <CacheProvider value={muiCache}>
+  const content = (
+    <CacheProvider value={windowCaches?.mui ?? muiCache}>
       <MuiThemeProvider theme={muiTheme}>{children}</MuiThemeProvider>
     </CacheProvider>
+  );
+  return windowCaches ? (
+    <TssCacheProvider value={windowCaches.tss}>{content}</TssCacheProvider>
+  ) : (
+    content
   );
 }
