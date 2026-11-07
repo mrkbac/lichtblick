@@ -1,7 +1,21 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { evictLiveRecordings, liveRecordingLockName, liveRecordingName } from "./liveRecordings";
+import { McapWriter, TempBuffer } from "@mcap/core";
+
+import {
+  evictLiveRecordings,
+  isEmptyMcap,
+  liveMachine,
+  liveRecordingLockName,
+  liveRecordingName,
+  parseLiveRecordingName,
+} from "./liveRecordings";
+
+/** Magic, then an (empty) chunk record header: what isEmptyMcap needs to see data. */
+const WITH_CHUNK = new Uint8Array([
+  0x89, 0x4d, 0x43, 0x41, 0x50, 0x30, 0x0d, 0x0a, 0x06, 0, 0, 0, 0, 0, 0, 0, 0,
+]).buffer;
 
 /** An in-memory directory of files with the given sizes. */
 function fakeDirectory(sizes: Record<string, number>) {
@@ -9,7 +23,13 @@ function fakeDirectory(sizes: Record<string, number>) {
   const directory = {
     async *entries() {
       for (const [name, size] of [...files]) {
-        yield [name, { kind: "file", getFile: async () => ({ size, lastModified: 0 }) }] as const;
+        yield [
+          name,
+          {
+            kind: "file",
+            getFile: async () => ({ size, lastModified: 0, arrayBuffer: async () => WITH_CHUNK }),
+          },
+        ] as const;
       }
     },
     removeEntry: async (name: string) => {
@@ -68,9 +88,65 @@ describe("evictLiveRecordings", () => {
 });
 
 describe("liveRecordingName", () => {
+  const start = new Date("2026-11-07T10:30:00.123Z");
+
   it("sorts by start time and is a valid file name", () => {
-    expect(liveRecordingName(new Date("2026-11-07T10:30:00.123Z"), "ab12")).toBe(
+    expect(liveRecordingName(start, undefined, "ab12")).toBe(
       "live-2026-11-07T10-30-00-123-ab12.mcap",
     );
+  });
+
+  it("names the machine and reads it back", () => {
+    const name = liveRecordingName(start, liveMachine("ws://robot.local:8765/x"), "ab12");
+    expect(name).toBe("live-2026-11-07T10-30-00-123-ab12@robot.local_8765.mcap");
+    expect(parseLiveRecordingName(name)).toEqual({ start, machine: "robot.local:8765" });
+  });
+
+  it("reads names without a machine", () => {
+    expect(parseLiveRecordingName("live-2026-11-07T10-30-00-123-ab12.mcap")).toEqual({
+      start,
+      machine: undefined,
+    });
+    expect(parseLiveRecordingName("other.mcap")).toEqual({});
+  });
+});
+
+describe("isEmptyMcap", () => {
+  async function mcap(messages: number): Promise<Blob> {
+    const buffer = new TempBuffer();
+    const writer = new McapWriter({ writable: buffer });
+    await writer.start({ profile: "", library: "test" });
+    if (messages > 0) {
+      const schemaId = await writer.registerSchema({
+        name: "S",
+        encoding: "",
+        data: new Uint8Array(),
+      });
+      const channelId = await writer.registerChannel({
+        topic: "/a",
+        schemaId,
+        messageEncoding: "json",
+        metadata: new Map(),
+      });
+      for (let i = 0; i < messages; i++) {
+        await writer.addMessage({
+          channelId,
+          sequence: i,
+          logTime: 0n,
+          publishTime: 0n,
+          data: new Uint8Array(),
+        });
+      }
+      await writer.end();
+    }
+    return new Blob([buffer.get().slice()]);
+  }
+
+  it("is true for a recording cut off before any message", async () => {
+    await expect(isEmptyMcap(await mcap(0))).resolves.toBe(true);
+  });
+
+  it("is false once a message was written", async () => {
+    await expect(isEmptyMcap(await mcap(1))).resolves.toBe(false);
   });
 });

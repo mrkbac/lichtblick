@@ -61,7 +61,11 @@ describe("LiveRecorder", () => {
   });
 
   it("starts a new file once the current one passes half the budget", async () => {
-    const recorder = new LiveRecorder({ profile: "", onError: () => {} });
+    const recorder = new LiveRecorder({
+      profile: "",
+      source: { url: "ws://localhost:8765" },
+      onError: () => {},
+    });
     recorder.record(channel, { sec: 1, nsec: 0 }, new Uint8Array(1));
     fileSize = 513 * MIB;
     await flush();
@@ -84,7 +88,11 @@ describe("LiveRecorder", () => {
   });
 
   it("keeps recordings when recording is turned off", async () => {
-    const recorder = new LiveRecorder({ profile: "", onError: () => {} });
+    const recorder = new LiveRecorder({
+      profile: "",
+      source: { url: "ws://localhost:8765" },
+      onError: () => {},
+    });
     recorder.record(channel, { sec: 1, nsec: 0 }, new Uint8Array(1));
     await flush();
     vi.mocked(evictLiveRecordings).mockClear();
@@ -94,7 +102,11 @@ describe("LiveRecorder", () => {
   });
 
   it("counts the file being written toward the budget when evicting", async () => {
-    const recorder = new LiveRecorder({ profile: "", onError: () => {} });
+    const recorder = new LiveRecorder({
+      profile: "",
+      source: { url: "ws://localhost:8765" },
+      onError: () => {},
+    });
     recorder.record(channel, { sec: 1, nsec: 0 }, new Uint8Array(1));
     fileSize = 100 * MIB;
     await flush();

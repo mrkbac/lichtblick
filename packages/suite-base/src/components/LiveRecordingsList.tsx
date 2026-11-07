@@ -32,11 +32,11 @@ import {
   listLiveRecordings,
   LiveRecording,
   moveLiveRecordingsToFolder,
+  parseLiveRecordingName,
   supportsLiveRecording,
   supportsRecordingFolder,
 } from "@lichtblick/suite-base/players/liveHistory/liveRecordings";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
-import { formatTimeAgo } from "@lichtblick/suite-base/util/recentSources";
 
 type FolderState = { name: string; permission: PermissionState } | undefined;
 
@@ -178,10 +178,10 @@ export function LiveRecordingsList({ onOpened }: { onOpened?: () => void }): Rea
       {recordings != undefined && recordings.length > 0 && (
         <List disablePadding dense className={classes.recentList}>
           {recordings.map((rec) => {
-            const started = liveRecordingStart(rec.name);
+            const { start, machine } = parseLiveRecordingName(rec.name);
             const secondary = [
+              start?.toLocaleString(i18n.language, { dateStyle: "medium", timeStyle: "medium" }),
               rec.active ? t("recording") : formatByteSize(rec.sizeBytes),
-              rec.active ? undefined : formatTimeAgo(rec.lastModified, Date.now(), i18n.language),
               rec.location === "folder" ? folder?.name : t("browserStorage"),
             ]
               .filter(Boolean)
@@ -243,14 +243,7 @@ export function LiveRecordingsList({ onOpened }: { onOpened?: () => void }): Rea
                       </span>
                       <div className={labelClasses.text}>
                         <Typography variant="body2" noWrap>
-                          {started
-                            ? t("sessionFrom", {
-                                time: started.toLocaleString(i18n.language, {
-                                  dateStyle: "medium",
-                                  timeStyle: "medium",
-                                }),
-                              })
-                            : rec.name}
+                          {machine ?? (start ? t("liveSession") : rec.name)}
                         </Typography>
                         <Typography variant="caption" noWrap component="div" color="textSecondary">
                           {secondary}
@@ -266,14 +259,4 @@ export function LiveRecordingsList({ onOpened }: { onOpened?: () => void }): Rea
       )}
     </Stack>
   );
-}
-
-/** Start of a recording from its name ("live-2026-11-07T10-30-00-123-k3f9.mcap"), if it has one. */
-function liveRecordingStart(name: string): Date | undefined {
-  const match = /^live-(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})(?:-(\d{3}))?/.exec(name);
-  if (!match) {
-    return undefined;
-  }
-  const [, day, hours, minutes, seconds, millis = "000"] = match;
-  return new Date(`${day}T${hours}:${minutes}:${seconds}.${millis}Z`);
 }
