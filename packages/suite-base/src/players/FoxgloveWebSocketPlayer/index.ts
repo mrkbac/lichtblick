@@ -176,6 +176,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #unsubscribeHistorySettings: () => void;
   /** Playback position while reviewing history; undefined while live. */
   #historyCursor?: Time;
+  /** Receive time of the newest history message handed to panels, to catch them up after a pause. */
+  #deliveredUntil?: Time;
   #historyTimer?: ReturnType<typeof setTimeout>;
   #historyTickMs = 0;
   /** Wall time of the last server time message (or of connecting), to detect a stale clock. */
@@ -656,8 +658,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
         }
         // While reviewing history, new messages only go into the history.
         if (this.#historyCursor == undefined) {
-          this.#parsedMessages.push(msgEvent);
-          this.#parsedMessagesBytes += sizeInBytes;
+          this.#queueMessages([msgEvent]);
         }
         if (this.#parsedMessagesBytes > CURRENT_FRAME_MAXIMUM_SIZE_BYTES) {
           this.#alerts.addAlert(`webSocketPlayer:parsedMessageCacheFull`, {
@@ -1396,8 +1397,23 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#numTimeSeeks++;
     this.#parsedMessages = [];
     this.#parsedMessagesBytes = 0;
+    const backfill = this.#history.backfill(
+      target,
+      new Set(this.#resolvedSubscriptionsByTopic.keys()),
+    );
+    // Seeking past what panels have seen (e.g. Live after a pause): also hand them the messages
+    // that arrived meanwhile, so accumulating panels (plots, logs) have no gap.
+    const delivered = this.#deliveredUntil;
+    const missed =
+      delivered != undefined && isLessThan(delivered, target)
+        ? this.#history.range(delivered, target)
+        : [];
     this.#queueMessages(
-      this.#history.backfill(target, new Set(this.#resolvedSubscriptionsByTopic.keys())),
+      missed.length === 0
+        ? backfill
+        : [...new Set([...backfill, ...missed])].sort((a, b) =>
+            compare(a.receiveTime, b.receiveTime),
+          ),
     );
     this.#historyCursor = target;
     if (this.#isPlaying) {
@@ -1410,6 +1426,9 @@ export default class FoxgloveWebSocketPlayer implements Player {
     for (const msg of messages) {
       this.#parsedMessages.push(msg);
       this.#parsedMessagesBytes += msg.sizeInBytes;
+      if (this.#deliveredUntil == undefined || isLessThan(this.#deliveredUntil, msg.receiveTime)) {
+        this.#deliveredUntil = msg.receiveTime;
+      }
     }
   }
 
@@ -1479,6 +1498,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#history.clear();
     this.#stopHistoryTick();
     this.#historyCursor = undefined;
+    this.#deliveredUntil = undefined;
   }
 
   #setAlert(id: string, alert: PlayerAlert | undefined): void {

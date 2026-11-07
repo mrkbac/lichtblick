@@ -187,6 +187,19 @@ describe("FoxgloveWebSocketPlayer live history", () => {
     expect(last().isPlaying).toBe(true);
   });
 
+  it("hands panels the messages that arrived while back in time when going live", async () => {
+    player.pausePlayback();
+    player.seekPlayback({ sec: 10, nsec: 0 });
+    await tick(13, 13);
+    await tick(14, 14);
+    await flush();
+    const from = states.length;
+    player.seekPlayback(last().endTime);
+    player.startPlayback();
+    await flush();
+    expect(values(from)).toEqual([13, 14]);
+  });
+
   it("plays through the history and catches up to live", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
     player.pausePlayback();
