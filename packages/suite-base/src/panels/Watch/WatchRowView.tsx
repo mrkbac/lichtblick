@@ -17,17 +17,10 @@ import { useSeriesDrag } from "@lichtblick/suite-base/panels/shared/useSeriesDra
 
 import { useStyles } from "./Watch.style";
 import { HISTORY_SIZE, WatchStore, historyValues } from "./WatchStore";
+import { WatchTree } from "./WatchTree";
 import { Schema, pathsForEnter } from "./compile";
 import { WatchRow } from "./config";
-import {
-  EnumNames,
-  autoDecimals,
-  formatAge,
-  formatExpanded,
-  formatValue,
-  isExpandable,
-  isStale,
-} from "./format";
+import { EnumNames, autoDecimals, formatAge, formatValue, isExpandable, isStale } from "./format";
 
 export const DRAG_TYPE = "application/x-lichtblick-watch-row";
 const FLASH_MS = 600;
@@ -57,6 +50,8 @@ type Props = {
   /** Ends editing: the paths to put in place of the row (several with Shift+Enter), or undefined to cancel */
   onEditDone: (id: string, paths: string[] | undefined) => void;
   onAction: (action: RowAction, id: string) => void;
+  /** Adds a field of the expanded value as its own row */
+  onAddPath: (afterId: string, path: string, options: { shiftKey: boolean }) => void;
   onDragOverRow: (id: string) => void;
   onDropRow: (fromId: string, toId: string) => void;
 };
@@ -111,12 +106,13 @@ function PathEditor({
         if (event.key === "Escape") {
           finish(undefined);
         } else if (event.key === "Enter" && !isCompositionEnter(event)) {
-          // A prevented Enter picked an autocomplete suggestion
-          const paths = pathsForEnter(
-            pathRef.current,
-            { shiftKey: event.shiftKey, picked: event.defaultPrevented },
-            schema,
-          );
+          // A prevented Enter picked an autocomplete suggestion: it only fills the input, which
+          // the pick blurred
+          if (event.defaultPrevented) {
+            (event.target as HTMLElement).focus();
+            return;
+          }
+          const paths = pathsForEnter(pathRef.current, { shiftKey: event.shiftKey }, schema);
           if (paths) {
             event.preventDefault();
             finish(paths);
@@ -125,14 +121,22 @@ function PathEditor({
       }}
       onBlur={(event) => {
         // Clicking away keeps a changed path that Enter would accept; anything else cancels
-        if (!event.currentTarget.contains(event.relatedTarget)) {
+        const container = event.currentTarget;
+        if (container.contains(event.relatedTarget)) {
+          return;
+        }
+        // Picking a suggestion blurs the input until the same Enter refocuses it
+        setTimeout(() => {
+          if (container.contains(document.activeElement)) {
+            return;
+          }
           const trimmed = pathRef.current.trim();
           finish(
             trimmed === initialPath
               ? undefined
-              : pathsForEnter(trimmed, { shiftKey: false, picked: false }, schema),
+              : pathsForEnter(trimmed, { shiftKey: false }, schema),
           );
-        }
+        }, 0);
       }}
     >
       <MessagePathInput
@@ -202,6 +206,7 @@ export const WatchRowView = memo(function WatchRowViewInner({
   schema,
   onEditDone,
   onAction,
+  onAddPath,
   onDragOverRow,
   onDropRow,
 }: Props): React.JSX.Element {
@@ -214,7 +219,8 @@ export const WatchRowView = memo(function WatchRowViewInner({
   const valueRef = useRef<HTMLSpanElement>(null);
   const sparkRef = useRef<HTMLCanvasElement>(null);
   const ageRef = useRef<HTMLSpanElement>(null);
-  const expandedRef = useRef<HTMLPreElement>(null);
+  // The expanded tree renders with React; it is only shown for the rows being inspected
+  const [treeValue, setTreeValue] = useState<{ value: unknown; text: string }>();
   const hadValue = useRef(false);
   // Most decimals seen so far, so automatic precision doesn't change the text width
   const decimals = useRef(0);
@@ -291,11 +297,23 @@ export const WatchRowView = memo(function WatchRowViewInner({
     if (sparkRef.current) {
       drawSparkline(sparkRef.current, state ? historyValues(state) : [], lineColor);
     }
-    if (expandedRef.current) {
-      expandedRef.current.textContent = isExpandable(value) ? formatExpanded(value) : text;
+    if (expanded) {
+      setTreeValue((prev) =>
+        prev != undefined && prev.value === value && prev.text === text ? prev : { value, text },
+      );
     }
     paintAge();
-  }, [enumNames, flashChanges, flashColor, lineColor, paintAge, row.id, row.precision, store]);
+  }, [
+    enumNames,
+    expanded,
+    flashChanges,
+    flashColor,
+    lineColor,
+    paintAge,
+    row.id,
+    row.precision,
+    store,
+  ]);
 
   useLayoutEffect(() => {
     painters.set(row.id, (what = "all") => {
@@ -453,7 +471,16 @@ export const WatchRowView = memo(function WatchRowViewInner({
           </Tooltip>
         </span>
       </div>
-      {expanded && <pre ref={expandedRef} className={classes.expanded} />}
+      {expanded && treeValue && (
+        <WatchTree
+          value={treeValue.value}
+          path={row.path}
+          fallbackText={treeValue.text}
+          onAddPath={(path, options) => {
+            onAddPath(row.id, path, options);
+          }}
+        />
+      )}
     </>
   );
 });

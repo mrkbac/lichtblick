@@ -13,6 +13,7 @@ export const watch = {
   copied: "Copied",
   expand: "Expand",
   collapse: "Collapse",
+  addAsRow: "Add as row (Shift: every field below)",
   invalidPath: "Invalid message path",
   addedRows: "Added {{count}} rows",
   ageTooltip: "Time since the message with this value",

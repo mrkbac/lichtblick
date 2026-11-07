@@ -70,11 +70,6 @@ function structureAt(path: string, schema: Schema): MessagePathStructureItem | u
   return result.valid ? result.structureItem : undefined;
 }
 
-/** Whether a path ends on a single field (not a message), so it is ready to watch. */
-export function isLeafPath(path: string, schema: Schema): boolean {
-  return structureAt(path, schema)?.structureType === "primitive";
-}
-
 /**
  * Every field below a path that ends on a message, in definition order, e.g. `.roll`, `.pitch`
  * and `.yaw` for `/imu.orientation.@rpy`. Arrays are skipped: their length varies, rows don't.
@@ -99,14 +94,12 @@ export function childPaths(path: string, schema: Schema): string[] {
 }
 
 /**
- * What Enter in a path input adds: the path itself, or with Shift every field below it. `picked`
- * is set when the same Enter accepted an autocomplete suggestion; it then only adds a finished
- * field, so a completion that ends on a message keeps the input open for typing further.
+ * What Enter in a path input adds: the path itself, or with Shift every field below it.
  * Undefined means Enter does nothing here.
  */
 export function pathsForEnter(
   path: string,
-  { shiftKey, picked }: { shiftKey: boolean; picked: boolean },
+  { shiftKey }: { shiftKey: boolean },
   schema: Schema,
 ): string[] | undefined {
   const trimmed = path.trim();
@@ -126,7 +119,7 @@ export function pathsForEnter(
     const children = childPaths(trimmed, schema);
     return children.length > 0 ? children : [trimmed];
   }
-  return picked && !isLeafPath(trimmed, schema) ? undefined : [trimmed];
+  return [trimmed];
 }
 
 export type CompileResult = {

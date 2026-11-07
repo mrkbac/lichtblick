@@ -11,7 +11,11 @@ import type { OpenSiblingPanel, PanelConfig } from "@lichtblick/suite-base/types
 
 import type { PlotConfig } from "./config";
 
-export function openSiblingPlotPanel(openSiblingPanel: OpenSiblingPanel, topicName: string): void {
+/** Adds one path, or several (e.g. the fields of a message), to the Plot next to the panel. */
+export function openSiblingPlotPanel(
+  openSiblingPanel: OpenSiblingPanel,
+  paths: string | readonly string[],
+): void {
   openSiblingPanel({
     panelType: "Plot",
     updateIfExists: true,
@@ -21,7 +25,11 @@ export function openSiblingPlotPanel(openSiblingPanel: OpenSiblingPanel, topicNa
         paths: _.uniqBy(
           [
             ...(config as PlotConfig).paths,
-            { value: topicName, enabled: true, timestampMethod: "receiveTime" },
+            ...(typeof paths === "string" ? [paths] : paths).map((value) => ({
+              value,
+              enabled: true,
+              timestampMethod: "receiveTime" as const,
+            })),
           ],
           "value",
         ),

@@ -4,7 +4,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import "@testing-library/jest-dom";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { composeStories } from "storybook-react-rsbuild";
 import type { Mock } from "vitest";
 
@@ -84,5 +85,52 @@ describe("Watch", () => {
   it("explains how to add rows when empty", () => {
     render(<Empty />);
     expect(screen.getByText("Watch many values in one table")).toBeInTheDocument();
+  });
+
+  it("adds a typed path on Enter; an Enter that picked a suggestion only fills the input", async () => {
+    const user = userEvent.setup();
+    render(<Empty />);
+    const input = screen.getByPlaceholderText("Add message path…");
+    await user.click(input);
+    await user.type(input, "/state.speed");
+    // What the path input does when Enter picks a suggestion: handle the key, then blur
+    const pick = (event: KeyboardEvent) => {
+      event.preventDefault();
+      input.blur();
+    };
+    input.addEventListener("keydown", pick, { once: true });
+    await user.keyboard("{Enter}");
+    expect(input).toHaveFocus();
+    expect(screen.queryAllByTestId("watch-row")).toHaveLength(0);
+
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(screen.getAllByTestId("watch-row")).toHaveLength(1);
+    });
+    expect(input).toHaveValue("");
+    expect(input).toHaveFocus();
+  });
+
+  it("shows an expanded message as a tree whose fields can become rows", async () => {
+    // The add buttons are revealed on hover, which jsdom doesn't apply
+    const user = userEvent.setup({ pointerEventsCheck: 0 });
+    render(<Empty />);
+    const input = screen.getByPlaceholderText("Add message path…");
+    await user.type(input, "/state.pose{Enter}/state.ok{Enter}");
+    await waitFor(() => {
+      expect(screen.getByText("{x, y}")).toBeInTheDocument();
+    });
+    await user.click(within(screen.getAllByTestId("watch-row")[0]!).getByLabelText("Expand"));
+    const tree = await screen.findByTestId("watch-tree");
+    expect(tree).toHaveTextContent("x1y2");
+    await user.click(within(tree).getAllByLabelText(/Add as row/)[1]!);
+    // Inserted right below the row it came from
+    await waitFor(() => {
+      expect(
+        screen
+          .getAllByTestId("watch-row")
+          .map((row) => row.querySelector("[role=button]")?.textContent),
+      ).toEqual(["/state.pose", "/state.pose.y", "/state.ok"]);
+    });
   });
 });
