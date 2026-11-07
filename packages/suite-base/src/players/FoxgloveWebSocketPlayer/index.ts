@@ -176,8 +176,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #unsubscribeHistorySettings: () => void;
   /** Playback position while reviewing history; undefined while live. */
   #historyCursor?: Time;
-  /** Receive time of the newest history message handed to panels, to catch them up after a pause. */
-  #deliveredUntil?: Time;
+  /** Newest message handed to panels, to catch them up after a pause. */
+  #lastDelivered?: MessageEvent;
   #historyTimer?: ReturnType<typeof setTimeout>;
   #historyTickMs = 0;
   /** Wall time of the last server time message (or of connecting), to detect a stale clock. */
@@ -658,7 +658,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
         }
         // While reviewing history, new messages only go into the history.
         if (this.#historyCursor == undefined) {
-          this.#queueMessages([msgEvent]);
+          this.#parsedMessages.push(msgEvent);
+          this.#parsedMessagesBytes += sizeInBytes;
         }
         if (this.#parsedMessagesBytes > CURRENT_FRAME_MAXIMUM_SIZE_BYTES) {
           this.#alerts.addAlert(`webSocketPlayer:parsedMessageCacheFull`, {
@@ -1040,6 +1041,14 @@ export default class FoxgloveWebSocketPlayer implements Player {
     const messages = this.#parsedMessages;
     this.#parsedMessages = [];
     this.#parsedMessagesBytes = 0;
+    const newest = messages.at(-1);
+    if (
+      newest != undefined &&
+      (this.#lastDelivered == undefined ||
+        compare(newest.receiveTime, this.#lastDelivered.receiveTime) >= 0)
+    ) {
+      this.#lastDelivered = newest;
+    }
     // Hand out a new Map only when stats changed, so consumers can compare by reference
     if (this.#topicsStatsChanged) {
       this.#topicsStatsChanged = false;
@@ -1403,10 +1412,10 @@ export default class FoxgloveWebSocketPlayer implements Player {
     );
     // Seeking past what panels have seen (e.g. Live after a pause): also hand them the messages
     // that arrived meanwhile, so accumulating panels (plots, logs) have no gap.
-    const delivered = this.#deliveredUntil;
+    const delivered = this.#lastDelivered;
     const missed =
-      delivered != undefined && isLessThan(delivered, target)
-        ? this.#history.range(delivered, target)
+      delivered != undefined && isLessThan(delivered.receiveTime, target)
+        ? this.#history.rangeAfter(delivered, target)
         : [];
     this.#queueMessages(
       missed.length === 0
@@ -1426,9 +1435,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
     for (const msg of messages) {
       this.#parsedMessages.push(msg);
       this.#parsedMessagesBytes += msg.sizeInBytes;
-      if (this.#deliveredUntil == undefined || isLessThan(this.#deliveredUntil, msg.receiveTime)) {
-        this.#deliveredUntil = msg.receiveTime;
-      }
     }
   }
 
@@ -1498,7 +1504,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#history.clear();
     this.#stopHistoryTick();
     this.#historyCursor = undefined;
-    this.#deliveredUntil = undefined;
+    this.#lastDelivered = undefined;
   }
 
   #setAlert(id: string, alert: PlayerAlert | undefined): void {
