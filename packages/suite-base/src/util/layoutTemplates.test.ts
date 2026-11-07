@@ -69,16 +69,15 @@ const DATATYPES: RosDatatypes = new Map([
 ]);
 
 describe("camera template", () => {
-  it("shows every image and video topic in a grid next to the first one", () => {
+  it("shows every compressed image and video topic in a grid next to the first one", () => {
     const { topics, panels } = build("camera", [VIDEO, POINTS, IMAGE_2, IMAGE]);
-    expect(topics).toEqual(["/camera/image", "/camera2/image", "/camera3/video"]);
+    expect(topics).toEqual(["/camera/image", "/camera3/video"]);
     expect(panels).toEqual([
       {
         type: "CameraGrid",
         config: {
           tiles: [
             expect.objectContaining({ topic: "/camera/image", visible: true }),
-            expect.objectContaining({ topic: "/camera2/image" }),
             expect.objectContaining({ topic: "/camera3/video" }),
           ],
         },
@@ -89,6 +88,14 @@ describe("camera template", () => {
 
   it("skips the grid for a single camera", () => {
     expect(build("camera", [IMAGE]).types).toEqual(["Image"]);
+  });
+
+  it("shows a raw image only in the image panel, never in the grid", () => {
+    const { topics, panels } = build("camera", [IMAGE_2, { ...IMAGE_2, name: "/raw2" }]);
+    expect(topics).toEqual(["/camera2/image"]);
+    expect(panels).toEqual([
+      { type: "Image", config: { imageMode: { imageTopic: "/camera2/image" } } },
+    ]);
   });
 
   it("leaves an empty image panel when there are no images", () => {

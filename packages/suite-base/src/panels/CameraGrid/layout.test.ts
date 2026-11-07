@@ -20,6 +20,11 @@ describe("imageTopicNames", () => {
       "/cam/right/image",
       "/video",
     ]);
+    expect(imageTopicNames(topics, { includeRaw: false })).toEqual([
+      "/cam/Back",
+      "/cam/left/compressed",
+      "/video",
+    ]);
     expect(imageTopicNames(undefined)).toEqual([]);
   });
 

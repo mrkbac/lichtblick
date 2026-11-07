@@ -9,7 +9,7 @@ import {
 import { Immutable } from "@lichtblick/suite";
 import { messagePathStructures } from "@lichtblick/suite-base/components/MessagePathSyntax/messagePathsForDatatype";
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
-import { imageKind } from "@lichtblick/suite-base/panels/CameraGrid/layout";
+import { imageKind, isRawImage } from "@lichtblick/suite-base/panels/CameraGrid/layout";
 import { makeTile } from "@lichtblick/suite-base/panels/CameraGrid/types";
 import { ALLOWED_DATATYPES as DIAGNOSTIC_DATATYPES } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
 import { SUPPORTED_DATATYPES as LOG_DATATYPES } from "@lichtblick/suite-base/panels/Log/conversion";
@@ -147,7 +147,13 @@ const result = (data: LayoutData, ...topicLists: string[][]): LayoutTemplateResu
 const camera: LayoutTemplate = {
   id: "camera",
   build: (topics) => {
-    const images = namesWithSchema(topics, (schema) => imageKind(schema) != undefined);
+    // Raw images can saturate the connection, so the grid only gets compressed ones.
+    const images = namesWithSchema(
+      topics,
+      (schema) => imageKind(schema) != undefined && !isRawImage(schema),
+    );
+    const main =
+      images[0] ?? namesWithSchema(topics, (schema) => imageKind(schema) != undefined)[0];
     const data = makeLayout((add) =>
       split(
         "row",
@@ -156,12 +162,12 @@ const camera: LayoutTemplate = {
           images.length > 1
             ? add({ type: "CameraGrid", config: { tiles: images.map(makeTile) } })
             : undefined,
-          add({ type: "Image", config: images[0] ? { imageMode: { imageTopic: images[0] } } : {} }),
+          add({ type: "Image", config: main ? { imageMode: { imageTopic: main } } : {} }),
         ],
         [60, 40],
       ),
     );
-    return result(data, images);
+    return result(data, images, main ? [main] : []);
   },
 };
 

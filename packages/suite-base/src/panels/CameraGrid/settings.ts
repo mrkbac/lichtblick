@@ -171,7 +171,8 @@ function moveTile(tiles: TileConfig[], from: number, to: number): void {
 export function settingsReducer(
   config: CameraGridConfig,
   action: SettingsTreeAction,
-  imageTopics: string[],
+  /** Topics "Add all" appends; raw images are left out by the caller. */
+  addAllTopicNames: string[],
   annotationTopics: string[] = [],
 ): CameraGridConfig {
   const { path } = action.payload;
@@ -185,7 +186,7 @@ export function settingsReducer(
   if (action.action === "perform-node-action") {
     const { id } = action.payload;
     if (id === ADD_ALL_ACTION) {
-      return addAllTopics(config, imageTopics);
+      return addAllTopics(config, addAllTopicNames);
     }
     if (id === "remove-all") {
       return { ...config, tiles: [] };

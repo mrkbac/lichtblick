@@ -4,14 +4,16 @@
 export const cameraGrid = {
   // Panel
   emptyIntro: "Show many camera topics side by side.",
-  addAllImageTopicsCount: "Add all image topics ({{count}})",
+  addAllImageTopicsCount: "Add all compressed image topics ({{count}})",
+  onlyRawImageTopics:
+    "Only raw image topics are available. Add them one by one in the panel settings.",
   allCamerasHidden: "All cameras are hidden.",
   waitingForImageTopics: "Waiting for image topics…",
   waitingForImages: "Waiting for images…",
 
   // Settings
   general: "General",
-  addAllImageTopics: "Add all image topics",
+  addAllImageTopics: "Add all compressed image topics",
   removeAll: "Remove all",
   addCamera: "Add camera",
   addCameraTooltip: "Pick an image topic to add it to the grid",
