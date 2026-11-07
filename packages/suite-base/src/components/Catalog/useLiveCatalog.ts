@@ -31,8 +31,15 @@ export type LiveCatalog = CatalogFolder & {
  */
 const pathOf = (rec: LiveRecording) => `${rec.location}/${rec.name}`;
 
-/** How often to check whether a recording in progress finished. */
-const ACTIVE_POLL_MS = 5000;
+/** How often an open list checks whether recordings changed. */
+const POLL_MS = 5000;
+
+/** What identifies a listing: each copy, whether it is being written, and its size. */
+const listingSignature = (recordings: readonly LiveRecording[]): string =>
+  recordings
+    .map((rec) => `${pathOf(rec)}|${rec.active ? "active" : rec.sizeBytes}`)
+    .sort()
+    .join("\n");
 
 /**
  * Live recordings as a catalog: indexed like a folder of recordings (topics, duration, thumbnails,
@@ -96,33 +103,24 @@ export function useLiveCatalog(name: string): LiveCatalog {
     void scan();
   }, [scan]);
 
-  // While something is recording, look every few seconds whether it finished, so it joins the
-  // catalog without a manual rescan. Only the cheap listing runs until the set changes.
-  const activeNames = live
-    .filter((rec) => rec.active)
-    .map((rec) => rec.name)
-    .join("\n");
+  // While the list is open, look every few seconds whether recordings started, finished or went
+  // away (also in other tabs), and rescan then. Only the cheap listing runs until something
+  // changes; summaries of unchanged files come from the cache.
+  const signature = listingSignature(live);
   useEffect(() => {
-    if (activeNames === "") {
-      return;
-    }
     const timer = setInterval(() => {
       void listLiveRecordings()
         .then((listed) => {
-          const stillActive = listed
-            .filter((rec) => rec.active)
-            .map((rec) => rec.name)
-            .join("\n");
-          if (stillActive !== activeNames) {
+          if (listingSignature(listed) !== signature) {
             void scan();
           }
         })
         .catch(() => {});
-    }, ACTIVE_POLL_MS);
+    }, POLL_MS);
     return () => {
       clearInterval(timer);
     };
-  }, [activeNames, scan]);
+  }, [signature, scan]);
 
   const recordingOf = useCallback(
     (recording: CatalogRecording) => {
