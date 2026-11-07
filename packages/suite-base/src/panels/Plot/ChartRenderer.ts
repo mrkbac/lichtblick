@@ -236,6 +236,8 @@ export class ChartRenderer {
       if (ticksOptions) {
         ticksOptions.display = action.showXAxisLabels;
       }
+      // hidden labels need no padding: size it afresh
+      this.#xPadding.span = Number.NaN;
     }
 
     if (action.yAxisLabel != undefined) {
