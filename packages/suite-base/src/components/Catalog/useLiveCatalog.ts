@@ -11,6 +11,7 @@ import {
   LiveRecording,
   moveLiveRecordingsToFolder,
   parseLiveRecordingName,
+  supportsRecordingFolder,
 } from "@lichtblick/suite-base/players/liveHistory/liveRecordings";
 
 import { FolderFile, indexFiles, loadPreview } from "./indexFolder";
@@ -114,6 +115,10 @@ export function useLiveCatalog(name: string): LiveCatalog {
       recordingOf,
       // "Change folder" picks where finished recordings are moved to.
       pickFolder: async () => {
+        // Browsers without a directory picker keep recordings in browser storage.
+        if (!supportsRecordingFolder()) {
+          return;
+        }
         await chooseRecordingFolder();
         await moveLiveRecordingsToFolder();
         await scan();

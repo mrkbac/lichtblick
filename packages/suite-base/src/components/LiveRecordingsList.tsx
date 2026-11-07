@@ -108,9 +108,16 @@ export function LiveRecordingsList({
             <IconButton
               aria-label={t("download")}
               onClick={() => {
-                run(async () => {
-                  downloadFiles([{ blob: await rec.file(), fileName: rec.name }]);
-                });
+                // Not through run(): a download changes nothing, so nothing needs reindexing.
+                setError(undefined);
+                rec
+                  .file()
+                  .then((blob) => {
+                    downloadFiles([{ blob, fileName: rec.name }]);
+                  })
+                  .catch((err: unknown) => {
+                    setError(String(err));
+                  });
               }}
             >
               <ArrowDownload20Regular />
