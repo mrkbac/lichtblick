@@ -20,6 +20,7 @@ import "@testing-library/jest-dom/vitest";
 import { useEffect, useCallback, useContext } from "react";
 import type { Mock } from "vitest";
 
+import { DockPanelContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import AnalyticsContext from "@lichtblick/suite-base/context/AnalyticsContext";
@@ -205,6 +206,61 @@ describe("Panel", () => {
       actions.current.savePanelConfigs({ configs: [{ id: "someOtherId", config: {} }] });
     });
     expect(renderFn.mock.calls.length).toEqual(2);
+  });
+
+  it("maximizes its dockview group for fullscreen inside a dock layout", () => {
+    function FullscreenComponent(_props: DummyProps): React.JSX.Element {
+      const ctx = useContext(PanelContext);
+      return (
+        <button onClick={ctx?.isFullscreen === true ? ctx.exitFullscreen : ctx?.enterFullscreen}>
+          {ctx?.isFullscreen === true ? "exit" : "enter"}
+        </button>
+      );
+    }
+    FullscreenComponent.panelType = "FullscreenDummy";
+    FullscreenComponent.defaultConfig = { someString: "" };
+    const FullscreenPanel = Panel(FullscreenComponent);
+
+    let maximized = false;
+    let notify = () => {};
+    const api = {
+      isMaximized: () => maximized,
+      maximize: vi.fn(() => {
+        maximized = true;
+        notify();
+      }),
+      exitMaximized: vi.fn(() => {
+        maximized = false;
+        notify();
+      }),
+    };
+    const containerApi = {
+      onDidMaximizedGroupChange: (cb: () => void) => {
+        notify = cb;
+        return { dispose: () => {} };
+      },
+    };
+    const dock = { api, containerApi } as unknown as NonNullable<
+      React.ContextType<typeof DockPanelContext>
+    >;
+
+    render(
+      <PanelSetup>
+        <DockPanelContext.Provider value={dock}>
+          <FullscreenPanel childId="FullscreenDummy!1" />
+        </DockPanelContext.Provider>
+      </PanelSetup>,
+    );
+
+    act(() => {
+      fireEvent.click(screen.getByText("enter"));
+    });
+    expect(api.maximize).toHaveBeenCalled();
+    act(() => {
+      fireEvent.click(screen.getByText("exit"));
+    });
+    expect(api.exitMaximized).toHaveBeenCalled();
+    expect(screen.getByText("enter")).toBeInTheDocument();
   });
 
   describe("Given a panel with logging functionality", () => {

@@ -28,6 +28,7 @@ import { useMountedState } from "react-use";
 
 import { useShallowMemo } from "@lichtblick/hooks";
 import { useConfigById } from "@lichtblick/suite-base/PanelAPI";
+import { DockPanelContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import { useStyles } from "@lichtblick/suite-base/components/Panel.style";
@@ -280,23 +281,51 @@ export default function Panel<
       [getCurrentLayoutState, splitPanel],
     );
 
-    const { enterFullscreen, exitFullscreen } = useMemo(
-      () => ({
-        enterFullscreen: () => {
-          setFullscreenSourceRect(panelRootRef.current?.getBoundingClientRect());
-          setFullscreen(true);
+    // Inside a dock layout, fullscreen is dockview's maximize: dockview renders panels in a
+    // transformed overlay, which traps the `position: fixed` fallback below inside the group.
+    const dock = useContext(DockPanelContext);
+    const [dockMaximized, setDockMaximized] = useState(false);
+    useEffect(() => {
+      if (!dock) {
+        return;
+      }
+      setDockMaximized(dock.api.isMaximized());
+      const sub = dock.containerApi.onDidMaximizedGroupChange(() => {
+        setDockMaximized(dock.api.isMaximized());
+      });
+      return () => {
+        sub.dispose();
+      };
+    }, [dock]);
 
-          // When entering fullscreen for a panel within a tab, we need to adjust the ancestor
-          // tab(s)'s z-index to have our panel properly overlay other panels outside the tab.
-          parentPanelContext?.setHasFullscreenDescendant(true);
-        },
-        exitFullscreen: () => {
-          // Don't clear fullscreenSourceRect or hasFullscreenDescendant, they are needed during the exit transition
-          setFullscreen(false);
-        },
-      }),
-      [parentPanelContext],
+    const { enterFullscreen, exitFullscreen } = useMemo(
+      () =>
+        dock
+          ? {
+              enterFullscreen: () => {
+                dock.api.maximize();
+              },
+              exitFullscreen: () => {
+                dock.api.exitMaximized();
+              },
+            }
+          : {
+              enterFullscreen: () => {
+                setFullscreenSourceRect(panelRootRef.current?.getBoundingClientRect());
+                setFullscreen(true);
+
+                // When entering fullscreen for a panel within a tab, we need to adjust the ancestor
+                // tab(s)'s z-index to have our panel properly overlay other panels outside the tab.
+                parentPanelContext?.setHasFullscreenDescendant(true);
+              },
+              exitFullscreen: () => {
+                // Don't clear fullscreenSourceRect or hasFullscreenDescendant, they are needed during the exit transition
+                setFullscreen(false);
+              },
+            },
+      [dock, parentPanelContext],
     );
+    const isFullscreen = dock ? dockMaximized : fullscreen;
 
     const setHasFullscreenDescendant = useCallback(
       // eslint-disable-next-line @lichtblick/no-boolean-parameters
@@ -512,7 +541,7 @@ export default function Panel<
             enterFullscreen,
             exitFullscreen,
             setHasFullscreenDescendant,
-            isFullscreen: fullscreen,
+            isFullscreen,
             connectToolbarDragHandle: connectDragHandle,
             setMessagePathDropConfig,
             showLogs,
@@ -524,7 +553,7 @@ export default function Panel<
           }}
         >
           <KeyListener global keyUpHandlers={keyUpHandlers} keyDownHandlers={keyDownHandlers} />
-          {fullscreen && <KeyListener global keyDownHandlers={fullScreenKeyHandlers} />}
+          {isFullscreen && <KeyListener global keyDownHandlers={fullScreenKeyHandlers} />}
           <Transition
             in={fullscreen}
             onExited={() => {
@@ -548,7 +577,7 @@ export default function Panel<
                 data-telemetry-id="panel"
                 ref={panelRootCallbackRef}
               >
-                {!fullscreen && (
+                {!isFullscreen && (
                   <PanelOverlay
                     {...panelOverlayProps}
                     ref={(el) => {
