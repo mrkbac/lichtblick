@@ -1414,7 +1414,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     // that arrived meanwhile, so accumulating panels (plots, logs) have no gap.
     const delivered = this.#lastDelivered;
     const missed =
-      delivered != undefined && isLessThan(delivered.receiveTime, target)
+      delivered != undefined && compare(delivered.receiveTime, target) <= 0
         ? this.#history.rangeAfter(delivered, target)
         : [];
     this.#queueMessages(
