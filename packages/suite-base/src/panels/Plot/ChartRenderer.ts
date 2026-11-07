@@ -91,11 +91,9 @@ export function alignTicksTo(
   max: number,
   origin: number,
 ): { value: number }[] {
-  let step = 0;
-  for (let i = 1; i < ticks.length; i++) {
-    // includeBounds can add a shorter step at either end: take the regular (largest) one
-    step = Math.max(step, ticks[i]!.value - ticks[i - 1]!.value);
-  }
+  // chart.js adds the axis min/max as ticks, or moves the nearest tick onto them, so only the
+  // gaps between inner ticks are its step
+  const step = ticks.length >= 4 ? ticks[2]!.value - ticks[1]!.value : 0;
   if (!(step > 0) || !Number.isFinite(origin)) {
     return [...ticks];
   }

@@ -118,8 +118,19 @@ describe("alignTicksTo", () => {
     });
   });
 
-  it("leaves fewer than two ticks alone", () => {
-    expect(alignTicksTo([{ value: 1 }], 0, 2, 0.5)).toEqual([{ value: 1 }]);
+  it("ignores a tick chart.js moved onto the axis max", () => {
+    // step 2, with the 30 tick moved onto the max 30.9
+    const ticks = [20.9, 22, 24, 26, 28, 30.9].map((value) => ({ value }));
+    const aligned = alignTicksTo(ticks, 20.9, 30.9, 30.9).map((tick) => tick.value);
+    expect(aligned).toHaveLength(6);
+    aligned.forEach((value, i) => {
+      expect(value).toBeCloseTo(20.9 + i * 2);
+    });
+  });
+
+  it("leaves too few ticks to find the step alone", () => {
+    const ticks = [{ value: 0 }, { value: 1 }, { value: 2 }];
+    expect(alignTicksTo(ticks, 0, 2, 0.5)).toEqual(ticks);
   });
 });
 
