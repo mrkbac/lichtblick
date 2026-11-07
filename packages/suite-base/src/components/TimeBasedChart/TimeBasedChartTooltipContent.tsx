@@ -87,7 +87,8 @@ const useStyles = makeStyles()((theme) => ({
   },
   header: {
     gridColumn: "1/4",
-    color: theme.palette.text.secondary,
+    // the tooltip is dark gray in both themes: text.secondary is unreadable on it in light mode
+    opacity: 0.7,
   },
   overflow: {
     gridColumn: "2/4",

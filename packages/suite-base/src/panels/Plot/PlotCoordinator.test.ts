@@ -227,6 +227,38 @@ describe("PlotCoordinator", () => {
         );
       });
 
+      it("should send the current time, not a new tick format, as time moves with relative-to-now ticks", async () => {
+        // GIVEN a timestamp plot labelled relative to now, rendered at the start of the file
+        plotCoordinator.handleConfig(
+          PlotBuilder.config({
+            xAxisVal: "timestamp",
+            followingViewWidth: 4,
+            timestampFormat: "relativeToNow",
+            paths: [],
+          }),
+          "light",
+          {},
+        );
+        const update = vi.spyOn(renderer, "update");
+        plotCoordinator.handlePlayerState(at(0));
+        await settle();
+        expect(update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            xTickFormat: expect.objectContaining({ relativeToNow: true }),
+          }),
+        );
+        expect(update).toHaveBeenCalledWith(expect.objectContaining({ xNowSec: 0 }));
+        update.mockClear();
+
+        // WHEN playback reaches 5 s
+        plotCoordinator.handlePlayerState(at(5));
+        await settle();
+
+        // THEN only the current time is sent, so the tick format (a layout reset) is not
+        expect(update).toHaveBeenCalledWith(expect.objectContaining({ xNowSec: 5 }));
+        expect(update.mock.calls.some(([action]) => action.xTickFormat != undefined)).toBe(false);
+      });
+
       it("should keep the playhead in the middle of the window when centered", async () => {
         // GIVEN a timestamp plot with a centered 4 s window
         plotCoordinator.handleConfig(
@@ -967,7 +999,8 @@ describe("PlotCoordinator", () => {
 
     it("forgets the held y range when the series change", () => {
       vi.spyOn(plotCoordinator as any, "queueDispatchRender").mockImplementation(() => {});
-      (parseMessagePath as Mock).mockReturnValue(BasicBuilder.string());
+      (parseMessagePath as Mock).mockReturnValue({ topicName: "/topic", messagePath: [] });
+      (fillInGlobalVariablesInPath as Mock).mockImplementation((parsed) => parsed);
       (stringifyMessagePath as Mock).mockReturnValue("");
       const config = PlotBuilder.config({ yRangeMode: "hold" });
 

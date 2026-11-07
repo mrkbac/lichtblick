@@ -69,6 +69,7 @@ export const plot = {
   primary: "Primary",
   receiveTime: "Receive Time",
   relative: "Relative",
+  relativeToNow: "Relative to now",
   removeMarkerA: "Remove marker A",
   removeMarkerB: "Remove marker B",
   reorderSeries: "Reorder series",
