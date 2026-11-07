@@ -5,7 +5,7 @@ import { Chart, ChartOptions, Element, InteractionItem, Scale } from "chart.js";
 import type { Mock } from "vitest";
 
 import { Immutable } from "@lichtblick/suite";
-import { ChartRenderer } from "@lichtblick/suite-base/panels/Plot/ChartRenderer";
+import { ChartRenderer, holdXPadding } from "@lichtblick/suite-base/panels/Plot/ChartRenderer";
 import { DEFAULT_ANNOTATION } from "@lichtblick/suite-base/panels/Plot/constants";
 import { getChartOptions } from "@lichtblick/suite-base/panels/Plot/utils/getChartOptions";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -782,5 +782,51 @@ describe("ChartRenderer", () => {
         },
       });
     });
+  });
+  it("holds the x padding through its afterFit hook until label visibility flips", () => {
+    // Given a renderer and its x scale fit hook
+    const { chartRenderer, chartOptions } = setup();
+    const afterFit = (
+      chartOptions.scales.x as { afterFit?: (scale: Record<string, number>) => void }
+    ).afterFit!;
+    const fit = (paddingLeft: number, paddingRight: number) => {
+      const scale = { min: -34.97, max: 25.03, paddingLeft, paddingRight };
+      afterFit(scale);
+      return [scale.paddingLeft, scale.paddingRight];
+    };
+
+    chartRenderer.update({ type: "update", showXAxisLabels: true });
+
+    // When the same-span window refits with shorter edge labels
+    expect(fit(10, 15)).toEqual([10, 15]);
+    // Then both paddings keep their widest value
+    expect(fit(8, 12)).toEqual([10, 15]);
+
+    // When the same label visibility is sent again, Then nothing resets
+    chartRenderer.update({ type: "update", showXAxisLabels: true });
+    expect(fit(8, 12)).toEqual([10, 15]);
+
+    // When labels are hidden, Then the padding is sized afresh
+    chartRenderer.update({ type: "update", showXAxisLabels: false });
+    expect(fit(0, 0)).toEqual([0, 0]);
+  });
+});
+
+describe("holdXPadding", () => {
+  it("keeps the plot area steady while edge labels change width, and resizes on zoom", () => {
+    // Given a sliding 60 s window whose edge label is first "25.03", then the shorter "25.1"
+    const held = { span: Number.NaN, left: 0, right: 0 };
+    const fit = (min: number, max: number, paddingRight: number) => {
+      const scale = { min, max, paddingLeft: 0, paddingRight };
+      holdXPadding(held, scale);
+      return scale.paddingRight;
+    };
+
+    // When the window slides, Then the wider padding is kept
+    expect(fit(-34.97, 25.03, 15)).toBe(15);
+    expect(fit(-34.9, 25.1, 12)).toBe(15);
+
+    // When zooming to a new span, Then the padding fits the new labels
+    expect(fit(0, 10, 9)).toBe(9);
   });
 });
