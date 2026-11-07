@@ -17,6 +17,8 @@ const POST_INTERVAL_MS = 500;
 /** How often the disk budget is enforced while recording. */
 const EVICT_INTERVAL_MS = 60_000;
 const MIB = 1024 * 1024;
+/** Recording stops if this much data is waiting for the worker: it can't keep up. */
+const MAX_BACKLOG_BYTES = 256 * MIB;
 
 const budgetBytes = (): number => liveHistorySettings.getState().diskMiB * MIB;
 
@@ -33,6 +35,8 @@ export class LiveRecorder {
   #channelKeys = new Map<RecorderChannel, number>();
   #pending: RecorderMessage[] = [];
   #sequence = 0;
+  /** Bytes handed to the worker or waiting to be, not yet written. */
+  #backlogBytes = 0;
   /** Size of the file being written, as last reported by the worker. */
   #activeBytes = 0;
   /** Bumped per file, so sizes reported for a closed file are ignored. */
@@ -86,6 +90,10 @@ export class LiveRecorder {
       sequence: this.#sequence++,
       data,
     });
+    this.#backlogBytes += data.byteLength;
+    if (this.#backlogBytes > MAX_BACKLOG_BYTES) {
+      this.#fail(new Error("Recording can't keep up with the incoming data"));
+    }
   }
 
   /** Write what is pending, finish the file and move it to the recording folder if there is one. */
@@ -113,8 +121,10 @@ export class LiveRecorder {
     const messages = this.#pending;
     this.#pending = [];
     const file = this.#file;
+    const bytes = messages.reduce((sum, msg) => sum + msg.data.byteLength, 0);
     void this.#call(async () => {
       const size = await this.#remote.append(messages);
+      this.#backlogBytes -= bytes;
       if (file === this.#file) {
         this.#activeBytes = size;
         const budget = budgetBytes();
@@ -163,9 +173,21 @@ export class LiveRecorder {
     try {
       await run();
     } catch (error) {
-      this.#failed = true;
-      this.#pending = [];
-      this.#onError(error);
+      this.#fail(error);
     }
+  }
+
+  /** Stop recording for good: report once, drop what is queued, end the worker (closes the file). */
+  #fail(error: unknown): void {
+    if (this.#failed) {
+      return;
+    }
+    this.#failed = true;
+    this.#pending = [];
+    this.#backlogBytes = 0;
+    clearInterval(this.#postTimer);
+    clearInterval(this.#evictTimer);
+    this.#worker.terminate();
+    this.#onError(error);
   }
 }

@@ -146,11 +146,18 @@ export async function evictLiveRecordings(budgetBytes: number): Promise<void> {
     if (rec.active) {
       continue;
     }
-    try {
-      await rec.remove();
+    // Under the recording's lock, so a move to the folder can't be copying it meanwhile.
+    const removed = await navigator.locks
+      .request(liveRecordingLockName(rec.name), { ifAvailable: true }, async (lock) => {
+        if (!lock) {
+          return false;
+        }
+        await rec.remove();
+        return true;
+      })
+      .catch(() => false); // e.g. opened by another tab right now; try again next time
+    if (removed) {
       total -= rec.sizeBytes;
-    } catch {
-      // Opened by another tab right now; try again next time.
     }
   }
 }

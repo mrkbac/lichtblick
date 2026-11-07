@@ -114,7 +114,8 @@ async function addChannel(key: number, channel: RecorderChannel): Promise<void> 
     return;
   }
   const { schema } = channel;
-  const schemaKey = `${schema.encoding}\0${schema.name}\0${new TextDecoder().decode(schema.data)}`;
+  // Base64, not text: binary descriptors (protobuf) must not collide after lossy decoding.
+  const schemaKey = `${schema.encoding}\0${schema.name}\0${schema.data.toBase64()}`;
   let schemaId = session.schemaIds.get(schemaKey);
   if (schemaId == undefined) {
     schemaId = await session.writer.registerSchema(schema);

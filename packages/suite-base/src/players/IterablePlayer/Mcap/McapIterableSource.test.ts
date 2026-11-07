@@ -128,6 +128,33 @@ describe("McapIterableSource", () => {
     ]);
   });
 
+  it("opens a recording that was cut off before its footer was written", async () => {
+    const tempBuffer = new TempBuffer();
+    const writer = new McapWriter({ writable: tempBuffer, chunkSize: 1 });
+    await writer.start({ library: "test", profile: "" });
+    const schemaId = await writer.registerSchema({
+      name: "test_schema",
+      encoding: "jsonschema",
+      data: new TextEncoder().encode(JSON.stringify({ type: "object" })),
+    });
+    const channelId = await writer.registerChannel({
+      schemaId,
+      topic: "/cut",
+      messageEncoding: "json",
+      metadata: new Map(),
+    });
+    await addMessage(writer, channelId, { data: new TextEncoder().encode("{}") });
+    await addMessage(writer, channelId, { data: new TextEncoder().encode("{}") });
+    // no writer.end(): the tab closed while recording
+
+    const source = new McapIterableSource({
+      type: "file",
+      file: new Blob([tempBuffer.get().slice()]) as unknown as globalThis.Blob,
+    });
+    const { topics } = await source.initialize();
+    expect(topics.map(({ name }) => name)).toEqual(["/cut"]);
+  });
+
   it("loads decompression handlers before creating an indexed reader for an indexed file", async () => {
     // Given
     const topic = `/${BasicBuilder.string()}`;

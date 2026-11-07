@@ -663,7 +663,10 @@ export default class FoxgloveWebSocketPlayer implements Player {
           this.#messageSizeEstimateByTopic[topic] = msgSizeEstimate;
         }
 
-        const sizeInBytes = Math.max(data.byteLength, msgSizeEstimate);
+        // The history also keeps the received bytes (for export and recording), so count both.
+        const sizeInBytes = this.#serverControlsPlayback
+          ? Math.max(data.byteLength, msgSizeEstimate)
+          : msgSizeEstimate + data.byteLength;
         const msgEvent: MessageEvent = {
           topic,
           receiveTime,

@@ -40,7 +40,14 @@ describe("evictLiveRecordings", () => {
     });
     Object.defineProperty(navigator, "locks", {
       configurable: true,
-      value: { query: async () => ({ held: held.map((name) => ({ name })) }) },
+      value: {
+        query: async () => ({ held: held.map((name) => ({ name })) }),
+        request: async (
+          name: string,
+          _options: unknown,
+          callback: (lock: { name: string } | null) => Promise<unknown>,
+        ) => await callback(held.includes(name) ? null : { name }),
+      },
     });
   });
 
