@@ -203,6 +203,7 @@ export function TabTitleInput({
   onDone: () => void;
 }): React.JSX.Element {
   const { classes } = useStyles();
+  const { t } = useTranslation("panelToolbar");
   const doneRef = useRef(false);
 
   const finish = (title: string | undefined) => {
@@ -232,7 +233,7 @@ export function TabTitleInput({
     <input
       ref={tabRef}
       className={classes.titleInput}
-      aria-label="Tab title"
+      aria-label={t("tabTitle")}
       defaultValue={initialTitle}
       autoFocus
       onFocus={(event) => {
@@ -266,6 +267,7 @@ export function TabTitleInput({
 export function PanelTab(props: IDockviewPanelHeaderProps): React.JSX.Element {
   const { api, containerApi } = props;
   const [editing, setEditing] = useState(false);
+  const { t } = useTranslation("panelToolbar");
   const { savePanelConfigs } = useCurrentLayoutActions();
   const saveTitle = useCallback(
     (title: string) => {
@@ -304,7 +306,7 @@ export function PanelTab(props: IDockviewPanelHeaderProps): React.JSX.Element {
   return (
     <DockviewDefaultTab
       {...props}
-      title="Double-click to rename"
+      title={t("doubleClickToRename")}
       onDoubleClick={() => {
         setEditing(true);
       }}

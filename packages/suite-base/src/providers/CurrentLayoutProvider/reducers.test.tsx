@@ -348,6 +348,47 @@ describe("layout reducers", () => {
       expect(result.layout).toBe(withTabs.layout);
     });
 
+    it("keeps the configs saved for a closed Tab panel that is being reopened", () => {
+      const closed = panelsReducer(withTabs, { type: "CLOSE_PANEL", payload: { id: "Tab!t" } });
+      const restored = panelsReducer(closed, {
+        type: "SAVE_PANEL_CONFIGS",
+        payload: {
+          configs: ["Tab!t", "B!1", "C!1"].map((id) => ({
+            id,
+            config: withTabs.configById[id]!,
+            override: true,
+          })),
+        },
+      });
+      const reopened = panelsReducer(restored, {
+        type: "ADD_PANEL",
+        payload: { id: "Tab!t", position: "left", targetPanelId: "A!1" },
+      });
+      expect(reopened.configById).toEqual(withTabs.configById);
+    });
+
+    it("splitting a Tab panel copies the panels in its tabs", () => {
+      const result = panelsReducer(withTabs, {
+        type: "SPLIT_PANEL",
+        payload: { id: "Tab!t", direction: "row", config: withTabs.configById["Tab!t"]! },
+      });
+      const copyId = getPanelIds(result.layout).find(
+        (id) => id.startsWith("Tab!") && id !== "Tab!t",
+      )!;
+      const copyTabs = result.configById[copyId]!.tabs as { layout?: LayoutNode }[];
+      const copyChildren = getPanelIds(copyTabs[0]!.layout);
+      expect(copyChildren).toHaveLength(2);
+      expect(copyChildren).not.toContain("B!1");
+      expect(result.configById[copyChildren[0]!]).toEqual({ b: 1 });
+      // Closing a panel in the copy leaves the original alone.
+      const closed = panelsReducer(result, {
+        type: "CLOSE_PANEL",
+        payload: { id: copyChildren[0]! },
+      });
+      expect(getPanelIds(tabLayout(closed, 0))).toEqual(["B!1", "C!1"]);
+      expect(closed.configById["B!1"]).toEqual({ b: 1 });
+    });
+
     it("won't put a Tab panel into one of its own tabs", () => {
       const result = panelsReducer(withTabs, {
         type: "ADD_PANEL",

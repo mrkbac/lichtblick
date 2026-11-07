@@ -19,6 +19,7 @@ import FullscreenIcon from "@mui/icons-material/Fullscreen";
 import FullscreenExitIcon from "@mui/icons-material/FullscreenExit";
 import { Typography } from "@mui/material";
 import React, { useContext, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import { useStyles } from "@lichtblick/suite-base/components/PanelToolbar/PanelToolbar.style";
@@ -40,6 +41,7 @@ export default React.memo<PanelToolbarProps>(function PanelToolbar({
   isUnknownPanel = false,
 }: PanelToolbarProps) {
   const { classes, cx } = useStyles();
+  const { t } = useTranslation("panelToolbar");
   const {
     isFullscreen,
     exitFullscreen,
@@ -102,7 +104,7 @@ export default React.memo<PanelToolbarProps>(function PanelToolbar({
         <span
           className={classes.grip}
           ref={panelContext.connectToolbarDragHandle}
-          title="Drag to move panel"
+          title={t("dragToMovePanel")}
           data-testid="panel-drag-grip"
         >
           <DragIndicatorIcon fontSize="inherit" />

@@ -96,6 +96,8 @@ const useStyles = makeStyles()((theme) => ({
 
 type TabButtonProps = {
   title: string;
+  /** Id of the tab panel content the tab controls. */
+  contentId: string;
   isActive: boolean;
   closable: boolean;
   onSelect: () => void;
@@ -109,8 +111,9 @@ type TabButtonProps = {
  * shows it, so the panel can be dropped into its layout; dropping on the tab itself adds the panel.
  */
 function TabButton(props: TabButtonProps): React.JSX.Element {
-  const { title, isActive, closable, onSelect, onRename, onClose, onDropPanel } = props;
+  const { title, contentId, isActive, closable, onSelect, onRename, onClose, onDropPanel } = props;
   const { classes, cx } = useStyles();
+  const { t } = useTranslation("panelToolbar");
   const [editing, setEditing] = useState(false);
   const [isOver, setIsOver] = useState(false);
   const hover = useDragHoverActivation(onSelect);
@@ -130,10 +133,21 @@ function TabButton(props: TabButtonProps): React.JSX.Element {
     <div
       role="tab"
       aria-selected={isActive}
-      title="Double-click to rename"
+      aria-controls={contentId}
+      tabIndex={0}
+      title={t("doubleClickToRename")}
       data-testid="tab-panel-tab"
       className={cx(classes.tab, { [classes.active]: isActive, [classes.dropOver]: isOver })}
       onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect();
+        } else if (event.key === "F2") {
+          event.preventDefault();
+          setEditing(true);
+        }
+      }}
       onDoubleClick={() => {
         setEditing(true);
       }}
@@ -162,7 +176,7 @@ function TabButton(props: TabButtonProps): React.JSX.Element {
       {closable && (
         <ButtonBase
           className={cx(classes.close, "close")}
-          aria-label={`Close ${title}`}
+          aria-label={t("closeTab", { title })}
           onClick={(event) => {
             event.stopPropagation();
             onClose();
@@ -186,6 +200,7 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
   const tabs = getTabs(config);
   const activeIdx = getActiveTabIndex(config);
   const layout = tabs[activeIdx]?.layout;
+  const contentId = `${panelId}-tabpanel`;
 
   const select = useCallback(
     (index: number) => {
@@ -251,6 +266,7 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
               // Tabs have no ids; the index is their identity.
               key={index}
               title={tab.title}
+              contentId={contentId}
               isActive={index === activeIdx}
               closable={tabs.length > 1}
               onSelect={() => {
@@ -269,7 +285,7 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
           ))}
         </div>
       </PanelToolbar>
-      <div className={classes.content}>
+      <div className={classes.content} role="tabpanel" id={contentId}>
         {/* A fresh layout per tab, so a change can't land in the tab switched to meanwhile. */}
         <UnconnectedPanelLayout
           key={activeIdx}

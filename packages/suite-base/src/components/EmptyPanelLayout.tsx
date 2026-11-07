@@ -108,6 +108,8 @@ export const EmptyPanelLayout = (): React.JSX.Element => {
       }}
       onDrop={onDrop}
       data-testid="empty-drop-target"
+      // Marks this as its own layout, so an outer layout leaves drags over it alone.
+      data-panel-layout
       className={cx(classes.dropTarget, { [classes.isOver]: isOver })}
     >
       <div className={classes.root}>

@@ -19,6 +19,7 @@ import * as _ from "lodash-es";
 import {
   AddPanelPayload,
   ChangePanelLayoutPayload,
+  ConfigsPayload,
   LayoutData,
   PanelsActions,
   SaveConfigsPayload,
@@ -26,9 +27,10 @@ import {
   SplitPanelPayload,
   SwapPanelPayload,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
-import { PlaybackConfig } from "@lichtblick/suite-base/types/panels";
+import { PanelConfig, PlaybackConfig } from "@lichtblick/suite-base/types/panels";
 import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import {
+  getPanelIds,
   insertPanel,
   removePanels,
   replacePanel,
@@ -39,6 +41,7 @@ import {
   findLayoutTree,
   getAllPanelIds,
   getLayoutTree,
+  getTabs,
   isTabPanel,
   mapLayoutTrees,
   setLayoutTree,
@@ -125,12 +128,46 @@ function saveFullPanelConfig(state: LayoutData, payload: SaveFullConfigPayload):
   return { ...state, configById: newProps };
 }
 
+/**
+ * The config of a copy of panel `id`. A copied Tab panel gets copies of the panels in its tabs,
+ * with new ids and their configs added to `configs`, so the copies don't share panels.
+ */
+function copyPanelConfig(
+  configById: LayoutData["configById"],
+  id: string,
+  config: PanelConfig,
+  configs: ConfigsPayload[],
+  copying: readonly string[] = [],
+): PanelConfig {
+  if (!isTabPanel(id) || copying.includes(id)) {
+    return config;
+  }
+  const tabs = getTabs(config).map((tab) => {
+    let layout = tab.layout;
+    for (const childId of getPanelIds(tab.layout)) {
+      const childCopyId = getPanelIdForType(getPanelTypeFromId(childId));
+      const childConfig = copyPanelConfig(configById, childId, configById[childId] ?? {}, configs, [
+        ...copying,
+        id,
+      ]);
+      configs.push({ id: childCopyId, config: childConfig });
+      layout = replacePanel(layout, childId, childCopyId);
+    }
+    return layout == undefined ? tab : { ...tab, layout };
+  });
+  return { ...config, tabs };
+}
+
 const splitPanel = (
   panelsState: LayoutData,
   { id, direction, config }: SplitPanelPayload,
 ): LayoutData => {
   const newId = getPanelIdForType(getPanelTypeFromId(id));
-  const withConfig = savePanelConfigs(panelsState, { configs: [{ id: newId, config }] });
+  const childConfigs: ConfigsPayload[] = [];
+  const newConfig = copyPanelConfig(panelsState.configById, id, config, childConfigs);
+  const withConfig = savePanelConfigs(panelsState, {
+    configs: [...childConfigs, { id: newId, config: newConfig }],
+  });
   return addPanel(withConfig, {
     id: newId,
     position: direction === "row" ? "right" : "bottom",
@@ -210,8 +247,13 @@ export default function (panelsState: Readonly<LayoutData>, action: PanelsAction
 
     case "SAVE_PANEL_CONFIGS": {
       const saved = savePanelConfigs(panelsState, action.payload);
-      // Removing a tab of a Tab panel removes the panels in it.
-      return action.payload.configs.some(({ id }) => isTabPanel(id)) ? trimConfigs(saved) : saved;
+      // Removing a tab of a Tab panel in the layout removes the panels in it. Configs saved for a
+      // Tab panel that is not in the layout yet (reopening a closed one) are kept.
+      const present = new Set(getAllPanelIds(saved));
+      const tabPanelChanged = action.payload.configs.some(
+        ({ id }) => isTabPanel(id) && present.has(id),
+      );
+      return tabPanelChanged ? trimConfigs(saved) : saved;
     }
 
     case "SAVE_FULL_PANEL_CONFIG":
