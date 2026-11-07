@@ -134,8 +134,13 @@ export type UpdateAction = {
   y2LogScale?: boolean;
   showXAxisGrid?: boolean;
   showYAxisGrid?: boolean;
-  /** Format x ticks as wall-clock time: seconds of the plot's x = 0. Undefined shows relative seconds. */
-  xTickFormat?: { absoluteStartSec?: number };
+  /**
+   * Format x ticks as wall-clock time (absoluteStartSec: seconds of the plot's x = 0) or as seconds
+   * before the current time (relativeToNow, with xNowSec). Neither shows seconds since start.
+   */
+  xTickFormat?: { absoluteStartSec?: number; relativeToNow?: boolean };
+  /** Current time on the x-axis, for relativeToNow ticks. Sent apart so it can change every frame. */
+  xNowSec?: number;
   /** Lock one x unit to one y unit */
   equalAxes?: boolean;
   zoomMode?: ZoomMode;

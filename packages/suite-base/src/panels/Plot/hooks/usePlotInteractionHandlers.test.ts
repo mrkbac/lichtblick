@@ -839,4 +839,12 @@ describe("liveTimeAgo", () => {
   it("is empty past the newest data", () => {
     expect(liveTimeAgo(state([]), 11)).toBeUndefined();
   });
+
+  it("measures from the current time on any source when labelled relative to now", () => {
+    const playback = {
+      capabilities: [PLAYER_CAPABILITIES.playbackControl],
+      activeData: { ...activeData, currentTime: { sec: 107, nsec: 0 } },
+    } as unknown as PlayerState;
+    expect(liveTimeAgo(playback, 4, { relativeToNow: true })).toBe("3.00 s ago");
+  });
 });
