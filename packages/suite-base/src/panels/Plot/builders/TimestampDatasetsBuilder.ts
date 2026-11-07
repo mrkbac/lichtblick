@@ -215,6 +215,11 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
     return { datasetsByConfigIndex: datasets, pathsWithMismatchedDataLengths: emptyPaths };
   }
 
+  public async getDerivedValuesAt(x: number): Promise<readonly unknown[]> {
+    await this.#flushPendingDispatch();
+    return await this.#datasetsBuilderRemote.getDerivedValuesAt(x);
+  }
+
   public async getCsvData(xRange?: Immutable<Bounds1D>): Promise<CsvDataset[]> {
     await this.#flushPendingDispatch();
     return await this.#datasetsBuilderRemote.getCsvData(xRange);

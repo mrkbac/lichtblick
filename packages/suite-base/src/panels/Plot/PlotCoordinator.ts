@@ -32,6 +32,7 @@ import {
   SeriesItem,
   Viewport,
 } from "./builders/IDatasetsBuilder";
+import { isDerivedSeries } from "./builders/utils";
 import {
   ConfigBounds,
   Dataset,
@@ -102,6 +103,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   private latestYScale?: YScale;
   private queueDispatchRender = debouncePromise(this.dispatchRender.bind(this));
   private queueDispatchDownsample = debouncePromise(this.dispatchDownsample.bind(this));
+  private queueDerivedValues = debouncePromise(this.dispatchDerivedValues.bind(this));
   private queueDatasetsRender = debouncePromise(this.dispatchDatasetsRender.bind(this));
   private destroyed = false;
 
@@ -196,6 +198,10 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     }
 
     for (const seriesItem of this.series) {
+      if (this.showsDerivedValue(seriesItem)) {
+        // the legend shows the plotted value, which comes from the datasets builder
+        continue;
+      }
       if (seriesItem.timestampMethod !== "receiveTime") {
         this.updateStampedCurrentValue(seriesItem, messages);
         continue;
@@ -234,6 +240,43 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
 
     if (handlePlayerStateResult.datasetsChanged) {
       this.queueDispatchDownsample();
+    }
+    this.queueDerivedValues();
+  }
+
+  /** The legend value of a series computed across samples is its plotted value, not the raw one */
+  private showsDerivedValue(seriesItem: Immutable<SeriesItem>): boolean {
+    return this.datasetsBuilder.getDerivedValuesAt != undefined && isDerivedSeries(seriesItem);
+  }
+
+  /** Fetch the plotted value at the current time of each series computed across samples */
+  private async dispatchDerivedValues(): Promise<void> {
+    const getDerivedValuesAt = this.datasetsBuilder.getDerivedValuesAt?.bind(this.datasetsBuilder);
+    const x = this.currentSeconds;
+    const derived = this.series.filter((item) => this.showsDerivedValue(item));
+    if (this.isDestroyed() || !getDerivedValuesAt || x == undefined || derived.length === 0) {
+      return;
+    }
+    const values = await getDerivedValuesAt(x);
+    if (this.isDestroyed()) {
+      return;
+    }
+    let changed = false;
+    for (const { configIndex } of derived) {
+      // the series list may have changed while waiting
+      if (
+        this.series[configIndex] == undefined ||
+        !this.showsDerivedValue(this.series[configIndex])
+      ) {
+        continue;
+      }
+      if (this.currentValuesByConfigIndex[configIndex] !== values[configIndex]) {
+        this.currentValuesByConfigIndex[configIndex] = values[configIndex];
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.emit("currentValuesChanged", this.currentValuesByConfigIndex);
     }
   }
 
@@ -441,9 +484,14 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
         filledParsed,
       )}${xKey}${timeKey}` as SeriesConfigKey;
 
-      // Keep current values for paths that match existing ones
+      // Keep current values for paths that match existing ones, unless the legend switches
+      // between the raw and the plotted value (moving average or stream modifier toggled)
       const existingSeries = this.series.find((series) => series.key === key);
-      if (existingSeries != undefined) {
+      if (
+        existingSeries != undefined &&
+        isDerivedSeries(existingSeries) ===
+          isDerivedSeries({ parsed: filledParsed, smoothing: path.smoothing })
+      ) {
         newCurrentValuesByConfigIndex[idx] =
           this.currentValuesByConfigIndex[existingSeries.configIndex];
         newCurrentValueTimesByConfigIndex[idx] =
@@ -495,6 +543,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     // Dispatch since we might have series changes
     this.datasetsBuilder.setSeries(this.series);
     this.queueDispatchDownsample();
+    this.queueDerivedValues();
   }
 
   public setGlobalBounds(bounds: Immutable<Bounds1D> | undefined): void {
@@ -754,6 +803,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     // work for sparse arrays)
     const datasets = Array.from(result.datasetsByConfigIndex, replaceUndefinedWithEmptyDataset);
     this.queueDatasetsRender(datasets);
+    // preloaded data may have just reached the current time
+    this.queueDerivedValues();
   }
 
   /** Render the provided datasets */

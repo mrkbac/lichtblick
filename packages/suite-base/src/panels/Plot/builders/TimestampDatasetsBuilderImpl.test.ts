@@ -66,6 +66,32 @@ describe("TimestampDatasetsBuilderImpl", () => {
     expect(data.map((item) => item.value)).toEqual([1, 1.5, 2, 3, 4]);
   });
 
+  it("gives the plotted value at a time for derived series only", () => {
+    // GIVEN a moving-average series, a derivative series and a raw series
+    const builder = build([
+      seriesItem("0", { smoothing: 3 }),
+      seriesItem("1", { path: "/topic.value.@derivative" }),
+      seriesItem("2"),
+    ]);
+    for (const series of ["0", "1", "2"]) {
+      builder.applyAction({
+        type: "append-full",
+        series: series as SeriesConfigKey,
+        items: items([1, 2, 3, 4, 5], (x) => x * x),
+      });
+    }
+
+    // WHEN asking for the values at 4.5 s
+    const values = builder.getDerivedValuesAt(4.5);
+
+    // THEN the average and derivative of the last sample at or before it are given, raw is left out
+    expect(values).toEqual([(4 + 9 + 16) / 3, 16 - 9]);
+    expect(2 in values).toBe(false);
+    // and before any data, or at the derivative's first sample, there is no value
+    expect(builder.getDerivedValuesAt(0.5)).toEqual([]);
+    expect(builder.getDerivedValuesAt(1)[1]).toBeUndefined();
+  });
+
   it("returns only the samples inside the requested x range", () => {
     const builder = build([seriesItem("0", { smoothing: 2 })]);
     builder.applyAction({ type: "append-full", series: key, items: items([1, 2, 3, 4, 5]) });

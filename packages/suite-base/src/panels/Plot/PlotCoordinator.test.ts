@@ -449,6 +449,44 @@ describe("PlotCoordinator", () => {
       expect(plotCoordinator["currentValuesByConfigIndex"]).toEqual([8]);
     });
 
+    it("shows the plotted value of a moving-average series in the legend, not the raw one", async () => {
+      // Given a raw series and a moving-average series on a timestamp plot
+      const state = PlayerBuilder.playerState({
+        activeData: PlayerBuilder.activeData({
+          startTime: RosTimeBuilder.time({ sec: 100, nsec: 0 }),
+          currentTime: RosTimeBuilder.time({ sec: 104, nsec: 0 }),
+        }),
+      });
+      const topic = state.activeData!.messages[0]!.topic;
+      plotCoordinator["isTimeseriesPlot"] = true;
+      plotCoordinator["series"] = [
+        { parsed: { topicName: topic }, configIndex: 0, timestampMethod: "receiveTime" },
+        {
+          parsed: { topicName: topic },
+          configIndex: 1,
+          timestampMethod: "receiveTime",
+          smoothing: 4,
+        },
+      ] as SeriesItem[];
+      (simpleGetMessagePathDataItems as Mock).mockReturnValue([10]);
+      const getDerivedValuesAt = vi.fn().mockResolvedValue([undefined, 7.5]);
+      datasetsBuilder.getDerivedValuesAt = getDerivedValuesAt;
+      const listener = vi.fn();
+      plotCoordinator.on("currentValuesChanged", listener);
+
+      // When a frame arrives
+      plotCoordinator.handlePlayerState(state);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // Then the raw series shows the message value and the averaged one its plotted value
+      expect(getDerivedValuesAt).toHaveBeenCalledWith(4);
+      expect(plotCoordinator["currentValuesByConfigIndex"]).toEqual([10, 7.5]);
+      // and the legend never showed the raw value for the averaged series
+      for (const [values] of listener.mock.calls as [unknown[]][]) {
+        expect(values[1]).not.toBe(10);
+      }
+    });
+
     it("should not update currentValuesByConfigIndex", () => {
       const state = PlayerBuilder.playerState({
         activeData: PlayerBuilder.activeData(),
