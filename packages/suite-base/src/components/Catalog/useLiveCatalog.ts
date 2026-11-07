@@ -31,6 +31,9 @@ export type LiveCatalog = CatalogFolder & {
  */
 const pathOf = (rec: LiveRecording) => `${rec.location}/${rec.name}`;
 
+/** How often to check whether a recording in progress finished. */
+const ACTIVE_POLL_MS = 5000;
+
 /**
  * Live recordings as a catalog: indexed like a folder of recordings (topics, duration, thumbnails,
  * GPS tracks), titled by the machine they came from.
@@ -92,6 +95,34 @@ export function useLiveCatalog(name: string): LiveCatalog {
   useEffect(() => {
     void scan();
   }, [scan]);
+
+  // While something is recording, look every few seconds whether it finished, so it joins the
+  // catalog without a manual rescan. Only the cheap listing runs until the set changes.
+  const activeNames = live
+    .filter((rec) => rec.active)
+    .map((rec) => rec.name)
+    .join("\n");
+  useEffect(() => {
+    if (activeNames === "") {
+      return;
+    }
+    const timer = setInterval(() => {
+      void listLiveRecordings()
+        .then((listed) => {
+          const stillActive = listed
+            .filter((rec) => rec.active)
+            .map((rec) => rec.name)
+            .join("\n");
+          if (stillActive !== activeNames) {
+            void scan();
+          }
+        })
+        .catch(() => {});
+    }, ACTIVE_POLL_MS);
+    return () => {
+      clearInterval(timer);
+    };
+  }, [activeNames, scan]);
 
   const recordingOf = useCallback(
     (recording: CatalogRecording) => {

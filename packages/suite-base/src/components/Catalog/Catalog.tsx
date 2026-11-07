@@ -553,7 +553,12 @@ export default function Catalog({
                 {virtualizer.getVirtualItems().map((item) => {
                   const r = shown[item.index]!;
                   const path = r.source.type === "local-file" ? r.source.path : r.source.url;
-                  const lastOpened = lastOpenedByName.get(r.name);
+                  // Recents know files by their file name; a live recording's title is its machine.
+                  const lastOpened = lastOpenedByName.get(
+                    r.source.type === "local-file"
+                      ? (r.source.path.split("/").pop() ?? r.name)
+                      : r.name,
+                  );
                   const caption = [
                     lastOpened != undefined
                       ? t("openedAgo", {
