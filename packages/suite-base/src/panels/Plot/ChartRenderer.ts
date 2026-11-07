@@ -56,12 +56,37 @@ export function formatClockTime(seconds: number): string {
   return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}.${ms}`;
 }
 
+type XPadding = { span: number; left: number; right: number };
+
+/**
+ * The x tick labels at the window edges (e.g. "25.0", then "25.03") change width as a live window
+ * slides, and chart.js sizes the plot area to fit them, so the whole chart wobbled sideways. Keep
+ * the widest padding seen for the current span; a zoom (new span) sizes it afresh.
+ */
+export function holdXPadding(
+  held: XPadding,
+  scale: Pick<ChartScale, "min" | "max" | "paddingLeft" | "paddingRight">,
+): void {
+  const span = scale.max - scale.min;
+  // the follow window's span differs by float rounding from frame to frame
+  if (!(Math.abs(span - held.span) <= Math.abs(held.span) * 1e-9)) {
+    held.span = span;
+    held.left = 0;
+    held.right = 0;
+  }
+  held.left = Math.max(held.left, scale.paddingLeft);
+  held.right = Math.max(held.right, scale.paddingRight);
+  scale.paddingLeft = held.left;
+  scale.paddingRight = held.right;
+}
+
 export class ChartRenderer {
   #chartInstance: ChartType;
   #fakeNodeEvents = new EventEmitter();
   #fakeDocumentEvents = new EventEmitter();
   readonly #titleColor: string;
   #absoluteStartSec?: number;
+  #xPadding: XPadding = { span: Number.NaN, left: 0, right: 0 };
   #equalAxes = false;
   /** Series datasets by config index; the chart's datasets also hold threshold fills after them */
   #seriesDatasets: Dataset[] = [];
@@ -96,6 +121,13 @@ export class ChartRenderer {
         return startSec == undefined || typeof value !== "number"
           ? Ticks.formatters.numeric.call(this, value as number, index, ticks)
           : formatClockTime(startSec + value);
+      };
+    }
+
+    const xScaleOptions = chartOptions.scales?.x;
+    if (xScaleOptions) {
+      xScaleOptions.afterFit = (scale) => {
+        holdXPadding(this.#xPadding, scale);
       };
     }
 
@@ -184,6 +216,8 @@ export class ChartRenderer {
 
     if (action.xTickFormat) {
       this.#absoluteStartSec = action.xTickFormat.absoluteStartSec;
+      // labels change length with the format: size the padding afresh
+      this.#xPadding.span = Number.NaN;
     }
 
     if (action.equalAxes != undefined) {
@@ -199,8 +233,10 @@ export class ChartRenderer {
 
     if (action.showXAxisLabels != undefined) {
       const ticksOptions = this.#chartInstance.options.scales?.x?.ticks;
-      if (ticksOptions) {
+      if (ticksOptions && ticksOptions.display !== action.showXAxisLabels) {
         ticksOptions.display = action.showXAxisLabels;
+        // hidden labels need no padding: size it afresh
+        this.#xPadding.span = Number.NaN;
       }
     }
 

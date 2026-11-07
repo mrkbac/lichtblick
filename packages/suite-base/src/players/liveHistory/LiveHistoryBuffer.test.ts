@@ -82,6 +82,20 @@ describe("LiveHistoryBuffer", () => {
     expect(buffer.range(fromSec(5), fromSec(9))).toEqual([]);
   });
 
+  it("returns messages after a given one, including later ones at the same time", () => {
+    const buffer = new LiveHistoryBuffer({
+      windowNs: 100n * SEC,
+      maxBytes: 1e9,
+    });
+    const first = msg("/a", 2, { value: "first" });
+    const second = msg("/b", 2, { value: "second" });
+    [msg("/a", 1), first, second, msg("/a", 3), msg("/a", 4)].forEach((m) => {
+      buffer.add(m);
+    });
+    expect(buffer.rangeAfter(first, fromSec(3))).toEqual([second, msg("/a", 3)]);
+    expect(buffer.rangeAfter(second, fromSec(3))).toEqual([msg("/a", 3)]);
+  });
+
   it("drops the oldest messages beyond the memory cap and reports it", () => {
     const buffer = new LiveHistoryBuffer({
       windowNs: 100n * SEC,
