@@ -5,7 +5,7 @@ import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
 import { ButtonBase, Popover } from "@mui/material";
 import { getPanelData } from "dockview-react";
-import { DragEvent, useCallback, useState } from "react";
+import { DragEvent, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -217,7 +217,9 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
   const { addPanel, changePanelLayout } = useCurrentLayoutActions();
   const panelCatalog = usePanelCatalog();
   const [catalogAnchor, setCatalogAnchor] = useState<HTMLElement | undefined>(undefined);
-  const tabs = getTabs(config);
+  // Stable while the tabs don't change, so the title selector below stays stable too.
+  const rawTabs = config.tabs;
+  const tabs = useMemo(() => getTabs({ tabs: rawTabs }), [rawTabs]);
 
   // A tab without its own title is named after the panels in it.
   const contentTitlesSelector = useCallback(

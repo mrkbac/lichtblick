@@ -202,6 +202,10 @@ function addPanel(
   const withConfig = config
     ? savePanelConfigs(panelsState, { configs: [{ id, config }] })
     : panelsState;
+  // A panel dropped onto itself stays where it is.
+  if (requestedTarget === id) {
+    return panelsState;
+  }
   let targetPanelId = requestedTarget;
   let target = targetPanelId != undefined ? findLayoutTree(withConfig, targetPanelId) : undefined;
   // Stacking onto a panel that fills a whole tab adds a tab to that Tab panel instead of nesting

@@ -452,6 +452,14 @@ describe("layout reducers", () => {
       });
     });
 
+    it("ignores a panel dropped onto itself", () => {
+      const result = panelsReducer(withTabs, {
+        type: "ADD_PANEL",
+        payload: { id: "Tab!t", position: "center", targetPanelId: "Tab!t" },
+      });
+      expect(result).toBe(withTabs);
+    });
+
     it("won't put a Tab panel into one of its own tabs", () => {
       const result = panelsReducer(withTabs, {
         type: "ADD_PANEL",
