@@ -38,10 +38,22 @@ export function imageKind(schemaName: string): ImageKind | undefined {
   return undefined;
 }
 
+/** Raw images cost far more bandwidth than compressed ones, so they are never added automatically. */
+export function isRawImage(schemaName: string): boolean {
+  const kind = imageKind(schemaName);
+  return kind === "raw-ros" || kind === "raw-foxglove";
+}
+
 /** Names of all topics carrying a supported image schema, sorted by name so the order is stable. */
-export function imageTopicNames(topics: readonly Topic[] | undefined): string[] {
+export function imageTopicNames(
+  topics: readonly Topic[] | undefined,
+  { includeRaw = true }: { includeRaw?: boolean } = {},
+): string[] {
   return (topics ?? [])
-    .filter((topic) => imageKind(topic.schemaName) != undefined)
+    .filter(
+      (topic) =>
+        imageKind(topic.schemaName) != undefined && (includeRaw || !isRawImage(topic.schemaName)),
+    )
     .map((topic) => topic.name)
     .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
 }

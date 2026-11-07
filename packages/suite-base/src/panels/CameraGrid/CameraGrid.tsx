@@ -224,6 +224,8 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
   const [renderer] = useState(() => new GridRenderer(bumpAspectVersion, t("waitingForImages")));
 
   const imageTopics = useMemo(() => imageTopicNames(topics), [topics]);
+  // "Add all" skips raw images: they can saturate the connection. They can still be added one by one.
+  const addAllTopicNames = useMemo(() => imageTopicNames(topics, { includeRaw: false }), [topics]);
   const annotationTopics = useMemo(() => annotationTopicNames(topics), [topics]);
   const visibleTiles = useMemo(() => config.tiles.filter((tile) => tile.visible), [config.tiles]);
   // One line per tile: its image topic, then its annotation topics, tab-separated. A string, so
@@ -296,9 +298,9 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
 
   const actionHandler = useCallback(
     (action: SettingsTreeAction) => {
-      setConfig((prev) => settingsReducer(prev, action, imageTopics, annotationTopics));
+      setConfig((prev) => settingsReducer(prev, action, addAllTopicNames, annotationTopics));
     },
-    [imageTopics, annotationTopics],
+    [addAllTopicNames, annotationTopics],
   );
 
   useEffect(() => {
@@ -352,14 +354,18 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
           ) : imageTopics.length > 0 ? (
             <>
               <Typography color="textSecondary">{t("emptyIntro")}</Typography>
-              <Button
-                variant="contained"
-                onClick={() => {
-                  setConfig((prev) => addAllTopics(prev, imageTopics));
-                }}
-              >
-                {t("addAllImageTopicsCount", { count: imageTopics.length })}
-              </Button>
+              {addAllTopicNames.length > 0 ? (
+                <Button
+                  variant="contained"
+                  onClick={() => {
+                    setConfig((prev) => addAllTopics(prev, addAllTopicNames));
+                  }}
+                >
+                  {t("addAllImageTopicsCount", { count: addAllTopicNames.length })}
+                </Button>
+              ) : (
+                <Typography color="textSecondary">{t("onlyRawImageTopics")}</Typography>
+              )}
             </>
           ) : (
             <Typography color="textSecondary">{t("waitingForImageTopics")}</Typography>
