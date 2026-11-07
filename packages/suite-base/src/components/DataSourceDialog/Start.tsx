@@ -19,6 +19,7 @@ import {
 } from "@mui/material";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { create } from "zustand";
 
 import Catalog from "@lichtblick/suite-base/components/Catalog/Catalog";
 import {
@@ -31,7 +32,7 @@ import { useCatalogFolder } from "@lichtblick/suite-base/components/Catalog/useC
 import DontShowThisAgainCheckbox from "@lichtblick/suite-base/components/DataSourceDialog/DontShowThisAgainCheckbox";
 import { OpenUrlInput } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
 import { useStyles } from "@lichtblick/suite-base/components/DataSourceDialog/index.style";
-import { LiveRecordingsList } from "@lichtblick/suite-base/components/LiveRecordingsDialog";
+import { LiveRecordingsList } from "@lichtblick/suite-base/components/LiveRecordingsList";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
@@ -48,7 +49,16 @@ import { splitRecentTitle } from "@lichtblick/suite-base/util/recentSources";
 // Number of recents listed on the All tab, unless searching
 const RECENTS_PREVIEW_COUNT = 5;
 
-type View = "all" | "catalog" | "recent" | "recordings";
+export type StartView = "all" | "catalog" | "recent" | "recordings";
+type View = StartView;
+
+/** The start page's tab: kept between openings, and set by menu items that open a given tab. */
+export const useStartView = create<{ view: View; setView: (view: View) => void }>()((set) => ({
+  view: "all",
+  setView: (view) => {
+    set({ view });
+  },
+}));
 type Kind = "all" | "file" | "remote" | "live";
 type CatalogView = "list" | "grid" | "map";
 
@@ -81,7 +91,8 @@ export default function Start(): React.JSX.Element {
   const folder = useCatalogFolder();
 
   const [query, setQuery] = useState("");
-  const [view, setView] = useState<View>("all");
+  const view = useStartView((state) => state.view);
+  const setView = useStartView((state) => state.setView);
   const [kindFilter, setKind] = useState<Kind>("all");
   // The kind filter belongs to the Recent tab; All shows every kind.
   const kind = view === "recent" ? kindFilter : "all";

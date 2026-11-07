@@ -18,7 +18,7 @@ import {
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 
-import Start from "./Start";
+import Start, { useStartView } from "./Start";
 
 vi.mock("react-i18next", () => ({
   useTranslation: vi.fn(),
@@ -131,6 +131,7 @@ describe("Start Component", () => {
   };
 
   beforeEach(() => {
+    useStartView.getState().setView("all");
     (useTranslation as Mock).mockReturnValue({
       t: (key: string, options?: { version?: string; count?: number }) =>
         key === "version" && options

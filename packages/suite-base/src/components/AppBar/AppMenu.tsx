@@ -13,11 +13,11 @@ import { useTranslation } from "react-i18next";
 import { useStyles } from "@lichtblick/suite-base/components/AppBar/AppMenu.style";
 import { useCommandPaletteStore } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
 import { LAYOUT_SHORTCUTS } from "@lichtblick/suite-base/components/CommandPalette/layoutShortcuts";
+import { useStartView } from "@lichtblick/suite-base/components/DataSourceDialog/Start";
 import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
 import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
-import { useLiveRecordingsDialog } from "@lichtblick/suite-base/components/LiveRecordingsDialog";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
@@ -46,7 +46,6 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
   const { recentSources, selectRecent } = usePlayerSelection();
   const exportableFile = useExportableFile();
   const openExport = useTrimStore((state) => state.openExport);
-  const showLiveRecordings = useLiveRecordingsDialog((state) => state.show);
   const showCommandPalette = useCommandPaletteStore((state) => state.show);
   const showShortcuts = useKeyboardShortcutsStore((state) => state.show);
   const { dialogActions } = useWorkspaceActions();
@@ -147,7 +146,10 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
       {item("export-recording", t("exportRecording"), openExport, {
         disabled: !exportableFile,
       })}
-      {item("live-recordings", t("liveRecordings"), showLiveRecordings)}
+      {item("live-recordings", t("liveRecordings"), () => {
+        useStartView.getState().setView("recordings");
+        dialogActions.dataSource.open("start");
+      })}
 
       {recents.length > 0 && (
         <ListSubheader className={classes.subheader}>{t("recentDataSources")}</ListSubheader>
