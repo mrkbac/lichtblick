@@ -8,6 +8,7 @@
 import { MarkOptional } from "ts-essentials";
 
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
+import { normalizeTabs } from "@lichtblick/suite-base/util/tabLayout";
 
 import { migrateLegacyToNew3DPanels } from "./migrateLegacyToNew3DPanels";
 import { migrateLegacyToNewImagePanels } from "./migrateLegacyToNewImagePanels";
@@ -32,6 +33,8 @@ export function migratePanelsState(data: MarkOptional<LayoutData, "configById">)
   result = migrateMosaicLayout(result);
   result = migrateLegacyToNew3DPanels(result);
   result = migrateLegacyToNewImagePanels(result);
+  // Panels stacked into one group are shown as a Tab panel.
+  result = normalizeTabs(result);
   result.version = Math.max(result.version ?? 0, LAYOUT_VERSION);
 
   return result;

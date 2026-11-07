@@ -115,3 +115,18 @@ describe("UndeliveredMessages", () => {
     expect(undelivered.hasHeld()).toBe(false);
   });
 });
+
+it("discards pending pre-seek messages without losing subscriptions", () => {
+  // Given an initial frame that is still waiting for the panel
+  const held = new UndeliveredMessages();
+  const topics = new Set(["/image"]);
+  held.setRequestedTopics(topics);
+  held.hold([message("/image")]);
+  // When the player seeks before the panel consumes it
+  held.clearPending();
+  // Then the old image cannot be replayed, but a new frame is still held for delivery
+  expect(held.frameFor(undefined, topics)).toBeUndefined();
+  const next = message("/image");
+  held.hold([next]);
+  expect(held.frameFor(undefined, topics)).toEqual([next]);
+});

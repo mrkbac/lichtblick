@@ -6,12 +6,19 @@ import * as _ from "lodash-es";
 import type { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
 import type { LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import type { PanelConfig } from "@lichtblick/suite-base/types/panels";
-import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
-import { getPanelIds, isLayoutNode, normalizeLayout } from "@lichtblick/suite-base/util/layoutTree";
+import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
+import {
+  getPanelIds,
+  isLayoutNode,
+  mapGroups,
+  normalizeLayout,
+  setActivePanel,
+} from "@lichtblick/suite-base/util/layoutTree";
 
 /**
- * The Tab panel holds a whole layout per tab. The tab layouts live in its config, so the layout
- * tree of the selected layout stays flat and every panel's config stays in `configById`.
+ * The Tab panel holds a whole layout per tab, so a tab can be split. It is the only kind of tab:
+ * panels stacked onto each other become a Tab panel (see `normalizeTabs`). The tab layouts live in
+ * its config, so the layout tree stays flat and every panel's config stays in `configById`.
  */
 export const TAB_PANEL_TYPE = "Tab";
 
@@ -33,9 +40,9 @@ export function isTabPanel(panelId: string): boolean {
 export function getTabs(config: PanelConfig | undefined): TabConfig[] {
   const tabs: unknown = config?.tabs;
   if (!Array.isArray(tabs)) {
-    return DEFAULT_TAB_PANEL_CONFIG.tabs;
+    return [];
   }
-  const valid = tabs.flatMap((tab: unknown) => {
+  return tabs.flatMap((tab: unknown) => {
     if (typeof tab !== "object" || tab == undefined) {
       return [];
     }
@@ -47,8 +54,6 @@ export function getTabs(config: PanelConfig | undefined): TabConfig[] {
       },
     ];
   });
-  // A Tab panel always has a tab, so panels added to it have somewhere to go.
-  return valid.length > 0 ? valid : DEFAULT_TAB_PANEL_CONFIG.tabs;
 }
 
 /** Index of the shown tab, within range. */
@@ -152,4 +157,114 @@ export function mapLayoutTrees<T extends TreeData>(
     (result, { location }) => setLayoutTree(result, location, fn(getLayoutTree(result, location))),
     data,
   );
+}
+
+/** The tabs of a Tab panel that hold panels, and which of them is shown. */
+function filledTabs(config: PanelConfig | undefined): { tabs: TabConfig[]; active: number } {
+  const all = getTabs(config);
+  const shown = all[getActiveTabIndex(config)];
+  const tabs = all.filter((tab) => getPanelIds(tab.layout).length > 0);
+  return { tabs, active: Math.max(0, shown ? tabs.indexOf(shown) : 0) };
+}
+
+function normalizeTabsOnce<T extends TreeData>(data: T): T {
+  let result = data;
+  for (const { location } of getLayoutTrees(data)) {
+    const tree = getLayoutTree(result, location);
+    if (tree == undefined) {
+      continue;
+    }
+    const configs: Record<string, PanelConfig> = {};
+    const { configById } = result;
+    const mapped = mapGroups(tree, (group) => {
+      if (group.panels.length === 1) {
+        const id = group.panels[0]!;
+        if (!isTabPanel(id)) {
+          return group;
+        }
+        const { tabs, active } = filledTabs(configById[id]);
+        // A Tab panel with one tab left becomes that tab's layout; one with none goes away.
+        if (tabs.length <= 1) {
+          return tabs[0]?.layout;
+        }
+        if (tabs.length !== getTabs(configById[id]).length) {
+          configs[id] = { ...configById[id], tabs, activeTabIdx: active };
+        }
+        return group;
+      }
+      // Panels stacked onto each other become one Tab panel with a tab per panel. Stacked Tab
+      // panels contribute their tabs; the first of them is kept.
+      const tabPanelId = group.panels.find(isTabPanel) ?? getPanelIdForType(TAB_PANEL_TYPE);
+      const shownId = group.active ?? group.panels[0];
+      const tabs: TabConfig[] = [];
+      let activeTabIdx = 0;
+      for (const id of group.panels) {
+        if (isTabPanel(id)) {
+          const merged = filledTabs(configById[id] ?? configs[id]);
+          if (id === shownId) {
+            activeTabIdx = tabs.length + merged.active;
+          }
+          tabs.push(...merged.tabs);
+        } else {
+          if (id === shownId) {
+            activeTabIdx = tabs.length;
+          }
+          tabs.push({ title: "", layout: { panels: [id] } });
+        }
+      }
+      configs[tabPanelId] = { ...configById[tabPanelId], tabs, activeTabIdx };
+      return { panels: [tabPanelId] };
+    });
+    result = { ...result, configById: { ...result.configById, ...configs } };
+    result = setLayoutTree(result, location, mapped);
+  }
+  return _.isEqual(result, data) ? data : result;
+}
+
+/**
+ * Keep tabs in one shape: panels stacked in a group become a Tab panel with a tab per panel, tabs
+ * without panels go away, and a Tab panel with a single tab left is replaced by that tab's layout.
+ * Configs of panels that leave the layout are not removed here.
+ */
+export function normalizeTabs<T extends TreeData>(data: T): T {
+  let result = data;
+  // Each pass can uncover more to do (e.g. a tab whose last panel was a Tab panel); a few suffice.
+  for (let pass = 0; pass < 8; pass++) {
+    const next = normalizeTabsOnce(result);
+    if (next === result) {
+      break;
+    }
+    result = next;
+  }
+  return result;
+}
+
+/** Bring `panelId` to front: its tab in its group, and every tab it is nested in. */
+export function showPanel<T extends TreeData>(data: T, panelId: string): T {
+  let result = data;
+  let id = panelId;
+  // Bounded by the nesting depth; the guard only protects against a malformed layout.
+  for (let depth = 0; depth < 16; depth++) {
+    const found = findLayoutTree(result, id);
+    if (found == undefined) {
+      break;
+    }
+    result = setLayoutTree(result, found.location, setActivePanel(found.tree, id));
+    const { location } = found;
+    if (location.tabPanelId == undefined) {
+      break;
+    }
+    const config = result.configById[location.tabPanelId];
+    if (config?.activeTabIdx !== location.tabIndex) {
+      result = {
+        ...result,
+        configById: {
+          ...result.configById,
+          [location.tabPanelId]: { ...config, activeTabIdx: location.tabIndex },
+        },
+      };
+    }
+    id = location.tabPanelId;
+  }
+  return result;
 }

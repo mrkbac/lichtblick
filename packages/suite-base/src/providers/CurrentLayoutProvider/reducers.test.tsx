@@ -18,6 +18,7 @@ import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/
 import { LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
+import { getTabs } from "@lichtblick/suite-base/util/tabLayout";
 
 import panelsReducer, { defaultPlaybackConfig } from "./reducers";
 
@@ -95,8 +96,15 @@ describe("layout reducers", () => {
           payload: { id: "Audio!x", position: "center", targetPanelId: "Second!b" },
         },
       );
-      expect(tab.layout).toMatchObject({
-        children: [{}, { panels: ["Second!b", "Audio!x"], active: "Audio!x" }],
+      // Stacked panels become a Tab panel with a tab per panel, the added one shown.
+      const tabPanelId = getPanelIds(tab.layout)[1]!;
+      expect(tabPanelId).toMatch(/^Tab!/);
+      expect(tab.configById[tabPanelId]).toEqual({
+        activeTabIdx: 1,
+        tabs: [
+          { title: "", layout: { panels: ["Second!b"] } },
+          { title: "", layout: { panels: ["Audio!x"] } },
+        ],
       });
     });
   });
@@ -127,13 +135,15 @@ describe("layout reducers", () => {
         },
       },
     );
-    expect(panels.layout).toEqual({
-      direction: "row",
-      children: [
-        { panels: ["FourthPanel!abc"] },
-        { panels: ["ThirdPanel!ye6m1m", "FirstPanel!34otwwt", "SecondPanel!2wydzut"] },
+    const tabPanelId = getPanelIds(panels.layout)[1]!;
+    expect(getPanelIds(panels.layout)).toEqual(["FourthPanel!abc", tabPanelId]);
+    expect(panels.configById[tabPanelId]).toMatchObject({
+      activeTabIdx: 0,
+      tabs: [
+        { layout: { panels: ["ThirdPanel!ye6m1m"] } },
+        { layout: { panels: ["FirstPanel!34otwwt"] } },
+        { layout: { panels: ["SecondPanel!2wydzut"] } },
       ],
-      sizes: [50, 50],
     });
   });
 
@@ -230,7 +240,12 @@ describe("layout reducers", () => {
       });
       panels = panelsReducer(panels, {
         type: "CHANGE_PANEL_LAYOUT",
-        payload: { layout: { panels: ["FirstPanel!34otwwt", "ThirdPanel!ye6m1m"] } },
+        payload: {
+          layout: {
+            direction: "row",
+            children: [{ panels: ["FirstPanel!34otwwt"] }, { panels: ["ThirdPanel!ye6m1m"] }],
+          },
+        },
       });
       expect(panels.configById).toEqual({ "FirstPanel!34otwwt": { baz: true } });
     });
@@ -260,12 +275,17 @@ describe("layout reducers", () => {
           tabs: [
             {
               title: "one",
-              layout: { direction: "row", children: [{ panels: ["B!1"] }, { panels: ["C!1"] }] },
+              layout: {
+                direction: "row",
+                children: [{ panels: ["B!1"] }, { panels: ["C!1"] }],
+                sizes: [50, 50],
+              },
             },
-            { title: "two" },
+            { title: "two", layout: { panels: ["E!1"] } },
           ],
         },
         "A!1": { a: 1 },
+        "E!1": { e: 1 },
         "B!1": { b: 1 },
         "C!1": { c: 1 },
       },
@@ -278,13 +298,13 @@ describe("layout reducers", () => {
         type: "CHANGE_PANEL_LAYOUT",
         payload: { layout: { panels: ["Tab!t", "A!1"] } },
       });
-      expect(Object.keys(result.configById).sort()).toEqual(["A!1", "B!1", "C!1", "Tab!t"]);
+      expect(Object.keys(result.configById).sort()).toEqual(["A!1", "B!1", "C!1", "E!1", "Tab!t"]);
     });
 
     it("moves a panel from the root into the shown tab and back", () => {
       const moved = panelsReducer(withTabs, {
         type: "ADD_PANEL",
-        payload: { id: "A!1", position: "center", targetPanelId: "B!1" },
+        payload: { id: "A!1", position: "bottom", targetPanelId: "B!1" },
       });
       expect(moved.layout).toEqual({ panels: ["Tab!t"] });
       expect(getPanelIds(tabLayout(moved, 0))).toEqual(["B!1", "A!1", "C!1"]);
@@ -298,7 +318,7 @@ describe("layout reducers", () => {
       expect(getPanelIds(tabLayout(back, 0))).toEqual(["B!1", "C!1"]);
     });
 
-    it("adds a panel into an empty tab", () => {
+    it("adds a panel into the shown tab", () => {
       const shown = panelsReducer(withTabs, {
         type: "SAVE_PANEL_CONFIGS",
         payload: { configs: [{ id: "Tab!t", config: { activeTabIdx: 1 } }] },
@@ -307,7 +327,7 @@ describe("layout reducers", () => {
         type: "ADD_PANEL",
         payload: { id: "D!1", config: { d: 1 }, tabId: "Tab!t" },
       });
-      expect(tabLayout(result, 1)).toEqual({ panels: ["D!1"] });
+      expect(getPanelIds(tabLayout(result, 1)).sort()).toEqual(["D!1", "E!1"]);
       expect(result.configById["D!1"]).toEqual({ d: 1 });
     });
 
@@ -331,11 +351,17 @@ describe("layout reducers", () => {
     it("closing a Tab panel or one of its tabs drops the configs of the panels in it", () => {
       const closed = panelsReducer(withTabs, { type: "CLOSE_PANEL", payload: { id: "Tab!t" } });
       expect(Object.keys(closed.configById)).toEqual(["A!1"]);
+      // With one tab left, the Tab panel is replaced by that tab's layout.
       const tabClosed = panelsReducer(withTabs, {
         type: "SAVE_PANEL_CONFIGS",
-        payload: { configs: [{ id: "Tab!t", config: { tabs: [{ title: "two" }] } }] },
+        payload: {
+          configs: [
+            { id: "Tab!t", config: { tabs: [{ title: "two", layout: { panels: ["E!1"] } }] } },
+          ],
+        },
       });
-      expect(Object.keys(tabClosed.configById).sort()).toEqual(["A!1", "Tab!t"]);
+      expect(getPanelIds(tabClosed.layout)).toEqual(["E!1", "A!1"]);
+      expect(Object.keys(tabClosed.configById).sort()).toEqual(["A!1", "E!1"]);
     });
 
     it("changes the layout of a tab", () => {
@@ -345,7 +371,7 @@ describe("layout reducers", () => {
       });
       expect(tabLayout(result, 0)).toEqual({ panels: ["B!1"] });
       expect(result.configById["C!1"]).toBeUndefined();
-      expect(result.layout).toBe(withTabs.layout);
+      expect(getPanelIds(result.layout)).toEqual(["Tab!t", "A!1"]);
     });
 
     it("keeps the configs saved for a closed Tab panel that is being reopened", () => {
@@ -353,7 +379,7 @@ describe("layout reducers", () => {
       const restored = panelsReducer(closed, {
         type: "SAVE_PANEL_CONFIGS",
         payload: {
-          configs: ["Tab!t", "B!1", "C!1"].map((id) => ({
+          configs: ["Tab!t", "B!1", "C!1", "E!1"].map((id) => ({
             id,
             config: withTabs.configById[id]!,
             override: true,
@@ -399,8 +425,39 @@ describe("layout reducers", () => {
         type: "ADD_PANEL",
         payload: { id: "D!1", tabId: "Tab!t" },
       });
-      expect(result.layout).toEqual({ panels: ["Tab!t"] });
-      expect(tabLayout(result, 0)).toEqual({ panels: ["D!1"] });
+      // A Tab panel without tabs goes away; the panel lands in the root.
+      expect(result.layout).toEqual({ panels: ["D!1"] });
+    });
+
+    it("stacking onto a panel that fills a tab adds a tab to that Tab panel", () => {
+      const result = panelsReducer(withTabs, {
+        type: "ADD_PANEL",
+        payload: { id: "F!1", position: "center", targetPanelId: "E!1" },
+      });
+      expect(getPanelIds(result.layout)).toEqual(["Tab!t", "A!1"]);
+      expect(result.configById["Tab!t"]).toMatchObject({
+        activeTabIdx: 2,
+        tabs: [{ title: "one" }, { title: "two" }, { layout: { panels: ["F!1"] } }],
+      });
+    });
+
+    it("removes empty tabs", () => {
+      const result = panelsReducer(withTabs, { type: "CLOSE_PANEL", payload: { id: "B!1" } });
+      expect(getTabs(result.configById["Tab!t"]).map((tab) => tab.title)).toEqual(["one", "two"]);
+      const both = panelsReducer(result, { type: "CLOSE_PANEL", payload: { id: "C!1" } });
+      expect(both.layout).toEqual({
+        direction: "row",
+        children: [{ panels: ["E!1"] }, { panels: ["A!1"] }],
+        sizes: [50, 50],
+      });
+    });
+
+    it("ignores a panel dropped onto itself", () => {
+      const result = panelsReducer(withTabs, {
+        type: "ADD_PANEL",
+        payload: { id: "Tab!t", position: "center", targetPanelId: "Tab!t" },
+      });
+      expect(result).toBe(withTabs);
     });
 
     it("won't put a Tab panel into one of its own tabs", () => {

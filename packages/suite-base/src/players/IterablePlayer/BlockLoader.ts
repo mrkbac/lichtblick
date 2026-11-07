@@ -22,7 +22,16 @@ import Log from "@lichtblick/log";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 import { IteratorCursor } from "@lichtblick/suite-base/players/IterablePlayer/IteratorCursor";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
-import { MessageBlock, Progress, TopicSelection } from "@lichtblick/suite-base/players/types";
+import {
+  sameTopicSelection,
+  subscriptionCovers,
+} from "@lichtblick/suite-base/players/subscriptionEquality";
+import {
+  MessageBlock,
+  Progress,
+  SubscribePayload,
+  TopicSelection,
+} from "@lichtblick/suite-base/players/types";
 
 import { IDeserializedIterableSource, MessageIteratorArgs } from "./IIterableSource";
 
@@ -44,6 +53,9 @@ type CacheBlock = MessageBlock & {
   needTopics: Immutable<TopicSelection>;
 };
 
+/** Per topic, the subscription its messages in a block were loaded with. */
+type LoadedSubscriptions = Record<string, Immutable<SubscribePayload>>;
+
 type Blocks = (CacheBlock | undefined)[];
 
 type LoadArgs = {
@@ -56,6 +68,8 @@ type LoadArgs = {
 export class BlockLoader {
   #source: IDeserializedIterableSource;
   #blocks: Blocks = [];
+  /** For each block, what its messages were loaded with (kept out of the blocks we emit). */
+  #loadedSubscriptions: LoadedSubscriptions[] = [];
   #start: Time;
   #end: Time;
   #blockDurationNanos: number;
@@ -90,7 +104,7 @@ export class BlockLoader {
   }
 
   public setTopics(topics: TopicSelection): void {
-    if (_.isEqual(topics, this.#topics)) {
+    if (sameTopicSelection(topics, this.#topics)) {
       return;
     }
 
@@ -99,21 +113,20 @@ export class BlockLoader {
     log.debug(`Preloaded topics: ${Array.from(topics.keys()).join(", ")}`);
 
     // Update all the blocks with any missing topics
-    for (const block of this.#blocks) {
+    for (const [index, block] of this.#blocks.entries()) {
       if (!block) {
         continue;
       }
+      const loaded = this.#loadedSubscriptions[index] ?? {};
 
-      const blockTopics = Object.keys(block.messagesByTopic);
-      const needTopics = new Map(topics);
-      for (const topic of blockTopics) {
-        // We need the topic unless the subscription is identical to the subscription for this
-        // topic at the time blocks were loaded.
-        if (_.isEqual(this.#topics.get(topic), topics.get(topic))) {
-          needTopics.delete(topic);
-        }
-      }
-      block.needTopics = needTopics;
+      // A topic needs loading unless this block already holds what the subscription asks for,
+      // e.g. a panel asking for fewer fields of a topic that is loaded, or a topic that was
+      // unsubscribed and subscribed again (its messages are kept until the cache is full).
+      block.needTopics = new Map(
+        [...topics].filter(
+          ([topic, subscription]) => !subscriptionCovers(loaded[topic], subscription),
+        ),
+      );
     }
 
     this.#topics = topics;
@@ -133,6 +146,7 @@ export class BlockLoader {
         const newMessagesByTopic: Record<string, MessageEvent[]> = {
           ...block.messagesByTopic,
         };
+        const loaded = this.#loadedSubscriptions[i];
         const blockTopics = Object.keys(newMessagesByTopic);
         for (const topic of blockTopics) {
           // remove topics that are no longer requested to be preloaded and topics that will
@@ -143,6 +157,9 @@ export class BlockLoader {
               blockBytesRemoved += msg.sizeInBytes;
             }
             delete newMessagesByTopic[topic];
+            if (loaded) {
+              delete loaded[topic];
+            }
           }
         }
         if (blockBytesRemoved > 0) {
@@ -279,7 +296,7 @@ export class BlockLoader {
         // While we were waiting for cursor data the topics we need to be loading may have changed.
         // Check whether the topics are changed and abort this loading instance because the results
         // may no longer be valid for the data we should be loading.
-        if (!_.isEqual(topics, this.#topics)) {
+        if (!sameTopicSelection(topics, this.#topics)) {
           return;
         }
 
@@ -374,6 +391,11 @@ export class BlockLoader {
             ...messagesByTopic,
           },
           sizeInBytes: newBlockSizeInBytes,
+        };
+
+        this.#loadedSubscriptions[currentBlockId] = {
+          ...this.#loadedSubscriptions[currentBlockId],
+          ...Object.fromEntries(topicsToFetch),
         };
 
         // Subtract the size of overridden messages from the the total size of all blocks.

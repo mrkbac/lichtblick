@@ -309,7 +309,8 @@ function updateSubscriberAction(
   // the cached message is the only way a panel that subscribes later can get it. This matters on a
   // tab switch: the old tab's panels unsubscribe before the new tab's panels subscribe.
   const canSeekBackfill = isRecordingSource(prevState.public.playerState.capabilities);
-  if (canSeekBackfill) {
+  // A paused panel can remount without the player emitting another frame.
+  if (canSeekBackfill && prevState.public.playerState.activeData?.isPlaying !== false) {
     for (const topic of prevTopics) {
       if (!subscriberIdsByTopic.has(topic)) {
         lastMessageEventByTopic.delete(topic);
@@ -374,6 +375,24 @@ function updatePlayerStateAction(
   const subscriberIdsByTopic = prevState.subscriberIdsByTopic;
 
   const lastMessageEventByTopic = prevState.lastMessageEventByTopic;
+
+  const previousData = prevState.public.playerState.activeData;
+  const nextData = action.playerState.activeData;
+  // Paused cached frames are valid only until playback resumes or the position changes.
+  if (
+    previousData?.isPlaying === false &&
+    nextData &&
+    isRecordingSource(action.playerState.capabilities) &&
+    (nextData.isPlaying ||
+      nextData.lastSeekTime !== previousData.lastSeekTime ||
+      compare(nextData.currentTime, previousData.currentTime) !== 0)
+  ) {
+    for (const topic of lastMessageEventByTopic.keys()) {
+      if (!subscriberIdsByTopic.has(topic)) {
+        lastMessageEventByTopic.delete(topic);
+      }
+    }
+  }
 
   // Put messages into per-subscriber queues
   if (messages && messages !== prevState.public.playerState.activeData?.messages) {

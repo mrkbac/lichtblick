@@ -3,6 +3,8 @@
 
 import { expect, test } from "@playwright/test";
 
+import { loadFiles } from "../../fixtures/load-files";
+
 test.beforeEach(async ({ page }) => {
   // Given
   await page.goto("/");
@@ -94,3 +96,39 @@ test("keeps ordinary pop-outs available when Document PiP is unsupported", {
   await expect(page.getByText("Open Picture-in-Picture monitor", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Open in new window", { exact: true })).toBeVisible();
 });
+
+for (const action of ["Open in new window", "Open Picture-in-Picture monitor"] as const) {
+  test(`keeps a paused recording image when using ${action}`, { tag: "@regression" }, async ({
+    page,
+  }) => {
+    // Given an image already visible in a paused recording
+    test.skip(
+      action === "Open Picture-in-Picture monitor" &&
+        !(await page.evaluate(() => "documentPictureInPicture" in window)),
+      "Document PiP unavailable",
+    );
+    await loadFiles({ mainWindow: page, filenames: "custom-camera-model.mcap" });
+    const image = page
+      .getByTestId(/^panel-mouseenter-container/)
+      .filter({ has: page.getByText("/image/compressed", { exact: true }) })
+      .first();
+    await expect(image.locator("canvas")).toBeVisible();
+    await expect(image.getByText("Waiting for image messages…", { exact: true })).toHaveCount(0);
+    await expect(page.getByTestId("play-button")).toHaveAttribute("title", "Play");
+    // When its renderer moves to another window without playback advancing
+    await image.getByTestId("panel-menu").click();
+    const opened = page.waitForEvent("popup");
+    await page.getByText(action, { exact: true }).click();
+    const monitor = await opened;
+    // Then the paused image is available there
+    await expect(monitor.getByText("/image/compressed", { exact: true })).toBeVisible();
+    await expect(monitor.locator("canvas")).toBeVisible();
+    await expect(monitor.getByText("Waiting for image messages…", { exact: true })).toHaveCount(0);
+    // When that window closes, the same paused image returns to the workspace
+    await monitor.close();
+    // Then no seek or playback is needed to recover it
+    await expect(image.locator("canvas")).toBeVisible();
+    await expect(image.getByText("Waiting for image messages…", { exact: true })).toHaveCount(0);
+    await expect(page.getByTestId("play-button")).toHaveAttribute("title", "Play");
+  });
+}

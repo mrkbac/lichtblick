@@ -7,6 +7,7 @@ import {
 } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
 import { LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import { findGroup } from "@lichtblick/suite-base/util/layoutTree";
+import { findLayoutTree, getTabs } from "@lichtblick/suite-base/util/tabLayout";
 
 import { COALESCE_MS, HISTORY_LIMIT, LayoutHistory, reopenPlacements } from "./layoutHistory";
 
@@ -206,7 +207,12 @@ describe("LayoutHistory", () => {
         1000,
       )!;
       const reopened = h.reopenClosedPanel(moved, 2000)!;
-      expect(findGroup(reopened.layout, "Plot!a")?.panels).toEqual(["Map!d", "Plot!a"]);
+      // Stacked onto Map!d, the two become a Tab panel.
+      const tabPanelId = findLayoutTree(reopened, "Plot!a")!.location.tabPanelId!;
+      expect(getTabs(reopened.configById[tabPanelId]).map((tab) => tab.layout)).toEqual([
+        { panels: ["Map!d"] },
+        { panels: ["Plot!a"] },
+      ]);
     });
 
     it("goes to the right edge instead of tabbing into an unrelated group", () => {

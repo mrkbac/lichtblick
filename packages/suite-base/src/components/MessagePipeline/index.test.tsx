@@ -408,22 +408,25 @@ describe("MessagePipelineProvider/useMessagePipeline", () => {
       schemaName: "tf2_msgs/TFMessage",
       sizeInBytes: 0,
     };
-    async function emitLatched(player: FakePlayer) {
-      await player.emit({
-        activeData: {
-          messages: [latched],
-          currentTime: { sec: 0, nsec: 0 },
-          startTime: { sec: 0, nsec: 0 },
-          endTime: { sec: 1, nsec: 0 },
-          isPlaying: true,
-          speed: 1,
-          lastSeekTime: 1,
-          topics: [{ name: "/tf_static", schemaName: "tf2_msgs/TFMessage" }],
-          topicStats: new Map<string, TopicStats>([["/tf_static", { numMessages: 1 }]]),
-          datatypes: new Map(Object.entries({ "tf2_msgs/TFMessage": { definitions: [] } })),
-          totalBytesReceived: 0,
-        },
-      });
+    async function emitLatched(
+      player: FakePlayer,
+      { isPlaying = true }: { isPlaying?: boolean } = {},
+    ) {
+      const activeData = {
+        messages: [latched],
+        currentTime: { sec: 0, nsec: 0 },
+        startTime: { sec: 0, nsec: 0 },
+        endTime: { sec: 1, nsec: 0 },
+        isPlaying,
+        speed: 1,
+        lastSeekTime: 1,
+        topics: [{ name: "/tf_static", schemaName: "tf2_msgs/TFMessage" }],
+        topicStats: new Map<string, TopicStats>([["/tf_static", { numMessages: 1 }]]),
+        datatypes: new Map(Object.entries({ "tf2_msgs/TFMessage": { definitions: [] } })),
+        totalBytesReceived: 0,
+      };
+      await player.emit({ activeData });
+      return activeData;
     }
 
     // Switching tabs unmounts the panels of the old tab before the new tab's panels subscribe.
@@ -450,6 +453,49 @@ describe("MessagePipelineProvider/useMessagePipeline", () => {
       // Then the new panel gets the cached message
       expect(result.current.messageEventsBySubscriberId.get("tab-b-panel")).toEqual([latched]);
     });
+
+    it.each(["remount", "resume", "advance", "seek"] as const)(
+      "keeps a paused recording frame only while its position stays unchanged (%s)",
+      async (transition) => {
+        // Given a paused recording whose only panel has received a frame
+        const player = new FakePlayer();
+        player.setCapabilities([PLAYER_CAPABILITIES.playbackControl]);
+        const { Hook, Wrapper } = makeTestHook({ player });
+        const { result } = renderHook(Hook, { wrapper: Wrapper });
+        let previous!: Awaited<ReturnType<typeof emitLatched>>;
+        await doubleAct(async () => {
+          previous = await emitLatched(player, { isPlaying: false });
+        });
+        act(() => {
+          result.current.setSubscriptions("panel", [{ topic: "/tf_static" }]);
+        });
+        // When its renderer unmounts, and playback optionally moves before it remounts
+        act(() => {
+          result.current.setSubscriptions("panel", []);
+        });
+        if (transition !== "remount") {
+          await doubleAct(async () => {
+            await player.emit({
+              activeData: {
+                ...previous,
+                messages: [],
+                isPlaying: transition === "resume",
+                currentTime: transition === "advance" ? { sec: 1, nsec: 0 } : previous.currentTime,
+                lastSeekTime:
+                  transition === "seek" ? previous.lastSeekTime + 1 : previous.lastSeekTime,
+              },
+            });
+          });
+        }
+        act(() => {
+          result.current.setSubscriptions("remounted-panel", [{ topic: "/tf_static" }]);
+        });
+        // Then only an unchanged paused position can replay the retained frame
+        expect(result.current.messageEventsBySubscriberId.get("remounted-panel")).toEqual(
+          transition === "remount" ? [latched] : undefined,
+        );
+      },
+    );
 
     // With playback the new subscriber gets the message at the current time from seek-backfill,
     // so a stale cached message must not be injected.

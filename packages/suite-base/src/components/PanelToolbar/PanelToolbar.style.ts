@@ -24,6 +24,16 @@ export const useStyles = makeStyles()((theme) => ({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     top: "auto !important" as any,
   },
+  content: {
+    display: "flex",
+    alignItems: "center",
+    alignSelf: "stretch",
+    flex: "1 1 auto",
+    minWidth: 0,
+    overflow: "hidden",
+    // Like the toolbar: content sits next to the controls, but when it overflows its start stays.
+    justifyContent: "safe flex-end",
+  },
   grip: {
     display: "flex",
     alignItems: "center",

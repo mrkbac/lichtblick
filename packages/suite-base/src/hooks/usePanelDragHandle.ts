@@ -5,6 +5,7 @@ import { LocalSelectionTransfer, PanelTransfer } from "dockview-react";
 import { useCallback, useContext } from "react";
 
 import { DockPanelContext } from "@lichtblick/suite-base/components/DockPanelContext";
+import { LayoutTabContext } from "@lichtblick/suite-base/components/LayoutTabContext";
 
 /**
  * Ref callback that makes an element (such as a panel toolbar) a drag handle for its panel. The
@@ -15,6 +16,8 @@ export function usePanelDragHandle(
   onDragStart?: () => void,
 ): ((element: HTMLElement | null) => (() => void) | undefined) | undefined {
   const dock = useContext(DockPanelContext);
+  // A layout in a tab of a Tab panel: its panels can always move out of it.
+  const isInTab = useContext(LayoutTabContext).length > 0;
 
   const ref = useCallback(
     (element: HTMLElement | null) => {
@@ -25,8 +28,8 @@ export function usePanelDragHandle(
       const transfer = LocalSelectionTransfer.getInstance<PanelTransfer>();
 
       const handleDragStart = (event: DragEvent) => {
-        // The only panel of a layout has nowhere to go.
-        if (containerApi.totalPanels <= 1) {
+        // The only panel of the root layout has nowhere to go.
+        if (!isInTab && containerApi.totalPanels <= 1) {
           event.preventDefault();
           return;
         }
@@ -54,7 +57,7 @@ export function usePanelDragHandle(
         element.removeEventListener("dragend", handleDragEnd);
       };
     },
-    [dock, onDragStart],
+    [dock, isInTab, onDragStart],
   );
 
   return dock == undefined ? undefined : ref;

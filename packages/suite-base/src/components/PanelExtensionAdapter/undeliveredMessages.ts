@@ -4,7 +4,7 @@
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 
 /**
- * Messages a panel requested on a live source but has not received in a rendered frame yet.
+ * Messages a panel requested but has not received in a rendered frame yet.
  *
  * When a panel subscribes to a topic, the pipeline injects the topic's last message (e.g. a latched
  * /tf_static that a live source never sends again) into a single frame. That frame can miss the
@@ -39,6 +39,11 @@ export class UndeliveredMessages {
   public reset(): void {
     this.#requestedTopics = new Set();
     this.#deliveredTopics.clear();
+    this.clearPending();
+  }
+
+  /** Discard pending frames from before a seek, keeping the current subscriptions. */
+  public clearPending(): void {
     this.#heldByTopic.clear();
     this.#lastBuilt = { pipelineFrame: undefined, frame: undefined };
   }

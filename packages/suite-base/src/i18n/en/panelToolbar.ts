@@ -18,7 +18,6 @@ export const panelToolbar = {
   returnToWorkspace: "Return to workspace",
   showPanelWindow: "Show panel window",
   panelWindowFailed: "Could not open the panel window. Allow pop-ups for Lichtblick and try again.",
-  newTab: "+ New tab",
   removePanel: "Remove panel",
   splitDown: "Split down",
   splitRight: "Split right",
