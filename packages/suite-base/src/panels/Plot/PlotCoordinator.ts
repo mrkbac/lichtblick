@@ -11,6 +11,7 @@ import * as _ from "lodash-es";
 
 import { debouncePromise } from "@lichtblick/den/async";
 import { filterMap } from "@lichtblick/den/collection";
+import Logger from "@lichtblick/log";
 import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
 import { Immutable, Time } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
@@ -53,6 +54,8 @@ import {
 } from "./utils/config";
 import { getSeriesTimestamp } from "./utils/seriesTimestamp";
 import { pathToSubscribePayload } from "./utils/subscription";
+
+const log = Logger.getLogger(__filename);
 
 const replaceUndefinedWithEmptyDataset = (dataset: Dataset | undefined) => dataset ?? { data: [] };
 
@@ -104,6 +107,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   private queueDispatchRender = debouncePromise(this.dispatchRender.bind(this));
   private queueDispatchDownsample = debouncePromise(this.dispatchDownsample.bind(this));
   private queueDerivedValues = debouncePromise(this.dispatchDerivedValues.bind(this));
+  /** Bumped on seeks and series changes so legend lookups started before them are dropped */
+  private derivedGeneration = 0;
   private queueDatasetsRender = debouncePromise(this.dispatchDatasetsRender.bind(this));
   private destroyed = false;
 
@@ -192,6 +197,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     }
 
     if (lastSeekTime !== this.lastSeekTime) {
+      this.derivedGeneration += 1;
       this.currentValuesByConfigIndex = [];
       this.currentValueTimesByConfigIndex = [];
       this.lastSeekTime = lastSeekTime;
@@ -222,6 +228,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     this.emit("currentValuesChanged", this.currentValuesByConfigIndex);
 
     const handlePlayerStateResult = this.datasetsBuilder.handlePlayerState(state);
+    // after the builder has this frame's data
+    this.queueDerivedValues();
 
     if (!handlePlayerStateResult) {
       this.datasetRange = undefined;
@@ -241,7 +249,6 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     if (handlePlayerStateResult.datasetsChanged) {
       this.queueDispatchDownsample();
     }
-    this.queueDerivedValues();
   }
 
   /** The legend value of a series computed across samples is its plotted value, not the raw one */
@@ -257,17 +264,23 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     if (this.isDestroyed() || !getDerivedValuesAt || x == undefined || derived.length === 0) {
       return;
     }
-    const values = await getDerivedValuesAt(x);
-    if (this.isDestroyed()) {
+    const generation = this.derivedGeneration;
+    let values: readonly unknown[];
+    try {
+      values = await getDerivedValuesAt(x);
+    } catch (error: unknown) {
+      log.error("Failed to read plotted legend values", error);
+      return;
+    }
+    // A seek or series change while waiting makes the result stale; a newer lookup is queued
+    if (this.isDestroyed() || generation !== this.derivedGeneration) {
       return;
     }
     let changed = false;
     for (const { configIndex } of derived) {
-      // the series list may have changed while waiting
-      if (
-        this.series[configIndex] == undefined ||
-        !this.showsDerivedValue(this.series[configIndex])
-      ) {
+      // series are compacted (reference lines and invalid paths are skipped): find by index
+      const current = this.series.find((item) => item.configIndex === configIndex);
+      if (current == undefined || !this.showsDerivedValue(current)) {
         continue;
       }
       if (this.currentValuesByConfigIndex[configIndex] !== values[configIndex]) {
@@ -543,6 +556,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     // Dispatch since we might have series changes
     this.datasetsBuilder.setSeries(this.series);
     this.queueDispatchDownsample();
+    this.derivedGeneration += 1;
     this.queueDerivedValues();
   }
 

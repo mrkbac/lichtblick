@@ -471,8 +471,8 @@ describe("PlotCoordinator", () => {
       (simpleGetMessagePathDataItems as Mock).mockReturnValue([10]);
       const getDerivedValuesAt = vi.fn().mockResolvedValue([undefined, 7.5]);
       datasetsBuilder.getDerivedValuesAt = getDerivedValuesAt;
-      const listener = vi.fn();
-      plotCoordinator.on("currentValuesChanged", listener);
+      const emitted: unknown[][] = [];
+      plotCoordinator.on("currentValuesChanged", (values) => emitted.push(values.slice()));
 
       // When a frame arrives
       plotCoordinator.handlePlayerState(state);
@@ -481,10 +481,47 @@ describe("PlotCoordinator", () => {
       // Then the raw series shows the message value and the averaged one its plotted value
       expect(getDerivedValuesAt).toHaveBeenCalledWith(4);
       expect(plotCoordinator["currentValuesByConfigIndex"]).toEqual([10, 7.5]);
-      // and the legend never showed the raw value for the averaged series
-      for (const [values] of listener.mock.calls as [unknown[]][]) {
-        expect(values[1]).not.toBe(10);
-      }
+      // and the legend got the averaged value, never the raw one for that series
+      expect(emitted.at(-1)).toEqual([10, 7.5]);
+      expect(emitted.every((values) => values[1] !== 10)).toBe(true);
+    });
+
+    it("drops a legend lookup that finishes after a seek, and survives a failed one", async () => {
+      // Given a moving-average series whose lookup is still running
+      const activeData = PlayerBuilder.activeData({
+        startTime: RosTimeBuilder.time({ sec: 100, nsec: 0 }),
+        currentTime: RosTimeBuilder.time({ sec: 104, nsec: 0 }),
+        lastSeekTime: 1,
+      });
+      plotCoordinator["isTimeseriesPlot"] = true;
+      plotCoordinator["series"] = [
+        {
+          parsed: { topicName: "/a" },
+          configIndex: 0,
+          timestampMethod: "receiveTime",
+          smoothing: 4,
+        },
+      ] as SeriesItem[];
+      let finish: (values: unknown[]) => void = () => {};
+      const getDerivedValuesAt = vi
+        .fn()
+        .mockReturnValueOnce(new Promise((resolve) => (finish = resolve)))
+        .mockRejectedValueOnce(new Error("lookup failed"));
+      datasetsBuilder.getDerivedValuesAt = getDerivedValuesAt;
+      plotCoordinator.handlePlayerState(PlayerBuilder.playerState({ activeData }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(getDerivedValuesAt).toHaveBeenCalledTimes(1);
+
+      // When the user seeks before it finishes
+      plotCoordinator.handlePlayerState(
+        PlayerBuilder.playerState({ activeData: { ...activeData, lastSeekTime: 2 } }),
+      );
+      finish([7.5]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // Then the old value is not shown, and the failing follow-up lookup does not throw
+      expect(getDerivedValuesAt).toHaveBeenCalledTimes(2);
+      expect(plotCoordinator["currentValuesByConfigIndex"]).toEqual([]);
     });
 
     it("should not update currentValuesByConfigIndex", () => {
