@@ -103,6 +103,16 @@ const useStyles = makeStyles()((theme) => ({
     minHeight: 0,
     display: "flex",
   },
+  tabContent: {
+    position: "absolute",
+    inset: 0,
+    display: "flex",
+  },
+  // Hidden tabs keep their size, so they don't need laying out again when shown.
+  hiddenTab: {
+    visibility: "hidden",
+    pointerEvents: "none",
+  },
 }));
 
 type TabButtonProps = {
@@ -204,6 +214,23 @@ function TabButton(props: TabButtonProps): React.JSX.Element {
   );
 }
 
+/** The layout in one tab; its changes are saved to that tab. */
+function TabLayout(props: {
+  tabPanelId: string;
+  index: number;
+  layout: LayoutNode | undefined;
+}): React.JSX.Element {
+  const { tabPanelId, index, layout } = props;
+  const { changePanelLayout } = useCurrentLayoutActions();
+  const onChange = useCallback(
+    (newLayout: LayoutNode | undefined) => {
+      changePanelLayout({ layout: newLayout, tab: { panelId: tabPanelId, index } });
+    },
+    [changePanelLayout, index, tabPanelId],
+  );
+  return <UnconnectedPanelLayout layout={layout} onChange={onChange} tabId={tabPanelId} />;
+}
+
 type Props = { config: TabPanelConfig; saveConfig: SaveConfig<TabPanelConfig> };
 
 /**
@@ -211,10 +238,10 @@ type Props = { config: TabPanelConfig; saveConfig: SaveConfig<TabPanelConfig> };
  * by stacking panels onto each other, and replaced by its last tab when only one is left.
  */
 function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
-  const { classes } = useStyles();
+  const { classes, cx } = useStyles();
   const { t } = useTranslation("panelToolbar");
   const { id: panelId } = usePanelContext();
-  const { addPanel, changePanelLayout } = useCurrentLayoutActions();
+  const { addPanel } = useCurrentLayoutActions();
   const panelCatalog = usePanelCatalog();
   const [catalogAnchor, setCatalogAnchor] = useState<HTMLElement | undefined>(undefined);
   // Stable while the tabs don't change, so the title selector below stays stable too.
@@ -242,7 +269,6 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
   );
   const contentTitles = useCurrentLayoutSelector(contentTitlesSelector).split("\n");
   const activeIdx = getActiveTabIndex(config);
-  const layout = tabs[activeIdx]?.layout;
   const contentId = `${panelId}-tabpanel`;
 
   const select = useCallback(
@@ -312,13 +338,6 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
     });
   };
 
-  const onChange = useCallback(
-    (newLayout: LayoutNode | undefined) => {
-      changePanelLayout({ layout: newLayout, tab: { panelId, index: activeIdx } });
-    },
-    [activeIdx, changePanelLayout, panelId],
-  );
-
   return (
     <div className={classes.root}>
       <PanelToolbar
@@ -382,13 +401,16 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
         <PanelCatalog mode="list" isMenu onPanelSelect={addNewTab} />
       </Popover>
       <div className={classes.content} role="tabpanel" id={contentId}>
-        {/* A fresh layout per tab, so a change can't land in the tab switched to meanwhile. */}
-        <UnconnectedPanelLayout
-          key={activeIdx}
-          layout={layout}
-          onChange={onChange}
-          tabId={panelId}
-        />
+        {/* Every tab stays mounted, so switching tabs is instant and keeps panels' data. */}
+        {tabs.map((tab, index) => (
+          <div
+            // Tabs have no ids; the index is their identity.
+            key={index}
+            className={cx(classes.tabContent, { [classes.hiddenTab]: index !== activeIdx })}
+          >
+            <TabLayout tabPanelId={panelId} index={index} layout={tab.layout} />
+          </div>
+        ))}
       </div>
     </div>
   );
