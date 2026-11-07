@@ -65,7 +65,7 @@ const useStyles = makeStyles()((theme) => ({
     userSelect: "none",
 
     "&:hover": { color: theme.palette.text.primary },
-    "&:hover .close": { visibility: "visible" },
+    "&:hover .close, &:focus-within .close": { visibility: "visible" },
   },
   active: {
     color: theme.palette.text.primary,
@@ -140,6 +140,10 @@ function TabButton(props: TabButtonProps): React.JSX.Element {
       className={cx(classes.tab, { [classes.active]: isActive, [classes.dropOver]: isOver })}
       onClick={onSelect}
       onKeyDown={(event) => {
+        // Keys on the close button are the button's own.
+        if (event.target !== event.currentTarget) {
+          return;
+        }
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
           onSelect();
