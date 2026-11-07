@@ -171,6 +171,25 @@ export class LiveHistoryBuffer {
   }
 
   /**
+   * Messages received after `last` (a message from this history) up to `upTo`, in order. Messages
+   * received at the same time as `last` but added after it are included.
+   */
+  public rangeAfter(last: MessageEvent, upTo: Time): MessageEvent[] {
+    let start = this.#upperBound(last.receiveTime);
+    for (let i = start - 1; i >= this.#head; i--) {
+      const msg = this.#messages[i]!;
+      if (msg === last) {
+        break;
+      }
+      if (compare(msg.receiveTime, last.receiveTime) !== 0) {
+        break;
+      }
+      start = i;
+    }
+    return this.#messages.slice(start, this.#upperBound(upTo));
+  }
+
+  /**
    * What a panel needs to show the state at `at`: for each topic the last message at or before
    * `at` (for transform topics, the last one per child frame), falling back to the seeds.
    * Returned in receive-time order.

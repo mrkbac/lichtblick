@@ -176,6 +176,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #unsubscribeHistorySettings: () => void;
   /** Playback position while reviewing history; undefined while live. */
   #historyCursor?: Time;
+  /** Newest message handed to panels, to catch them up after a pause. */
+  #lastDelivered?: MessageEvent;
   #historyTimer?: ReturnType<typeof setTimeout>;
   #historyTickMs = 0;
   /** Wall time of the last server time message (or of connecting), to detect a stale clock. */
@@ -1039,6 +1041,14 @@ export default class FoxgloveWebSocketPlayer implements Player {
     const messages = this.#parsedMessages;
     this.#parsedMessages = [];
     this.#parsedMessagesBytes = 0;
+    const newest = messages.at(-1);
+    if (
+      newest != undefined &&
+      (this.#lastDelivered == undefined ||
+        compare(newest.receiveTime, this.#lastDelivered.receiveTime) >= 0)
+    ) {
+      this.#lastDelivered = newest;
+    }
     // Hand out a new Map only when stats changed, so consumers can compare by reference
     if (this.#topicsStatsChanged) {
       this.#topicsStatsChanged = false;
@@ -1396,9 +1406,27 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#numTimeSeeks++;
     this.#parsedMessages = [];
     this.#parsedMessagesBytes = 0;
-    this.#queueMessages(
-      this.#history.backfill(target, new Set(this.#resolvedSubscriptionsByTopic.keys())),
-    );
+    const topics = new Set(this.#resolvedSubscriptionsByTopic.keys());
+    const backfill = this.#history.backfill(target, topics);
+    // Seeking past what panels have seen (e.g. Live after a pause): also hand them the messages
+    // that arrived meanwhile, so accumulating panels (plots, logs) have no gap.
+    const delivered = this.#lastDelivered;
+    const missed =
+      delivered != undefined && compare(delivered.receiveTime, target) <= 0
+        ? this.#history.rangeAfter(delivered, target).filter((msg) => topics.has(msg.topic))
+        : [];
+    if (missed.length === 0) {
+      this.#queueMessages(backfill);
+    } else {
+      // Backfill-only messages were received before every missed one, so with a stable sort
+      // messages at the same time keep their arrival order.
+      const missedSet = new Set(missed);
+      this.#queueMessages(
+        [...backfill.filter((msg) => !missedSet.has(msg)), ...missed].sort((a, b) =>
+          compare(a.receiveTime, b.receiveTime),
+        ),
+      );
+    }
     this.#historyCursor = target;
     if (this.#isPlaying) {
       this.#scheduleHistoryTick();
@@ -1479,6 +1507,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#history.clear();
     this.#stopHistoryTick();
     this.#historyCursor = undefined;
+    this.#lastDelivered = undefined;
   }
 
   #setAlert(id: string, alert: PlayerAlert | undefined): void {
