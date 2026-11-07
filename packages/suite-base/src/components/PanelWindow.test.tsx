@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { createDockview } from "dockview-react";
 import { createContext, useContext, useEffect } from "react";
 
+import { DockPanelContext } from "./DockPanelContext";
 import { PanelWindow, PanelWindowContext } from "./PanelWindow";
 
 const SharedContext = createContext("shared player");
@@ -65,6 +67,7 @@ afterEach(() => {
 });
 
 it("renders one panel in the child, shares context, and restores it on close", async () => {
+  // Given
   const { child, close } = childWindow();
   vi.spyOn(window, "open").mockReturnValue(child);
   render(
@@ -74,7 +77,9 @@ it("renders one panel in the child, shares context, and restores it on close", a
       </PanelWindow>
     </SharedContext.Provider>,
   );
+  // When
   fireEvent.click(screen.getByText("Pop out"));
+  // Then
   await waitFor(() => {
     expect(child.document.querySelector('[data-testid="content"]')).not.toBeNull();
   });
@@ -93,6 +98,7 @@ it("renders one panel in the child, shares context, and restores it on close", a
 });
 
 it("hides PiP without API support and reports a blocked popup without losing the panel", async () => {
+  // Given
   vi.spyOn(window, "open").mockReturnValue(null);
   render(
     <PanelWindow title="Monitor">
@@ -100,7 +106,9 @@ it("hides PiP without API support and reports a blocked popup without losing the
     </PanelWindow>,
   );
   expect(screen.queryByText("PiP")).toBeNull();
+  // When
   fireEvent.click(screen.getByText("Pop out"));
+  // Then
   await waitFor(() => {
     expect(screen.getByRole("alert")).toBeDefined();
   });
@@ -109,6 +117,7 @@ it("hides PiP without API support and reports a blocked popup without losing the
 });
 
 it("uses the PiP API and closes the monitor when the panel is removed", async () => {
+  // Given
   const { child, close } = childWindow();
   const requestWindow = vi.fn().mockResolvedValue(child);
   vi.stubGlobal("documentPictureInPicture", { requestWindow });
@@ -117,7 +126,9 @@ it("uses the PiP API and closes the monitor when the panel is removed", async ()
       <Content />
     </PanelWindow>,
   );
+  // When
   fireEvent.click(screen.getByText("PiP"));
+  // Then
   await waitFor(() => {
     expect(child.document.querySelector('[data-testid="content"]')).not.toBeNull();
   });
@@ -127,6 +138,7 @@ it("uses the PiP API and closes the monitor when the panel is removed", async ()
 });
 
 it("closes a PiP request that resolves after its panel was removed", async () => {
+  // Given
   const { child, close } = childWindow();
   let resolve!: (target: Window) => void;
   vi.stubGlobal("documentPictureInPicture", {
@@ -140,6 +152,7 @@ it("closes a PiP request that resolves after its panel was removed", async () =>
       <Content />
     </PanelWindow>,
   );
+  // When
   fireEvent.click(screen.getByText("PiP"));
   view.unmount();
   await act(async () => {
@@ -149,34 +162,42 @@ it("closes a PiP request that resolves after its panel was removed", async () =>
 });
 
 it("forwards app shortcuts while preserving text input in the monitor", async () => {
+  // Given
   const { child } = childWindow();
   vi.spyOn(window, "open").mockReturnValue(child);
   const key = vi.fn((event: KeyboardEvent) => {
     event.preventDefault();
   });
-  document.addEventListener("keydown", key);
-  const view = render(
-    <PanelWindow title="Monitor">
-      <Content />
-    </PanelWindow>,
-  );
-  fireEvent.click(screen.getByText("Pop out"));
-  await waitFor(() => {
-    expect(child.document.querySelector('[data-testid="content"]')).not.toBeNull();
-  });
-  const event = new KeyboardEvent("keydown", { key: " ", cancelable: true });
-  child.document.dispatchEvent(event);
-  expect(key).toHaveBeenCalledOnce();
-  expect(event.defaultPrevented).toBe(true);
-  const input = child.document.createElement("input");
-  child.document.body.appendChild(input);
-  input.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
-  expect(key).toHaveBeenCalledOnce();
-  document.removeEventListener("keydown", key);
-  view.unmount();
+  const controller = new AbortController();
+  document.addEventListener("keydown", key, { signal: controller.signal });
+  try {
+    const view = render(
+      <PanelWindow title="Monitor">
+        <Content />
+      </PanelWindow>,
+    );
+    // When
+    fireEvent.click(screen.getByText("Pop out"));
+    // Then
+    await waitFor(() => {
+      expect(child.document.querySelector('[data-testid="content"]')).not.toBeNull();
+    });
+    const event = new KeyboardEvent("keydown", { key: " ", cancelable: true });
+    child.document.dispatchEvent(event);
+    expect(key).toHaveBeenCalledOnce();
+    expect(event.defaultPrevented).toBe(true);
+    const input = child.document.createElement("input");
+    child.document.body.appendChild(input);
+    input.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true }));
+    expect(key).toHaveBeenCalledOnce();
+    view.unmount();
+  } finally {
+    controller.abort();
+  }
 });
 
 it("keeps several nested views in one monitor", async () => {
+  // Given
   const { child } = childWindow();
   const open = vi.spyOn(window, "open").mockReturnValue(child);
   render(
@@ -187,10 +208,69 @@ it("keeps several nested views in one monitor", async () => {
       </PanelWindow>
     </PanelWindow>,
   );
+  // When
   fireEvent.click(screen.getByText("Pop out"));
+  // Then
   await waitFor(() => {
     expect(child.document.querySelector('[data-testid="nested"]')).not.toBeNull();
   });
   expect(within(child.document.body).getByText("Nested view")).toBeDefined();
   expect(open).toHaveBeenCalledOnce();
 });
+
+it.each([false, true])(
+  "releases a popped-out panel's group and restores its tabs (stacked: %s)",
+  async (stacked) => {
+    // Given
+    const { child } = childWindow();
+    vi.spyOn(window, "open").mockReturnValue(child);
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const layout = createDockview(element, {
+      createComponent: () => ({ element: document.createElement("div"), init: () => {} }),
+      defaultRenderer: "always",
+    });
+    const panel = layout.addPanel({ id: "monitor", component: "content" });
+    const sibling = layout.addPanel({
+      id: "sibling",
+      component: "content",
+      position: { referencePanel: "monitor", direction: stacked ? "within" : "right" },
+    });
+    layout.layout(1000, 700);
+    const originalGroup = panel.group;
+    const view = render(
+      <DockPanelContext.Provider value={{ api: panel.api, containerApi: layout }}>
+        <PanelWindow title="Monitor">
+          <Content />
+        </PanelWindow>
+      </DockPanelContext.Provider>,
+    );
+    try {
+      // When
+      fireEvent.click(screen.getByText("Pop out"));
+      // Then
+      await waitFor(() => {
+        expect(panel.group.api.isVisible).toBe(false);
+      });
+      expect(sibling.group.api.isVisible).toBe(true);
+      expect(sibling.group.width).toBe(1000);
+      expect(layout.panels.map((item) => item.id).sort()).toEqual(["monitor", "sibling"]);
+      expect(screen.queryByText("Show panel window")).toBeNull();
+      // When the window closes, the original tab stack and layout return.
+      fireEvent.click(within(child.document.body).getByText("Return"));
+      // Then
+      await waitFor(() => {
+        expect(panel.group).toBe(originalGroup);
+      });
+      expect(panel.group.api.isVisible).toBe(true);
+      expect(sibling.group.api.isVisible).toBe(true);
+      expect(originalGroup.panels.map((item) => item.id)).toEqual(
+        stacked ? ["monitor", "sibling"] : ["monitor"],
+      );
+    } finally {
+      view.unmount();
+      layout.dispose();
+      element.remove();
+    }
+  },
+);

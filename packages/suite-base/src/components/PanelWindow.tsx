@@ -10,6 +10,7 @@ import {
   ReactNode,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -52,6 +53,7 @@ function copyStyles(source: Document, target: Document) {
   }
 }
 
+/** Give portaled controls their own caches so new styles stay in the panel document. */
 function PanelWindowStyles({ target, children }: PropsWithChildren<{ target: Window }>) {
   const caches = useMemo(
     () => ({
@@ -73,6 +75,8 @@ function PanelWindowStyles({ target, children }: PropsWithChildren<{ target: Win
 /** Keep the shared player/context, but recreate renderers rather than adopt a live canvas. */
 export function PanelWindow({ children, title }: PropsWithChildren<{ title: string }>): ReactNode {
   const parent = useContext(PanelWindowContext);
+  const dock = useContext(DockPanelContext);
+  const [windowMode, setWindowMode] = useState<"popout" | "pip">("popout");
   const { t } = useTranslation("panelToolbar");
   const [target, setTarget] = useState<Window>();
   const [failed, setFailed] = useState(false);
@@ -95,6 +99,42 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
     };
   }, []);
 
+  // Keep the panel mounted for its portal while Dockview gives its space to the remaining panels.
+  useLayoutEffect(() => {
+    if (!target || windowMode !== "popout" || !dock) {
+      return;
+    }
+    const originalGroup = dock.api.group;
+    const originalIndex = originalGroup.panels.findIndex((panel) => panel.id === dock.api.id);
+    const hide = () => {
+      if (!dock.containerApi.getPanel(dock.api.id)) {
+        return;
+      }
+      // A stacked sibling must stay visible, so give the detached panel its own hidden group.
+      if (dock.api.group.panels.length > 1) {
+        dock.api.moveTo({ group: dock.api.group, position: "right" });
+      }
+      if (dock.api.group.api.isVisible) {
+        dock.api.group.api.setVisible(false);
+      }
+    };
+    hide();
+    const subscription = dock.containerApi.onDidLayoutChange(hide);
+    return () => {
+      subscription.dispose();
+      if (!dock.containerApi.getPanel(dock.api.id)) {
+        return;
+      }
+      dock.api.group.api.setVisible(true);
+      if (
+        dock.containerApi.getGroup(originalGroup.id) === originalGroup &&
+        originalGroup !== dock.api.group
+      ) {
+        dock.api.moveTo({ group: originalGroup, position: "center", index: originalIndex });
+      }
+    };
+  }, [dock, windowMode, target]);
+
   const actions = useMemo<WindowActions>(
     () => ({
       isOpen: target != undefined,
@@ -108,6 +148,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           return;
         }
         pending.current = true;
+        setWindowMode(mode);
         setFailed(false);
         const open = async () => {
           const child =
@@ -192,16 +233,18 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
     <PanelWindowContext.Provider value={actions}>
       {target ? (
         <>
-          <Stack alignItems="center" justifyContent="center" flex={1} gap={1}>
-            <Button
-              onClick={() => {
-                target.focus();
-              }}
-            >
-              {t("showPanelWindow")}
-            </Button>
-            <Button onClick={actions.close}>{t("returnToWorkspace")}</Button>
-          </Stack>
+          {windowMode === "pip" && (
+            <Stack alignItems="center" justifyContent="center" flex={1} gap={1}>
+              <Button
+                onClick={() => {
+                  target.focus();
+                }}
+              >
+                {t("showPanelWindow")}
+              </Button>
+              <Button onClick={actions.close}>{t("returnToWorkspace")}</Button>
+            </Stack>
+          )}
           {createPortal(
             <PanelWindowStyles target={target}>
               <DockPanelContext.Provider value={undefined}>{children}</DockPanelContext.Provider>

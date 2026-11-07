@@ -179,7 +179,14 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
 
     if (panelWindow) {
       if (panelWindow.isOpen) {
-        items.push({ key: "return", text: t("returnToWorkspace"), onClick: panelWindow.close });
+        items.push({
+          key: "return",
+          text: t("returnToWorkspace"),
+          onClick: () => {
+            handleMenuClose();
+            panelWindow.close();
+          },
+        });
       } else {
         items.push({
           key: "popout",

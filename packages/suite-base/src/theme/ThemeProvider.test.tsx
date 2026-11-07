@@ -58,19 +58,31 @@ describe("ThemeProvider theme-color", () => {
 });
 
 it("styles a panel document without changing the opener's theme", () => {
+  // Given
+  const previousColorMode = document.documentElement.dataset.colorMode;
   document.documentElement.dataset.colorMode = "light";
   const iframe = document.createElement("iframe");
   document.body.appendChild(iframe);
   const child = iframe.contentDocument!;
-  const view = render(
-    <ThemeProvider isDark ownerDocument={child}>
-      <Button>Child control</Button>
-    </ThemeProvider>,
-    { container: child.body },
-  );
-  expect(child.documentElement.dataset.colorMode).toBe("dark");
-  expect(document.documentElement.dataset.colorMode).toBe("light");
-  expect(child.head.querySelector("style[data-emotion]")).not.toBeNull();
-  view.unmount();
-  iframe.remove();
+  try {
+    // When
+    const view = render(
+      <ThemeProvider isDark ownerDocument={child}>
+        <Button>Child control</Button>
+      </ThemeProvider>,
+      { container: child.body },
+    );
+    // Then
+    expect(child.documentElement.dataset.colorMode).toBe("dark");
+    expect(document.documentElement.dataset.colorMode).toBe("light");
+    expect(child.head.querySelector("style[data-emotion]")).not.toBeNull();
+    view.unmount();
+  } finally {
+    if (previousColorMode == undefined) {
+      delete document.documentElement.dataset.colorMode;
+    } else {
+      document.documentElement.dataset.colorMode = previousColorMode;
+    }
+    iframe.remove();
+  }
 });

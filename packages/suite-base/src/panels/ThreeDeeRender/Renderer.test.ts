@@ -340,7 +340,8 @@ describe("3D Renderer", () => {
     renderer.dispose();
   });
 
-  it("renders in a visible panel document while the opener is hidden", () => {
+  it("draws when the panel document is visible while the opener is hidden", () => {
+    // Given
     const iframe = document.createElement("iframe");
     document.body.appendChild(iframe);
     const child = iframe.contentWindow!;
@@ -354,7 +355,9 @@ describe("3D Renderer", () => {
     const renderer = new Renderer({ ...defaultRendererProps, canvas: childCanvas });
     try {
       const draw = vi.spyOn(renderer.gl, "render");
+      // When
       renderer.animationFrame();
+      // Then
       expect(draw).toHaveBeenCalled();
       frame.mockClear();
       childDocument.dispatchEvent(new Event("visibilitychange"));
