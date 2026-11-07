@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { STREAM_MODIFIERS } from "@lichtblick/message-path";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 
 import { GetViewportDatasetsResult, SeriesConfigKey, SeriesItem } from "./IDatasetsBuilder";
@@ -18,6 +19,20 @@ const emptyPaths = new Set<string>();
  * indefinitely. Shared by builders that separately track current and full (preloaded) buffers.
  */
 export const MAX_CURRENT_DATUMS_PER_SERIES = 50_000;
+
+/**
+ * True when the plotted y is computed across samples (a stream modifier like `.@derivative`, or a
+ * moving average), so it differs from the value in the latest message.
+ */
+export function isDerivedSeries(
+  config: Immutable<Pick<SeriesItem, "parsed" | "smoothing">>,
+): boolean {
+  const { modifier } = config.parsed;
+  return (
+    (modifier != undefined && STREAM_MODIFIERS.includes(modifier)) ||
+    Math.round(config.smoothing ?? 0) > 1
+  );
+}
 
 /**
  * Builds the chart.js dataset styling fields derived from a series config. Shared by builders
