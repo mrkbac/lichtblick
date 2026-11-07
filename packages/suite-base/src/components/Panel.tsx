@@ -283,8 +283,7 @@ export default function Panel<
       [getCurrentLayoutState, splitPanel],
     );
 
-    // Inside a dock layout, fullscreen is dockview's maximize: dockview renders panels in a
-    // transformed overlay, which traps the `position: fixed` fallback below inside the group.
+    // Inside a dock layout, maximize the group so its tabs and content expand together.
     const dock = useContext(DockPanelContext);
     const subscribeDockMaximized = useCallback(
       (onChange: () => void) => {

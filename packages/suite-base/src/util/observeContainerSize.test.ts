@@ -16,16 +16,25 @@ describe("observeContainerSize", () => {
     Object.defineProperty(element, "offsetParent", { configurable: true, value: document.body });
     vi.stubGlobal(
       "ResizeObserver",
-      class {
+      class implements ResizeObserver {
         public constructor(callback: ResizeObserverCallback) {
           notify = (width, height) => {
             callback(
-              [{ target: element, contentRect: { width, height } } as ResizeObserverEntry],
-              this as unknown as ResizeObserver,
+              [
+                {
+                  target: element,
+                  contentRect: new DOMRect(0, 0, width, height),
+                  borderBoxSize: [],
+                  contentBoxSize: [],
+                  devicePixelContentBoxSize: [],
+                },
+              ],
+              this,
             );
           };
         }
         public observe = vi.fn();
+        public unobserve = vi.fn();
         public disconnect = disconnect;
       },
     );
@@ -38,21 +47,30 @@ describe("observeContainerSize", () => {
   });
 
   it("lays out in the observer callback, without waiting for a frame", () => {
+    // Given
     observeContainerSize(element, api);
+    // When
     notify(600.4, 350.6);
+    // Then
     expect(api.layout).toHaveBeenCalledExactlyOnceWith(600, 351);
   });
 
   it("skips unchanged dimensions", () => {
+    // Given
     observeContainerSize(element, api);
+    // When
     notify(400.1, 299.9);
+    // Then
     expect(api.layout).not.toHaveBeenCalled();
   });
 
   it("keeps hidden tabs' sizes and updates them when shown", () => {
+    // Given
     observeContainerSize(element, api);
     Object.defineProperty(element, "offsetParent", { configurable: true, value: null });
+    // When
     notify(0, 0);
+    // Then
     expect(api.layout).not.toHaveBeenCalled();
     Object.defineProperty(element, "offsetParent", { configurable: true, value: document.body });
     notify(500, 300);
@@ -60,11 +78,14 @@ describe("observeContainerSize", () => {
   });
 
   it("ignores detached elements and disconnects on cleanup", () => {
+    // Given
     const cleanup = observeContainerSize(element, api);
     element.remove();
+    // When
     notify(600, 350);
-    expect(api.layout).not.toHaveBeenCalled();
     cleanup();
+    // Then
+    expect(api.layout).not.toHaveBeenCalled();
     expect(disconnect).toHaveBeenCalledOnce();
   });
 });

@@ -3,6 +3,8 @@
 
 import { Locator, Page, expect, test } from "@playwright/test";
 
+import { loadFiles } from "../../fixtures/load-files";
+
 /**
  * Drags panels with real mouse input (native HTML5 drag and drop in Chromium) and checks the
  * resulting layout. The default layout is 3D on the left, Image above Raw Messages on the right.
@@ -76,6 +78,12 @@ function centerOf(locator: Locator) {
   };
 }
 
+async function selectTab(page: Page, title: string) {
+  const tab = page.getByRole("tab", { name: title, exact: true });
+  await tab.locator(".dv-default-tab-content").click();
+  await expect(tab).toHaveAttribute("aria-selected", "true");
+}
+
 /**
  * A grab point on the toolbar of the panel of `type`. Panels with their own toolbar content drag
  * by the toolbar's controls.
@@ -119,24 +127,25 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
     test(`fills panel slots before paint during sidebar resizing${nested ? " inside a Tab panel" : ""}`, async ({
       page,
     }) => {
-      const resizeErrors: string[] = [];
+      const pageErrors: string[] = [];
       page.on("pageerror", (error) => {
-        if (error.message.includes("ResizeObserver")) {
-          resizeErrors.push(error.message);
-        }
+        pageErrors.push(error.message);
       });
       if (nested) {
         await drag(page, await catalogItem(page, "Tab"), inGroup(page, "3D", 0.5, 0.5));
         await expect(page.getByTestId("add-tab")).toBeVisible();
         const tabPanel = page.locator('[data-testid^="panel-mouseenter-container Tab!"]');
-        await drag(page, async () => await toolbarOf(page, "Image"), centerOf(tabPanel));
+        await tabPanel.getByTestId("panel-grid-card Image").click();
+        await expect(
+          tabPanel.locator('[data-testid^="panel-mouseenter-container Image!"]'),
+        ).toBeVisible();
         await expect(page.locator("[data-panel-layout] .dv-dockview")).toHaveCount(2);
       }
 
       const measurements = await page.evaluateHandle(() => {
         const gaps: number[] = [];
         const observer = new ResizeObserver((entries) => {
-          // Other observers lay out the grid; their microtasks position its panel contents.
+          // Measure after the layout's resize observer has sized the panel slots.
           queueMicrotask(() => {
             for (const { target } of entries) {
               if (!(target instanceof HTMLElement) || !target.offsetParent) {
@@ -147,35 +156,32 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
                 [...target.querySelectorAll<HTMLElement>(selector)].filter(
                   (element) => element.closest("[data-panel-layout]") === layout,
                 );
-              const grid = ownElements(".dv-dockview")[0];
+              const grid = ownElements(".dv-dockview").at(0);
+              if (grid == undefined) {
+                gaps.push(Infinity);
+                continue;
+              }
               gaps.push(Math.abs(target.clientWidth - grid.clientWidth));
               gaps.push(Math.abs(target.clientHeight - grid.clientHeight));
-              const slots = ownElements(".dv-content-container").map((element) =>
-                element.getBoundingClientRect(),
-              );
-              for (const overlay of ownElements(".dv-render-overlay")) {
-                if (getComputedStyle(overlay).visibility !== "visible") {
-                  continue;
-                }
-                const box = overlay.getBoundingClientRect();
+              for (const slot of ownElements(".dv-content-container")) {
+                const box = slot.firstElementChild?.getBoundingClientRect();
+                const bounds = slot.getBoundingClientRect();
                 gaps.push(
-                  Math.min(
-                    ...slots.map((slot) =>
-                      Math.max(
-                        Math.abs(box.left - slot.left),
-                        Math.abs(box.top - slot.top),
-                        Math.abs(box.width - slot.width),
-                        Math.abs(box.height - slot.height),
-                      ),
-                    ),
-                  ),
+                  box
+                    ? Math.max(
+                        Math.abs(box.left - bounds.left),
+                        Math.abs(box.top - bounds.top),
+                        Math.abs(box.width - bounds.width),
+                        Math.abs(box.height - bounds.height),
+                      )
+                    : Infinity,
                 );
               }
             }
           });
         });
-        for (const layout of document.querySelectorAll("[data-panel-layout]")) {
-          observer.observe(layout.firstElementChild!);
+        for (const shell of document.querySelectorAll(".dv-shell")) {
+          observer.observe(shell.parentElement!);
         }
         return { gaps, observer };
       });
@@ -199,12 +205,103 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
       await measurements.dispose();
       expect(gaps.length).toBeGreaterThan(20);
       expect(Math.max(...gaps)).toBeLessThanOrEqual(1);
-      expect(resizeErrors).toEqual([]);
+      expect(pageErrors).toEqual([]);
     });
   }
 
   test("stacks a panel dropped on the middle of another as tabs", async ({ page }) => {
     await stackImageOn3D(page);
+  });
+
+  test("keeps the 3D canvas across tab switches and maximize", async ({ page }) => {
+    const panel = page.locator('[data-testid^="panel-mouseenter-container 3D!"]');
+    const canvas = await panel
+      .locator("canvas")
+      .first()
+      .evaluateHandle((element: HTMLCanvasElement) => element);
+    await stackImageOn3D(page);
+    await expect(page.locator(".dv-render-overlay")).toHaveCount(0);
+    expect(await canvas.evaluate((element) => element.isConnected)).toBe(false);
+
+    for (let i = 0; i < 3; i++) {
+      await selectTab(page, "3D");
+      await expect(panel).toBeVisible();
+      expect(await canvas.evaluate((element) => element.isConnected)).toBe(true);
+      await selectTab(page, "Image");
+      expect(await canvas.evaluate((element) => element.isConnected)).toBe(false);
+    }
+    await selectTab(page, "3D");
+    const before = (await panel.boundingBox())!;
+    await panel.hover();
+    await panel.getByTitle("fullscreen", { exact: true }).click();
+    await expect.poll(async () => (await panel.boundingBox())!.width).toBeGreaterThan(before.width);
+    await panel.getByTitle("Exit fullscreen", { exact: true }).click();
+    await expect.poll(async () => (await panel.boundingBox())!.width).toBeCloseTo(before.width, 0);
+    expect(await canvas.evaluate((element) => element.isConnected)).toBe(true);
+    expect(await canvas.evaluate((element) => element.getContext("webgl2")?.isContextLost())).toBe(
+      false,
+    );
+    await canvas.dispose();
+  });
+
+  test("restores a nested layout after its outer tab was hidden and resized", async ({ page }) => {
+    await drag(page, await catalogItem(page, "Tab"), inGroup(page, "3D", 0.5, 0.5));
+    const panel = page.locator('[data-testid^="panel-mouseenter-container Tab!"]');
+    await panel.getByTestId("panel-grid-card Image").click();
+    const innerGrid = panel.locator(".dv-dockview");
+    await expect(innerGrid).toBeVisible();
+    const grid = await innerGrid.evaluateHandle((element) => element);
+    await selectTab(page, "3D");
+    expect(await grid.evaluate((element) => element.isConnected)).toBe(false);
+    await page.setViewportSize({ width: 1350, height: 850 });
+    await selectTab(page, "Tab");
+    await expect(innerGrid).toBeVisible();
+    expect(await grid.evaluate((element) => element.isConnected)).toBe(true);
+    await expect
+      .poll(
+        async () =>
+          await innerGrid.evaluate((element) =>
+            Math.abs(element.clientWidth - element.parentElement!.clientWidth),
+          ),
+      )
+      .toBeLessThanOrEqual(1);
+    await expect(panel.locator('[data-testid^="panel-mouseenter-container Image!"]')).toBeVisible();
+    await grid.dispose();
+  });
+
+  test("keeps the Plot canvas and cursor working after a hidden-tab resize", async ({ page }) => {
+    await loadFiles({ mainWindow: page, filenames: "example-2.mcap" });
+    await page.getByTestId("AddPanelButton").click();
+    await page.getByTestId("panel-menu-item Plot").click();
+    await page.getByTestId("add-series").click();
+    await page
+      .getByTestId("settings-tree-editor")
+      .getByPlaceholder("/some/topic.msgs[0].field")
+      .fill("mouse.clientX");
+    const panel = page.locator('[data-testid^="panel-mouseenter-container Plot!"]');
+    await expect(panel.getByTestId("plot-legend-row-path-label")).toHaveText("mouse.clientX");
+    const canvas = await panel.locator("canvas").evaluateHandle((element) => element);
+    await drag(page, async () => await toolbarOf(page, "Plot"), inGroup(page, "3D", 0.5, 0.5));
+    await selectTab(page, "3D");
+    expect(await canvas.evaluate((element) => element.isConnected)).toBe(false);
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await selectTab(page, "Plot");
+    await expect(panel).toBeVisible();
+    expect(await canvas.evaluate((element) => element.isConnected)).toBe(true);
+    await expect
+      .poll(async () => {
+        const bounds = (await panel.getByTestId("vertical-bar-wrapper").boundingBox())!;
+        const x = bounds.x + bounds.width * 0.6;
+        await page.mouse.move(x, bounds.y + bounds.height * 0.5);
+        return await panel
+          .getByTestId("hover-bar")
+          .evaluate(
+            (element, mouseX) => Math.abs(element.getBoundingClientRect().left - mouseX),
+            x,
+          );
+      })
+      .toBeLessThanOrEqual(2);
+    await canvas.dispose();
   });
 
   test("splits when a panel is dropped on an edge", async ({ page }) => {
