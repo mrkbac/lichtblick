@@ -178,7 +178,7 @@ export default function Start(): React.JSX.Element {
           <ToggleButton value="recordings">{t("tabRecordings")}</ToggleButton>
         </ToggleButtonGroup>
         <div className={classes.spacer} />
-        {view === "catalog" && folder.name != undefined && (
+        {((view === "catalog" && folder.name != undefined) || view === "recordings") && (
           <ToggleButtonGroup
             exclusive
             size="small"
@@ -316,7 +316,14 @@ export default function Start(): React.JSX.Element {
         </Stack>
       )}
 
-      {view === "recordings" && <LiveRecordingsList />}
+      {view === "recordings" && (
+        <LiveRecordingsList
+          query={query}
+          onQueryChange={setQuery}
+          view={catalogView}
+          lastOpenedByName={lastOpenedByName}
+        />
+      )}
 
       {showCatalog && (
         <Catalog

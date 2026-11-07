@@ -38,6 +38,11 @@ function sourceText(recording: CatalogRecording): string {
   return recording.source.type === "local-file" ? recording.source.path : recording.source.url;
 }
 
+/** Text that free search matches: name, path and, for live recordings, the machine. */
+function searchText(recording: CatalogRecording): string {
+  return [recording.name, sourceText(recording), recording.machine ?? ""].join("\n").toLowerCase();
+}
+
 function durationSec(recording: CatalogRecording): number | undefined {
   return recording.start && recording.end
     ? toSec(recording.end) - toSec(recording.start)
@@ -97,6 +102,8 @@ function filterPredicate(key: string, op: string, value: string): Predicate | un
       return (r) => r.topics?.some((t) => t.schema.toLowerCase().includes(needle)) ?? false;
     case "path":
       return (r) => sourceText(r).toLowerCase().includes(needle);
+    case "machine":
+      return op === ":" ? (r) => r.machine?.toLowerCase().includes(needle) ?? false : undefined;
     case "since":
     case "until": {
       const ms = Date.parse(value);
@@ -125,7 +132,7 @@ function filterPredicate(key: string, op: string, value: string): Predicate | un
 
 /**
  * Filter recordings with a query of space-separated terms, all of which must match:
- * free text (name or path), `topic:`, `schema:`, `path:`, `since:`/`until:` (dates),
+ * free text (name, path or machine), `topic:`, `schema:`, `path:`, `machine:`, `since:`/`until:` (dates),
  * `duration>5m`, `size<2GB`, `status:error|nosummary|ok` and `has:image|gps|pointcloud|tf|video`
  * (`|` matches either). Unknown filters match as text.
  */
@@ -144,9 +151,7 @@ export function filterRecordings(
       continue;
     }
     const needle = term.toLowerCase();
-    predicates.push(
-      (r) => r.name.toLowerCase().includes(needle) || sourceText(r).toLowerCase().includes(needle),
-    );
+    predicates.push((r) => searchText(r).includes(needle));
   }
   return recordings.filter((r) => predicates.every((predicate) => predicate(r)));
 }

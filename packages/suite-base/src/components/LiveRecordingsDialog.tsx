@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Button, Dialog, DialogActions, DialogContent } from "@mui/material";
+import { Button, Dialog, DialogActions, DialogContent, DialogTitle } from "@mui/material";
 import { useTranslation } from "react-i18next";
 import { create } from "zustand";
 
@@ -31,9 +31,16 @@ export function LiveRecordingsDialog(): React.JSX.Element | null {
     return null;
   }
   return (
-    <Dialog open onClose={hide} fullWidth maxWidth="sm" aria-label={t("title")}>
-      {/* The list's own header is the title, as on the start page. */}
-      <DialogContent>
+    <Dialog
+      open
+      onClose={hide}
+      fullWidth
+      maxWidth="lg"
+      aria-label={t("title")}
+      slotProps={{ paper: { style: { height: "80vh" } } }}
+    >
+      <DialogTitle>{t("title")}</DialogTitle>
+      <DialogContent style={{ display: "flex", flexDirection: "column" }}>
         <LiveRecordingsList onOpened={hide} />
       </DialogContent>
       <DialogActions>

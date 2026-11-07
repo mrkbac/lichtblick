@@ -643,6 +643,7 @@ export default function Catalog({
             initialFilter={topicTerm}
             loadPreview={loadSelectedPreview}
             onOpen={() => void open(selected)}
+            actions={folder.recordingActions?.(selected)}
             onClose={() => {
               setSelectedId(undefined);
             }}

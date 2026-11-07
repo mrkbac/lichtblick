@@ -53,6 +53,7 @@ export function RecordingDetails({
   loadPreview,
   onOpen,
   onClose,
+  actions,
 }: {
   recording: CatalogRecording;
   /** E.g. the `topic:` term of the catalog search, so matching topics show first. */
@@ -60,6 +61,8 @@ export function RecordingDetails({
   loadPreview?: (topic: string) => Promise<PreviewFrame[]>;
   onOpen: () => void;
   onClose: () => void;
+  /** More buttons next to Open, e.g. download and delete for live recordings. */
+  actions?: React.ReactNode;
 }): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("catalog");
@@ -92,9 +95,12 @@ export function RecordingDetails({
         </IconButton>
       </Stack>
       <PreviewPlayer recording={recording} loadPreview={loadPreview} />
-      <Button variant="contained" onClick={onOpen}>
-        {t("openRecording")}
-      </Button>
+      <Stack direction="row" gap={1}>
+        <Button variant="contained" onClick={onOpen} style={{ flex: "auto" }}>
+          {t("openRecording")}
+        </Button>
+        {actions}
+      </Stack>
       <TextField
         size="small"
         value={filter}

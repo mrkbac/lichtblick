@@ -51,4 +51,6 @@ export type CatalogRecording = CatalogSummary & {
   /** Where this recording's preview clips are cached locally. */
   previewKey?: string;
   size?: number;
+  /** The machine a live recording came from ("robot.local:8765"). */
+  machine?: string;
 };

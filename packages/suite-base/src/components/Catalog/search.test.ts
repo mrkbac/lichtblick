@@ -38,6 +38,24 @@ const recordings: CatalogRecording[] = [
 const ids = (query: string) => filterRecordings(recordings, query).map((r) => r.id);
 
 describe("filterRecordings", () => {
+  it("filters live recordings by the machine they came from", () => {
+    const live: CatalogRecording = {
+      id: "e",
+      name: "robot.local:8765",
+      source: {
+        type: "local-file",
+        path: "live-2026-11-07T10-30-00-000-ab12@robot.local_8765.mcap",
+      },
+      machine: "robot.local:8765",
+    };
+    const liveIds = (query: string) =>
+      filterRecordings([...recordings, live], query).map((r) => r.id);
+    expect(liveIds("machine:robot.local:8765")).toEqual(["e"]);
+    expect(liveIds("machine:ROBOT")).toEqual(["e"]);
+    expect(liveIds("robot.local")).toEqual(["e"]);
+    expect(liveIds("machine:other")).toEqual([]);
+  });
+
   it.each([
     ["", ["a", "b", "c", "d"]],
     ["DRIVE", ["a"]],
