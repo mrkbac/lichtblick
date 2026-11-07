@@ -63,6 +63,40 @@ describe("getValueActionForValue", () => {
     });
   });
 
+  it.each([
+    { values: new Float64Array([0, 6.23]), primitiveType: "float64" as const },
+    { values: new Float32Array([0, 6.23]), primitiveType: "float32" as const },
+    { values: new Uint8Array([0, 42]), primitiveType: "uint8" as const },
+    { values: new BigInt64Array([0n, 42n]), primitiveType: "int64" as const },
+    { values: new BigUint64Array([0n, 42n]), primitiveType: "uint64" as const },
+  ])("returns paths for $primitiveType typed-array elements", ({ values, primitiveType }) => {
+    const structureItem: MessagePathStructureItem = {
+      structureType: "message",
+      datatype: "JointState",
+      nextByName: {
+        position: {
+          structureType: "array",
+          datatype: "JointState",
+          next: { structureType: "primitive", primitiveType, datatype: "JointState" },
+        },
+      },
+    };
+    for (const index of [0, 1]) {
+      const paths = {
+        filterPath: "",
+        singleSlicePath: `.position[${index}]`,
+        multiSlicePath: ".position[:]",
+      };
+      expect(
+        getValueActionForValue({ position: values }, structureItem, ["position", index]),
+      ).toEqual({ ...paths, primitiveType });
+      expect(getValueActionForValue({ position: values }, undefined, ["position", index])).toEqual({
+        ...paths,
+        primitiveType: typeof values[index] === "bigint" ? "int64" : "int32",
+      });
+    }
+  });
+
   it("returns paths with bigints", () => {
     const structureItem: MessagePathStructureItem = {
       structureType: "array",

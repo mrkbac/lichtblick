@@ -386,7 +386,7 @@ export const isArrayElement = (
 ): boolean =>
   typeof pathItem === "number" &&
   (structureItem == undefined || structureItem.structureType === "array") &&
-  Array.isArray(value);
+  (Array.isArray(value) || isTypedArray(value));
 
 export const formatValueForFilter = (value: unknown): string => {
   return typeof value === "bigint" ? value.toString() : (JSON.stringify(value) ?? "");
