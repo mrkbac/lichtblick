@@ -81,13 +81,11 @@ async function drag(
 }
 
 function group(page: Page, title: string): Locator {
-  return page
-    .locator(".dv-groupview")
-    .filter({
-      has: page.locator(".dv-tab", {
-        hasText: new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
-      }),
-    });
+  return page.locator(".dv-groupview").filter({
+    has: page.locator(".dv-tab", {
+      hasText: new RegExp(`^${title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`),
+    }),
+  });
 }
 
 /** A point in a group, as fractions of its size. */
