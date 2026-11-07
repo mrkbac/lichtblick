@@ -173,6 +173,7 @@ type Props = {
   tabId?: string;
 };
 
+/** Synchronize a root or nested Dockview layout and resize each mounted container before paint. */
 export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactElement {
   const { layout, onChange, loadingComponent, tabId } = props;
   const { addPanel, getCurrentLayoutState } = useCurrentLayoutActions();

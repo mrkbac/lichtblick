@@ -72,12 +72,11 @@ const MAX_PANEL_LOGS = 1000;
 /** Used in storybook when panels are renered outside of a <PanelLayout/> */
 const FALLBACK_PANEL_ID = "$unknown_id";
 
-// HOC that wraps panel in an error boundary and flex box.
-// Gives panel a `config` and `saveConfig`.
-//   export default Panel(MyPanelComponent)
-//
-// `config` comes from the current layout, but in stories / tests you can pass in your own:
-//   `<MyPanel config={…} />`
+/**
+ * Wrap a panel in an error boundary and flex box, supplying its saved config and saveConfig.
+ * Use `export default Panel(MyPanelComponent)`; stories and tests can override the saved config
+ * with `<MyPanel config={…} />`.
+ */
 export default function Panel<
   Config extends PanelConfig,
   PanelProps extends { config: Config; saveConfig: SaveConfig<Config> },
@@ -85,6 +84,7 @@ export default function Panel<
   PanelComponent: ComponentType<PanelProps> & PanelStatics<Config>,
 ): ComponentType<GenericPanelProps<Config> & Omit<PanelProps, "config" | "saveConfig">> &
   PanelStatics<Config> {
+  /** Bind one panel instance to its saved configuration, controls, logs, and selection state. */
   function ConnectedPanel(props: GenericPanelProps<Config>) {
     const [logs, setLogs] = useState<PanelLog[]>([]);
     const [showLogs, setShowLogs] = useState(false);

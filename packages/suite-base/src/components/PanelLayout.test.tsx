@@ -92,6 +92,7 @@ describe("UnconnectedPanelLayout", () => {
       },
     ]);
     let crash = false;
+    /** Trigger error recovery while the parent layout component remains mounted. */
     function LoadingComponent() {
       if (crash) {
         throw new Error("Layout error for recovery test");
