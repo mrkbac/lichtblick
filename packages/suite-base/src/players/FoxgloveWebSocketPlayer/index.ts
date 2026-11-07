@@ -32,6 +32,7 @@ import {
   BinaryOpcode,
   IWebSocket,
 } from "@foxglove/ws-protocol";
+import { IWritable, McapWriter } from "@mcap/core";
 import * as _ from "lodash-es";
 
 import { debouncePromise } from "@lichtblick/den/async";
@@ -176,6 +177,10 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #unsubscribeHistorySettings: () => void;
   /** Playback position while reviewing history; undefined while live. */
   #historyCursor?: Time;
+  /** Raw payload of each history message, released together with the message. */
+  #rawByMessage = new WeakMap<MessageEvent, { data: Uint8Array; channel: ResolvedChannel }>();
+  /** Wall time of the current connection, for session stats. */
+  #connectedAtMs?: number;
   #historyTimer?: ReturnType<typeof setTimeout>;
   #historyTickMs = 0;
   /** Wall time of the last server time message (or of connecting), to detect a stale clock. */
@@ -286,6 +291,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
       }
       this.#presence = PlayerPresence.PRESENT;
       this.#resetSessionState();
+      this.#connectedAtMs = Date.now();
       this.#alerts.clear();
       this.#channelsById.clear();
       this.#channelsByTopic.clear();
@@ -512,6 +518,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#client.on("advertise", (newChannels) => {
       for (const channel of newChannels) {
         let parsedChannel;
+        let schema;
         try {
           let schemaEncoding;
           let schemaData;
@@ -552,14 +559,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
               : `Unsupported message encoding ${channel.encoding}`;
             throw new Error(msg);
           }
-          parsedChannel = parseChannel({
-            messageEncoding: channel.encoding,
-            schema: {
-              name: channel.schemaName,
-              encoding: schemaEncoding,
-              data: schemaData,
-            },
-          });
+          schema = { name: channel.schemaName, encoding: schemaEncoding, data: schemaData };
+          parsedChannel = parseChannel({ messageEncoding: channel.encoding, schema });
         } catch (error) {
           this.#unsupportedChannelIds.add(channel.id);
           this.#alerts.addAlert(`schema:${channel.topic}`, {
@@ -579,7 +580,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
           this.#emitState();
           continue;
         }
-        const resolvedChannel = { channel, parsedChannel };
+        const resolvedChannel = { channel, parsedChannel, schema };
         this.#channelsById.set(channel.id, resolvedChannel);
         this.#channelsByTopic.set(channel.topic, resolvedChannel);
       }
@@ -653,6 +654,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
         };
         if (!this.#serverControlsPlayback) {
           this.#history.add(msgEvent);
+          // ponytail: raw bytes aren't counted in the history memory limit; the heap guard covers it.
+          this.#rawByMessage.set(msgEvent, {
+            data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
+            channel: chanInfo,
+          });
         }
         // While reviewing history, new messages only go into the history.
         if (this.#historyCursor == undefined) {
@@ -1071,6 +1077,14 @@ export default class FoxgloveWebSocketPlayer implements Player {
         subscribedTopics: this.#subscribedTopics,
         services: this.#advertisedServices,
         serviceTypes: this.#serviceTypes,
+        liveStats: this.#serverControlsPlayback
+          ? undefined
+          : {
+              connectedAtMs: this.#connectedAtMs,
+              historyMessages: this.#history.size(),
+              historyBytes: this.#history.sizeBytes(),
+              historyLimitBytes: this.#history.maxBytes(),
+            },
       },
     });
   });
@@ -1453,6 +1467,48 @@ export default class FoxgloveWebSocketPlayer implements Player {
     }
     this.#emitState();
   };
+
+  /** Write everything in the live history to an MCAP file. */
+  public async exportLiveHistory(writable: IWritable): Promise<void> {
+    const messages = this.#history.snapshot();
+    const writer = new McapWriter({ writable });
+    await writer.start({ profile: this.#profile ?? "", library: "Lichtblick live history" });
+    const schemaIds = new Map<string, number>();
+    const channelIds = new Map<ResolvedChannel, number>();
+    let sequence = 0;
+    for (const msg of messages) {
+      const raw = this.#rawByMessage.get(msg);
+      if (!raw) {
+        continue;
+      }
+      let channelId = channelIds.get(raw.channel);
+      if (channelId == undefined) {
+        const { channel, schema } = raw.channel;
+        const schemaKey = `${schema.encoding}\0${schema.name}\0${channel.schema}`;
+        let schemaId = schemaIds.get(schemaKey);
+        if (schemaId == undefined) {
+          schemaId = await writer.registerSchema(schema);
+          schemaIds.set(schemaKey, schemaId);
+        }
+        channelId = await writer.registerChannel({
+          topic: channel.topic,
+          messageEncoding: channel.encoding,
+          schemaId,
+          metadata: new Map(),
+        });
+        channelIds.set(raw.channel, channelId);
+      }
+      const time = toNanoSec(msg.receiveTime);
+      await writer.addMessage({
+        channelId,
+        sequence: sequence++,
+        logTime: time,
+        publishTime: time,
+        data: raw.data,
+      });
+    }
+    await writer.end();
+  }
 
   /** Give history memory back while the browser heap is nearly full, before the tab crashes. */
   #checkHeap(): void {

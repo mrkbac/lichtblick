@@ -216,6 +216,23 @@ export class LiveHistoryBuffer {
     return [...result].sort((a, b) => compare(a.receiveTime, b.receiveTime));
   }
 
+  /**
+   * Everything the history holds, in receive-time order: the seeds of topics that fell out of the
+   * window, then the retained messages.
+   */
+  public snapshot(): MessageEvent[] {
+    const seeds = new Set<MessageEvent>();
+    for (const byKey of this.#seeds.values()) {
+      for (const seed of byKey.values()) {
+        seeds.add(seed);
+      }
+    }
+    return [
+      ...[...seeds].sort((a, b) => compare(a.receiveTime, b.receiveTime)),
+      ...this.#messages.slice(this.#head),
+    ];
+  }
+
   public clear(): void {
     this.#messages = [];
     this.#head = 0;

@@ -16,6 +16,7 @@
 
 import { MessageDefinition } from "@foxglove/message-definition";
 import { Time } from "@foxglove/rostime";
+import type { IWritable } from "@mcap/core";
 
 import type { MessageEvent, Metadata, ParameterValue } from "@lichtblick/suite";
 import { Immutable } from "@lichtblick/suite";
@@ -94,6 +95,8 @@ export interface Player {
   // Read the most recent message per topic at or before a given time, independent of the current
   // playback position. Not available for live/real-time data sources.
   getBackfillMessages?(args: GetBackfillMessagesArgs): Promise<MessageEvent[]>;
+  /** Write the rolling live history to an MCAP file. Available with PlayerCapabilities.liveHistory. */
+  exportLiveHistory?(writable: IWritable): Promise<void>;
 }
 
 export enum PlayerPresence {
@@ -228,6 +231,17 @@ export type PlayerStateActiveData = {
   // A map of parameter names to parameter values, used to describe remote parameters such as
   // rosparams.
   parameters?: Map<string, ParameterValue>;
+
+  /** Live sources with a rolling history: the connection and what the history holds. */
+  liveStats?: LiveStats;
+};
+
+export type LiveStats = {
+  /** Wall time (ms since epoch) the current connection was opened. */
+  connectedAtMs?: number;
+  historyMessages: number;
+  historyBytes: number;
+  historyLimitBytes: number;
 };
 
 export type ServiceTypeInfo = {

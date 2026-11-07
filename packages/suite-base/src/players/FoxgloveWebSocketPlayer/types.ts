@@ -15,6 +15,8 @@ import { ParsedChannel } from "@lichtblick/mcap-support";
 export type ResolvedChannel = {
   channel: Channel;
   parsedChannel: ParsedChannel;
+  /** Schema as MCAP expects it, to write received messages back out. */
+  schema: { name: string; encoding: string; data: Uint8Array };
 };
 export type Publication = ClientChannel & { messageWriter?: Ros1MessageWriter | Ros2MessageWriter };
 export type ResolvedService = {

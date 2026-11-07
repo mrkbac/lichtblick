@@ -5,8 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { compare, subtract, Time, toMillis } from "@foxglove/rostime";
-import { Skeleton, Typography } from "@mui/material";
+import { compare, fromMillis, subtract, Time, toMillis } from "@foxglove/rostime";
+import { TempBuffer } from "@mcap/core";
+import { Button, LinearProgress, Skeleton, Typography } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
@@ -23,6 +24,7 @@ import TextMiddleTruncate from "@lichtblick/suite-base/components/TextMiddleTrun
 import Timestamp from "@lichtblick/suite-base/components/Timestamp";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { PlayerPresence, RecordingFileInfo } from "@lichtblick/suite-base/players/types";
+import { downloadFiles } from "@lichtblick/suite-base/util/download";
 import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeAgo } from "@lichtblick/suite-base/util/recentSources";
 import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
@@ -46,6 +48,9 @@ const useStyles = makeStyles<void, "copyButton">()((theme, _params, classes) => 
     opacity: 0,
     padding: 0,
   },
+  progress: {
+    marginTop: theme.spacing(0.5),
+  },
   secondary: {
     color: theme.palette.text.secondary,
   },
@@ -58,6 +63,10 @@ const selectEndTime = (ctx: MessagePipelineContext) => ctx.playerState.activeDat
 const selectIsLive = (ctx: MessagePipelineContext) => ctx.seekPlayback == undefined;
 const selectTopics = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.topics;
 const selectTopicStats = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.topicStats;
+const selectLiveStats = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.liveStats;
+const selectTotalBytes = (ctx: MessagePipelineContext) =>
+  ctx.playerState.activeData?.totalBytesReceived;
+const selectExportLiveHistory = (ctx: MessagePipelineContext) => ctx.exportLiveHistory;
 const selectRecordingFiles = (ctx: MessagePipelineContext) =>
   ctx.playerState.activeData?.recordingFiles;
 
@@ -287,6 +296,101 @@ function FilesField({ startTime }: { startTime?: Time }): React.JSX.Element | nu
   );
 }
 
+/** "live-2026-11-07T10-30-00.mcap" */
+function liveHistoryFileName(now: Date): string {
+  return `live-${now.toISOString().slice(0, 19).replace(/:/g, "-")}.mcap`;
+}
+
+/** Live sources with a rolling history: session totals, history fill and saving it to MCAP. */
+function LiveFields(): React.JSX.Element | null {
+  const { t, i18n } = useTranslation("dataSourceInfo");
+  const { classes } = useStyles();
+  const stats = useMessagePipeline(selectLiveStats);
+  const totalBytes = useMessagePipeline(selectTotalBytes) ?? 0;
+  const exportLiveHistory = useMessagePipeline(selectExportLiveHistory);
+  const now = useNow(1000);
+  const [saveState, setSaveState] = useState<
+    { status: "saving" } | { status: "saved" } | { status: "failed"; error: string } | undefined
+  >();
+
+  if (!stats) {
+    return null;
+  }
+
+  const connectedMs = stats.connectedAtMs == undefined ? 0 : now - stats.connectedAtMs;
+  // Called straight from the click: the player snapshots the history before its first await, so
+  // what is in the history at the click is what gets saved.
+  const save = async () => {
+    if (!exportLiveHistory) {
+      return;
+    }
+    const fileName = liveHistoryFileName(new Date());
+    setSaveState({ status: "saving" });
+    try {
+      // ponytail: whole file built in memory, bounded by the history memory limit.
+      const file = new TempBuffer();
+      await exportLiveHistory(file);
+      downloadFiles([{ blob: new Blob([file.get().slice()]), fileName }]);
+      setSaveState({ status: "saved" });
+    } catch (err) {
+      setSaveState({ status: "failed", error: String(err) });
+    }
+  };
+
+  return (
+    <>
+      {stats.connectedAtMs != undefined && (
+        <Field label={t("session")}>
+          <Typography className={classes.numeric} variant="inherit">
+            {t("sessionValue", {
+              duration: formatDuration(fromMillis(connectedMs)),
+              size: formatByteSize(totalBytes),
+              rate: formatByteSize(connectedMs > 0 ? (totalBytes * 1000) / connectedMs : 0),
+            })}
+          </Typography>
+        </Field>
+      )}
+      <Field label={t("history")}>
+        <Typography className={classes.numeric} variant="inherit">
+          {t("historyValue", {
+            messages: stats.historyMessages.toLocaleString(i18n.language),
+            size: formatByteSize(stats.historyBytes),
+            limit: formatByteSize(stats.historyLimitBytes),
+          })}
+        </Typography>
+        <LinearProgress
+          variant="determinate"
+          value={Math.min(100, (100 * stats.historyBytes) / Math.max(1, stats.historyLimitBytes))}
+          className={classes.progress}
+        />
+      </Field>
+      {exportLiveHistory && (
+        <Stack direction="row" alignItems="center" gap={1}>
+          <Button
+            size="small"
+            variant="outlined"
+            disabled={saveState?.status === "saving" || stats.historyMessages === 0}
+            title={t("saveHistoryTitle")}
+            onClick={() => void save()}
+          >
+            {saveState?.status === "saving" ? t("savingHistory") : t("saveHistory")}
+          </Button>
+          {saveState?.status === "saved" && (
+            <Typography className={classes.secondary} variant="inherit">
+              {t("savedHistory")}
+            </Typography>
+          )}
+          {saveState?.status === "failed" && (
+            <Typography color="error" variant="inherit">
+              {t("saveHistoryFailed", { error: saveState.error })}
+            </Typography>
+          )}
+        </Stack>
+      )}
+    </>
+  );
+}
+
 /**
  * Summary of the open data source: name, time range, contents and files. Values can be copied
  * from a hover button; times are copied as raw `sec.nsec`.
@@ -317,6 +421,7 @@ export function DataSourceInfoView({
       <StartTimeField startTime={startTime} />
       <EndTimeAndDurationFields startTime={startTime} isLive={isLive} />
       <ContentsFields />
+      <LiveFields />
       <FilesField startTime={startTime} />
     </Stack>
   );

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { McapIndexedReader, TempBuffer } from "@mcap/core";
 import type { Mock } from "vitest";
 
 import NoopMetricsCollector from "@lichtblick/suite-base/players/NoopMetricsCollector";
@@ -165,6 +166,33 @@ describe("FoxgloveWebSocketPlayer live history", () => {
     expect(last().currentTime).toEqual({ sec: 11, nsec: 500 });
     expect(last().lastSeekTime).toBe(seeks + 1);
     expect(values(from)).toEqual([11]);
+  });
+
+  it("reports session and history stats", () => {
+    expect(last().liveStats).toEqual(
+      expect.objectContaining({ historyMessages: 3, connectedAtMs: expect.any(Number) }),
+    );
+  });
+
+  it("saves the history as MCAP with the received bytes", async () => {
+    const file = new TempBuffer();
+    await player.exportLiveHistory(file);
+    const reader = await McapIndexedReader.Initialize({ readable: file });
+    const channel = [...reader.channelsById.values()][0]!;
+    expect(channel).toEqual(expect.objectContaining({ topic: "/a", messageEncoding: "json" }));
+    expect(reader.schemasById.get(channel.schemaId)).toEqual(
+      expect.objectContaining({ name: "S", encoding: "jsonschema" }),
+    );
+    const decoder = new TextDecoder();
+    const saved = [];
+    for await (const msg of reader.readMessages()) {
+      saved.push([Number(msg.logTime / SEC), JSON.parse(decoder.decode(msg.data)).v]);
+    }
+    expect(saved).toEqual([
+      [10, 10],
+      [11, 11],
+      [12, 12],
+    ]);
   });
 
   it("clamps seeks to the buffered range", async () => {
