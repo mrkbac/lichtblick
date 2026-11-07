@@ -87,7 +87,8 @@ async function drag(
 }
 
 function group(page: Page, title: string): Locator {
-  return page.getByRole("region", { name: title, exact: true });
+  // The catalog menu hides the underlying app from accessibility queries during a drag.
+  return page.getByRole("region", { name: title, exact: true, includeHidden: true });
 }
 
 /** A point in a group, as fractions of its size. */
