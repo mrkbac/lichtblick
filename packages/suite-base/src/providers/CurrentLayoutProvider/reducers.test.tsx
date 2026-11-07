@@ -389,6 +389,20 @@ describe("layout reducers", () => {
       expect(closed.configById["B!1"]).toEqual({ b: 1 });
     });
 
+    it("adds into a Tab panel whose saved tabs are all malformed", () => {
+      const broken: LayoutData = {
+        ...emptyLayout,
+        layout: { panels: ["Tab!t"] },
+        configById: { "Tab!t": { tabs: ["x"] } },
+      };
+      const result = panelsReducer(broken, {
+        type: "ADD_PANEL",
+        payload: { id: "D!1", tabId: "Tab!t" },
+      });
+      expect(result.layout).toEqual({ panels: ["Tab!t"] });
+      expect(tabLayout(result, 0)).toEqual({ panels: ["D!1"] });
+    });
+
     it("won't put a Tab panel into one of its own tabs", () => {
       const result = panelsReducer(withTabs, {
         type: "ADD_PANEL",

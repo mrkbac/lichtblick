@@ -35,7 +35,7 @@ export function getTabs(config: PanelConfig | undefined): TabConfig[] {
   if (!Array.isArray(tabs)) {
     return DEFAULT_TAB_PANEL_CONFIG.tabs;
   }
-  return tabs.flatMap((tab: unknown) => {
+  const valid = tabs.flatMap((tab: unknown) => {
     if (typeof tab !== "object" || tab == undefined) {
       return [];
     }
@@ -47,6 +47,8 @@ export function getTabs(config: PanelConfig | undefined): TabConfig[] {
       },
     ];
   });
+  // A Tab panel always has a tab, so panels added to it have somewhere to go.
+  return valid.length > 0 ? valid : DEFAULT_TAB_PANEL_CONFIG.tabs;
 }
 
 /** Index of the shown tab, within range. */
