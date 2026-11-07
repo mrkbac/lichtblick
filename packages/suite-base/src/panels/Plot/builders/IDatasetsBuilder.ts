@@ -146,6 +146,12 @@ interface IDatasetsBuilder {
 
   getViewportDatasets(viewport: Immutable<Viewport>): Promise<GetViewportDatasetsResult>;
 
+  /**
+   * Optional: the plotted value at `x` of each series whose y is computed across samples (stream
+   * modifiers, moving average), by config index. The legend shows it instead of the raw value.
+   */
+  getDerivedValuesAt?(x: number): Promise<readonly unknown[]>;
+
   /** All data, or only the samples whose x is within `xRange` (filtered where the data lives). */
   getCsvData(xRange?: Immutable<Bounds1D>): Promise<CsvDataset[]>;
 }

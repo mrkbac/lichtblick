@@ -11,6 +11,7 @@ import * as _ from "lodash-es";
 
 import { debouncePromise } from "@lichtblick/den/async";
 import { filterMap } from "@lichtblick/den/collection";
+import Logger from "@lichtblick/log";
 import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
 import { Immutable, Time } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
@@ -32,6 +33,7 @@ import {
   SeriesItem,
   Viewport,
 } from "./builders/IDatasetsBuilder";
+import { isDerivedSeries } from "./builders/utils";
 import {
   ConfigBounds,
   Dataset,
@@ -52,6 +54,8 @@ import {
 } from "./utils/config";
 import { getSeriesTimestamp } from "./utils/seriesTimestamp";
 import { pathToSubscribePayload } from "./utils/subscription";
+
+const log = Logger.getLogger(__filename);
 
 const replaceUndefinedWithEmptyDataset = (dataset: Dataset | undefined) => dataset ?? { data: [] };
 
@@ -88,6 +92,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   private currentValueTimesByConfigIndex: (Time | undefined)[] = [];
   /** Flag indicating that new Y bounds should be sent to the renderer because the bounds have been reset */
   private shouldResetY = false;
+  private holdYRange = false;
   private updateAction: UpdateAction = { type: "update" };
   private isTimeseriesPlot: boolean = false;
   /** FFT or histogram settings; undefined plots the time series. x/y then are frequency or value. */
@@ -102,6 +107,9 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   private latestYScale?: YScale;
   private queueDispatchRender = debouncePromise(this.dispatchRender.bind(this));
   private queueDispatchDownsample = debouncePromise(this.dispatchDownsample.bind(this));
+  private queueDerivedValues = debouncePromise(this.dispatchDerivedValues.bind(this));
+  /** Bumped on seeks and series changes so legend lookups started before them are dropped */
+  private derivedGeneration = 0;
   private queueDatasetsRender = debouncePromise(this.dispatchDatasetsRender.bind(this));
   private destroyed = false;
 
@@ -190,12 +198,22 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     }
 
     if (lastSeekTime !== this.lastSeekTime) {
+      this.derivedGeneration += 1;
       this.currentValuesByConfigIndex = [];
       this.currentValueTimesByConfigIndex = [];
+      // The first player state is no seek: there is no held range yet
+      if (!Number.isNaN(this.lastSeekTime)) {
+        this.updateAction.resetHeldYRange = true;
+        this.queueDispatchRender();
+      }
       this.lastSeekTime = lastSeekTime;
     }
 
     for (const seriesItem of this.series) {
+      if (this.showsDerivedValue(seriesItem)) {
+        // the legend shows the plotted value, which comes from the datasets builder
+        continue;
+      }
       if (seriesItem.timestampMethod !== "receiveTime") {
         this.updateStampedCurrentValue(seriesItem, messages);
         continue;
@@ -216,6 +234,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     this.emit("currentValuesChanged", this.currentValuesByConfigIndex);
 
     const handlePlayerStateResult = this.datasetsBuilder.handlePlayerState(state);
+    // after the builder has this frame's data
+    this.queueDerivedValues();
 
     if (!handlePlayerStateResult) {
       this.datasetRange = undefined;
@@ -234,6 +254,48 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
 
     if (handlePlayerStateResult.datasetsChanged) {
       this.queueDispatchDownsample();
+    }
+  }
+
+  /** The legend value of a series computed across samples is its plotted value, not the raw one */
+  private showsDerivedValue(seriesItem: Immutable<SeriesItem>): boolean {
+    return this.datasetsBuilder.getDerivedValuesAt != undefined && isDerivedSeries(seriesItem);
+  }
+
+  /** Fetch the plotted value at the current time of each series computed across samples */
+  private async dispatchDerivedValues(): Promise<void> {
+    const getDerivedValuesAt = this.datasetsBuilder.getDerivedValuesAt?.bind(this.datasetsBuilder);
+    const x = this.currentSeconds;
+    const derived = this.series.filter((item) => this.showsDerivedValue(item));
+    if (this.isDestroyed() || !getDerivedValuesAt || x == undefined || derived.length === 0) {
+      return;
+    }
+    const generation = this.derivedGeneration;
+    let values: readonly unknown[];
+    try {
+      values = await getDerivedValuesAt(x);
+    } catch (error: unknown) {
+      log.error("Failed to read plotted legend values", error);
+      return;
+    }
+    // A seek or series change while waiting makes the result stale; a newer lookup is queued
+    if (this.isDestroyed() || generation !== this.derivedGeneration) {
+      return;
+    }
+    let changed = false;
+    for (const { configIndex } of derived) {
+      // series are compacted (reference lines and invalid paths are skipped): find by index
+      const current = this.series.find((item) => item.configIndex === configIndex);
+      if (current == undefined || !this.showsDerivedValue(current)) {
+        continue;
+      }
+      if (this.currentValuesByConfigIndex[configIndex] !== values[configIndex]) {
+        this.currentValuesByConfigIndex[configIndex] = values[configIndex];
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.emit("currentValuesChanged", this.currentValuesByConfigIndex);
     }
   }
 
@@ -390,6 +452,12 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       showGrid: config.showY2AxisGrid ?? false,
     };
 
+    const holdYRange = config.yRangeMode === "hold";
+    if (holdYRange !== this.holdYRange) {
+      this.holdYRange = holdYRange;
+      this.updateAction.holdYRange = holdYRange;
+    }
+
     if (configYBoundsChanged) {
       // Config changes to yBounds always takes precedence over user interaction changes like pan/zoom
       this.updateAction.yBounds = this.configBounds.y;
@@ -397,7 +465,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     const newSeriesKeysByTopic = new Map<string, Set<SeriesConfigKey>>();
     const newCurrentValuesByConfigIndex: unknown[] = [];
     const newCurrentValueTimesByConfigIndex: (Time | undefined)[] = [];
-    this.series = filterMap(config.paths, (path, idx): Immutable<SeriesItem> | undefined => {
+    const newSeries = filterMap(config.paths, (path, idx): Immutable<SeriesItem> | undefined => {
       if (isReferenceLinePlotPathType(path)) {
         return;
       }
@@ -441,9 +509,14 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
         filledParsed,
       )}${xKey}${timeKey}` as SeriesConfigKey;
 
-      // Keep current values for paths that match existing ones
+      // Keep current values for paths that match existing ones, unless the legend switches
+      // between the raw and the plotted value (moving average or stream modifier toggled)
       const existingSeries = this.series.find((series) => series.key === key);
-      if (existingSeries != undefined) {
+      if (
+        existingSeries != undefined &&
+        isDerivedSeries(existingSeries) ===
+          isDerivedSeries({ parsed: filledParsed, smoothing: path.smoothing })
+      ) {
         newCurrentValuesByConfigIndex[idx] =
           this.currentValuesByConfigIndex[existingSeries.configIndex];
         newCurrentValueTimesByConfigIndex[idx] =
@@ -484,6 +557,19 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     }
 
     this.seriesKeysByTopic = newSeriesKeysByTopic;
+    const seriesChanged =
+      newSeries.length !== this.series.length ||
+      newSeries.some((item, idx) => {
+        const old = this.series[idx];
+        return (
+          item.key !== old?.key || item.enabled !== old.enabled || item.yAxisID !== old.yAxisID
+        );
+      });
+    if (seriesChanged) {
+      // A removed or moved series' old extremes no longer belong on the axis
+      this.updateAction.resetHeldYRange = true;
+    }
+    this.series = newSeries;
 
     this.currentValuesByConfigIndex = newCurrentValuesByConfigIndex;
     this.currentValueTimesByConfigIndex = newCurrentValueTimesByConfigIndex;
@@ -495,6 +581,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     // Dispatch since we might have series changes
     this.datasetsBuilder.setSeries(this.series);
     this.queueDispatchDownsample();
+    this.derivedGeneration += 1;
+    this.queueDerivedValues();
   }
 
   public setGlobalBounds(bounds: Immutable<Bounds1D> | undefined): void {
@@ -630,7 +718,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
   }
 
   private canReset(): boolean {
-    if (this.interactionBounds) {
+    // Reset view also forgets a held y range
+    if (this.interactionBounds || this.holdYRange) {
       return true;
     }
     if (this.analysis) {
@@ -699,6 +788,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       const yMax = this.interactionBounds?.y.max ?? this.configBounds.y.max;
       this.updateAction.yBounds = { min: yMin, max: yMax };
       this.updateAction.y2Bounds = this.configY2Bounds;
+      this.updateAction.resetHeldYRange = true;
       this.shouldResetY = false;
     }
 
@@ -754,6 +844,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
     // work for sparse arrays)
     const datasets = Array.from(result.datasetsByConfigIndex, replaceUndefinedWithEmptyDataset);
     this.queueDatasetsRender(datasets);
+    // preloaded data may have just reached the current time
+    this.queueDerivedValues();
   }
 
   /** Render the provided datasets */

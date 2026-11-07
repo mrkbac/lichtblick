@@ -22,7 +22,7 @@ import {
   SeriesItem,
   Viewport,
 } from "./IDatasetsBuilder";
-import { MAX_CURRENT_DATUMS_PER_SERIES, buildDatasetStyle } from "./utils";
+import { MAX_CURRENT_DATUMS_PER_SERIES, buildDatasetStyle, isDerivedSeries } from "./utils";
 import { Dataset } from "../types";
 import { AnalysisColumns, computeHistogram, computeSpectrum } from "../utils/analysis";
 import { Datum, OriginalValue } from "../utils/datum";
@@ -654,6 +654,27 @@ export class TimestampDatasetsBuilderImpl {
         return `${counts[bin]} in [${formatNumber(edges[bin]!)}, ${formatNumber(edges[bin + 1]!)}]`;
       },
     };
+  }
+
+  /**
+   * The plotted value of each derived series (see `isDerivedSeries`) at `x`: its last sample at or
+   * before `x`, indexed by config index. Other series are left out.
+   */
+  public getDerivedValuesAt(x: number): (OriginalValue | undefined)[] {
+    const values: (OriginalValue | undefined)[] = [];
+    for (const series of this.#seriesByKey.values()) {
+      if (!series.config.enabled || !isDerivedSeries(series.config)) {
+        continue;
+      }
+      const { points } = series;
+      const i = upperBound(points.x, 0, points.length, x) - 1;
+      if (i < this.#firstIdx(series)) {
+        continue;
+      }
+      const ys = this.#getY(series);
+      values[series.config.configIndex] = this.#valueGetter(series, ys)(i);
+    }
+    return values;
   }
 
   public getCsvData(xRange?: Immutable<Bounds1D>): CsvDataset[] {
