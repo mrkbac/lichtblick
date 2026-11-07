@@ -91,6 +91,7 @@ function buildFooMessage(sec: number) {
   };
 }
 
+/** x of the first series' stored points */
 async function storedXs(builder: TimestampDatasetsBuilder): Promise<number[] | undefined> {
   return (await builder.getCsvData())[0]?.data.map(({ x }) => x);
 }

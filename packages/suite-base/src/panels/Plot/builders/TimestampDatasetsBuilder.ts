@@ -151,6 +151,7 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
     );
   }
 
+  /** Drops replayed messages after a seek and records the newest receive time per topic */
   #dropReplayed(events: Immutable<MessageEvent[]>): Immutable<MessageEvent[]> {
     const replayUntil = this.#replayUntilByTopic;
     const out =
