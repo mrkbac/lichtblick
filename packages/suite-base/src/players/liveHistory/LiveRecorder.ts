@@ -8,7 +8,9 @@ import { liveHistorySettings } from "./liveHistorySettings";
 import type { LiveRecorderWorker, RecorderChannel, RecorderMessage } from "./liveRecorder.worker";
 import {
   evictLiveRecordings,
+  liveMachine,
   liveRecordingName,
+  liveSourceUrl,
   moveLiveRecordingsToFolder,
 } from "./liveRecordings";
 
@@ -29,7 +31,9 @@ const budgetBytes = (): number => liveHistorySettings.getState().diskMiB * MIB;
  * Failures are reported once through `onError` and recording stops; the connection is unaffected.
  */
 export class LiveRecorder {
-  #name = liveRecordingName(new Date());
+  #name: string;
+  /** What the session is connected to; part of the file name and its MCAP metadata. */
+  #source: { url: string; serverName?: string };
   #worker = new Worker(new URL("./liveRecorder.worker", import.meta.url));
   #remote = Comlink.wrap<LiveRecorderWorker>(this.#worker);
   #channelKeys = new Map<RecorderChannel, number>();
@@ -52,13 +56,27 @@ export class LiveRecorder {
 
   public constructor({
     profile,
+    source,
     onError,
   }: {
     profile: string | undefined;
+    source: { url: string; serverName?: string };
     onError: (error: unknown) => void;
   }) {
     this.#profile = profile ?? "";
+    this.#source = source;
+    this.#name = this.#newName();
     this.#onError = onError;
+  }
+
+  #newName(): string {
+    return liveRecordingName(new Date(), liveMachine(this.#source.url));
+  }
+
+  #sourceMetadata(): Record<string, string> {
+    const { serverName } = this.#source;
+    const url = liveSourceUrl(this.#source.url);
+    return serverName ? { url, serverName } : { url };
   }
 
   /** `channel` must be the same object for every message of a channel. */
@@ -69,7 +87,7 @@ export class LiveRecorder {
     if (!this.#started) {
       const name = this.#name;
       this.#started = this.#call(async () => {
-        await this.#remote.start(name, this.#profile);
+        await this.#remote.start(name, this.#profile, this.#sourceMetadata());
       });
       this.#postTimer = setInterval(this.#post, POST_INTERVAL_MS);
       this.#evictTimer = setInterval(() => void this.#enforceBudget(), EVICT_INTERVAL_MS);
@@ -141,12 +159,12 @@ export class LiveRecorder {
     this.#file++;
     this.#activeBytes = 0;
     this.#channelKeys.clear();
-    const name = liveRecordingName(new Date());
+    const name = this.#newName();
     this.#name = name;
     void this.#call(async () => {
       // Sent together, so the worker runs them back to back, before any later batch.
       const stopped = this.#remote.stop();
-      const started = this.#remote.start(name, this.#profile);
+      const started = this.#remote.start(name, this.#profile, this.#sourceMetadata());
       await stopped;
       await started;
       await moveLiveRecordingsToFolder().catch(() => {});

@@ -61,7 +61,12 @@ describe("LiveRecorder", () => {
   });
 
   it("starts a new file once the current one passes half the budget", async () => {
-    const recorder = new LiveRecorder({ profile: "", onError: () => {} });
+    remote.start.mockClear();
+    const recorder = new LiveRecorder({
+      profile: "",
+      source: { url: "ws://user:secret@robot.local:8765/x?token=t#f", serverName: "bridge" },
+      onError: () => {},
+    });
     recorder.record(channel, { sec: 1, nsec: 0 }, new Uint8Array(1));
     fileSize = 513 * MIB;
     await flush();
@@ -81,10 +86,27 @@ describe("LiveRecorder", () => {
       "append 1",
       "stop",
     ]);
+    // Both files name the machine and carry the source without credentials.
+    expect(remote.start.mock.calls).toEqual([
+      [
+        expect.stringMatching(/@robot\.local_8765\.mcap$/),
+        "",
+        { url: "ws://robot.local:8765/x", serverName: "bridge" },
+      ],
+      [
+        expect.stringMatching(/@robot\.local_8765\.mcap$/),
+        "",
+        { url: "ws://robot.local:8765/x", serverName: "bridge" },
+      ],
+    ]);
   });
 
   it("keeps recordings when recording is turned off", async () => {
-    const recorder = new LiveRecorder({ profile: "", onError: () => {} });
+    const recorder = new LiveRecorder({
+      profile: "",
+      source: { url: "ws://localhost:8765" },
+      onError: () => {},
+    });
     recorder.record(channel, { sec: 1, nsec: 0 }, new Uint8Array(1));
     await flush();
     vi.mocked(evictLiveRecordings).mockClear();
@@ -94,7 +116,11 @@ describe("LiveRecorder", () => {
   });
 
   it("counts the file being written toward the budget when evicting", async () => {
-    const recorder = new LiveRecorder({ profile: "", onError: () => {} });
+    const recorder = new LiveRecorder({
+      profile: "",
+      source: { url: "ws://localhost:8765" },
+      onError: () => {},
+    });
     recorder.record(channel, { sec: 1, nsec: 0 }, new Uint8Array(1));
     fileSize = 100 * MIB;
     await flush();

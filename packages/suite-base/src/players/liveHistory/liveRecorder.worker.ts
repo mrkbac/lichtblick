@@ -34,8 +34,15 @@ export type RecorderMessage = {
   data: Uint8Array;
 };
 
+/** Recorded with each file as MCAP metadata: what the session was connected to. */
+export const LIVE_SOURCE_METADATA = "lichtblick.live_source";
+
 type Session = {
+  name: string;
+  dir: FileSystemDirectoryHandle;
   handle: FileSystemSyncAccessHandle;
+  /** Messages written; a file that ends without any is deleted. */
+  messageCount: number;
   /** Bytes written to the file so far. */
   size: () => number;
   writer: McapWriter;
@@ -59,7 +66,7 @@ async function serial<T>(run: () => Promise<T>): Promise<T> {
   return await result;
 }
 
-async function start(name: string, profile: string): Promise<void> {
+async function start(name: string, profile: string, source: Record<string, string>): Promise<void> {
   const compress = await compressZstd;
   let releaseLock!: () => void;
   // Never wait for or take over a recording that is in use, and never overwrite one.
@@ -105,8 +112,15 @@ async function start(name: string, profile: string): Promise<void> {
       compressChunk: (data) => ({ compression: "zstd", compressedData: compress(data) }),
     });
     await writer.start({ profile, library: "Lichtblick live recording" });
+    await writer.addMetadata({
+      name: LIVE_SOURCE_METADATA,
+      metadata: new Map(Object.entries(source)),
+    });
     session = {
+      name,
+      dir,
       handle,
+      messageCount: 0,
       size: () => Number(position),
       writer,
       channelIds: new Map(),
@@ -158,6 +172,7 @@ async function append(messages: RecorderMessage[]): Promise<number> {
         publishTime: msg.logTime,
         data: msg.data,
       });
+      session.messageCount++;
     }
   }
   return session.size();
@@ -171,18 +186,24 @@ async function stop(): Promise<void> {
   }
   clearInterval(current.flushTimer);
   try {
-    await current.writer.end();
-    current.handle.flush();
+    if (current.messageCount > 0) {
+      await current.writer.end();
+      current.handle.flush();
+    }
   } finally {
     current.handle.close();
+    if (current.messageCount === 0) {
+      // Nothing to open in a recording without messages.
+      await current.dir.removeEntry(current.name).catch(() => {});
+    }
     current.releaseLock();
   }
 }
 
 const api = {
-  start: async (name: string, profile: string) => {
+  start: async (name: string, profile: string, source: Record<string, string>) => {
     await serial(async () => {
-      await start(name, profile);
+      await start(name, profile, source);
     });
   },
   addChannel: async (key: number, channel: RecorderChannel) => {

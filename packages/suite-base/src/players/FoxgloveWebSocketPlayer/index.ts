@@ -130,6 +130,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
   readonly #sourceId: string;
 
   #url: string; // WebSocket URL.
+  /** Name the server gives itself, once known. */
+  #serverName?: string;
   #name: string;
   #client?: FoxgloveClient; // The client when we're connected.
   #id: string = randomUUID(); // Unique ID for this player session.
@@ -399,6 +401,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
       this.#id = newSessionId;
       this.#name = `${this.#url}\n${event.name}`;
+      this.#serverName = event.name;
       this.#serverCapabilities = Array.isArray(event.capabilities) ? event.capabilities : [];
       this.#serverPublishesTime = this.#serverCapabilities.includes(ServerCapability.time);
       this.#supportedEncodings = event.supportedEncodings;
@@ -1535,7 +1538,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
         this.#emitState();
       };
       try {
-        this.#recorder = new LiveRecorder({ profile: this.#profile, onError });
+        this.#recorder = new LiveRecorder({
+          profile: this.#profile,
+          source: { url: this.#url, serverName: this.#serverName },
+          onError,
+        });
       } catch (error) {
         this.#recorderUnavailable = true;
         onError(error);
