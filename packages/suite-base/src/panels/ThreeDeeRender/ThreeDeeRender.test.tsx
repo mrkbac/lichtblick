@@ -135,6 +135,7 @@ const createMockContext = (
   overrides: Partial<BuiltinPanelExtensionContext> = {},
 ): BuiltinPanelExtensionContext => {
   return {
+    panelElement: document.createElement("div"),
     initialState: {},
     saveState: vi.fn(),
     watch: vi.fn(),
