@@ -100,6 +100,8 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     thumbnail: tabThumbnail,
     module: async () => await import("./Tab"),
     hasCustomToolbar: true,
+    // Created by stacking panels onto each other, not from the panel list.
+    hidden: true,
   },
   {
     title: t("gauge"),

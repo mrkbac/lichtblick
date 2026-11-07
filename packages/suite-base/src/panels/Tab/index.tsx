@@ -3,13 +3,14 @@
 
 import AddIcon from "@mui/icons-material/Add";
 import CloseIcon from "@mui/icons-material/Close";
-import { ButtonBase } from "@mui/material";
+import { ButtonBase, Popover } from "@mui/material";
 import { getPanelData } from "dockview-react";
 import { DragEvent, useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import Panel from "@lichtblick/suite-base/components/Panel";
+import { PanelCatalog, PanelSelection } from "@lichtblick/suite-base/components/PanelCatalog";
 import { getPanelDragData } from "@lichtblick/suite-base/components/PanelCatalog/panelDrag";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { UnconnectedPanelLayout } from "@lichtblick/suite-base/components/PanelLayout";
@@ -20,10 +21,20 @@ import {
 } from "@lichtblick/suite-base/components/PanelTab";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
-import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
+import {
+  LayoutState,
+  useCurrentLayoutActions,
+  useCurrentLayoutSelector,
+} from "@lichtblick/suite-base/context/CurrentLayoutContext";
+import { usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogContext";
 import { LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
-import { getPanelIdForType } from "@lichtblick/suite-base/util/layout";
+import {
+  PANEL_TITLE_CONFIG_KEY,
+  getPanelIdForType,
+  getPanelTypeFromId,
+} from "@lichtblick/suite-base/util/layout";
+import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
 import {
   DEFAULT_TAB_PANEL_CONFIG,
   TAB_PANEL_TYPE,
@@ -195,13 +206,39 @@ function TabButton(props: TabButtonProps): React.JSX.Element {
 
 type Props = { config: TabPanelConfig; saveConfig: SaveConfig<TabPanelConfig> };
 
-/** Tabs that each hold a whole panel layout, which can be split like the root layout. */
+/**
+ * Tabs that each hold a whole panel layout, which can be split like the root layout. It is created
+ * by stacking panels onto each other, and replaced by its last tab when only one is left.
+ */
 function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("panelToolbar");
   const { id: panelId } = usePanelContext();
   const { addPanel, changePanelLayout } = useCurrentLayoutActions();
+  const panelCatalog = usePanelCatalog();
+  const [catalogAnchor, setCatalogAnchor] = useState<HTMLElement | undefined>(undefined);
   const tabs = getTabs(config);
+
+  // A tab without its own title is named after the panels in it.
+  const contentTitlesSelector = useCallback(
+    (state: LayoutState) =>
+      tabs
+        .map((tab) =>
+          getPanelIds(tab.layout)
+            .map((id) => {
+              const custom = state.selectedLayout?.data?.configById[id]?.[PANEL_TITLE_CONFIG_KEY];
+              if (typeof custom === "string" && custom !== "") {
+                return custom;
+              }
+              const type = getPanelTypeFromId(id);
+              return panelCatalog.getPanelByType(type)?.title ?? type;
+            })
+            .join(" + "),
+        )
+        .join("\n"),
+    [panelCatalog, tabs],
+  );
+  const contentTitles = useCurrentLayoutSelector(contentTitlesSelector).split("\n");
   const activeIdx = getActiveTabIndex(config);
   const layout = tabs[activeIdx]?.layout;
   const contentId = `${panelId}-tabpanel`;
@@ -227,8 +264,33 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
     });
   };
 
-  const addTab = () => {
-    saveConfig({ tabs: [...tabs, { title: `${tabs.length + 1}` }], activeTabIdx: tabs.length });
+  // Stacking a panel onto this Tab panel adds it as a new tab.
+  const addAsTab = (event: DragEvent<HTMLElement>) => {
+    if (event.defaultPrevented) {
+      return;
+    }
+    const selection = getPanelDragData(event.dataTransfer);
+    const movedId = getPanelData()?.panelId ?? undefined;
+    if (selection == undefined && movedId == undefined) {
+      return;
+    }
+    event.preventDefault();
+    addPanel({
+      id: selection ? getPanelIdForType(selection.type) : movedId!,
+      config: selection?.config,
+      position: "center",
+      targetPanelId: panelId,
+    });
+  };
+
+  const addNewTab = ({ type, config: panelConfig }: PanelSelection) => {
+    setCatalogAnchor(undefined);
+    addPanel({
+      id: getPanelIdForType(type),
+      config: panelConfig,
+      position: "center",
+      targetPanelId: panelId,
+    });
   };
 
   const dropPanel = (index: number, event: DragEvent<HTMLElement>) => {
@@ -259,20 +321,37 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
     <div className={classes.root}>
       <PanelToolbar
         additionalIcons={
-          <ToolbarIconButton title={t("addTab")} data-testid="add-tab" onClick={addTab}>
+          <ToolbarIconButton
+            title={t("addTab")}
+            data-testid="add-tab"
+            onClick={(event) => {
+              setCatalogAnchor(event.currentTarget);
+            }}
+          >
             <AddIcon />
           </ToolbarIconButton>
         }
       >
-        <div className={classes.strip} role="tablist">
+        <div
+          className={classes.strip}
+          role="tablist"
+          // The outer layout leaves drags over the tab strip to it.
+          data-tab-strip
+          onDragOver={(event) => {
+            if (isPanelBeingDragged(event.dataTransfer)) {
+              event.preventDefault();
+            }
+          }}
+          onDrop={addAsTab}
+        >
           {tabs.map((tab, index) => (
             <TabButton
               // Tabs have no ids; the index is their identity.
               key={index}
-              title={tab.title}
+              title={tab.title !== "" ? tab.title : (contentTitles[index] ?? "")}
               contentId={contentId}
               isActive={index === activeIdx}
-              closable={tabs.length > 1}
+              closable
               onSelect={() => {
                 select(index);
               }}
@@ -289,6 +368,17 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
           ))}
         </div>
       </PanelToolbar>
+      <Popover
+        open={catalogAnchor != undefined}
+        anchorEl={catalogAnchor}
+        onClose={() => {
+          setCatalogAnchor(undefined);
+        }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+        transformOrigin={{ vertical: "top", horizontal: "right" }}
+      >
+        <PanelCatalog mode="list" isMenu onPanelSelect={addNewTab} />
+      </Popover>
       <div className={classes.content} role="tabpanel" id={contentId}>
         {/* A fresh layout per tab, so a change can't land in the tab switched to meanwhile. */}
         <UnconnectedPanelLayout

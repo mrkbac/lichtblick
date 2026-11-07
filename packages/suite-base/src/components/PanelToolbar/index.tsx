@@ -110,12 +110,16 @@ export default React.memo<PanelToolbarProps>(function PanelToolbar({
           <DragIndicatorIcon fontSize="inherit" />
         </span>
       )}
-      {children ??
-        (title && (
+      {children != undefined ? (
+        // Custom toolbar content shrinks (and clips) instead of pushing the grip out of the panel.
+        <div className={classes.content}>{children}</div>
+      ) : (
+        title && (
           <Typography noWrap variant="body2" color="textSecondary" style={{ flex: "auto" }}>
             {title}
           </Typography>
-        ))}
+        )
+      )}
       <PanelToolbarControls
         additionalIcons={additionalIconsWithHelp}
         isUnknownPanel={isUnknownPanel}

@@ -11,7 +11,7 @@ import panelsReducer from "@lichtblick/suite-base/providers/CurrentLayoutProvide
 import { LayoutDropPosition, LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import { PanelConfig } from "@lichtblick/suite-base/types/panels";
 import { getPanelIds, isLayoutGroup } from "@lichtblick/suite-base/util/layoutTree";
-import { findLayoutTree, getAllPanelIds } from "@lichtblick/suite-base/util/tabLayout";
+import { findLayoutTree, getAllPanelIds, getTabs } from "@lichtblick/suite-base/util/tabLayout";
 
 /** Undo steps kept per layout. */
 export const HISTORY_LIMIT = 100;
@@ -86,6 +86,23 @@ export function reopenPlacements(node: LayoutNode | undefined, panelId: string):
 }
 
 /**
+ * Where panel `id` could go back after it is closed from `data`. A panel that filled a whole tab
+ * goes back as a tab of its Tab panel, or as a tab next to what is left of that Tab panel.
+ */
+function closePlacements(data: LayoutData, id: string): Placement[] {
+  const found = findLayoutTree(data, id);
+  const placements = reopenPlacements(found?.tree, id);
+  const tabPanelId = found?.location.tabPanelId;
+  if (placements.length > 0 || tabPanelId == undefined) {
+    return placements;
+  }
+  const others = getTabs(data.configById[tabPanelId])
+    .flatMap((tab) => getPanelIds(tab.layout))
+    .filter((other) => other !== id);
+  return [tabPanelId, ...others].map((targetPanelId) => ({ position: "center", targetPanelId }));
+}
+
+/**
  * Undo/redo history of one layout's data. Layout data is immutable, so steps are snapshots that
  * share structure. Any data it did not produce itself (another layout loaded, a revert) resets it.
  */
@@ -126,7 +143,7 @@ export class LayoutHistory {
       this.#closed.push({
         id,
         configs: _.omit(data.configById, Object.keys(next.configById)),
-        placements: reopenPlacements(findLayoutTree(data, id)?.tree, id),
+        placements: closePlacements(data, id),
       });
       if (this.#closed.length > HISTORY_LIMIT) {
         this.#closed.shift();
