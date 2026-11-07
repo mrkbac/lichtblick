@@ -28,9 +28,10 @@ export function liveSourceUrl(url: string): string {
 /** The machine a live connection goes to, from its URL: "robot.local:8765". */
 export function liveMachine(url: string): string {
   try {
-    return new URL(url).host || url;
+    return new URL(url).host;
   } catch {
-    return url;
+    // Never the raw text: it may carry credentials, e.g. a relative URL with a token.
+    return "";
   }
 }
 

@@ -118,6 +118,7 @@ describe("liveSourceUrl", () => {
       "ws://robot.local:8765/x",
     );
     expect(liveSourceUrl("not a url")).toBe("");
+    expect(liveMachine("/bridge?token=secret")).toBe("");
   });
 });
 

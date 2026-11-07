@@ -61,9 +61,10 @@ describe("LiveRecorder", () => {
   });
 
   it("starts a new file once the current one passes half the budget", async () => {
+    remote.start.mockClear();
     const recorder = new LiveRecorder({
       profile: "",
-      source: { url: "ws://localhost:8765" },
+      source: { url: "ws://user:secret@robot.local:8765/x?token=t#f", serverName: "bridge" },
       onError: () => {},
     });
     recorder.record(channel, { sec: 1, nsec: 0 }, new Uint8Array(1));
@@ -84,6 +85,19 @@ describe("LiveRecorder", () => {
       "channel 0",
       "append 1",
       "stop",
+    ]);
+    // Both files name the machine and carry the source without credentials.
+    expect(remote.start.mock.calls).toEqual([
+      [
+        expect.stringMatching(/@robot\.local_8765\.mcap$/),
+        "",
+        { url: "ws://robot.local:8765/x", serverName: "bridge" },
+      ],
+      [
+        expect.stringMatching(/@robot\.local_8765\.mcap$/),
+        "",
+        { url: "ws://robot.local:8765/x", serverName: "bridge" },
+      ],
     ]);
   });
 
