@@ -21,6 +21,8 @@ import { CatalogFolder } from "./useCatalogFolder";
 export type LiveCatalog = CatalogFolder & {
   /** Recordings being written right now; they can't be read until the session ends. */
   active: LiveRecording[];
+  /** Bytes of finished recordings in browser storage, from the listing (no indexing needed). */
+  browserBytes: number;
   /** The finished recording behind a catalog entry, for download and delete. */
   recordingOf: (recording: CatalogRecording) => LiveRecording | undefined;
 };
@@ -34,10 +36,12 @@ const pathOf = (rec: LiveRecording) => `${rec.location}/${rec.name}`;
 /** How often an open list checks whether recordings changed. */
 const POLL_MS = 5000;
 
-/** What identifies a listing: each copy, whether it is being written, and its size. */
+/** What identifies a listing: each copy, whether it is being written, its size and mtime. */
 const listingSignature = (recordings: readonly LiveRecording[]): string =>
   recordings
-    .map((rec) => `${pathOf(rec)}|${rec.active ? "active" : rec.sizeBytes}`)
+    .map(
+      (rec) => `${pathOf(rec)}|${rec.active ? "active" : `${rec.sizeBytes}|${rec.lastModified}`}`,
+    )
     .sort()
     .join("\n");
 
@@ -147,6 +151,10 @@ export function useLiveCatalog(name: string): LiveCatalog {
       progress,
       error,
       active: live.filter((rec) => rec.active),
+      browserBytes: live.reduce(
+        (sum, rec) => sum + (rec.location === "browser" ? rec.sizeBytes : 0),
+        0,
+      ),
       recordingOf,
       // "Change folder" picks where finished recordings are moved to.
       pickFolder: async () => {

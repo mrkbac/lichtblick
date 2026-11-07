@@ -154,11 +154,7 @@ export function LiveRecordingsList({
     [liveCatalog, recordingActions, onOpened, run],
   );
 
-  const browserBytes = liveCatalog.recordings.reduce(
-    (sum, recording) =>
-      sum + (recordingOf(recording)?.location === "browser" ? (recording.size ?? 0) : 0),
-    0,
-  );
+  const { browserBytes } = liveCatalog;
   const recordingNow = liveCatalog.active
     .map((rec) => parseLiveRecordingName(rec.name).machine ?? t("liveSession"))
     .join(", ");
