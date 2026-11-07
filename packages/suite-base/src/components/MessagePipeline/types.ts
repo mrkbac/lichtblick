@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time } from "@foxglove/rostime";
+import type { IWritable } from "@mcap/core";
 
 import { Immutable, MessageEvent, Metadata, ParameterValue } from "@lichtblick/suite";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
@@ -39,6 +40,7 @@ export type MessagePipelineContext = Immutable<{
   playUntil?: (time: Time) => void;
   setPlaybackSpeed?: (speed: number) => void;
   seekPlayback?: (time: Time) => void;
+  exportLiveHistory?: (writable: IWritable) => Promise<void>;
   // Don't render the next frame until the returned function has been called.
   pauseFrame: (name: string) => ResumeFrame;
   getBatchIterator: (

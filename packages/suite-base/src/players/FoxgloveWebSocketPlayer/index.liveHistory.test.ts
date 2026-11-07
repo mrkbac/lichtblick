@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { McapIndexedReader, TempBuffer } from "@mcap/core";
 import type { Mock } from "vitest";
 
 import NoopMetricsCollector from "@lichtblick/suite-base/players/NoopMetricsCollector";
@@ -9,6 +10,26 @@ import { liveHistorySettings } from "@lichtblick/suite-base/players/liveHistory/
 import { PlayerState } from "@lichtblick/suite-base/players/types";
 
 import FoxgloveWebSocketPlayer from "./index";
+
+const recorder = vi.hoisted(() => ({ enabled: false, failNext: 0, record: vi.fn() }));
+vi.mock("@lichtblick/suite-base/players/liveHistory/LiveRecorder", () => ({
+  LiveRecorder: class {
+    public record = recorder.record;
+    public constructor() {
+      if (recorder.failNext > 0) {
+        recorder.failNext--;
+        throw new Error("Workers are blocked");
+      }
+    }
+    public async stop() {}
+  },
+}));
+vi.mock("@lichtblick/suite-base/players/liveHistory/liveRecordings", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@lichtblick/suite-base/players/liveHistory/liveRecordings")
+  >()),
+  supportsLiveRecording: () => recorder.enabled,
+}));
 
 class MockWebSocket {
   public static lastInstance: MockWebSocket | undefined;
@@ -167,6 +188,33 @@ describe("FoxgloveWebSocketPlayer live history", () => {
     expect(values(from)).toEqual([11]);
   });
 
+  it("reports session and history stats", () => {
+    expect(last().liveStats).toEqual(
+      expect.objectContaining({ historyMessages: 3, connectedAtMs: expect.any(Number) }),
+    );
+  });
+
+  it("saves the history as MCAP with the received bytes", async () => {
+    const file = new TempBuffer();
+    await player.exportLiveHistory(file);
+    const reader = await McapIndexedReader.Initialize({ readable: file });
+    const channel = [...reader.channelsById.values()][0]!;
+    expect(channel).toEqual(expect.objectContaining({ topic: "/a", messageEncoding: "json" }));
+    expect(reader.schemasById.get(channel.schemaId)).toEqual(
+      expect.objectContaining({ name: "S", encoding: "jsonschema" }),
+    );
+    const decoder = new TextDecoder();
+    const saved = [];
+    for await (const msg of reader.readMessages()) {
+      saved.push([Number(msg.logTime / SEC), JSON.parse(decoder.decode(msg.data)).v]);
+    }
+    expect(saved).toEqual([
+      [10, 10],
+      [11, 11],
+      [12, 12],
+    ]);
+  });
+
   it("clamps seeks to the buffered range", async () => {
     player.pausePlayback();
     player.seekPlayback({ sec: 1, nsec: 0 });
@@ -256,6 +304,34 @@ describe("FoxgloveWebSocketPlayer live history", () => {
     );
     expect(last().startTime).toEqual({ sec: 19, nsec: 0 });
     (console.warn as Mock).mockClear();
+  });
+
+  it("keeps delivering messages if recording can't start, and retries on reconnect", async () => {
+    recorder.enabled = true;
+    recorder.failNext = 1;
+    (global as { Worker?: unknown }).Worker = vi.fn();
+    try {
+      const from = states.length;
+      await tick(13, 13);
+      await tick(14, 14);
+      expect(values(from)).toEqual([13, 14]);
+      expect(last().topicStats.get("/a")?.numMessages).toBe(5);
+      expect(states.at(-1)!.alerts?.map(({ message }) => message)).toContain(
+        "Recording to browser storage stopped",
+      );
+      expect(recorder.record).not.toHaveBeenCalled();
+      // the alert is also logged once
+      expect((console.warn as Mock).mock.calls.length).toBe(1);
+      (console.warn as Mock).mockClear();
+
+      connect();
+      await tick(50, 50, 1);
+      expect(recorder.record).toHaveBeenCalledTimes(1);
+    } finally {
+      recorder.enabled = false;
+      recorder.record.mockClear();
+      delete (global as { Worker?: unknown }).Worker;
+    }
   });
 
   it("clears the history on reconnect", async () => {

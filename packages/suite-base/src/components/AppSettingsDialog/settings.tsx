@@ -44,6 +44,7 @@ import {
   LIVE_HISTORY_MEMORY_OPTIONS_MIB,
   LIVE_HISTORY_WINDOW_OPTIONS_SEC,
   liveHistorySettings,
+  LIVE_RECORDING_DISK_OPTIONS_MIB,
 } from "@lichtblick/suite-base/players/liveHistory/liveHistorySettings";
 import { reportError } from "@lichtblick/suite-base/reportError";
 import { LaunchPreferenceValue } from "@lichtblick/suite-base/types/LaunchPreferenceValue";
@@ -316,7 +317,8 @@ const withCurrent = (options: readonly number[], current: number) =>
 
 export function LiveHistorySettings(): React.ReactElement {
   const { t } = useTranslation("appSettings");
-  const { windowSec, maxMiB, setWindowSec, setMaxMiB } = useStore(liveHistorySettings);
+  const { windowSec, maxMiB, diskMiB, setWindowSec, setMaxMiB, setDiskMiB } =
+    useStore(liveHistorySettings);
 
   return (
     <Stack gap={1}>
@@ -358,6 +360,22 @@ export function LiveHistorySettings(): React.ReactElement {
         </Stack>
       </Stack>
       <FormHelperText>{t("liveHistoryDescription")}</FormHelperText>
+      <FormLabel>{t("liveRecordingDisk")}</FormLabel>
+      <Select
+        value={diskMiB}
+        fullWidth
+        onChange={(event) => {
+          setDiskMiB(Number(event.target.value));
+        }}
+        data-testid="live-recording-disk"
+      >
+        {withCurrent(LIVE_RECORDING_DISK_OPTIONS_MIB, diskMiB).map((mib) => (
+          <MenuItem key={mib} value={mib}>
+            {mib === 0 ? t("liveRecordingOff") : formatLiveHistoryMemory(mib)}
+          </MenuItem>
+        ))}
+      </Select>
+      <FormHelperText>{t("liveRecordingDescription")}</FormHelperText>
     </Stack>
   );
 }

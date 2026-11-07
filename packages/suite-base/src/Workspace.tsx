@@ -50,6 +50,7 @@ import { KeyboardShortcuts } from "@lichtblick/suite-base/components/KeyboardSho
 import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import LayoutBrowser from "@lichtblick/suite-base/components/LayoutBrowser";
 import { LayoutTemplateCommands } from "@lichtblick/suite-base/components/LayoutTemplates";
+import { LiveRecordingsDialog } from "@lichtblick/suite-base/components/LiveRecordingsDialog";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -764,6 +765,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       <CommandPalette />
       <LayoutTemplateCommands />
       <KeyboardShortcuts />
+      <LiveRecordingsDialog />
       <div className={classes.container} ref={containerRef} tabIndex={0}>
         {appBar}
         <Sidebars

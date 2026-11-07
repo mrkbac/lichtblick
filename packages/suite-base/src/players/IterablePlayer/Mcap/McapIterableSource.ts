@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time } from "@foxglove/rostime";
-import { McapIndexedReader, McapTypes } from "@mcap/core";
+import { MCAP_MAGIC, McapIndexedReader, McapTypes } from "@mcap/core";
 
 import Log from "@lichtblick/log";
 import { loadDecompressHandlers } from "@lichtblick/mcap-support";
@@ -42,6 +42,20 @@ const log = Log.getLogger(__filename);
  * as "unindexed", since that would mask a real error behind an unbounded, unpooled eager-streaming
  * fallback (see `#eagerInner`).
  */
+/** Starts with the MCAP magic but doesn't end with it: written partially, never finished. */
+async function isTruncatedMcap(readable: McapTypes.IReadable): Promise<boolean> {
+  const size = await readable.size();
+  const magicLength = BigInt(MCAP_MAGIC.length);
+  if (size < magicLength * 2n) {
+    return false;
+  }
+  const isMagic = (bytes: Uint8Array) => MCAP_MAGIC.every((byte, i) => bytes[i] === byte);
+  return (
+    isMagic(await readable.read(0n, magicLength)) &&
+    !isMagic(await readable.read(size - magicLength, magicLength))
+  );
+}
+
 async function tryCreateIndexedReader(
   readable: McapTypes.IReadable,
   decompressHandlers: McapTypes.DecompressHandlers,
@@ -59,6 +73,11 @@ async function tryCreateIndexedReader(
     // operational failure. Any other message indicates a malformed file or an I/O error bubbling
     // up from `readable` and must be surfaced as a real failure, not silently swallowed.
     if (error.message.includes("File is not indexed")) {
+      return { status: "unindexed" };
+    }
+    // A recording cut off mid-write (e.g. the browser closed while recording live) starts like an
+    // MCAP file but has no footer; its complete records can still be streamed.
+    if (await isTruncatedMcap(readable).catch(() => false)) {
       return { status: "unindexed" };
     }
     log.error(error);

@@ -128,6 +128,48 @@ describe("McapIterableSource", () => {
     ]);
   });
 
+  it("opens a recording that was cut off before its footer was written", async () => {
+    const tempBuffer = new TempBuffer();
+    const writer = new McapWriter({ writable: tempBuffer, chunkSize: 1 });
+    await writer.start({ library: "test", profile: "" });
+    const schemaId = await writer.registerSchema({
+      name: "test_schema",
+      encoding: "jsonschema",
+      data: new TextEncoder().encode(JSON.stringify({ type: "object" })),
+    });
+    const channelId = await writer.registerChannel({
+      schemaId,
+      topic: "/cut",
+      messageEncoding: "json",
+      metadata: new Map(),
+    });
+    for (let i = 1; i <= 3; i++) {
+      await addMessage(writer, channelId, {
+        logTime: BigInt(i) * 1_000_000_000n,
+        data: new TextEncoder().encode(JSON.stringify({ v: i })),
+      });
+    }
+    // no writer.end(): the tab closed while recording
+
+    const source = new McapIterableSource({
+      type: "file",
+      file: new Blob([tempBuffer.get().slice()]) as unknown as globalThis.Blob,
+    });
+    const { topics } = await source.initialize();
+    expect(topics.map(({ name }) => name)).toEqual(["/cut"]);
+
+    const values = [];
+    for await (const result of source.messageIterator({
+      topics: new Map([["/cut", PlayerBuilder.subscribePayload({ topic: "/cut" })]]),
+    })) {
+      if (result.type === "message-event") {
+        values.push(JSON.parse(new TextDecoder().decode(result.msgEvent.message)).v);
+      }
+    }
+    // each message went into its own chunk; all complete chunks are recovered
+    expect(values).toEqual([1, 2, 3]);
+  });
+
   it("loads decompression handlers before creating an indexed reader for an indexed file", async () => {
     // Given
     const topic = `/${BasicBuilder.string()}`;
