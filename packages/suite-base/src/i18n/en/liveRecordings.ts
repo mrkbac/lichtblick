@@ -16,6 +16,7 @@ export const liveRecordings = {
   folderNeedsAccess: "Allow access to the folder {{name}} to move finished recordings there.",
   liveSession: "Live session",
   recordingNow: "Recording now: {{machines}}",
+  search: "Search recordings: machine, topic:gps, duration>5m…",
   recordingOff: "Recording is off. Turn it on in Settings under Live history.",
   stopUsingFolder: "Stop using folder",
   title: "Live recordings",

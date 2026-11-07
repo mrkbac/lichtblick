@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { ArrowDownload20Regular, Delete20Regular } from "@fluentui/react-icons";
-import { Button, IconButton, Tooltip, Typography } from "@mui/material";
+import { Button, IconButton, TextField, Tooltip, Typography } from "@mui/material";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useStore } from "zustand";
@@ -230,6 +230,19 @@ export function LiveRecordingsList({
         <Typography variant="body2" color="error">
           {error}
         </Typography>
+      )}
+      {/* The start page has its own search box; elsewhere (the dialog) the list brings one. */}
+      {queryProp == undefined && (
+        <TextField
+          size="small"
+          type="search"
+          value={query}
+          placeholder={t("search")}
+          aria-label={t("search")}
+          onChange={(event) => {
+            onQueryChange(event.target.value);
+          }}
+        />
       )}
       <Catalog
         folder={catalogFolder}

@@ -103,7 +103,12 @@ function filterPredicate(key: string, op: string, value: string): Predicate | un
     case "path":
       return (r) => sourceText(r).toLowerCase().includes(needle);
     case "machine":
-      return op === ":" ? (r) => r.machine?.toLowerCase().includes(needle) ?? false : undefined;
+      // `machine:robot` matches part of the name, `machine=robot-1` the whole name.
+      return op === "="
+        ? (r) => r.machine?.toLowerCase() === needle
+        : op === ":"
+          ? (r) => r.machine?.toLowerCase().includes(needle) ?? false
+          : undefined;
     case "since":
     case "until": {
       const ms = Date.parse(value);
@@ -132,7 +137,8 @@ function filterPredicate(key: string, op: string, value: string): Predicate | un
 
 /**
  * Filter recordings with a query of space-separated terms, all of which must match:
- * free text (name, path or machine), `topic:`, `schema:`, `path:`, `machine:`, `since:`/`until:` (dates),
+ * free text (name, path or machine), `topic:`, `schema:`, `path:`, `machine:` (or exact `machine=`),
+ * `since:`/`until:` (dates),
  * `duration>5m`, `size<2GB`, `status:error|nosummary|ok` and `has:image|gps|pointcloud|tf|video`
  * (`|` matches either). Unknown filters match as text.
  */
@@ -142,7 +148,7 @@ export function filterRecordings(
 ): CatalogRecording[] {
   const predicates: Predicate[] = [];
   for (const term of query.trim().split(/\s+/).filter(Boolean)) {
-    const match = /^([a-z]+)([:<>])(.+)$/i.exec(term);
+    const match = /^([a-z]+)([:<>=])(.+)$/i.exec(term);
     const predicate = match
       ? filterPredicate(match[1]!.toLowerCase(), match[2]!, match[3]!)
       : undefined;

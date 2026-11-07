@@ -26,6 +26,12 @@ export type LiveCatalog = CatalogFolder & {
 };
 
 /**
+ * A recording's catalog path, unique per copy: a recording can be both in browser storage and in
+ * the user's folder (e.g. after a move that failed halfway), and actions must hit the right one.
+ */
+const pathOf = (rec: LiveRecording) => `${rec.location}/${rec.name}`;
+
+/**
  * Live recordings as a catalog: indexed like a folder of recordings (topics, duration, thumbnails,
  * GPS tracks), titled by the machine they came from.
  */
@@ -48,7 +54,7 @@ export function useLiveCatalog(name: string): LiveCatalog {
       }
       setLive(listed);
       const finished = listed.filter((rec) => !rec.active);
-      const files: FolderFile[] = finished.map((rec) => ({ path: rec.name, getFile: rec.file }));
+      const files: FolderFile[] = finished.map((rec) => ({ path: pathOf(rec), getFile: rec.file }));
       const asLive = (recording: CatalogRecording): CatalogRecording => {
         const { machine } = parseLiveRecordingName(recording.name);
         // The machine is the title; the file name stays below it as the path.
@@ -91,7 +97,7 @@ export function useLiveCatalog(name: string): LiveCatalog {
     (recording: CatalogRecording) => {
       const { source } = recording;
       return source.type === "local-file"
-        ? live.find((rec) => !rec.active && rec.name === source.path)
+        ? live.find((rec) => !rec.active && pathOf(rec) === source.path)
         : undefined;
     },
     [live],
@@ -100,7 +106,7 @@ export function useLiveCatalog(name: string): LiveCatalog {
   const fileOf = useCallback(
     (recording: CatalogRecording): FolderFile | undefined => {
       const rec = recordingOf(recording);
-      return rec && { path: rec.name, getFile: rec.file };
+      return rec && { path: pathOf(rec), getFile: rec.file };
     },
     [recordingOf],
   );

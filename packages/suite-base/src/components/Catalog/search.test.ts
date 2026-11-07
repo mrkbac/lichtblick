@@ -54,6 +54,8 @@ describe("filterRecordings", () => {
     expect(liveIds("machine:ROBOT")).toEqual(["e"]);
     expect(liveIds("robot.local")).toEqual(["e"]);
     expect(liveIds("machine:other")).toEqual([]);
+    expect(liveIds("machine=robot.local:8765")).toEqual(["e"]);
+    expect(liveIds("machine=robot.local")).toEqual([]);
   });
 
   it.each([
