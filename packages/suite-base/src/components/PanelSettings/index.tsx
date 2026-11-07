@@ -35,10 +35,11 @@ import {
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
 import { PanelConfig } from "@lichtblick/suite-base/types/panels";
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
-import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
+import { getAllPanelIds } from "@lichtblick/suite-base/util/tabLayout";
 
 const singlePanelIdSelector = (state: LayoutState) => {
-  const panelIds = getPanelIds(state.selectedLayout?.data?.layout);
+  const data = state.selectedLayout?.data;
+  const panelIds = data ? getAllPanelIds(data) : [];
   return panelIds.length === 1 ? panelIds[0] : undefined;
 };
 

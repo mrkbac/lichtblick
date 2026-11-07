@@ -24,4 +24,16 @@ export const useStyles = makeStyles()((theme) => ({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     top: "auto !important" as any,
   },
+  grip: {
+    display: "flex",
+    alignItems: "center",
+    flex: "none",
+    alignSelf: "stretch",
+    marginLeft: theme.spacing(-0.5),
+    fontSize: theme.typography.body1.fontSize,
+    color: theme.palette.text.disabled,
+    cursor: "grab",
+
+    "&:hover": { color: theme.palette.text.secondary },
+  },
 }));

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
-import { PANEL_TITLE_CONFIG_KEY } from "@lichtblick/suite-base/util/layout";
 
 import { migrateMosaicLayout } from "./migrateMosaicLayout";
 
@@ -38,7 +37,7 @@ describe("migrateMosaicLayout", () => {
     expect(migrateMosaicLayout(current)).toBe(current);
   });
 
-  it("turns a Tab panel into tab groups, keeping every panel and its config", () => {
+  it("keeps Tab panels, converting the layout of each tab", () => {
     const result = migrateMosaicLayout(
       layoutData(
         { direction: "row", first: "Tab!t", second: "C!1" },
@@ -50,65 +49,63 @@ describe("migrateMosaicLayout", () => {
                 title: "Cameras",
                 layout: { direction: "column", first: "Image!a", second: "Image!b" },
               },
-              {
-                title: "Plots",
-                layout: { direction: "column", first: "Plot!a", second: "Plot!b" },
-              },
               { title: "Logs", layout: "Log!a" },
               { title: "Empty" },
             ],
           },
           "Image!a": { topic: "/a" },
-          "Log!a": {},
-          "C!1": {},
         },
       ),
     );
-    // The active tab's arrangement, with the other tabs' panels stacked in the same positions
     expect(result.layout).toEqual({
       direction: "row",
-      children: [
-        {
-          direction: "column",
-          children: [
-            { panels: ["Image!a", "Plot!a", "Log!a"], active: "Plot!a" },
-            { panels: ["Image!b", "Plot!b"], active: "Plot!b" },
-          ],
-          sizes: [50, 50],
-        },
-        { panels: ["C!1"] },
-      ],
+      children: [{ panels: ["Tab!t"] }, { panels: ["C!1"] }],
       sizes: [50, 50],
     });
-    expect(result.configById["Tab!t"]).toBeUndefined();
+    expect(result.configById["Tab!t"]).toEqual({
+      activeTabIdx: 1,
+      tabs: [
+        {
+          title: "Cameras",
+          layout: {
+            direction: "column",
+            children: [{ panels: ["Image!a"] }, { panels: ["Image!b"] }],
+            sizes: [50, 50],
+          },
+        },
+        { title: "Logs", layout: { panels: ["Log!a"] } },
+        { title: "Empty" },
+      ],
+    });
     expect(result.configById["Image!a"]).toEqual({ topic: "/a" });
-    // A single-panel tab passes its title on to the panel
-    expect(result.configById["Log!a"]).toEqual({ [PANEL_TITLE_CONFIG_KEY]: "Logs" });
   });
 
-  it("converts nested Tab panels", () => {
+  it("converts nested Tab panels and leaves converted ones alone", () => {
     const result = migrateMosaicLayout(
       layoutData("Tab!outer", {
         "Tab!outer": { activeTabIdx: 0, tabs: [{ title: "1", layout: "Tab!inner" }] },
         "Tab!inner": { activeTabIdx: 0, tabs: [{ title: "2", layout: "A!1" }] },
       }),
     );
-    expect(result.layout).toEqual({ panels: ["A!1"] });
-    expect(Object.keys(result.configById)).toEqual(["A!1"]);
+    expect(result.layout).toEqual({ panels: ["Tab!outer"] });
+    expect(result.configById["Tab!inner"]).toEqual({
+      activeTabIdx: 0,
+      tabs: [{ title: "2", layout: { panels: ["A!1"] } }],
+    });
+    const current = layoutData({ panels: ["Tab!t"] }, { "Tab!t": result.configById["Tab!inner"]! });
+    expect(migrateMosaicLayout(current)).toBe(current);
   });
 
   it("drops a malformed layout instead of failing on it", () => {
     expect(migrateMosaicLayout(layoutData({ direction: "row" })).layout).toBeUndefined();
   });
 
-  it("drops Tab panels whose config is malformed, keeping the rest of the layout", () => {
+  it("turns malformed tabs into empty tabs", () => {
     const result = migrateMosaicLayout(
-      layoutData(
-        { direction: "row", first: "Tab!t", second: "A!1" },
-        { "Tab!t": { tabs: {} }, "Tab!u": { tabs: ["x", { title: 3, layout: "B!1" }] } },
-      ),
+      layoutData("Tab!t", { "Tab!t": { tabs: ["x", { title: 3, layout: "B!1" }, { layout: 5 }] } }),
     );
-    expect(result.layout).toEqual({ panels: ["A!1"] });
-    expect(result.configById["Tab!t"]).toBeUndefined();
+    expect(result.configById["Tab!t"]).toEqual({
+      tabs: [{ title: "2", layout: { panels: ["B!1"] } }, { title: "3" }],
+    });
   });
 });

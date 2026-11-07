@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import AddIcon from "@mui/icons-material/Add";
+import { IconButton, Popover } from "@mui/material";
 import {
   DockviewApi,
   DockviewDefaultTab,
@@ -13,12 +15,13 @@ import { DragEvent, useCallback, useEffect, useRef, useState, useSyncExternalSto
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
+import { PanelCatalog, PanelSelection } from "@lichtblick/suite-base/components/PanelCatalog";
 import {
   getPanelDragData,
   isPanelDrag,
 } from "@lichtblick/suite-base/components/PanelCatalog/panelDrag";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
-import { getPanelIdForType } from "@lichtblick/suite-base/util/layout";
+import { PANEL_TITLE_CONFIG_KEY, getPanelIdForType } from "@lichtblick/suite-base/util/layout";
 
 /** How long a drag must rest on a background tab before the tab opens. */
 export const TAB_HOVER_ACTIVATE_MS = 500;
@@ -64,9 +67,18 @@ export function useDragHoverActivation(
   return { onDragEnter, onDragLeave, onDrop: cancel };
 }
 
-/** Whether `dataTransfer` carries a panel: one from the catalog, or a panel being moved. */
-function isPanelBeingDragged(dataTransfer: DataTransfer | null | undefined, dockId: string) {
-  return isPanelDrag(dataTransfer) || getPanelData()?.viewId === dockId;
+/**
+ * Whether `dataTransfer` carries a panel: one from the catalog, or a panel being moved (also one
+ * from another layout, such as the root layout and the layout in a tab of a Tab panel).
+ */
+export function isPanelBeingDragged(dataTransfer: DataTransfer | null | undefined): boolean {
+  return isPanelDrag(dataTransfer) || getPanelData()?.panelId != undefined;
+}
+
+/** The panel being moved from another dockview (e.g. from the root layout into a tab), if any. */
+export function getForeignPanelId(dockId: string): string | undefined {
+  const data = getPanelData();
+  return data?.viewId !== dockId ? (data?.panelId ?? undefined) : undefined;
 }
 
 // Whether a panel is being dragged anywhere. Data types are only readable once the drag has
@@ -131,14 +143,11 @@ function useDropIntoGroup(
 } {
   const { addPanel } = useCurrentLayoutActions();
 
-  const onDragOver = useCallback(
-    (event: DragEvent<HTMLElement>) => {
-      if (isPanelBeingDragged(event.dataTransfer, containerApi.id)) {
-        event.preventDefault();
-      }
-    },
-    [containerApi],
-  );
+  const onDragOver = useCallback((event: DragEvent<HTMLElement>) => {
+    if (isPanelBeingDragged(event.dataTransfer)) {
+      event.preventDefault();
+    }
+  }, []);
 
   const onDrop = useCallback(
     (event: DragEvent<HTMLElement>) => {
@@ -152,6 +161,12 @@ function useDropIntoGroup(
           position: "center",
           targetPanelId,
         });
+        return;
+      }
+      const foreignPanelId = getForeignPanelId(containerApi.id);
+      if (foreignPanelId != undefined) {
+        event.preventDefault();
+        addPanel({ id: foreignPanelId, position: "center", targetPanelId });
         return;
       }
       const data = getPanelData();
@@ -175,12 +190,92 @@ function useDropIntoGroup(
 }
 
 /**
- * Tab of a panel in a stacked group. Resting a dragged panel on a background tab opens it, so the
- * panel can be dropped into that tab's area. Dropping on a tab adds the panel to the tab's group:
- * a panel from the catalog becomes a new tab, and a panel dragged by its toolbar moves here.
+ * Inline editor for a tab's title. Enter or blur calls `onSave` with the trimmed title when it
+ * changed; Escape cancels. `onDone` is called either way.
+ */
+export function TabTitleInput({
+  initialTitle,
+  onSave,
+  onDone,
+}: {
+  initialTitle: string;
+  onSave: (title: string) => void;
+  onDone: () => void;
+}): React.JSX.Element {
+  const { classes } = useStyles();
+  const { t } = useTranslation("panelToolbar");
+  const doneRef = useRef(false);
+
+  const finish = (title: string | undefined) => {
+    if (doneRef.current) {
+      return;
+    }
+    doneRef.current = true;
+    if (title != undefined && title.trim() !== initialTitle) {
+      onSave(title.trim());
+    }
+    onDone();
+  };
+
+  // The tab is a drag source; text selection inside the input must not start a tab drag.
+  const tabRef = useCallback((input: HTMLInputElement | null) => {
+    const tab = input?.closest<HTMLElement>(".dv-tab");
+    if (!tab) {
+      return undefined;
+    }
+    tab.draggable = false;
+    return () => {
+      tab.draggable = true;
+    };
+  }, []);
+
+  return (
+    <input
+      ref={tabRef}
+      className={classes.titleInput}
+      aria-label={t("tabTitle")}
+      defaultValue={initialTitle}
+      autoFocus
+      onFocus={(event) => {
+        event.currentTarget.select();
+      }}
+      size={Math.max(initialTitle.length, 4)}
+      onBlur={(event) => {
+        finish(event.currentTarget.value);
+      }}
+      onKeyDown={(event) => {
+        event.stopPropagation();
+        if (event.key === "Enter") {
+          finish(event.currentTarget.value);
+        } else if (event.key === "Escape") {
+          finish(undefined);
+        }
+      }}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+      }}
+    />
+  );
+}
+
+/**
+ * Tab of a panel in a stacked group. Double-click renames it. Resting a dragged panel on a
+ * background tab opens it, so the panel can be dropped into that tab's area. Dropping on a tab
+ * adds the panel to the tab's group: a panel from the catalog becomes a new tab, and a panel
+ * dragged by its toolbar moves here.
  */
 export function PanelTab(props: IDockviewPanelHeaderProps): React.JSX.Element {
   const { api, containerApi } = props;
+  const [editing, setEditing] = useState(false);
+  const { t } = useTranslation("panelToolbar");
+  const { savePanelConfigs } = useCurrentLayoutActions();
+  const saveTitle = useCallback(
+    (title: string) => {
+      // An empty title falls back to the panel type's title.
+      savePanelConfigs({ configs: [{ id: api.id, config: { [PANEL_TITLE_CONFIG_KEY]: title } }] });
+    },
+    [api.id, savePanelConfigs],
+  );
   const activate = useCallback(() => {
     if (!api.isVisible) {
       api.setActive();
@@ -197,9 +292,24 @@ export function PanelTab(props: IDockviewPanelHeaderProps): React.JSX.Element {
     [cancelActivation, dropIntoGroup],
   );
 
+  if (editing) {
+    return (
+      <TabTitleInput
+        initialTitle={api.title ?? ""}
+        onSave={saveTitle}
+        onDone={() => {
+          setEditing(false);
+        }}
+      />
+    );
+  }
   return (
     <DockviewDefaultTab
       {...props}
+      title={t("doubleClickToRename")}
+      onDoubleClick={() => {
+        setEditing(true);
+      }}
       onDragEnter={onDragEnter}
       onDragLeave={onDragLeave}
       onDragOver={onDragOver}
@@ -222,6 +332,27 @@ const useStyles = makeStyles()((theme) => ({
     whiteSpace: "nowrap",
     boxSizing: "border-box",
   },
+  titleInput: {
+    alignSelf: "center",
+    margin: theme.spacing(0, 1),
+    padding: theme.spacing(0, 0.5),
+    font: "inherit",
+    color: theme.palette.text.primary,
+    background: theme.palette.background.paper,
+    border: `1px solid ${theme.palette.primary.main}`,
+    borderRadius: theme.shape.borderRadius,
+    outline: "none",
+  },
+  newTabButton: {
+    alignSelf: "center",
+    margin: theme.spacing(0, 0.5),
+    fontSize: theme.typography.body2.fontSize,
+    color: theme.palette.text.secondary,
+  },
+  catalogPaper: {
+    backgroundColor: theme.palette.background.menu,
+    maxHeight: `calc(100vh - ${theme.spacing(12)})`,
+  },
   newTabOver: {
     borderColor: theme.palette.primary.main,
     color: theme.palette.primary.main,
@@ -229,14 +360,63 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
+/** "+" after a group's tabs that opens the panel catalog and adds the chosen panel as a tab. */
+function NewTabButton({ group }: { group: DockviewGroupPanel }): React.JSX.Element {
+  const { classes } = useStyles();
+  const { t } = useTranslation("panelToolbar");
+  const { addPanel } = useCurrentLayoutActions();
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | undefined>(undefined);
+
+  const onPanelSelect = useCallback(
+    ({ type, config }: PanelSelection) => {
+      setAnchorEl(undefined);
+      addPanel({
+        id: getPanelIdForType(type),
+        config,
+        position: "center",
+        targetPanelId: group.activePanel?.id ?? group.panels[0]?.id,
+      });
+    },
+    [addPanel, group],
+  );
+
+  return (
+    <>
+      <IconButton
+        size="small"
+        className={classes.newTabButton}
+        title={t("addTab")}
+        aria-label={t("addTab")}
+        data-testid="new-tab-button"
+        onClick={(event) => {
+          setAnchorEl(event.currentTarget);
+        }}
+      >
+        <AddIcon fontSize="inherit" />
+      </IconButton>
+      <Popover
+        open={anchorEl != undefined}
+        anchorEl={anchorEl}
+        onClose={() => {
+          setAnchorEl(undefined);
+        }}
+        anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
+        slotProps={{ paper: { className: classes.catalogPaper } }}
+      >
+        <PanelCatalog mode="list" isMenu onPanelSelect={onPanelSelect} />
+      </Popover>
+    </>
+  );
+}
+
 /**
- * "+ New tab" target after a group's tabs, shown only while a panel is being dragged. Dropping
- * on it adds the panel to the group as a new tab.
+ * Header actions after a group's tabs: a "+" button to add a tab, which becomes a "+ New tab"
+ * drop target while a panel is being dragged. Dropping on it adds the panel as a new tab.
  */
 export function NewTabDropTarget({
   group,
   containerApi,
-}: IDockviewHeaderActionsProps): React.JSX.Element | null {
+}: IDockviewHeaderActionsProps): React.JSX.Element {
   const { classes, cx } = useStyles();
   const { t } = useTranslation("panelToolbar");
   const dragActive = usePanelDragActive();
@@ -244,7 +424,7 @@ export function NewTabDropTarget({
   const { onDragOver, onDrop } = useDropIntoGroup(group, containerApi);
 
   if (!dragActive) {
-    return null;
+    return <NewTabButton group={group} />;
   }
   return (
     <div

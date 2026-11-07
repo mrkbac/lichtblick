@@ -11,6 +11,7 @@ import panelsReducer from "@lichtblick/suite-base/providers/CurrentLayoutProvide
 import { LayoutDropPosition, LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import { PanelConfig } from "@lichtblick/suite-base/types/panels";
 import { getPanelIds, isLayoutGroup } from "@lichtblick/suite-base/util/layoutTree";
+import { findLayoutTree, getAllPanelIds } from "@lichtblick/suite-base/util/tabLayout";
 
 /** Undo steps kept per layout. */
 export const HISTORY_LIMIT = 100;
@@ -125,7 +126,7 @@ export class LayoutHistory {
       this.#closed.push({
         id,
         configs: _.omit(data.configById, Object.keys(next.configById)),
-        placements: reopenPlacements(data.layout, id),
+        placements: reopenPlacements(findLayoutTree(data, id)?.tree, id),
       });
       if (this.#closed.length > HISTORY_LIMIT) {
         this.#closed.shift();
@@ -158,7 +159,7 @@ export class LayoutHistory {
   /** Puts the most recently closed panel that is not in the layout back, with its config. */
   public reopenClosedPanel(data: LayoutData, now: number): LayoutData | undefined {
     this.#sync(data);
-    const present = new Set(getPanelIds(data.layout));
+    const present = new Set(getAllPanelIds(data));
     // Skip panels that are already back, e.g. through undo.
     let closed = this.#closed.pop();
     while (closed != undefined && present.has(closed.id)) {

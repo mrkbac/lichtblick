@@ -6,11 +6,16 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 export const panelToolbar = {
+  addTab: "New tab",
   changePanel: "Change panel",
+  closeTab: "Close {{title}}",
+  doubleClickToRename: "Double-click or F2 to rename",
+  dragToMovePanel: "Drag to move panel",
   fullscreen: "Fullscreen",
   more: "More",
   newTab: "+ New tab",
   removePanel: "Remove panel",
   splitDown: "Split down",
   splitRight: "Split right",
+  tabTitle: "Tab title",
 };

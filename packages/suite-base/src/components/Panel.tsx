@@ -65,6 +65,7 @@ import { OpenSiblingPanel, PanelConfig, SaveConfig } from "@lichtblick/suite-bas
 import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import { getSiblingGroup } from "@lichtblick/suite-base/util/layoutTree";
+import { findLayoutTree } from "@lichtblick/suite-base/util/tabLayout";
 
 const MAX_PANEL_LOGS = 1000;
 
@@ -209,7 +210,7 @@ export default function Panel<
 
         // Try to find a sibling panel and update it with the `siblingConfig`
         if (updateIfExists) {
-          const sibling = getSiblingGroup(panelsState.layout, childId);
+          const sibling = getSiblingGroup(findLayoutTree(panelsState, childId)?.tree, childId);
           const siblingId = sibling?.active ?? sibling?.panels[0];
           if (siblingId != undefined && getPanelTypeFromId(siblingId) === panelType) {
             const siblingConfig: PanelConfig = {

@@ -34,6 +34,7 @@ import rawMessagesThumbnail from "./RawMessages/thumbnail.png";
 import { RAW_MESSAGES_SHORTCUTS } from "./RawMessagesVirtual/shortcuts";
 import { STATE_TRANSITIONS_SHORTCUTS } from "./StateTransitions/shortcuts";
 import stateTransitionsThumbnail from "./StateTransitions/thumbnail.png";
+import tabThumbnail from "./Tab/thumbnail.png";
 import tableThumbnail from "./Table/thumbnail.png";
 import { TELEOP_SHORTCUTS } from "./Teleop/shortcuts";
 import teleopThumbnail from "./Teleop/thumbnail.png";
@@ -91,6 +92,14 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("indicatorDescription"),
     thumbnail: indicatorThumbnail,
     module: async () => await import("./Indicator"),
+  },
+  {
+    title: t("tab"),
+    type: "Tab",
+    description: t("tabDescription"),
+    thumbnail: tabThumbnail,
+    module: async () => await import("./Tab"),
+    hasCustomToolbar: true,
   },
   {
     title: t("gauge"),

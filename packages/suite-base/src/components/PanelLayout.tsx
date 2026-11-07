@@ -35,6 +35,7 @@ import React, {
 import { DockPanelContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import { EmptyPanelLayout } from "@lichtblick/suite-base/components/EmptyPanelLayout";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
+import { LayoutTabContext } from "@lichtblick/suite-base/components/LayoutTabContext";
 import {
   getPanelDragData,
   isPanelDrag,
@@ -64,7 +65,7 @@ import { layoutsEqual } from "@lichtblick/suite-base/util/layoutTree";
 import ErrorBoundary from "./ErrorBoundary";
 import { useStyles } from "./PanelLayout.style";
 import { PanelRemounter } from "./PanelRemounter";
-import { NewTabDropTarget, PanelTab } from "./PanelTab";
+import { NewTabDropTarget, PanelTab, getForeignPanelId } from "./PanelTab";
 import { UnknownPanel } from "./UnknownPanel";
 import { clearJunctionCursor, startSashDrag, updateJunctionCursor } from "./sashIntersection";
 import "dockview-react/dist/styles/dockview.css";
@@ -143,12 +144,21 @@ type Props = {
   layout?: LayoutNode;
   onChange: (layout: LayoutNode | undefined) => void;
   loadingComponent?: React.JSX.Element;
+  /** The Tab panel this layout is a tab of; the root layout has none. */
+  tabId?: string;
 };
 
 export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactElement {
-  const { layout, onChange, loadingComponent } = props;
+  const { layout, onChange, loadingComponent, tabId } = props;
   const { addPanel, getCurrentLayoutState } = useCurrentLayoutActions();
   const panelCatalog = usePanelCatalog();
+  const outerTabs = useContext(LayoutTabContext);
+  const tabPath = useMemo(
+    () => (tabId == undefined ? outerTabs : [...outerTabs, tabId]),
+    [outerTabs, tabId],
+  );
+  const tabPathRef = useRef(tabPath);
+  tabPathRef.current = tabPath;
 
   const panelComponents = useMemo<PanelComponents>(
     () =>
@@ -159,6 +169,7 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
   );
 
   const apiRef = useRef<DockviewApi | undefined>(undefined);
+  const rootRef = useRef<HTMLDivElement>(null);
   // The layout dockview currently shows, to tell our own changes from the user's.
   const shownLayoutRef = useRef<LayoutNode | undefined>(undefined);
   const latestRef = useRef({ layout, onChange });
@@ -207,9 +218,29 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
         }
       });
 
-      // Accept panels dragged out of the panel catalog.
+      // Dockview handles drags in the capture phase, so it would claim drags over the layout in a
+      // tab of a Tab panel before that layout sees them. Leave those to the inner layout.
+      api.onWillShowOverlay((event) => {
+        const target = event.nativeEvent.target;
+        if (
+          target instanceof Element &&
+          target.closest("[data-panel-layout]") !== rootRef.current
+        ) {
+          event.preventDefault();
+        }
+      });
+
+      // Accept panels dragged out of the panel catalog, and panels moved here from another layout
+      // (between the root and a tab of a Tab panel) unless it's a Tab panel holding this layout.
       api.onUnhandledDragOver((event) => {
-        if (event.nativeEvent instanceof DragEvent && isPanelDrag(event.nativeEvent.dataTransfer)) {
+        if (!(event.nativeEvent instanceof DragEvent)) {
+          return;
+        }
+        const foreignPanelId = getForeignPanelId(api.id);
+        if (
+          isPanelDrag(event.nativeEvent.dataTransfer) ||
+          (foreignPanelId != undefined && !tabPathRef.current.includes(foreignPanelId))
+        ) {
           event.accept();
         }
       });
@@ -236,52 +267,58 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
         return;
       }
       const selection = getPanelDragData(event.nativeEvent.dataTransfer);
-      if (selection == undefined) {
+      const movedId = getForeignPanelId(event.api.id);
+      if (selection == undefined && movedId == undefined) {
         return;
       }
       addPanel({
-        id: getPanelIdForType(selection.type),
-        config: selection.config,
+        id: selection ? getPanelIdForType(selection.type) : movedId!,
+        config: selection?.config,
         position: event.position,
         // Without a group the panel was dropped on an edge of the whole layout.
         targetPanelId: event.group?.activePanel?.id,
+        tabId,
       });
     },
-    [addPanel],
+    [addPanel, tabId],
   );
 
   return (
     <ErrorBoundary>
       {loadingComponent}
-      <PanelComponentsContext.Provider value={panelComponents}>
-        {layout == undefined && <EmptyPanelLayout />}
-        <div
-          style={{ display: layout == undefined ? "none" : "contents" }}
-          onPointerDownCapture={(event) => {
-            startSashDrag(event.nativeEvent);
-          }}
-          onPointerMove={(event) => {
-            updateJunctionCursor(event.nativeEvent);
-          }}
-          onPointerOut={(event) => {
-            clearJunctionCursor(event.nativeEvent);
-          }}
-        >
-          <DockviewReact
-            components={DOCK_COMPONENTS}
-            onReady={onReady}
-            onDidDrop={onDidDrop}
-            theme={DOCKVIEW_THEME}
-            disableFloatingGroups
-            singleTabMode="fullwidth"
-            scrollbars="native"
-            defaultTabComponent={PanelTab}
-            leftHeaderActionsComponent={NewTabDropTarget}
-            // Background tabs stay mounted and in the DOM, so switching tabs only toggles visibility.
-            defaultRenderer="always"
-          />
-        </div>
-      </PanelComponentsContext.Provider>
+      <LayoutTabContext.Provider value={tabPath}>
+        <PanelComponentsContext.Provider value={panelComponents}>
+          {layout == undefined && <EmptyPanelLayout />}
+          <div
+            ref={rootRef}
+            data-panel-layout
+            style={{ display: layout == undefined ? "none" : "contents" }}
+            onPointerDownCapture={(event) => {
+              startSashDrag(event.nativeEvent);
+            }}
+            onPointerMove={(event) => {
+              updateJunctionCursor(event.nativeEvent);
+            }}
+            onPointerOut={(event) => {
+              clearJunctionCursor(event.nativeEvent);
+            }}
+          >
+            <DockviewReact
+              components={DOCK_COMPONENTS}
+              onReady={onReady}
+              onDidDrop={onDidDrop}
+              theme={DOCKVIEW_THEME}
+              disableFloatingGroups
+              singleTabMode="fullwidth"
+              scrollbars="native"
+              defaultTabComponent={PanelTab}
+              leftHeaderActionsComponent={NewTabDropTarget}
+              // Background tabs stay mounted and in the DOM, so switching tabs only toggles visibility.
+              defaultRenderer="always"
+            />
+          </div>
+        </PanelComponentsContext.Provider>
+      </LayoutTabContext.Provider>
     </ErrorBoundary>
   );
 }
