@@ -22,6 +22,7 @@ import React, {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { Transition } from "react-transition-group";
 import { useMountedState } from "react-use";
@@ -284,19 +285,17 @@ export default function Panel<
     // Inside a dock layout, fullscreen is dockview's maximize: dockview renders panels in a
     // transformed overlay, which traps the `position: fixed` fallback below inside the group.
     const dock = useContext(DockPanelContext);
-    const [dockMaximized, setDockMaximized] = useState(false);
-    useEffect(() => {
-      if (!dock) {
-        return;
-      }
-      setDockMaximized(dock.api.isMaximized());
-      const sub = dock.containerApi.onDidMaximizedGroupChange(() => {
-        setDockMaximized(dock.api.isMaximized());
-      });
-      return () => {
-        sub.dispose();
-      };
-    }, [dock]);
+    const subscribeDockMaximized = useCallback(
+      (onChange: () => void) => {
+        const sub = dock?.containerApi.onDidMaximizedGroupChange(onChange);
+        return () => sub?.dispose();
+      },
+      [dock],
+    );
+    const dockMaximized = useSyncExternalStore(
+      subscribeDockMaximized,
+      () => dock?.api.isMaximized() ?? false,
+    );
 
     const { enterFullscreen, exitFullscreen } = useMemo(
       () =>
