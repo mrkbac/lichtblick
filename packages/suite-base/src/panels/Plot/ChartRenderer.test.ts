@@ -5,7 +5,7 @@ import { Chart, ChartOptions, Element, InteractionItem, Scale } from "chart.js";
 import type { Mock } from "vitest";
 
 import { Immutable } from "@lichtblick/suite";
-import { ChartRenderer } from "@lichtblick/suite-base/panels/Plot/ChartRenderer";
+import { ChartRenderer, holdXPadding } from "@lichtblick/suite-base/panels/Plot/ChartRenderer";
 import { DEFAULT_ANNOTATION } from "@lichtblick/suite-base/panels/Plot/constants";
 import { getChartOptions } from "@lichtblick/suite-base/panels/Plot/utils/getChartOptions";
 import { BasicBuilder } from "@lichtblick/test-builders";
@@ -782,5 +782,24 @@ describe("ChartRenderer", () => {
         },
       });
     });
+  });
+});
+
+describe("holdXPadding", () => {
+  it("keeps the plot area steady while edge labels change width, and resizes on zoom", () => {
+    // Given a sliding 60 s window whose edge label is first "25.03", then the shorter "25.1"
+    const held = { span: Number.NaN, left: 0, right: 0 };
+    const fit = (min: number, max: number, paddingRight: number) => {
+      const scale = { min, max, paddingLeft: 0, paddingRight };
+      holdXPadding(held, scale);
+      return scale.paddingRight;
+    };
+
+    // When the window slides, Then the wider padding is kept
+    expect(fit(-34.97, 25.03, 15)).toBe(15);
+    expect(fit(-34.9, 25.1, 12)).toBe(15);
+
+    // When zooming to a new span, Then the padding fits the new labels
+    expect(fit(0, 10, 9)).toBe(9);
   });
 });
