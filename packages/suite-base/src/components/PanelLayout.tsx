@@ -67,7 +67,7 @@ import { observeContainerSize } from "@lichtblick/suite-base/util/observeContain
 import ErrorBoundary from "./ErrorBoundary";
 import { useStyles } from "./PanelLayout.style";
 import { PanelRemounter } from "./PanelRemounter";
-import { NewTabDropTarget, PanelTab, getForeignPanelId } from "./PanelTab";
+import { getForeignPanelId } from "./PanelTab";
 import { UnknownPanel } from "./UnknownPanel";
 import { clearJunctionCursor, startSashDrag, updateJunctionCursor } from "./sashIntersection";
 import "dockview-react/dist/styles/dockview.css";
@@ -134,6 +134,29 @@ function DockPanel({ api, containerApi }: IDockviewPanelProps): React.JSX.Elemen
 
 // Panels only depend on their dockview api, so a layout change elsewhere doesn't re-render them.
 const DOCK_COMPONENTS = { [PANEL_COMPONENT]: React.memo(DockPanel) };
+
+/** Width of the band along a Tab panel's edges where a drop splits beside the whole Tab panel. */
+const EDGE_BAND_PX = 24;
+
+/** Whether the pointer is within the band along the edge of `element` that `position` names. */
+function isInEdgeBand(element: HTMLElement | undefined, position: string, event: Event): boolean {
+  if (element == undefined || !(event instanceof MouseEvent)) {
+    return false;
+  }
+  const rect = element.getBoundingClientRect();
+  switch (position) {
+    case "left":
+      return event.clientX - rect.left <= EDGE_BAND_PX;
+    case "right":
+      return rect.right - event.clientX <= EDGE_BAND_PX;
+    case "top":
+      return event.clientY - rect.top <= EDGE_BAND_PX;
+    case "bottom":
+      return rect.bottom - event.clientY <= EDGE_BAND_PX;
+    default:
+      return false;
+  }
+}
 
 /** A group shows its tab strip only when it stacks several panels. */
 function updateGroupHeaders(api: DockviewApi) {
@@ -222,12 +245,15 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
       });
 
       // Dockview handles drags in the capture phase, so it would claim drags over the layout in a
-      // tab of a Tab panel before that layout sees them. Leave those to the inner layout.
+      // tab of a Tab panel, and over its tab strip, before they see them. Leave those to them,
+      // except in a band along the edges of the Tab panel: dropping there splits beside it.
       api.onWillShowOverlay((event) => {
         const target = event.nativeEvent.target;
         if (
           target instanceof Element &&
-          target.closest("[data-panel-layout]") !== rootRef.current
+          (target.closest("[data-panel-layout]") !== rootRef.current ||
+            target.closest("[data-tab-strip]") != undefined) &&
+          !isInEdgeBand(event.group?.element, event.position, event.nativeEvent)
         ) {
           event.preventDefault();
         }
@@ -267,12 +293,7 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
 
   const onDidDrop = useCallback(
     (event: DockviewDidDropEvent) => {
-      // Drops on a tab or the "+ New tab" target are handled there (PanelTab).
-      if (
-        !(event.nativeEvent instanceof DragEvent) ||
-        (event.nativeEvent.target instanceof Element &&
-          event.nativeEvent.target.closest(".dv-tab, [data-testid='new-tab-drop-target']"))
-      ) {
+      if (!(event.nativeEvent instanceof DragEvent)) {
         return;
       }
       const selection = getPanelDragData(event.nativeEvent.dataTransfer);
@@ -322,8 +343,6 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
               disableFloatingGroups
               singleTabMode="fullwidth"
               scrollbars="native"
-              defaultTabComponent={PanelTab}
-              leftHeaderActionsComponent={NewTabDropTarget}
               // Render in the group's slot so content follows resizing without a deferred overlay.
               defaultRenderer="onlyWhenVisible"
             />

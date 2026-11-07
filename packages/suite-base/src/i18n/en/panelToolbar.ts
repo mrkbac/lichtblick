@@ -13,7 +13,6 @@ export const panelToolbar = {
   dragToMovePanel: "Drag to move panel",
   fullscreen: "Fullscreen",
   more: "More",
-  newTab: "+ New tab",
   removePanel: "Remove panel",
   splitDown: "Split down",
   splitRight: "Split right",

@@ -8,16 +8,35 @@ import { loadFiles } from "../../fixtures/load-files";
 /**
  * Drags panels with real mouse input (native HTML5 drag and drop in Chromium) and checks the
  * resulting layout. The default layout is 3D on the left, Image above Raw Messages on the right.
+ * Panels dropped onto each other become a Tab panel, whose tabs each hold their own layout.
  */
 
 type Point = [number, number];
 
-/** The layout as one entry per group: its tabs in order, e.g. "3D|Image". */
+/** The root layout as one entry per group, by panel title ("Tab" for a Tab panel). */
 async function groups(page: Page): Promise<string[]> {
+  return await page.locator(".dv-groupview").evaluateAll((els) =>
+    els
+      // Groups of the layouts inside Tab panels sit inside another panel layout.
+      .filter(
+        (g) =>
+          g.closest("[data-panel-layout]")?.parentElement?.closest("[data-panel-layout]") ==
+          undefined,
+      )
+      .map((g) =>
+        [...g.querySelectorAll(":scope > .dv-tabs-and-actions-container .dv-tab")]
+          .map((t) => t.textContent)
+          .join("|"),
+      ),
+  );
+}
+
+/** The tab titles of the (only) Tab panel, the shown one marked with "*". */
+async function tabs(page: Page): Promise<string[]> {
   return await page
-    .locator(".dv-groupview")
+    .getByTestId("tab-panel-tab")
     .evaluateAll((els) =>
-      els.map((g) => [...g.querySelectorAll(".dv-tab")].map((t) => t.textContent).join("|")),
+      els.map((t) => (t.getAttribute("aria-selected") === "true" ? "*" : "") + t.textContent),
     );
 }
 
@@ -28,20 +47,28 @@ async function drag(
   /** Waits for a state that must hold before the drop, e.g. a hovered tab opening. */
   beforeDrop?: () => Promise<void>,
 ) {
-  // Every panel drag shows "+ New tab" targets; retry until they show up, in case something
-  // covered the drag handle.
+  // Retry until the drag has started, in case something covered the drag handle.
   await expect(async () => {
     const from = typeof source === "function" ? await source() : source;
+    await page.evaluate(() => {
+      (window as { panelDragStarted?: boolean }).panelDragStarted = false;
+      document.addEventListener(
+        "dragstart",
+        () => ((window as { panelDragStarted?: boolean }).panelDragStarted = true),
+        { once: true, capture: true },
+      );
+    });
     await page.mouse.move(...from);
     await page.mouse.down();
     await page.mouse.move(from[0] + 10, from[1] + 10, { steps: 3 });
     // Drag events need movement after the drag has started.
     await page.mouse.move(from[0] + 30, from[1] + 40, { steps: 3 });
     try {
-      await page
-        .getByTestId("new-tab-drop-target")
-        .first()
-        .waitFor({ state: "attached", timeout: 2000 });
+      await page.waitForFunction(
+        () => (window as { panelDragStarted?: boolean }).panelDragStarted === true,
+        undefined,
+        { timeout: 2000 },
+      );
     } catch (error) {
       await page.mouse.up();
       // On a cold dev server the data source dialog can open again after the first Escape.
@@ -59,15 +86,23 @@ async function drag(
   await page.mouse.up();
 }
 
-function group(page: Page, tab: string): Locator {
-  return page.locator(".dv-groupview").filter({ has: page.locator(".dv-tab", { hasText: tab }) });
+function group(page: Page, title: string): Locator {
+  return page.getByRole("region", { name: title, exact: true });
 }
 
 /** A point in a group, as fractions of its size. */
-function inGroup(page: Page, tab: string, fx: number, fy: number) {
+function inGroup(page: Page, title: string, fx: number, fy: number) {
   return async (): Promise<Point> => {
-    const box = (await group(page, tab).boundingBox())!;
+    const box = (await group(page, title).boundingBox())!;
     return [box.x + box.width * fx, box.y + box.height * fy];
+  };
+}
+
+/** A point `px` pixels inside the left edge of a group, halfway down. */
+function nearLeftEdge(page: Page, title: string, px: number) {
+  return async (): Promise<Point> => {
+    const box = (await group(page, title).boundingBox())!;
+    return [box.x + px, box.y + box.height / 2];
   };
 }
 
@@ -78,9 +113,10 @@ function centerOf(locator: Locator) {
   };
 }
 
+/** Select a Tab-panel tab by title and wait until it is active. */
 async function selectTab(page: Page, title: string) {
-  const tab = page.getByRole("tab", { name: title, exact: true });
-  await tab.locator(".dv-default-tab-content").click();
+  const tab = page.getByTestId("tab-panel-tab").filter({ hasText: title });
+  await tab.getByText(title, { exact: true }).click();
   await expect(tab).toHaveAttribute("aria-selected", "true");
 }
 
@@ -90,12 +126,11 @@ async function selectTab(page: Page, title: string) {
  */
 async function toolbarOf(page: Page, type: string): Promise<Point> {
   const panel = page.locator(`[data-testid^="panel-mouseenter-container ${type}!"]`);
-  return await panel.getByTestId("mosaic-drag-handle").evaluate(async (handle: HTMLElement) => {
+  return await panel.getByTestId("panel-drag-grip").evaluate(async (grip: HTMLElement) => {
     // Panels are repositioned on the next frame after a layout change.
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    const el = handle.draggable ? handle : handle.querySelector<HTMLElement>("[draggable=true]")!;
-    const box = el.getBoundingClientRect();
-    return [box.x + Math.min(20, box.width / 2), box.y + box.height / 2] as Point;
+    const box = grip.getBoundingClientRect();
+    return [box.x + box.width / 2, box.y + box.height / 2] as Point;
   });
 }
 
@@ -120,7 +155,8 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
 
   async function stackImageOn3D(page: Page) {
     await drag(page, async () => await toolbarOf(page, "Image"), inGroup(page, "3D", 0.5, 0.5));
-    await expect.poll(async () => await groups(page)).toEqual(["3D|Image", "Raw Messages"]);
+    await expect.poll(async () => await groups(page)).toEqual(["Tab", "Raw Messages"]);
+    await expect.poll(async () => await tabs(page)).toEqual(["3D", "*Image"]);
   }
 
   for (const nested of [false, true]) {
@@ -132,14 +168,11 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
         pageErrors.push(error.message);
       });
       if (nested) {
-        await drag(page, await catalogItem(page, "Tab"), inGroup(page, "3D", 0.5, 0.5));
-        await expect(page.getByTestId("add-tab")).toBeVisible();
-        const tabPanel = page.locator('[data-testid^="panel-mouseenter-container Tab!"]');
-        await tabPanel.getByTestId("panel-grid-card Image").click();
+        await stackImageOn3D(page);
         await expect(
-          tabPanel.locator('[data-testid^="panel-mouseenter-container Image!"]'),
+          page.locator('[data-testid^="panel-mouseenter-container Image!"]'),
         ).toBeVisible();
-        await expect(page.locator("[data-panel-layout] .dv-dockview")).toHaveCount(2);
+        await expect(page.locator(".dv-dockview")).toHaveCount(3);
       }
 
       const measurements = await page.evaluateHandle(() => {
@@ -209,33 +242,35 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
     });
   }
 
-  test("stacks a panel dropped on the middle of another as tabs", async ({ page }) => {
+  test("makes a Tab panel when a panel is dropped on the middle of another", async ({ page }) => {
     await stackImageOn3D(page);
   });
 
   test("keeps the 3D canvas across tab switches and maximize", async ({ page }) => {
+    await stackImageOn3D(page);
+    await selectTab(page, "3D");
     const panel = page.locator('[data-testid^="panel-mouseenter-container 3D!"]');
     const canvas = await panel
       .locator("canvas")
       .first()
       .evaluateHandle((element: HTMLCanvasElement) => element);
-    await stackImageOn3D(page);
     await expect(page.locator(".dv-render-overlay")).toHaveCount(0);
-    expect(await canvas.evaluate((element) => element.isConnected)).toBe(false);
 
     for (let i = 0; i < 3; i++) {
       await selectTab(page, "3D");
       await expect(panel).toBeVisible();
       expect(await canvas.evaluate((element) => element.isConnected)).toBe(true);
       await selectTab(page, "Image");
-      expect(await canvas.evaluate((element) => element.isConnected)).toBe(false);
+      await expect(panel).toBeHidden();
+      expect(await canvas.evaluate((element) => element.isConnected)).toBe(true);
     }
     await selectTab(page, "3D");
     const before = (await panel.boundingBox())!;
-    await panel.hover();
-    await panel.getByTitle("fullscreen", { exact: true }).click();
+    const outer = page.locator('[data-testid^="panel-mouseenter-container Tab!"]');
+    await outer.hover();
+    await outer.getByTitle("fullscreen", { exact: true }).first().click();
     await expect.poll(async () => (await panel.boundingBox())!.width).toBeGreaterThan(before.width);
-    await panel.getByTitle("Exit fullscreen", { exact: true }).click();
+    await outer.getByTitle("Exit fullscreen", { exact: true }).first().click();
     await expect.poll(async () => (await panel.boundingBox())!.width).toBeCloseTo(before.width, 0);
     expect(await canvas.evaluate((element) => element.isConnected)).toBe(true);
     expect(await canvas.evaluate((element) => element.getContext("webgl2")?.isContextLost())).toBe(
@@ -245,27 +280,25 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
   });
 
   test("restores a nested layout after its outer tab was hidden and resized", async ({ page }) => {
-    await drag(page, await catalogItem(page, "Tab"), inGroup(page, "3D", 0.5, 0.5));
-    const panel = page.locator('[data-testid^="panel-mouseenter-container Tab!"]');
-    await panel.getByTestId("panel-grid-card Image").click();
-    const innerGrid = panel.locator(".dv-dockview");
-    await expect(innerGrid).toBeVisible();
-    const grid = await innerGrid.evaluateHandle((element) => element);
+    await stackImageOn3D(page);
+    const panel = page.locator('[data-testid^="panel-mouseenter-container Image!"]');
+    await expect(panel).toBeVisible();
+    const grid = await panel.evaluateHandle((element) => element.closest(".dv-dockview")!);
     await selectTab(page, "3D");
-    expect(await grid.evaluate((element) => element.isConnected)).toBe(false);
+    await expect(panel).toBeHidden();
+    expect(await grid.evaluate((element) => element.isConnected)).toBe(true);
     await page.setViewportSize({ width: 1350, height: 850 });
-    await selectTab(page, "Tab");
-    await expect(innerGrid).toBeVisible();
+    await selectTab(page, "Image");
+    await expect(panel).toBeVisible();
     expect(await grid.evaluate((element) => element.isConnected)).toBe(true);
     await expect
       .poll(
         async () =>
-          await innerGrid.evaluate((element) =>
+          await grid.evaluate((element) =>
             Math.abs(element.clientWidth - element.parentElement!.clientWidth),
           ),
       )
       .toBeLessThanOrEqual(1);
-    await expect(panel.locator('[data-testid^="panel-mouseenter-container Image!"]')).toBeVisible();
     await grid.dispose();
   });
 
@@ -280,10 +313,12 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
       .fill("mouse.clientX");
     const panel = page.locator('[data-testid^="panel-mouseenter-container Plot!"]');
     await expect(panel.getByTestId("plot-legend-row-path-label")).toHaveText("mouse.clientX");
-    const canvas = await panel.locator("canvas").evaluateHandle((element) => element);
     await drag(page, async () => await toolbarOf(page, "Plot"), inGroup(page, "3D", 0.5, 0.5));
+    await expect(panel).toBeVisible();
+    const canvas = await panel.locator("canvas").evaluateHandle((element) => element);
     await selectTab(page, "3D");
-    expect(await canvas.evaluate((element) => element.isConnected)).toBe(false);
+    await expect(panel).toBeHidden();
+    expect(await canvas.evaluate((element) => element.isConnected)).toBe(true);
     await page.setViewportSize({ width: 1400, height: 900 });
     await selectTab(page, "Plot");
     await expect(panel).toBeVisible();
@@ -314,38 +349,65 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
     expect(image!.x).toBeLessThan(threeD!.x);
   });
 
-  test("moves a tab out of its group onto an edge", async ({ page }) => {
+  test("splits inside a tab", async ({ page }) => {
     await stackImageOn3D(page);
     await drag(
       page,
-      await centerOf(page.locator(".dv-tab", { hasText: "Image" }))(),
+      async () => await toolbarOf(page, "RawMessages"),
+      inGroup(page, "Image", 0.95, 0.5),
+    );
+    await expect.poll(async () => await groups(page)).toEqual(["Tab"]);
+    await expect.poll(async () => await tabs(page)).toEqual(["3D", "*Image + Raw Messages"]);
+  });
+
+  test("splits beside a Tab panel in the band along its edge", async ({ page }) => {
+    await stackImageOn3D(page);
+    await drag(
+      page,
+      async () => await toolbarOf(page, "RawMessages"),
+      nearLeftEdge(page, "Tab", 8),
+    );
+    await expect.poll(async () => await groups(page)).toEqual(["Raw Messages", "Tab"]);
+  });
+
+  test("moving the last but one tab out turns the Tab panel back into a panel", async ({
+    page,
+  }) => {
+    await stackImageOn3D(page);
+    await drag(
+      page,
+      async () => await toolbarOf(page, "Image"),
       inGroup(page, "Raw Messages", 0.97, 0.5),
     );
     await expect.poll(async () => await groups(page)).toEqual(["3D", "Raw Messages", "Image"]);
+    await expect(page.getByTestId("tab-panel-tab")).toHaveCount(0);
   });
 
-  test("opens a background tab on hover and drops into its group", async ({ page }) => {
+  test("opens a background tab on hover and drops into it", async ({ page }) => {
     await stackImageOn3D(page);
+    const tab3D = page.getByTestId("tab-panel-tab").filter({ hasText: "3D" });
     await drag(
       page,
       async () => await toolbarOf(page, "RawMessages"),
-      centerOf(page.locator(".dv-tab", { hasText: "3D" })),
+      centerOf(tab3D),
       async () => {
-        await expect(page.locator(".dv-tab", { hasText: "3D" })).toHaveClass(/dv-active-tab/);
+        await expect(tab3D).toHaveAttribute("aria-selected", "true");
       },
     );
-    await expect.poll(async () => await groups(page)).toEqual(["3D|Raw Messages|Image"]);
+    await expect.poll(async () => await tabs(page)).toEqual(["*3D + Raw Messages", "Image"]);
   });
 
-  test("adds a panel as a new tab on the '+ New tab' target", async ({ page }) => {
+  test("adds a tab when a panel is dropped on the tab strip", async ({ page }) => {
     await stackImageOn3D(page);
     await drag(
       page,
       async () => await toolbarOf(page, "RawMessages"),
-      centerOf(group(page, "3D").getByTestId("new-tab-drop-target")),
+      async () => {
+        const box = (await page.locator("[data-tab-strip]").boundingBox())!;
+        return [box.x + box.width - 20, box.y + box.height / 2];
+      },
     );
-    await expect.poll(async () => await groups(page)).toEqual(["3D|Image|Raw Messages"]);
-    await expect(page.getByTestId("new-tab-drop-target")).toHaveCount(0);
+    await expect.poll(async () => await tabs(page)).toEqual(["3D", "Image", "*Raw Messages"]);
   });
 
   // Uses panel types that are already loaded: a cold dev server can fail to lazy-load new ones.
@@ -359,15 +421,7 @@ test.describe("panel layout drag and drop", { tag: "@smoke" }, () => {
     await drag(page, await catalogItem(page, "Image"), inGroup(page, "3D", 0.5, 0.5));
     await expect
       .poll(async () => await groups(page))
-      .toEqual(["3D|Image", "Raw Messages", "Image", "Raw Messages"]);
-
-    await drag(
-      page,
-      await catalogItem(page, "3D"),
-      centerOf(group(page, "3D").getByTestId("new-tab-drop-target")),
-    );
-    await expect
-      .poll(async () => await groups(page))
-      .toEqual(["3D|Image|3D", "Raw Messages", "Image", "Raw Messages"]);
+      .toEqual(["Tab", "Raw Messages", "Image", "Raw Messages"]);
+    await expect.poll(async () => await tabs(page)).toEqual(["3D", "*Image"]);
   });
 });

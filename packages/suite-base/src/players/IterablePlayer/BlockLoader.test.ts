@@ -475,7 +475,7 @@ describe("BlockLoader", () => {
     });
   });
 
-  it("should drop preloaded topics when subscription options change", async () => {
+  it("should keep preloaded messages that cover a subscription with fewer fields", async () => {
     const source = new TestSource();
     const maxBlockCount = 2;
     const loader = new BlockLoader({
@@ -549,8 +549,9 @@ describe("BlockLoader", () => {
     expect(consoleErrorMock.mock.calls[0] ?? []).toContain("cache-full");
     consoleErrorMock.mockClear();
 
-    // Load the same topic but with message slicing. Since messages are much smaller then,
-    // we expect that we can preload the full range.
+    // Load the same topic but with message slicing. The whole messages already loaded hold the
+    // requested fields, so they are kept; only the missing block is loaded, sliced, and the full
+    // range fits.
     loader.setTopics(new Map([["a", { topic: "a", fields: ["some_field"] }]]));
     let count = 0;
     await loader.startLoading({
@@ -560,36 +561,18 @@ describe("BlockLoader", () => {
           throw new Error("Too many progress callbacks");
         }
 
-        if (count === maxBlockCount) {
+        // Only the missing block is loaded, so one progress call completes the range.
+        if (count === 1) {
           // eslint-disable-next-line vitest/no-conditional-expect
-          expect(progress).toEqual({
-            fullyLoadedFractionRanges: [
-              {
-                start: 0,
-                end: 1.0,
-              },
-            ],
+          expect(progress).toMatchObject({
+            fullyLoadedFractionRanges: [{ start: 0, end: 1.0 }],
             messageCache: {
               blocks: [
-                {
-                  messagesByTopic: {
-                    a: slicedMsgEvents.slice(0, 5),
-                  },
-                  needTopics: new Map(),
-                  sizeInBytes: 5,
-                },
-                {
-                  messagesByTopic: {
-                    a: slicedMsgEvents.slice(5, 10),
-                  },
-                  needTopics: new Map(),
-                  sizeInBytes: 5,
-                },
+                // Kept: the whole messages hold the requested field.
+                { messagesByTopic: { a: msgEvents.slice(0, 5) }, sizeInBytes: 50 },
+                // Loaded sliced (the test source ignores the start time, so it gets every message).
+                { messagesByTopic: { a: slicedMsgEvents }, needTopics: new Map() },
               ],
-              startTime: { sec: 0, nsec: 0 },
-            },
-            memoryInfo: {
-              [MEMORY_INFO_PRELOADED_MSGS]: 10,
             },
           });
 
