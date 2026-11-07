@@ -9,6 +9,7 @@ import {
   liveMachine,
   liveRecordingLockName,
   liveRecordingName,
+  liveSourceUrl,
   parseLiveRecordingName,
 } from "./liveRecordings";
 
@@ -111,8 +112,17 @@ describe("liveRecordingName", () => {
   });
 });
 
+describe("liveSourceUrl", () => {
+  it("drops user info, query and fragment, which may carry credentials", () => {
+    expect(liveSourceUrl("ws://user:secret@robot.local:8765/x?token=abc#y")).toBe(
+      "ws://robot.local:8765/x",
+    );
+    expect(liveSourceUrl("not a url")).toBe("");
+  });
+});
+
 describe("isEmptyMcap", () => {
-  async function mcap(messages: number): Promise<Blob> {
+  async function mcap(messages: number, finished = messages > 0): Promise<Blob> {
     const buffer = new TempBuffer();
     const writer = new McapWriter({ writable: buffer });
     await writer.start({ profile: "", library: "test" });
@@ -137,6 +147,8 @@ describe("isEmptyMcap", () => {
           data: new Uint8Array(),
         });
       }
+    }
+    if (finished) {
       await writer.end();
     }
     return new Blob([buffer.get().slice()]);
@@ -151,6 +163,18 @@ describe("isEmptyMcap", () => {
     const cutOff = header.slice(0, header.length - 1);
     await expect(isEmptyMcap(new Blob([cutOff]))).resolves.toBe(false);
     await expect(isEmptyMcap(new Blob([new Uint8Array(20)]))).resolves.toBe(false);
+  });
+
+  it("is true for a finished recording without messages", async () => {
+    await expect(isEmptyMcap(await mcap(0, true))).resolves.toBe(true);
+  });
+
+  it("keeps files without a header first, or with only the magic", async () => {
+    const header = new Uint8Array(await (await mcap(0)).arrayBuffer());
+    const noHeader = header.slice();
+    noHeader[8] = 0x04; // a channel record where the header belongs
+    await expect(isEmptyMcap(new Blob([noHeader]))).resolves.toBe(false);
+    await expect(isEmptyMcap(new Blob([header.slice(0, 8)]))).resolves.toBe(false);
   });
 
   it("is false once a message was written", async () => {

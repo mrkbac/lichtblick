@@ -11,6 +11,20 @@ export const LIVE_RECORDINGS_DIR = "live-recordings";
 /** Web lock held while a recording is written, so moving and evicting skip it. */
 export const liveRecordingLockName = (name: string): string => `lichtblick.live-recording:${name}`;
 
+/** A connection URL without user info, query or fragment, which may carry credentials. */
+export function liveSourceUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.username = "";
+    parsed.password = "";
+    parsed.search = "";
+    parsed.hash = "";
+    return parsed.toString();
+  } catch {
+    return "";
+  }
+}
+
 /** The machine a live connection goes to, from its URL: "robot.local:8765". */
 export function liveMachine(url: string): string {
   try {
@@ -66,13 +80,24 @@ export async function isEmptyMcap(file: Blob): Promise<boolean> {
     return false;
   }
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  // Records follow the magic: opcode (1), content length (8), content. Anything that doesn't add
-  // up exactly counts as data, since an empty file gets deleted.
+  // Records follow the magic: opcode (1), content length (8), content; a finished file ends with
+  // the magic again. Anything that doesn't add up exactly counts as data, since an empty file gets
+  // deleted.
   for (let offset = MCAP_MAGIC.length; offset < bytes.length; ) {
+    if (
+      offset > MCAP_MAGIC.length &&
+      offset + MCAP_MAGIC.length === bytes.length &&
+      MCAP_MAGIC.every((byte, i) => bytes[offset + i] === byte)
+    ) {
+      return true;
+    }
     if (offset + 9 > bytes.length) {
       return false;
     }
     const opcode = bytes[offset]!;
+    if (offset === MCAP_MAGIC.length && opcode !== Opcode.HEADER) {
+      return false;
+    }
     if (opcode === Opcode.MESSAGE || opcode === Opcode.CHUNK) {
       return false;
     }
@@ -82,7 +107,8 @@ export async function isEmptyMcap(file: Blob): Promise<boolean> {
     }
     offset = Number(end);
   }
-  return true;
+  // Magic only, without a header: not something this app wrote.
+  return bytes.length > MCAP_MAGIC.length;
 }
 
 export type LiveRecording = {

@@ -10,6 +10,7 @@ import {
   evictLiveRecordings,
   liveMachine,
   liveRecordingName,
+  liveSourceUrl,
   moveLiveRecordingsToFolder,
 } from "./liveRecordings";
 
@@ -73,7 +74,8 @@ export class LiveRecorder {
   }
 
   #sourceMetadata(): Record<string, string> {
-    const { url, serverName } = this.#source;
+    const { serverName } = this.#source;
+    const url = liveSourceUrl(this.#source.url);
     return serverName ? { url, serverName } : { url };
   }
 
