@@ -233,11 +233,11 @@ export class ChartRenderer {
 
     if (action.showXAxisLabels != undefined) {
       const ticksOptions = this.#chartInstance.options.scales?.x?.ticks;
-      if (ticksOptions) {
+      if (ticksOptions && ticksOptions.display !== action.showXAxisLabels) {
         ticksOptions.display = action.showXAxisLabels;
+        // hidden labels need no padding: size it afresh
+        this.#xPadding.span = Number.NaN;
       }
-      // hidden labels need no padding: size it afresh
-      this.#xPadding.span = Number.NaN;
     }
 
     if (action.yAxisLabel != undefined) {
