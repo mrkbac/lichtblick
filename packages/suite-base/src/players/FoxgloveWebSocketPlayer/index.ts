@@ -304,6 +304,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#resetSessionState();
       this.#connectedAtMs = Date.now();
       this.#stopRecording();
+      this.#recorderUnavailable = false; // a new connection tries recording again
       this.#alerts.clear();
       this.#channelsById.clear();
       this.#channelsByTopic.clear();
