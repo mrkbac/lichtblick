@@ -176,7 +176,7 @@ export function useLogMessages(topics: readonly string[]): {
       delete acc[topic];
     }
     if (removed.length > 0) {
-      setLoadingTopics((prev) => new Set([...prev].filter((topic) => wanted.has(topic))));
+      setLoadingTopics((prev) => prev.intersection(wanted));
       setErrorByTopic((prev) => pickKeys(prev, wanted));
     }
     if (added || removed.length > 0) {
