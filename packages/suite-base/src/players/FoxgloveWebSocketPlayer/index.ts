@@ -47,10 +47,12 @@ import {
   heapLimitBytes,
   LiveHistoryBuffer,
 } from "@lichtblick/suite-base/players/liveHistory/LiveHistoryBuffer";
+import { LiveRecorder } from "@lichtblick/suite-base/players/liveHistory/LiveRecorder";
 import {
   formatLiveHistoryMemory,
   liveHistorySettings,
 } from "@lichtblick/suite-base/players/liveHistory/liveHistorySettings";
+import { supportsLiveRecording } from "@lichtblick/suite-base/players/liveHistory/liveRecordings";
 import { estimateObjectSize } from "@lichtblick/suite-base/players/messageMemoryEstimation";
 import {
   AdvertiseOptions,
@@ -181,6 +183,8 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #rawByMessage = new WeakMap<MessageEvent, { data: Uint8Array; channel: ResolvedChannel }>();
   /** Wall time of the current connection, for session stats. */
   #connectedAtMs?: number;
+  /** Records the current connection to browser storage; one file per connection. */
+  #recorder?: LiveRecorder;
   #historyTimer?: ReturnType<typeof setTimeout>;
   #historyTickMs = 0;
   /** Wall time of the last server time message (or of connecting), to detect a stale clock. */
@@ -234,7 +238,10 @@ export default class FoxgloveWebSocketPlayer implements Player {
       sourceId: this.#sourceId,
       parameters: { url: this.#url },
     };
-    this.#unsubscribeHistorySettings = liveHistorySettings.subscribe(({ windowSec }) => {
+    this.#unsubscribeHistorySettings = liveHistorySettings.subscribe(({ windowSec, diskMiB }) => {
+      if (diskMiB === 0) {
+        this.#stopRecording();
+      }
       this.#history.setWindow(secToNs(windowSec));
       this.#applyHistoryMemoryLimit();
       this.#emitState();
@@ -292,6 +299,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#presence = PlayerPresence.PRESENT;
       this.#resetSessionState();
       this.#connectedAtMs = Date.now();
+      this.#stopRecording();
       this.#alerts.clear();
       this.#channelsById.clear();
       this.#channelsByTopic.clear();
@@ -341,6 +349,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#client.on("close", (event) => {
       log.info("Connection closed:", event);
       this.#presence = PlayerPresence.RECONNECTING;
+      this.#stopRecording();
 
       if (this.#getParameterInterval != undefined) {
         clearInterval(this.#getParameterInterval);
@@ -580,7 +589,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
           this.#emitState();
           continue;
         }
-        const resolvedChannel = { channel, parsedChannel, schema };
+        const resolvedChannel = {
+          channel,
+          parsedChannel,
+          record: { topic: channel.topic, messageEncoding: channel.encoding, schema },
+        };
         this.#channelsById.set(channel.id, resolvedChannel);
         this.#channelsByTopic.set(channel.topic, resolvedChannel);
       }
@@ -655,10 +668,9 @@ export default class FoxgloveWebSocketPlayer implements Player {
         if (!this.#serverControlsPlayback) {
           this.#history.add(msgEvent);
           // ponytail: raw bytes aren't counted in the history memory limit; the heap guard covers it.
-          this.#rawByMessage.set(msgEvent, {
-            data: new Uint8Array(data.buffer, data.byteOffset, data.byteLength),
-            channel: chanInfo,
-          });
+          const raw = new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+          this.#rawByMessage.set(msgEvent, { data: raw, channel: chanInfo });
+          this.#recordingFor()?.record(chanInfo.record, receiveTime, raw);
         }
         // While reviewing history, new messages only go into the history.
         if (this.#historyCursor == undefined) {
@@ -1096,6 +1108,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
 
   public close(): void {
     this.#closed = true;
+    this.#stopRecording();
     this.#unsubscribeHistorySettings();
     this.#clearHistory();
     this.#client?.close();
@@ -1468,6 +1481,38 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#emitState();
   };
 
+  /** The recorder for this connection, started on first use while recording is on. */
+  #recordingFor(): LiveRecorder | undefined {
+    if (
+      !this.#recorder &&
+      liveHistorySettings.getState().diskMiB > 0 &&
+      supportsLiveRecording() &&
+      typeof Worker !== "undefined"
+    ) {
+      this.#recorder = new LiveRecorder({
+        profile: this.#profile,
+        onError: (error) => {
+          this.#alerts.addAlert("liveRecording:failed", {
+            severity: "warn",
+            message: "Recording to browser storage stopped",
+            tip: "The connection and its history in memory are unaffected. Free up disk space or lower the recording budget in Settings.",
+            error: toError(error),
+          });
+          this.#emitState();
+        },
+      });
+    }
+    return this.#recorder;
+  }
+
+  #stopRecording(): void {
+    const recorder = this.#recorder;
+    this.#recorder = undefined;
+    void recorder?.stop().catch((error: unknown) => {
+      log.error("Failed to finish the live recording", error);
+    });
+  }
+
   /** Write everything in the live history to an MCAP file. */
   public async exportLiveHistory(writable: IWritable): Promise<void> {
     const messages = this.#history.snapshot();
@@ -1483,16 +1528,16 @@ export default class FoxgloveWebSocketPlayer implements Player {
       }
       let channelId = channelIds.get(raw.channel);
       if (channelId == undefined) {
-        const { channel, schema } = raw.channel;
-        const schemaKey = `${schema.encoding}\0${schema.name}\0${channel.schema}`;
+        const { channel, record } = raw.channel;
+        const schemaKey = `${record.schema.encoding}\0${record.schema.name}\0${channel.schema}`;
         let schemaId = schemaIds.get(schemaKey);
         if (schemaId == undefined) {
-          schemaId = await writer.registerSchema(schema);
+          schemaId = await writer.registerSchema(record.schema);
           schemaIds.set(schemaKey, schemaId);
         }
         channelId = await writer.registerChannel({
-          topic: channel.topic,
-          messageEncoding: channel.encoding,
+          topic: record.topic,
+          messageEncoding: record.messageEncoding,
           schemaId,
           metadata: new Map(),
         });

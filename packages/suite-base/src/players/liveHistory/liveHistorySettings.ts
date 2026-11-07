@@ -13,6 +13,10 @@ export const LIVE_HISTORY_MIN_MIB = 16;
 export const LIVE_HISTORY_MAX_MIB = 8192;
 export const LIVE_HISTORY_MEMORY_OPTIONS_MIB = [64, 128, 256, 512, 1024, 2048, 4096];
 
+/** Disk budget for recordings of live sessions in browser storage; 0 turns recording off. */
+export const LIVE_RECORDING_DEFAULT_MIB = 2048;
+export const LIVE_RECORDING_DISK_OPTIONS_MIB = [0, 1024, 2048, 5120, 10240, 20480, 51200];
+
 const clamp = (value: number, min: number, max: number, fallback: number) =>
   Number.isFinite(value) ? Math.min(max, Math.max(min, Math.round(value))) : fallback;
 
@@ -30,6 +34,7 @@ export const formatLiveHistoryMemory = (mib: number): string =>
 
 const WINDOW_KEY = "lichtblick.liveHistory.windowSec";
 const MEMORY_KEY = "lichtblick.liveHistory.maxMiB";
+const DISK_KEY = "lichtblick.liveHistory.diskMiB";
 
 function load(key: string, clampValue: (value: number) => number, fallback: number): number {
   try {
@@ -53,7 +58,13 @@ type LiveHistorySettings = {
   maxMiB: number;
   setWindowSec: (sec: number) => void;
   setMaxMiB: (mib: number) => void;
+  /** Disk budget for recordings, 0 = don't record. */
+  diskMiB: number;
+  setDiskMiB: (mib: number) => void;
 };
+
+const clampDiskMiB = (mib: number): number =>
+  clamp(mib, 0, 1024 * 1024, LIVE_RECORDING_DEFAULT_MIB);
 
 /** Saved length and memory limit of the live history; players subscribe to follow changes. */
 export const liveHistorySettings = createStore<LiveHistorySettings>()((set) => ({
@@ -68,5 +79,11 @@ export const liveHistorySettings = createStore<LiveHistorySettings>()((set) => (
     const maxMiB = clampLiveHistoryMiB(mib);
     set({ maxMiB });
     save(MEMORY_KEY, maxMiB);
+  },
+  diskMiB: load(DISK_KEY, clampDiskMiB, LIVE_RECORDING_DEFAULT_MIB),
+  setDiskMiB: (mib) => {
+    const diskMiB = clampDiskMiB(mib);
+    set({ diskMiB });
+    save(DISK_KEY, diskMiB);
   },
 }));

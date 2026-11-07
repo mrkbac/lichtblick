@@ -30,6 +30,10 @@ export const appSettings = {
     "Kept while connected to a live source, so you can pause and seek. The memory limit shortens the history when reached; it also shrinks on its own if the browser runs low on memory.",
   liveHistoryLength: "Length",
   liveHistoryMemory: "Memory limit",
+  liveRecordingDisk: "Record live sessions to disk",
+  liveRecordingOff: "Off",
+  liveRecordingDescription:
+    "Every live connection is recorded to an MCAP file in browser storage. When this much space is used, the oldest recordings are deleted. Find them under Live recordings in the app menu.",
   memoryUseIndicator: "Memory use indicator",
   memoryUseIndicatorDescription: "Show the app memory use in the sidebar.",
   syncLichtblickInstances: "Sync Lichtblick instances",

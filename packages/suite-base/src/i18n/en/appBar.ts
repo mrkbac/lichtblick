@@ -21,6 +21,7 @@ export const appBar = {
   commandPalette: "Command palette…",
   keyboardShortcuts: "Keyboard shortcuts",
   exportRecording: "Export recording…",
+  liveRecordings: "Live recordings…",
   extensions: "Extensions…",
   hideLeftSidebar: "Hide left sidebar",
   hideRightSidebar: "Hide right sidebar",

@@ -11,12 +11,13 @@ import { MessageWriter as Ros2MessageWriter } from "@foxglove/rosmsg2-serializat
 import { Channel, ClientChannel, Service } from "@foxglove/ws-protocol";
 
 import { ParsedChannel } from "@lichtblick/mcap-support";
+import type { RecorderChannel } from "@lichtblick/suite-base/players/liveHistory/liveRecorder.worker";
 
 export type ResolvedChannel = {
   channel: Channel;
   parsedChannel: ParsedChannel;
-  /** Schema as MCAP expects it, to write received messages back out. */
-  schema: { name: string; encoding: string; data: Uint8Array };
+  /** The channel as MCAP expects it, to write received messages back out. */
+  record: RecorderChannel;
 };
 export type Publication = ClientChannel & { messageWriter?: Ros1MessageWriter | Ros2MessageWriter };
 export type ResolvedService = {

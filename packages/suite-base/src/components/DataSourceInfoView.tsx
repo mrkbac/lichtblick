@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { compare, fromMillis, subtract, Time, toMillis } from "@foxglove/rostime";
+import { compare, subtract, Time, toMillis } from "@foxglove/rostime";
 import { TempBuffer } from "@mcap/core";
 import { Button, LinearProgress, Skeleton, Typography } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
@@ -25,7 +25,7 @@ import Timestamp from "@lichtblick/suite-base/components/Timestamp";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { PlayerPresence, RecordingFileInfo } from "@lichtblick/suite-base/players/types";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
-import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
+import { formatDuration, formatHms } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeAgo } from "@lichtblick/suite-base/util/recentSources";
 import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
 import { customTypography } from "@lichtblick/theme";
@@ -343,7 +343,7 @@ function LiveFields(): React.JSX.Element | null {
         <Field label={t("session")}>
           <Typography className={classes.numeric} variant="inherit">
             {t("sessionValue", {
-              duration: formatDuration(fromMillis(connectedMs)),
+              duration: formatHms(connectedMs, { withMillis: false }),
               size: formatByteSize(totalBytes),
               rate: formatByteSize(connectedMs > 0 ? (totalBytes * 1000) / connectedMs : 0),
             })}

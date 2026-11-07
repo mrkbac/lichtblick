@@ -23,6 +23,7 @@ export * from "./httpErrors";
 export * from "./incompatibleLayoutVersion";
 export * from "./keyboardShortcuts";
 export * from "./layoutTemplates";
+export * from "./liveRecordings";
 export * from "./log";
 export * from "./notes";
 export * from "./openDialog";

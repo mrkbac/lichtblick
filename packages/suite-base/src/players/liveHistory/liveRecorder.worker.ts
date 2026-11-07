@@ -1,0 +1,187 @@
+// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
+// SPDX-License-Identifier: MPL-2.0
+
+// Writes one live session to an MCAP file in the origin private file system. A sync access handle
+// writes in place, so every chunk is in the file as soon as it is written: after a crash the file
+// is a valid MCAP without index (readable from the start), after `stop()` a regular indexed one.
+
+import * as Comlink from "@foxglove/comlink";
+import { McapWriter } from "@mcap/core";
+
+import { LIVE_RECORDINGS_DIR, liveRecordingLockName } from "./liveRecordings";
+
+/** fsync on this cadence; a reload keeps what was written even without it. */
+const FLUSH_INTERVAL_MS = 1000;
+/**
+ * Messages reach the file a chunk at a time, so a crash loses at most this much. Smaller than the
+ * default 1 MiB so slow streams land on disk sooner.
+ * ponytail: bounded by size, not time; a time bound needs a chunk flush McapWriter doesn't expose.
+ */
+const CHUNK_SIZE = 256 * 1024;
+
+export type RecorderChannel = {
+  topic: string;
+  messageEncoding: string;
+  schema: { name: string; encoding: string; data: Uint8Array };
+};
+
+export type RecorderMessage = {
+  channel: number;
+  logTime: bigint;
+  sequence: number;
+  data: Uint8Array;
+};
+
+type Session = {
+  handle: FileSystemSyncAccessHandle;
+  writer: McapWriter;
+  channelIds: Map<number, number>;
+  schemaIds: Map<string, number>;
+  flushTimer: ReturnType<typeof setInterval>;
+  releaseLock: () => void;
+};
+
+const zstd = import("@foxglove/wasm-zstd").then(async (module) => {
+  await module.isLoaded;
+  return module;
+});
+
+let session: Session | undefined;
+// Calls are queued: the writer must see them one at a time, in order.
+let queue = Promise.resolve();
+async function serial<T>(run: () => Promise<T>): Promise<T> {
+  const result = queue.then(run);
+  queue = result.then(
+    () => {},
+    () => {},
+  );
+  return await result;
+}
+
+async function start(name: string, profile: string): Promise<void> {
+  const { compress } = await zstd;
+  let releaseLock!: () => void;
+  const locked = new Promise<void>((resolve, reject) => {
+    void navigator.locks
+      .request(liveRecordingLockName(name), async () => {
+        resolve();
+        await new Promise<void>((release) => {
+          releaseLock = release;
+        });
+      })
+      .catch(reject);
+  });
+  await locked;
+  try {
+    const root = await navigator.storage.getDirectory();
+    const dir = await root.getDirectoryHandle(LIVE_RECORDINGS_DIR, { create: true });
+    const file = await dir.getFileHandle(name, { create: true });
+    const handle = await file.createSyncAccessHandle();
+    handle.truncate(0);
+    let position = 0n;
+    const writer = new McapWriter({
+      writable: {
+        position: () => position,
+        write: async (buffer) => {
+          handle.write(buffer, { at: Number(position) });
+          position += BigInt(buffer.byteLength);
+        },
+      },
+      chunkSize: CHUNK_SIZE,
+      compressChunk: (data) => ({ compression: "zstd", compressedData: compress(data) }),
+    });
+    await writer.start({ profile, library: "Lichtblick live recording" });
+    session = {
+      handle,
+      writer,
+      channelIds: new Map(),
+      schemaIds: new Map(),
+      flushTimer: setInterval(() => {
+        handle.flush();
+      }, FLUSH_INTERVAL_MS),
+      releaseLock,
+    };
+  } catch (error) {
+    releaseLock();
+    throw error;
+  }
+}
+
+async function addChannel(key: number, channel: RecorderChannel): Promise<void> {
+  if (!session) {
+    return;
+  }
+  const { schema } = channel;
+  const schemaKey = `${schema.encoding}\0${schema.name}\0${new TextDecoder().decode(schema.data)}`;
+  let schemaId = session.schemaIds.get(schemaKey);
+  if (schemaId == undefined) {
+    schemaId = await session.writer.registerSchema(schema);
+    session.schemaIds.set(schemaKey, schemaId);
+  }
+  const channelId = await session.writer.registerChannel({
+    topic: channel.topic,
+    messageEncoding: channel.messageEncoding,
+    schemaId,
+    metadata: new Map(),
+  });
+  session.channelIds.set(key, channelId);
+}
+
+async function append(messages: RecorderMessage[]): Promise<void> {
+  if (!session) {
+    return;
+  }
+  for (const msg of messages) {
+    const channelId = session.channelIds.get(msg.channel);
+    if (channelId != undefined) {
+      await session.writer.addMessage({
+        channelId,
+        sequence: msg.sequence,
+        logTime: msg.logTime,
+        publishTime: msg.logTime,
+        data: msg.data,
+      });
+    }
+  }
+}
+
+async function stop(): Promise<void> {
+  const current = session;
+  session = undefined;
+  if (!current) {
+    return;
+  }
+  clearInterval(current.flushTimer);
+  try {
+    await current.writer.end();
+    current.handle.flush();
+  } finally {
+    current.handle.close();
+    current.releaseLock();
+  }
+}
+
+const api = {
+  start: async (name: string, profile: string) => {
+    await serial(async () => {
+      await start(name, profile);
+    });
+  },
+  addChannel: async (key: number, channel: RecorderChannel) => {
+    await serial(async () => {
+      await addChannel(key, channel);
+    });
+  },
+  append: async (messages: RecorderMessage[]) => {
+    await serial(async () => {
+      await append(messages);
+    });
+  },
+  stop: async () => {
+    await serial(stop);
+  },
+};
+
+export type LiveRecorderWorker = typeof api;
+
+Comlink.expose(api);
