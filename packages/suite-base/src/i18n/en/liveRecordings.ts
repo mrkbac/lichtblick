@@ -7,6 +7,7 @@ export const liveRecordings = {
   budget: "{{used}} of {{budget}}",
   budgetHint: "Space used in browser storage. The oldest recordings are deleted when it's full.",
   chooseFolder: "Save to folder…",
+  close: "Close",
   folderName: "Folder: {{name}}",
   delete: "Delete",
   download: "Download",
