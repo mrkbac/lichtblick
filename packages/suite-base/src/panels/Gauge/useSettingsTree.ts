@@ -9,6 +9,7 @@ import { DATA_TYPES } from "@lichtblick/suite-base/panels/Gauge/constants";
 
 import { ColorMapConfig, ColorModeConfig, SettingsTreeNodesProps } from "./types";
 
+/** Shows the controls for the selected display and reports invalid inclinometer thresholds. */
 export function useSettingsTree({
   config,
   pathParseError,
@@ -38,8 +39,8 @@ export function useSettingsTree({
           label: t("displayMode"),
           input: "select",
           value: displayMode,
-          options: ["arc", "roll", "pitch"].map((mode) => ({
-            label: t(mode as "arc" | "roll" | "pitch"),
+          options: (["arc", "roll", "pitch"] as const).map((mode) => ({
+            label: t(mode),
             value: mode,
           })),
         },

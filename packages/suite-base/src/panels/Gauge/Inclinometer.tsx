@@ -10,12 +10,13 @@ import { useTranslation } from "react-i18next";
 
 import { GaugeConfig } from "./types";
 
+/** Keeps invalid readings and thresholds from appearing as a live, level horizon. */
 export function Inclinometer({
   config,
   value,
 }: {
   config: GaugeConfig;
-  value: number;
+  value: unknown;
 }): React.JSX.Element {
   const theme = useTheme();
   const { t } = useTranslation("gauge");
@@ -26,7 +27,11 @@ export function Inclinometer({
     criticalAngle > warningAngle &&
     angleRange > criticalAngle &&
     angleRange <= 90;
-  const degrees = angleUnit === "radians" ? (value * 180) / Math.PI : value;
+  const numericValue =
+    typeof value === "number" || (typeof value === "string" && value.trim() !== "")
+      ? Number(value)
+      : NaN;
+  const degrees = angleUnit === "radians" ? (numericValue * 180) / Math.PI : numericValue;
   const hasValue = Number.isFinite(degrees) && validRange;
   const angle = hasValue ? Math.max(-angleRange, Math.min(angleRange, degrees)) : 0;
   const color = !hasValue
@@ -46,7 +51,7 @@ export function Inclinometer({
       width="100%"
       height="100%"
       role="img"
-      aria-label={`${label}: ${hasValue ? `${degrees.toFixed(1)}°` : "—"}`}
+      aria-label={`${label}: ${hasValue ? `${degrees.toFixed(1)}°` : "—"}${validRange ? "" : ` ${t("invalidAngles")}`}`}
       style={{ color: theme.palette.text.primary, fontFamily: theme.typography.fontFamily }}
     >
       <defs>

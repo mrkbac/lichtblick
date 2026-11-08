@@ -28,6 +28,11 @@ describe("Inclinometer", () => {
     );
   });
 
+  it("accepts numeric strings", () => {
+    render(<Inclinometer config={config} value=" 12.5 " />);
+    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("roll: 12.5°");
+  });
+
   it("leaves room for labels across a 90° range", () => {
     render(<Inclinometer config={{ ...config, angleRange: 90 }} value={0} />);
     expect(screen.getByRole("img").getAttribute("viewBox")).toBe("0 -40 320 380");
@@ -49,16 +54,20 @@ describe("Inclinometer", () => {
     expect(container.querySelector('[transform="translate(0 37.5)"]')).not.toBeNull();
   });
 
-  it.each([NaN, Infinity, -Infinity])("shows no reading for %s", (value) => {
-    const { container } = render(<Inclinometer config={config} value={value} />);
-    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("roll: —");
-    expect(container.querySelector("[clip-path]")).toBeNull();
-  });
+  it.each([NaN, Infinity, -Infinity, "", "  ", "\t", undefined, null, false, "invalid"])(
+    "shows no reading for %s",
+    (value) => {
+      const { container } = render(<Inclinometer config={config} value={value} />);
+      expect(screen.getByRole("img").getAttribute("aria-label")).toBe("roll: —");
+      expect(container.querySelector("[clip-path]")).toBeNull();
+    },
+  );
 
   it("rejects invalid thresholds without drawing a live horizon", () => {
     const { container } = render(
       <Inclinometer config={{ ...config, warningAngle: 50 }} value={0} />,
     );
+    expect(screen.getByRole("img").getAttribute("aria-label")).toBe("roll: — invalidAngles");
     expect(screen.getByText("invalidAngles")).toBeDefined();
     expect(container.querySelector("[clip-path]")).toBeNull();
   });

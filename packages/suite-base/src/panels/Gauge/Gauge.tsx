@@ -21,6 +21,7 @@ import { settingsActionReducer } from "./settingsActionReducer";
 import { GaugeConfig, GaugeProps } from "./types";
 import { useSettingsTree } from "./useSettingsTree";
 
+/** Restores saved Gauge settings over defaults so older layouts retain their arc display. */
 export function Gauge({ context }: GaugeProps): React.JSX.Element {
   const { classes } = useStyles();
   // panel extensions must notify when they've completed rendering
@@ -135,7 +136,7 @@ export function Gauge({ context }: GaugeProps): React.JSX.Element {
   const needleExtraLength = 0.05;
   const [clipPathId] = useState(() => `gauge-clip-path-${randomUUID()}`);
   if (config.displayMode !== "arc") {
-    return <Inclinometer config={config} value={rawValue} />;
+    return <Inclinometer config={config} value={state.latestMatchingQueriedData} />;
   }
   return (
     <div className={classes.root}>
