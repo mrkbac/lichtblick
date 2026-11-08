@@ -10,5 +10,7 @@ test.use({ electronArgs: process.platform === "darwin" ? ["--use-angle=metal"] :
 test("renders sharp vectors and picks the shared 3D scene", { tag: "@smoke" }, async ({
   mainWindow,
 }) => {
+  // Software WebGL in CI needs more time for the projection and extreme-zoom round trips.
+  test.setTimeout(60_000);
   await exerciseSharedMap(mainWindow);
 });

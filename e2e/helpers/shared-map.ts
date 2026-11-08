@@ -120,8 +120,8 @@ export async function exerciseSharedMap(page: Page): Promise<void> {
   await page.getByText("View", { exact: true }).click();
   const distance = page.getByRole("spinbutton").first();
   await page.mouse.move(before.x + 100, before.y);
-  for (let i = 0; i < 12; i++) {
-    await page.mouse.wheel(0, 3000);
+  for (let i = 0; i < 4; i++) {
+    await page.mouse.wheel(0, 15000);
     await page.waitForTimeout(50);
   }
   const limit = Number(await distance.inputValue());
