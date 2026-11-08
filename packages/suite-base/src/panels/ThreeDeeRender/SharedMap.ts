@@ -18,6 +18,13 @@ export type MapAnchor = LatLon & {
 
 const EMPTY_STYLE: StyleSpecification = { version: 8, sources: {}, layers: [] };
 const CUSTOM_LAYER_ID = "lichtblick-3d-scene";
+const IDENTITY_POSE = makePose();
+const UNIT_SCALE = new THREE.Vector3(1, 1, 1);
+const forward = new THREE.Vector3();
+const up = new THREE.Vector3();
+const right = new THREE.Vector3();
+const levelRight = new THREE.Vector3();
+const levelUp = new THREE.Vector3();
 
 /** Camera orientation in the map's east/north/up frame, expressed in MapLibre degrees. */
 export function mapCameraAngles(matrix: THREE.Matrix4): {
@@ -25,16 +32,16 @@ export function mapCameraAngles(matrix: THREE.Matrix4): {
   pitch: number;
   roll: number;
 } {
-  const forward = new THREE.Vector3(0, 0, -1).transformDirection(matrix);
-  const up = new THREE.Vector3(0, 1, 0).transformDirection(matrix);
-  const right = new THREE.Vector3(1, 0, 0).transformDirection(matrix);
+  forward.set(0, 0, -1).transformDirection(matrix);
+  up.set(0, 1, 0).transformDirection(matrix);
+  right.set(1, 0, 0).transformDirection(matrix);
   const bearing =
     Math.hypot(forward.x, forward.y) < 1e-8
       ? Math.atan2(-right.y, right.x)
       : Math.atan2(forward.x, forward.y);
   const pitch = Math.acos(THREE.MathUtils.clamp(-forward.z, -1, 1));
-  const levelRight = new THREE.Vector3(Math.cos(bearing), -Math.sin(bearing), 0);
-  const levelUp = levelRight.clone().cross(forward);
+  levelRight.set(Math.cos(bearing), -Math.sin(bearing), 0);
+  levelUp.copy(levelRight).cross(forward);
   return {
     bearing: THREE.MathUtils.radToDeg(bearing),
     pitch: THREE.MathUtils.radToDeg(pitch),
@@ -53,6 +60,15 @@ export class SharedMap {
   #draw?: () => void;
   #renderer?: IRenderer;
   #renderToMercator = new THREE.Matrix4();
+  #renderToEnu = new THREE.Matrix4();
+  #enuToMercator = new THREE.Matrix4();
+  #cameraInEnu = new THREE.Matrix4();
+  #translation = new THREE.Vector3();
+  #rotation = new THREE.Quaternion();
+  #eye = new THREE.Vector3();
+  #eyeCoordinate = new MercatorCoordinate(0, 0, 0);
+  #origin?: MercatorCoordinate;
+  #pose = makePose();
 
   public constructor(map: MapLibreMap, layerId: string) {
     this.map = map;
@@ -90,6 +106,9 @@ export class SharedMap {
   }
 
   public locate(anchor: MapAnchor | undefined, zOffset: number): void {
+    if (anchor !== this.#anchor) {
+      this.#origin = anchor ? MercatorCoordinate.fromLngLat([anchor.lon, anchor.lat]) : undefined;
+    }
     this.#anchor = anchor;
     this.#zOffset = zOffset;
   }
@@ -143,15 +162,17 @@ export class SharedMap {
     const camera = renderer.cameraHandler.getActiveCamera();
     camera.updateProjectionMatrix();
     const anchor = this.#anchor;
-    const pose = makePose();
+    const pose = this.#pose;
+    const origin = this.#origin;
     const time = renderer.currentTime;
     const available =
       anchor != undefined &&
+      origin != undefined &&
       camera instanceof THREE.PerspectiveCamera &&
       Boolean(
         renderer.transformTree.apply(
           pose,
-          pose,
+          IDENTITY_POSE,
           anchor.enuFrame,
           fixedFrameId,
           renderFrameId,
@@ -161,40 +182,39 @@ export class SharedMap {
       );
     let placed = false;
     if (available) {
-      const renderToEnu = new THREE.Matrix4().compose(
-        new THREE.Vector3(pose.position.x, pose.position.y, pose.position.z),
-        new THREE.Quaternion(
+      const renderToEnu = this.#renderToEnu.compose(
+        this.#translation.set(pose.position.x, pose.position.y, pose.position.z),
+        this.#rotation.set(
           pose.orientation.x,
           pose.orientation.y,
           pose.orientation.z,
           pose.orientation.w,
         ),
-        new THREE.Vector3(1, 1, 1),
+        UNIT_SCALE,
       );
       const elevation =
         anchor.altitude ?? this.map.queryTerrainElevation([anchor.lon, anchor.lat]) ?? 0;
-      const origin = MercatorCoordinate.fromLngLat(
-        [anchor.lon, anchor.lat],
-        elevation - this.#zOffset,
-      );
       const scale = origin.meterInMercatorCoordinateUnits();
-      const enuToMercator = new THREE.Matrix4().makeScale(scale, -scale, scale);
+      const enuToMercator = this.#enuToMercator.makeScale(scale, -scale, scale);
       enuToMercator.setPosition(
         origin.x - anchor.position.x * scale,
         origin.y + anchor.position.y * scale,
-        origin.z - anchor.position.z * scale,
+        (elevation - this.#zOffset - anchor.position.z) * scale,
       );
       this.#renderToMercator.copy(enuToMercator).multiply(renderToEnu);
       camera.updateWorldMatrix(true, false);
-      const cameraInEnu = renderToEnu.clone().multiply(camera.matrixWorld);
+      const cameraInEnu = this.#cameraInEnu.copy(renderToEnu).multiply(camera.matrixWorld);
       const angles = mapCameraAngles(cameraInEnu);
-      const eye = new THREE.Vector3()
+      const eye = this.#eye
         .setFromMatrixPosition(camera.matrixWorld)
         .applyMatrix4(this.#renderToMercator);
       // shortcut: map-backed views require a camera above the ground looking down; use ordinary 3D otherwise.
       placed = angles.pitch < 85 && eye.z > 0;
       if (placed) {
-        const coordinate = new MercatorCoordinate(eye.x, eye.y, eye.z);
+        const coordinate = this.#eyeCoordinate;
+        coordinate.x = eye.x;
+        coordinate.y = eye.y;
+        coordinate.z = eye.z;
         this.map.setVerticalFieldOfView(camera.fov);
         this.map.jumpTo(
           this.map.calculateCameraOptionsFromCameraLngLatAltRotation(

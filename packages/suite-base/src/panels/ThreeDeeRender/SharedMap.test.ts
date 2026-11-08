@@ -87,9 +87,13 @@ describe("SharedMap", () => {
     expect(map.jumpTo).toHaveBeenCalled();
     const [eye, altitude] = map.calculateCameraOptionsFromCameraLngLatAltRotation.mock.calls[0]!;
     expect(eye).toEqual(
-      expect.objectContaining({ lng: expect.closeTo(11), lat: expect.closeTo(48) }),
+      expect.objectContaining({ lng: expect.closeTo(11, 10), lat: expect.closeTo(48, 10) }),
     );
     expect(altitude).toBeCloseTo(20);
+    shared.render("base", "map");
+    expect(map.calculateCameraOptionsFromCameraLngLatAltRotation.mock.calls[1]).toEqual(
+      map.calculateCameraOptionsFromCameraLngLatAltRotation.mock.calls[0],
+    );
     expect(map.addLayer).toHaveBeenCalledTimes(3);
     const originalProjection = camera.projectionMatrix.clone();
     layer!.render(

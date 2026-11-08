@@ -48,7 +48,7 @@ import { Renderer } from "./Renderer";
 import { RendererContext, useRendererEvent, useRendererProperty } from "./RendererContext";
 import { RendererOverlay } from "./RendererOverlay";
 import { onlyLastByTopicMessage } from "./SceneExtension";
-import { SharedMap } from "./SharedMap";
+import type { SharedMap } from "./SharedMap";
 import { useStyles } from "./ThreeDeeRender.style";
 import { CameraState, DEFAULT_CAMERA_STATE } from "./camera";
 import {
@@ -173,8 +173,8 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     }
     let disposed = false;
     let instance: SharedMap | undefined;
-    void import("@lichtblick/suite-base/panels/Map/maplibre")
-      .then(({ Map }) => {
+    void Promise.all([import("@lichtblick/suite-base/panels/Map/maplibre"), import("./SharedMap")])
+      .then(([{ Map }, { SharedMap }]) => {
         if (disposed) {
           return;
         }
