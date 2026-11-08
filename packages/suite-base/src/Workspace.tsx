@@ -56,6 +56,7 @@ import {
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import { MonitorSetupProvider } from "@lichtblick/suite-base/components/MonitorSetupContext";
 import { PanelCatalog } from "@lichtblick/suite-base/components/PanelCatalog";
 import PanelLayout from "@lichtblick/suite-base/components/PanelLayout";
 import PanelSettings from "@lichtblick/suite-base/components/PanelSettings";
@@ -841,7 +842,9 @@ export default function Workspace(props: WorkspaceProps): React.JSX.Element {
       workspaceStoreCreator={workspaceStoreCreator}
       disablePersistenceForStorybook={props.disablePersistenceForStorybook}
     >
-      <WorkspaceContent {...props} />
+      <MonitorSetupProvider>
+        <WorkspaceContent {...props} />
+      </MonitorSetupProvider>
     </WorkspaceContextProvider>
   );
 }

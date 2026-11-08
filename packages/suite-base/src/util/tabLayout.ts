@@ -23,7 +23,7 @@ import {
 export const TAB_PANEL_TYPE = "Tab";
 
 export type TabConfig = { title: string; layout?: LayoutNode };
-export type TabPanelConfig = { activeTabIdx: number; tabs: TabConfig[] };
+export type TabPanelConfig = { activeTabIdx: number; tabs: TabConfig[]; isWindow?: boolean };
 
 export const DEFAULT_TAB_PANEL_CONFIG: TabPanelConfig = {
   activeTabIdx: 0,
@@ -180,6 +180,10 @@ function normalizeTabsOnce<T extends TreeData>(data: T): T {
       if (group.panels.length === 1) {
         const id = group.panels[0]!;
         if (!isTabPanel(id)) {
+          return group;
+        }
+        // A monitor needs a stable container even when empty or holding just one panel.
+        if (configById[id]?.isWindow === true) {
           return group;
         }
         const { tabs, active } = filledTabs(configById[id]);

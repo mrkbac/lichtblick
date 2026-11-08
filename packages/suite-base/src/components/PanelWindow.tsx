@@ -28,13 +28,15 @@ import { TssCacheProvider } from "tss-react";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
 import { DockPanelContext } from "./DockPanelContext";
+import { useMonitorSetup } from "./MonitorSetupContext";
 import Stack from "./Stack";
+import { WindowBounds } from "./monitorSetup";
 
 type DocumentPiP = {
   requestWindow: (options: { width: number; height: number }) => Promise<Window>;
 };
 type WindowActions = {
-  open: (mode: "popout" | "pip") => void;
+  open: (mode: "popout" | "pip", bounds?: WindowBounds, existing?: Window) => void;
   close: () => void;
   isOpen: boolean;
   supportsPiP: boolean;
@@ -99,6 +101,7 @@ function PanelWindowStyles({ target, children }: PropsWithChildren<{ target: Win
 
 /** Keep the shared player/context, but recreate renderers rather than adopt a live canvas. */
 export function PanelWindow({ children, title }: PropsWithChildren<{ title: string }>): ReactNode {
+  const setup = useMonitorSetup();
   const parent = useContext(PanelWindowContext);
   const dock = useContext(DockPanelContext);
   const [windowMode, setWindowMode] = useState<"popout" | "pip">("popout");
@@ -168,8 +171,12 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
       close: () => {
         windowRef.current?.close();
       },
-      open: (mode) => {
+      open: (mode, bounds, existing) => {
         if (pending.current || windowRef.current != undefined) {
+          if (bounds && windowRef.current && windowMode === "popout") {
+            windowRef.current.moveTo(bounds.left, bounds.top);
+            windowRef.current.resizeTo(bounds.width, bounds.height);
+          }
           windowRef.current?.focus();
           return;
         }
@@ -180,7 +187,14 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           const child =
             mode === "pip"
               ? await pip?.requestWindow({ width: 800, height: 600 })
-              : window.open("about:blank", "_blank", "popup,width=1000,height=700");
+              : (existing ??
+                window.open(
+                  "about:blank",
+                  "_blank",
+                  bounds
+                    ? `popup,left=${bounds.left},top=${bounds.top},width=${bounds.width},height=${bounds.height}`
+                    : "popup,width=1000,height=700",
+                ));
           if (!child) {
             throw new Error("Panel window unavailable");
           }
@@ -189,6 +203,10 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
             return;
           }
           windowRef.current = child;
+          if (bounds) {
+            child.moveTo(bounds.left, bounds.top);
+            child.resizeTo(bounds.width, bounds.height);
+          }
           const doc = child.document;
           doc.title = title;
           doc.documentElement.lang = document.documentElement.lang;
@@ -250,8 +268,21 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           });
       },
     }),
-    [pip, target, title],
+    [pip, target, title, windowMode],
   );
+
+  const register = setup?.register;
+  useEffect(() => {
+    if (!register || !dock || parent?.isOpen === true || isDesktopApp()) {
+      return;
+    }
+    return register(dock.api.id, {
+      open: (bounds, existing) => {
+        actions.open("popout", bounds, existing);
+      },
+      getWindow: () => (windowMode === "popout" ? windowRef.current : undefined),
+    });
+  }, [actions, dock, parent?.isOpen, register, windowMode]);
 
   // A Tab panel can contain several panels; all of them share its one floating window.
   if (isDesktopApp() || parent?.isOpen === true) {

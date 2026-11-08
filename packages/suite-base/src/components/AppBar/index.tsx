@@ -44,6 +44,7 @@ import { AppBarIconButton } from "./AppBarIconButton";
 import { AppMenu } from "./AppMenu";
 import { CustomWindowControls, CustomWindowControlsProps } from "./CustomWindowControls";
 import { DataSource } from "./DataSource";
+import { MonitorSetupButtons } from "./MonitorSetupButtons";
 import { NetworkStatusIndicator } from "./NetworkStatusIndicator";
 import { UpdateIndicator } from "./UpdateIndicator";
 import { UserMenu, hasUserMenu } from "./UserMenu";
@@ -255,6 +256,7 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
               >
                 <SlideAdd24Regular />
               </AppBarIconButton>
+              <MonitorSetupButtons disabled={!hasCurrentLayout} />
             </div>
           </div>
 

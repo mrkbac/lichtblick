@@ -15,6 +15,8 @@ export const LOCAL_STORAGE_PROFILE_DATA = `${KEY_WORKSPACE_PREFIX}studio.profile
 export const LOCAL_STORAGE_APP_CONFIGURATION = `${KEY_WORKSPACE_PREFIX}studio.app-configuration.`;
 export const LOCAL_STORAGE_PANEL_LOGS_HEIGHT = `${KEY_WORKSPACE_PREFIX}studio.panel-logs-height`;
 
+export const LOCAL_STORAGE_MONITOR_SETUP = `${KEY_WORKSPACE_PREFIX}studio.monitor-setup.`;
+
 // Session storage keys
 export const SESSION_STORAGE_LOGS_SETTINGS = `${KEY_WORKSPACE_PREFIX}blick.logs-settings`;
 export const SESSION_STORAGE_LICHTBLICK_WORKSPACE = `${KEY_WORKSPACE_PREFIX}fox.workspace`;

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { expect, test } from "@playwright/test";
+import { expect, Page, test } from "@playwright/test";
 
 import { loadFiles } from "../../fixtures/load-files";
 
@@ -171,4 +171,89 @@ test("keeps typing shortcuts inside inherited editable fields", { tag: "@regress
     await page.evaluate(() => (window as Window & { forwardedSpaces: number }).forwardedSpaces),
   ).toBe(0);
   await monitor.close();
+});
+
+test("creates a blank monitor from the top bar and restores its contents with one click", {
+  tag: "@smoke",
+}, async ({ page }) => {
+  // Given an ordinary browser without Window Management permission support.
+  await page.evaluate(() => {
+    Object.defineProperty(window, "getScreenDetails", { configurable: true, value: undefined });
+  });
+  // When New window is clicked, it opens directly without another panel picker.
+  const opened = page.waitForEvent("popup");
+  await page.getByTestId("new-window-button").click();
+  const monitor = await opened;
+  await expect(monitor).toHaveTitle("New window");
+  await expect(monitor.getByTestId("empty-drop-target")).toBeVisible();
+  await expect(page.getByTestId("panel-menu")).toHaveCount(3);
+  // Then the existing catalog builds the monitor's contents in its own window.
+  await monitor.getByTestId("panel-grid-card Image").click();
+  await expect(monitor.getByTestId("panel-menu")).toHaveCount(2);
+  await expect(monitor.getByTestId("empty-drop-target")).toHaveCount(0);
+  await expect(page.getByTestId("save-monitor-setup")).toBeEnabled();
+
+  // When the arrangement is saved and both pages are recreated, nothing opens automatically.
+  await page.getByTestId("save-monitor-setup").click();
+  await expect(
+    page.getByText("Monitor setup saved on this computer for this layout."),
+  ).toBeVisible();
+  await monitor.close();
+  await page.reload();
+  const dialog = page.getByTestId("DataSourceDialog");
+  if (await dialog.isVisible()) {
+    await page.keyboard.press("Escape");
+  }
+  await expect(page.getByTestId("restore-monitor-setup")).toBeEnabled();
+  expect(page.context().pages()).toHaveLength(1);
+  // Then a single Restore click reopens the monitor with its configured Image panel.
+  const restored = page.waitForEvent("popup");
+  await page.getByTestId("restore-monitor-setup").click();
+  const returned = await restored;
+  await expect(returned).toHaveTitle("New window");
+  await expect(returned.getByTestId("panel-menu")).toHaveCount(2);
+  await expect(returned.getByTestId("empty-drop-target")).toHaveCount(0);
+  await returned.close();
+});
+
+test("restores several existing panel windows when screen permission is denied", {
+  tag: "@regression",
+}, async ({ page }) => {
+  // Given two ordinary pop-outs and a denied Window Management permission.
+  await page.evaluate(() => {
+    Object.defineProperty(window, "getScreenDetails", {
+      configurable: true,
+      value: async () => {
+        throw new DOMException("Denied", "NotAllowedError");
+      },
+    });
+  });
+  const monitors: Page[] = [];
+  for (let i = 0; i < 2; i++) {
+    await page.getByTestId("panel-menu").first().click();
+    const opened = page.waitForEvent("popup");
+    await page.getByText("Open in new window", { exact: true }).click();
+    monitors.push(await opened);
+  }
+  await page.getByTestId("save-monitor-setup").click();
+  await expect(
+    page.getByText("Monitor setup saved on this computer for this layout."),
+  ).toBeVisible();
+  for (const monitor of monitors) {
+    await monitor.close();
+  }
+  await expect(page.getByTestId("panel-menu")).toHaveCount(3);
+  // When Restore is clicked once, normal pop-outs remain available without screen permission.
+  const restored: Page[] = [];
+  page.on("popup", (monitor) => {
+    restored.push(monitor);
+  });
+  await page.getByTestId("restore-monitor-setup").click();
+  await expect.poll(() => restored.length).toBe(2);
+  // Then both panels are live in their windows and no duplicate panel remains in the workspace.
+  await expect(page.getByTestId("panel-menu")).toHaveCount(1);
+  for (const monitor of restored) {
+    await expect(monitor.getByTestId("panel-menu")).toHaveCount(1);
+    await monitor.close();
+  }
 });
