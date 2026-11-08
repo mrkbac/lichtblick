@@ -39,7 +39,9 @@ function setup(locationFrame?: string) {
     on: vi.fn(),
     off: vi.fn(),
     queueAnimationFrame: vi.fn(),
-    updateConfig: (fn: (draft: typeof config) => void) => fn(config),
+    updateConfig: (fn: (draft: typeof config) => void) => {
+      fn(config);
+    },
     settings: {
       setNodesForKey: vi.fn(),
       errors: { remove: vi.fn() },
