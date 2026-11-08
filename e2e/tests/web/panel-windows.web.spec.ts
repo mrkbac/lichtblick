@@ -320,3 +320,22 @@ for (const colorScheme of ["light", "dark"] as const) {
     await monitor.close();
   });
 }
+
+test("styles a Map added after the monitor opens", { tag: "@regression" }, async ({ page }) => {
+  // Given a blank monitor opened before the Map library's global CSS is loaded.
+  const opened = page.waitForEvent("popup");
+  await page.getByTestId("new-window-button").click();
+  const monitor = await opened;
+  // When Map is created, its library stylesheet must also reach this document.
+  await monitor.getByTestId("panel-grid-card Map").click();
+  const map = monitor.locator(".maplibregl-map");
+  await expect(map).toBeVisible();
+  // Then library layout rules apply, keeping the canvas and controls inside the panel.
+  await expect(map).toHaveCSS("position", "relative");
+  await expect(map).toHaveCSS("overflow", "hidden");
+  await expect(map.locator("canvas")).toBeVisible();
+  const bounds = await map.boundingBox();
+  expect(bounds!.height).toBeGreaterThan(100);
+  expect(bounds!.height).toBeLessThanOrEqual(await monitor.evaluate(() => innerHeight));
+  await monitor.close();
+});

@@ -9,10 +9,13 @@ import createCache from "@emotion/cache";
 import { CacheProvider } from "@emotion/react";
 import { ThemeProvider as MuiThemeProvider, darken } from "@mui/material";
 import * as React from "react";
-import { useEffect, useLayoutEffect, useMemo } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo } from "react";
 import { TssCacheProvider } from "tss-react";
 
 import { createMuiTheme } from "@lichtblick/theme";
+
+/** Carries document ownership across built-in panels with separate React roots. */
+export const ThemeDocumentContext = createContext<Document | undefined>(undefined);
 
 // Make sure mui styles are loaded first so that our makeStyles customizations
 // take precedence.
@@ -29,11 +32,15 @@ ThemeContainer.displayName = "ThemeContainer";
 export default function ThemeProvider({
   children,
   isDark,
-  ownerDocument = document,
+  ownerDocument: explicitDocument,
 }: React.PropsWithChildren<{
   isDark: boolean;
   ownerDocument?: Document;
 }>): React.ReactElement | null {
+  const inheritedDocument = useContext(ThemeDocumentContext);
+  const ownerDocument = explicitDocument ?? inheritedDocument ?? document;
+  // Nested panel themes style their subtree; the outer theme owns document/PWA chrome.
+  const ownsDocument = inheritedDocument !== ownerDocument;
   const windowCaches = useMemo(
     () =>
       ownerDocument === document
@@ -45,16 +52,22 @@ export default function ThemeProvider({
     [ownerDocument],
   );
   useEffect(() => {
+    if (!ownsDocument) {
+      return;
+    }
     // Trick CodeEditor into sync with our theme
     ownerDocument.documentElement.setAttribute("data-color-mode", isDark ? "dark" : "light");
 
     // remove styles set to prevent browser flash on init
     ownerDocument.querySelector("#loading-styles")?.remove();
-  }, [isDark, ownerDocument]);
+  }, [isDark, ownerDocument, ownsDocument]);
 
   const muiTheme = useMemo(() => createMuiTheme(isDark ? "dark" : "light"), [isDark]);
 
   useLayoutEffect(() => {
+    if (!ownsDocument) {
+      return;
+    }
     // Match the app bar, which the installed PWA draws in the title bar next to the browser's
     // own controls. Update the existing tag: browsers only read the first theme-color meta.
     let meta = ownerDocument.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
@@ -99,16 +112,20 @@ export default function ThemeProvider({
         ownerWindow.cancelAnimationFrame(frame);
       }
     };
-  }, [muiTheme, ownerDocument]);
+  }, [muiTheme, ownerDocument, ownsDocument]);
 
   const content = (
     <CacheProvider value={windowCaches?.mui ?? muiCache}>
       <MuiThemeProvider theme={muiTheme}>{children}</MuiThemeProvider>
     </CacheProvider>
   );
-  return windowCaches ? (
-    <TssCacheProvider value={windowCaches.tss}>{content}</TssCacheProvider>
-  ) : (
-    content
+  return (
+    <ThemeDocumentContext.Provider value={ownerDocument}>
+      {windowCaches ? (
+        <TssCacheProvider value={windowCaches.tss}>{content}</TssCacheProvider>
+      ) : (
+        content
+      )}
+    </ThemeDocumentContext.Provider>
   );
 }

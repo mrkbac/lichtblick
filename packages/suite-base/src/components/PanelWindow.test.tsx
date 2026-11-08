@@ -471,3 +471,36 @@ it("applies restored bounds through a captured PiP callback after reopening as a
   });
   expect(move).toHaveBeenCalledWith(120, 80);
 });
+
+it("mirrors library styles loaded, updated, and removed after opening a monitor", async () => {
+  const { child } = childWindow();
+  vi.spyOn(window, "open").mockReturnValue(child);
+  const view = render(
+    <PanelWindow title="Monitor">
+      <Content />
+    </PanelWindow>,
+  );
+  fireEvent.click(screen.getByText("Pop out"));
+  const target = child.document.createElement("div");
+  target.className = "late-panel-library";
+  child.document.body.appendChild(target);
+  const style = document.createElement("style");
+  try {
+    style.textContent = ".late-panel-library { color: rgb(1, 2, 3); }";
+    document.head.appendChild(style);
+    await waitFor(() => {
+      expect(child.getComputedStyle(target).color).toBe("rgb(1, 2, 3)");
+    });
+    style.textContent = ".late-panel-library { color: rgb(4, 5, 6); }";
+    await waitFor(() => {
+      expect(child.getComputedStyle(target).color).toBe("rgb(4, 5, 6)");
+    });
+    style.remove();
+    await waitFor(() => {
+      expect(child.getComputedStyle(target).color).not.toBe("rgb(4, 5, 6)");
+    });
+  } finally {
+    view.unmount();
+    style.remove();
+  }
+});

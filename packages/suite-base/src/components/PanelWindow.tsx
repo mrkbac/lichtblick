@@ -43,27 +43,67 @@ type WindowActions = {
 };
 export const PanelWindowContext = createContext<WindowActions | undefined>(undefined);
 
-/** Copy global CSS; panel styles are inserted into this document by its own Emotion caches. */
-function copyStyles(source: Document, target: Document) {
-  for (const sheet of source.styleSheets) {
-    try {
-      const style = target.createElement("style");
-      style.textContent = Array.from(sheet.cssRules, (rule) => rule.cssText).join("\n");
-      target.head.appendChild(style);
-    } catch {
-      if (sheet.href) {
-        const link = target.createElement("link");
-        link.rel = "stylesheet";
-        link.href = sheet.href;
-        target.head.appendChild(link);
+/** Mirror global/library CSS, including styles loaded by panels added after the window opens. */
+function copyStyles(source: Document, target: Document): () => void {
+  const copies = new Map<CSSStyleSheet, HTMLStyleElement | HTMLLinkElement>();
+  const sync = () => {
+    const sheets = new Set(source.styleSheets);
+    for (const [sheet, copy] of copies) {
+      if (!sheets.has(sheet)) {
+        copy.remove();
+        copies.delete(sheet);
       }
     }
-  }
+    for (const sheet of sheets) {
+      try {
+        let copy = copies.get(sheet);
+        if (!copy) {
+          copy = target.createElement(sheet.href ? "link" : "style");
+          if (copy instanceof target.defaultView!.HTMLLinkElement) {
+            copy.rel = "stylesheet";
+            copy.href = sheet.href!;
+          }
+          copies.set(sheet, copy);
+          target.head.appendChild(copy);
+        }
+        copy.media = sheet.disabled ? "not all" : sheet.media.mediaText;
+        if (!sheet.href) {
+          const css = Array.from(sheet.cssRules, (rule) => rule.cssText).join("\n");
+          if (copy.textContent !== css) {
+            copy.textContent = css;
+          }
+        }
+      } catch {
+        // Inaccessible CSS rules must not prevent the panel window from opening.
+        copies.get(sheet)?.remove();
+        copies.delete(sheet);
+      }
+    }
+  };
+  sync();
+  const observer = new MutationObserver(sync);
+  observer.observe(source.head, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ["href", "media", "disabled"],
+  });
+  source.head.addEventListener("load", sync, true);
+  return () => {
+    observer.disconnect();
+    source.head.removeEventListener("load", sync, true);
+    copies.forEach((copy) => {
+      copy.remove();
+    });
+    copies.clear();
+  };
 }
 
 /** Give portaled controls their own caches so new styles stay in the panel document. */
 function PanelWindowStyles({ target, children }: PropsWithChildren<{ target: Window }>) {
   const outerTheme = useTheme();
+  useLayoutEffect(() => copyStyles(document, target.document), [target]);
   const theme = useMemo(
     () => ({
       ...outerTheme,
@@ -207,7 +247,6 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           const base = doc.createElement("base");
           base.href = document.baseURI;
           doc.head.appendChild(base);
-          copyStyles(document, doc);
           doc.body.style.cssText = "margin:0;width:100vw;height:100vh;display:flex;overflow:hidden";
           const restore = () => {
             windowRef.current = undefined;
