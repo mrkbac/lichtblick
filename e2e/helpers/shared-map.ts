@@ -11,6 +11,7 @@ async function pixels(canvas: Locator) {
     const { width, height } = element;
     const data = new Uint8Array(width * height * 4);
     gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, data);
+    let blue = 0;
     let red = 0;
     let green = 0;
     let redX = 0;
@@ -25,6 +26,9 @@ async function pixels(canvas: Locator) {
           redX += x;
           redY += y;
         }
+        if (data[i + 2] > data[i] * 2 && data[i + 2] > data[i + 1] * 2) {
+          blue++;
+        }
         if (data[i + 1] > data[i] * 2 && data[i + 1] > data[i + 2] * 2) {
           green++;
           if (x === column) {
@@ -35,6 +39,7 @@ async function pixels(canvas: Locator) {
     }
     const rect = element.getBoundingClientRect();
     return {
+      blue,
       red,
       green,
       lineWidth: (lineWidth * rect.height) / height,
@@ -56,6 +61,25 @@ export async function exerciseSharedMap(page: Page): Promise<void> {
         version: 8,
         glyphs: "https://shared-map.test/{fontstack}/{range}.pbf",
         sources: {
+          world: {
+            type: "geojson",
+            data: {
+              type: "Feature",
+              properties: {},
+              geometry: {
+                type: "Polygon",
+                coordinates: [
+                  [
+                    [-20, -20],
+                    [20, -20],
+                    [20, 20],
+                    [-20, 20],
+                    [-20, -20],
+                  ],
+                ],
+              },
+            },
+          },
           road: {
             type: "geojson",
             data: {
@@ -73,6 +97,7 @@ export async function exerciseSharedMap(page: Page): Promise<void> {
         },
         layers: [
           { id: "background", type: "background", paint: { "background-color": "#e0f0e0" } },
+          { id: "world", type: "fill", source: "world", paint: { "fill-color": "#000077" } },
           {
             id: "road",
             type: "line",
@@ -122,13 +147,22 @@ export async function exerciseSharedMap(page: Page): Promise<void> {
   await page.mouse.move(before.x + 100, before.y);
   for (let i = 0; i < 4; i++) {
     await page.mouse.wheel(0, 15000);
-    await page.waitForTimeout(50);
+    await page.evaluate(async () => {
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          resolve();
+        });
+      });
+    });
   }
   const limit = Number(await distance.inputValue());
   expect(limit).toBeLessThan(1e9);
-  const zoomedOut = await canvas.screenshot();
+  const zoomedOut = (await pixels(canvas)).blue;
+  expect(zoomedOut).toBeGreaterThan(100);
   await page.mouse.wheel(0, -350);
-  await expect.poll(async () => Buffer.compare(await canvas.screenshot(), zoomedOut)).not.toBe(0);
+  await expect
+    .poll(async () => Math.abs((await pixels(canvas)).blue - zoomedOut))
+    .toBeGreaterThan(100);
   await distance.fill("100");
   await distance.press("Enter");
   await expect.poll(async () => (await pixels(canvas)).green).toBeGreaterThan(500);

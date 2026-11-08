@@ -104,8 +104,11 @@ describe("Maps location frame", () => {
   });
 
   it("does not expose settings for the deleted texture renderer", () => {
+    // Given
     const { maps } = setup();
+    // When
     const fields = maps.settingsNodes()[0]!.node.fields;
+    // Then
     expect(fields).not.toHaveProperty("rendering");
     expect(fields).not.toHaveProperty("size");
     expect(fields).not.toHaveProperty("drawBehind");

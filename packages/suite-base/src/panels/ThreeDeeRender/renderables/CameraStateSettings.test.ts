@@ -186,16 +186,20 @@ describe("CameraStateSettings", () => {
   });
 
   it("bounds map zoom-out while keeping ordinary and orthographic cameras unbounded", () => {
+    // Given
     Object.defineProperty(renderer, "sharedMap", {
       value: { maxCameraDistance: 1000 },
       configurable: true,
     });
     const handler = new CameraStateSettings(renderer, canvas, 1);
+    // When / Then: map-backed perspective distance is bounded.
     handler.setCameraState({ ...DEFAULT_CAMERA_STATE, distance: 1e12 });
     expect(mockOrbitControls.maxDistance).toBe(1000);
     expect(handler.getActiveCamera().position.length()).toBeCloseTo(1000);
+    // When / Then: orthographic distance remains unbounded.
     handler.setCameraState({ ...DEFAULT_CAMERA_STATE, perspective: false, distance: 1e12 });
     expect(mockOrbitControls.maxDistance).toBe(Infinity);
+    // When / Then: ordinary 3D distance remains unbounded.
     Object.defineProperty(renderer, "sharedMap", { value: undefined });
     handler.setCameraState({ ...DEFAULT_CAMERA_STATE, distance: 1e12 });
     expect(mockOrbitControls.maxDistance).toBe(Infinity);

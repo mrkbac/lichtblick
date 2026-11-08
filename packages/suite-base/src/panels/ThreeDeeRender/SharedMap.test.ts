@@ -71,6 +71,7 @@ describe("SharedMap", () => {
     const queueAnimationFrame = vi.fn();
     const renderer = {
       currentTime: 0n,
+      config: { cameraState: { targetOffset: [0, 0, 0] } },
       transformTree,
       cameraHandler: { getActiveCamera: () => camera },
       getCameraState: () => ({ distance: 20 }),

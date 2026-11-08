@@ -6,6 +6,7 @@ import type { CustomLayerInterface, Map as MapLibreMap, StyleSpecification } fro
 import { MercatorCoordinate } from "maplibre-gl";
 import * as THREE from "three";
 
+import type { HUDItem } from "./HUDItemManager";
 import type { IRenderer } from "./IRenderer";
 import { AnyFrameId, makePose } from "./transforms";
 
@@ -18,6 +19,18 @@ export type MapAnchor = {
 };
 
 const EMPTY_STYLE: StyleSpecification = { version: 8, sources: {}, layers: [] };
+const ORTHOGRAPHIC_NOTICE: HUDItem = {
+  id: "shared-map-orthographic",
+  group: "shared-map",
+  displayType: "notice",
+  getMessage: () => t("threeDee:mapPerspectiveRequired"),
+};
+const WAITING_NOTICE: HUDItem = {
+  id: "shared-map-view",
+  group: "shared-map",
+  displayType: "notice",
+  getMessage: () => t("threeDee:mapWaitingForView"),
+};
 const CUSTOM_LAYER_ID = "lichtblick-3d-scene";
 const IDENTITY_POSE = makePose();
 const UNIT_SCALE = new THREE.Vector3(1, 1, 1);
@@ -196,10 +209,15 @@ export class SharedMap {
           Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) *
           Math.max(512 * 2 ** this.map.getMinZoom(), height) *
           origin.meterInMercatorCoordinateUnits());
-      const state = renderer.getCameraState();
-      if (state && state.distance > this.maxCameraDistance) {
-        renderer.setCameraState({ ...state, distance: this.maxCameraDistance });
-        renderer.emit("cameraMove", renderer);
+      const distance = camera.position.distanceTo(
+        this.#translation.fromArray(renderer.config.cameraState.targetOffset),
+      );
+      if (distance > this.maxCameraDistance) {
+        const state = renderer.getCameraState();
+        if (state) {
+          renderer.setCameraState({ ...state, distance: this.maxCameraDistance });
+          renderer.emit("cameraMove", renderer);
+        }
       }
       const renderToEnu = this.#renderToEnu.compose(
         this.#translation.set(pose.position.x, pose.position.y, pose.position.z),
@@ -243,14 +261,17 @@ export class SharedMap {
           angles.roll,
         );
         this.map.jumpTo(options);
-        if (state && options.zoom != undefined && options.zoom < this.map.getZoom() - 1e-6) {
-          this.maxCameraDistance = Math.min(
-            this.maxCameraDistance,
-            state.distance * 2 ** (options.zoom - this.map.getZoom()),
-          );
-          renderer.setCameraState({ ...state, distance: this.maxCameraDistance });
-          renderer.emit("cameraMove", renderer);
-          renderer.queueAnimationFrame();
+        if (options.zoom != undefined && options.zoom < this.map.getZoom() - 1e-6) {
+          const state = renderer.getCameraState();
+          if (state) {
+            this.maxCameraDistance = Math.min(
+              this.maxCameraDistance,
+              state.distance * 2 ** (options.zoom - this.map.getZoom()),
+            );
+            renderer.setCameraState({ ...state, distance: this.maxCameraDistance });
+            renderer.emit("cameraMove", renderer);
+            renderer.queueAnimationFrame();
+          }
         }
       }
     }
@@ -262,18 +283,8 @@ export class SharedMap {
       this.maxCameraDistance = Infinity;
     }
     const orthographic = camera instanceof THREE.OrthographicCamera;
-    renderer.hud.displayIfTrue(orthographic, {
-      id: "shared-map-orthographic",
-      group: "shared-map",
-      displayType: "notice",
-      getMessage: () => t("threeDee:mapPerspectiveRequired"),
-    });
-    renderer.hud.displayIfTrue(!placed && !orthographic, {
-      id: "shared-map-view",
-      group: "shared-map",
-      displayType: "notice",
-      getMessage: () => t("threeDee:mapWaitingForView"),
-    });
+    renderer.hud.displayIfTrue(orthographic, ORTHOGRAPHIC_NOTICE);
+    renderer.hud.displayIfTrue(!placed && !orthographic, WAITING_NOTICE);
     this.map.redraw();
   }
 }

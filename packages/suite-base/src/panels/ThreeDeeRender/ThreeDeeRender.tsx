@@ -135,14 +135,15 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const [sceneCanvas, setSceneCanvas] = useState<HTMLCanvasElement | null>(null);
   const [mapContainer, setMapContainer] = useState<HTMLDivElement | null>(null);
   const [sharedMap, setSharedMap] = useState<SharedMap>();
-  const [sharedMapFailed, setSharedMapFailed] = useState(false);
+  const [failedSharedMapLayerId, setFailedSharedMapLayerId] = useState<string>();
   const requestedSharedMapLayerId =
     interfaceMode === "3d"
       ? Object.entries(config.layers).find(
           ([, layer]) => layer?.layerId === "lichtblick.Map" && layer.visible !== false,
         )?.[0]
       : undefined;
-  const sharedMapLayerId = sharedMapFailed ? undefined : requestedSharedMapLayerId;
+  const sharedMapLayerId =
+    requestedSharedMapLayerId === failedSharedMapLayerId ? undefined : requestedSharedMapLayerId;
   const canvas = sharedMapLayerId ? (sharedMap?.map.getCanvas() ?? null) : sceneCanvas;
   const [renderer, setRenderer] = useState<IRenderer | undefined>(undefined);
   const rendererRef = useRef<IRenderer | undefined>(undefined);
@@ -151,10 +152,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     status: contextStatus,
     recreate,
   } = useWebGLContextRecovery(canvas, renderer?.gl);
-
-  useEffect(() => {
-    setSharedMapFailed(false);
-  }, [requestedSharedMapLayerId]);
 
   const displayTemporaryError = useCallback(
     (errorString: string) => {
@@ -193,7 +190,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
         if (disposed) {
           return;
         }
-        setSharedMapFailed(true);
+        setFailedSharedMapLayerId(sharedMapLayerId);
         displayTemporaryError(String(error));
       });
     return () => {
@@ -812,19 +809,22 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     config.layers,
   ]);
 
-  // Notify the extension context when our subscription list changes
+  // A replacement renderer needs the current messages again, including while playback is paused.
   useEffect(() => {
-    if (!renderer || !topicsToSubscribe) {
+    if (!renderer) {
       return;
     }
-    log.debug(
-      `Subscribing to [${topicsToSubscribe.map((topic) => JSON.stringify(topic)).join(", ")}]`,
-    );
-    context.subscribe(topicsToSubscribe);
-    // A replacement renderer needs the current messages again, including while playback is paused.
     return () => {
       context.subscribe([] as Subscription[]);
     };
+  }, [context, renderer]);
+
+  // Notify the extension context when our subscription list changes.
+  useEffect(() => {
+    if (!renderer) {
+      return;
+    }
+    context.subscribe(topicsToSubscribe ?? ([] as Subscription[]));
   }, [context, topicsToSubscribe, renderer]);
 
   // Keep the renderer parameters up to date
