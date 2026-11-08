@@ -174,6 +174,7 @@ export class SharedMap {
       anchor != undefined &&
       origin != undefined &&
       camera instanceof THREE.PerspectiveCamera &&
+      this.map.getCanvas().clientHeight > 0 &&
       Boolean(
         renderer.transformTree.apply(
           pose,
