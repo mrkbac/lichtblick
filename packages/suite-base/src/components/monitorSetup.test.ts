@@ -4,6 +4,7 @@
 
 import {
   captureMonitor,
+  capturePanelConfigs,
   monitorScreens,
   readMonitorSetup,
   restoreMonitorBounds,
@@ -99,4 +100,31 @@ it("uses the Window Management API only when asked and falls back when access is
   expect(await monitorScreens()).toHaveLength(1);
   Reflect.deleteProperty(window, "getScreenDetails");
   expect(await monitorScreens()).toHaveLength(1);
+});
+
+it("captures only the saved window and its nested views", () => {
+  const configs = {
+    "Tab!one": { tabs: [{ title: "Image", layout: { panels: ["Image!one"] } }] },
+    "Image!one": { imageTopic: "/camera" },
+    "Plot!other": { title: "Main workspace" },
+  };
+  expect(capturePanelConfigs({ configById: configs }, "Tab!one")).toEqual({
+    "Tab!one": configs["Tab!one"],
+    "Image!one": configs["Image!one"],
+  });
+});
+
+it("keeps legacy geometry and validates saved view snapshots", () => {
+  const valid = { ...saved, configs: { [saved.panelId]: { tabs: [] } } };
+  localStorage.setItem(
+    "setup",
+    JSON.stringify([
+      saved,
+      valid,
+      { ...saved, configs: [] },
+      { ...saved, configs: { "Image!other": {} } },
+      { ...saved, configs: { [saved.panelId]: null } },
+    ])!,
+  );
+  expect(readMonitorSetup("setup")).toEqual([saved, valid]);
 });

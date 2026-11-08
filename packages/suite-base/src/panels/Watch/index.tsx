@@ -112,7 +112,8 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
     if (!root || typeof ResizeObserver === "undefined") {
       return;
     }
-    const observer = new ResizeObserver(() => {
+    const Observer = root.ownerDocument.defaultView?.ResizeObserver ?? ResizeObserver;
+    const observer = new Observer(() => {
       for (const paint of painters.values()) {
         paint();
       }

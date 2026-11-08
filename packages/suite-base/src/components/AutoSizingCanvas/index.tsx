@@ -33,15 +33,17 @@ const AutoSizingCanvas = ({
 
   const [pixelRatio, setPixelRatio] = useState(window.devicePixelRatio);
   useLayoutEffect(() => {
+    const ownerWindow = canvas?.ownerDocument.defaultView ?? window;
+    setPixelRatio(ownerWindow.devicePixelRatio);
     const listener = () => {
-      setPixelRatio(window.devicePixelRatio);
+      setPixelRatio(ownerWindow.devicePixelRatio);
     };
-    const query = window.matchMedia(`(resolution: ${pixelRatio}dppx)`);
+    const query = ownerWindow.matchMedia(`(resolution: ${pixelRatio}dppx)`);
     query.addEventListener("change", listener, { once: true });
     return () => {
       query.removeEventListener("change", listener);
     };
-  }, [pixelRatio]);
+  }, [canvas, pixelRatio]);
 
   const ratio = overrideDevicePixelRatioForTest ?? pixelRatio;
 

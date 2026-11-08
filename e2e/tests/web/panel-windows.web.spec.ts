@@ -14,7 +14,7 @@ test.beforeEach(async ({ page }) => {
   await expect(page.getByTestId("panel-menu")).toHaveCount(3);
 });
 
-test("opens independent panel windows and restores both on close", { tag: "@smoke" }, async ({
+test("opens independent panel windows and removes their views on close", { tag: "@smoke" }, async ({
   page,
 }) => {
   // When
@@ -46,11 +46,11 @@ test("opens independent panel windows and restores both on close", { tag: "@smok
   await expect(page.locator(".dv-groupview:visible")).toHaveCount(1);
   await expect(first.getByTestId("panel-menu")).toBeVisible();
 
-  // When both windows close, their panels return to the layout.
+  // Closing a window removes its views without returning them to the layout.
   await second.close();
-  await expect(page.getByTestId("panel-menu")).toHaveCount(2);
+  await expect(page.getByTestId("panel-menu")).toHaveCount(1);
   await first.close();
-  await expect(page.getByTestId("panel-menu")).toHaveCount(3);
+  await expect(page.getByTestId("panel-menu")).toHaveCount(1);
 });
 
 test("opens one always-on-top PiP monitor and returns it to the workspace", {
@@ -124,8 +124,9 @@ for (const action of ["Open in new window", "Open Picture-in-Picture monitor"] a
     await expect(monitor.getByText("/image/compressed", { exact: true })).toBeVisible();
     await expect(monitor.locator("canvas")).toBeVisible();
     await expect(monitor.getByText("Waiting for image messages…", { exact: true })).toHaveCount(0);
-    // When that window closes, the same paused image returns to the workspace
-    await monitor.close();
+    // Explicitly returning the panel preserves the same paused image.
+    await monitor.getByTestId("panel-menu").click();
+    await monitor.getByText("Return to workspace", { exact: true }).click();
     // Then no seek or playback is needed to recover it
     await expect(image.locator("canvas")).toBeVisible();
     await expect(image.getByText("Waiting for image messages…", { exact: true })).toHaveCount(0);
@@ -206,6 +207,7 @@ test("creates a blank monitor from the top bar and restores its contents with on
     page.getByText("Monitor setup saved on this computer for this layout."),
   ).toBeVisible();
   await monitor.close();
+  await expect(page.getByTestId("panel-menu")).toHaveCount(3);
   await page.reload();
   await page.getByTestId("AddPanelButton").waitFor();
   const dialog = page.getByTestId("DataSourceDialog");
@@ -251,7 +253,7 @@ test("restores several existing panel windows when screen permission is denied",
   for (const monitor of monitors) {
     await monitor.close();
   }
-  await expect(page.getByTestId("panel-menu")).toHaveCount(3);
+  await expect(page.getByTestId("panel-menu")).toHaveCount(1);
   // When Restore is clicked once, normal pop-outs remain available without screen permission.
   const restored: Page[] = [];
   page.on("popup", (monitor) => {
@@ -299,6 +301,14 @@ for (const colorScheme of ["light", "dark"] as const) {
     expect(await page.getByTestId("sidebar-left").innerText()).toBe(mainSettings);
     await monitor.getByTestId("sidebar-close-left").click();
     await expect(monitor.getByTestId("sidebar-left")).toHaveCount(0);
+    await monitor.getByTestId("window-left-sidebar-button").click();
+    await expect(monitor.getByTestId("sidebar-left")).toBeVisible();
+    await expect(monitor.getByTestId("window-left-sidebar-button")).toHaveCSS(
+      "-webkit-app-region",
+      "no-drag",
+    );
+    await monitor.getByTestId("window-left-sidebar-button").click();
+    await expect(monitor.getByTestId("sidebar-left")).toHaveCount(0);
     // A second view created through + also stays in this monitor.
     await monitor.getByTestId("add-tab").click();
     await monitor.getByTestId("panel-menu-item Plot").click();
@@ -338,4 +348,68 @@ test("styles a Map added after the monitor opens", { tag: "@regression" }, async
   expect(bounds!.height).toBeGreaterThan(100);
   expect(bounds!.height).toBeLessThanOrEqual(await monitor.evaluate(() => innerHeight));
   await monitor.close();
+});
+
+test.describe("native window resizing", () => {
+  test.use({ viewport: null });
+
+  for (const panelName of ["3D", "Camera Grid"]) {
+    test(`sizes ${panelName} within two frames and matches the main panel controls`, async ({
+      page,
+    }) => {
+      if (panelName === "Camera Grid") {
+        await loadFiles({ mainWindow: page, filenames: "custom-camera-model.mcap" });
+      }
+      const mainSize = await page.getByTestId("panel-menu").first().boundingBox();
+      const opened = page.waitForEvent("popup");
+      await page.getByTestId("new-window-button").click();
+      const monitor = await opened;
+      await monitor.getByTestId(`panel-grid-card ${panelName}`).click();
+      if (panelName === "Camera Grid") {
+        await monitor.getByRole("button", { name: /Add all/ }).click();
+      }
+      await expect(monitor.locator("canvas").first()).toBeVisible();
+      const childSize = await monitor.getByTestId("panel-menu").last().boundingBox();
+      expect(childSize!.width).toBe(mainSize!.width);
+      expect(childSize!.height).toBe(mainSize!.height);
+      expect(await monitor.locator("html").evaluate((el) => getComputedStyle(el).fontSize)).toBe(
+        await page.locator("html").evaluate((el) => getComputedStyle(el).fontSize),
+      );
+      await monitor.bringToFront();
+      const cdp = await page.context().newCDPSession(monitor);
+      const { windowId } = await cdp.send("Browser.getWindowForTarget");
+      for (const [width, height] of [
+        [720, 480],
+        [1100, 800],
+        [600, 500],
+      ]) {
+        await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width, height } });
+        const size = await monitor.evaluate(async () => {
+          await new Promise((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(resolve)),
+          );
+          const canvas = document.querySelector("canvas")!;
+          const rect = canvas.getBoundingClientRect();
+          return {
+            width: innerWidth,
+            height: innerHeight,
+            right: rect.right,
+            bottom: rect.bottom,
+            bufferWidth: canvas.width,
+            bufferHeight: canvas.height,
+            canvasWidth: rect.width,
+            canvasHeight: rect.height,
+            ratio: devicePixelRatio,
+          };
+        });
+        expect(Math.abs(size.right - size.width)).toBeLessThan(2);
+        expect(Math.abs(size.bottom - size.height)).toBeLessThan(2);
+        expect(Math.abs(size.bufferWidth - size.canvasWidth * size.ratio)).toBeLessThan(2);
+        expect(Math.abs(size.bufferHeight - size.canvasHeight * size.ratio)).toBeLessThan(2);
+      }
+      await cdp.detach();
+      await monitor.close();
+      await expect(page.getByTestId("panel-menu")).toHaveCount(3);
+    });
+  }
 });

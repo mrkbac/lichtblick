@@ -43,6 +43,13 @@ function Controls() {
   return (
     <>
       <MonitorSetupButtons disabled={false} />
+      <button
+        onClick={() => {
+          setup?.closePanel("Tab!one");
+        }}
+      >
+        Close window
+      </button>
     </>
   );
 }
@@ -217,3 +224,80 @@ it("confirms a monitor save only after its panel contents reach the local workin
     expect(localStorage.getItem(`${LOCAL_STORAGE_MONITOR_SETUP}mock-layout`)).toContain("Tab!one");
   });
 });
+
+it("refreshes a legacy saved setup before removing a window's views", () => {
+  const key = `${LOCAL_STORAGE_MONITOR_SETUP}mock-layout`;
+  const saved = { panelId: "Tab!one", bounds: { left: 0, top: 0, width: 800, height: 600 } };
+  localStorage.setItem(key, JSON.stringify([saved])!);
+  const configs = {
+    "Tab!one": { tabs: [{ title: "Camera", layout: { panels: ["Image!one"] } }] },
+    "Image!one": { imageTopic: "/latest-camera" },
+  };
+  const onAction = vi.fn();
+  renderThemed(
+    <MockCurrentLayoutProvider
+      initialState={{ layout: { panels: ["Tab!one"] }, configById: configs }}
+      onAction={onAction}
+    >
+      <MonitorSetupProvider>
+        <Controls />
+      </MonitorSetupProvider>
+    </MockCurrentLayoutProvider>,
+  );
+  fireEvent.click(screen.getByText("Close window"));
+  expect(JSON.parse(localStorage.getItem(key)!)).toEqual([{ ...saved, configs }]);
+  expect(onAction).toHaveBeenCalledExactlyOnceWith({
+    type: "CLOSE_PANEL",
+    payload: { id: "Tab!one" },
+  });
+});
+
+for (const conflict of [false, true]) {
+  it(`restores only its own saved views without overwriting active panels (conflict: ${conflict})`, async () => {
+    const key = `${LOCAL_STORAGE_MONITOR_SETUP}mock-layout`;
+    const configs = {
+      "Tab!saved": { tabs: [{ title: "Camera", layout: { panels: ["Image!saved"] } }] },
+      "Image!saved": { imageTopic: "/saved" },
+      "Plot!unrelated": { title: "Must not restore" },
+    };
+    localStorage.setItem(
+      key,
+      JSON.stringify([
+        { panelId: "Tab!saved", bounds: { left: 0, top: 0, width: 800, height: 600 }, configs },
+      ])!,
+    );
+    const windowOpen = vi.spyOn(window, "open").mockReturnValue(makeChild());
+    const onAction = vi.fn();
+    renderThemed(
+      <MockCurrentLayoutProvider
+        initialState={{ layout: { panels: [conflict ? "Image!saved" : "Plot!active"] } }}
+        onAction={onAction}
+      >
+        <MonitorSetupProvider>
+          <Controls />
+        </MonitorSetupProvider>
+      </MockCurrentLayoutProvider>,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("restore-monitor-setup"));
+    });
+    expect(windowOpen).toHaveBeenCalledTimes(conflict ? 0 : 1);
+    const expectedActions = conflict
+      ? []
+      : [
+          [
+            {
+              type: "SAVE_PANEL_CONFIGS",
+              payload: {
+                configs: [
+                  { id: "Tab!saved", config: configs["Tab!saved"] },
+                  { id: "Image!saved", config: configs["Image!saved"] },
+                ],
+              },
+            },
+          ],
+          [{ type: "ADD_PANEL", payload: { id: "Tab!saved", config: configs["Tab!saved"] } }],
+        ];
+    expect(onAction.mock.calls).toEqual(expectedActions);
+  });
+}

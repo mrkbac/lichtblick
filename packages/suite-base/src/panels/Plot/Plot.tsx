@@ -308,7 +308,8 @@ const Plot = (props: PlotProps): React.JSX.Element => {
     });
 
     const isCanvasTarget = (entry: Immutable<ResizeObserverEntry>) => entry.target === canvasDiv;
-    const resizeObserver = new ResizeObserver((entries) => {
+    const Observer = canvasDiv.ownerDocument.defaultView?.ResizeObserver ?? ResizeObserver;
+    const resizeObserver = new Observer((entries) => {
       const entry = _.findLast(entries, isCanvasTarget);
       if (entry != undefined) {
         plotCoordinator.setSize({

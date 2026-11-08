@@ -8,7 +8,8 @@ export function observeContainerSize(
   element: HTMLElement,
   api: Pick<DockviewApi, "width" | "height" | "layout">,
 ): () => void {
-  const observer = new ResizeObserver(([entry]) => {
+  const Observer = element.ownerDocument.defaultView?.ResizeObserver ?? ResizeObserver;
+  const observer = new Observer(([entry]) => {
     // Hidden tabs must keep their split sizes until they become visible again.
     if (!entry || !element.isConnected || !element.offsetParent) {
       return;

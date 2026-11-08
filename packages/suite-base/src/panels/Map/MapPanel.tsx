@@ -813,7 +813,8 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     });
 
     // The panel resizes without window resizes, so observe the container directly.
-    const observer = new ResizeObserver(() => {
+    const Observer = container.ownerDocument.defaultView?.ResizeObserver ?? ResizeObserver;
+    const observer = new Observer(() => {
       instance.resize();
     });
     observer.observe(container);
