@@ -72,6 +72,9 @@ const MAX_PANEL_LOGS = 1000;
 /** Used in storybook when panels are renered outside of a <PanelLayout/> */
 const FALLBACK_PANEL_ID = "$unknown_id";
 
+/** Clicks a panel already handled, so the panels around it (Tab panels) ignore them. */
+const panelHandledClicks = new WeakSet<Event>();
+
 /**
  * Wrap a panel in an error boundary and flex box, supplying its saved config and saveConfig.
  * Use `export default Panel(MyPanelComponent)`; stories and tests can override the saved config
@@ -252,6 +255,13 @@ export default function Panel<
 
     const onPanelRootClick: MouseEventHandler<HTMLDivElement> = useCallback(
       (e) => {
+        // A click on a panel inside a Tab panel bubbles up to the Tab panel; it belongs to the
+        // innermost panel only. React bubbles through the panel tree (also from portals such as
+        // the context menu), so the first panel to see a click takes it.
+        if (panelHandledClicks.has(e.nativeEvent)) {
+          return;
+        }
+        panelHandledClicks.add(e.nativeEvent);
         if (panelSettingsOpen) {
           // Allow clicking with no modifiers to select a panel (and deselect others) when panel settings are open
           setSelectedPanelIds([childId]);

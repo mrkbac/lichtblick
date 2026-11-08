@@ -31,6 +31,8 @@ class SampleNuscenesDataSourceFactory implements IDataSourceFactory {
   public iconName: IDataSourceFactory["iconName"] = SAMPLE_NUSCENES_DATA_SOURCE_ICON_NAME;
   public hidden = true;
   public sampleLayout = SampleNuscenesLayout as IDataSourceFactory["sampleLayout"];
+  // 2: tabs that each hold a split layout, showing most panels.
+  public sampleLayoutVersion = 2;
 
   public initialize(
     args: DataSourceFactoryInitializeArgs,

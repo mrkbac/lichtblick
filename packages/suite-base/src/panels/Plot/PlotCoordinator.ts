@@ -51,6 +51,7 @@ import {
   isReferenceLinePlotPathType,
   PlotAnalysisRange,
   PlotConfig,
+  yBound,
 } from "./utils/config";
 import { getSeriesTimestamp } from "./utils/seriesTimestamp";
 import { pathToSubscribePayload } from "./utils/subscription";
@@ -388,8 +389,8 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
       y: this.analysis
         ? {}
         : {
-            max: config.maxYValue == undefined ? undefined : +config.maxYValue,
-            min: config.minYValue == undefined ? undefined : +config.minYValue,
+            max: yBound(config.maxYValue),
+            min: yBound(config.minYValue),
           },
     };
     const configYBoundsChanged =

@@ -55,6 +55,11 @@ export interface IDataSourceFactory {
   warning?: string | React.JSX.Element;
 
   sampleLayout?: LayoutData;
+  /**
+   * Bump when `sampleLayout` changes, so users who opened the sample before get the new layout.
+   * Their previous copy is kept, renamed.
+   */
+  sampleLayoutVersion?: number;
 
   formConfig?: {
     // Initialization args are populated with keys of the _id_ field
