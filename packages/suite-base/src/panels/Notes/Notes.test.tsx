@@ -30,7 +30,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock("../UserScriptEditor/MonacoEditor", async () => {
   const React = await import("react");
-  const { Range } = await import("monaco-editor/editor/common/core/range.js");
   return {
     default: function MockEditor(props: {
       editorDidMount: EditorDidMount;
@@ -88,7 +87,14 @@ vi.mock("../UserScriptEditor/MonacoEditor", async () => {
           instance as unknown as editor.IStandaloneCodeEditor,
           {
             KeyCode: { Escape: 9, Enter: 3 },
-            Range,
+            Range: class {
+              public constructor(
+                public startLineNumber: number,
+                public startColumn: number,
+                public endLineNumber: number,
+                public endColumn: number,
+              ) {}
+            },
             editor: {
               tokenize: mocks.tokenize,
               createModel: (initial: string) => {
@@ -260,7 +266,7 @@ describe("Notes", () => {
     const stopPropagation = vi.fn();
     // When the leave-editor shortcut is pressed.
     act(() => {
-      mocks.keyDown!({ ...key, preventDefault, stopPropagation } as IKeyboardEvent);
+      mocks.keyDown!({ ...key, preventDefault, stopPropagation } as unknown as IKeyboardEvent);
     });
     // Then it saves and releases focus, without removing the editor.
     expect(saveConfig).toHaveBeenCalledWith({ text: "draft" });
