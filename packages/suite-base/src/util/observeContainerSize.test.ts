@@ -55,6 +55,22 @@ describe("observeContainerSize", () => {
     expect(api.layout).toHaveBeenCalledExactlyOnceWith(600, 351);
   });
 
+  it("uses the owning window observer when the opener is in the background", () => {
+    const iframe = document.createElement("iframe");
+    document.body.appendChild(iframe);
+    const Observer = vi.fn(function (this: ResizeObserver) {
+      this.observe = vi.fn();
+      this.disconnect = disconnect;
+    });
+    Object.defineProperty(iframe.contentWindow!, "ResizeObserver", { value: Observer });
+    iframe.contentDocument!.body.appendChild(element);
+    const cleanup = observeContainerSize(element, api);
+    expect(Observer).toHaveBeenCalledOnce();
+    cleanup();
+    expect(disconnect).toHaveBeenCalledOnce();
+    iframe.remove();
+  });
+
   it("skips unchanged dimensions", () => {
     // Given
     observeContainerSize(element, api);

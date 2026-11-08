@@ -24,10 +24,16 @@ import {
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { getPanelIdForType, PANEL_TITLE_CONFIG_KEY } from "@lichtblick/suite-base/util/layout";
-import { DEFAULT_TAB_PANEL_CONFIG, TAB_PANEL_TYPE } from "@lichtblick/suite-base/util/tabLayout";
+import {
+  getAllPanelIds,
+  findLayoutTree,
+  DEFAULT_TAB_PANEL_CONFIG,
+  TAB_PANEL_TYPE,
+} from "@lichtblick/suite-base/util/tabLayout";
 
 import {
   captureMonitor,
+  capturePanelConfigs,
   monitorScreens,
   readMonitorSetup,
   restoreMonitorBounds,
@@ -42,6 +48,7 @@ type MonitorPanel = {
 type MonitorSetup = {
   register: (id: string, panel: MonitorPanel) => () => void;
   newWindow: () => void;
+  closePanel: (id: string) => void;
   save: () => void;
   restore: () => void;
   canSave: boolean;
@@ -52,22 +59,30 @@ type MonitorSetup = {
 const MonitorSetupContext = createContext<MonitorSetup | undefined>(undefined);
 export const useMonitorSetup = (): MonitorSetup | undefined => useContext(MonitorSetupContext);
 const selectLayoutId = (state: LayoutState) => state.selectedLayout?.id;
+const selectLayoutReady = (state: LayoutState) => state.selectedLayout?.data != undefined;
 
 /** Local window placement stays outside portable/synced layout data. Nothing reopens without a click. */
 function WebMonitorSetupProvider({ children }: PropsWithChildren) {
   const layoutId = useCurrentLayoutSelector(selectLayoutId);
-  const { addPanel, getCurrentLayoutState } = useCurrentLayoutActions();
+  const layoutReady = useCurrentLayoutSelector(selectLayoutReady);
+  const {
+    addPanel,
+    getCurrentLayoutState,
+    savePanelConfigs,
+    closePanel: removePanel,
+  } = useCurrentLayoutActions();
   const layoutManager = useLayoutManager();
   const { t } = useTranslation("appBar");
   const key = `${LOCAL_STORAGE_MONITOR_SETUP}${layoutId ?? ""}`;
   const [saved, setSaved] = useState(() => readMonitorSetup(key));
   const [panels, setPanels] = useState(new Map<string, MonitorPanel>());
+  const panelsRef = useRef(new Map<string, MonitorPanel>());
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{
     text: string;
     severity: "success" | "warning" | "error";
   }>();
-  const pending = useRef(new Map<string, Window>());
+  const pending = useRef(new Map<string, { child: Window; bounds?: WindowBounds }>());
   const operation = useRef({ version: 0 });
   useEffect(() => {
     setSaved(readMonitorSetup(key));
@@ -76,27 +91,25 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
     const currentOperation = operation.current;
     return () => {
       currentOperation.version++;
-      waiting.forEach((child) => {
+      waiting.forEach(({ child }) => {
         child.close();
       });
       waiting.clear();
     };
   }, [key]);
   const register = useCallback((id: string, panel: MonitorPanel) => {
-    setPanels((previous) => new Map(previous).set(id, panel));
-    const child = pending.current.get(id);
-    if (child) {
+    panelsRef.current.set(id, panel);
+    setPanels(new Map(panelsRef.current));
+    const waiting = pending.current.get(id);
+    if (waiting) {
       pending.current.delete(id);
-      panel.open(undefined, child);
+      panel.open(waiting.bounds, waiting.child);
     }
     return () => {
-      setPanels((previous) => {
-        const next = new Map(previous);
-        if (next.get(id) === panel) {
-          next.delete(id);
-        }
-        return next;
-      });
+      if (panelsRef.current.get(id) === panel) {
+        panelsRef.current.delete(id);
+        setPanels(new Map(panelsRef.current));
+      }
     };
   }, []);
 
@@ -108,7 +121,25 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
       canSave:
         layoutId != undefined &&
         [...panels.values()].some((panel) => panel.getWindow() != undefined),
-      canRestore: layoutId != undefined && saved.some((item) => panels.has(item.panelId)),
+      canRestore:
+        layoutReady &&
+        layoutId != undefined &&
+        saved.some((item) => panels.has(item.panelId) || item.configs != undefined),
+      closePanel: (id) => {
+        const data = getCurrentLayoutState().selectedLayout?.data;
+        if (data && saved.some((item) => item.panelId === id)) {
+          const next = saved.map((item) =>
+            item.panelId === id ? { ...item, configs: capturePanelConfigs(data, id) } : item,
+          );
+          try {
+            localStorage.setItem(key, JSON.stringify(next)!);
+          } catch {
+            setNotice({ text: t("monitorSetupSaveFailed"), severity: "error" });
+          }
+          setSaved(next);
+        }
+        removePanel({ id });
+      },
       newWindow: () => {
         if (layoutId == undefined || getCurrentLayoutState().selectedLayout?.data == undefined) {
           return;
@@ -119,7 +150,7 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
           return;
         }
         const id = getPanelIdForType(TAB_PANEL_TYPE);
-        pending.current.set(id, child);
+        pending.current.set(id, { child });
         try {
           addPanel({
             id,
@@ -154,7 +185,14 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
             }
             const setup = [...panels].flatMap(([id, panel]) => {
               const child = panel.getWindow();
-              return child && !child.closed ? [captureMonitor(id, child, screens)] : [];
+              return child && !child.closed
+                ? [
+                    {
+                      ...captureMonitor(id, child, screens),
+                      configs: capturePanelConfigs(layout.data!, id),
+                    },
+                  ]
+                : [];
             });
             if (setup.length === 0) {
               return;
@@ -178,7 +216,47 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
         const version = operation.current.version;
         // Open synchronously while the click is active; screen permission may take arbitrarily long.
         for (const item of saved) {
-          panels.get(item.panelId)?.open();
+          const panel = panelsRef.current.get(item.panelId);
+          if (panel) {
+            panel.open();
+          } else if (item.configs && !pending.current.has(item.panelId)) {
+            const configs = capturePanelConfigs({ configById: item.configs }, item.panelId);
+            const current = getCurrentLayoutState().selectedLayout?.data;
+            const currentIds = current ? getAllPanelIds(current) : [];
+            const exists = currentIds.includes(item.panelId);
+            const openParent =
+              current != undefined &&
+              findLayoutTree(current, item.panelId)?.location.ancestors.some(
+                (id) => panelsRef.current.get(id)?.isOpen === true,
+              );
+            if (
+              !current ||
+              openParent === true ||
+              (!exists && currentIds.some((id) => Object.hasOwn(configs, id)))
+            ) {
+              setNotice({ text: t("monitorSetupRestoreFailed"), severity: "error" });
+              continue;
+            }
+            const child = window.open("about:blank", "_blank", "popup,width=1000,height=700");
+            if (!child) {
+              setNotice({ text: t("monitorWindowBlocked"), severity: "error" });
+              continue;
+            }
+            pending.current.set(item.panelId, { child });
+            try {
+              // An existing panel may still be mounting; registration adopts the preopened window.
+              if (!exists) {
+                savePanelConfigs({
+                  configs: Object.entries(configs).map(([id, config]) => ({ id, config })),
+                });
+                addPanel({ id: item.panelId, config: item.configs[item.panelId] });
+              }
+            } catch {
+              pending.current.delete(item.panelId);
+              child.close();
+              setNotice({ text: t("monitorSetupRestoreFailed"), severity: "error" });
+            }
+          }
         }
         setBusy(true);
         void monitorScreens()
@@ -187,12 +265,16 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
               return;
             }
             for (const item of saved) {
-              const panel = panels.get(item.panelId);
-              if (panel?.getWindow()) {
-                panel.open(restoreMonitorBounds(item, screens));
+              const bounds = restoreMonitorBounds(item, screens);
+              const panel = panelsRef.current.get(item.panelId);
+              const waiting = pending.current.get(item.panelId);
+              if (waiting) {
+                waiting.bounds = bounds;
+              } else if (panel?.getWindow()) {
+                panel.open(bounds);
               }
             }
-            if (saved.some((item) => !panels.has(item.panelId))) {
+            if (saved.some((item) => !panelsRef.current.has(item.panelId) && !item.configs)) {
               setNotice({ text: t("monitorPanelsMissing"), severity: "warning" });
             }
           })
@@ -214,9 +296,12 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
       getCurrentLayoutState,
       key,
       layoutId,
+      layoutReady,
       layoutManager,
       panels,
       register,
+      removePanel,
+      savePanelConfigs,
       saved,
       t,
     ],

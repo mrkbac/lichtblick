@@ -1,9 +1,18 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
+import type { PanelConfig } from "@lichtblick/suite-base/types/panels";
+import { getAllPanelIds } from "@lichtblick/suite-base/util/tabLayout";
+
 export type WindowBounds = { left: number; top: number; width: number; height: number };
 export type MonitorScreen = WindowBounds & { label?: string };
-export type SavedMonitor = { panelId: string; bounds: WindowBounds; screen?: MonitorScreen };
+export type SavedMonitor = {
+  panelId: string;
+  bounds: WindowBounds;
+  screen?: MonitorScreen;
+  configs?: Record<string, PanelConfig>;
+};
 export type ManagedScreen = Screen & {
   availLeft: number;
   availTop: number;
@@ -54,6 +63,36 @@ function isBounds(value: unknown): value is WindowBounds {
   );
 }
 
+/** Save only this window's panels, so closing it can remove active views without losing its saved setup. */
+export function capturePanelConfigs(
+  data: Pick<LayoutData, "configById">,
+  panelId: string,
+): Record<string, PanelConfig> {
+  return Object.fromEntries(
+    getAllPanelIds({ ...data, layout: { panels: [panelId] } }).map((id) => [
+      id,
+      data.configById[id] ?? {},
+    ]),
+  );
+}
+
+function validConfigs(configs: unknown, panelId: string): configs is Record<string, PanelConfig> {
+  return (
+    typeof configs === "object" &&
+    configs != undefined &&
+    !Array.isArray(configs) &&
+    Object.hasOwn(configs, panelId) &&
+    Object.keys(configs).length <= 1000 &&
+    Object.entries(configs).every(
+      ([id, config]) =>
+        id.length <= 256 &&
+        typeof config === "object" &&
+        config != undefined &&
+        !Array.isArray(config),
+    )
+  );
+}
+
 /** Treat browser storage as untrusted; a malformed setup must never open arbitrary windows. */
 export function readMonitorSetup(key: string): SavedMonitor[] {
   try {
@@ -70,6 +109,7 @@ export function readMonitorSetup(key: string): SavedMonitor[] {
         typeof saved.panelId === "string" &&
         saved.panelId.length <= 256 &&
         isBounds(saved.bounds) &&
+        (saved.configs == undefined || validConfigs(saved.configs, saved.panelId)) &&
         (saved.screen == undefined ||
           (isBounds(saved.screen) &&
             (saved.screen.label == undefined || typeof saved.screen.label === "string")))

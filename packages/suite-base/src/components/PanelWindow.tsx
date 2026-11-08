@@ -23,6 +23,7 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import AppCssBaseline from "@lichtblick/suite-base/components/CssBaseline";
+import CurrentLayoutContext from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
@@ -133,6 +134,11 @@ function PanelWindowStyles({ target, children }: PropsWithChildren<{ target: Win
 /** Keep the shared player/context, but recreate renderers rather than adopt a live canvas. */
 export function PanelWindow({ children, title }: PropsWithChildren<{ title: string }>): ReactNode {
   const setup = useMonitorSetup();
+  const layout = useContext(CurrentLayoutContext);
+  const closePanelRef = useRef(setup?.closePanel);
+  useLayoutEffect(() => {
+    closePanelRef.current = setup?.closePanel;
+  }, [setup?.closePanel]);
   const parent = useContext(PanelWindowContext);
   const dock = useContext(DockPanelContext);
   const [windowMode, setWindowMode] = useState<"popout" | "pip">("popout");
@@ -141,6 +147,8 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
   const [target, setTarget] = useState<Window>();
   const [failed, setFailed] = useState(false);
   const live = useRef(true);
+  const returning = useRef(false);
+  const removing = useRef(false);
   const pending = useRef(false);
   const windowRef = useRef<Window | undefined>(undefined);
   const pip = (window as Window & { documentPictureInPicture?: DocumentPiP })
@@ -148,6 +156,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
 
   useEffect(() => {
     const close = () => {
+      returning.current = true;
       windowRef.current?.close();
     };
     window.addEventListener("pagehide", close);
@@ -182,6 +191,9 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
     const subscription = dock.containerApi.onDidLayoutChange(hide);
     return () => {
       subscription.dispose();
+      if (removing.current) {
+        return;
+      }
       if (!dock.containerApi.getPanel(dock.api.id)) {
         return;
       }
@@ -201,6 +213,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
       isOpen: target != undefined,
       supportsPiP: pip != undefined,
       close: () => {
+        returning.current = true;
         windowRef.current?.close();
       },
       open: (mode, bounds, existing) => {
@@ -213,6 +226,8 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           return;
         }
         pending.current = true;
+        returning.current = false;
+        removing.current = false;
         windowModeRef.current = mode;
         setWindowMode(mode);
         setFailed(false);
@@ -242,20 +257,39 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           }
           const doc = child.document;
           doc.title = title;
+          const viewport = document.querySelector('meta[name="viewport"]');
+          if (viewport) {
+            doc.head.appendChild(viewport.cloneNode(true));
+          }
+          doc.documentElement.style.fontSize = window.getComputedStyle(
+            document.documentElement,
+          ).fontSize;
           doc.documentElement.lang = document.documentElement.lang;
           doc.documentElement.dataset.colorMode = document.documentElement.dataset.colorMode;
           const base = doc.createElement("base");
           base.href = document.baseURI;
           doc.head.appendChild(base);
           doc.body.style.cssText = "margin:0;width:100vw;height:100vh;display:flex;overflow:hidden";
-          const restore = () => {
+          const closed = () => {
+            if (windowRef.current !== child) {
+              return;
+            }
             windowRef.current = undefined;
-            if (live.current) {
+            if (!live.current) {
+              return;
+            }
+            if (!returning.current && dock && (closePanelRef.current || layout)) {
+              removing.current = true;
+              if (closePanelRef.current) {
+                closePanelRef.current(dock.api.id);
+              } else {
+                layout?.actions.closePanel({ id: dock.api.id });
+              }
+            } else {
               setTarget(undefined);
             }
           };
-          child.addEventListener("pagehide", restore, { once: true });
-          child.addEventListener("beforeunload", restore, { once: true });
+          child.addEventListener("pagehide", closed, { once: true });
           // Existing app-wide shortcuts live on the opener document. Preserve typing in the child.
           const key = (event: KeyboardEvent) => {
             const el = event.target as HTMLElement | null;
@@ -289,6 +323,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
         };
         void open()
           .catch(() => {
+            returning.current = true;
             windowRef.current?.close();
             windowRef.current = undefined;
             if (live.current) {
@@ -300,7 +335,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           });
       },
     }),
-    [pip, target, title],
+    [dock, layout, pip, target, title],
   );
 
   const register = setup?.register;

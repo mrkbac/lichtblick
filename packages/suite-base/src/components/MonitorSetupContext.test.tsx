@@ -32,17 +32,27 @@ const open = vi.fn();
 let child: Window | undefined;
 const getWindow = () => child;
 const selectLayoutId = (state: LayoutState) => state.selectedLayout?.id;
-function Controls() {
+function Controls({ registerPanel = true }: { registerPanel?: boolean }) {
   const setup = useMonitorSetup();
   const register = setup?.register;
   const id = useCurrentLayoutSelector(selectLayoutId);
   useEffect(
-    () => register?.("Tab!one", { open, getWindow, isOpen: child != undefined }),
-    [register, id],
+    () =>
+      registerPanel
+        ? register?.("Tab!one", { open, getWindow, isOpen: child != undefined })
+        : undefined,
+    [register, id, registerPanel],
   );
   return (
     <>
       <MonitorSetupButtons disabled={false} />
+      <button
+        onClick={() => {
+          setup?.closePanel("Tab!one");
+        }}
+      >
+        Close window
+      </button>
     </>
   );
 }
@@ -216,4 +226,136 @@ it("confirms a monitor save only after its panel contents reach the local workin
   await waitFor(() => {
     expect(localStorage.getItem(`${LOCAL_STORAGE_MONITOR_SETUP}mock-layout`)).toContain("Tab!one");
   });
+});
+
+it("refreshes a legacy saved setup before removing a window's views", () => {
+  const key = `${LOCAL_STORAGE_MONITOR_SETUP}mock-layout`;
+  const saved = { panelId: "Tab!one", bounds: { left: 0, top: 0, width: 800, height: 600 } };
+  localStorage.setItem(key, JSON.stringify([saved])!);
+  const configs = {
+    "Tab!one": { tabs: [{ title: "Camera", layout: { panels: ["Image!one"] } }] },
+    "Image!one": { imageTopic: "/latest-camera" },
+  };
+  const onAction = vi.fn();
+  renderThemed(
+    <MockCurrentLayoutProvider
+      initialState={{ layout: { panels: ["Tab!one"] }, configById: configs }}
+      onAction={onAction}
+    >
+      <MonitorSetupProvider>
+        <Controls />
+      </MonitorSetupProvider>
+    </MockCurrentLayoutProvider>,
+  );
+  fireEvent.click(screen.getByText("Close window"));
+  expect(JSON.parse(localStorage.getItem(key)!)).toEqual([{ ...saved, configs }]);
+  expect(onAction).toHaveBeenCalledExactlyOnceWith({
+    type: "CLOSE_PANEL",
+    payload: { id: "Tab!one" },
+  });
+});
+
+it.each(["missing", "child", "root", "nested"])(
+  "restores only its own saved views without overwriting active panels (location: %s)",
+  async (location) => {
+    const key = `${LOCAL_STORAGE_MONITOR_SETUP}mock-layout`;
+    const configs = {
+      "Tab!saved": { tabs: [{ title: "Camera", layout: { panels: ["Image!saved"] } }] },
+      "Image!saved": { imageTopic: "/saved" },
+      "Plot!unrelated": { title: "Must not restore" },
+    };
+    localStorage.setItem(
+      key,
+      JSON.stringify([
+        { panelId: "Tab!saved", bounds: { left: 0, top: 0, width: 800, height: 600 }, configs },
+      ])!,
+    );
+    if (location === "nested") {
+      child = makeChild();
+    }
+    const windowOpen = vi.spyOn(window, "open").mockReturnValue(makeChild());
+    const onAction = vi.fn();
+    renderThemed(
+      <MockCurrentLayoutProvider
+        initialState={{
+          configById: {
+            "Tab!one": { tabs: [{ title: "Nested", layout: { panels: ["Tab!saved"] } }] },
+          },
+          layout: {
+            panels: [
+              location === "child"
+                ? "Image!saved"
+                : location === "root"
+                  ? "Tab!saved"
+                  : location === "nested"
+                    ? "Tab!one"
+                    : "Plot!active",
+            ],
+          },
+        }}
+        onAction={onAction}
+      >
+        <MonitorSetupProvider>
+          <Controls />
+        </MonitorSetupProvider>
+      </MockCurrentLayoutProvider>,
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("restore-monitor-setup"));
+    });
+    expect(windowOpen).toHaveBeenCalledTimes(location === "child" || location === "nested" ? 0 : 1);
+    const expectedActions =
+      location !== "missing"
+        ? []
+        : [
+            [
+              {
+                type: "SAVE_PANEL_CONFIGS",
+                payload: {
+                  configs: [
+                    { id: "Tab!saved", config: configs["Tab!saved"] },
+                    { id: "Image!saved", config: configs["Image!saved"] },
+                  ],
+                },
+              },
+            ],
+            [{ type: "ADD_PANEL", payload: { id: "Tab!saved", config: configs["Tab!saved"] } }],
+          ];
+    expect(onAction.mock.calls).toEqual(expectedActions);
+  },
+);
+
+it("retains closed view snapshots for Restore when browser storage fails", async () => {
+  const key = `${LOCAL_STORAGE_MONITOR_SETUP}mock-layout`;
+  localStorage.setItem(
+    key,
+    JSON.stringify([{ panelId: "Tab!one", bounds: { left: 0, top: 0, width: 800, height: 600 } }])!,
+  );
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new DOMException("Quota", "QuotaExceededError");
+  });
+  vi.spyOn(window, "open").mockReturnValue(makeChild());
+  const onAction = vi.fn();
+  const config = { tabs: [{ title: "Latest", layout: { panels: ["Image!one"] } }] };
+  renderThemed(
+    <MockCurrentLayoutProvider
+      initialState={{
+        layout: { panels: ["Tab!one"] },
+        configById: { "Tab!one": config, "Image!one": { imageTopic: "/latest" } },
+      }}
+      onAction={onAction}
+    >
+      <MonitorSetupProvider>
+        <Controls registerPanel={false} />
+      </MonitorSetupProvider>
+    </MockCurrentLayoutProvider>,
+  );
+  expect(screen.getByTestId("restore-monitor-setup").hasAttribute("disabled")).toBe(true);
+  fireEvent.click(screen.getByText("Close window"));
+  expect(screen.getByRole("alert").textContent).toContain("Could not save monitor setup");
+  expect(screen.getByTestId("restore-monitor-setup").hasAttribute("disabled")).toBe(false);
+  await act(async () => {
+    fireEvent.click(screen.getByTestId("restore-monitor-setup"));
+  });
+  expect(onAction).toHaveBeenCalledWith({ type: "ADD_PANEL", payload: { id: "Tab!one", config } });
 });

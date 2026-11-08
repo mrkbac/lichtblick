@@ -25,7 +25,8 @@ export function useElementSize<T extends Element>(): ElementSize<T> {
     if (!element) {
       return;
     }
-    const observer = new ResizeObserver(([entry]) => {
+    const Observer = element.ownerDocument.defaultView?.ResizeObserver ?? ResizeObserver;
+    const observer = new Observer(([entry]) => {
       if (!entry) {
         return;
       }

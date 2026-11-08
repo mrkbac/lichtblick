@@ -16,6 +16,7 @@ const useStyles = makeStyles()((theme) => ({
     marginTop: `${theme.spacing(0.5)} !important`,
   },
   iconButton: {
+    WebkitAppRegion: "no-drag",
     borderRadius: 0,
     fontSize: 24,
     padding: theme.spacing(1.25),

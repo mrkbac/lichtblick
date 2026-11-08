@@ -319,7 +319,8 @@ export class GridRenderer {
     elements.timestamp.textContent = tile.stampText ?? "";
     // A remounted tile shows its last frame (redrawn on the first resize) instead of waiting text.
     this.#showStatus(tile, tile.bitmap ? undefined : this.#waitingText);
-    this.#resizeObserver ??= new ResizeObserver((entries) => {
+    const Observer = elements.canvas.ownerDocument.defaultView?.ResizeObserver ?? ResizeObserver;
+    this.#resizeObserver ??= new Observer((entries) => {
       this.#handleResize(entries);
     });
     this.#resizeObserver.observe(elements.canvas);
@@ -335,6 +336,10 @@ export class GridRenderer {
     this.#resizeObserver?.unobserve(tile.elements.canvas);
     tile.elements = undefined;
     tile.drawn = undefined;
+    if (![...this.#tiles.values()].some((entry) => entry.elements)) {
+      this.#resizeObserver?.disconnect();
+      this.#resizeObserver = undefined;
+    }
   }
 
   public setTileConfig(config: TileConfig): void {
@@ -366,9 +371,9 @@ export class GridRenderer {
   }
 
   #handleResize(entries: ResizeObserverEntry[]): void {
-    const dpr = window.devicePixelRatio;
     for (const entry of entries) {
       const canvas = entry.target as HTMLCanvasElement;
+      const dpr = canvas.ownerDocument.defaultView?.devicePixelRatio ?? window.devicePixelRatio;
       canvas.width = Math.round(entry.contentRect.width * dpr);
       canvas.height = Math.round(entry.contentRect.height * dpr);
       for (const tile of this.#tiles.values()) {
