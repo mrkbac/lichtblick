@@ -10,6 +10,13 @@ import { makeStyles } from "tss-react/mui";
 import { fontMonospace } from "@lichtblick/theme";
 
 export const useStyles = makeStyles()(() => ({
+  sharedMap: {
+    position: "absolute",
+    inset: 0,
+    width: "100%",
+    height: "100%",
+    "& .maplibregl-canvas-container": { width: "100%", height: "100%" },
+  },
   loadingTransforms: {
     position: "absolute",
     bottom: "10px",

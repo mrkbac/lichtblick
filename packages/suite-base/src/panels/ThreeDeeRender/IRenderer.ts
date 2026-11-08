@@ -37,6 +37,7 @@ import { PickedRenderable } from "./Picker";
 import { SceneExtension } from "./SceneExtension";
 import { SettingsManager } from "./SettingsManager";
 import { SharedGeometry } from "./SharedGeometry";
+import type { SharedMap } from "./SharedMap";
 import { CameraState } from "./camera";
 import { DetailLevel } from "./lod";
 import { LayerSettingsTransform } from "./renderables/FrameAxes";
@@ -258,6 +259,7 @@ export type AddMessageEventOptions = {
 export interface IRenderer extends EventEmitter<RendererEvents> {
   readonly interfaceMode: InterfaceMode;
   readonly gl: THREE.WebGLRenderer;
+  readonly sharedMap?: SharedMap;
   readonly testOptions: TestOptions;
   customCameraModels: CameraModelsMap;
   maxLod: DetailLevel;

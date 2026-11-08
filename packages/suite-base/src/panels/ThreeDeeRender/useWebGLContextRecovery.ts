@@ -73,8 +73,12 @@ export function useWebGLContextRecovery(
       // Only on canvas teardown (not on renderer recreation, which reuses the canvas). Disposing
       // the renderer alone leaves the context alive until garbage collection. Reading the latest
       // renderer here is intended: it is the one rendering into this canvas.
+      // A canvas switch may already have installed the next renderer; never lose its context.
       // eslint-disable-next-line react-hooks/exhaustive-deps
-      glRef.current?.forceContextLoss();
+      const latestRenderer = glRef.current;
+      if (latestRenderer?.domElement === canvas) {
+        latestRenderer.forceContextLoss();
+      }
     };
   }, [canvas, glRef, recreate]);
 

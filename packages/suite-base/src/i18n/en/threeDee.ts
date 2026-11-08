@@ -11,6 +11,13 @@ export const threeDee = {
   colorMode: "Color mode",
   frame: "Frame",
   locationFrame: "Location frame",
+  mapRendering: "Map rendering",
+  mapTexture: "Texture",
+  mapShared: "Direct (perspective)",
+  mapWaitingForView:
+    "Map: waiting for a location transform and a perspective view above the ground",
+  mapRenderingHelp:
+    "The first visible shared map renders directly with the 3D scene. Requires a perspective camera above the ground looking down. Orthographic views use a texture.",
   locationFrameFromMessage: "From message",
   locationFrameHelp:
     "Frame of the GPS receiver. For the nuScenes sample, use base_link and keep the ENU frame set to map.",

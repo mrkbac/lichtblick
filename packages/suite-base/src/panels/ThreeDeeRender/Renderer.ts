@@ -64,6 +64,7 @@ import { SceneExtensionConfig } from "./SceneExtensionConfig";
 import { ScreenOverlay } from "./ScreenOverlay";
 import { SettingsManager, SettingsTreeEntry } from "./SettingsManager";
 import { SharedGeometry } from "./SharedGeometry";
+import type { SharedMap } from "./SharedMap";
 import { CameraState } from "./camera";
 import { DARK_OUTLINE, LIGHT_OUTLINE, stringToRgb } from "./color";
 import { HOVER_PICK_THROTTLE_MS, isTransformPreloadEnabled } from "./constants";
@@ -165,6 +166,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   // The label atlas never shrinks, so an overflow stays true across clear()
   #labelAtlasError: string | undefined;
   public readonly gl: THREE.WebGLRenderer;
+  public readonly sharedMap?: SharedMap;
   public maxLod = DetailLevel.High;
 
   public customCameraModels: CameraModelsMap = new Map();
@@ -250,6 +252,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   #prevResolution = new THREE.Vector2();
   #pickingEnabled = false;
   #rendering = false;
+  #disposed = false;
   #animationFrame?: number;
   #cameraSyncError: undefined | string;
   #devicePixelRatioMediaQuery?: MediaQueryList;
@@ -262,6 +265,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
 
   public constructor(args: {
     canvas: HTMLCanvasElement;
+    sharedMap?: SharedMap;
     config: Immutable<RendererConfig>;
     interfaceMode: InterfaceMode;
     sceneExtensionConfig: SceneExtensionConfig;
@@ -278,6 +282,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
 
     const interfaceMode = (this.interfaceMode = args.interfaceMode);
     const canvas = (this.#canvas = args.canvas);
+    this.sharedMap = args.sharedMap;
     this.#ownerWindow = canvas.ownerDocument.defaultView ?? window;
     const config = (this.config = args.config);
     this.#fetchAsset = args.fetchAsset;
@@ -454,6 +459,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     this.#canvas.ownerDocument.addEventListener("visibilitychange", this.#onVisibilityChange);
 
     this.setCameraState(config.cameraState);
+    this.sharedMap?.attach(this, this.#drawScene);
     this.animationFrame();
   }
 
@@ -484,6 +490,15 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   }
 
   public dispose(): void {
+    if (this.#disposed) {
+      return;
+    }
+    this.#disposed = true;
+    this.sharedMap?.detach(this);
+    if (this.#animationFrame != undefined) {
+      this.#ownerWindow.cancelAnimationFrame(this.#animationFrame);
+      this.#animationFrame = undefined;
+    }
     log.warn(`Disposing renderer`);
     this.#devicePixelRatioMediaQuery?.removeEventListener("change", this.#onDevicePixelRatioChange);
     this.#canvas.ownerDocument.removeEventListener("visibilitychange", this.#onVisibilityChange);
@@ -1399,6 +1414,9 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   // Callback handlers
 
   public animationFrame = (): void => {
+    if (this.#disposed) {
+      return;
+    }
     // Cancel any requestAnimationFrame (rAF) that `queueAnimationFrame()` scheduled. When this runs synchronously (e.g. a
     // seek's `handleSeek`/`clear` queued a frame and the render-if-requested effect then calls us
     // directly in the same tick) the queued rAF would otherwise fire on the next tick and paint a
@@ -1414,6 +1432,9 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   };
 
   public queueAnimationFrame(): void {
+    if (this.#disposed) {
+      return;
+    }
     this.#animationFrame ??= this.#ownerWindow.requestAnimationFrame(this.animationFrame);
   }
 
@@ -1452,7 +1473,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     // A hidden tab shows nothing, but live data keeps driving frames: keep the scene state current
     // and skip the GPU work. #onVisibilityChange repaints when the tab is shown again.
     const draw = this.#canvas.ownerDocument.visibilityState !== "hidden";
-    if (draw) {
+    if (draw && !this.sharedMap) {
       this.gl.clear();
     }
     this.emit("startFrame", currentTime, this);
@@ -1473,19 +1494,29 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     }
 
     if (draw) {
-      this.gl.render(this.#scene, camera);
-    }
-
-    if (draw && this.#selectedRenderable) {
-      this.gl.render(this.#selectionBackdropScene, camera);
-      this.gl.clearDepth();
-      camera.layers.set(LAYER_SELECTED);
-      this.gl.render(this.#scene, camera);
+      if (this.sharedMap) {
+        this.sharedMap.render(renderFrameId, fixedFrameId);
+      } else {
+        this.#drawScene();
+      }
     }
 
     this.emit("endFrame", currentTime, this);
 
     this.gl.info.reset();
+  };
+
+  #drawScene = (): void => {
+    const camera = this.cameraHandler.getActiveCamera();
+    camera.layers.set(LAYER_DEFAULT);
+    this.gl.render(this.#scene, camera);
+
+    if (this.#selectedRenderable) {
+      this.gl.render(this.#selectionBackdropScene, camera);
+      this.gl.clearDepth();
+      camera.layers.set(LAYER_SELECTED);
+      this.gl.render(this.#scene, camera);
+    }
   };
 
   /** iterates through all subscription message queues, processes them, and calls their handler for each message in the frame */
@@ -1541,6 +1572,8 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   #resizeHandler = (size: THREE.Vector2): void => {
     this.gl.setPixelRatio(this.#ownerWindow.devicePixelRatio);
     this.gl.setSize(size.width, size.height);
+    this.sharedMap?.map.setPixelRatio(this.#ownerWindow.devicePixelRatio);
+    this.sharedMap?.map.resize();
     this.cameraHandler.handleResize(size.width, size.height, this.#ownerWindow.devicePixelRatio);
 
     const renderSize = this.gl.getDrawingBufferSize(tempVec2);
@@ -1734,6 +1767,9 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
    * cursor, writing it into `out`. Returns false when nothing pickable is under the cursor.
    */
   public pickPoint(cursorCoords: THREE.Vector2, out: THREE.Vector3): boolean {
+    if (this.sharedMap) {
+      this.gl.resetState();
+    }
     const camera = this.cameraHandler.getActiveCamera();
     const depth = this.#picker.pickDepth(cursorCoords.x, cursorCoords.y, camera);
     if (depth == undefined) {
@@ -1748,6 +1784,9 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
 
   /** The topmost object under the cursor, or undefined for the background */
   public pickObject(cursorCoords: THREE.Vector2): THREE.Object3D | undefined {
+    if (this.sharedMap) {
+      this.gl.resetState();
+    }
     const objectId = this.#picker.pick(
       cursorCoords.x,
       cursorCoords.y,
@@ -1758,6 +1797,9 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
   }
 
   #pickSingleObject(cursorCoords: THREE.Vector2): PickedRenderable | undefined {
+    if (this.sharedMap) {
+      this.gl.resetState();
+    }
     // Render a single pixel using a fragment shader that writes object IDs as
     // colors, then read the value of that single pixel back
     const objectId = this.#picker.pick(

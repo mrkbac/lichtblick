@@ -68,6 +68,7 @@ export class Picker {
   #depthCopyScene?: THREE.Scene;
   #depthCopyMaterial?: THREE.ShaderMaterial;
   #depthBits = new DataView(new ArrayBuffer(4));
+  #projectionBeforePick = new THREE.Matrix4();
 
   public constructor(gl: THREE.WebGLRenderer, scene: THREE.Scene) {
     this.#gl = gl;
@@ -266,13 +267,19 @@ export class Picker {
     const pixelRatio = this.#gl.getPixelRatio();
 
     if (options.disableSetViewOffset !== true) {
+      this.#projectionBeforePick.copy(this.#camera.projectionMatrix);
       const hw = (PIXEL_WIDTH / 2) | 0;
       const px = Math.floor(x * pixelRatio);
       const py = Math.floor(y * pixelRatio);
       const xi = Math.max(0, px - hw);
       const yi = Math.max(0, py - hw);
       // Set the projection matrix to only look at the pixels we are interested in
-      this.#camera.setViewOffset(w, h, xi, yi, PIXEL_WIDTH, PIXEL_WIDTH);
+      // Crop the actual projection, including a map-backed camera's custom near/far planes.
+      const crop = new THREE.Matrix4().makeScale(w / PIXEL_WIDTH, h / PIXEL_WIDTH, 1);
+      crop.elements[12] = (w - 2 * xi - PIXEL_WIDTH) / PIXEL_WIDTH;
+      crop.elements[13] = (2 * yi + PIXEL_WIDTH - h) / PIXEL_WIDTH;
+      this.#camera.projectionMatrix.copy(crop).multiply(this.#projectionBeforePick);
+      this.#camera.projectionMatrixInverse.copy(this.#camera.projectionMatrix).invert();
       // The offset is clamped at the left/top edges, so the cursor is not always centered.
       // GL rows count from the bottom.
       return { xInView: px - xi, yInView: PIXEL_WIDTH - 1 - (py - yi) };
@@ -290,7 +297,8 @@ export class Picker {
   #resetCameraFromPick(options: PickerOptions): void {
     assert(this.#camera, "camera must be set before resetting from pick");
     if (options.disableSetViewOffset !== true) {
-      this.#camera.clearViewOffset();
+      this.#camera.projectionMatrix.copy(this.#projectionBeforePick);
+      this.#camera.projectionMatrixInverse.copy(this.#projectionBeforePick).invert();
     }
   }
 

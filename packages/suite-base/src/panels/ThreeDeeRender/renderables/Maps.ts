@@ -5,7 +5,11 @@ import type { TilesRenderer } from "3d-tiles-renderer";
 import { toNanoSec } from "@foxglove/rostime";
 import { t } from "i18next";
 import * as _ from "lodash-es";
-import type { Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
+import type {
+  ErrorEvent as MapErrorEvent,
+  Map as MapLibreMap,
+  StyleSpecification,
+} from "maplibre-gl";
 import * as THREE from "three";
 
 import Logger from "@lichtblick/log";
@@ -37,6 +41,7 @@ import { createBundledDracoLoader } from "../ModelCache";
 import { BaseUserData, Renderable } from "../Renderable";
 import { SceneExtension, onlyLastByTopicMessage } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
+import type { MapAnchor } from "../SharedMap";
 import { normalizeTime } from "../normalizeMessages";
 import { CustomLayerSettings, PRECISION_DISTANCE } from "../settings";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
@@ -96,6 +101,8 @@ export type LayerSettingsMap = CustomLayerSettings & {
   locationFrame?: string;
   /** Frame whose XY plane is east/north; undefined uses the fixed frame. */
   enuFrame?: string;
+  /** Share MapLibre's canvas for sharp vector rendering in perspective views. */
+  rendering?: "texture" | "shared";
 };
 
 const DEFAULT_SETTINGS: LayerSettingsMap = {
@@ -115,12 +122,7 @@ const withDefaults = (config: Partial<LayerSettingsMap>): LayerSettingsMap => ({
 });
 
 /** The geographic position of a point in the ENU frame. */
-type Anchor = LatLon & {
-  /** Meters above the WGS 84 ellipsoid, if the fix had one. */
-  altitude?: number;
-  enuFrame: string;
-  position: THREE.Vector3;
-};
+type Anchor = MapAnchor;
 
 const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").replace(/&copy;/g, "©");
 
@@ -217,9 +219,15 @@ class MapRenderable extends Renderable<MapUserData> {
     this.#mesh.visible = false;
     this.#mesh.add(this.#buildings);
     this.add(this.#mesh);
+    if (renderer.sharedMap?.layerId === name) {
+      renderer.sharedMap.map.on("error", this.#handleMapError);
+    }
   }
 
   public override dispose(): void {
+    if (this.renderer.sharedMap?.layerId === this.name) {
+      this.renderer.sharedMap.map.off("error", this.#handleMapError);
+    }
     this.#disposed = true;
     this.#updateSoon.cancel();
     this.#demAbort?.abort();
@@ -259,6 +267,13 @@ class MapRenderable extends Renderable<MapUserData> {
     this.#onErrorsChanged();
   }
 
+  #handleMapError = (event: MapErrorEvent & { sourceId?: string }): void => {
+    const layerId = event.sourceId?.split(":")[0];
+    if (layerId) {
+      this.#setLayerError(layerId, event.error.message);
+    }
+  };
+
   public applySettings(settings: LayerSettingsMap): void {
     this.userData.settings = settings;
     const material = this.#mesh.material;
@@ -273,6 +288,15 @@ class MapRenderable extends Renderable<MapUserData> {
   }
 
   public locate(anchor: Anchor | undefined, fix: LatLon | undefined): void {
+    if (this.renderer.sharedMap?.layerId === this.name) {
+      this.renderer.sharedMap.locate(anchor, this.userData.settings.zOffset);
+      if (anchor !== this.#anchor) {
+        this.#anchor = anchor;
+        this.#placeTilesets();
+      }
+      this.#mesh.visible = false;
+      return;
+    }
     if (anchor !== this.#anchor) {
       this.#anchor = anchor;
       this.#anchorElevation = undefined;
@@ -381,18 +405,24 @@ class MapRenderable extends Renderable<MapUserData> {
       }
     }
     this.#attribution = _.uniq(attributions).join(" ");
-    map.setStyle(
-      composeStyle({
-        layers,
-        vectorStyles,
-        images,
-        projection: "mercator",
-        overlay: { sources: {}, layers: [] },
-      }),
-    );
+    const style = composeStyle({
+      layers,
+      vectorStyles,
+      images,
+      projection: "mercator",
+      overlay: { sources: {}, layers: [] },
+    });
+    if (this.renderer.sharedMap?.layerId === this.name) {
+      this.renderer.sharedMap.setStyle(style);
+    } else {
+      map.setStyle(style);
+    }
   }
 
   async #getMap(): Promise<MapLibreMap> {
+    if (this.renderer.sharedMap?.layerId === this.name) {
+      return this.renderer.sharedMap.map;
+    }
     return await (this.#mapPromise ??= this.#createMap());
   }
 
@@ -422,12 +452,7 @@ class MapRenderable extends Renderable<MapUserData> {
       canvasContextAttributes: { preserveDrawingBuffer: true },
     });
     // Tile errors name the source, whose id starts with the MapLayer id (see composeStyle).
-    map.on("error", (event) => {
-      const layerId = (event as { sourceId?: string }).sourceId?.split(":")[0];
-      if (layerId) {
-        this.#setLayerError(layerId, event.error.message);
-      }
-    });
+    map.on("error", this.#handleMapError);
     // Copy pixels explicitly rather than texturing from MapLibre's canvas: drawing another
     // context's canvas may use its last composited frame, which isn't defined off-screen.
     const pixels = new Uint8Array(CANVAS_SIZE * CANVAS_SIZE * 4);
@@ -473,6 +498,9 @@ class MapRenderable extends Renderable<MapUserData> {
   }
 
   #updateGeometry(): void {
+    if (this.renderer.sharedMap?.layerId === this.name) {
+      return;
+    }
     const s = this.userData.settings;
     const anchor = this.#anchor;
     const center = this.#center;
@@ -864,6 +892,16 @@ export class Maps extends SceneExtension<MapRenderable> {
           label: config.label,
           icon: "Map",
           fields: {
+            rendering: {
+              label: t("threeDee:mapRendering"),
+              input: "select",
+              options: [
+                { label: t("threeDee:mapTexture"), value: "texture" },
+                { label: t("threeDee:mapShared"), value: "shared" },
+              ],
+              value: config.rendering ?? "texture",
+              help: t("threeDee:mapRenderingHelp"),
+            },
             locationTopic: {
               label: "Location topic",
               input: "select",
@@ -895,6 +933,7 @@ export class Maps extends SceneExtension<MapRenderable> {
               help: "Frame whose X axis points east, Y north and Z up.",
             },
             size: {
+              disabled: this.renderer.sharedMap?.layerId === instanceId,
               label: t("threeDee:size"),
               input: "number",
               min: 20,
@@ -913,6 +952,7 @@ export class Maps extends SceneExtension<MapRenderable> {
               help: "Height of the 2D map in meters above the ENU frame's XY plane",
             },
             drawBehind: {
+              disabled: this.renderer.sharedMap?.layerId === instanceId,
               label: "Draw behind",
               input: "boolean",
               value: config.drawBehind ?? terrainSource(config.layers) == undefined,

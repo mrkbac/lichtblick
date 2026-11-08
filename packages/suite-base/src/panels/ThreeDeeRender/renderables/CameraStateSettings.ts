@@ -118,6 +118,7 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
   }
 
   public override dispose(): void {
+    this.#controls.dispose();
     // for camera settings
     this.renderer.off("cameraMove", this.#handleCameraMove);
 

@@ -1,0 +1,222 @@
+// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
+// SPDX-License-Identifier: MPL-2.0
+
+import { t } from "i18next";
+import type { CustomLayerInterface, Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
+import { MercatorCoordinate } from "maplibre-gl";
+import * as THREE from "three";
+
+import type { IRenderer } from "./IRenderer";
+import type { LatLon } from "./renderables/mapGeo";
+import { AnyFrameId, makePose } from "./transforms";
+
+export type MapAnchor = LatLon & {
+  altitude?: number;
+  enuFrame: string;
+  position: THREE.Vector3;
+};
+
+const EMPTY_STYLE: StyleSpecification = { version: 8, sources: {}, layers: [] };
+const CUSTOM_LAYER_ID = "lichtblick-3d-scene";
+
+/** Camera orientation in the map's east/north/up frame, expressed in MapLibre degrees. */
+export function mapCameraAngles(matrix: THREE.Matrix4): {
+  bearing: number;
+  pitch: number;
+  roll: number;
+} {
+  const forward = new THREE.Vector3(0, 0, -1).transformDirection(matrix);
+  const up = new THREE.Vector3(0, 1, 0).transformDirection(matrix);
+  const right = new THREE.Vector3(1, 0, 0).transformDirection(matrix);
+  const bearing =
+    Math.hypot(forward.x, forward.y) < 1e-8
+      ? Math.atan2(-right.y, right.x)
+      : Math.atan2(forward.x, forward.y);
+  const pitch = Math.acos(THREE.MathUtils.clamp(-forward.z, -1, 1));
+  const levelRight = new THREE.Vector3(Math.cos(bearing), -Math.sin(bearing), 0);
+  const levelUp = levelRight.clone().cross(forward);
+  return {
+    bearing: THREE.MathUtils.radToDeg(bearing),
+    pitch: THREE.MathUtils.radToDeg(pitch),
+    roll: THREE.MathUtils.radToDeg(Math.atan2(up.dot(levelRight), up.dot(levelUp))),
+  };
+}
+
+/** One MapLibre canvas and context, with the existing Three.js scene as a custom layer. */
+export class SharedMap {
+  public readonly map: MapLibreMap;
+  public readonly layerId: string;
+  #anchor?: MapAnchor;
+  #zOffset = 0;
+  #style: StyleSpecification = EMPTY_STYLE;
+  #placed = false;
+  #draw?: () => void;
+  #renderer?: IRenderer;
+  #renderToMercator = new THREE.Matrix4();
+
+  public constructor(map: MapLibreMap, layerId: string) {
+    this.map = map;
+    this.layerId = layerId;
+    map.on("style.load", this.#addSceneLayer);
+    map.on("sourcedata", this.#requestFrame);
+  }
+
+  public attach(renderer: IRenderer, draw: () => void): void {
+    this.#renderer = renderer;
+    this.#draw = draw;
+    if (this.map.isStyleLoaded() === true) {
+      this.#addSceneLayer();
+    }
+  }
+
+  public dispose(): void {
+    this.#renderer = undefined;
+    this.#draw = undefined;
+    this.map.off("style.load", this.#addSceneLayer);
+    this.map.off("sourcedata", this.#requestFrame);
+    this.map.remove();
+  }
+
+  public detach(renderer: IRenderer): void {
+    if (this.#renderer === renderer) {
+      this.#renderer = undefined;
+      this.#draw = undefined;
+    }
+  }
+
+  public setStyle(style: StyleSpecification): void {
+    this.#style = style;
+    this.map.setStyle(this.#placed ? style : EMPTY_STYLE, { diff: false });
+  }
+
+  public locate(anchor: MapAnchor | undefined, zOffset: number): void {
+    this.#anchor = anchor;
+    this.#zOffset = zOffset;
+  }
+
+  #requestFrame = (): void => {
+    // Terrain may supply the missing ground elevation after the first location fix.
+    this.#renderer?.queueAnimationFrame();
+  };
+
+  #addSceneLayer = (): void => {
+    if (!this.#renderer || this.map.getLayer(CUSTOM_LAYER_ID)) {
+      return;
+    }
+    const layer: CustomLayerInterface = {
+      id: CUSTOM_LAYER_ID,
+      type: "custom",
+      renderingMode: "3d",
+      render: (_gl, options) => {
+        const renderer = this.#renderer;
+        if (!renderer) {
+          return;
+        }
+        const camera = renderer.cameraHandler.getActiveCamera();
+        if (this.#placed) {
+          camera.updateWorldMatrix(true, false);
+          camera.projectionMatrix
+            .fromArray(options.defaultProjectionData.mainMatrix)
+            .multiply(this.#renderToMercator)
+            .multiply(camera.matrixWorld);
+          camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
+        }
+        renderer.gl.resetState();
+        try {
+          this.#draw?.();
+        } finally {
+          renderer.gl.resetState();
+        }
+      },
+    };
+    // Keep map labels above the robotics scene, with terrain/building depth below it.
+    const firstSymbol = this.map.getStyle().layers.find((entry) => entry.type === "symbol");
+    this.map.addLayer(layer, firstSymbol?.id);
+  };
+
+  /** Synchronize MapLibre to the existing orbit/follow camera, then draw synchronously. */
+  public render(renderFrameId: AnyFrameId, fixedFrameId: AnyFrameId): void {
+    const renderer = this.#renderer;
+    if (!renderer) {
+      return;
+    }
+    const camera = renderer.cameraHandler.getActiveCamera();
+    camera.updateProjectionMatrix();
+    const anchor = this.#anchor;
+    const pose = makePose();
+    const time = renderer.currentTime;
+    const available =
+      anchor != undefined &&
+      camera instanceof THREE.PerspectiveCamera &&
+      Boolean(
+        renderer.transformTree.apply(
+          pose,
+          pose,
+          anchor.enuFrame,
+          fixedFrameId,
+          renderFrameId,
+          time,
+          time,
+        ),
+      );
+    let placed = false;
+    if (available) {
+      const renderToEnu = new THREE.Matrix4().compose(
+        new THREE.Vector3(pose.position.x, pose.position.y, pose.position.z),
+        new THREE.Quaternion(
+          pose.orientation.x,
+          pose.orientation.y,
+          pose.orientation.z,
+          pose.orientation.w,
+        ),
+        new THREE.Vector3(1, 1, 1),
+      );
+      const elevation =
+        anchor.altitude ?? this.map.queryTerrainElevation([anchor.lon, anchor.lat]) ?? 0;
+      const origin = MercatorCoordinate.fromLngLat(
+        [anchor.lon, anchor.lat],
+        elevation - this.#zOffset,
+      );
+      const scale = origin.meterInMercatorCoordinateUnits();
+      const enuToMercator = new THREE.Matrix4().makeScale(scale, -scale, scale);
+      enuToMercator.setPosition(
+        origin.x - anchor.position.x * scale,
+        origin.y + anchor.position.y * scale,
+        origin.z - anchor.position.z * scale,
+      );
+      this.#renderToMercator.copy(enuToMercator).multiply(renderToEnu);
+      camera.updateWorldMatrix(true, false);
+      const cameraInEnu = renderToEnu.clone().multiply(camera.matrixWorld);
+      const angles = mapCameraAngles(cameraInEnu);
+      const eye = new THREE.Vector3()
+        .setFromMatrixPosition(camera.matrixWorld)
+        .applyMatrix4(this.#renderToMercator);
+      // shortcut: map-backed views require a camera above the ground looking down; use ordinary 3D otherwise.
+      placed = angles.pitch < 85 && eye.z > 0;
+      if (placed) {
+        const coordinate = new MercatorCoordinate(eye.x, eye.y, eye.z);
+        this.map.setVerticalFieldOfView(camera.fov);
+        this.map.jumpTo(
+          this.map.calculateCameraOptionsFromCameraLngLatAltRotation(
+            coordinate.toLngLat(),
+            coordinate.toAltitude(),
+            angles.bearing,
+            angles.pitch,
+            angles.roll,
+          ),
+        );
+      }
+    }
+    if (placed !== this.#placed) {
+      this.#placed = placed;
+      this.map.setStyle(placed ? this.#style : EMPTY_STYLE, { diff: false });
+    }
+    renderer.hud.displayIfTrue(!placed, {
+      id: "shared-map-view",
+      group: "shared-map",
+      displayType: "notice",
+      getMessage: () => t("threeDee:mapWaitingForView"),
+    });
+    this.map.redraw();
+  }
+}
