@@ -2,9 +2,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { Dialog, Menu, MenuItem } from "@mui/material";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { createDockview } from "dockview-react";
-import { createContext, useContext, useEffect } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 
 import { DockPanelContext } from "./DockPanelContext";
 import { PanelWindow, PanelWindowContext } from "./PanelWindow";
@@ -303,3 +304,132 @@ it("can retry after window initialization fails before the close handlers are at
   });
   expect(open).toHaveBeenCalledTimes(2);
 });
+
+it.each(["first", "second"] as const)(
+  "reveals returned stacked panels when the %s window closes first",
+  async (order) => {
+    // Given two stacked panels that both move into separate windows
+    const first = childWindow();
+    const second = childWindow();
+    vi.spyOn(window, "open").mockReturnValueOnce(first.child).mockReturnValueOnce(second.child);
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const layout = createDockview(element, {
+      createComponent: () => ({ element: document.createElement("div"), init: () => {} }),
+      defaultRenderer: "always",
+    });
+    const a = layout.addPanel({ id: "a", component: "content" });
+    const b = layout.addPanel({
+      id: "b",
+      component: "content",
+      position: { referencePanel: "a", direction: "within" },
+    });
+    layout.layout(1000, 700);
+    const view = render(
+      <>
+        <DockPanelContext.Provider value={{ api: a.api, containerApi: layout }}>
+          <PanelWindow title="A">
+            <Content />
+          </PanelWindow>
+        </DockPanelContext.Provider>
+        <DockPanelContext.Provider value={{ api: b.api, containerApi: layout }}>
+          <PanelWindow title="B">
+            <Content />
+          </PanelWindow>
+        </DockPanelContext.Provider>
+      </>,
+    );
+    try {
+      fireEvent.click(screen.getAllByText("Pop out")[0]!);
+      await waitFor(() => {
+        expect(a.group.api.isVisible).toBe(false);
+      });
+      fireEvent.click(screen.getByText("Pop out"));
+      await waitFor(() => {
+        expect(b.group.api.isVisible).toBe(false);
+      });
+      // When the first window closes, its panel is immediately visible again
+      act(() => {
+        (order === "first" ? first.close : second.close)();
+      });
+      // Then it stays visible after the remaining window closes too
+      await waitFor(() => {
+        expect((order === "first" ? a : b).group.api.isVisible).toBe(true);
+      });
+      act(() => {
+        (order === "first" ? second.close : first.close)();
+      });
+      await waitFor(() => {
+        expect(a.group).toBe(b.group);
+      });
+      expect(a.group.api.isVisible).toBe(true);
+      expect(a.group.panels.map((panel) => panel.id).sort()).toEqual(["a", "b"]);
+    } finally {
+      view.unmount();
+      layout.dispose();
+      element.remove();
+    }
+  },
+);
+
+it.each(["default", "explicit", "anchored"] as const)(
+  "keeps %s modal containers in their intended document",
+  async (mode) => {
+    // Given panel controls rendered in a separate window
+    const { child } = childWindow();
+    vi.spyOn(window, "open").mockReturnValue(child);
+    function Controls() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button
+            onClick={() => {
+              setOpen(true);
+            }}
+          >
+            Open dialog
+          </button>
+          {mode === "anchored" ? (
+            <Menu open={open} anchorEl={document.body}>
+              <MenuItem>Anchored item</MenuItem>
+            </Menu>
+          ) : (
+            <Dialog open={open} container={mode === "explicit" ? document.body : undefined}>
+              <span>Window dialog</span>
+            </Dialog>
+          )}
+        </>
+      );
+    }
+    const view = render(
+      <PanelWindow title="Monitor">
+        <Content />
+        <Controls />
+      </PanelWindow>,
+    );
+    try {
+      // When a dialog or anchored menu opens from that window
+      fireEvent.click(screen.getByText("Pop out"));
+      await waitFor(() => {
+        expect(within(child.document.body).getByText("Open dialog")).toBeDefined();
+      });
+      fireEvent.click(within(child.document.body).getByText("Open dialog"));
+      // Then defaults use the child document, while explicit containers and anchors keep their own
+      const expectedDocument = mode === "default" ? child.document : document;
+      await waitFor(() => {
+        expect(
+          within(expectedDocument.body).getByText(
+            mode === "anchored" ? "Anchored item" : "Window dialog",
+          ),
+        ).toBeDefined();
+      });
+      expect(
+        (mode === "default" ? document : child.document).querySelector(
+          mode === "anchored" ? '[role="menu"]' : '[role="dialog"]',
+        ),
+      ).toBeNull();
+    } finally {
+      view.unmount();
+    }
+  },
+);

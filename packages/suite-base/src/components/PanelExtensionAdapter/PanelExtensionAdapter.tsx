@@ -300,10 +300,9 @@ function PanelExtensionAdapter(
   // Keep the last message of a newly subscribed topic until a rendered
   // frame has delivered it (see UndeliveredMessages).
   const [undelivered] = useState(() => new UndeliveredMessages());
-  // Like the local subscriptions, the watched fields are
-  // React state, so the injected frame can arrive before a watch of currentFrame takes effect. They
-  // are handed to the panel once it watches currentFrame.
+  // Pending frames belong to the seek that produced them.
   const lastSeekTimeRef = useRef(playerState.activeData?.lastSeekTime);
+  // Watched fields update through React state; keep injected messages until currentFrame is watched.
   const deliverHeld = watchedFields.has("currentFrame");
   // The render-done callback belongs to the render that started it; read the current gate, since
   // the panel may start watching currentFrame while that render is in progress.

@@ -3,7 +3,13 @@
 
 import createCache from "@emotion/cache";
 import { CacheProvider } from "@emotion/react";
-import { Alert, Button, CssBaseline } from "@mui/material";
+import {
+  Alert,
+  Button,
+  CssBaseline,
+  ThemeProvider as MuiThemeProvider,
+  useTheme,
+} from "@mui/material";
 import {
   createContext,
   PropsWithChildren,
@@ -55,6 +61,23 @@ function copyStyles(source: Document, target: Document) {
 
 /** Give portaled controls their own caches so new styles stay in the panel document. */
 function PanelWindowStyles({ target, children }: PropsWithChildren<{ target: Window }>) {
+  const outerTheme = useTheme();
+  const theme = useMemo(
+    () => ({
+      ...outerTheme,
+      components: {
+        ...outerTheme.components,
+        MuiModal: {
+          ...outerTheme.components?.MuiModal,
+          defaultProps: {
+            ...outerTheme.components?.MuiModal?.defaultProps,
+            container: target.document.body,
+          },
+        },
+      },
+    }),
+    [outerTheme, target],
+  );
   const caches = useMemo(
     () => ({
       mui: createCache({ key: "mui", prepend: true, container: target.document.head }),
@@ -65,8 +88,10 @@ function PanelWindowStyles({ target, children }: PropsWithChildren<{ target: Win
   return (
     <CacheProvider value={caches.mui}>
       <TssCacheProvider value={caches.tss}>
-        <CssBaseline />
-        {children}
+        <MuiThemeProvider theme={theme}>
+          <CssBaseline />
+          {children}
+        </MuiThemeProvider>
       </TssCacheProvider>
     </CacheProvider>
   );
@@ -131,6 +156,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
         originalGroup !== dock.api.group
       ) {
         dock.api.moveTo({ group: originalGroup, position: "center", index: originalIndex });
+        originalGroup.api.setVisible(true);
       }
     };
   }, [dock, windowMode, target]);
@@ -185,7 +211,8 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
             const el = event.target as HTMLElement | null;
             if (
               el?.nodeType === 1 &&
-              el.closest("input,textarea,[contenteditable=true],.monaco-editor")
+              (el.isContentEditable ||
+                el.closest("input,textarea,[contenteditable=true],.monaco-editor"))
             ) {
               return;
             }

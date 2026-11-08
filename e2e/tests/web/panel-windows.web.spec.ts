@@ -132,3 +132,43 @@ for (const action of ["Open in new window", "Open Picture-in-Picture monitor"] a
     await expect(page.getByTestId("play-button")).toHaveAttribute("title", "Play");
   });
 }
+
+test("keeps typing shortcuts inside inherited editable fields", { tag: "@regression" }, async ({
+  page,
+}) => {
+  // Given a floating panel and an observer for shortcuts reaching the opener
+  await page.evaluate(() => {
+    const tracked = window as Window & { forwardedSpaces: number };
+    tracked.forwardedSpaces = 0;
+    document.addEventListener("keydown", (event) => {
+      if (event.key === " ") {
+        tracked.forwardedSpaces++;
+      }
+    });
+  });
+  await page.getByTestId("panel-menu").first().click();
+  const opened = page.waitForEvent("popup");
+  await page.getByText("Open in new window", { exact: true }).click();
+  const monitor = await opened;
+  // When Space is typed into empty, plaintext-only, and inherited editable states
+  for (const value of ["", "plaintext-only", "true"]) {
+    await monitor.evaluate((attribute) => {
+      const root = document.createElement("div");
+      root.setAttribute("contenteditable", attribute);
+      const target = document.createElement("span");
+      target.dataset.testid = "editable-target";
+      target.tabIndex = 0;
+      root.appendChild(target);
+      document.body.appendChild(root);
+    }, value);
+    await monitor.getByTestId("editable-target").press("Space");
+    await monitor.getByTestId("editable-target").evaluate((element) => {
+      element.parentElement!.remove();
+    });
+  }
+  // Then none of those typing events becomes an app shortcut in the opener
+  expect(
+    await page.evaluate(() => (window as Window & { forwardedSpaces: number }).forwardedSpaces),
+  ).toBe(0);
+  await monitor.close();
+});
