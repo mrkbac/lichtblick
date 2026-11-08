@@ -10,6 +10,10 @@ export const threeDee = {
   color: "Color",
   colorMode: "Color mode",
   frame: "Frame",
+  locationFrame: "Location frame",
+  locationFrameFromMessage: "From message",
+  locationFrameHelp:
+    "Frame of the GPS receiver. For the nuScenes sample, use base_link and keep the ENU frame set to map.",
   lineWidth: "Line width",
   position: "Position",
   reset: "Reset",

@@ -92,6 +92,8 @@ export type LayerSettingsMap = CustomLayerSettings & {
   drawBehind?: boolean;
   /** Location fix topic; undefined picks the first one. */
   locationTopic?: string;
+  /** Override the location fix's frame, for recordings without a frame_id. */
+  locationFrame?: string;
   /** Frame whose XY plane is east/north; undefined uses the fixed frame. */
   enuFrame?: string;
 };
@@ -765,16 +767,20 @@ export class Maps extends SceneExtension<MapRenderable> {
     event: MessageEvent<LocationMessage>,
     enuFrame: string,
     fixedFrameId: string,
+    locationFrame: string | undefined,
   ): Anchor | undefined {
     const message = event.message;
     const frameId = this.renderer.normalizeFrameId(
-      message.header?.frame_id ?? message.frame_id ?? "",
+      locationFrame ?? message.header?.frame_id ?? message.frame_id ?? "",
     );
     const stamp = normalizeTime(message.header?.stamp ?? message.timestamp);
     const time =
       stamp.sec === 0 && stamp.nsec === 0 ? toNanoSec(event.receiveTime) : toNanoSec(stamp);
     const pose = makePose();
     const known = frameId !== "" && this.renderer.transformTree.frame(frameId) != undefined;
+    if (locationFrame != undefined && !known) {
+      return undefined;
+    }
     if (
       known &&
       !this.renderer.transformTree.apply(pose, pose, enuFrame, fixedFrameId, frameId, time, time)
@@ -803,7 +809,7 @@ export class Maps extends SceneExtension<MapRenderable> {
       const event = this.#fixes.get(this.#locationTopic(settings) ?? "");
       let anchor = this.#anchors.get(instanceId);
       if (event && anchor?.enuFrame !== enuFrame) {
-        anchor = this.#makeAnchor(event, enuFrame, fixedFrameId);
+        anchor = this.#makeAnchor(event, enuFrame, fixedFrameId, settings.locationFrame);
         if (anchor) {
           this.#anchors.set(instanceId, anchor);
         }
@@ -866,7 +872,17 @@ export class Maps extends SceneExtension<MapRenderable> {
                 ...locationTopics.map((topic) => ({ label: topic.name, value: topic.name })),
               ],
               value: config.locationTopic,
-              help: "NavSatFix or LocationFix topic that places the map. Its frame_id must be in the transform tree, or the fix is placed at the ENU frame's origin.",
+              help: "NavSatFix or LocationFix topic that places the map. For fixes without a frame_id, select the location frame; otherwise the fix is placed at the ENU frame's origin.",
+            },
+            locationFrame: {
+              label: t("threeDee:locationFrame"),
+              input: "select",
+              options: [
+                { label: t("threeDee:locationFrameFromMessage"), value: undefined },
+                ...this.renderer.coordinateFrameList,
+              ],
+              value: config.locationFrame,
+              help: t("threeDee:locationFrameHelp"),
             },
             enuFrame: {
               label: "ENU frame",
@@ -950,7 +966,7 @@ export class Maps extends SceneExtension<MapRenderable> {
     }
     if (isOwnField) {
       this.saveSetting(path, action.payload.value);
-      if (path[2] === "enuFrame") {
+      if (["enuFrame", "locationFrame", "locationTopic"].includes(path[2]!)) {
         this.#anchors.delete(instanceId);
       }
     } else {
