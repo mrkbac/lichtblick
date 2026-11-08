@@ -109,6 +109,7 @@ function setupOrbitControlsMock() {
     dispose: vi.fn(),
     minPolarAngle: 0,
     maxPolarAngle: Math.PI,
+    maxDistance: Infinity,
   };
 }
 
