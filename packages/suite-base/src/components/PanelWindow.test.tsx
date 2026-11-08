@@ -433,3 +433,41 @@ it.each(["default", "explicit", "anchored"] as const)(
     }
   },
 );
+
+it("applies restored bounds through a captured PiP callback after reopening as a pop-out", async () => {
+  const pip = childWindow();
+  const popout = childWindow();
+  vi.stubGlobal("documentPictureInPicture", {
+    requestWindow: vi.fn().mockResolvedValue(pip.child),
+  });
+  vi.spyOn(window, "open").mockReturnValue(popout.child);
+  const move = vi.spyOn(popout.child, "moveTo").mockImplementation(() => {});
+  const resize = vi.spyOn(popout.child, "resizeTo").mockImplementation(() => {});
+  let captured: React.ContextType<typeof PanelWindowContext>;
+  function Capture() {
+    captured = useContext(PanelWindowContext);
+    return <Content />;
+  }
+  render(
+    <PanelWindow title="Monitor">
+      <Capture />
+    </PanelWindow>,
+  );
+  fireEvent.click(screen.getByText("PiP"));
+  await waitFor(() => {
+    expect(pip.child.document.querySelector('[data-testid="content"]')).not.toBeNull();
+  });
+  act(() => {
+    pip.close();
+  });
+  const restore = captured!;
+  // Restore opens synchronously, then uses the same captured callback to apply screen bounds.
+  act(() => {
+    restore.open("popout");
+    restore.open("popout", { left: 120, top: 80, width: 900, height: 650 });
+  });
+  await waitFor(() => {
+    expect(resize).toHaveBeenCalledWith(900, 650);
+  });
+  expect(move).toHaveBeenCalledWith(120, 80);
+});

@@ -96,6 +96,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
   const parent = useContext(PanelWindowContext);
   const dock = useContext(DockPanelContext);
   const [windowMode, setWindowMode] = useState<"popout" | "pip">("popout");
+  const windowModeRef = useRef<"popout" | "pip">("popout");
   const { t } = useTranslation("panelToolbar");
   const [target, setTarget] = useState<Window>();
   const [failed, setFailed] = useState(false);
@@ -164,7 +165,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
       },
       open: (mode, bounds, existing) => {
         if (pending.current || windowRef.current != undefined) {
-          if (bounds && windowRef.current && windowMode === "popout") {
+          if (bounds && windowRef.current && windowModeRef.current === "popout") {
             windowRef.current.moveTo(bounds.left, bounds.top);
             windowRef.current.resizeTo(bounds.width, bounds.height);
           }
@@ -172,6 +173,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           return;
         }
         pending.current = true;
+        windowModeRef.current = mode;
         setWindowMode(mode);
         setFailed(false);
         const open = async () => {
@@ -259,7 +261,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           });
       },
     }),
-    [pip, target, title, windowMode],
+    [pip, target, title],
   );
 
   const register = setup?.register;
@@ -271,10 +273,10 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
       open: (bounds, existing) => {
         actions.open("popout", bounds, existing);
       },
-      getWindow: () => (windowMode === "popout" ? windowRef.current : undefined),
+      getWindow: () => (windowModeRef.current === "popout" ? windowRef.current : undefined),
       isOpen: actions.isOpen,
     });
-  }, [actions, dock, parent?.isOpen, register, windowMode]);
+  }, [actions, dock, parent?.isOpen, register]);
 
   // A Tab panel can contain several panels; all of them share its one floating window.
   if (isDesktopApp() || parent?.isOpen === true) {
