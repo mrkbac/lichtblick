@@ -1,0 +1,58 @@
+{
+  "configById": {
+    "3D!shared": {
+      "cameraState": {
+        "distance": 100,
+        "perspective": true,
+        "phi": 35,
+        "thetaOffset": 0,
+        "target": [0, 0, 0],
+        "targetOffset": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followTf": "base_link",
+      "followMode": "follow-pose",
+      "scene": {},
+      "topics": {
+        "/scene": {
+          "visible": true
+        }
+      },
+      "transforms": {},
+      "layers": {
+        "map": {
+          "layerId": "lichtblick.Map",
+          "instanceId": "map",
+          "label": "Map",
+          "visible": true,
+          "locationTopic": "/gps",
+          "locationFrame": "base_link",
+          "enuFrame": "map",
+          "zOffset": 0,
+          "layers": [
+            {
+              "id": "base",
+              "source": "custom",
+              "visible": true,
+              "opacity": 1,
+              "custom": {
+                "kind": "vector",
+                "url": "https://shared-map.test/style.json"
+              }
+            }
+          ]
+        }
+      },
+      "publish": {},
+      "imageMode": {}
+    }
+  },
+  "layout": "3D!shared",
+  "globalVariables": {},
+  "playbackConfig": {
+    "speed": 1
+  }
+}

@@ -48,6 +48,7 @@ import { Renderer } from "./Renderer";
 import { RendererContext, useRendererEvent, useRendererProperty } from "./RendererContext";
 import { RendererOverlay } from "./RendererOverlay";
 import { onlyLastByTopicMessage } from "./SceneExtension";
+import type { SharedMap } from "./SharedMap";
 import { useStyles } from "./ThreeDeeRender.style";
 import { CameraState, DEFAULT_CAMERA_STATE } from "./camera";
 import {
@@ -63,6 +64,8 @@ import { DEFAULT_PUBLISH_SETTINGS } from "./renderables/PublishSettings";
 import { THREE_DEE_SHORTCUTS } from "./shortcuts";
 import { Shared3DPanelState, ThreeDeeRenderProps } from "./types";
 import { useWebGLContextRecovery } from "./useWebGLContextRecovery";
+
+import "maplibre-gl/dist/maplibre-gl.css";
 
 const log = Logger.getLogger(__filename);
 
@@ -113,7 +116,11 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       scene: partialConfig?.scene ?? {},
       transforms,
       topics: partialConfig?.topics ?? {},
-      layers: partialConfig?.layers ?? {},
+      layers: _.mapValues(partialConfig?.layers ?? {}, (layer) =>
+        layer?.layerId === "lichtblick.Map"
+          ? _.omit(layer, ["rendering", "size", "drawBehind"])
+          : layer,
+      ),
       publish,
       // deep partial on config, makes gradient tuple type [string | undefined, string | undefined]
       // which is incompatible with `Partial<ColorModeSettings>`
@@ -125,7 +132,19 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const { cameraState } = config;
   const backgroundColor = config.scene.backgroundColor;
 
-  const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
+  const [sceneCanvas, setSceneCanvas] = useState<HTMLCanvasElement | null>(null);
+  const [mapContainer, setMapContainer] = useState<HTMLDivElement | null>(null);
+  const [sharedMap, setSharedMap] = useState<SharedMap>();
+  const [failedSharedMapLayerId, setFailedSharedMapLayerId] = useState<string>();
+  const requestedSharedMapLayerId =
+    interfaceMode === "3d"
+      ? Object.entries(config.layers).find(
+          ([, layer]) => layer?.layerId === "lichtblick.Map" && layer.visible !== false,
+        )?.[0]
+      : undefined;
+  const sharedMapLayerId =
+    requestedSharedMapLayerId === failedSharedMapLayerId ? undefined : requestedSharedMapLayerId;
+  const canvas = sharedMapLayerId ? (sharedMap?.map.getCanvas() ?? null) : sceneCanvas;
   const [renderer, setRenderer] = useState<IRenderer | undefined>(undefined);
   const rendererRef = useRef<IRenderer | undefined>(undefined);
   const {
@@ -144,22 +163,64 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   );
 
   useEffect(() => {
-    const newRenderer = canvas
-      ? new Renderer({
-          canvas,
-          config: configRef.current,
-          interfaceMode,
-          fetchAsset,
-          sceneExtensionConfig: _.merge(
-            {},
-            DEFAULT_SCENE_EXTENSION_CONFIG,
-            customSceneExtensions ?? {},
-          ),
-          displayTemporaryError,
-          testOptions,
-          customCameraModels,
-        })
-      : undefined;
+    if (!mapContainer || !sharedMapLayerId) {
+      return;
+    }
+    let disposed = false;
+    let instance: SharedMap | undefined;
+    void Promise.all([import("@lichtblick/suite-base/panels/Map/maplibre"), import("./SharedMap")])
+      .then(([{ Map }, { SharedMap }]) => {
+        if (disposed) {
+          return;
+        }
+        const map = new Map({
+          container: mapContainer,
+          style: { version: 8, sources: {}, layers: [], projection: { type: "mercator" } },
+          interactive: false,
+          attributionControl: false,
+          fadeDuration: 0,
+          maxZoom: 24,
+          maxPitch: 85,
+          canvasContextAttributes: { antialias: true, preserveDrawingBuffer: true },
+        });
+        instance = new SharedMap(map, sharedMapLayerId);
+        setSharedMap(instance);
+      })
+      .catch((error: unknown) => {
+        if (disposed) {
+          return;
+        }
+        setFailedSharedMapLayerId(sharedMapLayerId);
+        displayTemporaryError(String(error));
+      });
+    return () => {
+      disposed = true;
+      rendererRef.current?.dispose();
+      rendererRef.current = undefined;
+      instance?.dispose();
+      setSharedMap(undefined);
+    };
+  }, [mapContainer, sharedMapLayerId, canvasKey, displayTemporaryError]);
+
+  useEffect(() => {
+    const newRenderer =
+      canvas?.isConnected === true
+        ? new Renderer({
+            canvas,
+            sharedMap: sharedMapLayerId ? sharedMap : undefined,
+            config: configRef.current,
+            interfaceMode,
+            fetchAsset,
+            sceneExtensionConfig: _.merge(
+              {},
+              DEFAULT_SCENE_EXTENSION_CONFIG,
+              customSceneExtensions ?? {},
+            ),
+            displayTemporaryError,
+            testOptions,
+            customCameraModels,
+          })
+        : undefined;
     setRenderer(newRenderer);
     rendererRef.current = newRenderer;
     return () => {
@@ -168,6 +229,8 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     };
   }, [
     canvas,
+    sharedMap,
+    sharedMapLayerId,
     configRef,
     config.scene.transforms?.enablePreloading,
     customSceneExtensions,
@@ -746,16 +809,23 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     config.layers,
   ]);
 
-  // Notify the extension context when our subscription list changes
+  // A replacement renderer needs the current messages again, including while playback is paused.
   useEffect(() => {
-    if (!topicsToSubscribe) {
+    if (!renderer) {
       return;
     }
-    log.debug(
-      `Subscribing to [${topicsToSubscribe.map((topic) => JSON.stringify(topic)).join(", ")}]`,
-    );
-    context.subscribe(topicsToSubscribe);
-  }, [context, topicsToSubscribe]);
+    return () => {
+      context.subscribe([] as Subscription[]);
+    };
+  }, [context, renderer]);
+
+  // Notify the extension context when our subscription list changes.
+  useEffect(() => {
+    if (!renderer) {
+      return;
+    }
+    context.subscribe(topicsToSubscribe ?? ([] as Subscription[]));
+  }, [context, topicsToSubscribe, renderer]);
 
   // Keep the renderer parameters up to date
   useEffect(() => {
@@ -1085,14 +1155,21 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     >
       <div style={PANEL_STYLE} onKeyDown={onKeyDown}>
         <canvas
-          key={canvasKey}
-          ref={setCanvas}
+          key={`canvas-${sharedMapLayerId ?? "3d"}-${canvasKey}`}
+          ref={setSceneCanvas}
           style={{
             position: "absolute",
             top: 0,
             left: 0,
+            display: sharedMapLayerId ? "none" : undefined,
             ...((measureActive || publishActive) && { cursor: "crosshair" }),
           }}
+        />
+        <div
+          key={`map-${canvasKey}`}
+          ref={setMapContainer}
+          className={classes.sharedMap}
+          style={{ display: sharedMapLayerId ? undefined : "none" }}
         />
         {isLoadingTransforms && config.scene.enableStats === true && (
           <div className={classes.loadingTransforms}>

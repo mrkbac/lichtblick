@@ -441,6 +441,92 @@ describe("ThreeDeeRender", () => {
     expect(rendererConfig?.followTf).toBe(customCameraState.followTf);
   });
 
+  it("retains cached topics when subscriptions change and clears them on unmount", async () => {
+    // Given
+    const subscribe = vi.fn();
+    const context = createMockContext({ subscribe });
+    const instance = createMockRenderer({
+      schemaSubscriptions: new Map([["test", [{ shouldSubscribe: () => true }]]]),
+    });
+    vi.mocked(Renderer).mockImplementationOnce(function () {
+      return instance as unknown as Renderer;
+    });
+    vi.mocked(Renderer).mockImplementationOnce(function () {
+      return createMockRenderer({
+        schemaSubscriptions: instance.schemaSubscriptions,
+      }) as unknown as Renderer;
+    });
+    const props = setup({}, context);
+    const { unmount, rerender } = render(<ThreeDeeRender {...props} />);
+    const topicA = RenderStateBuilder.topic({ name: "/a", schemaName: "test" });
+    const topicB = RenderStateBuilder.topic({ name: "/b", schemaName: "test" });
+    act(() => {
+      context.onRender!({ topics: [topicA] }, vi.fn());
+    });
+    await waitFor(() => {
+      expect(subscribe).toHaveBeenLastCalledWith([expect.objectContaining({ topic: "/a" })]);
+    });
+    subscribe.mockClear();
+
+    // When
+    act(() => {
+      context.onRender!({ topics: [topicA, topicB] }, vi.fn());
+    });
+
+    // Then
+    await waitFor(() => {
+      expect(subscribe).toHaveBeenLastCalledWith([
+        expect.objectContaining({ topic: "/a" }),
+        expect.objectContaining({ topic: "/b" }),
+      ]);
+    });
+    expect(subscribe).not.toHaveBeenCalledWith([]);
+    // A replacement renderer refreshes paused messages by clearing and re-subscribing.
+    subscribe.mockClear();
+    rerender(<ThreeDeeRender {...props} testOptions={{}} />);
+    expect(subscribe).toHaveBeenCalledWith([]);
+    await waitFor(() => {
+      expect(subscribe).toHaveBeenLastCalledWith([
+        expect.objectContaining({ topic: "/a" }),
+        expect.objectContaining({ topic: "/b" }),
+      ]);
+    });
+    unmount();
+    expect(subscribe).toHaveBeenLastCalledWith([]);
+  });
+
+  it.each([undefined, "texture", "shared"])(
+    "migrates old map-renderer settings (%s)",
+    (rendering) => {
+      // Given
+      const retained = {
+        layerId: "lichtblick.Map",
+        instanceId: "map",
+        visible: false,
+        layers: [{ id: "roads", source: "ofm-liberty", visible: true, opacity: 0.6 }],
+        locationTopic: "/gps",
+        locationFrame: "base_link",
+        enuFrame: "map",
+        zOffset: 2,
+      };
+      const grid = { layerId: "foxglove.Grid", visible: false, size: 10 };
+      const props = setup(
+        {},
+        {
+          initialState: {
+            layers: { map: { ...retained, rendering, size: 500, drawBehind: true }, grid },
+          },
+        },
+      );
+      // When
+      render(<ThreeDeeRender {...props} />);
+      // Then
+      const layers = mockedRenderer.mock.calls[0]![0].config.layers;
+      expect(layers.map).toEqual(retained);
+      expect(layers.grid).toEqual(grid);
+    },
+  );
+
   it("initializes with image interface mode", () => {
     // Given
     const initialState = {

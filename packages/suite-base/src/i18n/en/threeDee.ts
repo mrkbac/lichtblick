@@ -11,6 +11,12 @@ export const threeDee = {
   colorMode: "Color mode",
   frame: "Frame",
   locationFrame: "Location frame",
+  mapWaitingForView:
+    "Map: waiting for a location transform and a perspective view above the ground",
+  mapPerspectiveRequired: "Map is hidden in orthographic view. Switch to perspective to show it.",
+  mapUnavailable: "Map is unavailable because its graphics context could not be initialized.",
+  mapSingleLayer:
+    "Only one geographic map can be displayed. Add map sources to the same map layer.",
   locationFrameFromMessage: "From message",
   locationFrameHelp:
     "Frame of the GPS receiver. For the nuScenes sample, use base_link and keep the ENU frame set to map.",

@@ -37,6 +37,7 @@ let mockOrbitControls!: {
   getAzimuthalAngle: Mock;
   target: THREE.Vector3;
   update: Mock;
+  dispose: Mock;
   minPolarAngle: number;
   maxPolarAngle: number;
 };
@@ -53,6 +54,7 @@ function setupOrbitControlsMock() {
       .mockReturnValue(THREE.MathUtils.degToRad(-DEFAULT_CAMERA_STATE.thetaOffset)),
     target: new THREE.Vector3(...DEFAULT_CAMERA_STATE.targetOffset),
     update: vi.fn(),
+    dispose: vi.fn(),
     minPolarAngle: 0,
     maxPolarAngle: Math.PI,
   };

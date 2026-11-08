@@ -35,6 +35,7 @@ describe("useWebGLContextRecovery", () => {
 
   function setup() {
     const canvas = document.createElement("canvas");
+    gl.domElement = canvas;
     const hook = renderHook(
       ({ target }: { target: HTMLCanvasElement }) => useWebGLContextRecovery(target, gl),
       { initialProps: { target: canvas } },
@@ -127,5 +128,27 @@ describe("useWebGLContextRecovery", () => {
     expect(forceContextLoss).toHaveBeenCalledTimes(1);
     const event = loseContext(canvas);
     expect(event.defaultPrevented).toBe(false);
+  });
+
+  it("does not lose a replacement renderer's context when switching canvases", () => {
+    const oldCanvas = document.createElement("canvas");
+    const nextCanvas = document.createElement("canvas");
+    const oldLoss = vi.fn();
+    const nextLoss = vi.fn();
+    const oldRenderer = {
+      domElement: oldCanvas,
+      forceContextLoss: oldLoss,
+    } as unknown as THREE.WebGLRenderer;
+    const nextRenderer = {
+      domElement: nextCanvas,
+      forceContextLoss: nextLoss,
+    } as unknown as THREE.WebGLRenderer;
+    const hook = renderHook(({ canvas, renderer }) => useWebGLContextRecovery(canvas, renderer), {
+      initialProps: { canvas: oldCanvas, renderer: oldRenderer },
+    });
+    hook.rerender({ canvas: nextCanvas, renderer: nextRenderer });
+    expect(nextLoss).not.toHaveBeenCalled();
+    hook.unmount();
+    expect(nextLoss).toHaveBeenCalledOnce();
   });
 });

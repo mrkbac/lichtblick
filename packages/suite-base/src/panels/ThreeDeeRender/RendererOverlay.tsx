@@ -194,6 +194,13 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
   });
   const renderer = useRenderer();
 
+  useEffect(() => {
+    // Selections refer to objects owned by the previous renderer.
+    setSelectedRenderables([]);
+    setSelectedRenderable(undefined);
+    setHoveredEntities([]);
+  }, [renderer]);
+
   const getHoverEntityId = useCallback((pickedRenderable: PickedRenderable): string => {
     const entityId = (pickedRenderable.renderable.userData as { entityId?: string }).entityId;
     if (entityId != undefined) {
