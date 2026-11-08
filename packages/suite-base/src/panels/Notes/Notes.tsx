@@ -42,6 +42,7 @@ const useStyles = makeStyles()(({ palette, spacing }) => ({
 
 type Props = { config: NotesConfig; saveConfig: SaveConfig<NotesConfig> };
 
+/** Layout notes edited directly as styled Markdown, with autosave. */
 export function Notes({ config, saveConfig }: Props): React.JSX.Element {
   const { t } = useTranslation("notes");
   const { classes } = useStyles();
@@ -53,11 +54,12 @@ export function Notes({ config, saveConfig }: Props): React.JSX.Element {
     config.fontSize ??
     Number.parseFloat(theme.typography.body2.fontSize as string) * theme.typography.htmlFontSize;
   const fontSizeRef = useRef(fontSize);
-  fontSizeRef.current = fontSize;
 
   useNotesSettings(config, saveConfig);
 
+  const lastSavedRef = useRef<string | undefined>(undefined);
   const save = useDebouncedCallback((text: string) => {
+    lastSavedRef.current = text;
     saveConfig({ text });
   }, SAVE_DEBOUNCE_MS);
   useEffect(
@@ -72,6 +74,11 @@ export function Notes({ config, saveConfig }: Props): React.JSX.Element {
   }, []);
 
   useEffect(() => {
+    const isSaveEcho = config.text === lastSavedRef.current;
+    lastSavedRef.current = undefined;
+    if (isSaveEcho) {
+      return;
+    }
     if (textRef.current !== config.text) {
       save.cancel();
     }
@@ -83,7 +90,10 @@ export function Notes({ config, saveConfig }: Props): React.JSX.Element {
     updateHeadings();
   }, [config.text, save, updateHeadings]);
 
-  useEffect(updateHeadings, [fontSize, updateHeadings]);
+  useEffect(() => {
+    fontSizeRef.current = fontSize;
+    updateHeadings();
+  }, [fontSize, updateHeadings]);
 
   const willMount = useCallback<EditorWillMount>((monaco) => {
     for (const editorTheme of themes) {
