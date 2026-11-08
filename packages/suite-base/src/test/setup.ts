@@ -21,6 +21,21 @@ function noOp() {
 }
 
 if (typeof window !== "undefined") {
+  // jsdom does not implement media queries.
+  Object.defineProperty(window, "matchMedia", {
+    configurable: true,
+    writable: true,
+    value: vi.fn(
+      (query: string): MediaQueryList =>
+        Object.assign(new EventTarget(), {
+          matches: false,
+          media: query,
+          onchange: null,
+          addListener: noOp,
+          removeListener: noOp,
+        }),
+    ),
+  });
   if (typeof window.URL.createObjectURL === "undefined") {
     Object.defineProperty(window.URL, "createObjectURL", { value: noOp });
   }
