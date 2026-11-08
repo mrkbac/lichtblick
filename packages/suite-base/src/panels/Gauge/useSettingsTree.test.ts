@@ -127,3 +127,16 @@ describe("useSettingsTree", () => {
     expect(general.fields!.path!.error).toEqual(props.pathParseError);
   });
 });
+
+it("shows angle settings only for inclinometers", () => {
+  const { result } = renderHook(() =>
+    useSettingsTree({
+      config: GaugeBuilder.config({ displayMode: "roll" }),
+      error: undefined,
+      pathParseError: undefined,
+    }),
+  );
+  expect(result.current.general.fields!.angleUnit).toBeDefined();
+  expect(result.current.general.fields!.minValue).toBeUndefined();
+  expect(result.current.general.fields!.colorMode).toBeUndefined();
+});

@@ -19,6 +19,11 @@ export enum ColorModeConfig {
 }
 
 export type GaugeConfig = {
+  displayMode: "arc" | "roll" | "pitch";
+  angleUnit: "degrees" | "radians";
+  angleRange: number;
+  warningAngle: number;
+  criticalAngle: number;
   colorMap: ColorMapConfig;
   colorMode: ColorModeConfig;
   gradient: [string, string];

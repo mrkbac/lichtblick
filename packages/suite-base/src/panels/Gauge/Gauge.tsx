@@ -16,6 +16,7 @@ import { stateReducer } from "@lichtblick/suite-base/panels/shared/gaugeAndIndic
 import { GaugeAndIndicatorState } from "@lichtblick/suite-base/panels/shared/types";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
+import { Inclinometer } from "./Inclinometer";
 import { settingsActionReducer } from "./settingsActionReducer";
 import { GaugeConfig, GaugeProps } from "./types";
 import { useSettingsTree } from "./useSettingsTree";
@@ -133,6 +134,9 @@ export function Gauge({ context }: GaugeProps): React.JSX.Element {
   const needleThickness = 8;
   const needleExtraLength = 0.05;
   const [clipPathId] = useState(() => `gauge-clip-path-${randomUUID()}`);
+  if (config.displayMode !== "arc") {
+    return <Inclinometer config={config} value={rawValue} />;
+  }
   return (
     <div className={classes.root}>
       <div className={classes.gaugeContainer}>

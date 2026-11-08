@@ -11,6 +11,11 @@ import { BasicBuilder, defaults } from "@lichtblick/test-builders";
 export default class GaugeBuilder {
   public static config(props: Partial<GaugeConfig> = {}): GaugeConfig {
     return defaults<GaugeConfig>(props, {
+      displayMode: "arc",
+      angleUnit: "degrees",
+      angleRange: 40,
+      warningAngle: 20,
+      criticalAngle: 30,
       colorMap: BasicBuilder.sample(ColorMapConfig),
       colorMode: BasicBuilder.sample(ColorModeConfig),
       gradient: ["#000", "#fff"],
