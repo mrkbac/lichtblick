@@ -252,6 +252,14 @@ export default function Panel<
 
     const onPanelRootClick: MouseEventHandler<HTMLDivElement> = useCallback(
       (e) => {
+        // A click on a panel inside a Tab panel bubbles up to the Tab panel; it belongs to the
+        // innermost panel only.
+        if (
+          e.target instanceof Element &&
+          e.target.closest('[data-telemetry-id="panel"]') !== e.currentTarget
+        ) {
+          return;
+        }
         if (panelSettingsOpen) {
           // Allow clicking with no modifiers to select a panel (and deselect others) when panel settings are open
           setSelectedPanelIds([childId]);
