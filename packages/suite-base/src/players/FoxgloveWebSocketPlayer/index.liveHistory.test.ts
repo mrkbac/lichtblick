@@ -159,7 +159,7 @@ describe("FoxgloveWebSocketPlayer live history", () => {
     player.setParameter("binary", bytes);
     expect(ws.send).toHaveBeenLastCalledWith(
       expect.stringContaining(
-        JSON.stringify({ name: "binary", value: encoded, type: "byte_array" }),
+        JSON.stringify({ name: "binary", value: encoded, type: "byte_array" })!,
       ),
     );
     ws.receive(
