@@ -252,8 +252,9 @@ it("refreshes a legacy saved setup before removing a window's views", () => {
   });
 });
 
-for (const location of ["missing", "child", "root"]) {
-  it(`restores only its own saved views without overwriting active panels (location: ${location})`, async () => {
+it.each(["missing", "child", "root", "nested"])(
+  "restores only its own saved views without overwriting active panels (location: %s)",
+  async (location) => {
     const key = `${LOCAL_STORAGE_MONITOR_SETUP}mock-layout`;
     const configs = {
       "Tab!saved": { tabs: [{ title: "Camera", layout: { panels: ["Image!saved"] } }] },
@@ -266,18 +267,26 @@ for (const location of ["missing", "child", "root"]) {
         { panelId: "Tab!saved", bounds: { left: 0, top: 0, width: 800, height: 600 }, configs },
       ])!,
     );
+    if (location === "nested") {
+      child = makeChild();
+    }
     const windowOpen = vi.spyOn(window, "open").mockReturnValue(makeChild());
     const onAction = vi.fn();
     renderThemed(
       <MockCurrentLayoutProvider
         initialState={{
+          configById: {
+            "Tab!one": { tabs: [{ title: "Nested", layout: { panels: ["Tab!saved"] } }] },
+          },
           layout: {
             panels: [
               location === "child"
                 ? "Image!saved"
                 : location === "root"
                   ? "Tab!saved"
-                  : "Plot!active",
+                  : location === "nested"
+                    ? "Tab!one"
+                    : "Plot!active",
             ],
           },
         }}
@@ -291,7 +300,7 @@ for (const location of ["missing", "child", "root"]) {
     await act(async () => {
       fireEvent.click(screen.getByTestId("restore-monitor-setup"));
     });
-    expect(windowOpen).toHaveBeenCalledTimes(location === "child" ? 0 : 1);
+    expect(windowOpen).toHaveBeenCalledTimes(location === "child" || location === "nested" ? 0 : 1);
     const expectedActions =
       location !== "missing"
         ? []
@@ -310,5 +319,5 @@ for (const location of ["missing", "child", "root"]) {
             [{ type: "ADD_PANEL", payload: { id: "Tab!saved", config: configs["Tab!saved"] } }],
           ];
     expect(onAction.mock.calls).toEqual(expectedActions);
-  });
-}
+  },
+);

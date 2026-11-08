@@ -26,6 +26,7 @@ import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { getPanelIdForType, PANEL_TITLE_CONFIG_KEY } from "@lichtblick/suite-base/util/layout";
 import {
   getAllPanelIds,
+  findLayoutTree,
   DEFAULT_TAB_PANEL_CONFIG,
   TAB_PANEL_TYPE,
 } from "@lichtblick/suite-base/util/tabLayout";
@@ -223,7 +224,16 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
             const current = getCurrentLayoutState().selectedLayout?.data;
             const currentIds = current ? getAllPanelIds(current) : [];
             const exists = currentIds.includes(item.panelId);
-            if (!current || (!exists && currentIds.some((id) => Object.hasOwn(configs, id)))) {
+            const openParent =
+              current != undefined &&
+              findLayoutTree(current, item.panelId)?.location.ancestors.some(
+                (id) => panelsRef.current.get(id)?.isOpen === true,
+              );
+            if (
+              !current ||
+              openParent === true ||
+              (!exists && currentIds.some((id) => Object.hasOwn(configs, id)))
+            ) {
               setNotice({ text: t("monitorSetupRestoreFailed"), severity: "error" });
               continue;
             }
