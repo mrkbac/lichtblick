@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import createCache from "@emotion/cache";
-import { CacheProvider } from "@emotion/react";
 import {
   Alert,
   Button,
@@ -23,12 +21,14 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { TssCacheProvider } from "tss-react";
 
+import AppCssBaseline from "@lichtblick/suite-base/components/CssBaseline";
+import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
 import { DockPanelContext } from "./DockPanelContext";
 import { useMonitorSetup } from "./MonitorSetupContext";
+import { PanelWindowWorkspace } from "./PanelWindowWorkspace";
 import Stack from "./Stack";
 import { WindowBounds } from "./monitorSetup";
 
@@ -80,22 +80,13 @@ function PanelWindowStyles({ target, children }: PropsWithChildren<{ target: Win
     }),
     [outerTheme, target],
   );
-  const caches = useMemo(
-    () => ({
-      mui: createCache({ key: "mui", prepend: true, container: target.document.head }),
-      tss: createCache({ key: "tss", container: target.document.head }),
-    }),
-    [target],
-  );
   return (
-    <CacheProvider value={caches.mui}>
-      <TssCacheProvider value={caches.tss}>
-        <MuiThemeProvider theme={theme}>
-          <CssBaseline />
-          {children}
-        </MuiThemeProvider>
-      </TssCacheProvider>
-    </CacheProvider>
+    <ThemeProvider isDark={outerTheme.palette.mode === "dark"} ownerDocument={target.document}>
+      <MuiThemeProvider theme={theme}>
+        <CssBaseline />
+        <AppCssBaseline>{children}</AppCssBaseline>
+      </MuiThemeProvider>
+    </ThemeProvider>
   );
 }
 
@@ -281,6 +272,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
         actions.open("popout", bounds, existing);
       },
       getWindow: () => (windowMode === "popout" ? windowRef.current : undefined),
+      isOpen: actions.isOpen,
     });
   }, [actions, dock, parent?.isOpen, register, windowMode]);
 
@@ -306,7 +298,11 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           )}
           {createPortal(
             <PanelWindowStyles target={target}>
-              <DockPanelContext.Provider value={undefined}>{children}</DockPanelContext.Provider>
+              <DockPanelContext.Provider value={undefined}>
+                <PanelWindowWorkspace target={target} title={title} rootId={dock?.api.id}>
+                  {children}
+                </PanelWindowWorkspace>
+              </DockPanelContext.Provider>
             </PanelWindowStyles>,
             target.document.body,
           )}

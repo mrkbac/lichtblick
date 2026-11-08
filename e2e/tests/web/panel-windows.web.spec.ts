@@ -177,9 +177,16 @@ test("creates a blank monitor from the top bar and restores its contents with on
   tag: "@smoke",
 }, async ({ page }) => {
   // Given an ordinary browser without Window Management permission support.
-  await page.evaluate(() => {
+  await page.addInitScript(() => {
     Object.defineProperty(window, "getScreenDetails", { configurable: true, value: undefined });
   });
+  await page.reload();
+  await page.getByTestId("AddPanelButton").waitFor();
+  const initialDialog = page.getByTestId("DataSourceDialog");
+  if (await initialDialog.isVisible()) {
+    await page.keyboard.press("Escape");
+    await expect(initialDialog).toBeHidden();
+  }
   // When New window is clicked, it opens directly without another panel picker.
   const opened = page.waitForEvent("popup");
   await page.getByTestId("new-window-button").click();
@@ -200,9 +207,11 @@ test("creates a blank monitor from the top bar and restores its contents with on
   ).toBeVisible();
   await monitor.close();
   await page.reload();
+  await page.getByTestId("AddPanelButton").waitFor();
   const dialog = page.getByTestId("DataSourceDialog");
   if (await dialog.isVisible()) {
     await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
   }
   await expect(page.getByTestId("restore-monitor-setup")).toBeEnabled();
   expect(page.context().pages()).toHaveLength(1);
@@ -257,3 +266,57 @@ test("restores several existing panel windows when screen permission is denied",
     await monitor.close();
   }
 });
+
+for (const colorScheme of ["light", "dark"] as const) {
+  test(`renders newly created views with window-local settings and matching PWA colors (${colorScheme})`, {
+    tag: "@regression",
+  }, async ({ page }) => {
+    // Given the main window's selected color scheme and untouched settings sidebar.
+    await page.emulateMedia({ colorScheme });
+    await expect(page.locator("html")).toHaveAttribute("data-color-mode", colorScheme);
+    const mainSettings = await page.getByTestId("sidebar-left").innerText();
+    const opened = page.waitForEvent("popup");
+    await page.getByTestId("new-window-button").click();
+    const monitor = await opened;
+    // When a new 3D view is created in the blank window, it gets the app's scoped layout styles.
+    await monitor.getByTestId("panel-grid-card 3D").click();
+    await expect(monitor.locator("canvas")).toBeVisible();
+    const canvas = await monitor.locator("canvas").boundingBox();
+    expect(canvas!.height).toBeGreaterThan(100);
+    await expect(monitor.locator("html")).toHaveAttribute("data-color-mode", colorScheme);
+    expect(await monitor.locator('meta[name="theme-color"]').getAttribute("content")).toBe(
+      await page.locator('meta[name="theme-color"]').getAttribute("content"),
+    );
+    const headerColor = (element: HTMLElement) =>
+      getComputedStyle(element.closest('[data-tourid="app-bar"]')!).backgroundColor;
+    expect(await monitor.getByTestId("window-left-sidebar-button").evaluate(headerColor)).toBe(
+      await page.getByTestId("AddPanelButton").evaluate(headerColor),
+    );
+    // Then the panel's settings stay in its own left sidebar and leave the main settings alone.
+    await monitor.getByRole("button", { name: "Settings", exact: true }).click();
+    await expect(monitor.getByTestId("sidebar-left")).toBeVisible();
+    await expect(monitor.getByTestId("sidebar-left").getByRole("heading")).toContainText("3D");
+    expect(await page.getByTestId("sidebar-left").innerText()).toBe(mainSettings);
+    await monitor.getByTestId("sidebar-close-left").click();
+    await expect(monitor.getByTestId("sidebar-left")).toHaveCount(0);
+    // A second view created through + also stays in this monitor.
+    await monitor.getByTestId("add-tab").click();
+    await monitor.getByTestId("panel-menu-item Plot").click();
+    await expect(monitor.getByRole("tab", { name: "Plot", exact: true })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    );
+    await expect(monitor.getByTestId("empty-drop-target")).toHaveCount(0);
+    // Theme changes keep the already-open window and its PWA chrome in sync.
+    const nextScheme = colorScheme === "dark" ? "light" : "dark";
+    await page.emulateMedia({ colorScheme: nextScheme });
+    await expect(monitor.locator("html")).toHaveAttribute("data-color-mode", nextScheme);
+    expect(await monitor.locator('meta[name="theme-color"]').getAttribute("content")).toBe(
+      await page.locator('meta[name="theme-color"]').getAttribute("content"),
+    );
+    expect(await monitor.getByTestId("window-left-sidebar-button").evaluate(headerColor)).toBe(
+      await page.getByTestId("AddPanelButton").evaluate(headerColor),
+    );
+    await monitor.close();
+  });
+}

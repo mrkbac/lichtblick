@@ -37,6 +37,7 @@ import {
 type MonitorPanel = {
   open: (bounds?: WindowBounds, existing?: Window) => void;
   getWindow: () => Window | undefined;
+  isOpen: boolean;
 };
 type MonitorSetup = {
   register: (id: string, panel: MonitorPanel) => () => void;
@@ -46,6 +47,7 @@ type MonitorSetup = {
   canSave: boolean;
   canRestore: boolean;
   busy: boolean;
+  detachedPanelIds: readonly string[];
 };
 const MonitorSetupContext = createContext<MonitorSetup | undefined>(undefined);
 export const useMonitorSetup = (): MonitorSetup | undefined => useContext(MonitorSetupContext);
@@ -102,6 +104,7 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
     () => ({
       register,
       busy,
+      detachedPanelIds: [...panels].filter(([, panel]) => panel.isOpen).map(([id]) => id),
       canSave:
         layoutId != undefined &&
         [...panels.values()].some((panel) => panel.getWindow() != undefined),
@@ -173,6 +176,10 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
       },
       restore: () => {
         const version = operation.current.version;
+        // Open synchronously while the click is active; screen permission may take arbitrarily long.
+        for (const item of saved) {
+          panels.get(item.panelId)?.open();
+        }
         setBusy(true);
         void monitorScreens()
           .then((screens) => {
@@ -180,7 +187,10 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
               return;
             }
             for (const item of saved) {
-              panels.get(item.panelId)?.open(restoreMonitorBounds(item, screens));
+              const panel = panels.get(item.panelId);
+              if (panel?.getWindow()) {
+                panel.open(restoreMonitorBounds(item, screens));
+              }
             }
             if (saved.some((item) => !panels.has(item.panelId))) {
               setNotice({ text: t("monitorPanelsMissing"), severity: "warning" });

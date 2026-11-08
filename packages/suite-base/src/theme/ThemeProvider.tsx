@@ -80,8 +80,9 @@ export default function ThemeProvider({
     // Dialogs open, close, and change size or place (e.g. a dialog switching between a popup
     // and a full page); re-check at most once a frame.
     let frame: number | undefined;
-    const observer = new MutationObserver(() => {
-      frame ??= requestAnimationFrame(() => {
+    const ownerWindow = ownerDocument.defaultView ?? window;
+    const observer = new ownerWindow.MutationObserver(() => {
+      frame ??= ownerWindow.requestAnimationFrame(() => {
         frame = undefined;
         update();
       });
@@ -95,7 +96,7 @@ export default function ThemeProvider({
     return () => {
       observer.disconnect();
       if (frame != undefined) {
-        cancelAnimationFrame(frame);
+        ownerWindow.cancelAnimationFrame(frame);
       }
     };
   }, [muiTheme, ownerDocument]);

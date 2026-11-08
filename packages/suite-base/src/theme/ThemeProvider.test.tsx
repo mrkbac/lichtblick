@@ -86,3 +86,24 @@ it("styles a panel document without changing the opener's theme", () => {
     iframe.remove();
   }
 });
+
+it("updates a child document's PWA color and color mode without changing the opener", async () => {
+  const iframe = document.createElement("iframe");
+  document.body.appendChild(iframe);
+  const child = iframe.contentDocument!;
+  const parentColor = themeColor();
+  const { rerender, unmount } = render(<ThemeProvider isDark ownerDocument={child} />);
+  expect(child.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content).toBe(
+    palette.dark.appBar.main,
+  );
+  rerender(<ThemeProvider isDark={false} ownerDocument={child} />);
+  await waitFor(() => {
+    expect(child.documentElement.dataset.colorMode).toBe("light");
+  });
+  expect(child.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content).toBe(
+    palette.light.appBar.main,
+  );
+  expect(themeColor()).toBe(parentColor);
+  unmount();
+  iframe.remove();
+});

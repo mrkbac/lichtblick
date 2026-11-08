@@ -36,7 +36,10 @@ function Controls() {
   const setup = useMonitorSetup();
   const register = setup?.register;
   const id = useCurrentLayoutSelector(selectLayoutId);
-  useEffect(() => register?.("Tab!one", { open, getWindow }), [register, id]);
+  useEffect(
+    () => register?.("Tab!one", { open, getWindow, isOpen: child != undefined }),
+    [register, id],
+  );
   return (
     <>
       <MonitorSetupButtons disabled={false} />
@@ -68,7 +71,9 @@ function makeChild() {
 
 beforeEach(() => {
   child = undefined;
-  open.mockReset();
+  open.mockReset().mockImplementation(() => {
+    child ??= makeChild();
+  });
   layouts.updateLayout.mockReset().mockResolvedValue(undefined);
   localStorage.clear();
 });
@@ -95,7 +100,7 @@ it("saves per layout locally and restores only after one explicit click", async 
   expect(open).not.toHaveBeenCalled();
   fireEvent.click(screen.getByTestId("restore-monitor-setup"));
   await waitFor(() => {
-    expect(open).toHaveBeenCalledTimes(1);
+    expect(open).toHaveBeenCalledTimes(2);
   });
   expect(open).toHaveBeenCalledWith(
     expect.objectContaining<Partial<WindowBounds>>({ width: 800, height: 600 }),
@@ -162,7 +167,7 @@ it("has no monitor controls or browser calls in desktop mode", () => {
   expect(windowOpen).not.toHaveBeenCalled();
 });
 
-it("does not restore into a departed workspace after a screen permission prompt resolves", async () => {
+it("opens during the click and does not reposition after a departed workspace permission resolves", async () => {
   localStorage.setItem(
     `${LOCAL_STORAGE_MONITOR_SETUP}mock-layout`,
     JSON.stringify([
@@ -179,11 +184,13 @@ it("does not restore into a departed workspace after a screen permission prompt 
   });
   const view = renderThemed(<Wrapper />);
   fireEvent.click(screen.getByTestId("restore-monitor-setup"));
+  expect(open).toHaveBeenCalledTimes(1);
+  expect(open).toHaveBeenCalledWith();
   view.unmount();
   await act(async () => {
     finish({ screens: [] });
   });
-  expect(open).not.toHaveBeenCalled();
+  expect(open).toHaveBeenCalledTimes(1);
   Reflect.deleteProperty(window, "getScreenDetails");
 });
 
