@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { fromSec, toSec } from "@foxglove/rostime";
+import { compare, fromSec, toSec } from "@foxglove/rostime";
 import { useTheme } from "@mui/material";
 import { produce } from "immer";
 import {
@@ -297,14 +297,14 @@ function PanelExtensionAdapter(
   // updates.
   const renderingRef = useRef<boolean>(false);
 
-  // On a live source, a panel keeps the last message of a newly subscribed topic until a rendered
+  // Keep the last message of a newly subscribed topic until a rendered
   // frame has delivered it (see UndeliveredMessages).
   const [undelivered] = useState(() => new UndeliveredMessages());
-  // Messages are held on any live source: like the local subscriptions, the watched fields are
-  // React state, so the injected frame can arrive before a watch of currentFrame takes effect. They
-  // are handed to the panel once it watches currentFrame.
-  const keepUndelivered = !isRecordingSource(capabilities);
-  const deliverHeld = keepUndelivered && watchedFields.has("currentFrame");
+  // Pending frames belong to the seek that produced them.
+  const lastSeekTimeRef = useRef(playerState.activeData?.lastSeekTime);
+  const lastCurrentTimeRef = useRef(playerState.activeData?.currentTime);
+  // Watched fields update through React state; keep injected messages until currentFrame is watched.
+  const deliverHeld = watchedFields.has("currentFrame");
   // The render-done callback belongs to the render that started it; read the current gate, since
   // the panel may start watching currentFrame while that render is in progress.
   const deliverHeldRef = useLatest(deliverHeld);
@@ -318,9 +318,21 @@ function PanelExtensionAdapter(
   }, [deliverHeldRef, undelivered]);
 
   useLayoutEffect(() => {
-    if (keepUndelivered) {
-      undelivered.hold(messageEvents);
+    const lastSeekTime = playerState.activeData?.lastSeekTime;
+    const currentTime = playerState.activeData?.currentTime;
+    // Slow seeks acknowledge the target position before lastSeekTime changes.
+    const seekAcknowledged =
+      playerState.presence === PlayerPresence.BUFFERING &&
+      isRecordingSource(playerState.capabilities) &&
+      currentTime != undefined &&
+      lastCurrentTimeRef.current != undefined &&
+      compare(currentTime, lastCurrentTimeRef.current) !== 0;
+    if (lastSeekTime !== lastSeekTimeRef.current || seekAcknowledged) {
+      undelivered.clearPending();
     }
+    lastSeekTimeRef.current = lastSeekTime;
+    lastCurrentTimeRef.current = currentTime;
+    undelivered.hold(messageEvents);
 
     /**
      * We need to check that the panel has been initialized because the renderFn function is being
@@ -404,7 +416,6 @@ function PanelExtensionAdapter(
     globalVariables,
     heldRetry,
     hoverValue,
-    keepUndelivered,
     localSubscriptions,
     messageConverters,
     messageEvents,

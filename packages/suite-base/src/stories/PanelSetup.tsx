@@ -49,6 +49,7 @@ import * as panels from "@lichtblick/suite-base/panels";
 import { Diagnostic, UserScriptLog } from "@lichtblick/suite-base/players/UserScriptPlayer/types";
 import {
   AdvertiseOptions,
+  PlayerPresence,
   PlayerStateActiveData,
   Progress,
   PublishPayload,
@@ -75,6 +76,7 @@ export type Fixture = {
   frame?: Frame;
   topics?: Topic[];
   capabilities?: string[];
+  presence?: PlayerPresence;
   profile?: string;
   /** Do not include `messages` in player `activeData`.
    * Use `frame` instead, as it will populate player `activeData` automatically as necessary.
@@ -254,6 +256,7 @@ function UnconnectedPanelSetup(props: UnconnectedProps): React.JSX.Element | nul
     topics = [],
     datatypes,
     capabilities,
+    presence,
     profile,
     activeData,
     progress,
@@ -283,6 +286,7 @@ function UnconnectedPanelSetup(props: UnconnectedProps): React.JSX.Element | nul
     >
       <MockMessagePipelineProvider
         capabilities={capabilities}
+        presence={presence}
         topics={topics}
         datatypes={dTypes}
         messages={allData}

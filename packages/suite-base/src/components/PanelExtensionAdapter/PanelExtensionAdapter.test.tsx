@@ -26,7 +26,7 @@ import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPane
 import { AlertsContext, AlertsContextStore } from "@lichtblick/suite-base/context/AlertsContext";
 import { useHoverValue } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
-import { AdvertiseOptions } from "@lichtblick/suite-base/players/types";
+import { AdvertiseOptions, PlayerPresence } from "@lichtblick/suite-base/players/types";
 import * as PanelStateContextProvider from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import PanelSetup, { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
@@ -951,7 +951,7 @@ describe("PanelExtensionAdapter", () => {
     mockRAF.mockRestore();
   });
 
-  describe("last message injected when a panel subscribes to a topic (live source)", () => {
+  describe("last message injected when a panel subscribes to a topic (live or paused source)", () => {
     const msg = (topic: string, sec: number): MessageEvent => ({
       topic,
       receiveTime: { sec, nsec: 0 },
@@ -960,7 +960,13 @@ describe("PanelExtensionAdapter", () => {
       schemaName: "foo",
     });
 
-    function setup({ watchCurrentFrame = true }: { watchCurrentFrame?: boolean } = {}) {
+    function setup({
+      watchCurrentFrame = true,
+      recordingPaused = false,
+    }: {
+      watchCurrentFrame?: boolean;
+      recordingPaused?: boolean;
+    } = {}) {
       const renderStates: Immutable<RenderState>[] = [];
       const held: (() => void)[] = [];
       const panel: { context?: PanelExtensionContext; hold: boolean } = { hold: false };
@@ -984,11 +990,24 @@ describe("PanelExtensionAdapter", () => {
           }
         };
       });
-      const Wrapper = ({ frame }: { frame: Record<string, MessageEvent[]> }) => (
+      const capabilities = recordingPaused ? [PLAYER_CAPABILITIES.playbackControl] : [];
+      const saveConfig = () => {};
+      const Wrapper = ({
+        frame,
+        presence,
+        currentTime,
+      }: {
+        frame: Record<string, MessageEvent[]>;
+        presence?: PlayerPresence;
+        currentTime?: Time;
+      }) => (
         <ThemeProvider isDark>
           <MockPanelContextProvider>
             <PanelSetup
               fixture={{
+                capabilities,
+                activeData: { isPlaying: !recordingPaused, currentTime },
+                presence,
                 topics: [
                   { name: "fast", schemaName: "foo" },
                   { name: "latched", schemaName: "foo" },
@@ -1000,7 +1019,7 @@ describe("PanelExtensionAdapter", () => {
               // updates, so don't register render promises with it.
               pauseFrame={() => () => {}}
             >
-              <PanelExtensionAdapter config={{}} saveConfig={() => {}} initPanel={initPanel} />
+              <PanelExtensionAdapter config={{}} saveConfig={saveConfig} initPanel={initPanel} />
             </PanelSetup>
           </MockPanelContextProvider>
         </ThemeProvider>
@@ -1025,89 +1044,142 @@ describe("PanelExtensionAdapter", () => {
       }
     }
 
+    it.each([
+      { presence: PlayerPresence.BUFFERING, sec: 10, shouldDeliver: false },
+      { presence: PlayerPresence.PRESENT, sec: 10, shouldDeliver: true },
+      { presence: PlayerPresence.BUFFERING, sec: 2, shouldDeliver: true },
+    ])(
+      "handles held recording frames during $presence at $sec seconds",
+      async ({ presence, sec, shouldDeliver }) => {
+        const { Wrapper, panel, held, delivered, subscribe } = setup({
+          watchCurrentFrame: false,
+          recordingPaused: true,
+        });
+        panel.hold = true;
+        const handle = render(
+          <Wrapper
+            frame={{ fast: [msg("fast", 1)], latched: [msg("latched", 2)] }}
+            currentTime={{ sec: 2, nsec: 0 }}
+          />,
+        );
+        await settle();
+        act(() => {
+          panel.context!.watch("currentFrame");
+        });
+        subscribe(["fast", "latched"]);
+        await settle();
+        expect(delivered()).toEqual([]);
+
+        // A slow seek acknowledges its new position before lastSeekTime changes.
+        handle.rerender(<Wrapper frame={{}} presence={presence} currentTime={{ sec, nsec: 0 }} />);
+        await settle();
+        panel.hold = false;
+        act(() => {
+          held.splice(0).forEach((done) => {
+            done();
+          });
+        });
+        await settle();
+
+        expect(delivered().includes("latched@2")).toBe(shouldDeliver);
+      },
+    );
+
     // Tab switch: the old tab's panel held /tf_static and leaves, the new tab's 3D panel subscribes
     // while it is still rendering its first frame. The pipeline injects the cached message into
     // that moment's frame, which the adapter used to drop because the panel was busy; a live
     // source never sends /tf_static again.
-    it("is delivered after the panel finishes the frame it was rendering", async () => {
-      // Given a panel that got the latched message once and is now busy rendering a frame
-      const { Wrapper, panel, held, delivered, subscribe } = setup();
-      render(<Wrapper frame={{ fast: [msg("fast", 1)], latched: [msg("latched", 2)] }} />);
-      await settle();
-      expect(delivered().filter((d) => d === "latched@2")).toHaveLength(1);
+    it.each([false, true])(
+      "is delivered after a busy panel finishes rendering (paused recording: %s)",
+      async (recordingPaused) => {
+        // Given a panel that got the latched message once and is now busy rendering a frame
+        const { Wrapper, panel, held, delivered, subscribe } = setup({ recordingPaused });
+        render(<Wrapper frame={{ fast: [msg("fast", 1)], latched: [msg("latched", 2)] }} />);
+        await settle();
+        expect(delivered().filter((d) => d === "latched@2")).toHaveLength(1);
 
-      panel.hold = true;
-      subscribe(["fast"]);
-      await settle();
-      expect(held.length).toBeGreaterThan(0); // the panel is busy rendering
+        panel.hold = true;
+        subscribe(["fast"]);
+        await settle();
+        expect(held.length).toBeGreaterThan(0); // the panel is busy rendering
 
-      // When it subscribes to the latched topic while busy, then finishes rendering
-      subscribe(["fast", "latched"]);
-      await settle();
-      expect(delivered().filter((d) => d === "latched@2")).toHaveLength(1);
+        // When it subscribes to the latched topic while busy, then finishes rendering
+        subscribe(["fast", "latched"]);
+        await settle();
+        expect(delivered().filter((d) => d === "latched@2")).toHaveLength(1);
 
-      panel.hold = false;
-      act(() => {
-        held.splice(0).forEach((done) => {
-          done();
+        panel.hold = false;
+        act(() => {
+          held.splice(0).forEach((done) => {
+            done();
+          });
         });
-      });
-      await settle();
+        await settle();
 
-      // Then the latched message is delivered with the next rendered frame
-      expect(delivered().filter((d) => d === "latched@2")).toHaveLength(2);
-    });
+        // Then the latched message is delivered with the next rendered frame
+        expect(delivered().filter((d) => d === "latched@2")).toHaveLength(2);
+      },
+    );
 
     // The injected message used to arrive before the adapter's local subscriptions included the
     // topic, so the render state builder filtered it out and never saw that frame again.
-    it("is delivered once when the panel is not busy", async () => {
-      // Given a panel that got the latched message once and then unsubscribed from it
-      const { Wrapper, delivered, subscribe } = setup();
-      render(<Wrapper frame={{ fast: [msg("fast", 1)], latched: [msg("latched", 2)] }} />);
-      await settle();
-      subscribe(["fast"]);
-      await settle();
+    it.each([false, true])(
+      "is delivered once when the panel is not busy (paused recording: %s)",
+      async (recordingPaused) => {
+        // Given a panel that got the latched message once and then unsubscribed from it
+        const { Wrapper, delivered, subscribe } = setup({ recordingPaused });
+        render(<Wrapper frame={{ fast: [msg("fast", 1)], latched: [msg("latched", 2)] }} />);
+        await settle();
+        subscribe(["fast"]);
+        await settle();
 
-      // When it subscribes to the latched topic again and keeps rendering
-      subscribe(["fast", "latched"]);
-      await settle();
-      subscribe(["fast", "latched"]);
-      await settle();
+        // When it subscribes to the latched topic again and keeps rendering
+        subscribe(["fast", "latched"]);
+        await settle();
+        subscribe(["fast", "latched"]);
+        await settle();
 
-      // Then the latched message is delivered exactly once more
-      expect(delivered().filter((d) => d === "latched@2")).toHaveLength(2);
-    });
+        // Then the latched message is delivered exactly once more
+        expect(delivered().filter((d) => d === "latched@2")).toHaveLength(2);
+      },
+    );
 
     // The render-done callback belongs to the render that started it. If the panel starts watching
     // currentFrame and subscribes while that render is in progress, the effect holds the injected
     // message but cannot render; finishing the render must still deliver it.
-    it("is delivered when the panel starts watching currentFrame while rendering", async () => {
-      // Given a panel that watches only the topic list and is busy rendering it
-      const { Wrapper, panel, held, delivered, subscribe } = setup({ watchCurrentFrame: false });
-      panel.hold = true;
-      render(<Wrapper frame={{ fast: [msg("fast", 1)], latched: [msg("latched", 2)] }} />);
-      await settle();
-      expect(held.length).toBeGreaterThan(0);
-
-      // When it starts watching currentFrame and subscribes to the latched topic while busy, then
-      // finishes rendering
-      act(() => {
-        panel.context!.watch("currentFrame");
-      });
-      subscribe(["fast", "latched"]);
-      await settle();
-      expect(delivered()).toEqual([]);
-      panel.hold = false;
-      act(() => {
-        held.splice(0).forEach((done) => {
-          done();
+    it.each([false, true])(
+      "is delivered after currentFrame is watched during rendering (paused recording: %s)",
+      async (recordingPaused) => {
+        // Given a panel that watches only the topic list and is busy rendering it
+        const { Wrapper, panel, held, delivered, subscribe } = setup({
+          watchCurrentFrame: false,
+          recordingPaused,
         });
-      });
-      await settle();
+        panel.hold = true;
+        render(<Wrapper frame={{ fast: [msg("fast", 1)], latched: [msg("latched", 2)] }} />);
+        await settle();
+        expect(held.length).toBeGreaterThan(0);
 
-      // Then the latched message is delivered without waiting for another frame
-      expect(delivered()).toContain("latched@2");
-    });
+        // When it starts watching currentFrame and subscribes to the latched topic while busy, then
+        // finishes rendering
+        act(() => {
+          panel.context!.watch("currentFrame");
+        });
+        subscribe(["fast", "latched"]);
+        await settle();
+        expect(delivered()).toEqual([]);
+        panel.hold = false;
+        act(() => {
+          held.splice(0).forEach((done) => {
+            done();
+          });
+        });
+        await settle();
+
+        // Then the latched message is delivered without waiting for another frame
+        expect(delivered()).toContain("latched@2");
+      },
+    );
   });
 
   it("should call pause frame with new frame and resume after rendering", async () => {

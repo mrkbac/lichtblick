@@ -340,6 +340,37 @@ describe("3D Renderer", () => {
     renderer.dispose();
   });
 
+  it("draws when the panel document is visible while the opener is hidden", () => {
+    // Given
+    const iframe = document.createElement("iframe");
+    document.body.appendChild(iframe);
+    const child = iframe.contentWindow!;
+    const childDocument = iframe.contentDocument!;
+    const childCanvas = childDocument.createElement("canvas");
+    childDocument.body.appendChild(childCanvas);
+    Object.defineProperty(child, "matchMedia", { value: window.matchMedia });
+    const visible = vi.spyOn(childDocument, "visibilityState", "get").mockReturnValue("visible");
+    const hidden = vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+    const frame = vi.spyOn(child, "requestAnimationFrame").mockReturnValue(1);
+    const renderer = new Renderer({ ...defaultRendererProps, canvas: childCanvas });
+    try {
+      const draw = vi.spyOn(renderer.gl, "render");
+      // When
+      renderer.animationFrame();
+      // Then
+      expect(draw).toHaveBeenCalled();
+      frame.mockClear();
+      childDocument.dispatchEvent(new Event("visibilitychange"));
+      expect(frame).toHaveBeenCalledWith(renderer.animationFrame);
+    } finally {
+      renderer.dispose();
+      hidden.mockRestore();
+      visible.mockRestore();
+      frame.mockRestore();
+      iframe.remove();
+    }
+  });
+
   it("skips GPU work while the tab is hidden and repaints when it is shown", () => {
     const visibility = vi.spyOn(document, "visibilityState", "get");
     const requestAnimationFrameSpy = vi

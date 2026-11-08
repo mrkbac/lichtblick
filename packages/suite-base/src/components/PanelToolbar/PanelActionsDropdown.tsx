@@ -25,6 +25,7 @@ import { PanelSelection } from "@lichtblick/suite-base/components/PanelCatalog";
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import ChangePanelMenu from "@lichtblick/suite-base/components/PanelToolbar/ChangePanelMenu";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
+import { PanelWindowContext } from "@lichtblick/suite-base/components/PanelWindow";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { getPanelIdForType } from "@lichtblick/suite-base/util/layout";
 
@@ -69,6 +70,7 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
   const newTabOpen = subMenuAnchorEl?.id === "new-tab-button";
 
   const panelContext = useContext(PanelContext);
+  const panelWindow = useContext(PanelWindowContext);
   const {
     getCurrentLayoutState: getCurrentLayout,
     closePanel,
@@ -166,7 +168,7 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
       );
     }
 
-    if (panelContext?.isFullscreen !== true) {
+    if (panelContext?.isFullscreen !== true && panelWindow?.isOpen !== true) {
       items.push({
         key: "enter-fullscreen",
         text: t("fullscreen"),
@@ -175,6 +177,37 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
       });
     }
 
+    if (panelWindow) {
+      if (panelWindow.isOpen) {
+        items.push({
+          key: "return",
+          text: t("returnToWorkspace"),
+          onClick: () => {
+            handleMenuClose();
+            panelWindow.close();
+          },
+        });
+      } else {
+        items.push({
+          key: "popout",
+          text: t("openPopout"),
+          onClick: () => {
+            panelWindow.open("popout");
+            handleMenuClose();
+          },
+        });
+        if (panelWindow.supportsPiP) {
+          items.push({
+            key: "pip",
+            text: t("openPictureInPicture"),
+            onClick: () => {
+              panelWindow.open("pip");
+              handleMenuClose();
+            },
+          });
+        }
+      }
+    }
     items.push({ key: "divider", type: "divider" });
 
     items.push({
@@ -193,6 +226,7 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
     isUnknownPanel,
     panelContext?.id,
     panelContext?.isFullscreen,
+    panelWindow,
     split,
     t,
   ]);

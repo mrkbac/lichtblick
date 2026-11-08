@@ -25,6 +25,7 @@ import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import { useStyles } from "@lichtblick/suite-base/components/PanelToolbar/PanelToolbar.style";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
 import { PanelToolbarProps } from "@lichtblick/suite-base/components/PanelToolbar/types";
+import { PanelWindowContext } from "@lichtblick/suite-base/components/PanelWindow";
 import { useDefaultPanelTitle } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { PANEL_TITLE_CONFIG_KEY } from "@lichtblick/suite-base/util/layout";
 
@@ -50,6 +51,7 @@ export default React.memo<PanelToolbarProps>(function PanelToolbar({
   } = useContext(PanelContext) ?? {};
 
   const panelContext = useContext(PanelContext);
+  const panelWindow = useContext(PanelWindowContext);
 
   // Help-shown state must be hoisted outside the controls container so the modal can remain visible
   // when the panel is no longer hovered.
@@ -57,7 +59,7 @@ export default React.memo<PanelToolbarProps>(function PanelToolbar({
     return (
       <>
         {additionalIcons}
-        {isFullscreen === true ? (
+        {panelWindow?.isOpen === true ? undefined : isFullscreen === true ? (
           <ToolbarIconButton
             value="exit-fullscreen"
             title="Exit fullscreen"
@@ -72,15 +74,19 @@ export default React.memo<PanelToolbarProps>(function PanelToolbar({
         )}
       </>
     );
-  }, [additionalIcons, isFullscreen, exitFullscreen, enterFullscreen]);
+  }, [additionalIcons, isFullscreen, exitFullscreen, enterFullscreen, panelWindow?.isOpen]);
 
   // If we have children then we limit the drag area to the controls. Otherwise the entire
   // toolbar is draggable.
   const rootDragRef =
-    isUnknownPanel || children != undefined ? undefined : panelContext?.connectToolbarDragHandle;
+    isUnknownPanel || panelWindow?.isOpen === true || children != undefined
+      ? undefined
+      : panelContext?.connectToolbarDragHandle;
 
   const controlsDragRef =
-    isUnknownPanel || children == undefined ? undefined : panelContext?.connectToolbarDragHandle;
+    isUnknownPanel || panelWindow?.isOpen === true || children == undefined
+      ? undefined
+      : panelContext?.connectToolbarDragHandle;
 
   const [defaultPanelTitle] = useDefaultPanelTitle();
   const customPanelTitle =
@@ -99,17 +105,19 @@ export default React.memo<PanelToolbarProps>(function PanelToolbar({
         cursor: rootDragRef != undefined ? "grab" : "auto",
       }}
     >
-      {!isUnknownPanel && panelContext?.connectToolbarDragHandle != undefined && (
-        // Every panel gets a visible grip, even when its toolbar is full of controls.
-        <span
-          className={classes.grip}
-          ref={panelContext.connectToolbarDragHandle}
-          title={t("dragToMovePanel")}
-          data-testid="panel-drag-grip"
-        >
-          <DragIndicatorIcon fontSize="inherit" />
-        </span>
-      )}
+      {!isUnknownPanel &&
+        panelWindow?.isOpen !== true &&
+        panelContext?.connectToolbarDragHandle != undefined && (
+          // Every panel gets a visible grip, even when its toolbar is full of controls.
+          <span
+            className={classes.grip}
+            ref={panelContext.connectToolbarDragHandle}
+            title={t("dragToMovePanel")}
+            data-testid="panel-drag-grip"
+          >
+            <DragIndicatorIcon fontSize="inherit" />
+          </span>
+        )}
       {children != undefined ? (
         // Custom toolbar content shrinks (and clips) instead of pushing the grip out of the panel.
         <div className={classes.content}>{children}</div>
