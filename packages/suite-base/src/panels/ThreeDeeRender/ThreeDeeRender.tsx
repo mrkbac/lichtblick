@@ -59,7 +59,6 @@ import {
   makePoseMessage,
 } from "./publish";
 import type { LayerSettingsTransform } from "./renderables/FrameAxes";
-import type { LayerSettingsMap } from "./renderables/Maps";
 import { PublishClickEventMap } from "./renderables/PublishClickTool";
 import { DEFAULT_PUBLISH_SETTINGS } from "./renderables/PublishSettings";
 import { THREE_DEE_SHORTCUTS } from "./shortcuts";
@@ -117,7 +116,11 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       scene: partialConfig?.scene ?? {},
       transforms,
       topics: partialConfig?.topics ?? {},
-      layers: partialConfig?.layers ?? {},
+      layers: _.mapValues(partialConfig?.layers ?? {}, (layer) =>
+        layer?.layerId === "lichtblick.Map"
+          ? _.omit(layer, ["rendering", "size", "drawBehind"])
+          : layer,
+      ),
       publish,
       // deep partial on config, makes gradient tuple type [string | undefined, string | undefined]
       // which is incompatible with `Partial<ColorModeSettings>`
@@ -129,23 +132,18 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const { cameraState } = config;
   const backgroundColor = config.scene.backgroundColor;
 
-  const [fallbackCanvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
+  const [sceneCanvas, setSceneCanvas] = useState<HTMLCanvasElement | null>(null);
   const [mapContainer, setMapContainer] = useState<HTMLDivElement | null>(null);
   const [sharedMap, setSharedMap] = useState<SharedMap>();
   const [sharedMapFailed, setSharedMapFailed] = useState(false);
   const requestedSharedMapLayerId =
-    interfaceMode === "3d" && config.cameraState.perspective
-      ? Object.entries(config.layers).find(([, entry]) => {
-          const layer = entry as Partial<LayerSettingsMap> | undefined;
-          return (
-            layer?.layerId === "lichtblick.Map" &&
-            layer.visible !== false &&
-            layer.rendering === "shared"
-          );
-        })?.[0]
+    interfaceMode === "3d"
+      ? Object.entries(config.layers).find(
+          ([, layer]) => layer?.layerId === "lichtblick.Map" && layer.visible !== false,
+        )?.[0]
       : undefined;
   const sharedMapLayerId = sharedMapFailed ? undefined : requestedSharedMapLayerId;
-  const canvas = sharedMapLayerId ? (sharedMap?.map.getCanvas() ?? null) : fallbackCanvas;
+  const canvas = sharedMapLayerId ? (sharedMap?.map.getCanvas() ?? null) : sceneCanvas;
   const [renderer, setRenderer] = useState<IRenderer | undefined>(undefined);
   const rendererRef = useRef<IRenderer | undefined>(undefined);
   const {
@@ -156,7 +154,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
 
   useEffect(() => {
     setSharedMapFailed(false);
-  }, [requestedSharedMapLayerId, canvasKey]);
+  }, [requestedSharedMapLayerId]);
 
   const displayTemporaryError = useCallback(
     (errorString: string) => {
@@ -1158,7 +1156,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
       <div style={PANEL_STYLE} onKeyDown={onKeyDown}>
         <canvas
           key={`canvas-${sharedMapLayerId ?? "3d"}-${canvasKey}`}
-          ref={setCanvas}
+          ref={setSceneCanvas}
           style={{
             position: "absolute",
             top: 0,

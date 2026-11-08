@@ -534,7 +534,10 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
     // https://github.com/foxglove/studio/issues/4138
 
     // Convert the camera spherical coordinates (radius, phi, theta) to Cartesian (X, Y, Z)
-    tempSpherical.set(cameraState.distance, phi, theta);
+    this.#controls.maxDistance = cameraState.perspective
+      ? (this.renderer.sharedMap?.maxCameraDistance ?? Infinity)
+      : Infinity;
+    tempSpherical.set(Math.min(cameraState.distance, this.#controls.maxDistance), phi, theta);
     this.#perspectiveCamera.position.setFromSpherical(tempSpherical).applyAxisAngle(UNIT_X, PI_2);
     this.#perspectiveCamera.position.add(targetOffset);
 

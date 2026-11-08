@@ -5,11 +5,7 @@ import type { TilesRenderer } from "3d-tiles-renderer";
 import { toNanoSec } from "@foxglove/rostime";
 import { t } from "i18next";
 import * as _ from "lodash-es";
-import type {
-  ErrorEvent as MapErrorEvent,
-  Map as MapLibreMap,
-  StyleSpecification,
-} from "maplibre-gl";
+import type { ErrorEvent as MapErrorEvent, StyleSpecification } from "maplibre-gl";
 import * as THREE from "three";
 
 import Logger from "@lichtblick/log";
@@ -46,23 +42,11 @@ import { normalizeTime } from "../normalizeMessages";
 import { CustomLayerSettings, PRECISION_DISTANCE } from "../settings";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose } from "../transforms";
-import { buildingsGeometry } from "./mapBuildings";
-import {
-  DemSource,
-  DemTiles,
-  LatLon,
-  MAX_LATITUDE,
-  enuOffset,
-  loadDem,
-  metersPerMercator,
-  sampleElevation,
-  toMercator,
-  zoomForSpan,
-} from "./mapGeo";
 
 const log = Logger.getLogger(__filename);
 
 const LAYER_ID = "lichtblick.Map";
+const MAX_LATITUDE = 85.051129;
 
 /** The 3D panel renders 3D Tiles on top of what the Map panel offers. */
 const SOURCE_KINDS: readonly SourceKind[] = [...MAP_SOURCE_KINDS, "3dtiles"];
@@ -90,19 +74,13 @@ export type LayerSettingsMap = CustomLayerSettings & {
   layerId: typeof LAYER_ID;
   /** The Map panel's layer stack, top-most first. */
   layers: MapLayer[];
-  /** Side length in meters of the 2D map. */
-  size: number;
   zOffset: number;
-  /** Draw the 2D map before the scene, ignoring depth. Defaults to on without 3D terrain. */
-  drawBehind?: boolean;
   /** Location fix topic; undefined picks the first one. */
   locationTopic?: string;
   /** Override the location fix's frame, for recordings without a frame_id. */
   locationFrame?: string;
   /** Frame whose XY plane is east/north; undefined uses the fixed frame. */
   enuFrame?: string;
-  /** Share MapLibre's canvas for sharp vector rendering in perspective views. */
-  rendering?: "texture" | "shared";
 };
 
 const DEFAULT_SETTINGS: LayerSettingsMap = {
@@ -112,7 +90,6 @@ const DEFAULT_SETTINGS: LayerSettingsMap = {
   instanceId: "invalid",
   layerId: LAYER_ID,
   layers: [{ id: "base", source: "ofm-liberty", visible: true, opacity: 1 }],
-  size: 500,
   zOffset: 0,
 };
 
@@ -126,84 +103,24 @@ type Anchor = MapAnchor;
 
 const stripHtml = (html: string) => html.replace(/<[^>]*>/g, "").replace(/&copy;/g, "©");
 
-/** Canvas size of the offscreen map render; 500 m maps get ~0.25 m/px. */
-const CANVAS_SIZE = 2048;
-const TERRAIN_SEGMENTS = 128;
 const URL_DEBOUNCE_MS = 500;
-
-/** The first visible elevation layer with "3D terrain" on, as a mesh source. */
-function terrainSource(layers: readonly MapLayer[]):
-  | {
-      layer: MapLayer;
-      source?: DemSource;
-    }
-  | undefined {
-  const layer = layers.find(
-    (l) => l.visible && l.terrain === true && resolveSource(l)?.kind === "dem",
-  );
-  const params = layer && resolveSource(layer);
-  if (!layer || !params) {
-    return undefined;
-  }
-  // ponytail: the mesh fetches tiles itself, so only XYZ templates; TileJSON/PMTiles stay flat.
-  if (!params.url.includes("{z}")) {
-    return { layer };
-  }
-  return {
-    layer,
-    source: {
-      url: params.url,
-      tileSize: params.tileSize ?? 256,
-      maxZoom: params.maxZoom ?? 15,
-      encoding: params.encoding ?? "terrarium",
-    },
-  };
-}
 
 type MapUserData = BaseUserData & { settings: LayerSettingsMap };
 
 type Tileset = { url: string; tiles: TilesRenderer; group: THREE.Group; camera?: THREE.Camera };
 
-/**
- * The 2D layers of the stack rendered by an offscreen MapLibre map onto a plane (shaped by 3D
- * terrain if a layer enables it), plus any 3D Tiles layers, placed at the location fix.
- */
+/** MapLibre style sources and geographically placed 3D Tiles for a map layer. */
 class MapRenderable extends Renderable<MapUserData> {
   public override readonly pickable = false;
   /** Load and render errors by MapLayer id. */
   public readonly layerErrors = new Map<string, string>();
   #onErrorsChanged: () => void;
 
-  #mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(1, 1),
-    // Blend in the opaque pass so renderOrder can draw the map before everything else.
-    new THREE.MeshBasicMaterial({
-      side: THREE.DoubleSide,
-      blending: THREE.CustomBlending,
-      // MapLibre's pixels are premultiplied.
-      blendSrc: THREE.OneFactor,
-      blendDst: THREE.OneMinusSrcAlphaFactor,
-    }),
-  );
-  /** The style's fill-extrusion features as real 3D meshes; the draped map only shows roofs. */
-  #buildings = new THREE.Mesh(
-    new THREE.BufferGeometry(),
-    new THREE.MeshStandardMaterial({ vertexColors: true, metalness: 0, roughness: 0.9 }),
-  );
-  #container?: HTMLDivElement;
-  #map?: MapLibreMap;
-  #mapPromise?: Promise<MapLibreMap>;
   #styleKey?: string;
   #styleRequest = 0;
   #assets = new Map<string, Promise<StyleSpecification | ImageOverlay>>();
   #attribution = "";
   #anchor?: Anchor;
-  #center?: LatLon;
-  #geometryKey?: string;
-  #anchorElevation?: number;
-  #demAbort?: AbortController;
-  /** Loaded terrain the buildings stand on, with its exaggeration. */
-  #terrain?: { dem: DemTiles; exaggeration: number };
   #tilesets = new Map<string, Tileset>();
   /** Async loads check this so nothing is created after dispose(). */
   #disposed = false;
@@ -216,9 +133,6 @@ class MapRenderable extends Renderable<MapUserData> {
   ) {
     super(name, renderer, userData);
     this.#onErrorsChanged = onErrorsChanged;
-    this.#mesh.visible = false;
-    this.#mesh.add(this.#buildings);
-    this.add(this.#mesh);
     if (renderer.sharedMap?.layerId === name) {
       renderer.sharedMap.map.on("error", this.#handleMapError);
     }
@@ -230,9 +144,6 @@ class MapRenderable extends Renderable<MapUserData> {
     }
     this.#disposed = true;
     this.#updateSoon.cancel();
-    this.#demAbort?.abort();
-    this.#map?.remove();
-    this.#container?.remove();
     for (const asset of this.#assets.values()) {
       void asset.then((value) => {
         if ("coordinates" in value) {
@@ -243,11 +154,6 @@ class MapRenderable extends Renderable<MapUserData> {
     for (const tileset of this.#tilesets.values()) {
       tileset.tiles.dispose();
     }
-    this.#mesh.material.map?.dispose();
-    this.#mesh.material.dispose();
-    this.#mesh.geometry.dispose();
-    this.#buildings.material.dispose();
-    this.#buildings.geometry.dispose();
     super.dispose();
   }
 
@@ -276,44 +182,17 @@ class MapRenderable extends Renderable<MapUserData> {
 
   public applySettings(settings: LayerSettingsMap): void {
     this.userData.settings = settings;
-    const material = this.#mesh.material;
-    const drawBehind = settings.drawBehind ?? terrainSource(settings.layers) == undefined;
-    material.depthTest = !drawBehind;
-    material.depthWrite = !drawBehind;
-    material.needsUpdate = true;
-    this.#mesh.renderOrder = drawBehind ? -1_000_000 : 0;
     this.#updateSoon();
-    this.#updateGeometry();
     this.#placeTilesets();
   }
 
-  public locate(anchor: Anchor | undefined, fix: LatLon | undefined): void {
+  public locate(anchor: Anchor | undefined): void {
     if (this.renderer.sharedMap?.layerId === this.name) {
       this.renderer.sharedMap.locate(anchor, this.userData.settings.zOffset);
-      if (anchor !== this.#anchor) {
-        this.#anchor = anchor;
-        this.#placeTilesets();
-      }
-      this.#mesh.visible = false;
-      return;
     }
     if (anchor !== this.#anchor) {
       this.#anchor = anchor;
-      this.#anchorElevation = undefined;
-      this.#center = undefined;
-      this.#geometryKey = undefined; // Same first fix after a seek must still rebuild.
       this.#placeTilesets();
-    }
-    if (!anchor || !fix) {
-      this.#mesh.visible = false;
-      return;
-    }
-    // Re-center once the vehicle leaves the middle half, so the map always surrounds it.
-    const { east, north } = this.#center ? enuOffset(this.#center, fix) : { east: 0, north: 0 };
-    const size = this.userData.settings.size;
-    if (!this.#center || Math.max(Math.abs(east), Math.abs(north)) > size / 4) {
-      this.#center = { lat: fix.lat, lon: fix.lon };
-      this.#updateGeometry();
     }
   }
 
@@ -344,6 +223,10 @@ class MapRenderable extends Renderable<MapUserData> {
   }
 
   async #updateStyle(): Promise<void> {
+    const sharedMap = this.renderer.sharedMap;
+    if (sharedMap?.layerId !== this.name) {
+      return;
+    }
     const layers = this.userData.settings.layers.filter((layer) => layer.visible);
     const key = JSON.stringify(layers);
     if (key === this.#styleKey) {
@@ -395,10 +278,6 @@ class MapRenderable extends Renderable<MapUserData> {
     if (errors.size > 0) {
       this.#styleKey = undefined; // Retry failed loads on the next settings change.
     }
-    const map = await this.#getMap();
-    if (request !== this.#styleRequest) {
-      return;
-    }
     for (const layer of this.userData.settings.layers) {
       if (resolveSource(layer)?.kind !== "3dtiles") {
         this.#setLayerError(layer.id, errors.get(layer.id));
@@ -412,195 +291,7 @@ class MapRenderable extends Renderable<MapUserData> {
       projection: "mercator",
       overlay: { sources: {}, layers: [] },
     });
-    if (this.renderer.sharedMap?.layerId === this.name) {
-      this.renderer.sharedMap.setStyle(style);
-    } else {
-      map.setStyle(style);
-    }
-  }
-
-  async #getMap(): Promise<MapLibreMap> {
-    if (this.renderer.sharedMap?.layerId === this.name) {
-      return this.renderer.sharedMap.map;
-    }
-    return await (this.#mapPromise ??= this.#createMap());
-  }
-
-  async #createMap(): Promise<MapLibreMap> {
-    const maplibre = await import("@lichtblick/suite-base/panels/Map/maplibre");
-    if (this.#disposed) {
-      throw new Error("Map layer was removed");
-    }
-    const container = document.createElement("div");
-    Object.assign(container.style, {
-      position: "fixed",
-      left: "-100000px",
-      top: "0",
-      width: `${CANVAS_SIZE}px`,
-      height: `${CANVAS_SIZE}px`,
-      pointerEvents: "none",
-    });
-    document.body.appendChild(container);
-    const map = new maplibre.Map({
-      container,
-      style: { version: 8, sources: {}, layers: [] },
-      interactive: false,
-      attributionControl: false,
-      pixelRatio: 1,
-      fadeDuration: 0,
-      maxZoom: 24,
-      canvasContextAttributes: { preserveDrawingBuffer: true },
-    });
-    // Tile errors name the source, whose id starts with the MapLayer id (see composeStyle).
-    map.on("error", this.#handleMapError);
-    // Copy pixels explicitly rather than texturing from MapLibre's canvas: drawing another
-    // context's canvas may use its last composited frame, which isn't defined off-screen.
-    const pixels = new Uint8Array(CANVAS_SIZE * CANVAS_SIZE * 4);
-    const texture = new THREE.DataTexture(pixels, CANVAS_SIZE, CANVAS_SIZE, THREE.RGBAFormat);
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.magFilter = THREE.LinearFilter;
-    texture.minFilter = THREE.LinearMipmapLinearFilter;
-    texture.generateMipmaps = true;
-    texture.anisotropy = this.renderer.gl.capabilities.getMaxAnisotropy();
-    this.#mesh.material.map = texture;
-    this.#mesh.material.needsUpdate = true;
-    const canvas = map.getCanvas();
-    // getContext() returns MapLibre's existing context for its type, null for the other.
-    const gl = canvas.getContext("webgl2") ?? canvas.getContext("webgl");
-    const copy = () => {
-      gl?.readPixels(0, 0, CANVAS_SIZE, CANVAS_SIZE, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-      texture.needsUpdate = true;
-      this.renderer.queueAnimationFrame();
-    };
-    // ponytail: a 16 MB readback per copy, so at most 4/s while tiles stream in, then on idle.
-    const throttledCopy = _.throttle(copy, 250, { leading: false });
-    map.on("render", throttledCopy);
-    map.on("idle", () => {
-      throttledCopy.cancel();
-      copy();
-      this.#updateBuildings();
-    });
-    this.#container = container;
-    this.#map = map;
-    this.#jumpMap();
-    return map;
-  }
-
-  #jumpMap(): void {
-    if (this.#map && this.#center) {
-      this.#map.jumpTo({
-        center: [this.#center.lon, this.#center.lat],
-        zoom: zoomForSpan(this.#center.lat, this.userData.settings.size, CANVAS_SIZE),
-        bearing: 0,
-        pitch: 0,
-      });
-    }
-  }
-
-  #updateGeometry(): void {
-    if (this.renderer.sharedMap?.layerId === this.name) {
-      return;
-    }
-    const s = this.userData.settings;
-    const anchor = this.#anchor;
-    const center = this.#center;
-    if (!anchor || !center) {
-      return;
-    }
-    const terrain = terrainSource(s.layers);
-    const dem = terrain?.source;
-    const exaggeration = terrain?.layer.exaggeration ?? 1;
-    const key = JSON.stringify([center, s.size, s.zOffset, dem, exaggeration]);
-    if (key === this.#geometryKey) {
-      return;
-    }
-    this.#geometryKey = key;
-    if (terrain && !dem) {
-      this.#setLayerError(terrain.layer.id, "3D terrain in the 3D panel needs an XYZ tile URL");
-    }
-    this.#getMap().then(() => {
-      this.#jumpMap();
-    }, _.noop);
-
-    const { east, north } = enuOffset(anchor, center);
-    this.#mesh.position.set(anchor.position.x + east, anchor.position.y + north, s.zOffset);
-    this.#mesh.visible = true;
-
-    const segments = dem ? TERRAIN_SEGMENTS : 1;
-    const geometry = new THREE.PlaneGeometry(s.size, s.size, segments, segments);
-    this.#mesh.geometry.dispose();
-    this.#mesh.geometry = geometry;
-    this.#demAbort?.abort();
-    this.#terrain = undefined;
-    this.#updateBuildings();
-    if (!terrain || !dem) {
-      return;
-    }
-
-    const abort = (this.#demAbort = new AbortController());
-    loadDem(dem, center, s.size, s.size / segments, abort.signal)
-      .then((tiles) => {
-        if (!abort.signal.aborted) {
-          this.#applyTerrain(geometry, tiles, center, anchor, exaggeration);
-        }
-      })
-      .catch((error: unknown) => {
-        if (!abort.signal.aborted) {
-          this.#geometryKey = undefined; // Retry on the next settings or location change.
-          log.warn("Failed to load terrain", error);
-          this.#setLayerError(terrain.layer.id, `Failed to load terrain: ${String(error)}`);
-        }
-      });
-  }
-
-  #applyTerrain(
-    geometry: THREE.PlaneGeometry,
-    dem: DemTiles,
-    center: LatLon,
-    anchor: Anchor,
-    exaggeration: number,
-  ): void {
-    // The location fix sits on the ENU plane; terrain is relative to the ground there.
-    this.#anchorElevation ??= sampleElevation(dem, toMercator(anchor));
-    const origin = toMercator(center);
-    const scale = metersPerMercator(center.lat);
-    const positions = geometry.attributes.position as THREE.BufferAttribute;
-    for (let i = 0; i < positions.count; i++) {
-      const point = {
-        x: origin.x + positions.getX(i) / scale,
-        y: origin.y - positions.getY(i) / scale,
-      };
-      positions.setZ(i, (sampleElevation(dem, point) - this.#anchorElevation) * exaggeration);
-    }
-    positions.needsUpdate = true;
-    geometry.computeBoundingSphere();
-    this.#terrain = { dem, exaggeration };
-    this.#updateBuildings();
-  }
-
-  /** Rebuild the building meshes from what the offscreen map currently shows. */
-  #updateBuildings(): void {
-    const map = this.#map;
-    const center = this.#center;
-    const extrusions = map
-      ?.getLayersOrder()
-      .filter((id) => map.getLayer(id)?.type === "fill-extrusion");
-    const features =
-      map && extrusions && extrusions.length > 0
-        ? map.queryRenderedFeatures({ layers: extrusions })
-        : [];
-    const terrain = this.#terrain;
-    const anchorElevation = this.#anchorElevation ?? 0;
-    const geometry =
-      center &&
-      buildingsGeometry(features, center, (point) =>
-        terrain
-          ? (sampleElevation(terrain.dem, point) - anchorElevation) * terrain.exaggeration
-          : 0,
-      );
-    this.#buildings.geometry.dispose();
-    this.#buildings.geometry = geometry ?? new THREE.BufferGeometry();
-    this.renderer.queueAnimationFrame();
+    sharedMap.setStyle(style);
   }
 
   /** Create and drop TilesRenderers to match the visible 3D Tiles layers. */
@@ -843,9 +534,17 @@ export class Maps extends SceneExtension<MapRenderable> {
         }
       }
       renderable.userData.frameId = enuFrame;
-      renderable.locate(
-        anchor,
-        event && { lat: event.message.latitude, lon: event.message.longitude },
+      renderable.locate(anchor);
+
+      this.renderer.hud.displayIfTrue(
+        settings.visible && this.renderer.sharedMap?.layerId !== instanceId,
+        {
+          id: `${instanceId}:unavailable`,
+          group: Maps.extensionId,
+          displayType: "notice",
+          getMessage: () =>
+            t(this.renderer.sharedMap ? "threeDee:mapSingleLayer" : "threeDee:mapUnavailable"),
+        },
       );
 
       this.renderer.hud.displayIfTrue(settings.visible && anchor == undefined, {
@@ -892,16 +591,6 @@ export class Maps extends SceneExtension<MapRenderable> {
           label: config.label,
           icon: "Map",
           fields: {
-            rendering: {
-              label: t("threeDee:mapRendering"),
-              input: "select",
-              options: [
-                { label: t("threeDee:mapTexture"), value: "texture" },
-                { label: t("threeDee:mapShared"), value: "shared" },
-              ],
-              value: config.rendering ?? "texture",
-              help: t("threeDee:mapRenderingHelp"),
-            },
             locationTopic: {
               label: "Location topic",
               input: "select",
@@ -932,17 +621,6 @@ export class Maps extends SceneExtension<MapRenderable> {
               value: config.enuFrame,
               help: "Frame whose X axis points east, Y north and Z up.",
             },
-            size: {
-              disabled: this.renderer.sharedMap?.layerId === instanceId,
-              label: t("threeDee:size"),
-              input: "number",
-              min: 20,
-              max: 20000,
-              step: 100,
-              precision: 0,
-              value: config.size,
-              help: "Side length of the 2D map in meters. It re-centers as the location moves.",
-            },
             zOffset: {
               label: "Z offset",
               input: "number",
@@ -950,13 +628,6 @@ export class Maps extends SceneExtension<MapRenderable> {
               precision: PRECISION_DISTANCE,
               value: config.zOffset,
               help: "Height of the 2D map in meters above the ENU frame's XY plane",
-            },
-            drawBehind: {
-              disabled: this.renderer.sharedMap?.layerId === instanceId,
-              label: "Draw behind",
-              input: "boolean",
-              value: config.drawBehind ?? terrainSource(config.layers) == undefined,
-              help: "Draw the 2D map under everything else regardless of depth",
             },
           },
           visible: config.visible,

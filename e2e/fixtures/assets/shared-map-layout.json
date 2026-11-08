@@ -28,11 +28,9 @@
           "instanceId": "map",
           "label": "Map",
           "visible": true,
-          "rendering": "shared",
           "locationTopic": "/gps",
           "locationFrame": "base_link",
           "enuFrame": "map",
-          "size": 500,
           "zOffset": 0,
           "layers": [
             {

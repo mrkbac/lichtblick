@@ -24,7 +24,6 @@ function setup(locationFrame?: string) {
     label: "Map",
     visible: true,
     layers: [],
-    size: 500,
     zOffset: 0,
     locationTopic: "/gps",
     locationFrame,
@@ -50,7 +49,7 @@ function setup(locationFrame?: string) {
   } as unknown as IRenderer;
   const maps = new Maps(renderer);
   const renderable = maps.renderables.get("map")!;
-  // Check anchoring without creating an offscreen WebGL map.
+  // Check anchoring without creating a WebGL map.
   const locate = vi.spyOn(renderable, "locate").mockImplementation(() => {});
   const fix = (frame_id?: string) => {
     maps.getSubscriptions()[0]!.subscription.handler({
@@ -77,7 +76,6 @@ describe("Maps location frame", () => {
         enuFrame: "map",
         position: expect.objectContaining({ x: 411.3039349319818, y: 1180.8903791765097 }),
       }),
-      expect.anything(),
     );
     maps.dispose();
   });
@@ -102,6 +100,17 @@ describe("Maps location frame", () => {
     transformTree.addTransform("gps", "map", 0n, Transform.Identity().setPosition([5, 6, 0]));
     fix();
     expect(locate.mock.lastCall?.[0]?.position.x).toBe(5);
+    maps.dispose();
+  });
+
+  it("does not expose settings for the deleted texture renderer", () => {
+    const { maps } = setup();
+    const fields = maps.settingsNodes()[0]!.node.fields;
+    expect(fields).not.toHaveProperty("rendering");
+    expect(fields).not.toHaveProperty("size");
+    expect(fields).not.toHaveProperty("drawBehind");
+    expect(fields).toHaveProperty("locationFrame");
+    expect(fields).toHaveProperty("zOffset");
     maps.dispose();
   });
 });

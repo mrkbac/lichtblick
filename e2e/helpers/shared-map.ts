@@ -88,6 +88,7 @@ export async function exerciseSharedMap(page: Page): Promise<void> {
     .getByTestId("panel-mouseenter-container 3D!shared")
     .locator("canvas.maplibregl-canvas");
   await expect(canvas).toBeVisible();
+  await expect(page.getByText("Map rendering", { exact: true })).toHaveCount(0);
   await loadFiles({ mainWindow: page, filenames: "shared-map.mcap" });
   await expect.poll(async () => (await pixels(canvas)).red).toBeGreaterThan(100);
   await expect.poll(async () => (await pixels(canvas)).green).toBeGreaterThan(500);
@@ -101,19 +102,40 @@ export async function exerciseSharedMap(page: Page): Promise<void> {
   expect(after.lineWidth).toBeGreaterThan(5);
   expect(after.lineWidth).toBeLessThan(20);
   expect(Math.abs(after.lineWidth - before.lineWidth)).toBeLessThanOrEqual(2);
-  await page.getByRole("button", { name: "Inspect objects", exact: true }).click();
-  await page.mouse.click(after.x, after.y);
-  await expect(page.getByText("test-cube", { exact: true }).first()).toBeVisible();
-  // Switching projections must recreate the context without losing the selected map settings.
+  // Orthographic views keep the same context and 3D scene; the map explicitly pauses.
+  const originalCanvas = await canvas.elementHandle();
   await page.getByRole("button", { name: "3D", exact: true }).click();
-  await expect(canvas).toHaveCount(0);
-  expect(errors).toEqual([]);
-  const ordinary = page
-    .getByTestId("panel-mouseenter-container 3D!shared")
-    .locator("canvas:visible");
-  await expect(ordinary).toHaveCount(1);
-  await ordinary.press("3");
-  await expect(canvas).toBeVisible();
+  await expect(
+    page.getByText("Map is hidden in orthographic view. Switch to perspective to show it."),
+  ).toBeVisible();
+  await expect.poll(async () => (await pixels(canvas)).green).toBe(0);
   await expect.poll(async () => (await pixels(canvas)).red).toBeGreaterThan(100);
+  expect(await originalCanvas.evaluate((element) => element.isConnected)).toBe(true);
+  await page.getByRole("button", { name: /Switch to 3D camera/ }).click();
+  await expect(canvas).toBeVisible();
+  await expect.poll(async () => (await pixels(canvas)).green).toBeGreaterThan(500);
+  await expect.poll(async () => (await pixels(canvas)).red).toBeGreaterThan(100);
+  await expect(page.locator("canvas.maplibregl-canvas")).toHaveCount(1);
+  // Repeated zoom-out at the native limit must not consume the next inward scroll.
+  await page.getByText("View", { exact: true }).click();
+  const distance = page.getByRole("spinbutton").first();
+  await page.mouse.move(before.x + 100, before.y);
+  for (let i = 0; i < 12; i++) {
+    await page.mouse.wheel(0, 3000);
+    await page.waitForTimeout(50);
+  }
+  const limit = Number(await distance.inputValue());
+  expect(limit).toBeLessThan(1e9);
+  const zoomedOut = await canvas.screenshot();
+  await page.mouse.wheel(0, -350);
+  await expect.poll(async () => Buffer.compare(await canvas.screenshot(), zoomedOut)).not.toBe(0);
+  await distance.fill("100");
+  await distance.press("Enter");
+  await expect.poll(async () => (await pixels(canvas)).green).toBeGreaterThan(500);
+  await expect.poll(async () => (await pixels(canvas)).red).toBeGreaterThan(100);
+  const recovered = await pixels(canvas);
+  await page.getByRole("button", { name: "Inspect objects", exact: true }).click();
+  await page.mouse.click(recovered.x, recovered.y);
+  await expect(page.getByText("test-cube", { exact: true }).first()).toBeVisible();
   expect(errors).toEqual([]);
 }

@@ -7,10 +7,11 @@ import { MercatorCoordinate } from "maplibre-gl";
 import * as THREE from "three";
 
 import type { IRenderer } from "./IRenderer";
-import type { LatLon } from "./renderables/mapGeo";
 import { AnyFrameId, makePose } from "./transforms";
 
-export type MapAnchor = LatLon & {
+export type MapAnchor = {
+  lat: number;
+  lon: number;
   altitude?: number;
   enuFrame: string;
   position: THREE.Vector3;
@@ -53,6 +54,7 @@ export function mapCameraAngles(matrix: THREE.Matrix4): {
 export class SharedMap {
   public readonly map: MapLibreMap;
   public readonly layerId: string;
+  public maxCameraDistance = Infinity;
   #anchor?: MapAnchor;
   #zOffset = 0;
   #style: StyleSpecification = EMPTY_STYLE;
@@ -138,6 +140,9 @@ export class SharedMap {
             .fromArray(options.defaultProjectionData.mainMatrix)
             .multiply(this.#renderToMercator)
             .multiply(camera.matrixWorld);
+          // Three.js line shaders recognize perspective cameras by this normalized entry.
+          camera.projectionMatrix.multiplyScalar(-1 / camera.projectionMatrix.elements[11]);
+          camera.projectionMatrix.elements[11] = -1;
           camera.projectionMatrixInverse.copy(camera.projectionMatrix).invert();
         }
         renderer.gl.resetState();
@@ -182,6 +187,19 @@ export class SharedMap {
       );
     let placed = false;
     if (available) {
+      // Convert MapLibre's minimum zoom to an orbit distance in the anchor's meter scale.
+      const height = this.map.getCanvas().clientHeight;
+      this.maxCameraDistance =
+        height /
+        (2 *
+          Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) *
+          Math.max(512 * 2 ** this.map.getMinZoom(), height) *
+          origin.meterInMercatorCoordinateUnits());
+      const state = renderer.getCameraState();
+      if (state && state.distance > this.maxCameraDistance) {
+        renderer.setCameraState({ ...state, distance: this.maxCameraDistance });
+        renderer.emit("cameraMove", renderer);
+      }
       const renderToEnu = this.#renderToEnu.compose(
         this.#translation.set(pose.position.x, pose.position.y, pose.position.z),
         this.#rotation.set(
@@ -216,22 +234,40 @@ export class SharedMap {
         coordinate.y = eye.y;
         coordinate.z = eye.z;
         this.map.setVerticalFieldOfView(camera.fov);
-        this.map.jumpTo(
-          this.map.calculateCameraOptionsFromCameraLngLatAltRotation(
-            coordinate.toLngLat(),
-            coordinate.toAltitude(),
-            angles.bearing,
-            angles.pitch,
-            angles.roll,
-          ),
+        const options = this.map.calculateCameraOptionsFromCameraLngLatAltRotation(
+          coordinate.toLngLat(),
+          coordinate.toAltitude(),
+          angles.bearing,
+          angles.pitch,
+          angles.roll,
         );
+        this.map.jumpTo(options);
+        if (state && options.zoom != undefined && options.zoom < this.map.getZoom() - 1e-6) {
+          this.maxCameraDistance = Math.min(
+            this.maxCameraDistance,
+            state.distance * 2 ** (options.zoom - this.map.getZoom()),
+          );
+          renderer.setCameraState({ ...state, distance: this.maxCameraDistance });
+          renderer.emit("cameraMove", renderer);
+          renderer.queueAnimationFrame();
+        }
       }
     }
     if (placed !== this.#placed) {
       this.#placed = placed;
       this.map.setStyle(placed ? this.#style : EMPTY_STYLE, { diff: false });
     }
-    renderer.hud.displayIfTrue(!placed, {
+    if (!placed) {
+      this.maxCameraDistance = Infinity;
+    }
+    const orthographic = camera instanceof THREE.OrthographicCamera;
+    renderer.hud.displayIfTrue(orthographic, {
+      id: "shared-map-orthographic",
+      group: "shared-map",
+      displayType: "notice",
+      getMessage: () => t("threeDee:mapPerspectiveRequired"),
+    });
+    renderer.hud.displayIfTrue(!placed && !orthographic, {
       id: "shared-map-view",
       group: "shared-map",
       displayType: "notice",

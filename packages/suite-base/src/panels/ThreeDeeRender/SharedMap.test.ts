@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import type { CustomLayerInterface, Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
+import { MercatorCoordinate } from "maplibre-gl";
 import * as THREE from "three";
 
 import { ObjectPool } from "@lichtblick/den/collection";
@@ -54,7 +55,10 @@ describe("SharedMap", () => {
       setVerticalFieldOfView: vi.fn(),
       calculateCameraOptionsFromCameraLngLatAltRotation: vi.fn<
         MapLibreMap["calculateCameraOptionsFromCameraLngLatAltRotation"]
-      >(() => ({})),
+      >(() => ({ zoom: 10 })),
+      getMinZoom: () => 0,
+      getZoom: vi.fn(() => 10),
+      getCanvas: () => ({ clientHeight: 800 }),
       jumpTo: vi.fn(),
       redraw: vi.fn(),
     };
@@ -63,10 +67,16 @@ describe("SharedMap", () => {
     const transformTree = new TransformTree(new ObjectPool(Transform.Empty));
     transformTree.addTransform("base", "map", 0n, Transform.Identity().setPosition([10, 20, 0]));
     const resetState = vi.fn();
+    const setCameraState = vi.fn();
+    const queueAnimationFrame = vi.fn();
     const renderer = {
       currentTime: 0n,
       transformTree,
       cameraHandler: { getActiveCamera: () => camera },
+      getCameraState: () => ({ distance: 20 }),
+      setCameraState,
+      emit: vi.fn(),
+      queueAnimationFrame,
       gl: { resetState },
       hud: { displayIfTrue: vi.fn() },
     } as unknown as IRenderer;
@@ -85,6 +95,13 @@ describe("SharedMap", () => {
     expect(map.getStyle()).toBe(mapStyle);
     expect(map.setVerticalFieldOfView).toHaveBeenCalledWith(45);
     expect(map.jumpTo).toHaveBeenCalled();
+    expect(shared.maxCameraDistance).toBeCloseTo(
+      800 /
+        (2 *
+          Math.tan(Math.PI / 8) *
+          800 *
+          MercatorCoordinate.fromLngLat([11, 48]).meterInMercatorCoordinateUnits()),
+    );
     const [eye, altitude] = map.calculateCameraOptionsFromCameraLngLatAltRotation.mock.calls[0]!;
     expect(eye).toEqual(
       expect.objectContaining({ lng: expect.closeTo(11, 10), lat: expect.closeTo(48, 10) }),
@@ -96,18 +113,44 @@ describe("SharedMap", () => {
     );
     expect(map.addLayer).toHaveBeenCalledTimes(3);
     const originalProjection = camera.projectionMatrix.clone();
+    const origin = MercatorCoordinate.fromLngLat([11, 48]);
+    const scale = origin.meterInMercatorCoordinateUnits();
+    const renderToMercator = new THREE.Matrix4()
+      .makeScale(scale, -scale, scale)
+      .setPosition(origin.x, origin.y, 0);
+    const mapProjection = originalProjection
+      .clone()
+      .multiply(camera.matrixWorldInverse)
+      .multiply(renderToMercator.invert())
+      .multiplyScalar(1000);
     layer!.render(
       {} as WebGL2RenderingContext,
       {
-        defaultProjectionData: { mainMatrix: new THREE.Matrix4().elements },
+        defaultProjectionData: { mainMatrix: mapProjection.elements },
       } as unknown as Parameters<CustomLayerInterface["render"]>[1],
     );
     expect(draw).toHaveBeenCalledOnce();
     expect(resetState).toHaveBeenCalledTimes(2);
-    expect(camera.projectionMatrix.equals(originalProjection)).toBe(false);
+    expect(camera.projectionMatrix.elements[11]).toBe(-1);
+    camera.projectionMatrix.elements.forEach((value, index) => {
+      expect(value).toBeCloseTo(originalProjection.elements[index]!, 5);
+    });
+    const product = new THREE.Matrix4().multiplyMatrices(
+      camera.projectionMatrix,
+      camera.projectionMatrixInverse,
+    );
+    product.elements.forEach((value, index) => {
+      expect(value).toBeCloseTo(new THREE.Matrix4().elements[index]!, 5);
+    });
+    map.getZoom.mockReturnValue(11);
+    shared.render("base", "map");
+    expect(shared.maxCameraDistance).toBe(10);
+    expect(setCameraState).toHaveBeenCalledWith({ distance: 10 });
+    expect(queueAnimationFrame).toHaveBeenCalledOnce();
     shared.locate(undefined, 0);
     shared.render("base", "map");
     expect(map.getStyle().layers).toEqual([]);
+    expect(shared.maxCameraDistance).toBe(Infinity);
     shared.dispose();
     expect(map.remove).toHaveBeenCalledOnce();
   });

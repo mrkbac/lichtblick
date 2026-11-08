@@ -441,6 +441,35 @@ describe("ThreeDeeRender", () => {
     expect(rendererConfig?.followTf).toBe(customCameraState.followTf);
   });
 
+  it.each([undefined, "texture", "shared"])(
+    "migrates old map-renderer settings (%s)",
+    (rendering) => {
+      const retained = {
+        layerId: "lichtblick.Map",
+        instanceId: "map",
+        visible: false,
+        layers: [{ id: "roads", source: "ofm-liberty", visible: true, opacity: 0.6 }],
+        locationTopic: "/gps",
+        locationFrame: "base_link",
+        enuFrame: "map",
+        zOffset: 2,
+      };
+      const grid = { layerId: "foxglove.Grid", visible: false, size: 10 };
+      const props = setup(
+        {},
+        {
+          initialState: {
+            layers: { map: { ...retained, rendering, size: 500, drawBehind: true }, grid },
+          },
+        },
+      );
+      render(<ThreeDeeRender {...props} />);
+      const layers = mockedRenderer.mock.calls[0]![0].config.layers;
+      expect(layers.map).toEqual(retained);
+      expect(layers.grid).toEqual(grid);
+    },
+  );
+
   it("initializes with image interface mode", () => {
     // Given
     const initialState = {

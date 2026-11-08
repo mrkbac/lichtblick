@@ -38,6 +38,7 @@ let mockOrbitControls!: {
   dispose: Mock;
   minPolarAngle: number;
   maxPolarAngle: number;
+  maxDistance: number;
 };
 
 beforeEach(() => {
@@ -181,6 +182,24 @@ describe("CameraStateSettings", () => {
       });
       expect(cameraStateSettings.settingsNodes()).toHaveLength(2);
     });
+  });
+
+  it("bounds map zoom-out while keeping ordinary and orthographic cameras unbounded", () => {
+    Object.defineProperty(renderer, "sharedMap", {
+      value: { maxCameraDistance: 1000 },
+      configurable: true,
+    });
+    const handler = new CameraStateSettings(renderer, canvas, 1);
+    handler.setCameraState({ ...DEFAULT_CAMERA_STATE, distance: 1e12 });
+    expect(mockOrbitControls.maxDistance).toBe(1000);
+    expect(handler.getActiveCamera().position.length()).toBeCloseTo(1000);
+    handler.setCameraState({ ...DEFAULT_CAMERA_STATE, perspective: false, distance: 1e12 });
+    expect(mockOrbitControls.maxDistance).toBe(Infinity);
+    Object.defineProperty(renderer, "sharedMap", { value: undefined });
+    handler.setCameraState({ ...DEFAULT_CAMERA_STATE, distance: 1e12 });
+    expect(mockOrbitControls.maxDistance).toBe(Infinity);
+    expect(handler.getActiveCamera().position.length()).toBeCloseTo(1e12, 0);
+    handler.dispose();
   });
 
   describe("screen space panning", () => {
