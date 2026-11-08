@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import createCache from "@emotion/cache";
-import { CacheProvider } from "@emotion/react";
 import {
   Alert,
   Button,
@@ -23,45 +21,89 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
-import { TssCacheProvider } from "tss-react";
 
+import AppCssBaseline from "@lichtblick/suite-base/components/CssBaseline";
+import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
 import { DockPanelContext } from "./DockPanelContext";
+import { useMonitorSetup } from "./MonitorSetupContext";
+import { PanelWindowWorkspace } from "./PanelWindowWorkspace";
 import Stack from "./Stack";
+import { WindowBounds } from "./monitorSetup";
 
 type DocumentPiP = {
   requestWindow: (options: { width: number; height: number }) => Promise<Window>;
 };
 type WindowActions = {
-  open: (mode: "popout" | "pip") => void;
+  open: (mode: "popout" | "pip", bounds?: WindowBounds, existing?: Window) => void;
   close: () => void;
   isOpen: boolean;
   supportsPiP: boolean;
 };
 export const PanelWindowContext = createContext<WindowActions | undefined>(undefined);
 
-/** Copy global CSS; panel styles are inserted into this document by its own Emotion caches. */
-function copyStyles(source: Document, target: Document) {
-  for (const sheet of source.styleSheets) {
-    try {
-      const style = target.createElement("style");
-      style.textContent = Array.from(sheet.cssRules, (rule) => rule.cssText).join("\n");
-      target.head.appendChild(style);
-    } catch {
-      if (sheet.href) {
-        const link = target.createElement("link");
-        link.rel = "stylesheet";
-        link.href = sheet.href;
-        target.head.appendChild(link);
+/** Mirror global/library CSS, including styles loaded by panels added after the window opens. */
+function copyStyles(source: Document, target: Document): () => void {
+  const copies = new Map<CSSStyleSheet, HTMLStyleElement | HTMLLinkElement>();
+  const sync = () => {
+    const sheets = new Set(source.styleSheets);
+    for (const [sheet, copy] of copies) {
+      if (!sheets.has(sheet)) {
+        copy.remove();
+        copies.delete(sheet);
       }
     }
-  }
+    for (const sheet of sheets) {
+      try {
+        let copy = copies.get(sheet);
+        if (!copy) {
+          copy = target.createElement(sheet.href ? "link" : "style");
+          if (copy instanceof target.defaultView!.HTMLLinkElement) {
+            copy.rel = "stylesheet";
+            copy.href = sheet.href!;
+          }
+          copies.set(sheet, copy);
+          target.head.appendChild(copy);
+        }
+        copy.media = sheet.disabled ? "not all" : sheet.media.mediaText;
+        if (!sheet.href) {
+          const css = Array.from(sheet.cssRules, (rule) => rule.cssText).join("\n");
+          if (copy.textContent !== css) {
+            copy.textContent = css;
+          }
+        }
+      } catch {
+        // Inaccessible CSS rules must not prevent the panel window from opening.
+        copies.get(sheet)?.remove();
+        copies.delete(sheet);
+      }
+    }
+  };
+  sync();
+  const observer = new MutationObserver(sync);
+  observer.observe(source.head, {
+    childList: true,
+    subtree: true,
+    characterData: true,
+    attributes: true,
+    attributeFilter: ["href", "media", "disabled"],
+  });
+  source.head.addEventListener("load", sync, true);
+  return () => {
+    observer.disconnect();
+    source.head.removeEventListener("load", sync, true);
+    copies.forEach((copy) => {
+      copy.remove();
+    });
+    copies.clear();
+  };
 }
 
 /** Give portaled controls their own caches so new styles stay in the panel document. */
 function PanelWindowStyles({ target, children }: PropsWithChildren<{ target: Window }>) {
   const outerTheme = useTheme();
+  useLayoutEffect(() => copyStyles(document, target.document), [target]);
   const theme = useMemo(
     () => ({
       ...outerTheme,
@@ -78,30 +120,23 @@ function PanelWindowStyles({ target, children }: PropsWithChildren<{ target: Win
     }),
     [outerTheme, target],
   );
-  const caches = useMemo(
-    () => ({
-      mui: createCache({ key: "mui", prepend: true, container: target.document.head }),
-      tss: createCache({ key: "tss", container: target.document.head }),
-    }),
-    [target],
-  );
   return (
-    <CacheProvider value={caches.mui}>
-      <TssCacheProvider value={caches.tss}>
-        <MuiThemeProvider theme={theme}>
-          <CssBaseline />
-          {children}
-        </MuiThemeProvider>
-      </TssCacheProvider>
-    </CacheProvider>
+    <ThemeProvider isDark={outerTheme.palette.mode === "dark"} ownerDocument={target.document}>
+      <MuiThemeProvider theme={theme}>
+        <CssBaseline />
+        <AppCssBaseline>{children}</AppCssBaseline>
+      </MuiThemeProvider>
+    </ThemeProvider>
   );
 }
 
 /** Keep the shared player/context, but recreate renderers rather than adopt a live canvas. */
 export function PanelWindow({ children, title }: PropsWithChildren<{ title: string }>): ReactNode {
+  const setup = useMonitorSetup();
   const parent = useContext(PanelWindowContext);
   const dock = useContext(DockPanelContext);
   const [windowMode, setWindowMode] = useState<"popout" | "pip">("popout");
+  const windowModeRef = useRef<"popout" | "pip">("popout");
   const { t } = useTranslation("panelToolbar");
   const [target, setTarget] = useState<Window>();
   const [failed, setFailed] = useState(false);
@@ -168,19 +203,31 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
       close: () => {
         windowRef.current?.close();
       },
-      open: (mode) => {
+      open: (mode, bounds, existing) => {
         if (pending.current || windowRef.current != undefined) {
+          if (bounds && windowRef.current && windowModeRef.current === "popout") {
+            windowRef.current.moveTo(bounds.left, bounds.top);
+            windowRef.current.resizeTo(bounds.width, bounds.height);
+          }
           windowRef.current?.focus();
           return;
         }
         pending.current = true;
+        windowModeRef.current = mode;
         setWindowMode(mode);
         setFailed(false);
         const open = async () => {
           const child =
             mode === "pip"
               ? await pip?.requestWindow({ width: 800, height: 600 })
-              : window.open("about:blank", "_blank", "popup,width=1000,height=700");
+              : (existing ??
+                window.open(
+                  "about:blank",
+                  "_blank",
+                  bounds
+                    ? `popup,left=${bounds.left},top=${bounds.top},width=${bounds.width},height=${bounds.height}`
+                    : "popup,width=1000,height=700",
+                ));
           if (!child) {
             throw new Error("Panel window unavailable");
           }
@@ -189,6 +236,10 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
             return;
           }
           windowRef.current = child;
+          if (bounds) {
+            child.moveTo(bounds.left, bounds.top);
+            child.resizeTo(bounds.width, bounds.height);
+          }
           const doc = child.document;
           doc.title = title;
           doc.documentElement.lang = document.documentElement.lang;
@@ -196,7 +247,6 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           const base = doc.createElement("base");
           base.href = document.baseURI;
           doc.head.appendChild(base);
-          copyStyles(document, doc);
           doc.body.style.cssText = "margin:0;width:100vw;height:100vh;display:flex;overflow:hidden";
           const restore = () => {
             windowRef.current = undefined;
@@ -253,6 +303,20 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
     [pip, target, title],
   );
 
+  const register = setup?.register;
+  useEffect(() => {
+    if (!register || !dock || parent?.isOpen === true || isDesktopApp()) {
+      return;
+    }
+    return register(dock.api.id, {
+      open: (bounds, existing) => {
+        actions.open("popout", bounds, existing);
+      },
+      getWindow: () => (windowModeRef.current === "popout" ? windowRef.current : undefined),
+      isOpen: actions.isOpen,
+    });
+  }, [actions, dock, parent?.isOpen, register]);
+
   // A Tab panel can contain several panels; all of them share its one floating window.
   if (isDesktopApp() || parent?.isOpen === true) {
     return children;
@@ -275,7 +339,11 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           )}
           {createPortal(
             <PanelWindowStyles target={target}>
-              <DockPanelContext.Provider value={undefined}>{children}</DockPanelContext.Provider>
+              <DockPanelContext.Provider value={undefined}>
+                <PanelWindowWorkspace target={target} title={title} rootId={dock?.api.id}>
+                  {children}
+                </PanelWindowWorkspace>
+              </DockPanelContext.Provider>
             </PanelWindowStyles>,
             target.document.body,
           )}

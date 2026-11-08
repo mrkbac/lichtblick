@@ -8,6 +8,16 @@
 export const appBar = {
   about: "About",
   addPanel: "Add panel",
+  newWindow: "New window",
+  saveMonitorSetup: "Save monitor setup on this computer",
+  restoreMonitorSetup: "Restore monitor setup",
+  monitorSetupRestoreFailed:
+    "Could not restore monitor setup. Allow pop-ups for this site and try again.",
+  monitorSetupSaved: "Monitor setup saved on this computer for this layout.",
+  monitorSetupSaveFailed: "Could not save monitor setup. Check browser storage access.",
+  monitorWindowBlocked: "Could not open a window. Allow pop-ups for this site and try again.",
+  monitorPanelsMissing:
+    "Some saved panels are no longer in this layout. The remaining windows were restored.",
   documentation: "Documentation",
   checkForUpdates: "Check for updates",
   exploreSampleData: "Explore sample data",

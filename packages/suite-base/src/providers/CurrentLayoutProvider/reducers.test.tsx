@@ -441,6 +441,28 @@ describe("layout reducers", () => {
       });
     });
 
+    it("keeps a monitor container while panels are added and removed", () => {
+      const monitor = panelsReducer(emptyLayout, {
+        type: "ADD_PANEL",
+        payload: {
+          id: "Tab!window",
+          config: { isWindow: true, tabs: [{ title: "1" }], activeTabIdx: 0 },
+        },
+      });
+      expect(getPanelIds(monitor.layout)).toEqual(["Tab!window"]);
+      const filled = panelsReducer(monitor, {
+        type: "ADD_PANEL",
+        payload: { id: "Image!one", tabId: "Tab!window" },
+      });
+      expect(getPanelIds(filled.layout)).toEqual(["Tab!window"]);
+      expect(getTabs(filled.configById["Tab!window"])[0]?.layout).toEqual({
+        panels: ["Image!one"],
+      });
+      const empty = panelsReducer(filled, { type: "CLOSE_PANEL", payload: { id: "Image!one" } });
+      expect(getPanelIds(empty.layout)).toEqual(["Tab!window"]);
+      expect(getTabs(empty.configById["Tab!window"])[0]?.layout).toBeUndefined();
+    });
+
     it("removes empty tabs", () => {
       const result = panelsReducer(withTabs, { type: "CLOSE_PANEL", payload: { id: "B!1" } });
       expect(getTabs(result.configById["Tab!t"]).map((tab) => tab.title)).toEqual(["one", "two"]);

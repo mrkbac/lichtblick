@@ -8,7 +8,7 @@ import { render, waitFor } from "@testing-library/react";
 
 import * as palette from "@lichtblick/theme/src/palette";
 
-import ThemeProvider from "./ThemeProvider";
+import ThemeProvider, { ThemeDocumentContext } from "./ThemeProvider";
 
 const themeColor = () =>
   document.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content;
@@ -85,4 +85,60 @@ it("styles a panel document without changing the opener's theme", () => {
     }
     iframe.remove();
   }
+});
+
+it("updates a child document's PWA color and color mode without changing the opener", async () => {
+  const iframe = document.createElement("iframe");
+  document.body.appendChild(iframe);
+  const child = iframe.contentDocument!;
+  const parentColor = themeColor();
+  const { rerender, unmount } = render(<ThemeProvider isDark ownerDocument={child} />);
+  expect(child.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content).toBe(
+    palette.dark.appBar.main,
+  );
+  rerender(<ThemeProvider isDark={false} ownerDocument={child} />);
+  await waitFor(() => {
+    expect(child.documentElement.dataset.colorMode).toBe("light");
+  });
+  expect(child.querySelector<HTMLMetaElement>('meta[name="theme-color"]')?.content).toBe(
+    palette.light.appBar.main,
+  );
+  expect(themeColor()).toBe(parentColor);
+  unmount();
+  iframe.remove();
+});
+
+it("keeps nested panel themes from overwriting the document's color mode and PWA chrome", async () => {
+  render(
+    <ThemeProvider isDark={false}>
+      <ThemeProvider isDark />
+    </ThemeProvider>,
+  );
+  await waitFor(() => {
+    expect(document.documentElement.dataset.colorMode).toBe("light");
+  });
+  expect(themeColor()).toBe(palette.light.appBar.main);
+});
+
+it("puts a separate root's theme styles in its owning document", () => {
+  const iframe = document.createElement("iframe");
+  document.body.appendChild(iframe);
+  const child = iframe.contentDocument!;
+  child.documentElement.dataset.colorMode = "light";
+  const meta = child.createElement("meta");
+  meta.name = "theme-color";
+  meta.content = "outer-window-theme";
+  child.head.appendChild(meta);
+  const { unmount } = render(
+    <ThemeDocumentContext.Provider value={child}>
+      <ThemeProvider isDark>
+        <Button>Panel control</Button>
+      </ThemeProvider>
+    </ThemeDocumentContext.Provider>,
+  );
+  expect(child.head.querySelector('style[data-emotion="mui"]')).not.toBeNull();
+  expect(child.documentElement.dataset.colorMode).toBe("light");
+  expect(meta.content).toBe("outer-window-theme");
+  unmount();
+  iframe.remove();
 });

@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Divider, Typography } from "@mui/material";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useUnmount } from "react-use";
 
@@ -14,9 +14,11 @@ import { SettingsTree } from "@lichtblick/suite";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { useConfigById } from "@lichtblick/suite-base/PanelAPI";
 import { useMessagePipelineGetter } from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMonitorSetup } from "@lichtblick/suite-base/components/MonitorSetupContext";
 import { ActionMenu } from "@lichtblick/suite-base/components/PanelSettings/ActionMenu";
 import { EmptyWrapper } from "@lichtblick/suite-base/components/PanelSettings/EmptyWrapper";
 import { buildSettingsTree } from "@lichtblick/suite-base/components/PanelSettings/settingsTree";
+import { PanelWindowContext } from "@lichtblick/suite-base/components/PanelWindow";
 import SettingsTreeEditor from "@lichtblick/suite-base/components/SettingsTreeEditor";
 import { ShareJsonModal } from "@lichtblick/suite-base/components/ShareJsonModal";
 import { SidebarContent } from "@lichtblick/suite-base/components/SidebarContent";
@@ -36,6 +38,9 @@ import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
 import { PanelConfig } from "@lichtblick/suite-base/types/panels";
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import { getAllPanelIds } from "@lichtblick/suite-base/util/tabLayout";
+
+const selectLayoutData = (state: LayoutState) => state.selectedLayout?.data;
+const EMPTY_IDS: readonly string[] = [];
 
 const singlePanelIdSelector = (state: LayoutState) => {
   const data = state.selectedLayout?.data;
@@ -60,13 +65,29 @@ export default function PanelSettings({
   selectedPanelIdsForTests,
 }: PanelSettingsProps): React.JSX.Element {
   const { t } = useTranslation("panelSettings");
-  const singlePanelId = useCurrentLayoutSelector(singlePanelIdSelector);
+  const candidate = useCurrentLayoutSelector(singlePanelIdSelector);
+  const data = useCurrentLayoutSelector(selectLayoutData);
+  const inWindow = useContext(PanelWindowContext)?.isOpen === true;
+  const detached = useMonitorSetup()?.detachedPanelIds ?? EMPTY_IDS;
+  const hidden = useMemo(
+    () =>
+      new Set(
+        !inWindow && data
+          ? detached.flatMap((id) => getAllPanelIds({ ...data, layout: { panels: [id] } }))
+          : [],
+      ),
+    [data, detached, inWindow],
+  );
+  const singlePanelId = candidate != undefined && !hidden.has(candidate) ? candidate : undefined;
   const {
     selectedPanelIds: originalSelectedPanelIds,
     setSelectedPanelIds,
     selectAllPanels,
   } = useSelectedPanels();
-  const selectedPanelIds = selectedPanelIdsForTests ?? originalSelectedPanelIds;
+  const selectedPanelIds = useMemo(
+    () => selectedPanelIdsForTests ?? originalSelectedPanelIds.filter((id) => !hidden.has(id)),
+    [hidden, originalSelectedPanelIds, selectedPanelIdsForTests],
+  );
 
   const [enableNewTopNav = true] = useAppConfigurationValue<boolean>(AppSetting.ENABLE_NEW_TOPNAV);
 

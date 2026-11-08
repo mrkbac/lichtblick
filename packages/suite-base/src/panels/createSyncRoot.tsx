@@ -7,6 +7,8 @@
 
 import { createRoot, Root } from "react-dom/client";
 
+import { ThemeDocumentContext } from "@lichtblick/suite-base/theme/ThemeProvider";
+
 /**
  * Creates a root for rendering React components.
  *
@@ -22,7 +24,11 @@ export function createSyncRoot(
   panelElement: HTMLDivElement,
 ): () => void {
   const root: Root = createRoot(panelElement);
-  root.render(component);
+  root.render(
+    <ThemeDocumentContext.Provider value={panelElement.ownerDocument}>
+      {component}
+    </ThemeDocumentContext.Provider>,
+  );
   return () => {
     // Use queueMicrotask to ensure that the unmount occurs after the render cycle
     queueMicrotask(() => {

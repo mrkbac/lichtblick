@@ -287,7 +287,10 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
   const close = (index: number) => {
     // Closing a tab removes its panels; their configs go with it.
     saveConfig({
-      tabs: tabs.filter((_tab, i) => i !== index),
+      tabs:
+        config.isWindow === true && tabs.length === 1
+          ? [{ title: "1" }]
+          : tabs.filter((_tab, i) => i !== index),
       activeTabIdx: index < activeIdx || activeIdx === tabs.length - 1 ? activeIdx - 1 : activeIdx,
     });
   };
