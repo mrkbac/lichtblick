@@ -165,11 +165,11 @@ describe("FoxgloveWebSocketPlayer live history", () => {
     ws.receive(
       JSON.stringify({
         op: "parameterValues",
-        parameters: [{ name: "binary", type: "byte_array", value: encoded }],
+        parameters: [{ name: "received_binary", type: "byte_array", value: encoded }],
       }),
     );
     await flush();
-    expect(last().parameters?.get("binary")).toEqual(bytes);
+    expect(last().parameters?.get("received_binary")).toEqual(bytes);
   });
 
   it.each([" /x==\n", "/x", "/x=="])("decodes legacy loose Base64 %j", async (encoded) => {
