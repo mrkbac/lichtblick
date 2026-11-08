@@ -127,3 +127,31 @@ describe("useSettingsTree", () => {
     expect(general.fields!.path!.error).toEqual(props.pathParseError);
   });
 });
+
+it("shows angle settings only for inclinometers", () => {
+  const { result } = renderHook(() =>
+    useSettingsTree({
+      config: GaugeBuilder.config({ displayMode: "roll" }),
+      error: undefined,
+      pathParseError: undefined,
+    }),
+  );
+  expect(result.current.general.fields!.angleUnit).toBeDefined();
+  expect(result.current.general.fields!.angleRange).toMatchObject({ value: 40 });
+  expect(result.current.general.fields!.warningAngle).toMatchObject({ value: 20 });
+  expect(result.current.general.fields!.criticalAngle).toMatchObject({ value: 30 });
+  expect(result.current.general.fields!.angleRange!.error).toBeUndefined();
+  expect(result.current.general.fields!.minValue).toBeUndefined();
+  expect(result.current.general.fields!.colorMode).toBeUndefined();
+});
+
+it("reports invalid angle thresholds in settings", () => {
+  const { result } = renderHook(() =>
+    useSettingsTree({
+      config: GaugeBuilder.config({ displayMode: "roll", warningAngle: 50 }),
+      error: undefined,
+      pathParseError: undefined,
+    }),
+  );
+  expect(result.current.general.fields!.angleRange!.error).toBe("invalidAngles");
+});

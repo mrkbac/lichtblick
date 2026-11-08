@@ -246,3 +246,26 @@ export const StringValue: StoryObj = {
     },
   },
 };
+
+export const Roll: StoryObj = {
+  render: () => <GaugePanel overrideConfig={{ path: "/data.value", displayMode: "roll" }} />,
+  parameters: { panelSetup: { fixture: makeFixture(12) } },
+};
+
+export const Pitch: StoryObj = {
+  render: () => <GaugePanel overrideConfig={{ path: "/data.value", displayMode: "pitch" }} />,
+  parameters: { panelSetup: { fixture: makeFixture(-25) } },
+};
+
+export const RollRadians: StoryObj = {
+  render: () => (
+    <GaugePanel
+      overrideConfig={{ path: "/data.value", displayMode: "roll", angleUnit: "radians" }}
+    />
+  ),
+  parameters: { panelSetup: { fixture: makeFixture(Math.PI / 6) } },
+};
+
+export const InclinometerNoData: StoryObj = {
+  render: () => <GaugePanel overrideConfig={{ displayMode: "roll" }} />,
+};

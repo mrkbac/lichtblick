@@ -21,6 +21,11 @@ export const DATA_TYPES = [
 ];
 
 export const DEFAULT_CONFIG: GaugeConfig = {
+  displayMode: "arc",
+  angleUnit: "degrees",
+  angleRange: 40,
+  warningAngle: 20,
+  criticalAngle: 30,
   colorMap: ColorMapConfig.RED_YELLOW_GREEN,
   colorMode: ColorModeConfig.COLORMAP,
   gradient: ["#0000ff", "#ff00ff"],
