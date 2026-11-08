@@ -260,14 +260,27 @@ export default function PlayerManager(
         // edited or renamed copy is reopened and same-named layouts are never picked up.
         if (foundSource.sampleLayout) {
           const storageKey = `lichtblick.sampleLayoutId.${foundSource.id}`;
+          const versionKey = `${storageKey}.version`;
+          const version = String(foundSource.sampleLayoutVersion ?? 1);
           let savedId = sampleLayoutIds.current.get(storageKey);
+          let savedVersion: string | undefined = version;
           try {
             savedId ??= (localStorage.getItem(storageKey) as LayoutID | null) ?? undefined;
+            // Copies saved before versions were tracked are version 1.
+            savedVersion = localStorage.getItem(versionKey) ?? "1";
           } catch (error) {
             log.warn("Could not read the saved sample layout id", error);
           }
           try {
-            const existing = savedId ? await layoutManager.getLayout(savedId) : undefined;
+            let existing = savedId ? await layoutManager.getLayout(savedId) : undefined;
+            if (existing && savedVersion !== version) {
+              // The sample layout changed: keep the old copy, with any edits, under another name.
+              await layoutManager.updateLayout({
+                id: existing.id,
+                name: `${existing.name} (previous version)`,
+              });
+              existing = undefined;
+            }
             const layout =
               existing ??
               (await layoutManager.saveNewLayout({
@@ -278,6 +291,7 @@ export default function PlayerManager(
             sampleLayoutIds.current.set(storageKey, layout.id);
             try {
               localStorage.setItem(storageKey, layout.id);
+              localStorage.setItem(versionKey, version);
             } catch (error) {
               log.warn("Could not save the sample layout id; it is kept for this session", error);
             }

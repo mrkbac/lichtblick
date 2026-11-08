@@ -1,161 +1,5 @@
 {
   "configById": {
-    "Image!s2ii8x": {
-      "imageMode": {
-        "imageTopic": "/CAM_FRONT_LEFT/image_rect_compressed",
-        "calibrationTopic": "/CAM_FRONT_LEFT/camera_info",
-        "synchronize": false,
-        "rotation": 0,
-        "annotations": {
-          "/CAM_FRONT_LEFT/annotations": {
-            "visible": true
-          },
-          "/CAM_FRONT_LEFT/lidar": {
-            "visible": false
-          }
-        }
-      },
-      "cameraState": {
-        "distance": 20,
-        "perspective": true,
-        "phi": 60,
-        "target": [0, 0, 0],
-        "targetOffset": [0, 0, 0],
-        "targetOrientation": [0, 0, 0, 1],
-        "thetaOffset": 45,
-        "fovy": 45,
-        "near": 0.5,
-        "far": 5000
-      },
-      "followMode": "follow-pose",
-      "scene": {},
-      "transforms": {},
-      "topics": {
-        "/LIDAR_TOP": {
-          "visible": true,
-          "colorField": "intensity",
-          "colorMode": "colormap",
-          "colorMap": "turbo"
-        },
-        "/semantic_map": {
-          "visible": true
-        }
-      },
-      "layers": {},
-      "publish": {
-        "type": "point",
-        "poseTopic": "/move_base_simple/goal",
-        "pointTopic": "/clicked_point",
-        "poseEstimateTopic": "/initialpose",
-        "poseEstimateXDeviation": 0.5,
-        "poseEstimateYDeviation": 0.5,
-        "poseEstimateThetaDeviation": 0.26179939
-      }
-    },
-    "Image!qd8g5l": {
-      "imageMode": {
-        "imageTopic": "/CAM_FRONT/image_rect_compressed",
-        "calibrationTopic": "/CAM_FRONT/camera_info",
-        "synchronize": false,
-        "rotation": 0,
-        "annotations": {
-          "/CAM_FRONT/lidar": {
-            "visible": false
-          },
-          "/CAM_FRONT/annotations": {
-            "visible": true
-          }
-        }
-      },
-      "cameraState": {
-        "distance": 20,
-        "perspective": true,
-        "phi": 60,
-        "target": [0, 0, 0],
-        "targetOffset": [0, 0, 0],
-        "targetOrientation": [0, 0, 0, 1],
-        "thetaOffset": 45,
-        "fovy": 45,
-        "near": 0.5,
-        "far": 5000
-      },
-      "followMode": "follow-pose",
-      "scene": {},
-      "transforms": {},
-      "topics": {
-        "/LIDAR_TOP": {
-          "visible": true,
-          "colorField": "intensity",
-          "colorMode": "colormap",
-          "colorMap": "turbo"
-        },
-        "/semantic_map": {
-          "visible": true
-        }
-      },
-      "layers": {},
-      "publish": {
-        "type": "point",
-        "poseTopic": "/move_base_simple/goal",
-        "pointTopic": "/clicked_point",
-        "poseEstimateTopic": "/initialpose",
-        "poseEstimateXDeviation": 0.5,
-        "poseEstimateYDeviation": 0.5,
-        "poseEstimateThetaDeviation": 0.26179939
-      }
-    },
-    "Image!37zuv25": {
-      "imageMode": {
-        "imageTopic": "/CAM_FRONT_RIGHT/image_rect_compressed",
-        "calibrationTopic": "/CAM_FRONT_RIGHT/camera_info",
-        "synchronize": false,
-        "rotation": 0,
-        "annotations": {
-          "/CAM_FRONT_RIGHT/annotations": {
-            "visible": true
-          },
-          "/CAM_FRONT_RIGHT/lidar": {
-            "visible": false
-          }
-        }
-      },
-      "cameraState": {
-        "distance": 20,
-        "perspective": true,
-        "phi": 60,
-        "target": [0, 0, 0],
-        "targetOffset": [0, 0, 0],
-        "targetOrientation": [0, 0, 0, 1],
-        "thetaOffset": 45,
-        "fovy": 45,
-        "near": 0.5,
-        "far": 5000
-      },
-      "followMode": "follow-pose",
-      "scene": {},
-      "transforms": {},
-      "topics": {
-        "/LIDAR_TOP": {
-          "visible": true,
-          "colorField": "intensity",
-          "colorMode": "colormap",
-          "colorMap": "turbo"
-        },
-        "/semantic_map": {
-          "visible": true
-        }
-      },
-      "layers": {},
-      "publish": {
-        "type": "point",
-        "poseTopic": "/move_base_simple/goal",
-        "pointTopic": "/clicked_point",
-        "poseEstimateTopic": "/initialpose",
-        "poseEstimateXDeviation": 0.5,
-        "poseEstimateYDeviation": 0.5,
-        "poseEstimateThetaDeviation": 0.26179939
-      }
-    },
     "3D!12ucir": {
       "cameraState": {
         "distance": 35,
@@ -249,19 +93,6 @@
       "followTf": "base_link",
       "imageMode": {}
     },
-    "map!2vkib4e": {
-      "disabledTopics": [],
-      "zoomLevel": 17,
-      "layer": "map",
-      "customTileUrl": "",
-      "followTopic": "",
-      "center": {
-        "lat": 1.2988182017789598,
-        "lon": 103.78844261169435
-      },
-      "topicColors": {},
-      "maxNativeZoom": 18
-    },
     "3D!3edtgyg": {
       "cameraState": {
         "perspective": false,
@@ -317,7 +148,73 @@
       },
       "followMode": "follow-pose",
       "followTf": "base_link",
-      "imageMode": {}
+      "imageMode": {},
+      "lichtblickPanelTitle": "Lidar & radar (top down)"
+    },
+    "Image!qd8g5l": {
+      "imageMode": {
+        "imageTopic": "/CAM_FRONT/image_rect_compressed",
+        "calibrationTopic": "/CAM_FRONT/camera_info",
+        "synchronize": false,
+        "rotation": 0,
+        "annotations": {
+          "/CAM_FRONT/lidar": {
+            "visible": false
+          },
+          "/CAM_FRONT/annotations": {
+            "visible": true
+          }
+        }
+      },
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [0, 0, 0],
+        "targetOffset": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {
+        "/LIDAR_TOP": {
+          "visible": true,
+          "colorField": "intensity",
+          "colorMode": "colormap",
+          "colorMap": "turbo"
+        },
+        "/semantic_map": {
+          "visible": true
+        }
+      },
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      }
+    },
+    "map!2vkib4e": {
+      "disabledTopics": [],
+      "zoomLevel": 17,
+      "layer": "map",
+      "customTileUrl": "",
+      "followTopic": "",
+      "center": {
+        "lat": 1.2988182017789598,
+        "lon": 103.78844261169435
+      },
+      "topicColors": {},
+      "maxNativeZoom": 18
     },
     "Plot!2pb7zl7": {
       "paths": [
@@ -342,7 +239,7 @@
       "legendDisplay": "floating",
       "showPlotValuesInLegend": false,
       "sidebarDimension": 240,
-      "lichtblickPanelTitle": "Plot"
+      "lichtblickPanelTitle": "Acceleration & throttle"
     },
     "Plot!4792hqu": {
       "paths": [
@@ -377,7 +274,7 @@
       "legendDisplay": "floating",
       "showPlotValuesInLegend": false,
       "sidebarDimension": 240,
-      "lichtblickPanelTitle": "Plot"
+      "lichtblickPanelTitle": "Wheel speeds"
     },
     "StateTransitions!3i4dk1l": {
       "paths": [
@@ -409,6 +306,343 @@
       "diffEnabled": false,
       "showFullMessageForDiff": false,
       "autoExpandMode": "auto"
+    },
+    "CameraGrid!6cams": {
+      "tiles": [
+        {
+          "topic": "/CAM_FRONT_LEFT/image_rect_compressed",
+          "visible": true,
+          "fit": "fit",
+          "rotation": 0,
+          "flipHorizontal": false,
+          "flipVertical": false
+        },
+        {
+          "topic": "/CAM_FRONT/image_rect_compressed",
+          "visible": true,
+          "fit": "fit",
+          "rotation": 0,
+          "flipHorizontal": false,
+          "flipVertical": false
+        },
+        {
+          "topic": "/CAM_FRONT_RIGHT/image_rect_compressed",
+          "visible": true,
+          "fit": "fit",
+          "rotation": 0,
+          "flipHorizontal": false,
+          "flipVertical": false
+        },
+        {
+          "topic": "/CAM_BACK_LEFT/image_rect_compressed",
+          "visible": true,
+          "fit": "fit",
+          "rotation": 0,
+          "flipHorizontal": false,
+          "flipVertical": false
+        },
+        {
+          "topic": "/CAM_BACK/image_rect_compressed",
+          "visible": true,
+          "fit": "fit",
+          "rotation": 0,
+          "flipHorizontal": false,
+          "flipVertical": false
+        },
+        {
+          "topic": "/CAM_BACK_RIGHT/image_rect_compressed",
+          "visible": true,
+          "fit": "fit",
+          "rotation": 0,
+          "flipHorizontal": false,
+          "flipVertical": false
+        }
+      ],
+      "columns": 3,
+      "showLabels": true,
+      "showTimestamps": false,
+      "linkZoom": false,
+      "syncAnnotations": false
+    },
+    "Gauge!speed": {
+      "path": "/odom.vel.x",
+      "minValue": 0,
+      "maxValue": 15,
+      "colorMap": "red-yellow-green",
+      "colorMode": "colormap",
+      "gradient": ["#0000ff", "#ff00ff"],
+      "reverse": false,
+      "lichtblickPanelTitle": "Speed (m/s)"
+    },
+    "Gauge!accel": {
+      "path": "/imu.linear_accel.x",
+      "minValue": -3,
+      "maxValue": 3,
+      "colorMap": "red-yellow-green",
+      "colorMode": "colormap",
+      "gradient": ["#0000ff", "#ff00ff"],
+      "reverse": false,
+      "lichtblickPanelTitle": "Longitudinal accel (m/s²)"
+    },
+    "Indicator!drive": {
+      "path": "/imu.linear_accel.x",
+      "style": "background",
+      "fallbackColor": "#a0a0a0",
+      "fallbackLabel": "Cruising",
+      "rules": [
+        {
+          "operator": "<",
+          "rawValue": "-1",
+          "color": "#e5484d",
+          "label": "Braking"
+        },
+        {
+          "operator": ">",
+          "rawValue": "1",
+          "color": "#68e24a",
+          "label": "Accelerating"
+        }
+      ],
+      "lichtblickPanelTitle": "Drive state"
+    },
+    "Watch!vehicle": {
+      "rows": [
+        {
+          "id": "row-speed",
+          "path": "/odom.vel.x.@mul(3.6)",
+          "label": "Speed",
+          "unit": "km/h",
+          "precision": 1
+        },
+        {
+          "id": "row-accel",
+          "path": "/imu.linear_accel.x",
+          "label": "Longitudinal accel",
+          "unit": "m/s²",
+          "precision": 2
+        },
+        {
+          "id": "row-lat-accel",
+          "path": "/imu.linear_accel.y",
+          "label": "Lateral accel",
+          "unit": "m/s²",
+          "precision": 2
+        },
+        {
+          "id": "row-yaw",
+          "path": "/imu.rotation_rate.z",
+          "label": "Yaw rate",
+          "unit": "rad/s",
+          "precision": 3
+        },
+        {
+          "id": "row-odom-x",
+          "path": "/odom.pos.x",
+          "label": "Odometry x",
+          "unit": "m",
+          "precision": 2
+        },
+        {
+          "id": "row-odom-y",
+          "path": "/odom.pos.y",
+          "label": "Odometry y",
+          "unit": "m",
+          "precision": 2
+        },
+        {
+          "id": "row-lat",
+          "path": "/gps.latitude",
+          "label": "Latitude",
+          "precision": 6
+        },
+        {
+          "id": "row-lon",
+          "path": "/gps.longitude",
+          "label": "Longitude",
+          "precision": 6
+        }
+      ],
+      "sparklines": true,
+      "flashChanges": true,
+      "showAge": true,
+      "staleAfterSec": 2
+    },
+    "Table!odom": {
+      "topicPath": "/odom"
+    },
+    "TopicHealth!all": {
+      "tolerancePercent": 20,
+      "topics": {}
+    },
+    "TransformTree!tf": {},
+    "PlaybackPerformance!perf": {},
+    "Notes!about": {
+      "text": "# nuScenes sample\n\nA short drive through Singapore, adapted from the nuScenes dataset.\n\n- **Tabs hold whole layouts.** Every tab here is split into several panels. Drop a panel on the middle of another to make tabs, or on a panel's edge inside a tab to split that tab.\n- **Rename a tab** with a double-click.\n- **Drag panels** by the grip at the left of their toolbar.\n- Hover a message path in any panel to see where it comes from; open a panel's settings with the gear."
+    },
+    "Tab!main": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "Drive",
+          "layout": {
+            "direction": "row",
+            "children": [
+              {
+                "panels": ["3D!12ucir"]
+              },
+              {
+                "direction": "column",
+                "children": [
+                  {
+                    "panels": ["Image!qd8g5l"]
+                  },
+                  {
+                    "panels": ["map!2vkib4e"]
+                  }
+                ],
+                "sizes": [50, 50]
+              }
+            ],
+            "sizes": [65, 35]
+          }
+        },
+        {
+          "title": "Cameras",
+          "layout": {
+            "panels": ["CameraGrid!6cams"]
+          }
+        },
+        {
+          "title": "Vehicle",
+          "layout": {
+            "direction": "column",
+            "children": [
+              {
+                "direction": "row",
+                "children": [
+                  {
+                    "panels": ["Gauge!speed"]
+                  },
+                  {
+                    "panels": ["Gauge!accel"]
+                  },
+                  {
+                    "panels": ["Indicator!drive"]
+                  }
+                ],
+                "sizes": [37.5, 37.5, 25]
+              },
+              {
+                "direction": "row",
+                "children": [
+                  {
+                    "panels": ["Plot!4792hqu"]
+                  },
+                  {
+                    "direction": "column",
+                    "children": [
+                      {
+                        "panels": ["Plot!2pb7zl7"]
+                      },
+                      {
+                        "panels": ["StateTransitions!3i4dk1l"]
+                      }
+                    ],
+                    "sizes": [60, 40]
+                  }
+                ],
+                "sizes": [50, 50]
+              }
+            ],
+            "sizes": [35, 65]
+          }
+        },
+        {
+          "title": "Lidar & radar",
+          "layout": {
+            "panels": ["3D!3edtgyg"]
+          }
+        }
+      ]
+    },
+    "Tab!inspect": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "Diagnostics",
+          "layout": {
+            "direction": "column",
+            "children": [
+              {
+                "panels": ["DiagnosticSummary!3equ26v"]
+              },
+              {
+                "panels": ["DiagnosticStatusPanel!4bdyip2"]
+              }
+            ],
+            "sizes": [45, 55]
+          }
+        },
+        {
+          "title": "Watch",
+          "layout": {
+            "panels": ["Watch!vehicle"]
+          }
+        },
+        {
+          "title": "Messages",
+          "layout": {
+            "direction": "column",
+            "children": [
+              {
+                "panels": ["RawMessages!21ab95j"]
+              },
+              {
+                "panels": ["Table!odom"]
+              }
+            ],
+            "sizes": [55, 45]
+          }
+        }
+      ]
+    },
+    "Tab!system": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "Topics",
+          "layout": {
+            "panels": ["TopicHealth!all"]
+          }
+        },
+        {
+          "title": "Transforms",
+          "layout": {
+            "panels": ["TransformTree!tf"]
+          }
+        },
+        {
+          "title": "Source",
+          "layout": {
+            "direction": "row",
+            "children": [
+              {
+                "panels": ["SourceInfo!7dc2bd"]
+              },
+              {
+                "panels": ["PlaybackPerformance!perf"]
+              }
+            ],
+            "sizes": [50, 50]
+          }
+        },
+        {
+          "title": "About",
+          "layout": {
+            "panels": ["Notes!about"]
+          }
+        }
+      ]
     }
   },
   "globalVariables": {},
@@ -417,34 +651,25 @@
     "speed": 1
   },
   "layout": {
-    "direction": "column",
+    "direction": "row",
     "children": [
       {
-        "direction": "row",
-        "children": [
-          {
-            "panels": [
-              "Image!s2ii8x",
-              "map!2vkib4e",
-              "Plot!2pb7zl7",
-              "StateTransitions!3i4dk1l",
-              "RawMessages!21ab95j"
-            ]
-          },
-          {
-            "panels": ["Image!qd8g5l", "3D!3edtgyg", "Plot!4792hqu", "DiagnosticSummary!3equ26v"]
-          },
-          {
-            "panels": ["Image!37zuv25", "DiagnosticStatusPanel!4bdyip2"]
-          }
-        ],
-        "sizes": [33.33, 33.33, 33.33]
+        "panels": ["Tab!main"]
       },
       {
-        "panels": ["3D!12ucir", "SourceInfo!7dc2bd"]
+        "direction": "column",
+        "children": [
+          {
+            "panels": ["Tab!inspect"]
+          },
+          {
+            "panels": ["Tab!system"]
+          }
+        ],
+        "sizes": [55, 45]
       }
     ],
-    "sizes": [30, 70]
+    "sizes": [66, 34]
   },
   "version": 2
 }
