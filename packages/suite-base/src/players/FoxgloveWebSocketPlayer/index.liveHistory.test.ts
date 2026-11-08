@@ -153,6 +153,48 @@ describe("FoxgloveWebSocketPlayer live history", () => {
     delete (global as { WebSocket?: unknown }).WebSocket;
   });
 
+  it.each([0, 256, 100_000])("round-trips %i byte parameter values", async (length) => {
+    const bytes = Uint8Array.from({ length }, (_, i) => i % 256);
+    const encoded = Buffer.from(bytes).toString("base64");
+    player.setParameter("binary", bytes);
+    expect(ws.send).toHaveBeenLastCalledWith(
+      expect.stringContaining(
+        JSON.stringify({ name: "binary", value: encoded, type: "byte_array" })!,
+      ),
+    );
+    ws.receive(
+      JSON.stringify({
+        op: "parameterValues",
+        parameters: [{ name: "received_binary", type: "byte_array", value: encoded }],
+      }),
+    );
+    await flush();
+    expect(last().parameters?.get("received_binary")).toEqual(bytes);
+  });
+
+  it.each([" /x==\n", "/x", "/x=="])("decodes legacy loose Base64 %j", async (encoded) => {
+    ws.receive(
+      JSON.stringify({
+        op: "parameterValues",
+        parameters: [{ name: "binary", type: "byte_array", value: encoded }],
+      }),
+    );
+    await flush();
+    expect(last().parameters?.get("binary")).toEqual(new Uint8Array([255]));
+  });
+
+  it.each(["A", "AA=", "AA===", "AA!A", "_w=="])("rejects malformed Base64 %j", (encoded) => {
+    expect(() => {
+      ws.receive(
+        JSON.stringify({
+          op: "parameterValues",
+          parameters: [{ name: "binary", type: "byte_array", value: encoded }],
+        }),
+      );
+    }).toThrow();
+    expect(last().parameters?.has("binary")).toBe(false);
+  });
+
   it("is live by default and exposes the buffered range", () => {
     expect(states.at(-1)!.capabilities).toEqual(
       expect.arrayContaining([

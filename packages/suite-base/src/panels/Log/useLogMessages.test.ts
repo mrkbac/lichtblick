@@ -201,6 +201,23 @@ describe("useLogMessages", () => {
     expect(result.current.items).toEqual([]);
   });
 
+  it("clears loading when the only unfinished topic is removed", async () => {
+    withRange();
+    const { rerender, result } = renderHook(({ topics }) => useLogMessages(topics), {
+      initialProps: { topics: TOPICS },
+    });
+    await act(async () => {
+      rangeIterators.get("/a")!("done");
+      await vi.runAllTimersAsync();
+    });
+    expect(result.current.loading).toBe(true);
+
+    rerender({ topics: ["/a"] });
+
+    expect(result.current.loading).toBe(false);
+    expect(cancelByTopic.get("/b")).toHaveBeenCalledTimes(1);
+  });
+
   it("falls back to a rolling buffer when the source has no range support", () => {
     (useSubscribeMessageRange as Mock).mockReturnValue(vi.fn(() => () => {}));
     (useMessagesByTopic as Mock).mockReturnValue({
