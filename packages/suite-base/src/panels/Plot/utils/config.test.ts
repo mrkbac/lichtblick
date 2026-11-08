@@ -5,7 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { getPlotMode, getTimeWindow, isReferenceLinePlotPathType, PlotConfig } from "./config";
+import {
+  getPlotMode,
+  getTimeWindow,
+  isReferenceLinePlotPathType,
+  PlotConfig,
+  yBound,
+} from "./config";
 
 describe("isReferenceLinePlotPathType", () => {
   it.each(["0", "1.2", "1e6"])("returns true for '%s'", (value) => {
@@ -61,5 +67,15 @@ describe("getPlotMode", () => {
 
   it("ignores the mode when x is not time", () => {
     expect(getPlotMode({ xAxisVal: "custom", plotMode: "fft" })).toBe("time");
+  });
+});
+
+describe("yBound", () => {
+  it("reads numbers and numeric strings, and treats empty or invalid bounds as auto", () => {
+    expect(yBound(5)).toBe(5);
+    expect(yBound("-2.5")).toBe(-2.5);
+    expect(yBound("")).toBeUndefined();
+    expect(yBound(undefined)).toBeUndefined();
+    expect(yBound("abc")).toBeUndefined();
   });
 });

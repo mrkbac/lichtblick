@@ -17,6 +17,7 @@ import {
   PlotConfig,
   PlotPath,
   plotPathDisplayName,
+  yBound,
 } from "@lichtblick/suite-base/panels/Plot/utils/config";
 import { PLOTABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/shared/constants";
 import { lineColors } from "@lichtblick/suite-base/util/plotColors";
@@ -344,12 +345,10 @@ function makeShadeSeriesOptions(paths: PlotPath[]): { label: string; value: stri
 }
 
 export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): SettingsTreeNodes {
+  const minY = yBound(config.minYValue);
+  const maxY = yBound(config.maxYValue);
   const maxYError =
-    _.isNumber(config.minYValue) &&
-    _.isNumber(config.maxYValue) &&
-    config.minYValue >= config.maxYValue
-      ? t("maxYError")
-      : undefined;
+    minY != undefined && maxY != undefined && minY >= maxY ? t("maxYError") : undefined;
 
   const maxY2Error =
     config.minY2Value != undefined &&
@@ -421,14 +420,14 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
         minYValue: {
           label: t("min"),
           input: "number",
-          value: config.minYValue != undefined ? Number(config.minYValue) : undefined,
+          value: minY,
           placeholder: "auto",
         },
         maxYValue: {
           label: t("max"),
           input: "number",
           error: maxYError,
-          value: config.maxYValue != undefined ? Number(config.maxYValue) : undefined,
+          value: maxY,
           placeholder: "auto",
         },
         showYAxisGrid: {
