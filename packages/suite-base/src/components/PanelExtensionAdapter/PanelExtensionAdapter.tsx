@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { fromSec, toSec } from "@foxglove/rostime";
+import { compare, fromSec, toSec } from "@foxglove/rostime";
 import { useTheme } from "@mui/material";
 import { produce } from "immer";
 import {
@@ -59,7 +59,7 @@ import {
   useSetHoverValue,
 } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
-import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { isRecordingSource, PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import {
   AdvertiseOptions,
   InternalSubscribePayload,
@@ -302,6 +302,7 @@ function PanelExtensionAdapter(
   const [undelivered] = useState(() => new UndeliveredMessages());
   // Pending frames belong to the seek that produced them.
   const lastSeekTimeRef = useRef(playerState.activeData?.lastSeekTime);
+  const lastCurrentTimeRef = useRef(playerState.activeData?.currentTime);
   // Watched fields update through React state; keep injected messages until currentFrame is watched.
   const deliverHeld = watchedFields.has("currentFrame");
   // The render-done callback belongs to the render that started it; read the current gate, since
@@ -318,10 +319,19 @@ function PanelExtensionAdapter(
 
   useLayoutEffect(() => {
     const lastSeekTime = playerState.activeData?.lastSeekTime;
-    if (lastSeekTime !== lastSeekTimeRef.current) {
+    const currentTime = playerState.activeData?.currentTime;
+    // Slow seeks acknowledge the target position before lastSeekTime changes.
+    const seekAcknowledged =
+      playerState.presence === PlayerPresence.BUFFERING &&
+      isRecordingSource(playerState.capabilities) &&
+      currentTime != undefined &&
+      lastCurrentTimeRef.current != undefined &&
+      compare(currentTime, lastCurrentTimeRef.current) !== 0;
+    if (lastSeekTime !== lastSeekTimeRef.current || seekAcknowledged) {
       undelivered.clearPending();
-      lastSeekTimeRef.current = lastSeekTime;
     }
+    lastSeekTimeRef.current = lastSeekTime;
+    lastCurrentTimeRef.current = currentTime;
     undelivered.hold(messageEvents);
 
     /**

@@ -26,7 +26,7 @@ import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPane
 import { AlertsContext, AlertsContextStore } from "@lichtblick/suite-base/context/AlertsContext";
 import { useHoverValue } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
-import { AdvertiseOptions } from "@lichtblick/suite-base/players/types";
+import { AdvertiseOptions, PlayerPresence } from "@lichtblick/suite-base/players/types";
 import * as PanelStateContextProvider from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import PanelSetup, { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
@@ -990,13 +990,24 @@ describe("PanelExtensionAdapter", () => {
           }
         };
       });
-      const Wrapper = ({ frame }: { frame: Record<string, MessageEvent[]> }) => (
+      const capabilities = recordingPaused ? [PLAYER_CAPABILITIES.playbackControl] : [];
+      const saveConfig = () => {};
+      const Wrapper = ({
+        frame,
+        presence,
+        currentTime,
+      }: {
+        frame: Record<string, MessageEvent[]>;
+        presence?: PlayerPresence;
+        currentTime?: Time;
+      }) => (
         <ThemeProvider isDark>
           <MockPanelContextProvider>
             <PanelSetup
               fixture={{
-                capabilities: recordingPaused ? [PLAYER_CAPABILITIES.playbackControl] : [],
-                activeData: { isPlaying: !recordingPaused },
+                capabilities,
+                activeData: { isPlaying: !recordingPaused, currentTime },
+                presence,
                 topics: [
                   { name: "fast", schemaName: "foo" },
                   { name: "latched", schemaName: "foo" },
@@ -1008,7 +1019,7 @@ describe("PanelExtensionAdapter", () => {
               // updates, so don't register render promises with it.
               pauseFrame={() => () => {}}
             >
-              <PanelExtensionAdapter config={{}} saveConfig={() => {}} initPanel={initPanel} />
+              <PanelExtensionAdapter config={{}} saveConfig={saveConfig} initPanel={initPanel} />
             </PanelSetup>
           </MockPanelContextProvider>
         </ThemeProvider>
@@ -1032,6 +1043,47 @@ describe("PanelExtensionAdapter", () => {
         });
       }
     }
+
+    it.each([
+      { presence: PlayerPresence.BUFFERING, sec: 10, shouldDeliver: false },
+      { presence: PlayerPresence.PRESENT, sec: 10, shouldDeliver: true },
+      { presence: PlayerPresence.BUFFERING, sec: 2, shouldDeliver: true },
+    ])(
+      "handles held recording frames during $presence at $sec seconds",
+      async ({ presence, sec, shouldDeliver }) => {
+        const { Wrapper, panel, held, delivered, subscribe } = setup({
+          watchCurrentFrame: false,
+          recordingPaused: true,
+        });
+        panel.hold = true;
+        const handle = render(
+          <Wrapper
+            frame={{ fast: [msg("fast", 1)], latched: [msg("latched", 2)] }}
+            currentTime={{ sec: 2, nsec: 0 }}
+          />,
+        );
+        await settle();
+        act(() => {
+          panel.context!.watch("currentFrame");
+        });
+        subscribe(["fast", "latched"]);
+        await settle();
+        expect(delivered()).toEqual([]);
+
+        // A slow seek acknowledges its new position before lastSeekTime changes.
+        handle.rerender(<Wrapper frame={{}} presence={presence} currentTime={{ sec, nsec: 0 }} />);
+        await settle();
+        panel.hold = false;
+        act(() => {
+          held.splice(0).forEach((done) => {
+            done();
+          });
+        });
+        await settle();
+
+        expect(delivered().includes("latched@2")).toBe(shouldDeliver);
+      },
+    );
 
     // Tab switch: the old tab's panel held /tf_static and leaves, the new tab's 3D panel subscribes
     // while it is still rendering its first frame. The pipeline injects the cached message into
