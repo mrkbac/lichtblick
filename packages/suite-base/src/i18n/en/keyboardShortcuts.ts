@@ -68,7 +68,7 @@ export const keyboardShortcuts = {
   finishDrawing: "Finish drawing",
   cancelDrawing: "Finish line, deselect or exit tool",
   deleteDrawingPoint: "Delete last point or selected drawing",
-  finishNote: "Finish editing",
+  finishNote: "Leave notes editor",
   publishMessage: "Publish message",
   callService: "Call service",
 };
