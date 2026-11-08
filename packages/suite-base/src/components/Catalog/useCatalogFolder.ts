@@ -44,6 +44,8 @@ export type CatalogFolder = {
   accessDenied: boolean;
   /** Pick a folder with the classic upload dialog, which works where folder handles don't. */
   pickFolderWithInput: () => void;
+  /** More buttons for a recording in its details, next to Open. */
+  recordingActions?: (recording: CatalogRecording) => React.ReactNode;
 };
 
 function isAccessError(err: unknown): boolean {

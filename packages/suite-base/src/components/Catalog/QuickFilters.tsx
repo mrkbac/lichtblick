@@ -50,21 +50,28 @@ export function QuickFilters({ recordings, query, onQueryChange }: Props): React
   const { t } = useTranslation("catalog");
   const active = terms(query);
   const available = useMemo(
-    () =>
-      FILTERS.map((filter) => ({ ...filter, term: filter.term() })).filter(
-        ({ term }) => filterRecordings(recordings, term).length > 0,
-      ),
-    [recordings],
+    () => [
+      // One chip per machine live recordings came from, so a robot's sessions are one click away.
+      ...[...new Set(recordings.flatMap((r) => (r.machine ? [r.machine] : [])))]
+        .sort()
+        .map((machine) => ({ key: machine, label: machine, term: `machine=${machine}` })),
+      ...FILTERS.map((filter) => ({
+        key: filter.label,
+        label: t(filter.label),
+        term: filter.term(),
+      })).filter(({ term }) => filterRecordings(recordings, term).length > 0),
+    ],
+    [recordings, t],
   );
   return (
     <Stack direction="row" gap={1} flexWrap="wrap">
-      {available.map(({ label, term }) => {
+      {available.map(({ key, label, term }) => {
         const on = active.includes(term);
         return (
           <Chip
-            key={label}
+            key={key}
             size="small"
-            label={t(label)}
+            label={label}
             color={on ? "primary" : "default"}
             variant={on ? "filled" : "outlined"}
             onClick={() => {
