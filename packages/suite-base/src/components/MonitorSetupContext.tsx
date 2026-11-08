@@ -133,10 +133,10 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
           );
           try {
             localStorage.setItem(key, JSON.stringify(next)!);
-            setSaved(next);
           } catch {
             setNotice({ text: t("monitorSetupSaveFailed"), severity: "error" });
           }
+          setSaved(next);
         }
         removePanel({ id });
       },

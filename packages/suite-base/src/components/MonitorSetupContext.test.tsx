@@ -32,13 +32,16 @@ const open = vi.fn();
 let child: Window | undefined;
 const getWindow = () => child;
 const selectLayoutId = (state: LayoutState) => state.selectedLayout?.id;
-function Controls() {
+function Controls({ registerPanel = true }: { registerPanel?: boolean }) {
   const setup = useMonitorSetup();
   const register = setup?.register;
   const id = useCurrentLayoutSelector(selectLayoutId);
   useEffect(
-    () => register?.("Tab!one", { open, getWindow, isOpen: child != undefined }),
-    [register, id],
+    () =>
+      registerPanel
+        ? register?.("Tab!one", { open, getWindow, isOpen: child != undefined })
+        : undefined,
+    [register, id, registerPanel],
   );
   return (
     <>
@@ -321,3 +324,38 @@ it.each(["missing", "child", "root", "nested"])(
     expect(onAction.mock.calls).toEqual(expectedActions);
   },
 );
+
+it("retains closed view snapshots for Restore when browser storage fails", async () => {
+  const key = `${LOCAL_STORAGE_MONITOR_SETUP}mock-layout`;
+  localStorage.setItem(
+    key,
+    JSON.stringify([{ panelId: "Tab!one", bounds: { left: 0, top: 0, width: 800, height: 600 } }])!,
+  );
+  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+    throw new DOMException("Quota", "QuotaExceededError");
+  });
+  vi.spyOn(window, "open").mockReturnValue(makeChild());
+  const onAction = vi.fn();
+  const config = { tabs: [{ title: "Latest", layout: { panels: ["Image!one"] } }] };
+  renderThemed(
+    <MockCurrentLayoutProvider
+      initialState={{
+        layout: { panels: ["Tab!one"] },
+        configById: { "Tab!one": config, "Image!one": { imageTopic: "/latest" } },
+      }}
+      onAction={onAction}
+    >
+      <MonitorSetupProvider>
+        <Controls registerPanel={false} />
+      </MonitorSetupProvider>
+    </MockCurrentLayoutProvider>,
+  );
+  expect(screen.getByTestId("restore-monitor-setup").hasAttribute("disabled")).toBe(true);
+  fireEvent.click(screen.getByText("Close window"));
+  expect(screen.getByRole("alert").textContent).toContain("Could not save monitor setup");
+  expect(screen.getByTestId("restore-monitor-setup").hasAttribute("disabled")).toBe(false);
+  await act(async () => {
+    fireEvent.click(screen.getByTestId("restore-monitor-setup"));
+  });
+  expect(onAction).toHaveBeenCalledWith({ type: "ADD_PANEL", payload: { id: "Tab!one", config } });
+});
