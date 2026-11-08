@@ -136,7 +136,9 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
   const setup = useMonitorSetup();
   const layout = useContext(CurrentLayoutContext);
   const closePanelRef = useRef(setup?.closePanel);
-  closePanelRef.current = setup?.closePanel;
+  useLayoutEffect(() => {
+    closePanelRef.current = setup?.closePanel;
+  }, [setup?.closePanel]);
   const parent = useContext(PanelWindowContext);
   const dock = useContext(DockPanelContext);
   const [windowMode, setWindowMode] = useState<"popout" | "pip">("popout");

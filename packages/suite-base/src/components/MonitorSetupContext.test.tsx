@@ -252,8 +252,8 @@ it("refreshes a legacy saved setup before removing a window's views", () => {
   });
 });
 
-for (const conflict of [false, true]) {
-  it(`restores only its own saved views without overwriting active panels (conflict: ${conflict})`, async () => {
+for (const location of ["missing", "child", "root"]) {
+  it(`restores only its own saved views without overwriting active panels (location: ${location})`, async () => {
     const key = `${LOCAL_STORAGE_MONITOR_SETUP}mock-layout`;
     const configs = {
       "Tab!saved": { tabs: [{ title: "Camera", layout: { panels: ["Image!saved"] } }] },
@@ -270,7 +270,17 @@ for (const conflict of [false, true]) {
     const onAction = vi.fn();
     renderThemed(
       <MockCurrentLayoutProvider
-        initialState={{ layout: { panels: [conflict ? "Image!saved" : "Plot!active"] } }}
+        initialState={{
+          layout: {
+            panels: [
+              location === "child"
+                ? "Image!saved"
+                : location === "root"
+                  ? "Tab!saved"
+                  : "Plot!active",
+            ],
+          },
+        }}
         onAction={onAction}
       >
         <MonitorSetupProvider>
@@ -281,23 +291,24 @@ for (const conflict of [false, true]) {
     await act(async () => {
       fireEvent.click(screen.getByTestId("restore-monitor-setup"));
     });
-    expect(windowOpen).toHaveBeenCalledTimes(conflict ? 0 : 1);
-    const expectedActions = conflict
-      ? []
-      : [
-          [
-            {
-              type: "SAVE_PANEL_CONFIGS",
-              payload: {
-                configs: [
-                  { id: "Tab!saved", config: configs["Tab!saved"] },
-                  { id: "Image!saved", config: configs["Image!saved"] },
-                ],
+    expect(windowOpen).toHaveBeenCalledTimes(location === "child" ? 0 : 1);
+    const expectedActions =
+      location !== "missing"
+        ? []
+        : [
+            [
+              {
+                type: "SAVE_PANEL_CONFIGS",
+                payload: {
+                  configs: [
+                    { id: "Tab!saved", config: configs["Tab!saved"] },
+                    { id: "Image!saved", config: configs["Image!saved"] },
+                  ],
+                },
               },
-            },
-          ],
-          [{ type: "ADD_PANEL", payload: { id: "Tab!saved", config: configs["Tab!saved"] } }],
-        ];
+            ],
+            [{ type: "ADD_PANEL", payload: { id: "Tab!saved", config: configs["Tab!saved"] } }],
+          ];
     expect(onAction.mock.calls).toEqual(expectedActions);
   });
 }

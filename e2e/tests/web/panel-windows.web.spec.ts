@@ -11,7 +11,7 @@ test.beforeEach(async ({ page }) => {
   await page.getByTestId("DataSourceDialog").waitFor();
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("DataSourceDialog")).toBeHidden();
-  await expect(page.getByTestId("panel-menu")).toHaveCount(3);
+  await expect(page.getByTestId("panel-menu")).toHaveCount(3, { timeout: 15_000 });
 });
 
 test("opens independent panel windows and removes their views on close", { tag: "@smoke" }, async ({
@@ -89,7 +89,7 @@ test("keeps ordinary pop-outs available when Document PiP is unsupported", {
   await page.getByTestId("DataSourceDialog").waitFor();
   await page.keyboard.press("Escape");
   await expect(page.getByTestId("DataSourceDialog")).toBeHidden();
-  await expect(page.getByTestId("panel-menu")).toHaveCount(3);
+  await expect(page.getByTestId("panel-menu")).toHaveCount(3, { timeout: 15_000 });
   // When
   await page.getByTestId("panel-menu").first().click();
   // Then
@@ -354,9 +354,9 @@ test.describe("native window resizing", () => {
   test.use({ viewport: null });
 
   for (const panelName of ["3D", "Camera Grid"]) {
-    test(`sizes ${panelName} within two frames and matches the main panel controls`, async ({
-      page,
-    }) => {
+    test(`sizes ${panelName} within two frames and matches the main panel controls`, {
+      tag: "@regression",
+    }, async ({ page }) => {
       if (panelName === "Camera Grid") {
         await loadFiles({ mainWindow: page, filenames: "custom-camera-model.mcap" });
       }

@@ -58,10 +58,12 @@ type MonitorSetup = {
 const MonitorSetupContext = createContext<MonitorSetup | undefined>(undefined);
 export const useMonitorSetup = (): MonitorSetup | undefined => useContext(MonitorSetupContext);
 const selectLayoutId = (state: LayoutState) => state.selectedLayout?.id;
+const selectLayoutReady = (state: LayoutState) => state.selectedLayout?.data != undefined;
 
 /** Local window placement stays outside portable/synced layout data. Nothing reopens without a click. */
 function WebMonitorSetupProvider({ children }: PropsWithChildren) {
   const layoutId = useCurrentLayoutSelector(selectLayoutId);
+  const layoutReady = useCurrentLayoutSelector(selectLayoutReady);
   const {
     addPanel,
     getCurrentLayoutState,
@@ -119,6 +121,7 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
         layoutId != undefined &&
         [...panels.values()].some((panel) => panel.getWindow() != undefined),
       canRestore:
+        layoutReady &&
         layoutId != undefined &&
         saved.some((item) => panels.has(item.panelId) || item.configs != undefined),
       closePanel: (id) => {
@@ -218,7 +221,9 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
           } else if (item.configs && !pending.current.has(item.panelId)) {
             const configs = capturePanelConfigs({ configById: item.configs }, item.panelId);
             const current = getCurrentLayoutState().selectedLayout?.data;
-            if (!current || getAllPanelIds(current).some((id) => Object.hasOwn(configs, id))) {
+            const currentIds = current ? getAllPanelIds(current) : [];
+            const exists = currentIds.includes(item.panelId);
+            if (!current || (!exists && currentIds.some((id) => Object.hasOwn(configs, id)))) {
               setNotice({ text: t("monitorSetupRestoreFailed"), severity: "error" });
               continue;
             }
@@ -229,10 +234,13 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
             }
             pending.current.set(item.panelId, { child });
             try {
-              savePanelConfigs({
-                configs: Object.entries(configs).map(([id, config]) => ({ id, config })),
-              });
-              addPanel({ id: item.panelId, config: item.configs[item.panelId] });
+              // An existing panel may still be mounting; registration adopts the preopened window.
+              if (!exists) {
+                savePanelConfigs({
+                  configs: Object.entries(configs).map(([id, config]) => ({ id, config })),
+                });
+                addPanel({ id: item.panelId, config: item.configs[item.panelId] });
+              }
             } catch {
               pending.current.delete(item.panelId);
               child.close();
@@ -278,6 +286,7 @@ function WebMonitorSetupProvider({ children }: PropsWithChildren) {
       getCurrentLayoutState,
       key,
       layoutId,
+      layoutReady,
       layoutManager,
       panels,
       register,
