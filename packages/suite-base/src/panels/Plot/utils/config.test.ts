@@ -75,6 +75,7 @@ describe("yBound", () => {
     expect(yBound(5)).toBe(5);
     expect(yBound("-2.5")).toBe(-2.5);
     expect(yBound("")).toBeUndefined();
+    expect(yBound("  ")).toBeUndefined();
     expect(yBound(undefined)).toBeUndefined();
     expect(yBound("abc")).toBeUndefined();
   });

@@ -221,7 +221,7 @@ export default function PlayerManager(
   const [selectedFiles, setSelectedFiles] = useState<readonly File[] | undefined>();
 
   // Sample layout ids for this session, used when localStorage is unavailable.
-  const sampleLayoutIds = useRef(new Map<string, LayoutID>());
+  const sampleLayoutIds = useRef(new Map<string, { id: LayoutID; version: string }>());
   // Bumped on every selectSource/closeSource call, so a slow earlier selection can tell it was
   // superseded and won't apply its player or layout late.
   const selectionSeq = useRef(0);
@@ -262,14 +262,18 @@ export default function PlayerManager(
           const storageKey = `lichtblick.sampleLayoutId.${foundSource.id}`;
           const versionKey = `${storageKey}.version`;
           const version = String(foundSource.sampleLayoutVersion ?? 1);
-          let savedId = sampleLayoutIds.current.get(storageKey);
-          let savedVersion: string | undefined = version;
-          try {
-            savedId ??= (localStorage.getItem(storageKey) as LayoutID | null) ?? undefined;
-            // Copies saved before versions were tracked are version 1.
-            savedVersion = localStorage.getItem(versionKey) ?? "1";
-          } catch (error) {
-            log.warn("Could not read the saved sample layout id", error);
+          // This session's copy wins, so a failed localStorage write can't make it look outdated.
+          const sessionCopy = sampleLayoutIds.current.get(storageKey);
+          let savedId = sessionCopy?.id;
+          let savedVersion = sessionCopy?.version;
+          if (sessionCopy == undefined) {
+            try {
+              savedId = (localStorage.getItem(storageKey) as LayoutID | null) ?? undefined;
+              // Copies saved before versions were tracked are version 1.
+              savedVersion = localStorage.getItem(versionKey) ?? "1";
+            } catch (error) {
+              log.warn("Could not read the saved sample layout id", error);
+            }
           }
           try {
             let existing = savedId ? await layoutManager.getLayout(savedId) : undefined;
@@ -288,7 +292,7 @@ export default function PlayerManager(
                 data: foundSource.sampleLayout,
                 permission: "CREATOR_WRITE",
               }));
-            sampleLayoutIds.current.set(storageKey, layout.id);
+            sampleLayoutIds.current.set(storageKey, { id: layout.id, version });
             try {
               localStorage.setItem(storageKey, layout.id);
               localStorage.setItem(versionKey, version);

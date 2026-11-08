@@ -108,7 +108,7 @@ export type PlotLegendDisplay = "floating" | "top" | "left" | "none";
  * empty string or anything non-numeric means "auto" (`+""` would otherwise pin the axis at 0).
  */
 export function yBound(value: string | number | undefined): number | undefined {
-  if (value == undefined || value === "") {
+  if (value == undefined || (typeof value === "string" && value.trim() === "")) {
     return undefined;
   }
   const bound = Number(value);
