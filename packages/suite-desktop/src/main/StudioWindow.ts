@@ -45,9 +45,10 @@ const log = Logger.getLogger(__filename);
 
 const { t } = i18n;
 
+// The native window background shows through behind the traffic lights and in the rounded
+// corners, which sit in the app bar, so match the app bar instead of the page background.
 function getWindowBackgroundColor(): string | undefined {
-  const theme = palette[nativeTheme.shouldUseDarkColors ? "dark" : "light"];
-  return theme.background?.default;
+  return palette[nativeTheme.shouldUseDarkColors ? "dark" : "light"].appBar.main;
 }
 
 function getTitleBarOverlayOptions(): TitleBarOverlayOptions {

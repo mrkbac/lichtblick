@@ -47,8 +47,8 @@ vi.mock("@lichtblick/suite-base/src/i18n", () => ({
 }));
 vi.mock("@lichtblick/theme", () => ({
   palette: {
-    light: { background: { default: "#fff" }, appBar: {} },
-    dark: { background: { default: "#000" }, appBar: {} },
+    light: { background: { default: "#fff" }, appBar: { main: "#111" } },
+    dark: { background: { default: "#000" }, appBar: { main: "#222" } },
   },
 }));
 vi.mock("../common/webpackDefines", () => ({ LICHTBLICK_PRODUCT_NAME: "Lichtblick" }));
