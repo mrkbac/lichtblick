@@ -103,7 +103,6 @@ E2E tests:
 - Don't push features or fixes directly to `licht`. Tiny fork-only config tweaks (deploy config) may go direct.
 - No upstream PRs or merges unless the user asks.
 - Before merging: `pnpm typecheck`, targeted Vitest tests, `pnpm exec oxlint <changed files>`, and `pnpm build:packages` (CI runs it; unlike `typecheck` it also checks test files). Merge with `gh pr merge --merge` (merge commit) and delete the branch.
-- Pinned issue #47 ("licht: feature overview") is the overview. When a PR is opened, add a plain bullet (no checkbox) under "In progress": `- #N — <very short benefit>`, saying how it improves day-to-day use (e.g. "open a topic in a panel with a double-click"), not what the code does. Move it to "On licht" once merged.
 - Every pushed branch gets a Cloudflare Pages preview at `<branch>.lichtblick-2pl.pages.dev`; merging into `licht` deploys licht.marko.im.
 
 ### CodeRabbit
