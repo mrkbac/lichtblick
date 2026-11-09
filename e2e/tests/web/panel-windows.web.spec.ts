@@ -98,6 +98,52 @@ test("keeps ordinary pop-outs available when Document PiP is unsupported", {
 });
 
 for (const action of ["Open in new window", "Open Picture-in-Picture monitor"] as const) {
+  test(`keeps the same window when changing panel type after ${action}`, {
+    tag: "@regression",
+  }, async ({ page }) => {
+    test.skip(
+      action === "Open Picture-in-Picture monitor" &&
+        !(await page.evaluate(() => "documentPictureInPicture" in window)),
+      "Document PiP unavailable",
+    );
+    await page.getByTestId("panel-menu").first().click();
+    const opened = page.waitForEvent("popup");
+    await page.getByText(action, { exact: true }).click();
+    const monitor = await opened;
+    await expect(monitor).toHaveTitle("3D");
+    const mainSettings = await page.getByTestId("sidebar-left").innerText();
+    for (const type of ["Plot", "Image", "3D"]) {
+      await monitor.getByTestId("panel-menu").click();
+      await monitor.getByText("Change panel", { exact: true }).hover();
+      await monitor.getByTestId(`panel-menu-item ${type}`).click();
+      await expect(monitor).toHaveTitle(type);
+      await expect(monitor.getByTestId("panel-menu")).toHaveCount(1);
+      expect(monitor.isClosed()).toBe(false);
+      expect(page.context().pages()).toHaveLength(2);
+      await expect(page.getByTestId("panel-menu")).toHaveCount(2);
+      expect(await page.getByTestId("sidebar-left").innerText()).toBe(mainSettings);
+      if (action === "Open Picture-in-Picture monitor") {
+        expect(
+          await page.evaluate(
+            () =>
+              (
+                window as Window & {
+                  documentPictureInPicture: Record<"window", Window | null>;
+                }
+              ).documentPictureInPicture.window != undefined,
+          ),
+        ).toBe(true);
+      }
+    }
+    await expect(monitor.locator("canvas")).toBeVisible();
+    await monitor.getByTestId("window-left-sidebar-button").click();
+    await expect(monitor.getByTestId("sidebar-left").getByRole("heading")).toContainText("3D");
+    await monitor.getByTestId("panel-menu").click();
+    await monitor.getByText("Return to workspace", { exact: true }).click();
+    await expect.poll(() => monitor.isClosed()).toBe(true);
+    await expect(page.getByTestId("panel-menu")).toHaveCount(3);
+  });
+
   test(`keeps a paused recording image when using ${action}`, { tag: "@regression" }, async ({
     page,
   }) => {
@@ -133,6 +179,29 @@ for (const action of ["Open in new window", "Open Picture-in-Picture monitor"] a
     await expect(page.getByTestId("play-button")).toHaveAttribute("title", "Play");
   });
 }
+
+test("changes a view inside a new monitor without closing it", { tag: "@regression" }, async ({
+  page,
+}) => {
+  const opened = page.waitForEvent("popup");
+  await page.getByTestId("new-window-button").click();
+  const monitor = await opened;
+  await monitor.getByTestId("panel-grid-card Image").click();
+  await monitor
+    .getByTestId("mosaic-drag-handle")
+    .filter({ has: monitor.getByText("Image", { exact: true }) })
+    .getByTestId("panel-menu")
+    .click();
+  await monitor.getByText("Change panel", { exact: true }).hover();
+  await monitor.getByTestId("panel-menu-item Plot").click();
+  await expect(monitor).toHaveTitle("New window");
+  await expect(monitor.getByRole("region", { name: "Plot", exact: true })).toBeVisible();
+  await expect(monitor.getByTestId("panel-menu")).toHaveCount(2);
+  await expect(page.getByTestId("panel-menu")).toHaveCount(3);
+  expect(page.context().pages()).toHaveLength(2);
+  await monitor.close();
+  await expect(page.getByTestId("panel-menu")).toHaveCount(3);
+});
 
 test("keeps typing shortcuts inside inherited editable fields", { tag: "@regression" }, async ({
   page,

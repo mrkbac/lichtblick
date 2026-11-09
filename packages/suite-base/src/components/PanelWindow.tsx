@@ -44,6 +44,9 @@ type WindowActions = {
 };
 export const PanelWindowContext = createContext<WindowActions | undefined>(undefined);
 
+// A type change replaces the dock panel, but must keep its already-open browser window.
+const replacementWindows = new Map<string, { child: Window; mode: "popout" | "pip" }>();
+
 /** Mirror global/library CSS, including styles loaded by panels added after the window opens. */
 function copyStyles(source: Document, target: Document): () => void {
   const copies = new Map<CSSStyleSheet, HTMLStyleElement | HTMLLinkElement>();
@@ -151,6 +154,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
   const removing = useRef(false);
   const pending = useRef(false);
   const windowRef = useRef<Window | undefined>(undefined);
+  const windowCleanup = useRef<(() => void) | undefined>(undefined);
   const pip = (window as Window & { documentPictureInPicture?: DocumentPiP })
     .documentPictureInPicture;
 
@@ -164,6 +168,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
     return () => {
       live.current = false;
       window.removeEventListener("pagehide", close);
+      windowCleanup.current?.();
       close();
     };
   }, []);
@@ -233,10 +238,10 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
         setFailed(false);
         const open = async () => {
           const child =
-            mode === "pip"
+            existing ??
+            (mode === "pip"
               ? await pip?.requestWindow({ width: 800, height: 600 })
-              : (existing ??
-                window.open(
+              : window.open(
                   "about:blank",
                   "_blank",
                   bounds
@@ -258,7 +263,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           const doc = child.document;
           doc.title = title;
           const viewport = document.querySelector('meta[name="viewport"]');
-          if (viewport) {
+          if (viewport && !doc.querySelector('meta[name="viewport"]')) {
             doc.head.appendChild(viewport.cloneNode(true));
           }
           doc.documentElement.style.fontSize = window.getComputedStyle(
@@ -266,9 +271,11 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           ).fontSize;
           doc.documentElement.lang = document.documentElement.lang;
           doc.documentElement.dataset.colorMode = document.documentElement.dataset.colorMode;
-          const base = doc.createElement("base");
-          base.href = document.baseURI;
-          doc.head.appendChild(base);
+          if (!doc.querySelector("base")) {
+            const base = doc.createElement("base");
+            base.href = document.baseURI;
+            doc.head.appendChild(base);
+          }
           doc.body.style.cssText = "margin:0;width:100vw;height:100vh;display:flex;overflow:hidden";
           const closed = () => {
             if (windowRef.current !== child) {
@@ -289,6 +296,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
               setTarget(undefined);
             }
           };
+          windowCleanup.current?.();
           child.addEventListener("pagehide", closed, { once: true });
           // Existing app-wide shortcuts live on the opener document. Preserve typing in the child.
           const key = (event: KeyboardEvent) => {
@@ -318,6 +326,12 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           for (const type of ["keydown", "keyup", "keypress"] as const) {
             doc.addEventListener(type, key);
           }
+          windowCleanup.current = () => {
+            child.removeEventListener("pagehide", closed);
+            for (const type of ["keydown", "keyup", "keypress"] as const) {
+              doc.removeEventListener(type, key);
+            }
+          };
           setTarget(child);
           child.focus();
         };
@@ -337,6 +351,41 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
     }),
     [dock, layout, pip, target, title],
   );
+
+  const panelId = dock?.api.id;
+  useEffect(() => {
+    const replacement = panelId ? replacementWindows.get(panelId) : undefined;
+    if (replacement && panelId) {
+      replacementWindows.delete(panelId);
+      actions.open(replacement.mode, undefined, replacement.child);
+    }
+  }, [actions, panelId]);
+
+  const windowLayout = useMemo(() => {
+    if (!layout) {
+      return undefined;
+    }
+    return {
+      ...layout,
+      actions: {
+        ...layout.actions,
+        swapPanel: (payload: Parameters<typeof layout.actions.swapPanel>[0]) => {
+          const child = windowRef.current;
+          const before = layout.actions.getCurrentLayoutState().selectedLayout?.data?.configById;
+          layout.actions.swapPanel(payload);
+          if (!child || payload.originalId !== panelId) {
+            return;
+          }
+          const after = layout.actions.getCurrentLayoutState().selectedLayout?.data?.configById;
+          const newId = Object.keys(after ?? {}).find((id) => before?.[id] == undefined);
+          if (newId) {
+            replacementWindows.set(newId, { child, mode: windowModeRef.current });
+            windowRef.current = undefined;
+          }
+        },
+      },
+    };
+  }, [layout, panelId]);
 
   const register = setup?.register;
   useEffect(() => {
@@ -375,9 +424,11 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           {createPortal(
             <PanelWindowStyles target={target}>
               <DockPanelContext.Provider value={undefined}>
-                <PanelWindowWorkspace target={target} title={title} rootId={dock?.api.id}>
-                  {children}
-                </PanelWindowWorkspace>
+                <CurrentLayoutContext.Provider value={windowLayout}>
+                  <PanelWindowWorkspace target={target} title={title} rootId={dock?.api.id}>
+                    {children}
+                  </PanelWindowWorkspace>
+                </CurrentLayoutContext.Provider>
               </DockPanelContext.Provider>
             </PanelWindowStyles>,
             target.document.body,

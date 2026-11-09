@@ -7,6 +7,13 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { createDockview } from "dockview-react";
 import { createContext, useContext, useEffect, useState } from "react";
 
+import {
+  LayoutState,
+  useCurrentLayoutActions,
+  useCurrentLayoutSelector,
+} from "@lichtblick/suite-base/context/CurrentLayoutContext";
+import MockCurrentLayoutProvider from "@lichtblick/suite-base/providers/CurrentLayoutProvider/MockCurrentLayoutProvider";
+
 import { DockPanelContext } from "./DockPanelContext";
 import { PanelWindow, PanelWindowContext } from "./PanelWindow";
 
@@ -66,6 +73,93 @@ afterEach(() => {
     el.remove();
   });
 });
+
+it.each(["pip", "popout"] as const)(
+  "keeps the same %s window when changing panel type",
+  async (mode) => {
+    const { child, close } = childWindow();
+    const open = vi.spyOn(window, "open").mockReturnValue(child);
+    const requestWindow = vi.fn().mockResolvedValue(child);
+    vi.stubGlobal("documentPictureInPicture", { requestWindow });
+    const element = document.createElement("div");
+    document.body.appendChild(element);
+    const dockview = createDockview(element, {
+      createComponent: () => ({ element: document.createElement("div"), init: () => {} }),
+      defaultRenderer: "always",
+    });
+    const selectLayout = (state: LayoutState) => state.selectedLayout?.data?.layout;
+    function Replacement({ id }: { id: string }) {
+      const { swapPanel } = useCurrentLayoutActions();
+      return (
+        <>
+          <Content />
+          <span>{id}</span>
+          <button
+            onClick={() => {
+              swapPanel({ originalId: id, type: "Plot", config: {} });
+            }}
+          >
+            Change type
+          </button>
+        </>
+      );
+    }
+    function Layout() {
+      const layout = useCurrentLayoutSelector(selectLayout);
+      const id = layout && "panels" in layout ? layout.panels[0] : undefined;
+      if (!id) {
+        return <span>No panels</span>;
+      }
+      const panel = dockview.getPanel(id) ?? dockview.addPanel({ id, component: "content" });
+      return (
+        <DockPanelContext.Provider value={{ api: panel.api, containerApi: dockview }}>
+          <PanelWindow key={id} title={id}>
+            <Replacement id={id} />
+          </PanelWindow>
+        </DockPanelContext.Provider>
+      );
+    }
+    const view = render(
+      <MockCurrentLayoutProvider initialState={{ layout: { panels: ["Image!one"] } }}>
+        <Layout />
+      </MockCurrentLayoutProvider>,
+    );
+    try {
+      fireEvent.click(screen.getByText(mode === "pip" ? "PiP" : "Pop out"));
+      const floating = within(child.document.body);
+      await waitFor(() => {
+        expect(floating.getByText("Image!one")).toBeDefined();
+      });
+      for (let i = 0; i < 2; i++) {
+        fireEvent.click(floating.getByText("Change type"));
+        await waitFor(() => {
+          expect(child.document.title).toMatch(/^Plot!/);
+        });
+        expect(floating.getByText(child.document.title)).toBeDefined();
+        expect(document.querySelector('[data-testid="content"]')).toBeNull();
+        expect(close).not.toHaveBeenCalled();
+      }
+      expect(open).toHaveBeenCalledTimes(mode === "popout" ? 1 : 0);
+      expect(requestWindow).toHaveBeenCalledTimes(mode === "pip" ? 1 : 0);
+      const shortcut = vi.fn();
+      document.addEventListener("keydown", shortcut);
+      try {
+        fireEvent.keyDown(child.document.body, { key: "k" });
+        expect(shortcut).toHaveBeenCalledOnce();
+      } finally {
+        document.removeEventListener("keydown", shortcut);
+      }
+      act(() => {
+        child.dispatchEvent(new Event("pagehide"));
+      });
+      expect(screen.getByText("No panels")).toBeDefined();
+    } finally {
+      view.unmount();
+      dockview.dispose();
+      element.remove();
+    }
+  },
+);
 
 it("renders one panel in the child, shares context, and restores it on close", async () => {
   // Given
