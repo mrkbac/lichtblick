@@ -37,7 +37,7 @@ type LoadModelOptions = {
   referenceUrl?: string;
 };
 
-export type LoadedModel = THREE.Group | THREE.Scene;
+export type LoadedModel = (THREE.Group | THREE.Scene) & { hasEmbeddedMaterials?: boolean };
 
 type ErrorCallback = (err: Error) => void;
 
@@ -331,7 +331,8 @@ export class ModelCache {
     }
 
     manager.itemStart(url);
-    const group = objLoader.parse(text);
+    const group: LoadedModel = objLoader.parse(text);
+    group.hasEmbeddedMaterials = libraries.length > 0;
     manager.itemEnd(url);
 
     // THREE.js uses Y-up, while Studio follows the ROS

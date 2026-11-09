@@ -153,7 +153,7 @@ export class RenderableMeshResource extends RenderableMarker {
 
     const mesh = cachedModel.clone(true);
     removeLights(mesh);
-    if (!opts.useEmbeddedMaterials) {
+    if (!opts.useEmbeddedMaterials || cachedModel.hasEmbeddedMaterials === false) {
       replaceMaterials(mesh, this.#material);
     }
 
