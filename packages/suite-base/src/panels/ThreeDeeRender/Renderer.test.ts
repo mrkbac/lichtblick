@@ -27,6 +27,8 @@ import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { RendererConfig } from "./IRenderer";
+import { Renderable } from "./Renderable";
+import { SceneExtension } from "./SceneExtension";
 
 vi.mock("./Picker", async () => {
   const actual = await vi.importActual("./Picker");
@@ -240,6 +242,52 @@ describe("3D Renderer", () => {
   });
   afterEach(() => {
     (console.warn as Mock).mockClear();
+  });
+
+  it.each([true, false])("fits visible topic geometry in perspective=%s", (perspective) => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    const setCamera = vi.spyOn(renderer, "setCameraState");
+    vi.spyOn(renderer, "getCameraState").mockReturnValue({ ...DEFAULT_CAMERA_STATE, perspective });
+    renderer.zoomToData();
+    expect(setCamera).not.toHaveBeenCalled();
+
+    const extension = new SceneExtension("test-data", renderer);
+    const addBox = (path: string, x: number, options = { visible: true }) => {
+      const { visible } = options;
+      const renderable = new Renderable(`${path}${x}`, renderer, {
+        receiveTime: 0n,
+        messageTime: 0n,
+        frameId: "",
+        pose: makePose(),
+        settingsPath: [path, "test"],
+        settings: { visible, frameLocked: true },
+      });
+      renderable.visible = visible;
+      renderable.position.x = x;
+      renderable.add(new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2)));
+      extension.add(renderable);
+      extension.renderables.set(renderable.name, renderable);
+      return renderable;
+    };
+    addBox("topics", 100);
+    addBox("topics", 10000, { visible: false });
+    addBox("layers", -10000);
+    const hidden = new THREE.Mesh(new THREE.BoxGeometry(10000, 10000, 10000));
+    hidden.visible = false;
+    extension.renderables.get("topics100")!.add(hidden);
+    renderer.sceneExtensions.set(extension.extensionId, extension);
+    renderer.zoomToData();
+    expect(setCamera).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetOffset: [100, 0, 0],
+        perspective,
+        distance: expect.any(Number),
+      }),
+    );
+    const distance = setCamera.mock.calls[0]![0].distance;
+    const radius = Math.sqrt(3) * 1.1;
+    expect(distance).toBeCloseTo(perspective ? radius / Math.sin(Math.PI / 8) : 2 * radius);
+    renderer.dispose();
   });
 
   it("constructs a renderer without error", () => {

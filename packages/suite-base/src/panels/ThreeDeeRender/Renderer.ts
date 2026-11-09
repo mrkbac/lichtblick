@@ -1103,6 +1103,72 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     return this.cameraHandler.getCameraState();
   }
 
+  /** Fit visible topic geometry, excluding map tiles, grids, and transform helpers. */
+  public zoomToData(): void {
+    const state = this.getCameraState();
+    if (!state) {
+      return;
+    }
+    const bounds = new THREE.Box3();
+    const box = new THREE.Box3();
+    for (const extension of this.sceneExtensions.values()) {
+      if (!extension.visible) {
+        continue;
+      }
+      extension.updateWorldMatrix(true, true);
+      for (const renderable of extension.renderables.values()) {
+        if (renderable.userData.settingsPath[0] !== "topics") {
+          continue;
+        }
+        renderable.traverseVisible((object) => {
+          if (object.userData.picking === false) {
+            return;
+          }
+          if (
+            object instanceof THREE.Mesh ||
+            object instanceof THREE.Points ||
+            object instanceof THREE.Line
+          ) {
+            if (object instanceof THREE.InstancedMesh) {
+              object.computeBoundingBox();
+              box.copy(object.boundingBox!);
+            } else {
+              const geometry = object.geometry as THREE.BufferGeometry;
+              geometry.computeBoundingBox();
+              box.copy(geometry.boundingBox!);
+            }
+            box.applyMatrix4(object.matrixWorld);
+            if ([...box.min.toArray(), ...box.max.toArray()].every(Number.isFinite)) {
+              bounds.union(box);
+            }
+          }
+        });
+      }
+    }
+    if (bounds.isEmpty()) {
+      return;
+    }
+    const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+    const camera = this.cameraHandler.getActiveCamera();
+    camera.parent?.worldToLocal(sphere.center);
+    const { width, height } = this.input.canvasSize;
+    const aspect = width > 0 && height > 0 ? width / height : 1;
+    const halfFov = THREE.MathUtils.degToRad(state.fovy / 2);
+    const angle = Math.min(halfFov, Math.atan(Math.tan(halfFov) * aspect));
+    const radius = Math.max(sphere.radius, 0.5) * 1.1;
+    const cameraState: CameraState = {
+      ...state,
+      targetOffset: sphere.center.toArray(),
+      distance: state.perspective ? radius / Math.sin(angle) : (2 * radius) / Math.min(1, aspect),
+    };
+    this.updateConfig((draft) => {
+      draft.cameraState = cameraState;
+    });
+    this.setCameraState(cameraState);
+    this.emit("cameraMove", this);
+    this.queueAnimationFrame();
+  }
+
   public canResetView(): boolean {
     return this.#imageModeExtension?.hasModifiedView() ?? false;
   }

@@ -23,6 +23,7 @@ export const threeDee = {
   lineWidth: "Line width",
   position: "Position",
   reset: "Reset",
+  zoomToData: "Zoom to data",
   rotation: "Rotation",
   scale: "Scale",
   gradient: "Gradient",
