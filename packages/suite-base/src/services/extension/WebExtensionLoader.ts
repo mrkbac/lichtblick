@@ -1,15 +1,18 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { DBSchema, openDB } from "idb";
+
 import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import { InstallExtensionProps } from "@lichtblick/suite-base/services/extension/IExtensionLoader";
 import { IdbExtensionLoader } from "@lichtblick/suite-base/services/extension/IdbExtensionLoader";
 import validatePackageInfo from "@lichtblick/suite-base/services/extension/utils/validatePackageInfo";
 import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
-import { createKeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
 
 type DirectoryExtension = { directory: FileSystemDirectoryHandle; info: ExtensionInfo };
-const store = createKeyValueStore(`${KEY_WORKSPACE_PREFIX}extension-directories`, "directories");
+interface DirectoryDB extends DBSchema {
+  directories: { key: string; value: DirectoryExtension };
+}
 
 async function readText(directory: FileSystemDirectoryHandle, name: string): Promise<string> {
   return await (await (await directory.getFileHandle(name)).getFile()).text();
@@ -54,6 +57,12 @@ async function readInfo(directory: FileSystemDirectoryHandle): Promise<Extension
 }
 
 export class WebExtensionLoader extends IdbExtensionLoader {
+  readonly #db = openDB<DirectoryDB>(`${KEY_WORKSPACE_PREFIX}lichtblick-extension-folders`, 1, {
+    upgrade(database) {
+      database.createObjectStore("directories");
+    },
+  });
+
   public constructor() {
     super("local");
     if (typeof window !== "undefined" && "showDirectoryPicker" in window) {
@@ -70,13 +79,20 @@ export class WebExtensionLoader extends IdbExtensionLoader {
           );
         }
         const entries = await this.directories();
-        const retained: DirectoryExtension[] = [];
+        const replacedIds: string[] = [];
         for (const entry of entries) {
-          if (entry.info.id !== info.id && !(await directory.isSameEntry(entry.directory))) {
-            retained.push(entry);
+          if (entry.info.id !== info.id && (await directory.isSameEntry(entry.directory))) {
+            replacedIds.push(entry.info.id);
           }
         }
-        await store.set("extensions", [...retained, { directory, info }]);
+        const tx = (await this.#db).transaction("directories", "readwrite");
+        await Promise.all([
+          ...replacedIds.map(async (id) => {
+            await tx.store.delete(id);
+          }),
+          tx.store.put({ directory, info }, info.id),
+          tx.done,
+        ]);
       };
     }
   }
@@ -86,7 +102,7 @@ export class WebExtensionLoader extends IdbExtensionLoader {
   public loadExtensionFromDirectory?: () => Promise<void>;
 
   private async directories(): Promise<DirectoryExtension[]> {
-    return (await store.get<DirectoryExtension[]>("extensions")) ?? [];
+    return await (await this.#db).getAll("directories");
   }
 
   private async readSource(directory: FileSystemDirectoryHandle): Promise<{ raw: string }> {
@@ -140,23 +156,13 @@ export class WebExtensionLoader extends IdbExtensionLoader {
   public override async installExtension(data: InstallExtensionProps): Promise<ExtensionInfo> {
     // A linked folder must never shadow an installed package with the same identity.
     const info = await super.installExtension(data);
-    const entries = await this.directories();
-    if (entries.some((entry) => entry.info.id === info.id)) {
-      await store.set(
-        "extensions",
-        entries.filter((entry) => entry.info.id !== info.id),
-      );
-    }
+    await (await this.#db).delete("directories", info.id);
     return info;
   }
 
   public override async uninstallExtension(id: string): Promise<void> {
-    const entries = await this.directories();
-    if (entries.some((entry) => entry.info.id === id)) {
-      await store.set(
-        "extensions",
-        entries.filter((entry) => entry.info.id !== id),
-      );
+    if ((await (await this.#db).get("directories", id)) != undefined) {
+      await (await this.#db).delete("directories", id);
     } else {
       await super.uninstallExtension(id);
     }

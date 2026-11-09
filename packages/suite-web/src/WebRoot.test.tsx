@@ -21,6 +21,7 @@ vi.mock("@lichtblick/suite-base", () => {
     __esModule: true,
     AppSetting: { SHOW_DEBUG_PANELS: "showDebugPanels" },
     IdbExtensionLoader: Stub,
+    WebExtensionLoader: Stub,
     RemoteExtensionLoader: Stub,
     FoxgloveWebSocketDataSourceFactory: Stub,
     McapLocalDataSourceFactory: Stub,
@@ -40,8 +41,6 @@ vi.mock("@lichtblick/suite-base", () => {
 vi.mock("@lichtblick/suite-base/constants/config", () => ({
   APP_CONFIG: { apiUrl: undefined },
 }));
-
-vi.mock("./services/WebExtensionLoader", () => ({ WebExtensionLoader: vi.fn() }));
 
 vi.mock("./services/LocalStorageAppConfiguration", () => ({
   __esModule: true,

@@ -7,15 +7,33 @@ const mocks = vi.hoisted(() => ({
   records: new Map<IDBValidKey, unknown>(),
   installed: vi.fn(),
   uninstall: vi.fn(),
+  install: vi.fn(),
 }));
-vi.mock("@lichtblick/suite-base/util/idbKeyValueStore", () => ({
-  createKeyValueStore: () => ({
-    get: async (key: IDBValidKey) => mocks.records.get(key),
-    set: async (key: IDBValidKey, value: unknown) => {
-      mocks.records.set(key, value);
+vi.mock("idb", () => {
+  const store = {
+    getAll: async () => [...mocks.records.values()],
+    get: async (_name: string, key: IDBValidKey) => mocks.records.get(key),
+    delete: async (_name: string, key: IDBValidKey) => {
+      mocks.records.delete(key);
     },
-  }),
-}));
+  };
+  return {
+    openDB: async () => ({
+      ...store,
+      transaction: () => ({
+        store: {
+          put: async (value: unknown, key: IDBValidKey) => {
+            mocks.records.set(key, value);
+          },
+          delete: async (key: IDBValidKey) => {
+            mocks.records.delete(key);
+          },
+        },
+        done: Promise.resolve(),
+      }),
+    }),
+  };
+});
 vi.mock("@lichtblick/suite-base/services/extension/IdbExtensionLoader", () => ({
   IdbExtensionLoader: class {
     public namespace = "local";
@@ -29,8 +47,8 @@ vi.mock("@lichtblick/suite-base/services/extension/IdbExtensionLoader", () => ({
     public async uninstallExtension(id: string) {
       await mocks.uninstall(id);
     }
-    public async installExtension() {
-      return { id: "test.example" };
+    public async installExtension(data: { foxeFileData: Uint8Array }) {
+      return await mocks.install(data);
     }
     public async loadExtension() {
       return { raw: "browser copy" };
@@ -82,6 +100,7 @@ beforeEach(() => {
   mocks.records.clear();
   mocks.installed.mockReset();
   mocks.uninstall.mockReset();
+  mocks.install.mockReset().mockResolvedValue({ id: "test.example" });
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -167,4 +186,26 @@ it("replaces a folder link with a normal package installation", async () => {
   await loader.loadExtensionFromDirectory!();
   await loader.installExtension({ foxeFileData: new Uint8Array() });
   expect(await loader.loadExtension("test.example")).toEqual({ raw: "browser copy" });
+});
+
+it("replaces multiple folder links during concurrent package imports", async () => {
+  const first = folder();
+  const second = folder();
+  second.packageJson('{"name":"second","publisher":"test"}');
+  const picker = vi
+    .fn()
+    .mockResolvedValueOnce(first.directory)
+    .mockResolvedValueOnce(second.directory);
+  vi.stubGlobal("window", { showDirectoryPicker: picker });
+  const loader = new WebExtensionLoader();
+  await loader.loadExtensionFromDirectory!();
+  await loader.loadExtensionFromDirectory!();
+  mocks.install
+    .mockResolvedValueOnce({ id: "test.example" })
+    .mockResolvedValueOnce({ id: "test.second" });
+  await Promise.all([
+    loader.installExtension({ foxeFileData: new Uint8Array() }),
+    loader.installExtension({ foxeFileData: new Uint8Array() }),
+  ]);
+  expect(await loader.getExtensions()).toEqual([]);
 });

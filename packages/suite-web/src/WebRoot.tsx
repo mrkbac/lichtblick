@@ -14,6 +14,7 @@ import {
   FoxgloveWebSocketDataSourceFactory,
   IDataSourceFactory,
   IdbExtensionLoader,
+  WebExtensionLoader,
   McapLocalDataSourceFactory,
   RemoteDataSourceFactory,
   RemoteExtensionLoader,
@@ -28,7 +29,6 @@ import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { AppParametersInput } from "@lichtblick/suite-base/context/AppParametersContext";
 
 import LocalStorageAppConfiguration from "./services/LocalStorageAppConfiguration";
-import { WebExtensionLoader } from "./services/WebExtensionLoader";
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
