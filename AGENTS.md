@@ -102,8 +102,8 @@ E2E tests:
 - Every branch gets one PR into `licht`, ready for review (not draft): `gh pr create -R mrkbac/lichtblick --base licht`. Title = what the change does as a conventional commit (e.g. `feat(ws): support playbackControl`), not the latest commit subject.
 - Don't push features or fixes directly to `licht`. Tiny fork-only config tweaks (deploy config) may go direct.
 - No upstream PRs or merges unless the user asks.
-- Before merging: `pnpm typecheck`, targeted Vitest tests, `pnpm exec oxlint <changed files>`, and `pnpm build:packages` (CI runs it; unlike `typecheck` it also checks test files). Merge with `gh pr merge --merge` (merge commit) and delete the branch.
-- Every pushed branch gets a Cloudflare Pages preview at `<branch>.lichtblick-2pl.pages.dev`; merging into `licht` deploys licht.marko.im.
+- Before merging: `pnpm typecheck`, targeted Vitest tests, `pnpm exec oxlint --no-error-on-unmatched-pattern <changed files>`, and `pnpm build:packages` (CI runs it; unlike `typecheck` it also checks test files). Merge with `gh pr merge --merge` (merge commit) and delete the branch.
+- Every pushed branch gets a Cloudflare Pages preview at `<branch>.lichtblick-2pl.pages.dev` (`/` in the branch name becomes `-`, e.g. `feature-foo`); merging into `licht` deploys licht.marko.im.
 
 ### CodeRabbit
 
