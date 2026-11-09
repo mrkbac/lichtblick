@@ -8,5 +8,9 @@ export const extensionsSettings = {
     "Failed to retrieve the list of available marketplace extensions",
   checkInternetConnection: "Check your internet connection and try again.",
   searchExtensions: "Search extensions...",
+  loadExtensionFolder: "Load extension folder",
+  reloadDiskExtensions: "Reload disk extensions",
+  extensionFolderHelp:
+    "Select a trusted extension folder containing package.json and dist/extension.js. Reload to read disk changes. If access expires, select the folder again. Uninstall forgets the folder without deleting files.",
   available: "Available",
 };

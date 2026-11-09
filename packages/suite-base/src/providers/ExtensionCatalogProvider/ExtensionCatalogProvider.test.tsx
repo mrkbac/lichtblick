@@ -164,6 +164,22 @@ describe("ExtensionCatalogProvider", () => {
     expect(result.current.installedExtensions).toEqual([extensionInfo]);
   });
 
+  it("clears loaded contributions when disk access is revoked on refresh", async () => {
+    const extension = ExtensionBuilder.extensionInfo({ namespace: "local" });
+    const loadExtension = vi.fn().mockResolvedValue({ raw: defaultSource });
+    const loader = createLocalLoader(extension, { loadExtensionMock: loadExtension });
+    const { result } = await setup({ loadersOverride: [loader] });
+    expect(result.current.isExtensionInstalled(extension.id)).toBe(true);
+    loadExtension.mockRejectedValue(new DOMException("Access revoked", "NotAllowedError"));
+    await act(async () => {
+      await result.current.refreshAllExtensions();
+    });
+    expect(result.current.isExtensionInstalled(extension.id)).toBe(false);
+    expect(result.current.installedPanels).toEqual({});
+    // Keep the metadata so the user can forget the inaccessible directory.
+    expect(result.current.installedExtensions).toEqual([extension]);
+  });
+
   it("handles extensions with the same id in different loaders", async () => {
     const source1 = `module.exports = { activate: function() { return 1; } }`;
     const source2 = `module.exports = { activate: function() { return 2; } }`;

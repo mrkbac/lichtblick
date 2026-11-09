@@ -28,6 +28,7 @@ import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { AppParametersInput } from "@lichtblick/suite-base/context/AppParametersContext";
 
 import LocalStorageAppConfiguration from "./services/LocalStorageAppConfiguration";
+import { WebExtensionLoader } from "./services/WebExtensionLoader";
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
@@ -49,7 +50,7 @@ export function WebRoot(props: {
 
   const defaultExtensionLoaders: IExtensionLoader[] = [
     new IdbExtensionLoader("org"),
-    new IdbExtensionLoader("local"),
+    new WebExtensionLoader(),
   ];
   const url = new URL(globalThis.location.href);
   const workspace = url.searchParams.get("workspace");

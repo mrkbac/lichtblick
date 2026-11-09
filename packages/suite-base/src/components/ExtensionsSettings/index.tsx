@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Alert, AlertTitle, Button } from "@mui/material";
+import { Alert, AlertTitle, Button, Typography } from "@mui/material";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -14,6 +14,8 @@ import useExtensionSettings from "@lichtblick/suite-base/components/ExtensionsSe
 import { FocusedExtension } from "@lichtblick/suite-base/components/ExtensionsSettings/types";
 import SearchBar from "@lichtblick/suite-base/components/SearchBar/SearchBar";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { useExtensionCatalog } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
+import { useSharedRootContext } from "@lichtblick/suite-base/context/SharedRootContext";
 
 import ExtensionList from "./components/ExtensionList/ExtensionList";
 import { useStyles } from "./index.style";
@@ -21,6 +23,33 @@ import { useStyles } from "./index.style";
 export default function ExtensionsSettings(): React.ReactElement {
   const { t } = useTranslation("extensionsSettings");
   const { classes } = useStyles();
+  const { extensionLoaders } = useSharedRootContext();
+  const directoryLoader = extensionLoaders.find((loader) => loader.loadExtensionFromDirectory);
+  const refreshAllExtensions = useExtensionCatalog((state) => state.refreshAllExtensions);
+  const [directoryError, setDirectoryError] = useState<string | undefined>(() =>
+    directoryLoader?.directoryErrors?.join("\n"),
+  );
+  const [directoryBusy, setDirectoryBusy] = useState(false);
+  const updateDirectories = async (action: "select" | "reload") => {
+    setDirectoryBusy(true);
+    setDirectoryError(undefined);
+    try {
+      if (action === "select") {
+        await directoryLoader?.loadExtensionFromDirectory?.();
+      }
+      await refreshAllExtensions();
+      const errors = directoryLoader?.directoryErrors;
+      if (errors != undefined && errors.length > 0) {
+        setDirectoryError(errors.join("\n"));
+      }
+    } catch (error) {
+      if (!(error instanceof DOMException && error.name === "AbortError")) {
+        setDirectoryError(error instanceof Error ? error.message : String(error));
+      }
+    } finally {
+      setDirectoryBusy(false);
+    }
+  };
 
   const [focusedExtension, setFocusedExtension] = useState<FocusedExtension | undefined>();
 
@@ -59,6 +88,32 @@ export default function ExtensionsSettings(): React.ReactElement {
 
   return (
     <Stack gap={1}>
+      {directoryLoader && (
+        <Stack gap={1} paddingX={2}>
+          <Stack direction="row" gap={1}>
+            <Button
+              disabled={directoryBusy}
+              onClick={async () => {
+                await updateDirectories("select");
+              }}
+            >
+              {t("loadExtensionFolder")}
+            </Button>
+            <Button
+              disabled={directoryBusy}
+              onClick={async () => {
+                await updateDirectories("reload");
+              }}
+            >
+              {t("reloadDiskExtensions")}
+            </Button>
+          </Stack>
+          <Typography variant="body2" color="textSecondary">
+            {t("extensionFolderHelp")}
+          </Typography>
+          {directoryError && <Alert severity="error">{directoryError}</Alert>}
+        </Stack>
+      )}
       {marketplaceEntries.error && (
         <Alert
           severity="error"

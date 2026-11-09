@@ -41,6 +41,8 @@ vi.mock("@lichtblick/suite-base/constants/config", () => ({
   APP_CONFIG: { apiUrl: undefined },
 }));
 
+vi.mock("./services/WebExtensionLoader", () => ({ WebExtensionLoader: vi.fn() }));
+
 vi.mock("./services/LocalStorageAppConfiguration", () => ({
   __esModule: true,
   default: vi.fn(),

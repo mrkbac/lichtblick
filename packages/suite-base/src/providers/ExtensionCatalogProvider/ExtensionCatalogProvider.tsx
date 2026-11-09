@@ -242,6 +242,7 @@ function createExtensionRegistryStore(
         return;
       }
 
+      set({ loadedExtensions: new Set<string>() });
       const start = performance.now();
       const installedExtensions: ExtensionInfo[] = [];
       const contributionPoints: ContributionPoints = {
