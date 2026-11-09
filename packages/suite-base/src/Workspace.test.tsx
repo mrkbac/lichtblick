@@ -4,7 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import "@testing-library/jest-dom/vitest";
-import { render, waitFor } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import type { Mock } from "vitest";
 
 import {
@@ -411,6 +411,135 @@ describe("Workspace - session-based MCAP resolution", () => {
       sidebarItems: [],
       layoutBrowser: undefined,
       workspaceStoreCreator: undefined,
+    });
+  });
+
+  const protocolCallback = (query: string) =>
+    `http://localhost/?protocol=${encodeURIComponent(`web+lichtblick://open?${query}`)}`;
+
+  afterEach(() => {
+    delete window.launchQueue;
+    window.history.replaceState(undefined, "", "/");
+  });
+
+  it("opens a cold protocol launch once even when launchQueue delivers its initial URL", async () => {
+    const url = protocolCallback("ds=remote-file&ds.url=https://example.com/data.mcap");
+    window.history.replaceState(undefined, "", url);
+    const setConsumer = vi.fn();
+    window.launchQueue = { setConsumer };
+    (parseAppURLState as Mock).mockReturnValue({
+      ds: "remote-file",
+      dsParams: { url: "https://example.com/data.mcap" },
+    });
+    render(<Workspace deepLinks={[url]} />);
+    expect(mockSelectSource).toHaveBeenCalledTimes(1);
+    expect(window.location.search).not.toContain("protocol=");
+    await act(async () => {
+      await setConsumer.mock.calls[0]![0]({ files: [], targetURL: url });
+    });
+    expect(mockSelectSource).toHaveBeenCalledTimes(1);
+    expect(parseAppURLState).toHaveBeenCalledWith(
+      expect.objectContaining({
+        protocol: "http:",
+        search: "?ds=remote-file&ds.url=https://example.com/data.mcap",
+      }),
+    );
+  });
+
+  it("routes repeated protocol launches in the existing workspace and preserves ordinary launches", async () => {
+    const setConsumer = vi.fn();
+    window.launchQueue = { setConsumer };
+    (parseAppURLState as Mock).mockReturnValue(undefined);
+    render(<Workspace />);
+    const consume = setConsumer.mock.calls[0]![0] as (params: LaunchParams) => Promise<void>;
+    (parseAppURLState as Mock).mockReturnValue({
+      ds: "remote-file",
+      dsParams: { url: "https://example.com/data.mcap" },
+    });
+    await act(async () => {
+      await consume({
+        files: [],
+        targetURL: protocolCallback("ds=remote-file&ds.url=https://example.com/data.mcap"),
+      });
+    });
+    expect(mockSelectSource).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await consume({ files: [], targetURL: "https://untrusted.example/?protocol=bad" });
+      await consume({ files: [], targetURL: "http://localhost/" });
+    });
+    expect(mockSelectSource).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await consume({
+        files: [],
+        targetURL: protocolCallback("ds=remote-file&ds.url=https://example.com/data.mcap"),
+      });
+    });
+    expect(mockSelectSource).toHaveBeenCalledTimes(2);
+  });
+
+  it("applies a launch once across a pipeline change and seeks only the new source", async () => {
+    const setConsumer = vi.fn();
+    const seek = vi.fn();
+    window.launchQueue = { setConsumer };
+    let pipeline = {
+      ...mockPipelineContext,
+      playerState: {
+        ...mockPipelineContext.playerState,
+        presence: PlayerPresence.PRESENT,
+        playerId: "old",
+      },
+      seekPlayback: seek,
+    };
+    (useMessagePipeline as Mock).mockImplementation((selector: (ctx: typeof pipeline) => unknown) =>
+      selector(pipeline),
+    );
+    (useMessagePipelineGetter as Mock).mockReturnValue(() => pipeline);
+    (parseAppURLState as Mock).mockReturnValue(undefined);
+    const { rerender } = render(<Workspace />);
+    const consume = setConsumer.mock.calls[0]![0] as (params: LaunchParams) => Promise<void>;
+    (parseAppURLState as Mock).mockReturnValue({
+      ds: "remote-file",
+      dsParams: { url: "https://example.com/data.mcap" },
+      time: { sec: 123, nsec: 0 },
+    });
+    await act(async () => {
+      await consume({
+        files: [],
+        targetURL: protocolCallback("ds=remote-file&ds.url=https://example.com/data.mcap&time=123"),
+      });
+    });
+    expect(mockSelectSource).toHaveBeenCalledTimes(1);
+    expect(seek).not.toHaveBeenCalled();
+    pipeline = { ...pipeline, playerState: { ...pipeline.playerState, playerId: "new" } };
+    (useMessagePipelineGetter as Mock).mockReturnValue(() => pipeline);
+    rerender(<Workspace />);
+    expect(mockSelectSource).toHaveBeenCalledTimes(1);
+    expect(seek).toHaveBeenCalledExactlyOnceWith({ sec: 123, nsec: 0 });
+  });
+
+  it("preserves file launches and reports file read errors", async () => {
+    const setConsumer = vi.fn();
+    const handleFiles = vi.fn();
+    window.launchQueue = { setConsumer };
+    (useHandleFiles as Mock).mockReturnValue({ handleFiles });
+    (parseAppURLState as Mock).mockReturnValue(undefined);
+    render(<Workspace />);
+    const consume = setConsumer.mock.calls[0]![0] as (params: LaunchParams) => Promise<void>;
+    const file = new File(["data"], "data.mcap");
+    const handle = {
+      kind: "file",
+      getFile: vi.fn().mockResolvedValue(file),
+    } as unknown as FileSystemFileHandle;
+    await act(async () => {
+      await consume({ files: [handle], targetURL: "http://localhost/" });
+    });
+    expect(handleFiles).toHaveBeenCalledWith([file]);
+    (handle.getFile as Mock).mockRejectedValue(new Error("denied"));
+    await act(async () => {
+      await consume({ files: [handle] });
+    });
+    expect(mockEnqueueSnackbar).toHaveBeenCalledWith("Failed to open the launched file", {
+      variant: "error",
     });
   });
 

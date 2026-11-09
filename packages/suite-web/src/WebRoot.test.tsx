@@ -59,6 +59,16 @@ describe("WebRoot", () => {
       </WebRoot>,
     );
 
+  it("keeps protocol launches in the PWA even when the user prefers desktop", () => {
+    globalThis.history.replaceState(
+      {},
+      "",
+      `/?protocol=${encodeURIComponent("web+lichtblick://open?ds=remote-file")}`,
+    );
+    renderWebRoot();
+    expect(mockSharedRootProps[0]!.enableLaunchPreferenceScreen).toBe(false);
+  });
+
   it("maps the ?layout= query parameter to appParameters.defaultLayout", () => {
     const layout = BasicBuilder.string();
     globalThis.history.replaceState({}, "", `/?layout=${layout}`);

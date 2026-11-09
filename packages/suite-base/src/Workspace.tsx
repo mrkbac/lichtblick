@@ -13,6 +13,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { Time } from "@foxglove/rostime";
 import { Link, Typography } from "@mui/material";
 import { t } from "i18next";
 import { useSnackbar } from "notistack";
@@ -113,6 +114,7 @@ import { parseAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import useBroadcast from "@lichtblick/suite-base/util/broadcast/useBroadcast";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
+import { pwaProtocolUrl } from "@lichtblick/suite-base/util/pwaProtocolUrl";
 
 import { useWorkspaceActions } from "./context/Workspace/useWorkspaceActions";
 import { severityToBadgeColor } from "./utils";
@@ -276,9 +278,30 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     }
   }, [filesToOpen]);
 
-  // files the OS asked the installed PWA to open (manifest file_handlers)
+  const [launchedURL, setLaunchedURL] = useState<URL>();
+  const initialLaunchURL = useRef(props.deepLinks?.[0]);
+
+  // One consumer handles both file and protocol launches; focus-existing never reloads the app.
   useEffect(() => {
-    window.launchQueue?.setConsumer(async ({ files }) => {
+    if (isDesktopApp()) {
+      return;
+    }
+    const initialProtocolURL = initialLaunchURL.current
+      ? pwaProtocolUrl(initialLaunchURL.current, new URL(window.location.href))
+      : undefined;
+    if (initialProtocolURL) {
+      window.history.replaceState(undefined, "", initialProtocolURL.href);
+    }
+    window.launchQueue?.setConsumer(async ({ files, targetURL }) => {
+      const initialURL = initialLaunchURL.current;
+      initialLaunchURL.current = undefined;
+      if (files.length === 0 && targetURL != undefined && targetURL !== initialURL) {
+        const url = pwaProtocolUrl(targetURL, new URL(window.location.href));
+        if (url && parseAppURLState(url)) {
+          window.history.replaceState(undefined, "", url.href);
+          setLaunchedURL(url);
+        }
+      }
       const fileHandles = files.filter((h): h is FileSystemFileHandle => h.kind === "file");
       if (fileHandles.length === 0) {
         return;
@@ -292,6 +315,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         enqueueSnackbar("Failed to open the launched file", { variant: "error" });
       }
     });
+    return () => window.launchQueue?.setConsumer(() => {});
   }, [enqueueSnackbar]);
 
   const dropHandler = useCallback(
@@ -545,10 +569,21 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     ],
   );
 
+  const deepLink = props.deepLinks?.[0];
   const targetUrlState = useMemo(() => {
-    const deepLinks = props.deepLinks ?? [];
-    return deepLinks[0] ? parseAppURLState(new URL(deepLinks[0])) : undefined;
-  }, [props.deepLinks]);
+    if (launchedURL) {
+      return parseAppURLState(launchedURL);
+    }
+    if (!deepLink) {
+      return undefined;
+    }
+    const url = new URL(deepLink);
+    if (!isDesktopApp() && url.searchParams.has("protocol")) {
+      const protocolURL = pwaProtocolUrl(deepLink, new URL(window.location.href));
+      return protocolURL ? parseAppURLState(protocolURL) : undefined;
+    }
+    return parseAppURLState(url);
+  }, [launchedURL, deepLink]);
 
   const [unappliedSourceArgs, setUnappliedSourceArgs] = useState<
     | {
@@ -567,6 +602,33 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         }
       : undefined,
   );
+  const [unappliedTime, setUnappliedTime] = useState<{ time?: Time; previousPlayerId?: string }>(
+    targetUrlState ? { time: targetUrlState.time } : {},
+  );
+
+  // Replacing a player changes the pipeline getter; it must not replay the source launch.
+  const appliedLaunchURL = useRef<URL>(undefined);
+  useEffect(() => {
+    if (!launchedURL || appliedLaunchURL.current === launchedURL) {
+      return;
+    }
+    appliedLaunchURL.current = launchedURL;
+    const state = parseAppURLState(launchedURL);
+    setUnappliedSourceArgs(
+      state && !state.mcapBundleId
+        ? {
+            ds: state.ds,
+            dsParams: state.dsParams,
+            layoutUrl: state.layoutUrl,
+          }
+        : undefined,
+    );
+    setUnappliedTime({
+      time: state?.time,
+      previousPlayerId:
+        state?.ds || state?.mcapBundleId ? getMessagePipeline().playerState.playerId : undefined,
+    });
+  }, [launchedURL, getMessagePipeline]);
 
   // Resolve MCAP bundle URLs when mcapBundleId is present.
   useEffect(() => {
@@ -604,7 +666,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     return () => {
       controller.abort();
     };
-  }, [targetUrlState?.mcapBundleId, enqueueSnackbar]);
+  }, [targetUrlState, enqueueSnackbar]);
 
   const selectEvent = useEvents(selectSelectEvent);
 
@@ -700,24 +762,24 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     }
   }, [fetchLayoutFromUrl, selectEvent, selectSource, unappliedSourceArgs, setUnappliedSourceArgs]);
 
-  const [unappliedTime, setUnappliedTime] = useState(
-    targetUrlState ? { time: targetUrlState.time } : undefined,
-  );
   // Seek to time in URL.
   useEffect(() => {
-    if (unappliedTime?.time == undefined || !seek) {
+    if (unappliedTime.time == undefined || !seek) {
       return;
     }
 
     // Wait until player is ready before we try to seek.
-    if (playerPresence !== PlayerPresence.PRESENT) {
+    if (
+      playerPresence !== PlayerPresence.PRESENT ||
+      (unappliedTime.previousPlayerId != undefined && unappliedTime.previousPlayerId === playerId)
+    ) {
       return;
     }
 
     log.debug(`Seeking to url time:`, unappliedTime.time);
     seek(unappliedTime.time);
     setUnappliedTime({ time: undefined });
-  }, [playerPresence, seek, unappliedTime]);
+  }, [playerId, playerPresence, seek, unappliedTime]);
 
   useSeekTimeFromCLI();
 
