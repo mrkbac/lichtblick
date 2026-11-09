@@ -26,7 +26,6 @@ import {
 } from "@lichtblick/suite-base";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { AppParametersInput } from "@lichtblick/suite-base/context/AppParametersContext";
-import { pwaProtocolUrl } from "@lichtblick/suite-base/util/pwaProtocolUrl";
 
 import LocalStorageAppConfiguration from "./services/LocalStorageAppConfiguration";
 
@@ -53,7 +52,7 @@ export function WebRoot(props: {
     new IdbExtensionLoader("local"),
   ];
   const url = new URL(globalThis.location.href);
-  const [isProtocolLaunch] = useState(() => pwaProtocolUrl(url.href, url) != undefined);
+  const [isProtocolLaunch] = useState(() => url.searchParams.has("protocol"));
   const workspace = url.searchParams.get("workspace");
 
   if (workspace && APP_CONFIG.apiUrl) {

@@ -69,6 +69,12 @@ describe("WebRoot", () => {
     expect(mockSharedRootProps[0]!.enableLaunchPreferenceScreen).toBe(false);
   });
 
+  it("does not forward a rejected protocol callback to Electron", () => {
+    globalThis.history.replaceState({}, "", "/?protocol=invalid");
+    renderWebRoot();
+    expect(mockSharedRootProps[0]!.enableLaunchPreferenceScreen).toBe(false);
+  });
+
   it("maps the ?layout= query parameter to appParameters.defaultLayout", () => {
     const layout = BasicBuilder.string();
     globalThis.history.replaceState({}, "", `/?layout=${layout}`);
