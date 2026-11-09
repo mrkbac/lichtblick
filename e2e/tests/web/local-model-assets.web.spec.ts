@@ -70,9 +70,9 @@ async function coloredPixels(canvas: import("@playwright/test").Locator) {
   }, screenshot.toString("base64"));
 }
 
-test("loads local URDF meshes, materials and textures and reloads when folder grants change", async ({
-  page,
-}) => {
+test("loads local URDF meshes, materials and textures and reloads when folder grants change", {
+  tag: "@smoke",
+}, async ({ page }) => {
   await page.addInitScript(
     ({ objText, gltfText, robotText, binary }) => {
       window.showDirectoryPicker = async () => {
