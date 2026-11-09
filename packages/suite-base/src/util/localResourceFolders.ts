@@ -107,7 +107,7 @@ export class LocalResourceFolders {
       );
       if (candidates.length > 1) {
         throw new Error(
-          `ROS package "${authority}" exists in multiple selected locations; remove the duplicate folder`,
+          `ROS package "${authority}" exists in multiple selected locations; remove the duplicate package or selected folder`,
         );
       }
       folder = candidates[0]?.root;

@@ -216,6 +216,9 @@ export function createMessagePipelineStore({
               options.referenceUrl.slice(0, options.referenceUrl.lastIndexOf(pkgName)) + pkgPath;
             return await builtinFetch(resolvedUrl, options);
           }
+          throw new Error(
+            `ROS package "${pkgName}" was not found. Select its resource folder in Settings.`,
+          );
         }
 
         // Use a regular fetch for all other protocols

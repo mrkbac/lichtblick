@@ -39,7 +39,8 @@ function directory(name: string, tree: Tree): FileSystemDirectoryHandle {
     async *values() {
       yield* entries;
     },
-    isSameEntry: async (other: FileSystemDirectoryHandle) => other === handle,
+    isSameEntry: async (other: FileSystemDirectoryHandle): Promise<boolean> =>
+      other === (handle as unknown as FileSystemDirectoryHandle),
   };
   return handle as unknown as FileSystemDirectoryHandle;
 }

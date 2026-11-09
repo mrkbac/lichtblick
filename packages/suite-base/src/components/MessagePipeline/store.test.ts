@@ -77,7 +77,10 @@ describe("createMessagePipelineStore", () => {
 it("loads granted workspace resources through the shared pipeline", async () => {
   const asset = { uri: "local-asset://root/mesh.stl", data: new Uint8Array([1]) };
   const fetch = vi.spyOn(localResourceFolders, "fetchAsset").mockResolvedValue(asset);
-  const store = createMessagePipelineStore({ promisesToWaitForRef: { current: [] } });
+  const store = createMessagePipelineStore({
+    promisesToWaitForRef: { current: [] },
+    initialPlayer: undefined,
+  });
   expect(await store.getState().public.fetchAsset("package://robot/mesh.stl")).toBe(asset);
   expect(fetch).toHaveBeenCalledWith("package://robot/mesh.stl", undefined);
   fetch.mockRestore();
@@ -113,4 +116,14 @@ it("keeps desktop package lookup independent of browser grants", async () => {
     local.mockRestore();
     vi.unstubAllGlobals();
   }
+});
+
+it("explains how to grant access to a missing ROS package", async () => {
+  const store = createMessagePipelineStore({
+    promisesToWaitForRef: { current: [] },
+    initialPlayer: undefined,
+  });
+  await expect(store.getState().public.fetchAsset("package://missing/mesh.stl")).rejects.toThrow(
+    'ROS package "missing" was not found. Select its resource folder in Settings.',
+  );
 });
