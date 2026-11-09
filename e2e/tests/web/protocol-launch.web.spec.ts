@@ -12,7 +12,9 @@ type TestWindow = Window & {
 const callback = (query: string) =>
   `/?protocol=${encodeURIComponent(`web+lichtblick://open?${query}`)}`;
 
-test("routes cold and existing PWA protocol launches without reloading", async ({ page }) => {
+test("routes cold and existing PWA protocol launches without reloading", { tag: "@smoke" }, async ({
+  page,
+}) => {
   const manifestResponse = await page.request.get("/manifest.webmanifest");
   const manifest = (await manifestResponse.json()) as {
     protocol_handlers: { protocol: string; url: string }[];
