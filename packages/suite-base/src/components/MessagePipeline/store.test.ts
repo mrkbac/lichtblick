@@ -9,6 +9,7 @@
 import type { Mock } from "vitest";
 
 import FakePlayer from "@lichtblick/suite-base/components/MessagePipeline/FakePlayer";
+import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceFolders";
 
 import { createMessagePipelineStore } from "./store";
 
@@ -71,4 +72,45 @@ describe("createMessagePipelineStore", () => {
     });
     expect(result).toEqual(matchingMessage);
   });
+});
+
+it("loads granted workspace resources through the shared pipeline", async () => {
+  const asset = { uri: "local-asset://root/mesh.stl", data: new Uint8Array([1]) };
+  const fetch = vi.spyOn(localResourceFolders, "fetchAsset").mockResolvedValue(asset);
+  const store = createMessagePipelineStore({ promisesToWaitForRef: { current: [] } });
+  expect(await store.getState().public.fetchAsset("package://robot/mesh.stl")).toBe(asset);
+  expect(fetch).toHaveBeenCalledWith("package://robot/mesh.stl", undefined);
+  fetch.mockRestore();
+});
+
+it("preserves remote package lookup when no granted package matches", async () => {
+  const asset = { uri: "package://remote/mesh.stl", data: new Uint8Array([2]) };
+  const local = vi.spyOn(localResourceFolders, "fetchAsset").mockResolvedValue(undefined);
+  const remote = vi.fn().mockResolvedValue(asset);
+  const player = Object.assign(new FakePlayer(), { fetchAsset: remote });
+  const store = createMessagePipelineStore({
+    promisesToWaitForRef: { current: [] },
+    initialPlayer: player,
+  });
+  expect(await store.getState().public.fetchAsset(asset.uri)).toBe(asset);
+  expect(remote).toHaveBeenCalledWith(asset.uri);
+  local.mockRestore();
+});
+
+it("keeps desktop package lookup independent of browser grants", async () => {
+  vi.stubGlobal("desktopBridge", {});
+  const asset = { uri: "package://robot/mesh.stl", data: new Uint8Array([3]) };
+  const local = vi.spyOn(localResourceFolders, "fetchAsset");
+  const player = Object.assign(new FakePlayer(), { fetchAsset: vi.fn().mockResolvedValue(asset) });
+  try {
+    const store = createMessagePipelineStore({
+      promisesToWaitForRef: { current: [] },
+      initialPlayer: player,
+    });
+    expect(await store.getState().public.fetchAsset(asset.uri)).toBe(asset);
+    expect(local).not.toHaveBeenCalled();
+  } finally {
+    local.mockRestore();
+    vi.unstubAllGlobals();
+  }
 });

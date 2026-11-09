@@ -26,6 +26,7 @@ import {
   SubscribePayload,
 } from "@lichtblick/suite-base/players/types";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
+import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceFolders";
 
 import { FramePromise } from "./pauseFrameForPromise";
 import { MessagePipelineContext } from "./types";
@@ -174,6 +175,13 @@ export function createMessagePipelineStore({
       async fetchAsset(uri, options) {
         const { protocol } = new URL(uri);
         const player = get().player;
+
+        if (!isDesktopApp() && (protocol === "package:" || protocol === "local-asset:")) {
+          const asset = await localResourceFolders.fetchAsset(uri, options);
+          if (asset) {
+            return asset;
+          }
+        }
 
         if (protocol === "package:") {
           // For the desktop app, package:// is registered as a supported schema for builtin _fetch_ calls.

@@ -43,6 +43,7 @@ import {
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks/useAppConfigurationValue";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
+import { LocalResourceFolders } from "./LocalResourceFolders";
 import {
   AutoUpdate,
   ColorSchemeSettings,
@@ -140,7 +141,7 @@ export function AppSettingsDialog(
               <LanguageSettings />
               {supportsAppUpdates && <AutoUpdate />}
               {!isDesktopApp() && <LaunchDefault />}
-              {isDesktopApp() && <RosPackagePath />}
+              {isDesktopApp() ? <RosPackagePath /> : <LocalResourceFolders />}
               <Stack>
                 <FormLabel>{t("advanced")}:</FormLabel>
                 <FormControlLabel
