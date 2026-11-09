@@ -19,7 +19,6 @@ import {
   ListItemText,
   Menu,
   MenuItem,
-  Paper,
   Tooltip,
   useTheme,
 } from "@mui/material";
@@ -29,6 +28,7 @@ import { useLongPress } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
 import { LayoutActions } from "@lichtblick/suite";
+import OverlayToolbar from "@lichtblick/suite-base/components/OverlayToolbar";
 import {
   PanelContextMenu,
   PanelContextMenuItem,
@@ -74,7 +74,6 @@ const useStyles = makeStyles()((theme) => ({
   iconButton: {
     position: "relative",
     pointerEvents: "auto",
-    aspectRatio: "1/1",
   },
   pointScanIcon: {
     transform: "rotate(45deg)",
@@ -391,9 +390,10 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
           {...longPressPublishEvent}
           className={classes.iconButton}
           size="small"
-          color={props.publishActive ? "info" : "inherit"}
+          aria-pressed={props.publishActive}
           ref={publishClickButtonRef}
           onClick={props.onClickPublish}
+          aria-label={props.publishActive ? "Click to cancel" : "Click to publish"}
           data-testid="publish-button"
         >
           {selectedPublishClickIcon}
@@ -457,15 +457,11 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
   );
 
   const resetViewButton = showResetViewButton && (
-    <Button
-      className={classes.resetViewButton}
-      variant="contained"
-      color="secondary"
-      onClick={onResetView}
-      data-testid="reset-view"
-    >
-      {t("resetView")}
-    </Button>
+    <OverlayToolbar className={classes.resetViewButton}>
+      <Button color="inherit" onClick={onResetView} data-testid="reset-view">
+        {t("resetView")}
+      </Button>
+    </OverlayToolbar>
   );
 
   const getContextMenuItems = useCallback((): PanelContextMenuItem[] => {
@@ -503,7 +499,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
           )
         }
         {props.interfaceMode === "image" && mousePresent && (
-          <Paper square={false} elevation={4} style={{ display: "flex", flexDirection: "column" }}>
+          <OverlayToolbar>
             <Tooltip placement="left" title={t("downloadImage")}>
               <IconButton
                 data-testid="download-image-button"
@@ -515,10 +511,10 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
                 <ArrowDownload20Regular />
               </IconButton>
             </Tooltip>
-          </Paper>
+          </OverlayToolbar>
         )}
         {props.interfaceMode === "3d" && (
-          <Paper square={false} elevation={4} style={{ display: "flex", flexDirection: "column" }}>
+          <OverlayToolbar>
             <Tooltip
               placement="left"
               title={
@@ -531,7 +527,8 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
               <IconButton
                 className={classes.iconButton}
                 size="small"
-                color={props.perspective ? "info" : "inherit"}
+                aria-pressed={props.perspective}
+                aria-label={`Switch to ${props.perspective ? "2" : "3"}D camera`}
                 onClick={props.onTogglePerspective}
               >
                 <span className={classes.threeDeeButton}>3D</span>
@@ -543,9 +540,10 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
             >
               <IconButton
                 data-testid="measure-button"
+                aria-label={props.measureActive ? t("stopMeasuring") : t("measure")}
                 className={classes.iconButton}
                 size="small"
-                color={props.measureActive ? "info" : "inherit"}
+                aria-pressed={props.measureActive}
                 onClick={props.onClickMeasure}
               >
                 <div className={classes.pointScanIcon}>
@@ -563,7 +561,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
                 aria-label={framePicking ? t("stopMeasuringFrames") : t("measureFrames")}
                 className={classes.iconButton}
                 size="small"
-                color={framePicking ? "info" : "inherit"}
+                aria-pressed={framePicking}
                 onClick={() => {
                   if (!framePicking && props.measureActive) {
                     props.onClickMeasure();
@@ -579,7 +577,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
             </Tooltip>
 
             {publishControls}
-          </Paper>
+          </OverlayToolbar>
         )}
       </div>
       {clickedObjects.length > 1 && !selectedObject && (

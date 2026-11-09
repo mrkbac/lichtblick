@@ -24,6 +24,7 @@ import {
 } from "react";
 import { makeStyles } from "tss-react/mui";
 
+import OverlayToolbar from "@lichtblick/suite-base/components/OverlayToolbar";
 import { customTypography } from "@lichtblick/theme";
 
 import { MEASURE_HANDLE_LAYERS } from "./features";
@@ -86,7 +87,6 @@ const useStyles = makeStyles()((theme) => ({
     left: 10,
     pointerEvents: "none",
   },
-  tools: { display: "flex", flexDirection: "column", pointerEvents: "auto" },
   result: {
     padding: theme.spacing(0.75, 1.25),
     pointerEvents: "auto",
@@ -764,7 +764,7 @@ export function MapToolbar(props: Props): React.JSX.Element {
   return (
     <>
       <div className={classes.topLeft}>
-        <Paper className={classes.tools}>
+        <OverlayToolbar>
           {TOOLS.map(({ tool: option, title, icon, needsTerrain = false }) => {
             const disabled = needsTerrain && !hasTerrain;
             return (
@@ -777,7 +777,8 @@ export function MapToolbar(props: Props): React.JSX.Element {
                   <IconButton
                     size="small"
                     disabled={disabled}
-                    color={tool === option ? "primary" : "default"}
+                    aria-pressed={tool === option}
+                    aria-label={title}
                     onClick={() => {
                       setSelectedId(undefined);
                       setCursor(undefined);
@@ -795,6 +796,7 @@ export function MapToolbar(props: Props): React.JSX.Element {
             <span>
               <IconButton
                 size="small"
+                aria-label="Clear all measurements"
                 disabled={measurements.length === 0}
                 onClick={() => {
                   setMeasurements([]);
@@ -810,6 +812,7 @@ export function MapToolbar(props: Props): React.JSX.Element {
             <span>
               <IconButton
                 size="small"
+                aria-label="Zoom to data"
                 disabled={!onFitToData}
                 onClick={() => {
                   onFitToData?.();
@@ -819,7 +822,7 @@ export function MapToolbar(props: Props): React.JSX.Element {
               </IconButton>
             </span>
           </Tooltip>
-        </Paper>
+        </OverlayToolbar>
         {tool && (
           <Paper className={classes.result}>
             <Typography variant="body2" style={{ fontWeight: 600 }}>
