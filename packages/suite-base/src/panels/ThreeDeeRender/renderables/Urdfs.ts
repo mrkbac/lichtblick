@@ -137,6 +137,7 @@ const tempEuler = new THREE.Euler();
 export type UrdfUserData = BaseUserData & {
   settings: LayerSettingsUrdf | LayerSettingsCustomUrdf;
   fetching?: { url: string; control: AbortController };
+  referenceUrl?: string;
   urdf: string | undefined;
   sourceType: LayerSettingsCustomUrdf["sourceType"] | undefined;
   parameter: string | undefined;
@@ -169,6 +170,7 @@ type JointPosition = {
 
 export class UrdfRenderable extends Renderable<UrdfUserData> {
   public override dispose(): void {
+    this.userData.fetching?.control.abort();
     this.removeChildren();
     this.userData.urdf = undefined;
     super.dispose();
@@ -765,15 +767,29 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
     }
 
     log.debug(`Fetching URDF from ${url}`);
-    renderable.userData.fetching = { url, control: new AbortController() };
+    const fetching = {
+      url,
+      control: new AbortController(),
+    };
+    renderable.userData.fetching = fetching;
     this.renderer
       .fetchAsset(url, { signal: renderable.userData.fetching.control.signal })
       .then((urdf) => {
+        if (fetching.control.signal.aborted) {
+          return;
+        }
         log.debug(`Fetched ${urdf.data.length} byte URDF from ${url}`);
         this.renderer.settings.errors.remove(["layers", instanceId], FETCH_URDF_ERR);
-        this.#loadUrdf({ instanceId, urdf: this.#textDecoder.decode(urdf.data) });
+        this.#loadUrdf({
+          instanceId,
+          urdf: this.#textDecoder.decode(urdf.data),
+          referenceUrl: urdf.uri,
+        });
       })
       .catch((e: unknown) => {
+        if (fetching.control.signal.aborted) {
+          return;
+        }
         const err = e as Error;
         const hasError = !err.message.startsWith("Failed to fetch");
         const errMessage = `Failed to load URDF from "${url}"${hasError ? `: ${err.message}` : ""}`;
@@ -791,12 +807,24 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
     return settings;
   }
 
-  #loadUrdf(args: { instanceId: string; urdf?: string; forceReload?: boolean }): void {
+  #loadUrdf(args: {
+    instanceId: string;
+    urdf?: string;
+    forceReload?: boolean;
+    referenceUrl?: string;
+  }): void {
     const { instanceId, urdf } = args;
     const forceReload = args.forceReload ?? false;
     let renderable = this.renderables.get(instanceId);
+    const referenceUrl = args.referenceUrl ?? renderable?.userData.referenceUrl;
     const settings = this.#getCurrentSettings(instanceId);
-    if (renderable && urdf && !forceReload && renderable.userData.urdf === urdf) {
+    if (
+      renderable &&
+      urdf &&
+      !forceReload &&
+      renderable.userData.urdf === urdf &&
+      renderable.userData.referenceUrl === referenceUrl
+    ) {
       renderable.userData.settings = settings;
       return;
     }
@@ -852,6 +880,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
       this.renderables.set(instanceId, renderable);
     }
 
+    renderable.userData.referenceUrl = urdf ? referenceUrl : undefined;
     renderable.userData.urdf = urdf;
     renderable.userData.sourceType = sourceType;
     renderable.userData.topic = topic;
@@ -892,15 +921,21 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
 
     let baseUrl: string | undefined;
     if (sourceType === "url") {
-      baseUrl = url;
+      baseUrl = renderable.userData.referenceUrl ?? url;
     } else if (sourceType === "filePath") {
-      baseUrl = `file://${filePath}`;
+      baseUrl = renderable.userData.referenceUrl ?? `file://${filePath}`;
     }
 
     // Parse the URDF
     const loadedRenderable = renderable;
     parseUrdf(urdf, async (uri) => await this.#getFileFetch(uri, baseUrl), framePrefix)
       .then((parsed) => {
+        if (
+          this.renderables.get(instanceId) !== loadedRenderable ||
+          loadedRenderable.userData.urdf !== urdf
+        ) {
+          return;
+        }
         this.#loadRobot(loadedRenderable, parsed, baseUrl);
         this.renderer.settings.errors.remove(
           loadedRenderable.userData.settingsPath,
@@ -1094,8 +1129,10 @@ export function createRenderable(args: {
       return new RenderableSphere(name, marker, undefined, renderer);
     }
     case "mesh": {
-      // Collada and glTF carry their own materials; STL and OBJ get the URDF color
-      const hasMaterials = /\.(dae|gltf|glb)$/i.test(visual.geometry.filename.split(/[?#]/)[0]!);
+      // Collada, glTF and OBJ/MTL carry their own materials; STL gets the URDF color
+      const hasMaterials = /\.(dae|gltf|glb|obj)$/i.test(
+        visual.geometry.filename.split(/[?#]/)[0]!,
+      );
       const embedded = hasMaterials ? EmbeddedMaterialUsage.Use : EmbeddedMaterialUsage.Ignore;
       const marker = createMeshMarker(frameId, pose, embedded, visual.geometry, baseUrl, color);
       return new RenderableMeshResource(name, marker, undefined, renderer, {

@@ -29,6 +29,7 @@ import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 import RenderStateBuilder from "@lichtblick/suite-base/testing/builders/RenderStateBuilder";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceFolders";
 
 import { RendererConfig } from "./IRenderer";
 import { Renderer } from "./Renderer";
@@ -390,6 +391,20 @@ describe("ThreeDeeRender", () => {
 
     const { getByTestId } = render(<ThreeDeeRender {...props} />);
     expect(getByTestId("renderer-overlay")).toBeInTheDocument();
+  });
+
+  it("recreates the renderer when local resource folders change", () => {
+    const props = setup();
+    render(<ThreeDeeRender {...props} />);
+    const initialCalls = mockedRenderer.mock.calls.length;
+    const previous = mockedRenderer.mock.results.at(-1)!.value as ReturnType<
+      typeof createMockRenderer
+    >;
+    act(() => {
+      localResourceFolders.remove("removed-folder");
+    });
+    expect(previous.dispose).toHaveBeenCalled();
+    expect(mockedRenderer.mock.calls.length).toBe(initialCalls + 1);
   });
 
   it("initializes with default camera state when no initial state is provided", () => {

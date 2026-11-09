@@ -32,7 +32,7 @@ describe("Urdfs createRenderable", () => {
     ["mesh.stl?v=glb", false],
     ["mesh.stl?preview=robot.glb#view", false],
     ["mesh.stl", false],
-    ["mesh.obj", false],
+    ["mesh.obj", true],
   ])("uses embedded materials for %s: %s", (filename, expected) => {
     const renderable = createRenderable({
       visual: {
