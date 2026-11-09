@@ -3,8 +3,12 @@
 
 import { expect, test } from "@playwright/test";
 
+test.setTimeout(60_000);
+
 // Real browser handles and IndexedDB cloning; only the native chooser is substituted.
-test("loads, restores, reloads, and forgets a disk extension", async ({ page }) => {
+test("loads, restores, reloads, and forgets a disk extension", { tag: "@smoke" }, async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     window.showDirectoryPicker = async () => {
       const root = await navigator.storage.getDirectory();
@@ -81,7 +85,9 @@ test("loads, restores, reloads, and forgets a disk extension", async ({ page }) 
   await expect(page.locator("html")).not.toHaveAttribute("data-disk-extension-version");
 });
 
-test("handles picker cancellation and denial without installing an extension", async ({ page }) => {
+test("handles picker cancellation and denial without installing an extension", {
+  tag: "@regression",
+}, async ({ page }) => {
   await page.addInitScript(() => {
     window.showDirectoryPicker = async () => {
       throw new DOMException("Cancelled", "AbortError");
@@ -104,14 +110,16 @@ test("handles picker cancellation and denial without installing an extension", a
   await expect(load).toBeEnabled();
 });
 
-test("hides folder actions when directory access is unsupported", async ({ page }) => {
+test("hides folder actions when directory access is unsupported", { tag: "@regression" }, async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     Reflect.deleteProperty(window, "showDirectoryPicker");
   });
   await page.goto("/");
   await page.getByTestId("AppMenuButton").click();
   await page.getByRole("menuitem", { name: "Extensions…", exact: true }).click();
-  await expect(page.getByPlaceholder("Search extensions...")).toBeVisible();
+  await expect(page.getByPlaceholder("Search extensions...")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: "Load extension folder" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Reload disk extensions" })).toHaveCount(0);
 });

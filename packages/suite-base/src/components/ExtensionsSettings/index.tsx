@@ -14,42 +14,16 @@ import useExtensionSettings from "@lichtblick/suite-base/components/ExtensionsSe
 import { FocusedExtension } from "@lichtblick/suite-base/components/ExtensionsSettings/types";
 import SearchBar from "@lichtblick/suite-base/components/SearchBar/SearchBar";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { useExtensionCatalog } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
-import { useSharedRootContext } from "@lichtblick/suite-base/context/SharedRootContext";
 
 import ExtensionList from "./components/ExtensionList/ExtensionList";
+import { useDirectoryExtensions } from "./hooks/useDirectoryExtensions";
 import { useStyles } from "./index.style";
 
 export default function ExtensionsSettings(): React.ReactElement {
   const { t } = useTranslation("extensionsSettings");
   const { classes } = useStyles();
-  const { extensionLoaders } = useSharedRootContext();
-  const directoryLoader = extensionLoaders.find((loader) => loader.loadExtensionFromDirectory);
-  const refreshAllExtensions = useExtensionCatalog((state) => state.refreshAllExtensions);
-  const [directoryError, setDirectoryError] = useState<string | undefined>(() =>
-    directoryLoader?.directoryErrors?.join("\n"),
-  );
-  const [directoryBusy, setDirectoryBusy] = useState(false);
-  const updateDirectories = async (action: "select" | "reload") => {
-    setDirectoryBusy(true);
-    setDirectoryError(undefined);
-    try {
-      if (action === "select") {
-        await directoryLoader?.loadExtensionFromDirectory?.();
-      }
-      await refreshAllExtensions();
-      const errors = directoryLoader?.directoryErrors;
-      if (errors != undefined && errors.length > 0) {
-        setDirectoryError(errors.join("\n"));
-      }
-    } catch (error) {
-      if (!(error instanceof DOMException && error.name === "AbortError")) {
-        setDirectoryError(error instanceof Error ? error.message : String(error));
-      }
-    } finally {
-      setDirectoryBusy(false);
-    }
-  };
+  const { directoryLoader, directoryError, directoryBusy, updateDirectories } =
+    useDirectoryExtensions();
 
   const [focusedExtension, setFocusedExtension] = useState<FocusedExtension | undefined>();
 
