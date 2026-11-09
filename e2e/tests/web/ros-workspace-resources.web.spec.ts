@@ -3,7 +3,9 @@
 
 import { expect, test } from "@playwright/test";
 
-test("discovers ROS packages in a granted folder and removes the grant", async ({ page }) => {
+test("discovers ROS packages in a granted folder and removes the grant @regression", async ({
+  page,
+}) => {
   await page.addInitScript(() => {
     // Exercise real browser directory/file handles without automating the native picker dialog.
     window.showDirectoryPicker = async () => {

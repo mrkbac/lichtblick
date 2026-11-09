@@ -150,3 +150,27 @@ describe("LocalResourceFolders", () => {
     ).rejects.toThrow();
   });
 });
+
+it("skips marked colcon outputs while allowing an explicitly selected install tree", async () => {
+  const resources = new LocalResourceFolders();
+  const installed = {
+    COLCON_IGNORE: "",
+    share: { robot: { "package.xml": manifest, "a.stl": "installed" } },
+  };
+  await resources.add(
+    directory("workspace", {
+      src: { robot: { "package.xml": manifest, "a.stl": "source" } },
+      install: installed,
+      build: { COLCON_IGNORE: "", robot: { "package.xml": manifest } },
+    }),
+  );
+  expect(resources.getSnapshot().folders[0]!.packages).toHaveLength(1);
+  expect(Array.from((await resources.fetchAsset("package://robot/a.stl"))!.data)).toEqual(
+    Array.from(new TextEncoder().encode("source")),
+  );
+  const direct = new LocalResourceFolders();
+  await direct.add(directory("install", installed));
+  expect(Array.from((await direct.fetchAsset("package://robot/a.stl"))!.data)).toEqual(
+    Array.from(new TextEncoder().encode("installed")),
+  );
+});

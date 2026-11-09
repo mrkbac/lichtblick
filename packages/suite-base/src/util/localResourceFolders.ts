@@ -33,6 +33,17 @@ export class LocalResourceFolders {
   public async add(handle: FileSystemDirectoryHandle): Promise<void> {
     const packages: PackageDirectory[] = [];
     const scan = async (directory: FileSystemDirectoryHandle, path: string[]): Promise<void> => {
+      // Colcon marks generated build/install/log trees; an explicitly selected root remains usable.
+      if (path.length > 0) {
+        try {
+          await directory.getFileHandle("COLCON_IGNORE");
+          return;
+        } catch (error) {
+          if (!(error instanceof DOMException) || error.name !== "NotFoundError") {
+            throw error;
+          }
+        }
+      }
       let manifest: FileSystemFileHandle | undefined;
       try {
         manifest = await directory.getFileHandle("package.xml");

@@ -13,6 +13,11 @@ import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceF
 
 import { createMessagePipelineStore } from "./store";
 
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
+
 describe("createMessagePipelineStore", () => {
   it("should return undefined when the player does not support backfill lookups", async () => {
     // GIVEN - a store backed by a player that cannot answer backfill lookups
@@ -83,7 +88,6 @@ it("loads granted workspace resources through the shared pipeline", async () => 
   });
   expect(await store.getState().public.fetchAsset("package://robot/mesh.stl")).toBe(asset);
   expect(fetch).toHaveBeenCalledWith("package://robot/mesh.stl", undefined);
-  fetch.mockRestore();
 });
 
 it("preserves remote package lookup when no granted package matches", async () => {
@@ -97,7 +101,7 @@ it("preserves remote package lookup when no granted package matches", async () =
   });
   expect(await store.getState().public.fetchAsset(asset.uri)).toBe(asset);
   expect(remote).toHaveBeenCalledWith(asset.uri);
-  local.mockRestore();
+  expect(local).toHaveBeenCalledWith(asset.uri, undefined);
 });
 
 it("keeps desktop package lookup independent of browser grants", async () => {
@@ -105,17 +109,12 @@ it("keeps desktop package lookup independent of browser grants", async () => {
   const asset = { uri: "package://robot/mesh.stl", data: new Uint8Array([3]) };
   const local = vi.spyOn(localResourceFolders, "fetchAsset");
   const player = Object.assign(new FakePlayer(), { fetchAsset: vi.fn().mockResolvedValue(asset) });
-  try {
-    const store = createMessagePipelineStore({
-      promisesToWaitForRef: { current: [] },
-      initialPlayer: player,
-    });
-    expect(await store.getState().public.fetchAsset(asset.uri)).toBe(asset);
-    expect(local).not.toHaveBeenCalled();
-  } finally {
-    local.mockRestore();
-    vi.unstubAllGlobals();
-  }
+  const store = createMessagePipelineStore({
+    promisesToWaitForRef: { current: [] },
+    initialPlayer: player,
+  });
+  expect(await store.getState().public.fetchAsset(asset.uri)).toBe(asset);
+  expect(local).not.toHaveBeenCalled();
 });
 
 it("explains how to grant access to a missing ROS package", async () => {
