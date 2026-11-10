@@ -11,7 +11,6 @@ import { DataSourceFactoryInitializeArgs } from "@lichtblick/suite-base/context/
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
 import { DeserializingIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/DeserializingIterableSource";
 import { McapIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/McapIterableSource";
-import { PlayerMetricsCollectorInterface } from "@lichtblick/suite-base/players/types";
 
 import { McapRealPipelineBenchmarkDataSourceFactory } from "./McapRealPipelineBenchmarkDataSourceFactory";
 
@@ -30,7 +29,6 @@ vi.mock("@lichtblick/suite-base/players/IterablePlayer/Mcap/McapIterableSource",
 function setupArgs(params?: Record<string, string | undefined>): DataSourceFactoryInitializeArgs {
   return {
     params,
-    metricsCollector: vi.fn() as unknown as PlayerMetricsCollectorInterface,
   };
 }
 
@@ -92,7 +90,6 @@ describe("McapRealPipelineBenchmarkDataSourceFactory", () => {
       source: mockDeserializingSource,
       name: "https://example.com/test.mcap",
       sourceId: "mcap-real-pipeline",
-      metricsCollector: args.metricsCollector,
       urlParams: { url: "https://example.com/test.mcap" },
     });
     expect(result).toBe(mockPlayer);
