@@ -18,6 +18,7 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 
 import Logger from "@lichtblick/log";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
 const log = Logger.getLogger(__filename);
 
@@ -398,7 +399,8 @@ export class ModelCache {
         .map(async (resource) => {
           const resolved = new URL(resource, url).toString();
           try {
-            return [resolved, await this.#fetchAsset(resolved, { referenceUrl: url })] as const;
+            const fetchUrl = isDesktopApp() ? rewriteUrl(resolved) : resolved;
+            return [resolved, await this.#fetchAsset(fetchUrl, { referenceUrl: url })] as const;
           } catch (error) {
             if (requiredResources.includes(resource)) {
               throw error;

@@ -264,6 +264,33 @@ describe("model dependencies", () => {
     cache.dispose();
   });
 
+  it.each([false, true])("preserves platform TIFF fetching (desktop: %s)", async (desktop) => {
+    // Given
+    vi.stubGlobal("desktopBridge", desktop ? {} : undefined);
+    const textureUrl = desktop
+      ? "x-foxglove-converted-tiff://robot/textures/paint.tiff"
+      : "package://robot/textures/paint.tiff";
+    const { cache, fetchAsset } = cacheWithAssets({
+      "package://robot/model.gltf": JSON.stringify({
+        asset: { version: "2.0" },
+        scene: 0,
+        scenes: [{ nodes: [] }],
+        images: [{ uri: "textures/paint.tiff" }],
+      })!,
+      [textureUrl]: new Uint8Array([1]),
+    });
+    const error = vi.fn();
+    // When
+    const model = await cache.load("package://robot/model.gltf", {}, error);
+    // Then
+    expect(model).toBeDefined();
+    expect(error).not.toHaveBeenCalled();
+    expect(fetchAsset).toHaveBeenCalledWith(textureUrl, {
+      referenceUrl: "package://robot/model.gltf",
+    });
+    cache.dispose();
+  });
+
   it("keeps reference URLs separate in the model cache", async () => {
     // Given
     const { cache, fetchAsset } = cacheWithAssets({ "package://robot/model.gltf": EMPTY_GLTF });
