@@ -314,6 +314,7 @@ function createExtensionRegistryStore(
           `Failed to uninstall extension ${extension.id} from loader ${namespaceLoader.type}:`,
           error,
         );
+        throw error;
       }
 
       set((state) =>

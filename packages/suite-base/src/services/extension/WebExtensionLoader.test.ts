@@ -10,13 +10,14 @@ const mocks = vi.hoisted(() => ({
   install: vi.fn(),
   listPackages: vi.fn(),
   readDirectories: vi.fn(),
+  deleteDirectory: vi.fn(),
 }));
 vi.mock("idb", () => {
   const store = {
     getAll: async () => await mocks.readDirectories(),
     get: async (_name: string, key: IDBValidKey) => mocks.records.get(key),
     delete: async (_name: string, key: IDBValidKey) => {
-      mocks.records.delete(key);
+      await mocks.deleteDirectory(key);
     },
   };
   return {
@@ -105,6 +106,9 @@ beforeEach(() => {
   mocks.install.mockReset().mockResolvedValue({ id: "test.example" });
   mocks.listPackages.mockReset().mockResolvedValue([]);
   mocks.readDirectories.mockReset().mockImplementation(async () => [...mocks.records.values()]);
+  mocks.deleteDirectory.mockReset().mockImplementation(async (key: IDBValidKey) => {
+    mocks.records.delete(key);
+  });
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -259,4 +263,58 @@ it("uninstalls both records of an existing collision", async () => {
   await loader.uninstallExtension("test.example");
   expect(mocks.records.size).toBe(0);
   expect(mocks.uninstall).toHaveBeenCalledWith("test.example");
+});
+
+it("keeps unrelated folders available when collision cleanup fails", async () => {
+  const first = folder();
+  const second = folder();
+  second.packageJson('{"name":"second","publisher":"test"}');
+  const picker = vi
+    .fn()
+    .mockResolvedValueOnce(first.directory)
+    .mockResolvedValueOnce(second.directory);
+  vi.stubGlobal("window", { showDirectoryPicker: picker });
+  const loader = new WebExtensionLoader();
+  await loader.loadExtensionFromDirectory!();
+  await loader.loadExtensionFromDirectory!();
+  const info = { id: "test.example", displayName: "Package version" };
+  mocks.listPackages.mockResolvedValue([info]);
+  mocks.installed.mockImplementation(async (id: string) => (id === info.id ? info : undefined));
+  mocks.deleteDirectory.mockRejectedValue(new Error("Cleanup failed"));
+  expect(await loader.getExtensions()).toEqual([
+    info,
+    expect.objectContaining({ id: "test.second" }),
+  ]);
+  expect(loader.directoryErrors).toContain("Cleanup failed");
+});
+
+it("returns the installed package when folder cleanup fails", async () => {
+  mocks.deleteDirectory.mockRejectedValue(new Error("Cleanup failed"));
+  const loader = new WebExtensionLoader();
+  expect(await loader.installExtension({ foxeFileData: new Uint8Array() })).toEqual({
+    id: "test.example",
+  });
+  expect(loader.directoryErrors).toContain("Cleanup failed");
+});
+
+it("does not remove a package when forgetting its folder fails", async () => {
+  mocks.installed.mockResolvedValue({ id: "test.example" });
+  mocks.deleteDirectory.mockRejectedValue(new Error("Cleanup failed"));
+  const loader = new WebExtensionLoader();
+  await expect(loader.uninstallExtension("test.example")).rejects.toThrow("Cleanup failed");
+  expect(mocks.uninstall).not.toHaveBeenCalled();
+});
+
+it("looks up a single folder without clearing other folder errors", async () => {
+  const disk = folder();
+  vi.stubGlobal("window", { showDirectoryPicker: async () => disk.directory });
+  const loader = new WebExtensionLoader();
+  await loader.loadExtensionFromDirectory!();
+  loader.directoryErrors = ["Other folder unavailable"];
+  mocks.readDirectories.mockClear();
+  expect(await loader.getExtension("test.example")).toEqual(
+    expect.objectContaining({ id: "test.example" }),
+  );
+  expect(mocks.readDirectories).not.toHaveBeenCalled();
+  expect(loader.directoryErrors).toEqual(["Other folder unavailable"]);
 });

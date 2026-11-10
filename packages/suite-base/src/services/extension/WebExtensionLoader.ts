@@ -122,48 +122,56 @@ export class WebExtensionLoader extends IdbExtensionLoader {
     return { raw: await readText(dist, "extension.js") };
   }
 
+  private async readDirectoryInfo({ directory, info }: DirectoryExtension): Promise<ExtensionInfo> {
+    try {
+      await this.readSource(directory);
+      const updated = await readInfo(directory);
+      if (updated.id !== info.id) {
+        throw new Error("Extension identity changed. Select its folder again.");
+      }
+      return updated;
+    } catch (error) {
+      this.directoryErrors.push(
+        `${info.qualifiedName}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return info;
+    }
+  }
+
   public override async getExtensions(): Promise<ExtensionInfo[]> {
     const packages = await super.getExtensions();
     this.directoryErrors = [];
     let directories: DirectoryExtension[];
     try {
       directories = await this.directories();
-      const packageIds = new Set(packages.map((info) => info.id));
-      const collisions = directories.filter(({ info }) => packageIds.has(info.id));
-      directories = directories.filter(({ info }) => !packageIds.has(info.id));
-      await Promise.all(
-        collisions.map(async ({ info }) => {
-          await (await this.#db).delete("directories", info.id);
-        }),
-      );
     } catch (error) {
       this.directoryErrors.push(error instanceof Error ? error.message : String(error));
       return packages;
     }
+    const packageIds = new Set(packages.map((info) => info.id));
     const infos = await Promise.all(
-      directories.map(async ({ directory, info }) => {
-        try {
-          await this.readSource(directory);
-          const updated = await readInfo(directory);
-          if (updated.id !== info.id) {
-            throw new Error("Extension identity changed. Select its folder again.");
+      directories.map(async (entry) => {
+        if (packageIds.has(entry.info.id)) {
+          try {
+            await (await this.#db).delete("directories", entry.info.id);
+          } catch (error) {
+            this.directoryErrors.push(error instanceof Error ? error.message : String(error));
           }
-          return updated;
-        } catch (error) {
-          this.directoryErrors.push(
-            `${info.qualifiedName}: ${error instanceof Error ? error.message : String(error)}`,
-          );
-          return info;
+          return undefined;
         }
+        return await this.readDirectoryInfo(entry);
       }),
     );
-    return [...packages, ...infos];
+    return [...packages, ...infos.filter((info) => info != undefined)];
   }
 
   public override async getExtension(id: string): Promise<ExtensionInfo | undefined> {
-    return (
-      (await super.getExtension(id)) ?? (await this.getExtensions()).find((info) => info.id === id)
-    );
+    const installed = await super.getExtension(id);
+    if (installed) {
+      return installed;
+    }
+    const entry = await (await this.#db).get("directories", id);
+    return entry != undefined ? await this.readDirectoryInfo(entry) : undefined;
   }
 
   public override async loadExtension(id: string): Promise<{ raw: string }> {
@@ -183,7 +191,11 @@ export class WebExtensionLoader extends IdbExtensionLoader {
   public override async installExtension(data: InstallExtensionProps): Promise<ExtensionInfo> {
     // A linked folder must never shadow an installed package with the same identity.
     const info = await super.installExtension(data);
-    await (await this.#db).delete("directories", info.id);
+    try {
+      await (await this.#db).delete("directories", info.id);
+    } catch (error) {
+      this.directoryErrors.push(error instanceof Error ? error.message : String(error));
+    }
     return info;
   }
 

@@ -739,7 +739,7 @@ describe("ExtensionCatalogProvider", () => {
       },
     );
 
-    it("should log a warning and still remove extension data from state when uninstallExtension throws", async () => {
+    it("should retain extension data and reject when uninstallExtension throws", async () => {
       (isDesktopApp as Mock).mockReturnValue(false);
       vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -751,7 +751,7 @@ describe("ExtensionCatalogProvider", () => {
         getExtension: vi.fn(),
         getExtensions: vi.fn().mockResolvedValue([extensionInfo]),
         installExtension: vi.fn().mockResolvedValue(extensionInfo),
-        loadExtension: vi.fn(),
+        loadExtension: vi.fn().mockResolvedValue({ raw: defaultSource }),
         uninstallExtension: uninstallFn,
       };
 
@@ -762,12 +762,14 @@ describe("ExtensionCatalogProvider", () => {
       });
 
       await act(async () => {
-        await result.current.uninstallExtension("local", extensionInfo.id);
+        await expect(result.current.uninstallExtension("local", extensionInfo.id)).rejects.toThrow(
+          "Uninstall failed",
+        );
       });
 
-      // Extension is removed from state despite the error
-      expect(result.current.installedExtensions).toHaveLength(0);
-      expect(result.current.isExtensionInstalled(extensionInfo.id)).toBe(false);
+      // Failed persistence must leave the extension available to retry.
+      expect(result.current.installedExtensions).toHaveLength(1);
+      expect(result.current.isExtensionInstalled(extensionInfo.id)).toBe(true);
 
       (console.warn as Mock).mockRestore();
     });
