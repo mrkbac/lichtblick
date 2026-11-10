@@ -52,6 +52,8 @@ export const appSettings = {
   selectResourceFolder: "Select resource folder",
   scanningResourceFolder: "Scanning folder…",
   removeResourceFolder: "Remove folder",
+  rosPackageNotFound:
+    'ROS package "{{pkgName}}" was not found. Select its resource folder in Settings.',
   settings: "Settings",
   timestampFormat: "Timestamp format",
   webApp: "Web app",
