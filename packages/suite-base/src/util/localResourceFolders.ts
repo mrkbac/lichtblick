@@ -144,11 +144,24 @@ export class LocalResourceFolders {
       return undefined;
     }
     options?.signal?.throwIfAborted();
-    let directory = folder.handle;
-    for (const segment of [...packagePath, ...segments.slice(0, -1)]) {
-      directory = await directory.getDirectoryHandle(segment);
+    let file: File;
+    try {
+      let directory = folder.handle;
+      for (const segment of [...packagePath, ...segments.slice(0, -1)]) {
+        directory = await directory.getDirectoryHandle(segment);
+      }
+      file = await (await directory.getFileHandle(segments.at(-1)!)).getFile();
+    } catch (error) {
+      if (
+        protocol === "package" &&
+        error instanceof DOMException &&
+        error.name === "NotFoundError"
+      ) {
+        options?.signal?.throwIfAborted();
+        return undefined;
+      }
+      throw error;
     }
-    const file = await (await directory.getFileHandle(segments.at(-1)!)).getFile();
     const data = new Uint8Array(await file.arrayBuffer());
     options?.signal?.throwIfAborted();
     return {

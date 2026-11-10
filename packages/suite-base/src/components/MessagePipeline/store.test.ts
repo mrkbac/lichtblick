@@ -123,6 +123,6 @@ it("explains how to grant access to a missing ROS package", async () => {
     initialPlayer: undefined,
   });
   await expect(store.getState().public.fetchAsset("package://missing/mesh.stl")).rejects.toThrow(
-    'ROS package "missing" was not found. Select its resource folder in Settings.',
+    'ROS package "missing" or the requested resource was not found. Select its resource folder in Settings and check the resource path.',
   );
 });

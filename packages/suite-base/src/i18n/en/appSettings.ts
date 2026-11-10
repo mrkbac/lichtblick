@@ -53,7 +53,7 @@ export const appSettings = {
   scanningResourceFolder: "Scanning folder…",
   removeResourceFolder: "Remove folder",
   rosPackageNotFound:
-    'ROS package "{{pkgName}}" was not found. Select its resource folder in Settings.',
+    'ROS package "{{pkgName}}" or the requested resource was not found. Select its resource folder in Settings and check the resource path.',
   localResourceInvalidManifest: "Invalid ROS package.xml: {{path}}",
   localResourceInvalidUrl: "Invalid local resource URL",
   localResourcePathOutsideFolder: "Local resource path must stay inside its folder",
