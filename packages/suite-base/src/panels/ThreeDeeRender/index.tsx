@@ -21,7 +21,6 @@ import {
   BuiltinPanelExtensionContext,
   PanelExtensionAdapter,
 } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
-import { INJECTED_FEATURE_KEYS, useAppContext } from "@lichtblick/suite-base/context/AppContext";
 import { useExtensionCatalog } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import { createSyncRoot } from "@lichtblick/suite-base/panels/createSyncRoot";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
@@ -35,7 +34,6 @@ function initPanel(args: InitPanelArgs, context: BuiltinPanelExtensionContext) {
     forwardedAnalytics,
     interfaceMode,
     testOptions,
-    customSceneExtensions,
     customCameraModels,
     enqueueSnackbarFromParent,
     logError,
@@ -47,7 +45,6 @@ function initPanel(args: InitPanelArgs, context: BuiltinPanelExtensionContext) {
           context={context}
           interfaceMode={interfaceMode}
           testOptions={testOptions}
-          customSceneExtensions={customSceneExtensions}
           customCameraModels={customCameraModels}
           enqueueSnackbarFromParent={enqueueSnackbarFromParent}
           logError={logError}
@@ -75,16 +72,6 @@ function ThreeDeeRenderAdapter(interfaceMode: InterfaceMode, props: Props) {
   ) as CameraModelsMap;
 
   const forwardedAnalytics = useForwardAnalytics();
-  const { injectedFeatures } = useAppContext();
-  const customSceneExtensions = useMemo(() => {
-    if (injectedFeatures == undefined) {
-      return undefined;
-    }
-    const injectedSceneExtensions =
-      injectedFeatures.availableFeatures[INJECTED_FEATURE_KEYS.customSceneExtensions]
-        ?.customSceneExtensions;
-    return injectedSceneExtensions;
-  }, [injectedFeatures]);
 
   const boundInitPanel = useMemo(
     () =>
@@ -96,7 +83,6 @@ function ThreeDeeRenderAdapter(interfaceMode: InterfaceMode, props: Props) {
           onDownloadImage: props.onDownloadImage,
           debugPicking: props.debugPicking,
         },
-        customSceneExtensions,
         customCameraModels,
         enqueueSnackbarFromParent: (
           message: string,
@@ -112,7 +98,6 @@ function ThreeDeeRenderAdapter(interfaceMode: InterfaceMode, props: Props) {
       interfaceMode,
       props.onDownloadImage,
       props.debugPicking,
-      customSceneExtensions,
       customCameraModels,
       enqueueSnackbar,
       panelContext?.logError,
