@@ -8,7 +8,7 @@ test("discovers ROS packages in a granted folder and removes the grant @regressi
 }) => {
   await page.addInitScript(() => {
     // Exercise real browser directory/file handles without automating the native picker dialog.
-    window.showDirectoryPicker = async () => {
+    const folderPromise = (async () => {
       const root = await navigator.storage.getDirectory();
       const workspace = await root.getDirectoryHandle("ros-workspace", { create: true });
       const pkg = await workspace.getDirectoryHandle("robot-description", { create: true });
@@ -17,7 +17,8 @@ test("discovers ROS packages in a granted folder and removes the grant @regressi
       await writer.write("<package><name>robot</name></package>");
       await writer.close();
       return workspace;
-    };
+    })();
+    window.showDirectoryPicker = async () => await folderPromise;
   });
   await page.goto("/");
   await page.keyboard.press("Escape");
@@ -28,6 +29,7 @@ test("discovers ROS packages in a granted folder and removes the grant @regressi
   await expect(page.getByText(/^local-asset:\/\//)).toBeVisible();
   // Selecting the same handle refreshes the index rather than creating a duplicate root.
   await page.getByRole("button", { name: "Select resource folder" }).click();
+  await expect(page.getByRole("button", { name: "Select resource folder" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Remove folder" })).toHaveCount(1);
   await page.getByRole("button", { name: "Remove folder" }).click();
   await expect(page.getByText("ros-workspace — 1 ROS package", { exact: true })).toHaveCount(0);

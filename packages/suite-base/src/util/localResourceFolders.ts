@@ -112,7 +112,12 @@ export class LocalResourceFolders {
       return undefined;
     }
     const [, protocol, authority, path] = match;
-    const segments = path!.split("/").map(decodeURIComponent);
+    let segments: string[];
+    try {
+      segments = path!.split("/").map(decodeURIComponent);
+    } catch {
+      throw new Error(i18next.t("appSettings:localResourceInvalidUrl"));
+    }
     if (segments.some((part) => !part || part === "." || part === ".." || /[\\/\0]/.test(part))) {
       throw new Error(i18next.t("appSettings:localResourcePathOutsideFolder"));
     }

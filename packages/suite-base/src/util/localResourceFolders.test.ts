@@ -105,6 +105,13 @@ describe("LocalResourceFolders", () => {
     );
   });
 
+  it.each(["%", "%E0%A4%A.stl"])("reports malformed URL encoding: %s", async (path) => {
+    const resources = new LocalResourceFolders();
+    await expect(resources.fetchAsset(`package://robot/${path}`)).rejects.toThrow(
+      "Invalid local resource URL",
+    );
+  });
+
   it("keeps the previous index when a scan fails and reports permission failures", async () => {
     const resources = new LocalResourceFolders();
     const handle = directory("a", { "package.xml": manifest, "a.stl": "mesh" });
