@@ -236,6 +236,23 @@ describe("model dependencies", () => {
     },
   );
 
+  it("retains embedded OBJ vertex colors without a material library", async () => {
+    // Given
+    const { cache } = cacheWithAssets({
+      "local-asset://folder/colored.obj": "v 0 0 0 1 0 0\nv 1 0 0 0 1 0\nv 0 1 0 0 0 1\nf 1 2 3\n",
+    });
+    const error = vi.fn();
+    // When
+    const model = await cache.load("local-asset://folder/colored.obj", {}, error);
+    // Then
+    expect(error).not.toHaveBeenCalled();
+    expect(model!.hasEmbeddedMaterials).toBe(true);
+    const mesh = model!.children[0] as THREE.Mesh;
+    expect(mesh.geometry.getAttribute("color").count).toBe(3);
+    expect((mesh.material as THREE.MeshStandardMaterial).vertexColors).toBe(true);
+    cache.dispose();
+  });
+
   it("keeps glTF geometry when an image is missing", async () => {
     // Given
     vi.stubGlobal("self", globalThis);

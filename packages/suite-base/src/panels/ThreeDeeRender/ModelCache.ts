@@ -360,7 +360,11 @@ export class ModelCache {
 
     manager.itemStart(url);
     const group: LoadedModel = objLoader.parse(text);
-    group.hasEmbeddedMaterials = hasEmbeddedMaterials;
+    group.hasEmbeddedMaterials =
+      hasEmbeddedMaterials ||
+      group.children.some(
+        (child) => child instanceof THREE.Mesh && child.geometry.hasAttribute("color") === true,
+      );
     manager.itemEnd(url);
 
     // THREE.js uses Y-up, while Studio follows the ROS

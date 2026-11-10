@@ -31,7 +31,7 @@ const robot: UrdfRobot = {
 
 describe("Urdfs createRenderable", () => {
   it.each([false, true])(
-    "keeps the URDF color for OBJ models without material libraries (warning: %s)",
+    "keeps URDF colors for plain OBJ models (warning: %s)",
     async (warning) => {
       // Given
       const cachedModel: LoadedModel = new THREE.Group();
