@@ -111,6 +111,7 @@ Several agent sessions often run at once on one machine and share its RAM. `type
 
 - Run typecheck through the lock shared by all worktrees, both steps in one call: `lockf "$(git rev-parse --git-common-dir)/heavy.lock" sh -c 'pnpm typecheck && pnpm build:packages'`
 - Tests: targeted paths only (`pnpm exec vitest run <paths>`), never watch mode.
+- E2E: leave it to CI (PRs run `@smoke`). Locally run only the spec you changed, with `--workers=1` (each Playwright worker is a browser, ~1 GB; the web smoke run peaks at ~7.6 GB with default workers).
 - Leave no dev servers, watchers or background jobs running after your turn.
 
 ### CodeRabbit
