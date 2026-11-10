@@ -25,6 +25,13 @@ export default class WriteThroughLayoutCache implements ILayoutStorage {
       cache = this.storage
         .list(namespace)
         .then((layouts) => new Map(layouts.map((layout) => [layout.id, layout])));
+      const pending = cache;
+      // Don't keep a failed load: the next access retries instead of failing until reload
+      pending.catch(() => {
+        if (this.#cacheByNamespace.get(namespace) === pending) {
+          this.#cacheByNamespace.delete(namespace);
+        }
+      });
       this.#cacheByNamespace.set(namespace, cache);
     }
     return await cache;

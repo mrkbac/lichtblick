@@ -43,11 +43,40 @@ describe("WorkerSerializedIterableSource", () => {
     const source = makeSource();
     await source.initialize();
 
-    // WHEN/THEN: terminate() rejects with the same error...
-    await expect(source.terminate()).rejects.toThrow("boom");
+    // WHEN/THEN: terminate() still resolves, so closing the player is not blocked...
+    await expect(source.terminate()).resolves.toBeUndefined();
 
-    // ...but the worker is still disposed.
+    // ...and the worker is still disposed.
     expect(dispose).toHaveBeenCalledTimes(1);
+    expect(console.warn).toHaveBeenCalledTimes(1);
+    (console.warn as Mock).mockClear();
+  });
+
+  it("disposes a hung worker once the graceful terminate() times out", async () => {
+    vi.useFakeTimers();
+    try {
+      // GIVEN: an initialized source whose worker-side terminate() never settles.
+      const dispose = vi.fn();
+      const remote = makeMockRemote({ terminate: vi.fn(async () => await new Promise(() => {})) });
+      mockComlinkWrap.mockReturnValueOnce({
+        remote: vi.fn().mockResolvedValue(remote) as any,
+        dispose,
+      });
+      const source = makeSource();
+      await source.initialize();
+
+      // WHEN: the graceful shutdown times out
+      const terminated = source.terminate();
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      // THEN: terminate() resolves and the worker is disposed anyway
+      await expect(terminated).resolves.toBeUndefined();
+      expect(dispose).toHaveBeenCalledTimes(1);
+      expect(console.warn).toHaveBeenCalledTimes(1);
+      (console.warn as Mock).mockClear();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("does not let a concurrent initialize() worker get disposed or cleared by an in-flight terminate()", async () => {

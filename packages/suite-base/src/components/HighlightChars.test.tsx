@@ -11,36 +11,61 @@ const highlighted = (container: HTMLElement) =>
 
 describe("HighlightChars", () => {
   it("wraps matched runs and renders markup in the text as text", () => {
+    // Given
     const str = "<b>Raw Messages</b>";
+
+    // When
     const { container } = render(<HighlightChars str={str} indices={fuzzyPositions(str, "raw")} />);
+
+    // Then
     expect(container.textContent).toBe(str);
     expect(container.querySelector("b")).toBeNull();
     expect(highlighted(container)).toEqual(["Raw"]);
   });
 
   it("renders plain text without a match", () => {
-    const { container } = render(
-      <HighlightChars str="Plot" indices={fuzzyPositions("Plot", "zzz")} />,
-    );
+    // Given
+    const indices = fuzzyPositions("Plot", "zzz");
+
+    // When
+    const { container } = render(<HighlightChars str="Plot" indices={indices} />);
+
+    // Then
     expect(container.textContent).toBe("Plot");
     expect(highlighted(container)).toEqual([]);
   });
 
   it("applies the offset to indices", () => {
-    const { container } = render(<HighlightChars str="bar" indices={new Set([3])} offset={3} />);
+    // Given
+    const indices = new Set([3]);
+
+    // When
+    const { container } = render(<HighlightChars str="bar" indices={indices} offset={3} />);
+
+    // Then
     expect(highlighted(container)).toEqual(["b"]);
   });
 
   it("highlights every substring occurrence case-insensitively", () => {
+    // Given
     const str = "abc ABC abc";
+
+    // When
     const { container } = render(
       <HighlightChars str={str} indices={substringPositions(str, "abc")} />,
     );
+
+    // Then
     expect(highlighted(container)).toEqual(["abc", "ABC", "abc"]);
   });
 
   it("ignores a blank substring query", () => {
-    expect(substringPositions("a b", " ").size).toBe(0);
-    expect(substringPositions("a b", undefined).size).toBe(0);
+    // Given / When
+    const blank = substringPositions("a b", " ");
+    const missing = substringPositions("a b", undefined);
+
+    // Then
+    expect(blank.size).toBe(0);
+    expect(missing.size).toBe(0);
   });
 });

@@ -8,7 +8,9 @@
 import * as Comlink from "@foxglove/comlink";
 
 import { abortSignalTransferHandler } from "@lichtblick/comlink-transfer-handlers";
+import { promiseTimeout } from "@lichtblick/den/async";
 import { ComlinkWrap } from "@lichtblick/den/worker";
+import Log from "@lichtblick/log";
 import { Immutable, MessageEvent, Time } from "@lichtblick/suite";
 
 import type {
@@ -23,6 +25,10 @@ import type {
   Initialization,
 } from "./IIterableSource";
 import type { WorkerIterableSourceWorker } from "./WorkerIterableSourceWorker";
+
+const log = Log.getLogger(__filename);
+
+const WORKER_TERMINATE_TIMEOUT_MS = 5_000;
 
 Comlink.transferHandlers.set("abortsignal", abortSignalTransferHandler);
 
@@ -151,8 +157,13 @@ class WorkerIterableSourceBase<MessageType> implements IIterableSource<MessageTy
 
     try {
       // Give the worker-side source (e.g. MultiIterableSource's pool) a chance to release pooled
-      // readers/streams gracefully before the worker is hard-killed below.
-      await remote?.terminate();
+      // readers/streams gracefully before the worker is hard-killed below. A hung worker must not
+      // block closing, and a failed graceful shutdown is not worth surfacing.
+      if (remote) {
+        await promiseTimeout(remote.terminate(), WORKER_TERMINATE_TIMEOUT_MS);
+      }
+    } catch (err: unknown) {
+      log.warn("Worker source did not terminate gracefully", err);
     } finally {
       // Always dispose the captured worker, even if its graceful terminate() rejected.
       disposeRemote?.();

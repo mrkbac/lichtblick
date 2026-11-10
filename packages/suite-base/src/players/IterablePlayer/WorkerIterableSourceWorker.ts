@@ -54,10 +54,14 @@ export class WorkerIterableSourceWorker<MessageType = unknown>
       ...args,
       abortSignal,
     });
-    return Comlink.transfer(
-      messages,
-      messages.flatMap((msg) => (msg.message instanceof Uint8Array ? [msg.message.buffer] : [])),
-    );
+    // Messages may share one backing buffer; listing it twice makes postMessage throw
+    const buffers = new Set<ArrayBufferLike>();
+    for (const msg of messages) {
+      if (msg.message instanceof Uint8Array) {
+        buffers.add(msg.message.buffer);
+      }
+    }
+    return Comlink.transfer(messages, [...buffers] as Transferable[]);
   }
 
   public getMessageCursor(
