@@ -109,7 +109,7 @@ E2E tests:
 
 Several agent sessions often run at once on one machine and share its RAM. `typecheck` and `build:packages` build one project at a time (`--builders 1`, ~4 GB peak instead of ~10 GB), and Vitest runs at most 4 workers (~2.5 GB instead of 6+ GB).
 
-- Run typecheck through the lock shared by all worktrees, both steps in one call: `lockf "$(git rev-parse --git-common-dir)/heavy.lock" sh -c 'pnpm typecheck && pnpm build:packages'`
+- Run typecheck through the lock shared by all worktrees, both steps in one call: `lockf "$(git rev-parse --git-common-dir)/heavy.lock" sh -c 'pnpm typecheck && pnpm build:packages'` (on Linux use `flock` instead of `lockf`, same arguments)
 - Tests: targeted paths only (`pnpm exec vitest run <paths>`), never watch mode.
 - E2E: leave it to CI (PRs run `@smoke`). Locally run only the spec you changed, with `--workers=1` (each Playwright worker is a browser, ~1 GB; the web smoke run peaks at ~7.6 GB with default workers).
 - Leave no dev servers, watchers or background jobs running after your turn.
