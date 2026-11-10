@@ -164,7 +164,8 @@ test("loads local URDF meshes, materials and textures and reloads when folder gr
   await page.getByTestId("menu-item-settings").click();
   await page.getByRole("button", { name: "Select resource folder" }).click();
   await expect(page.getByText("local-model-assets — 1 ROS package", { exact: true })).toBeVisible();
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Settings", exact: true })).toBeHidden();
   // Then: software WebGL on CI can take longer than the default five-second assertion budget.
   await expect
     .poll(async () => (await coloredPixels(canvas)).red, { timeout: 15_000 })
@@ -176,7 +177,8 @@ test("loads local URDF meshes, materials and textures and reloads when folder gr
   await page.locator("#app-menu-button").click();
   await page.getByTestId("menu-item-settings").click();
   await page.getByRole("button", { name: "Remove folder" }).click();
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Settings", exact: true })).toBeHidden();
   // Then
   await expect
     .poll(async () => (await coloredPixels(canvas)).red, { timeout: 15_000 })
@@ -189,7 +191,8 @@ test("loads local URDF meshes, materials and textures and reloads when folder gr
   await page.getByTestId("menu-item-settings").click();
   await page.getByRole("button", { name: "Select resource folder" }).click();
   await expect(page.getByRole("button", { name: "Remove folder" })).toBeVisible();
-  await page.keyboard.press("Escape");
+  await page.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "Settings", exact: true })).toBeHidden();
   // Then
   await expect
     .poll(async () => (await coloredPixels(canvas)).red, { timeout: 15_000 })
