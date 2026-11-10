@@ -140,6 +140,12 @@ vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({
   useMessagePipeline: vi.fn(),
   useMessagePipelineGetter: vi.fn(),
 }));
+vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
+  useCurrentLayoutSelector: vi.fn().mockReturnValue(undefined),
+  useCurrentLayoutActions: vi.fn().mockReturnValue({
+    setSelectedLayoutId: vi.fn(),
+  }),
+}));
 vi.mock("@lichtblick/suite-base/context/CurrentUserContext", () => ({
   useCurrentUserType: vi.fn(),
 }));
