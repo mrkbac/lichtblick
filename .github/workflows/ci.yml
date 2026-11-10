@@ -163,9 +163,16 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: e2e-web-reports
-          path: |
-            e2e/reports/web/
-            test-results/
+          path: e2e/reports/web/
+          retention-days: 7
+          if-no-files-found: warn
+
+      - name: Upload Web E2E Failure Artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-web-failures
+          path: test-results/
           retention-days: 7
           if-no-files-found: warn
 
