@@ -165,15 +165,18 @@ describe("ExtensionCatalogProvider", () => {
   });
 
   it("clears loaded contributions when disk access is revoked on refresh", async () => {
+    // Given
     const extension = ExtensionBuilder.extensionInfo({ namespace: "local" });
     const loadExtension = vi.fn().mockResolvedValue({ raw: defaultSource });
     const loader = createLocalLoader(extension, { loadExtensionMock: loadExtension });
     const { result } = await setup({ loadersOverride: [loader] });
     expect(result.current.isExtensionInstalled(extension.id)).toBe(true);
     loadExtension.mockRejectedValue(new DOMException("Access revoked", "NotAllowedError"));
+    // When
     await act(async () => {
       await result.current.refreshAllExtensions();
     });
+    // Then
     expect(result.current.isExtensionInstalled(extension.id)).toBe(false);
     expect(result.current.installedPanels).toEqual({});
     // Keep the metadata so the user can forget the inaccessible directory.
@@ -740,6 +743,7 @@ describe("ExtensionCatalogProvider", () => {
     );
 
     it("should retain extension data and reject when uninstallExtension throws", async () => {
+      // Given
       (isDesktopApp as Mock).mockReturnValue(false);
       vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -761,13 +765,14 @@ describe("ExtensionCatalogProvider", () => {
         expect(result.current.installedExtensions).toHaveLength(1);
       });
 
+      // When
       await act(async () => {
         await expect(result.current.uninstallExtension("local", extensionInfo.id)).rejects.toThrow(
           "Uninstall failed",
         );
       });
 
-      // Failed persistence must leave the extension available to retry.
+      // Then — failed persistence must leave the extension available to retry.
       expect(result.current.installedExtensions).toHaveLength(1);
       expect(result.current.isExtensionInstalled(extensionInfo.id)).toBe(true);
 

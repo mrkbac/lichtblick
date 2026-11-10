@@ -38,29 +38,42 @@ function loader(): IExtensionLoader {
 }
 
 it("has no folder controls for desktop or unsupported browsers", () => {
-  expect(renderHook(useDirectoryExtensions).result.current.directoryLoader).toBeUndefined();
+  // Given
+  mocks.loaders = [];
+  // When
+  const { result } = renderHook(useDirectoryExtensions);
+  // Then
+  expect(result.current.directoryLoader).toBeUndefined();
 });
 
 it("selects a directory then refreshes the catalog", async () => {
+  // Given
   const disk = loader();
   mocks.loaders = [disk];
   const { result } = renderHook(useDirectoryExtensions);
+  // When
   await act(async () => {
     await result.current.updateDirectories("select");
   });
+  // Then
   expect(disk.loadExtensionFromDirectory).toHaveBeenCalledOnce();
   expect(mocks.refresh).toHaveBeenCalledOnce();
   expect(result.current.directoryBusy).toBe(false);
 });
 
 it("surfaces saved errors and refreshes without reopening the picker", async () => {
+  // Given
   const disk = { ...loader(), directoryErrors: ["Folder access expired"] };
   mocks.loaders = [disk];
+  // When
   const { result } = renderHook(useDirectoryExtensions);
+  // Then
   expect(result.current.directoryError).toBe("Folder access expired");
+  // When
   await act(async () => {
     await result.current.updateDirectories("reload");
   });
+  // Then
   expect(disk.loadExtensionFromDirectory).not.toHaveBeenCalled();
   expect(result.current.directoryError).toBe("Folder access expired");
 });
@@ -69,6 +82,7 @@ it.each([
   ["AbortError", undefined],
   ["NotAllowedError", "Access refused"],
 ])("handles %s and releases the busy state", async (name, expected) => {
+  // Given
   mocks.loaders = [
     {
       ...loader(),
@@ -78,9 +92,11 @@ it.each([
     },
   ];
   const { result } = renderHook(useDirectoryExtensions);
+  // When
   await act(async () => {
     await result.current.updateDirectories("select");
   });
+  // Then
   expect(result.current.directoryError).toBe(expected);
   expect(result.current.directoryBusy).toBe(false);
   expect(mocks.refresh).not.toHaveBeenCalled();

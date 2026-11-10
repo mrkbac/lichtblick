@@ -50,6 +50,7 @@ async function readInfo(directory: FileSystemDirectoryHandle): Promise<Extension
     id: `${info.publisher.replace(/[^A-Za-z0-9_\s]+/g, "")}.${info.name}`,
     namespace: "local",
     displayName: info.displayName || info.name,
+    version: "version" in raw && typeof raw.version === "string" ? raw.version : "",
     qualifiedName: info.displayName || info.name,
     readme: await readOptionalText(directory, "README.md"),
     changelog: await readOptionalText(directory, "CHANGELOG.md"),

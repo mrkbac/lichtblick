@@ -6,9 +6,15 @@ import { expect, test } from "@playwright/test";
 test.setTimeout(60_000);
 
 // Real browser handles and IndexedDB cloning; only the native chooser is substituted.
+/**
+ * GIVEN a synthetic extension folder with real browser handles
+ * WHEN it is selected, restored, reloaded, and uninstalled
+ * THEN disk edits are read and uninstall preserves its files
+ */
 test("loads, restores, reloads, and forgets a disk extension", { tag: "@smoke" }, async ({
   page,
 }) => {
+  // Given
   await page.addInitScript(() => {
     window.showDirectoryPicker = async () => {
       const root = await navigator.storage.getDirectory();
@@ -46,7 +52,9 @@ test("loads, restores, reloads, and forgets a disk extension", { tag: "@smoke" }
   await page.keyboard.press("Escape");
   await page.getByTestId("AppMenuButton").click();
   await page.getByRole("menuitem", { name: "Extensions…", exact: true }).click();
+  // When
   await page.getByRole("button", { name: "Load extension folder" }).click();
+  // Then
   await expect(page.locator("html")).toHaveAttribute("data-disk-extension-version", "1");
   await expect(page.getByRole("cell", { name: "Disk test", exact: true })).toBeVisible();
   await page.reload();
@@ -85,9 +93,15 @@ test("loads, restores, reloads, and forgets a disk extension", { tag: "@smoke" }
   await expect(page.locator("html")).not.toHaveAttribute("data-disk-extension-version");
 });
 
+/**
+ * GIVEN a folder picker that cancels or denies access
+ * WHEN the user attempts to select a folder
+ * THEN cancellation is silent and denied access is reported
+ */
 test("handles picker cancellation and denial without installing an extension", {
   tag: "@regression",
 }, async ({ page }) => {
+  // Given
   await page.addInitScript(() => {
     window.showDirectoryPicker = async () => {
       throw new DOMException("Cancelled", "AbortError");
@@ -97,7 +111,9 @@ test("handles picker cancellation and denial without installing an extension", {
   await page.getByTestId("AppMenuButton").click();
   await page.getByRole("menuitem", { name: "Extensions…", exact: true }).click();
   const load = page.getByRole("button", { name: "Load extension folder" });
+  // When
   await load.click();
+  // Then
   await expect(load).toBeEnabled();
   await expect(page.getByText("Cancelled", { exact: true })).toHaveCount(0);
   await page.evaluate(() => {
@@ -110,15 +126,23 @@ test("handles picker cancellation and denial without installing an extension", {
   await expect(load).toBeEnabled();
 });
 
+/**
+ * GIVEN directory selection is unavailable
+ * WHEN extension settings are opened
+ * THEN folder actions are hidden and ordinary settings remain available
+ */
 test("hides folder actions when directory access is unsupported", { tag: "@regression" }, async ({
   page,
 }) => {
+  // Given
   await page.addInitScript(() => {
     Reflect.deleteProperty(window, "showDirectoryPicker");
   });
   await page.goto("/");
   await page.getByTestId("AppMenuButton").click();
+  // When
   await page.getByRole("menuitem", { name: "Extensions…", exact: true }).click();
+  // Then
   await expect(page.getByPlaceholder("Search extensions...")).toBeVisible({ timeout: 15_000 });
   await expect(page.getByRole("button", { name: "Load extension folder" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Reload disk extensions" })).toHaveCount(0);
