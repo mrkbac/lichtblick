@@ -25,8 +25,8 @@ describe("FetchReader", () => {
     vi.clearAllMocks();
     mockFetch = vi.spyOn(global, "fetch");
 
-    // Default: globalRequestQueue.runExclusive passes through the function
-    mockGlobalRequestQueue.runExclusive.mockImplementation(async (fn) => fn);
+    // The queue never runs on its own: tests run the queued function themselves
+    mockGlobalRequestQueue.runExclusive.mockImplementation(async () => await new Promise(() => {}));
   });
 
   afterEach(() => {
