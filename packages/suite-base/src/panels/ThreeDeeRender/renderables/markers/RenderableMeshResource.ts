@@ -78,6 +78,7 @@ export class RenderableMeshResource extends RenderableMarker {
         disposeMeshesRecursive(this.#mesh);
         this.#mesh = undefined;
       }
+      errors.remove(this.userData.settingsPath, MESH_FETCH_FAILED);
       this.#loadModel(marker.mesh_resource, opts)
         .then((mesh) => {
           if (!mesh) {
@@ -92,8 +93,6 @@ export class RenderableMeshResource extends RenderableMarker {
           this.add(mesh);
           this.#updateOutlineVisibility();
 
-          // Remove any mesh fetch error message since loading was successful
-          this.renderer.settings.errors.remove(this.userData.settingsPath, MESH_FETCH_FAILED);
           // Render a new frame now that the model is loaded
           this.renderer.queueAnimationFrame();
         })

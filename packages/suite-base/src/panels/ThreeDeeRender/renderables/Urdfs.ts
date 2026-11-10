@@ -775,7 +775,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
     this.renderer
       .fetchAsset(url, { signal: renderable.userData.fetching.control.signal })
       .then((urdf) => {
-        if (fetching.control.signal.aborted) {
+        if (fetching.control.signal.aborted || renderable.userData.fetching !== fetching) {
           return;
         }
         log.debug(`Fetched ${urdf.data.length} byte URDF from ${url}`);
@@ -787,7 +787,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
         });
       })
       .catch((e: unknown) => {
-        if (fetching.control.signal.aborted) {
+        if (fetching.control.signal.aborted || renderable.userData.fetching !== fetching) {
           return;
         }
         const err = e as Error;

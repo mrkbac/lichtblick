@@ -73,6 +73,7 @@ async function coloredPixels(canvas: import("@playwright/test").Locator) {
 test("loads local URDF meshes, materials and textures and reloads when folder grants change", {
   tag: "@smoke",
 }, async ({ page }) => {
+  // Given
   await page.addInitScript(
     ({ objText, gltfText, robotText, binary }) => {
       window.showDirectoryPicker = async () => {
@@ -157,23 +158,29 @@ test("loads local URDF meshes, materials and textures and reloads when folder gr
   });
   const canvas = page.getByTestId("panel-mouseenter-container 3D!local-assets").locator("canvas");
   await expect(canvas).toBeVisible();
+  // When
   await page.locator("#app-menu-button").click();
   await page.getByTestId("menu-item-settings").click();
   await page.getByRole("button", { name: "Select resource folder" }).click();
   await expect(page.getByText("local-model-assets — 1 ROS package", { exact: true })).toBeVisible();
   await page.keyboard.press("Escape");
+  // Then
   await expect.poll(async () => (await coloredPixels(canvas)).red).toBeGreaterThan(100);
   await expect.poll(async () => (await coloredPixels(canvas)).green).toBeGreaterThan(100);
+  // When
   await page.locator("#app-menu-button").click();
   await page.getByTestId("menu-item-settings").click();
   await page.getByRole("button", { name: "Remove folder" }).click();
   await page.keyboard.press("Escape");
+  // Then
   await expect.poll(async () => (await coloredPixels(canvas)).red).toBeLessThan(100);
+  // When
   await page.locator("#app-menu-button").click();
   await page.getByTestId("menu-item-settings").click();
   await page.getByRole("button", { name: "Select resource folder" }).click();
   await expect(page.getByRole("button", { name: "Remove folder" })).toBeVisible();
   await page.keyboard.press("Escape");
+  // Then
   await expect.poll(async () => (await coloredPixels(canvas)).red).toBeGreaterThan(100);
   await expect.poll(async () => (await coloredPixels(canvas)).green).toBeGreaterThan(100);
 });

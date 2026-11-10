@@ -82,6 +82,7 @@ describe("model dependencies", () => {
   it.each([false, true])(
     "loads relative glTF buffers through the asset pipeline (binary: %s)",
     async (binary) => {
+      // Given
       const json = JSON.stringify(triangleGltf("../data/triangle%20positions.bin"))!;
       const bytes = new TextEncoder().encode(json.padEnd(Math.ceil(json.length / 4) * 4, " "));
       const glb = new Uint8Array(20 + bytes.length);
@@ -101,7 +102,9 @@ describe("model dependencies", () => {
       );
       const revoke = vi.spyOn(URL, "revokeObjectURL");
       const error = vi.fn();
+      // When
       const model = await cache.load("package://robot/meshes/triangle.gltf", {}, error);
+      // Then
       expect(error).not.toHaveBeenCalled();
       expect((model!.children[0] as THREE.Mesh).geometry.getAttribute("position").count).toBe(3);
       expect(fetchAsset).toHaveBeenCalledWith(
@@ -114,12 +117,16 @@ describe("model dependencies", () => {
   );
 
   it("reports missing dependencies and retries a failed model", async () => {
+    // Given
     const assets: Record<string, string | Uint8Array> = {
       "local-asset://folder/model.gltf": JSON.stringify(triangleGltf("missing.bin"))!,
     };
     const { cache } = cacheWithAssets(assets);
     const error = vi.fn();
-    expect(await cache.load("local-asset://folder/model.gltf", {}, error)).toBeUndefined();
+    // When
+    const failed = await cache.load("local-asset://folder/model.gltf", {}, error);
+    // Then
+    expect(failed).toBeUndefined();
     expect(error).toHaveBeenCalledWith(
       new Error("Missing asset: local-asset://folder/missing.bin"),
     );
@@ -129,6 +136,7 @@ describe("model dependencies", () => {
   });
 
   it("loads OBJ materials and textures relative to the material library", async () => {
+    // Given
     const textureUrls: string[] = [];
     let finishTexture!: () => void;
     vi.spyOn(THREE.TextureLoader.prototype, "load").mockImplementation(function (
@@ -150,6 +158,7 @@ describe("model dependencies", () => {
       "local-asset://folder/textures/red%20paint.png": new Uint8Array([1]),
     });
     const error = vi.fn();
+    // When
     const loading = cache.load("local-asset://folder/models/triangle.obj", {}, error);
     let settled = false;
     void loading.then(() => {
@@ -158,6 +167,7 @@ describe("model dependencies", () => {
     await vi.waitFor(() => {
       expect(finishTexture).toBeDefined();
     });
+    // Then
     expect(settled).toBe(false);
     finishTexture();
     const model = await loading;
@@ -172,21 +182,92 @@ describe("model dependencies", () => {
     cache.dispose();
   });
 
-  it("loads COLLADA image paths but ignores surface image identifiers", async () => {
-    vi.stubGlobal("DOMParser", new JSDOM().window.DOMParser);
-    const { cache, fetchAsset } = cacheWithAssets({
-      "local-asset://folder/model.dae": `<COLLADA version="1.4.1"><asset><up_axis>Z_UP</up_axis></asset><library_images><image id="paint"><init_from>textures/paint.png</init_from></image></library_images><library_effects><effect id="paint-effect"><profile_COMMON><newparam sid="surface"><surface type="2D"><init_from>paint</init_from></surface></newparam></profile_COMMON></effect></library_effects><library_visual_scenes><visual_scene id="Scene"/></library_visual_scenes><scene><instance_visual_scene url="#Scene"/></scene></COLLADA>`,
-      "local-asset://folder/textures/paint.png": new Uint8Array([1]),
+  it.each([false, true])(
+    "loads COLLADA without mistaking surface identifiers for images (missing texture: %s)",
+    async (missing) => {
+      // Given
+      vi.stubGlobal("DOMParser", new JSDOM().window.DOMParser);
+      const { cache, fetchAsset } = cacheWithAssets({
+        "local-asset://folder/model.dae": `<COLLADA version="1.4.1"><asset><up_axis>Z_UP</up_axis></asset><library_images><image id="paint"><init_from>textures/paint.png</init_from></image></library_images><library_effects><effect id="paint-effect"><profile_COMMON><newparam sid="surface"><surface type="2D"><init_from>paint</init_from></surface></newparam></profile_COMMON></effect></library_effects><library_visual_scenes><visual_scene id="Scene"/></library_visual_scenes><scene><instance_visual_scene url="#Scene"/></scene></COLLADA>`,
+        ...(missing ? {} : { "local-asset://folder/textures/paint.png": new Uint8Array([1]) }),
+      });
+      const error = vi.fn();
+      // When
+      const model = await cache.load("local-asset://folder/model.dae", {}, error);
+      // Then
+      expect(model).toBeDefined();
+      expect(error.mock.calls.map(([value]) => (value as Error).message)).toEqual(
+        missing ? ['Failed to load COLLADA asset "local-asset://folder/textures/paint.png"'] : [],
+      );
+      expect(console.error).toHaveBeenCalledTimes(missing ? 1 : 0);
+      vi.mocked(console.error).mockClear();
+      expect(fetchAsset).toHaveBeenCalledTimes(2);
+      cache.dispose();
+    },
+  );
+
+  it.each(["library", "texture"])(
+    "keeps OBJ geometry when its optional %s is missing",
+    async (missing) => {
+      // Given
+      const assets: Record<string, string> = {
+        "local-asset://folder/model.obj":
+          "mtllib paint.mtl\nv 0 0 0\nv 1 0 0\nv 0 1 0\nusemtl paint\nf 1 2 3\n",
+      };
+      if (missing === "texture") {
+        assets["local-asset://folder/paint.mtl"] = "newmtl paint\nKd 1 0 0\nmap_Kd absent.png\n";
+      }
+      const { cache } = cacheWithAssets(assets);
+      const error = vi.fn();
+      // When
+      const model = await cache.load("local-asset://folder/model.obj", {}, error);
+      // Then
+      expect(model).toBeDefined();
+      expect((model!.children[0] as THREE.Mesh).geometry.getAttribute("position").count).toBe(3);
+      expect(error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining(missing === "texture" ? "absent.png" : "paint.mtl"),
+        }),
+      );
+      expect(model!.hasEmbeddedMaterials).toBe(missing === "texture");
+      expect(console.error).toHaveBeenCalled();
+      vi.mocked(console.error).mockClear();
+      cache.dispose();
+    },
+  );
+
+  it("keeps glTF geometry when an image is missing", async () => {
+    // Given
+    vi.stubGlobal("self", globalThis);
+    const json = {
+      ...triangleGltf("positions.bin"),
+      images: [{ uri: "absent.png" }],
+      textures: [{ source: 0 }],
+      materials: [{ pbrMetallicRoughness: { baseColorTexture: { index: 0 } } }],
+      meshes: [{ primitives: [{ attributes: { POSITION: 0 }, material: 0 }] }],
+    };
+    const { cache } = cacheWithAssets({
+      "local-asset://folder/model.gltf": JSON.stringify(json)!,
+      "local-asset://folder/positions.bin": new Uint8Array(TRIANGLE.buffer),
     });
     const error = vi.fn();
-    expect(await cache.load("local-asset://folder/model.dae", {}, error)).toBeDefined();
-    expect(error).not.toHaveBeenCalled();
-    expect(fetchAsset).toHaveBeenCalledTimes(2);
+    // When
+    const model = await cache.load("local-asset://folder/model.gltf", {}, error);
+    // Then
+    expect(model).toBeDefined();
+    expect((model!.children[0] as THREE.Mesh).geometry.getAttribute("position").count).toBe(3);
+    expect(error).toHaveBeenCalledWith(
+      expect.objectContaining({ message: expect.stringContaining("absent.png") }),
+    );
+    expect(console.error).toHaveBeenCalled();
+    vi.mocked(console.error).mockClear();
     cache.dispose();
   });
 
   it("keeps reference URLs separate in the model cache", async () => {
+    // Given
     const { cache, fetchAsset } = cacheWithAssets({ "package://robot/model.gltf": EMPTY_GLTF });
+    // When
     await cache.load(
       "package://robot/model.gltf",
       { referenceUrl: "https://a/robot.urdf" },
@@ -197,11 +278,13 @@ describe("model dependencies", () => {
       { referenceUrl: "https://b/robot.urdf" },
       vi.fn(),
     );
+    // Then
     expect(fetchAsset).toHaveBeenCalledTimes(2);
     cache.dispose();
   });
 
   it("does not create object URLs after disposal during a fetch", async () => {
+    // Given
     let finish!: (asset: { uri: string; data: Uint8Array }) => void;
     const create = vi.spyOn(URL, "createObjectURL");
     const cache = new ModelCache({
@@ -216,12 +299,14 @@ describe("model dependencies", () => {
             }),
     });
     const error = vi.fn();
+    // When
     const loading = cache.load("local-asset://folder/model.gltf", {}, error);
     await vi.waitFor(() => {
       expect(finish).toBeDefined();
     });
     cache.dispose();
     finish({ uri: "local-asset://folder/triangle.bin", data: new Uint8Array(TRIANGLE.buffer) });
+    // Then
     expect(await loading).toBeUndefined();
     expect(create).not.toHaveBeenCalled();
   });

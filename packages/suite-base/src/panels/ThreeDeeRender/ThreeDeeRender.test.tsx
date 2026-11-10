@@ -394,15 +394,18 @@ describe("ThreeDeeRender", () => {
   });
 
   it("recreates the renderer when local resource folders change", () => {
+    // Given
     const props = setup();
     render(<ThreeDeeRender {...props} />);
     const initialCalls = mockedRenderer.mock.calls.length;
     const previous = mockedRenderer.mock.results.at(-1)!.value as ReturnType<
       typeof createMockRenderer
     >;
+    // When
     act(() => {
       localResourceFolders.remove("removed-folder");
     });
+    // Then
     expect(previous.dispose).toHaveBeenCalled();
     expect(mockedRenderer.mock.calls.length).toBe(initialCalls + 1);
   });

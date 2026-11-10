@@ -200,6 +200,10 @@ export class RenderableModels extends RenderablePrimitive {
       }
     }
 
+    // Keep warnings from a partially loaded model until its next load attempt.
+    if (modelsToLoad.length > 0) {
+      this.renderer.settings.errors.remove(this.userData.settingsPath, MODEL_FETCH_FAILED);
+    }
     // Load new renderables asynchronously
     Promise.all(
       modelsToLoad.map(async (primitive) => {
@@ -261,10 +265,6 @@ export class RenderableModels extends RenderablePrimitive {
         }
       }),
     )
-      .then(() => {
-        // Remove any mesh fetch error message since loading was successful
-        this.renderer.settings.errors.remove(this.userData.settingsPath, MODEL_FETCH_FAILED);
-      })
       .catch((e: unknown) => {
         console.error(e);
       })

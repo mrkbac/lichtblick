@@ -48,6 +48,16 @@ const GLTF_MIME_TYPES = ["model/gltf", "model/gltf-binary", "model/gltf+json"];
 const STL_MIME_TYPES = ["model/stl", "model/x.stl-ascii", "model/x.stl-binary", "application/sla"];
 const DAE_MIME_TYPES = ["model/vnd.collada+xml"];
 const OBJ_MIME_TYPES = ["model/obj", "text/prs.wavefront-obj"];
+const MTL_TEXTURE_FIELDS = [
+  "map_kd",
+  "map_ks",
+  "map_ke",
+  "norm",
+  "map_bump",
+  "bump",
+  "disp",
+  "map_d",
+] as const;
 
 export class ModelCache {
   #textDecoder = new TextDecoder();
@@ -175,10 +185,13 @@ export class ModelCache {
       buffers?: { uri?: string }[];
       images?: { uri?: string }[];
     };
+    const buffers = (json.buffers ?? []).flatMap(({ uri }) => (uri ? [uri] : []));
     await this.#prepareResources(
       url,
-      [...(json.buffers ?? []), ...(json.images ?? [])].flatMap(({ uri }) => (uri ? [uri] : [])),
+      [...buffers, ...(json.images ?? []).flatMap(({ uri }) => (uri ? [uri] : []))],
       manager,
+      onError,
+      buffers,
     );
     const gltfLoader = new GLTFLoader(manager);
     gltfLoader.setMeshoptDecoder(MeshoptDecoder);
@@ -246,21 +259,23 @@ export class ModelCache {
     xml.querySelectorAll("up_axis").forEach((node) => {
       node.remove();
     });
-    const xmlText = xml.documentElement.outerHTML;
 
     let texturesLoaded!: () => void;
     const texturesReady = new Promise<void>((resolve) => {
       texturesLoaded = resolve;
     });
     const manager = new THREE.LoadingManager(texturesLoaded, undefined, onError);
-    await this.#prepareResources(
-      url,
-      [...xml.querySelectorAll("library_images image init_from")].flatMap((node) => {
-        const uri = (node.querySelector("ref")?.textContent ?? node.textContent).trim();
-        return uri ? [uri] : [];
-      }),
-      manager,
+    const images = [...xml.querySelectorAll("library_images image init_from")];
+    const imageUris = images.map((node) =>
+      (node.querySelector("ref")?.textContent ?? node.textContent).trim(),
     );
+    const missing = await this.#prepareResources(url, imageUris.filter(Boolean), manager, onError);
+    images.forEach((node, index) => {
+      if (imageUris[index] && missing.has(new URL(imageUris[index], url).toString())) {
+        node.closest("image")?.remove();
+      }
+    });
+    const xmlText = xml.documentElement.outerHTML;
     const daeLoader = new ColladaLoader(manager);
 
     manager.itemStart(url);
@@ -298,41 +313,53 @@ export class ModelCache {
     const materials = new MTLLoader().parse("", "");
     for (const library of libraries) {
       const materialUrl = new URL(library, url).toString();
-      const asset = await this.#fetchAsset(materialUrl, { referenceUrl: url });
-      const creator = new MTLLoader(manager).parse(this.#textDecoder.decode(asset.data), "");
-      const textures = Object.values(creator.materialsInfo).flatMap((info) =>
-        [
-          info.map_kd,
-          info.map_ks,
-          info.map_ke,
-          info.norm,
-          info.map_bump,
-          info.bump,
-          info.disp,
-          info.map_d,
-        ].flatMap((value) => (value ? [creator.getTextureParams(value, {}).url] : [])),
-      );
-      // Each MTL has its own base directory and URL map.
-      let texturesLoaded!: () => void;
-      const texturesReady = new Promise<void>((resolve) => {
-        texturesLoaded = resolve;
-      });
-      const materialManager = new THREE.LoadingManager(texturesLoaded, undefined, onError);
-      await this.#prepareResources(asset.uri, textures, materialManager);
-      creator.setManager(materialManager);
-      materialManager.itemStart(asset.uri);
-      creator.preload();
-      materialManager.itemEnd(asset.uri);
-      await texturesReady;
-      Object.assign(materials.materials, creator.materials);
+      try {
+        const asset = await this.#fetchAsset(materialUrl, { referenceUrl: url });
+        const creator = new MTLLoader(manager).parse(this.#textDecoder.decode(asset.data), "");
+        const textures = Object.values(creator.materialsInfo).flatMap((info) =>
+          MTL_TEXTURE_FIELDS.flatMap((key) =>
+            info[key] ? [creator.getTextureParams(info[key], {}).url] : [],
+          ),
+        );
+        // Each MTL has its own base directory and URL map.
+        let texturesLoaded!: () => void;
+        const texturesReady = new Promise<void>((resolve) => {
+          texturesLoaded = resolve;
+        });
+        const materialManager = new THREE.LoadingManager(texturesLoaded, undefined, onError);
+        const missing = await this.#prepareResources(asset.uri, textures, materialManager, onError);
+        for (const info of Object.values(creator.materialsInfo)) {
+          for (const key of MTL_TEXTURE_FIELDS) {
+            const value = info[key];
+            if (
+              value &&
+              missing.has(new URL(creator.getTextureParams(value, {}).url, asset.uri).toString())
+            ) {
+              delete info[key];
+            }
+          }
+        }
+        creator.setManager(materialManager);
+        materialManager.itemStart(asset.uri);
+        creator.preload();
+        materialManager.itemEnd(asset.uri);
+        await texturesReady;
+        Object.assign(materials.materials, creator.materials);
+      } catch (error) {
+        if (this.#disposed) {
+          throw error;
+        }
+        onError(materialUrl);
+      }
     }
-    if (libraries.length > 0) {
+    const hasEmbeddedMaterials = Object.keys(materials.materials).length > 0;
+    if (hasEmbeddedMaterials) {
       objLoader.setMaterials(materials);
     }
 
     manager.itemStart(url);
     const group: LoadedModel = objLoader.parse(text);
-    group.hasEmbeddedMaterials = libraries.length > 0;
+    group.hasEmbeddedMaterials = hasEmbeddedMaterials;
     manager.itemEnd(url);
 
     // THREE.js uses Y-up, while Studio follows the ROS
@@ -360,30 +387,51 @@ export class ModelCache {
     url: string,
     resources: string[],
     manager: THREE.LoadingManager,
-  ): Promise<void> {
+    onError: (url: string) => void,
+    requiredResources: string[] = [],
+  ): Promise<Set<string>> {
+    const missing = new Set<string>();
     // LoadingManager requires a synchronous URL modifier, so fetch dependencies before parsing.
     const assets = await Promise.all(
       [...new Set(resources)]
         .filter((resource) => !/^(data|blob):/i.test(resource))
         .map(async (resource) => {
           const resolved = new URL(resource, url).toString();
-          return [resolved, await this.#fetchAsset(resolved, { referenceUrl: url })] as const;
+          try {
+            return [resolved, await this.#fetchAsset(resolved, { referenceUrl: url })] as const;
+          } catch (error) {
+            if (requiredResources.includes(resource)) {
+              throw error;
+            }
+            missing.add(resolved);
+            onError(resolved);
+            return undefined;
+          }
         }),
     );
     if (this.#disposed) {
       throw new Error("Model cache was disposed while loading assets");
     }
     const urls = new Map<string, string>();
-    for (const [resolved, asset] of assets) {
+    for (const entry of assets) {
+      if (!entry) {
+        continue;
+      }
+      const [resolved, asset] = entry;
       const objectUrl = URL.createObjectURL(
         new Blob([new Uint8Array(asset.data)], { type: asset.mediaType }),
       );
       this.#objectUrls.set(objectUrl, resolved);
       urls.set(resolved, objectUrl);
     }
-    manager.setURLModifier(
-      (resource) => urls.get(new URL(resource, url).toString()) ?? rewriteUrl(resource),
-    );
+    manager.setURLModifier((resource) => {
+      const resolved = new URL(resource, url).toString();
+      if (missing.has(resolved)) {
+        throw new Error(`Missing optional model asset: ${resolved}`);
+      }
+      return urls.get(resolved) ?? rewriteUrl(resource);
+    });
+    return missing;
   }
 
   public dispose(): void {
