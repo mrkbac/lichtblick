@@ -117,7 +117,8 @@ export const registerScript = ({
   try {
     const nodeExports: { default?: typeof nodeCallback } = {};
 
-    const require = (id: string) => requireImplementation(id, projectCode ?? new Map<string, string>());
+    const require = (id: string) =>
+      requireImplementation(id, projectCode ?? new Map<string, string>());
 
     // Using new Function in order to execute user-input text in User Scripts as code
     // eslint-disable-next-line no-new-func, @typescript-eslint/no-implied-eval

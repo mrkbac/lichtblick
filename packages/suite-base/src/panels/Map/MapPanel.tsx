@@ -918,9 +918,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       const fail = (error: unknown) => {
         settle();
         if (!controller.signal.aborted) {
-          setSourceErrors((prev) =>
-            new Map(prev).set(url, toError(error).message),
-          );
+          setSourceErrors((prev) => new Map(prev).set(url, toError(error).message));
         }
       };
       if (kind === "vector") {

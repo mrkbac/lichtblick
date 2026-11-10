@@ -46,10 +46,10 @@ import {
   TransformOffsets,
   withFrameOffset,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms/transformOffsets";
+import { formatSeconds } from "@lichtblick/suite-base/panels/TopicHealth/health";
 import { MessageEvent, SubscribePayload } from "@lichtblick/suite-base/players/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
-import { formatSeconds } from "@lichtblick/suite-base/panels/TopicHealth/health";
 
 import { OffsetEditor, RotationConventionInfo } from "./OffsetEditor";
 import { useStyles } from "./TransformTree.style";

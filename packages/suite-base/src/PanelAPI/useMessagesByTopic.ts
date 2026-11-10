@@ -47,8 +47,7 @@ export function useMessagesByTopic(params: {
         const retTopic = ret[topic];
         if (retTopic) {
           // Keep the newest `historySize` messages
-          ret[topic] =
-            historySize > 0 ? [...retTopic, ...newMessages].slice(-historySize) : [];
+          ret[topic] = historySize > 0 ? [...retTopic, ...newMessages].slice(-historySize) : [];
         }
       });
       return ret;

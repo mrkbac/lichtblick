@@ -11,11 +11,7 @@ import memoizeWeak from "memoize-weak";
 import { useMemo } from "react";
 
 import { useShallowMemo } from "@lichtblick/hooks";
-import {
-  SettingsTreeAction,
-  SettingsTreeNode,
-  SettingsTreeNodes,
-} from "@lichtblick/suite";
+import { SettingsTreeAction, SettingsTreeNode, SettingsTreeNodes } from "@lichtblick/suite";
 import { moveItem, moveUpDownActions } from "@lichtblick/suite-base/panels/utils";
 
 import { NotificationPermissionState, describeNotificationPermission, hasAlert } from "./alerts";

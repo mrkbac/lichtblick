@@ -5,8 +5,8 @@ import { TFunction } from "i18next";
 import { produce } from "immer";
 
 import { SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
-import { moveItem, moveUpDownActions } from "@lichtblick/suite-base/panels/utils";
 import { sortPrefixMatchesToFront } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/topicPrefixMatching";
+import { moveItem, moveUpDownActions } from "@lichtblick/suite-base/panels/utils";
 
 import { tileAnnotationTopics } from "./annotations";
 import { CameraGridConfig, Rotation, makeTile } from "./types";

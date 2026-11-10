@@ -36,7 +36,10 @@ import Stack from "@lichtblick/suite-base/components/Stack";
 import useCallbackWithToast from "@lichtblick/suite-base/hooks/useCallbackWithToast";
 import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";
 import usePublisher from "@lichtblick/suite-base/hooks/usePublisher";
-import { formatTime, useActionButtonStyles } from "@lichtblick/suite-base/panels/shared/actionButton";
+import {
+  formatTime,
+  useActionButtonStyles,
+} from "@lichtblick/suite-base/panels/shared/actionButton";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { useDefaultPanelTitle } from "@lichtblick/suite-base/providers/PanelStateContextProvider";

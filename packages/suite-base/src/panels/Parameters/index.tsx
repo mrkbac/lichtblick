@@ -299,9 +299,7 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
       startCompare(snapshots.length);
       setError(undefined);
     } catch (err) {
-      setError(
-        `Could not import ${file.name}: ${toError(err).message}`,
-      );
+      setError(`Could not import ${file.name}: ${toError(err).message}`);
     }
   };
 

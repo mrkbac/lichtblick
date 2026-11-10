@@ -167,9 +167,7 @@ const useStyles = makeStyles()(({ palette, shape, spacing, typography, shadows }
   };
 });
 
-function linkRenderer(
-  linkProps: React.AnchorHTMLAttributes<HTMLAnchorElement>,
-): React.JSX.Element {
+function linkRenderer(linkProps: React.AnchorHTMLAttributes<HTMLAnchorElement>): React.JSX.Element {
   return (
     <Link
       color="primary"

@@ -438,11 +438,7 @@ export default function LayoutBrowser({
         </Alert>
       )}
       {confirmModal}
-      <Stack
-        fullHeight
-        gap={1}
-        style={{ pointerEvents: pendingMultiAction ? "none" : "auto" }}
-      >
+      <Stack fullHeight gap={1} style={{ pointerEvents: pendingMultiAction ? "none" : "auto" }}>
         <List className={classes.actionList} disablePadding>
           <ListItem disablePadding>
             <ListItemButton onClick={createNewLayout}>

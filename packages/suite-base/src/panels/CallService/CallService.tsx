@@ -35,7 +35,10 @@ import {
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";
-import { formatTime, useActionButtonStyles } from "@lichtblick/suite-base/panels/shared/actionButton";
+import {
+  formatTime,
+  useActionButtonStyles,
+} from "@lichtblick/suite-base/panels/shared/actionButton";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { useDefaultPanelTitle } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";

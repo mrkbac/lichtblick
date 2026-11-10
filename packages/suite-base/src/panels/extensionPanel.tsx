@@ -52,7 +52,5 @@ export function extensionPanel(
     );
   }
 
-  return Panel(
-    Object.assign(ExtensionPanelAdapter, { panelType, defaultConfig: {} }),
-  );
+  return Panel(Object.assign(ExtensionPanelAdapter, { panelType, defaultConfig: {} }));
 }

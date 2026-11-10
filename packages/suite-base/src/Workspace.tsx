@@ -299,12 +299,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     const bottomItems = new Map<SidebarItemKey, SidebarItem>([]);
 
     return [topItems, bottomItems];
-  }, [
-    DataSourceSidebarItem,
-    alertCount,
-    highestSeverity,
-    enableStudioLogsSidebar,
-  ]);
+  }, [DataSourceSidebarItem, alertCount, highestSeverity, enableStudioLogsSidebar]);
 
   const eventsSupported = useEvents(selectEventsSupported);
   const showEventsTab = currentUserType !== "unauthenticated" && eventsSupported;
