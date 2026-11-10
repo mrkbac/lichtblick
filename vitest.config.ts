@@ -76,6 +76,9 @@ export default defineConfig({
   test: {
     // Like jest: a test file's afterEach runs before the shared ones from setup files
     sequence: { hooks: "stack" },
+    // Each worker holds ~600 MB; the default (one per core) peaks at 6+ GB per run, too much with
+    // several runs in parallel. 4 workers: ~2.5 GB, about 1.5x slower. Override with --maxWorkers.
+    maxWorkers: 4,
     // lcov.info for coverage tooling
     coverage: { provider: "v8", reporter: ["text-summary", "lcov"], reportsDirectory: "coverage" },
     // Unit tests run in UTC so time formatting doesn't depend on the machine's timezone
