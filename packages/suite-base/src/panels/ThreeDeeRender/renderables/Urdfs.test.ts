@@ -98,8 +98,10 @@ describe("Urdfs createRenderable", () => {
 describe("URDF requests", () => {
   function createExtension(fetchAsset: IRenderer["fetchAsset"]) {
     const addError = vi.fn();
+    const queueAnimationFrame = vi.fn();
     const extension = new Urdfs({
       ...renderer,
+      queueAnimationFrame,
       config: {
         topics: {},
         layers: {
@@ -117,7 +119,7 @@ describe("URDF requests", () => {
       settings: { errors: { add: addError, remove: vi.fn() }, setNodesForKey: vi.fn() },
       fetchAsset,
     } as unknown as IRenderer);
-    return { extension, addError };
+    return { extension, addError, queueAnimationFrame };
   }
 
   it.each(["success", "failure"])("ignores a superseded fetch %s", async (result) => {
@@ -145,31 +147,49 @@ describe("URDF requests", () => {
     expect(addError).not.toHaveBeenCalled();
     extension.dispose();
   });
-  it("ignores a superseded parse failure", async () => {
-    // Given
-    const parsing = Promise.withResolvers<UrdfRobot>();
-    const parse = vi
-      .spyOn(urdf, "parseRobot")
-      .mockImplementation(async () => await parsing.promise);
-    const { extension, addError } = createExtension(async (uri) => ({
-      uri,
-      data: new TextEncoder().encode("old URDF"),
-    }));
-    await vi.waitFor(() => {
-      expect(parse).toHaveBeenCalled();
-    });
-    const renderable = extension.renderables.get("robot")!;
-    renderable.userData.urdf = "new selection";
-    addError.mockClear();
-    // When
-    parsing.reject(new Error("old parse failed"));
-    await new Promise<void>((resolve) => {
-      setImmediate(resolve);
-    });
-    // Then
-    expect(renderable.userData.urdf).toBe("new selection");
-    expect(addError).not.toHaveBeenCalled();
-    parse.mockRestore();
-    extension.dispose();
-  });
+  it.each(["success", "failure"])(
+    "ignores an identical-content parse %s after reloading",
+    async (result) => {
+      // Given
+      const previous = Promise.withResolvers<UrdfRobot>();
+      const current = Promise.withResolvers<UrdfRobot>();
+      const parse = vi
+        .spyOn(urdf, "parseRobot")
+        .mockImplementationOnce(async () => await previous.promise)
+        .mockImplementation(async () => await current.promise);
+      const { extension, addError, queueAnimationFrame } = createExtension(async (uri) => ({
+        uri,
+        data: new TextEncoder().encode("same URDF"),
+      }));
+      await vi.waitFor(() => {
+        expect(parse).toHaveBeenCalledTimes(1);
+      });
+      // When
+      const layer = extension
+        .settingsNodes()
+        .find((entry) => entry.path[0] === "layers" && entry.path[1] === "robot")!;
+      layer.node.handler!({
+        action: "update",
+        payload: { path: ["layers", "robot", "displayMode"], input: "select", value: "visual" },
+      });
+      await vi.waitFor(() => {
+        expect(parse).toHaveBeenCalledTimes(2);
+      });
+      queueAnimationFrame.mockClear();
+      addError.mockClear();
+      if (result === "success") {
+        previous.resolve(robot);
+      } else {
+        previous.reject(new Error("previous parse failed"));
+      }
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve);
+      });
+      // Then
+      expect(queueAnimationFrame).not.toHaveBeenCalled();
+      expect(addError).not.toHaveBeenCalled();
+      parse.mockRestore();
+      extension.dispose();
+    },
+  );
 });

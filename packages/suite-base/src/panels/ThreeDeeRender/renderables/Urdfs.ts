@@ -138,6 +138,7 @@ export type UrdfUserData = BaseUserData & {
   settings: LayerSettingsUrdf | LayerSettingsCustomUrdf;
   fetching?: { url: string; control: AbortController };
   referenceUrl?: string;
+  loadGeneration: number;
   urdf: string | undefined;
   sourceType: LayerSettingsCustomUrdf["sourceType"] | undefined;
   parameter: string | undefined;
@@ -865,6 +866,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
       renderable = new UrdfRenderable(instanceId, this.renderer, {
         urdf,
         fetching: undefined,
+        loadGeneration: 0,
         renderables: new Map(),
         receiveTime: 0n,
         messageTime: 0n,
@@ -880,6 +882,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
       this.renderables.set(instanceId, renderable);
     }
 
+    const loadGeneration = ++renderable.userData.loadGeneration;
     renderable.userData.referenceUrl = urdf ? referenceUrl : undefined;
     renderable.userData.urdf = urdf;
     renderable.userData.sourceType = sourceType;
@@ -932,7 +935,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
       .then((parsed) => {
         if (
           this.renderables.get(instanceId) !== loadedRenderable ||
-          loadedRenderable.userData.urdf !== urdf
+          loadedRenderable.userData.loadGeneration !== loadGeneration
         ) {
           return;
         }
@@ -948,7 +951,7 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
       .catch((e: unknown) => {
         if (
           this.renderables.get(instanceId) !== loadedRenderable ||
-          loadedRenderable.userData.urdf !== urdf
+          loadedRenderable.userData.loadGeneration !== loadGeneration
         ) {
           return;
         }
