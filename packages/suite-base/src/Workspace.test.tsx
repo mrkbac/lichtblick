@@ -569,6 +569,35 @@ describe("Workspace - session-based MCAP resolution", () => {
     });
   });
 
+  it("does not refetch a bundle for a cold URL rewrite but handles repeated queued launches", async () => {
+    const setConsumer = vi.fn();
+    window.launchQueue = { setConsumer };
+    mockGetMcapBundle.mockResolvedValue([{ url: "https://example.com/data.mcap", metadata: {} }]);
+    (parseAppURLState as Mock).mockImplementation(() => ({ mcapBundleId: "session" }));
+    const { rerender } = render(
+      <Workspace deepLinks={[protocolCallback("mcap-bundle=session")]} />,
+    );
+    await waitFor(() => {
+      expect(mockSelectSource).toHaveBeenCalledTimes(1);
+    });
+    rerender(<Workspace deepLinks={["http://localhost/?mcap-bundle=session"]} />);
+    expect(mockGetMcapBundle).toHaveBeenCalledTimes(1);
+    const consume = setConsumer.mock.calls[0]![0] as (params: LaunchParams) => Promise<void>;
+    await act(async () => {
+      await consume({ files: [], targetURL: protocolCallback("mcap-bundle=session") });
+    });
+    expect(mockGetMcapBundle).toHaveBeenCalledTimes(1);
+    for (const count of [2, 3]) {
+      await act(async () => {
+        await consume({ files: [], targetURL: protocolCallback("mcap-bundle=session") });
+      });
+      await waitFor(() => {
+        expect(mockSelectSource).toHaveBeenCalledTimes(count);
+      });
+      expect(mockGetMcapBundle).toHaveBeenCalledTimes(count);
+    }
+  });
+
   it("should show error snackbar when session fetch fails", async () => {
     // Given
     const mcapBundleId = "failing-session";

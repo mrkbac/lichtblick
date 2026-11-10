@@ -631,8 +631,8 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   }, [launchedURL, getMessagePipeline]);
 
   // Resolve MCAP bundle URLs when mcapBundleId is present.
+  const mcapBundleId = targetUrlState?.mcapBundleId;
   useEffect(() => {
-    const mcapBundleId = targetUrlState?.mcapBundleId;
     if (!mcapBundleId) {
       return;
     }
@@ -666,7 +666,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     return () => {
       controller.abort();
     };
-  }, [targetUrlState, enqueueSnackbar]);
+  }, [mcapBundleId, launchedURL, enqueueSnackbar]);
 
   const selectEvent = useEvents(selectSelectEvent);
 
