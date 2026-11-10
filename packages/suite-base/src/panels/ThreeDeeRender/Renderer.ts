@@ -13,6 +13,7 @@ import { quat, vec3 } from "gl-matrix";
 import i18next from "i18next";
 import { produce } from "immer";
 import * as THREE from "three";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { DeepPartial, assert } from "ts-essentials";
 
 import { ObjectPool } from "@lichtblick/den/collection";
@@ -46,6 +47,7 @@ import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { palette, fontMonospace } from "@lichtblick/theme";
 
+import { DynamicBufferGeometry } from "./DynamicBufferGeometry";
 import {
   IRenderer,
   InstancedLineMaterial,
@@ -1111,6 +1113,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     }
     const bounds = new THREE.Box3();
     const box = new THREE.Box3();
+    const point = new THREE.Vector3();
     for (const extension of this.sceneExtensions.values()) {
       if (!extension.visible) {
         continue;
@@ -1134,8 +1137,37 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
               box.copy(object.boundingBox!);
             } else {
               const geometry = object.geometry as THREE.BufferGeometry;
-              geometry.computeBoundingBox();
-              box.copy(geometry.boundingBox!);
+              if (geometry instanceof LineSegmentsGeometry) {
+                box.makeEmpty();
+                const start = geometry.getAttribute("instanceStart") as
+                  | THREE.BufferAttribute
+                  | undefined;
+                const end = geometry.getAttribute("instanceEnd") as
+                  | THREE.BufferAttribute
+                  | undefined;
+                if (start != undefined && end != undefined) {
+                  const count = Math.min(geometry.instanceCount, start.count, end.count);
+                  for (let i = 0; i < count; i++) {
+                    box.expandByPoint(point.fromBufferAttribute(start, i));
+                    box.expandByPoint(point.fromBufferAttribute(end, i));
+                  }
+                }
+              } else if (geometry instanceof DynamicBufferGeometry) {
+                box.makeEmpty();
+                const position = geometry.getAttribute("position") as
+                  | THREE.BufferAttribute
+                  | undefined;
+                if (position != undefined) {
+                  const { start, count } = geometry.drawRange;
+                  for (let i = start; i < Math.min(start + count, position.count); i++) {
+                    box.expandByPoint(point.fromBufferAttribute(position, i));
+                  }
+                }
+              } else {
+                // Dynamic renderables do not consistently invalidate cached bounds.
+                geometry.computeBoundingBox();
+                box.copy(geometry.boundingBox!);
+              }
             }
             box.applyMatrix4(object.matrixWorld);
             if ([...box.min.toArray(), ...box.max.toArray()].every(Number.isFinite)) {
@@ -1156,10 +1188,16 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     const halfFov = THREE.MathUtils.degToRad(state.fovy / 2);
     const angle = Math.min(halfFov, Math.atan(Math.tan(halfFov) * aspect));
     const radius = Math.max(sphere.radius, 0.5) * 1.1;
+    const distance = state.perspective
+      ? radius / Math.sin(angle)
+      : (2 * radius) / Math.min(1, aspect);
+    if (!Number.isFinite(distance) || distance <= 0) {
+      return;
+    }
     const cameraState: CameraState = {
       ...state,
       targetOffset: sphere.center.toArray(),
-      distance: state.perspective ? radius / Math.sin(angle) : (2 * radius) / Math.min(1, aspect),
+      distance,
     };
     this.updateConfig((draft) => {
       draft.cameraState = cameraState;
