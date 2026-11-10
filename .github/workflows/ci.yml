@@ -163,7 +163,9 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: e2e-web-reports
-          path: e2e/reports/web/
+          path: |
+            e2e/reports/web/
+            test-results/
           retention-days: 7
           if-no-files-found: warn
 

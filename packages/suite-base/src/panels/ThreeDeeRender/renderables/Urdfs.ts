@@ -946,6 +946,12 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
         this.renderer.queueAnimationFrame();
       })
       .catch((e: unknown) => {
+        if (
+          this.renderables.get(instanceId) !== loadedRenderable ||
+          loadedRenderable.userData.urdf !== urdf
+        ) {
+          return;
+        }
         const err = e as Error;
         log.error(`Failed to parse URDF: ${err.message}`);
         this.renderer.settings.errors.add(
