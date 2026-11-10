@@ -9,11 +9,11 @@ import { UrdfRobot } from "@lichtblick/den/urdf";
 import { createRenderable, Urdfs } from "./Urdfs";
 import { IRenderer } from "../IRenderer";
 import { LoadedModel } from "../ModelCache";
-import { RenderableMeshResource } from "./markers/RenderableMeshResource";
+import { MESH_FETCH_FAILED, RenderableMeshResource } from "./markers/RenderableMeshResource";
 
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
 
-const meshErrors = { add: vi.fn(), remove: vi.fn() };
+const meshErrors = { add: vi.fn(), remove: vi.fn(), hasError: vi.fn().mockReturnValue(false) };
 const renderer = {
   normalizeFrameId: (id: string) => id,
   queueAnimationFrame: vi.fn(),
@@ -71,6 +71,40 @@ describe("Urdfs createRenderable", () => {
     },
   );
 
+  it.each([false, true])("ignores late mesh loads after disposal (loaded: %s)", async (loaded) => {
+    // Given
+    const pending = Promise.withResolvers<LoadedModel | undefined>();
+    let reportError!: (error: Error) => void;
+    const load = vi
+      .spyOn(renderer.modelCache, "load")
+      .mockImplementation(async (_url, _opts, report) => {
+        reportError = report;
+        return await pending.promise;
+      });
+    const renderable = createRenderable({
+      visual: {
+        geometry: { geometryType: "mesh", filename: "file:///late.obj" },
+        origin: { xyz: { x: 0, y: 0, z: 0 }, rpy: { x: 0, y: 0, z: 0 } },
+      },
+      robot,
+      id: 0,
+      frameId: "base_link",
+      renderer,
+    }) as RenderableMeshResource;
+    // When
+    renderable.dispose();
+    meshErrors.add.mockClear();
+    reportError(new Error("late mesh failure"));
+    pending.resolve(loaded ? new THREE.Group() : undefined);
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    // Then
+    expect(renderable.children).toHaveLength(0);
+    expect(meshErrors.add).not.toHaveBeenCalled();
+    load.mockRestore();
+  });
+
   it.each([
     ["mesh.glb", true],
     ["mesh.GLTF", true],
@@ -100,8 +134,9 @@ describe("URDF requests", () => {
     const addError = vi.fn();
     const removeError = vi.fn();
     const queueAnimationFrame = vi.fn();
-    const extension = new Urdfs({
+    const context = {
       ...renderer,
+      addCoordinateFrame: vi.fn(),
       queueAnimationFrame,
       config: {
         topics: {},
@@ -119,8 +154,9 @@ describe("URDF requests", () => {
       updateConfig: vi.fn(),
       settings: { errors: { add: addError, remove: removeError }, setNodesForKey: vi.fn() },
       fetchAsset,
-    } as unknown as IRenderer);
-    return { extension, addError, removeError, queueAnimationFrame };
+    };
+    const extension = new Urdfs(context as unknown as IRenderer);
+    return { extension, addError, removeError, queueAnimationFrame, context };
   }
 
   it("clears the previous mesh error on the URDF path when reloading the robot", async () => {
@@ -205,6 +241,63 @@ describe("URDF requests", () => {
       // Then
       expect(queueAnimationFrame).not.toHaveBeenCalled();
       expect(addError).not.toHaveBeenCalled();
+      parse.mockRestore();
+      extension.dispose();
+    },
+  );
+  it.each([false, true])(
+    "clears stale parent mesh errors and preserves current warnings (%s)",
+    async (warning) => {
+      // Given
+      const visual = {
+        geometry: { geometryType: "mesh" as const, filename: "model.obj" },
+        origin: { xyz: { x: 0, y: 0, z: 0 }, rpy: { x: 0, y: 0, z: 0 } },
+      };
+      const parsed: UrdfRobot = {
+        ...robot,
+        links: new Map([["base_link", { name: "base_link", visuals: [visual], colliders: [] }]]),
+      };
+      const parse = vi.spyOn(urdf, "parseRobot").mockResolvedValue(parsed);
+      const fetching = Promise.withResolvers<{ uri: string; data: Uint8Array }>();
+      const { extension, context, addError } = createExtension(async () => await fetching.promise);
+      let message: string | undefined = "previous mesh failure";
+      context.settings.errors.remove.mockImplementation((path: readonly string[], code: string) => {
+        if (path.join("/") === "layers/robot" && code === MESH_FETCH_FAILED) {
+          message = undefined;
+        }
+      });
+      addError.mockImplementation((path: readonly string[], code: string, value: string) => {
+        if (path.join("/") === "layers/robot" && code === MESH_FETCH_FAILED) {
+          message = value;
+        }
+      });
+      const model = new THREE.Group();
+      model.add(new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial()));
+      const load = vi
+        .spyOn(context.modelCache, "load")
+        .mockImplementation(async (_url, _opts, reportError) => {
+          await Promise.resolve();
+          if (warning) {
+            reportError(new Error("current appearance warning"));
+          }
+          return model;
+        });
+      // When
+      fetching.resolve({
+        uri: "https://example.com/robot.urdf",
+        data: new TextEncoder().encode("robot"),
+      });
+      const parent = extension.renderables.get("robot")!;
+      await vi.waitFor(() => {
+        expect(parent.children[0]?.children).toHaveLength(1);
+      });
+      // Then
+      expect(message).toBe(
+        warning
+          ? 'Error loading mesh from "https://example.com/model.obj": current appearance warning'
+          : undefined,
+      );
+      load.mockRestore();
       parse.mockRestore();
       extension.dispose();
     },

@@ -230,6 +230,9 @@ describe("model dependencies", () => {
         }),
       );
       expect(model!.hasEmbeddedMaterials).toBe(missing === "texture");
+      const cachedError = vi.fn();
+      expect(await cache.load("local-asset://folder/model.obj", {}, cachedError)).toBe(model);
+      expect(cachedError.mock.calls).toEqual(error.mock.calls);
       expect(console.error).toHaveBeenCalled();
       vi.mocked(console.error).mockClear();
       cache.dispose();

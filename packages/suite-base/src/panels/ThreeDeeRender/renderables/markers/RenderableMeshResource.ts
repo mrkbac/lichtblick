@@ -42,6 +42,7 @@ export class RenderableMeshResource extends RenderableMarker {
   }
 
   public override dispose(): void {
+    this.#updateId++;
     if (this.#mesh) {
       disposeMeshesRecursive(this.#mesh);
     }
@@ -127,10 +128,14 @@ export class RenderableMeshResource extends RenderableMarker {
     url: string,
     opts: { useEmbeddedMaterials: boolean },
   ): Promise<THREE.Group | THREE.Scene | undefined> {
+    const updateId = this.#updateId;
     const cachedModel = await this.renderer.modelCache.load(
       url,
       { referenceUrl: this.#referenceUrl },
       (err) => {
+        if (this.#updateId !== updateId) {
+          return;
+        }
         this.renderer.settings.errors.add(
           this.userData.settingsPath,
           MESH_FETCH_FAILED,
@@ -139,6 +144,9 @@ export class RenderableMeshResource extends RenderableMarker {
       },
     );
 
+    if (this.#updateId !== updateId) {
+      return undefined;
+    }
     if (!cachedModel) {
       if (!this.renderer.settings.errors.hasError(this.userData.settingsPath, MESH_FETCH_FAILED)) {
         this.renderer.settings.errors.add(

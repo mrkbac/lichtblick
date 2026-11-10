@@ -62,7 +62,8 @@ const MTL_TEXTURE_FIELDS = [
 
 export class ModelCache {
   #textDecoder = new TextDecoder();
-  #models = new Map<string, Promise<LoadedModel | undefined>>();
+  // Retain partial-load warnings for every consumer of a cached model.
+  #models = new Map<string, Promise<{ model: LoadedModel | undefined; errors: Error[] }>>();
   #edgeMaterial: THREE.Material;
   #fetchAsset: BuiltinPanelExtensionContext["unstable_fetchAsset"];
   #objectUrls = new Map<string, string>();
@@ -81,20 +82,24 @@ export class ModelCache {
   ): Promise<LoadedModel | undefined> {
     const key = JSON.stringify([url, opts.referenceUrl, opts.overrideMediaType])!;
     let promise = this.#models.get(key);
-    if (promise) {
-      return await promise;
+    if (!promise) {
+      const errors: Error[] = [];
+      promise = this.#loadModel(url, opts, (error) => {
+        errors.push(error);
+      })
+        .then((model) => ({ model: addEdges(model, this.#edgeMaterial), errors }))
+        .catch((err: unknown) => {
+          this.#models.delete(key);
+          errors.push(err as Error);
+          return { model: undefined, errors };
+        });
+      this.#models.set(key, promise);
     }
-
-    promise = this.#loadModel(url, opts, reportError)
-      .then((model) => addEdges(model, this.#edgeMaterial))
-      .catch(async (err: unknown) => {
-        this.#models.delete(key);
-        reportError(err as Error);
-        return undefined;
-      });
-
-    this.#models.set(key, promise);
-    return await promise;
+    const { model, errors } = await promise;
+    for (const error of errors) {
+      reportError(error);
+    }
+    return model;
   }
 
   async #loadModel(
