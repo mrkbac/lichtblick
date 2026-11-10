@@ -102,14 +102,13 @@ E2E tests:
 - Every branch gets one PR into `licht`, ready for review (not draft): `gh pr create -R mrkbac/lichtblick --base licht`. Title = what the change does as a conventional commit (e.g. `feat(ws): support playbackControl`), not the latest commit subject.
 - Don't push features or fixes directly to `licht`. Tiny fork-only config tweaks (deploy config) may go direct.
 - No upstream PRs or merges unless the user asks.
-- Before merging: typecheck and `build:packages` through the lock (see Parallel Sessions; CI runs `build:packages`, and unlike `typecheck` it also checks test files), targeted Vitest tests, and `pnpm exec oxlint --report-unused-disable-directives --max-warnings 0 --no-error-on-unmatched-pattern <changed files>` (same flags as CI's `pnpm lint:ci`). Merge with `gh pr merge --merge` (merge commit) and delete the branch.
+- Before merging: `pnpm typecheck` and `pnpm build:packages` (CI runs it; unlike `typecheck` it also checks test files), targeted Vitest tests, and `pnpm exec oxlint --report-unused-disable-directives --max-warnings 0 --no-error-on-unmatched-pattern <changed files>` (same flags as CI's `pnpm lint:ci`). Merge with `gh pr merge --merge` (merge commit) and delete the branch.
 - Every pushed branch gets a Cloudflare Pages preview at `<branch>.lichtblick-2pl.pages.dev` (`/` in the branch name becomes `-`, e.g. `feature-foo`); merging into `licht` deploys licht.marko.im.
 
 ### Parallel Sessions
 
 Several agent sessions often run at once on one machine and share its RAM. `typecheck` and `build:packages` build one project at a time (`--builders 1`, ~4 GB peak instead of ~10 GB), and Vitest runs at most 4 workers (~2.5 GB instead of 6+ GB).
 
-- Run typecheck through the lock shared by all worktrees, both steps in one call: `lockf "$(git rev-parse --git-common-dir)/heavy.lock" sh -c 'pnpm typecheck && pnpm build:packages'` (on Linux use `flock` instead of `lockf`, same arguments)
 - Tests: targeted paths only (`pnpm exec vitest run <paths>`), never watch mode.
 - E2E: leave it to CI (PRs run `@smoke`). Locally run only the spec you changed, with `--workers=1` (each Playwright worker is a browser, ~1 GB; the web smoke run peaks at ~7.6 GB with default workers).
 - Leave no dev servers, watchers or background jobs running after your turn.
