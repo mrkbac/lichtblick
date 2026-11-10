@@ -7,6 +7,7 @@ import "@testing-library/jest-dom/vitest";
 import { act, render, waitFor } from "@testing-library/react";
 import type { Mock } from "vitest";
 
+import { McapBundleFile } from "@lichtblick/suite-base/api/mcapBundle/types";
 import {
   useMessagePipeline,
   useMessagePipelineGetter,
@@ -596,6 +597,39 @@ describe("Workspace - session-based MCAP resolution", () => {
       });
       expect(mockGetMcapBundle).toHaveBeenCalledTimes(count);
     }
+  });
+
+  it("ignores a superseded bundle response that resolves after cancellation", async () => {
+    const stale = Promise.withResolvers<McapBundleFile[]>();
+    const setConsumer = vi.fn();
+    window.launchQueue = { setConsumer };
+    mockGetMcapBundle.mockReturnValue(stale.promise);
+    (parseAppURLState as Mock).mockReturnValue({ mcapBundleId: "old-session" });
+    render(<Workspace deepLinks={["http://localhost/?mcap-bundle=old-session"]} />);
+    const signal = mockGetMcapBundle.mock.calls[0]![1] as AbortSignal;
+    (parseAppURLState as Mock).mockReturnValue({
+      ds: "remote-file",
+      dsParams: { url: "https://example.com/new.mcap" },
+    });
+    const consume = setConsumer.mock.calls[0]![0] as (params: LaunchParams) => Promise<void>;
+    await act(async () => {
+      await consume({
+        files: [],
+        targetURL: protocolCallback("ds=remote-file&ds.url=https://example.com/new.mcap"),
+      });
+    });
+    expect(signal.aborted).toBe(true);
+    expect(mockSelectSource).toHaveBeenCalledExactlyOnceWith("remote-file", {
+      type: "connection",
+      params: { url: "https://example.com/new.mcap" },
+      sourceMetadata: undefined,
+    });
+    await act(async () => {
+      stale.resolve([{ url: "https://example.com/old.mcap", metadata: {} }]);
+      await stale.promise;
+    });
+    expect(mockSelectSource).toHaveBeenCalledTimes(1);
+    expect(mockEnqueueSnackbar).not.toHaveBeenCalled();
   });
 
   it("should show error snackbar when session fetch fails", async () => {

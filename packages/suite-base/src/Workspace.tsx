@@ -643,6 +643,9 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     void (async () => {
       try {
         const mcaps = await McapBundleAPI.getMcapBundle(mcapBundleId, signal);
+        if (signal.aborted) {
+          return;
+        }
         if (mcaps.length === 0) {
           enqueueSnackbar("Session contains no data sources", { variant: "error" });
           return;
