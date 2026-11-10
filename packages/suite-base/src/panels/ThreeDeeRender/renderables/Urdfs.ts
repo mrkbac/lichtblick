@@ -34,7 +34,7 @@ import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { RenderableCube } from "./markers/RenderableCube";
 import { RenderableCylinder } from "./markers/RenderableCylinder";
-import { RenderableMeshResource } from "./markers/RenderableMeshResource";
+import { MESH_FETCH_FAILED, RenderableMeshResource } from "./markers/RenderableMeshResource";
 import { RenderableSphere } from "./markers/RenderableSphere";
 import { missingTransformMessage, MISSING_TRANSFORM } from "./transforms";
 import type { AnyRendererSubscription, IRenderer } from "../IRenderer";
@@ -986,6 +986,8 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
 
     // Dispose any existing renderables
     renderable.removeChildren();
+    // Children share the URDF settings path, so clear the previous load's mesh error once here
+    renderer.settings.errors.remove(renderable.userData.settingsPath, MESH_FETCH_FAILED);
 
     const createChild = (frameId: string, i: number, visual: UrdfVisual): void => {
       const childRenderable = createRenderable({

@@ -98,6 +98,7 @@ describe("Urdfs createRenderable", () => {
 describe("URDF requests", () => {
   function createExtension(fetchAsset: IRenderer["fetchAsset"]) {
     const addError = vi.fn();
+    const removeError = vi.fn();
     const queueAnimationFrame = vi.fn();
     const extension = new Urdfs({
       ...renderer,
@@ -116,11 +117,27 @@ describe("URDF requests", () => {
       on: vi.fn(),
       addCustomLayerAction: vi.fn(),
       updateConfig: vi.fn(),
-      settings: { errors: { add: addError, remove: vi.fn() }, setNodesForKey: vi.fn() },
+      settings: { errors: { add: addError, remove: removeError }, setNodesForKey: vi.fn() },
       fetchAsset,
     } as unknown as IRenderer);
-    return { extension, addError, queueAnimationFrame };
+    return { extension, addError, removeError, queueAnimationFrame };
   }
+
+  it("clears the previous mesh error on the URDF path when reloading the robot", async () => {
+    // Given
+    const parse = vi.spyOn(urdf, "parseRobot").mockResolvedValue(robot);
+    // When
+    const { extension, removeError } = createExtension(async (uri) => ({
+      uri,
+      data: new TextEncoder().encode("URDF"),
+    }));
+    // Then
+    await vi.waitFor(() => {
+      expect(removeError).toHaveBeenCalledWith(["layers", "robot"], "MESH_FETCH_FAILED");
+    });
+    parse.mockRestore();
+    extension.dispose();
+  });
 
   it.each(["success", "failure"])("ignores a superseded fetch %s", async (result) => {
     // Given
