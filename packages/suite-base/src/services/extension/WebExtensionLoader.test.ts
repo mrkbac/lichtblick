@@ -8,10 +8,12 @@ const mocks = vi.hoisted(() => ({
   installed: vi.fn(),
   uninstall: vi.fn(),
   install: vi.fn(),
+  listPackages: vi.fn(),
+  readDirectories: vi.fn(),
 }));
 vi.mock("idb", () => {
   const store = {
-    getAll: async () => [...mocks.records.values()],
+    getAll: async () => await mocks.readDirectories(),
     get: async (_name: string, key: IDBValidKey) => mocks.records.get(key),
     delete: async (_name: string, key: IDBValidKey) => {
       mocks.records.delete(key);
@@ -39,7 +41,7 @@ vi.mock("@lichtblick/suite-base/services/extension/IdbExtensionLoader", () => ({
     public namespace = "local";
     public type = "browser";
     public async getExtensions() {
-      return [];
+      return await mocks.listPackages();
     }
     public async getExtension(id: string) {
       return await mocks.installed(id);
@@ -101,6 +103,8 @@ beforeEach(() => {
   mocks.installed.mockReset();
   mocks.uninstall.mockReset();
   mocks.install.mockReset().mockResolvedValue({ id: "test.example" });
+  mocks.listPackages.mockReset().mockResolvedValue([]);
+  mocks.readDirectories.mockReset().mockImplementation(async () => [...mocks.records.values()]);
 });
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -208,4 +212,51 @@ it("replaces multiple folder links during concurrent package imports", async () 
     loader.installExtension({ foxeFileData: new Uint8Array() }),
   ]);
   expect(await loader.getExtensions()).toEqual([]);
+});
+
+it("keeps package metadata and source available when the folder database fails", async () => {
+  const info = { id: "test.example", displayName: "Package version" };
+  mocks.listPackages.mockResolvedValue([info]);
+  mocks.installed.mockResolvedValue(info);
+  mocks.readDirectories.mockRejectedValue(new Error("Folder database closed"));
+  const loader = new WebExtensionLoader();
+  expect(await loader.getExtensions()).toEqual([info]);
+  expect(loader.directoryErrors).toEqual(["Folder database closed"]);
+  expect(await loader.getExtension(info.id)).toEqual(info);
+  expect(await loader.loadExtension(info.id)).toEqual({ raw: "browser copy" });
+});
+
+it("reconciles stale folder collisions and consistently selects package metadata and source", async () => {
+  const disk = folder();
+  vi.stubGlobal("window", { showDirectoryPicker: async () => disk.directory });
+  const loader = new WebExtensionLoader();
+  await loader.loadExtensionFromDirectory!();
+  const info = { id: "test.example", displayName: "Package version" };
+  mocks.listPackages.mockResolvedValue([info]);
+  mocks.installed.mockResolvedValue(info);
+  expect(await loader.getExtension(info.id)).toEqual(info);
+  expect(await loader.loadExtension(info.id)).toEqual({ raw: "browser copy" });
+  expect(await loader.getExtensions()).toEqual([info]);
+  expect(mocks.records.size).toBe(0);
+});
+
+it("discards a folder link when a package installation wins the selection race", async () => {
+  const disk = folder();
+  vi.stubGlobal("window", { showDirectoryPicker: async () => disk.directory });
+  mocks.installed.mockResolvedValueOnce(undefined).mockResolvedValue({ id: "test.example" });
+  const loader = new WebExtensionLoader();
+  await expect(loader.loadExtensionFromDirectory!()).rejects.toThrow("Uninstall the browser copy");
+  expect(mocks.records.size).toBe(0);
+  expect(await loader.loadExtension("test.example")).toEqual({ raw: "browser copy" });
+});
+
+it("uninstalls both records of an existing collision", async () => {
+  const disk = folder();
+  vi.stubGlobal("window", { showDirectoryPicker: async () => disk.directory });
+  const loader = new WebExtensionLoader();
+  await loader.loadExtensionFromDirectory!();
+  mocks.installed.mockResolvedValue({ id: "test.example" });
+  await loader.uninstallExtension("test.example");
+  expect(mocks.records.size).toBe(0);
+  expect(mocks.uninstall).toHaveBeenCalledWith("test.example");
 });

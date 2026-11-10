@@ -93,6 +93,13 @@ export class WebExtensionLoader extends IdbExtensionLoader {
           tx.store.put({ directory, info }, info.id),
           tx.done,
         ]);
+        // A package installed while the chooser was open takes precedence.
+        if (await super.getExtension(info.id)) {
+          await (await this.#db).delete("directories", info.id);
+          throw new Error(
+            "Uninstall the browser copy of this extension before loading its folder.",
+          );
+        }
       };
     }
   }
@@ -116,8 +123,23 @@ export class WebExtensionLoader extends IdbExtensionLoader {
   }
 
   public override async getExtensions(): Promise<ExtensionInfo[]> {
-    const directories = await this.directories();
+    const packages = await super.getExtensions();
     this.directoryErrors = [];
+    let directories: DirectoryExtension[];
+    try {
+      directories = await this.directories();
+      const packageIds = new Set(packages.map((info) => info.id));
+      const collisions = directories.filter(({ info }) => packageIds.has(info.id));
+      directories = directories.filter(({ info }) => !packageIds.has(info.id));
+      await Promise.all(
+        collisions.map(async ({ info }) => {
+          await (await this.#db).delete("directories", info.id);
+        }),
+      );
+    } catch (error) {
+      this.directoryErrors.push(error instanceof Error ? error.message : String(error));
+      return packages;
+    }
     const infos = await Promise.all(
       directories.map(async ({ directory, info }) => {
         try {
@@ -135,14 +157,19 @@ export class WebExtensionLoader extends IdbExtensionLoader {
         }
       }),
     );
-    return [...(await super.getExtensions()), ...infos];
+    return [...packages, ...infos];
   }
 
   public override async getExtension(id: string): Promise<ExtensionInfo | undefined> {
-    return (await this.getExtensions()).find((info) => info.id === id);
+    return (
+      (await super.getExtension(id)) ?? (await this.getExtensions()).find((info) => info.id === id)
+    );
   }
 
   public override async loadExtension(id: string): Promise<{ raw: string }> {
+    if (await super.getExtension(id)) {
+      return await super.loadExtension(id);
+    }
     const entry = (await this.directories()).find(({ info }) => info.id === id);
     if (!entry) {
       return await super.loadExtension(id);
@@ -161,9 +188,8 @@ export class WebExtensionLoader extends IdbExtensionLoader {
   }
 
   public override async uninstallExtension(id: string): Promise<void> {
-    if ((await (await this.#db).get("directories", id)) != undefined) {
-      await (await this.#db).delete("directories", id);
-    } else {
+    await (await this.#db).delete("directories", id);
+    if (await super.getExtension(id)) {
       await super.uninstallExtension(id);
     }
   }
