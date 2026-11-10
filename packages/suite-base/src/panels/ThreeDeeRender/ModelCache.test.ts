@@ -249,7 +249,7 @@ describe("model dependencies", () => {
     const model = await cache.load("local-asset://folder/colored.obj", {}, error);
     // Then
     expect(error).not.toHaveBeenCalled();
-    expect(model!.hasEmbeddedMaterials).toBe(true);
+    expect(model!.hasEmbeddedMaterials).toBe(false);
     const mesh = model!.children[0] as THREE.Mesh;
     expect(mesh.geometry.getAttribute("color").count).toBe(3);
     expect((mesh.material as THREE.MeshStandardMaterial).vertexColors).toBe(true);

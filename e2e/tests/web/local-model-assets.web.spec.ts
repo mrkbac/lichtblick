@@ -181,6 +181,9 @@ test("loads local URDF meshes, materials and textures and reloads when folder gr
   await expect
     .poll(async () => (await coloredPixels(canvas)).red, { timeout: 15_000 })
     .toBeLessThan(100);
+  await expect
+    .poll(async () => (await coloredPixels(canvas)).green, { timeout: 15_000 })
+    .toBeLessThan(100);
   // When
   await page.locator("#app-menu-button").click();
   await page.getByTestId("menu-item-settings").click();
