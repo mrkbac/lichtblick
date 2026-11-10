@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { compare, Time } from "@foxglove/rostime";
+import i18next from "i18next";
 import * as _ from "lodash-es";
 import { RefObject } from "react";
 import { createStore, StoreApi } from "zustand";
@@ -216,9 +217,7 @@ export function createMessagePipelineStore({
               options.referenceUrl.slice(0, options.referenceUrl.lastIndexOf(pkgName)) + pkgPath;
             return await builtinFetch(resolvedUrl, options);
           }
-          throw new Error(
-            `ROS package "${pkgName}" was not found. Select its resource folder in Settings.`,
-          );
+          throw new Error(i18next.t("appSettings:rosPackageNotFound", { pkgName }));
         }
 
         // Use a regular fetch for all other protocols

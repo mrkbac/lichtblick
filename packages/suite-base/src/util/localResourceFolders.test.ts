@@ -90,6 +90,24 @@ describe("LocalResourceFolders", () => {
     );
   });
 
+  it.each(["missing.stl", "missing/mesh.stl"])(
+    "allows remote fallback for missing package assets: %s",
+    async (path) => {
+      const resources = new LocalResourceFolders();
+      await resources.add(directory("workspace", { "package.xml": manifest }));
+      expect(await resources.fetchAsset(`package://robot/${path}`)).toBeUndefined();
+    },
+  );
+
+  it("keeps missing local-asset resources as errors", async () => {
+    const resources = new LocalResourceFolders();
+    await resources.add(directory("workspace", { "package.xml": manifest }));
+    const id = resources.getSnapshot().folders[0]!.id;
+    await expect(resources.fetchAsset(`local-asset://${id}/missing.stl`)).rejects.toThrow(
+      "Missing file",
+    );
+  });
+
   it.each([
     "../secret",
     "%2e%2e/secret",
@@ -102,6 +120,13 @@ describe("LocalResourceFolders", () => {
     const resources = new LocalResourceFolders();
     await expect(resources.fetchAsset(`package://robot/${path}`)).rejects.toThrow(
       "inside its folder",
+    );
+  });
+
+  it.each(["%", "%E0%A4%A.stl"])("reports malformed URL encoding: %s", async (path) => {
+    const resources = new LocalResourceFolders();
+    await expect(resources.fetchAsset(`package://robot/${path}`)).rejects.toThrow(
+      "Invalid local resource URL",
     );
   });
 
