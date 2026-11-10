@@ -54,6 +54,13 @@ export const appSettings = {
   removeResourceFolder: "Remove folder",
   rosPackageNotFound:
     'ROS package "{{pkgName}}" was not found. Select its resource folder in Settings.',
+  localResourceInvalidManifest: "Invalid ROS package.xml: {{path}}",
+  localResourceInvalidUrl: "Invalid local resource URL",
+  localResourcePathOutsideFolder: "Local resource path must stay inside its folder",
+  localResourceDuplicatePackage:
+    'ROS package "{{name}}" exists in multiple selected locations; remove the duplicate package or selected folder',
+  localResourceFolderUnavailable:
+    "Local resource folder is unavailable; select it again in Settings",
   settings: "Settings",
   timestampFormat: "Timestamp format",
   webApp: "Web app",

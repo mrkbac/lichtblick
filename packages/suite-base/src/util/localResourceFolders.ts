@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import i18next from "i18next";
+
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter/types";
 
 type PackageDirectory = { name: string; path: string[] };
@@ -66,7 +68,11 @@ export class LocalResourceFolders {
           !name ||
           !/^[a-zA-Z][a-zA-Z0-9_]*$/.test(name)
         ) {
-          throw new Error(`Invalid ROS package.xml: ${[handle.name, ...path].join("/")}`);
+          throw new Error(
+            i18next.t("appSettings:localResourceInvalidManifest", {
+              path: [handle.name, ...path].join("/"),
+            }),
+          );
         }
         packages.push({ name, path });
         // ROS packages are not nested; avoid walking large mesh/build trees inside each package.
@@ -101,14 +107,14 @@ export class LocalResourceFolders {
     const match = /^(package|local-asset):\/\/([^/?#]+)\/([^?#]*)(?:[?#].*)?$/.exec(uri);
     if (!match) {
       if (uri.startsWith("package:") || uri.startsWith("local-asset:")) {
-        throw new Error("Invalid local resource URL");
+        throw new Error(i18next.t("appSettings:localResourceInvalidUrl"));
       }
       return undefined;
     }
     const [, protocol, authority, path] = match;
     const segments = path!.split("/").map(decodeURIComponent);
     if (segments.some((part) => !part || part === "." || part === ".." || /[\\/\0]/.test(part))) {
-      throw new Error("Local resource path must stay inside its folder");
+      throw new Error(i18next.t("appSettings:localResourcePathOutsideFolder"));
     }
     let folder: ResourceFolder | undefined;
     let packagePath: string[] = [];
@@ -118,7 +124,7 @@ export class LocalResourceFolders {
       );
       if (candidates.length > 1) {
         throw new Error(
-          `ROS package "${authority}" exists in multiple selected locations; remove the duplicate package or selected folder`,
+          i18next.t("appSettings:localResourceDuplicatePackage", { name: authority }),
         );
       }
       folder = candidates[0]?.root;
@@ -126,7 +132,7 @@ export class LocalResourceFolders {
     } else {
       folder = this.#snapshot.folders.find((root) => root.id === authority);
       if (!folder) {
-        throw new Error("Local resource folder is unavailable; select it again in Settings");
+        throw new Error(i18next.t("appSettings:localResourceFolderUnavailable"));
       }
     }
     if (!folder) {
