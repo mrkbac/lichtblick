@@ -16,8 +16,9 @@ import type { RosValue } from "@lichtblick/suite-base/players/types";
 
 import { Axis, AXIS_LENGTH } from "./Axis";
 import { createArrowMarker } from "./Poses";
-import type { AnyRendererSubscription, IRenderer } from "../IRenderer";
+import type { AnyRendererSubscription } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import {
   onlyLastByTopicMessage,
   PartialMessage,
@@ -147,7 +148,7 @@ export class PoseArrayRenderable extends Renderable<PoseArrayUserData> {
 
 export class PoseArrays extends SceneExtension<PoseArrayRenderable> {
   public static extensionId = "foxglove.PoseArrays";
-  public constructor(renderer: IRenderer, name: string = PoseArrays.extensionId) {
+  public constructor(renderer: Renderer, name: string = PoseArrays.extensionId) {
     super(name, renderer);
   }
 
@@ -556,7 +557,7 @@ function normalizePosesInFrameToPoseArray(poseArray: PartialMessage<PosesInFrame
   };
 }
 
-function validateNavPath(messageEvent: PartialMessageEvent<NavPath>, renderer: IRenderer): boolean {
+function validateNavPath(messageEvent: PartialMessageEvent<NavPath>, renderer: Renderer): boolean {
   const { topic, message: navPath } = messageEvent;
   if (navPath.poses) {
     const baseFrameId = renderer.normalizeFrameId(navPath.header?.frame_id ?? "");

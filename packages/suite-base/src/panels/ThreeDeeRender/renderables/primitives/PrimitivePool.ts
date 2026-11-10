@@ -15,7 +15,7 @@ import { RenderableSpheres } from "./RenderableSpheres";
 import { RenderableTexts } from "./RenderableTexts";
 import { RenderableTriangles } from "./RenderableTriangles";
 import { PrimitiveType } from "./constants";
-import type { IRenderer } from "../../IRenderer";
+import type { Renderer } from "../../Renderer";
 
 const CONSTRUCTORS = {
   [PrimitiveType.CUBES]: RenderableCubes,
@@ -35,7 +35,7 @@ export class PrimitivePool {
   #primitivesByType = new Map<PrimitiveType, RenderablePrimitive[]>();
   #disposed = false;
 
-  public constructor(private renderer: IRenderer) {}
+  public constructor(private renderer: Renderer) {}
 
   public acquire<T extends PrimitiveType>(type: T): InstanceType<(typeof CONSTRUCTORS)[T]> {
     if (this.#disposed) {

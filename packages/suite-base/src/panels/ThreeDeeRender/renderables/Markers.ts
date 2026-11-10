@@ -12,8 +12,9 @@ import * as _ from "lodash-es";
 import { SettingsTreeAction } from "@lichtblick/suite";
 
 import { LayerSettingsMarker, TopicMarkers } from "./TopicMarkers";
-import type { AnyRendererSubscription, IRenderer } from "../IRenderer";
+import type { AnyRendererSubscription } from "../IRenderer";
 import { SELECTED_ID_VARIABLE } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import { PartialMessage, PartialMessageEvent, SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../SettingsManager";
 import {
@@ -39,7 +40,7 @@ const DEFAULT_SETTINGS: LayerSettingsMarker = {
 
 export class Markers extends SceneExtension<TopicMarkers> {
   public static extensionId = "foxglove.Markers";
-  public constructor(renderer: IRenderer, name: string = Markers.extensionId) {
+  public constructor(renderer: Renderer, name: string = Markers.extensionId) {
     super(name, renderer);
   }
   public override getSubscriptions(): readonly AnyRendererSubscription[] {

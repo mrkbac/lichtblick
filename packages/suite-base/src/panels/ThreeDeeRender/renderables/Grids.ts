@@ -11,8 +11,8 @@ import * as _ from "lodash-es";
 import Logger from "@lichtblick/log";
 import { SettingsTreeAction, SettingsTreeFields } from "@lichtblick/suite";
 
-import type { IRenderer } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { stringToRgba } from "../color";
@@ -72,7 +72,7 @@ export class GridRenderable extends Renderable<GridUserData> {
 
 export class Grids extends SceneExtension<GridRenderable> {
   public static extensionId = "foxglove.Grids";
-  public constructor(renderer: IRenderer, name: string = Grids.extensionId) {
+  public constructor(renderer: Renderer, name: string = Grids.extensionId) {
     super(name, renderer);
 
     renderer.addCustomLayerAction({

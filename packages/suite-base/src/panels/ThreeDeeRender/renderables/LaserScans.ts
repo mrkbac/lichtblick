@@ -23,8 +23,9 @@ import { emptyPose } from "@lichtblick/suite-base/util/Pose";
 
 import { colorHasTransparency, getColorConverter } from "./colorMode";
 import { DynamicBufferGeometry } from "../DynamicBufferGeometry";
-import { AnyRendererSubscription, IRenderer } from "../IRenderer";
+import { AnyRendererSubscription } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import { PartialMessage, PartialMessageEvent, SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../SettingsManager";
 import { LASERSCAN_DATATYPES as FOXGLOVE_LASERSCAN_DATATYPES } from "../foxglove";
@@ -141,7 +142,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
   public override pickable = false; // Picking happens on child renderables
   #pointsHistory: RenderObjectHistory<LaserScanRenderable>;
 
-  public constructor(topic: string, renderer: IRenderer, userData: LaserScanHistoryUserData) {
+  public constructor(topic: string, renderer: Renderer, userData: LaserScanHistoryUserData) {
     super(topic, renderer, userData);
 
     const isDecay = userData.settings.decayTime > 0;
@@ -323,7 +324,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
 
 export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
   public static extensionId = "foxglove.LaserScans";
-  public constructor(renderer: IRenderer, name: string = LaserScans.extensionId) {
+  public constructor(renderer: Renderer, name: string = LaserScans.extensionId) {
     super(name, renderer);
   }
 
@@ -674,7 +675,7 @@ class LaserScanInstancePickingMaterial extends THREE.RawShaderMaterial {
 }
 
 function invalidLaserScanError(
-  renderer: IRenderer,
+  renderer: Renderer,
   renderable: LaserScanHistoryRenderable,
   message: string,
 ): void {

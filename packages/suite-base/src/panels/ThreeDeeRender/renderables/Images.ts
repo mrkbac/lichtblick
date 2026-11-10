@@ -33,7 +33,8 @@ import {
 } from "./Images/imageNormalizers";
 import { getTopicMatchPrefix, sortPrefixMatchesToFront } from "./Images/topicPrefixMatching";
 import { cameraInfosEqual, normalizeCameraInfo } from "./projections";
-import type { AnyRendererSubscription, IRenderer } from "../IRenderer";
+import type { AnyRendererSubscription } from "../IRenderer";
+import type { Renderer } from "../Renderer";
 import { PartialMessageEvent, SceneExtension, onlyLastByTopicMessage } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import {
@@ -91,7 +92,7 @@ export class Images extends SceneExtension<ImageRenderable> {
 
   protected supportedImageSchemas = ALL_SUPPORTED_IMAGE_SCHEMAS;
 
-  public constructor(renderer: IRenderer, name: string = Images.extensionId) {
+  public constructor(renderer: Renderer, name: string = Images.extensionId) {
     super(name, renderer);
     this.customCameraModels = renderer.customCameraModels;
     this.renderer.on("topicsChanged", this.#handleTopicsChanged);

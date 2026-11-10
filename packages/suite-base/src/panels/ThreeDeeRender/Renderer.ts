@@ -47,7 +47,6 @@ import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { palette, fontMonospace } from "@lichtblick/theme";
 
 import {
-  IRenderer,
   InstancedLineMaterial,
   RendererConfig,
   RendererEvents,
@@ -159,7 +158,7 @@ function isStaticTransformTopic(topic: string): boolean {
  * An extensible 3D renderer attached to a `HTMLCanvasElement`,
  * `WebGLRenderingContext`, and `SettingsTree`.
  */
-export class Renderer extends EventEmitter<RendererEvents> implements IRenderer {
+export class Renderer extends EventEmitter<RendererEvents> {
   public readonly interfaceMode: InterfaceMode;
   #canvas: HTMLCanvasElement;
   readonly #ownerWindow: Window & typeof globalThis;
@@ -1074,11 +1073,11 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
     }
   }
 
-  public setParameters(parameters: ReadonlyMap<string, ParameterValue> | undefined): void {
+  public setParameters(parameters: Immutable<Map<string, ParameterValue>> | undefined): void {
     const changed = this.parameters !== parameters;
-    this.parameters = parameters;
+    this.parameters = parameters as ReadonlyMap<string, ParameterValue> | undefined;
     if (changed) {
-      this.emit("parametersChange", parameters, this);
+      this.emit("parametersChange", this.parameters, this);
     }
   }
 
@@ -1455,7 +1454,7 @@ export class Renderer extends EventEmitter<RendererEvents> implements IRenderer 
 
   public async fetchAsset(
     uri: string,
-    options?: { signal?: AbortSignal; baseUrl?: string },
+    options?: Parameters<BuiltinPanelExtensionContext["unstable_fetchAsset"]>[1],
   ): Promise<Asset> {
     return await this.#fetchAsset(uri, options);
   }

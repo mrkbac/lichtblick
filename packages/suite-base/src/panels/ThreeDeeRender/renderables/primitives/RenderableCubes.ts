@@ -10,7 +10,7 @@ import { CubePrimitive, SceneEntity } from "@foxglove/schemas";
 import * as THREE from "three";
 
 import { RenderablePrimitive } from "./RenderablePrimitive";
-import type { IRenderer } from "../../IRenderer";
+import type { Renderer } from "../../Renderer";
 import { makeRgba, rgbToThreeColor, stringToRgba } from "../../color";
 import { LayerSettingsEntity } from "../../settings";
 import { MeshStandardMaterialWithInstanceOpacity } from "../materials/MeshStandardMaterialWithInstanceOpacity";
@@ -45,7 +45,7 @@ export class RenderableCubes extends RenderablePrimitive {
   // stored for ease of use
   #sharedEdgesGeometry: THREE.EdgesGeometry;
 
-  public constructor(renderer: IRenderer) {
+  public constructor(renderer: Renderer) {
     super("", renderer);
 
     // Cube mesh
