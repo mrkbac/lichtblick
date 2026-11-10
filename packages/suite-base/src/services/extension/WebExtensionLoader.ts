@@ -95,7 +95,14 @@ export class WebExtensionLoader extends IdbExtensionLoader {
         ]);
         // A package installed while the chooser was open takes precedence.
         if (await super.getExtension(info.id)) {
-          await (await this.#db).delete("directories", info.id);
+          try {
+            await (await this.#db).delete("directories", info.id);
+          } catch (error) {
+            throw new Error(
+              `Uninstall the browser copy before loading its folder. Folder cleanup failed: ${error instanceof Error ? error.message : String(error)}`,
+              { cause: error },
+            );
+          }
           throw new Error(
             "Uninstall the browser copy of this extension before loading its folder.",
           );
@@ -200,9 +207,8 @@ export class WebExtensionLoader extends IdbExtensionLoader {
   }
 
   public override async uninstallExtension(id: string): Promise<void> {
+    // Forget the folder first so it cannot reactivate after the package is removed.
     await (await this.#db).delete("directories", id);
-    if (await super.getExtension(id)) {
-      await super.uninstallExtension(id);
-    }
+    await super.uninstallExtension(id);
   }
 }

@@ -136,7 +136,7 @@ it("selects read-only access, persists handles, and reads updated code on reload
   expect(await restored.loadExtension("test.example")).toEqual({ raw: "updated code" });
   await restored.uninstallExtension("test.example");
   expect(await restored.getExtensions()).toEqual([]);
-  expect(mocks.uninstall).not.toHaveBeenCalled();
+  expect(mocks.uninstall).toHaveBeenCalledWith("test.example");
 });
 
 it.each(["prompt", "denied"] as const)(
@@ -317,4 +317,28 @@ it("looks up a single folder without clearing other folder errors", async () => 
   );
   expect(mocks.readDirectories).not.toHaveBeenCalled();
   expect(loader.directoryErrors).toEqual(["Other folder unavailable"]);
+});
+
+it("reports both a package conflict and a failed folder cleanup", async () => {
+  const disk = folder();
+  vi.stubGlobal("window", { showDirectoryPicker: async () => disk.directory });
+  mocks.installed.mockResolvedValueOnce(undefined).mockResolvedValue({ id: "test.example" });
+  mocks.deleteDirectory.mockRejectedValue(new Error("Database closed"));
+  const loader = new WebExtensionLoader();
+  await expect(loader.loadExtensionFromDirectory!()).rejects.toThrow(
+    /browser copy.*Database closed/,
+  );
+});
+
+it("removes package metadata when its archive is already missing", async () => {
+  const info = { id: "test.example", displayName: "Orphaned package" };
+  mocks.listPackages.mockResolvedValue([info]);
+  mocks.installed.mockResolvedValue(undefined);
+  mocks.uninstall.mockImplementation(async () => {
+    mocks.listPackages.mockResolvedValue([]);
+  });
+  const loader = new WebExtensionLoader();
+  expect(await loader.getExtensions()).toEqual([info]);
+  await loader.uninstallExtension(info.id);
+  expect(await loader.getExtensions()).toEqual([]);
 });
