@@ -297,12 +297,12 @@ describe("model dependencies", () => {
     // When
     await cache.load(
       "package://robot/model.gltf",
-      { referenceUrl: "https://a/robot.urdf" },
+      { referenceUrl: "https://example.com/a/robot.urdf" },
       vi.fn(),
     );
     await cache.load(
       "package://robot/model.gltf",
-      { referenceUrl: "https://b/robot.urdf" },
+      { referenceUrl: "https://example.com/b/robot.urdf" },
       vi.fn(),
     );
     // Then
