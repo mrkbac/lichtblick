@@ -75,6 +75,7 @@ type Props<T extends string> = {
   dataTest?: string;
 };
 
+/** Expands a floating control into a tabbed pane while leaving the surrounding canvas interactive. */
 export default function ExpandingToolbar<T extends string>({
   children,
   checked,

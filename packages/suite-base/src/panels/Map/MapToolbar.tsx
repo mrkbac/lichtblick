@@ -353,6 +353,7 @@ type Measurement = {
 
 let nextMeasurementId = 1;
 
+/** Measurement tools and map gesture controls drawn over the map. */
 export function MapToolbar(props: Props): React.JSX.Element {
   const { map, units, showCoordinates, setMeasureData, measuringRef, onFitToData } = props;
   const { classes } = useStyles();

@@ -129,7 +129,7 @@ export async function exerciseSharedMap(page: Page): Promise<void> {
   expect(Math.abs(after.lineWidth - before.lineWidth)).toBeLessThanOrEqual(2);
   // Orthographic views keep the same context and 3D scene; the map explicitly pauses.
   const originalCanvas = await canvas.elementHandle();
-  await page.getByRole("button", { name: "3D", exact: true }).click();
+  await page.getByRole("button", { name: "Switch to 2D camera", exact: true }).click();
   await expect(
     page.getByText("Map is hidden in orthographic view. Switch to perspective to show it."),
   ).toBeVisible();

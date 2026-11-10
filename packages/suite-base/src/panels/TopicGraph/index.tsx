@@ -144,6 +144,7 @@ function unionInto<T>(dest: Set<T>, ...iterables: ReadonlySet<T>[]): void {
   }
 }
 
+/** Displays publisher/subscriber relationships with floating graph and visibility controls. */
 function TopicGraph() {
   const { classes } = useStyles();
   const [selectedTab, setSelectedTab] = useState<"Topics" | undefined>(undefined);
