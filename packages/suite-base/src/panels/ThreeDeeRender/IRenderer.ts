@@ -7,16 +7,16 @@
 
 import * as THREE from "three";
 
-import { Immutable, MessageEvent, ParameterValue, VariableValue } from "@lichtblick/suite";
+import type { Immutable, MessageEvent, ParameterValue, VariableValue } from "@lichtblick/suite";
 
-import { MeshUpAxis } from "./ModelCache";
-import { PickedRenderable } from "./Picker";
+import type { MeshUpAxis } from "./ModelCache";
+import type { PickedRenderable } from "./Picker";
 import type { Renderer } from "./Renderer";
-import { CameraState } from "./camera";
-import { LayerSettingsTransform } from "./renderables/FrameAxes";
-import { PublishClickType } from "./renderables/PublishClickTool";
-import { ColorModeSettings } from "./renderables/colorMode";
-import { BaseSettings, CustomLayerSettings } from "./settings";
+import type { CameraState } from "./camera";
+import type { LayerSettingsTransform } from "./renderables/FrameAxes";
+import type { PublishClickType } from "./renderables/PublishClickTool";
+import type { ColorModeSettings } from "./renderables/colorMode";
+import type { BaseSettings, CustomLayerSettings } from "./settings";
 import type { AdjustStep, RotationConvention } from "./transforms/transformOffsets";
 
 export type RendererEvents = {
