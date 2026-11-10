@@ -32,6 +32,8 @@ launches apply it in the current workspace without reloading the page. A time-on
 link seeks the current recording. A link specifying a source replaces that source;
 ordinary app activations and invalid protocol links leave the session alone.
 File launches continue through the same launch queue consumer.
+Superseded layout downloads and imports are cancelled. A storage write already
+underway may leave an unused saved layout copy after cancellation.
 
 To validate OS integration manually, install the app, approve protocol handling,
 and open a link from another application both with the PWA closed and already

@@ -729,6 +729,37 @@ describe("Workspace - fetchLayoutFromUrl", () => {
     setupWorkspaceMocks();
   });
 
+  it("does not install or delete layouts when an earlier download resolves after a new launch", async () => {
+    const pending = Promise.withResolvers<{ ok: boolean; text: () => Promise<string> }>();
+    const setConsumer = vi.fn();
+    window.launchQueue = { setConsumer };
+    global.fetch = vi.fn().mockReturnValue(pending.promise);
+    (parseAppURLState as Mock).mockReturnValue({ layoutUrl: "https://example.com/old.json" });
+    const view = render(
+      <Workspace deepLinks={["http://localhost/?layoutUrl=https://example.com/old.json"]} />,
+    );
+    const consume = setConsumer.mock.calls[0]![0] as (params: LaunchParams) => Promise<void>;
+    (parseAppURLState as Mock).mockReturnValue({
+      ds: "remote-file",
+      dsParams: { url: "https://example.com/new.mcap" },
+    });
+    await act(async () => {
+      await consume({
+        files: [],
+        targetURL: `http://localhost/?protocol=${encodeURIComponent("web+lichtblick://open?ds=remote-file&ds.url=https://example.com/new.mcap")}`,
+      });
+    });
+    await act(async () => {
+      pending.resolve({ ok: true, text: async () => "{}" });
+      await pending.promise;
+    });
+    expect(mockParseAndInstallLayout).not.toHaveBeenCalled();
+    expect(mockDeleteLayout).not.toHaveBeenCalled();
+    expect(mockEnqueueSnackbar).not.toHaveBeenCalled();
+    view.unmount();
+    delete window.launchQueue;
+  });
+
   it("should fetch and install layout from valid https URL", async () => {
     // Given
     global.fetch = vi.fn().mockResolvedValue({
@@ -748,12 +779,15 @@ describe("Workspace - fetchLayoutFromUrl", () => {
 
     // Then
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith("https://example.com/my-layout.json");
+      expect(global.fetch).toHaveBeenCalledWith("https://example.com/my-layout.json", {
+        signal: expect.any(AbortSignal),
+      });
     });
     await waitFor(() => {
       expect(mockParseAndInstallLayout).toHaveBeenCalledWith(
         expect.objectContaining({ name: "my-layout.json" }),
         "local",
+        expect.any(AbortSignal),
       );
     });
   });

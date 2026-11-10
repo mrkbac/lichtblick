@@ -280,6 +280,8 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
   const [launchedURL, setLaunchedURL] = useState<URL>();
   const initialLaunchURL = useRef(props.deepLinks?.[0]);
+  const layoutRequest = useRef<AbortController>(undefined);
+  useEffect(() => () => layoutRequest.current?.abort(), [launchedURL]);
 
   // One consumer handles both file and protocol launches; focus-existing never reloads the app.
   useEffect(() => {
@@ -301,6 +303,9 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
           window.history.replaceState(undefined, "", url.href);
           setLaunchedURL(url);
         }
+      }
+      if (files.length > 0) {
+        layoutRequest.current?.abort();
       }
       const fileHandles = files.filter((h): h is FileSystemFileHandle => h.kind === "file");
       if (fileHandles.length === 0) {
@@ -696,8 +701,13 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       // Use origin+pathname for logging/naming to avoid leaking credentials from query params
       const safeUrlLabel = `${parsedUrl.origin}${parsedUrl.pathname}`;
 
+      layoutRequest.current?.abort();
+      const controller = new AbortController();
+      layoutRequest.current = controller;
+      const { signal } = controller;
       try {
-        const response = await fetch(layoutUrl);
+        const response = await fetch(layoutUrl, { signal });
+        signal.throwIfAborted();
         if (!response.ok) {
           log.error(`Failed to fetch layout: ${safeUrlLabel} (status ${response.status})`);
           enqueueSnackbar(`Failed to load layout (HTTP ${response.status})`, { variant: "error" });
@@ -717,16 +727,21 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
         // Delegate JSON parsing, saving, and selection to parseAndInstallLayout
         const text = await response.text();
+        signal.throwIfAborted();
         const file = new File([text], filename, { type: "application/json" });
-        const newLayout = await parseAndInstallLayout(file, "local");
+        const newLayout = await parseAndInstallLayout(file, "local", signal);
 
         // Only delete old layouts after successful save to avoid data loss
         if (newLayout) {
           for (const layout of matchingLayouts) {
+            signal.throwIfAborted();
             await layoutManager.deleteLayout({ id: layout.id });
           }
         }
       } catch (error) {
+        if (signal.aborted) {
+          return;
+        }
         log.error(`Could not load layout from ${safeUrlLabel}`, error);
         enqueueSnackbar("Failed to load layout from URL", { variant: "error" });
       }
