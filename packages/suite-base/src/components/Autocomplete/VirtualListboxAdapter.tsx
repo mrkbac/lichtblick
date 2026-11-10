@@ -72,11 +72,10 @@ export type ListboxAdapterChild = [
  * From the Autocomplete parent it receives a list of children (which must conform to the
  * ListboxAdapterChild type), and props to apply to the outer listbox element.
  */
-export const VirtualListboxAdapter = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLElement>
->(function ListboxComponent(props, ref) {
-  const { children, ...other } = props;
+export function VirtualListboxAdapter(
+  props: React.HTMLAttributes<HTMLElement> & { ref?: React.Ref<HTMLDivElement> },
+): React.JSX.Element {
+  const { children, ref, ...other } = props;
   const { className, ...rest } = other;
 
   const options = children as ListboxAdapterChild[];
@@ -147,4 +146,4 @@ export const VirtualListboxAdapter = React.forwardRef<
       </div>
     </div>
   );
-});
+}

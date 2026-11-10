@@ -8,7 +8,7 @@
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import SettingsIcon from "@mui/icons-material/Settings";
 import { Badge } from "@mui/material";
-import React, { forwardRef, useCallback, useContext, useMemo } from "react";
+import React, { Ref, useCallback, useContext, useMemo } from "react";
 
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import { useStyles } from "@lichtblick/suite-base/components/PanelToolbar/PanelToolbarControls.style";
@@ -25,82 +25,82 @@ import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/us
 
 import { PanelActionsDropdown } from "./PanelActionsDropdown";
 
-const PanelToolbarControlsComponent = forwardRef<HTMLDivElement, PanelToolbarControlsProps>(
-  (props, ref) => {
-    const { additionalIcons, isUnknownPanel } = props;
-    const { classes } = useStyles();
-    const panelContext = useContext(PanelContext);
-    const { id: panelId, type: panelType, showLogs, setShowLogs, logCount } = panelContext ?? {};
-    const toggleLogs = () => {
-      if (setShowLogs) {
-        setShowLogs({ show: !(showLogs ?? false) });
-      }
-    };
-    const panelCatalog = useContext(PanelCatalogContext);
-    const { setSelectedPanelIds } = useSelectedPanels();
-    const { openPanelSettings } = useWorkspaceActions();
+function PanelToolbarControlsComponent(
+  props: PanelToolbarControlsProps & { ref?: Ref<HTMLDivElement> },
+): React.JSX.Element {
+  const { additionalIcons, isUnknownPanel, ref } = props;
+  const { classes } = useStyles();
+  const panelContext = useContext(PanelContext);
+  const { id: panelId, type: panelType, showLogs, setShowLogs, logCount } = panelContext ?? {};
+  const toggleLogs = () => {
+    if (setShowLogs) {
+      setShowLogs({ show: !(showLogs ?? false) });
+    }
+  };
+  const panelCatalog = useContext(PanelCatalogContext);
+  const { setSelectedPanelIds } = useSelectedPanels();
+  const { openPanelSettings } = useWorkspaceActions();
 
-    const hasSettingsSelector = useCallback(
-      (store: PanelStateStore) => (panelId ? store.settingsTrees[panelId] != undefined : false),
-      [panelId],
-    );
+  const hasSettingsSelector = useCallback(
+    (store: PanelStateStore) => (panelId ? store.settingsTrees[panelId] != undefined : false),
+    [panelId],
+  );
 
-    const panelInfo = useMemo(
-      () => (panelType != undefined ? panelCatalog?.getPanelByType(panelType) : undefined),
-      [panelCatalog, panelType],
-    );
+  const panelInfo = useMemo(
+    () => (panelType != undefined ? panelCatalog?.getPanelByType(panelType) : undefined),
+    [panelCatalog, panelType],
+  );
 
-    const hasSettings = usePanelStateStore(hasSettingsSelector);
+  const hasSettings = usePanelStateStore(hasSettingsSelector);
 
-    const openSettings = useCallback(async () => {
-      if (panelId) {
-        setSelectedPanelIds([panelId]);
-        openPanelSettings();
-      }
-    }, [panelId, setSelectedPanelIds, openPanelSettings]);
+  const openSettings = useCallback(async () => {
+    if (panelId) {
+      setSelectedPanelIds([panelId]);
+      openPanelSettings();
+    }
+  }, [panelId, setSelectedPanelIds, openPanelSettings]);
 
-    // Show the settings button so that panel title is editable, unless we have a custom
-    // toolbar in which case the title wouldn't be visible.
-    const showSettingsButton = panelInfo?.hasCustomToolbar !== true || hasSettings;
+  // Show the settings button so that panel title is editable, unless we have a custom
+  // toolbar in which case the title wouldn't be visible.
+  const showSettingsButton = panelInfo?.hasCustomToolbar !== true || hasSettings;
 
-    return (
-      <Stack
-        direction="row"
-        alignItems="center"
-        paddingLeft={1}
-        ref={ref}
-        fullHeight={true}
-        paddingTop={1}
+  return (
+    <Stack
+      direction="row"
+      alignItems="center"
+      paddingLeft={1}
+      ref={ref}
+      fullHeight={true}
+      paddingTop={1}
+    >
+      {additionalIcons}
+      <Badge
+        color="error"
+        variant="dot"
+        invisible={(logCount ?? 0) === 0}
+        className={classes.logsBadge}
       >
-        {additionalIcons}
-        <Badge
-          color="error"
-          variant="dot"
-          invisible={(logCount ?? 0) === 0}
-          className={classes.logsBadge}
+        <ToolbarIconButton
+          disabled={(logCount ?? 0) === 0}
+          title={
+            showLogs === true
+              ? "Hide logs"
+              : `Show logs${(logCount ?? 0) > 0 ? ` (${logCount})` : ""}`
+          }
+          onClick={toggleLogs}
         >
-          <ToolbarIconButton
-            disabled={(logCount ?? 0) === 0}
-            title={
-              showLogs === true
-                ? "Hide logs"
-                : `Show logs${(logCount ?? 0) > 0 ? ` (${logCount})` : ""}`
-            }
-            onClick={toggleLogs}
-          >
-            <ListAltIcon color={showLogs === true ? "primary" : undefined} />
-          </ToolbarIconButton>
-        </Badge>
-        {showSettingsButton && (
-          <ToolbarIconButton title="Settings" onClick={openSettings}>
-            <SettingsIcon />
-          </ToolbarIconButton>
-        )}
-        <PanelActionsDropdown isUnknownPanel={isUnknownPanel} />
-      </Stack>
-    );
-  },
-);
+          <ListAltIcon color={showLogs === true ? "primary" : undefined} />
+        </ToolbarIconButton>
+      </Badge>
+      {showSettingsButton && (
+        <ToolbarIconButton title="Settings" onClick={openSettings}>
+          <SettingsIcon />
+        </ToolbarIconButton>
+      )}
+      <PanelActionsDropdown isUnknownPanel={isUnknownPanel} />
+    </Stack>
+  );
+}
 
 PanelToolbarControlsComponent.displayName = "PanelToolbarControls";
 

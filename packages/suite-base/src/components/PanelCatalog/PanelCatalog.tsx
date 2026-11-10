@@ -10,7 +10,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import { IconButton, InputAdornment, TextField } from "@mui/material";
 import { Fzf } from "fzf";
 import * as _ from "lodash-es";
-import { forwardRef, useCallback, useEffect, useMemo, useState } from "react";
+import { Ref, useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -77,13 +77,18 @@ type Props = {
   selectedPanelType?: string;
   mode?: "grid" | "list";
   isMenu?: boolean;
+  ref?: Ref<HTMLDivElement>;
 };
 
-export const PanelCatalog = forwardRef<HTMLDivElement, Props>(function PanelCatalog(
-  props: Props,
-  ref,
-) {
-  const { isMenu = false, onDragStart, onPanelSelect, selectedPanelType, mode = "list" } = props;
+export function PanelCatalog(props: Props): React.JSX.Element {
+  const {
+    isMenu = false,
+    onDragStart,
+    onPanelSelect,
+    selectedPanelType,
+    mode = "list",
+    ref,
+  } = props;
   const { classes, cx } = useStyles();
   const { t } = useTranslation("addPanel");
 
@@ -271,4 +276,4 @@ export const PanelCatalog = forwardRef<HTMLDivElement, Props>(function PanelCata
       )}
     </Stack>
   );
-});
+}
