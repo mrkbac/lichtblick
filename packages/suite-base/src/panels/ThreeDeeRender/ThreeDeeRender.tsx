@@ -8,7 +8,15 @@
 import { Time, toNanoSec, compare } from "@foxglove/rostime";
 import { Button } from "@mui/material";
 import * as _ from "lodash-es";
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useLatest } from "react-use";
 import { DeepPartial } from "ts-essentials";
@@ -39,6 +47,7 @@ import {
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
+import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceFolders";
 
 import type { ImageModeConfig, RendererConfig, RendererSubscription } from "./IRenderer";
 import type { Path } from "./LayerErrors";
@@ -77,7 +86,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     context,
     interfaceMode,
     testOptions,
-    customSceneExtensions,
     customCameraModels,
     enqueueSnackbarFromParent,
     logError,
@@ -145,6 +153,10 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const sharedMapLayerId =
     requestedSharedMapLayerId === failedSharedMapLayerId ? undefined : requestedSharedMapLayerId;
   const canvas = sharedMapLayerId ? (sharedMap?.map.getCanvas() ?? null) : sceneCanvas;
+  const { revision: resourceRevision } = useSyncExternalStore(
+    localResourceFolders.subscribe,
+    localResourceFolders.getSnapshot,
+  );
   const [renderer, setRenderer] = useState<Renderer | undefined>(undefined);
   const rendererRef = useRef<Renderer | undefined>(undefined);
   const {
@@ -211,11 +223,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
             config: configRef.current,
             interfaceMode,
             fetchAsset,
-            sceneExtensionConfig: _.merge(
-              {},
-              DEFAULT_SCENE_EXTENSION_CONFIG,
-              customSceneExtensions ?? {},
-            ),
+            sceneExtensionConfig: DEFAULT_SCENE_EXTENSION_CONFIG,
             displayTemporaryError,
             testOptions,
             customCameraModels,
@@ -233,10 +241,10 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     sharedMapLayerId,
     configRef,
     config.scene.transforms?.enablePreloading,
-    customSceneExtensions,
     customCameraModels,
     interfaceMode,
     fetchAsset,
+    resourceRevision,
     testOptions,
     displayTemporaryError,
   ]);

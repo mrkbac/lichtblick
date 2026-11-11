@@ -8,25 +8,23 @@
 import * as Comlink from "@foxglove/comlink";
 
 import { IterableSourceInitializeArgs } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
-import { WorkerSerializedIterableSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSourceWorker";
+import { WorkerIterableSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSourceWorker";
 import { MultiIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/shared/MultiIterableSource";
 import { pickDefinedHydrationOverrides } from "@lichtblick/suite-base/players/IterablePlayer/shared/multiFileHydrationOptions";
 
 import { McapIterableSource } from "./McapIterableSource";
 
-export function initialize(
-  args: IterableSourceInitializeArgs,
-): WorkerSerializedIterableSourceWorker {
+export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSourceWorker {
   if (args.file) {
     const source = new McapIterableSource({ type: "file", file: args.file });
-    const wrapped = new WorkerSerializedIterableSourceWorker(source);
+    const wrapped = new WorkerIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
   } else if (args.files) {
     const source = new MultiIterableSource(
       { type: "files", files: args.files, ...pickDefinedHydrationOverrides(args) },
       McapIterableSource,
     );
-    const wrapped = new WorkerSerializedIterableSourceWorker(source);
+    const wrapped = new WorkerIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
   } else if (args.url) {
     const source = new McapIterableSource({
@@ -34,7 +32,7 @@ export function initialize(
       url: args.url,
       credentials: args.credentials,
     });
-    const wrapped = new WorkerSerializedIterableSourceWorker(source);
+    const wrapped = new WorkerIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
   } else if (args.urls) {
     const source = new MultiIterableSource(
@@ -46,7 +44,7 @@ export function initialize(
       },
       McapIterableSource,
     );
-    const wrapped = new WorkerSerializedIterableSourceWorker(source);
+    const wrapped = new WorkerIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
   }
 

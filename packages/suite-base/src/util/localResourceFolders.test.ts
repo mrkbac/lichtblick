@@ -167,6 +167,39 @@ describe("LocalResourceFolders", () => {
     unsubscribe();
   });
 
+  it("deduplicates concurrent additions of the same folder", async () => {
+    // Given
+    const resources = new LocalResourceFolders();
+    const handle = directory("workspace", { "package.xml": manifest });
+
+    // When
+    await Promise.all([resources.add(handle), resources.add(handle)]);
+
+    // Then
+    expect(resources.getSnapshot().folders).toHaveLength(1);
+  });
+
+  it("does not restore a removed folder when its rescan finishes", async () => {
+    // Given
+    const resources = new LocalResourceFolders();
+    const handle = directory("workspace", { "package.xml": manifest, "mesh.stl": "mesh" });
+    await resources.add(handle);
+    const id = resources.getSnapshot().folders[0]!.id;
+    const file = await handle.getFileHandle("package.xml");
+    const pending = Promise.withResolvers<FileSystemFileHandle>();
+    vi.spyOn(handle, "getFileHandle").mockReturnValueOnce(pending.promise);
+
+    // When
+    const rescan = resources.add(handle);
+    resources.remove(id);
+    pending.resolve(file);
+    await rescan;
+
+    // Then
+    expect(resources.getSnapshot().folders).toEqual([]);
+    expect(await resources.fetchAsset("package://robot/mesh.stl")).toBeUndefined();
+  });
+
   it("respects aborted reads", async () => {
     const resources = new LocalResourceFolders();
     await resources.add(directory("a", { "package.xml": manifest, "a.stl": "mesh" }));

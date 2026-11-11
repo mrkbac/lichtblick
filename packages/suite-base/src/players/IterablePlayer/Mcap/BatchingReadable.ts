@@ -7,6 +7,8 @@
 
 import { McapTypes } from "@mcap/core";
 
+import { toError } from "@lichtblick/suite-base/util/toError";
+
 const BATCH_GAP_THRESHOLD_BYTES = 64n * 1024n;
 const BATCH_MAX_COALESCED_BYTES = 4n * 1024n * 1024n;
 
@@ -107,7 +109,7 @@ export class BatchingReadable implements McapTypes.IReadable {
             }
           }
         } catch (err) {
-          const error = err instanceof Error ? err : new Error(String(err));
+          const error = toError(err);
           for (const member of group.members) {
             member.reject(error);
           }

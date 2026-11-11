@@ -29,6 +29,7 @@ import PanelSetup from "@lichtblick/suite-base/stories/PanelSetup";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 import RenderStateBuilder from "@lichtblick/suite-base/testing/builders/RenderStateBuilder";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceFolders";
 
 import { RendererConfig } from "./IRenderer";
 import { Renderer } from "./Renderer";
@@ -392,6 +393,23 @@ describe("ThreeDeeRender", () => {
     expect(getByTestId("renderer-overlay")).toBeInTheDocument();
   });
 
+  it("recreates the renderer when local resource folders change", () => {
+    // Given
+    const props = setup();
+    render(<ThreeDeeRender {...props} />);
+    const initialCalls = mockedRenderer.mock.calls.length;
+    const previous = mockedRenderer.mock.results.at(-1)!.value as ReturnType<
+      typeof createMockRenderer
+    >;
+    // When
+    act(() => {
+      localResourceFolders.remove("removed-folder");
+    });
+    // Then
+    expect(previous.dispose).toHaveBeenCalled();
+    expect(mockedRenderer.mock.calls.length).toBe(initialCalls + 1);
+  });
+
   it("initializes with default camera state when no initial state is provided", () => {
     // Given
     const props = setup();
@@ -542,25 +560,6 @@ describe("ThreeDeeRender", () => {
     expect(mockedRenderer).toHaveBeenCalled();
     const rendererCall = mockedRenderer.mock.calls[0]?.[0];
     expect(rendererCall?.interfaceMode).toBe(initialState.interfaceMode);
-  });
-
-  it("passes custom scene extensions to renderer", () => {
-    const customSceneExtensions = {
-      extensionsById: {
-        "foxglove.SceneSettings": {
-          init: (renderer: any) => renderer,
-          supportedInterfaceModes: ["3d" as const],
-        },
-      },
-    };
-    const props = setup({ customSceneExtensions });
-
-    const { container } = render(<ThreeDeeRender {...props} />);
-    expect(container).toBeInTheDocument();
-
-    expect(mockedRenderer).toHaveBeenCalled();
-    const rendererCall = mockedRenderer.mock.calls[0]?.[0];
-    expect(rendererCall?.sceneExtensionConfig).toMatchObject(customSceneExtensions);
   });
 
   it("renders with custom camera models", () => {

@@ -17,7 +17,7 @@ import { disposeMeshesRecursive } from "../../dispose";
 import { Marker } from "../../ros";
 import { removeLights, replaceMaterials } from "../models";
 
-const MESH_FETCH_FAILED = "MESH_FETCH_FAILED";
+export const MESH_FETCH_FAILED = "MESH_FETCH_FAILED";
 
 export class RenderableMeshResource extends RenderableMarker {
   #mesh: THREE.Group | THREE.Scene | undefined;
@@ -42,6 +42,7 @@ export class RenderableMeshResource extends RenderableMarker {
   }
 
   public override dispose(): void {
+    this.#updateId++;
     if (this.#mesh) {
       disposeMeshesRecursive(this.#mesh);
     }
@@ -78,6 +79,7 @@ export class RenderableMeshResource extends RenderableMarker {
         disposeMeshesRecursive(this.#mesh);
         this.#mesh = undefined;
       }
+      errors.remove(this.userData.settingsPath, MESH_FETCH_FAILED);
       this.#loadModel(marker.mesh_resource, opts)
         .then((mesh) => {
           if (!mesh) {
@@ -92,8 +94,6 @@ export class RenderableMeshResource extends RenderableMarker {
           this.add(mesh);
           this.#updateOutlineVisibility();
 
-          // Remove any mesh fetch error message since loading was successful
-          this.renderer.settings.errors.remove(this.userData.settingsPath, MESH_FETCH_FAILED);
           // Render a new frame now that the model is loaded
           this.renderer.queueAnimationFrame();
         })
@@ -128,10 +128,14 @@ export class RenderableMeshResource extends RenderableMarker {
     url: string,
     opts: { useEmbeddedMaterials: boolean },
   ): Promise<THREE.Group | THREE.Scene | undefined> {
+    const updateId = this.#updateId;
     const cachedModel = await this.renderer.modelCache.load(
       url,
       { referenceUrl: this.#referenceUrl },
       (err) => {
+        if (this.#updateId !== updateId) {
+          return;
+        }
         this.renderer.settings.errors.add(
           this.userData.settingsPath,
           MESH_FETCH_FAILED,
@@ -140,6 +144,9 @@ export class RenderableMeshResource extends RenderableMarker {
       },
     );
 
+    if (this.#updateId !== updateId) {
+      return undefined;
+    }
     if (!cachedModel) {
       if (!this.renderer.settings.errors.hasError(this.userData.settingsPath, MESH_FETCH_FAILED)) {
         this.renderer.settings.errors.add(
@@ -153,8 +160,8 @@ export class RenderableMeshResource extends RenderableMarker {
 
     const mesh = cachedModel.clone(true);
     removeLights(mesh);
-    if (!opts.useEmbeddedMaterials) {
-      replaceMaterials(mesh, this.#material);
+    if (!opts.useEmbeddedMaterials || cachedModel.hasEmbeddedMaterials === false) {
+      replaceMaterials(mesh, this.#material, { preserveVertexColors: opts.useEmbeddedMaterials });
     }
 
     return mesh;

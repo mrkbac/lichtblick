@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Bitstream } from "../Bitstream";
+import { byteToHex } from "../utils";
 
 // Prefix applied to general_profile_idc in the codec string for each value of
 // general_profile_space (ISO/IEC 14496-15 Annex E). A value of 0 produces no prefix.
@@ -262,11 +263,7 @@ function formatConstraintBytes(bytes: number[]): string {
 
   const hex: string[] = [];
   for (let i = 0; i <= lastNonZero; i++) {
-    hex.push(byteToHex(bytes[i]!).toUpperCase());
+    hex.push(byteToHex(bytes[i]!));
   }
   return hex.join(".");
-}
-
-function byteToHex(val: number): string {
-  return ("00" + val.toString(16)).slice(-2);
 }

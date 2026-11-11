@@ -13,7 +13,7 @@ import {
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
-import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource";
+import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
 import {
   MultiFileHydrationOverrides,
   addMultiFileHydrationOverrides,
@@ -121,7 +121,6 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
     return new IterablePlayer({
       source,
       name: urls.join(),
-      metricsCollector: args.metricsCollector,
       // Keep includeCredentials in the app URL so reloads and shared links still send cookies
       urlParams: includeCredentials ? { urls, includeCredentials: "true" } : { urls },
       sourceId: this.id,

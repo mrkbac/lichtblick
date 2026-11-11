@@ -1,15 +1,16 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { BROADCAST_CHANNEL_NAME } from "./constants";
-import { BroadcastMessageEvent, ChannelListeners } from "./types";
+import { BroadcastMessageEvent } from "./types";
+
+export const BROADCAST_CHANNEL_NAME = "broadcast-lichtblick";
 
 export default class BroadcastManager {
   private static instance: BroadcastManager | undefined;
   private static shouldSync = false;
 
   private readonly channel: BroadcastChannel;
-  private readonly listeners: ChannelListeners;
+  private readonly listeners: Set<(message: BroadcastMessageEvent) => void>;
 
   private constructor() {
     this.channel = new BroadcastChannel(BROADCAST_CHANNEL_NAME);

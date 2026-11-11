@@ -14,6 +14,7 @@ import {
   isEditedMessage,
   sampleMessageJson,
 } from "@lichtblick/suite-base/components/MessageEditor/messageJson";
+import { buttonSettingsFields } from "@lichtblick/suite-base/panels/shared/actionButton";
 import { Topic } from "@lichtblick/suite-base/players/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
@@ -88,11 +89,7 @@ const buildSettingsTree = (
   },
   button: {
     label: "Button",
-    fields: {
-      buttonText: { label: "Title", input: "string", value: config.buttonText },
-      buttonTooltip: { label: "Tooltip", input: "string", value: config.buttonTooltip },
-      buttonColor: { label: "Color", input: "rgb", value: config.buttonColor },
-    },
+    fields: buttonSettingsFields(config),
   },
 });
 

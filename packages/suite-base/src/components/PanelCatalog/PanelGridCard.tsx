@@ -9,8 +9,8 @@ import { Card, CardActionArea, CardContent, CardMedia, Typography } from "@mui/m
 import { useCallback } from "react";
 import { makeStyles } from "tss-react/mui";
 
+import { fuzzyPositions, HighlightChars } from "@lichtblick/suite-base/components/HighlightChars";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import TextHighlight from "@lichtblick/suite-base/components/TextHighlight";
 import { PanelInfo } from "@lichtblick/suite-base/context/PanelCatalogContext";
 
 const useStyles = makeStyles()((theme) => {
@@ -24,6 +24,11 @@ const useStyles = makeStyles()((theme) => {
     },
     cardContent: {
       flex: "auto",
+    },
+    highlight: {
+      backgroundColor: "transparent",
+      color: theme.palette.primary.main,
+      fontWeight: "bold",
     },
   };
 });
@@ -62,11 +67,19 @@ export function PanelGridCard(props: Props): React.JSX.Element {
           <CardContent className={classes.cardContent}>
             <Typography variant="subtitle2" gutterBottom>
               <span data-testid={`panel-grid-card ${panel.title}`}>
-                <TextHighlight targetStr={targetString} searchText={searchQuery} />
+                <HighlightChars
+                  str={targetString}
+                  indices={fuzzyPositions(targetString, searchQuery)}
+                  highlightClassName={classes.highlight}
+                />
               </span>
             </Typography>
             <Typography variant="body2" color="textSecondary">
-              <TextHighlight targetStr={panel.description ?? ""} searchText={searchQuery} />
+              <HighlightChars
+                str={panel.description ?? ""}
+                indices={fuzzyPositions(panel.description ?? "", searchQuery)}
+                highlightClassName={classes.highlight}
+              />
             </Typography>
           </CardContent>
         </Stack>

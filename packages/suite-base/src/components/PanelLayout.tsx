@@ -42,7 +42,6 @@ import {
   isPanelDrag,
 } from "@lichtblick/suite-base/components/PanelCatalog/panelDrag";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
 import {
   LayoutState,
   useCurrentLayoutActions,
@@ -374,7 +373,6 @@ const selectedLayoutTreeSelector = (state: LayoutState) => state.selectedLayout?
 
 export default function PanelLayout(): React.JSX.Element {
   const { classes } = useStyles();
-  const { layoutEmptyState } = useAppContext();
   const { changePanelLayout } = useCurrentLayoutActions();
   const layoutExists = useCurrentLayoutSelector(selectedLayoutExistsSelector);
   const layout = useCurrentLayoutSelector(selectedLayoutTreeSelector);
@@ -409,10 +407,6 @@ export default function PanelLayout(): React.JSX.Element {
         loadingComponent={loadingComponent}
       />
     );
-  }
-
-  if (layoutEmptyState) {
-    return layoutEmptyState;
   }
 
   return <></>;

@@ -16,7 +16,7 @@ import path from "path";
 import { generateSW } from "workbox-build";
 
 import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
-import { makeConfig } from "@lichtblick/suite-base/rspack.ts";
+import { isOverlayRuntimeError, makeConfig } from "@lichtblick/suite-base/rspack.ts";
 import * as palette from "@lichtblick/theme/src/palette.ts";
 
 export type ConfigParams = {
@@ -55,37 +55,7 @@ const devServer = (params: ConfigParams): DevServer => ({
       process.env.DISABLE_OVERLAY === "true"
         ? false
         : {
-            runtimeErrors: (error) => {
-              // Suppress overlays for importScript errors from terminated webworkers.
-              //
-              // When a webworker is terminated, any pending `importScript` calls are cancelled by the
-              // browser. These appear in the devtools network tab as "(cancelled)" and bubble up to the
-              // parent page as errors which trigger `window.onerror`.
-              //
-              // webpack devserver attaches to the window error handler surface unhandled errors sent to
-              // the page. However this kind of error is a false-positive for a worker that is
-              // terminated because we do not care that its network requests were cancelled since the
-              // worker itself is gone.
-              //
-              // Will this hide real importScript errors during development?
-              // It is possible that a worker encounters this error during normal operation (if
-              // importing a script does fail for a legitimate reason). In that case we expect the
-              // worker logic that depended on the script to fail execution and trigger other kinds of
-              // errors. The developer can still see the importScripts error in devtools console.
-              if (
-                error.message.startsWith(
-                  `Uncaught NetworkError: Failed to execute 'importScripts' on 'WorkerGlobalScope'`,
-                )
-              ) {
-                return false;
-              }
-              // Benign per spec: observers whose callbacks resize content get re-delivered next frame.
-              if (error.message.startsWith("ResizeObserver loop")) {
-                return false;
-              }
-
-              return true;
-            },
+            runtimeErrors: isOverlayRuntimeError,
           },
   },
 });

@@ -9,6 +9,7 @@ import {
   SettingsTreeNode,
   SettingsTreeNodeAction,
 } from "@lichtblick/suite";
+import { moveItem, moveUpDownActions } from "@lichtblick/suite-base/panels/utils";
 
 import {
   hiddenVectorGroups,
@@ -288,10 +289,7 @@ function layerNode(
     error,
     fields,
     actions: [
-      ...(index > 0 ? [{ type: "action" as const, id: "move-up", label: "Move up" }] : []),
-      ...(index < count - 1
-        ? [{ type: "action" as const, id: "move-down", label: "Move down" }]
-        : []),
+      ...moveUpDownActions(index, count),
       { type: "action", id: "delete-layer", label: "Delete layer" },
     ],
   };
@@ -401,13 +399,6 @@ function updateLayer(
   }
 }
 
-function moveLayer(layers: MapLayer[], from: number, to: number) {
-  const [moved] = layers.splice(from, 1);
-  if (moved) {
-    layers.splice(Math.max(0, Math.min(to, layers.length)), 0, moved);
-  }
-}
-
 /** Actions for the node that holds the layer stack. */
 export function layerStackActions(saved: readonly SourceParams[]): SettingsTreeNodeAction[] {
   return [
@@ -454,7 +445,7 @@ export function applyLayerStackAction(
       break;
     }
     case "reorder-node":
-      moveLayer(
+      moveItem(
         layers,
         Number(action.payload.path[depth]),
         Number(action.payload.targetPath[depth]),
@@ -476,10 +467,10 @@ export function applyLayerStackAction(
           layers.splice(index, 1);
           break;
         case "move-up":
-          moveLayer(layers, index, index - 1);
+          moveItem(layers, index, index - 1);
           break;
         case "move-down":
-          moveLayer(layers, index, index + 1);
+          moveItem(layers, index, index + 1);
           break;
       }
       break;

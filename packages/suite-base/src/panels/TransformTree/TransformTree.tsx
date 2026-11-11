@@ -46,6 +46,7 @@ import {
   TransformOffsets,
   withFrameOffset,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms/transformOffsets";
+import { formatSeconds } from "@lichtblick/suite-base/panels/TopicHealth/health";
 import { MessageEvent, SubscribePayload } from "@lichtblick/suite-base/players/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
@@ -128,10 +129,6 @@ function displayedTransform(
   };
 }
 
-function formatDuration(seconds: number): string {
-  return seconds < 1 ? `${Math.round(seconds * 1000)} ms` : `${seconds.toFixed(1)} s`;
-}
-
 /** ⚠ whose tooltip lists the problems */
 function WarningIcon({ text }: { text: string }): React.JSX.Element {
   const { classes } = useStyles();
@@ -154,8 +151,8 @@ function warningMessage(
       return t("warnings.multipleParents", { parents: row.entry?.parents.join(", ") ?? "" });
     case "stale":
       return t("warnings.stale", {
-        age: formatDuration(row.age ?? 0),
-        period: formatDuration(row.rate != undefined ? 1 / row.rate : 0),
+        age: formatSeconds(row.age ?? 0),
+        period: formatSeconds(row.rate != undefined ? 1 / row.rate : 0),
       });
     case "noData":
       return t("warnings.noData");

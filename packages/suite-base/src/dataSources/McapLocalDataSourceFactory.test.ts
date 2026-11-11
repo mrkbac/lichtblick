@@ -4,7 +4,7 @@
 import { DataSourceFactoryInitializeArgs } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { FILE_ACCEPT_TYPE } from "@lichtblick/suite-base/context/Workspace/constants";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
-import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource";
+import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
 import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
@@ -22,7 +22,7 @@ vi.mock("@lichtblick/suite-base/players/IterablePlayer", () => ({
   IterablePlayer: vi.fn(),
 }));
 
-vi.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource", () => ({
+vi.mock("@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource", () => ({
   WorkerSerializedIterableSource: vi.fn(),
 }));
 
@@ -44,8 +44,7 @@ describe("McapLocalDataSourceFactory", () => {
     const args: DataSourceFactoryInitializeArgs = {
       file,
       files,
-      metricsCollector: vi.fn(),
-    } as unknown as DataSourceFactoryInitializeArgs;
+    };
 
     return {
       args,
@@ -63,7 +62,6 @@ describe("McapLocalDataSourceFactory", () => {
       initArgs: { files },
     });
     expect(IterablePlayer).toHaveBeenCalledWith({
-      metricsCollector: args.metricsCollector,
       source: expect.any(Object),
       name: files[0]!.name,
       sourceId: MCAP_LOCAL_FILE_ID,
@@ -84,7 +82,6 @@ describe("McapLocalDataSourceFactory", () => {
       initArgs: { files },
     });
     expect(IterablePlayer).toHaveBeenCalledWith({
-      metricsCollector: args.metricsCollector,
       source: expect.any(Object),
       name: `${files[0]!.name}, ${files[1]!.name}`,
       sourceId: MCAP_LOCAL_FILE_ID,
@@ -137,7 +134,6 @@ describe("McapLocalDataSourceFactory", () => {
       initArgs: { files: [file] },
     });
     expect(IterablePlayer).toHaveBeenCalledWith({
-      metricsCollector: args.metricsCollector,
       source: expect.any(Object),
       name: file.name,
       sourceId: MCAP_LOCAL_FILE_ID,
@@ -159,7 +155,6 @@ describe("McapLocalDataSourceFactory", () => {
       initArgs: { files: [files[0], file] },
     });
     expect(IterablePlayer).toHaveBeenCalledWith({
-      metricsCollector: args.metricsCollector,
       source: expect.any(Object),
       name: `${files[0]?.name}, ${file.name}`,
       sourceId: MCAP_LOCAL_FILE_ID,

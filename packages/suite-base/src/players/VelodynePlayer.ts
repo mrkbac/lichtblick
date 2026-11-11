@@ -13,11 +13,11 @@ import { debouncePromise } from "@lichtblick/den/async";
 import Logger from "@lichtblick/log";
 import { ParameterValue } from "@lichtblick/suite";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
+import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import {
   AdvertiseOptions,
   MessageEvent,
   Player,
-  PlayerMetricsCollectorInterface,
   PlayerPresence,
   PlayerState,
   PlayerAlert,
@@ -68,7 +68,6 @@ const CAPABILITIES: string[] = [];
 
 type VelodynePlayerOpts = {
   port?: number;
-  metricsCollector: PlayerMetricsCollectorInterface;
 };
 
 export default class VelodynePlayer implements Player {
@@ -85,20 +84,16 @@ export default class VelodynePlayer implements Player {
   #start: Time; // The time at which we started playing
   #packets: RawPacket[] = []; // Queue of packets that will form the next parsed message
   #parsedMessages: MessageEvent[] = []; // Queue of messages that we'll send in next _emitState() call
-  #metricsCollector: PlayerMetricsCollectorInterface;
   #presence: PlayerPresence = PlayerPresence.INITIALIZING;
   #emitTimer?: ReturnType<typeof setTimeout>;
 
   // track issues within the player
-  #alerts: PlayerAlert[] = [];
-  #alertsById = new Map<string, PlayerAlert>();
+  #alerts = new PlayerAlertManager();
 
-  public constructor({ port, metricsCollector }: VelodynePlayerOpts) {
+  public constructor({ port }: VelodynePlayerOpts) {
     this.#port = port ?? DEFAULT_VELODYNE_PORT;
     log.info(`initializing VelodynePlayer on port ${this.#port}`);
-    this.#metricsCollector = metricsCollector;
     this.#start = fromMillis(Date.now());
-    this.#metricsCollector.playerConstructed();
     void this.#open();
   }
 
@@ -150,11 +145,7 @@ export default class VelodynePlayer implements Player {
 
     this.#totalBytesReceived += data.byteLength;
     this.#presence = PlayerPresence.PRESENT;
-    this.#clearAlert(PROBLEM_SOCKET_ERROR, { skipEmit: true });
-
-    if (this.#seq === 0) {
-      // this.#metricsCollector.recordTimeToFirstMsgs();
-    }
+    this.#alerts.removeAlert(PROBLEM_SOCKET_ERROR);
 
     const rawPacket = new RawPacket(data);
 
@@ -197,26 +188,9 @@ export default class VelodynePlayer implements Player {
     }
   };
 
-  #addAlert(
-    id: string,
-    alert: PlayerAlert,
-    { skipEmit = false }: { skipEmit?: boolean } = {},
-  ): void {
-    this.#alertsById.set(id, alert);
-    this.#alerts = Array.from(this.#alertsById.values());
-    if (!skipEmit) {
-      this.#emitState();
-    }
-  }
-
-  #clearAlert(id: string, { skipEmit = false }: { skipEmit?: boolean } = {}): void {
-    if (!this.#alertsById.delete(id)) {
-      return;
-    }
-    this.#alerts = Array.from(this.#alertsById.values());
-    if (!skipEmit) {
-      this.#emitState();
-    }
+  #addAlert(id: string, alert: PlayerAlert): void {
+    this.#alerts.addAlert(id, alert);
+    this.#emitState();
   }
 
   // Potentially performance-sensitive; await can be expensive
@@ -245,7 +219,7 @@ export default class VelodynePlayer implements Player {
       capabilities: CAPABILITIES,
       profile: "velodyne",
       playerId: this.#id,
-      alerts: this.#alerts,
+      alerts: this.#alerts.alerts(),
 
       activeData: {
         messages,
@@ -284,7 +258,6 @@ export default class VelodynePlayer implements Player {
       clearTimeout(this.#emitTimer);
       this.#emitTimer = undefined;
     }
-    // this.#metricsCollector.close();
     this.#totalBytesReceived = 0;
     this.#seq = 0;
     this.#packets = [];

@@ -8,16 +8,14 @@
 import * as Comlink from "@foxglove/comlink";
 
 import { IterableSourceInitializeArgs } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
-import { WorkerSerializedIterableSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSourceWorker";
+import { WorkerIterableSourceWorker } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSourceWorker";
 
 import { BagIterableSource } from "./BagIterableSource";
 
-export function initialize(
-  args: IterableSourceInitializeArgs,
-): WorkerSerializedIterableSourceWorker {
+export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSourceWorker {
   if (args.file) {
     const source = new BagIterableSource({ type: "file", file: args.file });
-    const wrapped = new WorkerSerializedIterableSourceWorker(source);
+    const wrapped = new WorkerIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
   } else if (args.url) {
     const source = new BagIterableSource({
@@ -25,7 +23,7 @@ export function initialize(
       url: args.url,
       credentials: args.credentials,
     });
-    const wrapped = new WorkerSerializedIterableSourceWorker(source);
+    const wrapped = new WorkerIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
   }
 

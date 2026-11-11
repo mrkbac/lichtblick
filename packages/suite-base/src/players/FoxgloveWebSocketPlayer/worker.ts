@@ -32,7 +32,8 @@ self.onmessage = (event: MessageEvent<ToWorkerMessage>) => {
           });
         };
         ws.onclose = (wsEvent) => {
-          send({ type: "close", data: JSON.parse(JSON.stringify(wsEvent) ?? "{}") });
+          const { code, reason, wasClean } = wsEvent;
+          send({ type: "close", data: { code, reason, wasClean } });
         };
         ws.onmessage = (wsEvent: MessageEvent) => {
           if (wsEvent.data instanceof ArrayBuffer) {

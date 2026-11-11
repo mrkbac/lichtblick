@@ -5,11 +5,11 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { McapIndexedReader, McapWriter } from "@mcap/core";
+import { McapIndexedReader, McapWriter, TempBuffer } from "@mcap/core";
 import { Blob } from "node:buffer";
 import type { Mock, MockedClass, MockedFunction } from "vitest";
 
-import { loadDecompressHandlers, TempBuffer } from "@lichtblick/mcap-support";
+import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";

@@ -30,8 +30,6 @@ import { formatTimeAgo } from "@lichtblick/suite-base/util/recentSources";
 import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
 import { customTypography } from "@lichtblick/theme";
 
-import { MultilineMiddleTruncate } from "./MultilineMiddleTruncate";
-
 const useStyles = makeStyles<void, "copyButton">()((theme, _params, classes) => ({
   label: {
     opacity: 0.6,
@@ -139,7 +137,7 @@ function SourceField(): React.JSX.Element {
   } else if (presence === PlayerPresence.RECONNECTING) {
     value = t("waitingForConnection");
   } else if (playerName) {
-    value = <MultilineMiddleTruncate text={playerName} />;
+    value = playerName.split("\n").map((line) => <TextMiddleTruncate key={line} text={line} />);
   } else {
     value = <EmptyValue />;
   }

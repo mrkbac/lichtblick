@@ -13,8 +13,7 @@ import { isTypicalFilterName } from "@lichtblick/suite-base/components/MessagePa
 import { format, formatDuration } from "@lichtblick/suite-base/util/formatTime";
 import { toHex8 } from "@lichtblick/suite-base/util/parseColor";
 import { quatToEuler } from "@lichtblick/suite-base/util/quatToEuler";
-
-const DURATION_20_YEARS_SEC = 20 * 365 * 24 * 60 * 60;
+import { isAbsoluteTime } from "@lichtblick/suite-base/util/time";
 
 const PRIMITIVE_TYPES = ["string", "number", "bigint", "boolean"];
 
@@ -38,11 +37,10 @@ export function getItemString(
   if (keys.length === 2) {
     const { sec, nsec } = data as { sec?: number; nsec?: number };
     if (typeof sec === "number" && typeof nsec === "number") {
-      // Values "too small" to be absolute epoch-based times are probably relative durations.
-      return sec < DURATION_20_YEARS_SEC ? (
-        formatDuration({ sec, nsec })
-      ) : (
+      return isAbsoluteTime({ sec, nsec }) ? (
         <span>{format({ sec, nsec }, timezone)}</span>
+      ) : (
+        formatDuration({ sec, nsec })
       );
     }
   }

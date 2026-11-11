@@ -5,10 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  IDataSourceFactory,
-  DataSourceFactoryInitializeArgs,
-} from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import { IDataSourceFactory } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import {
   SAMPLE_NUSCENES_DATA_SOURCE_DISPLAY_NAME,
   SAMPLE_NUSCENES_DATA_SOURCE_ICON_NAME,
@@ -19,7 +16,7 @@ import {
   SAMPLE_NUSCENES_DATA_SOURCE_URL,
 } from "@lichtblick/suite-base/dataSources/constants";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
-import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource";
+import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
 import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
 
 import SampleNuscenesLayout from "./SampleNuscenesLayout.json";
@@ -34,9 +31,7 @@ class SampleNuscenesDataSourceFactory implements IDataSourceFactory {
   // 2: tabs that each hold a split layout, showing most panels.
   public sampleLayoutVersion = 2;
 
-  public initialize(
-    args: DataSourceFactoryInitializeArgs,
-  ): ReturnType<IDataSourceFactory["initialize"]> {
+  public initialize(): ReturnType<IDataSourceFactory["initialize"]> {
     const bagUrl = SAMPLE_NUSCENES_DATA_SOURCE_URL;
 
     const source = new WorkerSerializedIterableSource({
@@ -53,9 +48,7 @@ class SampleNuscenesDataSourceFactory implements IDataSourceFactory {
 
     return new IterablePlayer({
       source,
-      isSampleDataSource: true,
       name: SAMPLE_NUSCENES_DATA_SOURCE_NAME,
-      metricsCollector: args.metricsCollector,
       // Use blank url params so the data source is set in the url
       urlParams: {},
       sourceId: this.id,

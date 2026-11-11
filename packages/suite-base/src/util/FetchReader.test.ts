@@ -11,7 +11,7 @@ import FetchReader from "./FetchReader";
 // Mock the global request queue
 vi.mock("@lichtblick/suite-base/util/RequestQueue", () => ({
   globalRequestQueue: {
-    run: vi.fn(),
+    runExclusive: vi.fn(),
   },
 }));
 
@@ -25,8 +25,8 @@ describe("FetchReader", () => {
     vi.clearAllMocks();
     mockFetch = vi.spyOn(global, "fetch");
 
-    // Default: globalRequestQueue.run passes through the function
-    mockGlobalRequestQueue.run.mockImplementation(async (fn) => fn);
+    // The queue never runs on its own: tests run the queued function themselves
+    mockGlobalRequestQueue.runExclusive.mockImplementation(async () => await new Promise(() => {}));
   });
 
   afterEach(() => {
@@ -46,8 +46,8 @@ describe("FetchReader", () => {
       const reader = new FetchReader(url, options);
 
       // Execute the queued fetch
-      const queuedFn = mockGlobalRequestQueue.run.mock.calls[0]![0];
-      await queuedFn();
+      const queuedFn = mockGlobalRequestQueue.runExclusive.mock.calls[0]![0];
+      await queuedFn(1);
 
       expect(mockFetch).toHaveBeenCalledWith(url, {
         ...options,
@@ -59,7 +59,7 @@ describe("FetchReader", () => {
 
     it("queues fetch request through globalRequestQueue", () => {
       // eslint-disable-next-line @typescript-eslint/unbound-method
-      const runGlobalRequestQueueMock = mockGlobalRequestQueue.run;
+      const runGlobalRequestQueueMock = mockGlobalRequestQueue.runExclusive;
       new FetchReader(url);
 
       // Verify fetch is queued, not called directly
