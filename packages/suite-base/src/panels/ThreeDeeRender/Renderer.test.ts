@@ -314,6 +314,44 @@ describe("3D Renderer", () => {
     renderer.dispose();
   });
 
+  it("fits point clouds with NaN points and cube instances, extending the far plane", () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    const setCamera = vi.spyOn(renderer, "setCameraState");
+    vi.spyOn(renderer, "getCameraState").mockReturnValue({ ...DEFAULT_CAMERA_STATE, far: 1 });
+    const extension = new SceneExtension("test-data", renderer);
+    const renderable = new Renderable("cloud", renderer, {
+      receiveTime: 0n,
+      messageTime: 0n,
+      frameId: "",
+      pose: makePose(),
+      settingsPath: ["topics", "cloud"],
+      settings: { visible: true, frameLocked: true },
+    });
+    const points = new DynamicBufferGeometry();
+    points.createAttribute("position", Float32Array, 3);
+    points.resize(3);
+    points.getAttribute("position").setXYZ(0, 0, 0, 0);
+    points.getAttribute("position").setXYZ(1, Number.NaN, 0, 0);
+    points.getAttribute("position").setXYZ(2, 4, 0, 0);
+    renderable.add(new THREE.Points(points));
+    const cubes = new THREE.InstancedBufferGeometry();
+    cubes.setAttribute("position", new THREE.BoxGeometry(1, 1, 1).getAttribute("position"));
+    cubes.setAttribute(
+      "instancePosition",
+      new THREE.InstancedBufferAttribute(new Float32Array([2, 4, 0]), 3),
+    );
+    cubes.instanceCount = 1;
+    renderable.add(new THREE.Mesh(cubes));
+    extension.add(renderable);
+    extension.renderables.set(renderable.name, renderable);
+    renderer.sceneExtensions.set(extension.extensionId, extension);
+    renderer.zoomToData();
+    const state = setCamera.mock.calls[0]![0];
+    expect(state.targetOffset).toEqual([2, 2, 0]);
+    expect(state.far).toBeGreaterThan(state.distance);
+    renderer.dispose();
+  });
+
   it("constructs a renderer without error", () => {
     expect(() => new Renderer({ ...defaultRendererProps, canvas })).not.toThrow();
   });

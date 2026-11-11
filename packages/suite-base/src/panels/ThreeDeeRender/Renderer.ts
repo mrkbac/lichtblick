@@ -1136,32 +1136,26 @@ export class Renderer extends EventEmitter<RendererEvents> {
               box.copy(object.boundingBox!);
             } else {
               const geometry = object.geometry as THREE.BufferGeometry;
+              // Bound only the active range of reused buffers, skipping NaN points (e.g. in clouds)
+              const expand = (name: string, from: number, to: number) => {
+                const attribute = geometry.getAttribute(name) as THREE.BufferAttribute | undefined;
+                for (let i = from; i < Math.min(to, attribute?.count ?? 0); i++) {
+                  point.fromBufferAttribute(attribute!, i);
+                  if (Number.isFinite(point.x + point.y + point.z)) {
+                    box.expandByPoint(point);
+                  }
+                }
+              };
+              box.makeEmpty();
               if (geometry instanceof LineSegmentsGeometry) {
-                box.makeEmpty();
-                const start = geometry.getAttribute("instanceStart") as
-                  | THREE.BufferAttribute
-                  | undefined;
-                const end = geometry.getAttribute("instanceEnd") as
-                  | THREE.BufferAttribute
-                  | undefined;
-                if (start != undefined && end != undefined) {
-                  const count = Math.min(geometry.instanceCount, start.count, end.count);
-                  for (let i = 0; i < count; i++) {
-                    box.expandByPoint(point.fromBufferAttribute(start, i));
-                    box.expandByPoint(point.fromBufferAttribute(end, i));
-                  }
-                }
+                expand("instanceStart", 0, geometry.instanceCount);
+                expand("instanceEnd", 0, geometry.instanceCount);
               } else if (geometry instanceof DynamicBufferGeometry) {
-                box.makeEmpty();
-                const position = geometry.getAttribute("position") as
-                  | THREE.BufferAttribute
-                  | undefined;
-                if (position != undefined) {
-                  const { start, count } = geometry.drawRange;
-                  for (let i = start; i < Math.min(start + count, position.count); i++) {
-                    box.expandByPoint(point.fromBufferAttribute(position, i));
-                  }
-                }
+                const { start, count } = geometry.drawRange;
+                expand("position", start, start + count);
+              } else if (geometry instanceof THREE.InstancedBufferGeometry) {
+                // Point cloud cubes: the shader offsets a unit cube by each instance position
+                expand("instancePosition", 0, geometry.instanceCount);
               } else {
                 // Dynamic renderables do not consistently invalidate cached bounds.
                 geometry.computeBoundingBox();
@@ -1197,6 +1191,8 @@ export class Renderer extends EventEmitter<RendererEvents> {
       ...state,
       targetOffset: sphere.center.toArray(),
       distance,
+      // Keep the far side of the fitted data inside the clipping range
+      far: Math.max(state.far, (distance + radius) * 1.1),
     };
     this.updateConfig((draft) => {
       draft.cameraState = cameraState;
