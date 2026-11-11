@@ -11,14 +11,13 @@ import {
   DataSourceFactoryInitializeArgs,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { IterablePlayer } from "@lichtblick/suite-base/players/IterablePlayer";
-import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerSerializedIterableSource";
+import { WorkerSerializedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/WorkerIterableSource";
 import {
   MultiFileHydrationOverrides,
   addMultiFileHydrationOverrides,
 } from "@lichtblick/suite-base/players/IterablePlayer/shared/multiFileHydrationOptions";
 import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
 import { Player } from "@lichtblick/suite-base/players/types";
-import { mergeMultipleFileNames } from "@lichtblick/suite-base/util/mergeMultipleFileName";
 
 class McapLocalDataSourceFactory implements IDataSourceFactory {
   private readonly multiFileHydrationOverrides?: MultiFileHydrationOverrides;
@@ -59,9 +58,8 @@ class McapLocalDataSourceFactory implements IDataSourceFactory {
     });
 
     return new IterablePlayer({
-      metricsCollector: args.metricsCollector,
       source,
-      name: mergeMultipleFileNames(files.map((file) => file.name)),
+      name: files.map((file) => file.name).join(", "),
       sourceId: this.id,
       readAheadDuration: { sec: 120, nsec: 0 },
       // MCAP can carry foxglove.CompressedVideo. Some codecs (e.g. H.265) cannot decode a P/B-frame

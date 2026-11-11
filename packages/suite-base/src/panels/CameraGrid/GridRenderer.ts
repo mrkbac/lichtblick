@@ -23,6 +23,7 @@ import {
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/imageNormalizers";
 import { PreparedVideoFrameStatus } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/types";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import {
   ANNOTATION_HISTORY,
@@ -429,7 +430,7 @@ export class GridRenderer {
     } catch (error) {
       if (tile.elements === elements) {
         tile.drawn = event;
-        this.#showStatus(tile, error instanceof Error ? error.message : String(error));
+        this.#showStatus(tile, toError(error).message);
       }
     }
   }

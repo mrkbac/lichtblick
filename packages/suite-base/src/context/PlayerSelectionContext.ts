@@ -8,11 +8,10 @@
 import { createContext, useContext } from "react";
 
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
-import { Player, PlayerMetricsCollectorInterface } from "@lichtblick/suite-base/players/types";
+import { Player } from "@lichtblick/suite-base/players/types";
 import { RegisteredIconNames } from "@lichtblick/suite-base/types/Icons";
 
 export type DataSourceFactoryInitializeArgs = {
-  metricsCollector: PlayerMetricsCollectorInterface;
   file?: File;
   files?: File[];
   params?: Record<string, string | undefined>;

@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { IconButton, IconButtonProps, Tooltip } from "@mui/material";
-import { forwardRef } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { parseColor } from "@lichtblick/suite-base/util/parseColor";
@@ -39,33 +38,24 @@ const useStyles = makeStyles()((theme) => ({
 
 type AppBarIconButtonProps = Omit<IconButtonProps, "title"> & { title?: React.ReactNode };
 
-export const AppBarIconButton = forwardRef<HTMLButtonElement, AppBarIconButtonProps>(
-  (props, ref) => {
-    const { title, className, children, color = "inherit", ...rest } = props;
-    const { classes, cx } = useStyles();
+export function AppBarIconButton(props: AppBarIconButtonProps): React.JSX.Element {
+  const { title, className, children, color = "inherit", ...rest } = props;
+  const { classes, cx } = useStyles();
 
-    return (
-      <Tooltip
-        disableInteractive
-        classes={{ tooltip: classes.tooltip }}
-        title={title}
-        arrow={false}
-        enterDelay={200}
-      >
-        {/* Extra div to avoid issues with wrapping Tooltip around disabled buttons */}
-        <div>
-          <IconButton
-            color={color}
-            ref={ref}
-            className={cx(classes.iconButton, className)}
-            {...rest}
-          >
-            {children}
-          </IconButton>
-        </div>
-      </Tooltip>
-    );
-  },
-);
-
-AppBarIconButton.displayName = "AppBarIconButton";
+  return (
+    <Tooltip
+      disableInteractive
+      classes={{ tooltip: classes.tooltip }}
+      title={title}
+      arrow={false}
+      enterDelay={200}
+    >
+      {/* Extra div to avoid issues with wrapping Tooltip around disabled buttons */}
+      <div>
+        <IconButton color={color} className={cx(classes.iconButton, className)} {...rest}>
+          {children}
+        </IconButton>
+      </div>
+    </Tooltip>
+  );
+}

@@ -14,54 +14,55 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import * as _ from "lodash-es";
-
-import Rpc, { Channel, createLinkedChannels } from "@lichtblick/suite-base/util/Rpc";
+import * as Comlink from "@foxglove/comlink";
 
 import { processMessage, registerScript } from "./runtimeWorker/registry";
 import generateRosLib from "./transformerWorker/generateRosLib";
 import transform from "./transformerWorker/transform";
 
-const validateWorkerArgs = (arg: unknown) => {
-  expect(arg).not.toBeInstanceOf(Function);
+type Listener = (event: MessageEvent) => void;
 
-  if (_.isPlainObject(arg) && typeof arg === "object" && arg != undefined) {
-    Object.values(arg).forEach((val) => {
-      validateWorkerArgs(val);
-    });
-  } else if (Array.isArray(arg)) {
-    arg.forEach(validateWorkerArgs);
-  }
-};
+// Two endpoints that deliver messages to each other synchronously, like a worker without the thread.
+function createLinkedEndpoints(): [Comlink.Endpoint & { start: () => void }, Comlink.Endpoint] {
+  const listeners = [new Set<Listener>(), new Set<Listener>()] as const;
+  const endpoint = (self: 0 | 1) => ({
+    postMessage: (data: unknown) => {
+      for (const listener of listeners[self === 0 ? 1 : 0]) {
+        listener({ data } as MessageEvent);
+      }
+    },
+    addEventListener: (_type: string, listener: Listener) => listeners[self].add(listener),
+    removeEventListener: (_type: string, listener: Listener) => listeners[self].delete(listener),
+    start: () => {},
+  });
+  return [endpoint(0), endpoint(1)] as [Comlink.Endpoint & { start: () => void }, Comlink.Endpoint];
+}
 
 // One test class that implements both typescript compilation and message transformation.
 export default class MockUserScriptPlayerWorker {
-  public port: Channel;
+  public port: Comlink.Endpoint & { start: () => void };
 
   public constructor() {
-    const { local, remote } = createLinkedChannels();
-    this.port = local;
+    const [port1, port2] = createLinkedEndpoints();
+    this.port = port1;
 
-    (local as { start?: () => void }).start = () => {
-      // no-op
-    };
-    const receiver = new Rpc(remote);
-    const receiveAndLog = <Args extends unknown[]>(
-      action: string,
-      impl: (..._: Args) => unknown,
-    ) => {
-      receiver.receive(action, (...args) => {
-        validateWorkerArgs(args);
+    const logged =
+      <Args extends unknown[], R>(action: string, impl: (...args: Args) => R) =>
+      (...args: Args): R => {
         this.messageSpy(action);
-        const ret = impl(...(args as unknown as Args));
-        validateWorkerArgs(ret);
-        return ret;
-      });
-    };
-    receiveAndLog("generateRosLib", generateRosLib);
-    receiveAndLog("transform", transform);
-    receiveAndLog("registerScript", registerScript);
-    receiveAndLog("processMessage", processMessage);
+        return impl(...args);
+      };
+    Comlink.expose(
+      {
+        onError: () => {},
+        close: () => {},
+        generateRosLib: logged("generateRosLib", generateRosLib),
+        transform: logged("transform", transform),
+        registerScript: logged("registerScript", registerScript),
+        processMessage: logged("processMessage", processMessage),
+      },
+      port2,
+    );
   }
 
   // So tests can spy on what gets called

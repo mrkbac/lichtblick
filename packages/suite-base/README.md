@@ -11,7 +11,7 @@ When contributing to the [Lichtblick](https://github.com/lichtblick-suite/lichtb
 
 ```plain
 import { ExtensionInfo, ExtensionLoaderContext, IExtensionLoader } from "@lichtblick/suite-base";
-import fuzzyFilter from "@lichtblick/suite-base/util/fuzzyFilter";
+import { toError } from "@lichtblick/suite-base/util/toError";
 ```
 
 For a full list of the package's exports, reference its [`index.ts` file](https://github.com/lichtblick-suite/lichtblick/suite/blob/main/packages/suite-base/src/index.ts).

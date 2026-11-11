@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { IconButton, IconButtonProps } from "@mui/material";
-import { ForwardedRef, forwardRef } from "react";
 import { makeStyles } from "tss-react/mui";
 
 const useStyles = makeStyles()((theme) => ({
@@ -22,12 +21,9 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
-export default forwardRef(function ToolbarIconButton(
-  props: IconButtonProps,
-  ref: ForwardedRef<HTMLButtonElement>,
-): React.ReactElement {
+export default function ToolbarIconButton(props: IconButtonProps): React.ReactElement {
   const { className, ...rest } = props;
   const { classes, cx } = useStyles();
 
-  return <IconButton ref={ref} className={cx(classes.root, className)} {...rest} />;
-});
+  return <IconButton className={cx(classes.root, className)} {...rest} />;
+}

@@ -52,7 +52,7 @@ class RosbridgeDataSourceFactory implements IDataSourceFactory {
       return;
     }
 
-    return new RosbridgePlayer({ url, metricsCollector: args.metricsCollector, sourceId: this.id });
+    return new RosbridgePlayer({ url, sourceId: this.id });
   }
 }
 

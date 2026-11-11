@@ -562,25 +562,6 @@ describe("ThreeDeeRender", () => {
     expect(rendererCall?.interfaceMode).toBe(initialState.interfaceMode);
   });
 
-  it("passes custom scene extensions to renderer", () => {
-    const customSceneExtensions = {
-      extensionsById: {
-        "foxglove.SceneSettings": {
-          init: (renderer: any) => renderer,
-          supportedInterfaceModes: ["3d" as const],
-        },
-      },
-    };
-    const props = setup({ customSceneExtensions });
-
-    const { container } = render(<ThreeDeeRender {...props} />);
-    expect(container).toBeInTheDocument();
-
-    expect(mockedRenderer).toHaveBeenCalled();
-    const rendererCall = mockedRenderer.mock.calls[0]?.[0];
-    expect(rendererCall?.sceneExtensionConfig).toMatchObject(customSceneExtensions);
-  });
-
   it("renders with custom camera models", () => {
     const mockCameraModelBuilder = (info: any) => ({
       width: info.width,

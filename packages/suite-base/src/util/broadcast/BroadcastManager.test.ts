@@ -5,8 +5,7 @@ import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuild
 import MockBroadcastChannel from "@lichtblick/suite-base/util/broadcast/MockBroadcastChannel";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-import BroadcastManager from "./BroadcastManager";
-import { BROADCAST_CHANNEL_NAME } from "./constants";
+import BroadcastManager, { BROADCAST_CHANNEL_NAME } from "./BroadcastManager";
 import { BroadcastMessageEvent } from "./types";
 
 (global as any).BroadcastChannel = MockBroadcastChannel;

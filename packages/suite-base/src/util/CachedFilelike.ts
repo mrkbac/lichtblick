@@ -17,6 +17,7 @@ import { Filelike } from "@foxglove/rosbag";
 import * as _ from "lodash-es";
 
 import Logger from "@lichtblick/log";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import type { FileReader, FileStream, ILogger } from "./CachedFilelike.types";
 import VirtualLRUBuffer from "./VirtualLRUBuffer";
@@ -169,7 +170,7 @@ export default class CachedFilelike implements Filelike {
           this.#updateState();
         })
         .catch((err: unknown) => {
-          reject(err instanceof Error ? err : new Error(String(err)));
+          reject(toError(err));
         });
     });
   }

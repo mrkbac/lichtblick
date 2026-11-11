@@ -19,7 +19,6 @@ import { useCallback } from "react";
 
 import { useDeepMemo } from "@lichtblick/hooks";
 import { MessageEvent, SubscribePayload } from "@lichtblick/suite-base/players/types";
-import concatAndTruncate from "@lichtblick/suite-base/util/concatAndTruncate";
 
 import { useMessageReducer } from "./useMessageReducer";
 
@@ -47,7 +46,8 @@ export function useMessagesByTopic(params: {
       Object.entries(newMessagesByTopic).forEach(([topic, newMessages]) => {
         const retTopic = ret[topic];
         if (retTopic) {
-          ret[topic] = concatAndTruncate(retTopic, newMessages, historySize);
+          // Keep the newest `historySize` messages
+          ret[topic] = historySize > 0 ? [...retTopic, ...newMessages].slice(-historySize) : [];
         }
       });
       return ret;

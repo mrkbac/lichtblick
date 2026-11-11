@@ -6,14 +6,12 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { DataSourceFactoryInitializeArgs } from "@lichtblick/suite-base/context/PlayerSelectionContext";
-import { PlayerMetricsCollectorInterface } from "@lichtblick/suite-base/players/types";
 
 import { McapLocalBenchmarkDataSourceFactory } from "./McapLocalBenchmarkDataSourceFactory";
 
 function setupArgs(file?: File): DataSourceFactoryInitializeArgs {
   return {
     file,
-    metricsCollector: vi.fn() as unknown as PlayerMetricsCollectorInterface,
   };
 }
 

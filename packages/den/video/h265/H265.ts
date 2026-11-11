@@ -15,7 +15,7 @@ import {
   H265SliceType,
 } from "./types";
 import { Bitstream } from "../Bitstream";
-import { findNextStartCode, findNextStartCodeEnd } from "../utils";
+import { annexBBoxSize, findNextStartCode, findNextStartCodeEnd } from "../utils";
 
 type H265PpsInfo = {
   ppsId: number;
@@ -43,23 +43,6 @@ type InspectFrameState = {
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class H265 {
-  public static AnnexBBoxSize(data: Uint8Array): number | undefined {
-    if (data.length < 4) {
-      return undefined;
-    }
-
-    if (data[0] === 0 && data[1] === 0) {
-      if (data[2] === 1) {
-        return 3;
-      }
-      if (data[2] === 0 && data[3] === 1) {
-        return 4;
-      }
-    }
-
-    return undefined;
-  }
-
   public static IsKeyframe(data: Uint8Array): boolean {
     const annexBData = H265.ToAnnexB(data);
     if (annexBData == undefined) {
@@ -129,7 +112,7 @@ export class H265 {
       H265.InspectNalu(nalu, state);
     }
 
-    const annexBBoxSize = H265.AnnexBBoxSize(data);
+    const isAnnexB = annexBBoxSize(data) != undefined;
     const isKeyframe = state.hasRandomAccessNaluType;
 
     // Only materialize a stripped buffer when parameter sets are actually present (rare for delta
@@ -141,7 +124,7 @@ export class H265 {
         : undefined;
 
     return {
-      bitstreamFormat: annexBBoxSize == undefined ? "length-prefixed" : "annex-b",
+      bitstreamFormat: isAnnexB ? "annex-b" : "length-prefixed",
       isKeyframe,
       frameType: H265.FrameType(state.sliceTypes),
       sliceTypes: state.sliceTypes,
@@ -203,7 +186,7 @@ export class H265 {
   }
 
   public static ToAnnexB(data: Uint8Array): Uint8Array | undefined {
-    if (H265.AnnexBBoxSize(data) != undefined) {
+    if (annexBBoxSize(data) != undefined) {
       return data;
     }
 

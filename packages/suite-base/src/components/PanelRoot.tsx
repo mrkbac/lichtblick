@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { alpha } from "@mui/material";
-import { forwardRef, HTMLAttributes, PropsWithChildren } from "react";
+import { HTMLAttributes, PropsWithChildren, Ref } from "react";
 import { TransitionStatus } from "react-transition-group";
 import { makeStyles } from "tss-react/mui";
 
@@ -107,24 +107,31 @@ const useStyles = makeStyles<Omit<PanelRootProps, "fullscreenState" | "selected"
   },
 );
 
-export const PanelRoot = forwardRef<HTMLDivElement, PropsWithChildren<PanelRootProps>>(
-  function PanelRoot(props, ref): React.JSX.Element {
-    const { className, fullscreenState, hasFullscreenDescendant, selected, sourceRect, ...rest } =
-      props;
-    const { classes, cx } = useStyles({ sourceRect, hasFullscreenDescendant });
+export function PanelRoot(
+  props: PropsWithChildren<PanelRootProps> & { ref?: Ref<HTMLDivElement> },
+): React.JSX.Element {
+  const {
+    className,
+    fullscreenState,
+    hasFullscreenDescendant,
+    selected,
+    sourceRect,
+    ref,
+    ...rest
+  } = props;
+  const { classes, cx } = useStyles({ sourceRect, hasFullscreenDescendant });
 
-    const classNames = cx(PANEL_ROOT_CLASS_NAME, className, classes.root, {
-      [classes.entering]: fullscreenState === "entering",
-      [classes.entered]: fullscreenState === "entered",
-      [classes.exiting]: fullscreenState === "exiting",
-      [classes.exited]: fullscreenState === "exited",
-      [classes.rootSelected]: selected,
-    });
+  const classNames = cx(PANEL_ROOT_CLASS_NAME, className, classes.root, {
+    [classes.entering]: fullscreenState === "entering",
+    [classes.entered]: fullscreenState === "entered",
+    [classes.exiting]: fullscreenState === "exiting",
+    [classes.exited]: fullscreenState === "exited",
+    [classes.rootSelected]: selected,
+  });
 
-    return (
-      <div ref={ref} className={classNames} {...rest}>
-        {props.children}
-      </div>
-    );
-  },
-);
+  return (
+    <div ref={ref} className={classNames} {...rest}>
+      {props.children}
+    </div>
+  );
+}

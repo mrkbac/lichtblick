@@ -8,7 +8,6 @@
 export { default as useDeepMemo } from "./useDeepMemo";
 export { default as useGuaranteedContext } from "./useGuaranteedContext";
 export { default as useMustNotChange } from "./useMustNotChange";
-export { default as useRethrow } from "./useRethrow";
 export { default as useShallowMemo } from "./useShallowMemo";
 export { default as useValueChangedDebugLog } from "./useValueChangedDebugLog";
 export { default as useVisibilityState } from "./useVisibilityState";

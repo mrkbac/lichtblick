@@ -60,6 +60,23 @@ describe("WriteThroughLayoutCache", () => {
       expect(listSpy).toHaveBeenCalledTimes(1);
     });
 
+    it("should retry the underlying list after a failed load", async () => {
+      // Given
+      const namespace = BasicBuilder.string();
+      const layouts = LayoutBuilder.layouts(1);
+      const listSpy = vi.spyOn(mockStorage, "list");
+      listSpy.mockRejectedValueOnce(new Error("storage unavailable"));
+      listSpy.mockResolvedValueOnce(layouts);
+
+      // When
+      await expect(cache.list(namespace)).rejects.toThrow("storage unavailable");
+      const result = await cache.list(namespace);
+
+      // Then
+      expect(result).toEqual(layouts);
+      expect(listSpy).toHaveBeenCalledTimes(2);
+    });
+
     it("should maintain separate caches for different namespaces", async () => {
       // Given
       const namespace1 = BasicBuilder.string();

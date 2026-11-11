@@ -18,7 +18,7 @@ import { Time, isLessThan } from "@foxglove/rostime";
 
 import Logger from "@lichtblick/log";
 import { PlayerState, MessageEvent, PlayerAlert } from "@lichtblick/suite-base/players/types";
-import { formatFrame } from "@lichtblick/suite-base/util/time";
+import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
 
 const DRIFT_THRESHOLD_SEC = 1; // Maximum amount of drift allowed.
 const WAIT_FOR_SEEK_SEC = 1; // How long we wait for a change in `lastSeekTime` before warning.
@@ -113,8 +113,8 @@ class MessageOrderTracker {
           this.#lastMessageTopic != undefined &&
           isLessThan(messageTime, this.#lastMessageTime)
         ) {
-          const formattedTime = formatFrame(messageTime);
-          const lastMessageTime = formatFrame(this.#lastMessageTime);
+          const formattedTime = formatTimeRaw(messageTime);
+          const lastMessageTime = formatTimeRaw(this.#lastMessageTime);
           const errorMessage =
             `Processed a message on ${message.topic} at ${formattedTime} which is earlier than ` +
             `last processed message on ${this.#lastMessageTopic} at ${lastMessageTime}.`;

@@ -84,14 +84,6 @@ export async function main(): Promise<void> {
   // See the comment for the webSecurity setting on browser window
   process.env["ELECTRON_DISABLE_SECURITY_WARNINGS"] = isProduction ? "false" : "true";
 
-  // Handle creating/removing shortcuts on Windows when installing/uninstalling.
-
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  if (require("electron-squirrel-startup") as boolean) {
-    app.quit();
-    return;
-  }
-
   // Check if --force-multiple-windows` is set
   const forceMultipleWindows = process.argv.some((arg) => arg === "--force-multiple-windows");
 
@@ -147,8 +139,8 @@ export async function main(): Promise<void> {
     }
   });
 
-  if (!app.isDefaultProtocolClient("foxglove")) {
-    if (!app.setAsDefaultProtocolClient("foxglove")) {
+  if (!app.isDefaultProtocolClient("lichtblick")) {
+    if (!app.setAsDefaultProtocolClient("lichtblick")) {
       log.warn("Could not set app as handler for lichtblick://");
     }
   }
@@ -249,11 +241,9 @@ export async function main(): Promise<void> {
 
     registerRosPackageProtocolHandlers();
 
-    // Only production builds check for automatic updates
+    // electron-updater is inactive in unpackaged (development) builds
     if (process.env.NODE_ENV !== "production") {
       log.info("Automatic updates disabled (development environment)");
-    } else if (/-(dev|nightly)/.test(LICHTBLICK_PRODUCT_VERSION)) {
-      log.info("Automatic updates disabled (development version)");
     }
 
     StudioAppUpdater.Instance().start();

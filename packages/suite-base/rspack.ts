@@ -16,6 +16,30 @@ import type { RspackArgv } from "./RspackArgv.ts";
  * Transpiles TypeScript/TSX with Rspack's built-in SWC loader (type checking runs separately with
  * `pnpm typecheck`). `refresh` enables React Fast Refresh for the dev server.
  */
+/**
+ * Dev-server overlay filter (`devServer.client.overlay.runtimeErrors`) that hides known false
+ * positives.
+ *
+ * When a webworker is terminated, any pending `importScripts` calls are cancelled by the browser
+ * and bubble up to the page's `window.onerror`, which the dev server overlay listens to. The worker
+ * is gone, so these are noise. A legitimately failing `importScripts` still breaks the worker logic
+ * that depends on it, and the error stays visible in the devtools console.
+ */
+export function isOverlayRuntimeError(error: Error): boolean {
+  if (
+    error.message.startsWith(
+      `Uncaught NetworkError: Failed to execute 'importScripts' on 'WorkerGlobalScope'`,
+    )
+  ) {
+    return false;
+  }
+  // Benign per spec: observers whose callbacks resize content get re-delivered next frame.
+  if (error.message.startsWith("ResizeObserver loop")) {
+    return false;
+  }
+  return true;
+}
+
 export function swcRule({
   isDev,
   refresh = false,
@@ -124,11 +148,6 @@ export function makeConfig(
     },
     module: {
       rules: [
-        // Add support for native node modules
-        {
-          test: /\.node$/,
-          use: "node-loader",
-        },
         {
           test: /\.wasm$/,
           type: "asset/resource",

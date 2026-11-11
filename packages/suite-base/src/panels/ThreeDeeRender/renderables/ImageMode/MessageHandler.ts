@@ -141,7 +141,7 @@ export const WAITING_FOR_SYNC_EMPTY_HUD_ITEM: HUDItem = {
  * is managing state in synchronized mode and ensuring that the a synchronized set of image and
  * annotations are handed off to the SceneExtension for rendering.
  */
-export class MessageHandler implements IMessageHandler {
+export class MessageHandler {
   /** settings that should reflect image mode config */
   #config: Immutable<Config>;
 
@@ -450,34 +450,6 @@ export class MessageHandler implements IMessageHandler {
     }
     return visibleAnnotations;
   }
-}
-
-export interface IMessageHandler {
-  handleRosRawImage: (messageEvent: PartialMessageEvent<RosImage>) => void;
-  handleRosCompressedImage: (messageEvent: PartialMessageEvent<RosCompressedImage>) => void;
-  handleRawImage: (messageEvent: PartialMessageEvent<RawImage>) => void;
-  handleCompressedImage: (messageEvent: PartialMessageEvent<CompressedImage>) => void;
-  handleCompressedVideo: (messageEvent: PartialMessageEvent<CompressedVideo>) => void;
-  handleCameraInfo: (message: PartialMessageEvent<CameraInfo>) => void;
-  handleAnnotations: (
-    messageEvent: MessageEvent<FoxgloveImageAnnotations | RosImageMarker | RosImageMarkerArray>,
-  ) => void;
-  /**
-   *  Add listener that will trigger every time the state changes
-   *  The listener will be called with the new state and the previous state.
-   */
-  addListener(listener: RenderStateListener): void;
-  /** Remove listener from being called on state update */
-  removeListener(listener: RenderStateListener): void;
-  setConfig(newConfig: Immutable<Partial<ImageModeConfig>>): void;
-  clear(): void;
-  getRenderStateAndUpdateHUD(): Readonly<Partial<MessageHandlerState>>;
-
-  /**
-   * Set what topics are available on the current source.
-   * This will prevent having to wait on annotations that are in the layout but not in the source.
-   */
-  setAvailableAnnotationTopics(availableAnnotations: string[]): void;
 }
 
 type SynchronizationResult =

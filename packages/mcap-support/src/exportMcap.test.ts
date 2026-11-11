@@ -5,9 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { McapIndexedReader, McapWriter } from "@mcap/core";
+import { McapIndexedReader, McapWriter, TempBuffer } from "@mcap/core";
 
-import { TempBuffer } from "./TempBuffer";
 import { loadDecompressHandlers } from "./decompressHandlers";
 import { ExportMcapOptions, countTimesInRange, exportMcap, readMessageTimes } from "./exportMcap";
 

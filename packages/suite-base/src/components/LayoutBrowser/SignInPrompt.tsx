@@ -8,11 +8,8 @@
 import CloseIcon from "@mui/icons-material/Close";
 import { ButtonBase, IconButton, Link, Typography } from "@mui/material";
 
-import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { SignInPromptProps } from "@lichtblick/suite-base/components/LayoutBrowser/types";
 import { useCurrentUser } from "@lichtblick/suite-base/context/CurrentUserContext";
-import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
-import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
 
 import { useStyles } from "./SignInPrompt.style";
 
@@ -20,15 +17,11 @@ export default function SignInPrompt(props: Readonly<SignInPromptProps>): React.
   const { onDismiss } = props;
   const { signIn } = useCurrentUser();
   const { classes } = useStyles();
-  const { openAccountSettings } = useWorkspaceActions();
-  const [topNavEnabled = false] = useAppConfigurationValue<boolean>(AppSetting.ENABLE_NEW_TOPNAV);
-
-  const action = topNavEnabled ? signIn : openAccountSettings;
 
   return (
-    <ButtonBase className={classes.root} onClick={action}>
+    <ButtonBase className={classes.root} onClick={signIn}>
       <Typography align="left" className={classes.title} variant="body2">
-        <Link color="inherit" onClick={action} underline="always">
+        <Link color="inherit" onClick={signIn} underline="always">
           Sign in
         </Link>{" "}
         to sync layouts across multiple devices, and share them with your organization.

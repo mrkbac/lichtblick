@@ -57,7 +57,6 @@ class McapRealPipelineBenchmarkDataSourceFactory implements IDataSourceFactory {
       source,
       name: url,
       sourceId: this.id,
-      metricsCollector: args.metricsCollector,
       urlParams: { url },
     });
   }

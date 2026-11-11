@@ -64,7 +64,6 @@ class Ros1SocketDataSourceFactory implements IDataSourceFactory {
     return new Ros1Player({
       url,
       hostname,
-      metricsCollector: args.metricsCollector,
       sourceId: this.id,
     });
   }

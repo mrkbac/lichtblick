@@ -5,7 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { LazilyInitialized } from "@lichtblick/den/async";
 import { LayoutID } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { ILayoutStorage, Layout } from "@lichtblick/suite-base/services/ILayoutStorage";
 
@@ -16,22 +15,26 @@ import { ILayoutStorage, Layout } from "@lichtblick/suite-base/services/ILayoutS
  * For this to be useful, we must assume nothing else is accessing the same underlying storage.
  */
 export default class WriteThroughLayoutCache implements ILayoutStorage {
-  #cacheByNamespace = new Map<string, LazilyInitialized<Map<string, Layout>>>();
+  #cacheByNamespace = new Map<string, Promise<Map<string, Layout>>>();
 
   public constructor(private storage: ILayoutStorage) {}
 
-  #getOrCreateCache(namespace: string): LazilyInitialized<Map<string, Layout>> {
+  async #getOrCreateCache(namespace: string): Promise<Map<string, Layout>> {
     let cache = this.#cacheByNamespace.get(namespace);
     if (!cache) {
-      cache = new LazilyInitialized(
-        async () =>
-          await this.storage
-            .list(namespace)
-            .then((layouts) => new Map(layouts.map((layout) => [layout.id, layout]))),
-      );
+      cache = this.storage
+        .list(namespace)
+        .then((layouts) => new Map(layouts.map((layout) => [layout.id, layout])));
+      const pending = cache;
+      // Don't keep a failed load: the next access retries instead of failing until reload
+      pending.catch(() => {
+        if (this.#cacheByNamespace.get(namespace) === pending) {
+          this.#cacheByNamespace.delete(namespace);
+        }
+      });
       this.#cacheByNamespace.set(namespace, cache);
     }
-    return cache;
+    return await cache;
   }
 
   public async importLayouts(params: {
@@ -46,21 +49,21 @@ export default class WriteThroughLayoutCache implements ILayoutStorage {
   }
 
   public async list(namespace: string): Promise<readonly Layout[]> {
-    return Array.from((await this.#getOrCreateCache(namespace).get()).values());
+    return Array.from((await this.#getOrCreateCache(namespace)).values());
   }
 
   public async get(namespace: string, id: LayoutID): Promise<Layout | undefined> {
-    return (await this.#getOrCreateCache(namespace).get()).get(id);
+    return (await this.#getOrCreateCache(namespace)).get(id);
   }
 
   public async put(namespace: string, layout: Layout): Promise<Layout> {
     const result = await this.storage.put(namespace, layout);
-    (await this.#getOrCreateCache(namespace).get()).set(result.id, result);
+    (await this.#getOrCreateCache(namespace)).set(result.id, result);
     return result;
   }
 
   public async delete(namespace: string, id: LayoutID): Promise<void> {
     await this.storage.delete(namespace, id);
-    (await this.#getOrCreateCache(namespace).get()).delete(id);
+    (await this.#getOrCreateCache(namespace)).delete(id);
   }
 }

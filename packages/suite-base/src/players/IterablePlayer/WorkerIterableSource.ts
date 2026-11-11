@@ -8,19 +8,27 @@
 import * as Comlink from "@foxglove/comlink";
 
 import { abortSignalTransferHandler } from "@lichtblick/comlink-transfer-handlers";
+import { promiseTimeout } from "@lichtblick/den/async";
 import { ComlinkWrap } from "@lichtblick/den/worker";
+import Log from "@lichtblick/log";
 import { Immutable, MessageEvent, Time } from "@lichtblick/suite";
 
 import type {
   GetBackfillMessagesArgs,
   IMessageCursor,
-  Initialization,
   IteratorResult,
   MessageIteratorArgs,
   IterableSourceInitializeArgs,
   IDeserializedIterableSource,
+  IIterableSource,
+  ISerializedIterableSource,
+  Initialization,
 } from "./IIterableSource";
 import type { WorkerIterableSourceWorker } from "./WorkerIterableSourceWorker";
+
+const log = Log.getLogger(__filename);
+
+const WORKER_TERMINATE_TIMEOUT_MS = 5_000;
 
 Comlink.transferHandlers.set("abortsignal", abortSignalTransferHandler);
 
@@ -29,13 +37,11 @@ type ConstructorArgs = {
   initArgs: IterableSourceInitializeArgs;
 };
 
-export class WorkerIterableSource implements IDeserializedIterableSource {
+class WorkerIterableSourceBase<MessageType> implements IIterableSource<MessageType> {
   readonly #args: ConstructorArgs;
 
-  #sourceWorkerRemote?: Comlink.Remote<WorkerIterableSourceWorker>;
+  #sourceWorkerRemote?: Comlink.Remote<WorkerIterableSourceWorker<MessageType>>;
   #disposeRemote?: () => void;
-
-  public readonly sourceType = "deserialized";
 
   public constructor(args: ConstructorArgs) {
     this.#args = args;
@@ -49,7 +55,9 @@ export class WorkerIterableSource implements IDeserializedIterableSource {
 
     const { remote: initializeWorker, dispose } =
       ComlinkWrap<
-        (args: IterableSourceInitializeArgs) => Comlink.Remote<WorkerIterableSourceWorker>
+        (
+          args: IterableSourceInitializeArgs,
+        ) => Comlink.Remote<WorkerIterableSourceWorker<MessageType>>
       >(worker);
 
     this.#disposeRemote = dispose;
@@ -59,7 +67,7 @@ export class WorkerIterableSource implements IDeserializedIterableSource {
 
   public async *messageIterator(
     args: MessageIteratorArgs,
-  ): AsyncIterableIterator<Readonly<IteratorResult>> {
+  ): AsyncIterableIterator<Readonly<IteratorResult<MessageType>>> {
     if (this.#sourceWorkerRemote == undefined) {
       throw new Error(`WorkerIterableSource is not initialized`);
     }
@@ -82,7 +90,9 @@ export class WorkerIterableSource implements IDeserializedIterableSource {
     }
   }
 
-  public async getBackfillMessages(args: GetBackfillMessagesArgs): Promise<MessageEvent[]> {
+  public async getBackfillMessages(
+    args: GetBackfillMessagesArgs,
+  ): Promise<MessageEvent<MessageType>[]> {
     if (this.#sourceWorkerRemote == undefined) {
       throw new Error(`WorkerIterableSource is not initialized`);
     }
@@ -96,7 +106,7 @@ export class WorkerIterableSource implements IDeserializedIterableSource {
 
   public getMessageCursor(
     args: Immutable<MessageIteratorArgs & { abort?: AbortSignal }>,
-  ): IMessageCursor {
+  ): IMessageCursor<MessageType> {
     if (this.#sourceWorkerRemote == undefined) {
       throw new Error(`WorkerIterableSource is not initialized`);
     }
@@ -107,7 +117,7 @@ export class WorkerIterableSource implements IDeserializedIterableSource {
     const { abort, ...rest } = args;
     const messageCursorPromise = this.#sourceWorkerRemote.getMessageCursor(rest, abort);
 
-    const cursor: IMessageCursor = {
+    const cursor: IMessageCursor<MessageType> = {
       async next() {
         const messageCursor = await messageCursorPromise;
         return await messageCursor.next();
@@ -137,10 +147,40 @@ export class WorkerIterableSource implements IDeserializedIterableSource {
   }
 
   public async terminate(): Promise<void> {
-    this.#disposeRemote?.();
-    // shouldn't normally have to do this, but if `initialize` is called after again we don't want
-    // to reuse the old remote
-    this.#disposeRemote = undefined;
+    // Capture and clear this call's endpoint immediately: a concurrent initialize() call may
+    // replace #sourceWorkerRemote/#disposeRemote with a newer worker while this terminate() is
+    // still awaiting below, and that newer worker must not be touched or disposed by this call.
+    const remote = this.#sourceWorkerRemote;
+    const disposeRemote = this.#disposeRemote;
     this.#sourceWorkerRemote = undefined;
+    this.#disposeRemote = undefined;
+
+    try {
+      // Give the worker-side source (e.g. MultiIterableSource's pool) a chance to release pooled
+      // readers/streams gracefully before the worker is hard-killed below. A hung worker must not
+      // block closing, and a failed graceful shutdown is not worth surfacing.
+      if (remote) {
+        await promiseTimeout(remote.terminate(), WORKER_TERMINATE_TIMEOUT_MS);
+      }
+    } catch (err: unknown) {
+      log.warn("Worker source did not terminate gracefully", err);
+    } finally {
+      // Always dispose the captured worker, even if its graceful terminate() rejected.
+      disposeRemote?.();
+    }
   }
+}
+
+export class WorkerIterableSource
+  extends WorkerIterableSourceBase<unknown>
+  implements IDeserializedIterableSource
+{
+  public readonly sourceType = "deserialized";
+}
+
+export class WorkerSerializedIterableSource
+  extends WorkerIterableSourceBase<Uint8Array>
+  implements ISerializedIterableSource
+{
+  public readonly sourceType = "serialized";
 }

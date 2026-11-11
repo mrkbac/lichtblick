@@ -10,8 +10,6 @@ import { CircularProgress, Divider, IconButton, Tab, Tabs } from "@mui/material"
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { AppSetting } from "@lichtblick/suite-base/AppSetting";
-import { EventsList } from "@lichtblick/suite-base/components/EventsList";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -20,11 +18,8 @@ import { SidebarContent } from "@lichtblick/suite-base/components/SidebarContent
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { TopicList } from "@lichtblick/suite-base/components/TopicList";
 import WssErrorModal from "@lichtblick/suite-base/components/WssErrorModal";
-import { useCurrentUser } from "@lichtblick/suite-base/context/CurrentUserContext";
-import { EventsStore, useEvents } from "@lichtblick/suite-base/context/EventsContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import useAlertCount from "@lichtblick/suite-base/hooks/useAlertCount";
-import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks/useAppConfigurationValue";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 
 import { AlertsList } from "../AlertList/AlertsList";
@@ -37,26 +32,17 @@ type Props = {
 };
 
 const selectPlayerPresence = ({ playerState }: MessagePipelineContext) => playerState.presence;
-const selectSelectedEventId = (store: EventsStore) => store.selectedEventId;
-const selectEventsSupported = (store: EventsStore) => store.eventsSupported;
 
-type DataSourceSidebarTab = "topics" | "events" | "alerts";
+type DataSourceSidebarTab = "topics" | "alerts";
 
 export default function DataSourceSidebar(props: Props): React.JSX.Element {
   const { disableToolbar = false } = props;
   const playerPresence = useMessagePipeline(selectPlayerPresence);
   const { playerAlerts, alertCount, highestSeverity } = useAlertCount();
-  const { currentUser } = useCurrentUser();
-  const selectedEventId = useEvents(selectSelectedEventId);
   const [activeTab, setActiveTab] = useState<DataSourceSidebarTab>("topics");
   const { classes } = useStyles();
   const { t } = useTranslation("dataSourceInfo");
   const { dialogActions } = useWorkspaceActions();
-
-  const [enableNewTopNav = true] = useAppConfigurationValue<boolean>(AppSetting.ENABLE_NEW_TOPNAV);
-
-  const eventsSupported = useEvents(selectEventsSupported);
-  const showEventsTab = !enableNewTopNav && currentUser != undefined && eventsSupported;
 
   const isLoading = useMemo(
     () =>
@@ -68,10 +54,8 @@ export default function DataSourceSidebar(props: Props): React.JSX.Element {
   useEffect(() => {
     if (playerPresence === PlayerPresence.ERROR || playerPresence === PlayerPresence.RECONNECTING) {
       setActiveTab("alerts");
-    } else if (showEventsTab && selectedEventId != undefined) {
-      setActiveTab("events");
     }
-  }, [playerPresence, showEventsTab, selectedEventId]);
+  }, [playerPresence]);
 
   return (
     <SidebarContent
@@ -117,9 +101,6 @@ export default function DataSourceSidebar(props: Props): React.JSX.Element {
                     textColor="inherit"
                   >
                     <Tab className={classes.tab} disableRipple label="Topics" value="topics" />
-                    {showEventsTab && (
-                      <Tab className={classes.tab} disableRipple label="Events" value="events" />
-                    )}
                     <Tab
                       className={classes.tab}
                       disableRipple
@@ -140,11 +121,6 @@ export default function DataSourceSidebar(props: Props): React.JSX.Element {
               {activeTab === "topics" && (
                 <div className={classes.tabContent}>
                   <TopicList />
-                </div>
-              )}
-              {activeTab === "events" && (
-                <div className={classes.tabContent}>
-                  <EventsList />
                 </div>
               )}
               {activeTab === "alerts" && (

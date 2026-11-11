@@ -35,6 +35,10 @@ import {
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";
+import {
+  formatTime,
+  useActionButtonStyles,
+} from "@lichtblick/suite-base/panels/shared/actionButton";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { useDefaultPanelTitle } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
@@ -61,23 +65,8 @@ type CallRecord = {
   response?: string;
 };
 
-const useStyles = makeStyles<{ buttonColor?: string }>()((theme, { buttonColor }) => {
-  const augmentedButtonColor = buttonColor
-    ? theme.palette.augmentColor({ color: { main: buttonColor } })
-    : undefined;
-
+const useStyles = makeStyles()((theme) => {
   return {
-    wrapper: {
-      display: "contents",
-    },
-    button: {
-      backgroundColor: augmentedButtonColor?.main,
-      color: augmentedButtonColor?.contrastText,
-
-      "&:hover": {
-        backgroundColor: augmentedButtonColor?.dark,
-      },
-    },
     history: {
       minWidth: 0,
       fontSize: theme.typography.caption.fontSize,
@@ -109,10 +98,6 @@ const selectServices = (ctx: MessagePipelineContext) => ctx.playerState.activeDa
 const selectServiceTypes = (ctx: MessagePipelineContext) =>
   ctx.playerState.activeData?.serviceTypes;
 
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString(undefined, { hour12: false });
-}
-
 function recordLabel(record: CallRecord): string {
   const status =
     record.status === "requesting"
@@ -124,7 +109,8 @@ function recordLabel(record: CallRecord): string {
 }
 
 export function CallService({ config, saveConfig }: Props): React.JSX.Element {
-  const { classes } = useStyles({ buttonColor: config.buttonColor });
+  const { classes } = useStyles();
+  const { classes: buttonClasses } = useActionButtonStyles({ buttonColor: config.buttonColor });
   const { datatypes, capabilities } = useDataSourceInfo();
   const callService = useMessagePipeline(selectCallService);
   const servicesWithProviders = useMessagePipeline(selectServices);
@@ -371,7 +357,7 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
   return (
     // `display: contents` keeps the layout while catching the call shortcut from any input
     <div
-      className={classes.wrapper}
+      className={buttonClasses.wrapper}
       onKeyDown={(event) => {
         if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
           event.preventDefault();
@@ -408,7 +394,7 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
             >
               <span>
                 <Button
-                  className={classes.button}
+                  className={buttonClasses.button}
                   variant="contained"
                   disabled={!canSend}
                   onClick={send}

@@ -58,6 +58,7 @@ import Stack from "@lichtblick/suite-base/components/Stack";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { downloadTextFile } from "@lichtblick/suite-base/util/download";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { ParameterRow } from "./ParameterRow";
 import {
@@ -298,9 +299,7 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
       startCompare(snapshots.length);
       setError(undefined);
     } catch (err) {
-      setError(
-        `Could not import ${file.name}: ${err instanceof Error ? err.message : String(err)}`,
-      );
+      setError(`Could not import ${file.name}: ${toError(err).message}`);
     }
   };
 

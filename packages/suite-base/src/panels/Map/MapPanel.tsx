@@ -36,6 +36,7 @@ import { turboColorString } from "@lichtblick/suite-base/util/colorUtils";
 import { formatTime } from "@lichtblick/suite-base/util/formatTime";
 import { darkColor, lineColors } from "@lichtblick/suite-base/util/plotColors";
 import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
+import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { MapToolbar } from "./MapToolbar";
 import { normalize, Sample, sampleAt, speedUnitLabel, speedValues, valueRange } from "./colorBy";
@@ -930,9 +931,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       const fail = (error: unknown) => {
         settle();
         if (!controller.signal.aborted) {
-          setSourceErrors((prev) =>
-            new Map(prev).set(url, String(error instanceof Error ? error.message : error)),
-          );
+          setSourceErrors((prev) => new Map(prev).set(url, toError(error).message));
         }
       };
       if (kind === "vector") {

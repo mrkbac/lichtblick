@@ -15,7 +15,7 @@ import {
   buttonClasses,
 } from "@mui/material";
 import * as _ from "lodash-es";
-import { forwardRef, ReactElement } from "react";
+import { ReactElement, Ref } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { PANEL_ROOT_CLASS_NAME } from "@lichtblick/suite-base/components/PanelRoot";
@@ -126,57 +126,56 @@ export type PanelOverlayProps = {
   open: boolean;
   variant?: "validDropTarget" | "invalidDropTarget" | "selected";
   onClickAway?: () => void;
+  ref?: Ref<HTMLDivElement>;
 };
 
-export const PanelOverlay = forwardRef<HTMLDivElement, PanelOverlayProps>(
-  function PanelOverlay(props, ref): React.JSX.Element | null {
-    const { actions, variant, highlightMode, dropMessage, open, onClickAway } = props;
-    const { classes, cx } = useStyles();
+export function PanelOverlay(props: PanelOverlayProps): React.JSX.Element | null {
+  const { actions, variant, highlightMode, dropMessage, open, onClickAway, ref } = props;
+  const { classes, cx } = useStyles();
 
-    return (
-      <ClickAwayListener onClickAway={onClickAway ?? _.noop}>
-        <Backdrop
-          transitionDuration={0}
-          unmountOnExit
-          ref={ref}
-          open={open}
-          className={cx(classes.backdrop, {
-            [classes.invalidTarget]: variant === "invalidDropTarget",
-            [classes.validTarget]: variant === "validDropTarget",
-            [classes.selected]: variant === "selected",
-            [classes.highlightActive]: highlightMode === "active",
-            [classes.highlightAll]: highlightMode === "all",
-          })}
-        >
-          {dropMessage && variant === "validDropTarget" ? (
-            <Chip size="small" color="primary" label={dropMessage} className={classes.chip} />
-          ) : (
-            actions && (
-              <div className={classes.buttonGroup}>
-                {actions.map((action) => (
-                  <Paper
-                    square={false}
-                    key={action.key}
-                    elevation={0}
-                    className={classes.buttonPaper}
+  return (
+    <ClickAwayListener onClickAway={onClickAway ?? _.noop}>
+      <Backdrop
+        transitionDuration={0}
+        unmountOnExit
+        ref={ref}
+        open={open}
+        className={cx(classes.backdrop, {
+          [classes.invalidTarget]: variant === "invalidDropTarget",
+          [classes.validTarget]: variant === "validDropTarget",
+          [classes.selected]: variant === "selected",
+          [classes.highlightActive]: highlightMode === "active",
+          [classes.highlightAll]: highlightMode === "all",
+        })}
+      >
+        {dropMessage && variant === "validDropTarget" ? (
+          <Chip size="small" color="primary" label={dropMessage} className={classes.chip} />
+        ) : (
+          actions && (
+            <div className={classes.buttonGroup}>
+              {actions.map((action) => (
+                <Paper
+                  square={false}
+                  key={action.key}
+                  elevation={0}
+                  className={classes.buttonPaper}
+                >
+                  <Button
+                    fullWidth
+                    variant="outlined"
+                    className={classes.button}
+                    onClick={action.onClick}
+                    startIcon={action.icon}
+                    color={action.color}
                   >
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      className={classes.button}
-                      onClick={action.onClick}
-                      startIcon={action.icon}
-                      color={action.color}
-                    >
-                      <div className={classes.buttonText}>{action.text}</div>
-                    </Button>
-                  </Paper>
-                ))}
-              </div>
-            )
-          )}
-        </Backdrop>
-      </ClickAwayListener>
-    );
-  },
-);
+                    <div className={classes.buttonText}>{action.text}</div>
+                  </Button>
+                </Paper>
+              ))}
+            </div>
+          )
+        )}
+      </Backdrop>
+    </ClickAwayListener>
+  );
+}

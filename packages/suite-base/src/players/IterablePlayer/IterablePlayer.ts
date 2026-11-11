@@ -22,10 +22,8 @@ import { debouncePromise } from "@lichtblick/den/async";
 import { filterMap } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
 import { Immutable, MessageEvent, Metadata, ParameterValue } from "@lichtblick/suite";
-import { DeserializedSourceWrapper } from "@lichtblick/suite-base/players/IterablePlayer/DeserializedSourceWrapper";
 import { DeserializingIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/DeserializingIterableSource";
 import { freezeMetadata } from "@lichtblick/suite-base/players/IterablePlayer/freezeMetadata";
-import NoopMetricsCollector from "@lichtblick/suite-base/players/NoopMetricsCollector";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { applySamplingGuardToSubscriptions } from "@lichtblick/suite-base/players/samplingGuard";
@@ -33,7 +31,6 @@ import { sameTopicSelection } from "@lichtblick/suite-base/players/subscriptionE
 import {
   AdvertiseOptions,
   Player,
-  PlayerMetricsCollectorInterface,
   PlayerPresence,
   PlayerState,
   PlayerStateActiveData,
@@ -55,6 +52,7 @@ import { BufferedIterableSource } from "./BufferedIterableSource";
 import {
   GetBackfillMessagesArgs,
   IDeserializedIterableSource,
+  IIterableSource,
   ISerializedIterableSource,
   IteratorResult,
 } from "./IIterableSource";
@@ -111,8 +109,6 @@ type ExpandBackfill = (
 ) => Promise<MessageEvent[]>;
 
 type IterablePlayerOptions = {
-  metricsCollector?: PlayerMetricsCollectorInterface;
-
   source: IDeserializedIterableSource | ISerializedIterableSource;
 
   // Optional player name
@@ -123,8 +119,6 @@ type IterablePlayerOptions = {
 
   // Source identifier used in constructing state urls.
   sourceId: string;
-
-  isSampleDataSource?: boolean;
 
   // Set to _false_ to disable preloading. (default: true)
   enablePreload?: boolean;
@@ -182,7 +176,6 @@ export class IterablePlayer implements Player {
   #capabilities: string[] = [PLAYER_CAPABILITIES.setSpeed, PLAYER_CAPABILITIES.playbackControl];
   #profile: string | undefined;
   #recordingFiles: readonly RecordingFileInfo[] | undefined;
-  #metricsCollector: PlayerMetricsCollectorInterface;
   #subscriptions: SubscribePayload[] = [];
   #allTopics: TopicSelection = new Map();
   #preloadTopics: TopicSelection = new Map();
@@ -208,7 +201,7 @@ export class IterablePlayer implements Player {
   #alertManager = new PlayerAlertManager();
 
   #iterableSource: IDeserializedIterableSource | ISerializedIterableSource;
-  #bufferedSource: IDeserializedIterableSource;
+  #bufferedSource: IIterableSource;
   // Buffering source implementation. We store a reference to it here so we can access buffer information such as loaded ranges & memory size.
   #bufferImpl: BufferedIterableSource;
   readonly #deserializingSource?: DeserializingIterableSource;
@@ -235,11 +228,10 @@ export class IterablePlayer implements Player {
 
   /** Promise that resolves when the player is closed. Only used for testing currently */
   public readonly isClosed: Promise<void>;
-  #resolveIsClosed: () => void = () => {};
+  readonly #resolveIsClosed: () => void;
 
   public constructor(options: IterablePlayerOptions) {
     const {
-      metricsCollector,
       urlParams,
       source,
       name,
@@ -252,7 +244,7 @@ export class IterablePlayer implements Player {
     this.#iterableSource = source;
     if (source.sourceType === "deserialized") {
       this.#bufferImpl = new BufferedIterableSource(source);
-      this.#bufferedSource = new DeserializedSourceWrapper(this.#bufferImpl);
+      this.#bufferedSource = this.#bufferImpl;
     } else {
       const MEGABYTE_IN_BYTES = 1024 * 1024;
       const bufferInterface = new BufferedIterableSource(source, {
@@ -266,16 +258,12 @@ export class IterablePlayer implements Player {
 
     this.#name = name;
     this.#urlParams = urlParams;
-    this.#metricsCollector = metricsCollector ?? new NoopMetricsCollector();
-    this.#metricsCollector.playerConstructed();
 
     this.#enablePreload = enablePreload ?? true;
     this.#sourceId = sourceId;
     this.#expandBackfill = expandBackfill;
 
-    this.isClosed = new Promise((resolveClose) => {
-      this.#resolveIsClosed = resolveClose;
-    });
+    ({ promise: this.isClosed, resolve: this.#resolveIsClosed } = Promise.withResolvers<void>());
 
     // Wrap emitStateImpl in a debouncePromise for our states to call. Since we can emit from states
     // or from block loading updates we use debouncePromise to guard against concurrent emits.

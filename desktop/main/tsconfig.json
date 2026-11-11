@@ -4,6 +4,7 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "rootDir": "../../",
-    "noEmit": true
+    "noEmit": true,
+    "lib": ["es2025", "esnext.typedarrays"]
   }
 }

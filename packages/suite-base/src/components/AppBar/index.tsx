@@ -23,7 +23,6 @@ import { isSafeUrl } from "@lichtblick/suite-base/api/organization/client";
 import { LichtblickLogo } from "@lichtblick/suite-base/components/LichtblickLogo";
 import { MemoryUseIndicator } from "@lichtblick/suite-base/components/MemoryUseIndicator";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { useAppContext } from "@lichtblick/suite-base/context/AppContext";
 import {
   LayoutState,
   useCurrentLayoutSelector,
@@ -181,7 +180,6 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
   const { classes, cx, theme } = useStyles({ debugDragRegion });
   const { t } = useTranslation("appBar");
 
-  const { appBarLayoutButton } = useAppContext();
   const [enableMemoryUseIndicator = false] = useAppConfigurationValue<boolean>(
     AppSetting.ENABLE_MEMORY_USE_INDICATOR,
   );
@@ -269,7 +267,6 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
               <NetworkStatusIndicator />
               <UpdateIndicator />
               {enableMemoryUseIndicator && <MemoryUseIndicator />}
-              {appBarLayoutButton}
               <Stack direction="row" alignItems="center" data-tourid="sidebar-button-group">
                 <AppBarIconButton
                   title={

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { SettingsTreeNodeAction } from "@lichtblick/suite";
 import { lineColors } from "@lichtblick/suite-base/util/plotColors";
 
 /**
@@ -13,6 +14,15 @@ export function assignDefaultColorsToSeries<T extends { color?: string }>(paths:
   });
 }
 
+/** Moves `arr[from]` to index `to` in place. No-op when either index is out of range. */
+export function moveItem(arr: unknown[], from: number, to: number): void {
+  if (from === to || !(from >= 0 && from < arr.length && to >= 0 && to < arr.length)) {
+    return;
+  }
+  const [item] = arr.splice(from, 1);
+  arr.splice(to, 0, item);
+}
+
 /**
  * Reorders an item in a paths array from sourceIndex to targetIndex.
  * Used by panels that support reordering of series/paths.
@@ -22,16 +32,21 @@ export function handleReorderSeriesAction<T extends { paths: unknown[] }>(
   sourceIndex: number,
   targetIndex: number,
 ): void {
-  if (
-    sourceIndex === targetIndex ||
-    sourceIndex < 0 ||
-    targetIndex < 0 ||
-    sourceIndex >= draft.paths.length ||
-    targetIndex >= draft.paths.length
-  ) {
-    return;
-  }
+  moveItem(draft.paths, sourceIndex, targetIndex);
+}
 
-  const [removed] = draft.paths.splice(sourceIndex, 1);
-  draft.paths.splice(targetIndex, 0, removed);
+/** "move-up"/"move-down" settings-tree actions for the item at `index` of a `count`-long list. */
+export function moveUpDownActions(
+  index: number,
+  count: number,
+  labels: { up: string; down: string } = { up: "Move up", down: "Move down" },
+): SettingsTreeNodeAction[] {
+  const actions: SettingsTreeNodeAction[] = [];
+  if (index > 0) {
+    actions.push({ type: "action", id: "move-up", label: labels.up, icon: "MoveUp" });
+  }
+  if (index < count - 1) {
+    actions.push({ type: "action", id: "move-down", label: labels.down, icon: "MoveDown" });
+  }
+  return actions;
 }

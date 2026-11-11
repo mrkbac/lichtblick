@@ -42,9 +42,9 @@ import {
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { ExtensionCatalogContext } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
-import { usePerformance } from "@lichtblick/suite-base/context/PerformanceContext";
 import PlayerSelectionContext, {
   DataSourceArgs,
+  DataSourceFactoryInitializeArgs,
   IDataSourceFactory,
   PlayerSelection,
   RecentSource,
@@ -57,16 +57,15 @@ import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables
 import useIndexedDbRecents, {
   RecentRecord,
 } from "@lichtblick/suite-base/hooks/useIndexedDbRecents";
-import AnalyticsMetricsCollector from "@lichtblick/suite-base/players/AnalyticsMetricsCollector";
 import {
   TopicAliasFunctions,
   TopicAliasingPlayer,
 } from "@lichtblick/suite-base/players/TopicAliasingPlayer/TopicAliasingPlayer";
 import UserScriptPlayer from "@lichtblick/suite-base/players/UserScriptPlayer";
 import { Player } from "@lichtblick/suite-base/players/types";
+import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { UserScripts } from "@lichtblick/suite-base/types/panels";
 import { updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
-import { mergeMultipleFileNames } from "@lichtblick/suite-base/util/mergeMultipleFileName";
 
 import { useTrustedUserScripts } from "./useTrustedUserScripts";
 
@@ -128,8 +127,6 @@ export default function PlayerManager(
 ): React.JSX.Element {
   const { children, playerSources } = props;
 
-  const perfRegistry = usePerformance();
-
   useWarnImmediateReRender();
 
   const userScriptActions = useUserScriptState(selectUserScriptActions);
@@ -137,7 +134,6 @@ export default function PlayerManager(
   const isMounted = useMountedState();
 
   const analytics = useAnalytics();
-  const metricsCollector = useMemo(() => new AnalyticsMetricsCollector(analytics), [analytics]);
 
   const [basePlayer, setBasePlayer] = useState<Player | undefined>();
 
@@ -192,15 +188,11 @@ export default function PlayerManager(
       return undefined;
     }
 
-    const userScriptPlayer = new UserScriptPlayer(
-      topicAliasPlayer,
-      userScriptActions,
-      perfRegistry,
-    );
+    const userScriptPlayer = new UserScriptPlayer(topicAliasPlayer, userScriptActions);
     userScriptPlayer.setGlobalVariables(globalVariablesRef.current);
 
     return userScriptPlayer;
-  }, [globalVariablesRef, topicAliasPlayer, userScriptActions, perfRegistry]);
+  }, [globalVariablesRef, topicAliasPlayer, userScriptActions]);
 
   // During layout switches, selectedLayout.data is briefly undefined (loading: true)
   useLayoutEffect(() => {
@@ -241,7 +233,13 @@ export default function PlayerManager(
         return;
       }
 
-      metricsCollector.setProperty("player", sourceId);
+      const initializePlayer = (initArgs: DataSourceFactoryInitializeArgs) => {
+        const newPlayer = foundSource.initialize(initArgs);
+        if (newPlayer) {
+          analytics.logEvent(AppEvent.PLAYER_CONSTRUCTED, { player: sourceId });
+        }
+        return newPlayer;
+      };
       setCurrentRecentId(undefined);
 
       setSelectedSource(foundSource);
@@ -249,9 +247,7 @@ export default function PlayerManager(
 
       // Sample sources don't need args or prompts to initialize
       if (foundSource.type === "sample") {
-        const newPlayer = foundSource.initialize({
-          metricsCollector,
-        });
+        const newPlayer = initializePlayer({});
 
         setBasePlayer(newPlayer);
         writeLastFile(undefined);
@@ -323,8 +319,7 @@ export default function PlayerManager(
       try {
         switch (args.type) {
           case "connection": {
-            const newPlayer = foundSource.initialize({
-              metricsCollector,
+            const newPlayer = initializePlayer({
               params: args.params,
               sourceMetadata: args.sourceMetadata,
             });
@@ -380,10 +375,9 @@ export default function PlayerManager(
             if (files) {
               const multiFile = foundSource.supportsMultiFile === true && files.length > 1;
 
-              const newPlayer = foundSource.initialize({
+              const newPlayer = initializePlayer({
                 file: multiFile ? undefined : files[0],
                 files: multiFile ? files : undefined,
-                metricsCollector,
               });
 
               setBasePlayer(newPlayer);
@@ -393,7 +387,7 @@ export default function PlayerManager(
               if (handles) {
                 const lastFile: LastFileSource = {
                   sourceId: foundSource.id,
-                  title: mergeMultipleFileNames(handles.map((h) => h.name)),
+                  title: handles.map((h) => h.name).join(", "),
                 };
                 setCurrentRecentId(addRecent({ type: "file", ...lastFile, handles }));
                 writeLastFile(lastFile);
@@ -415,7 +409,7 @@ export default function PlayerManager(
     },
     [
       playerSources,
-      metricsCollector,
+      analytics,
       enqueueSnackbar,
       isMounted,
       addRecent,

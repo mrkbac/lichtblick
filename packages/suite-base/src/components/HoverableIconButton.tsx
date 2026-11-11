@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { IconButton, IconButtonProps } from "@mui/material";
-import { forwardRef, useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 export type HoverableIconButtonProps = {
   icon: React.ReactNode;
@@ -17,69 +17,61 @@ export type HoverableIconButtonProps = {
   iconPosition?: "start" | "end";
 } & Omit<IconButtonProps, "children" | "color">;
 
-const HoverableIconButton = forwardRef<HTMLButtonElement, HoverableIconButtonProps>(
-  (props, ref) => {
-    const {
-      icon,
-      activeIcon,
-      color,
-      activeColor,
-      onMouseLeave,
-      onMouseEnter,
-      children,
-      iconPosition = "start",
-      ...rest
-    } = props;
+export default function HoverableIconButton(props: HoverableIconButtonProps): React.JSX.Element {
+  const {
+    icon,
+    activeIcon,
+    color,
+    activeColor,
+    onMouseLeave,
+    onMouseEnter,
+    children,
+    iconPosition = "start",
+    ...rest
+  } = props;
 
-    const [hovered, setHovered] = useState(false);
+  const [hovered, setHovered] = useState(false);
 
-    const handleMouseEnter = useCallback(
-      (event) => {
-        if (onMouseEnter != undefined) {
-          onMouseEnter(event);
-        }
-        if (props.disabled === true) {
-          return;
-        }
-        setHovered(true);
-      },
-      [onMouseEnter, props.disabled],
-    );
-
-    const handleMouseLeave = useCallback(
-      (event) => {
-        if (onMouseLeave != undefined) {
-          onMouseLeave(event);
-        }
-        setHovered(false);
-      },
-      [onMouseLeave],
-    );
-
-    useEffect(() => {
-      if (props.disabled === true) {
-        setHovered(false);
+  const handleMouseEnter = useCallback(
+    (event) => {
+      if (onMouseEnter != undefined) {
+        onMouseEnter(event);
       }
-    }, [props.disabled]);
+      if (props.disabled === true) {
+        return;
+      }
+      setHovered(true);
+    },
+    [onMouseEnter, props.disabled],
+  );
 
-    return (
-      <IconButton
-        ref={ref}
-        {...rest}
-        component="button"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-        color={activeColor != undefined ? (hovered ? activeColor : color) : color}
-      >
-        {iconPosition === "start" &&
-          (activeIcon != undefined ? (hovered ? activeIcon : icon) : icon)}
-        {children}
-        {iconPosition === "end" && (activeIcon != undefined ? (hovered ? activeIcon : icon) : icon)}
-      </IconButton>
-    );
-  },
-);
+  const handleMouseLeave = useCallback(
+    (event) => {
+      if (onMouseLeave != undefined) {
+        onMouseLeave(event);
+      }
+      setHovered(false);
+    },
+    [onMouseLeave],
+  );
 
-HoverableIconButton.displayName = "HoverableIconButton";
+  useEffect(() => {
+    if (props.disabled === true) {
+      setHovered(false);
+    }
+  }, [props.disabled]);
 
-export default HoverableIconButton;
+  return (
+    <IconButton
+      {...rest}
+      component="button"
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      color={activeColor != undefined ? (hovered ? activeColor : color) : color}
+    >
+      {iconPosition === "start" && (activeIcon != undefined ? (hovered ? activeIcon : icon) : icon)}
+      {children}
+      {iconPosition === "end" && (activeIcon != undefined ? (hovered ? activeIcon : icon) : icon)}
+    </IconButton>
+  );
+}

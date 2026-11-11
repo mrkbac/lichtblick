@@ -7,7 +7,6 @@
 
 import { dialog } from "electron";
 import { autoUpdater, UpdateInfo } from "electron-updater";
-import { EventEmitter } from "eventemitter3";
 
 import Logger from "@lichtblick/log";
 import { AppSetting } from "@lichtblick/suite-base/src/AppSetting";
@@ -31,11 +30,7 @@ function isNetworkError(err: unknown) {
   );
 }
 
-type EventTypes = {
-  error: (err: Error) => void;
-};
-
-class StudioAppUpdater extends EventEmitter<EventTypes> {
+class StudioAppUpdater {
   #started: boolean = false;
   // Seconds to wait after app startup to check and download updates.
   // This gives the user time to disable app updates for new installations
@@ -112,7 +107,7 @@ class StudioAppUpdater extends EventEmitter<EventTypes> {
       if (isNetworkError(err)) {
         log.warn(`Network error checking for updates: ${err}`);
       } else {
-        this.emit("error", err as Error);
+        log.error(err);
       }
     } finally {
       setTimeout(() => {
