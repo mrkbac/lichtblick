@@ -1,12 +1,26 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 type TestWindow = Window & {
   consumeLaunch?: (params: { files: FileSystemHandle[]; targetURL: string }) => Promise<void>;
+};
+
+// The browser hands launches to the app's launchQueue consumer; keep it so tests can launch.
+const stubLaunchQueue = async (page: Page) => {
+  await page.addInitScript(() => {
+    Object.defineProperty(window, "launchQueue", {
+      configurable: true,
+      value: {
+        setConsumer: (consumer: TestWindow["consumeLaunch"]) => {
+          (window as TestWindow).consumeLaunch = consumer;
+        },
+      },
+    });
+  });
 };
 
 const callback = (query: string) =>
@@ -42,16 +56,7 @@ test("routes cold and existing PWA protocol launches without reloading", { tag: 
       },
     });
   });
-  await page.addInitScript(() => {
-    Object.defineProperty(window, "launchQueue", {
-      configurable: true,
-      value: {
-        setConsumer: (consumer: TestWindow["consumeLaunch"]) => {
-          (window as TestWindow).consumeLaunch = consumer;
-        },
-      },
-    });
-  });
+  await stubLaunchQueue(page);
   await page.goto(
     callback("ds=remote-file&ds.url=http%3A%2F%2Flocalhost%3A8080%2Fprotocol-example.mcap"),
   );
@@ -82,4 +87,50 @@ test("routes cold and existing PWA protocol launches without reloading", { tag: 
   }, callback("ds=remote-file&ds.url=http%3A%2F%2Flocalhost%3A8080%2Fprotocol-example.mcap"));
   await expect(play).toBeEnabled();
   await expect(page.locator("body")).toHaveAttribute("data-launch-marker", "same-workspace");
+});
+
+test("opens .mcap and .bag files launched through the PWA file handlers", async ({ page }) => {
+  const manifest = (await (await page.request.get("/manifest.webmanifest")).json()) as {
+    file_handlers: { action: string; accept: Record<string, string[]> }[];
+  };
+  const extensions = manifest.file_handlers.flatMap((handler) =>
+    Object.values(handler.accept).flat(),
+  );
+  expect(extensions).toEqual(expect.arrayContaining([".mcap", ".bag"]));
+  expect(manifest.file_handlers.every((handler) => handler.action === ".")).toBe(true);
+
+  for (const name of ["example.mcap", "example.bag"]) {
+    const data = await readFile(path.resolve("e2e/fixtures/assets", name));
+    await page.route(`**/launched/${name}`, async (route) => {
+      await route.fulfill({ body: data });
+    });
+  }
+  await stubLaunchQueue(page);
+  await page.goto("/");
+  await expect.poll(async () => await page.evaluate(() => "consumeLaunch" in window)).toBe(true);
+
+  const launchFile = async (name: string) => {
+    await page.evaluate(async (fileName) => {
+      const blob = await (await fetch(`/launched/${fileName}`)).blob();
+      const handle = {
+        kind: "file",
+        name: fileName,
+        getFile: async () => new File([blob], fileName),
+      };
+      await (window as TestWindow).consumeLaunch!({
+        files: [handle as unknown as FileSystemHandle],
+        targetURL: location.origin + "/",
+      });
+    }, name);
+  };
+
+  const play = page.getByRole("button", { name: "Play", exact: true });
+  await launchFile("example.mcap");
+  await expect(play).toBeEnabled({ timeout: 30_000 });
+  await expect(page.getByText("example.mcap").first()).toBeVisible();
+
+  // A second launch replaces the open recording
+  await launchFile("example.bag");
+  await expect(page.getByText("example.bag").first()).toBeVisible({ timeout: 30_000 });
+  await expect(play).toBeEnabled();
 });
