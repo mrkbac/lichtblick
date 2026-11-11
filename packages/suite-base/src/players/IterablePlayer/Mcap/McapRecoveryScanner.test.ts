@@ -7,6 +7,7 @@ import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
 
 import { BlobReadable } from "./BlobReadable";
+import { McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
 import { McapIterableSource } from "./McapIterableSource";
 import { McapRecoveryScanner } from "./McapRecoveryScanner";
 
@@ -120,35 +121,49 @@ async function openSource(bytes: Uint8Array<ArrayBuffer>) {
 
 describe("McapRecoveryScanner", () => {
   it("recovers every record of a recording that was killed before writing its footer", async () => {
-    const scanner = await scan(await makeMcap({ finish: false }));
+    // Given
+    const bytes = await makeMcap({ finish: false });
 
+    // When
+    const scanner = await scan(bytes);
+
+    // Then
     expect(scanner.messageCount).toBe(BigInt(MESSAGE_COUNT));
     expect(scanner.recoveredChunkCount()).toBe(MESSAGE_COUNT);
     expect(scanner.complete).toBe(false);
     expect(scanner.unreadableBytes).toBe(0n);
+    expect(scanner.hasLosses()).toBe(false);
     expect(scanner.toAlert()).toMatchObject({ severity: "warn", message: /not closed properly/ });
   });
 
   it("serves the rebuilt index to McapIndexedReader, including metadata", async () => {
+    // Given
     const bytes = await makeMcap({ finish: false });
     const scanner = await scan(bytes);
-    const readable = scanner.toReadable(readableOf(bytes));
 
-    expect(await readValues(readable)).toEqual([1, 2, 3, 4, 5]);
+    // When
+    const readable = scanner.toReadable(readableOf(bytes));
     const reader = await McapIndexedReader.Initialize({ readable });
-    expect([...reader.channelsById.values()].map((c) => c.topic)).toEqual([TOPIC]);
-    expect(reader.statistics?.messageCount).toBe(BigInt(MESSAGE_COUNT));
     const metadata = [];
     for await (const record of reader.readMetadata()) {
       metadata.push(record.name);
     }
+
+    // Then
+    expect(await readValues(readable)).toEqual([1, 2, 3, 4, 5]);
+    expect([...reader.channelsById.values()].map((c) => c.topic)).toEqual([TOPIC]);
+    expect(reader.statistics?.messageCount).toBe(BigInt(MESSAGE_COUNT));
     expect(metadata).toEqual(["example"]);
   });
 
   it("drops a truncated last chunk and reports the lost bytes", async () => {
+    // Given
     const bytes = await truncatedInLastChunk();
+
+    // When
     const scanner = await scan(bytes);
 
+    // Then
     expect(scanner.messageCount).toBe(BigInt(MESSAGE_COUNT - 1));
     expect(scanner.unreadableBytes).toBeGreaterThan(0n);
     expect(await readValues(scanner.toReadable(readableOf(bytes)))).toEqual([1, 2, 3, 4]);
@@ -156,66 +171,93 @@ describe("McapRecoveryScanner", () => {
   });
 
   it("skips a chunk with a bad CRC and keeps the chunks after it", async () => {
+    // Given
     const bytes = await makeMcap({ finish: true });
     bytes[await logTimeOffsetInChunk(bytes, 1)]! ^= 0xff;
+
+    // When
     const scanner = await scan(bytes);
 
+    // Then
     expect(scanner.corruptRecords).toBe(1);
     expect(await readValues(scanner.toReadable(readableOf(bytes)))).toEqual([1, 3, 4, 5]);
-    expect(scanner.toAlert()?.tip).toMatch(/1 corrupt record/);
+    expect(scanner.toAlert().tip).toMatch(/1 corrupt record/);
   });
 
   it("stops at garbage after the last valid record", async () => {
+    // Given
     const valid = await makeMcap({ finish: false });
-    const garbage = new Uint8Array(100).fill(0x42);
-    const bytes = new Uint8Array([...valid, ...garbage]);
+    const bytes = new Uint8Array([...valid, ...new Uint8Array(100).fill(0x42)]);
+
+    // When
     const scanner = await scan(bytes);
 
+    // Then
     expect(scanner.offset).toBe(BigInt(valid.byteLength));
     expect(scanner.unreadableBytes).toBe(100n);
     expect(await readValues(scanner.toReadable(readableOf(bytes)))).toEqual([1, 2, 3, 4, 5]);
   });
 
   it("resumes from where the previous scan stopped as the file grows", async () => {
+    // Given
     const full = await makeMcap({ finish: false });
     const scanner = new McapRecoveryScanner(await loadDecompressHandlers());
     await scanner.scan(readableOf(full.slice(0, Math.floor(full.byteLength / 2))));
     const firstPass = scanner.messageCount;
+
+    // When
     await scanner.scan(readableOf(full));
 
+    // Then
     expect(firstPass).toBeLessThan(BigInt(MESSAGE_COUNT));
     expect(scanner.messageCount).toBe(BigInt(MESSAGE_COUNT));
     expect(await readValues(scanner.toReadable(readableOf(full)))).toEqual([1, 2, 3, 4, 5]);
   });
 
   it("refuses files that are not MCAP", async () => {
+    // Given
     const scanner = new McapRecoveryScanner(await loadDecompressHandlers());
+
+    // When / Then
     await expect(scanner.scan(readableOf(new Uint8Array(64).fill(1)))).rejects.toThrow(/magic/);
   });
 });
 
 describe("McapIterableSource recovery", () => {
   it("opens a footer-less file through the rebuilt index and says so", async () => {
-    const { init, values } = await openSource(await makeMcap({ finish: false }));
+    // Given
+    const bytes = await makeMcap({ finish: false });
 
+    // When
+    const { init, values } = await openSource(bytes);
+
+    // Then
     expect(values).toEqual([1, 2, 3, 4, 5]);
     expect(init.topicStats.get(TOPIC)?.numMessages).toBe(MESSAGE_COUNT);
     expect(init.alerts[0]).toMatchObject({ severity: "warn", message: /not closed properly/ });
   });
 
   it("opens a file cut off in the middle of a chunk", async () => {
-    const { init, values } = await openSource(await truncatedInLastChunk());
+    // Given
+    const bytes = await truncatedInLastChunk();
 
+    // When
+    const { init, values } = await openSource(bytes);
+
+    // Then
     expect(values).toEqual([1, 2, 3, 4]);
     expect(init.alerts[0]?.tip).toMatch(/could not be read/);
   });
 
   it("recovers mid-read from a corrupt chunk in a file whose summary is intact", async () => {
+    // Given a finished file whose summary still lists the corrupt chunk
     const bytes = await makeMcap({ finish: true });
-    // The summary still lists the chunk, so this only shows up when the chunk is read
     bytes[await logTimeOffsetInChunk(bytes, 2)]! ^= 0xff;
+
+    // When
     const { init, values, iteratorAlerts } = await openSource(bytes);
 
+    // Then
     expect(init.alerts).toEqual([]);
     expect(values).toEqual([1, 2, 4, 5]);
     expect(iteratorAlerts).toEqual([
@@ -224,9 +266,84 @@ describe("McapIterableSource recovery", () => {
   });
 
   it("keeps the healthy path free of scans", async () => {
-    const { init, values } = await openSource(await makeMcap({ finish: true }));
+    // Given
+    const bytes = await makeMcap({ finish: true });
 
+    // When
+    const { init, values } = await openSource(bytes);
+
+    // Then
     expect(values).toEqual([1, 2, 3, 4, 5]);
     expect(init.alerts).toEqual([]);
+  });
+});
+
+describe("McapIndexedIterableSource read errors", () => {
+  const subscription = new Map([[TOPIC, PlayerBuilder.subscribePayload({ topic: TOPIC })]]);
+
+  async function indexedReader(): Promise<McapIndexedReader> {
+    return await McapIndexedReader.Initialize({
+      readable: readableOf(await makeMcap({ finish: true })),
+    });
+  }
+
+  /** Makes the reader's next `count` reads throw after their first message */
+  function failReads(reader: McapIndexedReader, count: number): void {
+    const readMessages = reader.readMessages.bind(reader);
+    let failures = count;
+    vi.spyOn(reader, "readMessages").mockImplementation(async function* (args) {
+      const fail = failures-- > 0;
+      for await (const message of readMessages(args)) {
+        yield message;
+        if (fail) {
+          throw new Error("read failed");
+        }
+      }
+    });
+  }
+
+  async function collect(source: McapIndexedIterableSource): Promise<number[]> {
+    await source.initialize();
+    const values: number[] = [];
+    for await (const result of source.messageIterator({ topics: subscription })) {
+      if (result.type === "message-event") {
+        values.push(
+          (JSON.parse(new TextDecoder().decode(result.msgEvent.message)) as { v: number }).v,
+        );
+      }
+    }
+    return values;
+  }
+
+  it("retries a failed read once without rebuilding the index", async () => {
+    // Given a read that fails once, like a dropped connection
+    const reader = await indexedReader();
+    failReads(reader, 1);
+    const recover = vi.fn<RecoverReader>();
+
+    // When
+    const values = await collect(new McapIndexedIterableSource(reader, { recover }));
+
+    // Then every message arrives once and no scan ran
+    expect(values).toEqual([1, 2, 3, 4, 5]);
+    expect(recover).not.toHaveBeenCalled();
+  });
+
+  it("surfaces the error when the recovered reader fails too, instead of retrying forever", async () => {
+    // Given a reader and a recovered reader that both always fail
+    const reader = await indexedReader();
+    failReads(reader, Infinity);
+    const recovered = await indexedReader();
+    failReads(recovered, Infinity);
+    const recover = vi.fn<RecoverReader>().mockResolvedValue({
+      reader: recovered,
+      alert: undefined,
+    });
+
+    // When / Then
+    await expect(collect(new McapIndexedIterableSource(reader, { recover }))).rejects.toThrow(
+      "read failed",
+    );
+    expect(recover).toHaveBeenCalledTimes(1);
   });
 });

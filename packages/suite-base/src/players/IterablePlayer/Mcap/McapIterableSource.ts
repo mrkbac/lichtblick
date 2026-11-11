@@ -184,7 +184,7 @@ export class McapIterableSource implements ISerializedIterableSource {
     // indexed-init probe connection/cache alive.
     readable.close();
     this.#persistentReadable = undefined;
-    return await this.#openUnindexedUrlFallback(source.url);
+    return await this.#openUnindexedUrlFallback(source.url, result.length);
   }
 
   /**
@@ -235,11 +235,14 @@ export class McapIterableSource implements ISerializedIterableSource {
         readable: this.#recovery.toReadable(readable),
         decompressHandlers,
       });
-      return { reader, alert: this.#recovery.toAlert() };
+      // Nothing lost means the summary was fine and the read error came from elsewhere (e.g. the
+      // network); reading resumes on the rebuilt index without claiming the file was damaged.
+      return { reader, alert: this.#recovery.hasLosses() ? this.#recovery.toAlert() : undefined };
     };
   }
 
-  async #openUnindexedUrlFallback(url: string): Promise<OpenedInner> {
+  /** `length` limits the stream to the readable records of a damaged file */
+  async #openUnindexedUrlFallback(url: string, length?: number): Promise<OpenedInner> {
     const response = await fetch(url);
     if (!response.body) {
       throw new Error(`Unable to stream remote file. <${url}>`);
@@ -250,8 +253,8 @@ export class McapIterableSource implements ISerializedIterableSource {
     }
     return {
       inner: new McapUnindexedIterableSource({
-        size: Number.parseInt(size, 10),
-        stream: response.body,
+        size: length ?? Number.parseInt(size, 10),
+        stream: length == undefined ? response.body : response.body.pipeThrough(firstBytes(length)),
       }),
       indexed: false,
       weightBytes: READER_BASE_BYTES,
@@ -278,9 +281,8 @@ export class McapIterableSource implements ISerializedIterableSource {
   public async initialize(): Promise<Initialization> {
     const opened = await this.#openInner();
     const init = await opened.inner.initialize();
-    const recoveryAlert = this.#recovery?.toAlert();
-    if (recoveryAlert) {
-      init.alerts = [recoveryAlert, ...init.alerts];
+    if (this.#recovery) {
+      init.alerts = [this.#recovery.toAlert(), ...init.alerts];
     }
     this.#start = init.start;
     this.#end = init.end;
@@ -401,6 +403,19 @@ async function scanForRecovery(
   }
   log.info(`Recovered MCAP index after: ${originalError.message}`);
   return scanner;
+}
+
+/** Passes through the first `length` bytes of a stream and drops the rest */
+function firstBytes(length: number): TransformStream<Uint8Array, Uint8Array> {
+  let remaining = length;
+  return new TransformStream({
+    transform(chunk, controller) {
+      if (remaining > 0) {
+        controller.enqueue(chunk.byteLength > remaining ? chunk.subarray(0, remaining) : chunk);
+        remaining -= chunk.byteLength;
+      }
+    },
+  });
 }
 
 function sourceName(source: McapSource): string | undefined {
