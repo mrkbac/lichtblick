@@ -7,6 +7,12 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { createDockview } from "dockview-react";
 import { createContext, useContext, useEffect, useState } from "react";
 
+import {
+  LayoutState,
+  useCurrentLayoutActions,
+  useCurrentLayoutSelector,
+} from "@lichtblick/suite-base/context/CurrentLayoutContext";
+import MockCurrentLayoutProvider from "@lichtblick/suite-base/providers/CurrentLayoutProvider/MockCurrentLayoutProvider";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
 import { DockPanelContext } from "./DockPanelContext";
@@ -69,6 +75,182 @@ afterEach(() => {
     el.remove();
   });
 });
+
+/** Share the dock/layout harness so loaded and unclaimed replacements follow the same swap path. */
+function setupReplacement(replacement: "loaded" | "loading" = "loaded") {
+  const { child, close } = childWindow();
+  const open = vi.spyOn(window, "open").mockReturnValue(child);
+  const requestWindow = vi.fn().mockResolvedValue(child);
+  vi.stubGlobal("documentPictureInPicture", { requestWindow });
+  const element = document.createElement("div");
+  document.body.appendChild(element);
+  const dockview = createDockview(element, {
+    createComponent: () => ({ element: document.createElement("div"), init: () => {} }),
+    defaultRenderer: "always",
+  });
+  const selectLayout = (state: LayoutState) => state.selectedLayout?.data?.layout;
+  function Replacement({ id }: { id: string }) {
+    const { swapPanel } = useCurrentLayoutActions();
+    return (
+      <>
+        <Content />
+        <span>{id}</span>
+        <button
+          onClick={() => {
+            swapPanel({ originalId: id, type: "Plot", config: {} });
+          }}
+        >
+          Change type
+        </button>
+      </>
+    );
+  }
+  /** Leave deferred replacements unmounted to exercise ownership while their panel loads. */
+  function Layout() {
+    const layout = useCurrentLayoutSelector(selectLayout);
+    const { closePanel, setGlobalVariables } = useCurrentLayoutActions();
+    const id = layout && "panels" in layout ? layout.panels[0] : undefined;
+    if (!id) {
+      return <span>No panels</span>;
+    }
+    if (replacement === "loading" && id !== "Image!one") {
+      return (
+        <>
+          <button
+            onClick={() => {
+              setGlobalVariables({ example: 1 });
+            }}
+          >
+            Keep loading
+          </button>
+          <button
+            onClick={() => {
+              closePanel({ id });
+            }}
+          >
+            Remove loading replacement
+          </button>
+        </>
+      );
+    }
+    const panel = dockview.getPanel(id) ?? dockview.addPanel({ id, component: "content" });
+    return (
+      <DockPanelContext.Provider value={{ api: panel.api, containerApi: dockview }}>
+        <PanelWindow key={id} title={id}>
+          <Replacement id={id} />
+        </PanelWindow>
+      </DockPanelContext.Provider>
+    );
+  }
+  const view = render(
+    <MockCurrentLayoutProvider initialState={{ layout: { panels: ["Image!one"] } }}>
+      <Layout />
+    </MockCurrentLayoutProvider>,
+  );
+  return {
+    child,
+    close,
+    open,
+    requestWindow,
+    dispose: () => {
+      view.unmount();
+      dockview.dispose();
+      element.remove();
+    },
+  };
+}
+
+it.each(["pip", "popout"] as const)(
+  "keeps the same %s window when changing panel type",
+  async (mode) => {
+    const { child, close, open, requestWindow, dispose } = setupReplacement();
+    try {
+      fireEvent.click(screen.getByText(mode === "pip" ? "PiP" : "Pop out"));
+      const floating = within(child.document.body);
+      await waitFor(() => {
+        expect(floating.getByText("Image!one")).toBeDefined();
+      });
+      for (let i = 0; i < 2; i++) {
+        const previous = child.document.title;
+        fireEvent.click(floating.getByText("Change type"));
+        await waitFor(() => {
+          expect(child.document.title).toMatch(/^Plot!/);
+          expect(child.document.title).not.toBe(previous);
+        });
+        expect(floating.getByText(child.document.title)).toBeDefined();
+        expect(document.querySelector('[data-testid="content"]')).toBeNull();
+        expect(close).not.toHaveBeenCalled();
+      }
+      expect(open).toHaveBeenCalledTimes(mode === "popout" ? 1 : 0);
+      expect(requestWindow).toHaveBeenCalledTimes(mode === "pip" ? 1 : 0);
+      const shortcut = vi.fn();
+      document.addEventListener("keydown", shortcut);
+      try {
+        fireEvent.keyDown(child.document.body, { key: "k" });
+        expect(shortcut).toHaveBeenCalledOnce();
+      } finally {
+        document.removeEventListener("keydown", shortcut);
+      }
+      act(() => {
+        child.dispatchEvent(new Event("pagehide"));
+      });
+      expect(screen.getByText("No panels")).toBeDefined();
+    } finally {
+      dispose();
+    }
+  },
+);
+
+it.each([
+  ["pip", "remove"],
+  ["popout", "remove"],
+  ["pip", "unload"],
+  ["popout", "unload"],
+] as const)("closes an unclaimed %s replacement on %s", async (mode, outcome) => {
+  const { child, close, dispose } = setupReplacement("loading");
+  try {
+    fireEvent.click(screen.getByText(mode === "pip" ? "PiP" : "Pop out"));
+    const floating = within(child.document.body);
+    await waitFor(() => {
+      expect(floating.getByText("Image!one")).toBeDefined();
+    });
+    fireEvent.click(floating.getByText("Change type"));
+    expect(screen.getByText("Remove loading replacement")).toBeDefined();
+    fireEvent.click(screen.getByText("Keep loading"));
+    expect(close).not.toHaveBeenCalled();
+    if (outcome === "remove") {
+      fireEvent.click(screen.getByText("Remove loading replacement"));
+    } else {
+      act(() => {
+        window.dispatchEvent(new Event("pagehide"));
+      });
+    }
+    expect(close).toHaveBeenCalledOnce();
+  } finally {
+    dispose();
+  }
+});
+
+it.each(["pip", "popout"] as const)(
+  "closes a loading replacement panel when its %s window closes",
+  async (mode) => {
+    const { child, dispose } = setupReplacement("loading");
+    try {
+      fireEvent.click(screen.getByText(mode === "pip" ? "PiP" : "Pop out"));
+      await waitFor(() => {
+        expect(within(child.document.body).getByText("Image!one")).toBeDefined();
+      });
+      fireEvent.click(within(child.document.body).getByText("Change type"));
+      expect(screen.getByText("Remove loading replacement")).toBeDefined();
+      act(() => {
+        child.dispatchEvent(new Event("pagehide"));
+      });
+      expect(screen.getByText("No panels")).toBeDefined();
+    } finally {
+      dispose();
+    }
+  },
+);
 
 it("renders one panel in the child, shares context, and restores it on close", async () => {
   // Given
