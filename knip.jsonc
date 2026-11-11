@@ -85,6 +85,10 @@
       // Referenced by name in the quicklook rspack `resolve.fallback`
       "ignoreDependencies": ["path-browserify"]
     },
+    "packages/suite-web": {
+      // Loaded into the generated service worker by workbox importScripts (rspackConfigs.ts)
+      "entry": ["public/view-link-redirect.js"]
+    },
     "packages/oxlint-plugin": {
       // JSDoc-only `import("estree")` types, provided by oxlint
       "ignoreDependencies": ["estree"]
