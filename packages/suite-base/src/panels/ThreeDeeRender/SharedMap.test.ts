@@ -7,7 +7,7 @@ import * as THREE from "three";
 
 import { ObjectPool } from "@lichtblick/den/collection";
 
-import type { IRenderer } from "./IRenderer";
+import type { Renderer } from "./Renderer";
 import { SharedMap, mapCameraAngles } from "./SharedMap";
 import { Transform, TransformTree } from "./transforms";
 
@@ -80,7 +80,7 @@ describe("SharedMap", () => {
       queueAnimationFrame,
       gl: { resetState },
       hud: { displayIfTrue: vi.fn() },
-    } as unknown as IRenderer;
+    } as unknown as Renderer;
     const shared = new SharedMap(map as unknown as MapLibreMap, "map-layer");
     const draw = vi.fn();
     shared.attach(renderer, draw);

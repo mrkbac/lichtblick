@@ -91,6 +91,15 @@ describe("ExtensionDetails Component", () => {
     expect(screen.getByText("CHANGELOG")).toBeInTheDocument();
   });
 
+  it("hides the version label when the extension has no version", () => {
+    // Given
+    const extension = { ...mockExtension, version: "" };
+    // When
+    render(<ExtensionDetails extension={extension} onClose={() => {}} installed={true} />);
+    // Then
+    expect(screen.queryByText(/^v$/)).not.toBeInTheDocument();
+  });
+
   it("calls onClose when the back button is clicked", () => {
     const mockOnClose = vi.fn();
     render(<ExtensionDetails extension={mockExtension} onClose={mockOnClose} installed={false} />);

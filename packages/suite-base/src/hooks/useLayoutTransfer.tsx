@@ -25,9 +25,15 @@ import { AppEvent } from "../services/IAnalytics";
 type UseLayoutTransfer = {
   importLayout: () => Promise<void>;
   exportLayout: () => Promise<void>;
-  parseAndInstallLayout: (file: File, namespace: Namespace) => Promise<Layout | undefined>;
+  /** Saves and selects a layout; rejects with AbortError if the optional signal is cancelled. */
+  parseAndInstallLayout: (
+    file: File,
+    namespace: Namespace,
+    signal?: AbortSignal,
+  ) => Promise<Layout | undefined>;
 };
 
+/** Shares layout import/export behavior across file and launch entry points. */
 export function useLayoutTransfer(): UseLayoutTransfer {
   const isMounted = useMountedState();
   const layoutManager = useLayoutManager();
@@ -36,13 +42,14 @@ export function useLayoutTransfer(): UseLayoutTransfer {
   const { getCurrentLayoutState } = useCurrentLayoutActions();
 
   const parseAndInstallLayout = useCallback(
-    async (file: File, namespace: Namespace = "local") => {
+    async (file: File, namespace: Namespace = "local", signal?: AbortSignal) => {
       const layoutName = path.basename(file.name, path.extname(file.name));
       const content = await file.text();
 
       if (!isMounted()) {
         return;
       }
+      signal?.throwIfAborted();
 
       let parsedState: unknown;
       try {
@@ -76,6 +83,7 @@ export function useLayoutTransfer(): UseLayoutTransfer {
         permission: namespace === "org" ? "ORG_WRITE" : "CREATOR_WRITE",
       });
 
+      signal?.throwIfAborted();
       void onSelectLayout(newLayout);
 
       return newLayout;

@@ -164,6 +164,90 @@ describe("ExtensionCatalogProvider", () => {
     expect(result.current.installedExtensions).toEqual([extensionInfo]);
   });
 
+  it("clears loaded contributions when disk access is revoked on refresh", async () => {
+    // Given
+    const extension = ExtensionBuilder.extensionInfo({ namespace: "local" });
+    const loadExtension = vi.fn().mockResolvedValue({ raw: defaultSource });
+    const loader = createLocalLoader(extension, { loadExtensionMock: loadExtension });
+    const { result } = await setup({ loadersOverride: [loader] });
+    expect(result.current.isExtensionInstalled(extension.id)).toBe(true);
+    loadExtension.mockRejectedValue(new DOMException("Access revoked", "NotAllowedError"));
+    // When
+    await act(async () => {
+      await result.current.refreshAllExtensions();
+    });
+    // Then
+    expect(result.current.isExtensionInstalled(extension.id)).toBe(false);
+    expect(result.current.installedPanels).toEqual({});
+    // Keep the metadata so the user can forget the inaccessible directory.
+    expect(result.current.installedExtensions).toEqual([extension]);
+  });
+
+  it("keeps an uninstall from being overwritten by an in-flight refresh", async () => {
+    // Given
+    const extension = ExtensionBuilder.extensionInfo({ namespace: "local" });
+    const loadExtension = vi.fn().mockResolvedValue({ raw: defaultSource });
+    const loader = createLocalLoader(extension, { loadExtensionMock: loadExtension });
+    const { result } = await setup({ loadersOverride: [loader] });
+    const pendingSource = Promise.withResolvers<{ raw: string }>();
+    loadExtension.mockReturnValueOnce(pendingSource.promise);
+    let refresh = Promise.resolve();
+    act(() => {
+      refresh = result.current.refreshAllExtensions();
+    });
+    await waitFor(() => {
+      expect(loadExtension).toHaveBeenCalledTimes(2);
+    });
+
+    // When
+    let uninstall = Promise.resolve();
+    await act(async () => {
+      uninstall = result.current.uninstallExtension("local", extension.id);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      pendingSource.resolve({ raw: defaultSource });
+      await Promise.all([refresh, uninstall]);
+    });
+
+    // Then
+    expect(result.current.installedExtensions).toEqual([]);
+    expect(result.current.isExtensionInstalled(extension.id)).toBe(false);
+  });
+
+  it("keeps an install from being overwritten by an in-flight refresh", async () => {
+    // Given
+    const extension = ExtensionBuilder.extensionInfo({ namespace: "local" });
+    const added = ExtensionBuilder.extensionInfo({ namespace: "local", id: "test.added" });
+    const loadExtension = vi.fn().mockResolvedValue({ raw: defaultSource });
+    const loader = createLocalLoader(extension, { loadExtensionMock: loadExtension });
+    loader.installExtension = vi.fn().mockResolvedValue(added);
+    const { result } = await setup({ loadersOverride: [loader] });
+    const pendingSource = Promise.withResolvers<{ raw: string }>();
+    loadExtension.mockReturnValueOnce(pendingSource.promise);
+    let refresh = Promise.resolve();
+    act(() => {
+      refresh = result.current.refreshAllExtensions();
+    });
+    await waitFor(() => {
+      expect(loadExtension).toHaveBeenCalledTimes(2);
+    });
+
+    // When
+    let install: Promise<InstallExtensionsResult[]> = Promise.resolve([]);
+    await act(async () => {
+      install = result.current.installExtensions("local", [{ buffer: new Uint8Array() }]);
+      await Promise.resolve();
+    });
+    await act(async () => {
+      pendingSource.resolve({ raw: defaultSource });
+      await Promise.all([refresh, install]);
+    });
+
+    // Then
+    expect(result.current.installedExtensions).toEqual(expect.arrayContaining([extension, added]));
+  });
+
   it("handles extensions with the same id in different loaders", async () => {
     const source1 = `module.exports = { activate: function() { return 1; } }`;
     const source2 = `module.exports = { activate: function() { return 2; } }`;
@@ -723,7 +807,8 @@ describe("ExtensionCatalogProvider", () => {
       },
     );
 
-    it("should log a warning and still remove extension data from state when uninstallExtension throws", async () => {
+    it("should retain extension data and reject when uninstallExtension throws", async () => {
+      // Given
       (isDesktopApp as Mock).mockReturnValue(false);
       vi.spyOn(console, "warn").mockImplementation(() => {});
 
@@ -735,7 +820,7 @@ describe("ExtensionCatalogProvider", () => {
         getExtension: vi.fn(),
         getExtensions: vi.fn().mockResolvedValue([extensionInfo]),
         installExtension: vi.fn().mockResolvedValue(extensionInfo),
-        loadExtension: vi.fn(),
+        loadExtension: vi.fn().mockResolvedValue({ raw: defaultSource }),
         uninstallExtension: uninstallFn,
       };
 
@@ -745,13 +830,24 @@ describe("ExtensionCatalogProvider", () => {
         expect(result.current.installedExtensions).toHaveLength(1);
       });
 
+      // When
+      await act(async () => {
+        await expect(result.current.uninstallExtension("local", extensionInfo.id)).rejects.toThrow(
+          "Uninstall failed",
+        );
+      });
+
+      // Then — failed persistence must leave the extension available to retry.
+      expect(result.current.installedExtensions).toHaveLength(1);
+      expect(result.current.isExtensionInstalled(extensionInfo.id)).toBe(true);
+
+      // When persistence recovers, a queued retry must still run.
+      uninstallFn.mockResolvedValue(undefined);
       await act(async () => {
         await result.current.uninstallExtension("local", extensionInfo.id);
       });
-
-      // Extension is removed from state despite the error
-      expect(result.current.installedExtensions).toHaveLength(0);
-      expect(result.current.isExtensionInstalled(extensionInfo.id)).toBe(false);
+      // Then
+      expect(result.current.installedExtensions).toEqual([]);
 
       (console.warn as Mock).mockRestore();
     });
