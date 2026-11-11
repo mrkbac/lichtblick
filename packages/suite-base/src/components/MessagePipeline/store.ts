@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { compare, Time } from "@foxglove/rostime";
+import i18next from "i18next";
 import * as _ from "lodash-es";
 import { RefObject } from "react";
 import { createStore, StoreApi } from "zustand";
@@ -26,6 +27,7 @@ import {
   SubscribePayload,
 } from "@lichtblick/suite-base/players/types";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
+import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceFolders";
 
 import { FramePromise } from "./pauseFrameForPromise";
 import { MessagePipelineContext } from "./types";
@@ -175,6 +177,13 @@ export function createMessagePipelineStore({
         const { protocol } = new URL(uri);
         const player = get().player;
 
+        if (!isDesktopApp() && (protocol === "package:" || protocol === "local-asset:")) {
+          const asset = await localResourceFolders.fetchAsset(uri, options);
+          if (asset) {
+            return asset;
+          }
+        }
+
         if (protocol === "package:") {
           // For the desktop app, package:// is registered as a supported schema for builtin _fetch_ calls.
           const canBuiltinFetchPkgUri = isDesktopApp();
@@ -208,6 +217,7 @@ export function createMessagePipelineStore({
               options.referenceUrl.slice(0, options.referenceUrl.lastIndexOf(pkgName)) + pkgPath;
             return await builtinFetch(resolvedUrl, options);
           }
+          throw new Error(i18next.t("appSettings:rosPackageNotFound", { pkgName }));
         }
 
         // Use a regular fetch for all other protocols
