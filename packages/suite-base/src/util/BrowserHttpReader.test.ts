@@ -55,7 +55,7 @@ describe("BrowserHttpReader open errors", () => {
     [undefined, /allows https:\/\/app\.example \(or \*\)/],
     [
       "include" as const,
-      /Allow-Credentials: true and Access-Control-Allow-Origin: https:\/\/app\.example\./,
+      /Allow-Credentials: true and Access-Control-Allow-Origin: https:\/\/app\.example \(a wildcard/,
     ],
   ])(
     "reports CORS when a no-cors request reaches the server (credentials=%s)",
@@ -76,11 +76,11 @@ describe("BrowserHttpReader open errors", () => {
     await expect(reader.open()).rejects.toThrow(/^(?!.*Allow-Credentials)/s);
   });
 
-  it("reports a network error when the server can't be reached at all", async () => {
+  it("reports an inconclusive error when the no-cors request fails too", async () => {
     globalThis.fetch = vi.fn().mockImplementation(blocked);
     const reader = new BrowserHttpReader("https://example.com/a.mcap", { credentials: "include" });
 
-    await expect(reader.open()).rejects.toThrow(/^Couldn't reach https:\/\/example\.com\./);
+    await expect(reader.open()).rejects.toThrow(/^Couldn't read from https:\/\/example\.com\./);
   });
 
   it("passes other errors through without probing", async () => {

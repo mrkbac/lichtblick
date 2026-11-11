@@ -89,7 +89,9 @@ test("routes cold and existing PWA protocol launches without reloading", { tag: 
   await expect(page.locator("body")).toHaveAttribute("data-launch-marker", "same-workspace");
 });
 
-test("opens .mcap and .bag files launched through the PWA file handlers", async ({ page }) => {
+test("opens .mcap and .bag files launched through the PWA file handlers", {
+  tag: "@regression",
+}, async ({ page }) => {
   const manifest = (await (await page.request.get("/manifest.webmanifest")).json()) as {
     file_handlers: { action: string; accept: Record<string, string[]> }[];
   };

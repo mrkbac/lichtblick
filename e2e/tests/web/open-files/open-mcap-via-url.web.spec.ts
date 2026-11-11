@@ -30,7 +30,9 @@ test("should open an MCAP file via URL", { tag: "@smoke" }, async ({ page }) => 
   await expect(pauseButton).toBeEnabled();
 });
 
-test("explains which CORS headers a remote file server is missing", async ({ page }) => {
+test("explains which CORS headers a remote file server is missing", { tag: "@regression" }, async ({
+  page,
+}) => {
   // The app's dev server (localhost:8080) under another origin: it answers without CORS headers. (Mocked routes can't
   // reproduce a CORS rejection.)
   const url = encodeURIComponent("http://127.0.0.1:8080/a.mcap");

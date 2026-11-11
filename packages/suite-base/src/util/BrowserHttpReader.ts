@@ -21,6 +21,9 @@ import type { FileReader, FileStream } from "@lichtblick/suite-base/util/CachedF
 import FetchReader from "@lichtblick/suite-base/util/FetchReader";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
+// Bounds the CORS diagnosis request so a hanging server can't delay the error
+const PROBE_TIMEOUT_MS = 5000;
+
 // This reader runs in the data source workers, where the app never initialized i18next
 async function ensureI18n(): Promise<void> {
   if (!i18next.isInitialized) {
@@ -89,8 +92,9 @@ export default class BrowserHttpReader implements FileReader {
 
   /**
    * fetch() rejects with the same opaque TypeError for a CORS rejection and a network failure.
-   * Tell them apart with a no-cors request: it skips the CORS check, so it only fails when the
-   * server can't be reached (or refuses no-cors reads with Cross-Origin-Resource-Policy).
+   * Tell them apart with a no-cors request: it skips the CORS check, so it reaching the server
+   * means CORS blocked the read. Its failure is inconclusive: the server may be down, or refuse
+   * no-cors reads (Cross-Origin-Resource-Policy).
    */
   async #openError(error: unknown): Promise<Error> {
     if (isDesktopApp() || !(error instanceof TypeError)) {
@@ -101,7 +105,7 @@ export default class BrowserHttpReader implements FileReader {
       mode: "no-cors",
       cache: "no-store",
       credentials: this.#credentials,
-      signal: controller.signal,
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(PROBE_TIMEOUT_MS)]),
     }).then(
       () => true,
       () => false,
