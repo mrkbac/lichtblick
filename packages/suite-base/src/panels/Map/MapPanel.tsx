@@ -30,6 +30,7 @@ import Logger from "@lichtblick/log";
 import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
 import { MessageEvent, PanelExtensionContext, SettingsTreeAction, Topic } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
+import { OVERLAY_TOOLBAR_BUTTON_SIZE } from "@lichtblick/suite-base/components/OverlayToolbar";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { turboColorString } from "@lichtblick/suite-base/util/colorUtils";
 import { formatTime } from "@lichtblick/suite-base/util/formatTime";
@@ -153,10 +154,22 @@ const useStyles = makeStyles()((theme) => ({
     // Above the panel's own overlays (legends, toolbar).
     "& .maplibregl-popup": { zIndex: 3 },
     // Theme MapLibre's built-in controls.
-    "& .maplibregl-ctrl-group": {
+    "& .maplibregl-ctrl-group:not(:empty)": {
       backgroundColor: theme.palette.background.paper,
-      boxShadow: theme.shadows[2],
-      "& button + button": { borderTopColor: theme.palette.divider },
+      boxShadow: theme.shadows[4],
+      borderRadius: theme.shape.borderRadius,
+      overflow: "hidden",
+      "& button": {
+        width: OVERLAY_TOOLBAR_BUTTON_SIZE,
+        height: OVERLAY_TOOLBAR_BUTTON_SIZE,
+        borderRadius: theme.shape.borderRadius,
+      },
+      "& button:focus-visible": {
+        outline: "1px solid currentColor",
+        outlineOffset: -1,
+      },
+      color: theme.palette.text.secondary,
+      "& button + button": { borderTop: 0 },
       "& button:not(:disabled):hover": {
         backgroundColor: theme.palette.action.hover,
       },
@@ -181,7 +194,7 @@ const useStyles = makeStyles()((theme) => ({
     // Under the zoom/compass controls; the attribution at the bottom can wrap to several lines.
     position: "absolute",
     right: 10,
-    top: 110,
+    top: 10 + OVERLAY_TOOLBAR_BUTTON_SIZE * 3 + 10,
     display: "flex",
     flexDirection: "column",
     gap: theme.spacing(0.5),

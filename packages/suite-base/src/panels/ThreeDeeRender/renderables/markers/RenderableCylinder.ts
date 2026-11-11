@@ -9,7 +9,7 @@ import * as THREE from "three";
 
 import { RenderableMarker } from "./RenderableMarker";
 import { makeStandardMaterial } from "./materials";
-import type { IRenderer } from "../../IRenderer";
+import type { Renderer } from "../../Renderer";
 import { rgbToThreeColor } from "../../color";
 import { cylinderSubdivisions, DetailLevel } from "../../lod";
 import { Marker } from "../../ros";
@@ -22,7 +22,7 @@ export class RenderableCylinder extends RenderableMarker {
     topic: string,
     marker: Marker,
     receiveTime: bigint | undefined,
-    renderer: IRenderer,
+    renderer: Renderer,
   ) {
     super(topic, marker, receiveTime, renderer);
 

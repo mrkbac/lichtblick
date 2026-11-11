@@ -73,6 +73,44 @@ describe("useLayoutTransfer", () => {
     vi.clearAllMocks();
   });
 
+  it("does not save a cancelled layout import", async () => {
+    const controller = new AbortController();
+    const content = JSON.stringify(LayoutBuilder.data()) ?? "";
+    const file = new File([content], "cancelled.json");
+    file.text = async () => {
+      controller.abort();
+      return content;
+    };
+    const { result } = renderHook(() => useLayoutTransfer());
+    await act(async () => {
+      await expect(
+        result.current.parseAndInstallLayout(file, "local", controller.signal),
+      ).rejects.toThrow();
+    });
+    expect(saveNewLayoutMock).not.toHaveBeenCalled();
+    expect(onSelectLayoutMock).not.toHaveBeenCalled();
+  });
+
+  it("does not select a superseded layout when a save is already in progress", async () => {
+    const controller = new AbortController();
+    const layout = LayoutBuilder.layout();
+    const content = JSON.stringify(LayoutBuilder.data()) ?? "";
+    const file = new File([content], "cancelled.json");
+    file.text = async () => content;
+    saveNewLayoutMock.mockImplementationOnce(async () => {
+      controller.abort();
+      return layout;
+    });
+    const { result } = renderHook(() => useLayoutTransfer());
+    await act(async () => {
+      await expect(
+        result.current.parseAndInstallLayout(file, "local", controller.signal),
+      ).rejects.toThrow();
+    });
+    expect(saveNewLayoutMock).toHaveBeenCalledTimes(1);
+    expect(onSelectLayoutMock).not.toHaveBeenCalled();
+  });
+
   it("should import a layout and call onSelectLayout", async () => {
     promptForUnsavedChangesMock.mockResolvedValue(true);
     const content = JSON.stringify(LayoutBuilder.data()) ?? "";

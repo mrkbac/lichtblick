@@ -15,8 +15,9 @@ import { SettingsTreeAction, SettingsTreeFields } from "@lichtblick/suite";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
 import { Axis, AXIS_LENGTH } from "./Axis";
-import type { AnyRendererSubscription, IRenderer } from "../IRenderer";
+import type { AnyRendererSubscription } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import {
   onlyLastByTopicMessage,
   PartialMessage,
@@ -106,7 +107,7 @@ export class PoseRenderable extends Renderable<PoseUserData> {
 
 export class Poses extends SceneExtension<PoseRenderable> {
   public static extensionId = "foxglove.Poses";
-  public constructor(renderer: IRenderer, name: string = Poses.extensionId) {
+  public constructor(renderer: Renderer, name: string = Poses.extensionId) {
     super(name, renderer);
   }
 

@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
-import { IRenderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
 import { LayerErrors } from "@lichtblick/suite-base/panels/ThreeDeeRender/LayerErrors";
+import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
 import { MISSING_TRANSFORM } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/transforms";
 import { PointCloud2, PointFieldType } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
 import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updatePose";
@@ -70,10 +70,11 @@ function makeIntensityCloud(): PointCloud2 {
 }
 
 const noop = () => {};
-const renderer = {
+const rendererMock = {
   settings: { errors: { add: noop, addToTopic: noop, remove: noop, removeFromTopic: noop } },
   normalizeFrameId: (frameId: string) => frameId,
-} as unknown as IRenderer;
+};
+const renderer = rendererMock as unknown as Renderer;
 
 type Settings = typeof DEFAULT_POINT_SETTINGS & {
   stixelsEnabled: boolean;
@@ -207,10 +208,10 @@ describe("PointCloudHistoryRenderable missing transform error", () => {
     const errors = new LayerErrors();
     const path = ["topics", "/points"];
     const { renderable } = decode(makeCloud(), { stixelsEnabled: true }, {
-      ...renderer,
+      ...rendererMock,
       transformTree: {},
       settings: { errors },
-    } as unknown as IRenderer);
+    } as unknown as Renderer);
 
     // points fail, stixels resolve: the error must stay
     vi.mocked(updatePose).mockReturnValueOnce(false).mockReturnValue(true);

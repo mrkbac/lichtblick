@@ -20,14 +20,7 @@ import {
   Diamond20Filled,
   RectangleLandscape20Regular,
 } from "@fluentui/react-icons";
-import {
-  FormControlLabel,
-  IconButton,
-  Paper,
-  Radio,
-  RadioGroup,
-  iconButtonClasses,
-} from "@mui/material";
+import { FormControlLabel, IconButton, Radio, RadioGroup } from "@mui/material";
 import Cytoscape from "cytoscape";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { makeStyles } from "tss-react/mui";
@@ -35,6 +28,7 @@ import { makeStyles } from "tss-react/mui";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import ExpandingToolbar, { ToolGroup } from "@lichtblick/suite-base/components/ExpandingToolbar";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import OverlayToolbar from "@lichtblick/suite-base/components/OverlayToolbar";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import { PANEL_TOOLBAR_MIN_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
@@ -118,22 +112,6 @@ const useStyles = makeStyles()((theme) => ({
     // allow mouse events to pass through the empty space in this container element
     pointerEvents: "none",
   },
-  paper: {
-    display: "flex",
-    flexDirection: "column",
-    pointerEvents: "auto",
-
-    [`.${iconButtonClasses.root}`]: {
-      "&:not(:first-of-type)": {
-        borderTopRightRadius: 0,
-        borderTopLeftRadius: 0,
-      },
-      "&:not(:last-child)": {
-        borderBottomRightRadius: 0,
-        borderBottomLeftRadius: 0,
-      },
-    },
-  },
   toolbarContent: {
     padding: theme.spacing(1),
   },
@@ -166,6 +144,7 @@ function unionInto<T>(dest: Set<T>, ...iterables: ReadonlySet<T>[]): void {
   }
 }
 
+/** Displays publisher/subscriber relationships with floating graph and visibility controls. */
 function TopicGraph() {
   const { classes } = useStyles();
   const [selectedTab, setSelectedTab] = useState<"Topics" | undefined>(undefined);
@@ -365,24 +344,30 @@ function TopicGraph() {
     <>
       <PanelToolbar />
       <div className={classes.root}>
-        <Paper square={false} elevation={4} className={classes.paper}>
-          <IconButton size="small" title="Zoom fit" onClick={onZoomFit}>
+        <OverlayToolbar>
+          <IconButton size="small" aria-label="Zoom fit" title="Zoom fit" onClick={onZoomFit}>
             <PageFit20Regular />
           </IconButton>
-          <IconButton size="small" title="Orientation" onClick={toggleOrientation}>
+          <IconButton
+            size="small"
+            aria-label="Orientation"
+            title="Orientation"
+            onClick={toggleOrientation}
+          >
             <ArrowBidirectionalUpDown20Regular
               style={{ transform: `rotate(${lrOrientation ? 90 : 0}deg)` }}
             />
           </IconButton>
           <IconButton
             size="small"
-            color={showServices ? "info" : "inherit"}
+            aria-pressed={showServices}
+            aria-label={showServices ? "Showing services" : "Hiding services"}
             title={showServices ? "Showing services" : "Hiding services"}
             onClick={toggleShowServices}
           >
             <RectangleLandscape20Regular />
           </IconButton>
-        </Paper>
+        </OverlayToolbar>
 
         <ExpandingToolbar
           checked={topicVisibility !== "none"}

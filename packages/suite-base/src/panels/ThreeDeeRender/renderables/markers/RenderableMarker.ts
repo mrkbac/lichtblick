@@ -10,8 +10,8 @@ import * as THREE from "three";
 
 import { RosValue } from "@lichtblick/suite-base/players/types";
 
-import type { IRenderer } from "../../IRenderer";
 import { BaseUserData, Renderable } from "../../Renderable";
+import type { Renderer } from "../../Renderer";
 import { makeRgba, rgbToThreeColor, stringToRgba } from "../../color";
 import { Marker } from "../../ros";
 import type { LayerSettingsMarker } from "../TopicMarkers";
@@ -36,7 +36,7 @@ export class RenderableMarker extends Renderable<MarkerUserData> {
     topic: string,
     marker: Marker,
     receiveTime: bigint | undefined,
-    renderer: IRenderer,
+    renderer: Renderer,
   ) {
     const name = getMarkerId(topic, marker.ns, marker.id);
     const hasLifetime = marker.lifetime.sec !== 0 || marker.lifetime.nsec !== 0;

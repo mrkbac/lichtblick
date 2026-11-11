@@ -30,7 +30,7 @@ import { makeStyles } from "tss-react/mui";
 import clipboard from "@lichtblick/suite-base/util/clipboard";
 import { fontMonospace } from "@lichtblick/theme";
 
-import type { IRenderer } from "./IRenderer";
+import type { Renderer } from "./Renderer";
 import { measureKindLabel, MeasureKind, MeasurementInfo } from "./renderables/MeasurementTool";
 import type { ProfileSeries } from "./renderables/measure/geometry";
 
@@ -114,7 +114,7 @@ function ProfileChart({ profile }: { profile: ProfileSeries }): React.JSX.Elemen
 }
 
 /** Tool picker and result list for the 3D panel's measurement tool */
-export function MeasurePanel({ renderer }: { renderer: IRenderer }): React.JSX.Element {
+export function MeasurePanel({ renderer }: { renderer: Renderer }): React.JSX.Element {
   const { classes, cx } = useStyles();
   const { t } = useTranslation("threeDee");
   const tool = renderer.measurementTool;
