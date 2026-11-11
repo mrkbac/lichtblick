@@ -13,6 +13,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import { Time } from "@foxglove/rostime";
 import { Link, Typography } from "@mui/material";
 import { t } from "i18next";
 import { useSnackbar } from "notistack";
@@ -113,6 +114,7 @@ import { parseAppURLState } from "@lichtblick/suite-base/util/appURLState";
 import useBroadcast from "@lichtblick/suite-base/util/broadcast/useBroadcast";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
+import { pwaProtocolUrl } from "@lichtblick/suite-base/util/pwaProtocolUrl";
 
 import { useWorkspaceActions } from "./context/Workspace/useWorkspaceActions";
 import { severityToBadgeColor } from "./utils";
@@ -157,6 +159,7 @@ const selectWorkspaceRightSidebarItem = (store: WorkspaceContextStore) => store.
 const selectWorkspaceRightSidebarOpen = (store: WorkspaceContextStore) => store.sidebars.right.open;
 const selectWorkspaceRightSidebarSize = (store: WorkspaceContextStore) => store.sidebars.right.size;
 
+/** Keeps the active workspace mounted while applying file and protocol launch requests. */
 function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   const { PerformanceSidebarComponent } = useAppContext();
   const { classes } = useStyles();
@@ -276,9 +279,39 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     }
   }, [filesToOpen]);
 
-  // files the OS asked the installed PWA to open (manifest file_handlers)
+  const [launchedURL, setLaunchedURL] = useState<URL>();
+  const initialLaunchURL = useRef(props.deepLinks?.[0]);
+  const layoutRequest = useRef<AbortController>(undefined);
+  const bundleRequest = useRef<AbortController>(undefined);
+  useEffect(() => () => layoutRequest.current?.abort(), [launchedURL]);
+
+  // One consumer handles both file and protocol launches; focus-existing never reloads the app.
   useEffect(() => {
-    window.launchQueue?.setConsumer(async ({ files }) => {
+    if (isDesktopApp()) {
+      return;
+    }
+    const initialProtocolURL = initialLaunchURL.current
+      ? pwaProtocolUrl(initialLaunchURL.current, new URL(window.location.href))
+      : undefined;
+    if (initialProtocolURL) {
+      window.history.replaceState(undefined, "", initialProtocolURL.href);
+    }
+    window.launchQueue?.setConsumer(async ({ files, targetURL }) => {
+      const initialURL = initialLaunchURL.current;
+      initialLaunchURL.current = undefined;
+      if (files.length === 0 && targetURL != undefined && targetURL !== initialURL) {
+        const url = pwaProtocolUrl(targetURL, new URL(window.location.href));
+        if (url && parseAppURLState(url)) {
+          window.history.replaceState(undefined, "", url.href);
+          setLaunchedURL(url);
+        }
+      }
+      // A file launch supersedes any protocol launch still waiting on its layout, bundle or seek.
+      if (files.length > 0) {
+        layoutRequest.current?.abort();
+        bundleRequest.current?.abort();
+        setUnappliedTime({});
+      }
       const fileHandles = files.filter((h): h is FileSystemFileHandle => h.kind === "file");
       if (fileHandles.length === 0) {
         return;
@@ -292,6 +325,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         enqueueSnackbar("Failed to open the launched file", { variant: "error" });
       }
     });
+    return () => window.launchQueue?.setConsumer(() => {});
   }, [enqueueSnackbar]);
 
   const dropHandler = useCallback(
@@ -545,10 +579,21 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     ],
   );
 
+  const deepLink = props.deepLinks?.[0];
   const targetUrlState = useMemo(() => {
-    const deepLinks = props.deepLinks ?? [];
-    return deepLinks[0] ? parseAppURLState(new URL(deepLinks[0])) : undefined;
-  }, [props.deepLinks]);
+    if (launchedURL) {
+      return parseAppURLState(launchedURL);
+    }
+    if (!deepLink) {
+      return undefined;
+    }
+    const url = new URL(deepLink);
+    if (!isDesktopApp() && url.searchParams.has("protocol")) {
+      const protocolURL = pwaProtocolUrl(deepLink, new URL(window.location.href));
+      return protocolURL ? parseAppURLState(protocolURL) : undefined;
+    }
+    return parseAppURLState(url);
+  }, [launchedURL, deepLink]);
 
   const [unappliedSourceArgs, setUnappliedSourceArgs] = useState<
     | {
@@ -567,20 +612,51 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
         }
       : undefined,
   );
+  const [unappliedTime, setUnappliedTime] = useState<{ time?: Time; previousPlayerId?: string }>(
+    targetUrlState ? { time: targetUrlState.time } : {},
+  );
+
+  // Replacing a player changes the pipeline getter; it must not replay the source launch.
+  const appliedLaunchURL = useRef<URL>(undefined);
+  useEffect(() => {
+    if (!launchedURL || appliedLaunchURL.current === launchedURL) {
+      return;
+    }
+    appliedLaunchURL.current = launchedURL;
+    const state = parseAppURLState(launchedURL);
+    setUnappliedSourceArgs(
+      state && !state.mcapBundleId
+        ? {
+            ds: state.ds,
+            dsParams: state.dsParams,
+            layoutUrl: state.layoutUrl,
+          }
+        : undefined,
+    );
+    setUnappliedTime({
+      time: state?.time,
+      previousPlayerId:
+        state?.ds || state?.mcapBundleId ? getMessagePipeline().playerState.playerId : undefined,
+    });
+  }, [launchedURL, getMessagePipeline]);
 
   // Resolve MCAP bundle URLs when mcapBundleId is present.
+  const mcapBundleId = targetUrlState?.mcapBundleId;
   useEffect(() => {
-    const mcapBundleId = targetUrlState?.mcapBundleId;
     if (!mcapBundleId) {
       return;
     }
 
     const controller = new AbortController();
+    bundleRequest.current = controller;
     const { signal } = controller;
 
     void (async () => {
       try {
         const mcaps = await McapBundleAPI.getMcapBundle(mcapBundleId, signal);
+        if (signal.aborted) {
+          return;
+        }
         if (mcaps.length === 0) {
           enqueueSnackbar("Session contains no data sources", { variant: "error" });
           return;
@@ -604,10 +680,11 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     return () => {
       controller.abort();
     };
-  }, [targetUrlState?.mcapBundleId, enqueueSnackbar]);
+  }, [mcapBundleId, launchedURL, enqueueSnackbar]);
 
   const selectEvent = useEvents(selectSelectEvent);
 
+  /** Only the current launch may install a downloaded layout or replace saved copies. */
   const fetchLayoutFromUrl = useCallback(
     async (layoutUrl: string) => {
       if (layoutUrl === "") {
@@ -631,8 +708,13 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       // Use origin+pathname for logging/naming to avoid leaking credentials from query params
       const safeUrlLabel = `${parsedUrl.origin}${parsedUrl.pathname}`;
 
+      layoutRequest.current?.abort();
+      const controller = new AbortController();
+      layoutRequest.current = controller;
+      const { signal } = controller;
       try {
-        const response = await fetch(layoutUrl);
+        const response = await fetch(layoutUrl, { signal });
+        signal.throwIfAborted();
         if (!response.ok) {
           log.error(`Failed to fetch layout: ${safeUrlLabel} (status ${response.status})`);
           enqueueSnackbar(`Failed to load layout (HTTP ${response.status})`, { variant: "error" });
@@ -652,16 +734,21 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
         // Delegate JSON parsing, saving, and selection to parseAndInstallLayout
         const text = await response.text();
+        signal.throwIfAborted();
         const file = new File([text], filename, { type: "application/json" });
-        const newLayout = await parseAndInstallLayout(file, "local");
+        const newLayout = await parseAndInstallLayout(file, "local", signal);
 
         // Only delete old layouts after successful save to avoid data loss
         if (newLayout) {
           for (const layout of matchingLayouts) {
+            signal.throwIfAborted();
             await layoutManager.deleteLayout({ id: layout.id });
           }
         }
       } catch (error) {
+        if (signal.aborted) {
+          return;
+        }
         log.error(`Could not load layout from ${safeUrlLabel}`, error);
         enqueueSnackbar("Failed to load layout from URL", { variant: "error" });
       }
@@ -700,24 +787,24 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     }
   }, [fetchLayoutFromUrl, selectEvent, selectSource, unappliedSourceArgs, setUnappliedSourceArgs]);
 
-  const [unappliedTime, setUnappliedTime] = useState(
-    targetUrlState ? { time: targetUrlState.time } : undefined,
-  );
   // Seek to time in URL.
   useEffect(() => {
-    if (unappliedTime?.time == undefined || !seek) {
+    if (unappliedTime.time == undefined || !seek) {
       return;
     }
 
     // Wait until player is ready before we try to seek.
-    if (playerPresence !== PlayerPresence.PRESENT) {
+    if (
+      playerPresence !== PlayerPresence.PRESENT ||
+      (unappliedTime.previousPlayerId != undefined && unappliedTime.previousPlayerId === playerId)
+    ) {
       return;
     }
 
     log.debug(`Seeking to url time:`, unappliedTime.time);
     seek(unappliedTime.time);
     setUnappliedTime({ time: undefined });
-  }, [playerPresence, seek, unappliedTime]);
+  }, [playerId, playerPresence, seek, unappliedTime]);
 
   useSeekTimeFromCLI();
 
