@@ -15,6 +15,7 @@ declare global {
   // https://developer.mozilla.org/en-US/docs/Web/API/Launch_Handler_API (installed PWA file_handlers)
   interface LaunchParams {
     readonly files: readonly FileSystemHandle[];
+    readonly targetURL?: string;
   }
   interface Window {
     launchQueue?: { setConsumer(consumer: (params: LaunchParams) => void): void };

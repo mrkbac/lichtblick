@@ -7,8 +7,8 @@ import * as urdf from "@lichtblick/den/urdf";
 import { UrdfRobot } from "@lichtblick/den/urdf";
 
 import { createRenderable, Urdfs } from "./Urdfs";
-import { IRenderer } from "../IRenderer";
 import { LoadedModel } from "../ModelCache";
+import type { Renderer } from "../Renderer";
 import { MESH_FETCH_FAILED, RenderableMeshResource } from "./markers/RenderableMeshResource";
 
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
@@ -20,7 +20,7 @@ const renderer = {
   settings: { errors: meshErrors },
   config: { topics: {} },
   modelCache: { load: async () => await new Promise(() => {}) },
-} as unknown as IRenderer;
+} as unknown as Renderer;
 
 const robot: UrdfRobot = {
   name: "robot",
@@ -173,7 +173,7 @@ describe("Urdfs createRenderable", () => {
 });
 
 describe("URDF requests", () => {
-  function createExtension(fetchAsset: IRenderer["fetchAsset"]) {
+  function createExtension(fetchAsset: Renderer["fetchAsset"]) {
     const addError = vi.fn();
     const removeError = vi.fn();
     const queueAnimationFrame = vi.fn();
@@ -198,7 +198,7 @@ describe("URDF requests", () => {
       settings: { errors: { add: addError, remove: removeError }, setNodesForKey: vi.fn() },
       fetchAsset,
     };
-    const extension = new Urdfs(context as unknown as IRenderer);
+    const extension = new Urdfs(context as unknown as Renderer);
     return { extension, addError, removeError, queueAnimationFrame, context };
   }
 

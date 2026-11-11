@@ -14,6 +14,7 @@ import {
   FoxgloveWebSocketDataSourceFactory,
   IDataSourceFactory,
   IdbExtensionLoader,
+  WebExtensionLoader,
   McapLocalDataSourceFactory,
   RemoteDataSourceFactory,
   RemoteExtensionLoader,
@@ -31,6 +32,7 @@ import LocalStorageAppConfiguration from "./services/LocalStorageAppConfiguratio
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
+/** Configures browser services and keeps protocol callbacks inside the installed web app. */
 export function WebRoot(props: {
   extraProviders: React.JSX.Element[] | undefined;
   dataSources: IDataSourceFactory[] | undefined;
@@ -49,9 +51,10 @@ export function WebRoot(props: {
 
   const defaultExtensionLoaders: IExtensionLoader[] = [
     new IdbExtensionLoader("org"),
-    new IdbExtensionLoader("local"),
+    new WebExtensionLoader(),
   ];
   const url = new URL(globalThis.location.href);
+  const [isProtocolLaunch] = useState(() => url.searchParams.has("protocol"));
   const workspace = url.searchParams.get("workspace");
 
   if (workspace && APP_CONFIG.apiUrl) {
@@ -85,7 +88,7 @@ export function WebRoot(props: {
 
   return (
     <SharedRoot
-      enableLaunchPreferenceScreen
+      enableLaunchPreferenceScreen={!isProtocolLaunch}
       deepLinks={[globalThis.location.href]}
       dataSources={dataSources}
       appConfiguration={appConfiguration}

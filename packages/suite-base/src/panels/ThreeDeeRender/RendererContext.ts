@@ -8,16 +8,17 @@
 import EventEmitter from "eventemitter3";
 import { createContext, useContext, useEffect, useState } from "react";
 
-import type { IRenderer, RendererEvents } from "./IRenderer";
+import type { RendererEvents } from "./IRenderer";
+import type { Renderer } from "./Renderer";
 
-export const RendererContext = createContext<IRenderer | undefined>(undefined);
+export const RendererContext = createContext<Renderer | undefined>(undefined);
 
 /**
  * React hook to retrieve the Renderer instance registered with the
  * RendererContext. This will always return undefined from the ThreeDeeRender()
  * component since the context exists below ThreeDeeRender().
  */
-export function useRenderer(): IRenderer | undefined {
+export function useRenderer(): Renderer | undefined {
   const renderer = useContext(RendererContext);
   return renderer ?? undefined;
 }
@@ -36,7 +37,7 @@ export function useRendererEvent<K extends keyof RendererEvents>(
   listener: (
     ...args: EventEmitter.ArgumentMap<RendererEvents>[Extract<K, keyof RendererEvents>]
   ) => void,
-  rendererInstance?: IRenderer | null,
+  rendererInstance?: Renderer | null,
 ): void {
   const usedRenderer = useRenderer();
   const renderer = rendererInstance ?? usedRenderer;
@@ -56,16 +57,16 @@ export function useRendererEvent<K extends keyof RendererEvents>(
  * @param rendererInstance - Optional Renderer instance to subscribe to instead of the reference returned by useRenderer()
  * @returns - value of renderer property or fallback if undefined
  */
-export function useRendererProperty<K extends keyof IRenderer>(
+export function useRendererProperty<K extends keyof Renderer>(
   key: K,
   event: keyof RendererEvents,
-  fallback: () => IRenderer[K],
-  rendererInstance?: IRenderer,
-): IRenderer[K] {
+  fallback: () => Renderer[K],
+  rendererInstance?: Renderer,
+): Renderer[K] {
   const usedRenderer = useRenderer();
   const renderer = rendererInstance ?? usedRenderer;
 
-  const [value, setValue] = useState<IRenderer[K]>(() => renderer?.[key] ?? fallback());
+  const [value, setValue] = useState<Renderer[K]>(() => renderer?.[key] ?? fallback());
   useEffect(() => {
     if (!renderer) {
       return;

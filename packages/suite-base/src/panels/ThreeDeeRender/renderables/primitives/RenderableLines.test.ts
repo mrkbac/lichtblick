@@ -3,9 +3,10 @@
 
 import { LinePrimitive, LineType, SceneEntity } from "@foxglove/schemas";
 import * as THREE from "three";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 
 import { RenderableLines } from "./RenderableLines";
-import type { IRenderer } from "../../IRenderer";
+import type { Renderer } from "../../Renderer";
 import { LayerSettingsEntity } from "../../settings";
 
 const settings: LayerSettingsEntity = {
@@ -60,8 +61,25 @@ function materialVersion(renderable: RenderableLines): number {
 }
 
 describe("RenderableLines", () => {
+  it.each([
+    [LineType.LINE_STRIP, 1],
+    [LineType.LINE_LOOP, 2],
+    [LineType.LINE_LIST, 1],
+  ])("draws only the current segments after type %s shrinks", (type, count) => {
+    const renderer = { input: { canvasSize: new THREE.Vector2(100, 100) } } as Renderer;
+    const renderable = new RenderableLines(renderer);
+    const points = [0, 1, 2, 3].map((x) => ({ x, y: 0, z: 0 }));
+    renderable.update("/topic", entity({ type, points }), settings, 0n);
+    const line = renderable.children[0]!.children[0] as LineSegments2;
+    const buffer = line.geometry.getAttribute("instanceStart");
+    renderable.update("/topic", entity({ type, points: points.slice(0, 2) }), settings, 1n);
+    expect(line.geometry.getAttribute("instanceStart")).toBe(buffer);
+    expect(line.geometry.instanceCount).toBe(count);
+    renderable.dispose();
+  });
+
   it("only rebuilds the line shader when a compiled property changes", () => {
-    const renderer = { input: { canvasSize: new THREE.Vector2(100, 100) } } as IRenderer;
+    const renderer = { input: { canvasSize: new THREE.Vector2(100, 100) } } as Renderer;
     const renderable = new RenderableLines(renderer);
 
     renderable.update("/topic", entity({}), settings, 0n);

@@ -32,7 +32,7 @@ it("requests read-only access, scans the grant, and reports permission failures"
   await waitFor(() => {
     expect(add).toHaveBeenCalledWith(handle);
   });
-  expect(picker).toHaveBeenCalledWith({ mode: "read" });
+  expect(picker).toHaveBeenCalledWith({ id: "lichtblick-ros-resources", mode: "read" });
   expect(await screen.findByRole("alert")).toHaveTextContent("Access denied");
 });
 

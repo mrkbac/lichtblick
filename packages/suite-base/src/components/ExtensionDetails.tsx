@@ -105,10 +105,12 @@ export function ExtensionDetails({
             >
               {extension.id}
             </Link>
-            <Typography
-              variant="caption"
-              color="textSecondary"
-            >{`v${extension.version}`}</Typography>
+            {extension.version && (
+              <Typography
+                variant="caption"
+                color="textSecondary"
+              >{`v${extension.version}`}</Typography>
+            )}
             <Typography variant="caption" color="textSecondary">
               {extension.license}
             </Typography>

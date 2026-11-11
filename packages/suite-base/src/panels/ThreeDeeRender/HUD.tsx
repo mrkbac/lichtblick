@@ -11,7 +11,7 @@ import * as React from "react";
 import { makeStyles } from "tss-react/mui";
 
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
-import { IRenderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
+import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
 import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 
 import { HUDItem } from "./HUDItemManager";
@@ -56,7 +56,7 @@ const useStyles = makeStyles()((theme) => ({
 }));
 
 type HUDProps = {
-  renderer?: IRenderer;
+  renderer?: Renderer;
 };
 
 export function HUD(props: HUDProps): React.ReactElement {

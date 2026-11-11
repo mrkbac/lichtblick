@@ -6,7 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 
 import { FROM_COLOR, FrameMeasureCard, TO_COLOR } from "./FrameMeasureCard";
-import type { IRenderer } from "./IRenderer";
+import type { Renderer } from "./Renderer";
 import { useRendererEvent } from "./RendererContext";
 import type { FrameAxes } from "./renderables/FrameAxes";
 import { frameTransform } from "./renderables/measure/geometry";
@@ -32,7 +32,7 @@ const tempScale = new THREE.Vector3();
 type Result = { pose?: Pose; missing?: MissingLink | "unavailable" };
 
 /** Pose of `to` in `from` at the renderer's current time, or why there is none */
-function measureInRenderer(renderer: IRenderer, from: string, to: string): Result {
+function measureInRenderer(renderer: Renderer, from: string, to: string): Result {
   const tree = renderer.transformTree;
   if (!frameTransform(tempMatrix, tree, from, renderer.fixedFrameId, to, renderer.currentTime)) {
     const missing = findMissingLink(
@@ -50,7 +50,7 @@ function measureInRenderer(renderer: IRenderer, from: string, to: string): Resul
   };
 }
 
-function frameIds(renderer: IRenderer): string[] {
+function frameIds(renderer: Renderer): string[] {
   return [...renderer.transformTree.frames().keys()].sort();
 }
 
@@ -64,7 +64,7 @@ export function FrameMeasureOverlay({
   picking,
   onStopPicking,
 }: {
-  renderer: IRenderer;
+  renderer: Renderer;
   picking: boolean;
   onStopPicking: () => void;
 }): React.JSX.Element | undefined {

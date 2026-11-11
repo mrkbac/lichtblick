@@ -29,6 +29,10 @@ export interface IExtensionLoader {
   readonly namespace: Namespace;
   readonly type: TypeExtensionLoader;
 
+  // Available only when the browser can retain user-selected directory access.
+  readonly directoryErrors?: readonly string[];
+  loadExtensionFromDirectory?: () => Promise<void>;
+
   // get extension by id
   getExtension(id: string): Promise<ExtensionInfo | undefined>;
 

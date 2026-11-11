@@ -12,8 +12,9 @@ import * as THREE from "three";
 import { SettingsTreeAction, SettingsTreeFields } from "@lichtblick/suite";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
-import type { AnyRendererSubscription, IRenderer } from "../IRenderer";
+import type { AnyRendererSubscription } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import {
   PartialMessage,
   PartialMessageEvent,
@@ -92,7 +93,7 @@ export class OccupancyGridRenderable extends Renderable<OccupancyGridUserData> {
 
 export class OccupancyGrids extends SceneExtension<OccupancyGridRenderable> {
   public static extensionId = "foxglove.OccupancyGrids";
-  public constructor(renderer: IRenderer, name: string = OccupancyGrids.extensionId) {
+  public constructor(renderer: Renderer, name: string = OccupancyGrids.extensionId) {
     super(name, renderer);
   }
 
@@ -317,7 +318,7 @@ function createGeometry(): THREE.PlaneGeometry {
   return geometry;
 }
 function invalidOccupancyGridError(
-  renderer: IRenderer,
+  renderer: Renderer,
   renderable: OccupancyGridRenderable,
   message: string,
 ): void {
