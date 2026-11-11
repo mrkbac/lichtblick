@@ -1192,7 +1192,13 @@ export class Renderer extends EventEmitter<RendererEvents> {
       targetOffset: sphere.center.toArray(),
       distance,
       // Keep the far side of the fitted data inside the clipping range
-      far: Math.max(state.far, (distance + radius) * 1.1),
+      // (an orthographic camera sits at z = far / 2 and sees z in [-far / 2, far / 2 - near])
+      far: Math.max(
+        state.far,
+        state.perspective
+          ? (distance + radius) * 1.1
+          : 2 * (state.near + Math.abs(sphere.center.z) + radius),
+      ),
     };
     this.updateConfig((draft) => {
       draft.cameraState = cameraState;
