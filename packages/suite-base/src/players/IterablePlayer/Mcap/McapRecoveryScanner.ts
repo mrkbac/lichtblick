@@ -16,6 +16,17 @@ import type { PlayerAlert } from "@lichtblick/suite-base/players/types";
 
 const RECORD_PREFIX_LENGTH = 9n; // opcode + content length
 const READ_WINDOW_BYTES = 8n * 1024n * 1024n;
+const SNAPSHOT_VERSION = 1;
+
+type SnapshotHeader = {
+  version: number;
+  offset: string;
+  complete: boolean;
+  chunkCount: number;
+  corruptRecords: number;
+  unchunkedMessageCount: number;
+  messageIndexLength: number;
+};
 
 /**
  * Recovers a damaged MCAP (no footer or summary, truncated last record, corrupt chunks, garbage at
@@ -43,9 +54,10 @@ export class McapRecoveryScanner {
   #decompressHandlers: McapTypes.DecompressHandlers;
   #schemas = new Map<number, McapTypes.Schema>();
   #channels = new Map<number, McapTypes.Channel>();
-  // Message indexes are written as we go; chunk indexes point into this buffer (offsets relative
-  // to its start) and get shifted when the summary is built.
-  #messageIndexes = new McapRecordBuilder();
+  // Message indexes are written as we go; chunk indexes point into these bytes (offsets relative
+  // to their start) and get shifted when the summary is built.
+  #messageIndexes: Uint8Array[] = [];
+  #messageIndexLength = 0;
   #chunkIndexes: McapTypes.ChunkIndex[] = [];
   #attachmentIndexes: McapTypes.AttachmentIndex[] = [];
   #metadataIndexes: McapTypes.MetadataIndex[] = [];
@@ -61,6 +73,99 @@ export class McapRecoveryScanner {
 
   public recoveredChunkCount(): number {
     return this.#chunkIndexes.length;
+  }
+
+  /**
+   * Everything needed to restore this scanner without scanning again: the counters, then the
+   * same tail `toReadable()` serves (message indexes + summary + footer).
+   */
+  public toSnapshot(): Uint8Array {
+    const tail = (this.#tail ??= this.#buildTail(this.offset));
+    const header = new TextEncoder().encode(
+      JSON.stringify({
+        version: SNAPSHOT_VERSION,
+        offset: String(this.offset),
+        complete: this.complete,
+        chunkCount: this.chunkCount,
+        corruptRecords: this.corruptRecords,
+        unchunkedMessageCount: this.unchunkedMessageCount,
+        messageIndexLength: this.#messageIndexLength,
+      } satisfies SnapshotHeader),
+    );
+    const out = new Uint8Array(4 + header.byteLength + tail.byteLength);
+    new DataView(out.buffer).setUint32(0, header.byteLength, true);
+    out.set(header, 4);
+    out.set(tail, 4 + header.byteLength);
+    return out;
+  }
+
+  /** The inverse of `toSnapshot()`; throws on anything it doesn't recognize */
+  public static fromSnapshot(
+    snapshot: Uint8Array,
+    decompressHandlers: McapTypes.DecompressHandlers,
+  ): McapRecoveryScanner {
+    const view = new DataView(snapshot.buffer, snapshot.byteOffset, snapshot.byteLength);
+    const headerLength = view.getUint32(0, true);
+    const header = JSON.parse(
+      new TextDecoder().decode(snapshot.subarray(4, 4 + headerLength)),
+    ) as SnapshotHeader;
+    if (header.version !== SNAPSHOT_VERSION) {
+      throw new Error("Unknown snapshot version");
+    }
+    const scanner = new McapRecoveryScanner(decompressHandlers);
+    scanner.offset = BigInt(header.offset);
+    scanner.complete = header.complete;
+    scanner.chunkCount = header.chunkCount;
+    scanner.corruptRecords = header.corruptRecords;
+    scanner.unchunkedMessageCount = header.unchunkedMessageCount;
+
+    const tail = snapshot.slice(4 + headerLength);
+    scanner.#messageIndexes = [tail.subarray(0, header.messageIndexLength)];
+    scanner.#messageIndexLength = header.messageIndexLength;
+    const summary = reader(tail.subarray(header.messageIndexLength));
+    for (;;) {
+      const record = parseRecord(summary, true);
+      if (!record) {
+        throw new Error("Snapshot ends before its footer");
+      }
+      if (record.type === "Footer") {
+        break;
+      }
+      switch (record.type) {
+        case "Schema":
+          scanner.#schemas.set(record.id, record);
+          break;
+        case "Channel":
+          scanner.#channels.set(record.id, record);
+          break;
+        case "ChunkIndex":
+          scanner.#chunkIndexes.push({
+            ...record,
+            messageIndexOffsets: new Map(
+              [...record.messageIndexOffsets].map(([id, offset]) => [id, offset - scanner.offset]),
+            ),
+          });
+          break;
+        case "AttachmentIndex":
+          scanner.#attachmentIndexes.push(record);
+          break;
+        case "MetadataIndex":
+          scanner.#metadataIndexes.push(record);
+          break;
+        case "Statistics":
+          scanner.messageCount = record.messageCount;
+          scanner.#channelMessageCounts = new Map(record.channelMessageCounts);
+          if (scanner.#chunkIndexes.length > 0) {
+            scanner.#messageStartTime = record.messageStartTime;
+            scanner.#messageEndTime = record.messageEndTime;
+          }
+          break;
+        default:
+          break;
+      }
+    }
+    scanner.#tail = tail;
+    return scanner;
   }
 
   public async scan(readable: McapTypes.IReadable): Promise<void> {
@@ -292,14 +397,14 @@ export class McapRecoveryScanner {
     let start: bigint | undefined;
     let end: bigint | undefined;
     const messageIndexOffsets = new Map<number, bigint>();
-    const messageIndexStart = this.#messageIndexes.length;
+    const messageIndexes = new McapRecordBuilder();
     for (const [channelId, messages] of messagesByChannel) {
       messages.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
       start = start == undefined || messages[0]![0] < start ? messages[0]![0] : start;
       const last = messages[messages.length - 1]![0];
       end = end == undefined || last > end ? last : end;
-      messageIndexOffsets.set(channelId, BigInt(this.#messageIndexes.length));
-      this.#messageIndexes.writeMessageIndex({ channelId, records: messages });
+      messageIndexOffsets.set(channelId, BigInt(this.#messageIndexLength + messageIndexes.length));
+      messageIndexes.writeMessageIndex({ channelId, records: messages });
       this.#channelMessageCounts.set(
         channelId,
         (this.#channelMessageCounts.get(channelId) ?? 0n) + BigInt(messages.length),
@@ -318,18 +423,19 @@ export class McapRecoveryScanner {
       chunkStartOffset: offset,
       chunkLength: length,
       messageIndexOffsets,
-      messageIndexLength: BigInt(this.#messageIndexes.length - messageIndexStart),
+      messageIndexLength: BigInt(messageIndexes.length),
       compression: chunk.compression,
       compressedSize: BigInt(chunk.records.byteLength),
       uncompressedSize: chunk.uncompressedSize,
     });
+    this.#messageIndexes.push(messageIndexes.bufferView().slice());
+    this.#messageIndexLength += messageIndexes.length;
   }
 
   #buildTail(prefixLength: bigint): Uint8Array {
-    const messageIndexes = this.#messageIndexes.bufferView();
     const builder = new McapRecordBuilder();
     builder.writeDataEnd({ dataSectionCrc: 0 });
-    const summaryStart = prefixLength + BigInt(messageIndexes.byteLength + builder.length);
+    const summaryStart = prefixLength + BigInt(this.#messageIndexLength + builder.length);
     for (const schema of this.#schemas.values()) {
       builder.writeSchema(schema);
     }
@@ -364,9 +470,13 @@ export class McapRecoveryScanner {
     builder.writeFooter({ summaryStart, summaryOffsetStart: 0n, summaryCrc: 0 });
     builder.writeMagic();
 
-    const tail = new Uint8Array(messageIndexes.byteLength + builder.length);
-    tail.set(messageIndexes);
-    tail.set(builder.bufferView(), messageIndexes.byteLength);
+    const tail = new Uint8Array(this.#messageIndexLength + builder.length);
+    let at = 0;
+    for (const part of this.#messageIndexes) {
+      tail.set(part, at);
+      at += part.byteLength;
+    }
+    tail.set(builder.bufferView(), at);
     return tail;
   }
 

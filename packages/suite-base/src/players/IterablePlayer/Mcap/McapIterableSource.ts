@@ -21,9 +21,10 @@ import type {
   McapSource,
   OpenedInner,
 } from "./McapIterableSource.types";
-import { McapRecoveryScanner } from "./McapRecoveryScanner";
+import type { McapRecoveryScanner } from "./McapRecoveryScanner";
 import { McapUnindexedIterableSource } from "./McapUnindexedIterableSource";
 import { RemoteFileReadable } from "./RemoteFileReadable";
+import { scanWithIndexCache } from "./mcapIndexCache";
 import { READER_BASE_BYTES, estimateReaderWeightBytes } from "./readerWeight";
 import {
   IteratorResult,
@@ -189,7 +190,7 @@ export class McapIterableSource implements ISerializedIterableSource {
 
   /**
    * An indexed reader for the file: from its own summary when that works, otherwise from an index
-   * rebuilt by a forward scan (kept for re-hydration, so the scan runs once per session).
+   * rebuilt by a forward scan (kept for re-hydration, and saved in OPFS for the next session).
    * "unindexed" means stream it instead; `length` limits the stream to the readable records.
    */
   async #openReader(
@@ -391,9 +392,9 @@ async function scanForRecovery(
   decompressHandlers: McapTypes.DecompressHandlers,
   originalError: Error,
 ): Promise<McapRecoveryScanner> {
-  const scanner = new McapRecoveryScanner(decompressHandlers);
+  let scanner: McapRecoveryScanner;
   try {
-    await scanner.scan(readable);
+    scanner = await scanWithIndexCache(readable, decompressHandlers);
   } catch (scanError) {
     // Not an MCAP file, or the bytes can't be read at all: the original error says more.
     log.error(originalError, scanError);
