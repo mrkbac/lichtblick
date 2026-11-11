@@ -14,6 +14,7 @@ import {
   FoxgloveWebSocketDataSourceFactory,
   IDataSourceFactory,
   IdbExtensionLoader,
+  WebExtensionLoader,
   McapLocalDataSourceFactory,
   RemoteDataSourceFactory,
   RemoteExtensionLoader,
@@ -50,7 +51,7 @@ export function WebRoot(props: {
 
   const defaultExtensionLoaders: IExtensionLoader[] = [
     new IdbExtensionLoader("org"),
-    new IdbExtensionLoader("local"),
+    new WebExtensionLoader(),
   ];
   const url = new URL(globalThis.location.href);
   const [isProtocolLaunch] = useState(() => url.searchParams.has("protocol"));

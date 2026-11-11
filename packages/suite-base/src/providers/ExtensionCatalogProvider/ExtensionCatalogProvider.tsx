@@ -46,6 +46,17 @@ function createExtensionRegistryStore(
   );
 
   return createStore((set, get) => {
+    // Keep refresh snapshots from overwriting a newer install or uninstall.
+    let pending = Promise.resolve();
+    async function enqueue<T>(operation: () => Promise<T>): Promise<T> {
+      const result = pending.then(operation);
+      pending = result.then(
+        () => undefined,
+        () => undefined,
+      );
+      return await result;
+    }
+
     const isExtensionInstalled = (extensionId: string) => {
       return get().loadedExtensions.has(extensionId);
     };
@@ -242,6 +253,7 @@ function createExtensionRegistryStore(
         return;
       }
 
+      set({ loadedExtensions: new Set<string>() });
       const start = performance.now();
       const installedExtensions: ExtensionInfo[] = [];
       const contributionPoints: ContributionPoints = {
@@ -313,6 +325,7 @@ function createExtensionRegistryStore(
           `Failed to uninstall extension ${extension.id} from loader ${namespaceLoader.type}:`,
           error,
         );
+        throw error;
       }
 
       set((state) =>
@@ -327,12 +340,19 @@ function createExtensionRegistryStore(
 
     return {
       downloadExtension,
-      installExtensions,
+      installExtensions: async (namespace, extensions) =>
+        await enqueue(async () => await installExtensions(namespace, extensions)),
       isExtensionInstalled,
       markExtensionAsInstalled,
       mergeState,
-      refreshAllExtensions,
-      uninstallExtension,
+      refreshAllExtensions: async () => {
+        await enqueue(refreshAllExtensions);
+      },
+      uninstallExtension: async (namespace, id) => {
+        await enqueue(async () => {
+          await uninstallExtension(namespace, id);
+        });
+      },
       unMarkExtensionAsInstalled,
       installedExtensions: loaders.length === 0 ? [] : undefined,
       installedMessageConverters: mockMessageConverters ?? [],
