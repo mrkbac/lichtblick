@@ -31,7 +31,7 @@ export type HydratedInner = {
 export type IndexedReaderResult =
   | { status: "indexed"; reader: McapIndexedReader }
   | { status: "unindexed" }
-  | { status: "failed"; error: Error };
+  | { status: "recover"; error: Error };
 
 export type OpenedInner = {
   inner: ISerializedIterableSource;

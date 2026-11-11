@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time } from "@foxglove/rostime";
-import { MCAP_MAGIC, McapIndexedReader, McapTypes } from "@mcap/core";
+import { McapIndexedReader, McapTypes } from "@mcap/core";
 
 import Log from "@lichtblick/log";
 import { loadDecompressHandlers } from "@lichtblick/mcap-support";
@@ -14,13 +14,14 @@ import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { BlobReadable } from "./BlobReadable";
-import { McapIndexedIterableSource } from "./McapIndexedIterableSource";
+import { McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
 import type {
   HydratedInner,
   IndexedReaderResult,
   McapSource,
   OpenedInner,
 } from "./McapIterableSource.types";
+import { McapRecoveryScanner } from "./McapRecoveryScanner";
 import { McapUnindexedIterableSource } from "./McapUnindexedIterableSource";
 import { RemoteFileReadable } from "./RemoteFileReadable";
 import { READER_BASE_BYTES, estimateReaderWeightBytes } from "./readerWeight";
@@ -36,27 +37,11 @@ import { HydratedSourcePool, SourceHydrator } from "../shared/HydratedSourcePool
 const log = Log.getLogger(__filename);
 
 /**
- * Create a McapIndexedReader if it will be possible to do an indexed read. Distinguishes a
- * genuinely unindexed/empty file (safe, expected fallback to streaming read) from an operational
- * failure while attempting indexed initialization (e.g. a network/range-read error from the
- * underlying `readable`, or a malformed/corrupt index) — the latter must NOT be silently treated
- * as "unindexed", since that would mask a real error behind an unbounded, unpooled eager-streaming
- * fallback (see `#eagerInner`).
+ * Create a McapIndexedReader if it will be possible to do an indexed read. A file without a usable
+ * summary (no footer, cut off, corrupt summary) or that fails indexed initialization in any other
+ * way is reported as "recover": it gets a forward scan instead (see McapRecoveryScanner). I/O
+ * errors fail that scan too and surface as real errors.
  */
-/** Starts with the MCAP magic but doesn't end with it: written partially, never finished. */
-async function isTruncatedMcap(readable: McapTypes.IReadable): Promise<boolean> {
-  const size = await readable.size();
-  const magicLength = BigInt(MCAP_MAGIC.length);
-  if (size < magicLength * 2n) {
-    return false;
-  }
-  const isMagic = (bytes: Uint8Array) => MCAP_MAGIC.every((byte, i) => bytes[i] === byte);
-  return (
-    isMagic(await readable.read(0n, magicLength)) &&
-    !isMagic(await readable.read(size - magicLength, magicLength))
-  );
-}
-
 async function tryCreateIndexedReader(
   readable: McapTypes.IReadable,
   decompressHandlers: McapTypes.DecompressHandlers,
@@ -68,21 +53,7 @@ async function tryCreateIndexedReader(
       decompressHandlers,
     });
   } catch (err: unknown) {
-    const error = toError(err);
-    // @mcap/core throws exactly this message (plus a " [library=...]" suffix) when the file has
-    // no summary section at all (footer.summaryStart === 0n) — a genuinely unindexed file, not an
-    // operational failure. Any other message indicates a malformed file or an I/O error bubbling
-    // up from `readable` and must be surfaced as a real failure, not silently swallowed.
-    if (error.message.includes("File is not indexed")) {
-      return { status: "unindexed" };
-    }
-    // A recording cut off mid-write (e.g. the browser closed while recording live) starts like an
-    // MCAP file but has no footer; its complete records can still be streamed.
-    if (await isTruncatedMcap(readable).catch(() => false)) {
-      return { status: "unindexed" };
-    }
-    log.error(error);
-    return { status: "failed", error };
+    return { status: "recover", error: toError(err) };
   }
 
   if (reader.chunkIndexes.length === 0 || reader.channelsById.size === 0) {
@@ -106,6 +77,8 @@ export class McapIterableSource implements ISerializedIterableSource {
   // terminate(). Undefined for "file" sources and for remote sources that fail indexed init or
   // fall back to eager unindexed streaming.
   #persistentReadable: RemoteFileReadable | undefined;
+  // Index rebuilt by a forward scan, for files without a usable summary or with corrupt chunks
+  #recovery: McapRecoveryScanner | undefined;
 
   public readonly sourceType = "serialized";
 
@@ -138,24 +111,19 @@ export class McapIterableSource implements ISerializedIterableSource {
     await source.file.slice(0, 1).arrayBuffer();
 
     const readable = new BlobReadable(source.file);
-    const result = await tryCreateIndexedReader(readable, decompressHandlers);
-    if (result.status === "failed") {
-      // A real initialization failure (not "unindexed") must not be masked by the eager,
-      // unbounded streaming fallback — surface it so the caller sees an actual error.
-      throw result.error;
-    }
+    const result = await this.#openReader(readable, decompressHandlers);
     if (result.status === "indexed") {
       return {
-        inner: new McapIndexedIterableSource(result.reader),
+        inner: new McapIndexedIterableSource(result.reader, {
+          recover: this.#recoverer(readable, decompressHandlers),
+        }),
         indexed: true,
         weightBytes: estimateReaderWeightBytes(result.reader),
       };
     }
+    const file = result.length != undefined ? source.file.slice(0, result.length) : source.file;
     return {
-      inner: new McapUnindexedIterableSource({
-        size: source.file.size,
-        stream: source.file.stream(),
-      }),
+      inner: new McapUnindexedIterableSource({ size: file.size, stream: file.stream() }),
       indexed: false,
       weightBytes: READER_BASE_BYTES,
     };
@@ -177,21 +145,34 @@ export class McapIterableSource implements ISerializedIterableSource {
       await readable.open();
       this.#persistentReadable = readable;
     }
-    const result = await tryCreateIndexedReader(readable, decompressHandlers);
-    if (result.status === "failed") {
-      // A real initialization failure (not "unindexed") must not be masked by re-fetching the
-      // whole file via the eager, unbounded streaming fallback — surface the actual error.
+    let result;
+    try {
+      result = await this.#openReader(readable, decompressHandlers);
+    } catch (error) {
+      // A real failure (e.g. a network error) must not be masked by re-fetching the whole file via
+      // the eager, unbounded streaming fallback — surface the actual error.
       readable.close();
       this.#persistentReadable = undefined;
-      throw result.error;
+      throw error;
     }
     if (result.status === "indexed") {
       const remote = readable;
       return {
         inner: new McapIndexedIterableSource(result.reader, {
           prefetch: (ranges) => {
-            remote.prefetch(ranges);
+            // A rebuilt index keeps message indexes in memory past the end of the real bytes
+            const end = this.#recovery?.offset;
+            remote.prefetch(
+              end == undefined
+                ? ranges
+                : ranges.flatMap(({ offset, length }) =>
+                    offset < end
+                      ? [{ offset, length: offset + length > end ? end - offset : length }]
+                      : [],
+                  ),
+            );
           },
+          recover: this.#recoverer(readable, decompressHandlers),
         }),
         readable,
         indexed: true,
@@ -204,6 +185,58 @@ export class McapIterableSource implements ISerializedIterableSource {
     readable.close();
     this.#persistentReadable = undefined;
     return await this.#openUnindexedUrlFallback(source.url);
+  }
+
+  /**
+   * An indexed reader for the file: from its own summary when that works, otherwise from an index
+   * rebuilt by a forward scan (kept for re-hydration, so the scan runs once per session).
+   * "unindexed" means stream it instead; `length` limits the stream to the readable records.
+   */
+  async #openReader(
+    readable: McapTypes.IReadable,
+    decompressHandlers: McapTypes.DecompressHandlers,
+  ): Promise<
+    { status: "indexed"; reader: McapIndexedReader } | { status: "unindexed"; length?: number }
+  > {
+    if (!this.#recovery) {
+      const result = await tryCreateIndexedReader(readable, decompressHandlers);
+      if (result.status !== "recover") {
+        return result;
+      }
+      this.#recovery = await scanForRecovery(readable, decompressHandlers, result.error);
+    }
+    if (this.#recovery.recoveredChunkCount() === 0) {
+      // Nothing chunked (e.g. messages written without chunks): stream the readable part.
+      return { status: "unindexed", length: Number(this.#recovery.offset) };
+    }
+    return {
+      status: "indexed",
+      reader: await McapIndexedReader.Initialize({
+        readable: this.#recovery.toReadable(readable),
+        decompressHandlers,
+      }),
+    };
+  }
+
+  /**
+   * For an indexed reader that throws while reading (e.g. a chunk with a bad CRC in an otherwise
+   * complete file): rebuild the index from a scan, which skips the corrupt chunks.
+   */
+  #recoverer(
+    readable: McapTypes.IReadable,
+    decompressHandlers: McapTypes.DecompressHandlers,
+  ): RecoverReader | undefined {
+    if (this.#recovery) {
+      return undefined; // already built from a scan that validated every chunk
+    }
+    return async (error) => {
+      this.#recovery ??= await scanForRecovery(readable, decompressHandlers, error);
+      const reader = await McapIndexedReader.Initialize({
+        readable: this.#recovery.toReadable(readable),
+        decompressHandlers,
+      });
+      return { reader, alert: this.#recovery.toAlert() };
+    };
   }
 
   async #openUnindexedUrlFallback(url: string): Promise<OpenedInner> {
@@ -245,6 +278,10 @@ export class McapIterableSource implements ISerializedIterableSource {
   public async initialize(): Promise<Initialization> {
     const opened = await this.#openInner();
     const init = await opened.inner.initialize();
+    const recoveryAlert = this.#recovery?.toAlert();
+    if (recoveryAlert) {
+      init.alerts = [recoveryAlert, ...init.alerts];
+    }
     this.#start = init.start;
     this.#end = init.end;
 
@@ -347,6 +384,23 @@ export class McapIterableSource implements ISerializedIterableSource {
     this.#persistentReadable?.close();
     this.#persistentReadable = undefined;
   }
+}
+
+async function scanForRecovery(
+  readable: McapTypes.IReadable,
+  decompressHandlers: McapTypes.DecompressHandlers,
+  originalError: Error,
+): Promise<McapRecoveryScanner> {
+  const scanner = new McapRecoveryScanner(decompressHandlers);
+  try {
+    await scanner.scan(readable);
+  } catch (scanError) {
+    // Not an MCAP file, or the bytes can't be read at all: the original error says more.
+    log.error(originalError, scanError);
+    throw originalError;
+  }
+  log.info(`Recovered MCAP index after: ${originalError.message}`);
+  return scanner;
 }
 
 function sourceName(source: McapSource): string | undefined {
