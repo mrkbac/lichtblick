@@ -61,7 +61,14 @@ const replacementWindows = new Map<
 function copyStyles(source: Document, target: Document): () => void {
   const copies = new Map<CSSStyleSheet, HTMLStyleElement | HTMLLinkElement>();
   const sync = () => {
-    const sheets = new Set(source.styleSheets);
+    // Emotion regenerates MUI/TSS styles locally; copying them can override local customizations.
+    const generated = new Set(
+      Array.from(
+        source.querySelectorAll<HTMLStyleElement>("style[data-emotion]"),
+        (el) => el.sheet,
+      ),
+    );
+    const sheets = new Set(Array.from(source.styleSheets).filter((sheet) => !generated.has(sheet)));
     for (const [sheet, copy] of copies) {
       if (!sheets.has(sheet)) {
         copy.remove();

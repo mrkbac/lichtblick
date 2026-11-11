@@ -3,7 +3,7 @@
 
 import { ObjectPool } from "@lichtblick/den/collection";
 
-import type { IRenderer } from "../IRenderer";
+import type { Renderer } from "../Renderer";
 import { Transform, TransformTree } from "../transforms";
 import { LayerSettingsMap, Maps } from "./Maps";
 
@@ -46,7 +46,7 @@ function setup(locationFrame?: string) {
       errors: { remove: vi.fn() },
     },
     hud: { displayIfTrue: vi.fn(), removeGroup: vi.fn() },
-  } as unknown as IRenderer;
+  } as unknown as Renderer;
   const maps = new Maps(renderer);
   const renderable = maps.renderables.get("map")!;
   // Check anchoring without creating a WebGL map.

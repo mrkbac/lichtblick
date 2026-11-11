@@ -8,8 +8,8 @@ import { render, screen } from "@testing-library/react";
 
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
-import type { IRenderer } from "./IRenderer";
 import { MeasurePanel } from "./MeasurePanel";
+import type { Renderer } from "./Renderer";
 import type { MeasurementInfo } from "./renderables/MeasurementTool";
 
 function renderPanel({ unavailable }: { unavailable: boolean }) {
@@ -34,7 +34,7 @@ function renderPanel({ unavailable }: { unavailable: boolean }) {
     transformTree: { frameList: () => [] },
     on: vi.fn(),
     off: vi.fn(),
-  } as unknown as IRenderer;
+  } as unknown as Renderer;
   render(
     <ThemeProvider isDark>
       <MeasurePanel renderer={renderer} />

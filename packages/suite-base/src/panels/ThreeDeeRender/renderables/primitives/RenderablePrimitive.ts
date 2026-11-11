@@ -7,8 +7,8 @@
 
 import { SceneEntity } from "@foxglove/schemas";
 
-import { IRenderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
 import { BaseUserData, Renderable } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderable";
+import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
 import { RosValue } from "@lichtblick/suite-base/players/types";
 import { emptyPose } from "@lichtblick/suite-base/util/Pose";
 
@@ -31,7 +31,7 @@ const PRIMITIVE_DEFAULT_SETTINGS: LayerSettingsEntity = {
 export class RenderablePrimitive extends Renderable<EntityRenderableUserData> {
   public constructor(
     name: string,
-    renderer: IRenderer,
+    renderer: Renderer,
     userData: EntityRenderableUserData = {
       receiveTime: -1n,
       messageTime: -1n,

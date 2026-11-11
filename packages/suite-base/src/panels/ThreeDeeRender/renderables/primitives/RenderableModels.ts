@@ -11,8 +11,8 @@ import { ModelPrimitive, SceneEntity } from "@foxglove/schemas";
 import * as THREE from "three";
 
 import { RenderablePrimitive } from "./RenderablePrimitive";
-import type { IRenderer } from "../../IRenderer";
 import { EDGE_LINE_SEGMENTS_NAME, LoadedModel } from "../../ModelCache";
+import type { Renderer } from "../../Renderer";
 import { makeRgba, rgbToThreeColor, stringToRgba } from "../../color";
 import { disposeMeshesRecursive } from "../../dispose";
 import { LayerSettingsEntity } from "../../settings";
@@ -54,7 +54,7 @@ export class RenderableModels extends RenderablePrimitive {
 
   #updateCount = 0;
 
-  public constructor(renderer: IRenderer) {
+  public constructor(renderer: Renderer) {
     super("", renderer);
   }
 

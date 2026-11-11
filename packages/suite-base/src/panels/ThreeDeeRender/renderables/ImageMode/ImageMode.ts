@@ -83,12 +83,8 @@ import { downloadFiles } from "@lichtblick/suite-base/util/download";
 import { ImageModeCamera } from "./ImageModeCamera";
 import { IMessageHandler, MessageHandler, MessageRenderState } from "./MessageHandler";
 import { ImageAnnotations } from "./annotations/ImageAnnotations";
-import type {
-  AnyRendererSubscription,
-  IRenderer,
-  ImageModeConfig,
-  RendererConfig,
-} from "../../IRenderer";
+import type { AnyRendererSubscription, ImageModeConfig, RendererConfig } from "../../IRenderer";
+import type { Renderer } from "../../Renderer";
 import { PartialMessageEvent, SceneExtension } from "../../SceneExtension";
 import { SettingsTreeEntry } from "../../SettingsManager";
 import {
@@ -132,7 +128,7 @@ export class ImageMode
 
   public customCameraModels: CameraModelsMap;
 
-  public constructor(renderer: IRenderer, name: string = ImageMode.extensionId) {
+  public constructor(renderer: Renderer, name: string = ImageMode.extensionId) {
     super(name, renderer);
 
     this.customCameraModels = renderer.customCameraModels;

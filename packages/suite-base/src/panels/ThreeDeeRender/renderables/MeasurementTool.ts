@@ -10,8 +10,8 @@ import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 
-import type { IRenderer } from "../IRenderer";
 import { Renderable } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { AnyFrameId, CoordinateFrame } from "../transforms";
 import {
@@ -201,7 +201,7 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
   #rightDown = new THREE.Vector2(NaN, NaN);
   #labelContainer?: HTMLDivElement;
 
-  public constructor(renderer: IRenderer, name: string = MeasurementTool.extensionId) {
+  public constructor(renderer: Renderer, name: string = MeasurementTool.extensionId) {
     super(name, renderer);
     renderer.on("endFrame", this.#updateLabels);
   }

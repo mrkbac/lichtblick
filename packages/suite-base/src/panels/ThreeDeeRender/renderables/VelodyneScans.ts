@@ -34,7 +34,8 @@ import {
   pointCloudMaterial,
   POINT_CLOUD_REQUIRED_FIELDS,
 } from "./pointExtensionUtils";
-import type { AnyRendererSubscription, IRenderer } from "../IRenderer";
+import type { AnyRendererSubscription } from "../IRenderer";
+import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../SettingsManager";
 import { VELODYNE_SCAN_DATATYPES } from "../ros";
@@ -136,7 +137,7 @@ export class VelodyneScans extends SceneExtension<PointCloudHistoryRenderable> {
   #pointCloudFieldsByTopic = new Map<string, string[]>();
   #velodyneCloudConverter = new VelodyneCloudConverter();
 
-  public constructor(renderer: IRenderer, name: string = VelodyneScans.extensionId) {
+  public constructor(renderer: Renderer, name: string = VelodyneScans.extensionId) {
     super(name, renderer);
   }
 

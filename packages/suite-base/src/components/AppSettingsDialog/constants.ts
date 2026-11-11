@@ -29,8 +29,12 @@ export const APP_SETTINGS_ABOUT_ITEMS = new Map<
       subheader: "Legal",
       links: [
         {
+          title: "Source code",
+          url: "https://github.com/mrkbac/lichtblick/tree/licht",
+        },
+        {
           title: "License terms",
-          url: "https://github.com/lichtblick-suite/lichtblick/blob/main/LICENSE",
+          url: "https://github.com/mrkbac/lichtblick/blob/licht/LICENSE",
         },
       ],
     },

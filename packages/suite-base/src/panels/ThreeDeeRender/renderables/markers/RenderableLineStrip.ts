@@ -16,8 +16,8 @@ import {
   makeLinePickingMaterial,
   markerHasTransparency,
 } from "./materials";
-import type { IRenderer } from "../../IRenderer";
 import { LineMaterialWithAlphaVertex } from "../../LineMaterialWithAlphaVertex";
+import type { Renderer } from "../../Renderer";
 import { Marker } from "../../ros";
 import { setLinePositions } from "../../setLinePositions";
 
@@ -34,7 +34,7 @@ export class RenderableLineStrip extends RenderableMarker {
     topic: string,
     marker: Marker,
     receiveTime: bigint | undefined,
-    renderer: IRenderer,
+    renderer: Renderer,
   ) {
     super(topic, marker, receiveTime, renderer);
 

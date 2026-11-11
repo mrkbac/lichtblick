@@ -5,7 +5,7 @@ import { SceneEntity, TriangleListPrimitive } from "@foxglove/schemas";
 import * as THREE from "three";
 
 import { RenderableTriangles } from "./RenderableTriangles";
-import type { IRenderer } from "../../IRenderer";
+import type { Renderer } from "../../Renderer";
 import { LayerSettingsEntity } from "../../settings";
 
 const settings: LayerSettingsEntity = {
@@ -58,7 +58,7 @@ function materialVersion(renderable: RenderableTriangles): number {
 
 describe("RenderableTriangles", () => {
   it("does not rebuild the shader for a color change", () => {
-    const renderable = new RenderableTriangles({} as IRenderer);
+    const renderable = new RenderableTriangles({} as Renderer);
     renderable.update("/topic", entity({}), settings, 0n);
     const initial = materialVersion(renderable);
 
