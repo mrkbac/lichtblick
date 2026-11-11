@@ -33,6 +33,7 @@ export class LocalResourceFolders {
   }
 
   public async add(handle: FileSystemDirectoryHandle): Promise<void> {
+    const folders = this.#snapshot.folders;
     const packages: PackageDirectory[] = [];
     const scan = async (directory: FileSystemDirectoryHandle, path: string[]): Promise<void> => {
       // Colcon marks generated build/install/log trees; an explicitly selected root remains usable.
@@ -86,11 +87,15 @@ export class LocalResourceFolders {
     };
     await scan(handle, []);
     let existing: ResourceFolder | undefined;
-    for (const folder of this.#snapshot.folders) {
+    for (const folder of [...folders, ...this.#snapshot.folders]) {
       if (await folder.handle.isSameEntry(handle)) {
         existing = folder;
         break;
       }
+    }
+    // A completed rescan must not restore a grant removed while it was running.
+    if (existing && !this.#snapshot.folders.includes(existing)) {
+      return;
     }
     const folder = { id: existing?.id ?? crypto.randomUUID(), name: handle.name, handle, packages };
     this.#update([...this.#snapshot.folders.filter((item) => item !== existing), folder]);

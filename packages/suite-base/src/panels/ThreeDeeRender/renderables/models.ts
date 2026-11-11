@@ -29,9 +29,17 @@ export function removeLights(model: LoadedModel): void {
   }
 }
 
-export function replaceMaterials(model: LoadedModel, material: THREE.MeshStandardMaterial): void {
+export function replaceMaterials(
+  model: LoadedModel,
+  material: THREE.MeshStandardMaterial,
+  options: { preserveVertexColors?: boolean } = {},
+): void {
   model.traverse((child: THREE.Object3D) => {
     if (!(child instanceof THREE.Mesh)) {
+      return;
+    }
+
+    if (options.preserveVertexColors === true && child.geometry.hasAttribute("color") === true) {
       return;
     }
 
