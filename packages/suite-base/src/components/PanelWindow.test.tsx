@@ -7,7 +7,10 @@ import { act, fireEvent, render, screen, waitFor, within } from "@testing-librar
 import { createDockview } from "dockview-react";
 import { createContext, useContext, useEffect, useState } from "react";
 
+import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
+
 import { DockPanelContext } from "./DockPanelContext";
+import ToolbarIconButton from "./PanelToolbar/ToolbarIconButton";
 import { PanelWindow, PanelWindowContext } from "./PanelWindow";
 
 const SharedContext = createContext("shared player");
@@ -501,6 +504,49 @@ it("mirrors library styles loaded, updated, and removed after opening a monitor"
     });
   } finally {
     view.unmount();
+    style.remove();
+  }
+});
+
+it.each(["popout", "pip"] as const)("preserves custom control styling in %s", async (mode) => {
+  const { child } = childWindow();
+  vi.spyOn(window, "open").mockReturnValue(child);
+  vi.stubGlobal("documentPictureInPicture", { requestWindow: vi.fn().mockResolvedValue(child) });
+  render(
+    <ThemeProvider isDark={false}>
+      <PanelWindow title="Monitor">
+        <Content />
+        <ToolbarIconButton className="styled-control" data-testid="styled-control">
+          <svg />
+        </ToolbarIconButton>
+      </PanelWindow>
+    </ThemeProvider>,
+  );
+  const original = getComputedStyle(screen.getByTestId("styled-control"));
+  const expected = { fontSize: original.fontSize, padding: original.padding };
+  fireEvent.click(screen.getByText(mode === "pip" ? "PiP" : "Pop out"));
+  await waitFor(() => {
+    expect(within(child.document.body).getByTestId("styled-control")).toBeDefined();
+  });
+  // Simulate a base rule generated in the opener after the child's custom TSS rule.
+  const style = document.createElement("style");
+  style.dataset.emotion = "mui";
+  style.textContent = ".styled-control { font-size: 24px; padding: 8px; }";
+  // A library update ensures the observer has processed the new stylesheet.
+  const library = document.createElement("style");
+  library.textContent = ".library-marker { color: red; }";
+  try {
+    document.head.appendChild(style);
+    document.head.appendChild(library);
+    await waitFor(() => {
+      expect(child.document.head.textContent).toContain("library-marker");
+    });
+    const actual = child.getComputedStyle(
+      within(child.document.body).getByTestId("styled-control"),
+    );
+    expect({ fontSize: actual.fontSize, padding: actual.padding }).toEqual(expected);
+  } finally {
+    library.remove();
     style.remove();
   }
 });
