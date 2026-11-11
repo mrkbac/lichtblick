@@ -24,7 +24,10 @@ export function LocalResourceFolders(): React.JSX.Element {
   const select = async () => {
     setError(undefined);
     try {
-      const folder = await window.showDirectoryPicker({ mode: "read" });
+      const folder = await window.showDirectoryPicker({
+        id: "lichtblick-ros-resources",
+        mode: "read",
+      });
       setBusy(true);
       await localResourceFolders.add(folder);
     } catch (err) {
