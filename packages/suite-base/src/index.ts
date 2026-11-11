@@ -56,5 +56,6 @@ export { LaunchPreferenceValue } from "@lichtblick/suite-base/types/LaunchPrefer
 export { reportError, setReportErrorHandler } from "./reportError";
 export { makeWorkspaceContextInitialState } from "./providers/WorkspaceContextProvider";
 export type { AppBarProps } from "./components/AppBar";
+export { WebExtensionLoader } from "./services/extension/WebExtensionLoader";
 export { IdbExtensionLoader } from "./services/extension/IdbExtensionLoader";
 export { LOCAL_STORAGE_APP_CONFIGURATION } from "./constants/browserStorageKeys";
