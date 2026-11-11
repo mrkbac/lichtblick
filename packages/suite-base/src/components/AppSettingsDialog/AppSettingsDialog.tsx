@@ -51,6 +51,7 @@ import {
   MessageFramerate,
   StepSize,
   LiveHistorySettings,
+  OpenFoxgloveLinks,
   RosPackagePath,
   TimeFormat,
   TimezoneSettings,
@@ -140,6 +141,7 @@ export function AppSettingsDialog(
               <LanguageSettings />
               {supportsAppUpdates && <AutoUpdate />}
               {!isDesktopApp() && <LaunchDefault />}
+              {isDesktopApp() && <OpenFoxgloveLinks />}
               {isDesktopApp() && <RosPackagePath />}
               <Stack>
                 <FormLabel>{t("advanced")}:</FormLabel>

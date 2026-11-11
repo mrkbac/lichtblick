@@ -140,12 +140,6 @@ function makeElectronBuilderConfig(params) {
             LSItemContentTypes: ["dev.foxglove.extension"],
           },
         ],
-        CFBundleURLTypes: [
-          {
-            CFBundleURLSchemes: ["foxglove"],
-            CFBundleTypeRole: "Viewer",
-          },
-        ],
         UTExportedTypeDeclarations: [
           {
             UTTypeConformsTo: ["public.data", "public.log", "public.composite-content"],

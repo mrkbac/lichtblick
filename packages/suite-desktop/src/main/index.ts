@@ -14,6 +14,12 @@ import { initI18n, sharedI18nObject as i18n } from "@lichtblick/suite-base/src/i
 import StudioAppUpdater from "./StudioAppUpdater";
 import StudioWindow from "./StudioWindow";
 import { createNewWindow } from "./createNewWindow";
+import {
+  FOXGLOVE_SCHEME,
+  getDeepLinks,
+  LICHTBLICK_SCHEME,
+  toLichtblickDeepLink,
+} from "./deepLinks";
 import { isFileToOpen } from "./fileUtils";
 import getDevModeIcon from "./getDevModeIcon";
 import { getFilesToOpen } from "./getFilesToOpen";
@@ -24,7 +30,7 @@ import {
   registerRosPackageProtocolHandlers,
   registerRosPackageProtocolSchemes,
 } from "./rosPackageResources";
-import { getAppSetting } from "./settings";
+import { getAppSetting, opensFoxgloveLinks } from "./settings";
 import {
   LICHTBLICK_PRODUCT_HOMEPAGE,
   LICHTBLICK_PRODUCT_NAME,
@@ -126,7 +132,7 @@ export async function main(): Promise<void> {
     someWindow?.restore();
     someWindow?.focus();
 
-    const deepLinks = argv.slice(1).filter((arg) => arg.startsWith("lichtblick://"));
+    const deepLinks = getDeepLinks(argv.slice(1), { acceptFoxglove: opensFoxgloveLinks() });
     for (const link of deepLinks) {
       app.emit("open-url", { preventDefault() {} }, link);
     }
@@ -147,9 +153,12 @@ export async function main(): Promise<void> {
     }
   });
 
-  if (!app.isDefaultProtocolClient("foxglove")) {
-    if (!app.setAsDefaultProtocolClient("foxglove")) {
-      log.warn("Could not set app as handler for lichtblick://");
+  // foxglove:// is opt-in so we never take it over from an installed Foxglove app. Turning the
+  // setting off leaves any registration in place: the user may have chosen it outside the app.
+  const schemes = opensFoxgloveLinks() ? [LICHTBLICK_SCHEME, FOXGLOVE_SCHEME] : [LICHTBLICK_SCHEME];
+  for (const scheme of schemes) {
+    if (!app.isDefaultProtocolClient(scheme) && !app.setAsDefaultProtocolClient(scheme)) {
+      log.warn(`Could not set app as handler for ${scheme}://`);
     }
   }
 
@@ -196,9 +205,10 @@ export async function main(): Promise<void> {
 
   // works on osx - even when app is closed
   // tho it is a bit strange since it isn't clear when this runs...
-  app.on("open-url", (ev, url) => {
-    log.debug("open-url handler", url);
-    if (!url.startsWith("lichtblick://")) {
+  app.on("open-url", (ev, rawUrl) => {
+    log.debug("open-url handler", rawUrl);
+    const url = toLichtblickDeepLink(rawUrl, { acceptFoxglove: opensFoxgloveLinks() });
+    if (url == undefined) {
       return;
     }
 
@@ -240,7 +250,7 @@ export async function main(): Promise<void> {
   app.on("ready", async () => {
     updateNativeColorScheme();
     const argv = process.argv;
-    const deepLinks = argv.filter((arg) => arg.startsWith("lichtblick://"));
+    const deepLinks = getDeepLinks(argv, { acceptFoxglove: opensFoxgloveLinks() });
 
     // create the initial window now to display to the user immediately
     // loading the app url happens at the end of ready to ensure we've setup all the handlers, settings, etc

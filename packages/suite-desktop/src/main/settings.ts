@@ -47,3 +47,8 @@ export function getAppSetting<T>(
     return undefined;
   }
 }
+
+/** Whether the user opted in to opening `foxglove://open` deep links. Off by default. */
+export function opensFoxgloveLinks(): boolean {
+  return getAppSetting<boolean>(AppSetting.OPEN_FOXGLOVE_LINKS) === true;
+}

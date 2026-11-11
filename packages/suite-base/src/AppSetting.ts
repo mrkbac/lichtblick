@@ -32,6 +32,7 @@ export enum AppSetting {
   LAUNCH_PREFERENCE = "launchPreference",
   SHOW_OPEN_DIALOG_ON_STARTUP = "ui.open-dialog-startup",
   ENABLE_UNIFIED_NAVIGATION = "ui.new-app-menu",
+  OPEN_FOXGLOVE_LINKS = "desktop.openFoxgloveLinks",
 
   // Dev only
   ENABLE_LAYOUT_DEBUGGING = "enableLayoutDebugging",
