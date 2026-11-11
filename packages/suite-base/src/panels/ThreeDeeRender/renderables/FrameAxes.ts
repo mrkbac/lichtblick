@@ -22,8 +22,8 @@ import {
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 import clipboard from "@lichtblick/suite-base/util/clipboard";
 
-import type { IRenderer } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { getLuminance, stringToRgb } from "../color";
@@ -153,7 +153,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
   #labelHighlights: ReadonlyMap<string, string> = new Map();
 
   public constructor(
-    renderer: IRenderer,
+    renderer: Renderer,
     defaultRenderableSettings: Partial<LayerSettingsTransform>,
     name: string = FrameAxes.extensionId,
   ) {

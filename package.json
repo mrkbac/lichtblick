@@ -21,7 +21,7 @@
   },
   "scripts": {
     "clean": "bash ci/clean-build.sh",
-    "build:packages": "node ./node_modules/typescript7/bin/tsc --build --verbose packages/*/tsconfig.json packages/*/src/*/tsconfig.json",
+    "build:packages": "node ./node_modules/typescript7/bin/tsc --build --builders 1 --verbose packages/*/tsconfig.json packages/*/src/*/tsconfig.json",
     "desktop:build:dev": "rspack build --mode development --config desktop/rspack.config.ts",
     "desktop:build:prod": "rspack build --mode production --config desktop/rspack.config.ts",
     "desktop:serve": "rspack serve --mode development --config desktop/rspack.config.ts",
@@ -35,7 +35,7 @@
     "benchmark:desktop:build:prod": "rspack build --mode production --config benchmark/rspack.desktop.config.ts",
     "benchmark:desktop:start": "electron benchmark/.webpack-desktop",
     "gen:organization-api": "openapi-typescript packages/suite-base/src/api/organization/openapi.yaml -o packages/suite-base/src/api/organization/schema.gen.ts && biome format --write packages/suite-base/src/api/organization/schema.gen.ts",
-    "license-check": "node ci/license-check.ts",
+    "license-check": "vitest run --project ci && node ci/license-check.ts",
     "prepare": "husky",
     "format": "biome format --write .",
     "format:ci": "biome format --max-diagnostics=none .",
@@ -73,7 +73,7 @@
     "release:bump-nightly-version": "node ./ci/bump-nightly-version.ts",
     "storybook": "storybook dev --port 9009 --config-dir .storybook",
     "storybook:build": "storybook build --config-dir .storybook --stats-json",
-    "typecheck": "node ./node_modules/typescript7/bin/tsc --build tsconfig.json web/src/tsconfig.json desktop/tsconfig.json desktop/*/tsconfig.json benchmark/tsconfig.json benchmark/src/tsconfig.json benchmark/desktop/*/tsconfig.json"
+    "typecheck": "node ./node_modules/typescript7/bin/tsc --build --builders 1 tsconfig.json web/src/tsconfig.json desktop/tsconfig.json desktop/*/tsconfig.json benchmark/tsconfig.json benchmark/src/tsconfig.json benchmark/desktop/*/tsconfig.json"
   },
   "lint-staged": {
     "*.{js,jsx,mjs,cjs,ts,tsx,json}": [
@@ -96,6 +96,7 @@
     "@types/jsdom": "^30",
     "@types/nearley": "2.11.5",
     "@types/node": "26.6.6",
+    "@types/spdx-satisfies": "6.0.0",
     "@types/ws": "8.18.2",
     "@vitest/coverage-v8": "5.1.0",
     "electron": "45.2.3",
@@ -115,6 +116,7 @@
     "playwright": "1.65.0",
     "react": "19.3.1",
     "react-i18next": "17.1.13",
+    "spdx-satisfies": "6.0.1",
     "storybook": "10.6.6",
     "storybook-react-rsbuild": "3.6.2",
     "tslib": "2.9.1",

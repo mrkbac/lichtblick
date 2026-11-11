@@ -157,7 +157,14 @@ export const mainConfig =
         ...plugins,
         ...(appConfig.plugins ?? []),
         new rspack.CopyRspackPlugin({
-          patterns: [{ from: path.resolve(import.meta.dirname, "..", "public") }],
+          patterns: [
+            { from: path.resolve(import.meta.dirname, "..", "public") },
+            ...["LICENSE", "THIRD_PARTY_NOTICES"].map((name) => ({
+              from: path.resolve(import.meta.dirname, "../../..", name),
+              to: name,
+              toType: "file" as const,
+            })),
+          ],
         }),
         new rspack.HtmlRspackPlugin({
           // Minifying would strip the default layout placeholder comment below

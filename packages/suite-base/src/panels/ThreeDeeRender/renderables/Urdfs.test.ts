@@ -4,7 +4,7 @@
 import { UrdfRobot } from "@lichtblick/den/urdf";
 
 import { createRenderable } from "./Urdfs";
-import { IRenderer } from "../IRenderer";
+import type { Renderer } from "../Renderer";
 import { RenderableMeshResource } from "./markers/RenderableMeshResource";
 
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
@@ -14,7 +14,7 @@ const renderer = {
   settings: { errors: { add: vi.fn(), remove: vi.fn() } },
   config: { topics: {} },
   modelCache: { load: async () => await new Promise(() => {}) },
-} as unknown as IRenderer;
+} as unknown as Renderer;
 
 const robot: UrdfRobot = {
   name: "robot",

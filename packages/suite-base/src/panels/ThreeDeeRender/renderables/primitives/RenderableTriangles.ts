@@ -12,7 +12,7 @@ import * as THREE from "three";
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
 
 import { RenderablePrimitive } from "./RenderablePrimitive";
-import type { IRenderer } from "../../IRenderer";
+import type { Renderer } from "../../Renderer";
 import { makeRgb, makeRgba, rgbToThreeColor, SRGBToLinearRGBLUT, stringToRgba } from "../../color";
 import { LayerSettingsEntity } from "../../settings";
 
@@ -27,7 +27,7 @@ const INVALID_POINT_ERROR_ID = "INVALID_POINT";
 type TriangleMesh = THREE.Mesh<DynamicBufferGeometry, THREE.MeshStandardMaterial>;
 export class RenderableTriangles extends RenderablePrimitive {
   #triangleMeshes: TriangleMesh[] = [];
-  public constructor(renderer: IRenderer) {
+  public constructor(renderer: Renderer) {
     super("", renderer);
   }
 

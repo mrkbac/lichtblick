@@ -23,6 +23,7 @@ export const threeDee = {
   lineWidth: "Line width",
   position: "Position",
   reset: "Reset",
+  zoomToData: "Zoom to data",
   rotation: "Rotation",
   scale: "Scale",
   gradient: "Gradient",
@@ -214,7 +215,14 @@ export const threeDee = {
   poseDisplayTypeAxis: "Axis",
   poseDisplayTypeLine: "Line",
 
+  // Camera controls
+  perspectiveCamera: "3D camera",
+  switchTo2DCamera: "Switch to 2D camera",
+  switchTo3DCamera: "Switch to 3D camera",
+
   // Publish
+  clickToCancel: "Click to cancel",
+  clickToPublish: "Click to publish",
   publish: "Publish",
   publishTopicHelp: "The topic on which to publish",
   publishTypeHelp: "The type of message to publish when clicking in the scene",

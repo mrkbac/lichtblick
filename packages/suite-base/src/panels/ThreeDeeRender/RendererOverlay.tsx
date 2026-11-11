@@ -7,6 +7,7 @@
 
 import {
   ArrowDownload20Regular,
+  ZoomFit20Regular,
   ArrowRouting20Filled,
   ArrowRouting20Regular,
   PointScan20Regular,
@@ -19,7 +20,6 @@ import {
   ListItemText,
   Menu,
   MenuItem,
-  Paper,
   Tooltip,
   useTheme,
 } from "@mui/material";
@@ -29,6 +29,7 @@ import { useLongPress } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
 import { LayoutActions } from "@lichtblick/suite";
+import OverlayToolbar from "@lichtblick/suite-base/components/OverlayToolbar";
 import {
   PanelContextMenu,
   PanelContextMenuItem,
@@ -74,7 +75,6 @@ const useStyles = makeStyles()((theme) => ({
   iconButton: {
     position: "relative",
     pointerEvents: "auto",
-    aspectRatio: "1/1",
   },
   pointScanIcon: {
     transform: "rotate(45deg)",
@@ -377,23 +377,23 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
   const longPressPublishEvent = useLongPress(onLongPressPublish);
 
   const theme = useTheme();
+  const publishLabel = t(props.publishActive ? "clickToCancel" : "clickToPublish");
+  const perspectiveLabel = t(props.perspective ? "switchTo2DCamera" : "switchTo3DCamera");
 
   // Publish control is only available if the canPublish prop is true and we have a fixed frame in the renderer
   const showPublishControl =
     props.interfaceMode === "3d" && props.canPublish && renderer?.fixedFrameId != undefined;
   const publishControls = showPublishControl && (
     <>
-      <Tooltip
-        placement="left"
-        title={props.publishActive ? "Click to cancel" : "Click to publish"}
-      >
+      <Tooltip placement="left" title={publishLabel}>
         <IconButton
           {...longPressPublishEvent}
           className={classes.iconButton}
           size="small"
-          color={props.publishActive ? "info" : "inherit"}
+          aria-pressed={props.publishActive}
           ref={publishClickButtonRef}
           onClick={props.onClickPublish}
+          aria-label={t("publish")}
           data-testid="publish-button"
         >
           {selectedPublishClickIcon}
@@ -457,15 +457,11 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
   );
 
   const resetViewButton = showResetViewButton && (
-    <Button
-      className={classes.resetViewButton}
-      variant="contained"
-      color="secondary"
-      onClick={onResetView}
-      data-testid="reset-view"
-    >
-      {t("resetView")}
-    </Button>
+    <OverlayToolbar className={classes.resetViewButton}>
+      <Button color="inherit" onClick={onResetView} data-testid="reset-view">
+        {t("resetView")}
+      </Button>
+    </OverlayToolbar>
   );
 
   const getContextMenuItems = useCallback((): PanelContextMenuItem[] => {
@@ -503,7 +499,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
           )
         }
         {props.interfaceMode === "image" && mousePresent && (
-          <Paper square={false} elevation={4} style={{ display: "flex", flexDirection: "column" }}>
+          <OverlayToolbar>
             <Tooltip placement="left" title={t("downloadImage")}>
               <IconButton
                 data-testid="download-image-button"
@@ -515,26 +511,37 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
                 <ArrowDownload20Regular />
               </IconButton>
             </Tooltip>
-          </Paper>
+          </OverlayToolbar>
         )}
         {props.interfaceMode === "3d" && (
-          <Paper square={false} elevation={4} style={{ display: "flex", flexDirection: "column" }}>
+          <OverlayToolbar>
             <Tooltip
               placement="left"
+              describeChild
               title={
                 <>
-                  {`Switch to ${props.perspective ? "2" : "3"}D camera `}
-                  <kbd className={classes.kbd}>3</kbd>
+                  {perspectiveLabel} <kbd className={classes.kbd}>3</kbd>
                 </>
               }
             >
               <IconButton
                 className={classes.iconButton}
                 size="small"
-                color={props.perspective ? "info" : "inherit"}
+                aria-pressed={props.perspective}
+                aria-label={t("perspectiveCamera")}
                 onClick={props.onTogglePerspective}
               >
                 <span className={classes.threeDeeButton}>3D</span>
+              </IconButton>
+            </Tooltip>
+            <Tooltip placement="left" title={t("zoomToData")}>
+              <IconButton
+                aria-label={t("zoomToData")}
+                className={classes.iconButton}
+                size="small"
+                onClick={() => renderer?.zoomToData()}
+              >
+                <ZoomFit20Regular />
               </IconButton>
             </Tooltip>
             <Tooltip
@@ -543,9 +550,10 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
             >
               <IconButton
                 data-testid="measure-button"
+                aria-label={t("measure")}
                 className={classes.iconButton}
                 size="small"
-                color={props.measureActive ? "info" : "inherit"}
+                aria-pressed={props.measureActive}
                 onClick={props.onClickMeasure}
               >
                 <div className={classes.pointScanIcon}>
@@ -560,10 +568,10 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
             >
               <IconButton
                 data-testid="measure-frames-button"
-                aria-label={framePicking ? t("stopMeasuringFrames") : t("measureFrames")}
+                aria-label={t("measureFrames")}
                 className={classes.iconButton}
                 size="small"
-                color={framePicking ? "info" : "inherit"}
+                aria-pressed={framePicking}
                 onClick={() => {
                   if (!framePicking && props.measureActive) {
                     props.onClickMeasure();
@@ -579,7 +587,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
             </Tooltip>
 
             {publishControls}
-          </Paper>
+          </OverlayToolbar>
         )}
       </div>
       {clickedObjects.length > 1 && !selectedObject && (
