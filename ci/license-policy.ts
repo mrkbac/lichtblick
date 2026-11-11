@@ -24,6 +24,7 @@ const ALLOWED_LICENSES = [
   "Zlib",
 ];
 
+/** Accept approved alternatives; invalid expressions and unapproved requirements fail closed. */
 export function isLicenseAllowed(license: string): boolean {
   if (license === "Public Domain") {
     return true;
