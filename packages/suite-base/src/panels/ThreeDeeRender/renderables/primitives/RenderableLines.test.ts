@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
 
 import { RenderableLines } from "./RenderableLines";
-import type { IRenderer } from "../../IRenderer";
+import type { Renderer } from "../../Renderer";
 import { LayerSettingsEntity } from "../../settings";
 
 const settings: LayerSettingsEntity = {
@@ -79,7 +79,7 @@ describe("RenderableLines", () => {
   });
 
   it("only rebuilds the line shader when a compiled property changes", () => {
-    const renderer = { input: { canvasSize: new THREE.Vector2(100, 100) } } as IRenderer;
+    const renderer = { input: { canvasSize: new THREE.Vector2(100, 100) } } as Renderer;
     const renderable = new RenderableLines(renderer);
 
     renderable.update("/topic", entity({}), settings, 0n);

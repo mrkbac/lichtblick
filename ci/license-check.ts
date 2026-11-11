@@ -7,23 +7,7 @@
 
 import { execFileSync } from "node:child_process";
 
-// A license passes if it contains any of these (substring match, e.g. "BSD" covers "0BSD").
-const ALLOWED_LICENSES = [
-  "MPL-2.0",
-  "MIT",
-  "BSD",
-  "Apache",
-  "ISC",
-  "Python-2.0",
-  "PSF",
-  "CC-BY",
-  "CC0",
-  "Public Domain",
-  "WTFPL",
-  "Unlicense",
-  "OFL-1.1",
-  "BlueOak-1.0.0",
-];
+import { isLicenseAllowed } from "./license-policy.ts";
 
 // Reported as "Unknown" (no license field in package.json); their LICENSE file is the Unlicense.
 // Pinned to the verified versions so a new version or a license change fails the check.
@@ -40,7 +24,7 @@ const byLicense = JSON.parse(
 
 let failed = false;
 for (const [license, packages] of Object.entries(byLicense)) {
-  const allowed = ALLOWED_LICENSES.some((allowedLicense) => license.includes(allowedLicense));
+  const allowed = isLicenseAllowed(license);
   for (const pkg of packages) {
     const excepted =
       license === "Unknown" &&

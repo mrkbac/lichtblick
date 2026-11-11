@@ -12,7 +12,7 @@ import { ObjectPool } from "@lichtblick/den/collection";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
 import { FrameMeasureOverlay } from "./FrameMeasureOverlay";
-import type { IRenderer } from "./IRenderer";
+import type { Renderer } from "./Renderer";
 import { Transform, TransformTree } from "./transforms";
 import { FRAME_MEASUREMENT_VARIABLE, FrameMeasurement } from "./transforms/frameMeasurement";
 
@@ -45,7 +45,7 @@ function setup(initial: FrameMeasurement | undefined, { picking = false } = {}) 
     input: new EventEmitter(),
     pickObject: vi.fn(() => new THREE.Object3D()),
     sceneExtensions: new Map([["foxglove.FrameAxes", frameAxes]]),
-  }) as unknown as IRenderer;
+  }) as unknown as Renderer;
   const written: unknown[] = [];
   emitter.on("setVariable", (name: string, value: unknown) => {
     written.push(value);

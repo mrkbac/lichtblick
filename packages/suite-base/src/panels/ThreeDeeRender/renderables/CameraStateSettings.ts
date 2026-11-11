@@ -20,7 +20,8 @@ import {
   makePose,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
 
-import type { FollowMode, IRenderer } from "../IRenderer";
+import type { FollowMode } from "../IRenderer";
+import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { CameraState, DEFAULT_CAMERA_STATE, DEFAULT_ORBIT_CONTROLS_CONFIG } from "../camera";
@@ -65,7 +66,7 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
   #orthographicCamera: THREE.OrthographicCamera;
   #aspect: number;
 
-  public constructor(renderer: IRenderer, canvas: HTMLCanvasElement, aspect: number) {
+  public constructor(renderer: Renderer, canvas: HTMLCanvasElement, aspect: number) {
     super("foxglove.CameraStateSettings", renderer);
 
     // for Frame settings, we need to listen to the transform tree to update settings when new possible display frames are present

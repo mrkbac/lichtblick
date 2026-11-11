@@ -7,7 +7,7 @@ import { MercatorCoordinate } from "maplibre-gl";
 import * as THREE from "three";
 
 import type { HUDItem } from "./HUDItemManager";
-import type { IRenderer } from "./IRenderer";
+import type { Renderer } from "./Renderer";
 import { AnyFrameId, makePose } from "./transforms";
 
 export type MapAnchor = {
@@ -73,7 +73,7 @@ export class SharedMap {
   #style: StyleSpecification = EMPTY_STYLE;
   #placed = false;
   #draw?: () => void;
-  #renderer?: IRenderer;
+  #renderer?: Renderer;
   #renderToMercator = new THREE.Matrix4();
   #renderToEnu = new THREE.Matrix4();
   #enuToMercator = new THREE.Matrix4();
@@ -92,7 +92,7 @@ export class SharedMap {
     map.on("sourcedata", this.#requestFrame);
   }
 
-  public attach(renderer: IRenderer, draw: () => void): void {
+  public attach(renderer: Renderer, draw: () => void): void {
     this.#renderer = renderer;
     this.#draw = draw;
     if (this.map.isStyleLoaded() === true) {
@@ -108,7 +108,7 @@ export class SharedMap {
     this.map.remove();
   }
 
-  public detach(renderer: IRenderer): void {
+  public detach(renderer: Renderer): void {
     if (this.#renderer === renderer) {
       this.#renderer = undefined;
       this.#draw = undefined;

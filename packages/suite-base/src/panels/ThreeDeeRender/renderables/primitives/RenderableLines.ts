@@ -17,7 +17,7 @@ import { assert } from "ts-essentials";
 import { LineMaterialWithAlphaVertex } from "@lichtblick/suite-base/panels/ThreeDeeRender/LineMaterialWithAlphaVertex";
 
 import { RenderablePrimitive } from "./RenderablePrimitive";
-import type { IRenderer } from "../../IRenderer";
+import type { Renderer } from "../../Renderer";
 import { makeRgba, rgbToThreeColor, SRGBToLinear, stringToRgba } from "../../color";
 import { setLinePositions } from "../../setLinePositions";
 import { LayerSettingsEntity } from "../../settings";
@@ -26,7 +26,7 @@ const tempRgba = makeRgba();
 
 export class RenderableLines extends RenderablePrimitive {
   #lines: LinePrimitiveRenderable[] = [];
-  public constructor(renderer: IRenderer) {
+  public constructor(renderer: Renderer) {
     super("", renderer);
   }
 
