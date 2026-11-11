@@ -23,9 +23,12 @@ import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 
 import AppCssBaseline from "@lichtblick/suite-base/components/CssBaseline";
-import CurrentLayoutContext from "@lichtblick/suite-base/context/CurrentLayoutContext";
+import CurrentLayoutContext, {
+  LayoutState,
+} from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
+import { getAllPanelIds } from "@lichtblick/suite-base/util/tabLayout";
 
 import { DockPanelContext } from "./DockPanelContext";
 import { useMonitorSetup } from "./MonitorSetupContext";
@@ -45,7 +48,14 @@ type WindowActions = {
 export const PanelWindowContext = createContext<WindowActions | undefined>(undefined);
 
 // A type change replaces the dock panel, but must keep its already-open browser window.
-const replacementWindows = new Map<string, { child: Window; mode: "popout" | "pip" }>();
+const replacementWindows = new Map<
+  string,
+  {
+    child: Window;
+    mode: "popout" | "pip";
+    cleanup: () => void;
+  }
+>();
 
 /** Mirror global/library CSS, including styles loaded by panels added after the window opens. */
 function copyStyles(source: Document, target: Document): () => void {
@@ -356,7 +366,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
   useEffect(() => {
     const replacement = panelId ? replacementWindows.get(panelId) : undefined;
     if (replacement && panelId) {
-      replacementWindows.delete(panelId);
+      replacement.cleanup();
       actions.open(replacement.mode, undefined, replacement.child);
     }
   }, [actions, panelId]);
@@ -379,7 +389,26 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           const after = layout.actions.getCurrentLayoutState().selectedLayout?.data?.configById;
           const newId = Object.keys(after ?? {}).find((id) => before?.[id] == undefined);
           if (newId) {
-            replacementWindows.set(newId, { child, mode: windowModeRef.current });
+            const cleanup = () => {
+              replacementWindows.delete(newId);
+              layout.removeLayoutStateListener(checkLayout);
+              window.removeEventListener("pagehide", discard);
+              child.removeEventListener("pagehide", cleanup);
+            };
+            const discard = () => {
+              cleanup();
+              child.close();
+            };
+            const checkLayout = (state: LayoutState) => {
+              const data = state.selectedLayout?.data;
+              if (!data || !getAllPanelIds(data).includes(newId)) {
+                discard();
+              }
+            };
+            replacementWindows.set(newId, { child, mode: windowModeRef.current, cleanup });
+            layout.addLayoutStateListener(checkLayout);
+            window.addEventListener("pagehide", discard);
+            child.addEventListener("pagehide", cleanup);
             windowRef.current = undefined;
           }
         },
