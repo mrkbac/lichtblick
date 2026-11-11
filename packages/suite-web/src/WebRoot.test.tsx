@@ -21,6 +21,7 @@ vi.mock("@lichtblick/suite-base", () => {
     __esModule: true,
     AppSetting: { SHOW_DEBUG_PANELS: "showDebugPanels" },
     IdbExtensionLoader: Stub,
+    WebExtensionLoader: Stub,
     RemoteExtensionLoader: Stub,
     FoxgloveWebSocketDataSourceFactory: Stub,
     McapLocalDataSourceFactory: Stub,
@@ -58,6 +59,22 @@ describe("WebRoot", () => {
         <div />
       </WebRoot>,
     );
+
+  it("keeps protocol launches in the PWA even when the user prefers desktop", () => {
+    globalThis.history.replaceState(
+      {},
+      "",
+      `/?protocol=${encodeURIComponent("web+lichtblick://open?ds=remote-file")}`,
+    );
+    renderWebRoot();
+    expect(mockSharedRootProps[0]!.enableLaunchPreferenceScreen).toBe(false);
+  });
+
+  it("does not forward a rejected protocol callback to Electron", () => {
+    globalThis.history.replaceState({}, "", "/?protocol=invalid");
+    renderWebRoot();
+    expect(mockSharedRootProps[0]!.enableLaunchPreferenceScreen).toBe(false);
+  });
 
   it("maps the ?layout= query parameter to appParameters.defaultLayout", () => {
     const layout = BasicBuilder.string();

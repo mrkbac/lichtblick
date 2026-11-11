@@ -13,6 +13,7 @@ import { quat, vec3 } from "gl-matrix";
 import i18next from "i18next";
 import { produce } from "immer";
 import * as THREE from "three";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import { DeepPartial, assert } from "ts-essentials";
 
 import { ObjectPool } from "@lichtblick/den/collection";
@@ -46,6 +47,7 @@ import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { palette, fontMonospace } from "@lichtblick/theme";
 
+import { DynamicBufferGeometry } from "./DynamicBufferGeometry";
 import {
   InstancedLineMaterial,
   RendererConfig,
@@ -1100,6 +1102,110 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   public getCameraState(): CameraState | undefined {
     return this.cameraHandler.getCameraState();
+  }
+
+  /** Fit visible topic geometry, excluding map tiles, grids, and transform helpers. */
+  public zoomToData(): void {
+    const state = this.getCameraState();
+    if (!state) {
+      return;
+    }
+    const bounds = new THREE.Box3();
+    const box = new THREE.Box3();
+    const point = new THREE.Vector3();
+    for (const extension of this.sceneExtensions.values()) {
+      if (!extension.visible) {
+        continue;
+      }
+      extension.updateWorldMatrix(true, true);
+      for (const renderable of extension.renderables.values()) {
+        if (renderable.userData.settingsPath[0] !== "topics") {
+          continue;
+        }
+        renderable.traverseVisible((object) => {
+          if (object.userData.picking === false) {
+            return;
+          }
+          if (
+            object instanceof THREE.Mesh ||
+            object instanceof THREE.Points ||
+            object instanceof THREE.Line
+          ) {
+            if (object instanceof THREE.InstancedMesh) {
+              object.computeBoundingBox();
+              box.copy(object.boundingBox!);
+            } else {
+              const geometry = object.geometry as THREE.BufferGeometry;
+              // Bound only the active range of reused buffers, skipping NaN points (e.g. in clouds)
+              const expand = (name: string, from: number, to: number) => {
+                const attribute = geometry.getAttribute(name) as THREE.BufferAttribute | undefined;
+                for (let i = from; i < Math.min(to, attribute?.count ?? 0); i++) {
+                  point.fromBufferAttribute(attribute!, i);
+                  if (Number.isFinite(point.x + point.y + point.z)) {
+                    box.expandByPoint(point);
+                  }
+                }
+              };
+              box.makeEmpty();
+              if (geometry instanceof LineSegmentsGeometry) {
+                expand("instanceStart", 0, geometry.instanceCount);
+                expand("instanceEnd", 0, geometry.instanceCount);
+              } else if (geometry instanceof DynamicBufferGeometry) {
+                const { start, count } = geometry.drawRange;
+                expand("position", start, start + count);
+              } else if (geometry instanceof THREE.InstancedBufferGeometry) {
+                // Point cloud cubes: the shader offsets a unit cube by each instance position
+                expand("instancePosition", 0, geometry.instanceCount);
+              } else {
+                // Dynamic renderables do not consistently invalidate cached bounds.
+                geometry.computeBoundingBox();
+                box.copy(geometry.boundingBox!);
+              }
+            }
+            box.applyMatrix4(object.matrixWorld);
+            if ([...box.min.toArray(), ...box.max.toArray()].every(Number.isFinite)) {
+              bounds.union(box);
+            }
+          }
+        });
+      }
+    }
+    if (bounds.isEmpty()) {
+      return;
+    }
+    const sphere = bounds.getBoundingSphere(new THREE.Sphere());
+    const camera = this.cameraHandler.getActiveCamera();
+    camera.parent?.worldToLocal(sphere.center);
+    const { width, height } = this.input.canvasSize;
+    const aspect = width > 0 && height > 0 ? width / height : 1;
+    const halfFov = THREE.MathUtils.degToRad(state.fovy / 2);
+    const angle = Math.min(halfFov, Math.atan(Math.tan(halfFov) * aspect));
+    const radius = Math.max(sphere.radius, 0.5) * 1.1;
+    const distance = state.perspective
+      ? radius / Math.sin(angle)
+      : (2 * radius) / Math.min(1, aspect);
+    if (!Number.isFinite(distance) || distance <= 0) {
+      return;
+    }
+    const cameraState: CameraState = {
+      ...state,
+      targetOffset: sphere.center.toArray(),
+      distance,
+      // Keep the far side of the fitted data inside the clipping range
+      // (an orthographic camera sits at z = far / 2 and sees z in [-far / 2, far / 2 - near])
+      far: Math.max(
+        state.far,
+        state.perspective
+          ? (distance + radius) * 1.1
+          : 2 * (state.near + Math.abs(sphere.center.z) + radius),
+      ),
+    };
+    this.updateConfig((draft) => {
+      draft.cameraState = cameraState;
+    });
+    this.setCameraState(cameraState);
+    this.emit("cameraMove", this);
+    this.queueAnimationFrame();
   }
 
   public canResetView(): boolean {

@@ -44,6 +44,7 @@ import {
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks/useAppConfigurationValue";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
+import { LocalResourceFolders } from "./LocalResourceFolders";
 import {
   AutoUpdate,
   ColorSchemeSettings,
@@ -144,7 +145,7 @@ export function AppSettingsDialog(
               {!isDesktopApp() && <LaunchDefault />}
               {/* macOS can't register foxglove:// without declaring it for everyone, see main/settings.ts */}
               {isDesktopApp() && OsContextSingleton?.platform !== "darwin" && <OpenFoxgloveLinks />}
-              {isDesktopApp() && <RosPackagePath />}
+              {isDesktopApp() ? <RosPackagePath /> : <LocalResourceFolders />}
               <Stack>
                 <FormLabel>{t("advanced")}:</FormLabel>
                 <FormControlLabel

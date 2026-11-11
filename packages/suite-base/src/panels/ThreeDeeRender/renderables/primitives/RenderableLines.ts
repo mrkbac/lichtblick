@@ -201,13 +201,6 @@ class LinePrimitiveRenderable extends THREE.Object3D {
       assert(this.#positionBuffer, "Position buffer must be initialized");
       assert(this.#geometry, "Geometry must be initialized");
 
-      // Set an explicit instance count, because three.js ignores attribute offsets when
-      // automatically computing the instance count (and results differ across browsers because they
-      // depend on the key iteration order, since three.js derives the count from the first
-      // instanced interleaved attribute it sees).
-      // this represent the number of _lines_ to render
-      this.#geometry.instanceCount = isSegments ? numVertices >>> 1 : Math.max(numVertices - 1, 0);
-
       if (useIndices) {
         serializePositionsWithIndices(this.#positionBuffer, this.#primitive);
       } else {
@@ -217,6 +210,8 @@ class LinePrimitiveRenderable extends THREE.Object3D {
       // setPosition requires the position array to be >= 6 length or else it will error
       // we skip primitives with empty points before calling this function
       setLinePositions(this.#geometry, this.#positionBuffer);
+      // setLinePositions resets the count to buffer capacity; only draw current segments.
+      this.#geometry.instanceCount = isSegments ? numVertices >>> 1 : Math.max(numVertices - 1, 0);
     }
 
     if (this.#colorChanged || this.#primitiveChanged) {

@@ -10,6 +10,7 @@ import { Paper, IconButton, Tabs, Tab, tabClasses, tabsClasses, Tooltip } from "
 import React, { ReactElement, ReactNode } from "react";
 import { makeStyles } from "tss-react/mui";
 
+import OverlayToolbar from "@lichtblick/suite-base/components/OverlayToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 
 const PANE_HEIGHT = 240;
@@ -74,6 +75,7 @@ type Props<T extends string> = {
   dataTest?: string;
 };
 
+/** Expands a floating control into a tabbed pane while leaving the surrounding canvas interactive. */
 export default function ExpandingToolbar<T extends string>({
   children,
   checked,
@@ -94,11 +96,12 @@ export default function ExpandingToolbar<T extends string>({
     });
 
     return (
-      <Paper square={false} elevation={4} style={{ pointerEvents: "auto" }}>
+      <OverlayToolbar>
         <Tooltip placement="left" title={tooltip}>
           <IconButton
             size="small"
-            color={checked === true ? "info" : "default"}
+            aria-pressed={checked === true}
+            aria-label={tooltip}
             data-testid={`ExpandingToolbar-${tooltip}`}
             onClick={() => {
               onSelectTab(selectedTabLocal);
@@ -107,7 +110,7 @@ export default function ExpandingToolbar<T extends string>({
             {icon}
           </IconButton>
         </Tooltip>
-      </Paper>
+      </OverlayToolbar>
     );
   }
   let selectedChild: ReactElement | undefined;
