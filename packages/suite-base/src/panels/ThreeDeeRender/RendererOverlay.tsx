@@ -393,7 +393,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
           aria-pressed={props.publishActive}
           ref={publishClickButtonRef}
           onClick={props.onClickPublish}
-          aria-label={publishLabel}
+          aria-label={t("publish")}
           data-testid="publish-button"
         >
           {selectedPublishClickIcon}
@@ -517,6 +517,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
           <OverlayToolbar>
             <Tooltip
               placement="left"
+              describeChild
               title={
                 <>
                   {perspectiveLabel} <kbd className={classes.kbd}>3</kbd>
@@ -527,7 +528,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
                 className={classes.iconButton}
                 size="small"
                 aria-pressed={props.perspective}
-                aria-label={perspectiveLabel}
+                aria-label={t("perspectiveCamera")}
                 onClick={props.onTogglePerspective}
               >
                 <span className={classes.threeDeeButton}>3D</span>
@@ -549,7 +550,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
             >
               <IconButton
                 data-testid="measure-button"
-                aria-label={props.measureActive ? t("stopMeasuring") : t("measure")}
+                aria-label={t("measure")}
                 className={classes.iconButton}
                 size="small"
                 aria-pressed={props.measureActive}
@@ -567,7 +568,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
             >
               <IconButton
                 data-testid="measure-frames-button"
-                aria-label={framePicking ? t("stopMeasuringFrames") : t("measureFrames")}
+                aria-label={t("measureFrames")}
                 className={classes.iconButton}
                 size="small"
                 aria-pressed={framePicking}

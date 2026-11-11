@@ -129,18 +129,18 @@ export async function exerciseSharedMap(page: Page): Promise<void> {
   expect(Math.abs(after.lineWidth - before.lineWidth)).toBeLessThanOrEqual(2);
   // Orthographic views keep the same context and 3D scene; the map explicitly pauses.
   const originalCanvas = await canvas.elementHandle();
-  const perspectiveButton = page.getByRole("button", { name: "Switch to 2D camera", exact: true });
-  await expect(perspectiveButton).toHaveAttribute("aria-pressed", "true");
-  await perspectiveButton.click();
+  // The toggle keeps its name; aria-pressed carries the perspective state.
+  const cameraButton = page.getByRole("button", { name: "3D camera", exact: true });
+  await expect(cameraButton).toHaveAttribute("aria-pressed", "true");
+  await cameraButton.click();
   await expect(
     page.getByText("Map is hidden in orthographic view. Switch to perspective to show it."),
   ).toBeVisible();
   await expect.poll(async () => (await pixels(canvas)).green).toBe(0);
   await expect.poll(async () => (await pixels(canvas)).red).toBeGreaterThan(100);
   expect(await originalCanvas.evaluate((element) => element.isConnected)).toBe(true);
-  const orthographicButton = page.getByRole("button", { name: "Switch to 3D camera", exact: true });
-  await expect(orthographicButton).toHaveAttribute("aria-pressed", "false");
-  await orthographicButton.click();
+  await expect(cameraButton).toHaveAttribute("aria-pressed", "false");
+  await cameraButton.click();
   await expect(canvas).toBeVisible();
   await expect.poll(async () => (await pixels(canvas)).green).toBeGreaterThan(500);
   await expect.poll(async () => (await pixels(canvas)).red).toBeGreaterThan(100);

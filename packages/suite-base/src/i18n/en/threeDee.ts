@@ -216,6 +216,7 @@ export const threeDee = {
   poseDisplayTypeLine: "Line",
 
   // Camera controls
+  perspectiveCamera: "3D camera",
   switchTo2DCamera: "Switch to 2D camera",
   switchTo3DCamera: "Switch to 3D camera",
 
