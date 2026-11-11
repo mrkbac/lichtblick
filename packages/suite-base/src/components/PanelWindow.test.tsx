@@ -171,9 +171,11 @@ it.each(["pip", "popout"] as const)(
         expect(floating.getByText("Image!one")).toBeDefined();
       });
       for (let i = 0; i < 2; i++) {
+        const previous = child.document.title;
         fireEvent.click(floating.getByText("Change type"));
         await waitFor(() => {
           expect(child.document.title).toMatch(/^Plot!/);
+          expect(child.document.title).not.toBe(previous);
         });
         expect(floating.getByText(child.document.title)).toBeDefined();
         expect(document.querySelector('[data-testid="content"]')).toBeNull();
