@@ -14,13 +14,16 @@ import { MESH_FETCH_FAILED, RenderableMeshResource } from "./markers/RenderableM
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
 
 const meshErrors = { add: vi.fn(), remove: vi.fn(), hasError: vi.fn().mockReturnValue(false) };
-const renderer = {
+const rendererStub = {
   normalizeFrameId: (id: string) => id,
   queueAnimationFrame: vi.fn(),
   settings: { errors: meshErrors },
   config: { topics: {} },
-  modelCache: { load: async () => await new Promise(() => {}) },
-} as unknown as Renderer;
+  modelCache: {
+    load: async () => await new Promise(() => {}),
+  } as unknown as Renderer["modelCache"],
+};
+const renderer = rendererStub as unknown as Renderer;
 
 const robot: UrdfRobot = {
   name: "robot",
@@ -178,7 +181,7 @@ describe("URDF requests", () => {
     const removeError = vi.fn();
     const queueAnimationFrame = vi.fn();
     const context = {
-      ...renderer,
+      ...rendererStub,
       addCoordinateFrame: vi.fn(),
       queueAnimationFrame,
       config: {
