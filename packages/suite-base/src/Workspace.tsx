@@ -159,6 +159,7 @@ const selectWorkspaceRightSidebarItem = (store: WorkspaceContextStore) => store.
 const selectWorkspaceRightSidebarOpen = (store: WorkspaceContextStore) => store.sidebars.right.open;
 const selectWorkspaceRightSidebarSize = (store: WorkspaceContextStore) => store.sidebars.right.size;
 
+/** Keeps the active workspace mounted while applying file and protocol launch requests. */
 function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   const { PerformanceSidebarComponent } = useAppContext();
   const { classes } = useStyles();
@@ -678,6 +679,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
 
   const selectEvent = useEvents(selectSelectEvent);
 
+  /** Only the current launch may install a downloaded layout or replace saved copies. */
   const fetchLayoutFromUrl = useCallback(
     async (layoutUrl: string) => {
       if (layoutUrl === "") {

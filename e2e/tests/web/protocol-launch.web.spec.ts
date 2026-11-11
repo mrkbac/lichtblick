@@ -26,7 +26,8 @@ test("routes cold and existing PWA protocol launches without reloading", { tag: 
   ]);
   expect(manifest.launch_handler.client_mode).toBe("focus-existing");
   expect(manifest.file_handlers).toHaveLength(3);
-  const data = await readFile(path.resolve("e2e/fixtures/assets/example.mcap"));
+  // Generated JSON messages { value: 1..3 } on /example at seconds 1..3; no recorded data.
+  const data = await readFile(path.resolve("e2e/fixtures/assets/protocol-example.mcap"));
   await page.route("**/protocol-example.mcap", async (route) => {
     const range = (await route.request().headerValue("range"))?.match(/^bytes=(\d+)-(\d*)$/);
     const start = range ? Number(range[1]) : 0;
@@ -70,8 +71,8 @@ test("routes cold and existing PWA protocol launches without reloading", { tag: 
   await expect(play).toBeEnabled();
   await page.evaluate(async (target) => {
     await (window as TestWindow).consumeLaunch!({ files: [], targetURL: location.origin + target });
-  }, callback("time=1740566236"));
-  await expect(page).toHaveURL(/[?&]time=2025-02-26T10%3A37%3A16|[?&]time=2025-02-26T10:37:16/);
+  }, callback("time=2"));
+  await expect(page).toHaveURL(/[?&]time=1970-01-01T00(?::|%3A)00(?::|%3A)02/);
   await expect(page.locator("body")).toHaveAttribute("data-launch-marker", "same-workspace");
   await expect(play).toBeEnabled();
 

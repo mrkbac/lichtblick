@@ -31,6 +31,7 @@ import LocalStorageAppConfiguration from "./services/LocalStorageAppConfiguratio
 
 const isDevelopment = process.env.NODE_ENV === "development";
 
+/** Configures browser services and keeps protocol callbacks inside the installed web app. */
 export function WebRoot(props: {
   extraProviders: React.JSX.Element[] | undefined;
   dataSources: IDataSourceFactory[] | undefined;

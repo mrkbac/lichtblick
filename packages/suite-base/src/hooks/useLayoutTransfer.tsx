@@ -25,6 +25,7 @@ import { AppEvent } from "../services/IAnalytics";
 type UseLayoutTransfer = {
   importLayout: () => Promise<void>;
   exportLayout: () => Promise<void>;
+  /** Saves and selects a layout; rejects with AbortError if the optional signal is cancelled. */
   parseAndInstallLayout: (
     file: File,
     namespace: Namespace,
@@ -32,6 +33,7 @@ type UseLayoutTransfer = {
   ) => Promise<Layout | undefined>;
 };
 
+/** Shares layout import/export behavior across file and launch entry points. */
 export function useLayoutTransfer(): UseLayoutTransfer {
   const isMounted = useMountedState();
   const layoutManager = useLayoutManager();
