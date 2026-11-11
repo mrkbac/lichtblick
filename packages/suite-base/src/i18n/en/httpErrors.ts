@@ -11,4 +11,10 @@ export const httpErrors = {
   internalServerError: "Server error. Please try again later.",
   clientError: "Request error. Please check your input and try again.",
   serverError: "Server error. Please try again later.",
+  remoteFileCors:
+    "The server at {{origin}} blocked this site from reading the file (CORS). It must send an Access-Control-Allow-Origin header that allows {{appOrigin}} (or *), and Access-Control-Expose-Headers: Accept-Ranges, Content-Length.",
+  remoteFileCorsCredentials:
+    "The server at {{origin}} blocked this site from reading the file with credentials (CORS). Because this link sends cookies, the server must send Access-Control-Allow-Credentials: true and Access-Control-Allow-Origin: {{appOrigin}}. A wildcard (*) is not allowed for requests with credentials.",
+  remoteFileUnreachable:
+    "Couldn't reach {{origin}}. Check the URL and your network connection. ({{error}})",
 };
