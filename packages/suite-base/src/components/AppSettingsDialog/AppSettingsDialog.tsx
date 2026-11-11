@@ -28,6 +28,7 @@ import { lazy, MouseEvent, Suspense, SyntheticEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
+import OsContextSingleton from "@lichtblick/suite-base/OsContextSingleton";
 import { useStyles } from "@lichtblick/suite-base/components/AppSettingsDialog/AppSettingsDialog.style";
 import { APP_SETTINGS_ABOUT_ITEMS } from "@lichtblick/suite-base/components/AppSettingsDialog/constants";
 import { AppSettingsTab } from "@lichtblick/suite-base/components/AppSettingsDialog/types";
@@ -141,7 +142,8 @@ export function AppSettingsDialog(
               <LanguageSettings />
               {supportsAppUpdates && <AutoUpdate />}
               {!isDesktopApp() && <LaunchDefault />}
-              {isDesktopApp() && <OpenFoxgloveLinks />}
+              {/* macOS can't register foxglove:// without declaring it for everyone, see main/settings.ts */}
+              {isDesktopApp() && OsContextSingleton?.platform !== "darwin" && <OpenFoxgloveLinks />}
               {isDesktopApp() && <RosPackagePath />}
               <Stack>
                 <FormLabel>{t("advanced")}:</FormLabel>

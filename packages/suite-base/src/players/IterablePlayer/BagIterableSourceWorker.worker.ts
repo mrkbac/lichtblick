@@ -20,7 +20,11 @@ export function initialize(
     const wrapped = new WorkerSerializedIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
   } else if (args.url) {
-    const source = new BagIterableSource({ type: "remote", url: args.url });
+    const source = new BagIterableSource({
+      type: "remote",
+      url: args.url,
+      credentials: args.credentials,
+    });
     const wrapped = new WorkerSerializedIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
   }

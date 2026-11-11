@@ -369,7 +369,7 @@ describe("McapIterableSource", () => {
       const { alerts } = await source.initialize();
 
       // Then it should fall back to fetch for streaming
-      expect(mockFetch).toHaveBeenCalledWith(urlUnindexedMcap);
+      expect(mockFetch).toHaveBeenCalledWith(urlUnindexedMcap, { credentials: undefined });
       // And produce the unindexed performance warning
       expect(alerts).toEqual(
         expect.arrayContaining([

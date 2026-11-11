@@ -29,6 +29,7 @@ export class RemoteFileReadable {
   readonly #remoteReader: CachedFilelike;
   readonly #batchingReadable: BatchingReadable;
   readonly #url: string;
+  readonly #credentials: RequestCredentials | undefined;
   readonly #prefetchQueue = new RequestQueue(PREFETCH_CONCURRENCY);
   // Exact-range downloads keyed by start offset, in request order for eviction
   readonly #prefetched = new Map<number, Prefetched>();
@@ -37,7 +38,8 @@ export class RemoteFileReadable {
 
   public constructor(url: string, options?: RemoteFileReadableOptions) {
     this.#url = url;
-    const fileReader = new BrowserHttpReader(url);
+    this.#credentials = options?.credentials;
+    const fileReader = new BrowserHttpReader(url, { credentials: this.#credentials });
     this.#remoteReader = new CachedFilelike({
       fileReader,
       cacheSizeInBytes: options?.cacheSizeInBytes ?? DEFAULT_CACHE_SIZE_BYTES,
@@ -120,6 +122,7 @@ export class RemoteFileReadable {
     const controller = new AbortController();
     const response = await fetch(this.#url, {
       headers: { range: `bytes=${start}-${end - 1}` },
+      credentials: this.#credentials,
       signal: controller.signal,
     });
     if (response.status !== 206) {

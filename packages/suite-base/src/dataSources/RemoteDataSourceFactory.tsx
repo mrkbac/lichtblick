@@ -98,6 +98,9 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
       return;
     }
     const urls = args.params.url.split(",");
+    // Same meaning as Foxglove's `ds.includeCredentials`: send cookies with the file requests
+    const includeCredentials = args.params.includeCredentials === "true";
+    const credentials: RequestCredentials | undefined = includeCredentials ? "include" : undefined;
 
     let nextExtension: string | undefined = undefined;
     let extension = "";
@@ -111,15 +114,16 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
 
     const initArgs =
       urls.length === 1
-        ? { url: urls[0] }
-        : addMultiFileHydrationOverrides({ urls }, this.multiFileHydrationOverrides);
+        ? { url: urls[0], credentials }
+        : addMultiFileHydrationOverrides({ urls, credentials }, this.multiFileHydrationOverrides);
     const source = new WorkerSerializedIterableSource({ initWorker, initArgs });
 
     return new IterablePlayer({
       source,
       name: urls.join(),
       metricsCollector: args.metricsCollector,
-      urlParams: { urls },
+      // Keep includeCredentials in the app URL so reloads and shared links still send cookies
+      urlParams: includeCredentials ? { urls, includeCredentials: "true" } : { urls },
       sourceId: this.id,
       readAheadDuration: { sec: 10, nsec: 0 },
       // MCAP can carry foxglove.CompressedVideo. Some codecs (e.g. H.265) cannot decode a P/B-frame

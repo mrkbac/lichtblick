@@ -21,9 +21,11 @@ import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 // A file reader that reads from a remote HTTP URL, for usage in the browser (not for node.js).
 export default class BrowserHttpReader implements FileReader {
   #url: string;
+  #credentials: RequestCredentials | undefined;
 
-  public constructor(url: string) {
+  public constructor(url: string, options?: { credentials?: RequestCredentials }) {
     this.#url = url;
+    this.#credentials = options?.credentials;
   }
 
   public async open(): Promise<{ size: number; identifier?: string }> {
@@ -39,7 +41,11 @@ export default class BrowserHttpReader implements FileReader {
       // it may add a `range` header to the request, which causes some servers to omit the
       // `accept-ranges` header in the response.
       const controller = new AbortController();
-      response = await fetch(this.#url, { signal: controller.signal, cache: "no-store" });
+      response = await fetch(this.#url, {
+        signal: controller.signal,
+        cache: "no-store",
+        credentials: this.#credentials,
+      });
       controller.abort();
     } catch (error) {
       let errMsg = `Fetching remote file failed. ${error}`;
@@ -80,7 +86,7 @@ export default class BrowserHttpReader implements FileReader {
 
   public fetch(offset: number, length: number): FileStream {
     const headers = new Headers({ range: `bytes=${offset}-${offset + (length - 1)}` });
-    const reader = new FetchReader(this.#url, { headers });
+    const reader = new FetchReader(this.#url, { headers, credentials: this.#credentials });
     reader.read();
     return reader;
   }

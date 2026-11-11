@@ -29,12 +29,21 @@ export function initialize(
     const wrapped = new WorkerSerializedIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
   } else if (args.url) {
-    const source = new McapIterableSource({ type: "url", url: args.url });
+    const source = new McapIterableSource({
+      type: "url",
+      url: args.url,
+      credentials: args.credentials,
+    });
     const wrapped = new WorkerSerializedIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
   } else if (args.urls) {
     const source = new MultiIterableSource(
-      { type: "urls", urls: args.urls, ...pickDefinedHydrationOverrides(args) },
+      {
+        type: "urls",
+        urls: args.urls,
+        credentials: args.credentials,
+        ...pickDefinedHydrationOverrides(args),
+      },
       McapIterableSource,
     );
     const wrapped = new WorkerSerializedIterableSourceWorker(source);

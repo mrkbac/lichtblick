@@ -1,0 +1,7 @@
+# Cloudflare Pages redirects
+# Documentation: https://developers.cloudflare.com/pages/configuration/redirects/
+
+# Foxglove-style view links (/<org>/view?…, /~/view?…) use the same query parameters as ours.
+# Fold the path into the app root; Cloudflare keeps the query string on redirects.
+/:org/view   /   302
+/:org/view/  /   302

@@ -48,7 +48,14 @@ export function getAppSetting<T>(
   }
 }
 
-/** Whether the user opted in to opening `foxglove://open` deep links. Off by default. */
+/**
+ * Whether the user opted in to opening `foxglove://open` deep links. Off by default.
+ *
+ * Never on macOS: it only routes schemes declared in Info.plist, and declaring `foxglove` there
+ * would let Launch Services hand Foxglove's links to us without the user opting in.
+ */
 export function opensFoxgloveLinks(): boolean {
-  return getAppSetting<boolean>(AppSetting.OPEN_FOXGLOVE_LINKS) === true;
+  return (
+    process.platform !== "darwin" && getAppSetting<boolean>(AppSetting.OPEN_FOXGLOVE_LINKS) === true
+  );
 }
