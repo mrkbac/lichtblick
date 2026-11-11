@@ -377,16 +377,15 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
   const longPressPublishEvent = useLongPress(onLongPressPublish);
 
   const theme = useTheme();
+  const publishLabel = t(props.publishActive ? "clickToCancel" : "clickToPublish");
+  const perspectiveLabel = t(props.perspective ? "switchTo2DCamera" : "switchTo3DCamera");
 
   // Publish control is only available if the canPublish prop is true and we have a fixed frame in the renderer
   const showPublishControl =
     props.interfaceMode === "3d" && props.canPublish && renderer?.fixedFrameId != undefined;
   const publishControls = showPublishControl && (
     <>
-      <Tooltip
-        placement="left"
-        title={props.publishActive ? "Click to cancel" : "Click to publish"}
-      >
+      <Tooltip placement="left" title={publishLabel}>
         <IconButton
           {...longPressPublishEvent}
           className={classes.iconButton}
@@ -394,7 +393,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
           aria-pressed={props.publishActive}
           ref={publishClickButtonRef}
           onClick={props.onClickPublish}
-          aria-label={props.publishActive ? "Click to cancel" : "Click to publish"}
+          aria-label={publishLabel}
           data-testid="publish-button"
         >
           {selectedPublishClickIcon}
@@ -520,8 +519,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
               placement="left"
               title={
                 <>
-                  {`Switch to ${props.perspective ? "2" : "3"}D camera `}
-                  <kbd className={classes.kbd}>3</kbd>
+                  {perspectiveLabel} <kbd className={classes.kbd}>3</kbd>
                 </>
               }
             >
@@ -529,7 +527,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
                 className={classes.iconButton}
                 size="small"
                 aria-pressed={props.perspective}
-                aria-label={`Switch to ${props.perspective ? "2" : "3"}D camera`}
+                aria-label={perspectiveLabel}
                 onClick={props.onTogglePerspective}
               >
                 <span className={classes.threeDeeButton}>3D</span>
