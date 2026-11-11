@@ -32,7 +32,7 @@ test("open 3D panel after loading a mcap file", { tag: "@regression" }, async ({
   // When
   await panels.addPanel("3D");
   await sidebar.openPanelSettingsTab();
-  await mainWindow.getByText("3D").nth(0).click();
+  await panels.select("3D");
 
   // Then
   await expect(mainWindow.getByTestId("VisibilityToggle")).toBeVisible();

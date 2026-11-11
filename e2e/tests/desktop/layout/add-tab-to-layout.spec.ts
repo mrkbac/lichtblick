@@ -8,20 +8,18 @@ import { DataSourceDialog, LayoutManager, Sidebar } from "../../../page-objects"
 const LAYOUT_FILE = "tab-layout.json";
 
 /**
- * GIVEN the user is on the Layouts tab and a layout containing a tab is loaded
- * THEN one tab is already visible and ready to accept additional panels
- * WHEN a tab group is created inside the parent tab using a 3D panel
- * THEN the layout should display two tabs (parent and child)
- * WHEN a new tab is added from the child tab label
- * THEN the layout should display three tabs
- * WHEN the parent tab is removed
- * THEN the layout should display zero tabs
+ * GIVEN the user is on the Layouts tab and a layout with a two-tab Tab panel is loaded
+ * THEN both tabs are visible
+ * WHEN a new tab is added from the Tab panel's "New tab" button
+ * THEN the Tab panel shows three tabs and the new one is selected
+ * WHEN two tabs are closed
+ * THEN the Tab panel turns back into the remaining tab's panel
  */
-test("create a new layout and add a tab", { tag: "@regression" }, async ({ mainWindow }) => {
-  test.setTimeout(45_000);
+test("load a tab layout and add a tab", { tag: "@regression" }, async ({ mainWindow }) => {
   const dialog = new DataSourceDialog(mainWindow);
   const sidebar = new Sidebar(mainWindow);
   const layout = new LayoutManager(mainWindow);
+  const tabs = mainWindow.getByTestId("tab-panel-tab");
 
   // Given
   await dialog.close();
@@ -29,28 +27,28 @@ test("create a new layout and add a tab", { tag: "@regression" }, async ({ mainW
   await loadFromFilePicker(mainWindow, LAYOUT_FILE);
   await layout.importLayout();
 
-  //Then
-  await expect(mainWindow.getByTestId("toolbar-tab")).toHaveCount(1);
+  // Then
+  await expect(tabs).toHaveCount(2);
 
   // When
-  const panelSearch = mainWindow.getByTestId("panel-list-textfield").locator("input");
-  await panelSearch.fill("tab");
-  await mainWindow.getByRole("button", { name: "Tab Group panels together" }).click();
-  await mainWindow.getByRole("button", { name: "3d" }).click();
+  await mainWindow.getByTestId("add-tab").click();
+  await mainWindow.getByTestId("panel-menu-item Raw Messages").click();
 
   // Then
-  await expect(mainWindow.getByTestId("toolbar-tab")).toHaveCount(2);
-  await expect(mainWindow.getByTestId("add-tab")).toHaveCount(2);
+  await expect(tabs).toHaveCount(3);
+  await expect(mainWindow.getByRole("tab", { name: "Raw Messages" })).toHaveAttribute(
+    "aria-selected",
+    "true",
+  );
 
   // When
-  await mainWindow.getByTestId("add-tab").nth(1).click();
+  // Close buttons show on hover and sit inside role="tab", outside the accessibility tree.
+  for (const title of ["1", "2"]) {
+    await tabs.filter({ hasText: title }).first().hover();
+    await mainWindow.getByLabel(`Close ${title}`, { exact: true }).click();
+  }
 
   // Then
-  await expect(mainWindow.getByTestId("toolbar-tab")).toHaveCount(3);
-
-  // When
-  await mainWindow.getByTestId("tab-icon").nth(0).click();
-
-  // Then
-  await expect(mainWindow.getByTestId("toolbar-tab")).toHaveCount(0);
+  await expect(tabs).toHaveCount(0);
+  await expect(mainWindow.getByTestId(/^panel-mouseenter-container RawMessages!/)).toBeVisible();
 });

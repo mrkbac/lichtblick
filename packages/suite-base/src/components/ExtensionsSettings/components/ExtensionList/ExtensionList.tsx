@@ -162,45 +162,45 @@ export default function ExtensionList({
     setRowSelection({});
   }, [analytics, enqueueSnackbar, isExtensionInstalled, selectedExtensions, uninstallExtension]);
 
+  // Rendered inline, not as a column `cell`: flexRender mounts `cell` as a component, so a new
+  // closure (on every catalog or operation change) would remount the button and drop a click
+  // that lands mid-update.
+  const renderActions = (extension: ExtensionMarketplaceDetail) => {
+    const isExtensionOperating = isOperating(extension.id);
+    return isExtensionInstalled(extension.id) ? (
+      <UninstallButton
+        extension={extension}
+        onAction={handleUninstall}
+        isOperating={isExtensionOperating}
+        operationStatus={operationStatus}
+        stopPropagation
+        label={ExtensionActionsLabel.UNINSTALL}
+        loadingLabel={ExtensionOperationStatusLabel.UNINSTALLING}
+      />
+    ) : (
+      <InstallButton
+        extension={extension}
+        onAction={handleInstall}
+        isOperating={isExtensionOperating}
+        operationStatus={operationStatus}
+        stopPropagation
+        label={ExtensionActionsLabel.INSTALL}
+        loadingLabel={ExtensionOperationStatusLabel.INSTALLING}
+      />
+    );
+  };
+
   const columns = useMemo(() => {
     const all = columnHelper.columns([
       columnHelper.accessor("name", { header: "Name" }),
       columnHelper.accessor("version", { header: "Version" }),
       columnHelper.accessor("publisher", { header: "Publisher" }),
       columnHelper.accessor("description", { header: "Description" }),
-      columnHelper.display({
-        id: "actions",
-        header: "Actions",
-        cell: ({ row }) => {
-          const extension = row.original as ExtensionMarketplaceDetail;
-          const isExtensionOperating = isOperating(extension.id);
-          return isExtensionInstalled(extension.id) ? (
-            <UninstallButton
-              extension={extension}
-              onAction={handleUninstall}
-              isOperating={isExtensionOperating}
-              operationStatus={operationStatus}
-              stopPropagation
-              label={ExtensionActionsLabel.UNINSTALL}
-              loadingLabel={ExtensionOperationStatusLabel.UNINSTALLING}
-            />
-          ) : (
-            <InstallButton
-              extension={extension}
-              onAction={handleInstall}
-              isOperating={isExtensionOperating}
-              operationStatus={operationStatus}
-              stopPropagation
-              label={ExtensionActionsLabel.INSTALL}
-              loadingLabel={ExtensionOperationStatusLabel.INSTALLING}
-            />
-          );
-        },
-      }),
+      columnHelper.display({ id: "actions", header: "Actions" }),
     ]);
     const showActions = isDesktopApp() || !entries.some((entry) => canInstallExtension(entry));
     return showActions ? all : all.filter((column) => column.id !== "actions");
-  }, [entries, handleInstall, handleUninstall, isExtensionInstalled, isOperating, operationStatus]);
+  }, [entries]);
 
   const table = useTable({
     features,
@@ -330,7 +330,9 @@ export default function ExtensionList({
                   </TableCell>
                   {row.getAllCells().map((cell) => (
                     <TableCell key={cell.id}>
-                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      {cell.column.id === "actions"
+                        ? renderActions(row.original as ExtensionMarketplaceDetail)
+                        : flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </TableCell>
                   ))}
                 </TableRow>

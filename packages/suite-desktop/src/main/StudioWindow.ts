@@ -137,7 +137,9 @@ function newStudioWindow(deepLinks: string[] = [], reloadMainWindow: () => void)
   });
 
   browserWindow.webContents.once("dom-ready", () => {
-    if (!isProduction) {
+    // Skip when a debugger already drives the app (Playwright): docked DevTools halve the page
+    // width and slow startup, so e2e would test a layout users never see.
+    if (!isProduction && !app.commandLine.hasSwitch("remote-debugging-port")) {
       browserWindow.webContents.openDevTools();
     }
     browserWindow.webContents.send(browserWindow.isMaximized() ? "maximize" : "unmaximize");

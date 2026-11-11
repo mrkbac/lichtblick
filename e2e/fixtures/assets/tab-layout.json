@@ -4,10 +4,17 @@
       "activeTabIdx": 0,
       "tabs": [
         {
-          "title": "1"
+          "title": "1",
+          "layout": "Plot!1"
+        },
+        {
+          "title": "2",
+          "layout": "Plot!2"
         }
       ]
-    }
+    },
+    "Plot!1": {},
+    "Plot!2": {}
   },
   "globalVariables": {},
   "userNodes": {},
