@@ -544,6 +544,54 @@ describe("Workspace - session-based MCAP resolution", () => {
     });
   });
 
+  it("drops a pending protocol bundle and seek when a file launch arrives", async () => {
+    const stale = Promise.withResolvers<McapBundleFile[]>();
+    const setConsumer = vi.fn();
+    const seek = vi.fn();
+    window.launchQueue = { setConsumer };
+    let pipeline = {
+      ...mockPipelineContext,
+      playerState: {
+        ...mockPipelineContext.playerState,
+        presence: PlayerPresence.PRESENT,
+        playerId: "old",
+      },
+      seekPlayback: seek,
+    };
+    (useMessagePipeline as Mock).mockImplementation((selector: (ctx: typeof pipeline) => unknown) =>
+      selector(pipeline),
+    );
+    (useMessagePipelineGetter as Mock).mockReturnValue(() => pipeline);
+    mockGetMcapBundle.mockReturnValue(stale.promise);
+    (parseAppURLState as Mock).mockReturnValue(undefined);
+    const { rerender } = render(<Workspace />);
+    const consume = setConsumer.mock.calls[0]![0] as (params: LaunchParams) => Promise<void>;
+    (parseAppURLState as Mock).mockReturnValue({
+      mcapBundleId: "session",
+      time: { sec: 123, nsec: 0 },
+    });
+    await act(async () => {
+      await consume({ files: [], targetURL: protocolCallback("mcap-bundle=session&time=123") });
+    });
+    const signal = mockGetMcapBundle.mock.calls[0]![1] as AbortSignal;
+    const handle = {
+      kind: "file",
+      getFile: vi.fn().mockResolvedValue(new File(["data"], "data.mcap")),
+    } as unknown as FileSystemFileHandle;
+    await act(async () => {
+      await consume({ files: [handle], targetURL: "http://localhost/" });
+    });
+    expect(signal.aborted).toBe(true);
+    pipeline = { ...pipeline, playerState: { ...pipeline.playerState, playerId: "file" } };
+    rerender(<Workspace />);
+    await act(async () => {
+      stale.resolve([{ url: "https://example.com/old.mcap", metadata: {} }]);
+      await stale.promise;
+    });
+    expect(mockSelectSource).not.toHaveBeenCalled();
+    expect(seek).not.toHaveBeenCalled();
+  });
+
   it("should fetch session and call selectSource with resolved URLs and metadata", async () => {
     // Given
     const mcapBundleId = "test-session-123";

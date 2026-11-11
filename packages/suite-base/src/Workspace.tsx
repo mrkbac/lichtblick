@@ -282,6 +282,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   const [launchedURL, setLaunchedURL] = useState<URL>();
   const initialLaunchURL = useRef(props.deepLinks?.[0]);
   const layoutRequest = useRef<AbortController>(undefined);
+  const bundleRequest = useRef<AbortController>(undefined);
   useEffect(() => () => layoutRequest.current?.abort(), [launchedURL]);
 
   // One consumer handles both file and protocol launches; focus-existing never reloads the app.
@@ -305,8 +306,11 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
           setLaunchedURL(url);
         }
       }
+      // A file launch supersedes any protocol launch still waiting on its layout, bundle or seek.
       if (files.length > 0) {
         layoutRequest.current?.abort();
+        bundleRequest.current?.abort();
+        setUnappliedTime({});
       }
       const fileHandles = files.filter((h): h is FileSystemFileHandle => h.kind === "file");
       if (fileHandles.length === 0) {
@@ -644,6 +648,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     }
 
     const controller = new AbortController();
+    bundleRequest.current = controller;
     const { signal } = controller;
 
     void (async () => {
