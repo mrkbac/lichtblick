@@ -72,6 +72,7 @@ describe("Urdfs createRenderable", () => {
   );
 
   it("preserves vertex colors and applies URDF fallback per OBJ mesh", async () => {
+    // Given
     const model: LoadedModel = new THREE.Group();
     model.hasEmbeddedMaterials = false;
     const colored = new THREE.Mesh(
@@ -82,6 +83,8 @@ describe("Urdfs createRenderable", () => {
     const plain = new THREE.Mesh(new THREE.BoxGeometry(), new THREE.MeshStandardMaterial());
     model.add(colored, plain);
     const load = vi.spyOn(renderer.modelCache, "load").mockResolvedValue(model);
+
+    // When
     const renderable = createRenderable({
       visual: {
         geometry: { geometryType: "mesh", filename: "file:///mixed.obj" },
@@ -93,17 +96,22 @@ describe("Urdfs createRenderable", () => {
       frameId: "base_link",
       renderer,
     }) as RenderableMeshResource;
-    await vi.waitFor(() => {
-      expect(renderable.children).toHaveLength(1);
-    });
-    const meshes = renderable.children[0]!.children as THREE.Mesh<
-      THREE.BufferGeometry,
-      THREE.MeshStandardMaterial
-    >[];
-    expect(meshes[0]!.material).toBe(colored.material);
-    expect(meshes[1]!.material.color.getHex()).toBe(0xff0000);
-    load.mockRestore();
-    renderable.dispose();
+
+    try {
+      // Then
+      await vi.waitFor(() => {
+        expect(renderable.children).toHaveLength(1);
+      });
+      const meshes = renderable.children[0]!.children as THREE.Mesh<
+        THREE.BufferGeometry,
+        THREE.MeshStandardMaterial
+      >[];
+      expect(meshes[0]!.material).toBe(colored.material);
+      expect(meshes[1]!.material.color.getHex()).toBe(0xff0000);
+    } finally {
+      load.mockRestore();
+      renderable.dispose();
+    }
   });
 
   it.each([false, true])("ignores late mesh loads after disposal (loaded: %s)", async (loaded) => {
