@@ -93,10 +93,19 @@ vi.mock("@lichtblick/suite-base/components/LayoutBrowser", () => ({
 vi.mock("@lichtblick/suite-base/components/LayoutTemplates", () => ({
   LayoutTemplateCommands: () => undefined,
 }));
-vi.mock("@lichtblick/suite-base/components/PanelLayout", () => ({
-  __esModule: true,
-  default: () => undefined,
-}));
+const { mockPanelLayoutMount } = vi.hoisted(() => ({ mockPanelLayoutMount: vi.fn() }));
+vi.mock("@lichtblick/suite-base/components/PanelLayout", async () => {
+  const { useEffect } = await import("react");
+  return {
+    __esModule: true,
+    default: function MockPanelLayout() {
+      useEffect(() => {
+        mockPanelLayoutMount();
+      }, []);
+      return undefined;
+    },
+  };
+});
 vi.mock("@lichtblick/suite-base/components/PanelSettings", () => ({
   __esModule: true,
   default: () => undefined,
@@ -279,6 +288,36 @@ describe("Workspace - alerts badge in leftSidebarItems", () => {
 
   afterEach(() => {
     MockedSidebars.mockClear();
+  });
+
+  it("remounts the panels when the player changes and keeps them for the same player", () => {
+    // Given: Sidebars renders its children so the panel layout mounts
+    MockedSidebars.mockImplementation(({ children }: React.PropsWithChildren) => <>{children}</>);
+    mockPanelLayoutMount.mockClear();
+    let pipeline = {
+      ...mockPipelineContext,
+      playerState: { ...mockPipelineContext.playerState, playerId: "first" },
+    };
+    (useMessagePipeline as Mock).mockImplementation((selector: (ctx: typeof pipeline) => unknown) =>
+      selector(pipeline),
+    );
+    const { rerender } = render(<Workspace />);
+    expect(mockPanelLayoutMount).toHaveBeenCalledTimes(1);
+
+    // When: the same player re-renders
+    pipeline = { ...pipeline };
+    rerender(<Workspace />);
+
+    // Then: the panels are kept
+    expect(mockPanelLayoutMount).toHaveBeenCalledTimes(1);
+
+    // When: a different player takes over
+    pipeline = { ...pipeline, playerState: { ...pipeline.playerState, playerId: "second" } };
+    rerender(<Workspace />);
+
+    // Then: the panels remount
+    expect(mockPanelLayoutMount).toHaveBeenCalledTimes(2);
+    MockedSidebars.mockImplementation(() => undefined);
   });
 
   it("should not set badge on alerts sidebar item when alertCount is 0", () => {
