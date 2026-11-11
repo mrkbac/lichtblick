@@ -7,6 +7,7 @@
 
 import {
   ArrowDownload20Regular,
+  ZoomFit20Regular,
   ArrowRouting20Filled,
   ArrowRouting20Regular,
   PointScan20Regular,
@@ -535,6 +536,16 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
                 onClick={props.onTogglePerspective}
               >
                 <span className={classes.threeDeeButton}>3D</span>
+              </IconButton>
+            </Tooltip>
+            <Tooltip placement="left" title={t("zoomToData")}>
+              <IconButton
+                aria-label={t("zoomToData")}
+                className={classes.iconButton}
+                size="small"
+                onClick={() => renderer?.zoomToData()}
+              >
+                <ZoomFit20Regular />
               </IconButton>
             </Tooltip>
             <Tooltip

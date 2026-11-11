@@ -82,6 +82,7 @@ vi.mock("./Stats", () => {
 const mockRendererEventCallbacks = new Map<string, (...args: any[]) => void>();
 const mockRenderer = {
   setPickingEnabled: vi.fn(),
+  zoomToData: vi.fn(),
   setSelectedRenderable: vi.fn(),
   canResetView: vi.fn(() => false),
   getContextMenuItems: vi.fn((): PanelContextMenuItem[] => []),
@@ -128,6 +129,12 @@ describe("<RendererOverlay /> hover wiring", () => {
       </ThemeProvider>,
     );
   }
+
+  it("zooms to data from the 3D toolbar", () => {
+    renderOverlay(document.createElement("canvas"));
+    fireEvent.click(document.querySelector('[aria-label="Zoom to data"]')!);
+    expect(mockRenderer.zoomToData).toHaveBeenCalledOnce();
+  });
 
   it("maps hovered selections into HoverTooltip entities and absolute client position", async () => {
     const canvas = document.createElement("canvas");
