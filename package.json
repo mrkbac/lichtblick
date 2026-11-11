@@ -21,7 +21,7 @@
   },
   "scripts": {
     "clean": "bash ci/clean-build.sh",
-    "build:packages": "node ./node_modules/typescript7/bin/tsc --build --verbose packages/*/tsconfig.json packages/*/src/*/tsconfig.json",
+    "build:packages": "node ./node_modules/typescript7/bin/tsc --build --builders 1 --verbose packages/*/tsconfig.json packages/*/src/*/tsconfig.json",
     "desktop:build:dev": "rspack build --mode development --config desktop/rspack.config.ts",
     "desktop:build:prod": "rspack build --mode production --config desktop/rspack.config.ts",
     "desktop:serve": "rspack serve --mode development --config desktop/rspack.config.ts",
@@ -73,7 +73,7 @@
     "release:bump-nightly-version": "node ./ci/bump-nightly-version.ts",
     "storybook": "storybook dev --port 9009 --config-dir .storybook",
     "storybook:build": "storybook build --config-dir .storybook --stats-json",
-    "typecheck": "node ./node_modules/typescript7/bin/tsc --build tsconfig.json web/src/tsconfig.json desktop/tsconfig.json desktop/*/tsconfig.json benchmark/tsconfig.json benchmark/src/tsconfig.json benchmark/desktop/*/tsconfig.json"
+    "typecheck": "node ./node_modules/typescript7/bin/tsc --build --builders 1 tsconfig.json web/src/tsconfig.json desktop/tsconfig.json desktop/*/tsconfig.json benchmark/tsconfig.json benchmark/src/tsconfig.json benchmark/desktop/*/tsconfig.json"
   },
   "lint-staged": {
     "*.{js,jsx,mjs,cjs,ts,tsx,json}": [
