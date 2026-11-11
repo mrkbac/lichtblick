@@ -571,6 +571,9 @@ importers:
       '@types/react-transition-group':
         specifier: ^4.4.12
         version: 4.4.12(@types/react@19.3.0)
+      '@types/stats.js':
+        specifier: 0.17.4
+        version: 0.17.4
       '@types/three':
         specifier: 0.187.0
         version: 0.187.0
@@ -715,6 +718,9 @@ importers:
       reselect:
         specifier: 5.3.0
         version: 5.3.0
+      stats.js:
+        specifier: 0.17.0
+        version: 0.17.0
       storybook:
         specifier: 10.6.6
         version: 10.6.6(@types/react@19.3.0)(prettier@3.9.10)(react@19.3.1)
@@ -7360,6 +7366,9 @@ packages:
   stat-mode@1.0.0:
     resolution: {integrity: sha512-jH9EhtKIjuXZ2cWxmXS8ZP80XyC3iasQxMDV8jzhNJpfDb7VbQLVW4Wvsxz9QZvzV+G4YoSfBUVKDOyxLzi/sg==}
     engines: {node: '>= 6'}
+
+  stats.js@0.17.0:
+    resolution: {integrity: sha512-hNKz8phvYLPEcRkeG1rsGmV5ChMjKDAWU7/OJJdDErPBNChQXxCo3WZurGpnWc6gZhAzEPFad1aVgyOANH1sMw==}
 
   std-env@4.3.0:
     resolution: {integrity: sha512-OtU/EgQ1kIm5KwqQpBC6ZEMXrZRui11w8zgfTWp8cdO9B8OaPsbA8bTHO2P+HNo1VlUTGMVBwPhydu6poeXiag==}
@@ -15020,6 +15029,8 @@ snapshots:
       stacktrace-gps: 3.1.2
 
   stat-mode@1.0.0: {}
+
+  stats.js@0.17.0: {}
 
   std-env@4.3.0: {}
 
