@@ -9,6 +9,8 @@
 import { fromNanoSec, toNanoSec } from "@foxglove/rostime";
 import { FrameTransform, FrameTransforms } from "@foxglove/schemas";
 import * as THREE from "three";
+import { LineSegments2 } from "three/examples/jsm/lines/LineSegments2.js";
+import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeometry.js";
 import type { Mock } from "vitest";
 import { setupVitestCanvasMock } from "vitest-canvas-mock";
 
@@ -26,7 +28,10 @@ import { makePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/transform
 import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
+import { DynamicBufferGeometry } from "./DynamicBufferGeometry";
 import { RendererConfig } from "./IRenderer";
+import { Renderable } from "./Renderable";
+import { SceneExtension } from "./SceneExtension";
 
 vi.mock("./Picker", async () => {
   const actual = await vi.importActual("./Picker");
@@ -241,6 +246,121 @@ describe("3D Renderer", () => {
   afterEach(() => {
     (console.warn as Mock).mockClear();
   });
+
+  it.each([true, false])("fits visible topic geometry in perspective=%s", (perspective) => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    const setCamera = vi.spyOn(renderer, "setCameraState");
+    const getCamera = vi
+      .spyOn(renderer, "getCameraState")
+      .mockReturnValue({ ...DEFAULT_CAMERA_STATE, perspective });
+    renderer.zoomToData();
+    expect(setCamera).not.toHaveBeenCalled();
+
+    const extension = new SceneExtension("test-data", renderer);
+    const addBox = (path: string, x: number, options = { visible: true }) => {
+      const { visible } = options;
+      const renderable = new Renderable(`${path}${x}`, renderer, {
+        receiveTime: 0n,
+        messageTime: 0n,
+        frameId: "",
+        pose: makePose(),
+        settingsPath: [path, "test"],
+        settings: { visible, frameLocked: true },
+      });
+      renderable.visible = visible;
+      renderable.position.x = x;
+      renderable.add(new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2)));
+      extension.add(renderable);
+      extension.renderables.set(renderable.name, renderable);
+      return renderable;
+    };
+    const data = addBox("topics", 100);
+    const lineGeometry = new LineSegmentsGeometry().setPositions([
+      0, 0, 0, 1, 1, 1, 10000, 10000, 10000, 20000, 20000, 20000,
+    ]);
+    lineGeometry.instanceCount = 1;
+    data.add(new LineSegments2(lineGeometry));
+    const pointGeometry = new DynamicBufferGeometry();
+    pointGeometry.createAttribute("position", Float32Array, 3);
+    pointGeometry.resize(3);
+    pointGeometry.getAttribute("position").setXYZ(0, 0, 0, 0);
+    pointGeometry.getAttribute("position").setXYZ(1, 1, 1, 1);
+    pointGeometry.getAttribute("position").setXYZ(2, 10000, 10000, 10000);
+    pointGeometry.resize(2);
+    data.add(new THREE.Points(pointGeometry));
+    addBox("topics", 10000, { visible: false });
+    addBox("layers", -10000);
+    const hidden = new THREE.Mesh(new THREE.BoxGeometry(10000, 10000, 10000));
+    hidden.visible = false;
+    extension.renderables.get("topics100")!.add(hidden);
+    renderer.sceneExtensions.set(extension.extensionId, extension);
+    renderer.zoomToData();
+    expect(setCamera).toHaveBeenCalledWith(
+      expect.objectContaining({
+        targetOffset: [100, 0, 0],
+        perspective,
+        distance: expect.any(Number),
+      }),
+    );
+    const distance = setCamera.mock.calls[0]![0].distance;
+    const radius = Math.sqrt(3) * 1.1;
+    expect(distance).toBeCloseTo(perspective ? radius / Math.sin(Math.PI / 8) : 2 * radius);
+    for (const fovy of [0, Number.MIN_VALUE, Number.NaN, Number.POSITIVE_INFINITY]) {
+      getCamera.mockReturnValue({ ...DEFAULT_CAMERA_STATE, perspective: true, fovy });
+      setCamera.mockClear();
+      renderer.zoomToData();
+      expect(setCamera).not.toHaveBeenCalled();
+    }
+    renderer.dispose();
+  });
+
+  it.each([true, false])(
+    "fits point clouds with NaN points and cube instances, extending far in perspective=%s",
+    (perspective) => {
+      const renderer = new Renderer({ ...defaultRendererProps, canvas });
+      const setCamera = vi.spyOn(renderer, "setCameraState");
+      vi.spyOn(renderer, "getCameraState").mockReturnValue({
+        ...DEFAULT_CAMERA_STATE,
+        perspective,
+        far: 1,
+      });
+      const extension = new SceneExtension("test-data", renderer);
+      const renderable = new Renderable("cloud", renderer, {
+        receiveTime: 0n,
+        messageTime: 0n,
+        frameId: "",
+        pose: makePose(),
+        settingsPath: ["topics", "cloud"],
+        settings: { visible: true, frameLocked: true },
+      });
+      const points = new DynamicBufferGeometry();
+      points.createAttribute("position", Float32Array, 3);
+      points.resize(3);
+      points.getAttribute("position").setXYZ(0, 0, 0, 0);
+      points.getAttribute("position").setXYZ(1, Number.NaN, 0, 0);
+      points.getAttribute("position").setXYZ(2, 4, 0, 0);
+      renderable.add(new THREE.Points(points));
+      const cubes = new THREE.InstancedBufferGeometry();
+      cubes.setAttribute("position", new THREE.BoxGeometry(1, 1, 1).getAttribute("position"));
+      cubes.setAttribute(
+        "instancePosition",
+        new THREE.InstancedBufferAttribute(new Float32Array([2, 4, 0]), 3),
+      );
+      cubes.instanceCount = 1;
+      renderable.add(new THREE.Mesh(cubes));
+      extension.add(renderable);
+      extension.renderables.set(renderable.name, renderable);
+      renderer.sceneExtensions.set(extension.extensionId, extension);
+      renderer.zoomToData();
+      const state = setCamera.mock.calls[0]![0];
+      expect(state.targetOffset).toEqual([2, 2, 0]);
+      // Bounds span [0, 0, 0] to [4, 4, 0]: the far side must stay inside the clipping range
+      const radius = Math.sqrt(8);
+      const farSide = perspective ? state.far - state.distance : state.far / 2 - state.near;
+      expect(farSide).toBeGreaterThan(radius);
+      renderer.dispose();
+    },
+  );
 
   it("constructs a renderer without error", () => {
     expect(() => new Renderer({ ...defaultRendererProps, canvas })).not.toThrow();

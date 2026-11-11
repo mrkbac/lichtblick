@@ -40,7 +40,7 @@ import {
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
-import type { IRenderer, ImageModeConfig, RendererConfig, RendererSubscription } from "./IRenderer";
+import type { ImageModeConfig, RendererConfig, RendererSubscription } from "./IRenderer";
 import type { Path } from "./LayerErrors";
 import type { PickedRenderable } from "./Picker";
 import { SELECTED_ID_VARIABLE } from "./Renderable";
@@ -144,8 +144,8 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
   const sharedMapLayerId =
     requestedSharedMapLayerId === failedSharedMapLayerId ? undefined : requestedSharedMapLayerId;
   const canvas = sharedMapLayerId ? (sharedMap?.map.getCanvas() ?? null) : sceneCanvas;
-  const [renderer, setRenderer] = useState<IRenderer | undefined>(undefined);
-  const rendererRef = useRef<IRenderer | undefined>(undefined);
+  const [renderer, setRenderer] = useState<Renderer | undefined>(undefined);
+  const rendererRef = useRef<Renderer | undefined>(undefined);
   const {
     canvasKey,
     status: contextStatus,
@@ -342,13 +342,13 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
 
   // Maintain the settings tree
   const [settingsTree, setSettingsTree] = useState<SettingsTreeNodes | undefined>(undefined);
-  const updateSettingsTree = useCallback((curRenderer: IRenderer) => {
+  const updateSettingsTree = useCallback((curRenderer: Renderer) => {
     setSettingsTree(curRenderer.settings.tree());
   }, []);
   useRendererEvent("settingsTreeChange", updateSettingsTree, renderer);
 
   // Save the panel configuration when it changes
-  const updateConfig = useCallback((curRenderer: IRenderer) => {
+  const updateConfig = useCallback((curRenderer: Renderer) => {
     setConfig(curRenderer.config);
   }, []);
   useRendererEvent("configChange", updateConfig, renderer);
