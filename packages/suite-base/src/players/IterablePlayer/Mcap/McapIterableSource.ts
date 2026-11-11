@@ -405,14 +405,20 @@ async function scanForRecovery(
   return scanner;
 }
 
-/** Passes through the first `length` bytes of a stream and drops the rest */
+/** Passes through the first `length` bytes of a stream, then ends it and cancels the source */
 function firstBytes(length: number): TransformStream<Uint8Array, Uint8Array> {
   let remaining = length;
   return new TransformStream({
+    start(controller) {
+      if (remaining <= 0) {
+        controller.terminate();
+      }
+    },
     transform(chunk, controller) {
-      if (remaining > 0) {
-        controller.enqueue(chunk.byteLength > remaining ? chunk.subarray(0, remaining) : chunk);
-        remaining -= chunk.byteLength;
+      controller.enqueue(chunk.byteLength > remaining ? chunk.subarray(0, remaining) : chunk);
+      remaining -= chunk.byteLength;
+      if (remaining <= 0) {
+        controller.terminate();
       }
     },
   });
