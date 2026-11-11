@@ -26,8 +26,9 @@ import * as THREE from "three";
 import { SettingsTreeAction } from "@lichtblick/suite";
 
 import { TopicEntities } from "./TopicEntities";
-import type { AnyRendererSubscription, IRenderer } from "../IRenderer";
+import type { AnyRendererSubscription } from "../IRenderer";
 import { SELECTED_ID_VARIABLE } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import { PartialMessage, PartialMessageEvent, SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../SettingsManager";
 import { SCENE_UPDATE_DATATYPES } from "../foxglove";
@@ -55,7 +56,7 @@ export class FoxgloveSceneEntities extends SceneExtension<TopicEntities> {
   public static extensionId = "foxglove.SceneEntities";
   #primitivePool = new PrimitivePool(this.renderer);
 
-  public constructor(renderer: IRenderer, name: string = FoxgloveSceneEntities.extensionId) {
+  public constructor(renderer: Renderer, name: string = FoxgloveSceneEntities.extensionId) {
     super(name, renderer);
   }
   public override getSubscriptions(): readonly AnyRendererSubscription[] {

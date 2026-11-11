@@ -17,8 +17,9 @@ import type { RosValue } from "@lichtblick/suite-base/players/types";
 
 import { RenderableLineList } from "./markers/RenderableLineList";
 import { cameraInfosEqual, normalizeCameraInfo, projectPixel } from "./projections";
-import type { AnyRendererSubscription, IRenderer } from "../IRenderer";
+import type { AnyRendererSubscription } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
+import type { Renderer } from "../Renderer";
 import { PartialMessageEvent, SceneExtension, onlyLastByTopicMessage } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { makeRgba, rgbaToCssString, stringToRgba } from "../color";
@@ -90,7 +91,7 @@ export class Cameras extends SceneExtension<CameraInfoRenderable> {
   public static extensionId = "foxglove.Cameras";
   public customCameraModels: CameraModelsMap;
 
-  public constructor(renderer: IRenderer, name: string = Cameras.extensionId) {
+  public constructor(renderer: Renderer, name: string = Cameras.extensionId) {
     super(name, renderer);
 
     this.customCameraModels = renderer.customCameraModels;

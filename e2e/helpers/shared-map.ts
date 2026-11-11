@@ -167,6 +167,9 @@ export async function exerciseSharedMap(page: Page): Promise<void> {
   await distance.press("Enter");
   await expect.poll(async () => (await pixels(canvas)).green).toBeGreaterThan(500);
   await expect.poll(async () => (await pixels(canvas)).red).toBeGreaterThan(100);
+  await page.getByRole("button", { name: "Zoom to data", exact: true }).click();
+  await expect.poll(async () => Number(await distance.inputValue())).toBeLessThan(100);
+  await expect.poll(async () => (await pixels(canvas)).red).toBeGreaterThan(100);
   const recovered = await pixels(canvas);
   await page.getByRole("button", { name: "Inspect objects", exact: true }).click();
   await page.mouse.click(recovered.x, recovered.y);

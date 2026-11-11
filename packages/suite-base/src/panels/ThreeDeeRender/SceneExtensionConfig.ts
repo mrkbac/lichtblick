@@ -25,7 +25,7 @@ import { SceneSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/rend
 import { Urdfs } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Urdfs";
 import { VelodyneScans } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/VelodyneScans";
 
-import { IRenderer } from "./IRenderer";
+import type { Renderer } from "./Renderer";
 import { SceneExtension } from "./SceneExtension";
 import { MeasurementTool } from "./renderables/MeasurementTool";
 import { PublishClickTool } from "./renderables/PublishClickTool";
@@ -44,7 +44,7 @@ export type ReservedSceneExtensionConfig = {
 };
 
 export type ExtensionOverride<ExtensionType extends SceneExtension> = {
-  init: (renderer: IRenderer) => ExtensionType;
+  init: (renderer: Renderer) => ExtensionType;
   /** Which interfaceModes this extension is supported in. If undefined, will default be present in BOTH '3d' and 'image' modes */
   supportedInterfaceModes?: InterfaceMode[];
 };
@@ -52,75 +52,75 @@ export type ExtensionOverride<ExtensionType extends SceneExtension> = {
 export const DEFAULT_SCENE_EXTENSION_CONFIG: SceneExtensionConfig = {
   reserved: {
     imageMode: {
-      init: (renderer: IRenderer) => new ImageMode(renderer),
+      init: (renderer: Renderer) => new ImageMode(renderer),
     },
     measurementTool: {
-      init: (renderer: IRenderer) => new MeasurementTool(renderer),
+      init: (renderer: Renderer) => new MeasurementTool(renderer),
     },
     publishClickTool: {
-      init: (renderer: IRenderer) => new PublishClickTool(renderer),
+      init: (renderer: Renderer) => new PublishClickTool(renderer),
     },
   },
   extensionsById: {
     [PublishSettings.extensionId]: {
-      init: (renderer: IRenderer) => new PublishSettings(renderer),
+      init: (renderer: Renderer) => new PublishSettings(renderer),
       supportedInterfaceModes: ["3d"],
     },
     [Images.extensionId]: {
-      init: (renderer: IRenderer) => new Images(renderer),
+      init: (renderer: Renderer) => new Images(renderer),
       supportedInterfaceModes: ["3d"],
     },
     [Cameras.extensionId]: {
-      init: (renderer: IRenderer) => new Cameras(renderer),
+      init: (renderer: Renderer) => new Cameras(renderer),
       supportedInterfaceModes: ["3d"],
     },
     [Maps.extensionId]: {
-      init: (renderer: IRenderer) => new Maps(renderer),
+      init: (renderer: Renderer) => new Maps(renderer),
       supportedInterfaceModes: ["3d"],
     },
     [SceneSettings.extensionId]: {
-      init: (renderer: IRenderer) => new SceneSettings(renderer),
+      init: (renderer: Renderer) => new SceneSettings(renderer),
     },
     [FrameAxes.extensionId]: {
-      init: (renderer: IRenderer) =>
+      init: (renderer: Renderer) =>
         // only show frame axes and labels by default when in 3d mode
         new FrameAxes(renderer, { visible: renderer.interfaceMode === "3d" }),
     },
     [Grids.extensionId]: {
-      init: (renderer: IRenderer) => new Grids(renderer),
+      init: (renderer: Renderer) => new Grids(renderer),
     },
     [Markers.extensionId]: {
-      init: (renderer: IRenderer) => new Markers(renderer),
+      init: (renderer: Renderer) => new Markers(renderer),
     },
     [FoxgloveSceneEntities.extensionId]: {
-      init: (renderer: IRenderer) => new FoxgloveSceneEntities(renderer),
+      init: (renderer: Renderer) => new FoxgloveSceneEntities(renderer),
     },
     [FoxgloveGrid.extensionId]: {
-      init: (renderer: IRenderer) => new FoxgloveGrid(renderer),
+      init: (renderer: Renderer) => new FoxgloveGrid(renderer),
     },
     [LaserScans.extensionId]: {
-      init: (renderer: IRenderer) => new LaserScans(renderer),
+      init: (renderer: Renderer) => new LaserScans(renderer),
     },
     [OccupancyGrids.extensionId]: {
-      init: (renderer: IRenderer) => new OccupancyGrids(renderer),
+      init: (renderer: Renderer) => new OccupancyGrids(renderer),
     },
     [PointClouds.extensionId]: {
-      init: (renderer: IRenderer) => new PointClouds(renderer),
+      init: (renderer: Renderer) => new PointClouds(renderer),
     },
     [Polygons.extensionId]: {
-      init: (renderer: IRenderer) => new Polygons(renderer),
+      init: (renderer: Renderer) => new Polygons(renderer),
     },
     [Poses.extensionId]: {
-      init: (renderer: IRenderer) => new Poses(renderer),
+      init: (renderer: Renderer) => new Poses(renderer),
     },
     [PoseArrays.extensionId]: {
-      init: (renderer: IRenderer) => new PoseArrays(renderer),
+      init: (renderer: Renderer) => new PoseArrays(renderer),
     },
     [Urdfs.extensionId]: {
-      init: (renderer: IRenderer) => new Urdfs(renderer),
+      init: (renderer: Renderer) => new Urdfs(renderer),
     },
     [VelodyneScans.extensionId]: {
-      init: (renderer: IRenderer) => new VelodyneScans(renderer),
+      init: (renderer: Renderer) => new VelodyneScans(renderer),
     },
   },
 };

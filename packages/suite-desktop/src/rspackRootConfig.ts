@@ -42,6 +42,11 @@ export const rspackRootConfig =
         // Electron (and electron-builder) read package.json to find the entry script
         new rspack.CopyRspackPlugin({
           patterns: [
+            ...["LICENSE", "THIRD_PARTY_NOTICES"].map((name) => ({
+              from: path.resolve(import.meta.dirname, "../../..", name),
+              to: name,
+              toType: "file" as const,
+            })),
             {
               from: path.resolve(import.meta.dirname, "../../../package.json"),
               transform: () =>
