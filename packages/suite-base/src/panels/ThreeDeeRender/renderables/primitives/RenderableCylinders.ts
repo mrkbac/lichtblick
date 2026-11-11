@@ -10,7 +10,7 @@ import { CylinderPrimitive, SceneEntity } from "@foxglove/schemas";
 import * as THREE from "three";
 
 import { RenderablePrimitive } from "./RenderablePrimitive";
-import type { IRenderer } from "../../IRenderer";
+import type { Renderer } from "../../Renderer";
 import { DARK_OUTLINE, LIGHT_OUTLINE, makeRgba, rgbToThreeColor, stringToRgba } from "../../color";
 import { LayerSettingsEntity } from "../../settings";
 import { MeshStandardMaterialWithInstanceOpacity } from "../materials/MeshStandardMaterialWithInstanceOpacity";
@@ -45,7 +45,7 @@ export class RenderableCylinders extends RenderablePrimitive {
   #outlineGeometry: THREE.InstancedBufferGeometry;
   #outline: THREE.LineSegments;
 
-  public constructor(renderer: IRenderer) {
+  public constructor(renderer: Renderer) {
     super("", renderer);
 
     this.#geometry = renderer.sharedGeometry

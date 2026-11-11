@@ -7,7 +7,7 @@ import * as THREE from "three";
 
 import { ObjectPool } from "@lichtblick/den/collection";
 
-import type { IRenderer } from "../IRenderer";
+import type { Renderer } from "../Renderer";
 import { Transform, TransformTree } from "../transforms";
 import { MeasurementTool } from "./MeasurementTool";
 
@@ -38,7 +38,7 @@ function setup() {
       out.copy(picks.shift()!);
       return true;
     },
-  } as unknown as IRenderer;
+  } as unknown as Renderer;
 
   const tool = new MeasurementTool(renderer);
   const frame = () => {

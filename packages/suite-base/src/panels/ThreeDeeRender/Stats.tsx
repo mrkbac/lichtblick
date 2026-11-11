@@ -9,12 +9,12 @@ import { useEffect, useRef } from "react";
 import StatsMonitor from "stats.js";
 import type { WebGLInfo } from "three";
 
-import type { IRenderer } from "./IRenderer";
+import type { Renderer } from "./Renderer";
 import { useRendererEvent } from "./RendererContext";
 
 export function Stats(): React.JSX.Element {
   const container = useRef<HTMLDivElement>(null);
-  const update = useRef<((renderer: IRenderer) => void) | undefined>(undefined);
+  const update = useRef<((renderer: Renderer) => void) | undefined>(undefined);
 
   useRendererEvent("endFrame", (_event, renderer) => update.current?.(renderer));
 

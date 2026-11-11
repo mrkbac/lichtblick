@@ -8,7 +8,7 @@ import type { Mock } from "vitest";
 
 import { PinholeCameraModel } from "@lichtblick/den/image";
 import { H265SliceType, VideoPlayer } from "@lichtblick/den/video";
-import { IRenderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
+import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
 import H265FrameBuilder from "@lichtblick/suite-base/testing/builders/H265FrameBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
@@ -25,7 +25,7 @@ const mockRemove = vi.fn();
 const mockRemoveFromTopic = vi.fn();
 
 // Mocked dependencies
-const mockRenderer: IRenderer = {
+const mockRenderer: Renderer = {
   queueAnimationFrame: vi.fn(),
   normalizeFrameId: vi.fn((id) => id),
   settings: {
@@ -36,7 +36,7 @@ const mockRenderer: IRenderer = {
       removeFromTopic: mockRemoveFromTopic,
     },
   },
-} as unknown as IRenderer;
+} as unknown as Renderer;
 
 const mockUserData: ImageUserData = {
   topic: BasicBuilder.string(),
