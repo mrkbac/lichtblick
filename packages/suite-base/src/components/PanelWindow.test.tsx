@@ -231,6 +231,27 @@ it.each([
   }
 });
 
+it.each(["pip", "popout"] as const)(
+  "closes a loading replacement panel when its %s window closes",
+  async (mode) => {
+    const { child, dispose } = setupReplacement("loading");
+    try {
+      fireEvent.click(screen.getByText(mode === "pip" ? "PiP" : "Pop out"));
+      await waitFor(() => {
+        expect(within(child.document.body).getByText("Image!one")).toBeDefined();
+      });
+      fireEvent.click(within(child.document.body).getByText("Change type"));
+      expect(screen.getByText("Remove loading replacement")).toBeDefined();
+      act(() => {
+        child.dispatchEvent(new Event("pagehide"));
+      });
+      expect(screen.getByText("No panels")).toBeDefined();
+    } finally {
+      dispose();
+    }
+  },
+);
+
 it("renders one panel in the child, shares context, and restores it on close", async () => {
   // Given
   const { child, close } = childWindow();

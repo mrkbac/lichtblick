@@ -400,7 +400,16 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
               replacementWindows.delete(newId);
               layout.removeLayoutStateListener(checkLayout);
               window.removeEventListener("pagehide", discard);
-              child.removeEventListener("pagehide", cleanup);
+              child.removeEventListener("pagehide", closedWhileLoading);
+            };
+            // Closing a pending window closes its panel, as closing a claimed one does.
+            const closedWhileLoading = () => {
+              cleanup();
+              if (closePanelRef.current) {
+                closePanelRef.current(newId);
+              } else {
+                layout.actions.closePanel({ id: newId });
+              }
             };
             const discard = () => {
               cleanup();
@@ -415,7 +424,7 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
             replacementWindows.set(newId, { child, mode: windowModeRef.current, cleanup });
             layout.addLayoutStateListener(checkLayout);
             window.addEventListener("pagehide", discard);
-            child.addEventListener("pagehide", cleanup);
+            child.addEventListener("pagehide", closedWhileLoading);
             windowRef.current = undefined;
           }
         },
