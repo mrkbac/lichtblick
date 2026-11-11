@@ -66,7 +66,7 @@ describe("RenderableLines", () => {
     [LineType.LINE_LOOP, 2],
     [LineType.LINE_LIST, 1],
   ])("draws only the current segments after type %s shrinks", (type, count) => {
-    const renderer = { input: { canvasSize: new THREE.Vector2(100, 100) } } as IRenderer;
+    const renderer = { input: { canvasSize: new THREE.Vector2(100, 100) } } as Renderer;
     const renderable = new RenderableLines(renderer);
     const points = [0, 1, 2, 3].map((x) => ({ x, y: 0, z: 0 }));
     renderable.update("/topic", entity({ type, points }), settings, 0n);
