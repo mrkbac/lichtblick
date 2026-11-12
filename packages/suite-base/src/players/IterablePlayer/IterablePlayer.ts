@@ -155,6 +155,9 @@ export class IterablePlayer implements Player {
   #nextState?: IterablePlayerState;
   // The source grew while a state other than idle/play held the playback iterator
   #playbackIteratorStale = false;
+  // Playback stopped because it ran into the end (not a pause, seek or playUntil limit): a source
+  // that grows continues it, like a live connection
+  #playedToEnd = false;
   #state: IterablePlayerState = "preinit";
   #runningState: boolean = false;
 
@@ -290,6 +293,7 @@ export class IterablePlayer implements Player {
   }
 
   #startPlayImpl(opt?: { untilTime: Time }): void {
+    this.#playedToEnd = false;
     if (this.#isPlaying || this.#untilTime != undefined || !this.#start || !this.#end) {
       return;
     }
@@ -312,6 +316,7 @@ export class IterablePlayer implements Player {
   }
 
   public pausePlayback(): void {
+    this.#playedToEnd = false;
     if (!this.#isPlaying) {
       return;
     }
@@ -379,6 +384,7 @@ export class IterablePlayer implements Player {
   }
 
   public seekPlayback(time: Time): void {
+    this.#playedToEnd = false;
     // Wait to perform seek until initialization is complete
     if (this.#state === "preinit" || this.#state === "initialize") {
       log.debug(`Ignoring seek, state=${this.#state}`);
@@ -700,11 +706,6 @@ export class IterablePlayer implements Player {
         }
         // ponytail: preloaded blocks are dropped and reloaded on every update; extend the block
         // loader's range in place if that churn shows up (e.g. tailing a live file).
-        // Playback at the old end keeps going into the new data, like a live connection
-        const atEnd =
-          this.#currentTime != undefined &&
-          this.#end != undefined &&
-          compare(this.#currentTime, this.#end) >= 0;
         await this.#blockLoader?.stopLoading();
         await this.#blockLoadingProcess;
         if (this.#isClosing()) {
@@ -722,7 +723,8 @@ export class IterablePlayer implements Player {
         } else if (this.#state === "idle" || this.#state === "play") {
           // The current iterator ends at the old end
           this.#lastMessageEvent = undefined;
-          this.#isPlaying ||= atEnd && this.#untilTime == undefined;
+          this.#isPlaying ||= this.#playedToEnd;
+          this.#playedToEnd = false;
           this.#setState("reset-playback-iterator");
         } else {
           // e.g. start-play reading with an iterator that ends at the old end; it resets when done
@@ -1372,6 +1374,7 @@ export class IterablePlayer implements Player {
     try {
       while (this.#isPlaying && !this.#hasError && !this.#nextState) {
         if (compare(this.#currentTime, this.#end) >= 0) {
+          this.#playedToEnd = true;
           // Playback has ended. Reset internal trackers for maintaining the playback speed.
           this.#lastTickMillis = undefined;
           this.#lastRangeMillis = undefined;

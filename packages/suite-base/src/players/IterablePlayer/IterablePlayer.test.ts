@@ -6,7 +6,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { fromSec } from "@foxglove/rostime";
+import { fromSec, toSec } from "@foxglove/rostime";
 import * as _ from "lodash-es";
 import type { Mock, MockInstance } from "vitest";
 
@@ -251,8 +251,13 @@ describe("IterablePlayer", () => {
     }
   });
 
-  it("keeps playing into the new data of a grown source when playback is at the end", async () => {
-    // Given a source that grows once, and a player paused at its end
+  it.each([
+    { mode: "play", playing: true, name: "keeps playing into the new data when playback ran to" },
+    { mode: "pause", playing: false, name: "stays paused when playback was paused at" },
+    { mode: "until", playing: false, name: "stays paused when a playUntil limit stopped it at" },
+  ] as const)("$name the end of a grown source", async ({ mode, playing }) => {
+    // Given a source that grows once, and a player that got to its end by playing, seeking or
+    // playing until a limit
     const source = new TestSource();
     const initial = await source.initialize();
     let released!: () => void;
@@ -271,19 +276,30 @@ describe("IterablePlayer", () => {
       await vi.waitFor(() => {
         expect(states.at(-1)?.activeData?.endTime).toEqual({ sec: 1, nsec: 0 });
       });
-      player.seekPlayback({ sec: 1, nsec: 0 });
+      player.seekPlayback({ sec: mode === "until" ? 0 : 1, nsec: mode === "until" ? 900e6 : 0 });
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.currentTime.sec).toBe(mode === "until" ? 0 : 1);
+      });
+      if (mode === "play") {
+        player.startPlayback(); // at the end: it stops there until the source grows
+      } else if (mode === "until") {
+        player.playUntil({ sec: 1, nsec: 0 });
+      }
       await vi.waitFor(() => {
         expect(states.at(-1)?.activeData?.currentTime).toEqual({ sec: 1, nsec: 0 });
+        expect(states.at(-1)?.activeData?.isPlaying).toBe(false);
       });
-      expect(states.at(-1)?.activeData?.isPlaying).toBe(false);
 
       // When it grows
       released();
 
-      // Then playback follows the new data
+      // Then playback follows the new data only if it was playing
       await vi.waitFor(() => {
-        expect(states.at(-1)?.activeData?.endTime).toEqual({ sec: 5, nsec: 0 });
-        expect(states.at(-1)?.activeData?.isPlaying).toBe(true);
+        const activeData = states.at(-1)?.activeData;
+        expect(activeData?.endTime).toEqual({ sec: 5, nsec: 0 });
+        expect(activeData?.isPlaying).toBe(playing);
+        // playing moves past the old end; paused stays on it
+        expect(activeData && toSec(activeData.currentTime) > 1).toBe(playing);
       });
     } finally {
       player.close();

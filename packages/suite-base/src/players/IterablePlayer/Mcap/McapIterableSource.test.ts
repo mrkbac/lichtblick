@@ -268,7 +268,7 @@ describe("McapIterableSource", () => {
 
     /** A handle whose file is replaced by `write()`, as a recorder appending to it */
     function growingHandle(bytes: Uint8Array) {
-      let file = new File([bytes], "example.mcap", { lastModified: Date.now() });
+      let file = new File([bytes.slice()], "example.mcap", { lastModified: Date.now() });
       const handle = {
         getFile: vi.fn(async () => file),
       };
@@ -276,7 +276,7 @@ describe("McapIterableSource", () => {
         handle: handle as unknown as FileSystemFileHandle,
         getFile: handle.getFile,
         write: (next: Uint8Array) => {
-          file = new File([next], "example.mcap", { lastModified: Date.now() });
+          file = new File([next.slice()], "example.mcap", { lastModified: Date.now() });
         },
       };
     }

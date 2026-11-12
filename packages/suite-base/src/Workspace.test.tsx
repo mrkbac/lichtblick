@@ -520,7 +520,7 @@ describe("Workspace - session-based MCAP resolution", () => {
     await act(async () => {
       await consume({ files: [handle], targetURL: "http://localhost/" });
     });
-    expect(handleFiles).toHaveBeenCalledWith([file]);
+    expect(handleFiles).toHaveBeenCalledWith([file], undefined, [handle]);
     (handle.getFile as Mock).mockRejectedValue(new Error("denied"));
     await act(async () => {
       await consume({ files: [handle] });

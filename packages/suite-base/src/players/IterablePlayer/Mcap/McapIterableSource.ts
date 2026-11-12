@@ -330,17 +330,19 @@ export class McapIterableSource implements ISerializedIterableSource {
   }: {
     indexing: boolean;
     final?: boolean;
-  }): Promise<void> {
+  }): Promise<boolean> {
     const scan = this.#scan;
+    let ok = false;
     try {
       const { opened, init } = await this.#open({ indexing });
       if (this.#scan !== scan) {
         await opened.inner.terminate?.(); // terminated while reopening
-        return;
+        return false;
       }
       this.#eagerInner = opened.inner;
       this.#lastInit = init;
       this.#update = init;
+      ok = true;
     } catch (error) {
       log.error("Updating the MCAP index failed", error);
       if (final) {
@@ -349,6 +351,7 @@ export class McapIterableSource implements ISerializedIterableSource {
       }
     }
     this.#wake?.();
+    return ok;
   }
 
   /**
@@ -397,9 +400,11 @@ export class McapIterableSource implements ISerializedIterableSource {
           return;
         }
         if (state() !== published) {
-          published = state();
+          const next = state();
           const started = performance.now();
-          await this.#publish({ indexing: false });
+          if (await this.#publish({ indexing: false })) {
+            published = next; // a failed reopen is retried on the next check
+          }
           // ponytail: each update rebuilds the summary and reader (O(chunks)), and the player
           // reloads its preloaded blocks. Waiting 10x as long as that took keeps it under ~10% of
           // the time on huge files; append to the reader's index if that lags too far behind.
@@ -585,6 +590,7 @@ export class McapIterableSource implements ISerializedIterableSource {
               message: "This file is still being written; showing it as it was when opened.",
               tip: "To follow it as it grows, open it with Open file or drag and drop in a Chromium-based browser or the desktop app.",
             },
+        ...this.#recovery.toLiveAlerts(),
         ...init.alerts,
       ];
     } else if (this.#recovery) {
