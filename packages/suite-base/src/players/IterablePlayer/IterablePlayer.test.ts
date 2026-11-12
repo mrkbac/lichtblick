@@ -295,6 +295,7 @@ describe("IterablePlayer", () => {
         expect(reads).toBe(2);
       });
     } finally {
+      finishRead(); // a failed wait above must not leave the read, and so close(), blocked
       player.close();
       await player.isClosed;
     }
