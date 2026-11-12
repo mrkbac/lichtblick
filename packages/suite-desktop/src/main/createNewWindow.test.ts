@@ -19,6 +19,9 @@ vi.mock("./fileUtils", () => ({
 
 vi.mock("./injectFilesToOpen", () => ({ default: vi.fn() }));
 
+const mockOpensFoxgloveLinks = vi.fn(() => false);
+vi.mock("./settings", () => ({ opensFoxgloveLinks: () => mockOpensFoxgloveLinks() }));
+
 // Mock StudioWindow completely to avoid React dependencies
 const mockLoad = vi.fn();
 const mockGetBrowserWindow = vi.fn();
@@ -66,6 +69,19 @@ describe("createNewWindow", () => {
 
     expect(MockStudioWindow).toHaveBeenCalledWith(["lichtblick://test-link"]);
     expect(mockLoad).toHaveBeenCalled();
+  });
+
+  it("should open foxglove://open links only when opted in", () => {
+    const argv = ["app", "foxglove://open?ds=x"];
+
+    createNewWindow(argv);
+    expect(MockStudioWindow).toHaveBeenLastCalledWith([]);
+
+    mockIsFileToOpen.mockClear();
+    mockOpensFoxgloveLinks.mockReturnValueOnce(true);
+    createNewWindow(argv);
+    expect(MockStudioWindow).toHaveBeenLastCalledWith(["lichtblick://open?ds=x"]);
+    expect(mockIsFileToOpen).not.toHaveBeenCalledWith("foxglove://open?ds=x");
   });
 
   it("should filter out flags and process files", () => {

@@ -52,6 +52,7 @@ export type MultiSource =
   | ({
       type: "urls";
       urls: string[];
+      credentials?: RequestCredentials;
       totalCacheSizeInBytes?: number;
       minCachePerSourceBytes?: number;
       // When false, each remote source downloads only exact requested ranges with no speculative

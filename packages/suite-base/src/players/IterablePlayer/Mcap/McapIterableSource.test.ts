@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { McapIndexedReader, McapWriter, TempBuffer } from "@mcap/core";
+import { McapIndexedReader, McapRecordBuilder, McapWriter, TempBuffer } from "@mcap/core";
 import { Blob } from "node:buffer";
 import type { Mock, MockedClass, MockedFunction } from "vitest";
 
@@ -14,7 +14,7 @@ import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-import { McapIterableSource } from "./McapIterableSource";
+import { McapIterableSource, TAIL_POLL_MS } from "./McapIterableSource";
 import { RemoteFileReadable } from "./RemoteFileReadable";
 import { HydratedSourcePool } from "../shared/HydratedSourcePool";
 
@@ -168,6 +168,197 @@ describe("McapIterableSource", () => {
     }
     // each message went into its own chunk; all complete chunks are recovered
     expect(values).toEqual([1, 2, 3]);
+  });
+
+  it("plays a large damaged file before its index is rebuilt, then switches to the full index", async () => {
+    // Given a cut-off recording of many 1 MiB chunks, whose scan past the first step (16 MiB) waits for a gate
+    const chunkCount = 64;
+    const tempBuffer = new TempBuffer();
+    const writer = new McapWriter({ writable: tempBuffer, chunkSize: 1 });
+    await writer.start({ library: "test", profile: "" });
+    const channelId = await writer.registerChannel({
+      schemaId: 0,
+      topic: "/example",
+      messageEncoding: "json",
+      metadata: new Map(),
+    });
+    for (let i = 1; i <= chunkCount; i++) {
+      await addMessage(writer, channelId, {
+        logTime: BigInt(i) * 1_000_000_000n,
+        data: new Uint8Array(1024 * 1024).fill(i),
+      });
+    }
+    const bytes = tempBuffer.get().slice();
+    const blob = new Blob([bytes]);
+    const gate = Promise.withResolvers<void>();
+    let maxReadEnd = 0;
+    const gatedFile = {
+      size: blob.size,
+      slice: (start: number, end: number) => {
+        if (end - start >= 4 * 1024 * 1024) {
+          maxReadEnd = Math.max(maxReadEnd, end);
+        }
+        const part = blob.slice(start, end);
+        return {
+          arrayBuffer: async () => {
+            // Only the scan reads windows this large; the footer probe and chunk reads pass
+            if (start >= 16 * 1024 * 1024 && end - start >= 4 * 1024 * 1024) {
+              await gate.promise;
+            }
+            return await part.arrayBuffer();
+          },
+        };
+      },
+    } as unknown as globalThis.Blob;
+    const source = new McapIterableSource({ type: "file", file: gatedFile });
+    const topics = new Map([["/example", PlayerBuilder.subscribePayload({ topic: "/example" })]]);
+
+    // When it is opened
+    const init = await source.initialize();
+    const first = await source.messageIterator({ topics }).next();
+
+    // Then the first message plays while most of the file is still unread
+    expect(first.value).toMatchObject({
+      type: "message-event",
+      msgEvent: { topic: "/example", receiveTime: { sec: 1, nsec: 0 } },
+    });
+    expect(maxReadEnd).toBeLessThan(bytes.byteLength / 2);
+    expect(init.end.sec).toBeLessThan(chunkCount);
+    expect(init.alerts[0]?.message).toMatch(/^Indexing this file: \d+% read$/);
+
+    // When the scan finishes
+    gate.resolve();
+    let last = init;
+    for (let update; (update = await source.waitForUpdate()); ) {
+      last = update;
+    }
+
+    // Then the source covers the whole file, reports what was recovered, and plays all of it
+    expect(last.end).toEqual({ sec: chunkCount, nsec: 0 });
+    expect(source.getEnd()).toEqual({ sec: chunkCount, nsec: 0 });
+    expect(last.alerts[0]?.message).toMatch(/not closed properly/);
+    let count = 0;
+    for await (const result of source.messageIterator({ topics })) {
+      count += result.type === "message-event" ? 1 : 0;
+    }
+    expect(count).toBe(chunkCount);
+  });
+
+  describe("a file that is still being written", () => {
+    const topics = new Map([["/example", PlayerBuilder.subscribePayload({ topic: "/example" })]]);
+
+    /** A recording without a footer and, per message, the file bytes up to that message's chunk */
+    async function recordWithoutFooter(count: number): Promise<Uint8Array[]> {
+      const tempBuffer = new TempBuffer();
+      const writer = new McapWriter({ writable: tempBuffer, chunkSize: 1 });
+      await writer.start({ library: "test", profile: "" });
+      const channelId = await writer.registerChannel({
+        schemaId: 0,
+        topic: "/example",
+        messageEncoding: "json",
+        metadata: new Map(),
+      });
+      const snapshots: Uint8Array[] = [];
+      for (let i = 1; i <= count; i++) {
+        await addMessage(writer, channelId, { logTime: BigInt(i) * 1_000_000_000n });
+        snapshots.push(tempBuffer.get().slice());
+      }
+      return snapshots;
+    }
+
+    /** A handle whose file is replaced by `write()`, as a recorder appending to it */
+    function growingHandle(bytes: Uint8Array) {
+      let file = new File([bytes.slice()], "example.mcap", { lastModified: Date.now() });
+      const handle = {
+        getFile: vi.fn(async () => file),
+      };
+      return {
+        handle: handle as unknown as FileSystemFileHandle,
+        getFile: handle.getFile,
+        write: (next: Uint8Array) => {
+          file = new File([next.slice()], "example.mcap", { lastModified: Date.now() });
+        },
+      };
+    }
+
+    async function countMessages(source: McapIterableSource): Promise<number> {
+      let count = 0;
+      for await (const result of source.messageIterator({ topics })) {
+        count += result.type === "message-event" ? 1 : 0;
+      }
+      return count;
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("shows data appended after open, without reporting the partly written record", async () => {
+      // Given a recording of 2 messages so far, whose 3rd chunk is only partly written
+      const snapshots = await recordWithoutFooter(5);
+      const partial = snapshots[2]!.slice(0, snapshots[1]!.byteLength + 20);
+      const { handle, write } = growingHandle(partial);
+      const source = new McapIterableSource({
+        type: "file",
+        file: await handle.getFile(),
+        handle,
+      });
+
+      try {
+        // When it is opened
+        const init = await source.initialize();
+
+        // Then it plays what is there and shows it is live, not damaged
+        expect(init.end).toEqual({ sec: 2, nsec: 0 });
+        expect(init.alerts.map((alert) => alert.message)).toEqual([
+          "Live: following this file as it is written",
+        ]);
+        expect(await countMessages(source)).toBe(2);
+
+        // When the recorder appends 3 more messages
+        write(snapshots[4]!);
+        const update = source.waitForUpdate();
+        await vi.advanceTimersByTimeAsync(TAIL_POLL_MS);
+
+        // Then the new messages play, the end grows and it is still live
+        const grown = await update;
+        expect(grown?.end).toEqual({ sec: 5, nsec: 0 });
+        expect(grown?.alerts.map((alert) => alert.message)).toEqual([
+          "Live: following this file as it is written",
+        ]);
+        expect(await countMessages(source)).toBe(5);
+      } finally {
+        await source.terminate();
+      }
+    });
+
+    it("stops checking the file on terminate", async () => {
+      // Given an open file that is being followed
+      const snapshots = await recordWithoutFooter(2);
+      const { handle, getFile } = growingHandle(snapshots[1]!);
+      const source = new McapIterableSource({
+        type: "file",
+        file: await handle.getFile(),
+        handle,
+      });
+      await source.initialize();
+      await vi.advanceTimersByTimeAsync(TAIL_POLL_MS * 2);
+      expect(getFile.mock.calls.length).toBeGreaterThan(1);
+
+      // When it is terminated
+      await source.terminate();
+      const calls = getFile.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(TAIL_POLL_MS * 5);
+
+      // Then the file is no longer checked, no timer is left and no more updates come
+      expect(getFile.mock.calls.length).toBe(calls);
+      expect(vi.getTimerCount()).toBe(0);
+      await expect(source.waitForUpdate()).resolves.toBeUndefined();
+    });
   });
 
   it("loads decompression handlers before creating an indexed reader for an indexed file", async () => {
@@ -369,7 +560,7 @@ describe("McapIterableSource", () => {
       const { alerts } = await source.initialize();
 
       // Then it should fall back to fetch for streaming
-      expect(mockFetch).toHaveBeenCalledWith(urlUnindexedMcap);
+      expect(mockFetch).toHaveBeenCalledWith(urlUnindexedMcap, { credentials: undefined });
       // And produce the unindexed performance warning
       expect(alerts).toEqual(
         expect.arrayContaining([
@@ -382,6 +573,52 @@ describe("McapIterableSource", () => {
       // And getStart/getEnd should reflect the message time
       expect(source.getStart()).toEqual({ sec: 3, nsec: 0 });
       expect(source.getEnd()).toEqual({ sec: 3, nsec: 0 });
+    });
+
+    it("streams only the readable bytes of a damaged unchunked file and stops the download", async () => {
+      // Given an unchunked recording without footer, served by a connection that never closes
+      const builder = new McapRecordBuilder();
+      builder.writeMagic();
+      builder.writeHeader({ library: "", profile: "" });
+      builder.writeChannel({
+        id: 1,
+        messageEncoding: "json",
+        schemaId: 0,
+        metadata: new Map(),
+        topic: "/stalled",
+      });
+      builder.writeMessage({
+        channelId: 1,
+        data: new TextEncoder().encode("{}"),
+        logTime: 2_000_000_000n,
+        publishTime: 0n,
+        sequence: 1,
+      });
+      const recording = builder.buffer.slice();
+      const served = new Uint8Array([...recording, ...new Uint8Array(64).fill(0x42)]);
+      mockRemoteFileReadableWith(served);
+      let cancelled = false;
+      global.fetch = vi.fn().mockResolvedValue({
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(served); // and never close: a stalled connection
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }),
+        headers: new Headers({ "content-length": String(served.byteLength) }),
+      });
+
+      // When
+      const source = new McapIterableSource({ type: "url", url: urlUnindexedMcap });
+      await source.initialize();
+
+      // Then initialization finishes with the readable prefix and the download is cancelled
+      expect(source.getStart()).toEqual({ sec: 2, nsec: 0 });
+      await vi.waitFor(() => {
+        expect(cancelled).toBe(true);
+      });
     });
 
     it("should throw when fetch response has no body", async () => {
@@ -521,23 +758,15 @@ describe("McapIterableSource", () => {
         const pool = new HydratedSourcePool({ maxCount: 1 });
         const sourceA = new McapIterableSource({ type: "url", url: urlIndexedMcapA, pool });
         const sourceB = new McapIterableSource({ type: "url", url: urlIndexedMcapB, pool });
-        const realInitialize = McapIndexedReader.Initialize.bind(McapIndexedReader);
-        let failRehydrateForReadable: MockRemoteReadable | undefined;
         const fatalError = new Error("fatal indexed init");
-        vi.spyOn(McapIndexedReader, "Initialize").mockImplementation(async (args) => {
-          if (args.readable === failRehydrateForReadable) {
-            failRehydrateForReadable = undefined;
-            throw fatalError;
-          }
-          return await realInitialize(args);
-        });
 
         await sourceA.initialize();
         await sourceB.initialize();
 
         const firstReadable = readableInstancesByUrl.get(urlIndexedMcapA)?.[0];
         expect(firstReadable).toBeDefined();
-        failRehydrateForReadable = firstReadable;
+        // The connection dies: indexed init and the recovery scan both fail to read
+        firstReadable?.read.mockRejectedValue(fatalError);
 
         const failingIterator = sourceA.messageIterator({
           topics: new Map([[topic, PlayerBuilder.subscribePayload({ topic })]]),
@@ -760,22 +989,16 @@ describe("McapIterableSource", () => {
       expect(result.topics).toEqual([]);
     });
 
-    it("surfaces a real initialization error instead of silently falling back to unindexed (operational failure, not a genuinely unindexed file)", async () => {
-      // Given
-      const file = await createMcapFile({ withMessage: true });
+    it("surfaces the initialization error when the file can't be recovered either", async () => {
+      // Given a file that is not MCAP at all
+      const file = new Blob([new Uint8Array(64).fill(1)]) as unknown as globalThis.Blob;
       const source = new McapIterableSource({ type: "file", file });
-
-      const initializeSpy = vi
-        .spyOn(McapIndexedReader, "Initialize")
-        .mockRejectedValue(new Error("Corrupt MCAP file"));
-      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(function () {
+      vi.spyOn(console, "error").mockImplementation(function () {
         return undefined;
       });
 
-      // When / Then
-      await expect(source.initialize()).rejects.toThrow("Corrupt MCAP file");
-      expect(initializeSpy).toHaveBeenCalledTimes(1);
-      expect(consoleErrorSpy).toHaveBeenCalledWith(new Error("Corrupt MCAP file"));
+      // When / Then: the indexed reader's error, not the scan's
+      await expect(source.initialize()).rejects.toThrow(/Expected MCAP magic/);
     });
 
     it("still falls back to unindexed reader when Initialize throws the genuine 'File is not indexed' error", async () => {
@@ -783,14 +1006,14 @@ describe("McapIterableSource", () => {
       const file = await createMcapFile({ withMessage: true });
       const source = new McapIterableSource({ type: "file", file });
 
-      vi.spyOn(McapIndexedReader, "Initialize").mockRejectedValue(
+      vi.spyOn(McapIndexedReader, "Initialize").mockRejectedValueOnce(
         new Error("File is not indexed [library=test]"),
       );
 
       // When
       const result = await source.initialize();
 
-      // Then — genuinely unindexed (per the real @mcap/core error signal) still falls back safely
+      // Then — the index is rebuilt by a scan
       expect(result).toBeDefined();
       expect(result.topics).toHaveLength(1);
       expect(result.topics[0]?.name).toBe("/test");

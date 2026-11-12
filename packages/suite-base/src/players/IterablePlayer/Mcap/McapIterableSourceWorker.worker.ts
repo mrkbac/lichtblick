@@ -16,7 +16,7 @@ import { McapIterableSource } from "./McapIterableSource";
 
 export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSourceWorker {
   if (args.file) {
-    const source = new McapIterableSource({ type: "file", file: args.file });
+    const source = new McapIterableSource({ type: "file", file: args.file, handle: args.handle });
     const wrapped = new WorkerIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
   } else if (args.files) {
@@ -27,12 +27,21 @@ export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSo
     const wrapped = new WorkerIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
   } else if (args.url) {
-    const source = new McapIterableSource({ type: "url", url: args.url });
+    const source = new McapIterableSource({
+      type: "url",
+      url: args.url,
+      credentials: args.credentials,
+    });
     const wrapped = new WorkerIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
   } else if (args.urls) {
     const source = new MultiIterableSource(
-      { type: "urls", urls: args.urls, ...pickDefinedHydrationOverrides(args) },
+      {
+        type: "urls",
+        urls: args.urls,
+        credentials: args.credentials,
+        ...pickDefinedHydrationOverrides(args),
+      },
       McapIterableSource,
     );
     const wrapped = new WorkerIterableSourceWorker(source);

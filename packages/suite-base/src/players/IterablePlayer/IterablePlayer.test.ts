@@ -6,7 +6,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { fromSec } from "@foxglove/rostime";
+import { fromSec, toSec } from "@foxglove/rostime";
 import * as _ from "lodash-es";
 import type { Mock, MockInstance } from "vitest";
 
@@ -34,6 +34,7 @@ import { IterablePlayer } from "./IterablePlayer";
 
 class TestSource implements IDeserializedIterableSource {
   public readonly sourceType = "deserialized";
+  public waitForUpdate?: () => Promise<Initialization | undefined>;
 
   public async initialize(): Promise<Initialization> {
     return {
@@ -207,6 +208,153 @@ describe("IterablePlayer", () => {
 
     player.close();
     await player.isClosed;
+  });
+
+  it("applies the updates of a source that grows after initialize", async () => {
+    // Given a source that grows once after initialize, e.g. while its index is rebuilt
+    const source = new TestSource();
+    const initial = await source.initialize();
+    source.initialize = async () => ({
+      ...initial,
+      alerts: [{ severity: "info", message: "Indexing" }],
+    });
+    const grown = { ...initial, end: { sec: 5, nsec: 0 }, alerts: [] };
+    const updates: (Initialization | undefined)[] = [grown, undefined];
+    let released!: () => void;
+    const release = new Promise<void>((resolve) => (released = resolve));
+    source.waitForUpdate = async () => {
+      await release;
+      return updates.shift();
+    };
+    const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+    const states: PlayerState[] = [];
+    player.setListener(async (state) => {
+      states.push(state);
+    });
+    try {
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.endTime).toEqual({ sec: 1, nsec: 0 });
+      });
+      expect(states.at(-1)?.alerts).toEqual([{ severity: "info", message: "Indexing" }]);
+
+      // When it grows
+      released();
+
+      // Then the player shows the new time range and drops the old initialization alerts
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.endTime).toEqual({ sec: 5, nsec: 0 });
+      });
+      expect(states.at(-1)?.alerts).toEqual([]);
+    } finally {
+      player.close();
+      await player.isClosed;
+    }
+  });
+
+  it.each([
+    { mode: "play", playing: true, name: "keeps playing into the new data when playback ran to" },
+    { mode: "pause", playing: false, name: "stays paused when playback was paused at" },
+    { mode: "until", playing: false, name: "stays paused when a playUntil limit stopped it at" },
+  ] as const)("$name the end of a grown source", async ({ mode, playing }) => {
+    // Given a source that grows once, and a player that got to its end by playing, seeking or
+    // playing until a limit
+    const source = new TestSource();
+    const initial = await source.initialize();
+    let released!: () => void;
+    const release = new Promise<void>((resolve) => (released = resolve));
+    const updates: (Initialization | undefined)[] = [{ ...initial, end: { sec: 5, nsec: 0 } }];
+    source.waitForUpdate = async () => {
+      await release;
+      return updates.shift();
+    };
+    const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+    const states: PlayerState[] = [];
+    player.setListener(async (state) => {
+      states.push(state);
+    });
+    try {
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.endTime).toEqual({ sec: 1, nsec: 0 });
+      });
+      player.seekPlayback({ sec: mode === "until" ? 0 : 1, nsec: mode === "until" ? 900e6 : 0 });
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.currentTime.sec).toBe(mode === "until" ? 0 : 1);
+      });
+      if (mode === "play") {
+        player.startPlayback(); // at the end: it stops there until the source grows
+      } else if (mode === "until") {
+        player.playUntil({ sec: 1, nsec: 0 });
+      }
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.currentTime).toEqual({ sec: 1, nsec: 0 });
+        expect(states.at(-1)?.activeData?.isPlaying).toBe(false);
+      });
+
+      // When it grows
+      released();
+
+      // Then playback follows the new data only if it was playing
+      await vi.waitFor(() => {
+        const activeData = states.at(-1)?.activeData;
+        expect(activeData?.endTime).toEqual({ sec: 5, nsec: 0 });
+        expect(activeData?.isPlaying).toBe(playing);
+        // playing moves past the old end; paused stays on it
+        expect(activeData && toSec(activeData.currentTime) > 1).toBe(playing);
+      });
+    } finally {
+      player.close();
+      await player.isClosed;
+    }
+  });
+
+  it("restarts the first read when the source grows during it", async () => {
+    // Given a source whose first read is still running when it grows
+    const source = new TestSource();
+    const initial = await source.initialize();
+    const iterate = source.messageIterator.bind(source);
+    let reading!: () => void;
+    const firstReadStarted = new Promise<void>((resolve) => (reading = resolve));
+    let finishRead!: () => void;
+    const firstReadGate = new Promise<void>((resolve) => (finishRead = resolve));
+    let reads = 0;
+    source.messageIterator = async function* (args) {
+      reads++;
+      if (reads === 1) {
+        reading();
+        await firstReadGate;
+      }
+      yield* iterate(args);
+    };
+    const updates: (Initialization | undefined)[] = [
+      { ...initial, end: { sec: 5, nsec: 0 } },
+      undefined,
+    ];
+    source.waitForUpdate = async () => {
+      await firstReadStarted;
+      return updates.shift();
+    };
+    const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+    player.setSubscriptions([{ topic: "/example" }]); // without one the player reads nothing
+    const states: PlayerState[] = [];
+    player.setListener(async (state) => {
+      states.push(state);
+    });
+    try {
+      // When the update lands during the first read, and that read then finishes
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.endTime).toEqual({ sec: 5, nsec: 0 });
+      });
+      finishRead();
+
+      // Then playback gets a new iterator that reads up to the new end
+      await vi.waitFor(() => {
+        expect(reads).toBe(2);
+      });
+    } finally {
+      finishRead(); // a failed wait above must not leave the read, and so close(), blocked
+      player.close();
+      await player.isClosed;
+    }
   });
 
   it("should return backfill messages from the iterable source when requested", async () => {

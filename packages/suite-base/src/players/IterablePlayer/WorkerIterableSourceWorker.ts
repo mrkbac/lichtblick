@@ -38,6 +38,10 @@ export class WorkerIterableSourceWorker<MessageType = unknown>
     return await this.#source.initialize();
   }
 
+  public async waitForUpdate(): Promise<Initialization | undefined> {
+    return await this.#source.waitForUpdate?.();
+  }
+
   public messageIterator(
     args: MessageIteratorArgs,
   ): AsyncIterableIterator<Readonly<IteratorResult<MessageType>>> & Comlink.ProxyMarked {

@@ -259,6 +259,8 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       try {
         await handleFilesRef.current(
           await Promise.all(fileHandles.map(async (h) => await h.getFile())),
+          undefined,
+          fileHandles,
         );
       } catch (error) {
         log.error("Failed to open launched files", error);

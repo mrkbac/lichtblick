@@ -198,6 +198,13 @@ export interface IIterableSource<MessageType = unknown> {
     args: Immutable<MessageIteratorArgs> & { abort?: AbortSignal },
   ) => IMessageCursor<MessageType>;
 
+  /**
+   * Optional, for a source that grows after initialize() (e.g. a file whose index is still being
+   * built): resolves with a new Initialization once the source has grown, or with undefined once
+   * it won't grow any more. Callers call it again after each update.
+   */
+  waitForUpdate?: () => Promise<Initialization | undefined>;
+
   getStart?: () => Time | undefined;
 
   getEnd?: () => Time | undefined;
@@ -218,9 +225,13 @@ export interface IIterableSource<MessageType = unknown> {
 
 export type IterableSourceInitializeArgs = {
   file?: File;
+  // The handle `file` came from, if any: lets a source re-read a file that grows while open
+  handle?: FileSystemFileHandle;
   url?: string;
   files?: File[];
   urls?: string[];
+  // Fetch credentials for `url`/`urls`, e.g. "include" to send cookies (`ds.includeCredentials`)
+  credentials?: RequestCredentials;
   // Optional overrides for multi-file hydration tuning (see MultiSourceHydrationOptions in
   // players/IterablePlayer/shared/types.ts). Only meaningful when `files`/`urls` has more than
   // one entry. When omitted, MultiIterableSource's internal defaults apply.

@@ -461,6 +461,31 @@ export function AutoUpdate(): React.ReactElement {
   );
 }
 
+export function OpenFoxgloveLinks(): React.ReactElement {
+  const { t } = useTranslation("appSettings");
+  const [enabled = false, setEnabled] = useAppConfigurationValue<boolean>(
+    AppSetting.OPEN_FOXGLOVE_LINKS,
+  );
+  const { classes } = useStyles();
+
+  return (
+    <Stack>
+      <FormControlLabel
+        className={classes.formControlLabel}
+        control={
+          <Checkbox
+            className={classes.checkbox}
+            checked={enabled}
+            onChange={(_event, checked) => void setEnabled(checked)}
+          />
+        }
+        label={t("openFoxgloveLinks")}
+      />
+      <FormHelperText>{t("openFoxgloveLinksDescription")}</FormHelperText>
+    </Stack>
+  );
+}
+
 export function RosPackagePath(): React.ReactElement {
   const [rosPackagePath, setRosPackagePath] = useAppConfigurationValue<string>(
     AppSetting.ROS_PACKAGE_PATH,

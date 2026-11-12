@@ -54,6 +54,7 @@ import {
   IDeserializedIterableSource,
   IIterableSource,
   ISerializedIterableSource,
+  Initialization,
   IteratorResult,
 } from "./IIterableSource";
 
@@ -152,6 +153,11 @@ export class IterablePlayer implements Player {
   #urlParams?: Record<string, string | string[]>;
   #name?: string;
   #nextState?: IterablePlayerState;
+  // The source grew while a state other than idle/play held the playback iterator
+  #playbackIteratorStale = false;
+  // Playback stopped because it ran into the end (not a pause, seek or playUntil limit): a source
+  // that grows continues it, like a live connection
+  #playedToEnd = false;
   #state: IterablePlayerState = "preinit";
   #runningState: boolean = false;
 
@@ -287,6 +293,7 @@ export class IterablePlayer implements Player {
   }
 
   #startPlayImpl(opt?: { untilTime: Time }): void {
+    this.#playedToEnd = false;
     if (this.#isPlaying || this.#untilTime != undefined || !this.#start || !this.#end) {
       return;
     }
@@ -309,6 +316,7 @@ export class IterablePlayer implements Player {
   }
 
   public pausePlayback(): void {
+    this.#playedToEnd = false;
     if (!this.#isPlaying) {
       return;
     }
@@ -376,6 +384,7 @@ export class IterablePlayer implements Player {
   }
 
   public seekPlayback(time: Time): void {
+    this.#playedToEnd = false;
     // Wait to perform seek until initialization is complete
     if (this.#state === "preinit" || this.#state === "initialize") {
       log.debug(`Ignoring seek, state=${this.#state}`);
@@ -657,113 +666,7 @@ export class IterablePlayer implements Player {
     this.#queueEmitState();
 
     try {
-      const initResult = await this.#bufferedSource.initialize();
-      const {
-        start,
-        end,
-        topics,
-        profile,
-        topicStats,
-        alerts,
-        publishersByTopic,
-        datatypes,
-        name,
-        metadata,
-      } = initResult;
-
-      // Prior to initialization, the seekTarget may have been set to an out-of-bounds value
-      // This brings the value in bounds
-      if (this.#seekTarget) {
-        this.#seekTarget = clampTime(this.#seekTarget, start, end);
-      }
-
-      this.#metadata = metadata ?? [];
-
-      // This freezing has to be done here, in the main thread.
-      // If it is done inside the web worker, it will be serialized and deserialized
-      // and will lose the frozen attributes.
-      freezeMetadata(this.#metadata);
-
-      this.#profile = profile;
-      this.#recordingFiles = initResult.recordingFiles;
-      this.#start = start;
-      this.#currentTime = this.#seekTarget ?? start;
-      this.#end = end;
-      this.#publishedTopics = publishersByTopic;
-      this.#providerDatatypes = datatypes;
-      this.#name = name ?? this.#name;
-
-      // Studio does not like duplicate topics or topics with different datatypes
-      // Check for duplicates or for mismatched datatypes
-      const uniqueTopics = new Map<string, Topic>();
-      this.#providerTopicStats = topicStats;
-
-      for (const topic of topics) {
-        const existingTopic = uniqueTopics.get(topic.name);
-        if (existingTopic) {
-          alerts.push({
-            severity: "warn",
-            message: `Inconsistent datatype for topic: ${topic.name}`,
-            tip: `Topic ${topic.name} has messages with multiple datatypes: ${existingTopic.schemaName}, ${topic.schemaName}. This may result in errors during visualization.`,
-          });
-          continue;
-        }
-        uniqueTopics.set(topic.name, topic);
-      }
-
-      this.#providerTopics = Array.from(uniqueTopics.values());
-
-      let idx = 0;
-      for (const alert of alerts) {
-        this.#alertManager.addAlert(`init-alert-${idx}`, alert);
-        idx += 1;
-      }
-
-      if (this.#iterableSource.sourceType === "deserialized") {
-        this.#messageRangeSource = this.#iterableSource;
-      } else {
-        this.#messageRangeSource = new DeserializingIterableSource(this.#iterableSource);
-        (this.#messageRangeSource as DeserializingIterableSource).initializeDeserializers(
-          initResult,
-        );
-      }
-
-      if (this.#enablePreload) {
-        // --- setup block loader which loads messages for _full_ subscriptions in the "background"
-        try {
-          let blockLoaderSource;
-          if (this.#iterableSource.sourceType === "deserialized") {
-            blockLoaderSource = this.#iterableSource;
-          } else {
-            blockLoaderSource = new DeserializingIterableSource(this.#iterableSource);
-            // We must not call initialize() here, as the #iterableSource was already initialized above.
-            blockLoaderSource.initializeDeserializers(initResult);
-          }
-
-          this.#blockLoader = new BlockLoader({
-            cacheSizeBytes: DEFAULT_CACHE_SIZE_BYTES,
-            source: blockLoaderSource,
-            start: this.#start,
-            end: this.#end,
-            maxBlocks: MAX_BLOCKS,
-            minBlockDurationNs: MIN_MEM_CACHE_BLOCK_SIZE_NS,
-            alertManager: this.#alertManager,
-          });
-        } catch (err: unknown) {
-          log.error(err);
-
-          const startStr = toRFC3339String(this.#start);
-          const endStr = toRFC3339String(this.#end);
-
-          this.#alertManager.addAlert("block-loader", {
-            severity: "warn",
-            message: "Failed to initialize message preloading",
-            tip: `The start (${startStr}) and end (${endStr}) of your data is too far apart.`,
-            error: err as Error,
-          });
-        }
-      }
-
+      this.#applyInitialization(await this.#bufferedSource.initialize());
       this.#presence = PlayerPresence.PRESENT;
     } catch (error) {
       this.#setError(`Error initializing: ${toError(error).message}`, toError(error));
@@ -782,11 +685,172 @@ export class IterablePlayer implements Player {
         this.#setError((err as Error).message, err as Error);
       });
 
+      // Only now: an update replaces the block loader, which must not race its first start above
+      void this.#followSourceUpdates();
+
       this.#setState("start-play");
     }
   }
 
+  /**
+   * Applies each update of a source that grows after initialize() (e.g. a file whose index is
+   * still being built): the new time range, topics and alerts, a block loader for the new range,
+   * and a playback iterator that reads past the old end.
+   */
+  async #followSourceUpdates(): Promise<void> {
+    try {
+      for (;;) {
+        const update = await this.#bufferedSource.waitForUpdate?.();
+        if (!update || this.#isClosing()) {
+          return;
+        }
+        // ponytail: preloaded blocks are dropped and reloaded on every update; extend the block
+        // loader's range in place if that churn shows up (e.g. tailing a live file).
+        await this.#blockLoader?.stopLoading();
+        await this.#blockLoadingProcess;
+        if (this.#isClosing()) {
+          return;
+        }
+        this.#alertManager.removeAlerts((id) => id.startsWith("init-alert-"));
+        this.#applyInitialization(update);
+        this.#blockLoader?.setTopics(this.#preloadTopics);
+        this.#blockLoadingProcess = this.#startBlockLoading().catch((err: unknown) => {
+          this.#setError((err as Error).message, err as Error);
+        });
+        if (this.#nextState === "seek-backfill") {
+          // The pending seek resets the playback iterator on the new range
+          this.#queueEmitState();
+        } else if (this.#state === "idle" || this.#state === "play") {
+          // The current iterator ends at the old end
+          this.#lastMessageEvent = undefined;
+          this.#isPlaying ||= this.#playedToEnd;
+          this.#playedToEnd = false;
+          this.#setState("reset-playback-iterator");
+        } else {
+          // e.g. start-play reading with an iterator that ends at the old end; it resets when done
+          this.#playbackIteratorStale = true;
+          this.#queueEmitState();
+        }
+      }
+    } catch (error) {
+      log.error("Source update failed", error);
+    }
+  }
+
+  #isClosing(): boolean {
+    return this.#state === "close" || this.#nextState === "close";
+  }
+
+  #applyInitialization(initResult: Initialization): void {
+    const {
+      start,
+      end,
+      topics,
+      profile,
+      topicStats,
+      alerts,
+      publishersByTopic,
+      datatypes,
+      name,
+      metadata,
+    } = initResult;
+
+    // Prior to initialization, the seekTarget may have been set to an out-of-bounds value
+    // This brings the value in bounds
+    if (this.#seekTarget) {
+      this.#seekTarget = clampTime(this.#seekTarget, start, end);
+    }
+
+    this.#metadata = metadata ?? [];
+
+    // This freezing has to be done here, in the main thread.
+    // If it is done inside the web worker, it will be serialized and deserialized
+    // and will lose the frozen attributes.
+    freezeMetadata(this.#metadata);
+
+    this.#profile = profile;
+    this.#recordingFiles = initResult.recordingFiles;
+    this.#start = start;
+    this.#currentTime = this.#currentTime
+      ? clampTime(this.#currentTime, start, end)
+      : (this.#seekTarget ?? start);
+    this.#end = end;
+    this.#publishedTopics = publishersByTopic;
+    this.#providerDatatypes = datatypes;
+    this.#name = name ?? this.#name;
+
+    // Studio does not like duplicate topics or topics with different datatypes
+    // Check for duplicates or for mismatched datatypes
+    const uniqueTopics = new Map<string, Topic>();
+    this.#providerTopicStats = topicStats;
+
+    for (const topic of topics) {
+      const existingTopic = uniqueTopics.get(topic.name);
+      if (existingTopic) {
+        alerts.push({
+          severity: "warn",
+          message: `Inconsistent datatype for topic: ${topic.name}`,
+          tip: `Topic ${topic.name} has messages with multiple datatypes: ${existingTopic.schemaName}, ${topic.schemaName}. This may result in errors during visualization.`,
+        });
+        continue;
+      }
+      uniqueTopics.set(topic.name, topic);
+    }
+
+    this.#providerTopics = Array.from(uniqueTopics.values());
+
+    let idx = 0;
+    for (const alert of alerts) {
+      this.#alertManager.addAlert(`init-alert-${idx}`, alert);
+      idx += 1;
+    }
+
+    if (this.#iterableSource.sourceType === "deserialized") {
+      this.#messageRangeSource = this.#iterableSource;
+    } else {
+      this.#messageRangeSource = new DeserializingIterableSource(this.#iterableSource);
+      (this.#messageRangeSource as DeserializingIterableSource).initializeDeserializers(initResult);
+    }
+
+    if (this.#enablePreload) {
+      // --- setup block loader which loads messages for _full_ subscriptions in the "background"
+      try {
+        let blockLoaderSource;
+        if (this.#iterableSource.sourceType === "deserialized") {
+          blockLoaderSource = this.#iterableSource;
+        } else {
+          blockLoaderSource = new DeserializingIterableSource(this.#iterableSource);
+          // We must not call initialize() here, as the #iterableSource was already initialized above.
+          blockLoaderSource.initializeDeserializers(initResult);
+        }
+
+        this.#blockLoader = new BlockLoader({
+          cacheSizeBytes: DEFAULT_CACHE_SIZE_BYTES,
+          source: blockLoaderSource,
+          start: this.#start,
+          end: this.#end,
+          maxBlocks: MAX_BLOCKS,
+          minBlockDurationNs: MIN_MEM_CACHE_BLOCK_SIZE_NS,
+          alertManager: this.#alertManager,
+        });
+      } catch (err: unknown) {
+        log.error(err);
+
+        const startStr = toRFC3339String(this.#start);
+        const endStr = toRFC3339String(this.#end);
+
+        this.#alertManager.addAlert("block-loader", {
+          severity: "warn",
+          message: "Failed to initialize message preloading",
+          tip: `The start (${startStr}) and end (${endStr}) of your data is too far apart.`,
+          error: err as Error,
+        });
+      }
+    }
+  }
+
   async #resetPlaybackIterator() {
+    this.#playbackIteratorStale = false;
     if (!this.#currentTime) {
       throw new Error("Invariant: Tried to reset playback iterator with no current time.");
     }
@@ -921,6 +985,12 @@ export class IterablePlayer implements Player {
     this.#messages = messageEvents;
     this.#presence = PlayerPresence.PRESENT;
     this.#queueEmitState();
+    if (this.#playbackIteratorStale) {
+      // The source grew while reading; the new iterator re-reads anything saved past stopTime
+      this.#lastMessageEvent = undefined;
+      this.#setState("reset-playback-iterator");
+      return;
+    }
     // `startPlayback()` may have been called while still in "initialize"/"start-play" setting `#isPlaying` before we ever reach "idle". Honor it
     // here instead of always going idle
     this.#setState(this.#isPlaying ? "play" : "idle");
@@ -1304,6 +1374,7 @@ export class IterablePlayer implements Player {
     try {
       while (this.#isPlaying && !this.#hasError && !this.#nextState) {
         if (compare(this.#currentTime, this.#end) >= 0) {
+          this.#playedToEnd = true;
           // Playback has ended. Reset internal trackers for maintaining the playback speed.
           this.#lastTickMillis = undefined;
           this.#lastRangeMillis = undefined;

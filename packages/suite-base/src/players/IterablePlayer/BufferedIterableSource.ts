@@ -112,6 +112,12 @@ class BufferedIterableSource<MessageType = unknown>
     return this.#initResult;
   }
 
+  public async waitForUpdate(): Promise<Initialization | undefined> {
+    const update = await this.#source.waitForUpdate();
+    this.#initResult = update ?? this.#initResult;
+    return update;
+  }
+
   async #startProducer(args: MessageIteratorArgs): Promise<void> {
     if (!this.#initResult) {
       throw new Error("Invariant: uninitialized");
