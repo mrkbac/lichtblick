@@ -166,8 +166,11 @@ export class McapIterableSource implements ISerializedIterableSource {
     } catch (error) {
       // A real failure (e.g. a network error) must not be masked by re-fetching the whole file via
       // the eager, unbounded streaming fallback — surface the actual error.
-      readable.close();
-      this.#persistentReadable = undefined;
+      if (!this.#eagerInner) {
+        // Keep it while a reader opened earlier (e.g. on a partial index) still reads through it
+        readable.close();
+        this.#persistentReadable = undefined;
+      }
       throw error;
     }
     if (result.status === "indexed") {
