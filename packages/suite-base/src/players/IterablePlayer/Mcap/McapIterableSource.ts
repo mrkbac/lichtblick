@@ -402,8 +402,10 @@ export class McapIterableSource implements ISerializedIterableSource {
         if (state() !== published) {
           const next = state();
           const started = performance.now();
-          if (await this.#publish({ indexing: false })) {
-            published = next; // a failed reopen is retried on the next check
+          // A failed reopen is retried on the next check; once the footer is in there is no next
+          // check, so a failure then is published as an error instead
+          if (await this.#publish({ indexing: false, final: scanner.complete })) {
+            published = next;
           }
           // ponytail: each update rebuilds the summary and reader (O(chunks)), and the player
           // reloads its preloaded blocks. Waiting 10x as long as that took keeps it under ~10% of
