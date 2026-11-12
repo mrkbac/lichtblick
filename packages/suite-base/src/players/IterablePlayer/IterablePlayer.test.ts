@@ -251,6 +251,55 @@ describe("IterablePlayer", () => {
     }
   });
 
+  it("restarts the first read when the source grows during it", async () => {
+    // Given a source whose first read is still running when it grows
+    const source = new TestSource();
+    const initial = await source.initialize();
+    const iterate = source.messageIterator.bind(source);
+    let reading!: () => void;
+    const firstReadStarted = new Promise<void>((resolve) => (reading = resolve));
+    let finishRead!: () => void;
+    const firstReadGate = new Promise<void>((resolve) => (finishRead = resolve));
+    let reads = 0;
+    source.messageIterator = async function* (args) {
+      reads++;
+      if (reads === 1) {
+        reading();
+        await firstReadGate;
+      }
+      yield* iterate(args);
+    };
+    const updates: (Initialization | undefined)[] = [
+      { ...initial, end: { sec: 5, nsec: 0 } },
+      undefined,
+    ];
+    source.waitForUpdate = async () => {
+      await firstReadStarted;
+      return updates.shift();
+    };
+    const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+    player.setSubscriptions([{ topic: "/example" }]); // without one the player reads nothing
+    const states: PlayerState[] = [];
+    player.setListener(async (state) => {
+      states.push(state);
+    });
+    try {
+      // When the update lands during the first read, and that read then finishes
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.endTime).toEqual({ sec: 5, nsec: 0 });
+      });
+      finishRead();
+
+      // Then playback gets a new iterator that reads up to the new end
+      await vi.waitFor(() => {
+        expect(reads).toBe(2);
+      });
+    } finally {
+      player.close();
+      await player.isClosed;
+    }
+  });
+
   it("should return backfill messages from the iterable source when requested", async () => {
     // GIVEN - a source that can resolve backfill messages for a topic
     const source = new TestSource();
