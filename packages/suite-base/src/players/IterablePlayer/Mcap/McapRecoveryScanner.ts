@@ -273,10 +273,7 @@ export class McapRecoveryScanner {
   /** What was recovered and lost, for the user */
   public toAlert(): PlayerAlert {
     const lost = this.#losses();
-    const recovered =
-      this.#chunkIndexes.length > 0
-        ? `Recovered ${this.messageCount} message(s) from ${this.#chunkIndexes.length} chunk(s)`
-        : `Recovered ${this.unchunkedMessageCount} message(s)`;
+    const recovered = this.#recovered();
     if (lost.length === 0) {
       return this.complete
         ? {
@@ -290,21 +287,40 @@ export class McapRecoveryScanner {
             tip: `${recovered}.`,
           };
     }
+    return this.#damagedAlert(lost);
+  }
+
+  /**
+   * For a file still being written: what was lost, if anything, ignoring the cut-off end (the part
+   * not written yet).
+   */
+  public toLiveAlerts(): PlayerAlert[] {
+    const lost = this.#losses({ live: true });
+    return lost.length > 0 ? [this.#damagedAlert(lost)] : [];
+  }
+
+  #recovered(): string {
+    return this.#chunkIndexes.length > 0
+      ? `Recovered ${this.messageCount} message(s) from ${this.#chunkIndexes.length} chunk(s)`
+      : `Recovered ${this.unchunkedMessageCount} message(s)`;
+  }
+
+  #damagedAlert(lost: string[]): PlayerAlert {
     return {
       severity: "warn",
       message: "This file is damaged; showing what could be recovered.",
-      tip: `${recovered}; ${lost.join("; ")}.`,
+      tip: `${this.#recovered()}; ${lost.join("; ")}.`,
     };
   }
 
-  #losses(): string[] {
+  #losses({ live = false }: { live?: boolean } = {}): string[] {
     const lost: string[] = [];
     if (this.corruptRecords > 0) {
       lost.push(
         `${this.corruptRecords} corrupt record(s) (e.g. chunks with a bad CRC) were skipped`,
       );
     }
-    if (this.unreadableBytes > 0n) {
+    if (this.unreadableBytes > 0n && !live) {
       lost.push(
         `the last ${formatBytes(this.unreadableBytes)} could not be read (cut off or not MCAP data)`,
       );

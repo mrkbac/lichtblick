@@ -12,7 +12,8 @@ import type { RemoteFileReadable } from "./RemoteFileReadable";
 import type { HydratedSourcePool } from "../shared/HydratedSourcePool";
 
 export type McapSource =
-  | { type: "file"; file: Blob; pool?: HydratedSourcePool }
+  // `handle`: follow the file while it is still being written (see McapIterableSource)
+  | { type: "file"; file: Blob; handle?: FileSystemFileHandle; pool?: HydratedSourcePool }
   | {
       type: "url";
       url: string;
