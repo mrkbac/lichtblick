@@ -430,6 +430,11 @@ class CachingIterableSource<MessageType = unknown>
       throw new Error("Invariant: uninitialized");
     }
 
+    // The cache predates the latest update; the grown source may have newer messages in range
+    if (this.#stale) {
+      return await this.#source.getBackfillMessages(args);
+    }
+
     // Find a block that contains args.time. We must find a block that contains args.time rather
     // than one that occurs anytime before args.time to correctly get the last message before
     // args.time rather than any message that occurs before args.time.

@@ -94,6 +94,8 @@ export class McapIterableSource implements ISerializedIterableSource {
   #scanError: Error | undefined;
   // Newest Initialization not yet handed out by waitForUpdate(), and the waiter to wake for it
   #update: Initialization | undefined;
+  // Last Initialization handed out, to re-publish with an error if the final reopen fails
+  #lastInit: Initialization | undefined;
   #wake: (() => void) | undefined;
   // The local file, re-read from its handle once it has changed on disk
   #blob: BlobReadable | undefined;
@@ -176,8 +178,11 @@ export class McapIterableSource implements ISerializedIterableSource {
     } catch (error) {
       // A real failure (e.g. a network error) must not be masked by re-fetching the whole file via
       // the eager, unbounded streaming fallback — surface the actual error.
-      readable.close();
-      this.#persistentReadable = undefined;
+      if (!this.#eagerInner) {
+        // Keep it while a reader opened earlier (e.g. on a partial index) still reads through it
+        readable.close();
+        this.#persistentReadable = undefined;
+      }
       throw error;
     }
     if (result.status === "indexed") {
@@ -291,19 +296,22 @@ export class McapIterableSource implements ISerializedIterableSource {
   // ponytail: rebuilding the summary and reader per update is O(chunks); fine at this interval,
   // append to the reader's index instead if updates get frequent.
   async #followScan(scan: Promise<void>): Promise<void> {
+    const scanDone = scan.then(() => true); // one reaction on `scan`, not one per tick
     while (this.#scan === scan) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
       const done = await Promise.race([
-        scan.then(() => true),
+        scanDone,
         new Promise<false>((resolve) => {
-          setTimeout(() => {
+          timer = setTimeout(() => {
             resolve(false);
           }, UPDATE_INTERVAL_MS);
         }),
       ]);
+      clearTimeout(timer);
       if (this.#scan !== scan) {
         return; // terminated
       }
-      await this.#publish({ indexing: !done });
+      await this.#publish({ indexing: !done, final: done });
       if (done && this.#scan === scan) {
         this.#scan = this.#tail();
         this.#wake?.();
@@ -311,15 +319,34 @@ export class McapIterableSource implements ISerializedIterableSource {
     }
   }
 
-  /** Reopens the file on the index so far and hands the new Initialization to waitForUpdate() */
-  async #publish({ indexing }: { indexing: boolean }): Promise<void> {
+  /**
+   * Reopens the file on the index so far and hands the new Initialization to waitForUpdate(). On
+   * failure the current reader keeps playing and a later call retries; `final` marks the last
+   * call, whose failure is published as an error.
+   */
+  async #publish({
+    indexing,
+    final = false,
+  }: {
+    indexing: boolean;
+    final?: boolean;
+  }): Promise<void> {
+    const scan = this.#scan;
     try {
       const { opened, init } = await this.#open({ indexing });
+      if (this.#scan !== scan) {
+        await opened.inner.terminate?.(); // terminated while reopening
+        return;
+      }
       this.#eagerInner = opened.inner;
+      this.#lastInit = init;
       this.#update = init;
     } catch (error) {
       log.error("Updating the MCAP index failed", error);
-      this.#scan = undefined;
+      if (final) {
+        this.#scanError ??= toError(error);
+        this.#update = this.#lastInit && withScanError(this.#lastInit, this.#scanError);
+      }
     }
     this.#wake?.();
   }
@@ -385,7 +412,7 @@ export class McapIterableSource implements ISerializedIterableSource {
       }
       log.error("Following the MCAP file failed", error);
       this.#scanError = toError(error);
-      await this.#publish({ indexing: false });
+      await this.#publish({ indexing: false, final: true });
     }
     this.#scan = undefined;
     this.#wake?.();
@@ -500,6 +527,7 @@ export class McapIterableSource implements ISerializedIterableSource {
       // pooling them is non-trivial because re-hydration would re-stream the entire file.
       this.#eagerInner = opened.inner;
     }
+    this.#lastInit = init;
     if (this.#scan) {
       void this.#followScan(this.#scan);
     } else {
@@ -563,14 +591,7 @@ export class McapIterableSource implements ISerializedIterableSource {
       init.alerts = [this.#recovery.toAlert(), ...init.alerts];
     }
     if (this.#scanError) {
-      init.alerts = [
-        {
-          severity: "error",
-          message: "Indexing this file stopped early; only the part indexed so far plays.",
-          error: this.#scanError,
-        },
-        ...init.alerts,
-      ];
+      init.alerts = withScanError(init, this.#scanError).alerts;
     }
     this.#start = init.start;
     this.#end = init.end;
@@ -660,6 +681,20 @@ export class McapIterableSource implements ISerializedIterableSource {
     this.#interrupt?.();
     this.#wake?.();
   }
+}
+
+function withScanError(init: Initialization, error: Error): Initialization {
+  return {
+    ...init,
+    alerts: [
+      {
+        severity: "error",
+        message: "Indexing this file stopped early; only the part indexed so far plays.",
+        error,
+      },
+      ...init.alerts.filter((alert) => !alert.message.startsWith("Indexing this file:")),
+    ],
+  };
 }
 
 async function scanForRecovery(

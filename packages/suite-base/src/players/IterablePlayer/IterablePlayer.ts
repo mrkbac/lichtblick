@@ -153,6 +153,8 @@ export class IterablePlayer implements Player {
   #urlParams?: Record<string, string | string[]>;
   #name?: string;
   #nextState?: IterablePlayerState;
+  // The source grew while a state other than idle/play held the playback iterator
+  #playbackIteratorStale = false;
   #state: IterablePlayerState = "preinit";
   #runningState: boolean = false;
 
@@ -666,8 +668,6 @@ export class IterablePlayer implements Player {
     this.#queueEmitState();
 
     if (!this.#hasError && this.#start) {
-      void this.#followSourceUpdates();
-
       // Wait a bit until panels have had the chance to subscribe to topics before we start
       // playback.
       await delay(START_DELAY_MS);
@@ -678,6 +678,9 @@ export class IterablePlayer implements Player {
       this.#blockLoadingProcess = this.#startBlockLoading().catch((err: unknown) => {
         this.#setError((err as Error).message, err as Error);
       });
+
+      // Only now: an update replaces the block loader, which must not race its first start above
+      void this.#followSourceUpdates();
 
       this.#setState("start-play");
     }
@@ -692,7 +695,7 @@ export class IterablePlayer implements Player {
     try {
       for (;;) {
         const update = await this.#bufferedSource.waitForUpdate?.();
-        if (!update || this.#state === "close" || this.#nextState === "close") {
+        if (!update || this.#isClosing()) {
           return;
         }
         // ponytail: preloaded blocks are dropped and reloaded on every update; extend the block
@@ -704,6 +707,9 @@ export class IterablePlayer implements Player {
           compare(this.#currentTime, this.#end) >= 0;
         await this.#blockLoader?.stopLoading();
         await this.#blockLoadingProcess;
+        if (this.#isClosing()) {
+          return;
+        }
         this.#alertManager.removeAlerts((id) => id.startsWith("init-alert-"));
         this.#applyInitialization(update);
         this.#blockLoader?.setTopics(this.#preloadTopics);
@@ -716,12 +722,18 @@ export class IterablePlayer implements Player {
           this.#isPlaying ||= atEnd && this.#untilTime == undefined;
           this.#setState("reset-playback-iterator");
         } else {
+          // e.g. start-play reading with an iterator that ends at the old end; it resets when done
+          this.#playbackIteratorStale = true;
           this.#queueEmitState();
         }
       }
     } catch (error) {
       log.error("Source update failed", error);
     }
+  }
+
+  #isClosing(): boolean {
+    return this.#state === "close" || this.#nextState === "close";
   }
 
   #applyInitialization(initResult: Initialization): void {
@@ -833,6 +845,7 @@ export class IterablePlayer implements Player {
   }
 
   async #resetPlaybackIterator() {
+    this.#playbackIteratorStale = false;
     if (!this.#currentTime) {
       throw new Error("Invariant: Tried to reset playback iterator with no current time.");
     }
@@ -967,6 +980,10 @@ export class IterablePlayer implements Player {
     this.#messages = messageEvents;
     this.#presence = PlayerPresence.PRESENT;
     this.#queueEmitState();
+    if (this.#playbackIteratorStale) {
+      this.#setState("reset-playback-iterator"); // the source grew while reading
+      return;
+    }
     // `startPlayback()` may have been called while still in "initialize"/"start-play" setting `#isPlaying` before we ever reach "idle". Honor it
     // here instead of always going idle
     this.#setState(this.#isPlaying ? "play" : "idle");
