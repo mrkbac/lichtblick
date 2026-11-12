@@ -55,13 +55,17 @@ export class PlayerControls {
     const before = await this.getTimestampValue();
     await this.togglePlayback();
     await expect.poll(async () => await this.getTimestampValue()).not.toBe(before);
-    const start = await this.getTimestampValue();
-    const wallStart = Date.now();
+    // Read the timestamp and the clock together in the page, so response latency doesn't skew it.
+    const sample = async () =>
+      await this.getTimestampInput().evaluate((input: HTMLInputElement) => ({
+        time: Number(input.value),
+        wallMs: performance.now(),
+      }));
+    const start = await sample();
     await this.page.waitForTimeout(windowMs);
-    const end = await this.getTimestampValue();
-    const wallEnd = Date.now();
+    const end = await sample();
     await this.togglePlayback();
-    return (end - start) / ((wallEnd - wallStart) / 1000);
+    return (end.time - start.time) / ((end.wallMs - start.wallMs) / 1000);
   }
 
   public async getTimestampText(): Promise<string> {
