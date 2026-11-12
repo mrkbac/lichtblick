@@ -115,6 +115,11 @@ export class DeserializingIterableSource implements IDeserializedIterableSource 
     return this.initializeDeserializers(await this.#source.initialize());
   }
 
+  public async waitForUpdate(): Promise<Initialization | undefined> {
+    const update = await this.#source.waitForUpdate?.();
+    return update && this.initializeDeserializers(update);
+  }
+
   public initializeDeserializers(initResult: Initialization): Initialization {
     const alerts: Initialization["alerts"] = [];
 

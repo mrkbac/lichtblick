@@ -37,6 +37,9 @@ import { HydratedSourcePool, SourceHydrator } from "../shared/HydratedSourcePool
 
 const log = Log.getLogger(__filename);
 
+/** How often a source whose index is still being rebuilt reports its growth */
+export const UPDATE_INTERVAL_MS = 2000;
+
 /**
  * Create a McapIndexedReader if it will be possible to do an indexed read. A file without a usable
  * summary (no footer, cut off, corrupt summary) or that fails indexed initialization in any other
@@ -80,6 +83,16 @@ export class McapIterableSource implements ISerializedIterableSource {
   #persistentReadable: RemoteFileReadable | undefined;
   // Index rebuilt by a forward scan, for files without a usable summary or with corrupt chunks
   #recovery: McapRecoveryScanner | undefined;
+  // The recovery scan while it continues in the background, until its last update is published.
+  // Meanwhile the file plays from the index so far, which grows with each update.
+  #scan: Promise<void> | undefined;
+  #scanSize = 0n;
+  #scanError: Error | undefined;
+  // Newest Initialization not yet handed out by waitForUpdate(), and the waiter to wake for it
+  #update: Initialization | undefined;
+  // Last Initialization handed out, to re-publish with an error if the final reopen fails
+  #lastInit: Initialization | undefined;
+  #wake: (() => void) | undefined;
 
   public readonly sourceType = "serialized";
 
@@ -153,8 +166,11 @@ export class McapIterableSource implements ISerializedIterableSource {
     } catch (error) {
       // A real failure (e.g. a network error) must not be masked by re-fetching the whole file via
       // the eager, unbounded streaming fallback — surface the actual error.
-      readable.close();
-      this.#persistentReadable = undefined;
+      if (!this.#eagerInner) {
+        // Keep it while a reader opened earlier (e.g. on a partial index) still reads through it
+        readable.close();
+        this.#persistentReadable = undefined;
+      }
       throw error;
     }
     if (result.status === "indexed") {
@@ -205,7 +221,7 @@ export class McapIterableSource implements ISerializedIterableSource {
       if (result.status !== "recover") {
         return result;
       }
-      this.#recovery = await scanForRecovery(readable, decompressHandlers, result.error);
+      this.#recovery = await this.#scanForRecovery(readable, decompressHandlers, result.error);
     }
     if (this.#recovery.recoveredChunkCount() === 0) {
       // Nothing chunked (e.g. messages written without chunks): stream the readable part.
@@ -218,6 +234,93 @@ export class McapIterableSource implements ISerializedIterableSource {
         decompressHandlers,
       }),
     };
+  }
+
+  /**
+   * Rebuilds the index with a forward scan. An unpooled source returns as soon as the first chunks
+   * are indexed and keeps scanning in the background (see #followScan); a pooled one (part of a
+   * multi-file source, which doesn't follow growth) waits for the whole scan.
+   */
+  async #scanForRecovery(
+    readable: McapTypes.IReadable,
+    decompressHandlers: McapTypes.DecompressHandlers,
+    originalError: Error,
+  ): Promise<McapRecoveryScanner> {
+    const firstStep = Promise.withResolvers<McapRecoveryScanner>();
+    const scan = scanWithIndexCache(
+      readable,
+      decompressHandlers,
+      this.#source.pool ? undefined : firstStep.resolve,
+    );
+    let first;
+    try {
+      first = await Promise.race([
+        scan.then((scanner) => ({ scanner, done: true })),
+        firstStep.promise.then((scanner) => ({ scanner, done: false })),
+      ]);
+    } catch (scanError) {
+      // Not an MCAP file, or the bytes can't be read at all: the original error says more.
+      log.error(originalError, scanError);
+      throw originalError;
+    }
+    log.info(`Recovering MCAP index after: ${originalError.message}`);
+    if (!first.done) {
+      this.#scanSize = await readable.size();
+      this.#scan = scan.then(
+        () => undefined,
+        (error: unknown) => {
+          this.#scanError = toError(error);
+        },
+      );
+    }
+    return first.scanner;
+  }
+
+  /**
+   * Publishes a fresh Initialization every UPDATE_INTERVAL_MS while the background scan runs, and
+   * a last one when it ends. Each one reopens the file on the index so far, so seeking, the time
+   * range and topics grow with it.
+   */
+  // ponytail: rebuilding the summary and reader per update is O(chunks); fine at this interval,
+  // append to the reader's index instead if updates get frequent (e.g. tailing a live file).
+  async #followScan(scan: Promise<void>): Promise<void> {
+    const scanDone = scan.then(() => true); // one reaction on `scan`, not one per tick
+    while (this.#scan === scan) {
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const done = await Promise.race([
+        scanDone,
+        new Promise<false>((resolve) => {
+          timer = setTimeout(() => {
+            resolve(false);
+          }, UPDATE_INTERVAL_MS);
+        }),
+      ]);
+      clearTimeout(timer);
+      if (this.#scan !== scan) {
+        return; // terminated
+      }
+      try {
+        const { opened, init } = await this.#open({ indexing: !done });
+        if (this.#scan !== scan) {
+          await opened.inner.terminate?.(); // terminated while reopening
+          return;
+        }
+        this.#eagerInner = opened.inner;
+        this.#lastInit = init;
+        this.#update = init;
+      } catch (error) {
+        // Keep playing the part indexed so far; a later tick retries with a larger index.
+        log.error("Updating the MCAP index failed", error);
+        if (done) {
+          this.#scanError ??= toError(error);
+          this.#update = this.#lastInit && withScanError(this.#lastInit, this.#scanError);
+        }
+      }
+      if (done) {
+        this.#scan = undefined;
+      }
+      this.#wake?.();
+    }
   }
 
   /**
@@ -285,13 +388,7 @@ export class McapIterableSource implements ISerializedIterableSource {
   };
 
   public async initialize(): Promise<Initialization> {
-    const opened = await this.#openInner();
-    const init = await opened.inner.initialize();
-    if (this.#recovery) {
-      init.alerts = [this.#recovery.toAlert(), ...init.alerts];
-    }
-    this.#start = init.start;
-    this.#end = init.end;
+    const { opened, init } = await this.#open();
 
     const pool = this.#source.pool;
     if (pool && opened.indexed) {
@@ -309,6 +406,56 @@ export class McapIterableSource implements ISerializedIterableSource {
       // pooling them is non-trivial because re-hydration would re-stream the entire file.
       this.#eagerInner = opened.inner;
     }
+    if (this.#scan) {
+      this.#lastInit = init;
+      void this.#followScan(this.#scan);
+    }
+    return init;
+  }
+
+  /**
+   * Resolves with a new Initialization each time the index rebuilt for a damaged file has grown,
+   * and with undefined once it is complete (right away for every other file).
+   */
+  public async waitForUpdate(): Promise<Initialization | undefined> {
+    while (!this.#update && this.#scan) {
+      await new Promise<void>((resolve) => {
+        this.#wake = resolve;
+      });
+    }
+    const update = this.#update;
+    this.#update = undefined;
+    return update;
+  }
+
+  /** `indexing`: whether the background scan still runs (by default: whether it did when opened) */
+  async #open({
+    indexing,
+  }: {
+    indexing?: boolean;
+  } = {}): Promise<{ opened: OpenedInner; init: Initialization }> {
+    const opened = await this.#openInner();
+    const init = await opened.inner.initialize();
+    if ((indexing ?? this.#scan != undefined) && this.#recovery) {
+      const percent = Math.floor(
+        (Number(this.#recovery.offset) / Math.max(1, Number(this.#scanSize))) * 100,
+      );
+      init.alerts = [
+        {
+          severity: "info",
+          message: `Indexing this file: ${percent}% read`,
+          tip: "Its index is being rebuilt. Messages play from the part indexed so far; the time range grows as indexing continues.",
+        },
+        ...init.alerts,
+      ];
+    } else if (this.#recovery) {
+      init.alerts = [this.#recovery.toAlert(), ...init.alerts];
+    }
+    if (this.#scanError) {
+      init.alerts = withScanError(init, this.#scanError).alerts;
+    }
+    this.#start = init.start;
+    this.#end = init.end;
     if (init.recordingFiles) {
       const sizeBytes =
         this.#source.type === "file"
@@ -324,7 +471,7 @@ export class McapIterableSource implements ISerializedIterableSource {
         sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : undefined,
       }));
     }
-    return init;
+    return { opened, init };
   }
 
   public async *messageIterator(
@@ -391,7 +538,23 @@ export class McapIterableSource implements ISerializedIterableSource {
     // (see #persistentReadable) and is only closed when the whole source is torn down.
     this.#persistentReadable?.close();
     this.#persistentReadable = undefined;
+    this.#scan = undefined;
+    this.#wake?.();
   }
+}
+
+function withScanError(init: Initialization, error: Error): Initialization {
+  return {
+    ...init,
+    alerts: [
+      {
+        severity: "error",
+        message: "Indexing this file stopped early; only the part indexed so far plays.",
+        error,
+      },
+      ...init.alerts.filter((alert) => !alert.message.startsWith("Indexing this file:")),
+    ],
+  };
 }
 
 async function scanForRecovery(

@@ -65,6 +65,10 @@ class WorkerIterableSourceBase<MessageType> implements IIterableSource<MessageTy
     return await this.#sourceWorkerRemote.initialize();
   }
 
+  public async waitForUpdate(): Promise<Initialization | undefined> {
+    return await this.#sourceWorkerRemote?.waitForUpdate();
+  }
+
   public async *messageIterator(
     args: MessageIteratorArgs,
   ): AsyncIterableIterator<Readonly<IteratorResult<MessageType>>> {

@@ -198,6 +198,13 @@ export interface IIterableSource<MessageType = unknown> {
     args: Immutable<MessageIteratorArgs> & { abort?: AbortSignal },
   ) => IMessageCursor<MessageType>;
 
+  /**
+   * Optional, for a source that grows after initialize() (e.g. a file whose index is still being
+   * built): resolves with a new Initialization once the source has grown, or with undefined once
+   * it won't grow any more. Callers call it again after each update.
+   */
+  waitForUpdate?: () => Promise<Initialization | undefined>;
+
   getStart?: () => Time | undefined;
 
   getEnd?: () => Time | undefined;

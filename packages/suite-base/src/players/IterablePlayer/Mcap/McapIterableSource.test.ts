@@ -170,6 +170,80 @@ describe("McapIterableSource", () => {
     expect(values).toEqual([1, 2, 3]);
   });
 
+  it("plays a large damaged file before its index is rebuilt, then switches to the full index", async () => {
+    // Given a cut-off recording of many 1 MiB chunks, whose scan past the first step (16 MiB) waits for a gate
+    const chunkCount = 64;
+    const tempBuffer = new TempBuffer();
+    const writer = new McapWriter({ writable: tempBuffer, chunkSize: 1 });
+    await writer.start({ library: "test", profile: "" });
+    const channelId = await writer.registerChannel({
+      schemaId: 0,
+      topic: "/example",
+      messageEncoding: "json",
+      metadata: new Map(),
+    });
+    for (let i = 1; i <= chunkCount; i++) {
+      await addMessage(writer, channelId, {
+        logTime: BigInt(i) * 1_000_000_000n,
+        data: new Uint8Array(1024 * 1024).fill(i),
+      });
+    }
+    const bytes = tempBuffer.get().slice();
+    const blob = new Blob([bytes]);
+    const gate = Promise.withResolvers<void>();
+    let maxReadEnd = 0;
+    const gatedFile = {
+      size: blob.size,
+      slice: (start: number, end: number) => {
+        if (end - start >= 4 * 1024 * 1024) {
+          maxReadEnd = Math.max(maxReadEnd, end);
+        }
+        const part = blob.slice(start, end);
+        return {
+          arrayBuffer: async () => {
+            // Only the scan reads windows this large; the footer probe and chunk reads pass
+            if (start >= 16 * 1024 * 1024 && end - start >= 4 * 1024 * 1024) {
+              await gate.promise;
+            }
+            return await part.arrayBuffer();
+          },
+        };
+      },
+    } as unknown as globalThis.Blob;
+    const source = new McapIterableSource({ type: "file", file: gatedFile });
+    const topics = new Map([["/example", PlayerBuilder.subscribePayload({ topic: "/example" })]]);
+
+    // When it is opened
+    const init = await source.initialize();
+    const first = await source.messageIterator({ topics }).next();
+
+    // Then the first message plays while most of the file is still unread
+    expect(first.value).toMatchObject({
+      type: "message-event",
+      msgEvent: { topic: "/example", receiveTime: { sec: 1, nsec: 0 } },
+    });
+    expect(maxReadEnd).toBeLessThan(bytes.byteLength / 2);
+    expect(init.end.sec).toBeLessThan(chunkCount);
+    expect(init.alerts[0]?.message).toMatch(/^Indexing this file: \d+% read$/);
+
+    // When the scan finishes
+    gate.resolve();
+    let last = init;
+    for (let update; (update = await source.waitForUpdate()); ) {
+      last = update;
+    }
+
+    // Then the source covers the whole file, reports what was recovered, and plays all of it
+    expect(last.end).toEqual({ sec: chunkCount, nsec: 0 });
+    expect(source.getEnd()).toEqual({ sec: chunkCount, nsec: 0 });
+    expect(last.alerts[0]?.message).toMatch(/not closed properly/);
+    let count = 0;
+    for await (const result of source.messageIterator({ topics })) {
+      count += result.type === "message-event" ? 1 : 0;
+    }
+    expect(count).toBe(chunkCount);
+  });
+
   it("loads decompression handlers before creating an indexed reader for an indexed file", async () => {
     // Given
     const topic = `/${BasicBuilder.string()}`;
