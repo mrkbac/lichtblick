@@ -697,6 +697,11 @@ export class IterablePlayer implements Player {
         }
         // ponytail: preloaded blocks are dropped and reloaded on every update; extend the block
         // loader's range in place if that churn shows up (e.g. tailing a live file).
+        // Playback at the old end keeps going into the new data, like a live connection
+        const atEnd =
+          this.#currentTime != undefined &&
+          this.#end != undefined &&
+          compare(this.#currentTime, this.#end) >= 0;
         await this.#blockLoader?.stopLoading();
         await this.#blockLoadingProcess;
         this.#alertManager.removeAlerts((id) => id.startsWith("init-alert-"));
@@ -708,6 +713,7 @@ export class IterablePlayer implements Player {
         if (this.#state === "idle" || this.#state === "play") {
           // The current iterator ends at the old end
           this.#lastMessageEvent = undefined;
+          this.#isPlaying ||= atEnd && this.#untilTime == undefined;
           this.#setState("reset-playback-iterator");
         } else {
           this.#queueEmitState();

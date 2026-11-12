@@ -225,6 +225,8 @@ export interface IIterableSource<MessageType = unknown> {
 
 export type IterableSourceInitializeArgs = {
   file?: File;
+  // The handle `file` came from, if any: lets a source re-read a file that grows while open
+  handle?: FileSystemFileHandle;
   url?: string;
   files?: File[];
   urls?: string[];

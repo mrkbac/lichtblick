@@ -54,7 +54,12 @@ class McapLocalDataSourceFactory implements IDataSourceFactory {
           ),
         );
       },
-      initArgs: addMultiFileHydrationOverrides({ files }, this.multiFileHydrationOverrides),
+      // A single file is opened on its own, so it can show its index as it is rebuilt and follow
+      // the file while it grows
+      initArgs:
+        files.length === 1
+          ? { file: files[0], handle: args.handle }
+          : addMultiFileHydrationOverrides({ files }, this.multiFileHydrationOverrides),
     });
 
     return new IterablePlayer({

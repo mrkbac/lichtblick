@@ -39,6 +39,10 @@ const log = Log.getLogger(__filename);
 
 /** How often a source whose index is still being rebuilt reports its growth */
 export const UPDATE_INTERVAL_MS = 2000;
+/** How often a file that is still being written is checked for new data */
+export const TAIL_POLL_MS = 1000;
+/** A file without a footer that was written to this recently is taken to be still recording */
+export const LIVE_IDLE_MS = 60_000;
 
 /**
  * Create a McapIndexedReader if it will be possible to do an indexed read. A file without a usable
@@ -91,6 +95,10 @@ export class McapIterableSource implements ISerializedIterableSource {
   // Newest Initialization not yet handed out by waitForUpdate(), and the waiter to wake for it
   #update: Initialization | undefined;
   #wake: (() => void) | undefined;
+  // The local file, re-read from its handle once it has changed on disk
+  #blob: BlobReadable | undefined;
+  // Ends the wait between two checks of a growing file (on terminate)
+  #interrupt: (() => void) | undefined;
 
   public readonly sourceType = "serialized";
 
@@ -120,9 +128,13 @@ export class McapIterableSource implements ISerializedIterableSource {
     // Ensure the file is readable before proceeding (will throw in the event of a permission
     // error). Workaround for the fact that `file.stream().getReader()` returns a generic
     // "network error" in the event of a permission error.
-    await source.file.slice(0, 1).arrayBuffer();
+    const handle = source.handle;
+    const readable = (this.#blob ??= new BlobReadable(
+      source.file,
+      handle && (async () => await handle.getFile()),
+    ));
+    await readable.read(0n, BigInt(Math.min(1, readable.file.size)));
 
-    const readable = new BlobReadable(source.file);
     const result = await this.#openReader(readable, decompressHandlers);
     if (result.status === "indexed") {
       return {
@@ -133,7 +145,7 @@ export class McapIterableSource implements ISerializedIterableSource {
         weightBytes: estimateReaderWeightBytes(result.reader),
       };
     }
-    const file = result.length != undefined ? source.file.slice(0, result.length) : source.file;
+    const file = result.length != undefined ? readable.file.slice(0, result.length) : readable.file;
     return {
       inner: new McapUnindexedIterableSource({ size: file.size, stream: file.stream() }),
       indexed: false,
@@ -277,7 +289,7 @@ export class McapIterableSource implements ISerializedIterableSource {
    * range and topics grow with it.
    */
   // ponytail: rebuilding the summary and reader per update is O(chunks); fine at this interval,
-  // append to the reader's index instead if updates get frequent (e.g. tailing a live file).
+  // append to the reader's index instead if updates get frequent.
   async #followScan(scan: Promise<void>): Promise<void> {
     while (this.#scan === scan) {
       const done = await Promise.race([
@@ -291,19 +303,118 @@ export class McapIterableSource implements ISerializedIterableSource {
       if (this.#scan !== scan) {
         return; // terminated
       }
-      try {
-        const { opened, init } = await this.#open({ indexing: !done });
-        this.#eagerInner = opened.inner;
-        this.#update = init;
-      } catch (error) {
-        log.error("Updating the MCAP index failed", error);
-        this.#scan = undefined;
+      await this.#publish({ indexing: !done });
+      if (done && this.#scan === scan) {
+        this.#scan = this.#tail();
+        this.#wake?.();
       }
-      if (done) {
-        this.#scan = undefined;
-      }
-      this.#wake?.();
     }
+  }
+
+  /** Reopens the file on the index so far and hands the new Initialization to waitForUpdate() */
+  async #publish({ indexing }: { indexing: boolean }): Promise<void> {
+    try {
+      const { opened, init } = await this.#open({ indexing });
+      this.#eagerInner = opened.inner;
+      this.#update = init;
+    } catch (error) {
+      log.error("Updating the MCAP index failed", error);
+      this.#scan = undefined;
+    }
+    this.#wake?.();
+  }
+
+  /**
+   * Follows a local file without a footer that was opened from a handle, as it is written: see
+   * #followGrowth. Undefined when there is nothing to follow.
+   */
+  // ponytail: remote files aren't followed; that needs a Content-Length re-check every few
+  // seconds and a RemoteFileReadable whose size can grow.
+  #tail(): Promise<void> | undefined {
+    const handle = this.#source.type === "file" ? this.#source.handle : undefined;
+    const readable = this.#blob;
+    const scanner = this.#recovery;
+    if (!handle || !readable || !scanner || scanner.complete || this.#source.pool) {
+      return undefined;
+    }
+    return this.#followGrowth(handle, readable, scanner);
+  }
+
+  /**
+   * Checks the size of the file every TAIL_POLL_MS, indexes what was appended (a record that is
+   * only partly written yet is read again on the next check) and publishes the grown index, until
+   * the file gets its footer or the source is terminated.
+   */
+  async #followGrowth(
+    handle: FileSystemFileHandle,
+    readable: BlobReadable,
+    scanner: McapRecoveryScanner,
+  ): Promise<void> {
+    const state = () => `${scanner.offset} ${scanner.complete} ${this.#isBeingWritten()}`;
+    let published = state();
+    let size = -1;
+    let wait = TAIL_POLL_MS;
+    try {
+      while (!scanner.complete) {
+        await this.#sleep(wait);
+        if (this.#stopped()) {
+          return;
+        }
+        const file = await handle.getFile();
+        if (file.size !== size) {
+          size = file.size;
+          readable.file = file;
+          await scanner.scan(readable);
+        }
+        if (this.#stopped()) {
+          return;
+        }
+        if (state() !== published) {
+          published = state();
+          const started = performance.now();
+          await this.#publish({ indexing: false });
+          // ponytail: each update rebuilds the summary and reader (O(chunks)), and the player
+          // reloads its preloaded blocks. Waiting 10x as long as that took keeps it under ~10% of
+          // the time on huge files; append to the reader's index if that lags too far behind.
+          wait = Math.max(TAIL_POLL_MS, 10 * (performance.now() - started));
+        }
+      }
+    } catch (error) {
+      if (this.#stopped()) {
+        return;
+      }
+      log.error("Following the MCAP file failed", error);
+      this.#scanError = toError(error);
+      await this.#publish({ indexing: false });
+    }
+    this.#scan = undefined;
+    this.#wake?.();
+  }
+
+  /** Waits `ms`, or less if the source is terminated meanwhile */
+  async #sleep(ms: number): Promise<void> {
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, ms);
+      this.#interrupt = () => {
+        clearTimeout(timer);
+        resolve();
+      };
+    });
+  }
+
+  /** Whether the background scan or tail has ended (e.g. on terminate) */
+  #stopped(): boolean {
+    return this.#scan == undefined;
+  }
+
+  /** Whether a file without a footer was written to recently, i.e. is probably still recording */
+  #isBeingWritten(): boolean {
+    const file = this.#blob?.file;
+    return (
+      file instanceof File &&
+      this.#recovery?.complete === false &&
+      Date.now() - file.lastModified < LIVE_IDLE_MS
+    );
   }
 
   /**
@@ -391,6 +502,8 @@ export class McapIterableSource implements ISerializedIterableSource {
     }
     if (this.#scan) {
       void this.#followScan(this.#scan);
+    } else {
+      this.#scan = this.#tail();
     }
     return init;
   }
@@ -430,6 +543,22 @@ export class McapIterableSource implements ISerializedIterableSource {
         },
         ...init.alerts,
       ];
+    } else if (this.#recovery && this.#isBeingWritten() && !this.#source.pool) {
+      // A cut-off last record is just the part not written yet: not worth a warning
+      init.alerts = [
+        this.#source.type === "file" && this.#source.handle
+          ? {
+              severity: "info",
+              message: "Live: following this file as it is written",
+              tip: "New data appears as it is appended. Playback at the end keeps following it.",
+            }
+          : {
+              severity: "info",
+              message: "This file is still being written; showing it as it was when opened.",
+              tip: "To follow it as it grows, open it with Open file or drag and drop in a Chromium-based browser or the desktop app.",
+            },
+        ...init.alerts,
+      ];
     } else if (this.#recovery) {
       init.alerts = [this.#recovery.toAlert(), ...init.alerts];
     }
@@ -448,7 +577,7 @@ export class McapIterableSource implements ISerializedIterableSource {
     if (init.recordingFiles) {
       const sizeBytes =
         this.#source.type === "file"
-          ? this.#source.file.size
+          ? (this.#blob?.file ?? this.#source.file).size
           : Number(await opened.readable?.size());
       const { start, end } = init;
       const name = sourceName(this.#source);
@@ -528,6 +657,7 @@ export class McapIterableSource implements ISerializedIterableSource {
     this.#persistentReadable?.close();
     this.#persistentReadable = undefined;
     this.#scan = undefined;
+    this.#interrupt?.();
     this.#wake?.();
   }
 }

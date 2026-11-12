@@ -251,6 +251,46 @@ describe("IterablePlayer", () => {
     }
   });
 
+  it("keeps playing into the new data of a grown source when playback is at the end", async () => {
+    // Given a source that grows once, and a player paused at its end
+    const source = new TestSource();
+    const initial = await source.initialize();
+    let released!: () => void;
+    const release = new Promise<void>((resolve) => (released = resolve));
+    const updates: (Initialization | undefined)[] = [{ ...initial, end: { sec: 5, nsec: 0 } }];
+    source.waitForUpdate = async () => {
+      await release;
+      return updates.shift();
+    };
+    const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+    const states: PlayerState[] = [];
+    player.setListener(async (state) => {
+      states.push(state);
+    });
+    try {
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.endTime).toEqual({ sec: 1, nsec: 0 });
+      });
+      player.seekPlayback({ sec: 1, nsec: 0 });
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.currentTime).toEqual({ sec: 1, nsec: 0 });
+      });
+      expect(states.at(-1)?.activeData?.isPlaying).toBe(false);
+
+      // When it grows
+      released();
+
+      // Then playback follows the new data
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.endTime).toEqual({ sec: 5, nsec: 0 });
+        expect(states.at(-1)?.activeData?.isPlaying).toBe(true);
+      });
+    } finally {
+      player.close();
+      await player.isClosed;
+    }
+  });
+
   it("should return backfill messages from the iterable source when requested", async () => {
     // GIVEN - a source that can resolve backfill messages for a topic
     const source = new TestSource();

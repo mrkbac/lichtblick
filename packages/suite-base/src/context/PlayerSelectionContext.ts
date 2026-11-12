@@ -13,6 +13,8 @@ import { RegisteredIconNames } from "@lichtblick/suite-base/types/Icons";
 
 export type DataSourceFactoryInitializeArgs = {
   file?: File;
+  // The handle `file` came from, if any (see IterableSourceInitializeArgs)
+  handle?: FileSystemFileHandle;
   files?: File[];
   params?: Record<string, string | undefined>;
   sourceMetadata?: Record<string, unknown>[];

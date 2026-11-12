@@ -377,6 +377,7 @@ export default function PlayerManager(
 
               const newPlayer = initializePlayer({
                 file: multiFile ? undefined : files[0],
+                handle: multiFile ? undefined : handles?.[0],
                 files: multiFile ? files : undefined,
               });
 

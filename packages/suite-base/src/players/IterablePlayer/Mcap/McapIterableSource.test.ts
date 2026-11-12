@@ -14,7 +14,7 @@ import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-import { McapIterableSource } from "./McapIterableSource";
+import { McapIterableSource, TAIL_POLL_MS } from "./McapIterableSource";
 import { RemoteFileReadable } from "./RemoteFileReadable";
 import { HydratedSourcePool } from "../shared/HydratedSourcePool";
 
@@ -242,6 +242,123 @@ describe("McapIterableSource", () => {
       count += result.type === "message-event" ? 1 : 0;
     }
     expect(count).toBe(chunkCount);
+  });
+
+  describe("a file that is still being written", () => {
+    const topics = new Map([["/example", PlayerBuilder.subscribePayload({ topic: "/example" })]]);
+
+    /** A recording without a footer and, per message, the file bytes up to that message's chunk */
+    async function recordWithoutFooter(count: number): Promise<Uint8Array[]> {
+      const tempBuffer = new TempBuffer();
+      const writer = new McapWriter({ writable: tempBuffer, chunkSize: 1 });
+      await writer.start({ library: "test", profile: "" });
+      const channelId = await writer.registerChannel({
+        schemaId: 0,
+        topic: "/example",
+        messageEncoding: "json",
+        metadata: new Map(),
+      });
+      const snapshots: Uint8Array[] = [];
+      for (let i = 1; i <= count; i++) {
+        await addMessage(writer, channelId, { logTime: BigInt(i) * 1_000_000_000n });
+        snapshots.push(tempBuffer.get().slice());
+      }
+      return snapshots;
+    }
+
+    /** A handle whose file is replaced by `write()`, as a recorder appending to it */
+    function growingHandle(bytes: Uint8Array) {
+      let file = new File([bytes], "example.mcap", { lastModified: Date.now() });
+      const handle = {
+        getFile: vi.fn(async () => file),
+      };
+      return {
+        handle: handle as unknown as FileSystemFileHandle,
+        getFile: handle.getFile,
+        write: (next: Uint8Array) => {
+          file = new File([next], "example.mcap", { lastModified: Date.now() });
+        },
+      };
+    }
+
+    async function countMessages(source: McapIterableSource): Promise<number> {
+      let count = 0;
+      for await (const result of source.messageIterator({ topics })) {
+        count += result.type === "message-event" ? 1 : 0;
+      }
+      return count;
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("shows data appended after open, without reporting the partly written record", async () => {
+      // Given a recording of 2 messages so far, whose 3rd chunk is only partly written
+      const snapshots = await recordWithoutFooter(5);
+      const partial = snapshots[2]!.slice(0, snapshots[1]!.byteLength + 20);
+      const { handle, write } = growingHandle(partial);
+      const source = new McapIterableSource({
+        type: "file",
+        file: await handle.getFile(),
+        handle,
+      });
+
+      try {
+        // When it is opened
+        const init = await source.initialize();
+
+        // Then it plays what is there and shows it is live, not damaged
+        expect(init.end).toEqual({ sec: 2, nsec: 0 });
+        expect(init.alerts.map((alert) => alert.message)).toEqual([
+          "Live: following this file as it is written",
+        ]);
+        expect(await countMessages(source)).toBe(2);
+
+        // When the recorder appends 3 more messages
+        write(snapshots[4]!);
+        const update = source.waitForUpdate();
+        await vi.advanceTimersByTimeAsync(TAIL_POLL_MS);
+
+        // Then the new messages play, the end grows and it is still live
+        const grown = await update;
+        expect(grown?.end).toEqual({ sec: 5, nsec: 0 });
+        expect(grown?.alerts.map((alert) => alert.message)).toEqual([
+          "Live: following this file as it is written",
+        ]);
+        expect(await countMessages(source)).toBe(5);
+      } finally {
+        await source.terminate();
+      }
+    });
+
+    it("stops checking the file on terminate", async () => {
+      // Given an open file that is being followed
+      const snapshots = await recordWithoutFooter(2);
+      const { handle, getFile } = growingHandle(snapshots[1]!);
+      const source = new McapIterableSource({
+        type: "file",
+        file: await handle.getFile(),
+        handle,
+      });
+      await source.initialize();
+      await vi.advanceTimersByTimeAsync(TAIL_POLL_MS * 2);
+      expect(getFile.mock.calls.length).toBeGreaterThan(1);
+
+      // When it is terminated
+      await source.terminate();
+      const calls = getFile.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(TAIL_POLL_MS * 5);
+
+      // Then the file is no longer checked, no timer is left and no more updates come
+      expect(getFile.mock.calls.length).toBe(calls);
+      expect(vi.getTimerCount()).toBe(0);
+      await expect(source.waitForUpdate()).resolves.toBeUndefined();
+    });
   });
 
   it("loads decompression handlers before creating an indexed reader for an indexed file", async () => {
