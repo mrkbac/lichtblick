@@ -18,7 +18,11 @@ export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSo
     const wrapped = new WorkerIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
   } else if (args.url) {
-    const source = new BagIterableSource({ type: "remote", url: args.url });
+    const source = new BagIterableSource({
+      type: "remote",
+      url: args.url,
+      credentials: args.credentials,
+    });
     const wrapped = new WorkerIterableSourceWorker(source);
     return Comlink.proxy(wrapped);
   }

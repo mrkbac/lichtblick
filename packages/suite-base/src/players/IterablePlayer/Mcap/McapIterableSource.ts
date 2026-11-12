@@ -136,6 +136,7 @@ export class McapIterableSource implements ISerializedIterableSource {
     let readable = this.#persistentReadable;
     if (!readable) {
       readable = new RemoteFileReadable(source.url, {
+        credentials: source.credentials,
         cacheSizeInBytes: source.cacheSizeInBytes,
         readAheadEnabled: source.readAheadEnabled,
         ...(source.readAheadBufferBytes != undefined
@@ -184,7 +185,7 @@ export class McapIterableSource implements ISerializedIterableSource {
     // indexed-init probe connection/cache alive.
     readable.close();
     this.#persistentReadable = undefined;
-    return await this.#openUnindexedUrlFallback(source.url, result.length);
+    return await this.#openUnindexedUrlFallback(source.url, source.credentials, result.length);
   }
 
   /**
@@ -242,8 +243,12 @@ export class McapIterableSource implements ISerializedIterableSource {
   }
 
   /** `length` limits the stream to the readable records of a damaged file */
-  async #openUnindexedUrlFallback(url: string, length?: number): Promise<OpenedInner> {
-    const response = await fetch(url);
+  async #openUnindexedUrlFallback(
+    url: string,
+    credentials: RequestCredentials | undefined,
+    length?: number,
+  ): Promise<OpenedInner> {
+    const response = await fetch(url, { credentials });
     if (!response.body) {
       throw new Error(`Unable to stream remote file. <${url}>`);
     }
