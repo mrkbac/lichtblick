@@ -244,22 +244,14 @@ export class McapRecoveryScanner {
     };
   }
 
-  /** What was lost, for the user; undefined when nothing was */
-  public toAlert(): PlayerAlert | undefined {
-    const lost: string[] = [];
-    if (this.corruptRecords > 0) {
-      lost.push(
-        `${this.corruptRecords} corrupt record(s) (e.g. chunks with a bad CRC) were skipped`,
-      );
-    }
-    if (this.unreadableBytes > 0n) {
-      lost.push(
-        `the last ${formatBytes(this.unreadableBytes)} could not be read (cut off or not MCAP data)`,
-      );
-    }
-    if (this.unchunkedMessageCount > 0 && this.#chunkIndexes.length > 0) {
-      lost.push(`${this.unchunkedMessageCount} message(s) outside chunks were skipped`);
-    }
+  /** Whether the scan had to drop anything (corrupt records, unreadable bytes, unchunked messages) */
+  public hasLosses(): boolean {
+    return this.#losses().length > 0;
+  }
+
+  /** What was recovered and lost, for the user */
+  public toAlert(): PlayerAlert {
+    const lost = this.#losses();
     const recovered =
       this.#chunkIndexes.length > 0
         ? `Recovered ${this.messageCount} message(s) from ${this.#chunkIndexes.length} chunk(s)`
@@ -282,6 +274,24 @@ export class McapRecoveryScanner {
       message: "This file is damaged; showing what could be recovered.",
       tip: `${recovered}; ${lost.join("; ")}.`,
     };
+  }
+
+  #losses(): string[] {
+    const lost: string[] = [];
+    if (this.corruptRecords > 0) {
+      lost.push(
+        `${this.corruptRecords} corrupt record(s) (e.g. chunks with a bad CRC) were skipped`,
+      );
+    }
+    if (this.unreadableBytes > 0n) {
+      lost.push(
+        `the last ${formatBytes(this.unreadableBytes)} could not be read (cut off or not MCAP data)`,
+      );
+    }
+    if (this.unchunkedMessageCount > 0 && this.#chunkIndexes.length > 0) {
+      lost.push(`${this.unchunkedMessageCount} message(s) outside chunks were skipped`);
+    }
+    return lost;
   }
 
   async #readHeader(readable: McapTypes.IReadable, size: bigint): Promise<bigint> {

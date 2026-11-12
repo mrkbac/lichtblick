@@ -14,16 +14,31 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import i18next from "i18next";
+
+import * as en from "@lichtblick/suite-base/i18n/en";
 import type { FileReader, FileStream } from "@lichtblick/suite-base/util/CachedFilelike.types";
 import FetchReader from "@lichtblick/suite-base/util/FetchReader";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
+// Bounds the CORS diagnosis request so a hanging server can't delay the error
+const PROBE_TIMEOUT_MS = 5000;
+
+// This reader runs in the data source workers, where the app never initialized i18next
+async function ensureI18n(): Promise<void> {
+  if (!i18next.isInitialized) {
+    await i18next.init({ resources: { en }, lng: navigator.language, fallbackLng: "en" });
+  }
+}
+
 // A file reader that reads from a remote HTTP URL, for usage in the browser (not for node.js).
 export default class BrowserHttpReader implements FileReader {
   #url: string;
+  #credentials: RequestCredentials | undefined;
 
-  public constructor(url: string) {
+  public constructor(url: string, options?: { credentials?: RequestCredentials }) {
     this.#url = url;
+    this.#credentials = options?.credentials;
   }
 
   public async open(): Promise<{ size: number; identifier?: string }> {
@@ -39,17 +54,14 @@ export default class BrowserHttpReader implements FileReader {
       // it may add a `range` header to the request, which causes some servers to omit the
       // `accept-ranges` header in the response.
       const controller = new AbortController();
-      response = await fetch(this.#url, { signal: controller.signal, cache: "no-store" });
+      response = await fetch(this.#url, {
+        signal: controller.signal,
+        cache: "no-store",
+        credentials: this.#credentials,
+      });
       controller.abort();
     } catch (error) {
-      let errMsg = `Fetching remote file failed. ${error}`;
-
-      if (!isDesktopApp()) {
-        errMsg +=
-          "\n\nSometimes this is due to a CORS configuration error on the server. Make sure CORS is enabled.";
-      }
-
-      throw new Error(errMsg);
+      throw await this.#openError(error);
     }
     if (!response.ok) {
       throw new Error(
@@ -78,9 +90,49 @@ export default class BrowserHttpReader implements FileReader {
     };
   }
 
+  /**
+   * fetch() rejects with the same opaque TypeError for a CORS rejection and a network failure.
+   * Tell them apart with a no-cors request: it skips the CORS check, so it reaching the server
+   * means CORS blocked the read. Its failure is inconclusive: the server may be down, or refuse
+   * no-cors reads (Cross-Origin-Resource-Policy).
+   */
+  async #openError(error: unknown): Promise<Error> {
+    if (isDesktopApp() || !(error instanceof TypeError)) {
+      return new Error(`Fetching remote file failed. ${error}`);
+    }
+    const controller = new AbortController();
+    const reachable = await fetch(this.#url, {
+      mode: "no-cors",
+      cache: "no-store",
+      credentials: this.#credentials,
+      signal: AbortSignal.any([controller.signal, AbortSignal.timeout(PROBE_TIMEOUT_MS)]),
+    }).then(
+      () => true,
+      () => false,
+    );
+    controller.abort();
+    await ensureI18n();
+    const options = {
+      origin: new URL(this.#url, globalThis.location.href).origin,
+      appOrigin: globalThis.location.origin,
+      error: error.message,
+    };
+    if (!reachable) {
+      return new Error(i18next.t("httpErrors:remoteFileUnreachable", options));
+    }
+    return new Error(
+      i18next.t(
+        this.#credentials === "include"
+          ? "httpErrors:remoteFileCorsCredentials"
+          : "httpErrors:remoteFileCors",
+        options,
+      ),
+    );
+  }
+
   public fetch(offset: number, length: number): FileStream {
     const headers = new Headers({ range: `bytes=${offset}-${offset + (length - 1)}` });
-    const reader = new FetchReader(this.#url, { headers });
+    const reader = new FetchReader(this.#url, { headers, credentials: this.#credentials });
     reader.read();
     return reader;
   }

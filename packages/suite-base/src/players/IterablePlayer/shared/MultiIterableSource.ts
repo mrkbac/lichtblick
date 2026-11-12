@@ -120,11 +120,13 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
           ? Math.min(DEFAULT_READ_AHEAD_BUFFER_BYTES, Math.floor(perSourceCache / 4))
           : undefined);
 
+      const credentials = this.dataSource.credentials;
       sources = this.dataSource.urls.map(
         (url) =>
           new this.SourceConstructor({
             type: "url",
             url,
+            credentials,
             cacheSizeInBytes: perSourceCache,
             readAheadEnabled,
             readAheadBufferBytes,

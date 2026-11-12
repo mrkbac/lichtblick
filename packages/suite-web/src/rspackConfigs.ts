@@ -88,6 +88,8 @@ export const mainConfig =
               swDest: path.join(params.outputPath, "sw.js"),
               // serve the precached app shell for any navigation (deep links, file_handlers launches)
               navigateFallback: "index.html",
+              // registers its fetch listener first, so /<org>/view links redirect before the fallback
+              importScripts: ["view-link-redirect.js"],
               maximumFileSizeToCacheInBytes: 100 * 1024 * 1024,
               cleanupOutdatedCaches: true,
             });

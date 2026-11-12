@@ -27,7 +27,9 @@ import {
   TopicWithDecodingInfo,
 } from "./IIterableSource";
 
-type BagSource = { type: "file"; file: File } | { type: "remote"; url: string };
+type BagSource =
+  | { type: "file"; file: File }
+  | { type: "remote"; url: string; credentials?: RequestCredentials };
 
 export class BagIterableSource implements ISerializedIterableSource {
   readonly #source: BagSource;
@@ -49,7 +51,7 @@ export class BagIterableSource implements ISerializedIterableSource {
     let fileLike: Filelike | undefined;
     if (this.#source.type === "remote") {
       const bagUrl = this.#source.url;
-      const fileReader = new BrowserHttpReader(bagUrl);
+      const fileReader = new BrowserHttpReader(bagUrl, { credentials: this.#source.credentials });
       const remoteReader = new CachedFilelike({
         fileReader,
         cacheSizeInBytes: 1024 * 1024 * 200, // 200MiB

@@ -93,6 +93,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     // Resume point: the last yielded logTime and how many messages at that logTime were yielded
     let lastTime: bigint | undefined;
     let yieldedAtLastTime = 0;
+    let retried = false;
     for (;;) {
       const resumeArgs: ReadMessagesArgs =
         lastTime == undefined
@@ -109,17 +110,23 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
           try {
             result = await messages.next();
           } catch (err: unknown) {
-            // Unless another read already swapped the reader, recover (once, shared by every read)
-            if (this.#reader === reader) {
+            // Retry once first: a transient error (e.g. the network) needs no scan. Then, unless
+            // another read already swapped the reader, recover (once, shared by every read); an
+            // error from the recovered reader is rethrown, so reading never loops.
+            if (this.#reader === reader && retried) {
               const recover = this.#recover;
               if (!recover) {
                 throw err;
               }
               this.#recovering ??= recover(toError(err)).then(({ reader: next, alert }) => {
                 this.#reader = next;
+                this.#recover = undefined;
                 this.#recoveryAlert = alert;
               });
               await this.#recovering;
+              retried = false;
+            } else {
+              retried = this.#reader === reader;
             }
             break;
           }
@@ -137,6 +144,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
             lastTime = message.logTime;
             yieldedAtLastTime = 1;
           }
+          retried = false;
           yield message;
         }
       } finally {
