@@ -716,7 +716,10 @@ export class IterablePlayer implements Player {
         this.#blockLoadingProcess = this.#startBlockLoading().catch((err: unknown) => {
           this.#setError((err as Error).message, err as Error);
         });
-        if (this.#state === "idle" || this.#state === "play") {
+        if (this.#nextState === "seek-backfill") {
+          // The pending seek resets the playback iterator on the new range
+          this.#queueEmitState();
+        } else if (this.#state === "idle" || this.#state === "play") {
           // The current iterator ends at the old end
           this.#lastMessageEvent = undefined;
           this.#isPlaying ||= atEnd && this.#untilTime == undefined;
@@ -981,7 +984,9 @@ export class IterablePlayer implements Player {
     this.#presence = PlayerPresence.PRESENT;
     this.#queueEmitState();
     if (this.#playbackIteratorStale) {
-      this.#setState("reset-playback-iterator"); // the source grew while reading
+      // The source grew while reading; the new iterator re-reads anything saved past stopTime
+      this.#lastMessageEvent = undefined;
+      this.#setState("reset-playback-iterator");
       return;
     }
     // `startPlayback()` may have been called while still in "initialize"/"start-play" setting `#isPlaying` before we ever reach "idle". Honor it
