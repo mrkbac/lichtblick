@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { McapIndexedReader, McapWriter, TempBuffer } from "@mcap/core";
+import { McapIndexedReader, McapRecordBuilder, McapWriter, TempBuffer } from "@mcap/core";
 import { Blob } from "node:buffer";
 import type { Mock, MockedClass, MockedFunction } from "vitest";
 
@@ -384,6 +384,52 @@ describe("McapIterableSource", () => {
       expect(source.getEnd()).toEqual({ sec: 3, nsec: 0 });
     });
 
+    it("streams only the readable bytes of a damaged unchunked file and stops the download", async () => {
+      // Given an unchunked recording without footer, served by a connection that never closes
+      const builder = new McapRecordBuilder();
+      builder.writeMagic();
+      builder.writeHeader({ library: "", profile: "" });
+      builder.writeChannel({
+        id: 1,
+        messageEncoding: "json",
+        schemaId: 0,
+        metadata: new Map(),
+        topic: "/stalled",
+      });
+      builder.writeMessage({
+        channelId: 1,
+        data: new TextEncoder().encode("{}"),
+        logTime: 2_000_000_000n,
+        publishTime: 0n,
+        sequence: 1,
+      });
+      const recording = builder.buffer.slice();
+      const served = new Uint8Array([...recording, ...new Uint8Array(64).fill(0x42)]);
+      mockRemoteFileReadableWith(served);
+      let cancelled = false;
+      global.fetch = vi.fn().mockResolvedValue({
+        body: new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(served); // and never close: a stalled connection
+          },
+          cancel() {
+            cancelled = true;
+          },
+        }),
+        headers: new Headers({ "content-length": String(served.byteLength) }),
+      });
+
+      // When
+      const source = new McapIterableSource({ type: "url", url: urlUnindexedMcap });
+      await source.initialize();
+
+      // Then initialization finishes with the readable prefix and the download is cancelled
+      expect(source.getStart()).toEqual({ sec: 2, nsec: 0 });
+      await vi.waitFor(() => {
+        expect(cancelled).toBe(true);
+      });
+    });
+
     it("should throw when fetch response has no body", async () => {
       // Given an unindexed MCAP served via URL where fetch returns no body
       const mcapData = await buildUnindexedMcap([{ logTime: 1_000_000_000n }]);
@@ -521,23 +567,15 @@ describe("McapIterableSource", () => {
         const pool = new HydratedSourcePool({ maxCount: 1 });
         const sourceA = new McapIterableSource({ type: "url", url: urlIndexedMcapA, pool });
         const sourceB = new McapIterableSource({ type: "url", url: urlIndexedMcapB, pool });
-        const realInitialize = McapIndexedReader.Initialize.bind(McapIndexedReader);
-        let failRehydrateForReadable: MockRemoteReadable | undefined;
         const fatalError = new Error("fatal indexed init");
-        vi.spyOn(McapIndexedReader, "Initialize").mockImplementation(async (args) => {
-          if (args.readable === failRehydrateForReadable) {
-            failRehydrateForReadable = undefined;
-            throw fatalError;
-          }
-          return await realInitialize(args);
-        });
 
         await sourceA.initialize();
         await sourceB.initialize();
 
         const firstReadable = readableInstancesByUrl.get(urlIndexedMcapA)?.[0];
         expect(firstReadable).toBeDefined();
-        failRehydrateForReadable = firstReadable;
+        // The connection dies: indexed init and the recovery scan both fail to read
+        firstReadable?.read.mockRejectedValue(fatalError);
 
         const failingIterator = sourceA.messageIterator({
           topics: new Map([[topic, PlayerBuilder.subscribePayload({ topic })]]),
@@ -760,22 +798,16 @@ describe("McapIterableSource", () => {
       expect(result.topics).toEqual([]);
     });
 
-    it("surfaces a real initialization error instead of silently falling back to unindexed (operational failure, not a genuinely unindexed file)", async () => {
-      // Given
-      const file = await createMcapFile({ withMessage: true });
+    it("surfaces the initialization error when the file can't be recovered either", async () => {
+      // Given a file that is not MCAP at all
+      const file = new Blob([new Uint8Array(64).fill(1)]) as unknown as globalThis.Blob;
       const source = new McapIterableSource({ type: "file", file });
-
-      const initializeSpy = vi
-        .spyOn(McapIndexedReader, "Initialize")
-        .mockRejectedValue(new Error("Corrupt MCAP file"));
-      const consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(function () {
+      vi.spyOn(console, "error").mockImplementation(function () {
         return undefined;
       });
 
-      // When / Then
-      await expect(source.initialize()).rejects.toThrow("Corrupt MCAP file");
-      expect(initializeSpy).toHaveBeenCalledTimes(1);
-      expect(consoleErrorSpy).toHaveBeenCalledWith(new Error("Corrupt MCAP file"));
+      // When / Then: the indexed reader's error, not the scan's
+      await expect(source.initialize()).rejects.toThrow(/Expected MCAP magic/);
     });
 
     it("still falls back to unindexed reader when Initialize throws the genuine 'File is not indexed' error", async () => {
@@ -783,14 +815,14 @@ describe("McapIterableSource", () => {
       const file = await createMcapFile({ withMessage: true });
       const source = new McapIterableSource({ type: "file", file });
 
-      vi.spyOn(McapIndexedReader, "Initialize").mockRejectedValue(
+      vi.spyOn(McapIndexedReader, "Initialize").mockRejectedValueOnce(
         new Error("File is not indexed [library=test]"),
       );
 
       // When
       const result = await source.initialize();
 
-      // Then — genuinely unindexed (per the real @mcap/core error signal) still falls back safely
+      // Then — the index is rebuilt by a scan
       expect(result).toBeDefined();
       expect(result.topics).toHaveLength(1);
       expect(result.topics[0]?.name).toBe("/test");

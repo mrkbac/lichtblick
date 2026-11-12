@@ -33,6 +33,19 @@ const SKIM_PREFETCH_AHEAD_CHUNKS = 24;
 
 export type ByteRange = { offset: bigint; length: bigint };
 
+/** Rebuilds a reader that skips corrupt chunks, after `error` was thrown while reading */
+export type RecoverReader = (
+  error: Error,
+) => Promise<{ reader: McapIndexedReader; alert: PlayerAlert | undefined }>;
+
+type ReadMessagesArgs = Omit<
+  NonNullable<Parameters<McapIndexedReader["readMessages"]>[0]>,
+  "validateCrcs"
+>;
+
+// Alerts from rebuilding the index mid-read; not a real channel id (those are uint16)
+const RECOVERY_CONNECTION_ID = -1;
+
 // Below this many chunks per window, skimming would re-decompress the same chunks; read linearly.
 const SKIM_MIN_CHUNKS_PER_WINDOW = 4n;
 
@@ -50,19 +63,101 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   #end?: Time;
   #avgChunkDurationNs = 0n;
   #prefetch?: (ranges: ByteRange[]) => void;
+  #recover?: RecoverReader;
+  #recovering?: Promise<void>;
+  // Set once the reader was rebuilt mid-read; yielded by the next messageIterator result
+  #recoveryAlert?: PlayerAlert;
 
   public readonly sourceType = "serialized";
 
   /**
    * @param options.prefetch Fetches byte ranges ahead of time so the reader later hits a local
    * copy. Remote sources pass it so skimming can fetch upcoming chunks in parallel.
+   * @param options.recover Called once if reading throws (e.g. a corrupt chunk); reading resumes
+   * on the reader it returns.
    */
   public constructor(
     reader: McapIndexedReader,
-    options?: { prefetch?: (ranges: ByteRange[]) => void },
+    options?: { prefetch?: (ranges: ByteRange[]) => void; recover?: RecoverReader },
   ) {
     this.#reader = reader;
     this.#prefetch = options?.prefetch;
+    this.#recover = options?.recover;
+  }
+
+  /**
+   * `reader.readMessages`, but a read error swaps in a recovered reader (once) and resumes after
+   * the last message already yielded, so consumers see one uninterrupted stream.
+   */
+  async *#readMessages(args: ReadMessagesArgs): AsyncGenerator<McapTypes.Message> {
+    // Resume point: the last yielded logTime and how many messages at that logTime were yielded
+    let lastTime: bigint | undefined;
+    let yieldedAtLastTime = 0;
+    let retried = false;
+    for (;;) {
+      const resumeArgs: ReadMessagesArgs =
+        lastTime == undefined
+          ? args
+          : args.reverse === true
+            ? { ...args, endingAt: lastTime }
+            : { ...args, startingAt: lastTime };
+      let skip = yieldedAtLastTime;
+      const reader = this.#reader;
+      const messages = reader.readMessages({ ...resumeArgs, validateCrcs: false });
+      try {
+        for (;;) {
+          let result;
+          try {
+            result = await messages.next();
+          } catch (err: unknown) {
+            // Retry once first: a transient error (e.g. the network) needs no scan. Then, unless
+            // another read already swapped the reader, recover (once, shared by every read); an
+            // error from the recovered reader is rethrown, so reading never loops.
+            if (this.#reader === reader && retried) {
+              const recover = this.#recover;
+              if (!recover) {
+                throw err;
+              }
+              this.#recovering ??= recover(toError(err)).then(({ reader: next, alert }) => {
+                this.#reader = next;
+                this.#recover = undefined;
+                this.#recoveryAlert = alert;
+              });
+              await this.#recovering;
+              retried = false;
+            } else {
+              retried = this.#reader === reader;
+            }
+            break;
+          }
+          if (result.done === true) {
+            return;
+          }
+          const message = result.value;
+          if (message.logTime === lastTime && skip > 0) {
+            skip--; // already yielded before the reader was swapped
+            continue;
+          }
+          if (message.logTime === lastTime) {
+            yieldedAtLastTime++;
+          } else {
+            lastTime = message.logTime;
+            yieldedAtLastTime = 1;
+          }
+          retried = false;
+          yield message;
+        }
+      } finally {
+        await messages.return(undefined);
+      }
+    }
+  }
+
+  /** The alert for a recovery that happened while reading, once */
+  #takeRecoveryAlert(): Readonly<IteratorResult<Uint8Array>> | undefined {
+    const alert = this.#recoveryAlert;
+    this.#recoveryAlert = undefined;
+    return alert ? { type: "alert", connectionId: RECOVERY_CONNECTION_ID, alert } : undefined;
   }
 
   public async initialize(): Promise<Initialization> {
@@ -232,13 +327,20 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       return;
     }
 
-    for await (const message of this.#reader.readMessages({
+    for await (const message of this.#readMessages({
       startingAt: toNanoSec(start),
       endingAt: toNanoSec(end),
       topics: topicNames,
-      validateCrcs: false,
     })) {
+      const alert = this.#takeRecoveryAlert();
+      if (alert) {
+        yield alert;
+      }
       yield this.#toResult(message);
+    }
+    const alert = this.#takeRecoveryAlert();
+    if (alert) {
+      yield alert;
     }
   }
 
@@ -291,11 +393,10 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
 
       const messages: McapTypes.Message[] = [];
       const seen = new Set<string>();
-      for await (const message of this.#reader.readMessages({
+      for await (const message of this.#readMessages({
         startingAt: tailStart,
         endingAt: windowEnd,
         topics: topicNames,
-        validateCrcs: false,
       })) {
         messages.push(message);
         const topic = this.#channelInfoById.get(message.channelId)?.channel.topic;
@@ -310,6 +411,10 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       }
 
       messages.sort((a, b) => (a.logTime < b.logTime ? -1 : a.logTime > b.logTime ? 1 : 0));
+      const alert = this.#takeRecoveryAlert();
+      if (alert) {
+        yield alert;
+      }
       for (const message of messages) {
         yield this.#toResult(message);
       }
@@ -337,12 +442,11 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     const messages: McapTypes.Message[] = [];
     for (const [chunk, chunkTopics] of topicsByChunk) {
       const found = new Set<string>();
-      for await (const message of this.#reader.readMessages({
+      for await (const message of this.#readMessages({
         startingAt: chunk.messageStartTime > start ? chunk.messageStartTime : start,
         endingAt: chunk.messageEndTime < end ? chunk.messageEndTime : end,
         topics: chunkTopics,
         reverse: true,
-        validateCrcs: false,
       })) {
         const topic = this.#channelInfoById.get(message.channelId)?.channel.topic;
         if (topic == undefined || found.has(topic)) {
@@ -451,11 +555,10 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       // NOTE: An iterator is made for each topic to get the latest message on that topic.
       // An single iterator for all the topics could result in iterating through many
       // irrelevant messages to get to an older message on a topic.
-      for await (const message of this.#reader.readMessages({
+      for await (const message of this.#readMessages({
         endingAt: toNanoSec(time),
         topics: [topic],
         reverse: true,
-        validateCrcs: false,
       })) {
         const channelInfo = this.#channelInfoById.get(message.channelId);
         if (!channelInfo) {
