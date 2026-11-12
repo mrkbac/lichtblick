@@ -30,6 +30,7 @@ export enum AppSetting {
   HIDE_SIGN_IN_PROMPT = "hideSignInPrompt",
   LAUNCH_PREFERENCE = "launchPreference",
   SHOW_OPEN_DIALOG_ON_STARTUP = "ui.open-dialog-startup",
+  OPEN_FOXGLOVE_LINKS = "desktop.openFoxgloveLinks",
 
   // Dev only
   ENABLE_LAYOUT_DEBUGGING = "enableLayoutDebugging",

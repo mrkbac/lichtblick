@@ -41,6 +41,9 @@ export const appSettings = {
     "Activates the button in the right lower corner of the application to sync Lichtblick instances opened.",
   noExperimentalFeatures: "Currently there are no experimental features.",
   openLinksIn: "Open links in",
+  openFoxgloveLinks: "Open foxglove:// links",
+  openFoxgloveLinksDescription:
+    "Also handle foxglove://open links, so links shared for Foxglove open here. Takes effect after a restart. Turning it off does not unregister the app.",
   ros: "ROS",
   localResourceFolders: "Local resource folders",
   localResourceFoldersDescription:

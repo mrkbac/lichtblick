@@ -16,6 +16,7 @@ export type McapSource =
   | {
       type: "url";
       url: string;
+      credentials?: RequestCredentials;
       cacheSizeInBytes?: number;
       readAheadEnabled?: boolean;
       readAheadBufferBytes?: number;

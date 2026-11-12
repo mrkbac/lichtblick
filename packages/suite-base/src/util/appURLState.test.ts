@@ -326,3 +326,30 @@ describe("updateAppURLState", () => {
     });
   });
 });
+
+// The desktop app rewrites opt-in `foxglove://open?…` links to `lichtblick://open?…` without
+// touching the query, so Foxglove's documented arguments must parse as-is.
+describe("parseAppURLState with Foxglove link arguments", () => {
+  it("keeps a websocket source", () => {
+    expect(
+      parseAppURLState(
+        new URL("lichtblick://open?ds=foxglove-websocket&ds.url=ws%3A%2F%2Flocalhost%3A8765"),
+      ),
+    ).toEqual({ ds: "foxglove-websocket", dsParams: { url: "ws://localhost:8765" } });
+  });
+
+  it("joins repeated ds.url for remote files and keeps time", () => {
+    expect(
+      parseAppURLState(
+        new URL(
+          "lichtblick://open?ds=remote-file&ds.url=https%3A%2F%2Fexample.com%2Fa.mcap" +
+            "&ds.url=https%3A%2F%2Fexample.com%2Fb.mcap&time=2024-01-02T03%3A04%3A05Z",
+        ),
+      ),
+    ).toEqual({
+      ds: "remote-file",
+      dsParams: { url: "https://example.com/a.mcap,https://example.com/b.mcap" },
+      time: { sec: 1704164645, nsec: 0 },
+    });
+  });
+});
