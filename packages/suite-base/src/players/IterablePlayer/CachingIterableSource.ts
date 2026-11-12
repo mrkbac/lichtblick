@@ -92,6 +92,8 @@ class CachingIterableSource<MessageType = unknown>
   #loadedRangesDirty = false;
 
   #initResult?: Initialization;
+  // Set when the source grew; the next messageIterator() purges the cache
+  #stale = false;
 
   #totalSizeBytes: number = 0;
 
@@ -118,6 +120,16 @@ class CachingIterableSource<MessageType = unknown>
   public async initialize(): Promise<Initialization> {
     this.#initResult = await this.#source.initialize();
     return this.#initResult;
+  }
+
+  public async waitForUpdate(): Promise<Initialization | undefined> {
+    const update = await this.#source.waitForUpdate?.();
+    if (update) {
+      this.#initResult = update;
+      // Cached blocks may miss messages the grown source has (e.g. in newly indexed chunks)
+      this.#stale = true;
+    }
+    return update;
   }
 
   public async terminate(): Promise<void> {
@@ -151,10 +163,12 @@ class CachingIterableSource<MessageType = unknown>
     //
     // This is heavy-handed but avoids dealing with how to handle disjoint cached ranges across topics.
     if (
+      this.#stale ||
       !_.isEqual(args.topics, this.#cachedTopics) ||
       !_.isEqual(args.skimInterval, this.#cachedSkimInterval)
     ) {
-      log.debug("topics or skim interval changed - clearing cache, resetting range");
+      log.debug("topics, skim interval or source changed - clearing cache, resetting range");
+      this.#stale = false;
       this.#cachedTopics = args.topics;
       this.#cachedSkimInterval = args.skimInterval;
       this.#cache.length = 0;

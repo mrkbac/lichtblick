@@ -34,6 +34,7 @@ import { IterablePlayer } from "./IterablePlayer";
 
 class TestSource implements IDeserializedIterableSource {
   public readonly sourceType = "deserialized";
+  public waitForUpdate?: () => Promise<Initialization | undefined>;
 
   public async initialize(): Promise<Initialization> {
     return {
@@ -207,6 +208,47 @@ describe("IterablePlayer", () => {
 
     player.close();
     await player.isClosed;
+  });
+
+  it("applies the updates of a source that grows after initialize", async () => {
+    // Given a source that grows once after initialize, e.g. while its index is rebuilt
+    const source = new TestSource();
+    const initial = await source.initialize();
+    source.initialize = async () => ({
+      ...initial,
+      alerts: [{ severity: "info", message: "Indexing" }],
+    });
+    const grown = { ...initial, end: { sec: 5, nsec: 0 }, alerts: [] };
+    const updates: (Initialization | undefined)[] = [grown, undefined];
+    let released!: () => void;
+    const release = new Promise<void>((resolve) => (released = resolve));
+    source.waitForUpdate = async () => {
+      await release;
+      return updates.shift();
+    };
+    const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+    const states: PlayerState[] = [];
+    player.setListener(async (state) => {
+      states.push(state);
+    });
+    try {
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.endTime).toEqual({ sec: 1, nsec: 0 });
+      });
+      expect(states.at(-1)?.alerts).toEqual([{ severity: "info", message: "Indexing" }]);
+
+      // When it grows
+      released();
+
+      // Then the player shows the new time range and drops the old initialization alerts
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.endTime).toEqual({ sec: 5, nsec: 0 });
+      });
+      expect(states.at(-1)?.alerts).toEqual([]);
+    } finally {
+      player.close();
+      await player.isClosed;
+    }
   });
 
   it("should return backfill messages from the iterable source when requested", async () => {

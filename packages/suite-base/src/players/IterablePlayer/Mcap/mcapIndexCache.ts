@@ -18,14 +18,21 @@ const KEY_BYTES = 64n * 1024n;
 /** Bytes before the scanned offset that must still match, to catch a different file */
 const CHECK_BYTES = 64n * 1024n;
 
+/** How far each scan step reads before `onStep` sees the index */
+export const SCAN_STEP_BYTES = 16n * 1024n * 1024n;
+
 /**
  * A recovery scan that reuses the index saved in OPFS by an earlier scan of the same file, so
  * reopening a footer-less file skips the forward scan. A file that grew since then is scanned
  * from where the saved index ends. Without OPFS (Node, private windows, quota) this just scans.
+ *
+ * `onStep` is called every `SCAN_STEP_BYTES` with the scanner and its index so far, once that has
+ * at least one chunk, so the file can be shown while the rest is scanned.
  */
 export async function scanWithIndexCache(
   readable: McapTypes.IReadable,
   decompressHandlers: McapTypes.DecompressHandlers,
+  onStep?: (scanner: McapRecoveryScanner) => void,
 ): Promise<McapRecoveryScanner> {
   const size = await readable.size();
   const key = await cacheKey(readable, size).catch(() => undefined);
@@ -35,7 +42,12 @@ export async function scanWithIndexCache(
     // The same file again: whatever followed the index the last time is still unreadable
     scanner.unreadableBytes = scanner.complete ? 0n : size - scanner.offset;
   } else if (!scanner.complete) {
-    await scanner.scan(readable);
+    // Each step awaits reads, which lets message requests to this worker run in between
+    while (await scanner.scan(readable, SCAN_STEP_BYTES)) {
+      if (scanner.recoveredChunkCount() > 0) {
+        onStep?.(scanner);
+      }
+    }
   }
   if (key != undefined && cached?.size !== size) {
     await save(key, scanner, readable).catch((error: unknown) => {

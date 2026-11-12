@@ -54,9 +54,12 @@ export class McapRecoveryScanner {
   #decompressHandlers: McapTypes.DecompressHandlers;
   #schemas = new Map<number, McapTypes.Schema>();
   #channels = new Map<number, McapTypes.Channel>();
-  // Message indexes are written as we go; chunk indexes point into these bytes (offsets relative
-  // to their start) and get shifted when the summary is built.
-  #messageIndexes: Uint8Array[] = [];
+  // Message indexes are appended as we go; chunk indexes point into these bytes (offsets relative
+  // to their start) and get shifted when the summary is built. The buffer grows by doubling, so a
+  // reader built mid-scan keeps a view of what existed then while the scan appends behind it.
+  // ponytail: the whole message index stays in memory, ~16 B per message (1e8 messages ≈ 1.6 GB,
+  // and one typed array caps it). Spill it to OPFS and read it back by range if files get there.
+  #messageIndexBuffer = new Uint8Array(0);
   #messageIndexLength = 0;
   #chunkIndexes: McapTypes.ChunkIndex[] = [];
   #attachmentIndexes: McapTypes.AttachmentIndex[] = [];
@@ -64,7 +67,6 @@ export class McapRecoveryScanner {
   #channelMessageCounts = new Map<number, bigint>();
   #messageStartTime?: bigint;
   #messageEndTime?: bigint;
-  #tail?: Uint8Array;
   #readBuffer?: { offset: bigint; bytes: Uint8Array };
 
   public constructor(decompressHandlers: McapTypes.DecompressHandlers) {
@@ -80,7 +82,7 @@ export class McapRecoveryScanner {
    * same tail `toReadable()` serves (message indexes + summary + footer).
    */
   public toSnapshot(): Uint8Array {
-    const tail = (this.#tail ??= this.#buildTail(this.offset));
+    const tail = concat(this.#messageIndexes(), this.#buildSummary(this.offset));
     const header = new TextEncoder().encode(
       JSON.stringify({
         version: SNAPSHOT_VERSION,
@@ -120,7 +122,7 @@ export class McapRecoveryScanner {
     scanner.unchunkedMessageCount = header.unchunkedMessageCount;
 
     const tail = snapshot.slice(4 + headerLength);
-    scanner.#messageIndexes = [tail.subarray(0, header.messageIndexLength)];
+    scanner.#messageIndexBuffer = tail.subarray(0, header.messageIndexLength);
     scanner.#messageIndexLength = header.messageIndexLength;
     const summary = reader(tail.subarray(header.messageIndexLength));
     for (;;) {
@@ -164,18 +166,26 @@ export class McapRecoveryScanner {
           break;
       }
     }
-    scanner.#tail = tail;
     return scanner;
   }
 
-  public async scan(readable: McapTypes.IReadable): Promise<void> {
-    this.#tail = undefined;
+  /**
+   * Scans about `maxBytes` further (everything by default). Returns true if it stopped there with
+   * more to read, false once it reached the end of the readable records.
+   */
+  public async scan(readable: McapTypes.IReadable, maxBytes?: bigint): Promise<boolean> {
     this.#readBuffer = undefined;
+    this.unreadableBytes = 0n;
     const size = await readable.size();
     if (this.offset === 0n) {
       this.offset = await this.#readHeader(readable, size);
     }
+    const stopAt = maxBytes == undefined ? size : this.offset + maxBytes;
     while (!this.complete && this.offset + RECORD_PREFIX_LENGTH <= size) {
+      if (this.offset >= stopAt) {
+        this.#readBuffer = undefined;
+        return true;
+      }
       const prefix = await this.#read(readable, size, this.offset, RECORD_PREFIX_LENGTH);
       const opcode = prefix[0]!;
       const recordEnd =
@@ -215,30 +225,41 @@ export class McapRecoveryScanner {
     }
     this.unreadableBytes = this.complete ? 0n : size - this.offset;
     this.#readBuffer = undefined;
+    return false;
   }
 
-  /** The recovered records followed by a summary and footer built from the in-memory index */
+  /**
+   * The records scanned so far followed by message indexes, a summary and a footer built from the
+   * in-memory index. Safe to call mid-scan: it is a snapshot that later scanning doesn't change.
+   */
   public toReadable(base: McapTypes.IReadable): McapTypes.IReadable {
     const prefixLength = this.offset;
-    const tail = (this.#tail ??= this.#buildTail(prefixLength));
-    const tailLength = BigInt(tail.byteLength);
+    const tail = [this.#messageIndexes(), this.#buildSummary(prefixLength)];
+    const size = tail.reduce((sum, part) => sum + BigInt(part.byteLength), prefixLength);
     return {
-      size: async () => prefixLength + tailLength,
+      size: async () => size,
       read: async (offset, length) => {
         const end = offset + length;
         if (end <= prefixLength) {
           return await base.read(offset, length);
         }
-        const fromTail = tail.slice(
-          Number((offset > prefixLength ? offset : prefixLength) - prefixLength),
-          Number(end - prefixLength),
-        );
-        if (offset >= prefixLength) {
-          return fromTail;
-        }
         const out = new Uint8Array(Number(length));
-        out.set(await base.read(offset, prefixLength - offset));
-        out.set(fromTail, Number(prefixLength - offset));
+        if (offset < prefixLength) {
+          out.set(await base.read(offset, prefixLength - offset));
+        }
+        let partStart = prefixLength;
+        for (const part of tail) {
+          const partEnd = partStart + BigInt(part.byteLength);
+          const from = offset > partStart ? offset : partStart;
+          const to = end < partEnd ? end : partEnd;
+          if (from < to) {
+            out.set(
+              part.subarray(Number(from - partStart), Number(to - partStart)),
+              Number(from - offset),
+            );
+          }
+          partStart = partEnd;
+        }
         return out;
       },
     };
@@ -438,11 +459,23 @@ export class McapRecoveryScanner {
       compressedSize: BigInt(chunk.records.byteLength),
       uncompressedSize: chunk.uncompressedSize,
     });
-    this.#messageIndexes.push(messageIndexes.bufferView().slice());
-    this.#messageIndexLength += messageIndexes.length;
+    const bytes = messageIndexes.bufferView();
+    const needed = this.#messageIndexLength + bytes.byteLength;
+    if (needed > this.#messageIndexBuffer.byteLength) {
+      const grown = new Uint8Array(Math.max(needed, this.#messageIndexBuffer.byteLength * 2));
+      grown.set(this.#messageIndexes());
+      this.#messageIndexBuffer = grown;
+    }
+    this.#messageIndexBuffer.set(bytes, this.#messageIndexLength);
+    this.#messageIndexLength = needed;
   }
 
-  #buildTail(prefixLength: bigint): Uint8Array {
+  #messageIndexes(): Uint8Array {
+    return this.#messageIndexBuffer.subarray(0, this.#messageIndexLength);
+  }
+
+  /** DataEnd, summary, footer and magic, to follow the message indexes */
+  #buildSummary(prefixLength: bigint): Uint8Array {
     const builder = new McapRecordBuilder();
     builder.writeDataEnd({ dataSectionCrc: 0 });
     const summaryStart = prefixLength + BigInt(this.#messageIndexLength + builder.length);
@@ -479,15 +512,7 @@ export class McapRecoveryScanner {
     });
     builder.writeFooter({ summaryStart, summaryOffsetStart: 0n, summaryCrc: 0 });
     builder.writeMagic();
-
-    const tail = new Uint8Array(this.#messageIndexLength + builder.length);
-    let at = 0;
-    for (const part of this.#messageIndexes) {
-      tail.set(part, at);
-      at += part.byteLength;
-    }
-    tail.set(builder.bufferView(), at);
-    return tail;
+    return builder.bufferView().slice();
   }
 
   /** Sequential reads go through a large buffered so small records don't each cost a read */
@@ -514,6 +539,13 @@ export class McapRecoveryScanner {
     this.#readBuffer = { offset, bytes };
     return bytes.subarray(0, Number(length));
   }
+}
+
+function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
+  const out = new Uint8Array(a.byteLength + b.byteLength);
+  out.set(a);
+  out.set(b, a.byteLength);
+  return out;
 }
 
 function reader(bytes: Uint8Array): McapByteReader {

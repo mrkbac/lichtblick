@@ -54,6 +54,7 @@ import {
   IDeserializedIterableSource,
   IIterableSource,
   ISerializedIterableSource,
+  Initialization,
   IteratorResult,
 } from "./IIterableSource";
 
@@ -657,113 +658,7 @@ export class IterablePlayer implements Player {
     this.#queueEmitState();
 
     try {
-      const initResult = await this.#bufferedSource.initialize();
-      const {
-        start,
-        end,
-        topics,
-        profile,
-        topicStats,
-        alerts,
-        publishersByTopic,
-        datatypes,
-        name,
-        metadata,
-      } = initResult;
-
-      // Prior to initialization, the seekTarget may have been set to an out-of-bounds value
-      // This brings the value in bounds
-      if (this.#seekTarget) {
-        this.#seekTarget = clampTime(this.#seekTarget, start, end);
-      }
-
-      this.#metadata = metadata ?? [];
-
-      // This freezing has to be done here, in the main thread.
-      // If it is done inside the web worker, it will be serialized and deserialized
-      // and will lose the frozen attributes.
-      freezeMetadata(this.#metadata);
-
-      this.#profile = profile;
-      this.#recordingFiles = initResult.recordingFiles;
-      this.#start = start;
-      this.#currentTime = this.#seekTarget ?? start;
-      this.#end = end;
-      this.#publishedTopics = publishersByTopic;
-      this.#providerDatatypes = datatypes;
-      this.#name = name ?? this.#name;
-
-      // Studio does not like duplicate topics or topics with different datatypes
-      // Check for duplicates or for mismatched datatypes
-      const uniqueTopics = new Map<string, Topic>();
-      this.#providerTopicStats = topicStats;
-
-      for (const topic of topics) {
-        const existingTopic = uniqueTopics.get(topic.name);
-        if (existingTopic) {
-          alerts.push({
-            severity: "warn",
-            message: `Inconsistent datatype for topic: ${topic.name}`,
-            tip: `Topic ${topic.name} has messages with multiple datatypes: ${existingTopic.schemaName}, ${topic.schemaName}. This may result in errors during visualization.`,
-          });
-          continue;
-        }
-        uniqueTopics.set(topic.name, topic);
-      }
-
-      this.#providerTopics = Array.from(uniqueTopics.values());
-
-      let idx = 0;
-      for (const alert of alerts) {
-        this.#alertManager.addAlert(`init-alert-${idx}`, alert);
-        idx += 1;
-      }
-
-      if (this.#iterableSource.sourceType === "deserialized") {
-        this.#messageRangeSource = this.#iterableSource;
-      } else {
-        this.#messageRangeSource = new DeserializingIterableSource(this.#iterableSource);
-        (this.#messageRangeSource as DeserializingIterableSource).initializeDeserializers(
-          initResult,
-        );
-      }
-
-      if (this.#enablePreload) {
-        // --- setup block loader which loads messages for _full_ subscriptions in the "background"
-        try {
-          let blockLoaderSource;
-          if (this.#iterableSource.sourceType === "deserialized") {
-            blockLoaderSource = this.#iterableSource;
-          } else {
-            blockLoaderSource = new DeserializingIterableSource(this.#iterableSource);
-            // We must not call initialize() here, as the #iterableSource was already initialized above.
-            blockLoaderSource.initializeDeserializers(initResult);
-          }
-
-          this.#blockLoader = new BlockLoader({
-            cacheSizeBytes: DEFAULT_CACHE_SIZE_BYTES,
-            source: blockLoaderSource,
-            start: this.#start,
-            end: this.#end,
-            maxBlocks: MAX_BLOCKS,
-            minBlockDurationNs: MIN_MEM_CACHE_BLOCK_SIZE_NS,
-            alertManager: this.#alertManager,
-          });
-        } catch (err: unknown) {
-          log.error(err);
-
-          const startStr = toRFC3339String(this.#start);
-          const endStr = toRFC3339String(this.#end);
-
-          this.#alertManager.addAlert("block-loader", {
-            severity: "warn",
-            message: "Failed to initialize message preloading",
-            tip: `The start (${startStr}) and end (${endStr}) of your data is too far apart.`,
-            error: err as Error,
-          });
-        }
-      }
-
+      this.#applyInitialization(await this.#bufferedSource.initialize());
       this.#presence = PlayerPresence.PRESENT;
     } catch (error) {
       this.#setError(`Error initializing: ${toError(error).message}`, toError(error));
@@ -771,6 +666,8 @@ export class IterablePlayer implements Player {
     this.#queueEmitState();
 
     if (!this.#hasError && this.#start) {
+      void this.#followSourceUpdates();
+
       // Wait a bit until panels have had the chance to subscribe to topics before we start
       // playback.
       await delay(START_DELAY_MS);
@@ -783,6 +680,149 @@ export class IterablePlayer implements Player {
       });
 
       this.#setState("start-play");
+    }
+  }
+
+  /**
+   * Applies each update of a source that grows after initialize() (e.g. a file whose index is
+   * still being built): the new time range, topics and alerts, a block loader for the new range,
+   * and a playback iterator that reads past the old end.
+   */
+  async #followSourceUpdates(): Promise<void> {
+    try {
+      for (;;) {
+        const update = await this.#bufferedSource.waitForUpdate?.();
+        if (!update || this.#state === "close" || this.#nextState === "close") {
+          return;
+        }
+        // ponytail: preloaded blocks are dropped and reloaded on every update; extend the block
+        // loader's range in place if that churn shows up (e.g. tailing a live file).
+        await this.#blockLoader?.stopLoading();
+        await this.#blockLoadingProcess;
+        this.#alertManager.removeAlerts((id) => id.startsWith("init-alert-"));
+        this.#applyInitialization(update);
+        this.#blockLoader?.setTopics(this.#preloadTopics);
+        this.#blockLoadingProcess = this.#startBlockLoading().catch((err: unknown) => {
+          this.#setError((err as Error).message, err as Error);
+        });
+        if (this.#state === "idle" || this.#state === "play") {
+          // The current iterator ends at the old end
+          this.#lastMessageEvent = undefined;
+          this.#setState("reset-playback-iterator");
+        } else {
+          this.#queueEmitState();
+        }
+      }
+    } catch (error) {
+      log.error("Source update failed", error);
+    }
+  }
+
+  #applyInitialization(initResult: Initialization): void {
+    const {
+      start,
+      end,
+      topics,
+      profile,
+      topicStats,
+      alerts,
+      publishersByTopic,
+      datatypes,
+      name,
+      metadata,
+    } = initResult;
+
+    // Prior to initialization, the seekTarget may have been set to an out-of-bounds value
+    // This brings the value in bounds
+    if (this.#seekTarget) {
+      this.#seekTarget = clampTime(this.#seekTarget, start, end);
+    }
+
+    this.#metadata = metadata ?? [];
+
+    // This freezing has to be done here, in the main thread.
+    // If it is done inside the web worker, it will be serialized and deserialized
+    // and will lose the frozen attributes.
+    freezeMetadata(this.#metadata);
+
+    this.#profile = profile;
+    this.#recordingFiles = initResult.recordingFiles;
+    this.#start = start;
+    this.#currentTime = this.#currentTime
+      ? clampTime(this.#currentTime, start, end)
+      : (this.#seekTarget ?? start);
+    this.#end = end;
+    this.#publishedTopics = publishersByTopic;
+    this.#providerDatatypes = datatypes;
+    this.#name = name ?? this.#name;
+
+    // Studio does not like duplicate topics or topics with different datatypes
+    // Check for duplicates or for mismatched datatypes
+    const uniqueTopics = new Map<string, Topic>();
+    this.#providerTopicStats = topicStats;
+
+    for (const topic of topics) {
+      const existingTopic = uniqueTopics.get(topic.name);
+      if (existingTopic) {
+        alerts.push({
+          severity: "warn",
+          message: `Inconsistent datatype for topic: ${topic.name}`,
+          tip: `Topic ${topic.name} has messages with multiple datatypes: ${existingTopic.schemaName}, ${topic.schemaName}. This may result in errors during visualization.`,
+        });
+        continue;
+      }
+      uniqueTopics.set(topic.name, topic);
+    }
+
+    this.#providerTopics = Array.from(uniqueTopics.values());
+
+    let idx = 0;
+    for (const alert of alerts) {
+      this.#alertManager.addAlert(`init-alert-${idx}`, alert);
+      idx += 1;
+    }
+
+    if (this.#iterableSource.sourceType === "deserialized") {
+      this.#messageRangeSource = this.#iterableSource;
+    } else {
+      this.#messageRangeSource = new DeserializingIterableSource(this.#iterableSource);
+      (this.#messageRangeSource as DeserializingIterableSource).initializeDeserializers(initResult);
+    }
+
+    if (this.#enablePreload) {
+      // --- setup block loader which loads messages for _full_ subscriptions in the "background"
+      try {
+        let blockLoaderSource;
+        if (this.#iterableSource.sourceType === "deserialized") {
+          blockLoaderSource = this.#iterableSource;
+        } else {
+          blockLoaderSource = new DeserializingIterableSource(this.#iterableSource);
+          // We must not call initialize() here, as the #iterableSource was already initialized above.
+          blockLoaderSource.initializeDeserializers(initResult);
+        }
+
+        this.#blockLoader = new BlockLoader({
+          cacheSizeBytes: DEFAULT_CACHE_SIZE_BYTES,
+          source: blockLoaderSource,
+          start: this.#start,
+          end: this.#end,
+          maxBlocks: MAX_BLOCKS,
+          minBlockDurationNs: MIN_MEM_CACHE_BLOCK_SIZE_NS,
+          alertManager: this.#alertManager,
+        });
+      } catch (err: unknown) {
+        log.error(err);
+
+        const startStr = toRFC3339String(this.#start);
+        const endStr = toRFC3339String(this.#end);
+
+        this.#alertManager.addAlert("block-loader", {
+          severity: "warn",
+          message: "Failed to initialize message preloading",
+          tip: `The start (${startStr}) and end (${endStr}) of your data is too far apart.`,
+          error: err as Error,
+        });
+      }
     }
   }
 
