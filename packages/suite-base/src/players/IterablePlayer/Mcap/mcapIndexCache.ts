@@ -102,6 +102,7 @@ async function save(
   scanner: McapRecoveryScanner,
   readable: McapTypes.IReadable,
 ): Promise<void> {
+  const dir = await directory(); // first, so a missing OPFS fails before copying the index
   const check = await checkBytes(readable, scanner.offset);
   const snapshot = scanner.toSnapshot();
   const entry = new Uint8Array(16 + check.byteLength + snapshot.byteLength);
@@ -115,7 +116,6 @@ async function save(
     return;
   }
 
-  const dir = await directory();
   await evict(dir, key, MAX_CACHE_BYTES - entry.byteLength);
   const handle = await dir.getFileHandle(key, { create: true });
   if ("createWritable" in handle) {
