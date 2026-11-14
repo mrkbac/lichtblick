@@ -161,14 +161,7 @@ export class McapIterableSource implements ISerializedIterableSource {
   ): Promise<OpenedInner> {
     let readable = this.#persistentReadable;
     if (!readable) {
-      readable = new RemoteFileReadable(source.url, {
-        credentials: source.credentials,
-        cacheSizeInBytes: source.cacheSizeInBytes,
-        readAheadEnabled: source.readAheadEnabled,
-        ...(source.readAheadBufferBytes != undefined
-          ? { readAheadBufferBytes: source.readAheadBufferBytes }
-          : {}),
-      });
+      readable = new RemoteFileReadable(source.url, source);
       await readable.open();
       this.#persistentReadable = readable;
     }
@@ -214,7 +207,7 @@ export class McapIterableSource implements ISerializedIterableSource {
     // indexed-init probe connection/cache alive.
     readable.close();
     this.#persistentReadable = undefined;
-    return await this.#openUnindexedUrlFallback(source.url, source.credentials, result.length);
+    return await this.#openUnindexedUrlFallback(source, result.length);
   }
 
   /**
@@ -476,8 +469,7 @@ export class McapIterableSource implements ISerializedIterableSource {
 
   /** `length` limits the stream to the readable records of a damaged file */
   async #openUnindexedUrlFallback(
-    url: string,
-    credentials: RequestCredentials | undefined,
+    { url, credentials }: Extract<McapSource, { type: "url" }>,
     length?: number,
   ): Promise<OpenedInner> {
     const response = await fetch(url, { credentials });
