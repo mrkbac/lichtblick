@@ -17,6 +17,7 @@ import io
 import json
 import subprocess
 import tempfile
+import urllib.error
 import urllib.parse
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -53,7 +54,7 @@ ATTRIBUTION = (
 )
 
 
-def download(key: str) -> bytes:
+def fetch(key: str) -> Path:
     cache = CACHE / key
     if not cache.exists():
         cache.parent.mkdir(parents=True, exist_ok=True)
@@ -62,14 +63,19 @@ def download(key: str) -> bytes:
                 with urllib.request.urlopen(BASE + key, timeout=120) as response:
                     data = response.read()
                 break
-            except TimeoutError:
+            # urlopen wraps connection timeouts in URLError; a failure after 3 tries still raises.
+            except (TimeoutError, urllib.error.URLError) as error:
                 if attempt == 2:
                     raise
-                print(f"Retrying timed-out download: {key}", flush=True)
+                print(f"Retrying download ({error}): {key}", flush=True)
         # Write then rename, so an interrupted run never leaves a truncated cache entry.
         cache.with_suffix(".part").write_bytes(data)
         cache.with_suffix(".part").replace(cache)
-    return cache.read_bytes()
+    return cache
+
+
+def download(key: str) -> bytes:
+    return fetch(key).read_bytes()
 
 
 def stamp(microseconds: int) -> dict[str, int]:
@@ -141,7 +147,7 @@ def main() -> None:
         flush=True,
     )
     with ThreadPoolExecutor(max_workers=8) as pool:
-        for i, _ in enumerate(pool.map(download, keys)):
+        for i, _ in enumerate(pool.map(fetch, keys)):
             if i % 25 == 0:
                 print(f"Downloaded {i + 1}/{len(keys)}", flush=True)
     events: list[tuple[int, str, str, dict]] = []
