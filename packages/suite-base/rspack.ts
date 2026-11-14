@@ -114,6 +114,8 @@ function initModuleLocals(packageDir: string | undefined): void {
 type Options = {
   /** Specify the app version. */
   version: string;
+  /** App name shown in the UI (root package.json `productName`). */
+  productName: string;
   /**
    * Absolute path to the @lichtblick/suite-base package directory.
    * Defaults to the directory of this file.
@@ -142,7 +144,7 @@ export function makeConfig(
   const isDev = argv.mode === "development";
   const isServe = argv.env?.RSPACK_SERVE ?? false;
 
-  const { version } = options;
+  const { version, productName } = options;
 
   return {
     resolve: {
@@ -261,6 +263,7 @@ export function makeConfig(
       new rspack.DefinePlugin({
         // Should match webpack-defines.d.ts
         LICHTBLICK_SUITE_VERSION: JSON.stringify(version),
+        LICHTBLICK_PRODUCT_NAME: JSON.stringify(productName),
         // licht deploys talk to its organization server unless API_URL says otherwise.
         API_URL: JSON.stringify(process.env.API_URL ?? "https://licht-server.marko.im"),
         DEV_WORKSPACE: JSON.stringify(process.env.DEV_WORKSPACE),

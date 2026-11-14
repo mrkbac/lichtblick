@@ -29,6 +29,7 @@ export const rspackRendererConfig =
 
     const appConfig = makeConfig(env, argv, {
       version: params.packageJson.version,
+      productName: params.packageJson.productName,
     });
 
     const config: Configuration = {

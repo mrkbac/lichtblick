@@ -16,6 +16,7 @@ const params: ConfigParams = {
   contextPath: path.resolve(import.meta.dirname, "src"),
   entrypoint: "./entrypoint.tsx",
   prodSourceMap: "hidden-source-map",
+  productName: packageJson.productName,
   // Fork-only: show commit + build time in the version string (Settings > About, start dialog).
   version: `${packageJson.version} (${process.env.CF_PAGES_COMMIT_SHA?.slice(0, 7) ?? "local"}, built ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC)`,
 };

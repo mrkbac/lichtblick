@@ -4,6 +4,7 @@
 // Globals the webpack build injects with DefinePlugin
 Object.assign(globalThis, {
   LICHTBLICK_SUITE_VERSION: "TEST",
+  LICHTBLICK_PRODUCT_NAME: "Lichtblick",
   API_URL: "/",
   DEV_WORKSPACE: "",
   OTLP_ENDPOINT: undefined,

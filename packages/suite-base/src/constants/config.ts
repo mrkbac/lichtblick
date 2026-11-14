@@ -9,6 +9,7 @@
 // Global variables defined by webpack DefinePlugin
 declare const API_URL: string | undefined;
 declare const LICHTBLICK_SUITE_VERSION: string | undefined;
+declare const LICHTBLICK_PRODUCT_NAME: string | undefined;
 declare const DEV_WORKSPACE: string | undefined;
 declare const OTLP_ENDPOINT: string | undefined;
 
@@ -22,6 +23,11 @@ export const APP_CONFIG = {
    * Application version
    */
   version: LICHTBLICK_SUITE_VERSION ?? "unknown",
+
+  /**
+   * App name shown in the UI (root package.json `productName`)
+   */
+  productName: LICHTBLICK_PRODUCT_NAME ?? "Lichtblick",
 
   /**
    * Development workspace prefix (for local storage keys)
