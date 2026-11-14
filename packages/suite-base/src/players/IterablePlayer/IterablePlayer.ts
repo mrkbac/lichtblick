@@ -184,6 +184,7 @@ export class IterablePlayer implements Player {
   #profile: string | undefined;
   #recordingFiles: readonly RecordingFileInfo[] | undefined;
   #compareSides: readonly CompareSide[] | undefined;
+  #compareRequest: number | undefined;
   #subscriptions: SubscribePayload[] = [];
   #allTopics: TopicSelection = new Map();
   #preloadTopics: TopicSelection = new Map();
@@ -387,9 +388,9 @@ export class IterablePlayer implements Player {
     this.#queueEmitState();
   }
 
-  public setCompareOffsets(offsetsSec: readonly number[]): void {
+  public setCompareOffsets(offsetsSec: readonly number[], request: number): void {
     // The source reports the moved sides as an update (see #followSourceUpdates)
-    this.#iterableSource.setCompareOffsets?.(offsetsSec).catch((error: unknown) => {
+    this.#iterableSource.setCompareOffsets?.(offsetsSec, request).catch((error: unknown) => {
       log.error("Failed to move compared recordings", error);
     });
   }
@@ -805,6 +806,7 @@ export class IterablePlayer implements Player {
     this.#profile = profile;
     this.#recordingFiles = initResult.recordingFiles;
     this.#compareSides = initResult.compareSides;
+    this.#compareRequest = initResult.compareRequest;
     this.#start = start;
     this.#currentTime = this.#currentTime
       ? clampTime(this.#currentTime, start, end)
@@ -1186,6 +1188,7 @@ export class IterablePlayer implements Player {
         topicStats: this.#providerTopicStats,
         recordingFiles: this.#recordingFiles,
         compareSides: this.#compareSides,
+        compareRequest: this.#compareRequest,
         datatypes: this.#providerDatatypes,
         publishedTopics: this.#publishedTopics,
       };

@@ -91,6 +91,8 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
   // When comparing: one source per side, and the time all sides are aligned to start at
   #compared: ComparedSource[] | undefined;
   #compareStart: Time | undefined;
+  // The last setCompareOffsets request applied, published with the sides
+  #compareRequest: number | undefined;
   // Sources built by the caller (e.g. the files of one compared side), instead of from `dataSource`
   readonly #prebuilt: IIterableSource<Uint8Array>[] | undefined;
 
@@ -202,10 +204,11 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
   }
 
   /** Move each compared side by `offsetsSec[i]` seconds; reported through waitForUpdate() */
-  public async setCompareOffsets(offsetsSec: readonly number[]): Promise<void> {
+  public async setCompareOffsets(offsetsSec: readonly number[], request: number): Promise<void> {
     if (!this.#compared || !this.#compareStart) {
       return;
     }
+    this.#compareRequest = request;
     // Times can't go below zero: a side moved before time zero moves every side later instead
     const earliestOffset = Math.min(0, ...offsetsSec);
     const lowest = fromNanoSec(BigInt(Math.round(-earliestOffset * 1e9)));
@@ -445,6 +448,7 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
     }
     if (this.#compared) {
       resultInit.compareSides = this.#compared.map((source) => source.side());
+      resultInit.compareRequest = this.#compareRequest;
     }
     // A partial container summary would understate storage and channel totals.
     if (initializations.some((init) => init.recordingFiles == undefined)) {

@@ -69,8 +69,8 @@ class WorkerIterableSourceBase<MessageType> implements IIterableSource<MessageTy
     return await this.#sourceWorkerRemote?.waitForUpdate();
   }
 
-  public async setCompareOffsets(offsetsSec: readonly number[]): Promise<void> {
-    await this.#sourceWorkerRemote?.setCompareOffsets(offsetsSec);
+  public async setCompareOffsets(offsetsSec: readonly number[], request: number): Promise<void> {
+    await this.#sourceWorkerRemote?.setCompareOffsets(offsetsSec, request);
   }
 
   public async *messageIterator(

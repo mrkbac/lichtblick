@@ -97,9 +97,10 @@ export interface Player {
   getBackfillMessages?(args: GetBackfillMessagesArgs): Promise<MessageEvent[]>;
   /**
    * When recordings are compared (see PlayerStateActiveData.compareSides): move each side by
-   * `offsetsSec[i]` seconds on top of aligning all sides to start together.
+   * `offsetsSec[i]` seconds on top of aligning all sides to start together. `request` numbers the
+   * call; once applied, it is published as PlayerStateActiveData.compareRequest.
    */
-  setCompareOffsets?(offsetsSec: readonly number[]): void;
+  setCompareOffsets?(offsetsSec: readonly number[], request: number): void;
   /** Write the rolling live history to an MCAP file. Available with PlayerCapabilities.liveHistory. */
   exportLiveHistory?(writable: IWritable): Promise<void>;
 }
@@ -217,6 +218,8 @@ export type PlayerStateActiveData = {
 
   /** When recordings are compared: one entry per side, in prefix order (/a, /b, …) */
   compareSides?: readonly CompareSide[];
+  /** The `request` of the last setCompareOffsets call the published sides include */
+  compareRequest?: number;
 
   // A complete list of ROS datatypes. Allowed to change. But it must always be "complete" (every
   // topic must refer to a datatype that is present in this list, every datatypes that refers to

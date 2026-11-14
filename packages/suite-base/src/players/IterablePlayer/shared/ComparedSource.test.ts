@@ -206,10 +206,11 @@ describe("compared recordings", () => {
     await source.initialize();
     // A comparison keeps updating, so it reports moved sides at any time
     const update = source.waitForUpdate();
-    await source.setCompareOffsets([0, 2.5]);
+    await source.setCompareOffsets([0, 2.5], 1);
     const init = await update;
 
     expect(init?.updatedRanges).toBeUndefined();
+    expect(init?.compareRequest).toBe(1);
     expect(init?.end).toEqual({ sec: 104, nsec: 500_000_000 });
     expect(init?.compareSides?.[1]).toMatchObject({
       sharedStart: { sec: 102, nsec: 500_000_000 },
@@ -266,7 +267,7 @@ describe("compared recordings", () => {
     );
     await source.initialize();
     const update = source.waitForUpdate();
-    await source.setCompareOffsets([0, -1]);
+    await source.setCompareOffsets([0, -1], 1);
     const init = await update;
     expect(init?.compareSides?.map((side) => side.sharedStart.sec)).toEqual([1, 0]);
 

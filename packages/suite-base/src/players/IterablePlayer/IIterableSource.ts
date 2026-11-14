@@ -32,6 +32,8 @@ export type Initialization = {
   recordingFiles?: RecordingFileInfo[];
   /** When recordings are compared: one entry per side */
   compareSides?: CompareSide[];
+  /** The `request` of the last setCompareOffsets call these sides include */
+  compareRequest?: number;
   datatypes: RosDatatypes;
   profile: string | undefined;
   name?: string;
@@ -234,9 +236,10 @@ export interface IIterableSource<MessageType = unknown> {
 
   /**
    * Optional, for a source comparing recordings (see Initialization.compareSides): move each side
-   * by `offsetsSec[i]` seconds. The source reports the new times through waitForUpdate().
+   * by `offsetsSec[i]` seconds. The source reports the new times, with `request` as
+   * Initialization.compareRequest, through waitForUpdate().
    */
-  setCompareOffsets?: (offsetsSec: readonly number[]) => Promise<void>;
+  setCompareOffsets?: (offsetsSec: readonly number[], request: number) => Promise<void>;
 }
 
 export type IterableSourceInitializeArgs = {

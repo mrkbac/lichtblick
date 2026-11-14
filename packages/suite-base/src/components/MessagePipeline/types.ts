@@ -41,7 +41,7 @@ export type MessagePipelineContext = Immutable<{
   setPlaybackSpeed?: (speed: number) => void;
   seekPlayback?: (time: Time) => void;
   /** When recordings are compared: see Player.setCompareOffsets */
-  setCompareOffsets?: (offsetsSec: readonly number[]) => void;
+  setCompareOffsets?: (offsetsSec: readonly number[], request: number) => void;
   exportLiveHistory?: (writable: IWritable) => Promise<void>;
   // Don't render the next frame until the returned function has been called.
   pauseFrame: (name: string) => ResumeFrame;
