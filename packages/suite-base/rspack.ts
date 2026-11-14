@@ -7,7 +7,9 @@
 
 import { type Configuration, type RuleSetRule, rspack } from "@rspack/core";
 import dotenv from "dotenv";
+import fs from "node:fs";
 import { createRequire as _nodeCreateRequire } from "node:module";
+import path from "node:path";
 import { fileURLToPath as _nodeFileURLToPath, pathToFileURL as _nodePathToFileURL } from "node:url";
 
 import type { RspackArgv } from "./RspackArgv.ts";
@@ -40,6 +42,35 @@ export function isOverlayRuntimeError(error: Error): boolean {
   return true;
 }
 
+/**
+ * Per-message decoders whose published `dist` targets ES2020, which turns every `#private` field
+ * access into a WeakMap helper call. They ship their TypeScript `src/`, so we compile that with our
+ * ES2022 target instead (~17% faster ROS 2 decoding). Values: the workspace package that depends on
+ * each, since pnpm only links a dependency into its dependents.
+ */
+const DECODERS_FROM_SRC: Record<string, string> = {
+  "@foxglove/rosmsg2-serialization": "suite-base",
+  "@foxglove/omgidl-serialization": "mcap-support",
+};
+const DECODER_SRC_DIRS = /[\\/]@foxglove[\\/](rosmsg2|omgidl)-serialization[\\/]src[\\/]/;
+
+/** Aliases each decoder to its `src/index.ts`; fails the build if a package stops shipping it. */
+function decoderSrcAliases(): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(DECODERS_FROM_SRC).map(([name, dependent]) => {
+      const dependentRequire = _nodeCreateRequire(
+        path.join(import.meta.dirname, "..", dependent, "package.json"),
+      );
+      const pkgDir = path.dirname(dependentRequire.resolve(`${name}/package.json`));
+      const entry = path.join(pkgDir, "src", "index.ts");
+      if (!fs.existsSync(entry) || !DECODER_SRC_DIRS.test(entry)) {
+        throw new Error(`${name} no longer ships src/index.ts; update DECODERS_FROM_SRC`);
+      }
+      return [`${name}$`, entry];
+    }),
+  );
+}
+
 export function swcRule({
   isDev,
   refresh = false,
@@ -49,7 +80,8 @@ export function swcRule({
 }): RuleSetRule {
   return {
     test: /\.tsx?$/,
-    exclude: /node_modules/,
+    // node_modules ships JS, except the decoders compiled from src (see DECODERS_FROM_SRC)
+    exclude: { and: [/node_modules/, { not: DECODER_SRC_DIRS }] },
     loader: "builtin:swc-loader",
     options: {
       jsc: {
@@ -116,6 +148,7 @@ export function makeConfig(
     resolve: {
       extensions: [".js", ".ts", ".jsx", ".tsx"],
       alias: {
+        ...decoderSrcAliases(),
         "@lichtblick/suite-base": _nodeFileURLToPath(new URL("src", dirHref)),
         // Apps outside suite-base (web/src, desktop/renderer) don't depend on react themselves, and
         // pnpm doesn't hoist it, so JSX there resolves the runtime from suite-base.
