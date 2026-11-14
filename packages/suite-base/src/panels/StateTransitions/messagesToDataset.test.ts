@@ -2,7 +2,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { MessageEvent } from "@lichtblick/suite";
-import { MessageAndData } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import {
+  PathSample,
+  toPathSample,
+} from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
 import { TimestampMethod } from "@lichtblick/suite-base/util/time";
@@ -17,6 +21,14 @@ import {
   messagesToDataset,
 } from "./messagesToDataset";
 import { MessageDatasetArgs, StateTransitionPath } from "./types";
+
+const sample = ({
+  messageEvent,
+  queriedData,
+}: {
+  messageEvent: MessageEvent;
+  queriedData: MessagePathDataItem[];
+}): PathSample => toPathSample(messageEvent, queriedData);
 
 const messageEvent = MessageEventBuilder.messageEvent({
   topic: "/test/message_topic_test",
@@ -47,17 +59,17 @@ function MessageAndDataBuilder(
   value: number,
   pathInput: string,
   constantName: string,
-): MessageAndData {
-  return {
+): PathSample {
+  return sample({
     messageEvent: messageEventInput,
     queriedData: [{ value, path: pathInput, constantName }],
-  };
+  });
 }
 
-const item: MessageAndData = {
+const item: PathSample = sample({
   messageEvent,
   queriedData: [{ value: BasicBuilder.number(), path: BasicBuilder.string() }],
-};
+});
 
 let queriedDataValue: number;
 let queriedDataName: string;
@@ -79,10 +91,10 @@ describe("messagesToDataset helper functions", () => {
   });
 
   it("should return undefined when queriedData's argument has an empty array", () => {
-    const messageAndDataWithEmptyQueriedData: MessageAndData = {
+    const messageAndDataWithEmptyQueriedData: PathSample = sample({
       messageEvent,
       queriedData: [],
-    };
+    });
 
     const result = extractQueriedData(messageAndDataWithEmptyQueriedData);
 
@@ -92,13 +104,13 @@ describe("messagesToDataset helper functions", () => {
   it("should return undefined when queriedData's argument has more than one item", () => {
     queriedDataValue = BasicBuilder.number();
     queriedDataPath = BasicBuilder.string();
-    const messageAndDataWithMultipleItemsOnQueriedData: MessageAndData = {
+    const messageAndDataWithMultipleItemsOnQueriedData: PathSample = sample({
       messageEvent,
       queriedData: [
         { value: queriedDataValue, path: queriedDataPath },
         { value: queriedDataValue, path: queriedDataPath },
       ],
-    };
+    });
     const result = extractQueriedData(messageAndDataWithMultipleItemsOnQueriedData);
 
     expect(result).toEqual(undefined);
@@ -256,7 +268,7 @@ describe("messagesToDataset", () => {
 
   it("should add data points when blocks contain valid messages", () => {
     //forcing path.timestampMethod to be receiveTime for this specific unit test, headerStamp wont work here
-    const blocks: MessageAndData[][] = [
+    const blocks: PathSample[][] = [
       [MessageAndDataBuilder(messageEvent, queriedDataValue, queriedDataPath, queriedDataName)],
     ];
     const argsDataset: MessageDatasetArgs = {
@@ -280,7 +292,7 @@ describe("messagesToDataset", () => {
   it("should return undefined because getTimestampForMessageEvent will return undefined", () => {
     //forcing path.timestampMethod to be headerStamp without headers in the message
     //so getTimestampForMessageEvent returns undefined
-    const blocks: MessageAndData[][] = [
+    const blocks: PathSample[][] = [
       [
         MessageAndDataBuilder(
           { ...messageEvent, message: { header: undefined } },
@@ -304,7 +316,7 @@ describe("messagesToDataset", () => {
   it("should return dataset with 1 item on data[] because getTimestampForMessageEvent is called with headerStamp with header", () => {
     //forcing path.timestampMethod to be headerStamp with header in the message
     //so getTimestampForMessageEvent returns a stamp and therefore a item is added to data[] inisde the ChartDataset object returned
-    const blocks: MessageAndData[][] = [
+    const blocks: PathSample[][] = [
       [
         MessageAndDataBuilder(
           { ...messageEvent, message: { header: { stamp: RosTimeBuilder.time() } } },
@@ -339,12 +351,12 @@ describe("messagesToDataset", () => {
   });
 
   it("should return dataset with no data since queriedData is empty and therefore extractQueriedData will return undefined", () => {
-    const blocks: MessageAndData[][] = [
+    const blocks: PathSample[][] = [
       [
-        {
+        sample({
           messageEvent,
           queriedData: [],
-        },
+        }),
       ],
     ];
     const argsDataset: MessageDatasetArgs = {
@@ -359,15 +371,15 @@ describe("messagesToDataset", () => {
   });
 
   it("should return dataset with no data since queriedData has more than one item and therefore extractQueriedData will return undefined", () => {
-    const blocks: MessageAndData[][] = [
+    const blocks: PathSample[][] = [
       [
-        {
+        sample({
           messageEvent,
           queriedData: [
             { value: queriedDataValue, path: queriedDataPath },
             { value: queriedDataValue, path: queriedDataPath },
           ],
-        },
+        }),
       ],
     ];
     const argsDataset: MessageDatasetArgs = {
@@ -382,12 +394,12 @@ describe("messagesToDataset", () => {
   });
 
   it("should return dataset with no data since queriedData.value is typeof NaN", () => {
-    const blocks: MessageAndData[][] = [
+    const blocks: PathSample[][] = [
       [
-        {
+        sample({
           messageEvent,
           queriedData: [{ value: NaN, path: queriedDataPath }],
-        },
+        }),
       ],
     ];
     const argsDataset: MessageDatasetArgs = {
@@ -402,12 +414,12 @@ describe("messagesToDataset", () => {
   });
 
   it("should treat a null value as a gap and emit a NaN datum", () => {
-    const blocks: MessageAndData[][] = [
+    const blocks: PathSample[][] = [
       [
-        {
+        sample({
           messageEvent,
           queriedData: [{ value: null, path: queriedDataPath }],
-        },
+        }),
       ],
     ];
     const argsDataset: MessageDatasetArgs = {
@@ -422,12 +434,12 @@ describe("messagesToDataset", () => {
   });
 
   it("should not assign a label to repeated consecutive data points", () => {
-    const messageAndData = {
+    const messageAndData = sample({
       messageEvent,
       queriedData: [{ value: queriedDataValue, path: queriedDataPath }],
-    };
+    });
 
-    const blocks: MessageAndData[][] = [[messageAndData, messageAndData]];
+    const blocks: PathSample[][] = [[messageAndData, messageAndData]];
 
     const result = messagesToDataset({
       ...args,
@@ -442,10 +454,10 @@ describe("messagesToDataset", () => {
     const blocks = [
       undefined,
       [
-        {
+        sample({
           messageEvent,
           queriedData: [{ value: queriedDataValue, path: queriedDataPath }],
-        },
+        }),
       ],
     ];
 
@@ -463,10 +475,10 @@ describe("messagesToDataset", () => {
   it("should push lastDatum to dataset.data if isNewSegment is false but showPoints true meaning the label on the second object on result.data is undefined", () => {
     const blocks = [
       [
-        {
+        sample({
           messageEvent,
           queriedData: [{ value: queriedDataValue, path: queriedDataPath }],
-        },
+        }),
       ],
     ];
 
@@ -483,10 +495,10 @@ describe("messagesToDataset", () => {
   it("should keep lastDatum undefined", () => {
     const blocks = [
       [
-        {
+        sample({
           messageEvent,
           queriedData: [{ value: undefined, path: queriedDataPath }],
-        },
+        }),
       ],
     ];
 
@@ -500,10 +512,10 @@ describe("messagesToDataset", () => {
   });
 
   it("should only add the first and last messages to result.data with showPoints is false", () => {
-    const messageAndData = {
+    const messageAndData = sample({
       messageEvent,
       queriedData: [{ value: queriedDataValue, path: queriedDataPath }],
-    };
+    });
 
     const blocks = [[messageAndData, messageAndData, messageAndData, messageAndData]];
 
@@ -519,14 +531,14 @@ describe("messagesToDataset", () => {
 
   it("should preserve the pending state before a gap", () => {
     const repeatedValue = BasicBuilder.number();
-    const messageAndData = {
+    const messageAndData = sample({
       messageEvent,
       queriedData: [{ value: repeatedValue, path: queriedDataPath }],
-    };
-    const gap = {
+    });
+    const gap = sample({
       messageEvent,
       queriedData: [{ value: null, path: queriedDataPath }],
-    };
+    });
 
     const result = messagesToDataset({
       ...args,

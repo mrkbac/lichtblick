@@ -8,14 +8,29 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import React from "react";
 import type { Mock } from "vitest";
 
-import { MessageDataItemsByPath } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
-import useMessagesByPath from "@lichtblick/suite-base/components/MessagePathSyntax/useMessagesByPath";
+import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import {
+  PathSample,
+  toPathSample,
+  usePathSampleHistory,
+} from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
+import { LIVE_HISTORY_SIZE } from "@lichtblick/suite-base/panels/StateTransitions/constants";
+import { SamplesByPath } from "@lichtblick/suite-base/panels/StateTransitions/types";
+import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { useDecodedMessageRange } from "./hooks/useDecodedMessageRange";
 import StateTransitionsPanelWithHoc from "./index";
 import { StateTransitionConfig } from "./types";
+
+const sample = ({
+  messageEvent,
+  queriedData,
+}: {
+  messageEvent: MessageEvent;
+  queriedData: MessagePathDataItem[];
+}): PathSample => toPathSample(messageEvent, queriedData);
 
 // The Panel HOC is mocked to return the inner component, which takes config and saveConfig directly
 const StateTransitionsPanel = StateTransitionsPanelWithHoc as unknown as React.ComponentType<{
@@ -29,7 +44,13 @@ vi.mock("@lichtblick/suite-base/components/Panel", () => ({
     Object.assign(Component, { panelType: "StateTransitions", defaultConfig: {} }),
 }));
 
-vi.mock("@lichtblick/suite-base/components/MessagePathSyntax/useMessagesByPath");
+vi.mock(
+  "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory",
+  async (importOriginal) => ({
+    ...(await importOriginal()),
+    usePathSampleHistory: vi.fn(),
+  }),
+);
 vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useDecodedMessageRange");
 let mockCurrentTime = 0;
 vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsTime", () => ({
@@ -102,15 +123,15 @@ vi.mock("@lichtblick/suite-base/panels/StateTransitions/StateTransitions.style",
   useStateTransitionsStyles: () => ({ classes: { chartWrapper: "chartWrapper" } }),
 }));
 
-const mockUseMessagesByPath = useMessagesByPath as Mock;
+const mockUsePathSampleHistory = usePathSampleHistory as Mock;
 const mockUseDecodedMessageRange = useDecodedMessageRange as Mock;
 
 function buildMessageAndData(path: string) {
   const topic = path.split(".")[0]!;
-  return {
+  return sample({
     messageEvent: MessageEventBuilder.messageEvent({ topic }),
     queriedData: [{ path, value: BasicBuilder.string() }],
-  };
+  });
 }
 
 describe("StateTransitions", () => {
@@ -123,7 +144,7 @@ describe("StateTransitions", () => {
     vi.clearAllMocks();
     mockCurrentTime = 0;
     mockUseDecodedMessageRange.mockReturnValue([{}]);
-    mockUseMessagesByPath.mockReturnValue({});
+    mockUsePathSampleHistory.mockReturnValue({});
   });
 
   function renderPanel(config: Partial<StateTransitionConfig> = {}) {
@@ -141,7 +162,7 @@ describe("StateTransitions", () => {
     expect(getByTestId("path-legend")).toBeDefined();
   });
 
-  it("should pass pathStrings to useMessagesByPath when no range data", () => {
+  it("should pass pathStrings to usePathSampleHistory when no range data", () => {
     mockUseDecodedMessageRange.mockReturnValue([{}]);
     const topicA = BasicBuilder.string();
     const topicB = BasicBuilder.string();
@@ -153,7 +174,7 @@ describe("StateTransitions", () => {
       ],
     });
 
-    expect(mockUseMessagesByPath).toHaveBeenCalledWith([topicA, topicB]);
+    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([topicA, topicB], LIVE_HISTORY_SIZE);
   });
 
   it("should remove marker annotations when a path timestamp source changes", () => {
@@ -181,34 +202,34 @@ describe("StateTransitions", () => {
     expect(screen.getByTestId("time-based-chart")).toHaveAttribute("data-annotation-count", "0");
   });
 
-  it("should pass empty array to useMessagesByPath when range data is active", () => {
+  it("should pass empty array to usePathSampleHistory when range data is active", () => {
     const topic = BasicBuilder.string();
-    const decodedMessages: MessageDataItemsByPath[] = [{ [topic]: [buildMessageAndData(topic)] }];
+    const decodedMessages: SamplesByPath[] = [{ [topic]: [buildMessageAndData(topic)] }];
     mockUseDecodedMessageRange.mockReturnValue(decodedMessages);
 
     renderPanel({
       paths: [{ value: topic, timestampMethod: "receiveTime" }],
     });
 
-    expect(mockUseMessagesByPath).toHaveBeenCalledWith([]);
+    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([], LIVE_HISTORY_SIZE);
   });
 
   it("should pass pathStrings when decodedMessages has matching paths but empty arrays", () => {
     const topic = BasicBuilder.string();
-    const decodedMessages: MessageDataItemsByPath[] = [{ [topic]: [] }];
+    const decodedMessages: SamplesByPath[] = [{ [topic]: [] }];
     mockUseDecodedMessageRange.mockReturnValue(decodedMessages);
 
     renderPanel({
       paths: [{ value: topic, timestampMethod: "receiveTime" }],
     });
 
-    expect(mockUseMessagesByPath).toHaveBeenCalledWith([topic]);
+    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([topic], LIVE_HISTORY_SIZE);
   });
 
-  it("should skip useMessagesByPath when any path has range data", () => {
+  it("should skip usePathSampleHistory when any path has range data", () => {
     const topicA = BasicBuilder.string();
     const topicB = BasicBuilder.string();
-    const decodedMessages: MessageDataItemsByPath[] = [
+    const decodedMessages: SamplesByPath[] = [
       {
         [topicA]: [buildMessageAndData(topicA)],
         [topicB]: [],
@@ -223,7 +244,7 @@ describe("StateTransitions", () => {
       ],
     });
 
-    expect(mockUseMessagesByPath).toHaveBeenCalledWith([]);
+    expect(mockUsePathSampleHistory).toHaveBeenCalledWith([], LIVE_HISTORY_SIZE);
   });
 
   it.each([undefined, "=> 2"])("hides match navigation for condition %s", (condition) => {

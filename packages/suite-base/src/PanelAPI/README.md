@@ -26,15 +26,17 @@ Using this hook inside a panel will cause the panel to re-render automatically w
 
 ## [`PanelAPI.useMessagesByTopic()`](useMessagesByTopic.js)
 
-`useMessagesByTopic()` is a small wrapper around `PanelAPI.useMessageReducer` (see below). It makes it easy to just request some messages on some topics, without doing any transformations on the messages. This is convenient, but also means that the entire messages are kept in memory, so it's recommended to only use this for a small number of messages at a time (small `historySize`).
+`useMessagesByTopic()` is a small wrapper around `PanelAPI.useMessageReducer` (see below). It makes it easy to just request some messages on some topics, without doing any transformations on the messages. This is convenient, but also means that the entire messages are kept in memory, so it's recommended to only use this for a small number of messages at a time (small `historySize`). To keep a long history of a few values, use `usePathSampleHistory()`, which stores only the decoded values.
+
+Each topic's history is a `RingBuffer` that is appended in place, so a long history costs nothing extra per frame. `historySize` is required and must be finite.
 
 Using this hook will cause the panel to re-render when any new messages come in on the requested topics.
 
 ```js
 PanelAPI.useMessagesByTopic(props: {|
   topics: string[],
-  historySize: number // Number of messages to keep per topic.
-|}): { [topic: string]: Message[] };
+  historySize: number // Number of messages to keep per topic. Required, finite.
+|}): { [topic: string]: ReadonlyRingBuffer<MessageEvent> };
 ```
 
 ## [`PanelAPI.useMessageReducer()`](useMessageReducer.js)

@@ -22,10 +22,13 @@ import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 import * as PanelAPI from ".";
 
+const toArrays = (byTopic: PanelAPI.MessageHistoryByTopic) =>
+  Object.fromEntries(Object.entries(byTopic).map(([topic, history]) => [topic, history.toArray()]));
+
 describe("useMessagesByTopic", () => {
   it("initializes with an empty array per topic", async () => {
     const { result } = renderHook(
-      ({ topics, historySize }) => PanelAPI.useMessagesByTopic({ topics, historySize }),
+      ({ topics, historySize }) => toArrays(PanelAPI.useMessagesByTopic({ topics, historySize })),
       {
         initialProps: { topics: ["/foo"], historySize: 1 },
         wrapper: ({ children }) => (
@@ -39,7 +42,7 @@ describe("useMessagesByTopic", () => {
 
   it("accepts SubscribePayloads", async () => {
     const { result } = renderHook(
-      ({ topics, historySize }) => PanelAPI.useMessagesByTopic({ topics, historySize }),
+      ({ topics, historySize }) => toArrays(PanelAPI.useMessagesByTopic({ topics, historySize })),
       {
         initialProps: { topics: [{ topic: "/foo", fields: ["a"] }], historySize: 1 },
         wrapper: ({ children }) => (
@@ -70,9 +73,9 @@ describe("useMessagesByTopic", () => {
 
     let messages = [message1];
     const { result, rerender } = renderHook(
-      ({ topics, historySize }) => PanelAPI.useMessagesByTopic({ topics, historySize }),
+      ({ topics, historySize }) => toArrays(PanelAPI.useMessagesByTopic({ topics, historySize })),
       {
-        initialProps: { topics: ["/foo"], historySize: Infinity },
+        initialProps: { topics: ["/foo"], historySize: 10 },
         wrapper: ({ children }) => (
           <MockMessagePipelineProvider messages={messages}>{children}</MockMessagePipelineProvider>
         ),
@@ -80,7 +83,7 @@ describe("useMessagesByTopic", () => {
     );
     expect(result.current).toEqual({ "/foo": [message1] });
     messages = [message2];
-    rerender({ topics: ["/foo"], historySize: Infinity });
+    rerender({ topics: ["/foo"], historySize: 10 });
     expect(result.current).toEqual({ "/foo": [message1, message2] });
   });
 
@@ -103,9 +106,9 @@ describe("useMessagesByTopic", () => {
 
     let messages = [message1, message2];
     const { result, rerender } = renderHook(
-      ({ topics, historySize }) => PanelAPI.useMessagesByTopic({ topics, historySize }),
+      ({ topics, historySize }) => toArrays(PanelAPI.useMessagesByTopic({ topics, historySize })),
       {
-        initialProps: { topics: ["/foo"], historySize: Infinity },
+        initialProps: { topics: ["/foo"], historySize: 10 },
         wrapper: ({ children }) => (
           <MockMessagePipelineProvider messages={messages}>{children}</MockMessagePipelineProvider>
         ),
@@ -118,5 +121,15 @@ describe("useMessagesByTopic", () => {
     rerender({ topics: ["/foo", "/bar"], historySize: 1 });
 
     expect(result.current).toEqual({ "/foo": [message2], "/bar": [] });
+  });
+
+  it("rejects an unbounded history", () => {
+    expect(() =>
+      renderHook(() => PanelAPI.useMessagesByTopic({ topics: ["/foo"], historySize: Infinity }), {
+        wrapper: ({ children }) => (
+          <MockMessagePipelineProvider>{children}</MockMessagePipelineProvider>
+        ),
+      }),
+    ).toThrow(RangeError);
   });
 });

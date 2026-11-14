@@ -3,12 +3,25 @@
 
 import { fromSec } from "@foxglove/rostime";
 
-import { MessageAndData } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import {
+  PathSample,
+  toPathSample,
+} from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
 import { addMatchStarts } from "@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsData";
+import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 
 import { conditionMatches, parseCondition } from "./condition";
 import { messagesToDataset } from "./messagesToDataset";
+
+const sample = ({
+  messageEvent,
+  queriedData,
+}: {
+  messageEvent: MessageEvent;
+  queriedData: MessagePathDataItem[];
+}): PathSample => toPathSample(messageEvent, queriedData);
 
 describe("parseCondition", () => {
   it.each([
@@ -64,10 +77,12 @@ describe("conditionMatches", () => {
 
 describe("condition bands", () => {
   const startTime = { sec: 0, nsec: 0 };
-  const blocks: MessageAndData[] = [1, 3, 4, 1, 5, 0].map((value, i) => ({
-    messageEvent: MessageEventBuilder.messageEvent({ receiveTime: fromSec(i) }),
-    queriedData: [{ value, path: "/a.b" }],
-  }));
+  const blocks: PathSample[] = [1, 3, 4, 1, 5, 0].map((value, i) =>
+    sample({
+      messageEvent: MessageEventBuilder.messageEvent({ receiveTime: fromSec(i) }),
+      queriedData: [{ value, path: "/a.b" }],
+    }),
+  );
 
   it("turns values into true/false segments and collects where they turn true", () => {
     const dataset = messagesToDataset({

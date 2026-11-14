@@ -25,7 +25,7 @@ import { useTranslation } from "react-i18next";
 import { parseMessagePath } from "@lichtblick/message-path";
 import { OnClickArg as OnChartClickArgs } from "@lichtblick/suite-base/components/Chart";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
-import useMessagesByPath from "@lichtblick/suite-base/components/MessagePathSyntax/useMessagesByPath";
+import { usePathSampleHistory } from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -40,6 +40,7 @@ import { useStateTransitionsStyles } from "@lichtblick/suite-base/panels/StateTr
 import { parseCondition } from "@lichtblick/suite-base/panels/StateTransitions/condition";
 import {
   EMPTY_ITEMS_BY_PATH,
+  LIVE_HISTORY_SIZE,
   EMPTY_PATHS,
   EMPTY_TOPICS,
   STATE_TRANSITION_PLUGINS,
@@ -104,7 +105,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
     isPlayerPresent ? pathStrings : EMPTY_PATHS,
   );
 
-  // When range data is active, skip useMessagesByPath subscriptions entirely
+  // When range data is active, skip the live subscription entirely
   // to avoid wasteful current-frame processing and decoding.
   const hasRangeData = useMemo(
     () =>
@@ -114,7 +115,10 @@ function StateTransitions(props: StateTransitionPanelProps) {
     [decodedMessages, pathStrings],
   );
 
-  const itemsByPath = useMessagesByPath(hasRangeData ? EMPTY_PATHS : pathStrings);
+  const itemsByPath = usePathSampleHistory(
+    hasRangeData ? EMPTY_PATHS : pathStrings,
+    LIVE_HISTORY_SIZE,
+  );
 
   const { height, heightPerTopic } = useMemo(() => {
     const onlyTopicsHeight = paths.length * 64;

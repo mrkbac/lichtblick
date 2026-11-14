@@ -1,110 +1,152 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLatest } from "react-use";
 
-import { pushAll } from "@lichtblick/den/collection";
-import { MessageEvent } from "@lichtblick/suite";
+import { parseMessagePath } from "@lichtblick/message-path";
+import { useCachedGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import {
-  MessageDataItemsByPath,
-  useDecodeMessagePathsForMessagesByTopic,
-} from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+  PathSample,
+  toPathSample,
+} from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
 import { useSubscribeMessageRange } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
 
+/** Decoded samples of each path over the whole recording, oldest first. */
+export type PathSamplesByPath = Readonly<Record<string, readonly PathSample[]>>;
+
+const FLUSH_INTERVAL_MS = 250;
+
+type TopicRequest = { paths: string[]; key: string };
+
+/**
+ * Loads `pathStrings` over the whole recording. Each batch is decoded as it arrives and only the
+ * decoded samples are kept, so memory doesn't depend on message size and a flush never re-reads
+ * earlier batches.
+ *
+ * A topic is reloaded when the paths reading it change (or, for paths using `$variables`, when
+ * global variables change), since the messages themselves are not kept.
+ */
 export function useDecodedMessageRange(
-  topics: string[],
-  pathStrings: string[],
-): MessageDataItemsByPath[] {
-  const decodeMessagePathsForMessagesByTopic = useDecodeMessagePathsForMessagesByTopic(pathStrings);
+  topics: readonly string[],
+  pathStrings: readonly string[],
+): PathSamplesByPath[] {
   const subscribeMessageRange = useSubscribeMessageRange();
+  const decodeRef = useLatest(useCachedGetMessagePathDataItems(pathStrings));
+  const pathsRef = useLatest(pathStrings);
+  const { globalVariables } = useGlobalVariables();
 
-  const [messagesByTopic, setMessagesByTopic] = useState<Record<string, MessageEvent[]>>({});
-  const accumulatedRef = useRef<Record<string, MessageEvent[]>>({});
+  const requestByTopic = useMemo(() => {
+    const pathsByTopic = new Map<string, Set<string>>();
+    for (const path of pathStrings) {
+      const topic = parseMessagePath(path)?.topicName;
+      if (topic != undefined && topics.includes(topic)) {
+        pathsByTopic.set(topic, (pathsByTopic.get(topic) ?? new Set()).add(path));
+      }
+    }
+    const result = new Map<string, TopicRequest>();
+    for (const [topic, pathSet] of pathsByTopic) {
+      const paths = [...pathSet].sort();
+      const variables = paths.some((path) => path.includes("$"))
+        ? JSON.stringify(globalVariables)
+        : "";
+      result.set(topic, { paths, key: JSON.stringify([paths, variables]) ?? "" });
+    }
+    return result;
+  }, [globalVariables, pathStrings, topics]);
+
+  const [samplesByPath, setSamplesByPath] = useState<PathSamplesByPath>({});
+  // Mutated in place while loading; published as a new outer object on each flush.
+  const accRef = useRef<Record<string, PathSample[]>>({});
   const flushRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Never replace .current, only mutate: the unmount cleanup captures it at mount.
+  const subsRef = useRef(new Map<string, TopicRequest & { cancel: () => void }>());
 
-  // Never replace .current — only mutate in place. The unmount cleanup captures
-  // this reference at mount time and relies on it remaining the same object.
-  const cancelsByTopicRef = useRef<Map<string, () => void>>(new Map());
-  const subscribeTopic = useCallback(
-    (topic: string) => {
+  useEffect(() => {
+    const subs = subsRef.current;
+    const acc = accRef.current;
+    const publish = () => {
+      setSamplesByPath({ ...acc });
+    };
+
+    let removed = false;
+    for (const [topic, sub] of subs) {
+      if (requestByTopic.get(topic)?.key !== sub.key) {
+        sub.cancel();
+        subs.delete(topic);
+        for (const path of sub.paths) {
+          delete acc[path];
+        }
+        removed = true;
+      }
+    }
+
+    for (const [topic, request] of requestByTopic) {
+      if (subs.has(topic)) {
+        continue;
+      }
+      let cancelled = false;
       const cancel = subscribeMessageRange({
         topic,
         onNewRangeIterator: async (batchIterator) => {
-          accumulatedRef.current[topic] = [];
-          setMessagesByTopic((prev) => ({ ...prev, [topic]: [] }));
-
+          // A new iterator replaces the topic's data (e.g. an edited user script).
+          for (const path of request.paths) {
+            acc[path] = [];
+          }
+          publish();
           for await (const batch of batchIterator) {
-            // oxlint-disable-next-line typescript/no-unnecessary-condition -- cleanup deletes the entry while batches are still awaited
-            accumulatedRef.current[topic] ??= [];
-            pushAll(accumulatedRef.current[topic], batch);
-
-            // Wait 250ms before updating state so that batches arriving in quick
-            // succession are grouped into one update instead of re-rendering the
-            // chart for each batch individually.
-            // Less batches means faster updates and better performance
-            flushRef.current ??= globalThis.setTimeout(() => {
+            // The resolver can already be the next render's, before this effect cancels us.
+            if (cancelled || request.paths.some((path) => !pathsRef.current.includes(path))) {
+              return;
+            }
+            for (const path of request.paths) {
+              const out = (acc[path] ??= []);
+              for (const message of batch) {
+                const queriedData = decodeRef.current(path, message);
+                if (queriedData) {
+                  out.push(toPathSample(message, queriedData));
+                }
+              }
+            }
+            // Group batches arriving in quick succession into one update.
+            flushRef.current ??= setTimeout(() => {
               flushRef.current = undefined;
-              setMessagesByTopic({ ...accumulatedRef.current });
-            }, 250);
+              publish();
+            }, FLUSH_INTERVAL_MS);
           }
-
-          // Final flush after iterator completes
-          if (flushRef.current != undefined) {
-            clearTimeout(flushRef.current);
-            flushRef.current = undefined;
+          if (!cancelled) {
+            publish();
           }
-          setMessagesByTopic({ ...accumulatedRef.current });
         },
       });
-      cancelsByTopicRef.current.set(topic, cancel);
-    },
-    [subscribeMessageRange],
-  );
-
-  useEffect(() => {
-    const nextSet = new Set(topics);
-
-    // Unsubscribe topics that are no longer needed.
-    for (const [topic, cancel] of cancelsByTopicRef.current) {
-      if (!nextSet.has(topic)) {
-        cancel();
-        cancelsByTopicRef.current.delete(topic);
-        delete accumulatedRef.current[topic];
-        setMessagesByTopic((prev) => {
-          const next = { ...prev };
-          delete next[topic];
-          return next;
-        });
-      }
+      subs.set(topic, {
+        ...request,
+        cancel: () => {
+          cancelled = true;
+          cancel();
+        },
+      });
     }
 
-    for (const topic of nextSet) {
-      if (!cancelsByTopicRef.current.has(topic)) {
-        subscribeTopic(topic);
-      }
+    if (removed) {
+      publish();
     }
-  }, [topics, subscribeTopic]);
+  }, [decodeRef, pathsRef, requestByTopic, subscribeMessageRange]);
 
   // Clean up all subscriptions on unmount.
   useEffect(() => {
-    const cancels = cancelsByTopicRef.current;
+    const subs = subsRef.current;
     const flush = flushRef;
     return () => {
-      if (flush.current != undefined) {
-        clearTimeout(flush.current);
-        flush.current = undefined;
-      }
-      for (const cancel of cancels.values()) {
+      clearTimeout(flush.current);
+      flush.current = undefined;
+      for (const { cancel } of subs.values()) {
         cancel();
       }
-      cancels.clear();
+      subs.clear();
     };
   }, []);
 
-  const decoded = useMemo(
-    () => decodeMessagePathsForMessagesByTopic(messagesByTopic),
-    [messagesByTopic, decodeMessagePathsForMessagesByTopic],
-  );
-
-  return [decoded];
+  return useMemo(() => [samplesByPath], [samplesByPath]);
 }

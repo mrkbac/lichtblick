@@ -15,6 +15,6 @@ ruleTester.run("no-push-spread", plugin.rules["no-push-spread"], {
   valid: ["arr.push(a, b);", "pushAll(arr, items);", "const c = [...a, ...b];", "f(...args);"],
   invalid: [
     { code: "arr.push(...items);", errors: [{ messageId: "spread" }] },
-    { code: "this.#x.full.push(a, ...items);", errors: [{ messageId: "spread" }] },
+    { code: "this.x.full.push(a, ...items);", errors: [{ messageId: "spread" }] },
   ],
 });

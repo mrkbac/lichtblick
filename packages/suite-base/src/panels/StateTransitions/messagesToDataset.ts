@@ -7,14 +7,11 @@
 
 import { subtract as subtractTimes, toSec } from "@foxglove/rostime";
 
-import {
-  MessageAndData,
-  MessagePathDataItem,
-} from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import { PathSample } from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
 import { ChartDataset } from "@lichtblick/suite-base/components/TimeBasedChart/types";
 import { hashString } from "@lichtblick/suite-base/util/hashString";
 import { expandedLineColors } from "@lichtblick/suite-base/util/plotColors";
-import { getTimestampForMessageEvent } from "@lichtblick/suite-base/util/time";
 
 import { conditionMatches, parseCondition } from "./condition";
 import positiveModulo from "./positiveModulo";
@@ -55,7 +52,8 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
     }
 
     for (const itemByPath of messages) {
-      const timestamp = getTimestampForMessageEvent(itemByPath.messageEvent, path.timestampMethod);
+      const timestamp =
+        path.timestampMethod === "headerStamp" ? itemByPath.headerStamp : itemByPath.receiveTime;
       if (!timestamp) {
         continue;
       }
@@ -121,7 +119,7 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
   return dataset;
 }
 
-export function extractQueriedData(itemByPath: MessageAndData): MessagePathDataItem | undefined {
+export function extractQueriedData(itemByPath: PathSample): MessagePathDataItem | undefined {
   if (itemByPath.queriedData.length === 1) {
     return itemByPath.queriedData[0];
   }

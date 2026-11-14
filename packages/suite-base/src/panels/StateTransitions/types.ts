@@ -7,8 +7,8 @@
 
 import { Time } from "@foxglove/rostime";
 
-import { Immutable, SettingsTreeAction, SettingsTreeNodeActionItem } from "@lichtblick/suite";
-import { MessageAndData } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import { SettingsTreeAction, SettingsTreeNodeActionItem } from "@lichtblick/suite";
+import { PathSample } from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { TimestampMethod } from "@lichtblick/suite-base/util/time";
 
@@ -72,7 +72,7 @@ export type MessageDatasetArgs = {
   startTime: Time;
   y: number;
   pathIndex: number;
-  blocks: readonly (readonly MessageAndData[] | undefined)[];
+  blocks: readonly (Iterable<PathSample> | undefined)[];
   showPoints: boolean;
 };
 
@@ -83,4 +83,7 @@ export type ValueAtTime = {
   constantName: string | undefined;
 };
 
-export type ImmutableDataset = Immutable<(MessageAndData[] | undefined)[]>;
+export type ImmutableDataset = readonly (Iterable<PathSample> | undefined)[];
+
+/** Decoded samples per message path, from a recorded range or a live history. */
+export type SamplesByPath = Readonly<Record<string, Iterable<PathSample> | undefined>>;

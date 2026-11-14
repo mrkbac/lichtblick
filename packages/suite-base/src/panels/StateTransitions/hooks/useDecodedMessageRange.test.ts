@@ -7,19 +7,21 @@ import { act, renderHook } from "@testing-library/react";
 import type { Mock } from "vitest";
 
 import { MessageEvent, SubscribeMessageRangeArgs } from "@lichtblick/suite";
-import { useDecodeMessagePathsForMessagesByTopic } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import { useCachedGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import { useSubscribeMessageRange } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
 
-import { useDecodedMessageRange } from "./useDecodedMessageRange";
+import { PathSamplesByPath, useDecodedMessageRange } from "./useDecodedMessageRange";
 
 vi.mock("@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems");
 vi.mock("@lichtblick/suite-base/components/PanelExtensionAdapter");
+vi.mock("@lichtblick/suite-base/hooks/useGlobalVariables");
 
 describe("useDecodedMessageRange", () => {
   let mockSubscribeMessageRange: Mock;
-  let mockDecodeMessagePathsForMessagesByTopic: Mock;
+  let mockDecode: Mock;
   let mockCancel: Mock;
 
   beforeEach(() => {
@@ -28,41 +30,46 @@ describe("useDecodedMessageRange", () => {
 
     mockCancel = vi.fn();
     mockSubscribeMessageRange = vi.fn().mockReturnValue(mockCancel);
-    mockDecodeMessagePathsForMessagesByTopic = vi.fn().mockReturnValue({});
+    // Decodes a path to the whole message, so tests can check which messages were kept.
+    mockDecode = vi.fn((path: string, message: MessageEvent) => [{ value: message, path }]);
 
     (useSubscribeMessageRange as Mock).mockReturnValue(mockSubscribeMessageRange);
-    (useDecodeMessagePathsForMessagesByTopic as Mock).mockReturnValue(
-      mockDecodeMessagePathsForMessagesByTopic,
-    );
+    (useCachedGetMessagePathDataItems as Mock).mockReturnValue(mockDecode);
+    (useGlobalVariables as Mock).mockReturnValue({ globalVariables: {} });
   });
 
   afterEach(() => {
     vi.useRealTimers();
   });
 
-  async function simulateBatches(topic: string, batches: MessageEvent[][]): Promise<void> {
-    const call = mockSubscribeMessageRange.mock.calls.find(
+  function rangeArgs(topic: string): SubscribeMessageRangeArgs {
+    const call = mockSubscribeMessageRange.mock.calls.findLast(
       ([args]) => (args as SubscribeMessageRangeArgs).topic === topic,
     ) as [SubscribeMessageRangeArgs] | undefined;
     if (call == undefined) {
       throw new Error(`No subscription found for topic "${topic}"`);
     }
-    const args: SubscribeMessageRangeArgs = call[0];
-
-    const batchIterator = (async function* () {
-      for (const batch of batches) {
-        yield batch;
-      }
-    })();
-
-    await args.onNewRangeIterator(batchIterator);
+    return call[0];
   }
 
-  it("should subscribe to each topic", () => {
+  async function simulateBatches(topic: string, batches: MessageEvent[][]): Promise<void> {
+    await rangeArgs(topic).onNewRangeIterator(
+      (async function* () {
+        for (const batch of batches) {
+          yield batch;
+        }
+      })(),
+    );
+  }
+
+  const valuesOf = (current: PathSamplesByPath[], path: string) =>
+    current[0]?.[path]?.map((sample) => sample.queriedData[0]?.value);
+
+  it("subscribes to each topic and cancels on unmount", () => {
     const topicA = PlayerBuilder.topic().name;
     const topicB = PlayerBuilder.topic().name;
 
-    renderHook(() =>
+    const { unmount } = renderHook(() =>
       useDecodedMessageRange([topicA, topicB], [`${topicA}.field`, `${topicB}.field`]),
     );
 
@@ -73,315 +80,140 @@ describe("useDecodedMessageRange", () => {
     expect(mockSubscribeMessageRange).toHaveBeenCalledWith(
       expect.objectContaining({ topic: topicB }),
     );
-  });
-
-  it("should cancel subscriptions on unmount", () => {
-    const topic = PlayerBuilder.topic().name;
-
-    const { unmount } = renderHook(() => useDecodedMessageRange([topic], [`${topic}.field`]));
-
     unmount();
-
-    expect(mockCancel).toHaveBeenCalled();
+    expect(mockCancel).toHaveBeenCalledTimes(2);
   });
 
-  it("should accumulate messages and decode after flush", async () => {
-    const topic = PlayerBuilder.topic().name;
-
-    const { result } = renderHook(() => useDecodedMessageRange([topic], [`${topic}.field`]));
-
-    const msgs = [
-      MessageEventBuilder.messageEvent({ topic }),
-      MessageEventBuilder.messageEvent({ topic }),
-    ];
-
-    await act(async () => {
-      await simulateBatches(topic, [msgs]);
-    });
-
-    expect(mockDecodeMessagePathsForMessagesByTopic).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        [topic]: expect.arrayContaining(msgs),
-      }),
-    );
-    expect(result.current).toEqual([{}]);
-  });
-
-  it("should handle empty topics", () => {
-    (useDecodeMessagePathsForMessagesByTopic as Mock).mockReturnValue(vi.fn().mockReturnValue({}));
-
+  it("does not subscribe without topics", () => {
     const { result } = renderHook(() => useDecodedMessageRange([], []));
 
     expect(result.current).toEqual([{}]);
     expect(mockSubscribeMessageRange).not.toHaveBeenCalled();
   });
 
-  it("should reset accumulated data when a new range iterator is provided", async () => {
+  it("keeps decoded samples per path, with the timestamps", async () => {
     const topic = PlayerBuilder.topic().name;
+    const path = `${topic}.field`;
+    const { result } = renderHook(() => useDecodedMessageRange([topic], [path]));
 
-    renderHook(() => useDecodedMessageRange([topic], [`${topic}.field`]));
-
-    const firstBatch = [MessageEventBuilder.messageEvent({ topic })];
-    const secondBatch = [MessageEventBuilder.messageEvent({ topic })];
-
+    const msgs = [
+      MessageEventBuilder.messageEvent({
+        topic,
+        message: { header: { stamp: { sec: 1, nsec: 2 } } },
+      }),
+      MessageEventBuilder.messageEvent({ topic }),
+    ];
     await act(async () => {
-      await simulateBatches(topic, [firstBatch]);
+      await simulateBatches(topic, [msgs]);
     });
 
-    const call = mockSubscribeMessageRange.mock.calls.find(
-      ([args]) => (args as SubscribeMessageRangeArgs).topic === topic,
-    );
-    const args: SubscribeMessageRangeArgs = call![0];
-
-    await act(async () => {
-      const newIterator = (async function* () {
-        yield secondBatch;
-      })();
-      await args.onNewRangeIterator(newIterator);
-    });
-
-    expect(mockDecodeMessagePathsForMessagesByTopic).toHaveBeenLastCalledWith(
+    expect(valuesOf(result.current, path)).toEqual(msgs);
+    expect(result.current[0]?.[path]?.[0]).toEqual(
       expect.objectContaining({
-        [topic]: secondBatch,
+        receiveTime: msgs[0]!.receiveTime,
+        headerStamp: { sec: 1, nsec: 2 },
       }),
     );
   });
 
-  describe("incremental topic diffing", () => {
-    it("should preserve existing topic data when a new topic is added", async () => {
-      const topicA = PlayerBuilder.topic().name;
-      const topicB = PlayerBuilder.topic().name;
+  it("decodes each message once however many flushes happen while loading", async () => {
+    const topic = PlayerBuilder.topic().name;
+    const path = `${topic}.field`;
+    const { result } = renderHook(() => useDecodedMessageRange([topic], [path]));
 
-      const initialTopics = [topicA];
-      const initialPaths = [`${topicA}.field`];
-
-      const { rerender } = renderHook(
-        ({ topics, paths }) => useDecodedMessageRange(topics, paths),
-        { initialProps: { topics: initialTopics, paths: initialPaths } },
-      );
-
-      const msgsA = [
-        MessageEventBuilder.messageEvent({ topic: topicA }),
-        MessageEventBuilder.messageEvent({ topic: topicA }),
-      ];
-
-      await act(async () => {
-        await simulateBatches(topicA, [msgsA]);
-      });
-
-      expect(mockDecodeMessagePathsForMessagesByTopic).toHaveBeenLastCalledWith(
-        expect.objectContaining({ [topicA]: expect.arrayContaining(msgsA) }),
-      );
-
-      mockSubscribeMessageRange.mockClear();
-
-      rerender({
-        topics: [topicA, topicB],
-        paths: [`${topicA}.field`, `${topicB}.field`],
-      });
-
-      expect(mockSubscribeMessageRange).toHaveBeenCalledTimes(1);
-      expect(mockSubscribeMessageRange).toHaveBeenCalledWith(
-        expect.objectContaining({ topic: topicB }),
-      );
-
-      const msgsB = [MessageEventBuilder.messageEvent({ topic: topicB })];
-
-      await act(async () => {
-        await simulateBatches(topicB, [msgsB]);
-      });
-
-      expect(mockDecodeMessagePathsForMessagesByTopic).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          [topicA]: expect.arrayContaining(msgsA),
-          [topicB]: expect.arrayContaining(msgsB),
-        }),
+    const batches = Array.from({ length: 20 }, () => [
+      MessageEventBuilder.messageEvent({ topic }),
+      MessageEventBuilder.messageEvent({ topic }),
+    ]);
+    await act(async () => {
+      await rangeArgs(topic).onNewRangeIterator(
+        (async function* () {
+          for (const batch of batches) {
+            yield batch;
+            // Let the flush timer fire between batches, as during a slow load
+            vi.advanceTimersByTime(250);
+          }
+        })(),
       );
     });
 
-    it("should only cancel the removed topic and preserve remaining topic data", async () => {
-      const topicA = PlayerBuilder.topic().name;
-      const topicB = PlayerBuilder.topic().name;
-
-      const cancelA = vi.fn();
-      const cancelB = vi.fn();
-      mockSubscribeMessageRange.mockReturnValueOnce(cancelA).mockReturnValueOnce(cancelB);
-
-      const { rerender } = renderHook(
-        ({ topics, paths }) => useDecodedMessageRange(topics, paths),
-        {
-          initialProps: {
-            topics: [topicA, topicB],
-            paths: [`${topicA}.field`, `${topicB}.field`],
-          },
-        },
-      );
-
-      const msgsA = [MessageEventBuilder.messageEvent({ topic: topicA })];
-      const msgsB = [MessageEventBuilder.messageEvent({ topic: topicB })];
-
-      await act(async () => {
-        await simulateBatches(topicA, [msgsA]);
-        await simulateBatches(topicB, [msgsB]);
-      });
-
-      rerender({
-        topics: [topicA],
-        paths: [`${topicA}.field`],
-      });
-
-      expect(cancelA).not.toHaveBeenCalled();
-      expect(cancelB).toHaveBeenCalledTimes(1);
-
-      expect(mockDecodeMessagePathsForMessagesByTopic).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          [topicA]: expect.arrayContaining(msgsA),
-        }),
-      );
-      expect(mockDecodeMessagePathsForMessagesByTopic).toHaveBeenLastCalledWith(
-        expect.not.objectContaining({
-          [topicB]: expect.anything(),
-        }),
-      );
-    });
-
-    it("should not resubscribe to topics that remain unchanged", async () => {
-      const topicA = PlayerBuilder.topic().name;
-      const topicB = PlayerBuilder.topic().name;
-      const topicC = PlayerBuilder.topic().name;
-
-      const { rerender } = renderHook(
-        ({ topics, paths }) => useDecodedMessageRange(topics, paths),
-        {
-          initialProps: {
-            topics: [topicA, topicB],
-            paths: [`${topicA}.field`, `${topicB}.field`],
-          },
-        },
-      );
-
-      await act(async () => {
-        await simulateBatches(topicA, [[MessageEventBuilder.messageEvent({ topic: topicA })]]);
-        await simulateBatches(topicB, [[MessageEventBuilder.messageEvent({ topic: topicB })]]);
-      });
-
-      expect(mockSubscribeMessageRange).toHaveBeenCalledTimes(2);
-      mockSubscribeMessageRange.mockClear();
-
-      rerender({
-        topics: [topicA, topicC],
-        paths: [`${topicA}.field`, `${topicC}.field`],
-      });
-
-      expect(mockSubscribeMessageRange).toHaveBeenCalledTimes(1);
-      expect(mockSubscribeMessageRange).toHaveBeenCalledWith(
-        expect.objectContaining({ topic: topicC }),
-      );
-    });
-
-    it("should handle adding a topic that shares data with existing subscriptions", async () => {
-      const topicA = PlayerBuilder.topic().name;
-
-      const { rerender } = renderHook(
-        ({ topics, paths }) => useDecodedMessageRange(topics, paths),
-        { initialProps: { topics: [topicA], paths: [`${topicA}.field`] } },
-      );
-
-      const msgsA = [
-        MessageEventBuilder.messageEvent({ topic: topicA }),
-        MessageEventBuilder.messageEvent({ topic: topicA }),
-        MessageEventBuilder.messageEvent({ topic: topicA }),
-      ];
-
-      await act(async () => {
-        await simulateBatches(topicA, [msgsA]);
-      });
-
-      mockSubscribeMessageRange.mockClear();
-      rerender({ topics: [topicA], paths: [`${topicA}.field`] });
-
-      expect(mockSubscribeMessageRange).not.toHaveBeenCalled();
-
-      expect(mockDecodeMessagePathsForMessagesByTopic).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          [topicA]: expect.arrayContaining(msgsA),
-        }),
-      );
-    });
+    expect(mockDecode).toHaveBeenCalledTimes(40);
+    expect(valuesOf(result.current, path)).toEqual(batches.flat());
   });
 
-  describe("player readiness (empty arrays until ready)", () => {
-    it("should not subscribe when topics and pathStrings are empty", () => {
-      renderHook(() => useDecodedMessageRange([], []));
+  it("replaces a topic's data when a new range iterator is provided", async () => {
+    const topic = PlayerBuilder.topic().name;
+    const path = `${topic}.field`;
+    const { result } = renderHook(() => useDecodedMessageRange([topic], [path]));
 
-      expect(mockSubscribeMessageRange).not.toHaveBeenCalled();
+    await act(async () => {
+      await simulateBatches(topic, [[MessageEventBuilder.messageEvent({ topic })]]);
+    });
+    const second = [MessageEventBuilder.messageEvent({ topic })];
+    await act(async () => {
+      await simulateBatches(topic, [second]);
     });
 
-    it("should subscribe when transitioning from empty to non-empty arrays", () => {
-      const topicA = PlayerBuilder.topic().name;
+    expect(valuesOf(result.current, path)).toEqual(second);
+  });
 
-      const { rerender } = renderHook(
-        ({ topics, paths }) => useDecodedMessageRange(topics, paths),
-        { initialProps: { topics: [] as string[], paths: [] as string[] } },
-      );
+  it("only subscribes added topics and only drops removed ones", async () => {
+    const topicA = PlayerBuilder.topic().name;
+    const topicB = PlayerBuilder.topic().name;
+    const cancelA = vi.fn();
+    mockSubscribeMessageRange.mockReturnValueOnce(cancelA);
 
-      expect(mockSubscribeMessageRange).not.toHaveBeenCalled();
-
-      rerender({
-        topics: [topicA],
-        paths: [`${topicA}.field`],
-      });
-
-      expect(mockSubscribeMessageRange).toHaveBeenCalledTimes(1);
-      expect(mockSubscribeMessageRange).toHaveBeenCalledWith(
-        expect.objectContaining({ topic: topicA }),
-      );
+    const { result, rerender } = renderHook(
+      ({ topics, paths }) => useDecodedMessageRange(topics, paths),
+      { initialProps: { topics: [topicA], paths: [`${topicA}.field`] } },
+    );
+    const msgsA = [MessageEventBuilder.messageEvent({ topic: topicA })];
+    await act(async () => {
+      await simulateBatches(topicA, [msgsA]);
     });
 
-    it("should receive and decode data after transitioning from empty to non-empty", async () => {
-      const topicA = PlayerBuilder.topic().name;
+    mockSubscribeMessageRange.mockClear();
+    rerender({ topics: [topicA, topicB], paths: [`${topicA}.field`, `${topicB}.field`] });
+    expect(mockSubscribeMessageRange).toHaveBeenCalledTimes(1);
+    expect(mockSubscribeMessageRange).toHaveBeenCalledWith(
+      expect.objectContaining({ topic: topicB }),
+    );
 
-      const { rerender } = renderHook(
-        ({ topics, paths }) => useDecodedMessageRange(topics, paths),
-        { initialProps: { topics: [] as string[], paths: [] as string[] } },
-      );
+    const msgsB = [MessageEventBuilder.messageEvent({ topic: topicB })];
+    await act(async () => {
+      await simulateBatches(topicB, [msgsB]);
+    });
+    expect(valuesOf(result.current, `${topicA}.field`)).toEqual(msgsA);
+    expect(valuesOf(result.current, `${topicB}.field`)).toEqual(msgsB);
 
-      rerender({
-        topics: [topicA],
-        paths: [`${topicA}.field`],
-      });
+    rerender({ topics: [topicB], paths: [`${topicB}.field`] });
+    expect(cancelA).toHaveBeenCalledTimes(1);
+    expect(result.current[0]?.[`${topicA}.field`]).toBeUndefined();
+    expect(valuesOf(result.current, `${topicB}.field`)).toEqual(msgsB);
+  });
 
-      const msgs = [
-        MessageEventBuilder.messageEvent({ topic: topicA }),
-        MessageEventBuilder.messageEvent({ topic: topicA }),
-      ];
-
-      await act(async () => {
-        await simulateBatches(topicA, [msgs]);
-      });
-
-      expect(mockDecodeMessagePathsForMessagesByTopic).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          [topicA]: expect.arrayContaining(msgs),
-        }),
-      );
+  it("reloads a topic when the paths reading it change", async () => {
+    const topic = PlayerBuilder.topic().name;
+    const { rerender } = renderHook(({ paths }) => useDecodedMessageRange([topic], paths), {
+      initialProps: { paths: [`${topic}.a`] },
     });
 
-    it("should not create duplicate subscriptions on multiple rerenders with same topics", () => {
-      const topicA = PlayerBuilder.topic().name;
+    mockSubscribeMessageRange.mockClear();
+    rerender({ paths: [`${topic}.a`] });
+    expect(mockSubscribeMessageRange).not.toHaveBeenCalled();
 
-      const { rerender } = renderHook(
-        ({ topics, paths }) => useDecodedMessageRange(topics, paths),
-        { initialProps: { topics: [] as string[], paths: [] as string[] } },
-      );
+    rerender({ paths: [`${topic}.a`, `${topic}.b`] });
+    expect(mockCancel).toHaveBeenCalledTimes(1);
+    expect(mockSubscribeMessageRange).toHaveBeenCalledTimes(1);
+  });
 
-      const props = { topics: [topicA], paths: [`${topicA}.field`] };
+  it("reloads paths with variables when the variables change", () => {
+    const topic = PlayerBuilder.topic().name;
+    const { rerender } = renderHook(() => useDecodedMessageRange([topic], [`${topic}.a[$index]`]));
 
-      rerender(props);
-      rerender(props);
-      rerender(props);
-
-      expect(mockSubscribeMessageRange).toHaveBeenCalledTimes(1);
-    });
+    mockSubscribeMessageRange.mockClear();
+    (useGlobalVariables as Mock).mockReturnValue({ globalVariables: { index: 1 } });
+    rerender();
+    expect(mockSubscribeMessageRange).toHaveBeenCalledTimes(1);
   });
 });

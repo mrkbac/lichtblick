@@ -1,15 +1,28 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { MessageAndData } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import {
+  PathSample,
+  toPathSample,
+} from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
 import {
   ImmutableDataset,
   StateTransitionPath,
 } from "@lichtblick/suite-base/panels/StateTransitions/types";
+import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { datasetContainsArray, stateTransitionPathDisplayName } from "./shared";
+
+const sample = ({
+  messageEvent,
+  queriedData,
+}: {
+  messageEvent: MessageEvent;
+  queriedData: MessagePathDataItem[];
+}): PathSample => toPathSample(messageEvent, queriedData);
 
 describe("stateTransitionPathDisplayName", () => {
   function buildStateTransitionPath(
@@ -55,10 +68,11 @@ describe("stateTransitionPathDisplayName", () => {
 });
 
 describe("datasetContainsArray", () => {
-  const createMessageAndData = (queriedDataLength: number): MessageAndData => ({
-    messageEvent: MessageEventBuilder.messageEvent(), // Mock the MessageEvent
-    queriedData: new Array(queriedDataLength).fill({}), // Create an array of the specified length
-  });
+  const createMessageAndData = (queriedDataLength: number): PathSample =>
+    sample({
+      messageEvent: MessageEventBuilder.messageEvent(), // Mock the MessageEvent
+      queriedData: new Array(queriedDataLength).fill({}), // Create an array of the specified length
+    });
 
   it("should return false for an empty dataset", () => {
     const dataset: ImmutableDataset = [];
@@ -75,22 +89,22 @@ describe("datasetContainsArray", () => {
     expect(datasetContainsArray(dataset)).toBe(false);
   });
 
-  it("should return false for a single MessageAndData[] element with queriedData of length 1", () => {
+  it("should return false for a single PathSample[] element with queriedData of length 1", () => {
     const dataset: ImmutableDataset = [[createMessageAndData(1)]];
     expect(datasetContainsArray(dataset)).toBe(false);
   });
 
-  it("should return true for a single MessageAndData[] element with queriedData of length greater than 1", () => {
+  it("should return true for a single PathSample[] element with queriedData of length greater than 1", () => {
     const dataset: ImmutableDataset = [[createMessageAndData(2)]];
     expect(datasetContainsArray(dataset)).toBe(true);
   });
 
-  it("should return true for multiple MessageAndData[] elements with consistent queriedData lengths greater than 1", () => {
+  it("should return true for multiple PathSample[] elements with consistent queriedData lengths greater than 1", () => {
     const dataset: ImmutableDataset = [[createMessageAndData(2)], [createMessageAndData(2)]];
     expect(datasetContainsArray(dataset)).toBe(true);
   });
 
-  it("should return false for multiple MessageAndData[] elements with mixed queriedData lengths, including lengths less than or equal to 1", () => {
+  it("should return false for multiple PathSample[] elements with mixed queriedData lengths, including lengths less than or equal to 1", () => {
     const dataset: ImmutableDataset = [[createMessageAndData(2)], [createMessageAndData(1)]];
     expect(datasetContainsArray(dataset)).toBe(false);
   });
