@@ -23,13 +23,18 @@ import { Code, CodeBuilder, int, ident, js, Locals, Unsupported } from "./codege
 export function createRos2CdrDeserializer(
   definitions: MessageDefinition[],
 ): (data: ArrayBufferView) => unknown {
-  const reader = new MessageReader(definitions);
-  const fallback = (data: ArrayBufferView): unknown => reader.readMessage(data);
-
-  // Same root and lookup rules as MessageReader.
-  const root = definitions.find((def) => !isConstantModule(def));
+  // Same root and lookup rules as MessageReader, which skips leading all-constant definitions
+  // (ros2idl constant modules). A .msg with only constants (e.g. an enum-like type) is a single
+  // all-constant definition: MessageReader rejects it, but ROS 2 serializes it as an empty struct,
+  // which the generated code decodes.
+  const readerRoot = definitions.find((def) => !isConstantModule(def));
+  const root = readerRoot ?? (definitions.length === 1 ? definitions[0] : undefined);
+  // Built up front when possible so invalid definitions still throw here, as before.
+  let reader = readerRoot == undefined ? undefined : new MessageReader(definitions);
+  const fallback = (data: ArrayBufferView): unknown =>
+    (reader ??= new MessageReader(definitions)).readMessage(data);
   if (root == undefined) {
-    return fallback;
+    throw new Error("MessageReader initialized with no root MessageDefinition"); // as before
   }
   const types = new Map(definitions.map((def) => [def.name ?? "", def.definitions]));
 

@@ -491,6 +491,24 @@ describe("createRos2CdrDeserializer", () => {
     expect((globalThis as { injectedByTest?: boolean }).injectedByTest).toBeUndefined();
   });
 
+  it("decodes a message with only constants as an empty struct", () => {
+    // MessageReader takes this for a ros2idl constant module and finds no root to decode.
+    const definitions: MessageDefinition[] = [
+      {
+        name: "pkg/msg/Codes",
+        definitions: [
+          { name: "OK", type: "uint8", isConstant: true, value: 0 },
+          { name: "FAILED", type: "uint8", isConstant: true, value: 1 },
+        ],
+      },
+    ];
+    expect(() => new MessageReader(definitions)).toThrow("no root MessageDefinition");
+    const decode = createRos2CdrDeserializer(definitions);
+    expect(decode(new Uint8Array([0, 1, 0, 0, 0]))).toEqual({});
+    expect(() => decode(new Uint8Array([0, 1, 0, 0]))).toThrow(RangeError);
+    expect(() => createRos2CdrDeserializer([])).toThrow("no root MessageDefinition");
+  });
+
   it("throws the header error for data shorter than 4 bytes", () => {
     const definitions: MessageDefinition[] = [{ definitions: [{ name: "a", type: "uint8" }] }];
     expect(() => createRos2CdrDeserializer(definitions)(new Uint8Array(2))).toThrow(

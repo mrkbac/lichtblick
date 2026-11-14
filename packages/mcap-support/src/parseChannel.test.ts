@@ -169,6 +169,18 @@ describe("parseChannel", () => {
     expect(channel.datatypes.get("foo_msgs/msg/Bar")?.definitions[0]?.type).toBe("foo_msgs/Time");
   });
 
+  it("works with a ros2 message that has only constants", () => {
+    const channel = parseChannel({
+      messageEncoding: "cdr",
+      schema: {
+        name: "pkg/msg/Codes",
+        encoding: "ros2msg",
+        data: new TextEncoder().encode("uint8 OK=0\nuint8 FAILED=1\n"),
+      },
+    });
+    expect(channel.deserialize(new Uint8Array([0, 1, 0, 0, 0]))).toEqual({});
+  });
+
   it("works with ros2idl", () => {
     const channel = parseChannel({
       messageEncoding: "cdr",
