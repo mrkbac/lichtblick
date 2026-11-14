@@ -32,6 +32,7 @@ import { useLatest, useMountedState } from "react-use";
 import { useWarnImmediateReRender } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { Immutable } from "@lichtblick/suite";
+import { CompareProvider } from "@lichtblick/suite-base/components/Compare/CompareContext";
 import { MessagePipelineProvider } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
@@ -379,7 +380,8 @@ export default function PlayerManager(
                 file: multiFile ? undefined : files[0],
                 handle: multiFile ? undefined : handles?.[0],
                 files: multiFile ? files : undefined,
-                compare: multiFile && foundSource.supportsCompare === true && args.compare,
+                compare:
+                  multiFile && foundSource.supportsCompare === true ? args.compare : undefined,
               });
 
               setBasePlayer(newPlayer);
@@ -552,7 +554,9 @@ export default function PlayerManager(
     <>
       {userScriptsPrompt}
       <PlayerSelectionContext.Provider value={value}>
-        <MessagePipelineProvider player={player}>{children}</MessagePipelineProvider>
+        <MessagePipelineProvider player={player}>
+          <CompareProvider>{children}</CompareProvider>
+        </MessagePipelineProvider>
       </PlayerSelectionContext.Provider>
     </>
   );

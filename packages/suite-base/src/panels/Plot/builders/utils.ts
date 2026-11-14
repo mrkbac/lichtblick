@@ -40,7 +40,7 @@ export function isDerivedSeries(
  * `setSeries` below for builders that only track the current frame.
  */
 export function buildDatasetStyle(config: Immutable<SeriesItem>): Omit<Dataset, "data"> {
-  const { color, contrastColor, showLine, lineSize, interpolation, yAxisID } = config;
+  const { color, contrastColor, showLine, lineSize, lineDash, interpolation, yAxisID } = config;
   return {
     borderColor: color,
     showLine,
@@ -49,6 +49,7 @@ export function buildDatasetStyle(config: Immutable<SeriesItem>): Omit<Dataset, 
     yAxisID: yAxisID ?? "y",
     fill: false,
     borderWidth: lineSize,
+    borderDash: lineDash != undefined ? [...lineDash] : [],
     pointRadius: lineSize * 1.2,
     pointHoverRadius: 3,
     pointBackgroundColor: showLine ? contrastColor : color,

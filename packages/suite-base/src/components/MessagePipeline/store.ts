@@ -141,6 +141,7 @@ export function createMessagePipelineStore({
           pausePlayback: undefined,
           setPlaybackSpeed: undefined,
           seekPlayback: undefined,
+          setCompareOffsets: undefined,
           exportLiveHistory: undefined,
         },
       }));
@@ -251,6 +252,7 @@ export function createMessagePipelineStore({
       pausePlayback: undefined,
       setPlaybackSpeed: undefined,
       seekPlayback: undefined,
+      setCompareOffsets: undefined,
       exportLiveHistory: undefined,
 
       pauseFrame(name: string) {
@@ -469,6 +471,7 @@ function updatePlayerStateAction(
     newPublicState.seekPlayback = capabilities.includes(PLAYER_CAPABILITIES.playbackControl)
       ? player.seekPlayback?.bind(player)
       : undefined;
+    newPublicState.setCompareOffsets = player.setCompareOffsets?.bind(player);
     newPublicState.exportLiveHistory = capabilities.includes(PLAYER_CAPABILITIES.liveHistory)
       ? player.exportLiveHistory?.bind(player)
       : undefined;

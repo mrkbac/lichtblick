@@ -20,6 +20,7 @@ export const keyboardShortcuts = {
   showShortcuts: "Show keyboard shortcuts",
   selectAllPanels: "Select all panels",
   panelQuickActions: "Show panel quick actions (hold)",
+  nextCompareSide: "Show the next compared recording",
   exitFullscreen: "Exit fullscreen panel",
 
   // Playback

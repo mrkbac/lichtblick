@@ -37,6 +37,7 @@ import {
   Progress,
   PublishPayload,
   RecordingFileInfo,
+  CompareSide,
   SubscribePayload,
   Topic,
   TopicSelection,
@@ -188,6 +189,8 @@ export class IterablePlayer implements Player {
   #capabilities: string[] = [PLAYER_CAPABILITIES.setSpeed, PLAYER_CAPABILITIES.playbackControl];
   #profile: string | undefined;
   #recordingFiles: readonly RecordingFileInfo[] | undefined;
+  #compareSides: readonly CompareSide[] | undefined;
+  #compareRequest: number | undefined;
   #subscriptions: SubscribePayload[] = [];
   #allTopics: TopicSelection = new Map();
   #preloadTopics: TopicSelection = new Map();
@@ -394,6 +397,13 @@ export class IterablePlayer implements Player {
 
     // Queue event state update to update speed in player state to UI
     this.#queueEmitState();
+  }
+
+  public setCompareOffsets(offsetsSec: readonly number[], request: number): void {
+    // The source reports the moved sides as an update (see #followSourceUpdates)
+    this.#iterableSource.setCompareOffsets?.(offsetsSec, request).catch((error: unknown) => {
+      log.error("Failed to move compared recordings", error);
+    });
   }
 
   public seekPlayback(time: Time): void {
@@ -735,6 +745,26 @@ export class IterablePlayer implements Player {
         if (this.#nextState === "seek-backfill") {
           // The pending seek resets the playback iterator on the new range
           this.#queueEmitState();
+        } else if (update.updatedRanges == undefined && this.#state === "seek-backfill") {
+          // The running seek may read messages from before they moved: run it again
+          this.#setState("seek-backfill");
+        } else if (
+          update.updatedRanges == undefined &&
+          this.#currentTime &&
+          (this.#state === "idle" ||
+            this.#state === "play" ||
+            this.#state === "reset-playback-iterator")
+        ) {
+          // Any message may have moved (e.g. a compared recording was moved in time): panels
+          // still show the old ones, so load the current moment again like a seek to it
+          this.#lastMessageEvent = undefined;
+          this.#isPlaying ||= this.#playedToEnd;
+          this.#playedToEnd = false;
+          this.#seekTarget = this.#currentTime;
+          // A playUntil limit stays: the playhead doesn't move
+          this.#lastTickMillis = undefined;
+          this.#lastRangeMillis = undefined;
+          this.#setState("seek-backfill");
         } else if (this.#state === "idle" || this.#state === "play") {
           // The current iterator ends at the old end
           this.#lastMessageEvent = undefined;
@@ -786,6 +816,8 @@ export class IterablePlayer implements Player {
 
     this.#profile = profile;
     this.#recordingFiles = initResult.recordingFiles;
+    this.#compareSides = initResult.compareSides;
+    this.#compareRequest = initResult.compareRequest;
     this.#start = start;
     this.#currentTime = this.#currentTime
       ? clampTime(this.#currentTime, start, end)
@@ -1082,6 +1114,10 @@ export class IterablePlayer implements Player {
         this.#lastRangeMillis = undefined;
       }
 
+      // A state asked for meanwhile (e.g. the seek again after a source update) wins
+      if (this.#hasPendingState()) {
+        return;
+      }
       this.#setState(this.#isPlaying ? "play" : "idle");
     } catch (e: unknown) {
       const err = e as Error;
@@ -1156,6 +1192,8 @@ export class IterablePlayer implements Player {
         topics: this.#providerTopics,
         topicStats: this.#providerTopicStats,
         recordingFiles: this.#recordingFiles,
+        compareSides: this.#compareSides,
+        compareRequest: this.#compareRequest,
         datatypes: this.#providerDatatypes,
         publishedTopics: this.#publishedTopics,
       };

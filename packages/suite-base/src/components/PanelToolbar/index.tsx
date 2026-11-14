@@ -21,6 +21,7 @@ import { Typography } from "@mui/material";
 import React, { useContext, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { CompareCopyContext } from "@lichtblick/suite-base/components/Compare/ComparedPanel";
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import { useStyles } from "@lichtblick/suite-base/components/PanelToolbar/PanelToolbar.style";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
@@ -52,6 +53,8 @@ export default React.memo<PanelToolbarProps>(function PanelToolbar({
 
   const panelContext = useContext(PanelContext);
   const panelWindow = useContext(PanelWindowContext);
+  // The extra copies of a panel showing every compared recording keep their toolbar's space only
+  const { secondary } = useContext(CompareCopyContext);
 
   // Help-shown state must be hoisted outside the controls container so the modal can remain visible
   // when the panel is no longer hovered.
@@ -103,6 +106,7 @@ export default React.memo<PanelToolbarProps>(function PanelToolbar({
       style={{
         backgroundColor,
         cursor: rootDragRef != undefined ? "grab" : "auto",
+        visibility: secondary ? "hidden" : undefined,
       }}
     >
       {!isUnknownPanel &&

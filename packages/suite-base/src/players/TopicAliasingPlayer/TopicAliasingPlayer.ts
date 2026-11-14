@@ -146,6 +146,10 @@ export class TopicAliasingPlayer implements Player {
     this.#player.seekPlayback?.(time);
   }
 
+  public setCompareOffsets(offsetsSec: readonly number[], request: number): void {
+    this.#player.setCompareOffsets?.(offsetsSec, request);
+  }
+
   public async exportLiveHistory(writable: IWritable): Promise<void> {
     await this.#player.exportLiveHistory?.(writable);
   }

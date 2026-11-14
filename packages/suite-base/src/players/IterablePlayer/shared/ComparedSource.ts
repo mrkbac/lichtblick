@@ -4,7 +4,7 @@
 import { Time, fromNanoSec, toNanoSec } from "@foxglove/rostime";
 
 import { Immutable, MessageEvent } from "@lichtblick/suite";
-import { TopicSelection, TopicStats } from "@lichtblick/suite-base/players/types";
+import { CompareSide, TopicSelection, TopicStats } from "@lichtblick/suite-base/players/types";
 
 import {
   GetBackfillMessagesArgs,
@@ -24,13 +24,15 @@ export function prefixTopic(prefix: string, topic: string): string {
 }
 
 /**
- * One recording in a comparison: puts its topics under `prefix` (e.g. `/a/imu`) and shifts its
- * times by a fixed offset so several recordings can share one timeline side by side.
+ * One side of a comparison (a recording, or several merged): puts its topics under `prefix` (e.g.
+ * `/a/imu`) and shifts its times so several sides can share one timeline.
  */
 export class ComparedSource<MessageType = Uint8Array> implements IIterableSource<MessageType> {
   readonly #source: IIterableSource<MessageType>;
   readonly #prefix: string;
+  readonly #name: string;
   #offsetNs = 0n;
+  #offsetSec = 0;
   // Prefixed topic name -> name in the recording
   readonly #originalTopic = new Map<string, string>();
   // Name in the recording -> prefixed topic name
@@ -38,9 +40,27 @@ export class ComparedSource<MessageType = Uint8Array> implements IIterableSource
   readonly #topicNames = new Set<string>();
   #init?: Initialization;
 
-  public constructor(source: IIterableSource<MessageType>, prefix: string) {
+  /** Present when the wrapped source can grow (see IIterableSource.waitForUpdate) */
+  public readonly waitForUpdate?: () => Promise<Initialization | undefined>;
+
+  public constructor(source: IIterableSource<MessageType>, prefix: string, name = prefix) {
     this.#source = source;
     this.#prefix = prefix;
+    this.#name = name;
+    if (source.waitForUpdate) {
+      const waitForUpdate = source.waitForUpdate.bind(source);
+      this.waitForUpdate = async () => {
+        const update = await waitForUpdate();
+        if (!update) {
+          return undefined;
+        }
+        this.#init = update;
+        for (const topic of update.topics) {
+          this.#topicNames.add(topic.name);
+        }
+        return this.#mapInit(update);
+      };
+    }
   }
 
   public async initialize(): Promise<Initialization> {
@@ -51,13 +71,33 @@ export class ComparedSource<MessageType = Uint8Array> implements IIterableSource
     return this.#mapInit(this.#init);
   }
 
-  /** Shift this recording so it starts at `start`; returns the shifted initialization. */
-  public alignStartTo(start: Time): Initialization {
+  /**
+   * Place this side so it starts at `start` moved by `offsetSec` seconds; returns the shifted
+   * initialization.
+   */
+  public alignStartTo(start: Time, offsetSec = 0): Initialization {
     if (!this.#init) {
       throw new Error("alignStartTo called before initialize");
     }
-    this.#offsetNs = toNanoSec(start) - toNanoSec(this.#init.start);
+    this.#offsetSec = offsetSec;
+    this.#offsetNs =
+      toNanoSec(start) - toNanoSec(this.#init.start) + BigInt(Math.round(offsetSec * 1e9));
     return this.#mapInit(this.#init);
+  }
+
+  /** This side as shown on the shared timeline */
+  public side(): CompareSide {
+    if (!this.#init) {
+      throw new Error("side called before initialize");
+    }
+    return {
+      prefix: this.#prefix,
+      name: this.#name,
+      start: this.#init.start,
+      end: this.#init.end,
+      sharedStart: this.#shift(this.#init.start),
+      offsetSec: this.#offsetSec,
+    };
   }
 
   public async *messageIterator(
@@ -140,7 +180,11 @@ export class ComparedSource<MessageType = Uint8Array> implements IIterableSource
       return known;
     }
     const base = prefixTopic(this.#prefix, topic);
-    const name = !topic.startsWith("/") && this.#topicNames.has(`/${topic}`) ? `${base} (2)` : base;
+    let name = !topic.startsWith("/") && this.#topicNames.has(`/${topic}`) ? `${base} (2)` : base;
+    // A topic found by a later update never takes a name already given out
+    for (let count = 2; this.#originalTopic.has(name); count++) {
+      name = `${base} (${count})`;
+    }
     this.#originalTopic.set(name, topic);
     this.#prefixedTopic.set(topic, name);
     return name;
@@ -179,6 +223,10 @@ export class ComparedSource<MessageType = Uint8Array> implements IIterableSource
       ...init,
       start: this.#shift(init.start),
       end: this.#shift(init.end),
+      updatedRanges: init.updatedRanges?.map((range) => ({
+        start: this.#shift(range.start),
+        end: this.#shift(range.end),
+      })),
       topics: init.topics.map((topic) => ({ ...topic, name: this.#prefixed(topic.name) })),
       topicStats,
       publishersByTopic: new Map(

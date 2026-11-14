@@ -14,6 +14,8 @@ import { makeStyles } from "tss-react/mui";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import { Immutable } from "@lichtblick/suite";
+import { useCompare } from "@lichtblick/suite-base/components/Compare/CompareContext";
+import { CompareSidesEditor } from "@lichtblick/suite-base/components/Compare/CompareSidesEditor";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import {
   MessagePipelineContext,
@@ -25,6 +27,7 @@ import Timestamp from "@lichtblick/suite-base/components/Timestamp";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { PlayerPresence, RecordingFileInfo } from "@lichtblick/suite-base/players/types";
+import { defaultCompareSides } from "@lichtblick/suite-base/util/compareSides";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
 import { formatDuration, formatHms } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeAgo } from "@lichtblick/suite-base/util/recentSources";
@@ -284,6 +287,19 @@ function FileRow(props: {
   );
 }
 
+function CompareField(): React.JSX.Element | undefined {
+  const { t } = useTranslation("compare");
+  const comparison = useCompare();
+  if (!comparison) {
+    return undefined;
+  }
+  return (
+    <Field label={t("recordings")}>
+      <CompareSidesEditor />
+    </Field>
+  );
+}
+
 function FilesField({ startTime }: { startTime?: Time }): React.JSX.Element | null {
   const { t } = useTranslation("dataSourceInfo");
   const files = useMessagePipeline(selectRecordingFiles);
@@ -318,7 +334,7 @@ function FilesField({ startTime }: { startTime?: Time }): React.JSX.Element | nu
               selectSource(selectedSource.id, {
                 type: "file",
                 files: [...selectedFiles],
-                compare: !comparing,
+                compare: comparing ? undefined : defaultCompareSides(selectedFiles),
               });
             }}
           >
@@ -456,6 +472,7 @@ export function DataSourceInfoView({
       <EndTimeAndDurationFields startTime={startTime} isLive={isLive} />
       <ContentsFields />
       <LiveFields />
+      <CompareField />
       <FilesField startTime={startTime} />
     </Stack>
   );

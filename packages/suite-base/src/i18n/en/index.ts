@@ -12,6 +12,7 @@ export * from "./audio";
 export * from "./cameraGrid";
 export * from "./catalog";
 export * from "./commandPalette";
+export * from "./compare";
 export * from "./dataSourceInfo";
 export * from "./diagnostics";
 export * from "./desktopWindow";

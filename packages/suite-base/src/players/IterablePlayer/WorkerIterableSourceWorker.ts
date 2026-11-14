@@ -42,6 +42,10 @@ export class WorkerIterableSourceWorker<MessageType = unknown>
     return await this.#source.waitForUpdate?.();
   }
 
+  public async setCompareOffsets(offsetsSec: readonly number[], request: number): Promise<void> {
+    await this.#source.setCompareOffsets?.(offsetsSec, request);
+  }
+
   public messageIterator(
     args: MessageIteratorArgs,
   ): AsyncIterableIterator<Readonly<IteratorResult<MessageType>>> & Comlink.ProxyMarked {

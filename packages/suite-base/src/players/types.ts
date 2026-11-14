@@ -95,6 +95,12 @@ export interface Player {
   // Read the most recent message per topic at or before a given time, independent of the current
   // playback position. Not available for live/real-time data sources.
   getBackfillMessages?(args: GetBackfillMessagesArgs): Promise<MessageEvent[]>;
+  /**
+   * When recordings are compared (see PlayerStateActiveData.compareSides): move each side by
+   * `offsetsSec[i]` seconds on top of aligning all sides to start together. `request` numbers the
+   * call; once applied, it is published as PlayerStateActiveData.compareRequest.
+   */
+  setCompareOffsets?(offsetsSec: readonly number[], request: number): void;
   /** Write the rolling live history to an MCAP file. Available with PlayerCapabilities.liveHistory. */
   exportLiveHistory?(writable: IWritable): Promise<void>;
 }
@@ -210,6 +216,11 @@ export type PlayerStateActiveData = {
   /** Container facts from each physical MCAP file, independent of playback. */
   recordingFiles?: readonly RecordingFileInfo[];
 
+  /** When recordings are compared: one entry per side, in prefix order (/a, /b, …) */
+  compareSides?: readonly CompareSide[];
+  /** The `request` of the last setCompareOffsets call the published sides include */
+  compareRequest?: number;
+
   // A complete list of ROS datatypes. Allowed to change. But it must always be "complete" (every
   // topic must refer to a datatype that is present in this list, every datatypes that refers to
   // another datatype must refer to a datatype that is present in this list).
@@ -264,6 +275,21 @@ export type Topic = {
 };
 
 export type TopicWithSchemaName = Topic & { schemaName: string };
+
+/** One side of a comparison: a recording (or a merged folder of them) on the shared timeline */
+export type CompareSide = {
+  /** Topic prefix of this side, e.g. "/a" */
+  prefix: string;
+  /** Display name, e.g. the folder or file name */
+  name: string;
+  /** Time range in the recording's own clock */
+  start: Time;
+  end: Time;
+  /** Where `start` lies on the shared timeline: shared time = own time - start + sharedStart */
+  sharedStart: Time;
+  /** Seconds the side is moved by on top of aligning all sides to start together */
+  offsetSec: number;
+};
 
 export type RecordingFileInfo = {
   /** File name, or the last path segment of a remote URL. */

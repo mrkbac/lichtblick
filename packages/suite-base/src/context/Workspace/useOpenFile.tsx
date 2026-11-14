@@ -15,6 +15,7 @@ import {
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { FILE_ACCEPT_TYPE } from "@lichtblick/suite-base/context/Workspace/constants";
 import { normalizeExtensions } from "@lichtblick/suite-base/context/Workspace/utils";
+import { defaultCompareSides } from "@lichtblick/suite-base/util/compareSides";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 
 export type OpenFileOptions = {
@@ -124,7 +125,10 @@ export function useOpenFile(
       selectSource(matchingSources[0]!.id, {
         type: "file",
         handles: filesHandle,
-        compare: options?.compare,
+        compare:
+          options?.compare === true
+            ? defaultCompareSides(processedFiles.map(({ file }) => file))
+            : undefined,
       });
     },
     [allExtensions, normalizeExtensionsArray, selectSource, sources],

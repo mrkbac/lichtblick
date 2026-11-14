@@ -10,6 +10,7 @@ import SettingsIcon from "@mui/icons-material/Settings";
 import { Badge } from "@mui/material";
 import React, { Ref, useCallback, useContext, useMemo } from "react";
 
+import { CompareSidePicker } from "@lichtblick/suite-base/components/Compare/CompareSidePicker";
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import { useStyles } from "@lichtblick/suite-base/components/PanelToolbar/PanelToolbarControls.style";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
@@ -73,6 +74,7 @@ function PanelToolbarControlsComponent(
       fullHeight={true}
       paddingTop={1}
     >
+      <CompareSidePicker />
       {additionalIcons}
       <Badge
         color="error"
