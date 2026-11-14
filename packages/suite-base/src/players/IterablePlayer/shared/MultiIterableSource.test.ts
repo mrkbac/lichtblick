@@ -280,7 +280,7 @@ describe("MultiIterableSource", () => {
     });
     it("should bound default initialization concurrency for url sources", async () => {
       // GIVEN: more URL sources than the default remote initialization concurrency.
-      const urls = Array.from({ length: 8 }, () => BasicBuilder.string());
+      const urls = Array.from({ length: 16 }, () => BasicBuilder.string());
       const { implementation, getMaxInFlight } = trackInitConcurrency();
       mockSourceConstructor.mockImplementation(implementation);
       const multiSource = new MultiIterableSource(
@@ -294,9 +294,9 @@ describe("MultiIterableSource", () => {
       // WHEN: initializing all remote sources.
       await multiSource["loadMultipleSources"]();
 
-      // THEN: initialization runs concurrently but no more than four at a time.
-      expect(getMaxInFlight()).toBeGreaterThan(1);
-      expect(getMaxInFlight()).toBeLessThanOrEqual(4);
+      // THEN: initialization runs concurrently but no more than eight at a time.
+      expect(getMaxInFlight()).toBeGreaterThan(4);
+      expect(getMaxInFlight()).toBeLessThanOrEqual(8);
       expect(mockSourceConstructor).toHaveBeenCalledTimes(urls.length);
     });
     it("should bound default initialization concurrency for file sources", async () => {

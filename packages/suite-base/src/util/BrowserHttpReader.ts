@@ -17,9 +17,16 @@
 import i18next from "i18next";
 
 import * as en from "@lichtblick/suite-base/i18n/en";
-import type { FileReader, FileStream } from "@lichtblick/suite-base/util/CachedFilelike.types";
+import type {
+  FileReader,
+  FileReaderOpenResult,
+  FileStream,
+} from "@lichtblick/suite-base/util/CachedFilelike.types";
 import FetchReader from "@lichtblick/suite-base/util/FetchReader";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
+
+// Bytes fetched from each end of the file when opening it
+const EDGE_BYTES = 64 * 1024;
 
 // Bounds the CORS diagnosis request so a hanging server can't delay the error
 const PROBE_TIMEOUT_MS = 5000;
@@ -41,28 +48,101 @@ export default class BrowserHttpReader implements FileReader {
     this.#credentials = options?.credentials;
   }
 
-  public async open(): Promise<{ size: number; identifier?: string }> {
+  /**
+   * Learns the file size in one round trip: the first and last `EDGE_BYTES` are requested in
+   * parallel, and their data is returned so the caller can cache it. Header, footer and (usually)
+   * the summary/index of MCAP and bag files are in there, so opening needs no further requests.
+   */
+  public async open(): Promise<FileReaderOpenResult> {
+    const head = this.#fetchRange(`bytes=0-${EDGE_BYTES - 1}`);
+    // Not a CORS-safelisted range, so cross-origin servers see a preflight first. That runs in
+    // parallel with the head request, and if the server refuses it the tail is just not cached.
+    const tail = this.#fetchRange(`bytes=-${EDGE_BYTES}`);
     let response: Response;
     try {
-      // Make a GET request and then immediately cancel it. This is more robust than a HEAD request,
-      // since the server might not accept HEAD requests (e.g. when using S3 presigned URLs that
-      // only work for one particular method like GET).
-      // Note that we cannot use `range: "bytes=0-1"` or so, because then we can't get the actual
-      // file size without making Content-Range a CORS header, therefore making all this a bit less
-      // robust.
-      // "no-store" forces an unconditional remote request. When the browser's cache is populated,
-      // it may add a `range` header to the request, which causes some servers to omit the
-      // `accept-ranges` header in the response.
-      const controller = new AbortController();
+      response = await head.response;
+    } catch (error) {
+      tail.abort();
+      throw await this.#openError(error);
+    }
+    if (response.status !== 206) {
+      // Errors, or a server that ignored the range. Don't download the body.
+      head.abort();
+      tail.abort();
+      return this.#checkFullResponse(response);
+    }
+    const total = totalSize(response);
+    const etag = response.headers.get("etag") ?? undefined;
+    const identifier = etag ?? response.headers.get("last-modified") ?? undefined;
+    const readTail = async (): Promise<Uint8Array | undefined> => {
+      const tailResponse = await tail.response;
+      // Only a range of the same file version can be cached
+      if (
+        tailResponse.status !== 206 ||
+        total == undefined ||
+        totalSize(tailResponse) !== total ||
+        (tailResponse.headers.get("etag") ?? undefined) !== etag
+      ) {
+        tail.abort();
+        return undefined;
+      }
+      return await tail.body();
+    };
+    const [headData, tailData] = await Promise.all([
+      head.body(),
+      readTail().catch(() => undefined),
+    ]);
+    if (total == undefined) {
+      // Content-Range is not exposed to this origin (CORS): ask for the size the old way
+      const { size } = await this.#openWithoutRange();
+      return { size, identifier, initialData: edgeData(headData, undefined, size) };
+    }
+    return { size: total, identifier, initialData: edgeData(headData, tailData, total) };
+  }
+
+  #fetchRange(range: string): {
+    response: Promise<Response>;
+    body: () => Promise<Uint8Array>;
+    abort: () => void;
+  } {
+    const controller = new AbortController();
+    // "no-store" keeps the browser cache from turning this into a conditional request
+    const response = fetch(this.#url, {
+      headers: { range },
+      cache: "no-store",
+      credentials: this.#credentials,
+      signal: controller.signal,
+    });
+    response.catch(() => {}); // the caller may not await a request it aborted
+    return {
+      response,
+      body: async () => new Uint8Array(await (await response).arrayBuffer()),
+      abort: () => {
+        controller.abort();
+      },
+    };
+  }
+
+  /** A GET that is cancelled once the headers arrive, for its Content-Length. */
+  async #openWithoutRange(): Promise<FileReaderOpenResult> {
+    // A GET is more robust than a HEAD request, since the server might not accept HEAD requests
+    // (e.g. when using S3 presigned URLs that only work for one particular method like GET).
+    const controller = new AbortController();
+    let response: Response;
+    try {
       response = await fetch(this.#url, {
         signal: controller.signal,
         cache: "no-store",
         credentials: this.#credentials,
       });
-      controller.abort();
     } catch (error) {
       throw await this.#openError(error);
     }
+    controller.abort();
+    return this.#checkFullResponse(response);
+  }
+
+  #checkFullResponse(response: Response): FileReaderOpenResult {
     if (!response.ok) {
       throw new Error(
         `Fetching remote file failed. <${this.#url}> Status code: ${response.status}.`,
@@ -136,4 +216,24 @@ export default class BrowserHttpReader implements FileReader {
     reader.read();
     return reader;
   }
+}
+
+/** The total size from `Content-Range: bytes 0-99/1234`, if the header is readable and known */
+function totalSize(response: Response): number | undefined {
+  const match = /\/(\d+)$/.exec(response.headers.get("content-range") ?? "");
+  return match ? Number(match[1]) : undefined;
+}
+
+/** The fetched ends of the file, skipping any whose length doesn't match the file size */
+function edgeData(
+  head: Uint8Array,
+  tail: Uint8Array | undefined,
+  size: number,
+): { offset: number; data: Uint8Array }[] {
+  const expected = Math.min(EDGE_BYTES, size);
+  const ranges = head.byteLength === expected ? [{ offset: 0, data: head }] : [];
+  if (tail?.byteLength === expected) {
+    ranges.push({ offset: size - expected, data: tail });
+  }
+  return ranges;
 }

@@ -106,7 +106,7 @@ export default class CachedFilelike implements Filelike {
     if (this.#fileSize != undefined) {
       return;
     }
-    const { size } = await this.#fileReader.open();
+    const { size, initialData } = await this.#fileReader.open();
     this.#fileSize = size;
     if (this.#cacheSizeInBytes >= size) {
       // If we have a cache limit that exceeds the file size, then we don't need to limit ourselves
@@ -121,6 +121,12 @@ export default class CachedFilelike implements Filelike {
         // to allow for a read range not starting or ending perfectly at a block boundary.
         numberOfBlocks: Math.ceil(this.#cacheSizeInBytes / CACHE_BLOCK_SIZE) + 2,
       });
+    }
+    for (const { offset, data } of initialData ?? []) {
+      // Cached like downloaded data, so reads of these ranges need no request
+      if (data.byteLength > 0 && data.byteLength <= this.#cacheSizeInBytes) {
+        this.#virtualBuffer.copyFrom(data, offset);
+      }
     }
     this.#log.info(`Opening file with size ${bytesToMiB(this.#fileSize)}MiB`);
   }
