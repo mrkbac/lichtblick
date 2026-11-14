@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { McapTypes } from "@mcap/core";
+import { McapTypes } from "@lichtblick/mcap-core";
 
 let handlersPromise: Promise<McapTypes.DecompressHandlers> | undefined;
 export async function loadDecompressHandlers(): Promise<McapTypes.DecompressHandlers> {

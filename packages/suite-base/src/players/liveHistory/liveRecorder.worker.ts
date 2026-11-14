@@ -6,8 +6,8 @@
 // is a valid MCAP without index (readable from the start), after `stop()` a regular indexed one.
 
 import * as Comlink from "@foxglove/comlink";
-import { McapWriter } from "@mcap/core";
 
+import { McapWriter } from "@lichtblick/mcap-core";
 import { loadRewriteChunkDeps } from "@lichtblick/mcap-support";
 
 import { LIVE_RECORDINGS_DIR, liveRecordingLockName } from "./liveRecordings";

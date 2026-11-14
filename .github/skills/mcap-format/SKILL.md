@@ -175,8 +175,8 @@ MCAP is an open-source container format for heterogeneous timestamped data, desi
 
 | MCAP Concept | Lichtblick Code |
 |-------------|----------------|
-| Indexed reading | `McapIndexedReader` (from `@mcap/core`) |
-| Streaming reading | `McapStreamReader` (from `@mcap/core`) |
+| Indexed reading | `McapIndexedReader` (from `@lichtblick/mcap-core`) |
+| Streaming reading | `McapStreamReader` (from `@lichtblick/mcap-core`) |
 | Indexed source | `McapIndexedIterableSource.ts` |
 | Unindexed source | `McapUnindexedIterableSource.ts` |
 | File readable | `BlobReadable.ts` (local), `RemoteFileReadable.ts` (HTTP Range) |

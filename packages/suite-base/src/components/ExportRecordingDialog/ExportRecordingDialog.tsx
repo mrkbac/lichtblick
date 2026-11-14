@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { toNanoSec } from "@foxglove/rostime";
-import type { McapIndexedReader, McapTypes } from "@mcap/core";
 import MyLocationIcon from "@mui/icons-material/MyLocation";
 import {
   Alert,
@@ -36,6 +35,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAsync } from "react-use";
 
+import type { McapIndexedReader, McapTypes } from "@lichtblick/mcap-core";
 import {
   ChunkCache,
   ExportCompression,

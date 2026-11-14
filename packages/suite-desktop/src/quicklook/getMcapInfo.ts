@@ -5,9 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { hasMcapPrefix, McapConstants } from "@mcap/core";
-
 import Logger from "@lichtblick/log";
+import { hasMcapPrefix, MCAP_MAGIC } from "@lichtblick/mcap-core";
 import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 
 import getIndexedMcapInfo from "./getIndexedMcapInfo";
@@ -18,7 +17,7 @@ const log = Logger.getLogger(__filename);
 
 export async function getMcapInfo(file: Blob): Promise<FileInfo> {
   const isValidMcap = hasMcapPrefix(
-    new DataView(await file.slice(0, McapConstants.MCAP_MAGIC.length).arrayBuffer()),
+    new DataView(await file.slice(0, MCAP_MAGIC.length).arrayBuffer()),
   );
 
   if (!isValidMcap) {

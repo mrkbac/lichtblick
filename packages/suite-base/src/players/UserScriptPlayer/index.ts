@@ -16,7 +16,6 @@
 
 import * as Comlink from "@foxglove/comlink";
 import { Time, compare } from "@foxglove/rostime";
-import type { IWritable } from "@mcap/core";
 import { Mutex } from "async-mutex";
 import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
@@ -24,6 +23,7 @@ import memoizeWeak from "memoize-weak";
 import { MutexLocked } from "@lichtblick/den/async";
 import { filterMap, VecQueue } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
+import type { IWritable } from "@lichtblick/mcap-core";
 import { Metadata, ParameterValue } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";

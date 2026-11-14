@@ -6,9 +6,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time, fromNanoSec, toNanoSec, toRFC3339String, compare } from "@foxglove/rostime";
-import { type McapIndexedReader, McapTypes } from "@mcap/core";
 
 import Logger from "@lichtblick/log";
+import { type McapIndexedReader, McapTypes } from "@lichtblick/mcap-core";
 import { ParsedChannel, parseChannel } from "@lichtblick/mcap-support";
 import { MessageEvent, Metadata } from "@lichtblick/suite";
 import {

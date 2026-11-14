@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { McapIndexedReader, McapTypes } from "@mcap/core";
+import { McapIndexedReader, McapTypes } from "@lichtblick/mcap-core";
 
 import type { ChunkCache } from "./ChunkCache";
 

@@ -32,11 +32,11 @@ import {
   BinaryOpcode,
   IWebSocket,
 } from "@foxglove/ws-protocol";
-import { IWritable, McapWriter } from "@mcap/core";
 import * as _ from "lodash-es";
 
 import { debouncePromise } from "@lichtblick/den/async";
 import Log from "@lichtblick/log";
+import { IWritable, McapWriter } from "@lichtblick/mcap-core";
 import { parseChannel } from "@lichtblick/mcap-support";
 import { ParameterValue } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";

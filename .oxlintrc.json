@@ -206,7 +206,7 @@
             "message": "@mui/Box has performance implications. Use tss-react/mui instead."
           },
           {
-            "name": "@mcap/core",
+            "name": "@lichtblick/mcap-core",
             "importNames": ["McapIndexedReader"],
             "allowTypeImports": true,
             "message": "Open readers with openCachedMcapReader from @lichtblick/mcap-support, so readers of a file share its decompressed chunks."
@@ -610,6 +610,20 @@
         "packages/suite-base/src/panels/ThreeDeeRender/**",
         "packages/suite-base/src/players/**"
       ],
+      "rules": {
+        "@lichtblick/no-push-spread": "off"
+      }
+    },
+    {
+      "files": ["packages/mcap-core/**"],
+      "rules": {
+        "@lichtblick/license-header": "off",
+        "@lichtblick/no-getters-setters": "off",
+        "@lichtblick/no-boolean-parameters": "off"
+      }
+    },
+    {
+      "files": ["packages/mcap-core/**/*.test.ts"],
       "rules": {
         "@lichtblick/no-push-spread": "off"
       }

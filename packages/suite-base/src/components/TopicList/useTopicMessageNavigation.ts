@@ -11,7 +11,7 @@
  *    - The footer contains the summary section with ChunkIndexes that include messageStartTime/messageEndTime
  *    - This means topicStats.firstMessageTime and topicStats.lastMessageTime are available IMMEDIATELY
  *      after initialization, without needing to iterate through all messages
- *    - See: @mcap/core McapIndexedReader.Initialize() - reads footer from end of file before chunk data
+ *    - See: @lichtblick/mcap-core McapIndexedReader.Initialize() - reads footer from end of file before chunk data
  *
  * 2. Navigation Optimization Strategy
  *    - Next message: Direct seek using getBatchIterator({ start: currentTime }) - O(1) complexity

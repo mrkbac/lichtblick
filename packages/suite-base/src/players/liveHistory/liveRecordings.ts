@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { MCAP_MAGIC, Opcode } from "@mcap/core";
-
+import { MCAP_MAGIC, Opcode } from "@lichtblick/mcap-core";
 import { createKeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
 
 /** Folder in the origin private file system (browser storage) that holds live recordings. */
