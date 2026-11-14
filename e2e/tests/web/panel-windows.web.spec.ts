@@ -423,7 +423,7 @@ for (const colorScheme of ["light", "dark"] as const) {
       .getByTestId("panel-menu")
       .first()
       .click();
-    await monitor.getByTestId("panel-menu-new-tab").click();
+    await monitor.getByRole("menuitem", { name: "New tab" }).click();
     await monitor.getByTestId("panel-menu-item Plot").click();
     await expect(monitor.getByRole("tab", { name: "Plot", exact: true })).toHaveAttribute(
       "aria-selected",

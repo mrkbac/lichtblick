@@ -4,7 +4,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { Menu } from "@mui/material";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import "@testing-library/jest-dom/vitest";
 
 import { PanelCatalog } from "@lichtblick/suite-base/components/PanelCatalog";
@@ -57,7 +58,9 @@ function searchField(): HTMLElement {
 
 describe("panel catalog search focus", () => {
   it("focuses the search field when the catalog opens in a menu", () => {
-    // Like the app bar's "Add panel" menu: the menu focuses its list right after it opens.
+    // Given a catalog in a menu, like the app bar's "Add panel" menu, which focuses its list
+    // right after it opens
+    // When it opens
     render(
       <Providers>
         <Menu open anchorEl={document.body}>
@@ -66,26 +69,48 @@ describe("panel catalog search focus", () => {
       </Providers>,
     );
 
+    // Then the search field has focus
     expect(searchField()).toHaveFocus();
   });
 
-  it("keeps the New tab submenu open with its search focused when its item is clicked", () => {
+  it("keeps the New tab submenu open with its search focused when its item is clicked", async () => {
+    // Given an open panel menu
+    const user = userEvent.setup();
     render(
       <Providers>
         <PanelActionsDropdown isUnknownPanel={false} />
       </Providers>,
     );
-    fireEvent.click(screen.getByTestId("panel-menu"));
+    await user.click(screen.getByTestId("panel-menu"));
 
-    const newTab = screen.getByTestId("panel-menu-new-tab");
-    expect(fireEvent.mouseDown(newTab)).toBe(false); // the press doesn't take focus
-    fireEvent.click(newTab);
+    // When "New tab" is clicked, twice
+    await user.click(screen.getByRole("menuitem", { name: "New tab" }));
+    await user.click(screen.getByRole("menuitem", { name: "New tab" }));
 
+    // Then the submenu stays open with its search focused, and picking a panel adds it as a tab
     expect(searchField()).toHaveFocus();
-    fireEvent.change(searchField(), { target: { value: "raw" } });
-    fireEvent.keyDown(searchField(), { key: "Enter" });
+    await user.keyboard("raw{Enter}");
     expect(addPanel).toHaveBeenCalledWith(
       expect.objectContaining({ position: "center", targetPanelId: "Tab!a" }),
     );
+  });
+
+  it("closes the New tab submenu on a click outside it", async () => {
+    // Given an open New tab submenu
+    const user = userEvent.setup();
+    render(
+      <Providers>
+        <PanelActionsDropdown isUnknownPanel={false} />
+      </Providers>,
+    );
+    await user.click(screen.getByTestId("panel-menu"));
+    await user.click(screen.getByRole("menuitem", { name: "New tab" }));
+    expect(searchField()).toBeInTheDocument();
+
+    // When the user clicks outside the submenu and its menu item
+    await user.click(document.body);
+
+    // Then the submenu closes
+    expect(screen.queryByPlaceholderText("Search panels")).not.toBeInTheDocument();
   });
 });

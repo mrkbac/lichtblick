@@ -36,7 +36,7 @@ test("load a tab layout and add a tab", { tag: "@regression" }, async ({ mainWin
     .getByTestId("panel-menu")
     .first()
     .click();
-  await mainWindow.getByTestId("panel-menu-new-tab").click();
+  await mainWindow.getByRole("menuitem", { name: "New tab" }).click();
   await mainWindow.getByTestId("panel-menu-item Raw Messages").click();
 
   // Then
