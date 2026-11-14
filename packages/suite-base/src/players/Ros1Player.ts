@@ -16,6 +16,10 @@ import { debouncePromise } from "@lichtblick/den/async";
 import Logger from "@lichtblick/log";
 import { ParameterValue } from "@lichtblick/suite";
 import OsContextSingleton from "@lichtblick/suite-base/OsContextSingleton";
+import {
+  LIVE_QUEUE_MAX_BYTES,
+  LiveMessageQueue,
+} from "@lichtblick/suite-base/players/LiveMessageQueue";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import {
@@ -78,11 +82,12 @@ export default class Ros1Player implements Player {
   #clockTime?: Time; // The most recent published `/clock` time, if available
   #requestedPublishers: AdvertiseOptions[] = []; // Requested publishers by setPublishers()
   #requestedSubscriptions: SubscribePayload[] = []; // Requested subscriptions by setSubscriptions()
-  #parsedMessages: MessageEvent[] = []; // Queue of messages that we'll send in next _emitState() call.
   #requestTopicsTimeout?: ReturnType<typeof setTimeout>; // setTimeout() handle for _requestTopics().
   #hasReceivedMessage = false;
   #presence: PlayerPresence = PlayerPresence.INITIALIZING;
   #alerts = new PlayerAlertManager();
+  // Messages that we'll send in the next emitState() call.
+  readonly #parsedMessages = new LiveMessageQueue(LIVE_QUEUE_MAX_BYTES, this.#alerts);
   #emitTimer?: ReturnType<typeof setTimeout>;
   readonly #sourceId: string;
 
@@ -311,8 +316,7 @@ export default class Ros1Player implements Player {
     }
 
     const currentTime = this.#getCurrentTime();
-    const messages = this.#parsedMessages;
-    this.#parsedMessages = [];
+    const messages = this.#parsedMessages.drain();
     return this.#listener({
       name: this.#url,
       presence: this.#presence,

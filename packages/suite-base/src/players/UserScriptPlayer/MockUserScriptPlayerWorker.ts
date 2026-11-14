@@ -16,14 +16,17 @@
 
 import * as Comlink from "@foxglove/comlink";
 
-import { processMessage, registerScript } from "./runtimeWorker/registry";
+import { processMessages, registerScript } from "./runtimeWorker/registry";
 import generateRosLib from "./transformerWorker/generateRosLib";
 import transform from "./transformerWorker/transform";
 
 type Listener = (event: MessageEvent) => void;
 
 // Two endpoints that deliver messages to each other synchronously, like a worker without the thread.
-function createLinkedEndpoints(): [Comlink.Endpoint & { start: () => void }, Comlink.Endpoint] {
+function createLinkedEndpoints(): [
+  Comlink.Endpoint & { start: () => void; close: () => void },
+  Comlink.Endpoint,
+] {
   const listeners = [new Set<Listener>(), new Set<Listener>()] as const;
   const endpoint = (self: 0 | 1) => ({
     postMessage: (data: unknown) => {
@@ -34,13 +37,18 @@ function createLinkedEndpoints(): [Comlink.Endpoint & { start: () => void }, Com
     addEventListener: (_type: string, listener: Listener) => listeners[self].add(listener),
     removeEventListener: (_type: string, listener: Listener) => listeners[self].delete(listener),
     start: () => {},
+    close: () => {},
   });
-  return [endpoint(0), endpoint(1)] as [Comlink.Endpoint & { start: () => void }, Comlink.Endpoint];
+  return [endpoint(0), endpoint(1)] as [
+    Comlink.Endpoint & { start: () => void; close: () => void },
+    Comlink.Endpoint,
+  ];
 }
 
 // One test class that implements both typescript compilation and message transformation.
 export default class MockUserScriptPlayerWorker {
-  public port: Comlink.Endpoint & { start: () => void };
+  public port: Comlink.Endpoint & { start: () => void; close: () => void };
+  public closed = false;
 
   public constructor() {
     const [port1, port2] = createLinkedEndpoints();
@@ -55,11 +63,13 @@ export default class MockUserScriptPlayerWorker {
     Comlink.expose(
       {
         onError: () => {},
-        close: () => {},
+        close: () => {
+          this.closed = true;
+        },
         generateRosLib: logged("generateRosLib", generateRosLib),
         transform: logged("transform", transform),
         registerScript: logged("registerScript", registerScript),
-        processMessage: logged("processMessage", processMessage),
+        processMessages: logged("processMessages", processMessages),
       },
       port2,
     );

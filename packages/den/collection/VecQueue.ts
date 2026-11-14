@@ -66,6 +66,17 @@ export class VecQueue<T> {
   }
 
   /**
+   * @returns the item `index` places from the front of the queue (0 is the next to dequeue), or
+   * undefined if the queue has no such item
+   */
+  public at(index: number): T | undefined {
+    if (index < 0 || index >= this.size()) {
+      return undefined;
+    }
+    return this.#buffer[(this.#readPos + index) % this.#buffer.length];
+  }
+
+  /**
    * @returns the number of items in the queue
    */
   public size(): number {

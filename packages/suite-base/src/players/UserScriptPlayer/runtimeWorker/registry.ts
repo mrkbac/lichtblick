@@ -178,3 +178,19 @@ export const processMessage = ({
     };
   }
 };
+
+/** Run the script on a batch of messages: one worker round trip per frame instead of per message. */
+export const processMessages = ({
+  messages,
+  globalVariables,
+}: {
+  messages: readonly unknown[];
+  globalVariables: GlobalVariables;
+}): ProcessMessageOutput[] =>
+  messages.map((message, i) => {
+    const output = processMessage({ message, globalVariables });
+    // A script may return (or log) the same mutable object for every input. Snapshot each output
+    // before the next callback runs, as a per-message round trip would. The last one is cloned by
+    // postMessage anyway.
+    return i === messages.length - 1 ? output : structuredClone(output);
+  });
