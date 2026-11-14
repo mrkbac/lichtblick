@@ -400,16 +400,23 @@ describe("McapIterableSource", () => {
     });
 
     it("reports that anything may have changed after an update failed", async () => {
-      // Given a followed file whose next update fails once (after its reader took new chunks)
+      // Given a followed file whose next update fails once, after its reader took the new chunks
       const snapshots = await recordWithoutFooter(4);
       const { handle, write } = growingHandle(snapshots[1]!);
       const source = new McapIterableSource({ type: "file", file: await handle.getFile(), handle });
       vi.spyOn(console, "error").mockImplementation(() => {});
       try {
         await source.initialize();
-        const initialize = vi
-          .spyOn(McapIndexedIterableSource.prototype, "initialize")
-          .mockRejectedValueOnce(new Error("update failed"));
+        // It fails after the inner initialize() ran, so whatever it took is already consumed
+        const { prototype } = McapIndexedIterableSource;
+        const original = Object.getOwnPropertyDescriptor(prototype, "initialize")!
+          .value as McapIndexedIterableSource["initialize"];
+        const initialize = vi.spyOn(prototype, "initialize").mockImplementationOnce(async function (
+          this: McapIndexedIterableSource,
+        ) {
+          await original.call(this);
+          throw new Error("update failed");
+        });
 
         // When the file grows, the update fails, and the retry succeeds
         write(snapshots[2]!);
