@@ -135,13 +135,22 @@ export function parseNumber(cell: string, delimiter: string): number {
   return text === "" ? NaN : Number(text);
 }
 
-// Date-time strings like 2024-01-31T12:00:00Z or 2024-01-31 12:00:00.123. A plain number is not a
-// date even though Date.parse accepts some.
-const DATE_RE = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/;
+// Date-time strings like 2024-01-31T12:00:00Z, 2024-01-31 12:00:00.123 or 2024-01-31T12:00+01:00.
+// A plain number is not a date even though Date.parse accepts some.
+const DATE_RE = /^(\d{4}-\d{2}-\d{2})[T ](\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?)(Z|[+-]\d{2}:?\d{2})?$/i;
 
+/**
+ * Parses a date-time cell to Unix milliseconds. Times without a zone are read as UTC, so a file
+ * gets the same timestamps on every machine (Date.parse would use the local zone).
+ */
 export function parseDateMs(cell: string): number {
-  const trimmed = cell.trim();
-  return DATE_RE.test(trimmed) ? Date.parse(trimmed) : NaN;
+  const match = DATE_RE.exec(cell.trim());
+  if (!match) {
+    return NaN;
+  }
+  const [, date, time, zone = "Z"] = match;
+  const offset = zone.length === 5 ? `${zone.slice(0, 3)}:${zone.slice(3)}` : zone.toUpperCase();
+  return Date.parse(`${date}T${time}${offset}`);
 }
 
 /** Turns header cells into unique message field names usable in message paths. */
@@ -205,7 +214,7 @@ export function numericTimeFormat(header: string, firstValue: number): TimeForma
 /** Converts a time cell to nanoseconds, exactly for plain decimal numbers. */
 export function cellToNs(cell: string, format: TimeFormat, delimiter: string): bigint {
   if (format.type === "date") {
-    return BigInt(Date.parse(cell.trim())) * 1_000_000n;
+    return BigInt(parseDateMs(cell)) * 1_000_000n;
   }
   const text = numericText(cell, delimiter);
   const match = /^(-?)(\d*)(?:\.(\d*))?$/.exec(text);

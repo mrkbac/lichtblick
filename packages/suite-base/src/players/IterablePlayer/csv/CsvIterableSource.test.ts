@@ -76,6 +76,53 @@ describe("CsvIterableSource", () => {
     expect(backfill.map((e) => e.message)).toEqual([{ t: 4100, v: 8200 }]);
   });
 
+  it("reads every row when many rows share a timestamp across index entries", async () => {
+    const lines = ["time,v"];
+    for (let i = 0; i < 5000; i++) {
+      lines.push(`${i < 4000 ? 0 : 1},${i}`);
+    }
+    const source = new CsvIterableSource([file("same.csv", lines.join("\n"))]);
+    await source.initialize();
+
+    const all = await collect(source, { topics: topics("/same") });
+    expect(all).toHaveLength(5000);
+    const fromOne = await collect(source, { topics: topics("/same"), start: { sec: 1, nsec: 0 } });
+    expect(fromOne).toHaveLength(1000);
+    expect((fromOne[0]!.message as { v: number }).v).toBe(4000);
+  });
+
+  it("rejects a time column that decreases only at nanosecond precision", async () => {
+    // All three are the same double, but the last one is earlier than the second
+    const source = new CsvIterableSource([
+      file(
+        "ns.csv",
+        "time_ns,v\n1700000000000000000,1\n1700000000000000002,2\n1700000000000000001,3\n",
+      ),
+    ]);
+    const init = await source.initialize();
+    expect(init.alerts).toEqual([
+      expect.objectContaining({ message: "ns.csv: no time column found" }),
+    ]);
+  });
+
+  it("keeps exact nanosecond times of an increasing column", async () => {
+    const source = new CsvIterableSource([
+      file("ns.csv", "time_ns,v\n1700000000000000001,1\n1700000000000000002,2\n"),
+    ]);
+    const init = await source.initialize();
+    expect(init.alerts).toEqual([]);
+    expect(init.start).toEqual({ sec: 1700000000, nsec: 1 });
+    expect(init.end).toEqual({ sec: 1700000000, nsec: 2 });
+  });
+
+  it("does not use a column of infinite values as the time", async () => {
+    const source = new CsvIterableSource([file("inf.csv", "time,v\nInfinity,a\nInfinity,b\n")]);
+    const init = await source.initialize();
+    expect(init.alerts).toEqual([
+      expect.objectContaining({ message: "inf.csv: no time column found" }),
+    ]);
+  });
+
   it("merges several files in time order", async () => {
     const source = new CsvIterableSource([
       file("a.csv", "time,x\n1,1\n3,3\n"),

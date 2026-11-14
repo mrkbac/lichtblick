@@ -77,6 +77,15 @@ describe("parseNumber / parseDateMs", () => {
     expect(parseDateMs("2024-01-31T12:00:00Z")).toBe(Date.UTC(2024, 0, 31, 12));
     expect(parseDateMs("2024")).toBeNaN();
   });
+
+  it("reads date-times without a zone as UTC and honors explicit offsets", () => {
+    const utcNoon = Date.UTC(2024, 0, 31, 12);
+    expect(parseDateMs("2024-01-31 12:00:00")).toBe(utcNoon);
+    expect(parseDateMs("2024-01-31T12:00")).toBe(utcNoon);
+    expect(parseDateMs("2024-01-31T13:00:00+01:00")).toBe(utcNoon);
+    expect(parseDateMs("2024-01-31T13:00:00+0100")).toBe(utcNoon);
+    expect(parseDateMs("2024-01-31T12:00:00.250z")).toBe(utcNoon + 250);
+  });
 });
 
 describe("toFieldNames", () => {

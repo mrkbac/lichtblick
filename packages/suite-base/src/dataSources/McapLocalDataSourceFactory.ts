@@ -28,6 +28,7 @@ class McapLocalDataSourceFactory implements IDataSourceFactory {
   public iconName: IDataSourceFactory["iconName"] = "OpenFile";
   public supportedFileTypes = [AllowedFileExtensions.MCAP];
   public supportsMultiFile = true;
+  public supportsCompare = true;
 
   // Optional pass-through for future multi-file hydration tuning experiments. Omitted by default
   // so existing behavior remains unchanged until a caller explicitly opts in.

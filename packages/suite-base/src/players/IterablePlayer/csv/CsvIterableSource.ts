@@ -30,6 +30,10 @@ import {
 // One seek point per this many rows: a 10M row file keeps ~10k index entries
 const ROWS_PER_INDEX = 1024;
 const NS_PER_SEC = 1_000_000_000n;
+// Index entry times come from doubles, off by at most a few hundred ns for epoch times
+const SEEK_MARGIN_NS = 1_000n;
+// Any fixed unit gives the same order; seconds keeps every digit of the value
+const EXACT_ORDER: TimeFormat = { type: "number", nsPerUnit: NS_PER_SEC };
 
 type IndexEntry = { offset: number; row: number; timeNs: bigint };
 
@@ -62,6 +66,7 @@ class CsvFile {
     let timeOk: boolean[] = [];
     let isDate: boolean[] = [];
     let lastTime: number[] = [];
+    let lastTimeCell: string[] = [];
     let firstCells: string[] = [];
     let lastCells: string[] = [];
     const entryTimes: number[][] = [];
@@ -78,6 +83,7 @@ class CsvFile {
           timeOk = header.map(() => true);
           isDate = header.map(() => false);
           lastTime = header.map(() => -Infinity);
+          lastTimeCell = header.map(() => "");
           if (!allNumeric) {
             continue;
           }
@@ -108,11 +114,21 @@ class CsvFile {
           }
           const value =
             isDate[col] === true ? parseDateMs(cell) : parseNumber(cell, this.#delimiter);
-          // Time must be present, non-negative and non-decreasing to drive playback
-          if (isNaN(value) || value < 0 || value < lastTime[col]!) {
+          // Time must be present, finite, non-negative and non-decreasing to drive playback.
+          // Doubles round long values (e.g. epoch ns), so equal doubles are compared exactly.
+          if (
+            !Number.isFinite(value) ||
+            value < 0 ||
+            value < lastTime[col]! ||
+            (value === lastTime[col] &&
+              isDate[col] !== true &&
+              cellToNs(cell, EXACT_ORDER, this.#delimiter) <
+                cellToNs(lastTimeCell[col]!, EXACT_ORDER, this.#delimiter))
+          ) {
             timeOk[col] = false;
           } else {
             lastTime[col] = value;
+            lastTimeCell[col] = cell;
             if (times) {
               times[col] = value;
             }
@@ -158,7 +174,7 @@ class CsvFile {
         ? { type: "date" }
         : numericTimeFormat(names[col]!, parseNumber(firstCells[col]!, this.#delimiter));
     const nsPerValue = this.#timeFormat.type === "date" ? 1e6 : Number(this.#timeFormat.nsPerUnit);
-    // Approximate (double precision) times are fine here: seeks step back one entry for margin
+    // Approximate (double precision) times are fine here: seeks allow SEEK_MARGIN_NS for them
     this.#index.forEach((entry, idx) => {
       entry.timeNs = BigInt(Math.round(entryTimes[idx]![col]! * nsPerValue));
     });
@@ -215,21 +231,24 @@ class CsvFile {
     return last && this.#event(last.cells, last.timeNs, last.size);
   }
 
+  /**
+   * The entry to start reading at so no row at or after `timeNs` is skipped: the one before the
+   * first entry at or after `timeNs` (minus a margin for the approximate entry times). Using the
+   * first such entry, not the last, matters when many rows share a timestamp.
+   */
   #seek(timeNs: bigint): IndexEntry | undefined {
-    // Last entry at or before timeNs, then one more back since entry times are approximate
+    const target = timeNs - SEEK_MARGIN_NS;
     let lo = 0;
-    let hi = this.#index.length - 1;
-    let found = 0;
-    while (lo <= hi) {
+    let hi = this.#index.length;
+    while (lo < hi) {
       const mid = (lo + hi) >> 1;
-      if (this.#index[mid]!.timeNs <= timeNs) {
-        found = mid;
+      if (this.#index[mid]!.timeNs < target) {
         lo = mid + 1;
       } else {
-        hi = mid - 1;
+        hi = mid;
       }
     }
-    return this.#index[Math.max(0, found - 1)];
+    return this.#index[Math.max(0, lo - 1)];
   }
 
   #cellTime(cells: readonly string[], row: number): bigint {
