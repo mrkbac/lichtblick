@@ -24,6 +24,7 @@ import { NamespaceSelectionModal } from "@lichtblick/suite-base/components/Names
 import { AllowedFileExtensions } from "@lichtblick/suite-base/constants/allowedFileExtensions";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { Namespace } from "@lichtblick/suite-base/types";
+import { rememberFolder } from "@lichtblick/suite-base/util/compareSides";
 
 const log = Logger.getLogger(__filename);
 
@@ -163,6 +164,7 @@ export default function DocumentDropListener(props: DocumentDropListenerProps): 
               (entry as FileSystemFileEntry).file(resolve, reject);
             });
             allFiles.push(file);
+            rememberFolder(file, directory.name);
           }
         }
       }

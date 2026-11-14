@@ -20,6 +20,7 @@ import {
 } from "@lichtblick/suite-base/players/IterablePlayer/shared/multiFileHydrationOptions";
 import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
 import { Player } from "@lichtblick/suite-base/players/types";
+import { uniqueNames } from "@lichtblick/suite-base/util/compareSides";
 
 const initWorkers: Record<string, () => Worker> = {
   ".bag": () => {
@@ -112,17 +113,35 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
 
     const initWorker = initWorkers[extension]!;
 
+    // `ds.compare=true` compares the files side by side, one side per file; a comma list names the
+    // side of each file instead (files with the same name are merged into that side)
+    const compareParam = args.params.compare;
+    const compare =
+      urls.length < 2 || compareParam == undefined || compareParam === ""
+        ? undefined
+        : compareParam === "true"
+          ? uniqueNames(urls.map((url) => path.basename(new URL(url).pathname)))
+          : compareParam.split(",");
+    const validCompare = compare?.length === urls.length ? compare : undefined;
+
     const initArgs =
       urls.length === 1
         ? { url: urls[0], credentials }
-        : addMultiFileHydrationOverrides({ urls, credentials }, this.multiFileHydrationOverrides);
+        : addMultiFileHydrationOverrides(
+            { urls, credentials, compare: validCompare },
+            this.multiFileHydrationOverrides,
+          );
     const source = new WorkerSerializedIterableSource({ initWorker, initArgs });
 
     return new IterablePlayer({
       source,
       name: urls.join(),
       // Keep includeCredentials in the app URL so reloads and shared links still send cookies
-      urlParams: includeCredentials ? { urls, includeCredentials: "true" } : { urls },
+      urlParams: {
+        urls,
+        ...(includeCredentials && { includeCredentials: "true" }),
+        ...(validCompare && { compare: compareParam! }),
+      },
       sourceId: this.id,
       readAheadDuration: { sec: 10, nsec: 0 },
       // MCAP can carry foxglove.CompressedVideo. Some codecs (e.g. H.265) cannot decode a P/B-frame

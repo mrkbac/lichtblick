@@ -1345,6 +1345,10 @@ export default class UserScriptPlayer implements Player {
     this.#player.seekPlayback?.(time);
   }
 
+  public setCompareOffsets(offsetsSec: readonly number[]): void {
+    this.#player.setCompareOffsets?.(offsetsSec);
+  }
+
   public async exportLiveHistory(writable: IWritable): Promise<void> {
     await this.#player.exportLiveHistory?.(writable);
   }

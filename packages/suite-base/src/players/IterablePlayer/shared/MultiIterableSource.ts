@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { compare } from "@foxglove/rostime";
+import { Time, compare } from "@foxglove/rostime";
 import { Semaphore } from "async-mutex";
 
 import Logger from "@lichtblick/log";
@@ -86,14 +86,31 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
   #updating = 0;
   #wake: (() => void) | undefined;
   #lastUpdate = 0;
+  // Skip the update throttle once, e.g. for a change the user is waiting on
+  #urgent = false;
+  // When comparing: one source per side, and the time all sides are aligned to start at
+  #compared: ComparedSource[] | undefined;
+  #compareStart: Time | undefined;
+  // Sources built by the caller (e.g. the files of one compared side), instead of from `dataSource`
+  readonly #prebuilt: IIterableSource<Uint8Array>[] | undefined;
 
-  public constructor(dataSource: MultiSource, SourceConstructor: IterableSourceConstructor<T, P>) {
+  public constructor(
+    dataSource: MultiSource,
+    SourceConstructor: IterableSourceConstructor<T, P>,
+    prebuilt?: IIterableSource<Uint8Array>[],
+  ) {
     this.dataSource = dataSource;
     this.SourceConstructor = SourceConstructor;
+    this.#prebuilt = prebuilt;
   }
 
   private async loadMultipleSources(): Promise<Initialization[]> {
     const { type } = this.dataSource;
+    const concurrency = this.dataSource.initConcurrency ?? DEFAULT_INIT_CONCURRENCY;
+    if (this.#prebuilt) {
+      this.sourceImpl.push(...this.#prebuilt);
+      return await this.initializeSources(this.#prebuilt, concurrency);
+    }
 
     // Construct one bounded reader pool before branching; files and URLs use the same overrides.
     const maxHydratedCount = this.dataSource.maxHydratedSources ?? DEFAULT_MAX_HYDRATED_SOURCES;
@@ -150,24 +167,58 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
       );
     }
 
-    // Bound local and remote initialization: concurrent MCAP summary parsing can spike worker
-    // memory in large multi-file sessions.
-    const concurrency = this.dataSource.initConcurrency ?? DEFAULT_INIT_CONCURRENCY;
-
-    if (this.dataSource.compare !== true) {
+    // Bound local and remote initialization (`concurrency`): concurrent MCAP summary parsing can
+    // spike worker memory in large multi-file sessions.
+    const sideNames = this.dataSource.compare;
+    if (sideNames == undefined || sideNames.length !== sources.length) {
       this.sourceImpl.push(...sources);
       return await this.initializeSources(sources, concurrency);
     }
 
-    const compared = sources.map((source, i) => new ComparedSource(source, `/${compareLabel(i)}`));
+    // One compared source per side name, in order of first appearance; a side of several files
+    // merges them first
+    const names = [...new Set(sideNames)];
+    const compared = names.map((name, side) => {
+      const members = sources.filter((_, index) => sideNames[index] === name);
+      const merged =
+        members.length === 1
+          ? members[0]!
+          : new MultiIterableSource(
+              { ...this.dataSource, compare: undefined },
+              this.SourceConstructor,
+              members,
+            );
+      return new ComparedSource(merged, `/${compareLabel(side)}`, name);
+    });
+    this.#compared = compared;
     this.sourceImpl.push(...compared);
     const initializations = await this.initializeSources(compared, concurrency);
-    // ponytail: aligns recording starts only; add a per-recording offset when starts differ in content
     const earliest = initializations.reduce(
       (min, init) => (compare(init.start, min) < 0 ? init.start : min),
       initializations[0]!.start,
     );
+    this.#compareStart = earliest;
     return compared.map((source) => source.alignStartTo(earliest));
+  }
+
+  /** Move each compared side by `offsetsSec[i]` seconds; reported through waitForUpdate() */
+  public async setCompareOffsets(offsetsSec: readonly number[]): Promise<void> {
+    const start = this.#compareStart;
+    if (!this.#compared || !start) {
+      return;
+    }
+    this.#compared.forEach((source, side) => {
+      const init = source.alignStartTo(start, offsetsSec[side] ?? 0);
+      const index = this.#sources.indexOf(source);
+      if (index >= 0) {
+        this.#inits[index] = init;
+      }
+    });
+    // Every message moved
+    this.#updatedRanges = undefined;
+    this.#changed = true;
+    this.#urgent = true;
+    this.#wake?.();
   }
 
   private async initializeSources(
@@ -194,6 +245,10 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
 
     this.#inits = initializations;
     this.#sources = [...this.sourceImpl];
+    if (this.#compared) {
+      // Offsets can change at any time, so a comparison never stops updating
+      this.#updating += 1;
+    }
     this.#sources.forEach((source, index) => {
       if (source.waitForUpdate) {
         this.#updating += 1;
@@ -253,7 +308,7 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
     }
     // The last update (no source can grow any more) goes out right away
     const until = this.#lastUpdate + MIN_UPDATE_INTERVAL_MS;
-    while (this.#updating > 0 && Date.now() < until) {
+    while (this.#updating > 0 && Date.now() < until && !this.#urgent) {
       await new Promise<void>((resolve) => {
         const timer = setTimeout(resolve, until - Date.now());
         this.#wake = () => {
@@ -264,6 +319,7 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
     }
     this.#lastUpdate = Date.now();
     this.#changed = false;
+    this.#urgent = false;
     this.#sortSources();
     const merged = this.mergeInitializations(this.#inits);
     merged.updatedRanges = this.#updatedRanges;
@@ -383,6 +439,9 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
       resultInit.alerts.push(...init.alerts);
       validateAndAddNewDatatypes(resultInit, init);
       validateAndAddNewTopics(resultInit, init);
+    }
+    if (this.#compared) {
+      resultInit.compareSides = this.#compared.map((source) => source.side());
     }
     // A partial container summary would understate storage and channel totals.
     if (initializations.some((init) => init.recordingFiles == undefined)) {

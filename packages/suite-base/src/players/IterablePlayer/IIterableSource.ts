@@ -10,6 +10,7 @@ import { Time } from "@foxglove/rostime";
 import { Immutable, MessageEvent, Metadata } from "@lichtblick/suite";
 import {
   PlayerAlert,
+  CompareSide,
   RecordingFileInfo,
   Topic,
   TopicSelection,
@@ -29,6 +30,8 @@ export type Initialization = {
   topics: TopicWithDecodingInfo[];
   topicStats: Map<string, TopicStats>;
   recordingFiles?: RecordingFileInfo[];
+  /** When recordings are compared: one entry per side */
+  compareSides?: CompareSide[];
   datatypes: RosDatatypes;
   profile: string | undefined;
   name?: string;
@@ -228,6 +231,12 @@ export interface IIterableSource<MessageType = unknown> {
    * treated as non-fatal by callers; the source can still hydrate on demand later.
    */
   prewarm?: () => Promise<void>;
+
+  /**
+   * Optional, for a source comparing recordings (see Initialization.compareSides): move each side
+   * by `offsetsSec[i]` seconds. The source reports the new times through waitForUpdate().
+   */
+  setCompareOffsets?: (offsetsSec: readonly number[]) => Promise<void>;
 }
 
 export type IterableSourceInitializeArgs = {
@@ -237,8 +246,9 @@ export type IterableSourceInitializeArgs = {
   url?: string;
   files?: File[];
   urls?: string[];
-  // Compare `files`/`urls` side by side instead of merging them (see MultiSource)
-  compare?: boolean;
+  // Compare `files`/`urls` side by side instead of merging them: the side name of each, in order.
+  // Entries with the same name are merged into one side (see MultiSource).
+  compare?: readonly string[];
   // Fetch credentials for `url`/`urls`, e.g. "include" to send cookies (`ds.includeCredentials`)
   credentials?: RequestCredentials;
   // Optional overrides for multi-file hydration tuning (see MultiSourceHydrationOptions in

@@ -66,9 +66,10 @@ export type MultiSource = (
       readAheadBufferBytes?: number;
     } & MultiSourceHydrationOptions)
 ) & {
-  // Keep recordings apart instead of merging them: each file's topics go under its own prefix
-  // (/a, /b, …) and every file is shifted to start at the same time.
-  compare?: boolean;
+  // Keep recordings apart instead of merging them: the side name of each file/URL, in order. Each
+  // side's topics go under its own prefix (/a, /b, … in order of first appearance), files with the
+  // same side name are merged, and every side is shifted to start at the same time.
+  compare?: readonly string[];
 };
 
 export type IterableSourceConstructor<T extends IIterableSource, P> = new (args: P) => T;

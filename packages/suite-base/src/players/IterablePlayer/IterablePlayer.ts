@@ -37,6 +37,7 @@ import {
   Progress,
   PublishPayload,
   RecordingFileInfo,
+  CompareSide,
   SubscribePayload,
   Topic,
   TopicSelection,
@@ -182,6 +183,7 @@ export class IterablePlayer implements Player {
   #capabilities: string[] = [PLAYER_CAPABILITIES.setSpeed, PLAYER_CAPABILITIES.playbackControl];
   #profile: string | undefined;
   #recordingFiles: readonly RecordingFileInfo[] | undefined;
+  #compareSides: readonly CompareSide[] | undefined;
   #subscriptions: SubscribePayload[] = [];
   #allTopics: TopicSelection = new Map();
   #preloadTopics: TopicSelection = new Map();
@@ -383,6 +385,13 @@ export class IterablePlayer implements Player {
 
     // Queue event state update to update speed in player state to UI
     this.#queueEmitState();
+  }
+
+  public setCompareOffsets(offsetsSec: readonly number[]): void {
+    // The source reports the moved sides as an update (see #followSourceUpdates)
+    this.#iterableSource.setCompareOffsets?.(offsetsSec).catch((error: unknown) => {
+      log.error("Failed to move compared recordings", error);
+    });
   }
 
   public seekPlayback(time: Time): void {
@@ -775,6 +784,7 @@ export class IterablePlayer implements Player {
 
     this.#profile = profile;
     this.#recordingFiles = initResult.recordingFiles;
+    this.#compareSides = initResult.compareSides;
     this.#start = start;
     this.#currentTime = this.#currentTime
       ? clampTime(this.#currentTime, start, end)
@@ -1151,6 +1161,7 @@ export class IterablePlayer implements Player {
         topics: this.#providerTopics,
         topicStats: this.#providerTopicStats,
         recordingFiles: this.#recordingFiles,
+        compareSides: this.#compareSides,
         datatypes: this.#providerDatatypes,
         publishedTopics: this.#publishedTopics,
       };
