@@ -211,7 +211,7 @@ export const mainConfig =
       // the modules they hold) change with it. A page still loading the previous build then asks
       // for chunk files that no longer exist (404, "Chunk is from another build"). Without split
       // chunks every async chunk keeps its name across lazy compiles.
-      ...(isServe && { optimization: { ...appConfig.optimization, splitChunks: false } }),
+      ...(isServe && { optimization: { splitChunks: false } }),
 
       target: "web",
       context: params.contextPath,
