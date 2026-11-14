@@ -7,6 +7,7 @@ import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
 
 import { BlobReadable } from "./BlobReadable";
+import { ChunkCache } from "./ChunkCache";
 import { McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
 import { McapIterableSource } from "./McapIterableSource";
 import { McapRecoveryScanner } from "./McapRecoveryScanner";
@@ -142,7 +143,7 @@ describe("McapRecoveryScanner", () => {
     const scanner = await scan(bytes);
 
     // When
-    const readable = scanner.toReadable(readableOf(bytes));
+    const readable = scanner.toReadable(readableOf(bytes), new ChunkCache());
     const reader = await McapIndexedReader.Initialize({ readable });
     const metadata = [];
     for await (const record of reader.readMetadata()) {
@@ -166,7 +167,9 @@ describe("McapRecoveryScanner", () => {
     // Then
     expect(scanner.messageCount).toBe(BigInt(MESSAGE_COUNT - 1));
     expect(scanner.unreadableBytes).toBeGreaterThan(0n);
-    expect(await readValues(scanner.toReadable(readableOf(bytes)))).toEqual([1, 2, 3, 4]);
+    expect(await readValues(scanner.toReadable(readableOf(bytes), new ChunkCache()))).toEqual([
+      1, 2, 3, 4,
+    ]);
     expect(scanner.toAlert()).toMatchObject({ severity: "warn", message: /damaged/ });
   });
 
@@ -180,7 +183,9 @@ describe("McapRecoveryScanner", () => {
 
     // Then
     expect(scanner.corruptRecords).toBe(1);
-    expect(await readValues(scanner.toReadable(readableOf(bytes)))).toEqual([1, 3, 4, 5]);
+    expect(await readValues(scanner.toReadable(readableOf(bytes), new ChunkCache()))).toEqual([
+      1, 3, 4, 5,
+    ]);
     expect(scanner.toAlert().tip).toMatch(/1 corrupt record/);
   });
 
@@ -195,7 +200,9 @@ describe("McapRecoveryScanner", () => {
     // Then
     expect(scanner.offset).toBe(BigInt(valid.byteLength));
     expect(scanner.unreadableBytes).toBe(100n);
-    expect(await readValues(scanner.toReadable(readableOf(bytes)))).toEqual([1, 2, 3, 4, 5]);
+    expect(await readValues(scanner.toReadable(readableOf(bytes), new ChunkCache()))).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
   });
 
   it("resumes from where the previous scan stopped as the file grows", async () => {
@@ -211,7 +218,9 @@ describe("McapRecoveryScanner", () => {
     // Then
     expect(firstPass).toBeLessThan(BigInt(MESSAGE_COUNT));
     expect(scanner.messageCount).toBe(BigInt(MESSAGE_COUNT));
-    expect(await readValues(scanner.toReadable(readableOf(full)))).toEqual([1, 2, 3, 4, 5]);
+    expect(await readValues(scanner.toReadable(readableOf(full), new ChunkCache()))).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
   });
 
   it("reads no further than a short step needs", async () => {
@@ -281,7 +290,11 @@ describe("McapRecoveryScanner.openLiveReader", () => {
     const scanner = new McapRecoveryScanner(await loadDecompressHandlers());
     const base = readableOf(bytes);
     await scanner.scan(readableOf(await recording(before)));
-    const live = await scanner.openLiveReader(base, await loadDecompressHandlers());
+    const live = await scanner.openLiveReader(
+      base,
+      await loadDecompressHandlers(),
+      new ChunkCache(),
+    );
     const source = new McapIndexedIterableSource(live.reader);
     await source.initialize();
     expect(live.reader.chunkIndexes).toHaveLength(before);
@@ -508,7 +521,7 @@ describe("McapRecoveryScanner message indexes", () => {
     const bytes = await oneChunk(1000);
     const scanner = await scan(bytes);
     const reader = await McapIndexedReader.Initialize({
-      readable: scanner.toReadable(readableOf(bytes)),
+      readable: scanner.toReadable(readableOf(bytes), new ChunkCache()),
     });
 
     // When one topic is read
@@ -527,7 +540,7 @@ describe("McapRecoveryScanner message indexes", () => {
     const bytes = await recording(4);
     const scanner = await scan(bytes);
     const recovered = await McapIndexedReader.Initialize({
-      readable: scanner.toReadable(readableOf(bytes)),
+      readable: scanner.toReadable(readableOf(bytes), new ChunkCache()),
     });
     const starts = new Set(recovered.chunkIndexes.map((chunk) => chunk.chunkStartOffset));
     let chunkReads = 0;
@@ -539,7 +552,11 @@ describe("McapRecoveryScanner message indexes", () => {
         return await base.read(offset, length);
       },
     };
-    const { reader } = await scanner.openLiveReader(counting, await loadDecompressHandlers());
+    const { reader } = await scanner.openLiveReader(
+      counting,
+      await loadDecompressHandlers(),
+      new ChunkCache(),
+    );
 
     // When every message is read twice (e.g. backfill and playback)
     const readAll = async () => {

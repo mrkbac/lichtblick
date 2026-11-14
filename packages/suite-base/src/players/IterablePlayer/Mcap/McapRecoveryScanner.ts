@@ -15,6 +15,8 @@ import {
 
 import type { PlayerAlert } from "@lichtblick/suite-base/players/types";
 
+import type { ChunkCache } from "./ChunkCache";
+
 const RECORD_PREFIX_LENGTH = 9n; // opcode + content length
 const READ_WINDOW_BYTES = 8n * 1024n * 1024n;
 const SNAPSHOT_VERSION = 2;
@@ -31,26 +33,6 @@ const MESSAGE_INDEX_BASE_BYTES = 15n;
 const MESSAGE_HEADER_BYTES = 22;
 // Where a message record's log time is: after opcode, length, channel id and sequence
 const LOG_TIME_OFFSET = 15;
-// Chunk record fields before the records, with an empty compression string
-const CHUNK_HEADER_BYTES = 49;
-/**
- * Chunks read recently, decompressed, with their rebuilt message indexes. Shared by every scanner
- * in this worker (keys start with the scanner's id), so it bounds memory however many files are
- * open. Reading a chunk's message indexes puts it here, and the read of the chunk itself right
- * after takes it from here instead of decompressing it again; so do later reads of the same chunk
- * (e.g. backfill reads one topic at a time, the player and the block loader read side by side).
- */
-const CHUNK_CACHE_BYTES = 16 * 1024 * 1024;
-type CachedChunk = {
-  /** Length of the chunk record in the file */
-  length: bigint;
-  /** The chunk record, uncompressed */
-  record: Uint8Array;
-  /** Its message indexes, as the chunk index's offsets point into them */
-  messageIndexes: Uint8Array;
-};
-const chunkCache = new Map<string, { chunk: Promise<CachedChunk>; bytes: number }>();
-let nextScannerId = 0;
 
 /** A reader on a growing index; `grow()` adds what was scanned since and returns the new chunks */
 export type LiveReader = {
@@ -101,7 +83,6 @@ export class McapRecoveryScanner {
   public unreadableBytes = 0n;
 
   #decompressHandlers: McapTypes.DecompressHandlers;
-  #id = nextScannerId++;
   #schemas = new Map<number, McapTypes.Schema>();
   #channels = new Map<number, McapTypes.Channel>();
   // Only the chunk-level index is kept: offset, length, time range and channels per chunk. Its
@@ -285,16 +266,20 @@ export class McapRecoveryScanner {
    * in-memory index, at fixed offsets past the file (see LIVE_INDEX_AT). Safe to call mid-scan: it
    * is a snapshot that later scanning doesn't change.
    */
-  public toReadable(base: McapTypes.IReadable): McapTypes.IReadable {
-    return this.#readable(base, this.#buildSummary(LIVE_SUMMARY_AT));
+  public toReadable(base: McapTypes.IReadable, cache: ChunkCache): McapTypes.IReadable {
+    return this.#readable(base, this.#buildSummary(LIVE_SUMMARY_AT), cache);
   }
 
   /**
    * `base` with the message indexes and `summary` past its end. Message indexes are rebuilt from
-   * their chunk on demand, and the chunk is kept decompressed in `chunkCache` for the read of the
-   * chunk itself that follows.
+   * their chunk on demand, and both go into `cache`, where the reader (given the same cache) finds
+   * the chunk when it reads its messages right after.
    */
-  #readable(base: McapTypes.IReadable, summary: Uint8Array): McapTypes.IReadable {
+  #readable(
+    base: McapTypes.IReadable,
+    summary: Uint8Array,
+    cache: ChunkCache,
+  ): McapTypes.IReadable {
     return {
       size: async () => LIVE_SUMMARY_AT + BigInt(summary.byteLength),
       read: async (offset, length) => {
@@ -305,72 +290,31 @@ export class McapRecoveryScanner {
         if (offset >= LIVE_INDEX_AT) {
           // A read stays within one chunk's message indexes (see ChunkCursor.loadMessageIndexes)
           const i = (offset - LIVE_INDEX_AT) / INDEX_STRIDE;
-          const { messageIndexes } = await this.#cachedChunk(base, this.#chunkIndexes[Number(i)]!);
-          const start = Number(offset - LIVE_INDEX_AT - i * INDEX_STRIDE);
-          return messageIndexes.subarray(start, start + Number(length));
-        }
-        // ponytail: hands the reader the cached chunk record uncompressed, which is longer than
-        // the `length` it asked for; McapIndexedReader parses one record from what it gets, so
-        // that is fine. It costs two copies of the uncompressed chunk (here and in the reader's
-        // parse), ~10% of a first read; a decompressed-chunk hook in @mcap/core would save both.
-        const cached = chunkCache.get(this.#chunkKey(offset));
-        if (cached && cached.bytes > 0) {
-          const chunk = await cached.chunk;
-          if (length === chunk.length) {
-            return chunk.record;
+          const chunk = this.#chunkIndexes[Number(i)]!;
+          let messageIndexes = cache.getMessageIndexes(chunk.chunkStartOffset);
+          if (!messageIndexes) {
+            const rebuilt = await this.#rebuildChunk(base, chunk);
+            messageIndexes = rebuilt.messageIndexes;
+            cache.set(chunk.chunkStartOffset, rebuilt.records);
+            cache.setMessageIndexes(chunk.chunkStartOffset, messageIndexes);
           }
+          const start = Number(offset - LIVE_INDEX_AT - i * INDEX_STRIDE);
+          return new Uint8Array(
+            messageIndexes.buffer,
+            messageIndexes.byteOffset + start,
+            Number(length),
+          );
         }
         return await base.read(offset, length);
       },
     };
   }
 
-  #chunkKey(chunkStartOffset: bigint): string {
-    return `${this.#id}:${chunkStartOffset}`;
-  }
-
-  /** The chunk decompressed with its message indexes, from `chunkCache` or rebuilt into it */
-  async #cachedChunk(base: McapTypes.IReadable, chunk: McapTypes.ChunkIndex): Promise<CachedChunk> {
-    const key = this.#chunkKey(chunk.chunkStartOffset);
-    const hit = chunkCache.get(key);
-    if (hit) {
-      chunkCache.delete(key); // most recently used goes last
-      chunkCache.set(key, hit);
-      return await hit.chunk;
-    }
-    const entry = { chunk: this.#rebuildChunk(base, chunk), bytes: 0 };
-    chunkCache.set(key, entry);
-    try {
-      const built = await entry.chunk;
-      entry.bytes = built.record.byteLength + built.messageIndexes.byteLength;
-    } catch (error) {
-      if (chunkCache.get(key) === entry) {
-        chunkCache.delete(key);
-      }
-      throw error;
-    }
-    let total = 0;
-    for (const { bytes } of chunkCache.values()) {
-      total += bytes;
-    }
-    // Oldest first; always keeps the newest, however big, and the ones still being read
-    for (const [oldKey, old] of chunkCache) {
-      if (total <= CHUNK_CACHE_BYTES || old === entry) {
-        break;
-      }
-      if (old.bytes > 0) {
-        total -= old.bytes;
-        chunkCache.delete(oldKey);
-      }
-    }
-    return await entry.chunk;
-  }
-
   /** Reads and decompresses the chunk and writes its message indexes as #addChunk laid them out */
   async #rebuildChunk(
     base: McapTypes.IReadable,
     chunkIndex: McapTypes.ChunkIndex,
-  ): Promise<CachedChunk> {
+  ): Promise<{ records: DataView; messageIndexes: DataView }> {
     const changed = () =>
       new Error(`Chunk at offset ${chunkIndex.chunkStartOffset} changed since it was indexed`);
     // The chunk header is read in place: parseRecord would copy the records
@@ -426,22 +370,7 @@ export class McapRecoveryScanner {
       }
     }
 
-    if (compression === "") {
-      return { length: chunkIndex.chunkLength, record: bytes, messageIndexes };
-    }
-    // The same chunk record, uncompressed, so the reader doesn't decompress it again
-    const record = new Uint8Array(CHUNK_HEADER_BYTES + records.byteLength);
-    const header = new DataView(record.buffer);
-    header.setUint8(0, Opcode.CHUNK);
-    header.setBigUint64(1, BigInt(record.byteLength - 9), true);
-    header.setBigUint64(9, chunkView.getBigUint64(9, true), true); // message start time
-    header.setBigUint64(17, chunkView.getBigUint64(17, true), true); // message end time
-    header.setBigUint64(25, BigInt(records.byteLength), true);
-    header.setUint32(33, 0, true); // no CRC: it was checked when the chunk was indexed
-    header.setUint32(37, 0, true); // compression: ""
-    header.setBigUint64(41, BigInt(records.byteLength), true);
-    record.set(records, CHUNK_HEADER_BYTES);
-    return { length: chunkIndex.chunkLength, record, messageIndexes };
+    return { records: recordsView, messageIndexes: view };
   }
 
   /**
@@ -453,6 +382,7 @@ export class McapRecoveryScanner {
   public async openLiveReader(
     base: McapTypes.IReadable,
     decompressHandlers: McapTypes.DecompressHandlers,
+    cache: ChunkCache,
   ): Promise<LiveReader> {
     // What the summary holds; counted now, since scanning may go on while Initialize awaits
     let chunks = this.#chunkIndexes.length;
@@ -460,7 +390,8 @@ export class McapRecoveryScanner {
     let metadata = this.#metadataIndexes.length;
     const indexedReader = await McapIndexedReader.Initialize({
       decompressHandlers,
-      readable: this.#readable(base, this.#buildSummary(LIVE_SUMMARY_AT)),
+      readable: this.#readable(base, this.#buildSummary(LIVE_SUMMARY_AT), cache),
+      chunkCache: cache,
     });
     // ponytail: McapIndexedReader has no API to append to its index, so this writes to the fields
     // Initialize built (readMessages reads them on every call). Its private time range stays at

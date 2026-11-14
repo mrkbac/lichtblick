@@ -1194,3 +1194,96 @@ describe("McapIterableSource", () => {
     });
   });
 });
+
+describe("McapIterableSource chunk cache", () => {
+  const TOPICS = ["/a", "/b", "/c"];
+  const STEPS = 6;
+  // chunkSize 1: every message is a chunk
+  const CHUNKS = STEPS * TOPICS.length;
+
+  /** STEPS messages per topic, one per chunk, under a compression that counts its calls */
+  async function countedFile({ finish }: { finish: boolean }): Promise<Blob> {
+    const buffer = new TempBuffer();
+    const writer = new McapWriter({
+      writable: buffer,
+      chunkSize: 1,
+      compressChunk: (data) => ({ compression: "counted", compressedData: data }),
+    });
+    await writer.start({ library: "test", profile: "" });
+    const channels = [];
+    for (const topic of TOPICS) {
+      channels.push(
+        await writer.registerChannel({
+          schemaId: 0,
+          topic,
+          messageEncoding: "json",
+          metadata: new Map(),
+        }),
+      );
+    }
+    for (let i = 0; i < STEPS; i++) {
+      for (const channelId of channels) {
+        const time = BigInt(i) * 1_000_000_000n + BigInt(channelId);
+        await writer.addMessage({
+          channelId,
+          sequence: i,
+          logTime: time,
+          publishTime: time,
+          data: new Uint8Array([1]),
+        });
+      }
+    }
+    if (finish) {
+      await writer.end();
+    }
+    return new Blob([buffer.get().slice()]);
+  }
+
+  it.each([
+    { name: "an indexed file", finish: true },
+    { name: "a recovered file", finish: false },
+  ])(
+    "decompresses each chunk of $name once for play, preload, 3 plots and backfill",
+    async ({ finish }) => {
+      // Given a file whose chunks count their decompressions
+      let decompressions = 0;
+      vi.mocked(loadDecompressHandlers).mockResolvedValue({
+        counted: (buffer) => {
+          decompressions++;
+          return buffer.slice();
+        },
+      });
+      const source = new McapIterableSource({
+        type: "file",
+        file: (await countedFile({ finish })) as unknown as globalThis.Blob,
+      });
+      const init = await source.initialize();
+      while ((await source.waitForUpdate()) != undefined) {
+        // let a recovery scan finish
+      }
+      const decompressionsToOpen = decompressions;
+
+      // When playback, the preloader and three plot series read side by side, then backfill runs
+      const subscribe = (names: string[]) =>
+        new Map(names.map((topic) => [topic, PlayerBuilder.subscribePayload({ topic })]));
+      const readers = [TOPICS, TOPICS, ["/a"], ["/b"], ["/c"]].map((names) =>
+        source.messageIterator({ topics: subscribe(names), start: init.start, end: init.end }),
+      );
+      let messages = 0;
+      for (let done = 0; done < readers.length; ) {
+        done = 0;
+        for (const reader of readers) {
+          const result = await reader.next();
+          done += result.done === true ? 1 : 0;
+          messages += result.value?.type === "message-event" ? 1 : 0;
+        }
+      }
+      await source.getBackfillMessages({ topics: subscribe(TOPICS), time: init.end });
+
+      // Then every chunk was decompressed once, however many readers wanted it
+      expect(messages).toBe(CHUNKS * 3);
+      expect(decompressions - decompressionsToOpen).toBe(CHUNKS);
+      await source.terminate();
+    },
+  );
+});
