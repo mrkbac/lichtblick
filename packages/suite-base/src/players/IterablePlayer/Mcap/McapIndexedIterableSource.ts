@@ -201,8 +201,17 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     }
     index.chunks = reader.chunkIndexes.length;
 
+    // A channel whose schema is missing stays pending: a later chunk may repeat the schema
+    const missingSchemaAlerts: PlayerAlert[] = [];
     for (const channel of reader.channelsById.values()) {
       if (index.channels.has(channel.id)) {
+        continue;
+      }
+      if (channel.schemaId !== 0 && !reader.schemasById.has(channel.schemaId)) {
+        missingSchemaAlerts.push({
+          severity: "error",
+          message: `Missing schema info for schema id ${channel.schemaId} (channel ${channel.id}, topic ${channel.topic})`,
+        });
         continue;
       }
       index.channels.add(channel.id);
@@ -268,7 +277,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       topics: [...index.topicsByName.values()],
       datatypes: new Map(index.datatypes),
       profile: reader.header.profile,
-      alerts: [...index.alerts],
+      alerts: [...index.alerts, ...missingSchemaAlerts],
       metadata: index.metadata,
       publishersByTopic: new Map(
         [...index.publishersByTopic].map(([topic, publishers]) => [topic, new Set(publishers)]),
@@ -281,14 +290,6 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   #addChannel(channel: McapTypes.Channel): void {
     const index = this.#index;
     const schema = this.#reader.schemasById.get(channel.schemaId);
-    if (channel.schemaId !== 0 && schema == undefined) {
-      index.alerts.push({
-        severity: "error",
-        message: `Missing schema info for schema id ${channel.schemaId} (channel ${channel.id}, topic ${channel.topic})`,
-      });
-      return;
-    }
-
     let parsedChannel;
     try {
       parsedChannel = parseChannel({ messageEncoding: channel.messageEncoding, schema });

@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { McapIndexedReader, McapWriter, TempBuffer } from "@mcap/core";
+import { McapIndexedReader, McapTypes, McapWriter, TempBuffer } from "@mcap/core";
 import { Blob } from "node:buffer";
 
 import { loadDecompressHandlers } from "@lichtblick/mcap-support";
@@ -13,6 +13,51 @@ import { BlobReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap
 import { McapIndexedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/McapIndexedIterableSource";
 
 describe("McapIndexedIterableSource", () => {
+  it("adds a channel whose schema was missing once a later initialize() finds it", async () => {
+    // Given a reader whose channel's schema is missing at first
+    const tempBuffer = new TempBuffer();
+    const writer = new McapWriter({ writable: tempBuffer, startChannelId: 1 });
+    await writer.start({ library: "", profile: "" });
+    const schemaId = await writer.registerSchema({
+      data: new TextEncoder().encode(JSON.stringify({ type: "object" })),
+      encoding: "jsonschema",
+      name: "example_schema",
+    });
+    await writer.registerChannel({
+      messageEncoding: "json",
+      schemaId,
+      metadata: new Map(),
+      topic: "/example",
+    });
+    await writer.addMessage({
+      channelId: 1,
+      data: new TextEncoder().encode("{}"),
+      logTime: 0n,
+      publishTime: 0n,
+      sequence: 1,
+    });
+    await writer.end();
+    const reader = await McapIndexedReader.Initialize({
+      readable: new BlobReadable(new Blob([tempBuffer.get().slice()])),
+      decompressHandlers: await loadDecompressHandlers(),
+    });
+    const schemas = reader.schemasById as unknown as Map<number, McapTypes.Schema>;
+    const schema = schemas.get(schemaId)!;
+    schemas.delete(schemaId);
+    const source = new McapIndexedIterableSource(reader);
+    const before = await source.initialize();
+
+    // When the schema shows up (e.g. repeated in a later chunk of a growing index)
+    schemas.set(schemaId, schema);
+    const after = await source.initialize();
+
+    // Then the channel is added and the alert is gone
+    expect(before.topics).toEqual([]);
+    expect(before.alerts[0]?.message).toMatch(/Missing schema info/);
+    expect(after.topics.map((topic) => topic.name)).toEqual(["/example"]);
+    expect(after.alerts).toEqual([]);
+  });
+
   it("returns the correct metadata", async () => {
     const tempBuffer = new TempBuffer();
 
