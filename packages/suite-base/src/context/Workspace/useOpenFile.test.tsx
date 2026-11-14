@@ -136,10 +136,10 @@ describe("useOpenFile", () => {
     });
 
     await expect(result.current()).rejects.toThrow(
-      "The application only support multiple files for MCAP extension.",
+      "Opening multiple .json files at once is not supported.",
     );
     expect(enqueueSnackbar).toHaveBeenCalledWith(
-      expect.stringContaining("The application only support multiple files"),
+      expect.stringContaining("Opening multiple .json files at once"),
       { variant: "error" },
     );
   });

@@ -31,6 +31,7 @@ vi.mock("@lichtblick/suite-base", () => {
     RosbridgeDataSourceFactory: Stub,
     SampleNuscenesDataSourceFactory: Stub,
     UlogLocalDataSourceFactory: Stub,
+    CsvLocalDataSourceFactory: Stub,
     SharedRoot: (props: Record<string, unknown>) => {
       mockSharedRootProps.push(props);
       return null;

@@ -103,11 +103,8 @@ export function useOpenFile(
         );
       }
 
-      /**
-       * Should be removed when implement the rest of extensions.
-       */
-      if (extension !== ".mcap" && processedFiles.length > 1) {
-        throwErrorAndSnackbar(`The application only support multiple files for MCAP extension.`);
+      if (matchingSources[0]!.supportsMultiFile !== true && processedFiles.length > 1) {
+        throwErrorAndSnackbar(`Opening multiple ${extension} files at once is not supported.`);
       }
       selectSource(matchingSources[0]!.id, {
         type: "file",

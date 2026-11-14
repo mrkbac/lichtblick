@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   App,
   AppSetting,
+  CsvLocalDataSourceFactory,
   FoxgloveWebSocketDataSourceFactory,
   IAppConfiguration,
   IDataSourceFactory,
@@ -93,6 +94,7 @@ export default function Root(props: RootProps): React.JSX.Element {
       new Ros1LocalBagDataSourceFactory(),
       new Ros2LocalBagDataSourceFactory(),
       new UlogLocalDataSourceFactory(),
+      new CsvLocalDataSourceFactory(),
       new VelodyneDataSourceFactory(),
       new SampleNuscenesDataSourceFactory(),
       new McapLocalDataSourceFactory(),
