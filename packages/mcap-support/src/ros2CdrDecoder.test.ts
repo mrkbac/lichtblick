@@ -223,18 +223,21 @@ function canonical(value: unknown, input: ArrayBufferLike): unknown {
   return value;
 }
 
+/** The decoded value in canonical form, or the error name if decoding throws. */
+function outcome(decode: (data: Uint8Array) => unknown, data: Uint8Array) {
+  try {
+    return { value: canonical(decode(data), data.buffer) };
+  } catch (error) {
+    return { error: (error as Error).name };
+  }
+}
+
 function decodeBoth(definitions: MessageDefinition[], data: Uint8Array) {
-  const run = (decode: (view: ArrayBufferView) => unknown) => {
-    try {
-      return { value: canonical(decode(data), data.buffer) };
-    } catch (error) {
-      return { error: (error as Error).name };
-    }
-  };
   const reader = new MessageReader(definitions);
-  const expected = run((view) => reader.readMessage(view));
-  const actual = run(createRos2CdrDeserializer(definitions));
-  return { expected, actual };
+  return {
+    expected: outcome((view) => reader.readMessage(view), data),
+    actual: outcome(createRos2CdrDeserializer(definitions), data),
+  };
 }
 
 /** Copies `bytes` into a larger buffer at `offset`, with `tail` extra bytes after the view. */
@@ -271,25 +274,35 @@ describe("createRos2CdrDeserializer", () => {
       const written = new MessageWriter(definitions).writeMessage(value);
       expect(writeWithKind(EncapsulationKind.CDR_LE, root, types, value)).toEqual(written);
 
+      // One deserializer per schema, like one channel decoding many messages, so the later
+      // inputs and the second round decode with the cached variant for each encapsulation kind.
+      const decode = createRos2CdrDeserializer(definitions);
+      const reader = new MessageReader(definitions);
       const inputs = [written, ...KINDS.map((kind) => writeWithKind(kind, root, types, value))];
-      for (const bytes of inputs) {
-        for (const data of [placeAt(bytes, 0), placeAt(bytes, 1 + rng.int(7), 16)]) {
+      const placed = inputs.flatMap((bytes) => [
+        placeAt(bytes, 0),
+        placeAt(bytes, 1 + rng.int(7), 16),
+      ]);
+      for (let round = 0; round < 2; round++) {
+        for (const data of placed) {
           fallbackSpy.mockClear();
-          const actual = createRos2CdrDeserializer(definitions)(data);
+          const actual = decode(data);
           expect(fallbackSpy).not.toHaveBeenCalled(); // the generated code ran
-          const reader = new MessageReader(definitions);
           expect(canonical(actual, data.buffer), `seed ${seed}`).toEqual(
             canonical(reader.readMessage(data), data.buffer),
           );
           compared++;
         }
-        // Truncated input: both throw, or both return the same value.
+      }
+      // Truncated input: both throw, or both return the same value.
+      for (const bytes of inputs) {
         const cut = placeAt(bytes.subarray(0, 4 + rng.int(bytes.byteLength - 3)), 0);
-        const { expected, actual } = decodeBoth(definitions, cut);
-        expect(actual, `seed ${seed} truncated`).toEqual(expected);
+        expect(outcome(decode, cut), `seed ${seed} truncated`).toEqual(
+          outcome((data) => reader.readMessage(data), cut),
+        );
       }
     }
-    expect(compared).toBe(400 * (KINDS.length + 1) * 2);
+    expect(compared).toBe(400 * (KINDS.length + 1) * 2 * 2);
   });
 
   it("decodes random bytes like MessageReader", () => {
@@ -357,6 +370,38 @@ describe("createRos2CdrDeserializer", () => {
       expect(spy).toHaveBeenCalledTimes(2); // once for the reference, once as fallback
       spy.mockRestore();
     }
+  });
+
+  it("never turns schema text into code", () => {
+    const payload = "globalThis.injectedByTest = true";
+    const attacks: MessageDefinition[][] = [
+      [{ definitions: [{ name: `a: (${payload}), b`, type: "uint8" }] }],
+      [{ definitions: [{ name: `a; ${payload}; //`, type: "uint8" }] }],
+      [
+        {
+          definitions: [
+            {
+              name: "a",
+              type: "uint8",
+              isArray: true,
+              arrayLength: `(${payload}, 1)` as unknown as number,
+            },
+          ],
+        },
+      ],
+      [{ definitions: [{ name: "a", type: "float64", isArray: true, arrayLength: 1.5 }] }],
+      [{ definitions: [{ name: "a", type: "float64", isArray: true, arrayLength: -1 }] }],
+      [{ definitions: [{ name: "a", type: `float64(o); ${payload}; view.getUint8` }] }],
+      [
+        { definitions: [{ name: "a", type: `T"); ${payload}; ("`, isComplex: true }] },
+        { name: `T"); ${payload}; ("`, definitions: [{ name: "b", type: "uint8" }] },
+      ],
+    ];
+    const data = new Uint8Array([0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    for (const definitions of attacks) {
+      decodeBoth(definitions, data);
+    }
+    expect((globalThis as { injectedByTest?: boolean }).injectedByTest).toBeUndefined();
   });
 
   it("throws the header error for data shorter than 4 bytes", () => {

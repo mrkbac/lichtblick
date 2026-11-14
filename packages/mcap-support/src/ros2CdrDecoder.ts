@@ -4,6 +4,8 @@
 import { MessageDefinition, MessageDefinitionField } from "@foxglove/message-definition";
 import { MessageReader } from "@foxglove/rosmsg2-serialization";
 
+import { Code, CodeBuilder, int, ident, js, Locals, Unsupported } from "./codegen";
+
 /**
  * ROS 2 CDR decoder that compiles one JavaScript function per schema instead of walking the
  * message definition for every message like `MessageReader` does. Output matches `MessageReader`
@@ -14,7 +16,9 @@ import { MessageReader } from "@foxglove/rosmsg2-serialization";
  * and skips alignment math wherever the alignment is already known at compile time.
  *
  * Fails closed: any schema the generator does not handle (unknown types, `wstring`, recursion,
- * unsafe field names, oversized code, or no `new Function`) decodes with `MessageReader`.
+ * field names that are not plain identifiers, array lengths that are not integers, oversized code,
+ * or no `new Function`) decodes with `MessageReader`. Schema text never becomes code: see
+ * codegen.ts.
  */
 export function createRos2CdrDeserializer(
   definitions: MessageDefinition[],
@@ -54,8 +58,6 @@ type Decoder = (view: DataView, rt: typeof RUNTIME) => unknown;
 // Encapsulation kinds that are little-endian (see @foxglove/cdr getEncapsulationKindInfo).
 const LITTLE_ENDIAN_KINDS = new Set([0x01, 0x03, 0x07, 0x09, 0x0b, 0x11, 0x13, 0x15]);
 const HOST_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
-const MAX_SOURCE_LENGTH = 512 * 1024;
-const SAFE_FIELD_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function isConstantModule(def: MessageDefinition): boolean {
   return def.definitions.length > 0 && def.definitions.every((field) => field.isConstant === true);
@@ -84,41 +86,39 @@ function readString(view: DataView, offset: number, length: number): string {
 const RUNTIME = { readString };
 
 // [DataView getter, byte size, typed array]
-const NUMERIC: Record<string, [string, number, string]> = {
-  int16: ["getInt16", 2, "Int16Array"],
-  uint16: ["getUint16", 2, "Uint16Array"],
-  int32: ["getInt32", 4, "Int32Array"],
-  uint32: ["getUint32", 4, "Uint32Array"],
-  int64: ["getBigInt64", 8, "BigInt64Array"],
-  uint64: ["getBigUint64", 8, "BigUint64Array"],
-  float32: ["getFloat32", 4, "Float32Array"],
-  float64: ["getFloat64", 8, "Float64Array"],
+const NUMERIC: Record<string, [getter: Code, byteSize: number, ctor: Code]> = {
+  int16: [js`getInt16`, 2, js`Int16Array`],
+  uint16: [js`getUint16`, 2, js`Uint16Array`],
+  int32: [js`getInt32`, 4, js`Int32Array`],
+  uint32: [js`getUint32`, 4, js`Uint32Array`],
+  int64: [js`getBigInt64`, 8, js`BigInt64Array`],
+  uint64: [js`getBigUint64`, 8, js`BigUint64Array`],
+  float32: [js`getFloat32`, 4, js`Float32Array`],
+  float64: [js`getFloat64`, 8, js`Float64Array`],
 };
 
-class Unsupported extends Error {}
-
+/**
+ * Generates the decoder. All generated text goes through `js`, `ident` and `int` (see
+ * codegen.ts), so nothing from the schema can become code.
+ */
 function compile(
   rootFields: MessageDefinitionField[],
   types: Map<string, MessageDefinitionField[]>,
   { littleEndian, eightByteAlignment }: { littleEndian: boolean; eightByteAlignment: 4 | 8 },
 ): Decoder | false {
-  const le = String(littleEndian);
-  const lines: string[] = [];
-  let size = 0;
-  let nextVar = 0;
+  const le = littleEndian ? js`true` : js`false`;
+  const out = new CodeBuilder();
+  const emit = (code: Code) => {
+    out.emit(code);
+  };
+  const locals = new Locals();
+  const local = () => locals.next();
   // Largest power of two that (offset - 4) is known to be a multiple of; 8 at the start.
   let known = 8;
-  const emit = (line: string) => {
-    size += line.length + 1;
-    if (size > MAX_SOURCE_LENGTH) {
-      throw new Unsupported();
-    }
-    lines.push(line);
-  };
-  const local = () => `v${nextVar++}`;
   const align = (to: number) => {
     if (known < to) {
-      emit(`o += (${to} - ((o - 4) % ${to})) % ${to};`);
+      const n = int(to);
+      emit(js`o += (${n} - ((o - 4) % ${n})) % ${n};`);
       known = to;
     }
   };
@@ -127,28 +127,40 @@ function compile(
     known = Math.min(known, step);
   };
   const alignmentOf = (byteSize: number) => (byteSize === 8 ? eightByteAlignment : byteSize);
-  const readUint32 = (target: string) => {
+  const readUint32 = (target: Code) => {
     align(4);
-    emit(`const ${target} = view.getUint32(o, ${le}); o += 4;`);
+    emit(js`const ${target} = view.getUint32(o, ${le}); o += 4;`);
     advanced(4);
   };
+  // Fixed array lengths come from the schema, so they must pass `int()`.
+  const lengthOf = (field: MessageDefinitionField): Code => {
+    if (field.arrayLength != undefined) {
+      return int(field.arrayLength);
+    }
+    const n = local();
+    readUint32(n);
+    return n;
+  };
 
-  const readPrimitive = (type: string): string => {
+  const readPrimitive = (type: string): Code => {
     const v = local();
     switch (type) {
       case "bool":
-        emit(`const ${v} = view.getInt8(o) !== 0; o += 1;`);
+        emit(js`const ${v} = view.getInt8(o) !== 0; o += 1;`);
         advanced(1);
         return v;
       case "int8":
+        emit(js`const ${v} = view.getInt8(o); o += 1;`);
+        advanced(1);
+        return v;
       case "uint8":
-        emit(`const ${v} = view.get${type === "int8" ? "Int8" : "Uint8"}(o); o += 1;`);
+        emit(js`const ${v} = view.getUint8(o); o += 1;`);
         advanced(1);
         return v;
       case "string": {
         const n = local();
         readUint32(n);
-        emit(`const ${v} = ${n} <= 1 ? "" : rt.readString(view, o, ${n}); o += ${n};`);
+        emit(js`const ${v} = ${n} <= 1 ? "" : rt.readString(view, o, ${n}); o += ${n};`);
         advanced(1);
         return v;
       }
@@ -156,7 +168,7 @@ function compile(
       case "duration": {
         align(4);
         emit(
-          `const ${v} = { sec: view.getInt32(o, ${le}), nanosec: view.getUint32(o + 4, ${le}) }; o += 8;`,
+          js`const ${v} = { sec: view.getInt32(o, ${le}), nanosec: view.getUint32(o + 4, ${le}) }; o += 8;`,
         );
         advanced(4);
         return v;
@@ -168,7 +180,7 @@ function compile(
         }
         const [getter, byteSize] = numeric;
         align(alignmentOf(byteSize));
-        emit(`const ${v} = view.${getter}(o, ${le}); o += ${byteSize};`);
+        emit(js`const ${v} = view.${getter}(o, ${le}); o += ${int(byteSize)};`);
         advanced(byteSize);
         return v;
       }
@@ -176,27 +188,22 @@ function compile(
   };
 
   // Emits a loop that runs `body` `count` times; the body starts with unknown alignment.
-  const loop = (count: string, body: (i: string) => void) => {
+  const loop = (count: Code, body: (i: Code) => void) => {
     const i = local();
-    emit(`for (let ${i} = 0; ${i} < ${count}; ${i}++) {`);
+    emit(js`for (let ${i} = 0; ${i} < ${count}; ${i}++) {`);
     known = 1;
     body(i);
-    emit(`}`);
+    emit(js`}`);
     known = 1;
   };
 
-  const readPrimitiveArray = (type: string, fixedLength: number | undefined): string => {
+  const readPrimitiveArray = (field: MessageDefinitionField): Code => {
+    const type = field.type;
     const v = local();
-    let n: string;
-    if (fixedLength != undefined) {
-      n = String(fixedLength);
-    } else {
-      n = local();
-      readUint32(n);
-    }
+    const n = lengthOf(field);
     if (type === "int8" || type === "uint8") {
-      const ctor = type === "int8" ? "Int8Array" : "Uint8Array";
-      emit(`const ${v} = new ${ctor}(view.buffer, view.byteOffset + o, ${n}); o += ${n};`);
+      const ctor = type === "int8" ? js`Int8Array` : js`Uint8Array`;
+      emit(js`const ${v} = new ${ctor}(view.buffer, view.byteOffset + o, ${n}); o += ${n};`);
       advanced(1);
       return v;
     }
@@ -205,31 +212,31 @@ function compile(
       // Same results as CdrReader.typedArray(): an empty array without aligning, else a view on
       // the input when the host endianness matches and the data is aligned, else a copy.
       const [getter, byteSize, ctor] = numeric;
+      const size = int(byteSize);
       const alignTo = alignmentOf(byteSize);
       const knownBefore = known;
-      const sameEndian = littleEndian === HOST_LITTLE_ENDIAN;
       const off = local();
       const i = local();
-      emit(`let ${v};`);
-      emit(`if (${n} === 0) { ${v} = new ${ctor}(); } else {`);
+      emit(js`let ${v};`);
+      emit(js`if (${n} === 0) { ${v} = new ${ctor}(); } else {`);
       align(alignTo);
-      emit(`const ${off} = view.byteOffset + o;`);
-      if (sameEndian) {
-        emit(`if (${off} % ${byteSize} === 0) { ${v} = new ${ctor}(view.buffer, ${off}, ${n}); }`);
-        emit(`else if (${n} >= 10) {`);
-        emit(`  const copy = new Uint8Array(${n} * ${byteSize});`);
-        emit(`  copy.set(new Uint8Array(view.buffer, ${off}, ${n} * ${byteSize}));`);
-        emit(`  ${v} = new ${ctor}(copy.buffer, copy.byteOffset, ${n});`);
-        emit(`} else {`);
+      emit(js`const ${off} = view.byteOffset + o;`);
+      if (littleEndian === HOST_LITTLE_ENDIAN) {
+        emit(js`if (${off} % ${size} === 0) { ${v} = new ${ctor}(view.buffer, ${off}, ${n}); }`);
+        emit(js`else if (${n} >= 10) {`);
+        emit(js`  const copy = new Uint8Array(${n} * ${size});`);
+        emit(js`  copy.set(new Uint8Array(view.buffer, ${off}, ${n} * ${size}));`);
+        emit(js`  ${v} = new ${ctor}(copy.buffer, copy.byteOffset, ${n});`);
+        emit(js`} else {`);
       } else {
-        emit(`{`);
+        emit(js`{`);
       }
-      emit(`  ${v} = new ${ctor}(${n});`);
+      emit(js`  ${v} = new ${ctor}(${n});`);
       emit(
-        `  for (let ${i} = 0; ${i} < ${n}; ${i}++) { ${v}[${i}] = view.${getter}(o + ${i} * ${byteSize}, ${le}); }`,
+        js`  for (let ${i} = 0; ${i} < ${n}; ${i}++) { ${v}[${i}] = view.${getter}(o + ${i} * ${size}, ${le}); }`,
       );
-      emit(`}`);
-      emit(`o += ${n} * ${byteSize}; }`);
+      emit(js`}`);
+      emit(js`o += ${n} * ${size}; }`);
       // Empty: offset unchanged. Otherwise aligned to `alignTo`, then whole elements read.
       known = Math.min(knownBefore, alignTo, byteSize);
       return v;
@@ -237,10 +244,10 @@ function compile(
     if (type !== "bool" && type !== "string" && type !== "time" && type !== "duration") {
       throw new Unsupported();
     }
-    emit(`const ${v} = new Array(${n});`);
+    emit(js`const ${v} = new Array(${n});`);
     loop(n, (i) => {
       const item = readPrimitive(type);
-      emit(`${v}[${i}] = ${item};`);
+      emit(js`${v}[${i}] = ${item};`);
     });
     return v;
   };
@@ -253,60 +260,52 @@ function compile(
     const dataFields = fields.filter((field) => field.isConstant !== true);
     if (dataFields.length === 0) {
       // ROS 2 adds `uint8 structure_needs_at_least_one_member` to empty messages.
-      emit(`view.getUint8(o); o += 1;`);
+      emit(js`view.getUint8(o); o += 1;`);
       advanced(1);
-      emit(`const ${v} = {};`);
+      emit(js`const ${v} = {};`);
       return v;
     }
     stack.add(fields);
-    const entries: string[] = [];
+    let entries: Code | undefined;
     for (const field of dataFields) {
-      if (!SAFE_FIELD_NAME.test(field.name) || field.name === "__proto__") {
-        throw new Unsupported();
-      }
-      let value: string;
+      const name = ident(field.name);
+      let value: Code;
       if (field.isComplex === true) {
         const nested = types.get(field.type);
         if (nested == undefined) {
           throw new Unsupported();
         }
         if (field.isArray === true) {
-          let n: string;
-          if (field.arrayLength != undefined) {
-            n = String(field.arrayLength);
-          } else {
-            n = local();
-            readUint32(n);
-          }
-          value = local();
-          emit(`const ${value} = [];`);
+          const n = lengthOf(field);
+          const array = local();
+          emit(js`const ${array} = [];`);
           loop(n, () => {
             const item = readStruct(nested, stack);
-            emit(`${value}.push(${item});`);
+            emit(js`${array}.push(${item});`);
           });
+          value = array;
         } else {
           value = readStruct(nested, stack);
         }
       } else if (field.isArray === true) {
-        value = readPrimitiveArray(field.type, field.arrayLength);
+        value = readPrimitiveArray(field);
       } else {
         value = readPrimitive(field.type);
       }
-      entries.push(`${field.name}: ${value}`);
+      entries = entries == undefined ? js`${name}: ${value}` : js`${entries}, ${name}: ${value}`;
     }
     stack.delete(fields);
-    emit(`const ${v} = { ${entries.join(", ")} };`);
+    emit(js`const ${v} = { ${entries!} };`);
     return v;
   };
 
   try {
-    emit(`let o = 4;`);
+    emit(js`let o = 4;`);
     const result = readStruct(rootFields, new Set());
-    emit(`return ${result};`);
-    // eslint-disable-next-line no-new-func, @typescript-eslint/no-implied-eval
-    return new Function("view", "rt", lines.join("\n")) as Decoder;
+    emit(js`return ${result};`);
+    return out.compile<Decoder>(js`view`, js`rt`) ?? false;
   } catch (error) {
-    if (error instanceof Unsupported || error instanceof EvalError) {
+    if (error instanceof Unsupported) {
       return false;
     }
     throw error;
