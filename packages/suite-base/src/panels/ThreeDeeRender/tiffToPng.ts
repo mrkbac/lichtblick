@@ -3,6 +3,9 @@
 
 import UTIF from "utif";
 
+/** Malformed TIFFs can make UTIF loop forever, so a decode that takes longer is abandoned. */
+export const TIFF_DECODE_TIMEOUT_MS = 10_000;
+
 /** True if `data` starts with a little-endian ("II*\0") or big-endian ("MM\0*") TIFF header. */
 export function isTiff(data: Uint8Array): boolean {
   const [a, b, c, d] = data;
@@ -14,11 +17,36 @@ export function isTiff(data: Uint8Array): boolean {
 
 /**
  * Browsers can't decode TIFF in <img>, which three.js uses for textures, so re-encode the first
- * image of a TIFF as PNG.
+ * image of a TIFF as PNG. Runs in a worker so a slow or malformed file can't block the renderer.
  */
-// ponytail: decodes on the main thread; one-off per texture, move to a worker if large TIFFs stutter.
 export async function tiffToPng(data: Uint8Array): Promise<Blob> {
-  assertTiffStructure(data);
+  const worker = new Worker(new URL("./tiffToPng.worker", import.meta.url));
+  try {
+    return await new Promise<Blob>((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        reject(new Error(`TIFF decoding took longer than ${TIFF_DECODE_TIMEOUT_MS} ms`));
+      }, TIFF_DECODE_TIMEOUT_MS);
+      worker.onmessage = ({ data: result }: MessageEvent<Blob | Error>) => {
+        clearTimeout(timeout);
+        if (result instanceof Blob) {
+          resolve(result);
+        } else {
+          reject(result);
+        }
+      };
+      worker.onerror = (event) => {
+        clearTimeout(timeout);
+        reject(new Error(`TIFF decoding failed: ${event.message}`));
+      };
+      worker.postMessage(data);
+    });
+  } finally {
+    worker.terminate();
+  }
+}
+
+/** Decode the first image of a TIFF and encode it as PNG. Called inside the worker. */
+export async function decodeTiffToPng(data: Uint8Array): Promise<Blob> {
   const buffer = data.slice().buffer;
   const [ifd] = UTIF.decode(buffer);
   if (!ifd) {
@@ -37,59 +65,4 @@ export async function tiffToPng(data: Uint8Array): Promise<Blob> {
     0,
   );
   return await canvas.convertToBlob({ type: "image/png" });
-}
-
-// Bytes per element for each TIFF field type (1-13, plus 16-18 from BigTIFF).
-const TYPE_SIZES: Record<number, number> = {
-  1: 1,
-  2: 1,
-  3: 2,
-  4: 4,
-  5: 8,
-  6: 1,
-  7: 1,
-  8: 2,
-  9: 4,
-  10: 8,
-  11: 4,
-  12: 8,
-  13: 4,
-  16: 8,
-  17: 8,
-  18: 8,
-};
-
-/**
- * UTIF trusts the directory chain and each entry's declared element count, so a malformed file
- * could loop forever or iterate billions of times and hang the renderer. Walk the top-level
- * directories first and reject loops, unknown field types and payloads that run past the file.
- */
-function assertTiffStructure(data: Uint8Array): void {
-  const malformed = () => new Error("Malformed TIFF directory");
-  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-  const littleEndian = data[0] === 0x49;
-  const seen = new Set<number>();
-  let offset = data.byteLength >= 8 ? view.getUint32(4, littleEndian) : -1;
-  while (offset !== 0) {
-    if (offset < 0 || offset + 2 > data.byteLength || seen.has(offset)) {
-      throw malformed();
-    }
-    seen.add(offset);
-    const entries = view.getUint16(offset, littleEndian);
-    const nextOffsetAt = offset + 2 + entries * 12;
-    if (nextOffsetAt + 4 > data.byteLength) {
-      throw malformed();
-    }
-    for (let entry = offset + 2; entry < nextOffsetAt; entry += 12) {
-      const size = TYPE_SIZES[view.getUint16(entry + 2, littleEndian)];
-      if (size == undefined) {
-        throw malformed();
-      }
-      const length = size * view.getUint32(entry + 4, littleEndian);
-      if (length > 4 && view.getUint32(entry + 8, littleEndian) + length > data.byteLength) {
-        throw malformed();
-      }
-    }
-    offset = view.getUint32(nextOffsetAt, littleEndian);
-  }
 }
