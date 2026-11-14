@@ -30,6 +30,11 @@ describe("getConfiguredTopics", () => {
     expect(getConfiguredTopics({ topicToRender: "/b" })).toEqual(["/b"]);
     expect(getConfiguredTopics({})).toBeUndefined();
   });
+
+  it("ignores a malformed topics value from a saved layout", () => {
+    const config = { topics: { "/a": { visible: true } } } as unknown as DiagnosticTopicsConfig;
+    expect(getConfiguredTopics(config)).toBeUndefined();
+  });
 });
 
 describe("useDiagnosticTopics", () => {
