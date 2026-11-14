@@ -8,6 +8,7 @@
 import * as Comlink from "@foxglove/comlink";
 import { compare, toSec, subtract as subtractTime } from "@foxglove/rostime";
 
+import { pushAll } from "@lichtblick/den/collection";
 import { ComlinkWrap } from "@lichtblick/den/worker";
 import { Immutable, MessageEvent, Time } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
@@ -117,7 +118,7 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
         { didSeek, hasRangeSource: this.#hasRangeSource },
         (config) => readMessagePathItems(msgEvents, config, activeData.startTime),
       );
-      this.#pendingDispatch.push(...(seriesActions as UpdateDataAction[]));
+      pushAll(this.#pendingDispatch, seriesActions as UpdateDataAction[]);
       datasetsChanged ||= seriesChanged;
     }
 
@@ -195,7 +196,7 @@ export class TimestampDatasetsBuilder implements IDatasetsBuilder {
     const actions = buildFullSeriesActions(this.#series, topic, options, (config) =>
       readMessagePathItems(messages, config, startTime),
     );
-    this.#pendingDispatch.push(...(actions as UpdateDataAction[]));
+    pushAll(this.#pendingDispatch, actions as UpdateDataAction[]);
   }
 
   public setSeries(series: Immutable<SeriesItem[]>): void {

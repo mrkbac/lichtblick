@@ -4,6 +4,7 @@
 import { toSec } from "@foxglove/rostime";
 import { useEffect, useState } from "react";
 
+import { pushAll } from "@lichtblick/den/collection";
 import { useSubscribeMessageRange } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import {
   DiagnosticId,
@@ -38,7 +39,7 @@ export function addToHistory(
       if (t < entry.lastSeen) {
         continue; // out-of-order (e.g. same check on two topics); keep history monotonic
       }
-      entry.changes.push(...changesFor(entry, status.level, t, staleSec));
+      pushAll(entry.changes, changesFor(entry, status.level, t, staleSec));
       entry.lastSeen = t;
     }
   }

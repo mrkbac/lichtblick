@@ -241,6 +241,7 @@
     "@lichtblick/strict-equality": "error",
     "@lichtblick/no-return-promise-resolve": "error",
     "@lichtblick/no-getters-setters": "error",
+    "@lichtblick/no-push-spread": "error",
     "@lichtblick/link-target": "error",
     "@lichtblick/lodash-ramda-imports": "error",
     "@lichtblick/ramda-usage": "error",
@@ -578,6 +579,15 @@
       ],
       "rules": {
         "@lichtblick/license-header": "off"
+      }
+    },
+    {
+      "files": [
+        "packages/suite-base/src/panels/ThreeDeeRender/**",
+        "packages/suite-base/src/players/**"
+      ],
+      "rules": {
+        "@lichtblick/no-push-spread": "off"
       }
     }
   ],

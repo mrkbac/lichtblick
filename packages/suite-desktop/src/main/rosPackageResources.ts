@@ -10,6 +10,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { pathToFileURL } from "url";
 
+import { pushAll } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import { AppSetting } from "@lichtblick/suite-base/src/AppSetting";
 
@@ -98,12 +99,12 @@ export async function findRosPackage(
 
   // Search options.rosPackagePath
   if (options?.rosPackagePath) {
-    rosPackagePaths.push(...options.rosPackagePath.split(path.delimiter));
+    pushAll(rosPackagePaths, options.rosPackagePath.split(path.delimiter));
   }
 
   // Search env.ROS_PACKAGE_PATH
   if (process.env.ROS_PACKAGE_PATH) {
-    rosPackagePaths.push(...process.env.ROS_PACKAGE_PATH.split(path.delimiter));
+    pushAll(rosPackagePaths, process.env.ROS_PACKAGE_PATH.split(path.delimiter));
   }
 
   for (const rosPackagePath of rosPackagePaths) {

@@ -9,6 +9,7 @@ import * as _ from "lodash-es";
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useAsync } from "react-use";
 
+import { pushAll } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import { createKeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
@@ -141,7 +142,7 @@ function useIndexedDbRecents(): IRecentsStore {
         }
       }
 
-      newRecentsRef.current.push(...initialRecents);
+      pushAll(newRecentsRef.current, initialRecents);
     }
 
     if (haveUnsavedRecents) {

@@ -589,19 +589,20 @@ export async function readMessageTimes(
   const BATCH = 64;
   const indexBytes: Uint8Array[] = [];
   for (let i = 0; i < reader.chunkIndexes.length; i += BATCH) {
-    indexBytes.push(
-      ...(await Promise.all(
-        reader.chunkIndexes
-          .slice(i, i + BATCH)
-          .map(
-            async (chunk) =>
-              await readable.read(
-                chunk.chunkStartOffset + chunk.chunkLength,
-                chunk.messageIndexLength,
-              ),
-          ),
-      )),
+    const batch = await Promise.all(
+      reader.chunkIndexes
+        .slice(i, i + BATCH)
+        .map(
+          async (chunk) =>
+            await readable.read(
+              chunk.chunkStartOffset + chunk.chunkLength,
+              chunk.messageIndexLength,
+            ),
+        ),
     );
+    for (const bytes of batch) {
+      indexBytes.push(bytes);
+    }
   }
   const perChannel = new Map<number, bigint[]>();
   for (const bytes of indexBytes) {

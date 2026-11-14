@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { pushAll } from "@lichtblick/den/collection";
 import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import { createKeyValueStore } from "@lichtblick/suite-base/util/idbKeyValueStore";
 
@@ -39,7 +40,7 @@ export async function listDirectory(
   const files: FolderFile[] = [];
   for await (const entry of dir.values()) {
     if (entry.kind === "directory") {
-      files.push(...(await listDirectory(entry, `${prefix}${entry.name}/`)));
+      pushAll(files, await listDirectory(entry, `${prefix}${entry.name}/`));
     } else if (isMcap(entry.name)) {
       files.push({
         path: `${prefix}${entry.name}`,
@@ -66,14 +67,12 @@ export async function listEntry(dir: FileSystemDirectoryEntry, prefix = ""): Pro
     if (batch.length === 0) {
       break;
     }
-    entries.push(...batch);
+    pushAll(entries, batch);
   }
   const files: FolderFile[] = [];
   for (const entry of entries) {
     if (entry.isDirectory) {
-      files.push(
-        ...(await listEntry(entry as FileSystemDirectoryEntry, `${prefix}${entry.name}/`)),
-      );
+      pushAll(files, await listEntry(entry as FileSystemDirectoryEntry, `${prefix}${entry.name}/`));
     } else if (isMcap(entry.name)) {
       files.push({
         path: `${prefix}${entry.name}`,

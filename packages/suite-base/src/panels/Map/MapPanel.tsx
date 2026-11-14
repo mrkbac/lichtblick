@@ -25,7 +25,7 @@ import { useLatest } from "react-use";
 import { makeStyles } from "tss-react/mui";
 import { useDebounce } from "use-debounce";
 
-import { filterMap } from "@lichtblick/den/collection";
+import { filterMap, pushAll } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
 import { MessageEvent, PanelExtensionContext, SettingsTreeAction, Topic } from "@lichtblick/suite";
@@ -471,7 +471,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   const pendingTrack = useRef<NavMessage[]>([]);
   const flushTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const appendTrack = useCallback((messages: NavMessage[], cap?: number) => {
-    pendingTrack.current.push(...messages);
+    pushAll(pendingTrack.current, messages);
     // Live trails (capped) rebuild less often: each flush redraws the whole retained trail.
     flushTimer.current ??= setTimeout(
       () => {

@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
+import { pushAll } from "@lichtblick/den/collection";
 import { MessageEvent } from "@lichtblick/suite";
 import {
   MessageDataItemsByPath,
@@ -35,7 +36,7 @@ export function useDecodedMessageRange(
           for await (const batch of batchIterator) {
             // oxlint-disable-next-line typescript/no-unnecessary-condition -- cleanup deletes the entry while batches are still awaited
             accumulatedRef.current[topic] ??= [];
-            accumulatedRef.current[topic].push(...batch);
+            pushAll(accumulatedRef.current[topic], batch);
 
             // Wait 250ms before updating state so that batches arriving in quick
             // succession are grouped into one update instead of re-rendering the

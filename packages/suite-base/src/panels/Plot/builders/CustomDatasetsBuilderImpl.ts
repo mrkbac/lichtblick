@@ -7,6 +7,7 @@
 
 import { compare } from "@foxglove/rostime";
 
+import { pushAll } from "@lichtblick/den/collection";
 import { Immutable, Time } from "@lichtblick/suite";
 import { downsampleScatter } from "@lichtblick/suite-base/components/TimeBasedChart/downsample";
 import { Bounds1D } from "@lichtblick/suite-base/components/TimeBasedChart/types";
@@ -323,7 +324,7 @@ export class CustomDatasetsBuilderImpl {
         break;
       }
       case "append-full-x": {
-        this.#xValues.full.push(...action.items);
+        pushAll(this.#xValues.full, action.items);
 
         // trim current data to remove values present in the full data
         const lastFullReceiveTime = this.#xValues.full[this.#xValues.full.length - 1]?.receiveTime;
@@ -376,7 +377,7 @@ export class CustomDatasetsBuilderImpl {
           return;
         }
 
-        series.full.push(...action.items);
+        pushAll(series.full, action.items);
 
         // trim current data to remove values present in the full data
         const lastFullReceiveTime = series.full[series.full.length - 1]?.receiveTime;

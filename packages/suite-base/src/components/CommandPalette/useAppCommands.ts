@@ -5,6 +5,7 @@ import { Time, subtract, toSec } from "@foxglove/rostime";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { pushAll } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import {
@@ -172,7 +173,10 @@ export function useAppCommands(): {
   const commands = useMemo(() => {
     const list: Command[] = [];
     const push = (group: string, ...items: Command[]) => {
-      list.push(...items.map((item) => ({ ...item, group })));
+      pushAll(
+        list,
+        items.map((item) => ({ ...item, group })),
+      );
     };
 
     // ---- Open ----
