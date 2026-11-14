@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { compare } from "@foxglove/rostime";
-import * as _ from "lodash-es";
 
 import Logger from "@lichtblick/log";
 import { parseChannel } from "@lichtblick/mcap-support";
@@ -429,8 +428,14 @@ export class DeserializingIterableSource implements IDeserializedIterableSource 
     }
 
     const deserializedMessage = deserialize(message) as Record<string, unknown>;
+    // Not lodash `pick`: it reads "a.b" as a nested path and skips keys like `constructor`.
+    // `fromEntries` copies the literal top-level fields, `__proto__` included.
     const msg = subscription.fields
-      ? _.pick(deserializedMessage, subscription.fields)
+      ? Object.fromEntries(
+          subscription.fields
+            .filter((field) => field in deserializedMessage)
+            .map((field) => [field, deserializedMessage[field]]),
+        )
       : deserializedMessage;
 
     const msgSizeEstimate = this.#shared.sizes.estimate(
