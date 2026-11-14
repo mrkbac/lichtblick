@@ -178,8 +178,9 @@ export class McapIterableSource implements ISerializedIterableSource {
     } catch (error) {
       // A real failure (e.g. a network error) must not be masked by re-fetching the whole file via
       // the eager, unbounded streaming fallback — surface the actual error.
-      if (!this.#eagerInner) {
-        // Keep it while a reader opened earlier (e.g. on a partial index) still reads through it
+      if (!this.#eagerInner && !this.#scan) {
+        // Keep it while a reader opened earlier (e.g. on a partial index, also a resident pooled
+        // one) or the background scan still reads through it
         readable.close();
         this.#persistentReadable = undefined;
       }
@@ -311,8 +312,11 @@ export class McapIterableSource implements ISerializedIterableSource {
       if (!done && this.#recovery?.offset === published) {
         continue;
       }
+      // Sampled before reopening: the reader covers at least this much, so a scan that moves on
+      // meanwhile is published on the next tick
+      const offset = this.#recovery?.offset;
       if (await this.#publish({ indexing: !done, final: done })) {
-        published = this.#recovery?.offset;
+        published = offset;
       }
       if (done && this.#scan === scan) {
         this.#scan = this.#tail();
