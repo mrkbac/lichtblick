@@ -29,13 +29,14 @@ export function createRos2CdrDeserializer(
   // which the generated code decodes.
   const readerRoot = definitions.find((def) => !isConstantModule(def));
   const root = readerRoot ?? (definitions.length === 1 ? definitions[0] : undefined);
-  // Built up front when possible so invalid definitions still throw here, as before.
-  let reader = readerRoot == undefined ? undefined : new MessageReader(definitions);
-  const fallback = (data: ArrayBufferView): unknown =>
-    (reader ??= new MessageReader(definitions)).readMessage(data);
   if (root == undefined) {
     throw new Error("MessageReader initialized with no root MessageDefinition"); // as before
   }
+  // Built up front so invalid definitions still throw here, as before. MessageReader can't decode
+  // a constants-only message, so its fallback reads the empty struct's placeholder byte itself.
+  const reader = readerRoot == undefined ? undefined : new MessageReader(definitions);
+  const fallback = (data: ArrayBufferView): unknown =>
+    reader != undefined ? reader.readMessage(data) : readEmptyStruct(data);
   const types = new Map(definitions.map((def) => [def.name ?? "", def.definitions]));
 
   // One compiled variant per (endianness, 8-byte alignment), compiled on first use.
@@ -74,6 +75,17 @@ const VARIANT_OF_KIND = Uint8Array.from(
 );
 
 const HOST_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+
+/** A message with no data fields: a CDR header and one placeholder byte, like CdrReader reads. */
+function readEmptyStruct(data: ArrayBufferView): Record<string, never> {
+  if (data.byteLength < 4) {
+    throw new Error(
+      `Invalid CDR data size ${data.byteLength}, must contain at least a 4-byte header`,
+    );
+  }
+  new DataView(data.buffer, data.byteOffset, data.byteLength).getUint8(4); // throws past the end
+  return {};
+}
 
 function isConstantModule(def: MessageDefinition): boolean {
   return def.definitions.length > 0 && def.definitions.every((field) => field.isConstant === true);

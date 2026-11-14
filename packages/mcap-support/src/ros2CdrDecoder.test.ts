@@ -507,6 +507,16 @@ describe("createRos2CdrDeserializer", () => {
     expect(decode(new Uint8Array([0, 1, 0, 0, 0]))).toEqual({});
     expect(() => decode(new Uint8Array([0, 1, 0, 0]))).toThrow(RangeError);
     expect(() => createRos2CdrDeserializer([])).toThrow("no root MessageDefinition");
+
+    // Also when code generation is blocked, e.g. by a Content-Security-Policy.
+    const blocked = vi.spyOn(globalThis, "Function").mockImplementation(() => {
+      throw new EvalError("blocked");
+    });
+    const fallback = createRos2CdrDeserializer(definitions);
+    expect(fallback(new Uint8Array([0, 1, 0, 0, 0]))).toEqual({});
+    expect(() => fallback(new Uint8Array([0, 1, 0, 0]))).toThrow(RangeError);
+    expect(() => fallback(new Uint8Array([0, 1]))).toThrow("Invalid CDR data size");
+    expect(blocked).toHaveBeenCalled();
   });
 
   it("throws the header error for data shorter than 4 bytes", () => {
