@@ -34,9 +34,9 @@ async function getKeychainFile(context: AfterPackContext): Promise<string | unde
 }
 
 export default async function afterPack(context: AfterPackContext): Promise<void> {
-  await assertNoSourceMaps(context.appOutDir);
   await configureQuickLookExtension(context);
   await copySpotlightImporter(context);
+  await assertNoSourceMaps(context.appOutDir);
 }
 
 /** Lists the file paths stored in an asar archive (header layout: see @electron/asar). */
@@ -68,9 +68,16 @@ export async function listAsarFiles(asarPath: string): Promise<string[]> {
   }
 }
 
-/** Source maps doubled the app size; electronBuilderConfig.js excludes them. Keep it that way. */
+/**
+ * Source maps doubled the app size; electronBuilderConfig.js and the Quick Look copy exclude them.
+ * Checks loose files and the contents of app.asar.
+ */
 async function assertNoSourceMaps(appOutDir: string): Promise<void> {
   const entries = await fs.readdir(appOutDir, { recursive: true });
+  const looseMaps = entries.filter((entry) => entry.endsWith(".map"));
+  if (looseMaps.length > 0) {
+    throw new Error(`The app contains ${looseMaps.length} source maps, e.g. ${looseMaps[0]}`);
+  }
   const asars = entries.filter((entry) => path.basename(entry) === "app.asar");
   if (asars.length === 0) {
     throw new Error(`No app.asar found in ${appOutDir}`);
@@ -200,6 +207,9 @@ async function configureQuickLookExtension(context: AfterPackContext) {
   for (const file of await fs.readdir(webpackOutputDir, { withFileTypes: true })) {
     if (!file.isFile()) {
       throw new Error(`Expected only files in Quick Look webpack output, found: ${file.name}`);
+    }
+    if (file.name.endsWith(".map")) {
+      continue;
     }
     await fs.copyFile(path.join(webpackOutputDir, file.name), path.join(appexResources, file.name));
   }

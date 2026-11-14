@@ -19,9 +19,12 @@ function StudioLogsSettingsProvider(props: PropsWithChildren): React.JSX.Element
   const [studioLogsSettingsSavedState, setStudioLogsSettingsSavedState] =
     useLocalStorage<LocalStorageSaveState>(SESSION_STORAGE_LOGS_SETTINGS, {});
 
-  const [studioLogsSettingsStore, setStudioLogsSettingsStore] = useState(() =>
-    createStudioLogsSettingsStore(studioLogsSettingsSavedState),
-  );
+  // The store merges channels with the same display name, so its channel list can be shorter than
+  // the logger registry. Remember the registry size the store was built from instead.
+  const [{ store: studioLogsSettingsStore, registryCount }, setStore] = useState(() => ({
+    registryCount: Log.channels().length,
+    store: createStudioLogsSettingsStore(studioLogsSettingsSavedState),
+  }));
 
   // To avoid resetting effect below when the localstorage state changes we use a ref for the localstorage state
   const savedStateRef = useRef<LocalStorageSaveState | undefined>(studioLogsSettingsSavedState);
@@ -32,10 +35,13 @@ function StudioLogsSettingsProvider(props: PropsWithChildren): React.JSX.Element
   // Re-initialize the settings store when logging channels are added (e.g. by a lazy-loaded chunk)
   // so the settings show them. A chunk adds many channels at once, so the check runs once after.
   useEffect(() => {
-    const storeChannelsCount = studioLogsSettingsStore.getState().channels.length;
     const check = () => {
-      if (storeChannelsCount !== Log.channels().length) {
-        setStudioLogsSettingsStore(createStudioLogsSettingsStore(savedStateRef.current));
+      const count = Log.channels().length;
+      if (count !== registryCount) {
+        setStore({
+          registryCount: count,
+          store: createStudioLogsSettingsStore(savedStateRef.current),
+        });
       }
     };
     check(); // channels added before this effect subscribed
@@ -47,7 +53,7 @@ function StudioLogsSettingsProvider(props: PropsWithChildren): React.JSX.Element
       unsubscribe();
       clearTimeout(timeout);
     };
-  }, [studioLogsSettingsStore]);
+  }, [registryCount]);
 
   useEffect(() => {
     return studioLogsSettingsStore.subscribe((value) => {

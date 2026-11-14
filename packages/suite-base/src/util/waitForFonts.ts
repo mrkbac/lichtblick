@@ -15,16 +15,12 @@
 //   You may not use this file except in compliance with the License.
 
 /**
- * Wait for the regular Inter and IBM Plex Mono faces before the first render. Rendering before
- * fonts are loaded crashed the rendering thread for many Windows users (skia/DirectWrite font
- * loading with display scaling >100%), so the app must not render text before these are ready.
- *
- * Only the regular faces are awaited: the other weights and italics (each a separate file) load on
- * first use instead of delaying startup.
+ * Wait for every custom font face (Inter and IBM Plex Mono, all weights) declared by CSS or the
+ * FontFace API. Rendering text before fonts are loaded crashed the rendering thread for many
+ * Windows users (a race in Chromium's DirectWrite font cache, see theme/src/typography.ts), so the
+ * app must not render before this resolves. Start it early: the faces are separate files.
  */
 export default async function waitForFonts(): Promise<unknown> {
-  return await Promise.all([
-    document.fonts.load('400 1em "Inter"'),
-    document.fonts.load('400 1em "IBM Plex Mono"'),
-  ]);
+  // allSettled: a face that fails to download (e.g. offline) falls back instead of blocking startup
+  return await Promise.allSettled([...document.fonts].map(async (font) => await font.load()));
 }

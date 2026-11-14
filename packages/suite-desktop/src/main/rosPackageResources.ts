@@ -133,7 +133,7 @@ export async function findRosPackage(
 /**
  * Returns findRosPackage with a cache of package name to root directory. A scene loads many meshes
  * from the same few packages, and each lookup walks the whole search path. The cache is cleared
- * when the search path changes; lookups that found nothing are retried.
+ * when the search path changes; lookups that found nothing or failed are retried.
  */
 export function makeCachedRosPackageFinder(
   find: typeof findRosPackage = findRosPackage,
@@ -150,11 +150,22 @@ export function makeCachedRosPackageFinder(
       root = find(pkg, { rosPackagePath });
       packageRoots.set(pkg, root);
     }
-    const found = await root;
-    if (!found && packageRoots.get(pkg) === root) {
-      packageRoots.delete(pkg);
+    // Misses and failed lookups (e.g. an unreadable directory) are retried by the next request
+    const evict = () => {
+      if (packageRoots.get(pkg) === root) {
+        packageRoots.delete(pkg);
+      }
+    };
+    try {
+      const found = await root;
+      if (!found) {
+        evict();
+      }
+      return found;
+    } catch (err: unknown) {
+      evict();
+      throw err;
     }
-    return found;
   };
 }
 

@@ -11,6 +11,7 @@ import { createRoot } from "react-dom/client";
 import Logger from "@lichtblick/log";
 import type { IDataSourceFactory } from "@lichtblick/suite-base";
 import CssBaseline from "@lichtblick/suite-base/components/CssBaseline";
+import waitForFonts from "@lichtblick/suite-base/util/waitForFonts";
 
 import { CompatibilityBanner } from "./CompatibilityBanner";
 import { canRenderApp } from "./canRenderApp";
@@ -54,22 +55,30 @@ async function cacheLoadedAssets(): Promise<void> {
         return true;
       });
     for (const url of urls) {
-      void cacheAsset(cache, url);
+      // each file on its own: one failure doesn't drop the others, and it is retried the next
+      // time the page loads it
+      void cacheAsset(cache, url).then((cached) => {
+        if (!cached) {
+          seen.delete(url);
+        }
+      });
     }
   }).observe({ type: "resource", buffered: true });
 }
 
-async function cacheAsset(cache: Cache, url: string): Promise<void> {
+async function cacheAsset(cache: Cache, url: string): Promise<boolean> {
   try {
     // file names are content-hashed, so the HTTP cache copy is always valid: no second download
     const response = await fetch(url, { cache: "force-cache" });
     // same rule as the service worker: the host answers unknown paths with index.html
     if (response.ok && response.headers.get("content-type")?.startsWith("text/html") !== true) {
       await cache.put(url, response);
+      return true;
     }
   } catch (err: unknown) {
     log.warn("Caching loaded asset failed", url, err);
   }
+  return false;
 }
 
 export type MainParams = {
@@ -131,14 +140,10 @@ export async function main(getParams: () => Promise<MainParams> = async () => ({
   // displayed. Start both at once instead of one after another.
   // Chunk names: the startup budget in rspackConfigs.ts measures these.
   const webRootPromise = import(/* webpackChunkName: "startup-webroot" */ "./WebRoot");
-  const {
-    installDevtoolsFormatters,
-    overwriteFetch,
-    waitForFonts,
-    initI18n,
-    StudioApp,
-    completeLoginRedirect,
-  } = await import(/* webpackChunkName: "startup-app" */ "@lichtblick/suite-base");
+  // CssBaseline (imported above) declared the font faces; download them while the JS loads
+  const fontsPromise = waitForFonts();
+  const { installDevtoolsFormatters, overwriteFetch, initI18n, StudioApp, completeLoginRedirect } =
+    await import(/* webpackChunkName: "startup-app" */ "@lichtblick/suite-base");
   installDevtoolsFormatters();
   overwriteFetch();
   // Before anything reads the URL: a login redirect carries a code and restores the original URL.
@@ -146,7 +151,7 @@ export async function main(getParams: () => Promise<MainParams> = async () => ({
     log.error("Login failed", error);
   });
   // consider moving waitForFonts into App to display an app loading screen
-  await Promise.all([waitForFonts(), initI18n()]);
+  await Promise.all([fontsPromise, initI18n()]);
 
   const [{ WebRoot }, params] = await Promise.all([webRootPromise, getParams()]);
   const rootElement = params.rootElement ?? (

@@ -51,6 +51,17 @@ describe("rosPackageResources", () => {
       expect(find).toHaveBeenCalledTimes(4);
       expect(find).toHaveBeenLastCalledWith("foo", { rosPackagePath: "/b" });
     });
+
+    it("retries a lookup that failed", async () => {
+      const find = vi
+        .fn<typeof findRosPackage>()
+        .mockRejectedValueOnce(new Error("EACCES"))
+        .mockResolvedValueOnce("/root/foo");
+      const findCached = makeCachedRosPackageFinder(find);
+
+      await expect(findCached("foo", "/a")).rejects.toThrow("EACCES");
+      await expect(findCached("foo", "/a")).resolves.toBe("/root/foo");
+    });
   });
 
   describe("rosPackageNameAtPath", () => {

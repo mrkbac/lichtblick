@@ -176,6 +176,28 @@ describe("StudioLogsSettingsProvider", () => {
   });
 
   describe("Channel Count Monitoring", () => {
+    it("settles when the store merges channels with the same name", () => {
+      // Given two registered loggers that the store shows as one channel
+      (mockLog.channels as Mock).mockReturnValue([mockLogger, createMockLogger()]);
+      mockStore.getState.mockReturnValue({
+        ...defaultMockState,
+        channels: [{ name: "<root>", enabled: true }],
+      });
+
+      // When
+      render(
+        <StudioLogsSettingsProvider>
+          <div>Test</div>
+        </StudioLogsSettingsProvider>,
+      );
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      // Then
+      expect(mockCreateStudioLogsSettingsStore).toHaveBeenCalledTimes(1);
+    });
+
     it("should recreate store when channel count changes", () => {
       // Given
       (mockLog.channels as Mock).mockReturnValue([mockLogger]);

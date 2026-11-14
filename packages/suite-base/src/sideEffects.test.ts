@@ -42,7 +42,7 @@ describe("package.json sideEffects", () => {
       const hasSideEffects = lines.some(
         (line) => STATEMENT.test(line) && !PURE_STATEMENT.test(line),
       );
-      const entry = `./src/${path.relative(SRC, file)}`;
+      const entry = `./src/${path.relative(SRC, file).split(path.sep).join("/")}`;
       if (hasSideEffects && !listed.has(entry)) {
         missing.push(entry);
       }

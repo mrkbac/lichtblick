@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import {
+  type Compilation,
   type Configuration,
   type DevServer,
   type RspackPluginInstance,
@@ -27,29 +28,40 @@ import * as palette from "@lichtblick/theme/src/palette.ts";
  */
 const STARTUP_JS_BUDGET_BYTES = 4_300_000;
 
+/**
+ * Files (name to size) the app needs to start: the entry chunk group plus the "startup-*" groups
+ * index.tsx imports, with their fonts and other assets. Source maps excluded.
+ */
+function startupAssets(compilation: Compilation): Map<string, number> {
+  const { namedChunkGroups = {} } = compilation.getStats().toJson({
+    all: false,
+    chunkGroups: true,
+    assets: true,
+  });
+  if (!namedChunkGroups["startup-app"] || !namedChunkGroups["startup-webroot"]) {
+    throw new Error("The startup-* chunk groups are missing, see index.tsx");
+  }
+  const files = new Map<string, number>();
+  for (const [name, group] of Object.entries(namedChunkGroups)) {
+    if (name === "main" || name.startsWith("startup-")) {
+      for (const asset of [...(group.assets ?? []), ...(group.auxiliaryAssets ?? [])]) {
+        if (!asset.name.endsWith(".map")) {
+          files.set(asset.name, asset.size ?? 0);
+        }
+      }
+    }
+  }
+  return files;
+}
+
 /** Fails the build when the startup chunks exceed STARTUP_JS_BUDGET_BYTES. */
 const startupBudgetPlugin: RspackPluginInstance = {
   apply: (compiler) => {
     compiler.hooks.afterEmit.tap("StartupBudget", (compilation) => {
-      const { namedChunkGroups = {} } = compilation.getStats().toJson({
-        all: false,
-        chunkGroups: true,
-        assets: true,
-      });
-      const files = new Map<string, number>();
-      for (const [name, group] of Object.entries(namedChunkGroups)) {
-        if (name === "main" || name.startsWith("startup-")) {
-          for (const asset of group.assets ?? []) {
-            if (asset.name.endsWith(".js")) {
-              files.set(asset.name, asset.size ?? 0);
-            }
-          }
-        }
-      }
+      const files = new Map(
+        [...startupAssets(compilation)].filter(([file]) => file.endsWith(".js")),
+      );
       const total = [...files.values()].reduce((sum, size) => sum + size, 0);
-      if (!namedChunkGroups["startup-app"] || !namedChunkGroups["startup-webroot"]) {
-        throw new Error("Startup budget: the startup-* chunks are missing, see index.tsx");
-      }
       if (total > STARTUP_JS_BUDGET_BYTES) {
         const largest = [...files]
           .sort((a, b) => b[1] - a[1])
@@ -123,15 +135,16 @@ export const mainConfig =
     // Runs on the files on disk after emit, so only for real builds (the dev server serves from memory)
     if (!isDev && !isServe) {
       plugins.push(startupBudgetPlugin);
-      // Precache only the app shell; every other build file is hashed and cached on first use
-      // (CacheFirst), so a first visit or a deploy no longer downloads the whole build (~35 MB).
-      // index.tsx copies the chunks a first, uncontrolled visit loaded into the same cache, so
-      // the installed PWA starts offline. Panels never opened online are not available offline.
+      // Precache only what the app needs to start (shell and startup chunks, ~4 MB), so an
+      // installed update starts offline too. Every other build file is hashed and cached on first
+      // use (CacheFirst), so a first visit or a deploy no longer downloads the whole build
+      // (~35 MB). index.tsx copies the chunks a first, uncontrolled visit loaded into the same
+      // cache. Panels never opened online with this version are not available offline.
       // The new version activates once all app windows are closed, or when the user clicks the
       // update button in the app bar (see useServiceWorkerUpdate.ts).
       plugins.push({
         apply: (compiler) => {
-          compiler.hooks.afterEmit.tapPromise("GenerateSW", async () => {
+          compiler.hooks.afterEmit.tapPromise("GenerateSW", async (compilation) => {
             await generateSW({
               globDirectory: params.outputPath,
               globPatterns: [
@@ -141,7 +154,13 @@ export const mainConfig =
                 "view-link-redirect.js",
                 "favicon*",
                 "*icon-*.png",
+                // startup waits for every font face (see waitForFonts.ts)
+                "*.woff2",
+                ...startupAssets(compilation).keys(),
               ],
+              // hashed names change with their content: fetch them as is, so the browser can reuse
+              // what the page already downloaded instead of loading every file a second time
+              dontCacheBustURLsMatching: /[0-9a-f]{16}\.\w+$/,
               swDest: path.join(params.outputPath, "sw.js"),
               // serve the precached app shell for any navigation (deep links, file_handlers launches)
               navigateFallback: "index.html",
