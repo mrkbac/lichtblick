@@ -10,7 +10,7 @@ import SearchIcon from "@mui/icons-material/Search";
 import { IconButton, InputAdornment, TextField } from "@mui/material";
 import { Fzf } from "fzf";
 import * as _ from "lodash-es";
-import { Ref, useCallback, useEffect, useMemo, useState } from "react";
+import { Ref, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -94,6 +94,13 @@ export function PanelCatalog(props: Props): React.JSX.Element {
 
   const [searchQuery, setSearchQuery] = useState("");
   const [highlightedPanelIdx, setHighlightedPanelIdx] = useState<number | undefined>();
+
+  // Not `autoFocus`: a surrounding MUI Menu focuses its list in a layout effect right after mount,
+  // which takes focus back from the field. A passive effect runs after that.
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    searchInputRef.current?.focus();
+  }, []);
 
   const handleSearchChange = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
     const query = event.target.value;
@@ -229,7 +236,7 @@ export function PanelCatalog(props: Props): React.JSX.Element {
           value={searchQuery}
           onChange={handleSearchChange}
           onKeyDown={onKeyDown}
-          autoFocus
+          inputRef={searchInputRef}
           data-testid="panel-list-textfield"
           slotProps={{
             input: {

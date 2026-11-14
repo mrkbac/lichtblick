@@ -49,10 +49,6 @@ export class LayoutManager {
     await this.page.getByRole("button", { name: "Delete" }).click();
   }
 
-  public async addTab(): Promise<void> {
-    await this.page.getByTestId("add-tab").click();
-  }
-
   public async toggleFavorite(name: string): Promise<void> {
     const layoutRow = this.page.getByRole("listitem").filter({ hasText: name });
     await layoutRow.hover();

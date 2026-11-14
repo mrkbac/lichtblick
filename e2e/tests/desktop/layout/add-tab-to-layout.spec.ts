@@ -10,7 +10,7 @@ const LAYOUT_FILE = "tab-layout.json";
 /**
  * GIVEN the user is on the Layouts tab and a layout with a two-tab Tab panel is loaded
  * THEN both tabs are visible
- * WHEN a new tab is added from the Tab panel's "New tab" button
+ * WHEN a new tab is added from the Tab panel's menu
  * THEN the Tab panel shows three tabs and the new one is selected
  * WHEN two tabs are closed
  * THEN the Tab panel turns back into the remaining tab's panel
@@ -31,7 +31,12 @@ test("load a tab layout and add a tab", { tag: "@regression" }, async ({ mainWin
   await expect(tabs).toHaveCount(2);
 
   // When
-  await mainWindow.getByTestId("add-tab").click();
+  await mainWindow
+    .getByTestId(/^panel-mouseenter-container Tab!/)
+    .getByTestId("panel-menu")
+    .first()
+    .click();
+  await mainWindow.getByTestId("panel-menu-new-tab").click();
   await mainWindow.getByTestId("panel-menu-item Raw Messages").click();
 
   // Then
