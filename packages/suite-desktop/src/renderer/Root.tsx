@@ -22,7 +22,7 @@ import {
   Ros1SocketDataSourceFactory,
   Ros2LocalBagDataSourceFactory,
   RosbridgeDataSourceFactory,
-  SampleNuscenesDataSourceFactory,
+  SampleBoreasDataSourceFactory,
   UlogLocalDataSourceFactory,
   VelodyneDataSourceFactory,
 } from "@lichtblick/suite-base";
@@ -96,7 +96,7 @@ export default function Root(props: RootProps): React.JSX.Element {
       new UlogLocalDataSourceFactory(),
       new CsvLocalDataSourceFactory(),
       new VelodyneDataSourceFactory(),
-      new SampleNuscenesDataSourceFactory(),
+      new SampleBoreasDataSourceFactory(),
       new McapLocalDataSourceFactory(),
       new RemoteDataSourceFactory(),
     ];

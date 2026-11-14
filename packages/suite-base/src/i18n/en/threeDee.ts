@@ -18,8 +18,7 @@ export const threeDee = {
   mapSingleLayer:
     "Only one geographic map can be displayed. Add map sources to the same map layer.",
   locationFrameFromMessage: "From message",
-  locationFrameHelp:
-    "Frame of the GPS receiver. For the nuScenes sample, use base_link and keep the ENU frame set to map.",
+  locationFrameHelp: "Frame of the GPS receiver.",
   lineWidth: "Line width",
   position: "Position",
   reset: "Reset",

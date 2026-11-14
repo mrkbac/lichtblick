@@ -57,7 +57,7 @@ const playerSelection: PlayerSelection = {
   recentSources: [
     {
       id: "1111",
-      title: "NuScenes-v1.0-mini-scene-0655-reallllllllly-long-name-8829908290831091.bag",
+      title: "Boreas-2021-09-02-11-42-long-sample-recording-name.mcap",
     },
     {
       id: "2222",

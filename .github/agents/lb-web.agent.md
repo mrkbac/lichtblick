@@ -100,7 +100,7 @@ Available in web mode:
 - `Ros1LocalBagDataSourceFactory` — ROS 1 bag files
 - `Ros2LocalBagDataSourceFactory` — ROS 2 db3 files
 - `RosbridgeDataSourceFactory` — rosbridge WebSocket
-- `SampleNuscenesDataSourceFactory` — demo data
+- `SampleBoreasDataSourceFactory` — demo data
 - `UlogLocalDataSourceFactory` — PX4 Ulog files
 
 ## Rspack Configuration

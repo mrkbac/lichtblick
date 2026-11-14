@@ -22,7 +22,7 @@ import {
   Ros1LocalBagDataSourceFactory,
   Ros2LocalBagDataSourceFactory,
   RosbridgeDataSourceFactory,
-  SampleNuscenesDataSourceFactory,
+  SampleBoreasDataSourceFactory,
   SharedRoot,
   UlogLocalDataSourceFactory,
 } from "@lichtblick/suite-base";
@@ -80,7 +80,7 @@ export function WebRoot(props: {
       new RosbridgeDataSourceFactory(),
       new UlogLocalDataSourceFactory(),
       new CsvLocalDataSourceFactory(),
-      new SampleNuscenesDataSourceFactory(),
+      new SampleBoreasDataSourceFactory(),
       new McapLocalDataSourceFactory(),
       new RemoteDataSourceFactory(),
     ];

@@ -29,7 +29,7 @@ vi.mock("@lichtblick/suite-base", () => {
     Ros1LocalBagDataSourceFactory: Stub,
     Ros2LocalBagDataSourceFactory: Stub,
     RosbridgeDataSourceFactory: Stub,
-    SampleNuscenesDataSourceFactory: Stub,
+    SampleBoreasDataSourceFactory: Stub,
     UlogLocalDataSourceFactory: Stub,
     CsvLocalDataSourceFactory: Stub,
     SharedRoot: (props: Record<string, unknown>) => {
