@@ -186,6 +186,14 @@ export function useAppCommands(): {
         run: catchErrors(dialogActions.openFile.open),
       },
       {
+        id: "open.compare",
+        title: t("compareRecordings"),
+        keywords: ["mcap", "diff", "side by side", "recording"],
+        run: catchErrors(async () => {
+          await dialogActions.openFile.open({ compare: true });
+        }),
+      },
+      {
         id: "open.dialog",
         title: t("openDataSource"),
         run: () => {

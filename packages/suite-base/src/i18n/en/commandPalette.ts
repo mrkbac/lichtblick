@@ -21,6 +21,7 @@ export const commandPalette = {
   groupHelp: "Help",
 
   openFile: "Open local file…",
+  compareRecordings: "Compare recordings…",
   openDataSource: "Open data source…",
   openRecent: "Open recent…",
   openRecentPlaceholder: "Search recent data sources",

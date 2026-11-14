@@ -25,7 +25,7 @@ import {
   WorkspaceContext,
   WorkspaceContextStore,
 } from "./WorkspaceContext";
-import { useOpenFile } from "./useOpenFile";
+import { OpenFileOptions, useOpenFile } from "./useOpenFile";
 
 export type WorkspaceActions = {
   dialogActions: {
@@ -34,7 +34,7 @@ export type WorkspaceActions = {
       open: (item: DataSourceDialogItem, dataSource?: IDataSourceFactory) => void;
     };
     openFile: {
-      open: () => Promise<void>;
+      open: (options?: OpenFileOptions) => Promise<void>;
     };
     preferences: {
       close: () => void;

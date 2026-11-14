@@ -12,6 +12,11 @@ export const dataSourceInfo = {
   duration: "Duration",
   endTime: "End time",
   files: "Files",
+  compareFiles: "Compare side by side",
+  compareFilesHint:
+    "Reopen with each file under its own topic prefix (/a, /b, …), all starting at the same time",
+  mergeFiles: "Merge into one recording",
+  mergeFilesHint: "Reopen the files as one recording with shared topics",
   history: "History",
   historyValue: "{{messages}} messages · {{size}} of {{limit}}",
   saveHistory: "Download history as MCAP",

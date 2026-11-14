@@ -59,7 +59,10 @@ class McapLocalDataSourceFactory implements IDataSourceFactory {
       initArgs:
         files.length === 1
           ? { file: files[0], handle: args.handle }
-          : addMultiFileHydrationOverrides({ files }, this.multiFileHydrationOverrides),
+          : addMultiFileHydrationOverrides(
+              { files, compare: args.compare },
+              this.multiFileHydrationOverrides,
+            ),
     });
 
     return new IterablePlayer({

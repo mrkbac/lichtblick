@@ -17,7 +17,14 @@ import { FILE_ACCEPT_TYPE } from "@lichtblick/suite-base/context/Workspace/const
 import { normalizeExtensions } from "@lichtblick/suite-base/context/Workspace/utils";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 
-export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promise<void> {
+export type OpenFileOptions = {
+  /** Compare the picked recordings side by side instead of merging them */
+  compare?: boolean;
+};
+
+export function useOpenFile(
+  sources: readonly IDataSourceFactory[],
+): (options?: OpenFileOptions) => Promise<void> {
   const { selectSource } = usePlayerSelection();
 
   const throwErrorAndSnackbar = (message: string): void => {
@@ -40,70 +47,74 @@ export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promi
     [allExtensions],
   );
 
-  return useCallback(async () => {
-    const filesHandle = await showOpenFilePicker({
-      multiple: true,
-      types: [
-        {
-          description: normalizeExtensionsArray.join(", "),
-          accept: {
-            [FILE_ACCEPT_TYPE]: normalizeExtensionsArray,
+  return useCallback(
+    async (options?: OpenFileOptions) => {
+      const filesHandle = await showOpenFilePicker({
+        multiple: true,
+        types: [
+          {
+            description: normalizeExtensionsArray.join(", "),
+            accept: {
+              [FILE_ACCEPT_TYPE]: normalizeExtensionsArray,
+            },
           },
-        },
-      ],
-    });
-    if (filesHandle.length === 0) {
-      return;
-    }
+        ],
+      });
+      if (filesHandle.length === 0) {
+        return;
+      }
 
-    const processedFiles = await Promise.all(
-      filesHandle.map(async (handle) => {
-        const file = await handle.getFile();
-        return {
-          file,
-          extension: path.extname(file.name),
-        };
-      }),
-    );
-
-    const uniqueExtensions = new Set(processedFiles.map(({ extension }) => extension));
-    if (uniqueExtensions.size > 1) {
-      throwErrorAndSnackbar(
-        `Multiple file extensions detected: ${[...uniqueExtensions].join(
-          ", ",
-        )}. All files must have the same extension.`,
+      const processedFiles = await Promise.all(
+        filesHandle.map(async (handle) => {
+          const file = await handle.getFile();
+          return {
+            file,
+            extension: path.extname(file.name),
+          };
+        }),
       );
-    }
 
-    const [extension] = uniqueExtensions;
+      const uniqueExtensions = new Set(processedFiles.map(({ extension }) => extension));
+      if (uniqueExtensions.size > 1) {
+        throwErrorAndSnackbar(
+          `Multiple file extensions detected: ${[...uniqueExtensions].join(
+            ", ",
+          )}. All files must have the same extension.`,
+        );
+      }
 
-    const matchingSources = sources.filter(
-      (source) =>
-        (source.supportedFileTypes &&
-          source.type === "file" &&
-          source.supportedFileTypes.includes(extension!)) ??
-        false,
-    );
+      const [extension] = uniqueExtensions;
 
-    if (matchingSources.length === 0) {
-      throwErrorAndSnackbar(`Cannot find a source to handle files with extension ${extension}`);
-    }
-
-    if (matchingSources.length > 1) {
-      throwErrorAndSnackbar(
-        `The file extension "${extension}" is not supported. Please select files with the following extensions: ${allExtensions.join(", ")}.`,
+      const matchingSources = sources.filter(
+        (source) =>
+          (source.supportedFileTypes &&
+            source.type === "file" &&
+            source.supportedFileTypes.includes(extension!)) ??
+          false,
       );
-    }
 
-    /**
-     * Should be removed when implement the rest of extensions.
-     */
-    if (extension !== ".mcap" && processedFiles.length > 1) {
-      throwErrorAndSnackbar(`The application only support multiple files for MCAP extension.`);
-    }
-    selectSource(matchingSources[0]!.id, {
-      type: "file",
-      handles: filesHandle,
-    });
-  }, [allExtensions, normalizeExtensionsArray, selectSource, sources]);
+      if (matchingSources.length === 0) {
+        throwErrorAndSnackbar(`Cannot find a source to handle files with extension ${extension}`);
+      }
+
+      if (matchingSources.length > 1) {
+        throwErrorAndSnackbar(
+          `The file extension "${extension}" is not supported. Please select files with the following extensions: ${allExtensions.join(", ")}.`,
+        );
+      }
+
+      /**
+       * Should be removed when implement the rest of extensions.
+       */
+      if (extension !== ".mcap" && processedFiles.length > 1) {
+        throwErrorAndSnackbar(`The application only support multiple files for MCAP extension.`);
+      }
+      selectSource(matchingSources[0]!.id, {
+        type: "file",
+        handles: filesHandle,
+        compare: options?.compare,
+      });
+    },
+    [allExtensions, normalizeExtensionsArray, selectSource, sources],
+  );
 }

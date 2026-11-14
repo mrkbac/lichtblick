@@ -144,6 +144,9 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
           shortcut: shortcutLabel(APP_SHORTCUTS, "app.openFile"),
         },
       )}
+      {item("compare-recordings", t("compareRecordings"), async () => {
+        await dialogActions.openFile.open({ compare: true });
+      })}
       {item("export-recording", t("exportRecording"), openExport, {
         disabled: !exportableFile,
       })}
