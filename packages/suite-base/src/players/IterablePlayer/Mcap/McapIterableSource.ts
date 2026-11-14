@@ -8,12 +8,20 @@
 import { Time, fromNanoSec } from "@foxglove/rostime";
 
 import Log from "@lichtblick/log";
-import type { McapIndexedReader, McapTypes } from "@lichtblick/mcap-core";
-import { ChunkCache, loadDecompressHandlers, openCachedMcapReader } from "@lichtblick/mcap-support";
+import {
+  BlobReadable,
+  checkChunk,
+  ChunkCache,
+  type LiveReader,
+  type McapIndexedReader,
+  type McapRecoveryScanner,
+  type McapTypes,
+  openCachedMcapReader,
+} from "@lichtblick/mcap-core";
+import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
-import { BlobReadable } from "./BlobReadable";
 import { CheckChunk, McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
 import type {
   HydratedInner,
@@ -21,7 +29,6 @@ import type {
   McapSource,
   OpenedInner,
 } from "./McapIterableSource.types";
-import { checkChunk, type LiveReader, type McapRecoveryScanner } from "./McapRecoveryScanner";
 import { McapUnindexedIterableSource } from "./McapUnindexedIterableSource";
 import { RemoteFileReadable } from "./RemoteFileReadable";
 import { scanWithIndexCache } from "./mcapIndexCache";
@@ -30,6 +37,7 @@ import {
   estimateAddedWeightBytes,
   estimateReaderWeightBytes,
 } from "./readerWeight";
+import { liveRecoveryAlerts, recoveryAlert } from "./recoveryAlerts";
 import {
   IteratorResult,
   Initialization,
@@ -569,7 +577,10 @@ export class McapIterableSource implements ISerializedIterableSource {
       });
       // Nothing lost means the summary was fine and the read error came from elsewhere (e.g. the
       // network); reading resumes on the rebuilt index without claiming the file was damaged.
-      return { reader, alert: this.#recovery.hasLosses() ? this.#recovery.toAlert() : undefined };
+      return {
+        reader,
+        alert: this.#recovery.hasLosses() ? recoveryAlert(this.#recovery) : undefined,
+      };
     };
   }
 
@@ -717,11 +728,11 @@ export class McapIterableSource implements ISerializedIterableSource {
               message: "This file is still being written; showing it as it was when opened.",
               tip: "To follow it as it grows, open it with Open file or drag and drop in a Chromium-based browser or the desktop app.",
             },
-        ...this.#recovery.toLiveAlerts(),
+        ...liveRecoveryAlerts(this.#recovery),
         ...init.alerts,
       ];
     } else if (this.#recovery) {
-      init.alerts = [this.#recovery.toAlert(), ...init.alerts];
+      init.alerts = [recoveryAlert(this.#recovery), ...init.alerts];
     }
     if (this.#scanError) {
       init.alerts = withScanError(init, this.#scanError).alerts;

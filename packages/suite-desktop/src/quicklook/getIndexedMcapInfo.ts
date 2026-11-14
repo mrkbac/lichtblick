@@ -7,8 +7,7 @@
 
 import { fromNanoSec } from "@foxglove/rostime";
 
-import { McapTypes } from "@lichtblick/mcap-core";
-import { ChunkCache, openCachedMcapReader } from "@lichtblick/mcap-support";
+import { ChunkCache, McapTypes, openCachedMcapReader } from "@lichtblick/mcap-core";
 
 import { FileInfo, TopicInfo } from "./types";
 

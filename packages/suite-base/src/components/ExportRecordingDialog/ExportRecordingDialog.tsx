@@ -35,21 +35,24 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAsync } from "react-use";
 
-import type { McapIndexedReader, McapTypes } from "@lichtblick/mcap-core";
 import {
+  BlobReadable,
   ChunkCache,
+  type McapIndexedReader,
+  type McapTypes,
+  openCachedMcapReader,
+} from "@lichtblick/mcap-core";
+import {
   ExportCompression,
   countTimesInRange,
   exportMcap,
   loadDecompressHandlers,
-  openCachedMcapReader,
   readMessageTimes,
 } from "@lichtblick/mcap-support";
 import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
-import { BlobReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/BlobReadable";
 
 import { useStyles } from "./ExportRecordingDialog.style";
 import {

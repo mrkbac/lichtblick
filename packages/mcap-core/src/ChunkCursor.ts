@@ -5,10 +5,10 @@ import * as _ from "lodash-es";
 
 import McapByteReader from "./McapByteReader.ts";
 import { parseRecord } from "./parse.ts";
-import type { IReadable, TypedMcapRecords } from "./types.ts";
+import type { ChunkIndex, IReadable } from "./types.ts";
 
 type ChunkCursorParams = {
-  chunkIndex: TypedMcapRecords["ChunkIndex"];
+  chunkIndex: ChunkIndex;
   relevantChannels: Set<number> | undefined;
   startingAt: bigint | undefined;
   endingAt: bigint | undefined;
@@ -23,7 +23,7 @@ type ChunkCursorParams = {
  * pointing into the message index for each channel of interest.
  */
 export class ChunkCursor {
-  public readonly chunkIndex: TypedMcapRecords["ChunkIndex"];
+  public readonly chunkIndex: ChunkIndex;
 
   #relevantChannels?: Set<number>;
   #startingAt: bigint | undefined;

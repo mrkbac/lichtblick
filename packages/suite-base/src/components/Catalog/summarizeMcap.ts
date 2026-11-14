@@ -3,9 +3,13 @@
 
 import { fromNanoSec } from "@foxglove/rostime";
 
-import type { McapIndexedReader } from "@lichtblick/mcap-core";
-import { ChunkCache, loadDecompressHandlers, openCachedMcapReader } from "@lichtblick/mcap-support";
-import { BlobReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/BlobReadable";
+import {
+  BlobReadable,
+  ChunkCache,
+  type McapIndexedReader,
+  openCachedMcapReader,
+} from "@lichtblick/mcap-core";
+import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 
 import { Previews, renderPreviews } from "./preview";
 import { sampleRecording } from "./sampleRecording";

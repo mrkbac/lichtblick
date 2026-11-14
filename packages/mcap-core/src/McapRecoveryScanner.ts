@@ -3,18 +3,14 @@
 
 import { crc32 } from "@foxglove/crc";
 
-import {
-  MCAP_MAGIC,
-  McapByteReader,
-  type McapIndexedReader,
-  McapRecordBuilder,
-  McapTypes,
-  Opcode,
-  isKnownOpcode,
-  parseRecord,
-} from "@lichtblick/mcap-core";
-import { type ChunkCache, openCachedMcapReader } from "@lichtblick/mcap-support";
-import type { PlayerAlert } from "@lichtblick/suite-base/players/types";
+import type { ChunkCache } from "./ChunkCache.ts";
+import McapByteReader from "./McapByteReader.ts";
+import type { McapIndexedReader } from "./McapIndexedReader.ts";
+import { McapRecordBuilder } from "./McapRecordBuilder.ts";
+import { MCAP_MAGIC, Opcode, isKnownOpcode } from "./constants.ts";
+import { openCachedMcapReader } from "./openCachedMcapReader.ts";
+import { parseRecord } from "./parse.ts";
+import type * as McapTypes from "./types.ts";
 
 const RECORD_PREFIX_LENGTH = 9n; // opcode + content length
 const READ_WINDOW_BYTES = 8n * 1024n * 1024n;
@@ -39,14 +35,14 @@ export type LiveReader = {
   grow: () => readonly McapTypes.ChunkIndex[];
 };
 
-// The index fields McapIndexedReader builds once in Initialize; readMessages reads them per call
-type MutableIndex = {
-  chunkIndexes: McapTypes.ChunkIndex[];
-  attachmentIndexes: McapTypes.AttachmentIndex[];
-  metadataIndexes: McapTypes.MetadataIndex[];
-  channelsById: Map<number, McapTypes.Channel>;
-  schemasById: Map<number, McapTypes.Schema>;
-  statistics: McapTypes.Statistics | undefined;
+/** What a recovery scan dropped, see `McapRecoveryScanner.losses` */
+export type RecoveryLosses = {
+  /** Records that failed to parse, decompress or pass their CRC */
+  corruptRecords: number;
+  /** Bytes after the last complete record that could not be read */
+  unreadableBytes: bigint;
+  /** Messages outside chunks, skipped since the index only covers chunked messages */
+  skippedMessages: number;
 };
 
 type SnapshotHeader = {
@@ -406,100 +402,42 @@ export class McapRecoveryScanner {
       readable: this.#readable(base, this.#buildSummary(LIVE_SUMMARY_AT), cache),
       chunkCache: cache,
     });
-    // ponytail: McapIndexedReader has no API to append to its index, so this writes to the fields
-    // Initialize built (readMessages reads them on every call). Its private time range stays at
-    // what was indexed at open; it is only a default for reads without bounds, so pass bounds.
-    const index = indexedReader as unknown as MutableIndex;
     const grow = (): McapTypes.ChunkIndex[] => {
       const added = this.#chunkIndexes.slice(chunks);
-      // Loops, not push(...): a spread of a long list overflows the call stack
-      for (const chunk of added) {
-        index.chunkIndexes.push(chunk);
-      }
       chunks = this.#chunkIndexes.length;
-      for (; attachments < this.#attachmentIndexes.length; attachments++) {
-        index.attachmentIndexes.push(this.#attachmentIndexes[attachments]!);
-      }
-      for (; metadata < this.#metadataIndexes.length; metadata++) {
-        index.metadataIndexes.push(this.#metadataIndexes[metadata]!);
-      }
-      // Records can only add or replace ids, never remove one, so a size check finds new ones
-      if (index.channelsById.size !== this.#channels.size) {
-        index.channelsById = new Map(this.#channels);
-      }
-      if (index.schemasById.size !== this.#schemas.size) {
-        index.schemasById = new Map(this.#schemas);
-      }
-      index.statistics = this.#statistics();
+      indexedReader.appendIndex({
+        chunkIndexes: added,
+        attachmentIndexes: this.#attachmentIndexes.slice(attachments),
+        metadataIndexes: this.#metadataIndexes.slice(metadata),
+        // All of them: O(channels), and catches records that replaced an id
+        channels: this.#channels.values(),
+        schemas: this.#schemas.values(),
+        statistics: this.#statistics(),
+      });
+      attachments = this.#attachmentIndexes.length;
+      metadata = this.#metadataIndexes.length;
       return added;
     };
     return { reader: indexedReader, grow };
   }
 
-  /** Whether the scan had to drop anything (corrupt records, unreadable bytes, unchunked messages) */
-  public hasLosses(): boolean {
-    return this.#losses().length > 0;
-  }
-
-  /** What was recovered and lost, for the user */
-  public toAlert(): PlayerAlert {
-    const lost = this.#losses();
-    const recovered = this.#recovered();
-    if (lost.length === 0) {
-      return this.complete
-        ? {
-            severity: "info",
-            message: "This file has no index; it was rebuilt in memory.",
-            tip: `${recovered}.`,
-          }
-        : {
-            severity: "warn",
-            message: "This file was not closed properly (no footer); recovered all of its records.",
-            tip: `${recovered}.`,
-          };
-    }
-    return this.#damagedAlert(lost);
-  }
-
   /**
-   * For a file still being written: what was lost, if anything, ignoring the cut-off end (the part
-   * not written yet).
+   * What the scan had to drop. `live` is for a file still being written: its cut-off end is the
+   * part not written yet, not a loss.
    */
-  public toLiveAlerts(): PlayerAlert[] {
-    const lost = this.#losses({ live: true });
-    return lost.length > 0 ? [this.#damagedAlert(lost)] : [];
-  }
-
-  #recovered(): string {
-    return this.#chunkIndexes.length > 0
-      ? `Recovered ${this.messageCount} message(s) from ${this.#chunkIndexes.length} chunk(s)`
-      : `Recovered ${this.unchunkedMessageCount} message(s)`;
-  }
-
-  #damagedAlert(lost: string[]): PlayerAlert {
+  public losses({ live = false }: { live?: boolean } = {}): RecoveryLosses {
     return {
-      severity: "warn",
-      message: "This file is damaged; showing what could be recovered.",
-      tip: `${this.#recovered()}; ${lost.join("; ")}.`,
+      corruptRecords: this.corruptRecords,
+      unreadableBytes: live ? 0n : this.unreadableBytes,
+      // Without chunks, the unchunked messages are what the reader serves instead
+      skippedMessages: this.#chunkIndexes.length > 0 ? this.unchunkedMessageCount : 0,
     };
   }
 
-  #losses({ live = false }: { live?: boolean } = {}): string[] {
-    const lost: string[] = [];
-    if (this.corruptRecords > 0) {
-      lost.push(
-        `${this.corruptRecords} corrupt record(s) (e.g. chunks with a bad CRC) were skipped`,
-      );
-    }
-    if (this.unreadableBytes > 0n && !live) {
-      lost.push(
-        `the last ${formatBytes(this.unreadableBytes)} could not be read (cut off or not MCAP data)`,
-      );
-    }
-    if (this.unchunkedMessageCount > 0 && this.#chunkIndexes.length > 0) {
-      lost.push(`${this.unchunkedMessageCount} message(s) outside chunks were skipped`);
-    }
-    return lost;
+  /** Whether the scan had to drop anything (corrupt records, unreadable bytes, unchunked messages) */
+  public hasLosses(): boolean {
+    const lost = this.losses();
+    return lost.corruptRecords > 0 || lost.unreadableBytes > 0n || lost.skippedMessages > 0;
   }
 
   async #readHeader(readable: McapTypes.IReadable, size: bigint): Promise<bigint> {
@@ -841,13 +779,4 @@ function walkChunk(
 
 function reader(bytes: Uint8Array): McapByteReader {
   return new McapByteReader(new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength));
-}
-
-function formatBytes(bytes: bigint): string {
-  const n = Number(bytes);
-  return n < 1024
-    ? `${n} B`
-    : n < 1024 * 1024
-      ? `${(n / 1024).toFixed(1)} KiB`
-      : `${(n / 1024 / 1024).toFixed(1)} MiB`;
 }

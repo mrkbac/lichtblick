@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { CHUNK_CACHE_BYTES, ChunkCache } from "./ChunkCache";
+import { CHUNK_CACHE_BYTES, ChunkCache } from "./ChunkCache.ts";
 
 const view = (bytes: number) => new DataView(new ArrayBuffer(bytes));
 

@@ -7,9 +7,14 @@
 
 import { Blob } from "node:buffer";
 
-import { McapIndexedReader, McapTypes, McapWriter, TempBuffer } from "@lichtblick/mcap-core";
+import {
+  BlobReadable,
+  McapIndexedReader,
+  McapTypes,
+  McapWriter,
+  TempBuffer,
+} from "@lichtblick/mcap-core";
 import { loadDecompressHandlers } from "@lichtblick/mcap-support";
-import { BlobReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/BlobReadable";
 import { McapIndexedIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/McapIndexedIterableSource";
 
 describe("McapIndexedIterableSource", () => {
@@ -49,15 +54,11 @@ describe("McapIndexedIterableSource", () => {
 
     // When the schema shows up (e.g. repeated in a later chunk of a growing index), and the first
     // update with it fails reading metadata
-    schemas.set(schemaId, schema);
+    reader.appendIndex({ schemas: [schema] });
     const readMetadata = vi.spyOn(reader, "readMetadata").mockImplementationOnce(() => {
       throw new Error("read failed");
     });
-    (reader.metadataIndexes as unknown as McapTypes.MetadataIndex[]).push({
-      offset: 0n,
-      length: 0n,
-      name: "example",
-    });
+    reader.appendIndex({ metadataIndexes: [{ offset: 0n, length: 0n, name: "example" }] });
     await expect(source.initialize()).rejects.toThrow("read failed");
     readMetadata.mockImplementation(async function* () {});
     const after = await source.initialize();
