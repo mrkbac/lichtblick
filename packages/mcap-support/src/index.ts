@@ -10,3 +10,5 @@ export * from "./protobufDefinitionsToDatatypes";
 export * from "./parseChannel";
 export * from "./decompressHandlers";
 export * from "./exportMcap";
+export * from "./ChunkCache";
+export * from "./openCachedMcapReader";

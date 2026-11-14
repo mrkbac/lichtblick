@@ -8,6 +8,11 @@ overrides:
   dompurify@<3.4.17: 3.4.17
   undici@<6.29.1: 6.29.1
 
+patchedDependencies:
+  '@mcap/core@2.4.0':
+    hash: 32c3c746c279d385979cdba998ec9122ce5b0dd523aea57bb11b7aa697bf5d42
+    path: patches/@mcap__core@2.4.0.patch
+
 importers:
 
   .:
@@ -311,7 +316,7 @@ importers:
         version: 1.0.1
       '@mcap/core':
         specifier: 2.4.0
-        version: 2.4.0
+        version: 2.4.0(patch_hash=32c3c746c279d385979cdba998ec9122ce5b0dd523aea57bb11b7aa697bf5d42)
       flatbuffers:
         specifier: 25.9.23
         version: 25.9.23
@@ -489,7 +494,7 @@ importers:
         version: 26.5.1
       '@mcap/core':
         specifier: 2.4.0
-        version: 2.4.0
+        version: 2.4.0(patch_hash=32c3c746c279d385979cdba998ec9122ce5b0dd523aea57bb11b7aa697bf5d42)
       '@mui/icons-material':
         specifier: 9.5.0
         version: 9.5.0(@mui/material@9.5.0(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@types/react@19.3.0)(react@19.3.1)
@@ -807,7 +812,7 @@ importers:
         version: link:../theme
       '@mcap/core':
         specifier: 2.4.0
-        version: 2.4.0
+        version: 2.4.0(patch_hash=32c3c746c279d385979cdba998ec9122ce5b0dd523aea57bb11b7aa697bf5d42)
       '@rspack/core':
         specifier: 2.3.1
         version: 2.3.1(@swc/helpers@0.5.23)
@@ -9800,7 +9805,7 @@ snapshots:
       '@types/geojson': 7946.0.16
       pbf: 5.1.2
 
-  '@mcap/core@2.4.0':
+  '@mcap/core@2.4.0(patch_hash=32c3c746c279d385979cdba998ec9122ce5b0dd523aea57bb11b7aa697bf5d42)':
     dependencies:
       '@foxglove/crc': 0.0.3
       heap-js: 2.7.1

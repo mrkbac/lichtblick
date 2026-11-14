@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { McapIndexedReader } from "@mcap/core";
-
-import { loadDecompressHandlers } from "@lichtblick/mcap-support";
+import { ChunkCache, loadDecompressHandlers, openCachedMcapReader } from "@lichtblick/mcap-support";
 import { BlobReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/BlobReadable";
 
 import { SampledFrame, sampleRecording } from "./sampleRecording";
@@ -53,9 +51,10 @@ export async function renderPreviews(
 
 /** Preview of one image topic, for topics the index skipped. */
 export async function previewMcap(file: Blob, topic: string): Promise<PreviewFrame[]> {
-  const reader = await McapIndexedReader.Initialize({
+  const reader = await openCachedMcapReader({
     readable: new BlobReadable(file),
     decompressHandlers: await loadDecompressHandlers(),
+    chunkCache: new ChunkCache(),
   });
   const { frames } = await sampleRecording(reader, { imageTopics: [topic] });
   const origin = reader.statistics?.messageStartTime;

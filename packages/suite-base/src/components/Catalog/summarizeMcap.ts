@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { fromNanoSec } from "@foxglove/rostime";
-import { McapIndexedReader } from "@mcap/core";
+import type { McapIndexedReader } from "@mcap/core";
 
-import { loadDecompressHandlers } from "@lichtblick/mcap-support";
+import { ChunkCache, loadDecompressHandlers, openCachedMcapReader } from "@lichtblick/mcap-support";
 import { BlobReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/BlobReadable";
 
 import { Previews, renderPreviews } from "./preview";
@@ -25,9 +25,10 @@ export async function summarizeMcap(
 ): Promise<CatalogSummary & { previews?: Previews }> {
   let reader: McapIndexedReader;
   try {
-    reader = await McapIndexedReader.Initialize({
+    reader = await openCachedMcapReader({
       readable: new BlobReadable(file),
       decompressHandlers: await loadDecompressHandlers(),
+      chunkCache: new ChunkCache(),
     });
   } catch (err: unknown) {
     // @mcap/core throws this when the file has no summary section.

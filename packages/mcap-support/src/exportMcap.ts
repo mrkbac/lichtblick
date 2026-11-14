@@ -5,7 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { IWritable, McapIndexedReader, McapRecordBuilder, McapTypes, Opcode } from "@mcap/core";
+import {
+  IWritable,
+  type McapIndexedReader,
+  McapRecordBuilder,
+  McapTypes,
+  Opcode,
+} from "@mcap/core";
 
 import { loadDecompressHandlers } from "./decompressHandlers";
 
