@@ -65,13 +65,17 @@ export class ChunkCache {
     }
     entries.set(fullKey, data);
     totalBytes += data.byteLength;
-    // Oldest first; always keeps the newest, however big
+    // Oldest first. Always keeps the newest, however big, and the other half of its chunk (its
+    // records or message indexes), so adding one never evicts the other.
+    const sibling = this.#prefix + (key.startsWith("c") ? "i" : "c") + key.slice(1);
     for (const [oldKey, oldData] of entries) {
       if (totalBytes <= CHUNK_CACHE_BYTES || oldKey === fullKey) {
         break;
       }
-      entries.delete(oldKey);
-      totalBytes -= oldData.byteLength;
+      if (oldKey !== sibling) {
+        entries.delete(oldKey);
+        totalBytes -= oldData.byteLength;
+      }
     }
   }
 }
