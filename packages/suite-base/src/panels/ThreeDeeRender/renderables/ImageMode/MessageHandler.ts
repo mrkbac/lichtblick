@@ -141,6 +141,12 @@ export const WAITING_FOR_SYNC_EMPTY_HUD_ITEM: HUDItem = {
  * is managing state in synchronized mode and ensuring that the a synchronized set of image and
  * annotations are handed off to the SceneExtension for rendering.
  */
+/**
+ * Cap on stamps buffered while waiting for a synchronized image + annotations set. ~10 s at 30 Hz;
+ * annotations later than that are treated as never arriving.
+ */
+export const MAX_SYNC_ENTRIES = 300;
+
 export class MessageHandler {
   /** settings that should reflect image mode config */
   #config: Immutable<Config>;
@@ -232,10 +238,21 @@ export class MessageHandler {
     if (item) {
       item.image = normalizedImageMessage;
     } else {
-      this.#tree.set(getTimestampFromImage(image), {
+      this.#setSyncItem(getTimestampFromImage(image), {
         image: normalizedImageMessage,
         annotationsByTopic: new Map(),
       });
+    }
+  }
+
+  /**
+   * The only way to insert into `#tree`: keeps it at MAX_SYNC_ENTRIES by dropping the oldest stamps,
+   * so images whose annotations never arrive cannot pile up, and the per-message scan stays bounded.
+   */
+  #setSyncItem(stamp: Time, item: SynchronizationItem): void {
+    this.#tree.set(stamp, item);
+    while (this.#tree.size > MAX_SYNC_ENTRIES) {
+      this.#tree.shift();
     }
   }
 
@@ -279,7 +296,7 @@ export class MessageHandler {
           image: undefined,
           annotationsByTopic: new Map(),
         };
-        this.#tree.set(stamp, item);
+        this.#setSyncItem(stamp, item);
       }
       item.annotationsByTopic.set(topic, {
         originalMessage: messageEvent,

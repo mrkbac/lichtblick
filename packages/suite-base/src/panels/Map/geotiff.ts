@@ -112,6 +112,7 @@ export async function loadGeoTiff(url: string, signal: AbortSignal): Promise<Ima
   });
 
   return {
+    // oxlint-disable-next-line @lichtblick/no-object-url -- MapPanel owns and revokes overlay URLs
     url: URL.createObjectURL(blob),
     coordinates: [
       toLngLat(minX, maxY),
