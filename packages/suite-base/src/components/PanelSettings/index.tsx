@@ -12,6 +12,7 @@ import { useUnmount } from "react-use";
 
 import { SettingsTree } from "@lichtblick/suite";
 import { useConfigById } from "@lichtblick/suite-base/PanelAPI";
+import { PanelSideScope } from "@lichtblick/suite-base/components/Compare/ComparedPanel";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import { useMessagePipelineGetter } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useMonitorSetup } from "@lichtblick/suite-base/components/MonitorSetupContext";
@@ -244,11 +245,13 @@ export default function PanelSettings({
             </>
           )}
           {settingsTree || showTitleField ? (
-            <SettingsTreeEditor
-              key={selectedPanelId}
-              settings={settingsTree ?? EMPTY_SETTINGS_TREE}
-              variant="panel"
-            />
+            <PanelSideScope panelType={panelType} config={config}>
+              <SettingsTreeEditor
+                key={selectedPanelId}
+                settings={settingsTree ?? EMPTY_SETTINGS_TREE}
+                variant="panel"
+              />
+            </PanelSideScope>
           ) : (
             <Stack flex="auto" alignItems="center" justifyContent="center" paddingX={1}>
               <Typography variant="body2" align="center" color="textSecondary">

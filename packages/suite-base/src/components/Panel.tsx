@@ -29,6 +29,13 @@ import { useMountedState } from "react-use";
 
 import { useShallowMemo } from "@lichtblick/hooks";
 import { useConfigById } from "@lichtblick/suite-base/PanelAPI";
+import { useCompare } from "@lichtblick/suite-base/components/Compare/CompareContext";
+import { ComparedPanel } from "@lichtblick/suite-base/components/Compare/ComparedPanel";
+import {
+  COMPARE_VIEW_CONFIG_KEY,
+  CompareView,
+  compareSupport,
+} from "@lichtblick/suite-base/components/Compare/compareView";
 import { DockPanelContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
@@ -43,7 +50,12 @@ import {
   loadPanelLogsHeight,
   savePanelLogsHeight,
 } from "@lichtblick/suite-base/components/helpers";
-import { PanelLog, PanelStatics, GenericPanelProps } from "@lichtblick/suite-base/components/types";
+import {
+  PanelContextType,
+  PanelLog,
+  PanelStatics,
+  GenericPanelProps,
+} from "@lichtblick/suite-base/components/types";
 import {
   useCurrentLayoutActions,
   useSelectedPanels,
@@ -71,6 +83,12 @@ const MAX_PANEL_LOGS = 1000;
 
 /** Used in storybook when panels are renered outside of a <PanelLayout/> */
 const FALLBACK_PANEL_ID = "$unknown_id";
+
+/** Id suffix of the read-only copies of a panel that show the other compared recordings */
+const COPY_ID_SUFFIX = "@compare-copy";
+
+// Copies of a panel never change its config: the panel itself does
+const ignoreSaveConfig = (): void => {};
 
 /** Clicks a panel already handled, so the panels around it (Tab panels) ignore them. */
 const panelHandledClicks = new WeakSet<Event>();
@@ -432,6 +450,15 @@ export default function Panel<
     );
     const child = useMemo(() => <PanelComponent {...childProps} />, [childProps]);
 
+    // While recordings are compared: the panel shows one of them, or every one of them through
+    // read-only copies of itself (see ComparedPanel)
+    const compare = useCompare();
+    const support = useMemo(() => compareSupport(type), [type]);
+    const copy = useMemo(
+      () => <PanelComponent {...childProps} saveConfig={ignoreSaveConfig} />,
+      [childProps],
+    );
+
     const renderCount = useRef(0);
 
     const perfInfo = useRef<HTMLDivElement>(null);
@@ -528,6 +555,52 @@ export default function Panel<
       split,
     ]);
 
+    const panelContextValue: PanelContextType<PanelConfig> = {
+      type,
+      id: childId,
+      title,
+      config: panelComponentConfig,
+      saveConfig: saveConfig as SaveConfig<PanelConfig>,
+      updatePanelConfigs,
+      openSiblingPanel,
+      replacePanel,
+      enterFullscreen,
+      exitFullscreen,
+      setHasFullscreenDescendant,
+      isFullscreen,
+      connectToolbarDragHandle: connectDragHandle,
+      setMessagePathDropConfig,
+      showLogs,
+      setShowLogs: ({ show }) => {
+        setShowLogs(show);
+      },
+      logError: addLog,
+      logCount: logs.length,
+    };
+    const panelBody =
+      compare && support.mode !== "none" ? (
+        <ComparedPanel
+          compare={compare}
+          support={support}
+          view={panelComponentConfig[COMPARE_VIEW_CONFIG_KEY] as CompareView | undefined}
+          panel={child}
+          copy={
+            <PanelContext.Provider
+              value={{
+                ...panelContextValue,
+                id: `${childId}${COPY_ID_SUFFIX}`,
+                saveConfig: ignoreSaveConfig,
+                connectToolbarDragHandle: undefined,
+              }}
+            >
+              {copy}
+            </PanelContext.Provider>
+          }
+        />
+      ) : (
+        child
+      );
+
     return (
       <Profiler
         id={childId}
@@ -537,30 +610,7 @@ export default function Panel<
           }
         }}
       >
-        <PanelContext.Provider
-          value={{
-            type,
-            id: childId,
-            title,
-            config: panelComponentConfig,
-            saveConfig: saveConfig as SaveConfig<PanelConfig>,
-            updatePanelConfigs,
-            openSiblingPanel,
-            replacePanel,
-            enterFullscreen,
-            exitFullscreen,
-            setHasFullscreenDescendant,
-            isFullscreen,
-            connectToolbarDragHandle: connectDragHandle,
-            setMessagePathDropConfig,
-            showLogs,
-            setShowLogs: ({ show }) => {
-              setShowLogs(show);
-            },
-            logError: addLog,
-            logCount: logs.length,
-          }}
-        >
+        <PanelContext.Provider value={panelContextValue}>
           <KeyListener global keyUpHandlers={keyUpHandlers} keyDownHandlers={keyDownHandlers} />
           {isFullscreen && <KeyListener global keyDownHandlers={fullScreenKeyHandlers} />}
           <Transition
@@ -601,7 +651,7 @@ export default function Panel<
                   onResetPanel={resetPanel}
                   onLogError={addLog}
                 >
-                  {child}
+                  {panelBody}
                 </PanelErrorBoundary>
                 {process.env.NODE_ENV !== "production" && (
                   <div className={classes.perfInfo} ref={perfInfo} />

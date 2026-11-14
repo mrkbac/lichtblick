@@ -24,6 +24,8 @@ export const APP_SHORTCUTS = [
   // Display only: hold-to-show, handled by key down/up pairs in Panel
   { id: "app.panelQuickActions", titleKey: "panelQuickActions", keys: [{ key: "`" }] },
   { id: "app.exitFullscreen", titleKey: "exitFullscreen", keys: [{ key: "Escape" }] },
+  // Only while recordings are compared: panels following the layout switch to the next recording
+  { id: "app.nextCompareSide", titleKey: "nextCompareSide", keys: [{ key: "c" }] },
 ] as const satisfies readonly KeyboardShortcut[];
 
 export const PLAYBACK_SHORTCUTS = [
