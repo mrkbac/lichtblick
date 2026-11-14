@@ -63,9 +63,12 @@ def fetch(key: str) -> Path:
                 with urllib.request.urlopen(BASE + key, timeout=120) as response:
                     data = response.read()
                 break
-            # urlopen wraps connection timeouts in URLError; a failure after 3 tries still raises.
+            # urlopen wraps connection timeouts in URLError; other errors (e.g. 404) raise at once.
             except (TimeoutError, urllib.error.URLError) as error:
-                if attempt == 2:
+                timed_out = isinstance(error, TimeoutError) or isinstance(
+                    error.reason, TimeoutError
+                )
+                if not timed_out or attempt == 2:
                     raise
                 print(f"Retrying download ({error}): {key}", flush=True)
         # Write then rename, so an interrupted run never leaves a truncated cache entry.
