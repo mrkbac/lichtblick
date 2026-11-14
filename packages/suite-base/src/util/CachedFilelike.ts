@@ -107,6 +107,9 @@ export default class CachedFilelike implements Filelike {
       return;
     }
     const { size, initialData } = await this.#fileReader.open();
+    if (this.#closed) {
+      return;
+    }
     this.#fileSize = size;
     if (this.#cacheSizeInBytes >= size) {
       // If we have a cache limit that exceeds the file size, then we don't need to limit ourselves

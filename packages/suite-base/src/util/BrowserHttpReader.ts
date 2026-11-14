@@ -28,6 +28,10 @@ import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 // Bytes fetched from each end of the file when opening it
 const EDGE_BYTES = 64 * 1024;
 
+// How long opening waits for the tail once the head has arrived. The tail can take an extra round
+// trip for its CORS preflight; past this, it is read on demand like any other range.
+const TAIL_GRACE_MS = 2000;
+
 // Bounds the CORS diagnosis request so a hanging server can't delay the error
 const PROBE_TIMEOUT_MS = 5000;
 
@@ -71,33 +75,58 @@ export default class BrowserHttpReader implements FileReader {
       tail.abort();
       return this.#checkFullResponse(response);
     }
-    const total = totalSize(response);
-    const etag = response.headers.get("etag") ?? undefined;
-    const identifier = etag ?? response.headers.get("last-modified") ?? undefined;
+    const headRange = contentRange(response);
+    const identifier = versionOf(response);
+    if (headRange == undefined) {
+      // Content-Range is not exposed to this origin (CORS): ask for the size the old way, and keep
+      // the head only if it is provably from the same file version
+      tail.abort();
+      const [headData, full] = await Promise.all([head.body(), this.#openWithoutRange()]);
+      const sameVersion = identifier != undefined && full.identifier === identifier;
+      return sameVersion
+        ? { ...full, initialData: edgeData(headData, undefined, full.size) }
+        : full;
+    }
+    const total = headRange.total;
+    const expected = Math.min(EDGE_BYTES, total);
     const readTail = async (): Promise<Uint8Array | undefined> => {
       const tailResponse = await tail.response;
-      // Only a range of the same file version can be cached
+      const range = contentRange(tailResponse);
+      // Only the requested range of the same file version can be cached
       if (
         tailResponse.status !== 206 ||
-        total == undefined ||
-        totalSize(tailResponse) !== total ||
-        (tailResponse.headers.get("etag") ?? undefined) !== etag
+        range?.total !== total ||
+        range.start !== total - expected ||
+        range.end !== total - 1 ||
+        versionOf(tailResponse) !== identifier
       ) {
         tail.abort();
         return undefined;
       }
       return await tail.body();
     };
-    const [headData, tailData] = await Promise.all([
-      head.body(),
-      readTail().catch(() => undefined),
-    ]);
-    if (total == undefined) {
-      // Content-Range is not exposed to this origin (CORS): ask for the size the old way
-      const { size } = await this.#openWithoutRange();
-      return { size, identifier, initialData: edgeData(headData, undefined, size) };
+    // The tail is optional: don't let a stalled one hold up opening the file
+    const tailData = readTail().catch(() => undefined);
+    const headData =
+      headRange.start === 0 && headRange.end === expected - 1 ? await head.body() : undefined;
+    if (headData == undefined) {
+      head.abort();
     }
-    return { size: total, identifier, initialData: edgeData(headData, tailData, total) };
+    let stopTimer = () => {};
+    const tailOrTimeout = await Promise.race([
+      tailData,
+      new Promise<undefined>((resolve) => {
+        const timer = setTimeout(resolve, TAIL_GRACE_MS);
+        stopTimer = () => {
+          clearTimeout(timer);
+        };
+      }),
+    ]);
+    stopTimer();
+    if (tailOrTimeout == undefined) {
+      tail.abort();
+    }
+    return { size: total, identifier, initialData: edgeData(headData, tailOrTimeout, total) };
   }
 
   #fetchRange(range: string): {
@@ -218,20 +247,29 @@ export default class BrowserHttpReader implements FileReader {
   }
 }
 
-/** The total size from `Content-Range: bytes 0-99/1234`, if the header is readable and known */
-function totalSize(response: Response): number | undefined {
-  const match = /\/(\d+)$/.exec(response.headers.get("content-range") ?? "");
-  return match ? Number(match[1]) : undefined;
+/** `Content-Range: bytes 0-99/1234`, if the header is readable and the total is known */
+function contentRange(
+  response: Response,
+): { start: number; end: number; total: number } | undefined {
+  const match = /^bytes (\d+)-(\d+)\/(\d+)$/.exec(response.headers.get("content-range") ?? "");
+  return match
+    ? { start: Number(match[1]), end: Number(match[2]), total: Number(match[3]) }
+    : undefined;
+}
+
+/** What identifies the file version: its ETag, or else its modification time */
+function versionOf(response: Response): string | undefined {
+  return response.headers.get("etag") ?? response.headers.get("last-modified") ?? undefined;
 }
 
 /** The fetched ends of the file, skipping any whose length doesn't match the file size */
 function edgeData(
-  head: Uint8Array,
+  head: Uint8Array | undefined,
   tail: Uint8Array | undefined,
   size: number,
 ): { offset: number; data: Uint8Array }[] {
   const expected = Math.min(EDGE_BYTES, size);
-  const ranges = head.byteLength === expected ? [{ offset: 0, data: head }] : [];
+  const ranges = head?.byteLength === expected ? [{ offset: 0, data: head }] : [];
   if (tail?.byteLength === expected) {
     ranges.push({ offset: size - expected, data: tail });
   }

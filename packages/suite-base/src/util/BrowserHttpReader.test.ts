@@ -17,18 +17,26 @@ function rangeOf(init: RequestInit | undefined): string | undefined {
 /** A server that answers byte ranges (including suffix ranges) of `data` */
 function rangeServer(
   data: Uint8Array<ArrayBuffer>,
-  options: { headers?: (range: string) => Record<string, string>; tail?: () => Response } = {},
+  options: {
+    headers?: (range: string) => Record<string, string>;
+    tail?: () => Response | Promise<Response>;
+    fullEtag?: string;
+  } = {},
 ) {
   return vi.fn(async (_url: RequestInfo | URL, init?: RequestInit) => {
     const range = rangeOf(init);
     const match = range != undefined ? /^bytes=(\d*)-(\d*)$/.exec(range) : undefined;
     if (!match) {
       return new Response(data.slice(), {
-        headers: { "accept-ranges": "bytes", "content-length": String(data.length) },
+        headers: {
+          "accept-ranges": "bytes",
+          "content-length": String(data.length),
+          etag: options.fullEtag ?? '"v1"',
+        },
       });
     }
     if (match[1] === "" && options.tail) {
-      return options.tail();
+      return await options.tail();
     }
     const start = match[1] === "" ? Math.max(0, data.length - Number(match[2])) : Number(match[1]);
     const end =
@@ -144,6 +152,37 @@ describe("BrowserHttpReader open", () => {
     expect(rangeOf(fetchMock.mock.calls[2]![1])).toBeUndefined();
   });
 
+  it("drops the head when the size request sees another file version", async () => {
+    const data = file(EDGE * 3);
+    globalThis.fetch = rangeServer(data, {
+      headers: () => ({ "content-range": "" }),
+      fullEtag: '"v2"',
+    });
+
+    await expect(new BrowserHttpReader(FILE_URL).open()).resolves.toEqual({
+      size: data.length,
+      identifier: '"v2"',
+    });
+  });
+
+  it("doesn't wait for a stalled tail", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    try {
+      const data = file(EDGE * 3);
+      globalThis.fetch = rangeServer(data, { tail: async () => await new Promise(() => {}) });
+
+      const opened = new BrowserHttpReader(FILE_URL).open();
+      await vi.advanceTimersByTimeAsync(2000);
+      await expect(opened).resolves.toEqual({
+        size: data.length,
+        identifier: '"v1"',
+        initialData: [{ offset: 0, data: data.slice(0, EDGE) }],
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it.each([
     [
       "fails",
@@ -152,6 +191,14 @@ describe("BrowserHttpReader open", () => {
       },
     ],
     ["is ignored", () => new Response(file(EDGE * 3), { status: 200 })],
+    [
+      "returns another interval",
+      () =>
+        new Response(file(EDGE), {
+          status: 206,
+          headers: { "content-range": `bytes 0-${EDGE - 1}/${EDGE * 3}`, etag: '"v1"' },
+        }),
+    ],
     [
       "is from another version",
       () =>
