@@ -4,7 +4,6 @@
 import { Time } from "@foxglove/rostime";
 import { useMemo } from "react";
 
-import { MessageDataItemsByPath } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import {
   ChartDataset,
   ChartDatasets,
@@ -19,6 +18,7 @@ import { messagesToDataset } from "@lichtblick/suite-base/panels/StateTransition
 import { datasetContainsArray } from "@lichtblick/suite-base/panels/StateTransitions/shared";
 import {
   PathState,
+  SamplesByPath,
   StateTransitionPath,
 } from "@lichtblick/suite-base/panels/StateTransitions/types";
 
@@ -34,8 +34,8 @@ export function addMatchStarts(dataset: ChartDataset, out: Set<number>): void {
 function useStateTransitionsData(
   paths: StateTransitionPath[],
   startTime: Readonly<Time> | undefined,
-  itemsByPath: MessageDataItemsByPath,
-  decodedBlocks: MessageDataItemsByPath[],
+  itemsByPath: SamplesByPath,
+  decodedBlocks: readonly SamplesByPath[],
   // eslint-disable-next-line @lichtblick/no-boolean-parameters
   showPoints: boolean,
 ): UseStateTransitionsData {

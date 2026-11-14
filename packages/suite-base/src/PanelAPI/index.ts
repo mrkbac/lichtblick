@@ -24,5 +24,7 @@ export { useMessageReducer } from "./useMessageReducer";
 
 export { useBlocksSubscriptions } from "./useBlocksSubscriptions";
 export { useMessagesByTopic } from "./useMessagesByTopic";
+export type { MessageHistoryByTopic } from "./useMessagesByTopic";
+export { useMessageHistory } from "./useMessageHistory";
 
 export { default as useConfigById } from "./useConfigById";

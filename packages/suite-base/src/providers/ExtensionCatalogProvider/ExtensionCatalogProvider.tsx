@@ -9,6 +9,7 @@ import * as _ from "lodash-es";
 import React, { PropsWithChildren, useEffect, useState } from "react";
 import { StoreApi, createStore } from "zustand";
 
+import { pushAll } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import { RegisterMessageConverterArgs } from "@lichtblick/suite";
 import {
@@ -207,8 +208,8 @@ function createExtensionRegistryStore(
 
         _.assign(panels, newContributionPoints.panels);
         _.merge(panelSettings, newContributionPoints.panelSettings);
-        messageConverters.push(...newContributionPoints.messageConverters);
-        topicAliasFunctions.push(...newContributionPoints.topicAliasFunctions);
+        pushAll(messageConverters, newContributionPoints.messageConverters);
+        pushAll(topicAliasFunctions, newContributionPoints.topicAliasFunctions);
 
         for (const [name, builder] of newContributionPoints.cameraModels) {
           if (cameraModels.has(name)) {

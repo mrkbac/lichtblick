@@ -4,6 +4,7 @@
 import { SnackbarKey, useSnackbar } from "notistack";
 import { useCallback, useEffect, useRef } from "react";
 
+import { pushAll } from "@lichtblick/den/collection";
 import {
   ExtensionData,
   ExtensionSnackbar,
@@ -102,7 +103,7 @@ export function useInstallingExtensionsState({
             const result = await installExtensions(namespace, chunk);
 
             // Store all results for later counting
-            allResults.push(...result);
+            pushAll(allResults, result);
 
             const successfulResults = result.filter(({ success }) => success);
             const failedResults = result.filter(({ success }) => !success);

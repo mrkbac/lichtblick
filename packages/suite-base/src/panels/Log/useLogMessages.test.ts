@@ -5,12 +5,14 @@
 import { act, renderHook } from "@testing-library/react";
 import type { Mock } from "vitest";
 
+import { RingBuffer } from "@lichtblick/den/collection";
 import { MessageEvent, SubscribeMessageRangeArgs } from "@lichtblick/suite";
-import { useMessagesByTopic } from "@lichtblick/suite-base/PanelAPI";
+import { useMessageHistory } from "@lichtblick/suite-base/PanelAPI";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useSubscribeMessageRange } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 
+import { normalizeLogEvent } from "./conversion";
 import { NormalizedLogMessage } from "./types";
 import { mergeByReceiveTime, useLogMessages } from "./useLogMessages";
 
@@ -46,6 +48,9 @@ describe("mergeByReceiveTime", () => {
   });
 });
 
+/** A live history as useMessageHistory returns it: normalized messages in a ring buffer. */
+const history = (events: MessageEvent[]) => RingBuffer.from(100, events.map(normalizeLogEvent));
+
 describe("useLogMessages", () => {
   let ctx: { playerState: { playerId: string; presence: PlayerPresence } };
   let rangeIterators: Map<string, (batch: MessageEvent[] | "done" | Error) => void>;
@@ -59,7 +64,7 @@ describe("useLogMessages", () => {
     (useMessagePipeline as Mock).mockImplementation((selector: (c: typeof ctx) => unknown) =>
       selector(ctx),
     );
-    (useMessagesByTopic as Mock).mockReturnValue({});
+    (useMessageHistory as Mock).mockReturnValue({});
   });
 
   afterEach(() => {
@@ -110,9 +115,10 @@ describe("useLogMessages", () => {
     const { result } = renderHook(() => useLogMessages(TOPICS));
 
     expect(subscribe).toHaveBeenCalledTimes(2);
-    expect(useMessagesByTopic).toHaveBeenLastCalledWith({
+    expect(useMessageHistory).toHaveBeenLastCalledWith({
       topics: [],
       historySize: 50_000,
+      map: normalizeLogEvent,
     });
     expect(result.current.loading).toBe(true);
 
@@ -126,6 +132,29 @@ describe("useLogMessages", () => {
 
     expect(result.current.items.map((m) => m.message)).toEqual(["/a@1", "/b@2", "/a@3"]);
     expect(result.current.loading).toBe(false);
+  });
+
+  it("merges batches arriving out of order across flushes", async () => {
+    withRange();
+    const { result } = renderHook(() => useLogMessages(TOPICS));
+    const messages = () => result.current.items.map((m) => m.message);
+
+    await act(async () => {
+      rangeIterators.get("/a")!([event(1, "/a"), event(3, "/a")]);
+      await vi.runAllTimersAsync();
+    });
+    await act(async () => {
+      rangeIterators.get("/b")!([event(2, "/b"), event(3, "/b")]);
+      await vi.runAllTimersAsync();
+    });
+    expect(messages()).toEqual(["/a@1", "/b@2", "/a@3", "/b@3"]);
+
+    await act(async () => {
+      rangeIterators.get("/a")!([event(5, "/a")]);
+      rangeIterators.get("/b")!([event(4, "/b")]);
+      await vi.runAllTimersAsync();
+    });
+    expect(messages()).toEqual(["/a@1", "/b@2", "/a@3", "/b@3", "/b@4", "/a@5"]);
   });
 
   it("stops loading and reports the error when reading fails, and can retry", async () => {
@@ -220,24 +249,25 @@ describe("useLogMessages", () => {
 
   it("falls back to a rolling buffer when the source has no range support", () => {
     (useSubscribeMessageRange as Mock).mockReturnValue(vi.fn(() => () => {}));
-    (useMessagesByTopic as Mock).mockReturnValue({
-      "/a": [event(1, "/a"), event(3, "/a")],
-      "/b": [event(2, "/b")],
+    (useMessageHistory as Mock).mockReturnValue({
+      "/a": history([event(1, "/a"), event(3, "/a")]),
+      "/b": history([event(2, "/b")]),
     });
 
     const { result } = renderHook(() => useLogMessages(TOPICS));
 
-    expect(useMessagesByTopic).toHaveBeenLastCalledWith({
+    expect(useMessageHistory).toHaveBeenLastCalledWith({
       topics: TOPICS,
       historySize: 50_000,
+      map: normalizeLogEvent,
     });
     expect(result.current.items.map((m) => m.message)).toEqual(["/a@1", "/b@2", "/a@3"]);
   });
 
   it("takes live updates at most every 250 ms, always ending on the latest", () => {
     (useSubscribeMessageRange as Mock).mockReturnValue(vi.fn(() => () => {}));
-    let live = { "/a": [event(1, "/a")] };
-    (useMessagesByTopic as Mock).mockImplementation(() => live);
+    let live = { "/a": history([event(1, "/a")]) };
+    (useMessageHistory as Mock).mockImplementation(() => live);
     const { result, rerender } = renderHook(() => useLogMessages(SINGLE_TOPIC));
     const messages = () => result.current.items.map((m) => m.message);
 
@@ -245,20 +275,20 @@ describe("useLogMessages", () => {
     act(() => {
       vi.advanceTimersByTime(1000);
     });
-    live = { "/a": [event(1, "/a"), event(2, "/a")] };
+    live = { "/a": history([event(1, "/a"), event(2, "/a")]) };
     rerender();
     act(() => {
       vi.advanceTimersByTime(0);
     });
     expect(messages()).toEqual(["/a@1", "/a@2"]);
 
-    live = { "/a": [event(1, "/a"), event(2, "/a"), event(3, "/a")] };
+    live = { "/a": history([event(1, "/a"), event(2, "/a"), event(3, "/a")]) };
     rerender();
     act(() => {
       vi.advanceTimersByTime(100);
     });
     expect(messages()).toEqual(["/a@1", "/a@2"]);
-    live = { "/a": [event(1, "/a"), event(2, "/a"), event(3, "/a"), event(4, "/a")] };
+    live = { "/a": history([event(1, "/a"), event(2, "/a"), event(3, "/a"), event(4, "/a")]) };
     rerender();
     act(() => {
       vi.advanceTimersByTime(150);

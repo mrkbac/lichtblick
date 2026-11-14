@@ -31,8 +31,14 @@ export function stateTransitionPathDisplayName(
 export function datasetContainsArray(dataset: ImmutableDataset): boolean {
   // We need to detect when the path produces more than one data point,
   // since that is invalid input
-  const dataCounts = [
-    ...new Set(dataset.flatMap((data) => data?.map((message) => message.queriedData.length) ?? [])),
-  ];
-  return dataCounts.length > 0 && dataCounts.every((numPoints) => numPoints > 1);
+  let any = false;
+  for (const samples of dataset) {
+    for (const sample of samples ?? []) {
+      if (sample.count <= 1) {
+        return false;
+      }
+      any = true;
+    }
+  }
+  return any;
 }

@@ -4,6 +4,8 @@
 import * as _ from "lodash-es";
 import type { LayerSpecification, SourceSpecification, StyleSpecification } from "maplibre-gl";
 
+import { pushAll } from "@lichtblick/den/collection";
+
 import type { LngLat } from "./geo";
 
 export type SourceKind = "raster" | "vector" | "dem" | "geotiff" | "3dtiles";
@@ -476,7 +478,7 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
   }
 
   Object.assign(style.sources, input.overlay.sources);
-  style.layers.push(...input.overlay.layers);
+  pushAll(style.layers, input.overlay.layers);
   return style;
 }
 

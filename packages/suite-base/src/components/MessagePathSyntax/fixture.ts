@@ -14,39 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";
-import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
-
-export const datatypes: RosDatatypes = new Map(
-  Object.entries({
-    "some/datatype": { definitions: [{ name: "index", type: "int32" }] },
-  }),
-);
-
-export const messages = Object.freeze<MessageEvent[]>([
-  {
-    topic: "/some/topic",
-    receiveTime: { sec: 100, nsec: 0 },
-    message: { index: 0 },
-    schemaName: "msgs/PoseDebug",
-    sizeInBytes: 0,
-  },
-  {
-    topic: "/some/topic",
-    receiveTime: { sec: 101, nsec: 0 },
-    message: { index: 1 },
-    schemaName: "msgs/PoseDebug",
-    sizeInBytes: 0,
-  },
-  {
-    topic: "/some/topic",
-    receiveTime: { sec: 102, nsec: 0 },
-    message: { index: 2 },
-    schemaName: "msgs/PoseDebug",
-    sizeInBytes: 0,
-  },
-]);
 
 export const MessagePathInputStoryFixture: Fixture = {
   datatypes: new Map(

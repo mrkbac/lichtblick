@@ -18,6 +18,7 @@ import { t } from "i18next";
 import { useSnackbar } from "notistack";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
+import { pushAll } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { useStyles } from "@lichtblick/suite-base/Workspace.style";
@@ -168,7 +169,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
     const extensions: string[] = [AllowedFileExtensions.FOXE, AllowedFileExtensions.JSON];
     for (const source of availableSources) {
       if (source.type === "file" && source.supportedFileTypes) {
-        extensions.push(...source.supportedFileTypes);
+        pushAll(extensions, source.supportedFileTypes);
       }
     }
     return extensions;

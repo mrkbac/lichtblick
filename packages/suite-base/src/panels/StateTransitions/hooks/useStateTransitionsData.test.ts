@@ -7,10 +7,12 @@ import { Time } from "@foxglove/rostime";
 import { renderHook } from "@testing-library/react";
 import type { Mock } from "vitest";
 
-import { MessageDataItemsByPath } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import { messagesToDataset } from "@lichtblick/suite-base/panels/StateTransitions/messagesToDataset";
 import { datasetContainsArray } from "@lichtblick/suite-base/panels/StateTransitions/shared";
-import { StateTransitionPath } from "@lichtblick/suite-base/panels/StateTransitions/types";
+import {
+  StateTransitionPath,
+  SamplesByPath,
+} from "@lichtblick/suite-base/panels/StateTransitions/types";
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
 
 import useStateTransitionsData from "./useStateTransitionsData";
@@ -43,11 +45,11 @@ describe("useStateTransitionsData", () => {
       { value: "path2", timestampMethod: "receiveTime" },
     ];
     const startTime: Readonly<Time> = RosTimeBuilder.time();
-    const itemsByPath: MessageDataItemsByPath = {
+    const itemsByPath: SamplesByPath = {
       path1: [],
       path2: [],
     };
-    const decodedBlocks: MessageDataItemsByPath[] = [{ path1: [] }];
+    const decodedBlocks: SamplesByPath[] = [{ path1: [] }];
     const showPoints = true;
 
     mockMessagesToDataset.mockImplementation(({ path }) => ({ label: path.value }));
@@ -68,8 +70,8 @@ describe("useStateTransitionsData", () => {
   it("should handle undefined items in itemsByPath", () => {
     const paths: StateTransitionPath[] = [{ value: "path1", timestampMethod: "receiveTime" }];
     const startTime: Readonly<Time> = RosTimeBuilder.time();
-    const itemsByPath: MessageDataItemsByPath = {};
-    const decodedBlocks: MessageDataItemsByPath[] = [];
+    const itemsByPath: SamplesByPath = {};
+    const decodedBlocks: SamplesByPath[] = [];
     const showPoints = true;
 
     mockMessagesToDataset.mockImplementation(({ path }) => ({ label: path.value }));

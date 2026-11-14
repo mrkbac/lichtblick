@@ -3,6 +3,7 @@
 
 import * as _ from "lodash-es";
 
+import { pushAll } from "@lichtblick/den/collection";
 import type { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
 import type { LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import type { PanelConfig } from "@lichtblick/suite-base/types/panels";
@@ -208,7 +209,7 @@ function normalizeTabsOnce<T extends TreeData>(data: T): T {
           if (id === shownId) {
             activeTabIdx = tabs.length + merged.active;
           }
-          tabs.push(...merged.tabs);
+          pushAll(tabs, merged.tabs);
         } else {
           if (id === shownId) {
             activeTabIdx = tabs.length;

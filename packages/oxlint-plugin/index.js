@@ -11,6 +11,7 @@ module.exports = {
     "no-boolean-parameters": require("./no-boolean-parameters"),
     "no-getters-setters": require("./no-getters-setters"),
     "no-object-url": require("./no-object-url"),
+    "no-push-spread": require("./no-push-spread"),
     "no-return-promise-resolve": require("./no-return-promise-resolve"),
     "ramda-usage": require("./ramda-usage"),
     "strict-equality": require("./strict-equality"),

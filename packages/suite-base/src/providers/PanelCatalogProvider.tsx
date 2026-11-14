@@ -8,6 +8,7 @@
 import { PropsWithChildren, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { pushAll } from "@lichtblick/den/collection";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import { PanelExtensionAdapter } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { useExtensionCatalog } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
@@ -67,7 +68,7 @@ export default function PanelCatalogProvider(props: PropsWithChildren): React.Re
 
   const visiblePanels = useMemo(() => {
     const panelList = [...allPanelsInfo.builtin];
-    panelList.push(...wrappedExtensionPanels);
+    pushAll(panelList, wrappedExtensionPanels);
     return panelList;
   }, [wrappedExtensionPanels, allPanelsInfo]);
 
