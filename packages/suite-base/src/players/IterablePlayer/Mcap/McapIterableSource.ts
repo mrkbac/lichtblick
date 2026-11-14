@@ -111,6 +111,9 @@ export class McapIterableSource implements ISerializedIterableSource {
   // Chunks of the rebuilt index covered by the last Initialization handed out; an update reports
   // the time range of every chunk since, whichever reader (grown, reopened, re-hydrated) has it
   #publishedChunks = 0;
+  // Set when an update failed after its reader may have taken changes (e.g. a channel whose
+  // schema showed up), so the next one reports that anything may have changed
+  #updateFailed = false;
 
   public readonly sourceType = "serialized";
 
@@ -347,12 +350,17 @@ export class McapIterableSource implements ISerializedIterableSource {
         return false; // terminated meanwhile
       }
       this.#publishedChunks = chunks;
+      if (this.#updateFailed) {
+        init.updatedRanges = undefined;
+        this.#updateFailed = false;
+      }
       this.#lastInit = init;
       // One not taken by waitForUpdate() yet is replaced, but what it changed still counts
       this.#update = this.#update ? withRangesOf(this.#update, init) : init;
       ok = true;
     } catch (error) {
       log.error("Updating the MCAP index failed", error);
+      this.#updateFailed = true;
       if (final) {
         this.#scanError ??= toError(error);
         this.#update = this.#lastInit && {
