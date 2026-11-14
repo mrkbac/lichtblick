@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { sortedIndexByTuple } from "./binarySearch";
+import * as _ from "lodash-es";
 
 /**
  * A list of values with type `V` sorted by numeric keys of type `K`
@@ -130,6 +130,7 @@ export class ArrayMap<K, V> {
    * plus 1.
    */
   public binarySearch(key: K): number {
-    return sortedIndexByTuple(this.#list, key);
+    const index = _.sortedIndexBy<readonly [K, unknown]>(this.#list, [key, undefined], ([k]) => k);
+    return this.#list[index]?.[0] === key ? index : ~index;
   }
 }

@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { compare } from "@foxglove/rostime";
+import * as _ from "lodash-es";
 
 import Logger from "@lichtblick/log";
 import { parseChannel } from "@lichtblick/mcap-support";
@@ -429,7 +430,7 @@ export class DeserializingIterableSource implements IDeserializedIterableSource 
 
     const deserializedMessage = deserialize(message) as Record<string, unknown>;
     const msg = subscription.fields
-      ? pickFields(deserializedMessage, subscription.fields)
+      ? _.pick(deserializedMessage, subscription.fields)
       : deserializedMessage;
 
     const msgSizeEstimate = this.#shared.sizes.estimate(
@@ -451,21 +452,4 @@ export class DeserializingIterableSource implements IDeserializedIterableSource 
       sizeInBytes,
     };
   }
-}
-
-/**
- * Copy of `record` with only the listed top-level fields. Not lodash `pick`, which would treat a
- * field name containing dots as a nested path.
- */
-function pickFields(
-  record: Readonly<Record<string, unknown>>,
-  fields: readonly string[],
-): Record<string, unknown> {
-  const result: Record<string, unknown> = {};
-  for (const field of fields) {
-    if (field in record) {
-      result[field] = record[field];
-    }
-  }
-  return result;
 }

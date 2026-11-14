@@ -7,7 +7,6 @@
 
 export { default as filterMap } from "./filterMap";
 export * from "./ArrayMap";
-export * from "./binarySearch";
 export * from "./ObjectPool";
 export * from "./VecQueue";
 export * from "./RingBuffer";

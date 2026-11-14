@@ -9,7 +9,6 @@ import { add, compare, subtract, toNanoSec } from "@foxglove/rostime";
 import EventEmitter from "eventemitter3";
 import * as _ from "lodash-es";
 
-import { sortedIndexByTuple } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
 import { MessageEvent, Time } from "@lichtblick/suite";
 import { ByteBudget } from "@lichtblick/suite-base/players/ByteBudget";
@@ -508,28 +507,14 @@ class CachingIterableSource<MessageType = unknown>
       }
 
       const targetTime = toNanoSec(args.time);
-      let readIdx = sortedIndexByTuple(cacheBlock.items, targetTime);
-
-      // If readIdx is negative then we don't have an exact match, but readIdx does tell us what that is
-      // See the findCacheItem documentation for how to interpret it.
-      if (readIdx < 0) {
-        readIdx = ~readIdx;
-
-        // readIdx will point to the element after our time (or 1 past the end of the array)
-        // We subtract 1 to start reading from before that element or end of array
-        readIdx -= 1;
-      } else {
-        // When readIdx is an exact match we get a positive value. For an exact match we traverse
-        // forward linearly to find the last occurrence of the matching timestamp in our cache
-        // block. We can then read backwards in the block to find the last messages on all requested
-        // topics.
-        for (let i = readIdx + 1; i < cacheBlock.items.length; ++i) {
-          if (cacheBlock.items[i]?.[0] !== targetTime) {
-            break;
-          }
-          readIdx = i;
-        }
-      }
+      // Last item at or before targetTime: we read backwards from there to find the latest
+      // message on each requested topic.
+      const readIdx =
+        _.sortedLastIndexBy<readonly [bigint, unknown]>(
+          cacheBlock.items,
+          [targetTime, undefined],
+          ([time]) => time,
+        ) - 1;
 
       for (let i = readIdx; i >= 0; --i) {
         const record = cacheBlock.items[i];
@@ -767,23 +752,8 @@ class CachingIterableSource<MessageType = unknown>
       return 0;
     }
 
-    let idx = sortedIndexByTuple(items, key);
-    if (idx < 0) {
-      return ~idx;
-    }
-
-    // An exact match just means we've found a matching item, not necessarily the first or last
-    // matching item. We want the first item so we linearly iterate backwards until we no longer have
-    // a match.
-    for (let i = idx - 1; i >= 0; --i) {
-      const prevItem = items[i];
-      if (prevItem != undefined && prevItem[0] !== key) {
-        break;
-      }
-      idx = i;
-    }
-
-    return idx;
+    // First item at or after key
+    return _.sortedIndexBy<readonly [bigint, unknown]>(items, [key, undefined], ([time]) => time);
   }
 }
 
