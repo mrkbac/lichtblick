@@ -18,7 +18,8 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 
 import Logger from "@lichtblick/log";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
-import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
+
+import { isTiff, tiffToPng } from "./tiffToPng";
 
 const log = Logger.getLogger(__filename);
 
@@ -176,7 +177,7 @@ export class ModelCache {
     reportError: ErrorCallback,
   ): Promise<LoadedModel> {
     const onError = (assetUrl: string) => {
-      const originalUrl = this.#objectUrls.get(assetUrl) ?? unrewriteUrl(assetUrl);
+      const originalUrl = this.#objectUrls.get(assetUrl) ?? assetUrl;
       log.error(`Failed to load GLTF asset "${originalUrl}" for "${url}"`);
       reportError(new Error(`Failed to load GLTF asset "${originalUrl}"`));
     };
@@ -250,7 +251,7 @@ export class ModelCache {
     reportError: ErrorCallback,
   ): Promise<LoadedModel> {
     const onError = (assetUrl: string) => {
-      const originalUrl = this.#objectUrls.get(assetUrl) ?? unrewriteUrl(assetUrl);
+      const originalUrl = this.#objectUrls.get(assetUrl) ?? assetUrl;
       log.error(`Failed to load COLLADA asset "${originalUrl}" for "${url}"`);
       reportError(new Error(`Failed to load COLLADA asset "${originalUrl}"`));
     };
@@ -308,7 +309,7 @@ export class ModelCache {
     reportError: ErrorCallback,
   ): Promise<LoadedModel> {
     const onError = (assetUrl: string) => {
-      const originalUrl = this.#objectUrls.get(assetUrl) ?? unrewriteUrl(assetUrl);
+      const originalUrl = this.#objectUrls.get(assetUrl) ?? assetUrl;
       log.error(`Failed to load OBJ asset "${originalUrl}" for "${url}"`);
       reportError(new Error(`Failed to load OBJ asset "${originalUrl}"`));
     };
@@ -404,8 +405,11 @@ export class ModelCache {
         .map(async (resource) => {
           const resolved = new URL(resource, url).toString();
           try {
-            const fetchUrl = isDesktopApp() ? rewriteUrl(resolved) : resolved;
-            return [resolved, await this.#fetchAsset(fetchUrl, { referenceUrl: url })] as const;
+            const asset = await this.#fetchAsset(resolved, { referenceUrl: url });
+            const blob = isTiff(asset.data)
+              ? await tiffToPng(asset.data)
+              : new Blob([new Uint8Array(asset.data)], { type: asset.mediaType });
+            return [resolved, blob] as const;
           } catch (error) {
             if (requiredResources.includes(resource)) {
               throw error;
@@ -424,10 +428,8 @@ export class ModelCache {
       if (!entry) {
         continue;
       }
-      const [resolved, asset] = entry;
-      const objectUrl = URL.createObjectURL(
-        new Blob([new Uint8Array(asset.data)], { type: asset.mediaType }),
-      );
+      const [resolved, blob] = entry;
+      const objectUrl = URL.createObjectURL(blob);
       this.#objectUrls.set(objectUrl, resolved);
       urls.set(resolved, objectUrl);
     }
@@ -436,7 +438,7 @@ export class ModelCache {
       if (missing.has(resolved)) {
         throw new Error(`Missing optional model asset: ${resolved}`);
       }
-      return urls.get(resolved) ?? rewriteUrl(resource);
+      return urls.get(resolved) ?? resource;
     });
     return missing;
   }
@@ -534,24 +536,6 @@ function toStandard(
   standard.roughness = 1 - shininess / 100;
   standard.dithering = true;
   return standard;
-}
-
-// The THREE.TextureLoader does not support loading .tiff files into textures. To work around
-// this we rewrite any `package://` url pointing at a .tiff file into a url which returns a png.
-// The x-foxglove-converted-tiff protocol is used because the electron protocol handler for
-// package:// uses registerFileProtocol and for converted tiff we need registerBufferProtocol
-function rewriteUrl(url: string): string {
-  if (url.startsWith("package://") && /\.tiff?$/i.test(url)) {
-    return url.replace("package://", "x-foxglove-converted-tiff://");
-  }
-  return url;
-}
-
-function unrewriteUrl(url: string): string {
-  if (url.startsWith("x-foxglove-converted-tiff://")) {
-    return url.replace("x-foxglove-converted-tiff://", "package://");
-  }
-  return url;
 }
 
 /** A DRACOLoader that loads its decoder from the webpack bundle instead of a CDN. */

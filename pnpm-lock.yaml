@@ -577,6 +577,9 @@ importers:
       '@types/three':
         specifier: 0.187.0
         version: 0.187.0
+      '@types/utif':
+        specifier: ^3.0.6
+        version: 3.0.6
       '@types/wicg-file-system-access':
         specifier: 2023.10.7
         version: 2023.10.7
@@ -754,6 +757,9 @@ importers:
       use-sync-external-store:
         specifier: 1.7.0
         version: 1.7.0(react@19.3.1)
+      utif:
+        specifier: 3.1.0
+        version: 3.1.0
       vitest-canvas-mock:
         specifier: 1.2.0
         version: 1.2.0(vitest@5.1.0)
@@ -808,12 +814,6 @@ importers:
       '@rspack/plugin-react-refresh':
         specifier: 2.0.2
         version: 2.0.2(@rspack/core@2.3.1(@swc/helpers@0.5.23))(react-refresh@0.18.0)
-      '@types/pngjs':
-        specifier: ^6.0.5
-        version: 6.0.5
-      '@types/utif':
-        specifier: ^3.0.6
-        version: 3.0.6
       '@xmldom/xmldom':
         specifier: 0.9.12
         version: 0.9.12
@@ -850,9 +850,6 @@ importers:
       plist:
         specifier: 5.0.0
         version: 5.0.0
-      pngjs:
-        specifier: 7.0.0
-        version: 7.0.0
       quicklookjs:
         specifier: 1.0.1
         version: 1.0.1
@@ -877,9 +874,6 @@ importers:
       typescript:
         specifier: 6.0.3
         version: 6.0.3
-      utif:
-        specifier: 3.1.0
-        version: 3.1.0
 
   packages/suite-web:
     dependencies:
@@ -3970,9 +3964,6 @@ packages:
   '@types/parse-json@4.0.2':
     resolution: {integrity: sha512-dISoDXWWQwUquiKsyZ4Ng+HX2KsPL7LyHKHQwgGFEA3IaKac4Obd+h2a/a6waisAoepJlBcx9paWqjA8/HVjCw==}
 
-  '@types/pngjs@6.0.5':
-    resolution: {integrity: sha512-0k5eKfrA83JOZPppLtS2C7OUtyNAl2wKNxfyYl9Q5g9lPkgBl/9hNyAu6HuEH2J4XmIv2znEpkDd0SaZVxW6iQ==}
-
   '@types/prop-types@15.7.15':
     resolution: {integrity: sha512-F6bEyamV9jKGAFBEmlQnesRPGOQqS2+Uwi0Em15xenOxHaf2hv6L8YCVn3rPdPJOiJfPiCnLIRyvwVaqMY3MIw==}
 
@@ -6737,10 +6728,6 @@ packages:
 
   pmtiles@4.5.0:
     resolution: {integrity: sha512-CBeD4SoUluFziGdy/8k7FOjQxQy486n+929W/tWophauvMICpkZ26vGBWhDt/6b1FZQWNaf4jFdT/5+q0Wii5w==}
-
-  pngjs@7.0.0:
-    resolution: {integrity: sha512-LKWqWJRhstyYo9pGvgor/ivk2w94eSjE3RGVuzLGlr3NmD8bf7RcYGze1mNdEHRP6TRP6rMuDHk5t44hnTRyow==}
-    engines: {node: '>=14.19.0'}
 
   possible-typed-array-names@1.1.0:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
@@ -11030,10 +11017,6 @@ snapshots:
 
   '@types/parse-json@4.0.2': {}
 
-  '@types/pngjs@6.0.5':
-    dependencies:
-      '@types/node': 26.6.6
-
   '@types/prop-types@15.7.15': {}
 
   '@types/react-dom@19.3.0(@types/react@19.3.0)':
@@ -14287,8 +14270,6 @@ snapshots:
   pmtiles@4.5.0:
     dependencies:
       fflate: 0.8.3
-
-  pngjs@7.0.0: {}
 
   possible-typed-array-names@1.1.0: {}
 

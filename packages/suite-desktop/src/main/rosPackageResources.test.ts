@@ -26,12 +26,9 @@ describe("rosPackageResources", () => {
   describe("registerRosPackageProtocolSchemes", () => {
     it("allows cross-origin fetch from the file:// renderer", () => {
       registerRosPackageProtocolSchemes();
-      expect(registerSchemesAsPrivileged).toHaveBeenCalledWith(
-        ["package", "x-foxglove-converted-tiff"].map((scheme) => ({
-          scheme,
-          privileges: { supportFetchAPI: true, corsEnabled: true },
-        })),
-      );
+      expect(registerSchemesAsPrivileged).toHaveBeenCalledWith([
+        { scheme: "package", privileges: { supportFetchAPI: true, corsEnabled: true } },
+      ]);
     });
   });
 
