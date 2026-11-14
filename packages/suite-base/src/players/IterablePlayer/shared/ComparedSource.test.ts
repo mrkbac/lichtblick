@@ -11,11 +11,12 @@ import {
   IteratorResult,
   MessageIteratorArgs,
 } from "../IIterableSource";
-import { ComparedSource } from "./ComparedSource";
+import { ComparedSource, compareLabel, prefixTopic } from "./ComparedSource";
 import { MultiIterableSource } from "./MultiIterableSource";
 
 // A recording with one message per second on /imu, starting at `startSec`
 class FakeSource implements IIterableSource<Uint8Array> {
+  public readonly sourceType = "serialized";
   public lastArgs?: MessageIteratorArgs;
   readonly #start: Time;
   public constructor({ file }: { file: { startSec: number } }) {
@@ -112,5 +113,11 @@ describe("compared recordings", () => {
     expect(backfill.map((event) => [event.topic, event.receiveTime.sec])).toEqual([
       ["/b/imu", 100],
     ]);
+  });
+
+  it("labels recordings a…z, then r27…, and prefixes topics with or without a leading slash", () => {
+    expect([0, 1, 25, 26].map(compareLabel)).toEqual(["a", "b", "z", "r27"]);
+    expect(prefixTopic("/a", "/imu")).toEqual("/a/imu");
+    expect(prefixTopic("/a", "imu")).toEqual("/a/imu");
   });
 });

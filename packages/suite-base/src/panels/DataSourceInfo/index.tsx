@@ -135,7 +135,9 @@ export function RecordingInspector(): React.JSX.Element {
   const [tree, setTree] = useState(false);
   const [showActivity, setShowActivity] = useState(true);
   const [collapsed, setCollapsed] = useState(new Set<string>());
-  const [tab, setTab] = useState("topics");
+  const [selectedTab, setTab] = useState("topics");
+  // The compare tab goes away when the files are merged again
+  const tab = selectedTab === "compare" && !comparing ? "topics" : selectedTab;
   const [inspections, setInspections] = useState(new Map<string, TopicInspection>());
   const [selected, setSelected] = useState<string>();
   const [scanning, setScanning] = useState<string>();

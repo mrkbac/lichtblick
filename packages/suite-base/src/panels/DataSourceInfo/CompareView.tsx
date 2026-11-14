@@ -3,7 +3,7 @@
 
 import { subtract, toSec } from "@foxglove/rostime";
 import { Chip, FormControlLabel, Switch, TextField, Typography } from "@mui/material";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
 import { Immutable } from "@lichtblick/suite";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -81,7 +81,7 @@ export function CompareView({
   const { classes } = useStyles();
   const [query, setQuery] = useState("");
   const [onlyDifferences, setOnlyDifferences] = useState(false);
-  const rows = compareRecordings(files, topicStats);
+  const rows = useMemo(() => compareRecordings(files, topicStats), [files, topicStats]);
   const differing = rows.filter((row) => row.differences.length > 0).length;
   const shown = rows.filter(
     (row) =>
