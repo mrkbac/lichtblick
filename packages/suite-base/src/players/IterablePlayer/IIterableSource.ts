@@ -38,6 +38,13 @@ export type Initialization = {
   publishersByTopic: Map<string, Set<string>>;
 
   alerts: PlayerAlert[];
+
+  /**
+   * On an update (see IIterableSource.waitForUpdate): the only time ranges whose messages changed
+   * since the previous Initialization, so caches can keep what they loaded elsewhere. Empty if no
+   * message changed; absent if any may have.
+   */
+  updatedRanges?: { start: Time; end: Time }[];
 };
 
 export type MessageIteratorArgs = {

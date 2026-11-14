@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Time } from "@foxglove/rostime";
+import { Time, fromNanoSec } from "@foxglove/rostime";
 import { McapIndexedReader, McapTypes } from "@mcap/core";
 
 import Log from "@lichtblick/log";
@@ -21,11 +21,15 @@ import type {
   McapSource,
   OpenedInner,
 } from "./McapIterableSource.types";
-import type { McapRecoveryScanner } from "./McapRecoveryScanner";
+import type { LiveReader, McapRecoveryScanner } from "./McapRecoveryScanner";
 import { McapUnindexedIterableSource } from "./McapUnindexedIterableSource";
 import { RemoteFileReadable } from "./RemoteFileReadable";
 import { scanWithIndexCache } from "./mcapIndexCache";
-import { READER_BASE_BYTES, estimateReaderWeightBytes } from "./readerWeight";
+import {
+  READER_BASE_BYTES,
+  estimateAddedWeightBytes,
+  estimateReaderWeightBytes,
+} from "./readerWeight";
 import {
   IteratorResult,
   Initialization,
@@ -101,6 +105,9 @@ export class McapIterableSource implements ISerializedIterableSource {
   #blob: BlobReadable | undefined;
   // Ends the wait between two checks of a growing file (on terminate)
   #interrupt: (() => void) | undefined;
+  // The current inner on a rebuilt index (eager, or resident in the pool), which updates grow in
+  // place; `value` is the object the pool holds
+  #live: { value: HydratedInner; live: LiveReader } | undefined;
 
   public readonly sourceType = "serialized";
 
@@ -145,6 +152,7 @@ export class McapIterableSource implements ISerializedIterableSource {
         }),
         indexed: true,
         weightBytes: estimateReaderWeightBytes(result.reader),
+        live: result.live,
       };
     }
     const file = result.length != undefined ? readable.file.slice(0, result.length) : readable.file;
@@ -201,6 +209,7 @@ export class McapIterableSource implements ISerializedIterableSource {
         readable,
         indexed: true,
         weightBytes: estimateReaderWeightBytes(result.reader),
+        live: result.live,
       };
     }
     // Unindexed remote fallback: single-pass streaming read of the whole file. This path
@@ -220,7 +229,8 @@ export class McapIterableSource implements ISerializedIterableSource {
     readable: McapTypes.IReadable,
     decompressHandlers: McapTypes.DecompressHandlers,
   ): Promise<
-    { status: "indexed"; reader: McapIndexedReader } | { status: "unindexed"; length?: number }
+    | { status: "indexed"; reader: McapIndexedReader; live?: LiveReader }
+    | { status: "unindexed"; length?: number }
   > {
     if (!this.#recovery) {
       const result = await tryCreateIndexedReader(readable, decompressHandlers);
@@ -233,13 +243,8 @@ export class McapIterableSource implements ISerializedIterableSource {
       // Nothing chunked (e.g. messages written without chunks): stream the readable part.
       return { status: "unindexed", length: Number(this.#recovery.offset) };
     }
-    return {
-      status: "indexed",
-      reader: await McapIndexedReader.Initialize({
-        readable: this.#recovery.toReadable(readable),
-        decompressHandlers,
-      }),
-    };
+    const live = await this.#recovery.openLiveReader(readable, decompressHandlers);
+    return { status: "indexed", reader: live.reader, live };
   }
 
   /**
@@ -282,8 +287,6 @@ export class McapIterableSource implements ISerializedIterableSource {
    * a last one when it ends. Each one reopens the file on the index so far, so seeking, the time
    * range and topics grow with it.
    */
-  // ponytail: rebuilding the summary and reader per update is O(chunks); fine at this interval,
-  // append to the reader's index instead if updates get frequent.
   async #followScan(scan: Promise<void>): Promise<void> {
     const scanDone = scan.then(() => true); // one reaction on `scan`, not one per tick
     let published = this.#recovery?.offset;
@@ -333,25 +336,11 @@ export class McapIterableSource implements ISerializedIterableSource {
     const scan = this.#scan;
     let ok = false;
     try {
-      const { opened, init } = await this.#open({ indexing });
-      if (this.#scan !== scan) {
-        await opened.inner.terminate?.(); // terminated while reopening
-        return false;
-      }
-      if (this.#pool) {
-        // Kept only while resident, so memory stays within the pool's budget; otherwise the next
-        // acquire() opens on the grown index
-        if (
-          !(await this.#pool.refresh(this, {
-            inner: opened.inner,
-            readable: opened.readable,
-            weightBytes: opened.weightBytes,
-          }))
-        ) {
-          await opened.inner.terminate?.();
-        }
-      } else {
-        this.#eagerInner = opened.inner;
+      const init = this.#live
+        ? await this.#grow(this.#live, { indexing })
+        : await this.#reopen({ indexing });
+      if (!init || this.#scan !== scan) {
+        return false; // terminated meanwhile
       }
       this.#lastInit = init;
       this.#update = init;
@@ -365,6 +354,65 @@ export class McapIterableSource implements ISerializedIterableSource {
     }
     this.#wake?.();
     return ok;
+  }
+
+  /**
+   * Adds what was indexed since to the current reader, in O(what is new): the Initialization says
+   * which time range changed, so caches keep the rest.
+   */
+  async #grow(
+    { value, live }: { value: HydratedInner; live: LiveReader },
+    { indexing }: { indexing: boolean },
+  ): Promise<Initialization> {
+    const channels = live.reader.channelsById.size;
+    const added = live.grow();
+    value.weightBytes += estimateAddedWeightBytes(added, live.reader.channelsById.size - channels);
+    const init = await this.#describe(await value.inner.initialize(), value.readable, {
+      indexing,
+    });
+    let range: { start: bigint; end: bigint } | undefined;
+    for (const { messageStartTime: start, messageEndTime: end } of added) {
+      range = {
+        start: range && range.start < start ? range.start : start,
+        end: range && range.end > end ? range.end : end,
+      };
+    }
+    init.updatedRanges = range
+      ? [{ start: fromNanoSec(range.start), end: fromNanoSec(range.end) }]
+      : [];
+    // Its weight grew; the pool may evict something else for it
+    await this.#pool?.refresh(this, value);
+    return init;
+  }
+
+  /**
+   * Opens a new reader on the index so far, when there is no live one to grow (e.g. the pooled
+   * reader was evicted). Undefined if the source was terminated meanwhile.
+   */
+  async #reopen({ indexing }: { indexing: boolean }): Promise<Initialization | undefined> {
+    const scan = this.#scan;
+    const { opened, init } = await this.#open({ indexing });
+    if (this.#scan !== scan) {
+      await opened.inner.terminate?.();
+      return undefined;
+    }
+    const value = {
+      inner: opened.inner,
+      readable: opened.readable,
+      weightBytes: opened.weightBytes,
+    };
+    if (this.#pool) {
+      // Kept only while resident, so memory stays within the pool's budget; otherwise the next
+      // acquire() opens on the grown index
+      if (!(await this.#pool.refresh(this, value))) {
+        await opened.inner.terminate?.();
+        return init;
+      }
+    } else {
+      this.#eagerInner = opened.inner;
+    }
+    this.#live = opened.live && { value, live: opened.live };
+    return init;
   }
 
   /**
@@ -420,9 +468,9 @@ export class McapIterableSource implements ISerializedIterableSource {
           if (await this.#publish({ indexing: false, final: scanner.complete })) {
             published = next;
           }
-          // ponytail: each update rebuilds the summary and reader (O(chunks)), and the player
-          // reloads its preloaded blocks. Waiting 10x as long as that took keeps it under ~10% of
-          // the time on huge files; append to the reader's index if that lags too far behind.
+          // An update grows the reader in place (O(what is new)), but one that has to reopen it
+          // (e.g. an evicted pooled reader) is O(chunks): waiting 10x as long as it took keeps
+          // updates under ~10% of the time.
           wait = Math.max(TAIL_POLL_MS, 10 * (performance.now() - started));
         }
       }
@@ -514,11 +562,19 @@ export class McapIterableSource implements ISerializedIterableSource {
   // remote readable/connection is session-persistent and intentionally survives pool eviction.
   readonly #hydrator: SourceHydrator<HydratedInner> = {
     open: async () => {
-      const { inner, readable, weightBytes } = await this.#openInner();
+      const { inner, readable, weightBytes, live } = await this.#openInner();
       await inner.initialize();
-      return { inner, readable, weightBytes };
+      const value = { inner, readable, weightBytes };
+      if (live) {
+        this.#live = { value, live };
+      }
+      return value;
     },
-    close: async (_value) => {
+    close: async (value) => {
+      // Evicted: the next update reopens instead of growing it
+      if (this.#live?.value === value) {
+        this.#live = undefined;
+      }
       // The underlying RemoteFileReadable/connection is session-persistent (see
       // #persistentReadable) and is intentionally NOT closed here. Eviction only discards the
       // heavyweight indexed-reader/parsed-channel structures, which are rebuilt on the next
@@ -531,15 +587,17 @@ export class McapIterableSource implements ISerializedIterableSource {
     const { opened, init } = await this.#open();
 
     const pool = this.#source.pool;
+    const value = {
+      inner: opened.inner,
+      readable: opened.readable,
+      weightBytes: opened.weightBytes,
+    };
+    this.#live = opened.live && { value, live: opened.live };
     if (pool && opened.indexed) {
       this.#pool = pool;
       // Seed the pool with the already-hydrated inner (no redundant open). May be evicted+closed
       // immediately if the pool is already at capacity.
-      await pool.admit(this, this.#hydrator, {
-        inner: opened.inner,
-        readable: opened.readable,
-        weightBytes: opened.weightBytes,
-      });
+      await pool.admit(this, this.#hydrator, value);
     } else {
       // Unindexed (and unpooled) sources are retained eagerly for the whole session and are NOT
       // bounded by the pool. A session of many large unindexed MCAPs can therefore grow unbounded;
@@ -577,7 +635,18 @@ export class McapIterableSource implements ISerializedIterableSource {
     indexing?: boolean;
   } = {}): Promise<{ opened: OpenedInner; init: Initialization }> {
     const opened = await this.#openInner();
-    const init = await opened.inner.initialize();
+    const init = await this.#describe(await opened.inner.initialize(), opened.readable, {
+      indexing,
+    });
+    return { opened, init };
+  }
+
+  /** Adds this source's alerts, time range and file info to its inner's Initialization */
+  async #describe(
+    init: Initialization,
+    readable: RemoteFileReadable | undefined,
+    { indexing }: { indexing?: boolean },
+  ): Promise<Initialization> {
     if ((indexing ?? this.#scan != undefined) && this.#recovery) {
       const percent = Math.floor(
         (Number(this.#recovery.offset) / Math.max(1, Number(this.#scanSize))) * 100,
@@ -621,7 +690,7 @@ export class McapIterableSource implements ISerializedIterableSource {
       const sizeBytes =
         this.#source.type === "file"
           ? (this.#blob?.file ?? this.#source.file).size
-          : Number(await opened.readable?.size());
+          : Number(await readable?.size());
       const { start, end } = init;
       const name = sourceName(this.#source);
       init.recordingFiles = init.recordingFiles.map((file) => ({
@@ -632,7 +701,7 @@ export class McapIterableSource implements ISerializedIterableSource {
         sizeBytes: Number.isFinite(sizeBytes) ? sizeBytes : undefined,
       }));
     }
-    return { opened, init };
+    return init;
   }
 
   public async *messageIterator(
@@ -699,6 +768,7 @@ export class McapIterableSource implements ISerializedIterableSource {
     // (see #persistentReadable) and is only closed when the whole source is torn down.
     this.#persistentReadable?.close();
     this.#persistentReadable = undefined;
+    this.#live = undefined;
     this.#scan = undefined;
     this.#interrupt?.();
     this.#wake?.();

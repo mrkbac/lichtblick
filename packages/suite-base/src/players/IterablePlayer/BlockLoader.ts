@@ -9,6 +9,7 @@ import {
   Time,
   add,
   clampTime,
+  compare,
   fromNanoSec,
   subtract as subtractTimes,
   toNanoSec,
@@ -73,6 +74,7 @@ export class BlockLoader {
   #start: Time;
   #end: Time;
   #blockDurationNanos: number;
+  #maxBlocks: number;
   #topics: TopicSelection = new Map();
   #maxCacheSize: number = 0;
   #alertManager: PlayerAlertManager;
@@ -93,6 +95,7 @@ export class BlockLoader {
       throw new Error("Time range is too long to be supported");
     }
 
+    this.#maxBlocks = args.maxBlocks;
     this.#blockDurationNanos = Math.ceil(
       Math.max(args.minBlockDurationNs, totalNs / args.maxBlocks),
     );
@@ -101,6 +104,93 @@ export class BlockLoader {
 
     log.debug(`Block count: ${blockCount}`);
     this.#blocks = Array.from({ length: blockCount });
+  }
+
+  /**
+   * For a source that grew to `end`: extends the blocks in place, keeping what is loaded except in
+   * `updatedRanges` (where the source has new messages). Call it while loading is stopped. False if
+   * that isn't possible (the start moved, or the range shrank); make a new loader instead.
+   */
+  public grow(
+    start: Time,
+    end: Time,
+    updatedRanges: readonly { start: Time; end: Time }[],
+  ): boolean {
+    if (compare(start, this.#start) !== 0 || compare(end, this.#end) < 0) {
+      return false;
+    }
+    const totalNs = Number(toNanoSec(subtractTimes(end, start))) + 1;
+    if (totalNs > Number.MAX_SAFE_INTEGER * 0.9) {
+      return false;
+    }
+    this.#end = end;
+    // Twice as long blocks, half as many, until they fit: each block halving costs O(blocks)
+    while (Math.ceil(totalNs / this.#blockDurationNanos) > this.#maxBlocks) {
+      this.#mergeBlockPairs();
+    }
+    const blockCount = Math.ceil(totalNs / this.#blockDurationNanos);
+    while (this.#blocks.length < blockCount) {
+      this.#blocks.push(undefined);
+    }
+    const startNs = toNanoSec(start);
+    const blockOf = (time: Time) =>
+      Math.min(
+        blockCount - 1,
+        Math.max(0, Math.floor(Number(toNanoSec(time) - startNs) / this.#blockDurationNanos)),
+      );
+    for (const range of updatedRanges) {
+      for (let i = blockOf(range.start); i <= blockOf(range.end); i++) {
+        this.#blocks[i] = undefined;
+        this.#loadedSubscriptions[i] = {};
+      }
+    }
+    return true;
+  }
+
+  /** Merges each pair of neighboring blocks into one, keeping the topics both have loaded alike */
+  #mergeBlockPairs(): void {
+    const blocks: Blocks = [];
+    const loadedSubscriptions: LoadedSubscriptions[] = [];
+    for (let i = 0; i < this.#blocks.length; i += 2) {
+      const first = this.#blocks[i];
+      // Past the last block is past the old end: no messages there but updated ones, which grow()
+      // drops after merging
+      const hasSecond = i + 1 < this.#blocks.length;
+      const second = this.#blocks[i + 1];
+      if (!first || (hasSecond && !second)) {
+        blocks.push(undefined);
+        loadedSubscriptions.push({});
+        continue;
+      }
+      const loaded: LoadedSubscriptions = {};
+      const messagesByTopic: Record<string, MessageEvent[]> = {};
+      let sizeInBytes = 0;
+      for (const [topic, subscription] of Object.entries(this.#loadedSubscriptions[i] ?? {})) {
+        if (hasSecond && !_.isEqual(this.#loadedSubscriptions[i + 1]?.[topic], subscription)) {
+          continue;
+        }
+        const messages = [
+          ...(first.messagesByTopic[topic] ?? []),
+          ...(second?.messagesByTopic[topic] ?? []),
+        ];
+        loaded[topic] = subscription;
+        messagesByTopic[topic] = messages;
+        sizeInBytes += messages.reduce((sum, message) => sum + message.sizeInBytes, 0);
+      }
+      blocks.push({
+        messagesByTopic,
+        sizeInBytes,
+        needTopics: new Map(
+          [...this.#topics].filter(
+            ([topic, subscription]) => !subscriptionCovers(loaded[topic], subscription),
+          ),
+        ),
+      });
+      loadedSubscriptions.push(loaded);
+    }
+    this.#blocks = blocks;
+    this.#loadedSubscriptions = loadedSubscriptions;
+    this.#blockDurationNanos *= 2;
   }
 
   public setTopics(topics: TopicSelection): void {

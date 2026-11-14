@@ -92,8 +92,9 @@ class CachingIterableSource<MessageType = unknown>
   #loadedRangesDirty = false;
 
   #initResult?: Initialization;
-  // Set when the source grew; the next messageIterator() purges the cache
-  #stale = false;
+  // Where the source has new messages since the cache was filled (undefined: anywhere); the next
+  // messageIterator() drops the cache blocks there
+  #updated: { start: Time; end: Time }[] | undefined = [];
 
   #totalSizeBytes: number = 0;
 
@@ -127,7 +128,8 @@ class CachingIterableSource<MessageType = unknown>
     if (update) {
       this.#initResult = update;
       // Cached blocks may miss messages the grown source has (e.g. in newly indexed chunks)
-      this.#stale = true;
+      this.#updated = this.#updated &&
+        update.updatedRanges && [...this.#updated, ...update.updatedRanges];
     }
     return update;
   }
@@ -162,13 +164,27 @@ class CachingIterableSource<MessageType = unknown>
     // When the list of topics we want changes we purge the entire cache and start again.
     //
     // This is heavy-handed but avoids dealing with how to handle disjoint cached ranges across topics.
+    const updated = this.#updated;
+    this.#updated = [];
+    if (updated && updated.length > 0) {
+      // Keep the blocks elsewhere: the source has the same messages there
+      this.#cache = this.#cache.filter((block) => {
+        const hit = updated.some(
+          (range) => compare(block.start, range.end) <= 0 && compare(block.end, range.start) >= 0,
+        );
+        if (hit) {
+          this.#totalSizeBytes -= block.size;
+        }
+        return !hit;
+      });
+      this.#markLoadedRangesDirty();
+    }
     if (
-      this.#stale ||
+      !updated ||
       !_.isEqual(args.topics, this.#cachedTopics) ||
       !_.isEqual(args.skimInterval, this.#cachedSkimInterval)
     ) {
       log.debug("topics, skim interval or source changed - clearing cache, resetting range");
-      this.#stale = false;
       this.#cachedTopics = args.topics;
       this.#cachedSkimInterval = args.skimInterval;
       this.#cache.length = 0;
@@ -431,7 +447,7 @@ class CachingIterableSource<MessageType = unknown>
     }
 
     // The cache predates the latest update; the grown source may have newer messages in range
-    if (this.#stale) {
+    if (this.#updated?.length !== 0) {
       return await this.#source.getBackfillMessages(args);
     }
 

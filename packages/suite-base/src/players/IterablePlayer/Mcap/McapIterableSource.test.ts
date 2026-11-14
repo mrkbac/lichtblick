@@ -237,6 +237,8 @@ describe("McapIterableSource", () => {
     gate.resolve();
     let last = init;
     for (let update; (update = await source.waitForUpdate()); ) {
+      // Each update grows the reader in place and says which time range is new
+      expect(update.updatedRanges).toBeDefined();
       last = update;
     }
 

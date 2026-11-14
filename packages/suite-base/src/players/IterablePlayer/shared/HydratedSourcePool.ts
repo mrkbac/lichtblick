@@ -121,7 +121,8 @@ export class HydratedSourcePool {
     this.#totalWeight += weight - entry.weight;
     entry.weight = weight;
     entry.value = Promise.resolve(value);
-    if (entry.pins === 0) {
+    // The same value again only has a new weight
+    if (entry.pins === 0 && old !== value) {
       await entry.hydrator.close(old);
     }
     await this.#evictBeyondCapacity();

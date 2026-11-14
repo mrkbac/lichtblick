@@ -8,6 +8,7 @@
 import type { McapIndexedReader } from "@mcap/core";
 
 import type { ISerializedIterableSource } from "../IIterableSource";
+import type { LiveReader } from "./McapRecoveryScanner";
 import type { RemoteFileReadable } from "./RemoteFileReadable";
 import type { RemoteFileReadableOptions } from "./RemoteFileReadable.types";
 import type { HydratedSourcePool } from "../shared/HydratedSourcePool";
@@ -33,4 +34,6 @@ export type OpenedInner = {
   readable?: RemoteFileReadable;
   indexed: boolean;
   weightBytes: number;
+  /** For a reader on a rebuilt index: adds what was indexed since (see openLiveReader) */
+  live?: LiveReader;
 };

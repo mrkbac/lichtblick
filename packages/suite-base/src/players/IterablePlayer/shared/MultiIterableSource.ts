@@ -80,6 +80,8 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
   #inits: Initialization[] = [];
   #sources: IIterableSource<Uint8Array>[] = [];
   #changed = false;
+  // What the pending updates changed (see Initialization.updatedRanges); undefined: anything
+  #updatedRanges: Initialization["updatedRanges"] = [];
   // Sources that may still publish updates (e.g. whose index is still being rebuilt)
   #updating = 0;
   #wake: (() => void) | undefined;
@@ -224,6 +226,8 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
         }
         this.#inits[index] = init;
         this.#changed = true;
+        this.#updatedRanges = this.#updatedRanges &&
+          init.updatedRanges && [...this.#updatedRanges, ...init.updatedRanges];
         this.#wake?.();
       }
     } catch (error) {
@@ -261,7 +265,10 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
     this.#lastUpdate = Date.now();
     this.#changed = false;
     this.#sortSources();
-    return this.mergeInitializations(this.#inits);
+    const merged = this.mergeInitializations(this.#inits);
+    merged.updatedRanges = this.#updatedRanges;
+    this.#updatedRanges = [];
+    return merged;
   }
 
   // Touch earliest sources in descending start order so the earliest become most-recently-used.
