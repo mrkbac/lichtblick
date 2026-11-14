@@ -15,6 +15,7 @@ import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
+import { McapIndexedIterableSource } from "./McapIndexedIterableSource";
 import { McapIterableSource, TAIL_POLL_MS } from "./McapIterableSource";
 import { RemoteFileReadable } from "./RemoteFileReadable";
 import { HydratedSourcePool } from "../shared/HydratedSourcePool";
@@ -393,6 +394,39 @@ describe("McapIterableSource", () => {
           "Live: following this file as it is written",
         ]);
         expect(await countMessages(source)).toBe(5);
+      } finally {
+        await source.terminate();
+      }
+    });
+
+    it("reports that anything may have changed after an update failed", async () => {
+      // Given a followed file whose next update fails once (after its reader took new chunks)
+      const snapshots = await recordWithoutFooter(4);
+      const { handle, write } = growingHandle(snapshots[1]!);
+      const source = new McapIterableSource({ type: "file", file: await handle.getFile(), handle });
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        await source.initialize();
+        const initialize = vi
+          .spyOn(McapIndexedIterableSource.prototype, "initialize")
+          .mockRejectedValueOnce(new Error("update failed"));
+
+        // When the file grows, the update fails, and the retry succeeds
+        write(snapshots[2]!);
+        const retried = source.waitForUpdate();
+        await vi.advanceTimersByTimeAsync(TAIL_POLL_MS * 2);
+        const afterFailure = await retried;
+        initialize.mockRestore();
+
+        // Then the retry says anything may have changed, and the next update is ranged again
+        expect(afterFailure?.end).toEqual({ sec: 3, nsec: 0 });
+        expect(afterFailure?.updatedRanges).toBeUndefined();
+        write(snapshots[3]!);
+        const next = source.waitForUpdate();
+        await vi.advanceTimersByTimeAsync(TAIL_POLL_MS);
+        expect((await next)?.updatedRanges).toEqual([
+          { start: { sec: 4, nsec: 0 }, end: { sec: 4, nsec: 0 } },
+        ]);
       } finally {
         await source.terminate();
       }
