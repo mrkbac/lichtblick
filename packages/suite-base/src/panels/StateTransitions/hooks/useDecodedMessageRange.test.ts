@@ -63,7 +63,7 @@ describe("useDecodedMessageRange", () => {
   }
 
   const valuesOf = (current: PathSamplesByPath[], path: string) =>
-    current[0]?.[path]?.map((sample) => sample.queriedData[0]?.value);
+    current[0]?.[path]?.map((sample) => sample.value);
 
   it("subscribes to each topic and cancels on unmount", () => {
     const topicA = PlayerBuilder.topic().name;

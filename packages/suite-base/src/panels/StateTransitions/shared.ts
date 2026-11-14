@@ -34,7 +34,7 @@ export function datasetContainsArray(dataset: ImmutableDataset): boolean {
   let any = false;
   for (const samples of dataset) {
     for (const sample of samples ?? []) {
-      if (sample.queriedData.length <= 1) {
+      if (sample.count <= 1) {
         return false;
       }
       any = true;

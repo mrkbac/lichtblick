@@ -13,7 +13,6 @@ import { TimestampMethod } from "@lichtblick/suite-base/util/time";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import {
-  extractQueriedData,
   isValidValue,
   getColor,
   createLabel,
@@ -66,11 +65,6 @@ function MessageAndDataBuilder(
   });
 }
 
-const item: PathSample = sample({
-  messageEvent,
-  queriedData: [{ value: BasicBuilder.number(), path: BasicBuilder.string() }],
-});
-
 let queriedDataValue: number;
 let queriedDataName: string;
 let queriedDataPath: string;
@@ -80,40 +74,6 @@ describe("messagesToDataset helper functions", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     constName = BasicBuilder.string();
-  });
-
-  // unit tests for extractQueriedData
-
-  it("should return the first item when queriedData has exactly one item", () => {
-    const result = extractQueriedData(item);
-
-    expect(result).toEqual(item.queriedData[0]);
-  });
-
-  it("should return undefined when queriedData's argument has an empty array", () => {
-    const messageAndDataWithEmptyQueriedData: PathSample = sample({
-      messageEvent,
-      queriedData: [],
-    });
-
-    const result = extractQueriedData(messageAndDataWithEmptyQueriedData);
-
-    expect(result).toEqual(undefined);
-  });
-
-  it("should return undefined when queriedData's argument has more than one item", () => {
-    queriedDataValue = BasicBuilder.number();
-    queriedDataPath = BasicBuilder.string();
-    const messageAndDataWithMultipleItemsOnQueriedData: PathSample = sample({
-      messageEvent,
-      queriedData: [
-        { value: queriedDataValue, path: queriedDataPath },
-        { value: queriedDataValue, path: queriedDataPath },
-      ],
-    });
-    const result = extractQueriedData(messageAndDataWithMultipleItemsOnQueriedData);
-
-    expect(result).toEqual(undefined);
   });
 
   // unit tests for isValidValue
@@ -350,7 +310,7 @@ describe("messagesToDataset", () => {
     expect(result.data.length).toBe(0);
   });
 
-  it("should return dataset with no data since queriedData is empty and therefore extractQueriedData will return undefined", () => {
+  it("should return dataset with no data since queriedData is empty and therefore the sample has no single value", () => {
     const blocks: PathSample[][] = [
       [
         sample({
@@ -370,7 +330,7 @@ describe("messagesToDataset", () => {
     expect(result.data.length).toBe(0);
   });
 
-  it("should return dataset with no data since queriedData has more than one item and therefore extractQueriedData will return undefined", () => {
+  it("should return dataset with no data since queriedData has more than one item and therefore the sample has no single value", () => {
     const blocks: PathSample[][] = [
       [
         sample({

@@ -34,52 +34,56 @@ type RangeState = {
 const EMPTY_RANGE: RangeState = { topics: new Set(), items: [] };
 
 /**
- * Range messages per topic, and their merge. A flush merges only what arrived since the last
- * one into the merged list, instead of re-merging every topic from the start.
+ * Range messages of all topics, merged by receive time. Batches wait per topic until the next
+ * flush, which merges only them into the merged list instead of re-merging from the start; the
+ * merged list is the only full copy kept.
  */
 class RangeAccumulator {
-  public byTopic = new Map<string, NormalizedLogMessage[]>();
+  /** Topics read from the range; their messages not yet merged. */
+  #pending = new Map<string, NormalizedLogMessage[]>();
   #merged: readonly NormalizedLogMessage[] = [];
-  /** Per topic, how many of its messages are in #merged. */
-  #mergedCount = new Map<string, number>();
-  /** Set when messages were removed: the next flush re-merges everything. */
-  #stale = false;
+  /** Topics whose merged messages must go on the next flush. */
+  #removed = new Set<string>();
 
-  public reset(topic: string): NormalizedLogMessage[] {
-    const messages: NormalizedLogMessage[] = [];
-    if (this.byTopic.has(topic)) {
-      this.#stale = true;
-    }
-    this.byTopic.set(topic, messages);
-    return messages;
+  public has(topic: string): boolean {
+    return this.#pending.has(topic);
+  }
+
+  /** Start (or restart, replacing what was loaded) reading a topic. */
+  public reset(topic: string): void {
+    this.delete(topic);
+    this.#pending.set(topic, []);
+  }
+
+  public push(topic: string, message: NormalizedLogMessage): void {
+    this.#pending.get(topic)?.push(message);
   }
 
   public delete(topic: string): void {
-    this.#stale ||= this.byTopic.delete(topic);
+    if (this.#pending.delete(topic)) {
+      this.#removed.add(topic);
+    }
   }
 
   public clear(): void {
-    this.byTopic.clear();
-    this.#stale = true;
+    this.#pending.clear();
+    this.#merged = [];
+    this.#removed.clear();
   }
 
   /** A new array, so consumers see a new reference on every flush. */
   public snapshot(): RangeState {
-    if (this.#stale) {
-      this.#stale = false;
-      this.#merged = [];
-      this.#mergedCount.clear();
+    let merged = this.#merged;
+    if (this.#removed.size > 0) {
+      const removed = this.#removed;
+      merged = merged.filter((message) => !removed.has(message.topic));
+      this.#removed = new Set();
     }
-    const pending: NormalizedLogMessage[][] = [];
-    for (const [topic, messages] of this.byTopic) {
-      const count = this.#mergedCount.get(topic) ?? 0;
-      if (messages.length > count) {
-        pending.push(messages.slice(count));
-      }
-      this.#mergedCount.set(topic, messages.length);
+    const batches = [...this.#pending.values()];
+    for (const topic of this.#pending.keys()) {
+      this.#pending.set(topic, []);
     }
-    const added = mergeByReceiveTime(pending);
-    const merged = this.#merged;
+    const added = mergeByReceiveTime(batches);
     let next: NormalizedLogMessage[];
     if (added.length === 0) {
       next = merged.slice();
@@ -90,7 +94,7 @@ class RangeAccumulator {
       pushAll(next, mergeTwo(merged.slice(start), added));
     }
     this.#merged = next;
-    return { topics: new Set(this.byTopic.keys()), items: next };
+    return { topics: new Set(this.#pending.keys()), items: next };
   }
 }
 
@@ -190,7 +194,7 @@ export function useLogMessages(topics: readonly string[]): {
         topic,
         rethrowErrors: true,
         onNewRangeIterator: async (iterator) => {
-          const messages = acc.reset(topic);
+          acc.reset(topic);
           setLoadingTopics((prev) => new Set(prev).add(topic));
           try {
             for await (const batch of iterator) {
@@ -198,7 +202,7 @@ export function useLogMessages(topics: readonly string[]): {
                 return;
               }
               for (const event of batch) {
-                messages.push(normalizeLogEvent(event));
+                acc.push(topic, normalizeLogEvent(event));
               }
               flushTimerRef.current ??= setTimeout(flush, FLUSH_INTERVAL_MS);
             }
@@ -222,7 +226,7 @@ export function useLogMessages(topics: readonly string[]): {
       });
       // onNewRangeIterator runs synchronously when the source supports ranges. Topics without
       // range support (live sources) are not tracked here so they use the live subscription.
-      if (acc.byTopic.has(topic)) {
+      if (acc.has(topic)) {
         added = true;
         subs.set(topic, () => {
           cancelled = true;

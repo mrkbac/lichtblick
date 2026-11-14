@@ -21,6 +21,7 @@ import { AnnotationOptions } from "chartjs-plugin-annotation";
 import * as _ from "lodash-es";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useDebounce } from "use-debounce";
 
 import { parseMessagePath } from "@lichtblick/message-path";
 import { OnClickArg as OnChartClickArgs } from "@lichtblick/suite-base/components/Chart";
@@ -41,6 +42,7 @@ import { parseCondition } from "@lichtblick/suite-base/panels/StateTransitions/c
 import {
   EMPTY_ITEMS_BY_PATH,
   LIVE_HISTORY_SIZE,
+  LIVE_REDRAW_MS,
   EMPTY_PATHS,
   EMPTY_TOPICS,
   STATE_TRANSITION_PLUGINS,
@@ -129,7 +131,12 @@ function StateTransitions(props: StateTransitionPanelProps) {
     };
   }, [paths.length]);
 
-  const newItemsByPath = hasRangeData ? EMPTY_ITEMS_BY_PATH : itemsByPath;
+  // The live history grows in place every frame and the chart redraws all of it, so take live
+  // updates at most every LIVE_REDRAW_MS instead of once per message.
+  const [throttledItemsByPath] = useDebounce(itemsByPath, LIVE_REDRAW_MS, {
+    maxWait: LIVE_REDRAW_MS,
+  });
+  const newItemsByPath = hasRangeData ? EMPTY_ITEMS_BY_PATH : throttledItemsByPath;
 
   const showPoints = config.showPoints === true;
 

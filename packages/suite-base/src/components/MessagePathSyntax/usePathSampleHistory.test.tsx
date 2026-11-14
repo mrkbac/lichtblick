@@ -42,8 +42,7 @@ function setup(historySize: number) {
     </MockCurrentLayoutProvider>
   );
   const hook = renderHook(() => usePathSampleHistory(["/state.mode"], historySize), { wrapper });
-  const values = () =>
-    hook.result.current["/state.mode"]?.toArray().map((sample) => sample.queriedData[0]?.value);
+  const values = () => hook.result.current["/state.mode"]?.toArray().map((sample) => sample.value);
   return {
     values,
     hook,
@@ -70,7 +69,9 @@ describe("usePathSampleHistory", () => {
     expect(last).toEqual({
       receiveTime: { sec: 3, nsec: 0 },
       headerStamp: undefined,
-      queriedData: [expect.objectContaining({ value: 3 })],
+      count: 1,
+      value: 3,
+      constantName: undefined,
     });
     expect(last).not.toHaveProperty("messageEvent");
   });

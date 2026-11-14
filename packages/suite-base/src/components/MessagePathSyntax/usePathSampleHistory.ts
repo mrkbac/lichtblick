@@ -19,13 +19,17 @@ import { getTimestampForMessage } from "@lichtblick/suite-base/util/time";
 
 /**
  * A message path's value in one message, without the message: keeping samples instead of
- * MessageEvents lets a long history hold just the values a panel draws.
+ * MessageEvents lets a long history hold just the values a panel draws. Flat, one object per
+ * sample, since histories hold millions of them.
  */
 export type PathSample = {
   receiveTime: Time;
   /** The message's header stamp, if it has one. */
   headerStamp: Time | undefined;
-  queriedData: MessagePathDataItem[];
+  /** How many values the path matched. `value` and `constantName` are only set when it is 1. */
+  count: number;
+  value: unknown;
+  constantName: string | undefined;
 };
 
 export type PathSampleHistoryByPath = Readonly<Record<string, ReadonlyRingBuffer<PathSample>>>;
@@ -35,11 +39,14 @@ export function toPathSample(
   queriedData: MessagePathDataItem[],
 ): PathSample {
   const stamp = getTimestampForMessage(message.message);
+  const only = queriedData.length === 1 ? queriedData[0] : undefined;
   return {
     receiveTime: message.receiveTime,
     // Copy, so the sample never keeps the message alive through a lazily decoded stamp
     headerStamp: stamp ? { sec: stamp.sec, nsec: stamp.nsec } : undefined,
-    queriedData,
+    count: queriedData.length,
+    value: only?.value,
+    constantName: only?.constantName,
   };
 }
 

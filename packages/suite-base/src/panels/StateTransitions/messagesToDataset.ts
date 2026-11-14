@@ -7,8 +7,6 @@
 
 import { subtract as subtractTimes, toSec } from "@foxglove/rostime";
 
-import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
-import { PathSample } from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
 import { ChartDataset } from "@lichtblick/suite-base/components/TimeBasedChart/types";
 import { hashString } from "@lichtblick/suite-base/util/hashString";
 import { expandedLineColors } from "@lichtblick/suite-base/util/plotColors";
@@ -58,12 +56,12 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
         continue;
       }
 
-      const queriedData = extractQueriedData(itemByPath);
-      if (!queriedData) {
+      // A path matching several values is invalid input (see datasetContainsArray)
+      if (itemByPath.count !== 1) {
         continue;
       }
 
-      const { constantName: rawConstantName, value: rawValue } = queriedData;
+      const { constantName: rawConstantName, value: rawValue } = itemByPath;
       const x = toSec(subtractTimes(timestamp, startTime));
 
       // A null value marks a gap: break the line here and start a fresh segment once data resumes.
@@ -117,13 +115,6 @@ export function messagesToDataset(args: MessageDatasetArgs): ChartDataset {
   }
 
   return dataset;
-}
-
-export function extractQueriedData(itemByPath: PathSample): MessagePathDataItem | undefined {
-  if (itemByPath.queriedData.length === 1) {
-    return itemByPath.queriedData[0];
-  }
-  return undefined;
 }
 
 export function isValidValue(value: unknown): value is number | string | bigint | boolean {
