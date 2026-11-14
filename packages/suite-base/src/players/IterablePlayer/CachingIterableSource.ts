@@ -141,6 +141,7 @@ class CachingIterableSource<MessageType = unknown>
     this.#cache.length = 0;
     this.#budget.reset();
     this.#candidatesStale = true;
+    this.#readHeadBlock = undefined;
     this.#cachedTopics.clear();
   }
 
@@ -183,6 +184,7 @@ class CachingIterableSource<MessageType = unknown>
         return !hit;
       });
       this.#candidatesStale = true;
+      this.#readHeadBlock = undefined;
       this.#markLoadedRangesDirty();
     }
     if (
@@ -196,6 +198,7 @@ class CachingIterableSource<MessageType = unknown>
       this.#cache.length = 0;
       this.#budget.reset();
       this.#candidatesStale = true;
+      this.#readHeadBlock = undefined;
       this.#markLoadedRangesDirty();
     }
 

@@ -213,11 +213,15 @@ export class BlockLoader {
       // A topic needs loading unless this block already holds what the subscription asks for,
       // e.g. a panel asking for fewer fields of a topic that is loaded, or a topic that was
       // unsubscribed and subscribed again (its messages are kept until the cache is full).
-      block.needTopics = new Map(
-        [...topics].filter(
-          ([topic, subscription]) => !subscriptionCovers(loaded[topic], subscription),
+      // A new block, not a change to it: consumers reuse work per block reference
+      this.#blocks[index] = {
+        ...block,
+        needTopics: new Map(
+          [...topics].filter(
+            ([topic, subscription]) => !subscriptionCovers(loaded[topic], subscription),
+          ),
         ),
-      );
+      };
     }
 
     this.#topics = topics;

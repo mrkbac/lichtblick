@@ -222,6 +222,35 @@ describe("readVideoGopForSeekTarget", () => {
     expect(await readVideoGopForSeekTarget(target, source, () => undefined)).toEqual([]);
   });
 
+  it("returns empty when the frames after an earlier window's keyframe are too many", async () => {
+    // The newest 2 s window holds MAX frames; the keyframe is in the window before it
+    const deltas = Array.from({ length: MAX_SEEK_BACKFILL_VIDEO_GOP_MESSAGES }, (_, i) =>
+      frame(i * 1000, 0x02, "h265", 9),
+    );
+    const target = deltas.at(-1)!;
+    const source = fakeSource([frame(0, 0xff, "h265", 5), ...deltas]);
+    mockKeyframes();
+
+    expect(await readVideoGopForSeekTarget(target, source, () => undefined)).toEqual([]);
+    expect(source.reads).toHaveLength(2);
+  });
+
+  it("does not read further windows once aborted", async () => {
+    const target = frame(0, 0x01, "h265", 100);
+    const source = fakeSource([frame(0, 0xff, "h265", 1), target]);
+    mockKeyframes();
+    const controller = new AbortController();
+    // Aborts after the first (keyframe-less) window is read
+    const read = source.messageIterator.bind(source);
+    source.messageIterator = (args) => {
+      controller.abort();
+      return read(args);
+    };
+
+    expect(await readVideoGopForSeekTarget(target, source, () => controller.signal)).toEqual([]);
+    expect(source.reads).toHaveLength(1);
+  });
+
   it("keeps a long run of frames when a keyframe follows it", async () => {
     const run = Array.from({ length: MAX_SEEK_BACKFILL_VIDEO_GOP_MESSAGES + 5 }, (_, i) =>
       frame(i + 1, 0x02),

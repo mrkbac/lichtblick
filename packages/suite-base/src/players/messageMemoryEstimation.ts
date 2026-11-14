@@ -252,17 +252,18 @@ export function estimateObjectSize(obj: unknown): number {
  * serialized size, so each estimate is reused only for messages within 2× of the one it came from.
  */
 export class MessageSizeEstimator {
-  #estimates = new Map<string, number>();
+  // Per key, the estimate per bucket
+  #estimates = new Map<string, number[]>();
 
   public estimate(key: string, serializedBytes: number, message: unknown): number {
-    // clz32 is the power-of-two bucket: 31 - floor(log2(bytes))
-    const bucketKey = `${Math.clz32(serializedBytes)}:${key}`;
-    let estimate = this.#estimates.get(bucketKey);
-    if (estimate == undefined) {
-      estimate = estimateObjectSize(message);
-      this.#estimates.set(bucketKey, estimate);
+    let buckets = this.#estimates.get(key);
+    if (!buckets) {
+      buckets = [];
+      this.#estimates.set(key, buckets);
     }
-    return estimate;
+    // clz32 is the power-of-two bucket: 31 - floor(log2(bytes))
+    const bucket = Math.clz32(serializedBytes);
+    return (buckets[bucket] ??= estimateObjectSize(message));
   }
 
   public clear(): void {

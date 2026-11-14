@@ -1045,16 +1045,14 @@ export class IterablePlayer implements Player {
 
     try {
       this.#abort = new AbortController();
-      const backfillMessages = await this.#getBackfillMessages(targetTime, this.#abort.signal);
+      // #setState() aborts and drops #abort, so keep this seek's signal
+      const abortSignal = this.#abort.signal;
+      const backfillMessages = await this.#getBackfillMessages(targetTime, abortSignal);
       // An optional, source-supplied hook may expand the backfill before emit (e.g. replaying a
       // video GOP so a P/B-frame is decodable). When no hook is supplied the raw backfill is used
       // unchanged, keeping the player itself free of codec-specific knowledge.
       const messages = this.#expandBackfill
-        ? await this.#expandBackfill(
-            backfillMessages,
-            this.#unbufferedSource,
-            () => this.#abort?.signal,
-          )
+        ? await this.#expandBackfill(backfillMessages, this.#unbufferedSource, () => abortSignal)
         : backfillMessages;
 
       // We've successfully loaded the messages and will emit those, no longer need the ackTimeout

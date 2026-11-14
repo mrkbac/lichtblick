@@ -87,6 +87,9 @@ export async function readVideoGopForSeekTarget(
   let windowNs = INITIAL_GOP_WINDOW_NS;
 
   for (;;) {
+    if (getAbortSignal()?.aborted === true) {
+      return [];
+    }
     const startNs = endNs >= windowNs ? endNs - windowNs + 1n : 0n;
     // Frames since the window's last keyframe (or its start), dropped once too many for a GOP
     let frames: MessageEvent[] = [];
@@ -122,6 +125,9 @@ export async function readVideoGopForSeekTarget(
     }
 
     if (tooLong) {
+      return [];
+    }
+    if (frames.length + later.length > MAX_SEEK_BACKFILL_VIDEO_GOP_MESSAGES) {
       return [];
     }
     if (startsWithKeyframe) {
