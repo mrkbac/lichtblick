@@ -200,6 +200,76 @@ describe("ImageRenderable", () => {
   });
 });
 
+describe("ImageRenderable bitmap ownership", () => {
+  function deferredBitmap() {
+    const bitmap = new ImageBitmap();
+    const close = vi.spyOn(bitmap, "close");
+    let resolve!: () => void;
+    const promise = new Promise<ImageBitmap>((done) => {
+      resolve = () => {
+        done(bitmap);
+      };
+    });
+    return { bitmap, close, promise, resolve };
+  }
+
+  it("closes results that arrive out of order, replaced images and the shown image on dispose", async () => {
+    const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
+    const older = deferredBitmap();
+    const newer = deferredBitmap();
+    const newest = deferredBitmap();
+    const decode = vi
+      .fn()
+      .mockReturnValueOnce(older.promise)
+      .mockReturnValueOnce(newer.promise)
+      .mockReturnValueOnce(newest.promise);
+    (renderable as unknown as { decodeImage: Mock }).decodeImage = decode;
+
+    renderable.setImage(sampleImage);
+    renderable.setImage(sampleImage);
+    newer.resolve();
+    await vi.waitFor(() => {
+      expect(renderable.getDecodedImage()).toBe(newer.bitmap);
+    });
+    // The older decode finishes late: it is never shown, so it must be closed.
+    older.resolve();
+    await vi.waitFor(() => {
+      expect(older.close).toHaveBeenCalled();
+    });
+    expect(newer.close).not.toHaveBeenCalled();
+
+    renderable.setImage(sampleImage);
+    newest.resolve();
+    await vi.waitFor(() => {
+      expect(renderable.getDecodedImage()).toBe(newest.bitmap);
+    });
+    expect(newer.close).toHaveBeenCalled();
+    expect(newest.close).not.toHaveBeenCalled();
+
+    renderable.dispose();
+    expect(newest.close).toHaveBeenCalled();
+    expect(renderable.getDecodedImage()).toBeUndefined();
+  });
+
+  it("does not close the video player's last bitmap, which the player owns", async () => {
+    const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
+    const shared = deferredBitmap();
+    renderable.videoPlayer = {
+      lastImageBitmap: shared.bitmap,
+      close: vi.fn(),
+    } as unknown as VideoPlayer;
+    (renderable as unknown as { decodeImage: Mock }).decodeImage = vi
+      .fn()
+      .mockResolvedValue(shared.bitmap);
+    renderable.setImage(sampleImage);
+    await vi.waitFor(() => {
+      expect(renderable.getDecodedImage()).toBe(shared.bitmap);
+    });
+    renderable.dispose();
+    expect(shared.close).not.toHaveBeenCalled();
+  });
+});
+
 describe("ImageRenderable error handling", () => {
   beforeEach(() => {
     vi.clearAllMocks();

@@ -117,6 +117,7 @@ export class Images extends SceneExtension<ImageRenderable> {
       // A hidden topic gets no messages; free its texture, decoder and video cache now instead of
       // keeping them until the panel closes. Showing it again re-creates it from the next message.
       if (!renderable.userData.settings.visible) {
+        this.renderer.settings.errors.clearPath(renderable.userData.settingsPath);
         renderable.removeFromParent();
         renderable.dispose();
         this.renderables.delete(topic);

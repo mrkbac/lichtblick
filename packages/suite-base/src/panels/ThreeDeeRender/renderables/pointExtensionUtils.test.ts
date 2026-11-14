@@ -1,10 +1,13 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import * as THREE from "three";
+
 import { SettingsTreeField, Topic } from "@lichtblick/suite";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-import { pointSettingsNode } from "./pointExtensionUtils";
+import { HistoryLimits, RenderObjectHistory, pointSettingsNode } from "./pointExtensionUtils";
+import type { Renderer } from "../Renderer";
 
 type SettingsTreeFieldWithOptions = SettingsTreeField & {
   options: { label: string; value: string };
@@ -122,5 +125,80 @@ describe("pointExtensionUtils", () => {
         { label: "Square", value: "square" },
       ]);
     });
+  });
+});
+
+describe("RenderObjectHistory", () => {
+  type Params = ConstructorParameters<typeof RenderObjectHistory>[0];
+  let live = 0;
+
+  function entry(time: bigint, points: number) {
+    live++;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setDrawRange(0, points);
+    const renderable = Object.assign(new THREE.Object3D(), {
+      geometry,
+      dispose: vi.fn(() => {
+        live--;
+      }),
+      releaseMessage: vi.fn(),
+    });
+    return { receiveTime: time, messageTime: time, renderable };
+  }
+
+  function makeHistory(limits: HistoryLimits, decayTime = 1000) {
+    live = 0;
+    const parentRenderable = Object.assign(new THREE.Object3D(), {
+      userData: { settings: { decayTime } },
+    }) as unknown as Params["parentRenderable"];
+    const history = new RenderObjectHistory({
+      initial: entry(0n, 1),
+      parentRenderable,
+      renderer: {} as Renderer,
+      limits,
+    });
+    return history;
+  }
+
+  it("caps the entry count on insert and disposes evicted entries", () => {
+    const history = makeHistory({ maxEntries: 3, maxPoints: Infinity });
+    for (let i = 1n; i <= 10n; i++) {
+      history.addHistoryEntry(entry(i, 1));
+    }
+    expect(live).toBe(3);
+    expect(history.latest().receiveTime).toBe(10n);
+  });
+
+  it("drops the oldest entries over the point budget, keeping the latest", () => {
+    const history = makeHistory({ maxEntries: 100, maxPoints: 250 });
+    for (let i = 1n; i <= 10n; i++) {
+      history.addHistoryEntry(entry(i, 100));
+    }
+    history.updateHistoryFromCurrentTime(10n);
+    expect(live).toBe(2);
+
+    history.addHistoryEntry(entry(11n, 1_000));
+    history.updateHistoryFromCurrentTime(11n);
+    expect(live).toBe(1);
+    expect(history.latest().receiveTime).toBe(11n);
+  });
+
+  it("releases the message of every entry but the latest", () => {
+    const history = makeHistory({ maxEntries: 100, maxPoints: Infinity });
+    const first = entry(1n, 1);
+    const second = entry(2n, 1);
+    history.addHistoryEntry(first);
+    history.addHistoryEntry(second);
+    expect(first.renderable.releaseMessage).toHaveBeenCalledTimes(1);
+    expect(second.renderable.releaseMessage).not.toHaveBeenCalled();
+  });
+
+  it("disposes everything on dispose", () => {
+    const history = makeHistory({ maxEntries: 100, maxPoints: Infinity });
+    for (let i = 1n; i <= 5n; i++) {
+      history.addHistoryEntry(entry(i, 1));
+    }
+    history.dispose();
+    expect(live).toBe(0);
   });
 });

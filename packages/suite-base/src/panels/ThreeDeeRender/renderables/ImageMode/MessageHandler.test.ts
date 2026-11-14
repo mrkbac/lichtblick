@@ -19,6 +19,7 @@ import { DeepPartial } from "ts-essentials";
 import { MessageEvent } from "@lichtblick/suite";
 import { HUDItemManager } from "@lichtblick/suite-base/panels/ThreeDeeRender/HUDItemManager";
 import {
+  MAX_SYNC_ENTRIES,
   MessageHandler,
   WAITING_FOR_BOTH_HUD_ITEM,
   WAITING_FOR_CALIBRATION_HUD_ITEM,
@@ -283,6 +284,40 @@ describe("MessageHandler: synchronized = true", () => {
     const state = messageHandler.getRenderStateAndUpdateHUD();
 
     expect(state.cameraInfo).not.toBeUndefined();
+  });
+
+  it("drops the oldest buffered images when annotations never arrive", () => {
+    const hud = new HUDItemManager(() => {});
+    const messageHandler = new MessageHandler(
+      { synchronize: true, annotations: { annotations: { visible: true } } },
+      hud,
+    );
+    messageHandler.setAvailableAnnotationTopics(["annotations"]);
+    const imageCount = BigInt(MAX_SYNC_ENTRIES + 50);
+    for (let time = 1n; time <= imageCount; time++) {
+      messageHandler.handleRawImage(
+        wrapInMessageEvent<RawImage>("image", "foxglove.RawImage", time, {
+          timestamp: fromNanoSec(time),
+        }),
+      );
+    }
+    const annotationsAt = (time: bigint) =>
+      wrapInMessageEvent(
+        "annotations",
+        "foxglove.ImageAnnotations",
+        time,
+        createCircleAnnotations([time]),
+      ) as MessageEvent<ImageAnnotations>;
+
+    // The first image was evicted, so its annotations cannot complete a set.
+    messageHandler.handleAnnotations(annotationsAt(1n));
+    expect(messageHandler.getRenderStateAndUpdateHUD().image).toBeUndefined();
+
+    // The newest image is still buffered.
+    messageHandler.handleAnnotations(annotationsAt(imageCount));
+    expect(messageHandler.getRenderStateAndUpdateHUD().image?.message).toMatchObject({
+      timestamp: fromNanoSec(imageCount),
+    });
   });
 
   it("handles and shows image in state with no active annotations", () => {

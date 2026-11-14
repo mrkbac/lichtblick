@@ -80,4 +80,17 @@ describe("TransformTree", () => {
     expect(tfTree.frame("c")).toBeUndefined();
     expect(tfTree.frame("d")).toBeUndefined();
   });
+
+  it("keeps only maxStorageTime of history per frame, well below the capacity cap", () => {
+    const sec = BigInt(1e9);
+    const tfTree = new TransformTree(new ObjectPool(Transform.Empty), 10n * sec, 10_000);
+    // 10 Hz for 1000 s: the old capacity-only trim would keep all 10_000 transforms.
+    for (let i = 0n; i < 10_000n; i++) {
+      tfTree.addTransform("b", "a", i * (sec / 10n), tf);
+    }
+    const size = tfTree.frame("b")!.transformsSize();
+    // 10 s window plus up to a quarter window of slack before the amortized trim runs.
+    expect(size).toBeGreaterThanOrEqual(100);
+    expect(size).toBeLessThanOrEqual(126);
+  });
 });
