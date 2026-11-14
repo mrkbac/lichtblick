@@ -48,7 +48,11 @@ class FakeSource implements IIterableSource<Uint8Array> {
     args: MessageIteratorArgs,
   ): AsyncIterableIterator<IteratorResult<Uint8Array>> {
     this.lastArgs = args;
-    for (let sec = this.#start.sec; sec <= this.#start.sec + 2; sec++) {
+    for (
+      let sec = Math.max(this.#start.sec, args.start?.sec ?? 0);
+      sec <= this.#start.sec + 2;
+      sec++
+    ) {
       yield { type: "message-event", msgEvent: this.#event(sec) };
     }
   }

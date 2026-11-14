@@ -91,10 +91,11 @@ const Plot = (props: PlotProps): React.JSX.Element => {
     return (path: PlotPath, side: CompareSideInfo, index: number): Partial<PlotPath> => ({
       color: single ? side.color : getLineColor(path.color, index),
       lineDash: SIDE_DASHES[side.index % SIDE_DASHES.length],
-      // The custom time field is read from the same side's messages
+      // The custom time field and own x value are read from the same side's messages
       ...(path.timestampPath != undefined && {
         timestampPath: sidePath(path.timestampPath, side.prefix),
       }),
+      ...(path.xValue != undefined && { xValue: sidePath(path.xValue, side.prefix) }),
     });
   }, [props.config.paths]);
   const { saveConfig, config } = useComparedPaths(
