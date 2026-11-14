@@ -108,4 +108,27 @@ describe("compareRecordings", () => {
     expect(rows[0]!.cells.map((cell) => cell?.schemaName)).toEqual(["Imu, ImuV2", "Imu"]);
     expect(rows[0]!.differences).toEqual(["schema"]);
   });
+
+  it("compares a row on one rate basis even when only one recording was scanned", () => {
+    const files = [file("/a", [["/imu", "Imu"]], 100), file("/b", [["/imu", "Imu"]], 100)];
+    const topicStats = new Map([
+      ["/a/imu", { numMessages: 100 }],
+      ["/b/imu", { numMessages: 100 }],
+    ]);
+    const scanned = { count: 100, timing: { medianHz: 100 } } as TopicInspection;
+    const rows = compareRecordings(files, topicStats, new Map([["/a/imu", scanned]]));
+    expect(rows[0]!.cells.map((cell) => cell?.hz)).toEqual([1, 1]);
+    expect(rows[0]!.differences).toEqual([]);
+  });
+
+  it("gives topics with zero or one message a rate over the recording", () => {
+    const files = [file("/a", [["/imu", "Imu"]], 10), file("/b", [["/imu", "Imu"]], 10)];
+    const topicStats = new Map([
+      ["/a/imu", { numMessages: 0 }],
+      ["/b/imu", { numMessages: 10 }],
+    ]);
+    const rows = compareRecordings(files, topicStats);
+    expect(rows[0]!.cells.map((cell) => cell?.hz)).toEqual([0, 1]);
+    expect(rows[0]!.differences).toEqual(["rate"]);
+  });
 });

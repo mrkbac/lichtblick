@@ -26,6 +26,13 @@ export type CompareRow = {
 // Rates within 10% of each other count as the same: recordings rarely run at exactly equal Hz.
 const RATE_TOLERANCE = 1.1;
 
+type RateCandidates = Omit<CompareCell, "hz"> & {
+  median?: number;
+  span?: number;
+  average?: number;
+};
+const RATE_BASES = ["median", "span", "average"] as const;
+
 function span(first: Time | undefined, last: Time | undefined): number {
   return first && last ? toSec(subtract(last, first)) : 0;
 }
@@ -33,16 +40,16 @@ function span(first: Time | undefined, last: Time | undefined): number {
 /**
  * Lines up each topic across compared recordings and flags what differs.
  *
- * The rate is, in order of preference: the median rate from a scan of the topic, the rate between
- * the topic's first and last message, or its count over the recording's duration (indexed MCAP
- * summaries only carry counts).
+ * Every row compares rates on one basis, the first that all of its recordings have: the median
+ * rate from a scan of the topic, the rate between the topic's first and last message, or its count
+ * over the recording's duration (indexed MCAP summaries only carry counts).
  */
 export function compareRecordings(
   files: Immutable<RecordingFileInfo[]>,
   topicStats: ReadonlyMap<string, TopicStats> | undefined,
   inspections?: ReadonlyMap<string, TopicInspection>,
 ): CompareRow[] {
-  const rows = new Map<string, (CompareCell | undefined)[]>();
+  const rows = new Map<string, (RateCandidates | undefined)[]>();
   files.forEach((file, index) => {
     const prefix = file.topicPrefix ?? "";
     const schemasByTopic = new Map<string, Set<string>>();
@@ -61,22 +68,34 @@ export function compareRecordings(
       const inspection = inspections?.get(prefixedTopic);
       const count = inspection?.count ?? stats?.numMessages;
       const topicSeconds = span(stats?.firstMessageTime, stats?.lastMessageTime);
-      let hz = inspection?.timing?.medianHz;
-      if (hz == undefined && count != undefined && count > 1) {
-        if (topicSeconds > 0) {
-          hz = (count - 1) / topicSeconds;
-        } else if (fileSeconds > 0) {
-          hz = count / fileSeconds;
-        }
-      }
       const cells =
-        rows.get(topic) ?? new Array<CompareCell | undefined>(files.length).fill(undefined);
-      cells[index] = { count, hz, schemaName: [...schemas].sort().join(", ") };
+        rows.get(topic) ?? new Array<RateCandidates | undefined>(files.length).fill(undefined);
+      cells[index] = {
+        count,
+        schemaName: [...schemas].sort().join(", "),
+        median: inspection?.timing?.medianHz,
+        span:
+          count != undefined && count > 1 && topicSeconds > 0
+            ? (count - 1) / topicSeconds
+            : undefined,
+        average: count != undefined && fileSeconds > 0 ? count / fileSeconds : undefined,
+      };
       rows.set(topic, cells);
     }
   });
   return [...rows]
-    .map(([topic, cells]) => {
+    .map(([topic, candidates]) => {
+      const basis = RATE_BASES.find((key) =>
+        candidates.every((cell) => cell == undefined || cell[key] != undefined),
+      );
+      const cells = candidates.map(
+        (cell): CompareCell | undefined =>
+          cell && {
+            count: cell.count,
+            schemaName: cell.schemaName,
+            hz: basis && cell[basis],
+          },
+      );
       const present = cells.filter((cell): cell is CompareCell => cell != undefined);
       const rates = present.flatMap((cell) => (cell.hz != undefined ? [cell.hz] : []));
       const differences: CompareDifference[] = [];

@@ -126,14 +126,15 @@ describe("compared recordings", () => {
     const init = await inner.initialize();
     inner.initialize = async () => ({
       ...init,
+      // Discovery order must not matter: `imu` gets the suffix either way
       topics: [
-        { name: "/imu", schemaName: "Imu" },
         { name: "imu", schemaName: "Imu" },
+        { name: "/imu", schemaName: "Imu" },
       ],
     });
     const compared = new ComparedSource(inner, "/a");
     const result = await compared.initialize();
-    expect(result.topics.map((topic) => topic.name)).toEqual(["/a/imu", "/a/imu (2)"]);
+    expect(result.topics.map((topic) => topic.name)).toEqual(["/a/imu (2)", "/a/imu"]);
 
     const iterator = compared.messageIterator({
       topics: new Map([["/a/imu (2)", { topic: "/a/imu (2)" }]]),
