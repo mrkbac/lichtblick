@@ -35,8 +35,8 @@ type Options = {
   readAheadDuration?: Time;
   // The minimum duration to buffer before playback resumes
   minReadAheadDuration?: Time;
-  // Max. cache size in bytes
-  maxCacheSizeBytes?: number;
+  // Max. cache size in bytes (required: the cache evicts to stay under it)
+  maxCacheSizeBytes: number;
 };
 
 interface EventTypes {
@@ -88,13 +88,13 @@ class BufferedIterableSource<MessageType = unknown>
   #baseReadAheadDuration: Time;
   #baseMinReadAheadDuration: Time;
 
-  public constructor(source: IIterableSource<MessageType>, opt?: Options) {
+  public constructor(source: IIterableSource<MessageType>, opt: Options) {
     super();
 
-    this.#readAheadDuration = opt?.readAheadDuration ?? DEFAULT_READ_AHEAD_DURATION;
-    this.#minReadAheadDuration = opt?.minReadAheadDuration ?? DEFAULT_MIN_READ_AHEAD_DURATION;
+    this.#readAheadDuration = opt.readAheadDuration ?? DEFAULT_READ_AHEAD_DURATION;
+    this.#minReadAheadDuration = opt.minReadAheadDuration ?? DEFAULT_MIN_READ_AHEAD_DURATION;
     this.#source = new CachingIterableSource<MessageType>(source, {
-      maxTotalSize: opt?.maxCacheSizeBytes,
+      maxTotalSize: opt.maxCacheSizeBytes,
     });
 
     if (compare(this.#readAheadDuration, this.#minReadAheadDuration) < 0) {
