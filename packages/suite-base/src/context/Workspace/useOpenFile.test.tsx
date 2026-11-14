@@ -89,6 +89,42 @@ describe("useOpenFile", () => {
     });
   });
 
+  it("opens files with different extensions that one multi-file source reads", async () => {
+    const source = {
+      id: BasicBuilder.string(),
+      type: "file",
+      supportedFileTypes: [".csv", ".tsv"],
+      supportsMultiFile: true,
+    } as IDataSourceFactory;
+    const { result, fsHandles } = setup({
+      sourcesOverride: [source],
+      filesOverride: [buildFile("csv", "text/csv"), buildFile("tsv", "text/tab-separated-values")],
+    });
+
+    await result.current();
+
+    expect(selectSource).toHaveBeenCalledWith(source.id, { type: "file", handles: fsHandles });
+  });
+
+  it("refuses to compare files of a source that can only merge them", async () => {
+    const { result } = setup({
+      sourcesOverride: [
+        {
+          id: BasicBuilder.string(),
+          type: "file",
+          supportedFileTypes: [".csv"],
+          supportsMultiFile: true,
+        } as IDataSourceFactory,
+      ],
+      filesOverride: [buildFile("csv", "text/csv"), buildFile("csv", "text/csv")],
+    });
+
+    await expect(result.current({ compare: true })).rejects.toThrow(
+      "Comparing .csv files side by side is not supported.",
+    );
+    expect(selectSource).not.toHaveBeenCalled();
+  });
+
   it("should show error if multiple file extensions are selected", async () => {
     const { result } = setup({
       filesOverride: [buildFile("mcap", FILE_ACCEPT_TYPE), buildFile("txt", "text/plain")],
@@ -136,10 +172,10 @@ describe("useOpenFile", () => {
     });
 
     await expect(result.current()).rejects.toThrow(
-      "The application only support multiple files for MCAP extension.",
+      "Opening multiple .json files at once is not supported.",
     );
     expect(enqueueSnackbar).toHaveBeenCalledWith(
-      expect.stringContaining("The application only support multiple files"),
+      expect.stringContaining("Opening multiple .json files at once"),
       { variant: "error" },
     );
   });
