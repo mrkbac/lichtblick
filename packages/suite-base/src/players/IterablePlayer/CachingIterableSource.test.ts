@@ -51,6 +51,35 @@ describe("CachingIterableSource", () => {
     expect(bufferedSource.loadedRanges()).toEqual([{ start: 0, end: 0 }]);
   });
 
+  it("doesn't count results a consumer stopped before they were stored", async () => {
+    // Given a source with several messages at one time (pending until time moves on)
+    const source = new TestSource();
+    const cache = new CachingIterableSource(source);
+    await cache.initialize();
+    source.messageIterator = async function* () {
+      for (let i = 0; i < 3; i++) {
+        yield {
+          type: "message-event",
+          msgEvent: {
+            topic: "a",
+            receiveTime: { sec: 1, nsec: 0 },
+            message: undefined,
+            sizeInBytes: 10,
+            schemaName: "foo",
+          },
+        };
+      }
+    };
+
+    // When a consumer stops after the first one (e.g. on a seek)
+    const iterator = cache.messageIterator({ topics: mockTopicSelection("a") });
+    await iterator.next();
+    await iterator.return?.(undefined);
+
+    // Then nothing is left counted
+    expect(cache.getCacheSize()).toBe(0);
+  });
+
   it("keeps cached blocks outside the ranges an update changed", async () => {
     // Given a cache with blocks over 0–4 s and 6–9 s
     const source = new TestSource();

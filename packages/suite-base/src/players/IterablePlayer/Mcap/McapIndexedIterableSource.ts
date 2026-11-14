@@ -217,12 +217,15 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     this.#start = fromNanoSec(startTime ?? 0n);
     this.#end = fromNanoSec(endTime ?? startTime ?? 0n);
 
-    if (index.metadataCount !== reader.metadataIndexes.length) {
-      index.metadataCount = reader.metadataIndexes.length;
-      index.metadata = [];
+    const metadataCount = reader.metadataIndexes.length;
+    if (index.metadataCount !== metadataCount) {
+      // Committed only once every record was read, so a failed read is retried next time
+      const metadata: Metadata[] = [];
       for await (const record of reader.readMetadata()) {
-        index.metadata.push({ name: record.name, metadata: Object.fromEntries(record.metadata) });
+        metadata.push({ name: record.name, metadata: Object.fromEntries(record.metadata) });
       }
+      index.metadata = metadata;
+      index.metadataCount = metadataCount;
     }
 
     const topicStats = new Map<string, TopicStats>();

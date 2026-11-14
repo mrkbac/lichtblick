@@ -102,6 +102,19 @@ export class McapRecoveryScanner {
     return this.#chunkIndexes.length;
   }
 
+  /** Log time range (ns) of the chunks indexed in [from, to), in O(to - from) */
+  public chunkTimeRange(from: number, to: number): { start: bigint; end: bigint } | undefined {
+    let range: { start: bigint; end: bigint } | undefined;
+    for (let i = from; i < to; i++) {
+      const { messageStartTime: start, messageEndTime: end } = this.#chunkIndexes[i]!;
+      range = {
+        start: range && range.start < start ? range.start : start,
+        end: range && range.end > end ? range.end : end,
+      };
+    }
+    return range;
+  }
+
   /**
    * Everything needed to restore this scanner without scanning again: the counters, then the
    * same tail `toReadable()` serves (message indexes + summary + footer).

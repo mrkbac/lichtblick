@@ -236,10 +236,18 @@ describe("McapIterableSource", () => {
     // When the scan finishes
     gate.resolve();
     let last = init;
+    const updatedRanges = [];
     for (let update; (update = await source.waitForUpdate()); ) {
       // Each update grows the reader in place and says which time range is new
       expect(update.updatedRanges).toBeDefined();
+      updatedRanges.push(...(update.updatedRanges ?? []));
       last = update;
+    }
+    // Together they cover every message added after open
+    for (let sec = init.end.sec + 1; sec <= chunkCount; sec++) {
+      expect(updatedRanges.some((range) => range.start.sec <= sec && sec <= range.end.sec)).toBe(
+        true,
+      );
     }
 
     // Then the source covers the whole file, reports what was recovered, and plays all of it

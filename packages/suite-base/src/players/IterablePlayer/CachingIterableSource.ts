@@ -301,18 +301,135 @@ class CachingIterableSource<MessageType = unknown>
       let lastTime = toNanoSec(sourceReadStart);
 
       const pendingIterResults: [bigint, IteratorResult<MessageType>][] = [];
+      // Pending results are counted in #totalSizeBytes as they are read; false until the last of
+      // them is stored in a block
+      let stored = false;
 
-      for await (const iterResult of sourceMessageIterator) {
-        // if there is no block, we make a new block
-        if (!block) {
+      try {
+        for await (const iterResult of sourceMessageIterator) {
+          // if there is no block, we make a new block
+          if (!block) {
+            const newBlock: CacheBlock<MessageType> = {
+              id: this.#nextBlockId++,
+              start: readHead,
+              end: readHead,
+              items: [],
+              size: 0,
+              lastAccess: Date.now(),
+            };
+
+            // Find where we need to insert our new block.
+            // It should come before any blocks with a start time > than new block start time.
+            const insertIndex = _.sortedIndexBy(this.#cache, newBlock, (item) =>
+              toNanoSec(item.start),
+            );
+            this.#cache.splice(insertIndex, 0, newBlock);
+
+            block = newBlock;
+            this.#markLoadedRangesDirty();
+          }
+
+          // When receiving a message event or stamp, we update our known time on the block to the
+          // stamp or receiveTime because we know we've received all the results up to this time
+          if (iterResult.type === "message-event" || iterResult.type === "stamp") {
+            const receiveTime =
+              iterResult.type === "stamp" ? iterResult.stamp : iterResult.msgEvent.receiveTime;
+            const receiveTimeNs = toNanoSec(receiveTime);
+
+            // There might be multiple messages at the same time, and since block end time
+            // is inclusive we only update the end time once we've moved to the next time
+            if (receiveTimeNs > lastTime) {
+              // write any pending messages to the block
+              for (const pendingIterResult of pendingIterResults) {
+                const item = pendingIterResult[1];
+                const pendingSizeInBytes =
+                  item.type === "message-event" ? item.msgEvent.sizeInBytes : 0;
+                block.items.push(pendingIterResult);
+                block.size += pendingSizeInBytes;
+              }
+
+              pendingIterResults.length = 0;
+
+              // update the last time this block was accessed
+              block.lastAccess = Date.now();
+
+              // Set the end time to 1 nanosecond before the current receive time since we know we've
+              // read up to this receive time.
+              block.end = subtract(receiveTime, { sec: 0, nsec: 1 });
+
+              lastTime = receiveTimeNs;
+              this.#markLoadedRangesDirty();
+            }
+          }
+
+          // Block is too big so we close it and will start a new one next loop
+          if (block.size >= this.#maxBlockSizeBytes) {
+            // The new block starts right after our previous one
+            readHead = add(block.end, { sec: 0, nsec: 1 });
+
+            // Will force creation of a new block on the next loop
+            block = undefined;
+          }
+
+          const sizeInBytes =
+            iterResult.type === "message-event" ? iterResult.msgEvent.sizeInBytes : 0;
+          if (
+            this.#maybePurgeCache({
+              activeBlock: block,
+              sizeInBytes,
+            })
+          ) {
+            this.#markLoadedRangesDirty();
+          }
+
+          // As we add items to pending we also consider them as part of the total size
+          this.#totalSizeBytes += sizeInBytes;
+
+          // Store the latest message in pending results and flush to the block when time moves forward
+          pendingIterResults.push([lastTime, iterResult]);
+
+          yield iterResult;
+        }
+
+        // We've finished reading our source to the end, close out the block
+        if (block) {
+          block.end = sourceReadEnd;
+
+          // update the last time this block was accessed
+          block.lastAccess = Date.now();
+
+          // write any pending messages to the block
+          for (const pendingIterResult of pendingIterResults) {
+            const item = pendingIterResult[1];
+            const pendingSizeInBytes =
+              item.type === "message-event" ? item.msgEvent.sizeInBytes : 0;
+            block.items.push(pendingIterResult);
+            block.size += pendingSizeInBytes;
+          }
+
+          this.#markLoadedRangesDirty();
+        } else {
+          // We don't have a block after finishing our source. This can happen if the last
+          // thing we read in the source made our block be over size and we cycled to a new block.
+          // This can also happen if there were no messages in our source range.
+          //
+          // Since we never loop again we need to insert an empty block from the readHead
+          // to sourceReadEnd because we know there's nothing else in that range.
           const newBlock: CacheBlock<MessageType> = {
             id: this.#nextBlockId++,
             start: readHead,
-            end: readHead,
-            items: [],
+            end: sourceReadEnd,
+            items: pendingIterResults,
             size: 0,
             lastAccess: Date.now(),
           };
+
+          for (const pendingIterResult of pendingIterResults) {
+            const item = pendingIterResult[1];
+            const pendingSizeInBytes =
+              item.type === "message-event" ? item.msgEvent.sizeInBytes : 0;
+            newBlock.size += pendingSizeInBytes;
+          }
 
           // Find where we need to insert our new block.
           // It should come before any blocks with a start time > than new block start time.
@@ -321,116 +438,16 @@ class CachingIterableSource<MessageType = unknown>
           );
           this.#cache.splice(insertIndex, 0, newBlock);
 
-          block = newBlock;
           this.#markLoadedRangesDirty();
         }
-
-        // When receiving a message event or stamp, we update our known time on the block to the
-        // stamp or receiveTime because we know we've received all the results up to this time
-        if (iterResult.type === "message-event" || iterResult.type === "stamp") {
-          const receiveTime =
-            iterResult.type === "stamp" ? iterResult.stamp : iterResult.msgEvent.receiveTime;
-          const receiveTimeNs = toNanoSec(receiveTime);
-
-          // There might be multiple messages at the same time, and since block end time
-          // is inclusive we only update the end time once we've moved to the next time
-          if (receiveTimeNs > lastTime) {
-            // write any pending messages to the block
-            for (const pendingIterResult of pendingIterResults) {
-              const item = pendingIterResult[1];
-              const pendingSizeInBytes =
-                item.type === "message-event" ? item.msgEvent.sizeInBytes : 0;
-              block.items.push(pendingIterResult);
-              block.size += pendingSizeInBytes;
-            }
-
-            pendingIterResults.length = 0;
-
-            // update the last time this block was accessed
-            block.lastAccess = Date.now();
-
-            // Set the end time to 1 nanosecond before the current receive time since we know we've
-            // read up to this receive time.
-            block.end = subtract(receiveTime, { sec: 0, nsec: 1 });
-
-            lastTime = receiveTimeNs;
-            this.#markLoadedRangesDirty();
+        stored = true;
+      } finally {
+        // A consumer that stops early (e.g. a seek) leaves results that were counted, not stored
+        if (!stored) {
+          for (const [, item] of pendingIterResults) {
+            this.#totalSizeBytes -= item.type === "message-event" ? item.msgEvent.sizeInBytes : 0;
           }
         }
-
-        // Block is too big so we close it and will start a new one next loop
-        if (block.size >= this.#maxBlockSizeBytes) {
-          // The new block starts right after our previous one
-          readHead = add(block.end, { sec: 0, nsec: 1 });
-
-          // Will force creation of a new block on the next loop
-          block = undefined;
-        }
-
-        const sizeInBytes =
-          iterResult.type === "message-event" ? iterResult.msgEvent.sizeInBytes : 0;
-        if (
-          this.#maybePurgeCache({
-            activeBlock: block,
-            sizeInBytes,
-          })
-        ) {
-          this.#markLoadedRangesDirty();
-        }
-
-        // As we add items to pending we also consider them as part of the total size
-        this.#totalSizeBytes += sizeInBytes;
-
-        // Store the latest message in pending results and flush to the block when time moves forward
-        pendingIterResults.push([lastTime, iterResult]);
-
-        yield iterResult;
-      }
-
-      // We've finished reading our source to the end, close out the block
-      if (block) {
-        block.end = sourceReadEnd;
-
-        // update the last time this block was accessed
-        block.lastAccess = Date.now();
-
-        // write any pending messages to the block
-        for (const pendingIterResult of pendingIterResults) {
-          const item = pendingIterResult[1];
-          const pendingSizeInBytes = item.type === "message-event" ? item.msgEvent.sizeInBytes : 0;
-          block.items.push(pendingIterResult);
-          block.size += pendingSizeInBytes;
-        }
-
-        this.#markLoadedRangesDirty();
-      } else {
-        // We don't have a block after finishing our source. This can happen if the last
-        // thing we read in the source made our block be over size and we cycled to a new block.
-        // This can also happen if there were no messages in our source range.
-        //
-        // Since we never loop again we need to insert an empty block from the readHead
-        // to sourceReadEnd because we know there's nothing else in that range.
-        const newBlock: CacheBlock<MessageType> = {
-          id: this.#nextBlockId++,
-          start: readHead,
-          end: sourceReadEnd,
-          items: pendingIterResults,
-          size: 0,
-          lastAccess: Date.now(),
-        };
-
-        for (const pendingIterResult of pendingIterResults) {
-          const item = pendingIterResult[1];
-          const pendingSizeInBytes = item.type === "message-event" ? item.msgEvent.sizeInBytes : 0;
-          newBlock.size += pendingSizeInBytes;
-        }
-
-        // Find where we need to insert our new block.
-        // It should come before any blocks with a start time > than new block start time.
-        const insertIndex = _.sortedIndexBy(this.#cache, newBlock, (item) => toNanoSec(item.start));
-        this.#cache.splice(insertIndex, 0, newBlock);
-
-        this.#markLoadedRangesDirty();
       }
 
       // We've read everything there was to read for this source, so our next read will be after

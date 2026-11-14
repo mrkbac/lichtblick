@@ -108,6 +108,9 @@ export class McapIterableSource implements ISerializedIterableSource {
   // The current inner on a rebuilt index (eager, or resident in the pool), which updates grow in
   // place; `value` is the object the pool holds
   #live: { value: HydratedInner; live: LiveReader } | undefined;
+  // Chunks of the rebuilt index covered by the last Initialization handed out; an update reports
+  // the time range of every chunk since, whichever reader (grown, reopened, re-hydrated) has it
+  #publishedChunks = 0;
 
   public readonly sourceType = "serialized";
 
@@ -336,20 +339,27 @@ export class McapIterableSource implements ISerializedIterableSource {
     const scan = this.#scan;
     let ok = false;
     try {
+      const chunks = this.#recovery?.recoveredChunkCount() ?? 0;
       const init = this.#live
-        ? await this.#grow(this.#live, { indexing })
+        ? await this.#grow(this.#live, { indexing, chunks })
         : await this.#reopen({ indexing });
       if (!init || this.#scan !== scan) {
         return false; // terminated meanwhile
       }
+      this.#publishedChunks = chunks;
       this.#lastInit = init;
-      this.#update = init;
+      // One not taken by waitForUpdate() yet is replaced, but what it changed still counts
+      this.#update = this.#update ? withRangesOf(this.#update, init) : init;
       ok = true;
     } catch (error) {
       log.error("Updating the MCAP index failed", error);
       if (final) {
         this.#scanError ??= toError(error);
-        this.#update = this.#lastInit && withScanError(this.#lastInit, this.#scanError);
+        this.#update = this.#lastInit && {
+          ...withScanError(this.#lastInit, this.#scanError),
+          // Nothing new beyond what an update not taken yet changed
+          updatedRanges: this.#update ? this.#update.updatedRanges : [],
+        };
       }
     }
     this.#wake?.();
@@ -362,7 +372,7 @@ export class McapIterableSource implements ISerializedIterableSource {
    */
   async #grow(
     { value, live }: { value: HydratedInner; live: LiveReader },
-    { indexing }: { indexing: boolean },
+    { indexing, chunks }: { indexing: boolean; chunks: number },
   ): Promise<Initialization> {
     const channels = live.reader.channelsById.size;
     const added = live.grow();
@@ -370,13 +380,9 @@ export class McapIterableSource implements ISerializedIterableSource {
     const init = await this.#describe(await value.inner.initialize(), value.readable, {
       indexing,
     });
-    let range: { start: bigint; end: bigint } | undefined;
-    for (const { messageStartTime: start, messageEndTime: end } of added) {
-      range = {
-        start: range && range.start < start ? range.start : start,
-        end: range && range.end > end ? range.end : end,
-      };
-    }
+    // Since the last Initialization handed out, not since this reader last grew: a failed update
+    // or a re-hydration may have taken chunks that were never reported
+    const range = this.#recovery?.chunkTimeRange(this.#publishedChunks, chunks);
     init.updatedRanges = range
       ? [{ start: fromNanoSec(range.start), end: fromNanoSec(range.end) }]
       : [];
@@ -593,6 +599,7 @@ export class McapIterableSource implements ISerializedIterableSource {
       weightBytes: opened.weightBytes,
     };
     this.#live = opened.live && { value, live: opened.live };
+    this.#publishedChunks = opened.live?.reader.chunkIndexes.length ?? 0;
     if (pool && opened.indexed) {
       this.#pool = pool;
       // Seed the pool with the already-hydrated inner (no redundant open). May be evicted+closed
@@ -773,6 +780,15 @@ export class McapIterableSource implements ISerializedIterableSource {
     this.#interrupt?.();
     this.#wake?.();
   }
+}
+
+/** `next`, also reporting what `pending` (an update not taken yet) changed */
+function withRangesOf(pending: Initialization, next: Initialization): Initialization {
+  return {
+    ...next,
+    updatedRanges: pending.updatedRanges &&
+      next.updatedRanges && [...pending.updatedRanges, ...next.updatedRanges],
+  };
 }
 
 function withScanError(init: Initialization, error: Error): Initialization {
