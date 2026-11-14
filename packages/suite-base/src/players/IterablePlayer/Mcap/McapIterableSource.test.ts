@@ -17,6 +17,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 import { McapIterableSource, TAIL_POLL_MS } from "./McapIterableSource";
 import { RemoteFileReadable } from "./RemoteFileReadable";
 import { HydratedSourcePool } from "../shared/HydratedSourcePool";
+import { MultiIterableSource } from "../shared/MultiIterableSource";
 
 vi.mock("./RemoteFileReadable");
 
@@ -170,9 +171,8 @@ describe("McapIterableSource", () => {
     expect(values).toEqual([1, 2, 3]);
   });
 
-  it("plays a large damaged file before its index is rebuilt, then switches to the full index", async () => {
-    // Given a cut-off recording of many 1 MiB chunks, whose scan past the first step (16 MiB) waits for a gate
-    const chunkCount = 64;
+  /** A cut-off recording of 1 MiB chunks whose scan past the first 16 MiB waits for `gate` */
+  async function gatedCutOffRecording(chunkCount: number) {
     const tempBuffer = new TempBuffer();
     const writer = new McapWriter({ writable: tempBuffer, chunkSize: 1 });
     await writer.start({ library: "test", profile: "" });
@@ -191,12 +191,12 @@ describe("McapIterableSource", () => {
     const bytes = tempBuffer.get().slice();
     const blob = new Blob([bytes]);
     const gate = Promise.withResolvers<void>();
-    let maxReadEnd = 0;
-    const gatedFile = {
+    const state = { maxReadEnd: 0 };
+    const file = {
       size: blob.size,
       slice: (start: number, end: number) => {
         if (end - start >= 4 * 1024 * 1024) {
-          maxReadEnd = Math.max(maxReadEnd, end);
+          state.maxReadEnd = Math.max(state.maxReadEnd, end);
         }
         const part = blob.slice(start, end);
         return {
@@ -210,6 +210,13 @@ describe("McapIterableSource", () => {
         };
       },
     } as unknown as globalThis.Blob;
+    return { bytes, file, gate, state };
+  }
+
+  it("plays a large damaged file before its index is rebuilt, then switches to the full index", async () => {
+    // Given a cut-off recording of many 1 MiB chunks, whose scan past the first step (16 MiB) waits for a gate
+    const chunkCount = 64;
+    const { bytes, file: gatedFile, gate, state } = await gatedCutOffRecording(chunkCount);
     const source = new McapIterableSource({ type: "file", file: gatedFile });
     const topics = new Map([["/example", PlayerBuilder.subscribePayload({ topic: "/example" })]]);
 
@@ -222,7 +229,7 @@ describe("McapIterableSource", () => {
       type: "message-event",
       msgEvent: { topic: "/example", receiveTime: { sec: 1, nsec: 0 } },
     });
-    expect(maxReadEnd).toBeLessThan(bytes.byteLength / 2);
+    expect(state.maxReadEnd).toBeLessThan(bytes.byteLength / 2);
     expect(init.end.sec).toBeLessThan(chunkCount);
     expect(init.alerts[0]?.message).toMatch(/^Indexing this file: \d+% read$/);
 
@@ -242,6 +249,47 @@ describe("McapIterableSource", () => {
       count += result.type === "message-event" ? 1 : 0;
     }
     expect(count).toBe(chunkCount);
+  });
+
+  it("opens several large damaged files on their partial indexes and merges their updates", async () => {
+    // Given two cut-off recordings whose scans past the first step wait for a gate
+    const chunkCount = 64;
+    const a = await gatedCutOffRecording(chunkCount);
+    const b = await gatedCutOffRecording(chunkCount);
+    const source = new MultiIterableSource(
+      { type: "files", files: [a.file, b.file] },
+      McapIterableSource,
+    );
+    const topics = new Map([["/example", PlayerBuilder.subscribePayload({ topic: "/example" })]]);
+
+    // When they are opened together
+    const init = await source.initialize();
+    const first = await source.messageIterator({ topics }).next();
+
+    // Then the first message plays while most of each file is still unread
+    expect(first.value).toMatchObject({ type: "message-event" });
+    expect(a.state.maxReadEnd).toBeLessThan(a.bytes.byteLength / 2);
+    expect(b.state.maxReadEnd).toBeLessThan(b.bytes.byteLength / 2);
+    expect(init.end.sec).toBeLessThan(chunkCount);
+    expect(init.alerts.filter((alert) => alert.message.startsWith("Indexing "))).toHaveLength(2);
+
+    // When the scans finish
+    a.gate.resolve();
+    b.gate.resolve();
+    let last = init;
+    for (let update; (update = await source.waitForUpdate()); ) {
+      last = update;
+    }
+
+    // Then the merged source covers both whole files
+    expect(last.end).toEqual({ sec: chunkCount, nsec: 0 });
+    expect(last.alerts.some((alert) => alert.message.startsWith("Indexing "))).toBe(false);
+    let count = 0;
+    for await (const result of source.messageIterator({ topics })) {
+      count += result.type === "message-event" ? 1 : 0;
+    }
+    expect(count).toBe(2 * chunkCount);
+    await source.terminate();
   });
 
   describe("a file that is still being written", () => {

@@ -54,8 +54,7 @@ class McapLocalDataSourceFactory implements IDataSourceFactory {
           ),
         );
       },
-      // A single file is opened on its own, so it can show its index as it is rebuilt and follow
-      // the file while it grows
+      // A single file is opened on its own, so it can follow the file while it grows
       initArgs:
         files.length === 1
           ? { file: files[0], handle: args.handle }

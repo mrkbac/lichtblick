@@ -91,6 +91,36 @@ export class HydratedSourcePool {
   }
 
   /**
+   * Replace the value of a resident entry (e.g. a source whose index grew), keeping its pins and
+   * recency; holders of the old value keep using it. Returns false, and keeps nothing, when `token`
+   * isn't resident: the next acquire() hydrates the current state instead.
+   */
+  public async refresh<T>(token: object, value: T): Promise<boolean> {
+    const entry = this.#entries.get(token);
+    if (!entry || this.#terminated) {
+      return false;
+    }
+    let old: unknown;
+    try {
+      old = await entry.value;
+    } catch {
+      return false; // its open() failed; that acquire() removes it
+    }
+    if (this.#entries.get(token) !== entry) {
+      return false; // evicted meanwhile
+    }
+    const weight = Math.max(0, entry.hydrator.weigh?.(value) ?? 1);
+    this.#totalWeight += weight - entry.weight;
+    entry.weight = weight;
+    entry.value = Promise.resolve(value);
+    if (entry.pins === 0) {
+      await entry.hydrator.close(old);
+    }
+    await this.#evictBeyondCapacity();
+    return true;
+  }
+
+  /**
    * Acquire the hydrated value for `token`, hydrating via `hydrator.open()` if it is not resident.
    * The entry is pinned until the matching release(token) call, so it cannot be evicted while used.
    * Callers MUST call release(token) exactly once per acquire, ideally in a finally block.
