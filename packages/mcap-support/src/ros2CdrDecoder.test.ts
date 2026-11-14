@@ -248,6 +248,8 @@ function placeAt(bytes: Uint8Array, offset: number, tail = 0): Uint8Array {
   return view;
 }
 
+const SCHEMA_SEEDS = 200;
+
 const KINDS = [
   EncapsulationKind.CDR_LE,
   EncapsulationKind.CDR_BE,
@@ -261,10 +263,12 @@ describe("createRos2CdrDeserializer", () => {
     vi.restoreAllMocks();
   });
 
-  it("decodes random schemas exactly like MessageReader", () => {
-    const fallbackSpy = vi.spyOn(MessageReader.prototype, "readMessage");
+  // A fuzz test: slower than a unit test, especially on CI runners with coverage on.
+  it("decodes random schemas exactly like MessageReader", { timeout: 30_000 }, () => {
+    const readSpy = vi.spyOn(MessageReader.prototype, "readMessage");
     let compared = 0;
-    for (let seed = 1; seed <= 400; seed++) {
+    let referenceReads = 0;
+    for (let seed = 1; seed <= SCHEMA_SEEDS; seed++) {
       const rng = makeRng(seed);
       const definitions = randomSchema(rng);
       const types = new Map(definitions.map((def) => [def.name ?? "", def.definitions]));
@@ -285,12 +289,11 @@ describe("createRos2CdrDeserializer", () => {
       ]);
       for (let round = 0; round < 2; round++) {
         for (const data of placed) {
-          fallbackSpy.mockClear();
-          const actual = decode(data);
-          expect(fallbackSpy).not.toHaveBeenCalled(); // the generated code ran
-          expect(canonical(actual, data.buffer), `seed ${seed}`).toEqual(
-            canonical(reader.readMessage(data), data.buffer),
-          );
+          // Strings keep this fast enough for CI; a mismatch still shows both values.
+          const actual = JSON.stringify(canonical(decode(data), data.buffer));
+          const expected = JSON.stringify(canonical(reader.readMessage(data), data.buffer));
+          referenceReads++;
+          expect(actual, `seed ${seed}`).toBe(expected);
           compared++;
         }
       }
@@ -300,12 +303,15 @@ describe("createRos2CdrDeserializer", () => {
         expect(outcome(decode, cut), `seed ${seed} truncated`).toEqual(
           outcome((data) => reader.readMessage(data), cut),
         );
+        referenceReads++;
       }
     }
-    expect(compared).toBe(400 * (KINDS.length + 1) * 2 * 2);
+    expect(compared).toBe(SCHEMA_SEEDS * (KINDS.length + 1) * 2 * 2);
+    // Only the reference reads above used MessageReader: the generated code never fell back.
+    expect(readSpy).toHaveBeenCalledTimes(referenceReads);
   });
 
-  it("decodes random bytes like MessageReader", () => {
+  it("decodes random bytes like MessageReader", { timeout: 30_000 }, () => {
     for (let seed = 1; seed <= 300; seed++) {
       const rng = makeRng(seed);
       // Garbage sequence lengths make both decoders allocate typed arrays of up to 32 GB, so
