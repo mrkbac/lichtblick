@@ -97,4 +97,32 @@ describe("CompareSidesEditor", () => {
     nudge(0, 0);
     expect(setCompareOffsets.mock.calls.at(-1)).toEqual([[2, 1], 3]);
   });
+
+  it("keeps an undo pending through an update and the publication of the change it undoes", () => {
+    const setCompareOffsets = vi.fn();
+    const { rerender } = render(
+      <Editors compareSides={sides([0, 0])} setCompareOffsets={setCompareOffsets} />,
+    );
+    // Move the first recording by 1 s, then undo it
+    nudge(0, 0);
+    fireEvent.click(screen.getAllByTitle("Move by -1 s")[0]!);
+    expect(setCompareOffsets.mock.calls).toEqual([
+      [[1, 0], 1],
+      [[0, 0], 2],
+    ]);
+
+    // A growing recording publishes [0, 0] again, then the player publishes the first change
+    rerender(<Editors compareSides={sides([0, 0])} setCompareOffsets={setCompareOffsets} />);
+    rerender(
+      <Editors
+        compareSides={sides([1, 0])}
+        compareRequest={1}
+        setCompareOffsets={setCompareOffsets}
+      />,
+    );
+
+    // The undo is still on its way, so a nudge of the second recording builds on it
+    nudge(1, 1);
+    expect(setCompareOffsets.mock.calls.at(-1)).toEqual([[0, 1], 3]);
+  });
 });
