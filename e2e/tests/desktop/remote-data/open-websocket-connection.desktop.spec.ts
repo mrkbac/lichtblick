@@ -34,11 +34,12 @@ test("show correctly open a web socket connection showing correct attibutes on r
     await expect(mainWindow.getByText("/websocket_test").innerHTML()).resolves.toBeDefined();
     await panels.addPanel("Raw Messages");
 
-    const rawMessagesPanel = mainWindow.getByTestId(/RawMessages!/);
+    // The default layout's Raw Messages panel may sit in a hidden tab; use the visible one.
+    const rawMessagesPanel = mainWindow.getByTestId(/RawMessages!/).first();
     await rawMessagesPanel.getByPlaceholder("/some/topic.msgs[0].field").click();
     await mainWindow.getByTestId("autocomplete-item").click();
 
-    await rawMessagesPanel.getByText("data").nth(0).click();
+    await rawMessagesPanel.getByRole("button", { name: "Expand data", exact: true }).click();
     const attributesToCheck = ["hello", '"world"', "foo", "42"];
 
     // Then

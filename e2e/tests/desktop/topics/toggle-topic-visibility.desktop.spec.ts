@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 import { test, expect } from "../../../fixtures/electron";
 import { loadFiles } from "../../../fixtures/load-files";
-import { Sidebar } from "../../../page-objects";
+import { Panels, Sidebar } from "../../../page-objects";
 
 /**
  * GIVEN a file with multiple topics is loaded
@@ -21,7 +21,7 @@ test("toggle topics visibility", { tag: "@regression" }, async ({ mainWindow }) 
 
   // When
   await sidebar.openPanelSettingsTab();
-  await mainWindow.getByText("3D").first().click();
+  await new Panels(mainWindow).select("3D");
   const visibilityButtons = mainWindow.getByTitle("Toggle visibility");
   await visibilityButtons.first().click();
 

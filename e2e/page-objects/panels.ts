@@ -17,6 +17,14 @@ export class Panels {
     await this.page.getByTestId(`panel-menu-item ${panelName}`).click();
   }
 
+  /** Selects the first panel of a type; dockview keeps tab labels hidden, so click the panel. */
+  public async select(panelType: string): Promise<void> {
+    await this.page
+      .getByTestId(new RegExp(`^panel-mouseenter-container ${panelType}!`))
+      .first()
+      .click();
+  }
+
   public async setTopicPath(path: string): Promise<void> {
     await this.page.getByPlaceholder("/some/topic.msgs[0].field").fill(path);
   }

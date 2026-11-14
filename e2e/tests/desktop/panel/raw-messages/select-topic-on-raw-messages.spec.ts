@@ -51,7 +51,8 @@ test("create a new layout with raw messages panel, select a topic and change the
 
   // Then
   await expect(mainWindow.getByText("No topic selected")).not.toBeVisible();
-  const topicMessage = mainWindow.getByText("level 1");
+  // Keys and values render as separate nodes; the "level" key carries the panel font size.
+  const topicMessage = mainWindow.getByText("level", { exact: true });
   await expect(topicMessage).toBeVisible();
   await expect(topicMessage).toHaveCSS("font-size", "12px");
 

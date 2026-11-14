@@ -47,6 +47,27 @@ export class PlayerControls {
     return Number(await this.getTimestampInput().inputValue());
   }
 
+  /**
+   * Plays for `windowMs` and returns recording seconds per wall-clock second. Both samples are
+   * taken while playing, so play/pause latency does not skew the rate.
+   */
+  public async measurePlaybackRate(windowMs: number): Promise<number> {
+    const before = await this.getTimestampValue();
+    await this.togglePlayback();
+    await expect.poll(async () => await this.getTimestampValue()).not.toBe(before);
+    // Read the timestamp and the clock together in the page, so response latency doesn't skew it.
+    const sample = async () =>
+      await this.getTimestampInput().evaluate((input: HTMLInputElement) => ({
+        time: Number(input.value),
+        wallMs: performance.now(),
+      }));
+    const start = await sample();
+    await this.page.waitForTimeout(windowMs);
+    const end = await sample();
+    await this.togglePlayback();
+    return (end.time - start.time) / ((end.wallMs - start.wallMs) / 1000);
+  }
+
   public async getTimestampText(): Promise<string> {
     return await this.getTimestampInput().inputValue();
   }

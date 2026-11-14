@@ -24,7 +24,7 @@ test("open map panel after loading a bag file", { tag: "@regression" }, async ({
   // When
   await panels.addPanel("Map");
   await sidebar.openPanelSettingsTab();
-  await mainWindow.getByText("Waiting for first GPS point...").nth(0).click();
+  await panels.select("map");
 
   // Then
   await expect(mainWindow.getByText("Map panel", { exact: true }).count()).resolves.toBe(1);

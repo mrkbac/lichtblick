@@ -24,29 +24,20 @@ test("should double playback speed after choosing 2x", { tag: "@regression" }, a
   await changeToEpochFormat(mainWindow);
 
   const expectedRatio = 2;
-  const expectedDuration = 500; // ms
+  const measureWindow = 800; // ms
 
   await player.setSpeed("1×"); // make sure we're on 1x speed
 
-  const measureProgress = async (durationMs: number): Promise<number> => {
-    const start = await player.getTimestampValue();
-    await player.togglePlayback(); // start playback
-    await mainWindow.waitForTimeout(durationMs);
-    await player.togglePlayback(); // stop playback
-    const end = await player.getTimestampValue();
-    return end - start;
-  };
-
   // When
-  const normalProgress = await measureProgress(expectedDuration);
+  const normalRate = await player.measurePlaybackRate(measureWindow);
 
   await player.setSpeed("2×"); // change to 2x speed
 
   // Then
-  const newProgress = await measureProgress(expectedDuration);
+  const newRate = await player.measurePlaybackRate(measureWindow);
 
   // Assert new playback speed
-  const ratio = newProgress / normalProgress;
+  const ratio = newRate / normalRate;
   const tolerance = expectedRatio * 0.2;
 
   expect(ratio).toBeGreaterThan(expectedRatio - tolerance);
@@ -69,29 +60,20 @@ test("should playback at one-tenth speed after choosing 0.1x", { tag: "@regressi
   await changeToEpochFormat(mainWindow);
 
   const expectedRatio = 0.1;
-  const expectedDuration = 500; // ms
+  const measureWindow = 800; // ms
 
   await player.setSpeed("1×"); // make sure we're on 1x speed
 
-  const measureProgress = async (durationMs: number): Promise<number> => {
-    const start = await player.getTimestampValue();
-    await player.togglePlayback(); // start playback
-    await mainWindow.waitForTimeout(durationMs);
-    await player.togglePlayback(); // stop playback
-    const end = await player.getTimestampValue();
-    return end - start;
-  };
-
   // When
-  const normalProgress = await measureProgress(expectedDuration);
+  const normalRate = await player.measurePlaybackRate(measureWindow);
 
   await player.setSpeed("0.1×"); // change to 0.1x speed
 
   // Then
-  const newProgress = await measureProgress(expectedDuration);
+  const newRate = await player.measurePlaybackRate(measureWindow);
 
   // Assert new playback speed
-  const ratio = newProgress / normalProgress;
+  const ratio = newRate / normalRate;
   const tolerance = expectedRatio * 0.2;
 
   expect(ratio).toBeGreaterThan(expectedRatio - tolerance);
