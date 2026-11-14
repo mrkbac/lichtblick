@@ -312,11 +312,22 @@ describe("model dependencies", () => {
         asset: { version: "2.0" },
         scene: 0,
         scenes: [{ nodes: [] }],
-        images: [{ uri: "textures/paint.tiff" }, { uri: "textures/broken.tif" }],
+        images: [
+          { uri: "textures/paint.tiff" },
+          { uri: "textures/broken.tif" },
+          { uri: "textures/huge.tif" },
+        ],
       })!,
       "package://robot/textures/paint.tiff": new Uint8Array(UTIF.encodeImage(pixels, 2, 1)),
-      "package://robot/textures/broken.tif": // Its only directory links back to itself, which would hang an unguarded decoder.
-        new Uint8Array([0x49, 0x49, 42, 0, 8, 0, 0, 0, 0, 0, 8, 0, 0, 0]),
+      // Its only directory links back to itself, which would hang an unguarded decoder.
+      "package://robot/textures/broken.tif": new Uint8Array([
+        0x49, 0x49, 42, 0, 8, 0, 0, 0, 0, 0, 8, 0, 0, 0,
+      ]),
+      // One entry claims 0xffffffff LONG values, far more than the file holds.
+      "package://robot/textures/huge.tif": new Uint8Array([
+        0x49, 0x49, 42, 0, 8, 0, 0, 0, 1, 0, 0, 1, 4, 0, 0xff, 0xff, 0xff, 0xff, 26, 0, 0, 0, 0, 0,
+        0, 0,
+      ]),
     });
     const error = vi.fn();
     // When
@@ -327,6 +338,7 @@ describe("model dependencies", () => {
     expect(createObjectURL).toHaveBeenCalledWith(expect.objectContaining({ type: "image/png" }));
     expect(error.mock.calls.map(([value]) => (value as Error).message)).toEqual([
       'Failed to load GLTF asset "package://robot/textures/broken.tif"',
+      'Failed to load GLTF asset "package://robot/textures/huge.tif"',
     ]);
     expect(console.error).toHaveBeenCalled();
     vi.mocked(console.error).mockClear();
