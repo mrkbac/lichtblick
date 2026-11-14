@@ -60,11 +60,12 @@ export async function main(params: MainParams): Promise<void> {
   // window.onload fires
   await Sockets.Create();
 
-  // consider moving waitForFonts into App to display an app loading screen
-  await waitForFonts();
-  await initI18n();
-
-  const cliFlags = await desktopBridge.getCLIFlags();
+  const [cliFlags] = await Promise.all([
+    desktopBridge.getCLIFlags(),
+    // consider moving waitForFonts into App to display an app loading screen
+    waitForFonts(),
+    initI18n(),
+  ]);
 
   const root = createRoot(rootEl);
   root.render(

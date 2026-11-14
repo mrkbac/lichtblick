@@ -26,6 +26,45 @@ function LogAfterRender(props: React.PropsWithChildren): React.JSX.Element {
   return <>{props.children}</>;
 }
 
+/** Must match RUNTIME_CACHE_NAME in rspackConfigs.ts */
+const RUNTIME_CACHE_NAME = "lichtblick-assets";
+
+/**
+ * An uncontrolled page (first visit, force refresh) loads its chunks past the service worker.
+ * Copy them, and every chunk loaded later in this session, into the service worker's runtime
+ * cache so the next start works offline.
+ */
+async function cacheLoadedAssets(): Promise<void> {
+  const cache = await caches.open(RUNTIME_CACHE_NAME);
+  // addAll's own fetches show up as resource entries too; never cache a URL twice
+  const seen = new Set<string>();
+  new PerformanceObserver((list) => {
+    const urls = list
+      .getEntries()
+      .map((entry) => entry.name)
+      .filter((url) => {
+        const { origin, pathname } = new URL(url);
+        // same rule as the service worker's runtime cache route
+        const cacheable =
+          origin === location.origin && /\/[\w.-]*[0-9a-f]{16}\.\w+$/.test(pathname);
+        if (!cacheable || seen.has(url)) {
+          return false;
+        }
+        seen.add(url);
+        return true;
+      });
+    if (urls.length === 0) {
+      return;
+    }
+    // file names are content-hashed, so the HTTP cache copy is always valid: no second download
+    cache
+      .addAll(urls.map((url) => new Request(url, { cache: "force-cache" })))
+      .catch((err: unknown) => {
+        log.warn("Caching loaded assets failed", err);
+      });
+  }).observe({ type: "resource", buffered: true });
+}
+
 export type MainParams = {
   dataSources?: IDataSourceFactory[];
   extraProviders?: React.JSX.Element[];
@@ -44,6 +83,11 @@ export async function main(getParams: () => Promise<MainParams> = async () => ({
     navigator.serviceWorker.register("sw.js").catch((err: unknown) => {
       log.error("Service worker registration failed", err);
     });
+    if (!navigator.serviceWorker.controller) {
+      void navigator.serviceWorker.ready.then(cacheLoadedAssets).catch((err: unknown) => {
+        log.warn("Caching loaded assets failed", err);
+      });
+    }
     // Keep the offline cache from being evicted under storage pressure
     void navigator.storage.persist();
   }
@@ -76,8 +120,10 @@ export async function main(getParams: () => Promise<MainParams> = async () => ({
     return;
   }
 
-  // Use an async import to delay loading the majority of suite-base code until the CompatibilityBanner
-  // can be displayed.
+  // Async imports delay loading the majority of suite-base code until the CompatibilityBanner can be
+  // displayed. Start both at once instead of one after another.
+  // Chunk names: the startup budget in rspackConfigs.ts measures these.
+  const webRootPromise = import(/* webpackChunkName: "startup-webroot" */ "./WebRoot");
   const {
     installDevtoolsFormatters,
     overwriteFetch,
@@ -85,7 +131,7 @@ export async function main(getParams: () => Promise<MainParams> = async () => ({
     initI18n,
     StudioApp,
     completeLoginRedirect,
-  } = await import("@lichtblick/suite-base");
+  } = await import(/* webpackChunkName: "startup-app" */ "@lichtblick/suite-base");
   installDevtoolsFormatters();
   overwriteFetch();
   // Before anything reads the URL: a login redirect carries a code and restores the original URL.
@@ -93,11 +139,9 @@ export async function main(getParams: () => Promise<MainParams> = async () => ({
     log.error("Login failed", error);
   });
   // consider moving waitForFonts into App to display an app loading screen
-  await waitForFonts();
-  await initI18n();
+  await Promise.all([waitForFonts(), initI18n()]);
 
-  const { WebRoot } = await import("./WebRoot");
-  const params = await getParams();
+  const [{ WebRoot }, params] = await Promise.all([webRootPromise, getParams()]);
   const rootElement = params.rootElement ?? (
     <WebRoot extraProviders={params.extraProviders} dataSources={params.dataSources}>
       <StudioApp />

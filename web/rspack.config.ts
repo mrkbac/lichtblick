@@ -15,7 +15,7 @@ const params: ConfigParams = {
   outputPath: path.resolve(import.meta.dirname, ".webpack"),
   contextPath: path.resolve(import.meta.dirname, "src"),
   entrypoint: "./entrypoint.tsx",
-  prodSourceMap: "source-map",
+  prodSourceMap: "hidden-source-map",
   // Fork-only: show commit + build time in the version string (Settings > About, start dialog).
   version: `${packageJson.version} (${process.env.CF_PAGES_COMMIT_SHA?.slice(0, 7) ?? "local"}, built ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC)`,
 };

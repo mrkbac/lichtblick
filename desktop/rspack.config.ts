@@ -21,7 +21,8 @@ import packageJson from "../package.json" with { type: "json" };
 const params: RspackConfigParams = {
   packageJson,
   outputPath: path.resolve(import.meta.dirname, ".webpack"),
-  prodSourceMap: "source-map",
+  // Maps stay next to the build for debugging; electronBuilderConfig.js keeps them out of the app
+  prodSourceMap: "hidden-source-map",
   rendererContext: path.resolve(import.meta.dirname, "renderer"),
   rendererEntrypoint: "./index.tsx",
   mainContext: path.resolve(import.meta.dirname, "main"),

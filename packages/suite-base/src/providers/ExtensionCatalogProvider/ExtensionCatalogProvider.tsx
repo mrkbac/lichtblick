@@ -192,6 +192,7 @@ function createExtensionRegistryStore(
       loader: IExtensionLoader,
       installedExtensions: ExtensionInfo[],
       contributionPoints: ContributionPoints,
+      loadedExtensions: Set<string>,
     ): Promise<void> {
       try {
         installedExtensions.push(extension);
@@ -218,7 +219,7 @@ function createExtensionRegistryStore(
           cameraModels.set(name, builder);
         }
 
-        get().markExtensionAsInstalled(extension.id);
+        loadedExtensions.add(extension.id);
       } catch (err) {
         log.error(`Error loading extension ${extension.id}`, err);
       }
@@ -229,11 +230,13 @@ function createExtensionRegistryStore(
       loader,
       installedExtensions,
       contributionPoints,
+      loadedExtensions,
     }: {
       batch: ExtensionInfo[];
       loader: IExtensionLoader;
       installedExtensions: ExtensionInfo[];
       contributionPoints: ContributionPoints;
+      loadedExtensions: Set<string>;
     }) {
       await Promise.all(
         batch.map(async (extension) => {
@@ -242,6 +245,7 @@ function createExtensionRegistryStore(
             loader,
             installedExtensions,
             contributionPoints,
+            loadedExtensions,
           );
         }),
       );
@@ -256,6 +260,8 @@ function createExtensionRegistryStore(
       set({ loadedExtensions: new Set<string>() });
       const start = performance.now();
       const installedExtensions: ExtensionInfo[] = [];
+      // Collected here and stored once below: one store update instead of one per extension
+      const loadedExtensions = new Set<string>();
       const contributionPoints: ContributionPoints = {
         messageConverters: [],
         panels: {},
@@ -272,6 +278,7 @@ function createExtensionRegistryStore(
             contributionPoints,
             installedExtensions,
             loader,
+            loadedExtensions,
           });
         } catch (err: unknown) {
           log.error("Error loading extension list", err);
@@ -288,6 +295,8 @@ function createExtensionRegistryStore(
       );
 
       set({
+        // merged: an extension installed while this refresh ran stays marked
+        loadedExtensions: new Set([...get().loadedExtensions, ...loadedExtensions]),
         installedExtensions,
         installedPanels: contributionPoints.panels,
         installedMessageConverters: contributionPoints.messageConverters,

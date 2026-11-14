@@ -212,9 +212,10 @@ export function makeConfig(
         {
           test: /\.css$/,
           loader: localRequire.resolve("css-loader"),
-          options: { sourceMap: true },
+          options: { sourceMap: isDev },
         },
-        { test: /\.woff2?$/, type: "asset/inline" },
+        // Separate files, not inlined: base64 fonts inflated the entry chunk by ~0.9 MB.
+        { test: /\.woff2?$/, type: "asset/resource" },
         { test: /\.(glb|bag|ttf|bin)$/, type: "asset/resource" },
       ],
     },

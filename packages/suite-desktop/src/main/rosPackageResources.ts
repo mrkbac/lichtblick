@@ -13,7 +13,7 @@ import { pathToFileURL } from "url";
 import Logger from "@lichtblick/log";
 import { AppSetting } from "@lichtblick/suite-base/src/AppSetting";
 
-import { getAppSetting } from "./settings";
+import { readAppSetting } from "./settings";
 
 const log = Logger.getLogger(__filename);
 
@@ -37,7 +37,10 @@ export async function rosPackageNameAtPath(packagePath: string): Promise<string 
     });
     return rosPackageName(contents);
   } catch (err: unknown) {
-    log.error(err);
+    // Most directories on the search path are not packages
+    if ((err as NodeJS.ErrnoException).code !== "ENOENT") {
+      log.error(err);
+    }
     return undefined;
   }
 }
@@ -127,15 +130,44 @@ export async function findRosPackage(
  *
  * The package: protocol handler attempts to load resources using ROS_PACKAGE_PATH lookup semantics.
  */
+/**
+ * Returns findRosPackage with a cache of package name to root directory. A scene loads many meshes
+ * from the same few packages, and each lookup walks the whole search path. The cache is cleared
+ * when the search path changes; lookups that found nothing are retried.
+ */
+export function makeCachedRosPackageFinder(
+  find: typeof findRosPackage = findRosPackage,
+): (pkg: string, rosPackagePath: string) => Promise<string | undefined> {
+  let cachedFor: string | undefined;
+  const packageRoots = new Map<string, Promise<string | undefined>>();
+  return async (pkg, rosPackagePath) => {
+    if (cachedFor !== rosPackagePath) {
+      cachedFor = rosPackagePath;
+      packageRoots.clear();
+    }
+    let root = packageRoots.get(pkg);
+    if (!root) {
+      root = find(pkg, { rosPackagePath });
+      packageRoots.set(pkg, root);
+    }
+    const found = await root;
+    if (!found && packageRoots.get(pkg) === root) {
+      packageRoots.delete(pkg);
+    }
+    return found;
+  };
+}
+
 export function registerRosPackageProtocolHandlers(): void {
+  const findCachedRosPackage = makeCachedRosPackageFinder();
+
   protocol.handle("package", async (request) => {
     try {
       // Give preference to the ROS_PACKAGE_PATH app setting over the environment variable
       const rosPackagePath =
-        getAppSetting<string>(AppSetting.ROS_PACKAGE_PATH) ?? process.env.ROS_PACKAGE_PATH;
+        (await readAppSetting<string>(AppSetting.ROS_PACKAGE_PATH)) ?? process.env.ROS_PACKAGE_PATH;
 
-      log.info(`Load: ${request.url}`);
-      log.info(`ROS_PACKAGE_PATH ${rosPackagePath}`);
+      log.debug(`Load: ${request.url} (ROS_PACKAGE_PATH ${rosPackagePath})`);
       if (!rosPackagePath) {
         throw new Error("ROS_PACKAGE_PATH not set");
       }
@@ -144,9 +176,7 @@ export function registerRosPackageProtocolHandlers(): void {
       const targetPkg = url.host;
       const relPath = url.pathname;
 
-      const pkgRoot = await findRosPackage(targetPkg, {
-        rosPackagePath,
-      });
+      const pkgRoot = await findCachedRosPackage(targetPkg, rosPackagePath);
 
       if (!pkgRoot) {
         throw new Error(
@@ -155,7 +185,7 @@ export function registerRosPackageProtocolHandlers(): void {
       }
 
       const resolvedResourcePath = path.join(pkgRoot, ...relPath.split("/"));
-      log.info(`Resolved: ${resolvedResourcePath}`);
+      log.debug(`Resolved: ${resolvedResourcePath}`);
       // prepend the file:// protocol to the path
       const fileUrl = pathToFileURL(resolvedResourcePath).toString();
       return await net.fetch(fileUrl);

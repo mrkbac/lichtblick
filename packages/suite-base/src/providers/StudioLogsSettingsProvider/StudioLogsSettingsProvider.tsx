@@ -29,22 +29,25 @@ function StudioLogsSettingsProvider(props: PropsWithChildren): React.JSX.Element
     savedStateRef.current = studioLogsSettingsSavedState;
   });
 
-  // Setup an interval to check for changes to the total number of logging channels
-  //
-  // When the total number of channels changes we re-initialize the settings store so we display any
-  // newly added log channels.
+  // Re-initialize the settings store when logging channels are added (e.g. by a lazy-loaded chunk)
+  // so the settings show them. A chunk adds many channels at once, so the check runs once after.
   useEffect(() => {
     const storeChannelsCount = studioLogsSettingsStore.getState().channels.length;
-    const intervalHandle = setInterval(() => {
+    const check = () => {
       if (storeChannelsCount !== Log.channels().length) {
         setStudioLogsSettingsStore(createStudioLogsSettingsStore(savedStateRef.current));
       }
-    }, 1000);
-
-    return () => {
-      clearInterval(intervalHandle);
     };
-  }, [studioLogsSettingsStore, studioLogsSettingsSavedState]);
+    check(); // channels added before this effect subscribed
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    const unsubscribe = Log.onChannelAdded(() => {
+      timeout ??= setTimeout(check, 0);
+    });
+    return () => {
+      unsubscribe();
+      clearTimeout(timeout);
+    };
+  }, [studioLogsSettingsStore]);
 
   useEffect(() => {
     return studioLogsSettingsStore.subscribe((value) => {

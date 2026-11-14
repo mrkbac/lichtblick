@@ -18,7 +18,8 @@ function makeElectronBuilderConfig(params) {
     appId: "dev.lichtblick.suite",
     npmRebuild: false,
     asar: true,
-    files: ["**/*", "!**/node_modules/**"],
+    // Source maps (~130 MB) stay out of the app; afterPack.ts fails the build if one gets in.
+    files: ["**/*", "!**/node_modules/**", "!**/*.map"],
     directories: {
       app: params.appPath,
       buildResources: path.join(__dirname, "../resources"),

@@ -11,20 +11,12 @@ import * as _ from "lodash-es";
 import { SettingsTreeAction } from "@lichtblick/suite";
 
 import { PublishClickType } from "./PublishClickTool";
-import type { RendererConfig } from "../IRenderer";
 import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
+import { DEFAULT_PUBLISH_SETTINGS } from "../defaults";
 
-export const DEFAULT_PUBLISH_SETTINGS: RendererConfig["publish"] = {
-  type: "point",
-  poseTopic: "/move_base_simple/goal",
-  pointTopic: "/clicked_point",
-  poseEstimateTopic: "/initialpose",
-  poseEstimateXDeviation: 0.5,
-  poseEstimateYDeviation: 0.5,
-  poseEstimateThetaDeviation: _.round(Math.PI / 12, 8),
-};
+export { DEFAULT_PUBLISH_SETTINGS };
 
 export class PublishSettings extends SceneExtension {
   public static extensionId = "foxglove.PublishSettings";
