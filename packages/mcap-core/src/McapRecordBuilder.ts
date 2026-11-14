@@ -93,7 +93,7 @@ export class McapRecordBuilder {
       .uint64(footer.summaryOffsetStart)
       .uint32(footer.summaryCrc);
     // footer record cannot be padded
-    return 20n;
+    return 1n + 8n + 20n;
   }
 
   public writeSchema(schema: Schema): bigint {
@@ -417,6 +417,6 @@ export class McapRecordBuilder {
       .uint64(4n) // data end is fixed length
       .uint32(dataEnd.dataSectionCrc);
     // data end record cannot be padded
-    return 4n;
+    return 1n + 8n + 4n;
   }
 }

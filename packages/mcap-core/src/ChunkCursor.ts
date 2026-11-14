@@ -185,13 +185,6 @@ export class ChunkCursor {
         return diff;
       });
 
-    if (reverse) {
-      // If we used `logTimeB - logTimeA` as the comparator for reverse iteration, messages with
-      // the same timestamp would not be in reverse order. To avoid this problem we use reverse()
-      // instead.
-      this.#orderedMessageOffsets.reverse();
-    }
-
     if (this.#orderedMessageOffsets.length === 0) {
       return;
     }
@@ -209,6 +202,13 @@ export class ChunkCursor {
       throw new Error(
         `Chunk at offset ${this.chunkIndex.chunkStartOffset} contains a message with logTime (${logTimeLastMessage}) later than chunk messageEndTime (${this.chunkIndex.messageEndTime})`,
       );
+    }
+
+    if (reverse) {
+      // If we used `logTimeB - logTimeA` as the comparator for reverse iteration, messages with
+      // the same timestamp would not be in reverse order. To avoid this problem we use reverse()
+      // instead. Reverse only after the bounds checks above, which expect ascending order.
+      this.#orderedMessageOffsets.reverse();
     }
 
     // Determine the indexes corresponding to the start and end time.

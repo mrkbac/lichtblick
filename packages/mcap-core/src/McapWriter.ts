@@ -284,6 +284,9 @@ export class McapWriter {
    * Add a schema and return a generated schema id. The schema id is used when adding channels.
    */
   public async registerSchema(info: Omit<Schema, "id">): Promise<number> {
+    if (this.#nextSchemaId > 0xffff) {
+      throw new Error("Too many schemas: MCAP schema ids are 16-bit");
+    }
     const id = this.#nextSchemaId++;
     this.#schemas.set(id, { ...info, id });
     if (this.statistics) {
@@ -296,6 +299,9 @@ export class McapWriter {
    * Add a channel and return a generated channel id. The channel id is used when adding messages.
    */
   public async registerChannel(info: Omit<Channel, "id">): Promise<number> {
+    if (this.#nextChannelId > 0xffff) {
+      throw new Error("Too many channels: MCAP channel ids are 16-bit");
+    }
     const id = this.#nextChannelId++;
     this.#channels.set(id, { ...info, id });
     if (this.statistics) {
@@ -305,25 +311,6 @@ export class McapWriter {
   }
 
   public async addMessage(message: Message): Promise<void> {
-    if (this.statistics) {
-      if (this.statistics.messageCount === 0n) {
-        this.statistics.messageStartTime = message.logTime;
-        this.statistics.messageEndTime = message.logTime;
-      } else {
-        if (message.logTime < this.statistics.messageStartTime) {
-          this.statistics.messageStartTime = message.logTime;
-        }
-        if (message.logTime > this.statistics.messageEndTime) {
-          this.statistics.messageEndTime = message.logTime;
-        }
-      }
-      this.statistics.channelMessageCounts.set(
-        message.channelId,
-        (this.statistics.channelMessageCounts.get(message.channelId) ?? 0n) + 1n,
-      );
-      ++this.statistics.messageCount;
-    }
-
     // write out channel and schema if we have not yet done so
     if (!this.#writtenChannelIds.has(message.channelId)) {
       const channel = this.#channels.get(message.channelId);
@@ -354,6 +341,26 @@ export class McapWriter {
         this.#recordWriter.writeChannel(channel);
       }
       this.#writtenChannelIds.add(message.channelId);
+    }
+
+    // Count the message only once its channel and schema are known to exist.
+    if (this.statistics) {
+      if (this.statistics.messageCount === 0n) {
+        this.statistics.messageStartTime = message.logTime;
+        this.statistics.messageEndTime = message.logTime;
+      } else {
+        if (message.logTime < this.statistics.messageStartTime) {
+          this.statistics.messageStartTime = message.logTime;
+        }
+        if (message.logTime > this.statistics.messageEndTime) {
+          this.statistics.messageEndTime = message.logTime;
+        }
+      }
+      this.statistics.channelMessageCounts.set(
+        message.channelId,
+        (this.statistics.channelMessageCounts.get(message.channelId) ?? 0n) + 1n,
+      );
+      ++this.statistics.messageCount;
     }
 
     if (this.#chunkBuilder) {

@@ -10,6 +10,12 @@ import { MCAP_MAGIC } from "./constants.ts";
 import { parseMagic, parseRecord } from "./parse.ts";
 import type { DecompressHandlers, IReadable, TypedMcapRecords } from "./types.ts";
 
+/**
+ * Chunk views cached by a read with `validateCrcs: false`. The first read that validates CRCs
+ * loads and checks such a chunk again instead of trusting the cached copy.
+ */
+const uncheckedChunks = new WeakSet<DataView>();
+
 /** Decompressed chunk data keyed by chunk start offset. See `McapIndexedReader.Initialize`. */
 export type ChunkDataCache = {
   get(chunkStartOffset: bigint): DataView | undefined;
@@ -598,10 +604,13 @@ export class McapIndexedReader<TReadOptions = unknown> {
     options: { validateCrcs: boolean; readOptions?: TReadOptions },
   ): Promise<DataView> {
     const cached = this.#chunkCache?.get(chunkIndex.chunkStartOffset);
-    if (cached) {
+    if (cached && !(options.validateCrcs && uncheckedChunks.has(cached))) {
       return cached;
     }
     const view = await this.#loadChunkDataUncached(chunkIndex, options);
+    if (!options.validateCrcs) {
+      uncheckedChunks.add(view);
+    }
     this.#chunkCache?.set(chunkIndex.chunkStartOffset, view);
     return view;
   }

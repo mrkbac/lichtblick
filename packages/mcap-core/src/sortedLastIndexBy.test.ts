@@ -38,19 +38,19 @@ describe("sortedLastIndexBy", () => {
     expect(sortedLastIndexBy(array, 4n, (x) => x)).toEqual(2);
   });
 
-  it("handles negation", () => {
+  it("handles negation of descending times (reverse iteration)", () => {
     const array: [bigint, bigint][] = [
-      [1n, 42n],
-      [2n, 42n],
-      [3n, 42n],
       [4n, 42n],
+      [3n, 42n],
+      [2n, 42n],
+      [1n, 42n],
     ];
 
     expect(sortedLastIndexBy(array, 0n, (x) => -x)).toEqual(4);
     expect(sortedLastIndexBy(array, 1n, (x) => -x)).toEqual(4);
-    expect(sortedLastIndexBy(array, 2n, (x) => -x)).toEqual(4);
-    expect(sortedLastIndexBy(array, 3n, (x) => -x)).toEqual(4);
-    expect(sortedLastIndexBy(array, 4n, (x) => -x)).toEqual(0);
+    expect(sortedLastIndexBy(array, 2n, (x) => -x)).toEqual(3);
+    expect(sortedLastIndexBy(array, 3n, (x) => -x)).toEqual(2);
+    expect(sortedLastIndexBy(array, 4n, (x) => -x)).toEqual(1);
     expect(sortedLastIndexBy(array, 5n, (x) => -x)).toEqual(0);
   });
 
