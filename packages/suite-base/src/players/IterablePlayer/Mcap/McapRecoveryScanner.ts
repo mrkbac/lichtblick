@@ -564,14 +564,7 @@ export class McapRecoveryScanner {
   }
 
   #decompress(compression: string, records: Uint8Array, uncompressedSize: bigint): Uint8Array {
-    if (compression === "") {
-      return records;
-    }
-    const decompress = this.#decompressHandlers[compression];
-    if (!decompress) {
-      throw new Error(`Unsupported compression ${compression}`);
-    }
-    return decompress(records, uncompressedSize);
+    return decompress(this.#decompressHandlers, compression, records, uncompressedSize);
   }
 
   #addChunk(chunk: McapTypes.Chunk, offset: bigint, length: bigint): void {
@@ -717,6 +710,93 @@ export class McapRecoveryScanner {
     this.#readBuffer = { offset, bytes };
     return bytes.subarray(0, Number(length));
   }
+}
+
+/**
+ * Why the chunk can't be read as its index describes it (it doesn't parse or decompress, fails its
+ * CRC, or its message indexes point at anything but its messages), or undefined if it can. Reads
+ * and decompresses only this chunk. A failing read (e.g. the network) throws instead: it doesn't
+ * make the chunk corrupt.
+ */
+export async function checkChunk(
+  readable: McapTypes.IReadable,
+  decompressHandlers: McapTypes.DecompressHandlers,
+  chunkIndex: McapTypes.ChunkIndex,
+): Promise<Error | undefined> {
+  const chunkBytes = await readable.read(chunkIndex.chunkStartOffset, chunkIndex.chunkLength);
+  const offsets = [...chunkIndex.messageIndexOffsets.values()];
+  const indexStart = offsets.reduce<bigint | undefined>(
+    (a, b) => (a == undefined || b < a ? b : a),
+    undefined,
+  );
+  const indexBytes =
+    indexStart == undefined
+      ? undefined
+      : await readable.read(indexStart, chunkIndex.messageIndexLength);
+  try {
+    const chunk = parseRecord(reader(chunkBytes), true);
+    if (chunk?.type !== "Chunk") {
+      throw new Error(`No chunk at offset ${chunkIndex.chunkStartOffset}`);
+    }
+    const records = decompress(
+      decompressHandlers,
+      chunk.compression,
+      chunk.records,
+      chunk.uncompressedSize,
+    );
+    if (chunk.uncompressedCrc !== 0 && crc32(records) !== chunk.uncompressedCrc) {
+      throw new Error(`Chunk at offset ${chunkIndex.chunkStartOffset} fails its CRC`);
+    }
+    const view = new DataView(records.buffer, records.byteOffset, records.byteLength);
+    const messages = new Map<number, { channelId: number; logTime: bigint }>();
+    walkChunk(records, (channelId, offset) => {
+      messages.set(offset, {
+        channelId,
+        logTime: view.getBigUint64(offset + LOG_TIME_OFFSET, true),
+      });
+    });
+    if (!indexBytes) {
+      return undefined;
+    }
+    const indexes = reader(indexBytes);
+    for (let record; (record = parseRecord(indexes, true)); ) {
+      if (record.type !== "MessageIndex") {
+        continue;
+      }
+      for (const [logTime, offset] of record.records) {
+        const message = messages.get(Number(offset));
+        if (
+          message?.channelId !== record.channelId ||
+          message.logTime !== logTime ||
+          logTime < chunkIndex.messageStartTime ||
+          logTime > chunkIndex.messageEndTime
+        ) {
+          throw new Error(
+            `Message index of chunk at offset ${chunkIndex.chunkStartOffset} doesn't match it`,
+          );
+        }
+      }
+    }
+    return undefined;
+  } catch (error) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+}
+
+function decompress(
+  handlers: McapTypes.DecompressHandlers,
+  compression: string,
+  records: Uint8Array,
+  uncompressedSize: bigint,
+): Uint8Array {
+  if (compression === "") {
+    return records;
+  }
+  const handler = handlers[compression];
+  if (!handler) {
+    throw new Error(`Unsupported compression ${compression}`);
+  }
+  return handler(records, uncompressedSize);
 }
 
 /**

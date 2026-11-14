@@ -7,7 +7,7 @@ import { ChunkCache, loadDecompressHandlers } from "@lichtblick/mcap-support";
 import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
 
 import { BlobReadable } from "./BlobReadable";
-import { McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
+import { CheckChunk, McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
 import { McapIterableSource } from "./McapIterableSource";
 import { McapRecoveryScanner } from "./McapRecoveryScanner";
 
@@ -373,20 +373,53 @@ describe("McapIterableSource recovery", () => {
     expect(init.alerts[0]?.tip).toMatch(/could not be read/);
   });
 
-  it("recovers mid-read from a corrupt chunk in a file whose summary is intact", async () => {
-    // Given a finished file whose summary still lists the corrupt chunk
+  it("skips a chunk found corrupt mid-read without scanning the file", async () => {
+    // Given a finished file whose summary still lists a corrupt chunk
     const bytes = await makeMcap({ finish: true });
     bytes[await logTimeOffsetInChunk(bytes, 2)]! ^= 0xff;
+    const scanSpy = vi.spyOn(McapRecoveryScanner.prototype, "scan");
 
     // When
-    const { init, values, iteratorAlerts } = await openSource(bytes);
+    const { init, values, iteratorAlerts, source } = await openSource(bytes);
 
-    // Then
+    // Then the rest plays, and only that chunk is gone, for later reads too
     expect(init.alerts).toEqual([]);
     expect(values).toEqual([1, 2, 4, 5]);
     expect(iteratorAlerts).toEqual([
       expect.objectContaining({ severity: "warn", message: expect.stringMatching(/damaged/) }),
     ]);
+    expect(scanSpy).not.toHaveBeenCalled();
+    const again = [];
+    for await (const result of source.messageIterator({
+      topics: new Map([[TOPIC, PlayerBuilder.subscribePayload({ topic: TOPIC })]]),
+    })) {
+      again.push(result.type);
+    }
+    expect(again).toEqual(["message-event", "message-event", "message-event", "message-event"]);
+  });
+
+  it("skims past a topic's latest chunk when it turns out corrupt", async () => {
+    // Given a file whose 4th chunk (the latest before 4.5 s) is corrupt
+    const bytes = await makeMcap({ finish: true });
+    bytes[await logTimeOffsetInChunk(bytes, 3)]! ^= 0xff;
+    const source = new McapIterableSource({ type: "file", file: new Blob([bytes]) });
+    await source.initialize();
+
+    // When a skim window ending at 4.5 s finds nothing in its tail and looks for the latest message
+    const values = [];
+    for await (const result of source.messageIterator({
+      topics: new Map([[TOPIC, PlayerBuilder.subscribePayload({ topic: TOPIC })]]),
+      start: { sec: 1, nsec: 0 },
+      end: { sec: 4, nsec: 500_000_000 },
+      skimInterval: { sec: 10, nsec: 0 },
+    })) {
+      if (result.type === "message-event") {
+        values.push(JSON.parse(new TextDecoder().decode(result.msgEvent.message)).v as number);
+      }
+    }
+
+    // Then it falls back to the chunk before the corrupt one
+    expect(values).toEqual([3]);
   });
 
   it("keeps the healthy path free of scans", async () => {
@@ -450,6 +483,41 @@ describe("McapIndexedIterableSource read errors", () => {
 
     // Then every message arrives once and no scan ran
     expect(values).toEqual([1, 2, 3, 4, 5]);
+    expect(recover).not.toHaveBeenCalled();
+  });
+
+  it("rebuilds the index when no chunk explains a read error", async () => {
+    // Given a read that keeps failing although every chunk checks out
+    const reader = await indexedReader();
+    failReads(reader, 2);
+    const checkChunk = vi.fn<CheckChunk>().mockResolvedValue(undefined);
+    const recover = vi.fn<RecoverReader>().mockResolvedValue({
+      reader: await indexedReader(),
+      alert: undefined,
+    });
+
+    // When
+    const values = await collect(new McapIndexedIterableSource(reader, { checkChunk, recover }));
+
+    // Then the chunks were checked, and reading resumed on the rebuilt index
+    expect(values).toEqual([1, 2, 3, 4, 5]);
+    expect(checkChunk).toHaveBeenCalled();
+    expect(recover).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops no chunk when checking it can't read the file", async () => {
+    // Given a read that keeps failing, and a check that can't read the chunk either (offline)
+    const reader = await indexedReader();
+    failReads(reader, Infinity);
+    const checkChunk = vi.fn<CheckChunk>().mockRejectedValue(new Error("offline"));
+    const recover = vi.fn<RecoverReader>();
+    const corruptChunks = new Set<bigint>();
+
+    // When / Then the read error surfaces, and no chunk is taken for corrupt
+    await expect(
+      collect(new McapIndexedIterableSource(reader, { checkChunk, recover, corruptChunks })),
+    ).rejects.toThrow("offline");
+    expect(corruptChunks.size).toBe(0);
     expect(recover).not.toHaveBeenCalled();
   });
 

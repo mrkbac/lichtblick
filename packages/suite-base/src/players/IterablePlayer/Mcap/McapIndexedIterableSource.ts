@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Time, fromNanoSec, toNanoSec, compare } from "@foxglove/rostime";
+import { Time, fromNanoSec, toNanoSec, toRFC3339String, compare } from "@foxglove/rostime";
 import { type McapIndexedReader, McapTypes } from "@mcap/core";
 
 import Logger from "@lichtblick/log";
@@ -38,6 +38,12 @@ export type RecoverReader = (
   error: Error,
 ) => Promise<{ reader: McapIndexedReader; alert: PlayerAlert | undefined }>;
 
+/**
+ * Why a chunk can't be read as the index describes it, or undefined if it can. Throws if its bytes
+ * can't be read at all (e.g. the network), which says nothing about the chunk.
+ */
+export type CheckChunk = (chunk: McapTypes.ChunkIndex) => Promise<Error | undefined>;
+
 type ReadMessagesArgs = Omit<
   NonNullable<Parameters<McapIndexedReader["readMessages"]>[0]>,
   "validateCrcs"
@@ -45,6 +51,11 @@ type ReadMessagesArgs = Omit<
 
 // Alerts from rebuilding the index mid-read; not a real channel id (those are uint16)
 const RECOVERY_CONNECTION_ID = -1;
+
+// After a read error, how many chunks around the read position are checked for the corrupt one
+const MAX_CHUNK_CHECKS = 16;
+// Past this many corrupt chunks the index itself is suspect: rebuild it with a scan instead
+const MAX_CORRUPT_CHUNKS = 64;
 
 // Below this many chunks per window, skimming would re-decompress the same chunks; read linearly.
 const SKIM_MIN_CHUNKS_PER_WINDOW = 4n;
@@ -65,6 +76,11 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   #prefetch?: (ranges: ByteRange[]) => void;
   #recover?: RecoverReader;
   #recovering?: Promise<void>;
+  #checkChunk?: CheckChunk;
+  // Start offsets of the chunks dropped as corrupt; shared with later readers of the same file
+  #corruptChunks: Set<bigint>;
+  // The corrupt-chunk search in progress, shared by the reads that fail meanwhile
+  #checking?: Promise<boolean>;
   // Set once the reader was rebuilt mid-read; yielded by the next messageIterator result
   #recoveryAlert?: PlayerAlert;
   // What initialize() has processed of the reader's index so far, and what it built from it
@@ -89,21 +105,96 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   /**
    * @param options.prefetch Fetches byte ranges ahead of time so the reader later hits a local
    * copy. Remote sources pass it so skimming can fetch upcoming chunks in parallel.
-   * @param options.recover Called once if reading throws (e.g. a corrupt chunk); reading resumes
-   * on the reader it returns.
+   * @param options.checkChunk Checks the chunks around a read that keeps failing: a corrupt one
+   * is dropped from the index (and added to `options.corruptChunks`) and reading resumes, without
+   * scanning the file.
+   * @param options.recover Called once if reading still throws (e.g. no corrupt chunk was found);
+   * reading resumes on the reader it returns.
    */
   public constructor(
     reader: McapIndexedReader,
-    options?: { prefetch?: (ranges: ByteRange[]) => void; recover?: RecoverReader },
+    options?: {
+      prefetch?: (ranges: ByteRange[]) => void;
+      recover?: RecoverReader;
+      checkChunk?: CheckChunk;
+      corruptChunks?: Set<bigint>;
+    },
   ) {
     this.#reader = reader;
     this.#prefetch = options?.prefetch;
     this.#recover = options?.recover;
+    this.#checkChunk = options?.checkChunk;
+    this.#corruptChunks = options?.corruptChunks ?? new Set();
+    if (this.#corruptChunks.size > 0) {
+      this.#setChunkIndexes(
+        reader.chunkIndexes.filter((chunk) => !this.#corruptChunks.has(chunk.chunkStartOffset)),
+      );
+    }
+  }
+
+  // ponytail: McapIndexedReader has no API to change its index; readMessages reads this field on
+  // every call (see also McapRecoveryScanner.openLiveReader).
+  #setChunkIndexes(chunkIndexes: readonly McapTypes.ChunkIndex[]): void {
+    (this.#reader as { chunkIndexes: readonly McapTypes.ChunkIndex[] }).chunkIndexes = chunkIndexes;
   }
 
   /**
-   * `reader.readMessages`, but a read error swaps in a recovered reader (once) and resumes after
-   * the last message already yielded, so consumers see one uninterrupted stream.
+   * Finds the corrupt chunk a read of `args` failed on, among the chunks it reads first, and drops
+   * it from the index. Reads and decompresses at most MAX_CHUNK_CHECKS chunks, so it costs the same
+   * however big the file is. False if none of them is corrupt; throws if a chunk can't be read at
+   * all (e.g. the network), since that says nothing about the chunk.
+   */
+  async #dropCorruptChunk(args: ReadMessagesArgs): Promise<boolean> {
+    const checkChunk = this.#checkChunk;
+    if (!checkChunk || this.#corruptChunks.size >= MAX_CORRUPT_CHUNKS) {
+      return false;
+    }
+    const reader = this.#reader;
+    const start = args.startingAt ?? 0n;
+    const end = args.endingAt ?? BigInt("0xffffffffffffffff");
+    const channels = args.topics
+      ? new Set(
+          [...reader.channelsById.values()]
+            .filter((channel) => args.topics!.includes(channel.topic))
+            .map((channel) => channel.id),
+        )
+      : undefined;
+    const reverse = args.reverse === true;
+    const candidates = reader.chunkIndexes
+      .filter(
+        (chunk) =>
+          chunk.messageStartTime <= end &&
+          chunk.messageEndTime >= start &&
+          (!channels || [...chunk.messageIndexOffsets.keys()].some((id) => channels.has(id))),
+      )
+      .sort((a, b) =>
+        reverse
+          ? Number(b.messageEndTime - a.messageEndTime)
+          : Number(a.messageStartTime - b.messageStartTime),
+      )
+      .slice(0, MAX_CHUNK_CHECKS);
+    for (const chunk of candidates) {
+      const error = await checkChunk(chunk);
+      if (error) {
+        this.#corruptChunks.add(chunk.chunkStartOffset);
+        this.#setChunkIndexes(this.#reader.chunkIndexes.filter((other) => other !== chunk));
+        log.info(`Skipping corrupt MCAP chunk at offset ${chunk.chunkStartOffset}`, error);
+        this.#recoveryAlert = {
+          severity: "warn",
+          message: "This file is damaged; skipping the parts that can't be read.",
+          tip: `Skipped ${this.#corruptChunks.size} corrupt chunk(s) so far, the last one from ${toRFC3339String(fromNanoSec(chunk.messageStartTime))} to ${toRFC3339String(fromNanoSec(chunk.messageEndTime))}: ${error.message}`,
+          error,
+        };
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * `reader.readMessages`, but a read error drops the corrupt chunk it hit (or else swaps in a
+   * recovered reader, once) and resumes after the last message already yielded, so consumers see
+   * one uninterrupted stream.
    */
   async *#readMessages(args: ReadMessagesArgs): AsyncGenerator<McapTypes.Message> {
     // Resume point: the last yielded logTime and how many messages at that logTime were yielded
@@ -119,6 +210,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
             : { ...args, startingAt: lastTime };
       let skip = yieldedAtLastTime;
       const reader = this.#reader;
+      const chunkIndexes = reader.chunkIndexes;
       const messages = reader.readMessages({ ...resumeArgs, validateCrcs: false });
       try {
         for (;;) {
@@ -127,9 +219,21 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
             result = await messages.next();
           } catch (err: unknown) {
             // Retry once first: a transient error (e.g. the network) needs no scan. Then, unless
-            // another read already swapped the reader, recover (once, shared by every read); an
-            // error from the recovered reader is rethrown, so reading never loops.
-            if (this.#reader === reader && retried) {
+            // another read already dropped a chunk or swapped the reader meanwhile, look for the
+            // corrupt chunk around the read position and drop it. Only if there is none, recover
+            // (once, shared by every read); an error from the recovered reader is rethrown, so
+            // reading never loops.
+            // A swapped reader has another index too
+            const changed = () => this.#reader.chunkIndexes !== chunkIndexes;
+            if (!changed() && retried) {
+              this.#checking ??= this.#dropCorruptChunk(resumeArgs).finally(() => {
+                this.#checking = undefined;
+              });
+              await this.#checking;
+            }
+            if (changed()) {
+              retried = false;
+            } else if (retried) {
               const recover = this.#recover;
               if (!recover) {
                 throw err;
@@ -137,12 +241,15 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
               this.#recovering ??= recover(toError(err)).then(({ reader: next, alert }) => {
                 this.#reader = next;
                 this.#recover = undefined;
+                // Its index comes from a scan that already skipped corrupt chunks, and its message
+                // indexes aren't in the file, so checking chunks against the file would fail
+                this.#checkChunk = undefined;
                 this.#recoveryAlert = alert;
               });
               await this.#recovering;
               retried = false;
             } else {
-              retried = this.#reader === reader;
+              retried = true;
             }
             break;
           }
@@ -464,6 +571,27 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     start: bigint,
     end: bigint,
   ): Promise<McapTypes.Message[]> {
+    const messages: McapTypes.Message[] = [];
+    // Again for the topics still missing if a read dropped a corrupt chunk meanwhile: it may have
+    // been the latest chunk of a topic that has an earlier one. Drops are bounded, so this ends.
+    for (let missing = topics, chunkIndexes; missing.size > 0; ) {
+      chunkIndexes = this.#reader.chunkIndexes;
+      const found = await this.#latestInChunks(missing, start, end, messages);
+      missing = new Set([...missing].filter((topic) => !found.has(topic)));
+      if (this.#reader.chunkIndexes === chunkIndexes) {
+        break;
+      }
+    }
+    return messages;
+  }
+
+  /** #latestBefore for the chunk index as it is now; adds to `messages`, returns their topics */
+  async #latestInChunks(
+    topics: Set<string>,
+    start: bigint,
+    end: bigint,
+    messages: McapTypes.Message[],
+  ): Promise<Set<string>> {
     const latestChunkByTopic = this.#latestChunkByTopic(topics, start, end);
 
     const topicsByChunk = new Map<McapTypes.ChunkIndex, string[]>();
@@ -471,7 +599,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       topicsByChunk.set(chunk, [...(topicsByChunk.get(chunk) ?? []), topic]);
     }
 
-    const messages: McapTypes.Message[] = [];
+    const allFound = new Set<string>();
     for (const [chunk, chunkTopics] of topicsByChunk) {
       const found = new Set<string>();
       for await (const message of this.#readMessages({
@@ -485,13 +613,14 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
           continue;
         }
         found.add(topic);
+        allFound.add(topic);
         messages.push(message);
         if (found.size === chunkTopics.length) {
           break;
         }
       }
     }
-    return messages;
+    return allFound;
   }
 
   /** The chunk holding each topic's latest message in [start, end], from the chunk index alone */
