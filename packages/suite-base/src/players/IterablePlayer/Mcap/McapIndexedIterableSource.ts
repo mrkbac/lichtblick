@@ -38,7 +38,10 @@ export type RecoverReader = (
   error: Error,
 ) => Promise<{ reader: McapIndexedReader; alert: PlayerAlert | undefined }>;
 
-/** Why a chunk can't be read as the index describes it, or undefined if it can */
+/**
+ * Why a chunk can't be read as the index describes it, or undefined if it can. Throws if its bytes
+ * can't be read at all (e.g. the network), which says nothing about the chunk.
+ */
 export type CheckChunk = (chunk: McapTypes.ChunkIndex) => Promise<Error | undefined>;
 
 type ReadMessagesArgs = Omit<
@@ -138,7 +141,8 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   /**
    * Finds the corrupt chunk a read of `args` failed on, among the chunks it reads first, and drops
    * it from the index. Reads and decompresses at most MAX_CHUNK_CHECKS chunks, so it costs the same
-   * however big the file is. False if none of them is corrupt.
+   * however big the file is. False if none of them is corrupt; throws if a chunk can't be read at
+   * all (e.g. the network), since that says nothing about the chunk.
    */
   async #dropCorruptChunk(args: ReadMessagesArgs): Promise<boolean> {
     const checkChunk = this.#checkChunk;
@@ -567,6 +571,27 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     start: bigint,
     end: bigint,
   ): Promise<McapTypes.Message[]> {
+    const messages: McapTypes.Message[] = [];
+    // Again for the topics still missing if a read dropped a corrupt chunk meanwhile: it may have
+    // been the latest chunk of a topic that has an earlier one. Drops are bounded, so this ends.
+    for (let missing = topics, chunkIndexes; missing.size > 0; ) {
+      chunkIndexes = this.#reader.chunkIndexes;
+      const found = await this.#latestInChunks(missing, start, end, messages);
+      missing = new Set([...missing].filter((topic) => !found.has(topic)));
+      if (this.#reader.chunkIndexes === chunkIndexes) {
+        break;
+      }
+    }
+    return messages;
+  }
+
+  /** #latestBefore for the chunk index as it is now; adds to `messages`, returns their topics */
+  async #latestInChunks(
+    topics: Set<string>,
+    start: bigint,
+    end: bigint,
+    messages: McapTypes.Message[],
+  ): Promise<Set<string>> {
     const latestChunkByTopic = this.#latestChunkByTopic(topics, start, end);
 
     const topicsByChunk = new Map<McapTypes.ChunkIndex, string[]>();
@@ -574,7 +599,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       topicsByChunk.set(chunk, [...(topicsByChunk.get(chunk) ?? []), topic]);
     }
 
-    const messages: McapTypes.Message[] = [];
+    const allFound = new Set<string>();
     for (const [chunk, chunkTopics] of topicsByChunk) {
       const found = new Set<string>();
       for await (const message of this.#readMessages({
@@ -588,13 +613,14 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
           continue;
         }
         found.add(topic);
+        allFound.add(topic);
         messages.push(message);
         if (found.size === chunkTopics.length) {
           break;
         }
       }
     }
-    return messages;
+    return allFound;
   }
 
   /** The chunk holding each topic's latest message in [start, end], from the chunk index alone */

@@ -715,18 +715,26 @@ export class McapRecoveryScanner {
 /**
  * Why the chunk can't be read as its index describes it (it doesn't parse or decompress, fails its
  * CRC, or its message indexes point at anything but its messages), or undefined if it can. Reads
- * and decompresses only this chunk.
+ * and decompresses only this chunk. A failing read (e.g. the network) throws instead: it doesn't
+ * make the chunk corrupt.
  */
 export async function checkChunk(
   readable: McapTypes.IReadable,
   decompressHandlers: McapTypes.DecompressHandlers,
   chunkIndex: McapTypes.ChunkIndex,
 ): Promise<Error | undefined> {
+  const chunkBytes = await readable.read(chunkIndex.chunkStartOffset, chunkIndex.chunkLength);
+  const offsets = [...chunkIndex.messageIndexOffsets.values()];
+  const indexStart = offsets.reduce<bigint | undefined>(
+    (a, b) => (a == undefined || b < a ? b : a),
+    undefined,
+  );
+  const indexBytes =
+    indexStart == undefined
+      ? undefined
+      : await readable.read(indexStart, chunkIndex.messageIndexLength);
   try {
-    const chunk = parseRecord(
-      reader(await readable.read(chunkIndex.chunkStartOffset, chunkIndex.chunkLength)),
-      true,
-    );
+    const chunk = parseRecord(reader(chunkBytes), true);
     if (chunk?.type !== "Chunk") {
       throw new Error(`No chunk at offset ${chunkIndex.chunkStartOffset}`);
     }
@@ -747,12 +755,10 @@ export async function checkChunk(
         logTime: view.getBigUint64(offset + LOG_TIME_OFFSET, true),
       });
     });
-    const offsets = [...chunkIndex.messageIndexOffsets.values()];
-    if (offsets.length === 0) {
+    if (!indexBytes) {
       return undefined;
     }
-    const start = offsets.reduce((a, b) => (b < a ? b : a));
-    const indexes = reader(await readable.read(start, chunkIndex.messageIndexLength));
+    const indexes = reader(indexBytes);
     for (let record; (record = parseRecord(indexes, true)); ) {
       if (record.type !== "MessageIndex") {
         continue;
