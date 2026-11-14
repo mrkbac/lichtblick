@@ -77,6 +77,7 @@ export type MockMessagePipelineProps = {
   startPlayback?: () => void;
   pausePlayback?: () => void;
   seekPlayback?: (arg0: Time) => void;
+  setCompareOffsets?: (offsetsSec: readonly number[], request: number) => void;
   currentTime?: Time;
   startTime?: Time;
   endTime?: Time;
@@ -186,6 +187,7 @@ function getPublicState(
     setPlaybackSpeed:
       props.capabilities?.includes(PLAYER_CAPABILITIES.setSpeed) === true ? noop : undefined,
     seekPlayback: props.seekPlayback,
+    setCompareOffsets: props.setCompareOffsets,
     getMetadata: () => {
       const mockMetadata: ReadonlyArray<Readonly<Metadata>> = [
         {

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { OffsetRequest, nextOffsets, pendingRequests } from "./CompareSidesEditor";
+import { OffsetRequest, nextOffsets, pendingRequests } from "./offsetRequests";
 
 describe("offset requests", () => {
   it("keeps a newer request when an older one is published", () => {

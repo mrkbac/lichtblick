@@ -6,7 +6,7 @@ import AlignHorizontalLeftIcon from "@mui/icons-material/AlignHorizontalLeft";
 import AlignHorizontalRightIcon from "@mui/icons-material/AlignHorizontalRight";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { Button, IconButton, InputAdornment, TextField, Tooltip, Typography } from "@mui/material";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -49,7 +49,6 @@ const useStyles = makeStyles()((theme) => ({
 }));
 
 const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
-const selectSetOffsets = (ctx: MessagePipelineContext) => ctx.setCompareOffsets;
 
 const NUDGES = [-1, -0.1, 0.1, 1];
 
@@ -179,56 +178,10 @@ function SideOffset({
   );
 }
 
-/** An offset change asked of the player, numbered so its publication can be recognized */
-export type OffsetRequest = { request: number; offsets: readonly number[] };
-
-/**
- * The offsets to ask for when `side` changes: built on the newest request the player hasn't shown
- * yet (the last of `inFlight`), else on the published offsets, so quick edits to different sides
- * don't undo each other
- */
-export function nextOffsets(
-  published: readonly number[],
-  inFlight: readonly OffsetRequest[],
-  side: number,
-  change: number | ((current: number) => number),
-): number[] {
-  const base = inFlight.at(-1)?.offsets ?? published;
-  return base.map((value, index) =>
-    index !== side ? value : typeof change === "function" ? change(value) : change,
-  );
-}
-
-/**
- * The requests the player hasn't published yet: those after the last one it applied
- * (`appliedRequest`, see PlayerStateActiveData.compareRequest). Other updates, such as a growing
- * source, publish the same number, so they acknowledge nothing.
- */
-export function pendingRequests(
-  inFlight: readonly OffsetRequest[],
-  appliedRequest: number | undefined,
-): OffsetRequest[] {
-  return appliedRequest == undefined
-    ? [...inFlight]
-    : inFlight.filter(({ request }) => request > appliedRequest);
-}
-
-const selectPublishedSides = (ctx: MessagePipelineContext) =>
-  ctx.playerState.activeData?.compareSides;
-const selectAppliedRequest = (ctx: MessagePipelineContext) =>
-  ctx.playerState.activeData?.compareRequest;
-
 /** The compared recordings with controls to move each along the shared timeline */
 export function CompareSidesEditor(): React.JSX.Element | undefined {
   const compare = useCompare();
-  const setOffsets = useMessagePipeline(selectSetOffsets);
-  const publication = useMessagePipeline(selectPublishedSides);
-  const appliedRequest = useMessagePipeline(selectAppliedRequest);
   const { t } = useTranslation("compare");
-  const published = publication?.map((side) => side.offsetSec);
-  const inFlight = useRef<OffsetRequest[]>([]);
-  const lastRequest = useRef(0);
-  inFlight.current = pendingRequests(inFlight.current, appliedRequest);
   if (!compare) {
     return undefined;
   }
@@ -242,11 +195,7 @@ export function CompareSidesEditor(): React.JSX.Element | undefined {
           key={side.prefix}
           side={side}
           onOffset={(offsetSec) => {
-            const offsets = nextOffsets(published!, inFlight.current, side.index, offsetSec);
-            const request = Math.max(lastRequest.current, appliedRequest ?? 0) + 1;
-            lastRequest.current = request;
-            inFlight.current = [...inFlight.current, { request, offsets }];
-            setOffsets?.(offsets, request);
+            compare.requestOffset(side.index, offsetSec);
           }}
         />
       ))}

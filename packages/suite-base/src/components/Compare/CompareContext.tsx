@@ -2,7 +2,15 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { Time, add, subtract } from "@foxglove/rostime";
-import { createContext, useContext, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { StoreApi } from "zustand";
 
 import { useGuaranteedContext } from "@lichtblick/hooks";
@@ -18,6 +26,7 @@ import { MessagePipelineInternalState } from "@lichtblick/suite-base/components/
 import { CompareSide } from "@lichtblick/suite-base/players/types";
 import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
+import { OffsetRequest, nextOffsets, pendingRequests } from "./offsetRequests";
 import { SideView } from "./sideView";
 
 /** Colors of sides A, B, C, …, picked to stay apart from each other in light and dark themes */
@@ -38,6 +47,11 @@ export type CompareState = {
   setActiveSide: (prefix: string) => void;
   /** The pipeline store showing every side, which side scopes are made from */
   rootStore: StoreApi<MessagePipelineInternalState>;
+  /**
+   * Move `side` to `change` seconds (or by a function of its latest requested offset). Requests
+   * are numbered and kept per player, so editors anywhere build on each other's pending changes.
+   */
+  requestOffset: (side: number, change: number | ((current: number) => number)) => void;
 };
 
 const CompareContext = createContext<CompareState | undefined>(undefined);
@@ -48,6 +62,9 @@ function sideLabel(index: number): string {
 
 const selectCompareSides = (ctx: MessagePipelineContext) =>
   ctx.playerState.activeData?.compareSides;
+const selectAppliedRequest = (ctx: MessagePipelineContext) =>
+  ctx.playerState.activeData?.compareRequest;
+const selectSetOffsets = (ctx: MessagePipelineContext) => ctx.setCompareOffsets;
 
 /** Provides the compared sides, when recordings are compared, to everything below it */
 export function CompareProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
@@ -62,6 +79,37 @@ export function CompareProvider({ children }: { children: React.ReactNode }): Re
   }, [prefixes]);
 
   const [chosenSide, setActiveSide] = useState<string | undefined>(undefined);
+
+  // Offset requests the player hasn't applied yet, shared by every editor of this player
+  const appliedRequest = useMessagePipeline(selectAppliedRequest);
+  const setCompareOffsets = useMessagePipeline(selectSetOffsets);
+  const latest = useRef({ compareSides, appliedRequest });
+  latest.current = { compareSides, appliedRequest };
+  const requests = useRef<{ inFlight: OffsetRequest[]; last: number }>({ inFlight: [], last: 0 });
+  const requestOffset = useCallback(
+    (side: number, change: number | ((current: number) => number)) => {
+      const { compareSides: published, appliedRequest: applied } = latest.current;
+      if (!published || !setCompareOffsets) {
+        return;
+      }
+      const pending = requests.current;
+      const inFlight = pendingRequests(pending.inFlight, applied);
+      const offsets = nextOffsets(
+        published.map((item) => item.offsetSec),
+        inFlight,
+        side,
+        change,
+      );
+      const request = Math.max(pending.last, applied ?? 0) + 1;
+      requests.current = { inFlight: [...inFlight, { request, offsets }], last: request };
+      setCompareOffsets(offsets, request);
+    },
+    [setCompareOffsets],
+  );
+  // A new player starts with nothing pending
+  useEffect(() => {
+    requests.current = { inFlight: [], last: 0 };
+  }, [setCompareOffsets]);
 
   const value = useMemo((): CompareState | undefined => {
     if (!compareSides || compareSides.length < 2) {
@@ -79,8 +127,8 @@ export function CompareProvider({ children }: { children: React.ReactNode }): Re
     const activeSide = sides.some((side) => side.prefix === chosenSide)
       ? chosenSide!
       : sides[0]!.prefix;
-    return { sides, activeSide, setActiveSide, rootStore };
-  }, [chosenSide, compareSides, rootStore, views]);
+    return { sides, activeSide, setActiveSide, rootStore, requestOffset };
+  }, [chosenSide, compareSides, requestOffset, rootStore, views]);
 
   const keyDownHandlers = useMemo(
     () =>
