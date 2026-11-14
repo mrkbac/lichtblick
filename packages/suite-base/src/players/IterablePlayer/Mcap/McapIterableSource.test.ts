@@ -501,10 +501,10 @@ describe("McapIterableSource", () => {
       await source.initialize();
 
       // Then RemoteFileReadable should be constructed with the URL options
-      expect(MockRemoteFileReadable).toHaveBeenCalledWith(urlIndexedMcap, {
-        cacheSizeInBytes,
-        readAheadEnabled,
-      });
+      expect(MockRemoteFileReadable).toHaveBeenCalledWith(
+        urlIndexedMcap,
+        expect.objectContaining({ cacheSizeInBytes, readAheadEnabled }),
+      );
     });
 
     it("should forward readAheadBufferBytes to RemoteFileReadable when provided", async () => {
