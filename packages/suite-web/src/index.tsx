@@ -33,10 +33,13 @@ const RUNTIME_CACHE_NAME = "lichtblick-assets";
 /**
  * An uncontrolled page (first visit, force refresh) loads its chunks past the service worker.
  * Copy them, and every chunk loaded later in this session, into the service worker's runtime
- * cache so the next start works offline.
+ * cache so the next start works offline. Observes from the start, so no entry is missed while the
+ * service worker installs; the copies wait for it.
  */
-async function cacheLoadedAssets(): Promise<void> {
-  const cache = await caches.open(RUNTIME_CACHE_NAME);
+function cacheLoadedAssets(): void {
+  const cachePromise = navigator.serviceWorker.ready.then(
+    async () => await caches.open(RUNTIME_CACHE_NAME),
+  );
   // cacheAsset's own fetches show up as resource entries too; never cache a URL twice
   const seen = new Set<string>();
   new PerformanceObserver((list) => {
@@ -57,13 +60,14 @@ async function cacheLoadedAssets(): Promise<void> {
     for (const url of urls) {
       // each file on its own, so one failure doesn't drop the others. A failed file stays in
       // `seen` (its own fetch shows up as a new entry); the next uncontrolled load retries it.
-      void cacheAsset(cache, url);
+      void cacheAsset(cachePromise, url);
     }
   }).observe({ type: "resource", buffered: true });
 }
 
-async function cacheAsset(cache: Cache, url: string): Promise<void> {
+async function cacheAsset(cachePromise: Promise<Cache>, url: string): Promise<void> {
   try {
+    const cache = await cachePromise;
     // file names are content-hashed, so the HTTP cache copy is always valid: no second download
     const response = await fetch(url, { cache: "force-cache" });
     // same rule as the service worker: the host answers unknown paths with index.html
@@ -94,9 +98,7 @@ export async function main(getParams: () => Promise<MainParams> = async () => ({
       log.error("Service worker registration failed", err);
     });
     if (!navigator.serviceWorker.controller) {
-      void navigator.serviceWorker.ready.then(cacheLoadedAssets).catch((err: unknown) => {
-        log.warn("Caching loaded assets failed", err);
-      });
+      cacheLoadedAssets();
     }
     // Keep the offline cache from being evicted under storage pressure
     void navigator.storage.persist();
