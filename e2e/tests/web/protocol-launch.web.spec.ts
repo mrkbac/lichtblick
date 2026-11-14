@@ -113,14 +113,15 @@ test("opens .mcap and .bag files launched through the PWA file handlers", {
 
   const launchFile = async (name: string) => {
     await page.evaluate(async (fileName) => {
+      // Launches carry real file handles, which the app keeps in recents and asks for permission.
       const blob = await (await fetch(`/launched/${fileName}`)).blob();
-      const handle = {
-        kind: "file",
-        name: fileName,
-        getFile: async () => new File([blob], fileName),
-      };
+      const root = await navigator.storage.getDirectory();
+      const handle = await root.getFileHandle(fileName, { create: true });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
       await (window as TestWindow).consumeLaunch!({
-        files: [handle as unknown as FileSystemHandle],
+        files: [handle],
         targetURL: location.origin + "/",
       });
     }, name);

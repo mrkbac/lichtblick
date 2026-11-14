@@ -496,11 +496,25 @@ test.describe("native window resizing", () => {
         [1100, 800],
         [600, 500],
       ]) {
+        // setWindowBounds can resolve before the page sees the resize; count frames from the event.
+        await monitor.evaluate(() => {
+          (window as Window & { resized?: Promise<void> }).resized = new Promise((resolve) => {
+            addEventListener(
+              "resize",
+              () => {
+                requestAnimationFrame(() => {
+                  requestAnimationFrame(() => {
+                    resolve();
+                  });
+                });
+              },
+              { once: true },
+            );
+          });
+        });
         await cdp.send("Browser.setWindowBounds", { windowId, bounds: { width, height } });
         const size = await monitor.evaluate(async () => {
-          await new Promise((resolve) =>
-            requestAnimationFrame(() => requestAnimationFrame(resolve)),
-          );
+          await (window as Window & { resized?: Promise<void> }).resized;
           const canvas = document.querySelector("canvas")!;
           const rect = canvas.getBoundingClientRect();
           return {
