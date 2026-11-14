@@ -557,7 +557,7 @@ describe("McapRecoveryScanner message indexes", () => {
       new ChunkCache(),
     );
 
-    // When every message is read twice (e.g. backfill and playback)
+    // When every message is read by two readers at once (e.g. backfill and playback), then again
     const readAll = async () => {
       const read = [];
       for await (const message of reader.readMessages({ startingAt: 0n })) {
@@ -565,10 +565,10 @@ describe("McapRecoveryScanner message indexes", () => {
       }
       return read;
     };
-    const values = [...(await readAll()), ...(await readAll())];
+    const values = [...(await Promise.all([readAll(), readAll()])).flat(), ...(await readAll())];
 
     // Then each chunk was read once: for its message indexes, and kept for its messages
-    expect(values).toEqual([1, 2, 3, 4, 1, 2, 3, 4]);
+    expect(values).toEqual([1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4]);
     expect(chunkReads).toBe(4);
   });
 });

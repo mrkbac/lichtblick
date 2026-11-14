@@ -87,6 +87,9 @@ export class McapRecoveryScanner {
   // Only the chunk-level index is kept: offset, length, time range and channels per chunk. Its
   // message index offsets point at LIVE_INDEX_AT + i * INDEX_STRIDE (see #readable).
   #chunkIndexes: McapTypes.ChunkIndex[] = [];
+  // Chunks being rebuilt (see #readable) by start offset, so readers that miss the cache at the
+  // same time share one rebuild
+  #rebuilding = new Map<bigint, Promise<DataView>>();
   #attachmentIndexes: McapTypes.AttachmentIndex[] = [];
   #metadataIndexes: McapTypes.MetadataIndex[] = [];
   #channelMessageCounts = new Map<number, bigint>();
@@ -290,12 +293,23 @@ export class McapRecoveryScanner {
           // A read stays within one chunk's message indexes (see ChunkCursor.loadMessageIndexes)
           const i = (offset - LIVE_INDEX_AT) / INDEX_STRIDE;
           const chunk = this.#chunkIndexes[Number(i)]!;
-          let messageIndexes = cache.getMessageIndexes(chunk.chunkStartOffset);
+          const key = chunk.chunkStartOffset;
+          let messageIndexes = cache.getMessageIndexes(key);
           if (!messageIndexes) {
-            const rebuilt = await this.#rebuildChunk(base, chunk);
-            messageIndexes = rebuilt.messageIndexes;
-            cache.set(chunk.chunkStartOffset, rebuilt.records);
-            cache.setMessageIndexes(chunk.chunkStartOffset, messageIndexes);
+            let rebuild = this.#rebuilding.get(key);
+            if (!rebuild) {
+              rebuild = this.#rebuildChunk(base, chunk)
+                .then(({ records, messageIndexes: rebuilt }) => {
+                  cache.set(key, records);
+                  cache.setMessageIndexes(key, rebuilt);
+                  return rebuilt;
+                })
+                .finally(() => {
+                  this.#rebuilding.delete(key);
+                });
+              this.#rebuilding.set(key, rebuild);
+            }
+            messageIndexes = await rebuild;
           }
           const start = Number(offset - LIVE_INDEX_AT - i * INDEX_STRIDE);
           return new Uint8Array(
