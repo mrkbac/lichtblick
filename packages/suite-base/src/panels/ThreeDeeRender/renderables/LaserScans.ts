@@ -81,7 +81,8 @@ function createLaserScanGeometry(topic: string, usage: THREE.Usage): DynamicBuff
 }
 
 type LaserScanUserData = BaseUserData & {
-  laserScan: NormalizedLaserScan;
+  /** Undefined once a newer decay entry exists (see releaseMessage) */
+  laserScan: NormalizedLaserScan | undefined;
   originalMessage: Record<string, RosValue> | undefined;
 };
 
@@ -108,17 +109,22 @@ class LaserScanRenderable extends PointsRenderable<LaserScanUserData> {
   }
 
   public releaseMessage(): void {
+    this.userData.laserScan = undefined;
     this.userData.originalMessage = undefined;
   }
 
   public override instanceDetails(instanceId: number): Record<string, RosValue> | undefined {
+    const laserScan = this.userData.laserScan;
+    if (!laserScan) {
+      return undefined; // an older decay entry: only its geometry is kept
+    }
     const range =
-      instanceId >= 0 && instanceId < this.userData.laserScan.ranges.length
-        ? this.userData.laserScan.ranges[instanceId]
+      instanceId >= 0 && instanceId < laserScan.ranges.length
+        ? laserScan.ranges[instanceId]
         : undefined;
     const intensity =
-      instanceId >= 0 && instanceId < this.userData.laserScan.intensities.length
-        ? this.userData.laserScan.intensities[instanceId]
+      instanceId >= 0 && instanceId < laserScan.intensities.length
+        ? laserScan.intensities[instanceId]
         : undefined;
     return { range, intensity };
   }

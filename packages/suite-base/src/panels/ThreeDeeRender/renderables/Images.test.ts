@@ -9,7 +9,7 @@ import type { ImageRenderable } from "./Images/ImageRenderable";
 
 function hiddenRenderable() {
   return Object.assign(new THREE.Object3D(), {
-    userData: { settings: { visible: false }, settingsPath: ["topics", "image"] },
+    userData: { topic: "hidden", settings: { visible: false }, settingsPath: ["topics", "hidden"] },
     dispose: vi.fn(),
     flushPendingDecodes: vi.fn(),
   }) as unknown as ImageRenderable & { dispose: ReturnType<typeof vi.fn> };

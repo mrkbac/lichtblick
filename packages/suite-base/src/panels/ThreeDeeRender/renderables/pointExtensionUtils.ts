@@ -568,6 +568,9 @@ export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
 
   /** Disposes the `count` oldest entries, always keeping the latest. */
   #evictOldest(count: number): void {
+    if (count <= 0) {
+      return;
+    }
     const evicted = this.#history.splice(0, Math.min(count, this.#history.length - 1));
     for (const entry of evicted) {
       this.#parentRenderable.remove(entry.renderable);

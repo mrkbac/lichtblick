@@ -196,10 +196,14 @@ export class ImageRenderable extends Renderable<ImageUserData> {
 
   /**
    * This renderable owns every ImageBitmap that `decodeImage()` hands it, except the video player's
-   * `lastImageBitmap`, which the player owns and closes itself. Closing twice is a no-op.
+   * `lastImageBitmap`, which the player owns and closes itself. Once disposed, the player is
+   * closed too, so a late bitmap it was handed is closed here. Closing twice is a no-op.
    */
   #releaseBitmap(image: ImageBitmap | ImageData | undefined): void {
-    if (image instanceof ImageBitmap && image !== this.videoPlayer?.lastImageBitmap) {
+    if (
+      image instanceof ImageBitmap &&
+      (this.#disposed || image !== this.videoPlayer?.lastImageBitmap)
+    ) {
       image.close();
     }
   }

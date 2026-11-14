@@ -254,19 +254,43 @@ describe("ImageRenderable bitmap ownership", () => {
   it("does not close the video player's last bitmap, which the player owns", async () => {
     const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
     const shared = deferredBitmap();
+    const next = deferredBitmap();
     renderable.videoPlayer = {
       lastImageBitmap: shared.bitmap,
       close: vi.fn(),
     } as unknown as VideoPlayer;
     (renderable as unknown as { decodeImage: Mock }).decodeImage = vi
       .fn()
-      .mockResolvedValue(shared.bitmap);
+      .mockResolvedValueOnce(shared.bitmap)
+      .mockResolvedValueOnce(next.bitmap);
     renderable.setImage(sampleImage);
     await vi.waitFor(() => {
       expect(renderable.getDecodedImage()).toBe(shared.bitmap);
     });
-    renderable.dispose();
+    // Replacing it while the player is alive leaves it to the player.
+    renderable.setImage(sampleImage);
+    await vi.waitFor(() => {
+      expect(renderable.getDecodedImage()).toBe(next.bitmap);
+    });
     expect(shared.close).not.toHaveBeenCalled();
+  });
+
+  it("closes a player bitmap that arrives after dispose, when the player is already closed", async () => {
+    const renderable = new ImageRenderable(mockUserData.topic, mockRenderer, { ...mockUserData });
+    const late = deferredBitmap();
+    const player = { lastImageBitmap: undefined as ImageBitmap | undefined, close: vi.fn() };
+    renderable.videoPlayer = player as unknown as VideoPlayer;
+    (renderable as unknown as { decodeImage: Mock }).decodeImage = vi.fn(async () => {
+      const bitmap = await late.promise;
+      player.lastImageBitmap = bitmap; // as a GOP replay does after createImageBitmap
+      return bitmap;
+    });
+    renderable.setImage(sampleImage);
+    renderable.dispose();
+    late.resolve();
+    await vi.waitFor(() => {
+      expect(late.close).toHaveBeenCalled();
+    });
   });
 });
 

@@ -309,14 +309,15 @@ describe("MessageHandler: synchronized = true", () => {
         createCircleAnnotations([time]),
       ) as MessageEvent<ImageAnnotations>;
 
-    // The first image was evicted, so its annotations cannot complete a set.
-    messageHandler.handleAnnotations(annotationsAt(1n));
+    // Exactly the newest MAX_SYNC_ENTRIES images are kept: the one before them is gone...
+    const oldestKept = imageCount - BigInt(MAX_SYNC_ENTRIES) + 1n;
+    messageHandler.handleAnnotations(annotationsAt(oldestKept - 1n));
     expect(messageHandler.getRenderStateAndUpdateHUD().image).toBeUndefined();
 
-    // The newest image is still buffered.
-    messageHandler.handleAnnotations(annotationsAt(imageCount));
+    // ...and the oldest kept one still completes a set.
+    messageHandler.handleAnnotations(annotationsAt(oldestKept));
     expect(messageHandler.getRenderStateAndUpdateHUD().image?.message).toMatchObject({
-      timestamp: fromNanoSec(imageCount),
+      timestamp: fromNanoSec(oldestKept),
     });
   });
 

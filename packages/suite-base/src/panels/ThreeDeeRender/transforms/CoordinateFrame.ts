@@ -165,8 +165,14 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
     // window so the O(n) removeBefore runs once per quarter window, not on every insert.
     const windowStart = this.#transforms.maxKey()! - this.maxStorageTime;
     if (this.#transforms.minKey()! < windowStart - this.maxStorageTime / 4n) {
-      for (const [, tf] of this.#transforms.removeBefore(windowStart)) {
-        this.#transformPool.release(tf);
+      // Keep the newest transform before the window, so lookups inside the window still
+      // interpolate from it instead of snapping to the next one.
+      const index = this.#transforms.binarySearch(windowStart);
+      const keepFrom = index >= 0 ? index : ~index - 1;
+      if (keepFrom > 0) {
+        for (const [, tf] of this.#transforms.removeBefore(this.#transforms.at(keepFrom)![0])) {
+          this.#transformPool.release(tf);
+        }
       }
     }
 

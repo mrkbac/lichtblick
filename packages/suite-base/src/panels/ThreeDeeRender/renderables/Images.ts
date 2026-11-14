@@ -113,14 +113,14 @@ export class Images extends SceneExtension<ImageRenderable> {
     // happen inside #handleSubscriptionQueues(), which runs before startFrame()). Flushing here
     // means the full GOP batch is already in each queue, so skipRender correctly suppresses every
     // intermediate frame and only the last one triggers a GPU upload.
-    for (const [topic, renderable] of this.renderables) {
+    for (const renderable of this.renderables.values()) {
       // A hidden topic gets no messages; free its texture, decoder and video cache now instead of
       // keeping them until the panel closes. Showing it again re-creates it from the next message.
       if (!renderable.userData.settings.visible) {
         this.renderer.settings.errors.clearPath(renderable.userData.settingsPath);
         renderable.removeFromParent();
         renderable.dispose();
-        this.renderables.delete(topic);
+        this.renderables.delete(renderable.userData.topic);
         continue;
       }
       renderable.flushPendingDecodes();
