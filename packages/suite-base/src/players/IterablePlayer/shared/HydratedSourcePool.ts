@@ -43,6 +43,8 @@ export class HydratedSourcePool {
   #totalWeight = 0;
   #overCapacityReported = false;
   #terminated = false;
+  // Refreshes run one at a time, so a later one replaces (and closes) what an earlier one installed
+  #refreshes: Promise<unknown> = Promise.resolve();
 
   public constructor(options: HydratedSourcePoolOptions) {
     this.#maxCount =
@@ -88,6 +90,42 @@ export class HydratedSourcePool {
     });
     this.#totalWeight += weight;
     await this.#evictBeyondCapacity();
+  }
+
+  /**
+   * Replace the value of a resident entry (e.g. a source whose index grew), keeping its pins and
+   * recency; holders of the old value keep using it. Returns false, and keeps nothing, when `token`
+   * isn't resident: the next acquire() hydrates the current state instead.
+   */
+  public async refresh<T>(token: object, value: T): Promise<boolean> {
+    const result = this.#refreshes.then(async () => await this.#refresh(token, value));
+    this.#refreshes = result.catch(() => undefined);
+    return await result;
+  }
+
+  async #refresh(token: object, value: unknown): Promise<boolean> {
+    const entry = this.#entries.get(token);
+    if (!entry || this.#terminated) {
+      return false;
+    }
+    let old: unknown;
+    try {
+      old = await entry.value;
+    } catch {
+      return false; // its open() failed; that acquire() removes it
+    }
+    if (this.#entries.get(token) !== entry) {
+      return false; // evicted meanwhile
+    }
+    const weight = Math.max(0, entry.hydrator.weigh?.(value) ?? 1);
+    this.#totalWeight += weight - entry.weight;
+    entry.weight = weight;
+    entry.value = Promise.resolve(value);
+    if (entry.pins === 0) {
+      await entry.hydrator.close(old);
+    }
+    await this.#evictBeyondCapacity();
+    return true;
   }
 
   /**

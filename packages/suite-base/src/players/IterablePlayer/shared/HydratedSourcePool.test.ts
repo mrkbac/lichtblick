@@ -49,6 +49,49 @@ describe("HydratedSourcePool", () => {
     pool.release(token);
   });
 
+  it("refreshes a resident entry in place and keeps nothing for one that isn't resident", async () => {
+    // GIVEN: a byte-budgeted pool with one resident entry and one evicted token.
+    const pool = new HydratedSourcePool({ maxCount: 4, maxBytes: 100 });
+    const token = {};
+    const hydrator: SourceHydrator<{ bytes: number }> = {
+      open: vi.fn(),
+      close: vi.fn().mockResolvedValue(undefined),
+      weigh: ({ bytes }) => bytes,
+    };
+    const old = { bytes: 10 };
+    await pool.admit(token, hydrator, old);
+
+    // WHEN: refreshing both.
+    const grown = { bytes: 20 };
+    const refreshed = await pool.refresh(token, grown);
+    const missing = await pool.refresh({}, { bytes: 1 });
+
+    // THEN: the resident entry now serves the new value, and the old unpinned one is closed.
+    expect(refreshed).toBe(true);
+    expect(missing).toBe(false);
+    expect(hydrator.close).toHaveBeenCalledWith(old);
+    expect(await pool.acquire(token, hydrator)).toBe(grown);
+    expect(hydrator.open).not.toHaveBeenCalled();
+    expect(pool.size).toBe(1);
+    pool.release(token);
+  });
+
+  it("runs overlapping refreshes of one token in order, closing every replaced value", async () => {
+    // GIVEN: a resident entry
+    const pool = new HydratedSourcePool({ maxCount: 4 });
+    const token = {};
+    const hydrator = makeHydrator("old");
+    await pool.admit(token, hydrator, "old");
+
+    // WHEN: two refreshes overlap
+    await Promise.all([pool.refresh(token, "first"), pool.refresh(token, "second")]);
+
+    // THEN: the last one wins and both replaced values are closed once
+    expect(hydrator.close.mock.calls).toEqual([["old"], ["first"]]);
+    expect(await pool.acquire(token, hydrator)).toBe("second");
+    pool.release(token);
+  });
+
   it("hydrates via open() when not resident and allows eviction after release", async () => {
     // GIVEN: an empty pool and a token that has not been hydrated.
     const pool = new HydratedSourcePool({ maxCount: 1 });

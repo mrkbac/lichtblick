@@ -12,7 +12,7 @@ import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { IIterableSource, Initialization, ISerializedIterableSource } from "../IIterableSource";
 import { HydratedSourcePool, SourceHydrator } from "./HydratedSourcePool";
-import { MultiIterableSource } from "./MultiIterableSource";
+import { MIN_UPDATE_INTERVAL_MS, MultiIterableSource } from "./MultiIterableSource";
 import { MultiSource } from "./types";
 
 const DEFAULT_READ_AHEAD_BUFFER_BYTES = 1024 * 1024 * 2;
@@ -629,6 +629,72 @@ describe("MultiIterableSource", () => {
       // THEN: nothing is fetched.
       expect(backfill).not.toHaveBeenCalled();
       expect(result).toEqual([]);
+    });
+  });
+
+  describe("waitForUpdate", () => {
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("merges the sources' updates into one per interval and ends when none can grow", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "Date"] });
+      // GIVEN: two sources that publish updates on their own
+      const channels = [0, 1].map(() => {
+        let pending = Promise.withResolvers<Initialization | undefined>();
+        return {
+          waitForUpdate: async () => await pending.promise,
+          push: (init: Initialization | undefined) => {
+            const current = pending;
+            pending = Promise.withResolvers();
+            current.resolve(init);
+          },
+        };
+      });
+      const at = (sec: number) =>
+        InitializationSourceBuilder.initialization({
+          start: { sec: 0, nsec: 0 },
+          end: { sec, nsec: 0 },
+        });
+      let created = 0;
+      mockSourceConstructor.mockImplementation(function () {
+        return {
+          initialize: vi.fn().mockResolvedValue(at(1)),
+          messageIterator: vi.fn(),
+          getBackfillMessages: vi.fn().mockResolvedValue([]),
+          waitForUpdate: channels[created++]!.waitForUpdate,
+        } as Mocked<IIterableSource>;
+      });
+      const source = new MultiIterableSource(
+        { type: "files", files: [new Blob(), new Blob()] },
+        mockSourceConstructor,
+      );
+      await source.initialize();
+
+      // WHEN: one source grows, then both grow again within the interval
+      channels[0]!.push(at(10));
+      const first = await source.waitForUpdate();
+      channels[0]!.push(at(20));
+      channels[1]!.push(at(30));
+      let second: Initialization | undefined;
+      void source.waitForUpdate().then((update) => {
+        second = update;
+      });
+      await vi.advanceTimersByTimeAsync(MIN_UPDATE_INTERVAL_MS - 1);
+      const beforeInterval = second;
+      await vi.advanceTimersByTimeAsync(1);
+
+      // THEN: the first update goes out right away, the next two come as one after the interval
+      expect(first?.end).toEqual({ sec: 10, nsec: 0 });
+      expect(beforeInterval).toBeUndefined();
+      expect(second?.end).toEqual({ sec: 30, nsec: 0 });
+
+      // WHEN: both sources are done
+      channels[0]!.push(undefined);
+      channels[1]!.push(undefined);
+
+      // THEN: there are no more updates
+      await expect(source.waitForUpdate()).resolves.toBeUndefined();
     });
   });
 

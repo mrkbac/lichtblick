@@ -63,6 +63,10 @@ const DEFAULT_MAX_HYDRATED_BYTES = 1024 * 1024 * 512; // 512 MiB
 // intentionally fixed and small to avoid a large open/request burst.
 const PREWARM_EARLIEST_COUNT = 3;
 
+// Each update makes the player reload its preloaded blocks, so the sources' updates (each file
+// publishes on its own clock) are merged into one per interval.
+export const MIN_UPDATE_INTERVAL_MS = 2000;
+
 export class MultiIterableSource<T extends ISerializedIterableSource, P>
   implements ISerializedIterableSource
 {
@@ -71,6 +75,14 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
   private dataSource: MultiSource;
   private sourceImpl: IIterableSource<Uint8Array>[] = [];
   #pool: HydratedSourcePool | undefined;
+  // Each source's newest Initialization, in the order of `#sources`
+  #inits: Initialization[] = [];
+  #sources: IIterableSource<Uint8Array>[] = [];
+  #changed = false;
+  // Sources that may still publish updates (e.g. whose index is still being rebuilt)
+  #updating = 0;
+  #wake: (() => void) | undefined;
+  #lastUpdate = 0;
 
   public constructor(dataSource: MultiSource, SourceConstructor: IterableSourceConstructor<T, P>) {
     this.dataSource = dataSource;
@@ -166,16 +178,78 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
 
     const resultInit: Initialization = this.mergeInitializations(initializations);
 
-    this.sourceImpl.sort((a, b) => {
-      const aStart = a.getStart?.() ?? { sec: 0, nsec: 0 };
-      const bStart = b.getStart?.() ?? { sec: 0, nsec: 0 };
-      return compare(aStart, bStart);
+    this.#inits = initializations;
+    this.#sources = [...this.sourceImpl];
+    this.#sources.forEach((source, index) => {
+      if (source.waitForUpdate) {
+        this.#updating += 1;
+        void this.#followUpdates(source, index);
+      }
     });
+
+    this.#sortSources();
 
     // Warm earliest sources so t=0 playback does not stall re-hydrating them.
     await this.#prewarmEarliestSources();
 
     return resultInit;
+  }
+
+  #sortSources(): void {
+    this.sourceImpl.sort((a, b) => {
+      const aStart = a.getStart?.() ?? { sec: 0, nsec: 0 };
+      const bStart = b.getStart?.() ?? { sec: 0, nsec: 0 };
+      return compare(aStart, bStart);
+    });
+  }
+
+  async #followUpdates(source: IIterableSource<Uint8Array>, index: number): Promise<void> {
+    try {
+      for (;;) {
+        const init = await source.waitForUpdate?.();
+        if (!init) {
+          return;
+        }
+        this.#inits[index] = init;
+        this.#changed = true;
+        this.#wake?.();
+      }
+    } catch (error) {
+      log.error("Source update failed", error);
+    } finally {
+      this.#updating -= 1;
+      this.#wake?.();
+    }
+  }
+
+  /**
+   * Resolves with the merged Initialization whenever one of the sources has grown (at most once per
+   * MIN_UPDATE_INTERVAL_MS), and with undefined once none of them can grow any more.
+   */
+  public async waitForUpdate(): Promise<Initialization | undefined> {
+    while (!this.#changed && this.#updating > 0) {
+      await new Promise<void>((resolve) => {
+        this.#wake = resolve;
+      });
+    }
+    if (!this.#changed) {
+      return undefined;
+    }
+    // The last update (no source can grow any more) goes out right away
+    const until = this.#lastUpdate + MIN_UPDATE_INTERVAL_MS;
+    while (this.#updating > 0 && Date.now() < until) {
+      await new Promise<void>((resolve) => {
+        const timer = setTimeout(resolve, until - Date.now());
+        this.#wake = () => {
+          clearTimeout(timer);
+          resolve();
+        };
+      });
+    }
+    this.#lastUpdate = Date.now();
+    this.#changed = false;
+    this.#sortSources();
+    return this.mergeInitializations(this.#inits);
   }
 
   // Touch earliest sources in descending start order so the earliest become most-recently-used.

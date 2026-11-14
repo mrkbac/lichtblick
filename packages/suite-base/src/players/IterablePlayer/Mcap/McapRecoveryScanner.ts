@@ -68,6 +68,8 @@ export class McapRecoveryScanner {
   #messageStartTime?: bigint;
   #messageEndTime?: bigint;
   #readBuffer?: { offset: bigint; bytes: Uint8Array };
+  // Where the current scan step stops: read windows end there, so short steps read no further
+  #stopAt = 0n;
 
   public constructor(decompressHandlers: McapTypes.DecompressHandlers) {
     this.#decompressHandlers = decompressHandlers;
@@ -181,6 +183,7 @@ export class McapRecoveryScanner {
       this.offset = await this.#readHeader(readable, size);
     }
     const stopAt = maxBytes == undefined ? size : this.offset + maxBytes;
+    this.#stopAt = stopAt;
     while (!this.complete && this.offset + RECORD_PREFIX_LENGTH <= size) {
       if (this.offset >= stopAt) {
         this.#readBuffer = undefined;
@@ -550,8 +553,12 @@ export class McapRecoveryScanner {
     if (length >= READ_WINDOW_BYTES) {
       return await readable.read(offset, length);
     }
-    const windowLength = offset + READ_WINDOW_BYTES > size ? size - offset : READ_WINDOW_BYTES;
-    const bytes = await readable.read(offset, windowLength);
+    let end = offset + READ_WINDOW_BYTES;
+    end = end > size ? size : end;
+    if (end > this.#stopAt) {
+      end = this.#stopAt > offset + length ? this.#stopAt : offset + length;
+    }
+    const bytes = await readable.read(offset, end - offset);
     this.#readBuffer = { offset, bytes };
     return bytes.subarray(0, Number(length));
   }

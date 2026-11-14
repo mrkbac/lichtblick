@@ -3,6 +3,7 @@
 
 import { crc32 } from "@foxglove/crc";
 import type { McapTypes } from "@mcap/core";
+import { Semaphore } from "async-mutex";
 
 import Log from "@lichtblick/log";
 
@@ -20,14 +21,22 @@ const CHECK_BYTES = 64n * 1024n;
 
 /** How far each scan step reads before `onStep` sees the index */
 export const SCAN_STEP_BYTES = 16n * 1024n * 1024n;
+/** Steps before the first chunk is indexed are this short, so a file opens after its first chunk */
+export const FIRST_STEP_BYTES = 1024n * 1024n;
+/**
+ * Scan steps running at once in this worker. Each holds a read window and a decompressed chunk, so
+ * scanning many files keeps memory flat. Steps of files not open yet go first, then they take turns.
+ */
+const scanSteps = new Semaphore(2);
 
 /**
  * A recovery scan that reuses the index saved in OPFS by an earlier scan of the same file, so
  * reopening a footer-less file skips the forward scan. A file that grew since then is scanned
  * from where the saved index ends. Without OPFS (Node, private windows, quota) this just scans.
  *
- * `onStep` is called every `SCAN_STEP_BYTES` with the scanner and its index so far, once that has
- * at least one chunk, so the file can be shown while the rest is scanned.
+ * `onStep` is called after each step (`SCAN_STEP_BYTES`, shorter until the first chunk) with the
+ * scanner and its index so far, once that has at least one chunk, so the file can be shown while
+ * the rest is scanned.
  */
 export async function scanWithIndexCache(
   readable: McapTypes.IReadable,
@@ -43,7 +52,12 @@ export async function scanWithIndexCache(
     scanner.unreadableBytes = scanner.complete ? 0n : size - scanner.offset;
   } else if (!scanner.complete) {
     // Each step awaits reads, which lets message requests to this worker run in between
-    while (await scanner.scan(readable, SCAN_STEP_BYTES)) {
+    const step = async () =>
+      await scanner.scan(
+        readable,
+        scanner.recoveredChunkCount() > 0 ? SCAN_STEP_BYTES : FIRST_STEP_BYTES,
+      );
+    while (await scanSteps.runExclusive(step, 1, scanner.recoveredChunkCount() > 0 ? 0 : 1)) {
       if (scanner.recoveredChunkCount() > 0) {
         onStep?.(scanner);
       }
