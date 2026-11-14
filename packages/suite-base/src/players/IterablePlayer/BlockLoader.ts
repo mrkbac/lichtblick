@@ -21,6 +21,7 @@ import { Condvar } from "@lichtblick/den/async";
 import { filterMap } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
+import { ByteBudget } from "@lichtblick/suite-base/players/ByteBudget";
 import { IteratorCursor } from "@lichtblick/suite-base/players/IterablePlayer/IteratorCursor";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import {
@@ -76,7 +77,7 @@ export class BlockLoader {
   #blockDurationNanos: number;
   #maxBlocks: number;
   #topics: TopicSelection = new Map();
-  #maxCacheSize: number = 0;
+  #budget: ByteBudget;
   #alertManager: PlayerAlertManager;
   #stopped: boolean = false;
   #activeChangeCondvar: Condvar = new Condvar();
@@ -86,7 +87,7 @@ export class BlockLoader {
     this.#source = args.source;
     this.#start = args.start;
     this.#end = args.end;
-    this.#maxCacheSize = args.cacheSizeBytes;
+    this.#budget = new ByteBudget(args.cacheSizeBytes);
     this.#alertManager = args.alertManager;
     this.#abortController = new AbortController();
 
@@ -265,6 +266,47 @@ export class BlockLoader {
     return totalBytesRemoved;
   }
 
+  /**
+   * For each topic, the last preloaded message at or before `time`. A topic counts as answered
+   * when the blocks back from `time` to the start (or to its last message) hold it, loaded with
+   * at least the wanted fields; `missing` has the other topics, for the caller to read elsewhere.
+   */
+  public getBackfillMessages(
+    topics: TopicSelection,
+    time: Time,
+  ): { messages: MessageEvent[]; missing: TopicSelection } {
+    const messages: MessageEvent[] = [];
+    const missing: TopicSelection = new Map();
+    const offsetNs = toNanoSec(time) - toNanoSec(this.#start);
+    const lastBlockId = Math.min(
+      this.#blocks.length - 1,
+      Math.floor(Number(offsetNs) / this.#blockDurationNanos),
+    );
+
+    for (const [topic, subscription] of topics) {
+      let answered = offsetNs >= 0n && lastBlockId >= 0;
+      let message: MessageEvent | undefined;
+      for (let blockId = lastBlockId; answered && blockId >= 0 && !message; --blockId) {
+        const blockMessages = this.#blocks[blockId]?.messagesByTopic[topic];
+        if (
+          !blockMessages ||
+          !subscriptionCovers(this.#loadedSubscriptions[blockId]?.[topic], subscription)
+        ) {
+          answered = false;
+          break;
+        }
+        // Messages are in receive time order; only the block holding `time` has later ones
+        message = blockMessages.findLast((msg) => compare(msg.receiveTime, time) <= 0);
+      }
+      if (message) {
+        messages.push(message);
+      } else if (!answered) {
+        missing.set(topic, subscription);
+      }
+    }
+    return { messages, missing };
+  }
+
   public async stopLoading(): Promise<void> {
     log.debug("Stop loading blocks");
     this.#stopped = true;
@@ -312,7 +354,10 @@ export class BlockLoader {
     log.debug("loading blocks", { topics });
 
     const { progress } = args;
-    let totalBlockSizeBytes = this.#cacheSize();
+    // Recounted: setTopics() and grow() drop messages from blocks
+    const budget = this.#budget;
+    budget.reset();
+    budget.add(this.#cacheSize());
     // "cache-full" is only added right before returning, so clearing it once per load is enough
     let cacheFullCleared = false;
 
@@ -429,12 +474,12 @@ export class BlockLoader {
           }
 
           const messageSizeInBytes = iterResult.msgEvent.sizeInBytes;
-          totalBlockSizeBytes += messageSizeInBytes;
+          budget.add(messageSizeInBytes);
           arr.push(iterResult.msgEvent);
 
           sizeInBytes += messageSizeInBytes;
 
-          if (totalBlockSizeBytes < this.#maxCacheSize) {
+          if (budget.used() < budget.capacity) {
             if (!cacheFullCleared) {
               cacheFullCleared = true;
               this.#alertManager.removeAlert("cache-full");
@@ -443,8 +488,8 @@ export class BlockLoader {
           }
           // cache over capacity, try removing unused topics
           const removedSize = this.#removeUnusedBlockTopics();
-          totalBlockSizeBytes -= removedSize;
-          if (totalBlockSizeBytes > this.#maxCacheSize) {
+          budget.release(removedSize);
+          if (!budget.fits(0)) {
             this.#alertManager.addAlert("cache-full", {
               severity: "error",
               message: `Cache is full. Preloading for topics [${Array.from(
@@ -454,7 +499,7 @@ export class BlockLoader {
             });
             // We need to emit progress here so the player will emit a new state
             // containing the problem.
-            progress(this.#calculateProgress(topics, totalBlockSizeBytes));
+            progress(this.#calculateProgress(topics, budget.used()));
             return;
           }
         }
@@ -490,9 +535,9 @@ export class BlockLoader {
 
         // Subtract the size of overridden messages from the the total size of all blocks.
         // (The size of new messages is already added above).
-        totalBlockSizeBytes -= overridenBlockMessagesSize;
+        budget.release(overridenBlockMessagesSize);
 
-        progress(this.#calculateProgress(topics, totalBlockSizeBytes));
+        progress(this.#calculateProgress(topics, budget.used()));
       }
 
       await cursor.end();

@@ -407,5 +407,9 @@ describe("StateProcessor", () => {
     expect(newMapped.progress.messageCache?.blocks[0]?.messagesByTopic["/renamed_topic_1"]).toBe(
       mapped.progress.messageCache?.blocks[0]?.messagesByTopic["/renamed_topic_1"],
     );
+    // The unchanged block itself is reused, not rebuilt
+    expect(newMapped.progress.messageCache?.blocks[0]).toBe(
+      mapped.progress.messageCache?.blocks[0],
+    );
   });
 });

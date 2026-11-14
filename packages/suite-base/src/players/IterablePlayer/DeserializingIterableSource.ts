@@ -19,7 +19,7 @@ import {
   Initialization,
   IIterableSource,
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
-import { estimateObjectSize } from "@lichtblick/suite-base/players/messageMemoryEstimation";
+import { MessageSizeEstimator } from "@lichtblick/suite-base/players/messageMemoryEstimation";
 import { SubscribePayload } from "@lichtblick/suite-base/players/types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
@@ -82,11 +82,20 @@ function tryDeserializeMessage(
 /**
  * Iterable source that deserializes messages from a raw iterable source (messages are Uint8Arrays).
  */
+/** Parsed channels and size estimates; parsed once and shared by every reader of one source. */
+type SharedState = {
+  deserializersByTopic: Record<string, (data: ArrayBufferView) => unknown>;
+  connectionIdByTopic: Record<string, number>;
+  sizes: MessageSizeEstimator;
+};
+
 export class DeserializingIterableSource implements IDeserializedIterableSource {
   #source: IIterableSource<Uint8Array>;
-  #deserializersByTopic: Record<string, (data: ArrayBufferView) => unknown> = {};
-  #messageSizeEstimateBySubHash: Record<string, number> = {};
-  #connectionIdByTopic: Record<string, number> = {};
+  #shared: SharedState = {
+    deserializersByTopic: {},
+    connectionIdByTopic: {},
+    sizes: new MessageSizeEstimator(),
+  };
   // Shared across all iterators produced by messageIterator(). Only one iterator
   // should be active at a time; calling setSamplingWindowEnd mid-iteration will
   // affect the live iterator immediately.
@@ -96,6 +105,16 @@ export class DeserializingIterableSource implements IDeserializedIterableSource 
 
   public constructor(source: IIterableSource<Uint8Array>) {
     this.#source = source;
+  }
+
+  /**
+   * A reader of another view of the same data (e.g. the unbuffered source behind a buffer) that
+   * reuses this one's parsed channels instead of parsing them (and holding schema roots) again.
+   */
+  public withSource(source: IIterableSource<Uint8Array>): DeserializingIterableSource {
+    const reader = new DeserializingIterableSource(source);
+    reader.#shared = this.#shared;
+    return reader;
   }
 
   /**
@@ -131,9 +150,9 @@ export class DeserializingIterableSource implements IDeserializedIterableSource 
       schemaData,
       schemaEncoding,
     } of initResult.topics) {
-      this.#connectionIdByTopic[topic] = nextConnectionId++;
+      this.#shared.connectionIdByTopic[topic] = nextConnectionId++;
 
-      if (this.#deserializersByTopic[topic] == undefined) {
+      if (this.#shared.deserializersByTopic[topic] == undefined) {
         try {
           if (messageEncoding == undefined) {
             throw new Error(`Unspecified message encoding for topic ${topic}`);
@@ -152,7 +171,7 @@ export class DeserializingIterableSource implements IDeserializedIterableSource 
             messageEncoding,
             schema,
           });
-          this.#deserializersByTopic[topic] = deserialize;
+          this.#shared.deserializersByTopic[topic] = deserialize;
         } catch (error) {
           // This should in practice never happen as the underlying source filters out invalid topics
           alerts.push({
@@ -187,7 +206,7 @@ export class DeserializingIterableSource implements IDeserializedIterableSource 
     const self = this;
     const rawIterator = self.#source.messageIterator(args);
     const deserializeMsg = self.#deserializeMessage.bind(self);
-    const connectionIdByTopic = self.#connectionIdByTopic;
+    const connectionIdByTopic = self.#shared.connectionIdByTopic;
 
     // Collect all topics that will be sampled
     const samplingTopics = new Set<string>();
@@ -404,7 +423,7 @@ export class DeserializingIterableSource implements IDeserializedIterableSource 
   ): MessageEvent {
     const { topic, message } = rawMessageEvent;
 
-    const deserialize = this.#deserializersByTopic[topic];
+    const deserialize = this.#shared.deserializersByTopic[topic];
     if (!deserialize) {
       throw new Error(`Failed to find deserializer for topic ${topic}`);
     }
@@ -414,12 +433,11 @@ export class DeserializingIterableSource implements IDeserializedIterableSource 
       ? pickFields(deserializedMessage, subscription.fields)
       : deserializedMessage;
 
-    // Lookup the size estimate for this subscription hash or compute it if not found in the cache.
-    let msgSizeEstimate = this.#messageSizeEstimateBySubHash[subscription.subscriptionHash];
-    if (msgSizeEstimate == undefined) {
-      msgSizeEstimate = estimateObjectSize(msg);
-      this.#messageSizeEstimateBySubHash[subscription.subscriptionHash] = msgSizeEstimate;
-    }
+    const msgSizeEstimate = this.#shared.sizes.estimate(
+      subscription.subscriptionHash,
+      message.byteLength,
+      msg,
+    );
 
     // For sliced messages we use the estimated message size whereas for non-sliced messages
     // take whatever size is bigger.

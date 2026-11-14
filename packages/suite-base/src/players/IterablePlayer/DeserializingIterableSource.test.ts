@@ -541,4 +541,67 @@ describe("DeserializingIterableSources", () => {
     });
     expect(done).toEqual({ done: true, value: undefined });
   });
+
+  it.each([
+    ["whole messages", undefined],
+    ["sliced messages", ["data"]],
+  ])(
+    "keeps tracked sizes within 2x of real sizes for %s of very different sizes",
+    async (_, fields) => {
+      const lengths = [3, 100_000, 10, 70_000, 1, 2_000, 99_999, 5, 40_000, 300, 64, 65, 129];
+      const source = new TestSource();
+      source.messageIterator = async function* () {
+        for (const [i, length] of lengths.entries()) {
+          const message = encodeJson({ id: i, data: new Array(length).fill(1.5) });
+          yield {
+            type: "message-event",
+            msgEvent: {
+              topic: "json_topic",
+              receiveTime: { sec: 0, nsec: i },
+              message,
+              sizeInBytes: message.byteLength,
+              schemaName: "some_type",
+            },
+          };
+        }
+      };
+      const deserSource = new DeserializingIterableSource(source);
+      await deserSource.initialize();
+
+      let tracked = 0;
+      let real = 0;
+      for await (const result of deserSource.messageIterator({
+        topics: new Map([["json_topic", { topic: "json_topic", fields }]]),
+      })) {
+        if (result.type !== "message-event") {
+          continue;
+        }
+        const realSize = estimateObjectSize(result.msgEvent.message);
+        expect(result.msgEvent.sizeInBytes).toBeGreaterThanOrEqual(realSize / 2);
+        expect(result.msgEvent.sizeInBytes).toBeLessThanOrEqual(realSize * 2);
+        tracked += result.msgEvent.sizeInBytes;
+        real += realSize;
+      }
+      expect(tracked / real).toBeGreaterThan(0.5);
+      expect(tracked / real).toBeLessThan(2);
+    },
+  );
+
+  it("shares parsed channels with readers made by withSource()", async () => {
+    const source = new TestSource();
+    source.messageIterator = defaultMessageIterator;
+    const playback = new DeserializingIterableSource(source);
+    await playback.initialize();
+
+    // Never initialized itself: it reads with the channels parsed by `playback`
+    const reader = playback.withSource(source);
+    const results = [];
+    for await (const result of reader.messageIterator({
+      topics: new Map([["json_topic", { topic: "json_topic" }]]),
+    })) {
+      results.push(result);
+    }
+    expect(results).toHaveLength(8);
+    expect(results.every((result) => result.type === "message-event")).toBe(true);
+  });
 });

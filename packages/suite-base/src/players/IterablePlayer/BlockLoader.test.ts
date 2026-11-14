@@ -76,6 +76,67 @@ describe("BlockLoader", () => {
     expect.assertions(1);
   });
 
+  it("answers backfill from loaded blocks and leaves the rest to the caller", async () => {
+    const source = new TestSource();
+    const message = (topic: string, sec: number): MessageEvent => ({
+      topic,
+      receiveTime: { sec, nsec: 0 },
+      message: undefined,
+      sizeInBytes: 1,
+      schemaName: "foo",
+    });
+    // "a" has messages in the first and third block only; "b" none at all
+    const messages = [message("a", 0), message("a", 2)];
+    source.messageIterator = async function* (args) {
+      for (const msgEvent of messages) {
+        if (
+          args.topics.has(msgEvent.topic) &&
+          (!args.start || msgEvent.receiveTime.sec >= args.start.sec) &&
+          (!args.end || msgEvent.receiveTime.sec <= args.end.sec)
+        ) {
+          yield { type: "message-event", msgEvent };
+        }
+      }
+    };
+    const loader = new BlockLoader({
+      maxBlocks: 4,
+      cacheSizeBytes: 100,
+      minBlockDurationNs: 1,
+      source,
+      start: { sec: 0, nsec: 0 },
+      end: { sec: 3, nsec: 999_999_999 },
+      alertManager: new PlayerAlertManager(),
+    });
+    loader.setTopics(
+      new Map([
+        ["a", { topic: "a" }],
+        ["b", { topic: "b" }],
+        ["sliced", { topic: "sliced", fields: ["x"] }],
+      ]),
+    );
+    await loader.startLoading({
+      progress: async (progress) => {
+        if (progress.fullyLoadedFractionRanges?.[0]?.end === 1) {
+          await loader.stopLoading();
+        }
+      },
+    });
+
+    const topics = new Map([
+      ["a", { topic: "a" }],
+      ["b", { topic: "b" }],
+      ["sliced", { topic: "sliced" }], // whole messages, but only field "x" is loaded
+      ["not-preloaded", { topic: "not-preloaded" }],
+    ]);
+    // In the second block: "a" comes from the first block, "b" has no message before
+    const { messages: found, missing } = loader.getBackfillMessages(topics, { sec: 1, nsec: 5 });
+    expect(found).toEqual([messages[0]]);
+    expect([...missing.keys()]).toEqual(["sliced", "not-preloaded"]);
+
+    expect(loader.getBackfillMessages(topics, { sec: 3, nsec: 0 }).messages).toEqual([messages[1]]);
+    expect(loader.getBackfillMessages(topics, { sec: 2, nsec: 0 }).messages).toEqual([messages[1]]);
+  });
+
   it("grows in place, keeping blocks outside the updated range and merging blocks to fit", async () => {
     // Given 4 one-second blocks loaded with a message each
     const source = new TestSource();

@@ -64,6 +64,12 @@ const log = Log.getLogger(__filename);
 // See: https://github.com/foxglove/studio/pull/1733
 const DEFAULT_CACHE_SIZE_BYTES = 1.0e9;
 
+const MEGABYTE = 1024 * 1024;
+// Playback read-ahead cache for raw (serialized) messages
+const PLAYBACK_CACHE_BYTES = 300 * MEGABYTE;
+// Playback read-ahead cache for sources that hand out deserialized messages
+const DESERIALIZED_PLAYBACK_CACHE_BYTES = 600 * MEGABYTE;
+
 // From this speed on, playback skims: sources read only what is shown, SKIM_UPDATES_PER_SEC
 // times per second, instead of every message.
 const SKIM_MIN_SPEED = 10;
@@ -95,8 +101,8 @@ const MEMORY_INFO_BUFFERED_MSGS = "Buffered messages";
 const EMPTY_ARRAY = Object.freeze([]);
 /**
  * Hook invoked on a seek to optionally expand the backfill messages before they are emitted, e.g.
- * to replay a video GOP so a P/B-frame is decodable. It receives the raw backfill messages, a
- * function to fetch further backfill from the source, and a getter for the current abort signal,
+ * to replay a video GOP so a P/B-frame is decodable. It receives the raw backfill messages, an
+ * unbuffered source to read further messages from, and a getter for the current abort signal,
  * and returns the (possibly expanded) message set. Kept generic so the player carries no
  * codec-specific knowledge; the data-source layer decides whether to supply one.
  *
@@ -105,7 +111,7 @@ const EMPTY_ARRAY = Object.freeze([]);
  */
 type ExpandBackfill = (
   messages: MessageEvent[],
-  getBackfillMessages: (args: GetBackfillMessagesArgs) => Promise<MessageEvent[]>,
+  source: Pick<IDeserializedIterableSource, "messageIterator">,
   getAbortSignal: () => AbortSignal | undefined,
 ) => Promise<MessageEvent[]>;
 
@@ -219,10 +225,12 @@ export class IterablePlayer implements Player {
   #playbackIterator?: AsyncIterator<Readonly<IteratorResult>>;
 
   #blockLoader?: BlockLoader;
-  // The block loader's source, whose deserializers an update that keeps the loader refreshes
-  #blockLoaderSource?: DeserializingIterableSource;
   #blockLoadingProcess?: Promise<void>;
 
+  // Unbuffered reads (block loading, range and backfill reads). Shares the playback source's parsed
+  // channels, which its initialize() and waitForUpdate() parse for all readers.
+  readonly #unbufferedSource: IDeserializedIterableSource;
+  // #unbufferedSource once initialized
   #messageRangeSource?: IDeserializedIterableSource;
   #samplingEnabled: boolean = false;
 
@@ -251,17 +259,20 @@ export class IterablePlayer implements Player {
 
     this.#iterableSource = source;
     if (source.sourceType === "deserialized") {
-      this.#bufferImpl = new BufferedIterableSource(source);
+      this.#bufferImpl = new BufferedIterableSource(source, {
+        maxCacheSizeBytes: DESERIALIZED_PLAYBACK_CACHE_BYTES,
+      });
       this.#bufferedSource = this.#bufferImpl;
+      this.#unbufferedSource = source;
     } else {
-      const MEGABYTE_IN_BYTES = 1024 * 1024;
       const bufferInterface = new BufferedIterableSource(source, {
         readAheadDuration,
-        maxCacheSizeBytes: 300 * MEGABYTE_IN_BYTES, // 300mb
+        maxCacheSizeBytes: PLAYBACK_CACHE_BYTES,
       });
       this.#bufferImpl = bufferInterface;
       this.#deserializingSource = new DeserializingIterableSource(bufferInterface);
       this.#bufferedSource = this.#deserializingSource;
+      this.#unbufferedSource = this.#deserializingSource.withSource(source);
     }
 
     this.#name = name;
@@ -810,31 +821,14 @@ export class IterablePlayer implements Player {
       idx += 1;
     }
 
-    if (this.#iterableSource.sourceType === "deserialized") {
-      this.#messageRangeSource = this.#iterableSource;
-    } else {
-      this.#messageRangeSource = new DeserializingIterableSource(this.#iterableSource);
-      (this.#messageRangeSource as DeserializingIterableSource).initializeDeserializers(initResult);
-    }
+    this.#messageRangeSource = this.#unbufferedSource;
 
-    if (keepBlocks) {
-      this.#blockLoaderSource?.initializeDeserializers(initResult);
-    } else if (this.#enablePreload) {
+    if (!keepBlocks && this.#enablePreload) {
       // --- setup block loader which loads messages for _full_ subscriptions in the "background"
       try {
-        let blockLoaderSource;
-        if (this.#iterableSource.sourceType === "deserialized") {
-          blockLoaderSource = this.#iterableSource;
-        } else {
-          blockLoaderSource = new DeserializingIterableSource(this.#iterableSource);
-          // We must not call initialize() here, as the #iterableSource was already initialized above.
-          blockLoaderSource.initializeDeserializers(initResult);
-          this.#blockLoaderSource = blockLoaderSource;
-        }
-
         this.#blockLoader = new BlockLoader({
           cacheSizeBytes: DEFAULT_CACHE_SIZE_BYTES,
-          source: blockLoaderSource,
+          source: this.#messageRangeSource,
           start: this.#start,
           end: this.#end,
           maxBlocks: MAX_BLOCKS,
@@ -1004,6 +998,23 @@ export class IterablePlayer implements Player {
     this.#setState(this.#isPlaying ? "play" : "idle");
   }
 
+  /** The last message per subscribed topic at `time`: preloaded ones from the blocks, others read */
+  async #getBackfillMessages(time: Time, abortSignal: AbortSignal): Promise<MessageEvent[]> {
+    const fromBlocks = this.#blockLoader?.getBackfillMessages(this.#allTopics, time) ?? {
+      messages: [],
+      missing: this.#allTopics,
+    };
+    if (fromBlocks.missing.size === 0) {
+      return fromBlocks.messages.sort((a, b) => compare(a.receiveTime, b.receiveTime));
+    }
+    const read = await this.#bufferedSource.getBackfillMessages({
+      topics: fromBlocks.missing,
+      time,
+      abortSignal,
+    });
+    return fromBlocks.messages.concat(read).sort((a, b) => compare(a.receiveTime, b.receiveTime));
+  }
+
   // Process a seek request. The seek is performed by requesting a getBackfillMessages from the source.
   // This provides the last message on all subscribed topics.
   async #stateSeekBackfill() {
@@ -1034,18 +1045,14 @@ export class IterablePlayer implements Player {
 
     try {
       this.#abort = new AbortController();
-      const backfillMessages = await this.#bufferedSource.getBackfillMessages({
-        topics: this.#allTopics,
-        time: targetTime,
-        abortSignal: this.#abort.signal,
-      });
+      const backfillMessages = await this.#getBackfillMessages(targetTime, this.#abort.signal);
       // An optional, source-supplied hook may expand the backfill before emit (e.g. replaying a
       // video GOP so a P/B-frame is decodable). When no hook is supplied the raw backfill is used
       // unchanged, keeping the player itself free of codec-specific knowledge.
       const messages = this.#expandBackfill
         ? await this.#expandBackfill(
             backfillMessages,
-            this.#bufferedSource.getBackfillMessages.bind(this.#bufferedSource),
+            this.#unbufferedSource,
             () => this.#abort?.signal,
           )
         : backfillMessages;

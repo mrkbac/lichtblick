@@ -53,7 +53,7 @@ import {
   liveHistorySettings,
 } from "@lichtblick/suite-base/players/liveHistory/liveHistorySettings";
 import { supportsLiveRecording } from "@lichtblick/suite-base/players/liveHistory/liveRecordings";
-import { estimateObjectSize } from "@lichtblick/suite-base/players/messageMemoryEstimation";
+import { MessageSizeEstimator } from "@lichtblick/suite-base/players/messageMemoryEstimation";
 import {
   AdvertiseOptions,
   MessageEvent,
@@ -222,7 +222,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #fetchAssetRequests = new Map<number, (response: FetchAssetResponse) => void>();
   #fetchedAssets = new Map<string, Promise<Asset>>();
   #parameterTypeByName = new Map<string, Parameter["type"]>();
-  #messageSizeEstimateByTopic: Record<string, number> = {};
+  #messageSizes = new MessageSizeEstimator();
 
   public constructor({
     url,
@@ -653,12 +653,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
         const topic = chanInfo.channel.topic;
         const deserializedMessage = chanInfo.parsedChannel.deserialize(data);
 
-        // Lookup the size estimate for this topic or compute it if not found in the cache.
-        let msgSizeEstimate = this.#messageSizeEstimateByTopic[topic];
-        if (msgSizeEstimate == undefined) {
-          msgSizeEstimate = estimateObjectSize(deserializedMessage);
-          this.#messageSizeEstimateByTopic[topic] = msgSizeEstimate;
-        }
+        const msgSizeEstimate = this.#messageSizes.estimate(
+          topic,
+          data.byteLength,
+          deserializedMessage,
+        );
 
         // The history also keeps the received bytes (for export and recording), so count both.
         const sizeInBytes = this.#serverControlsPlayback
@@ -1877,7 +1876,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     }
     this.#fetchAssetRequests.clear();
     this.#parameterTypeByName.clear();
-    this.#messageSizeEstimateByTopic = {};
+    this.#messageSizes.clear();
   }
 
   #updateDataTypes(datatypes: MessageDefinitionMap): void {

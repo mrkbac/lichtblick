@@ -244,3 +244,28 @@ export function estimateObjectSize(obj: unknown): number {
   log.error(`Can't estimate size of type '${typeof obj}'`);
   return SMALL_INTEGER_SIZE;
 }
+
+/**
+ * Caches {@link estimateObjectSize} per key (topic or subscription) and serialized-size bucket.
+ * Walking every message is too slow, but one estimate per key is wrong for messages whose size
+ * varies (point clouds, images, variable-length arrays). Buckets are powers of two of the
+ * serialized size, so each estimate is reused only for messages within 2× of the one it came from.
+ */
+export class MessageSizeEstimator {
+  #estimates = new Map<string, number>();
+
+  public estimate(key: string, serializedBytes: number, message: unknown): number {
+    // clz32 is the power-of-two bucket: 31 - floor(log2(bytes))
+    const bucketKey = `${Math.clz32(serializedBytes)}:${key}`;
+    let estimate = this.#estimates.get(bucketKey);
+    if (estimate == undefined) {
+      estimate = estimateObjectSize(message);
+      this.#estimates.set(bucketKey, estimate);
+    }
+    return estimate;
+  }
+
+  public clear(): void {
+    this.#estimates.clear();
+  }
+}

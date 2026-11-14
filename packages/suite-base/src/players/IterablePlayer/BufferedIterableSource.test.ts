@@ -19,6 +19,8 @@ import {
   MessageIteratorArgs,
 } from "./IIterableSource";
 
+const TEST_CACHE_BYTES = 600 * 1024 * 1024;
+
 function waiter(count: number) {
   let resolver: () => void;
 
@@ -68,7 +70,9 @@ class TestSource implements IIterableSource {
 describe("BufferedIterableSource", () => {
   it("should construct and initialize", async () => {
     const source = new TestSource();
-    const bufferedSource = new BufferedIterableSource(source);
+    const bufferedSource = new BufferedIterableSource(source, {
+      maxCacheSizeBytes: TEST_CACHE_BYTES,
+    });
 
     await bufferedSource.initialize();
     expect(bufferedSource.loadedRanges()).toEqual([{ start: 0, end: 0 }]);
@@ -76,7 +80,9 @@ describe("BufferedIterableSource", () => {
 
   it("should produce messages that the source produces", async () => {
     const source = new TestSource();
-    const bufferedSource = new BufferedIterableSource(source);
+    const bufferedSource = new BufferedIterableSource(source, {
+      maxCacheSizeBytes: TEST_CACHE_BYTES,
+    });
 
     await bufferedSource.initialize();
 
@@ -130,7 +136,9 @@ describe("BufferedIterableSource", () => {
 
   it("should produce messages after buffering is complete", async () => {
     const source = new TestSource();
-    const bufferedSource = new BufferedIterableSource(source);
+    const bufferedSource = new BufferedIterableSource(source, {
+      maxCacheSizeBytes: TEST_CACHE_BYTES,
+    });
 
     await bufferedSource.initialize();
 
@@ -192,7 +200,9 @@ describe("BufferedIterableSource", () => {
 
   it("should indicate loaded ranges are done even when last message is before end", async () => {
     const source = new TestSource();
-    const bufferedSource = new BufferedIterableSource(source);
+    const bufferedSource = new BufferedIterableSource(source, {
+      maxCacheSizeBytes: TEST_CACHE_BYTES,
+    });
 
     await bufferedSource.initialize();
 
@@ -251,7 +261,9 @@ describe("BufferedIterableSource", () => {
 
   it("should indicate loading ranges when partially buffered", async () => {
     const source = new TestSource();
-    const bufferedSource = new BufferedIterableSource(source);
+    const bufferedSource = new BufferedIterableSource(source, {
+      maxCacheSizeBytes: TEST_CACHE_BYTES,
+    });
 
     await bufferedSource.initialize();
 
@@ -292,7 +304,9 @@ describe("BufferedIterableSource", () => {
 
   it("should yield correct messages when starting a new iterator before the the cached items", async () => {
     const source = new TestSource();
-    const bufferedSource = new BufferedIterableSource(source);
+    const bufferedSource = new BufferedIterableSource(source, {
+      maxCacheSizeBytes: TEST_CACHE_BYTES,
+    });
 
     await bufferedSource.initialize();
 
@@ -403,6 +417,7 @@ describe("BufferedIterableSource", () => {
   it("should wait to buffer more messages until reading moves forward", async () => {
     const source = new TestSource();
     const bufferedSource = new BufferedIterableSource(source, {
+      maxCacheSizeBytes: TEST_CACHE_BYTES,
       readAheadDuration: { sec: 1, nsec: 0 },
       minReadAheadDuration: { sec: 0, nsec: 0 },
     });
@@ -467,6 +482,7 @@ describe("BufferedIterableSource", () => {
   it("should scale read ahead with playback speed", async () => {
     const source = new TestSource();
     const bufferedSource = new BufferedIterableSource(source, {
+      maxCacheSizeBytes: TEST_CACHE_BYTES,
       readAheadDuration: { sec: 1, nsec: 0 },
       minReadAheadDuration: { sec: 0, nsec: 0 },
     });
@@ -507,6 +523,7 @@ describe("BufferedIterableSource", () => {
   it("should buffer minimum duration ahead before messages can be read", async () => {
     const source = new TestSource();
     const bufferedSource = new BufferedIterableSource(source, {
+      maxCacheSizeBytes: TEST_CACHE_BYTES,
       readAheadDuration: { sec: 3, nsec: 0 },
       minReadAheadDuration: { sec: 2, nsec: 0 },
     });
@@ -570,6 +587,7 @@ describe("BufferedIterableSource", () => {
   it("should adjust buffer position when reading while buffering", async () => {
     const source = new TestSource();
     const bufferedSource = new BufferedIterableSource(source, {
+      maxCacheSizeBytes: TEST_CACHE_BYTES,
       readAheadDuration: { sec: 1, nsec: 0 },
     });
 
@@ -623,6 +641,7 @@ describe("BufferedIterableSource", () => {
   it("should support stamp iterator results and wait to buffer more messages until reading moves forward", async () => {
     const source = new TestSource();
     const bufferedSource = new BufferedIterableSource(source, {
+      maxCacheSizeBytes: TEST_CACHE_BYTES,
       readAheadDuration: { sec: 1, nsec: 0 },
     });
 
@@ -680,6 +699,7 @@ describe("BufferedIterableSource", () => {
   it("should exit producer when waiting for readhead to move past stamp", async () => {
     const source = new TestSource();
     const bufferedSource = new BufferedIterableSource(source, {
+      maxCacheSizeBytes: TEST_CACHE_BYTES,
       readAheadDuration: { sec: 1, nsec: 0 },
     });
 

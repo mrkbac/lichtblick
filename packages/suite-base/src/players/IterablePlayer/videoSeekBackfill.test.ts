@@ -3,11 +3,13 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { compare } from "@foxglove/rostime";
+
 import { H265 } from "@lichtblick/den/video";
 import { MessageEvent } from "@lichtblick/suite";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 
-import { GetBackfillMessagesArgs } from "./IIterableSource";
+import { IteratorResult, MessageIteratorArgs } from "./IIterableSource";
 import {
   MAX_SEEK_BACKFILL_VIDEO_GOP_MESSAGES,
   expandVideoSeekBackfill,
@@ -122,309 +124,164 @@ describe("messageKey", () => {
   });
 });
 
+function frame(nsec: number, byte: number, format = "h265", sec = 0): MessageEvent {
+  return MessageEventBuilder.messageEvent({
+    topic: "video",
+    schemaName: "foxglove.CompressedVideo",
+    receiveTime: { sec, nsec },
+    message: { format, data: new Uint8Array([byte]) },
+    sizeInBytes: 1,
+  });
+}
+
+/** A source over `messages` (in receive time order) that records its reads */
+function fakeSource(messages: MessageEvent[]) {
+  const reads: MessageIteratorArgs[] = [];
+  return {
+    reads,
+    async *messageIterator(
+      args: MessageIteratorArgs,
+    ): AsyncIterableIterator<Readonly<IteratorResult>> {
+      reads.push(args);
+      for (const msgEvent of messages) {
+        if (
+          args.topics.has(msgEvent.topic) &&
+          (args.start == undefined || compare(msgEvent.receiveTime, args.start) >= 0) &&
+          (args.end == undefined || compare(msgEvent.receiveTime, args.end) <= 0)
+        ) {
+          yield { type: "message-event", msgEvent };
+        }
+      }
+    },
+  };
+}
+
+/** Keyframes are the frames whose data byte is 0xff */
+function mockKeyframes(): void {
+  vi.spyOn(H265, "IsKeyframe").mockImplementation((data: Uint8Array) => data[0] === 0xff);
+}
+
 describe("readVideoGopForSeekTarget", () => {
-  it("returns the GOP from the closest preceding keyframe to the target, in order", async () => {
-    // Given
-    const target = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 0, nsec: 30 },
-      message: { format: "h265", data: new Uint8Array([0x01]) },
-      sizeInBytes: 1,
-    });
-    const delta1 = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 0, nsec: 20 },
-      message: { format: "h265", data: new Uint8Array([0x02]) },
-      sizeInBytes: 1,
-    });
-    const keyframe = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 0, nsec: 10 },
-      message: { format: "h265", data: new Uint8Array([0x03]) },
-      sizeInBytes: 1,
-    });
+  it("returns the GOP from the closest preceding keyframe to the target in one read", async () => {
+    const older = frame(5, 0xff);
+    const keyframe = frame(10, 0xff);
+    const delta = frame(20, 0x02);
+    const target = frame(30, 0x01);
+    const after = frame(40, 0x03);
+    const source = fakeSource([older, keyframe, delta, target, after]);
+    mockKeyframes();
 
-    const sequence = [target, delta1, keyframe];
-    const getBackfillMessages = vi.fn(
-      async () => [sequence.shift()].filter((m) => m) as MessageEvent[],
+    const result = await readVideoGopForSeekTarget(target, source, () => undefined);
+
+    expect(result).toEqual([keyframe, delta, target]);
+    expect(source.reads).toHaveLength(1);
+    expect(source.reads[0]?.end).toEqual(target.receiveTime);
+  });
+
+  it("reads further back in growing windows until it finds a keyframe", async () => {
+    const keyframe = frame(0, 0xff, "h265", 10);
+    const deltas = [11, 13, 16].map((sec) => frame(0, 0x02, "h265", sec));
+    const target = frame(0, 0x01, "h265", 17);
+    const source = fakeSource([keyframe, ...deltas, target]);
+    mockKeyframes();
+
+    const result = await readVideoGopForSeekTarget(target, source, () => undefined);
+
+    expect(result).toEqual([keyframe, ...deltas, target]);
+    // 2s, then 4s further back, then 8s: (15, 17], (11, 15], (3, 11]
+    expect(source.reads).toHaveLength(3);
+    // No frame is read twice
+    expect(source.reads[1]?.end).toEqual({ sec: 15, nsec: 0 });
+  });
+
+  it("returns empty when there is no keyframe before the target", async () => {
+    const target = frame(30, 0x01);
+    const source = fakeSource([frame(10, 0x02), target]);
+    mockKeyframes();
+
+    expect(await readVideoGopForSeekTarget(target, source, () => undefined)).toEqual([]);
+  });
+
+  it("returns empty when the topic carries a message that does not need GOP backfill", async () => {
+    const target = frame(30, 0x01);
+    const other = { ...frame(20, 0x02), schemaName: "other" };
+    const source = fakeSource([frame(10, 0xff), other, target]);
+    mockKeyframes();
+
+    expect(await readVideoGopForSeekTarget(target, source, () => undefined)).toEqual([]);
+  });
+
+  it("returns empty when the GOP is longer than MAX_SEEK_BACKFILL_VIDEO_GOP_MESSAGES", async () => {
+    const deltas = Array.from({ length: MAX_SEEK_BACKFILL_VIDEO_GOP_MESSAGES + 5 }, (_, i) =>
+      frame(i + 1, 0x02, "h265", 1),
     );
-    vi.spyOn(H265, "IsKeyframe").mockImplementation(
-      (data: Uint8Array) => data === (keyframe.message as { data: Uint8Array }).data,
+    const target = deltas.at(-1)!;
+    const source = fakeSource([frame(0, 0xff, "h265", 1), ...deltas]);
+    mockKeyframes();
+
+    expect(await readVideoGopForSeekTarget(target, source, () => undefined)).toEqual([]);
+  });
+
+  it("keeps a long run of frames when a keyframe follows it", async () => {
+    const run = Array.from({ length: MAX_SEEK_BACKFILL_VIDEO_GOP_MESSAGES + 5 }, (_, i) =>
+      frame(i + 1, 0x02),
     );
+    const keyframe = frame(1e6, 0xff);
+    const target = frame(2e6, 0x01);
+    const source = fakeSource([...run, keyframe, target]);
+    mockKeyframes();
 
-    // When
-    const result = await readVideoGopForSeekTarget(target, getBackfillMessages, () => undefined);
-
-    // Then
-    expect(result.map((m) => m.receiveTime.nsec)).toEqual([10, 20, 30]);
-    expect(getBackfillMessages).toHaveBeenCalledTimes(3);
-  });
-
-  it("returns empty when the source returns no candidate", async () => {
-    // Given
-    const target = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 0, nsec: 0 },
-      message: { format: "h265", data: new Uint8Array([0x01]) },
-      sizeInBytes: 1,
-    });
-    const getBackfillMessages = vi.fn(async () => []);
-    vi.spyOn(H265, "IsKeyframe").mockReturnValue(false);
-
-    // When
-    const result = await readVideoGopForSeekTarget(target, getBackfillMessages, () => undefined);
-
-    // Then
-    expect(result).toEqual([]);
-  });
-
-  it("returns empty when the source returns a non-H.265 candidate", async () => {
-    // Given
-    const target = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 0, nsec: 0 },
-      message: { format: "h265", data: new Uint8Array([0x01]) },
-      sizeInBytes: 1,
-    });
-    const getBackfillMessages = vi.fn(async () => [
-      MessageEventBuilder.messageEvent({
-        topic: "video",
-        schemaName: "other",
-        receiveTime: { sec: 0, nsec: 0 },
-        message: { format: "h265", data: new Uint8Array([0x01]) },
-        sizeInBytes: 1,
-      }),
+    expect(await readVideoGopForSeekTarget(target, source, () => undefined)).toEqual([
+      keyframe,
+      target,
     ]);
-    vi.spyOn(H265, "IsKeyframe").mockReturnValue(false);
-
-    // When
-    const result = await readVideoGopForSeekTarget(target, getBackfillMessages, () => undefined);
-
-    // Then
-    expect(result).toEqual([]);
   });
 
-  it("returns empty if the same candidate is seen twice (would loop)", async () => {
-    // Given
-    const target = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 5, nsec: 100 },
-      message: { format: "h265", data: new Uint8Array([0x01]) },
-      sizeInBytes: 1,
-    });
-    const getBackfillMessages = vi.fn(async () => [
-      MessageEventBuilder.messageEvent({
-        topic: "video",
-        schemaName: "foxglove.CompressedVideo",
-        receiveTime: { sec: 5, nsec: 100 },
-        message: { format: "h265", data: new Uint8Array([0x02]) },
-        sizeInBytes: 1,
-      }),
-    ]);
-    vi.spyOn(H265, "IsKeyframe").mockReturnValue(false);
-
-    // When
-    const result = await readVideoGopForSeekTarget(target, getBackfillMessages, () => undefined);
-
-    // Then
-    expect(result).toEqual([]);
-  });
-
-  it("returns empty when stepping back below time zero", async () => {
-    // Given
-    const target = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 0, nsec: 0 },
-      message: { format: "h265", data: new Uint8Array([0x01]) },
-      sizeInBytes: 1,
-    });
-    const getBackfillMessages = vi.fn(async () => [
-      MessageEventBuilder.messageEvent({
-        topic: "video",
-        schemaName: "foxglove.CompressedVideo",
-        receiveTime: { sec: 0, nsec: 0 },
-        message: { format: "h265", data: new Uint8Array([0x02]) },
-        sizeInBytes: 1,
-      }),
-    ]);
-    vi.spyOn(H265, "IsKeyframe").mockReturnValue(false);
-
-    // When
-    const result = await readVideoGopForSeekTarget(target, getBackfillMessages, () => undefined);
-
-    // Then
-    expect(result).toEqual([]);
-  });
-
-  it("aborts after MAX_SEEK_BACKFILL_VIDEO_GOP_MESSAGES iterations", async () => {
-    // Given
-    let counter = 0;
-    const getBackfillMessages = vi.fn(async () => [
-      MessageEventBuilder.messageEvent({
-        topic: "video",
-        schemaName: "foxglove.CompressedVideo",
-        receiveTime: { sec: 1, nsec: ++counter * 1000 },
-        message: { format: "h265", data: new Uint8Array([0x01]) },
-        sizeInBytes: 1,
-      }),
-    ]);
-    vi.spyOn(H265, "IsKeyframe").mockReturnValue(false);
-
-    const target = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 1, nsec: (MAX_SEEK_BACKFILL_VIDEO_GOP_MESSAGES + 5) * 1000 },
-      message: { format: "h265", data: new Uint8Array([0x01]) },
-      sizeInBytes: 1,
-    });
-
-    // When
-    const result = await readVideoGopForSeekTarget(target, getBackfillMessages, () => undefined);
-
-    // Then
-    expect(result).toEqual([]);
-    expect(getBackfillMessages).toHaveBeenCalledTimes(MAX_SEEK_BACKFILL_VIDEO_GOP_MESSAGES);
-  });
-
-  it("forwards the abort signal from the getter on each call", async () => {
-    // Given
-    const target = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 0, nsec: 0 },
-      message: { format: "h265", data: new Uint8Array([0x01]) },
-      sizeInBytes: 1,
-    });
-    const keyframe = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 0, nsec: 10 },
-      message: { format: "h265", data: new Uint8Array([0x02]) },
-      sizeInBytes: 1,
-    });
-    const getBackfillMessages = vi.fn(async (_args: GetBackfillMessagesArgs) => [keyframe]);
-    vi.spyOn(H265, "IsKeyframe").mockReturnValue(true);
+  it("stops when the seek is aborted", async () => {
+    const target = frame(30, 0x01);
+    const source = fakeSource([frame(10, 0xff), target]);
+    mockKeyframes();
     const controller = new AbortController();
+    controller.abort();
 
-    // When
-    await readVideoGopForSeekTarget(target, getBackfillMessages, () => controller.signal);
-
-    // Then
-    expect(getBackfillMessages.mock.calls[0]?.[0].abortSignal).toBe(controller.signal);
+    expect(await readVideoGopForSeekTarget(target, source, () => controller.signal)).toEqual([]);
   });
 });
 
 describe("expandVideoSeekBackfill", () => {
   it("passes through unrecognized formats and keyframes unchanged", async () => {
-    // Given
-    const otherFormat = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 0, nsec: 1 },
-      message: { format: "mjpeg", data: new Uint8Array([0x01]) },
-      sizeInBytes: 1,
-    });
-    const keyframe = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 0, nsec: 2 },
-      message: { format: "h265", data: new Uint8Array([0x02]) },
-      sizeInBytes: 1,
-    });
-    vi.spyOn(H265, "IsKeyframe").mockReturnValue(true);
-    const getBackfillMessages = vi.fn(async () => []);
+    const otherFormat = frame(1, 0x01, "mjpeg");
+    const keyframe = frame(2, 0xff);
+    const source = fakeSource([]);
+    mockKeyframes();
 
-    // When
-    const result = await expandVideoSeekBackfill(
-      [otherFormat, keyframe],
-      getBackfillMessages,
-      () => undefined,
-    );
+    const result = await expandVideoSeekBackfill([otherFormat, keyframe], source, () => undefined);
 
-    // Then
-    expect(result.map((m) => m.receiveTime.nsec)).toEqual([1, 2]);
-    expect(getBackfillMessages).not.toHaveBeenCalled();
+    expect(result).toEqual([otherFormat, keyframe]);
+    expect(source.reads).toHaveLength(0);
   });
 
   it("expands a P frame with its preceding GOP and dedupes by message key", async () => {
-    // Given
-    const keyframe = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 0, nsec: 10 },
-      message: { format: "h265", data: new Uint8Array([0x03]) },
-      sizeInBytes: 1,
-    });
-    const delta1 = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 0, nsec: 20 },
-      message: { format: "h265", data: new Uint8Array([0x02]) },
-      sizeInBytes: 1,
-    });
-    const target = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 0, nsec: 30 },
-      message: { format: "h265", data: new Uint8Array([0x01]) },
-      sizeInBytes: 1,
-    });
-    const sequence = [target, delta1, keyframe];
+    const keyframe = frame(10, 0xff);
+    const delta = frame(20, 0x02);
+    const target = frame(30, 0x01);
+    const source = fakeSource([keyframe, delta, target]);
+    mockKeyframes();
 
-    const getBackfillMessages = vi.fn(
-      async () => [sequence.shift()].filter((m) => m) as MessageEvent[],
-    );
-    vi.spyOn(H265, "IsKeyframe").mockImplementation(
-      (data: Uint8Array) => data === (keyframe.message as { data: Uint8Array }).data,
-    );
+    const result = await expandVideoSeekBackfill([target], source, () => undefined);
 
-    // When
-    const result = await expandVideoSeekBackfill([target], getBackfillMessages, () => undefined);
-
-    // Then
-    expect(result.map((m) => m.receiveTime.nsec)).toEqual([10, 20, 30]);
+    expect(result).toEqual([keyframe, delta, target]);
   });
 
   it("returns sorted output when expansion mixes new and original messages", async () => {
-    // Given
-    const keyframe = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 0, nsec: 5 },
-      message: { format: "h265", data: new Uint8Array([0x02]) },
-      sizeInBytes: 1,
-    });
-    const target = MessageEventBuilder.messageEvent({
-      topic: "video",
-      schemaName: "foxglove.CompressedVideo",
-      receiveTime: { sec: 0, nsec: 30 },
-      message: { format: "h265", data: new Uint8Array([0x01]) },
-      sizeInBytes: 1,
-    });
+    const other = { ...frame(40, 0x01, "mjpeg"), topic: "other" };
+    const keyframe = frame(5, 0xff);
+    const target = frame(30, 0x01);
+    const source = fakeSource([keyframe, target]);
+    mockKeyframes();
 
-    let firstCall = true;
-    const getBackfillMessages = vi.fn(async () => {
-      if (firstCall) {
-        firstCall = false;
-        return [keyframe];
-      }
-      return [];
-    });
-    vi.spyOn(H265, "IsKeyframe").mockImplementation(
-      (data: Uint8Array) => data === (keyframe.message as { data: Uint8Array }).data,
-    );
+    const result = await expandVideoSeekBackfill([other, target], source, () => undefined);
 
-    // When
-    const result = await expandVideoSeekBackfill([target], getBackfillMessages, () => undefined);
-
-    // Then
-    expect(result.map((m) => m.receiveTime.nsec)).toEqual([5, 30]);
+    expect(result.map((m) => m.receiveTime.nsec)).toEqual([5, 30, 40]);
   });
 });
