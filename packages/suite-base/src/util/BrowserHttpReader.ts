@@ -16,6 +16,7 @@
 
 import i18next from "i18next";
 
+import { promiseTimeout } from "@lichtblick/den/async";
 import * as en from "@lichtblick/suite-base/i18n/en";
 import type {
   FileReader,
@@ -28,9 +29,9 @@ import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 // Bytes fetched from each end of the file when opening it
 const EDGE_BYTES = 64 * 1024;
 
-// How long opening waits for the tail once the head has arrived. The tail can take an extra round
-// trip for its CORS preflight; past this, it is read on demand like any other range.
-const TAIL_GRACE_MS = 2000;
+// How long opening waits for the edge data once the head response has arrived. The tail can take an
+// extra round trip for its CORS preflight; past this, it is read on demand like any other range.
+const EDGE_GRACE_MS = 2000;
 
 // Bounds the CORS diagnosis request so a hanging server can't delay the error
 const PROBE_TIMEOUT_MS = 5000;
@@ -77,11 +78,23 @@ export default class BrowserHttpReader implements FileReader {
     }
     const headRange = contentRange(response);
     const identifier = versionOf(response);
+    // The edge data only saves later requests, so a failed or stalled read is just left out
+    const optional = async (
+      edge: typeof head,
+      read: () => Promise<Uint8Array | undefined>,
+    ): Promise<Uint8Array | undefined> =>
+      await promiseTimeout(read(), EDGE_GRACE_MS).catch(() => {
+        edge.abort();
+        return undefined;
+      });
     if (headRange == undefined) {
       // Content-Range is not exposed to this origin (CORS): ask for the size the old way, and keep
       // the head only if it is provably from the same file version
       tail.abort();
-      const [headData, full] = await Promise.all([head.body(), this.#openWithoutRange()]);
+      const [headData, full] = await Promise.all([
+        optional(head, head.body),
+        this.#openWithoutRange(),
+      ]);
       const sameVersion = identifier != undefined && full.identifier === identifier;
       return sameVersion
         ? { ...full, initialData: edgeData(headData, undefined, full.size) }
@@ -105,28 +118,15 @@ export default class BrowserHttpReader implements FileReader {
       }
       return await tail.body();
     };
-    // The tail is optional: don't let a stalled one hold up opening the file
-    const tailData = readTail().catch(() => undefined);
-    const headData =
-      headRange.start === 0 && headRange.end === expected - 1 ? await head.body() : undefined;
-    if (headData == undefined) {
+    const headMatches = headRange.start === 0 && headRange.end === expected - 1;
+    if (!headMatches) {
       head.abort();
     }
-    let stopTimer = () => {};
-    const tailOrTimeout = await Promise.race([
-      tailData,
-      new Promise<undefined>((resolve) => {
-        const timer = setTimeout(resolve, TAIL_GRACE_MS);
-        stopTimer = () => {
-          clearTimeout(timer);
-        };
-      }),
+    const [headData, tailData] = await Promise.all([
+      headMatches ? optional(head, head.body) : undefined,
+      optional(tail, readTail),
     ]);
-    stopTimer();
-    if (tailOrTimeout == undefined) {
-      tail.abort();
-    }
-    return { size: total, identifier, initialData: edgeData(headData, tailOrTimeout, total) };
+    return { size: total, identifier, initialData: edgeData(headData, tailData, total) };
   }
 
   #fetchRange(range: string): {

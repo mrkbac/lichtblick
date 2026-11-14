@@ -165,6 +165,35 @@ describe("BrowserHttpReader open", () => {
     });
   });
 
+  it.each([
+    ["exposed", `bytes 0-${EDGE - 1}/${EDGE * 3}`],
+    ["hidden", ""],
+  ])(
+    "opens without the head when its body fails (Content-Range %s)",
+    async (_, contentRangeHeader) => {
+      const data = file(EDGE * 3);
+      const server = rangeServer(data, {
+        headers: () => ({ "content-range": contentRangeHeader }),
+      });
+      globalThis.fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) =>
+        rangeOf(init) === `bytes=0-${EDGE - 1}`
+          ? new Response(
+              new ReadableStream({
+                start(controller) {
+                  controller.error(new Error("connection reset"));
+                },
+              }),
+              { status: 206, headers: { "content-range": contentRangeHeader, etag: '"v1"' } },
+            )
+          : await server(url, init),
+      );
+
+      const opened = await new BrowserHttpReader(FILE_URL).open();
+      expect(opened.size).toBe(data.length);
+      expect(opened.initialData?.some(({ offset }) => offset === 0) ?? false).toBe(false);
+    },
+  );
+
   it("doesn't wait for a stalled tail", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout"] });
     try {
