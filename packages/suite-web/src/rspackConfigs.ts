@@ -207,6 +207,11 @@ export const mainConfig =
       // `rspack serve` compiles lazy imports on first use, and the recompile reloads every open page.
       // E2E tests run in parallel against one dev server, so build everything up front for them.
       ...(process.env.E2E === "true" && { lazyCompilation: false }),
+      // Each lazy compile adds modules to the shared split chunks, and their names (derived from
+      // the modules they hold) change with it. A page still loading the previous build then asks
+      // for chunk files that no longer exist (404, "Chunk is from another build"). Without split
+      // chunks every async chunk keeps its name across lazy compiles.
+      ...(isServe && { optimization: { ...appConfig.optimization, splitChunks: false } }),
 
       target: "web",
       context: params.contextPath,
