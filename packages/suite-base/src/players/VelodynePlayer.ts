@@ -13,6 +13,10 @@ import { debouncePromise } from "@lichtblick/den/async";
 import Logger from "@lichtblick/log";
 import { ParameterValue } from "@lichtblick/suite";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
+import {
+  LIVE_QUEUE_MAX_BYTES,
+  LiveMessageQueue,
+} from "@lichtblick/suite-base/players/LiveMessageQueue";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import {
   AdvertiseOptions,
@@ -83,12 +87,13 @@ export default class VelodynePlayer implements Player {
   #topicStats = new Map<string, TopicStats>(); // Message count and timestamps for our single topic
   #start: Time; // The time at which we started playing
   #packets: RawPacket[] = []; // Queue of packets that will form the next parsed message
-  #parsedMessages: MessageEvent[] = []; // Queue of messages that we'll send in next _emitState() call
   #presence: PlayerPresence = PlayerPresence.INITIALIZING;
   #emitTimer?: ReturnType<typeof setTimeout>;
 
   // track issues within the player
   #alerts = new PlayerAlertManager();
+  // Messages that we'll send in the next emitState() call.
+  readonly #parsedMessages = new LiveMessageQueue(LIVE_QUEUE_MAX_BYTES, this.#alerts);
 
   public constructor({ port }: VelodynePlayerOpts) {
     this.#port = port ?? DEFAULT_VELODYNE_PORT;
@@ -210,8 +215,7 @@ export default class VelodynePlayer implements Player {
     }
 
     const currentTime = fromMillis(Date.now());
-    const messages = this.#parsedMessages;
-    this.#parsedMessages = [];
+    const messages = this.#parsedMessages.drain();
     return this.#listener({
       name: "Velodyne",
       presence: this.#presence,
@@ -261,7 +265,7 @@ export default class VelodynePlayer implements Player {
     this.#totalBytesReceived = 0;
     this.#seq = 0;
     this.#packets = [];
-    this.#parsedMessages = [];
+    this.#parsedMessages.clear();
   }
 
   public setSubscriptions(_subscriptions: SubscribePayload[]): void {}

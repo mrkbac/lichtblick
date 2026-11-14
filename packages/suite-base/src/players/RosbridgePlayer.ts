@@ -25,6 +25,10 @@ import { debouncePromise } from "@lichtblick/den/async";
 import { filterMap } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
 import { ParameterValue } from "@lichtblick/suite";
+import {
+  LIVE_QUEUE_MAX_BYTES,
+  LiveMessageQueue,
+} from "@lichtblick/suite-base/players/LiveMessageQueue";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import {
@@ -111,7 +115,6 @@ export default class RosbridgePlayer implements Player {
   // active subscriptions
   #topicSubscriptions = new Map<string, roslib.Topic>();
   #requestedSubscriptions: SubscribePayload[] = []; // Requested subscriptions by setSubscriptions()
-  #parsedMessages: MessageEvent[] = []; // Queue of messages that we'll send in next _emitState() call.
   #requestTopicsTimeout?: ReturnType<typeof setTimeout>; // setTimeout() handle for _requestTopics().
   // active publishers for the current connection
   #topicPublishers = new Map<string, roslib.Topic>();
@@ -121,6 +124,8 @@ export default class RosbridgePlayer implements Player {
   #receivedBytes: number = 0;
   #presence: PlayerPresence = PlayerPresence.NOT_PRESENT;
   #alerts = new PlayerAlertManager();
+  // Messages that we'll send in the next emitState() call.
+  readonly #parsedMessages = new LiveMessageQueue(LIVE_QUEUE_MAX_BYTES, this.#alerts);
   #emitTimer?: ReturnType<typeof setTimeout>;
   #serviceTypeCache = new Map<string, Promise<string>>();
   #serviceDetailsCache = new Map<string, Promise<RosapiTypeDef[]>>();
@@ -399,8 +404,7 @@ export default class RosbridgePlayer implements Player {
     }
 
     const currentTime = this.#getCurrentTime();
-    const messages = this.#parsedMessages;
-    this.#parsedMessages = [];
+    const messages = this.#parsedMessages.drain();
     return this.#listener({
       name: this.#url,
       presence: this.#presence,

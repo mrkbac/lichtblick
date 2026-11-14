@@ -95,4 +95,24 @@ describe("PlayerAlertManager", () => {
     expect(console.error).toHaveBeenCalledTimes(2);
     (console.error as Mock).mockClear();
   });
+
+  it("ignores an identical alert: no log, same array", () => {
+    const manager = new PlayerAlertManager();
+    expect(manager.addAlert("a", { severity: "error", message: "A", error: new Error("x") })).toBe(
+      true,
+    );
+    const alerts = manager.alerts();
+    for (let i = 0; i < 1000; i++) {
+      expect(
+        manager.addAlert("a", { severity: "error", message: "A", error: new Error("x") }),
+      ).toBe(false);
+    }
+    expect(manager.alerts()).toBe(alerts);
+    expect(console.error).toHaveBeenCalledTimes(1);
+    expect(manager.addAlert("a", { severity: "error", message: "A", error: new Error("y") })).toBe(
+      true,
+    );
+    expect(manager.alerts()).not.toBe(alerts);
+    (console.error as Mock).mockClear();
+  });
 });
