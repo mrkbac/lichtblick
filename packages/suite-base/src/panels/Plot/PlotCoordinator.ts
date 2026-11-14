@@ -547,6 +547,7 @@ export class PlotCoordinator extends EventEmitter<PlotCoordinatorEventTypes> {
         color,
         contrastColor: getContrastColor(colorScheme, color),
         lineSize: path.lineSize ?? 1.0,
+        lineDash: path.lineDash,
         timestampMethod: path.timestampMethod,
         showLine: path.showLine ?? true,
         enabled: path.enabled,

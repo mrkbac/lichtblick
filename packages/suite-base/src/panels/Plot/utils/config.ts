@@ -22,6 +22,8 @@ export type PlotPath = BasePlotPath & {
   timestampPath?: string;
   showLine?: boolean;
   lineSize?: number;
+  /** Dash pattern of the line in pixels (on, off, …); unset is solid */
+  lineDash?: readonly number[];
   /** "step" holds each value until the next sample (sample-and-hold). */
   interpolation?: PlotInterpolation;
   /** Which y-axis the series is drawn against. */

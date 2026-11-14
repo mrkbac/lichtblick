@@ -17,6 +17,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useLatest } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
+import { CompareTimelineOverlay } from "@lichtblick/suite-base/components/Compare/CompareTimelineOverlay";
 import { clampTimeToCut } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import {
   MessagePipelineContext,
@@ -244,6 +245,7 @@ export default function Scrubber(props: Props): React.JSX.Element {
             renderSlider={renderSlider}
           />
         </Stack>
+        <CompareTimelineOverlay />
         <TrimRangeOverlay />
         <EventsOverlay />
         <PlaybackBarHoverTicks componentId={hoverComponentId} />

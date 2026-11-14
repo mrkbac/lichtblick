@@ -24,6 +24,10 @@ import { useTranslation } from "react-i18next";
 
 import { parseMessagePath } from "@lichtblick/message-path";
 import { OnClickArg as OnChartClickArgs } from "@lichtblick/suite-base/components/Chart";
+import {
+  configuredFocus,
+  useComparedPaths,
+} from "@lichtblick/suite-base/components/Compare/comparedPaths";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import useMessagesByPath from "@lichtblick/suite-base/components/MessagePathSyntax/useMessagesByPath";
 import {
@@ -66,8 +70,16 @@ const MATCH_EPSILON = 1e-6;
 
 const selectPlayerPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
 
+// Compared recordings get a row each, named by their topic (`/a/…`, `/b/…`)
+const sameStyle = () => ({});
+
 function StateTransitions(props: StateTransitionPanelProps) {
-  const { config, saveConfig } = props;
+  const { config, saveConfig } = useComparedPaths(
+    "StateTransitions",
+    props.config,
+    props.saveConfig,
+    sameStyle,
+  );
   const { paths } = config;
   const { classes } = useStateTransitionsStyles();
   const theme = useTheme();
@@ -274,7 +286,25 @@ function StateTransitions(props: StateTransitionPanelProps) {
     };
   }, [deltaMode.active, markerA, markerB, paths]);
 
-  usePanelSettings(config, saveConfig, pathState, focusedPath);
+  // Settings edit the configured paths, not one per compared recording
+  const configuredPathState = useMemo(
+    () =>
+      props.config.paths.map((path, index) => ({
+        path,
+        isArray: pathState.some(
+          (state, expandedIndex) =>
+            state.isArray &&
+            configuredFocus(["paths", String(expandedIndex)], config.paths)?.[1] === String(index),
+        ),
+      })),
+    [config.paths, pathState, props.config.paths],
+  );
+  usePanelSettings(
+    props.config,
+    props.saveConfig,
+    configuredPathState,
+    configuredFocus(focusedPath, config.paths),
+  );
 
   return (
     <Stack flexGrow={1} overflow="hidden" style={{ zIndex: 0 }}>

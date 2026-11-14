@@ -5,12 +5,17 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { subtract as subtractTimes, toSec, Time } from "@foxglove/rostime";
+import { compare as compareTimes, subtract as subtractTimes, toSec, Time } from "@foxglove/rostime";
 import { Divider, Typography } from "@mui/material";
 import * as _ from "lodash-es";
 import { Fragment, useEffect, useRef } from "react";
 import { makeStyles } from "tss-react/mui";
 
+import {
+  sideLocalTime,
+  sideSharedEnd,
+  useCompare,
+} from "@lichtblick/suite-base/components/Compare/CompareContext";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -88,6 +93,7 @@ export function PlaybackControlsTooltipContent(params: {
   const { timeFormat, formatTime, formatDate } = useAppTimeFormat();
   const hoveredEvents = useTimelineInteractionState(selectHoveredEvents);
   const startTime = useMessagePipeline(selectStartTime);
+  const compare = useCompare();
   const { classes } = useStyles();
 
   if (!startTime) {
@@ -134,6 +140,20 @@ export function PlaybackControlsTooltipContent(params: {
     title: "Elapsed",
     value: `${toSec(timeFromStart).toFixed(9)} sec`,
   });
+
+  // Each compared recording's own time here, if it covers this moment
+  if (compare) {
+    tooltipItems.push({ type: "divider" });
+    for (const side of compare.sides) {
+      const inRange =
+        compareTimes(stamp, side.sharedStart) >= 0 && compareTimes(stamp, sideSharedEnd(side)) <= 0;
+      tooltipItems.push({
+        type: "item",
+        title: `${side.label} · ${side.name}`,
+        value: inRange ? formatTime(sideLocalTime(side, stamp)) : "–",
+      });
+    }
+  }
 
   return (
     <div className={classes.tooltipWrapper}>

@@ -46,6 +46,8 @@ export type SeriesItem = {
   timestampParsed?: MessagePath;
   showLine: boolean;
   lineSize: number;
+  /** Dash pattern of the line in pixels; unset or empty is solid */
+  lineDash?: readonly number[];
   enabled: boolean;
   interpolation?: "linear" | "step";
   /** chart.js scale id: "y" (primary) or "y2" (secondary) */

@@ -18,6 +18,11 @@ import { useTranslation } from "react-i18next";
 import { MessagePath } from "@lichtblick/message-path";
 import { Immutable } from "@lichtblick/suite";
 import * as PanelAPI from "@lichtblick/suite-base/PanelAPI";
+import { CompareSideInfo } from "@lichtblick/suite-base/components/Compare/CompareContext";
+import {
+  configuredFocus,
+  useComparedPaths,
+} from "@lichtblick/suite-base/components/Compare/comparedPaths";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import { messagePathStructures } from "@lichtblick/suite-base/components/MessagePathSyntax/messagePathsForDatatype";
 import { resolveEnumNamesInPath } from "@lichtblick/suite-base/components/MessagePathSyntax/resolveEnumNames";
@@ -45,12 +50,17 @@ import {
   TooltipStateSetter,
   ZoomMode,
 } from "@lichtblick/suite-base/panels/Plot/types";
-import { getPlotMode } from "@lichtblick/suite-base/panels/Plot/utils/config";
+import {
+  PlotPath,
+  getPlotMode,
+  isReferenceLinePlotPathType,
+} from "@lichtblick/suite-base/panels/Plot/utils/config";
 import { MeasureModeToolbarButton } from "@lichtblick/suite-base/panels/shared/MeasureModeToolbarButton";
 import { createMeasureModeEscapeHandler } from "@lichtblick/suite-base/panels/shared/measureModeEscapeHandler";
 import useAppendOnlyKey from "@lichtblick/suite-base/panels/shared/useAppendOnlyKey";
 import { enumValuesByDatatypeAndField } from "@lichtblick/suite-base/util/enums";
 import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
+import { getLineColor } from "@lichtblick/suite-base/util/plotColors";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { BoxZoomOverlay } from "./BoxZoomOverlay";
@@ -68,8 +78,27 @@ import useSubscriptions from "./hooks/useSubscriptions";
 const labelOr = (label: string | undefined, fallback: string): string =>
   label != undefined && label !== "" ? label : fallback;
 
+/** Dash pattern telling compared recordings apart: A solid, B dashed, … */
+const SIDE_DASHES: (readonly number[] | undefined)[] = [undefined, [6, 4], [2, 3], [8, 3, 2, 3]];
+
+const isTopicPlotPath = (path: PlotPath) => !isReferenceLinePlotPathType(path);
+
 const Plot = (props: PlotProps): React.JSX.Element => {
-  const { saveConfig, config } = props;
+  // While every compared recording is shown, each series is drawn once per recording
+  const comparedStyle = useMemo(() => {
+    const single = props.config.paths.filter(isTopicPlotPath).length === 1;
+    return (path: PlotPath, side: CompareSideInfo, index: number): Partial<PlotPath> => ({
+      color: single ? side.color : getLineColor(path.color, index),
+      lineDash: SIDE_DASHES[side.index % SIDE_DASHES.length],
+    });
+  }, [props.config.paths]);
+  const { saveConfig, config } = useComparedPaths(
+    "Plot",
+    props.config,
+    props.saveConfig,
+    comparedStyle,
+    isTopicPlotPath,
+  );
   const {
     paths: series,
     showLegend,
@@ -144,7 +173,8 @@ const Plot = (props: PlotProps): React.JSX.Element => {
     subscriberId,
   });
 
-  usePlotPanelSettings(config, saveConfig, focusedPath);
+  // Settings edit the configured series, not one per compared recording
+  usePlotPanelSettings(props.config, props.saveConfig, configuredFocus(focusedPath, config.paths));
   useSubscriptions(config, subscriberId);
   useGlobalSync(coordinator, setCanReset, { shouldSync }, subscriberId);
   usePanning(canvasDiv, coordinator, draggingRef);
