@@ -94,7 +94,8 @@ export class CodeBuilder {
 
   /**
    * Compiles the collected lines into a function with the given parameters. Returns undefined
-   * when `new Function` is not allowed (e.g. by a Content-Security-Policy).
+   * when a Content-Security-Policy blocks `new Function` (EvalError). Other errors, such as a
+   * Trusted Types TypeError, are thrown; callers must treat any error as "fall back".
    */
   public compile<F>(...params: Code[]): F | undefined {
     try {

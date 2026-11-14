@@ -46,7 +46,15 @@ export function createRos2CdrDeserializer(
       littleEndian: (slot & 1) === 1,
       eightByteAlignment: (slot & 2) === 2 ? 4 : 8,
     }));
-    return decode === false ? fallback(data) : decode(view, bytesOf(data.buffer), RUNTIME);
+    if (decode === false) {
+      return fallback(data);
+    }
+    // Strings are read from the message's own bytes; an input Uint8Array is used as is.
+    const bytes =
+      data instanceof Uint8Array
+        ? data
+        : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+    return decode(view, bytes, RUNTIME);
   };
 }
 
@@ -60,17 +68,6 @@ const VARIANT_OF_KIND = Uint8Array.from(
   (_, kind) => (LITTLE_ENDIAN_KINDS.includes(kind) ? 1 : 0) | (kind > 3 ? 2 : 0),
 );
 
-// A byte view of the most recent input buffer. Messages from one chunk share a buffer, so this
-// is made once per chunk instead of once per string. Holds on to at most one buffer.
-let lastBuffer: ArrayBufferLike | undefined;
-let lastBytes: Uint8Array = new Uint8Array(0);
-function bytesOf(buffer: ArrayBufferLike): Uint8Array {
-  if (buffer !== lastBuffer) {
-    lastBuffer = buffer;
-    lastBytes = new Uint8Array(buffer);
-  }
-  return lastBytes;
-}
 const HOST_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 
 function isConstantModule(def: MessageDefinition): boolean {
@@ -87,12 +84,12 @@ const stringCache: (string | undefined)[] = new Array(STRING_CACHE_SIZE).fill(un
 
 /**
  * Same result as `CdrReader.string()` for a string of `count` bytes (without the terminator) at
- * byte `start` of the input buffer.
+ * offset `start` of the message `bytes`.
  */
 function readString(bytes: Uint8Array, start: number, count: number): string {
   if (count > MAX_CACHED_STRING_LENGTH || start + count > bytes.length) {
-    // Bounded by the underlying buffer, not the view, like CdrReader (throws past its end).
-    return textDecoder.decode(new Uint8Array(bytes.buffer, start, count));
+    // Bounded by the underlying buffer, not the message, like CdrReader (throws past its end).
+    return textDecoder.decode(new Uint8Array(bytes.buffer, bytes.byteOffset + start, count));
   }
   // Hash the length and five sampled bytes; the full compare below makes any collision harmless.
   const last = start + count - 1;
@@ -116,7 +113,7 @@ function readString(bytes: Uint8Array, start: number, count: number): string {
   }
   for (let i = 0; i < count; i++) {
     if (bytes[start + i]! >= 0x80) {
-      return textDecoder.decode(new Uint8Array(bytes.buffer, start, count));
+      return textDecoder.decode(bytes.subarray(start, start + count));
     }
   }
   let ascii = "";
@@ -205,9 +202,7 @@ function compile(
       case "string": {
         const n = local();
         readUint32(n);
-        emit(
-          js`const ${v} = ${n} <= 1 ? "" : rt.readString(bytes, view.byteOffset + o, ${n} - 1); o += ${n};`,
-        );
+        emit(js`const ${v} = ${n} <= 1 ? "" : rt.readString(bytes, o, ${n} - 1); o += ${n};`);
         advanced(1);
         return v;
       }
