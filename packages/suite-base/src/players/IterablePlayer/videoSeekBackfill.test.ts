@@ -240,11 +240,11 @@ describe("readVideoGopForSeekTarget", () => {
     const source = fakeSource([frame(0, 0xff, "h265", 1), target]);
     mockKeyframes();
     const controller = new AbortController();
-    // Aborts after the first (keyframe-less) window is read
+    // Aborts once the first (keyframe-less) window has been read
     const read = source.messageIterator.bind(source);
-    source.messageIterator = (args) => {
+    source.messageIterator = async function* (args) {
+      yield* read(args);
       controller.abort();
-      return read(args);
     };
 
     expect(await readVideoGopForSeekTarget(target, source, () => controller.signal)).toEqual([]);
