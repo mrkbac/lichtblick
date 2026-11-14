@@ -122,5 +122,8 @@ describe("defaultCompareSides", () => {
     expect(
       defaultCompareSides([file("recording.mcap"), file("recording.mcap"), file("other.mcap")]),
     ).toEqual(["recording.mcap", "recording.mcap (2)", "other.mcap"]);
+    expect(
+      defaultCompareSides([file("a.mcap", "run.mcap"), file("b.mcap", "other"), file("run.mcap")]),
+    ).toEqual(["run.mcap", "other", "run.mcap (2)"]);
   });
 });

@@ -97,6 +97,12 @@ describe("SideView", () => {
     expect(mapped.messageEventsBySubscriberId.get("panel")?.[0]?.topic).toEqual("/odom");
   });
 
+  it("keeps the prefix of its own topic that starts like another side's", () => {
+    expect(view.fromSide("/b/a/odom")).toEqual("/b/a/odom");
+    expect(view.fromSide("/b/odom")).toEqual("/odom");
+    expect(view.toSide("/b/a/odom")).toEqual("/b/a/odom");
+  });
+
   it("delivers messages of a topic subscribed with another side's prefix", () => {
     const mapped = view.mapPublic(
       context({

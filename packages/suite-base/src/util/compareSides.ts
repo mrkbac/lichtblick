@@ -24,11 +24,24 @@ function folderOf(file: File): string | undefined {
  */
 export function defaultCompareSides(files: readonly File[]): string[] {
   const folders = files.map(folderOf);
-  const distinctFolders = new Set(folders.filter((folder) => folder != undefined));
+  const distinctFolders = new Set(
+    folders.filter((folder): folder is string => folder != undefined),
+  );
   if (distinctFolders.size > 1) {
-    // Loose files next to the folders are each a side of their own
-    const looseNames = uniqueNames(files.map((file) => file.name));
-    return folders.map((folder, index) => folder ?? looseNames[index]!);
+    // Loose files next to the folders are each a side of their own, never named like a folder
+    const taken = new Set(distinctFolders);
+    return folders.map((folder, index) => {
+      if (folder != undefined) {
+        return folder;
+      }
+      const base = files[index]!.name;
+      let name = base;
+      for (let count = 2; taken.has(name); count++) {
+        name = `${base} (${count})`;
+      }
+      taken.add(name);
+      return name;
+    });
   }
   return uniqueNames(files.map((file) => file.name));
 }

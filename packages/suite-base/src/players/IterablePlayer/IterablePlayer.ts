@@ -733,6 +733,9 @@ export class IterablePlayer implements Player {
         if (this.#nextState === "seek-backfill") {
           // The pending seek resets the playback iterator on the new range
           this.#queueEmitState();
+        } else if (update.updatedRanges == undefined && this.#state === "seek-backfill") {
+          // The running seek may read messages from before they moved: run it again
+          this.#setState("seek-backfill");
         } else if (
           update.updatedRanges == undefined &&
           this.#currentTime &&

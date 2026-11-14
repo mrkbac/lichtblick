@@ -67,7 +67,13 @@ export class SideView {
     if (side == undefined) {
       return topic;
     }
-    return side === this.#prefix ? topic.slice(side.length) : undefined;
+    if (side !== this.#prefix) {
+      return undefined;
+    }
+    // A recorded topic that itself starts like another side (`/b/a/odom`) keeps its prefix, so
+    // it never takes the name of that side's topic (`/a/odom`)
+    const name = topic.slice(side.length);
+    return this.#sideOf(name) != undefined ? topic : name;
   }
 
   public mapPublic(context: MessagePipelineContext): MessagePipelineContext {
