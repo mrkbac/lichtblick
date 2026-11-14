@@ -91,6 +91,25 @@ describe("CsvIterableSource", () => {
     expect((fromOne[0]!.message as { v: number }).v).toBe(4000);
   });
 
+  it("seeks exactly to times too large for a double", async () => {
+    // A double rounds this down by about 1 µs; approximate index times would skip rows on a seek
+    const lines = ["time_ns,v"];
+    for (let i = 0; i < 5000; i++) {
+      lines.push(`10000000000000001023,${i}`);
+    }
+    const source = new CsvIterableSource([file("big_ns.csv", lines.join("\n"))]);
+    const init = await source.initialize();
+    expect(init.start).toEqual({ sec: 10000000000, nsec: 1023 });
+
+    const events = await collect(source, { topics: topics("/big_ns"), start: init.start });
+    expect(events).toHaveLength(5000);
+    const backfill = await source.getBackfillMessages({
+      topics: topics("/big_ns"),
+      time: init.start,
+    });
+    expect(backfill.map((e) => (e.message as { v: number }).v)).toEqual([4999]);
+  });
+
   it("rejects a time column that decreases only at nanosecond precision", async () => {
     // All three are the same double, but the last one is earlier than the second
     const source = new CsvIterableSource([

@@ -30,8 +30,6 @@ import {
 // One seek point per this many rows: a 10M row file keeps ~10k index entries
 const ROWS_PER_INDEX = 1024;
 const NS_PER_SEC = 1_000_000_000n;
-// Index entry times come from doubles, off by at most a few hundred ns for epoch times
-const SEEK_MARGIN_NS = 1_000n;
 // Any fixed unit gives the same order; seconds keeps every digit of the value
 const EXACT_ORDER: TimeFormat = { type: "number", nsPerUnit: NS_PER_SEC };
 
@@ -69,7 +67,8 @@ class CsvFile {
     let lastTimeCell: string[] = [];
     let firstCells: string[] = [];
     let lastCells: string[] = [];
-    const entryTimes: number[][] = [];
+    // Cells of each index entry's first row (about 1/1024 of the file), for exact entry times
+    const entryCells: string[][] = [];
     let row = 0;
 
     for await (const rows of readRows(this.file)) {
@@ -92,15 +91,13 @@ class CsvFile {
         const cells = splitRow(line, this.#delimiter);
         if (row % ROWS_PER_INDEX === 0) {
           this.#index.push({ offset, row, timeNs: 0n });
-          entryTimes.push([]);
+          entryCells.push(cells);
         }
         if (row === 0) {
           firstCells = cells;
         }
         lastCells = cells;
 
-        // Times of the row that starts the current index entry
-        const times = row % ROWS_PER_INDEX === 0 ? entryTimes[entryTimes.length - 1] : undefined;
         for (let col = 0; col < header.length; col++) {
           const cell = cells[col] ?? "";
           if (numeric[col] === true && cell.trim() !== "") {
@@ -129,9 +126,6 @@ class CsvFile {
           } else {
             lastTime[col] = value;
             lastTimeCell[col] = cell;
-            if (times) {
-              times[col] = value;
-            }
           }
         }
         row++;
@@ -173,10 +167,8 @@ class CsvFile {
       isDate[col] === true
         ? { type: "date" }
         : numericTimeFormat(names[col]!, parseNumber(firstCells[col]!, this.#delimiter));
-    const nsPerValue = this.#timeFormat.type === "date" ? 1e6 : Number(this.#timeFormat.nsPerUnit);
-    // Approximate (double precision) times are fine here: seeks allow SEEK_MARGIN_NS for them
     this.#index.forEach((entry, idx) => {
-      entry.timeNs = BigInt(Math.round(entryTimes[idx]![col]! * nsPerValue));
+      entry.timeNs = this.#cellTime(entryCells[idx]!, entry.row);
     });
     this.startNs = this.#cellTime(firstCells, 0);
     this.endNs = this.#cellTime(lastCells, row - 1);
@@ -233,16 +225,15 @@ class CsvFile {
 
   /**
    * The entry to start reading at so no row at or after `timeNs` is skipped: the one before the
-   * first entry at or after `timeNs` (minus a margin for the approximate entry times). Using the
-   * first such entry, not the last, matters when many rows share a timestamp.
+   * first entry at or after `timeNs`. Using the first such entry, not the last, matters when many
+   * rows share a timestamp. Entry times are exact, so no row before the result can be at `timeNs`.
    */
   #seek(timeNs: bigint): IndexEntry | undefined {
-    const target = timeNs - SEEK_MARGIN_NS;
     let lo = 0;
     let hi = this.#index.length;
     while (lo < hi) {
       const mid = (lo + hi) >> 1;
-      if (this.#index[mid]!.timeNs < target) {
+      if (this.#index[mid]!.timeNs < timeNs) {
         lo = mid + 1;
       } else {
         hi = mid;
