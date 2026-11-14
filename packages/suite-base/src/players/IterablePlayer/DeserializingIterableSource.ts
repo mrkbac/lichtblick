@@ -428,15 +428,22 @@ export class DeserializingIterableSource implements IDeserializedIterableSource 
     }
 
     const deserializedMessage = deserialize(message) as Record<string, unknown>;
-    // Not lodash `pick`: it reads "a.b" as a nested path and skips keys like `constructor`.
-    // `fromEntries` copies the literal top-level fields, `__proto__` included.
-    const msg = subscription.fields
-      ? Object.fromEntries(
-          subscription.fields
-            .filter((field) => field in deserializedMessage)
-            .map((field) => [field, deserializedMessage[field]]),
-        )
-      : deserializedMessage;
+    let msg = deserializedMessage;
+    if (subscription.fields) {
+      // Not lodash `pick`: it reads "a.b" as a nested path and skips keys like `constructor`.
+      // defineProperty instead of assignment so a `__proto__` field stays a plain data field.
+      msg = {};
+      for (const field of subscription.fields) {
+        if (field in deserializedMessage) {
+          Object.defineProperty(msg, field, {
+            value: deserializedMessage[field],
+            enumerable: true,
+            writable: true,
+            configurable: true,
+          });
+        }
+      }
+    }
 
     const msgSizeEstimate = this.#shared.sizes.estimate(
       subscription.subscriptionHash,
