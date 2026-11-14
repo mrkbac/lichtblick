@@ -351,6 +351,63 @@ describe("IterablePlayer", () => {
     }
   });
 
+  it("seeks again when an update that may move every message lands during a seek", async () => {
+    // Given a paused player whose playback read is held, so a seek waits for it to stop while
+    // it resets the playback iterator
+    const source = new TestSource();
+    const initial = await source.initialize();
+    const iterate = source.messageIterator.bind(source);
+    let reading!: () => void;
+    const firstReadStarted = new Promise<void>((resolve) => (reading = resolve));
+    let finishRead!: () => void;
+    const firstReadGate = new Promise<void>((resolve) => (finishRead = resolve));
+    let reads = 0;
+    source.messageIterator = async function* (args) {
+      reads++;
+      if (reads === 1) {
+        reading();
+        await firstReadGate;
+      }
+      yield* iterate(args);
+    };
+    let sendUpdate!: () => void;
+    const updateSent = new Promise<void>((resolve) => (sendUpdate = resolve));
+    const updates: (Initialization | undefined)[] = [{ ...initial }];
+    source.waitForUpdate = async () => {
+      await updateSent;
+      return updates.shift();
+    };
+    const backfill = vi.spyOn(source, "getBackfillMessages");
+    const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+    player.setSubscriptions([{ topic: "/example" }]);
+    player.setListener(async () => {});
+    try {
+      // A first seek starts the playback read that is held; a second one waits for it to stop
+      player.seekPlayback({ sec: 0, nsec: 200e6 });
+      await firstReadStarted;
+      const before = backfill.mock.calls.length;
+      player.seekPlayback({ sec: 0, nsec: 500e6 });
+      await vi.waitFor(() => {
+        expect(backfill).toHaveBeenCalledTimes(before + 1);
+      });
+
+      // When the update lands while the seek waits for the held read, and the read then ends
+      sendUpdate();
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      finishRead();
+
+      // Then the seek reads the messages at its target again
+      await vi.waitFor(() => {
+        expect(backfill).toHaveBeenCalledTimes(before + 2);
+      });
+      expect(backfill.mock.calls.at(-1)?.[0].time).toEqual({ sec: 0, nsec: 500e6 });
+    } finally {
+      finishRead();
+      player.close();
+      await player.isClosed;
+    }
+  });
+
   it("restarts the first read when the source grows during it", async () => {
     // Given a source whose first read is still running when it grows
     const source = new TestSource();
