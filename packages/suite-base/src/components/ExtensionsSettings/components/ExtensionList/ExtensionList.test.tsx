@@ -189,6 +189,34 @@ describe("ExtensionList Component", () => {
     });
   });
 
+  it("keeps the action button element when the catalog updates", () => {
+    // Given an installed extension
+    (isDesktopApp as Mock).mockReturnValue(true);
+    let installed: Immutable<ExtensionMarketplaceDetail>[] = [mockEntries[0]!];
+    (useExtensionCatalog as Mock).mockImplementation((selector) =>
+      selector({ installedExtensions: installed, uninstallExtension: vi.fn() }),
+    );
+    const renderList = () => (
+      <ExtensionList
+        namespace={mockNamespace}
+        entries={mockEntries}
+        filterText=""
+        selectExtension={mockSelectExtension}
+      />
+    );
+    const { rerender } = render(renderList());
+    const button = screen.getByRole("button", { name: "Uninstall" });
+
+    // When a refresh replaces the catalog entries
+    installed = [{ ...mockEntries[0]! }];
+    rerender(renderList());
+
+    // Then a click already in progress still lands on the same element
+    const after = screen.getByRole("button", { name: "Uninstall" });
+    (isDesktopApp as Mock).mockReset();
+    expect(after).toBe(button);
+  });
+
   describe("handleBulkUninstall", () => {
     const mockUninstallExtension = vi.fn();
 

@@ -7,12 +7,12 @@ export class ExtensionManager {
   public constructor(private readonly page: Page) {}
 
   public async open(): Promise<void> {
-    await this.page.getByTestId("PersonIcon").click();
-    await this.page.getByRole("menuitem", { name: "Extensions" }).click();
+    await this.page.getByTestId("AppMenuButton").click();
+    await this.page.getByRole("menuitem", { name: "Extensions…", exact: true }).click();
   }
 
   public async search(query: string): Promise<void> {
-    await this.page.getByPlaceholder("Search Extensions...").fill(query);
+    await this.page.getByPlaceholder("Search extensions...").fill(query);
   }
 
   public findExtension(name: string, version?: string): Locator {
@@ -34,6 +34,6 @@ export class ExtensionManager {
   }
 
   public getSearchBar(): Locator {
-    return this.page.getByPlaceholder("Search Extensions...");
+    return this.page.getByPlaceholder("Search extensions...");
   }
 }
