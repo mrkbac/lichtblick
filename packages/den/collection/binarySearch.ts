@@ -6,9 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 /**
- * Performs a binary search on a sorted array of tuples to find the index of the entry with the given key.
- *
- * Copied from @lichtblick/den/collection ArrayMap
+ * Binary search over tuples sorted by their numeric (number or bigint) first element.
  *
  * @param key Key to search for.
  * @returns The index of the key/value tuple if an exact match is found; otherwise, a negative
@@ -17,18 +15,24 @@
  * larger key. If the key is not found and is greater than all keys in the list, the negative
  * number returned is the bitwise complement of the index of the last element plus 1.
  */
-function sortedIndexByTuple<T>(items: [bigint, T][], key: bigint): number {
-  const list = items;
-  if (list.length === 0) {
+export function sortedIndexByTuple<K, V>(items: readonly (readonly [K, V])[], key: K): number {
+  if (items.length === 0) {
     return -1;
   }
 
   let left = 0;
-  let right = list.length - 1;
+  let right = items.length - 1;
+
+  // Quick checks to see if key is outside the bounds of the list
+  if (key < items[left]![0]) {
+    return ~left;
+  } else if (key > items[right]![0]) {
+    return ~(right + 1);
+  }
 
   while (left <= right) {
     const mid = (left + right) >> 1;
-    const midKey = list[mid]![0];
+    const midKey = items[mid]![0];
 
     if (midKey === key) {
       return mid;
@@ -41,5 +45,3 @@ function sortedIndexByTuple<T>(items: [bigint, T][], key: bigint): number {
 
   return ~left;
 }
-
-export { sortedIndexByTuple };

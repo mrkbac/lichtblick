@@ -14,15 +14,17 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { signal } from ".";
 import debouncePromise from "./debouncePromise";
+
+const makeResolvers = (count: number) =>
+  Array.from({ length: count }, () => Promise.withResolvers<void>());
 
 describe("debouncePromise", () => {
   it("debounces with resolved and rejected signals", async () => {
     // These signals allow us to precisely control and wait for when calls to the debounced function start/finish.
-    const callsStarted = [signal(), signal(), signal(), signal()]; // indicate when the debounced function is called
-    const callReturns = [signal(), signal(), signal(), signal()]; // allows test code to "release" pending calls by letting them finish
-    const callsFinished = [signal(), signal(), signal(), signal()]; // indicate when the .currentPromise completes
+    const callsStarted = makeResolvers(4); // indicate when the debounced function is called
+    const callReturns = makeResolvers(4); // allows test code to "release" pending calls by letting them finish
+    const callsFinished = makeResolvers(4); // indicate when the .currentPromise completes
 
     let numCallsStarted = 0;
     const debouncedFn = debouncePromise(async () => {
@@ -32,7 +34,7 @@ describe("debouncePromise", () => {
       if (!promise) {
         throw new Error("no remaining promises");
       }
-      await promise;
+      await promise.promise;
     });
 
     let prevExpectedCallsStarted = 0;
@@ -44,7 +46,7 @@ describe("debouncePromise", () => {
         const finishedSignal = callsFinished[prevExpectedCallsStarted];
         debouncedFn.currentPromise?.then(
           () => finishedSignal?.resolve(),
-          (err: unknown) => finishedSignal?.reject(err as Error),
+          (err: unknown) => finishedSignal?.reject(err),
         );
       }
       prevExpectedCallsStarted = expectedNum;
@@ -61,33 +63,33 @@ describe("debouncePromise", () => {
     debouncedFn();
     expectCallsStarted(1);
     callReturns[0]?.resolve();
-    await callsStarted[0];
-    await callsStarted[1];
+    await callsStarted[0]?.promise;
+    await callsStarted[1]?.promise;
     expectCallsStarted(2);
     callReturns[1]?.reject(new Error("1"));
     expect(debouncedFn.currentPromise).toBeDefined();
-    await callsFinished[0];
-    await expect(callsFinished[1]).rejects.toThrow("1");
+    await callsFinished[0]?.promise;
+    await expect(callsFinished[1]?.promise).rejects.toThrow("1");
     expectCallsStarted(2);
     expect(debouncedFn.currentPromise).toBeUndefined();
 
     // Now we can immediately start a third call.
     debouncedFn();
     expectCallsStarted(3);
-    await callsStarted[2];
+    await callsStarted[2]?.promise;
     expect(debouncedFn.currentPromise).toBeDefined();
 
     // The previous call is still running, so we don't start a new call yet.
     debouncedFn();
     expectCallsStarted(3);
     callReturns[2]?.reject(new Error("2"));
-    await expect(callsFinished[2]).rejects.toThrow("2");
+    await expect(callsFinished[2]?.promise).rejects.toThrow("2");
     // After the 3rd call finishes, the 4th can begin.
-    await callsStarted[3];
+    await callsStarted[3]?.promise;
     expectCallsStarted(4);
     expect(debouncedFn.currentPromise).toBeDefined();
     callReturns[3]?.resolve();
-    await callsFinished[3];
+    await callsFinished[3]?.promise;
     expect(debouncedFn.currentPromise).toBeUndefined();
     expectCallsStarted(4);
   });
@@ -95,11 +97,11 @@ describe("debouncePromise", () => {
   it("provides currentPromise to wait on the current call", async () => {
     expect.assertions(5);
 
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
     let calls = 0;
     const debouncedFn = debouncePromise(async () => {
       ++calls;
-      await sig;
+      await sig.promise;
     });
 
     expect(calls).toBe(0);

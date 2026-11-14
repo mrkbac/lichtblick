@@ -7,7 +7,6 @@
 
 import { compare } from "@foxglove/rostime";
 
-import { pickFields } from "@lichtblick/den/records";
 import Logger from "@lichtblick/log";
 import { parseChannel } from "@lichtblick/mcap-support";
 import { MessageEvent } from "@lichtblick/suite";
@@ -452,4 +451,21 @@ export class DeserializingIterableSource implements IDeserializedIterableSource 
       sizeInBytes,
     };
   }
+}
+
+/**
+ * Copy of `record` with only the listed top-level fields. Not lodash `pick`, which would treat a
+ * field name containing dots as a nested path.
+ */
+function pickFields(
+  record: Readonly<Record<string, unknown>>,
+  fields: readonly string[],
+): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const field of fields) {
+    if (field in record) {
+      result[field] = record[field];
+    }
+  }
+  return result;
 }

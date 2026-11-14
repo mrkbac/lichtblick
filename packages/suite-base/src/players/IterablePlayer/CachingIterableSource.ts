@@ -9,7 +9,7 @@ import { add, compare, subtract, toNanoSec } from "@foxglove/rostime";
 import EventEmitter from "eventemitter3";
 import * as _ from "lodash-es";
 
-import { minIndexBy, sortedIndexByTuple } from "@lichtblick/den/collection";
+import { sortedIndexByTuple } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
 import { MessageEvent, Time } from "@lichtblick/suite";
 import { ByteBudget } from "@lichtblick/suite-base/players/ByteBudget";
@@ -700,10 +700,9 @@ class CachingIterableSource<MessageType = unknown>
       // No block contains current read head, return the oldest cache block.
       // This can only happen when seeked to a new time and no message has been read yet, as
       // reading a new message that does not fit in any block will always create a new cache block.
-      const oldestBlockIdx = minIndexBy(this.#cache, (a, b) => a.lastAccess - b.lastAccess);
-      const oldestBlock = this.#cache[oldestBlockIdx];
+      const oldestBlock = _.minBy(this.#cache, (block) => block.lastAccess);
       if (!oldestBlock) {
-        // This should never happen as the cache is not empty and the index is valid.
+        // This should never happen as the cache is not empty.
         throw new Error("Failed to retrieve oldest block from cache");
       }
       return [oldestBlock.id];
