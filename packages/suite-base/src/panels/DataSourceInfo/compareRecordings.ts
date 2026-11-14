@@ -16,7 +16,7 @@ export type CompareCell = {
 };
 export type CompareDifference = "missing" | "schema" | "rate";
 export type CompareRow = {
-  /** Topic name without the recording prefix */
+  /** Topic name in the recordings, without the comparison prefix */
   topic: string;
   /** One cell per recording, undefined when that recording lacks the topic */
   cells: (CompareCell | undefined)[];
@@ -52,18 +52,25 @@ export function compareRecordings(
   const rows = new Map<string, (RateCandidates | undefined)[]>();
   files.forEach((file, index) => {
     const prefix = file.topicPrefix ?? "";
-    const schemasByTopic = new Map<string, Set<string>>();
+    // Rows are keyed by the topic's name in the recording: prefixed names can carry a collision
+    // suffix that differs between recordings.
+    const schemasByTopic = new Map<string, { prefixedTopic: string; schemas: Set<string> }>();
     for (const channel of file.channels) {
-      if (!channel.topic.startsWith(prefix)) {
+      const topic =
+        channel.originalTopic ??
+        (channel.topic.startsWith(prefix) ? channel.topic.slice(prefix.length) : undefined);
+      if (topic == undefined) {
         continue;
       }
-      const schemas = schemasByTopic.get(channel.topic) ?? new Set();
-      schemas.add(channel.schemaName ?? "");
-      schemasByTopic.set(channel.topic, schemas);
+      const entry = schemasByTopic.get(topic) ?? {
+        prefixedTopic: channel.topic,
+        schemas: new Set<string>(),
+      };
+      entry.schemas.add(channel.schemaName ?? "");
+      schemasByTopic.set(topic, entry);
     }
     const fileSeconds = span(file.start, file.end);
-    for (const [prefixedTopic, schemas] of schemasByTopic) {
-      const topic = prefixedTopic.slice(prefix.length);
+    for (const [topic, { prefixedTopic, schemas }] of schemasByTopic) {
       const stats = topicStats?.get(prefixedTopic);
       const inspection = inspections?.get(prefixedTopic);
       const count = inspection?.count ?? stats?.numMessages;

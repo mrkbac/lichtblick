@@ -131,4 +131,21 @@ describe("compareRecordings", () => {
     expect(rows[0]!.cells.map((cell) => cell?.hz)).toEqual([0, 1]);
     expect(rows[0]!.differences).toEqual(["rate"]);
   });
+
+  it("pairs topics by their name in the recording, not their prefixed name", () => {
+    // Recording a has `/imu` and `imu`, so its `imu` is shown as `/a/imu (2)`; b has only `imu`.
+    const a = file("/a", [
+      ["/imu", "Imu"],
+      ["/imu (2)", "ImuRaw"],
+    ]);
+    a.channels[0]!.originalTopic = "/imu";
+    a.channels[1]!.originalTopic = "imu";
+    const b = file("/b", [["/imu", "ImuRaw"]]);
+    b.channels[0]!.originalTopic = "imu";
+    const rows = compareRecordings([a, b], undefined);
+    expect(rows.map((row) => [row.topic, row.cells.map((cell) => cell?.schemaName)])).toEqual([
+      ["/imu", ["Imu", undefined]],
+      ["imu", ["ImuRaw", "ImuRaw"]],
+    ]);
+  });
 });

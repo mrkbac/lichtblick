@@ -192,6 +192,7 @@ export class ComparedSource<MessageType = Uint8Array> implements IIterableSource
         channels: file.channels.map((channel) => ({
           ...channel,
           topic: this.#prefixed(channel.topic),
+          originalTopic: channel.topic,
         })),
       })),
     };

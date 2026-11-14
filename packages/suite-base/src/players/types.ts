@@ -278,6 +278,8 @@ export type RecordingFileInfo = {
   channels: {
     id: number;
     topic: string;
+    /** When recordings are compared: the topic's name in the recording, before prefixing */
+    originalTopic?: string;
     schemaName?: string;
     messageEncoding: string;
     schemaEncoding?: string;
