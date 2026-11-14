@@ -175,7 +175,7 @@ export function useComparedPaths<C extends { paths: P[] }, P extends ComparableP
     | CompareView
     | undefined;
   const sides =
-    compare && resolveCompareView(view, compareSupport(panelType), compare).kind === "all"
+    compare && resolveCompareView(view, compareSupport(panelType, config), compare).kind === "all"
       ? compare.sides
       : undefined;
 

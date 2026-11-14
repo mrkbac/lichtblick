@@ -46,9 +46,16 @@ const NONE = new Set([
 ]);
 const OVERLAY = new Set(["3D", "CameraGrid", "Image", "map"]);
 
-export function compareSupport(panelType: string): CompareSupport {
+export function compareSupport(
+  panelType: string,
+  config?: Readonly<Record<string, unknown>>,
+): CompareSupport {
+  // A plot whose x values come from one panel-wide path can't pair them with another recording's
+  // series, so it shows one copy per recording instead
+  const panelWideX =
+    panelType === "Plot" && (config?.xAxisVal === "custom" || config?.xAxisVal === "currentCustom");
   return {
-    mode: NATIVE.has(panelType) ? "native" : NONE.has(panelType) ? "none" : "copies",
+    mode: NATIVE.has(panelType) && !panelWideX ? "native" : NONE.has(panelType) ? "none" : "copies",
     overlay: OVERLAY.has(panelType),
   };
 }

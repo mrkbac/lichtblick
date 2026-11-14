@@ -77,7 +77,7 @@ export function CompareSidePicker(): React.JSX.Element | undefined {
   if (!compare || !panel) {
     return undefined;
   }
-  const support = compareSupport(panel.type);
+  const support = compareSupport(panel.type, panel.config);
   if (support.mode === "none") {
     return undefined;
   }

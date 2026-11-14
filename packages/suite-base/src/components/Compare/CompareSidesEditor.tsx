@@ -6,6 +6,7 @@ import AlignHorizontalLeftIcon from "@mui/icons-material/AlignHorizontalLeft";
 import AlignHorizontalRightIcon from "@mui/icons-material/AlignHorizontalRight";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { Button, IconButton, InputAdornment, TextField, Tooltip, Typography } from "@mui/material";
+import * as _ from "lodash-es";
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
@@ -179,18 +180,42 @@ function SideOffset({
   );
 }
 
+/**
+ * The offsets to ask for when `side` changes: built on the newest request the player hasn't shown
+ * yet, else on the published offsets, so quick edits to different sides don't undo each other
+ */
+export function nextOffsets(
+  published: readonly number[],
+  pending: readonly number[] | undefined,
+  side: number,
+  change: number | ((current: number) => number),
+): number[] {
+  const base = pending ?? published;
+  return base.map((value, index) =>
+    index !== side ? value : typeof change === "function" ? change(value) : change,
+  );
+}
+
+/**
+ * The request still on its way once the player published `published`: none when it shows the
+ * request, else the request (an older publication never replaces a newer request)
+ */
+export function settledRequest(
+  published: readonly number[],
+  pending: readonly number[] | undefined,
+): number[] | undefined {
+  return pending && !_.isEqual(pending, published) ? [...pending] : undefined;
+}
+
 /** The compared recordings with controls to move each along the shared timeline */
 export function CompareSidesEditor(): React.JSX.Element | undefined {
   const compare = useCompare();
   const setOffsets = useMessagePipeline(selectSetOffsets);
   const { t } = useTranslation("compare");
-  // The offsets last asked for: the published ones lag behind while a change applies, so building
-  // the next change from them could undo one to another side
-  const published = compare?.sides.map((side) => side.offsetSec).join(",");
-  const requested = useRef<number[]>([]);
-  useEffect(() => {
-    requested.current = published ? published.split(",").map(Number) : [];
-  }, [published]);
+  // The offsets last asked for while the player hasn't shown them yet (see nextOffsets)
+  const published = compare?.sides.map((side) => side.offsetSec);
+  const pending = useRef<number[] | undefined>(undefined);
+  pending.current = published && settledRequest(published, pending.current);
   if (!compare) {
     return undefined;
   }
@@ -204,17 +229,8 @@ export function CompareSidesEditor(): React.JSX.Element | undefined {
           key={side.prefix}
           side={side}
           onOffset={(offsetSec) => {
-            const current = compare.sides.map(
-              (other, index) => requested.current[index] ?? other.offsetSec,
-            );
-            const next = current.map((value, index) =>
-              index !== side.index
-                ? value
-                : typeof offsetSec === "function"
-                  ? offsetSec(value)
-                  : offsetSec,
-            );
-            requested.current = next;
+            const next = nextOffsets(published!, pending.current, side.index, offsetSec);
+            pending.current = next;
             setOffsets?.(next);
           }}
         />

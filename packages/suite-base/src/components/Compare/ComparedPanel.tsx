@@ -235,7 +235,7 @@ export function PanelSideScope({
   children: React.ReactNode;
 }): React.JSX.Element {
   const compare = useCompare();
-  const support = panelType != undefined ? compareSupport(panelType) : undefined;
+  const support = panelType != undefined ? compareSupport(panelType, config) : undefined;
   if (!compare || !support || support.mode === "none") {
     return <>{children}</>;
   }

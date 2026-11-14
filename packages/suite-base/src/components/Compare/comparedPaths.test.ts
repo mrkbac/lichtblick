@@ -4,6 +4,7 @@
 import { defaultCompareSides } from "@lichtblick/suite-base/util/compareSides";
 
 import { CompareSideInfo } from "./CompareContext";
+import { compareSupport } from "./compareView";
 import { collapsePaths, configuredFocus, expandPaths, sidePath, unsidePath } from "./comparedPaths";
 import { SideView } from "./sideView";
 
@@ -125,5 +126,19 @@ describe("defaultCompareSides", () => {
     expect(
       defaultCompareSides([file("a.mcap", "run.mcap"), file("b.mcap", "other"), file("run.mcap")]),
     ).toEqual(["run.mcap", "other", "run.mcap (2)"]);
+    expect(defaultCompareSides([file("e.mcap"), file("e.mcap"), file("e.mcap (2)")])).toEqual([
+      "e.mcap",
+      "e.mcap (2)",
+      "e.mcap (2) (2)",
+    ]);
+  });
+});
+
+describe("compareSupport", () => {
+  it("shows a plot with a panel-wide x path as one copy per recording", () => {
+    expect(compareSupport("Plot", { xAxisVal: "timestamp" }).mode).toEqual("native");
+    expect(compareSupport("Plot", { xAxisVal: "custom" }).mode).toEqual("copies");
+    expect(compareSupport("Plot", { xAxisVal: "currentCustom" }).mode).toEqual("copies");
+    expect(compareSupport("Tab").mode).toEqual("none");
   });
 });

@@ -48,10 +48,13 @@ export function defaultCompareSides(files: readonly File[]): string[] {
 
 /** `names` with repeats made unique: x, x (2), x (3), … */
 export function uniqueNames(names: readonly string[]): string[] {
-  const seen = new Map<string, number>();
-  return names.map((name) => {
-    const count = (seen.get(name) ?? 0) + 1;
-    seen.set(name, count);
-    return count === 1 ? name : `${name} (${count})`;
+  const taken = new Set<string>();
+  return names.map((base) => {
+    let name = base;
+    for (let count = 2; taken.has(name); count++) {
+      name = `${base} (${count})`;
+    }
+    taken.add(name);
+    return name;
   });
 }

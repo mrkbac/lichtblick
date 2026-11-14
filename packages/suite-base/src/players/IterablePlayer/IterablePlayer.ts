@@ -1105,6 +1105,10 @@ export class IterablePlayer implements Player {
         this.#lastRangeMillis = undefined;
       }
 
+      // A state asked for meanwhile (e.g. the seek again after a source update) wins
+      if (this.#hasPendingState()) {
+        return;
+      }
       this.#setState(this.#isPlaying ? "play" : "idle");
     } catch (e: unknown) {
       const err = e as Error;

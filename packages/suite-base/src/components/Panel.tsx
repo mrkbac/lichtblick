@@ -454,7 +454,10 @@ export default function Panel<
     // While recordings are compared: the panel shows one of them, or every one of them through
     // read-only copies of itself (see ComparedPanel)
     const compare = useCompare();
-    const support = useMemo(() => compareSupport(type), [type]);
+    const support = useMemo(
+      () => compareSupport(type, panelComponentConfig),
+      [panelComponentConfig, type],
+    );
     const copy = useMemo(
       () => <PanelComponent {...childProps} saveConfig={ignoreSaveConfig} />,
       [childProps],
