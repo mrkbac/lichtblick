@@ -161,7 +161,21 @@ export class CoordinateFrame<ID extends AnyFrameId = UserFrameId> {
       this.#transformPool.release(oldTf);
     }
 
-    // Remove transforms that are too old
+    // Prune by time on insert. Wait until the oldest entry is a quarter of maxStorageTime past the
+    // window so the O(n) removeBefore runs once per quarter window, not on every insert.
+    const windowStart = this.#transforms.maxKey()! - this.maxStorageTime;
+    if (this.#transforms.minKey()! < windowStart - this.maxStorageTime / 4n) {
+      // Keep the newest transform before the window, so lookups inside the window still
+      // interpolate from it instead of snapping to the next one.
+      const index = this.#transforms.binarySearch(windowStart);
+      const keepFrom = index >= 0 ? index : ~index - 1;
+      if (keepFrom > 0) {
+        for (const [, tf] of this.#transforms.removeBefore(this.#transforms.at(keepFrom)![0])) {
+          this.#transformPool.release(tf);
+        }
+      }
+    }
+
     const transformsFull = this.#transforms.size >= this.maxCapacity;
 
     // Trim down to the maximum history size if we've exceeded the capacity

@@ -194,8 +194,34 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     return this.#decodedImage;
   }
 
+  /**
+   * This renderable owns every ImageBitmap that `decodeImage()` hands it, except the video player's
+   * `lastImageBitmap`, which the player owns and closes itself. Once disposed, the player is
+   * closed too, so a late bitmap it was handed is closed here. Closing twice is a no-op.
+   */
+  #releaseBitmap(image: ImageBitmap | ImageData | undefined): void {
+    if (
+      image instanceof ImageBitmap &&
+      (this.#disposed || image !== this.videoPlayer?.lastImageBitmap)
+    ) {
+      image.close();
+    }
+  }
+
+  /** Replace the decoded image, closing the previous one unless the texture still shows it. */
+  #setDecodedImage(image: ImageBitmap | ImageData): void {
+    const previous = this.#decodedImage;
+    this.#decodedImage = image;
+    if (previous !== image && previous !== this.userData.texture?.image) {
+      this.#releaseBitmap(previous);
+    }
+  }
+
   public override dispose(): void {
     this.#disposed = true;
+    this.#releaseBitmap(this.#decodedImage);
+    this.#releaseBitmap(this.userData.texture?.image as ImageBitmap | ImageData | undefined);
+    this.#decodedImage = undefined;
     this.userData.texture?.dispose();
     this.userData.material?.dispose();
     this.userData.geometry?.dispose();
@@ -444,14 +470,13 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     try {
       const skipRender = options?.skipRender ?? false;
       const result = await this.decodeImage(image, resizeWidth);
-      if (this.isDisposed()) {
-        return;
-      }
-      if (this.#displayedImageSequenceNumber > seq) {
+      if (this.isDisposed() || this.#displayedImageSequenceNumber > seq) {
+        // Disposed meanwhile, or a newer image is already shown: this result is never displayed.
+        this.#releaseBitmap(result);
         return;
       }
       this.#displayedImageSequenceNumber = seq;
-      this.#decodedImage = result;
+      this.#setDecodedImage(result);
       this.#textureNeedsUpdate = true;
       if (!skipRender) {
         this.update();
@@ -477,13 +502,11 @@ export class ImageRenderable extends Renderable<ImageUserData> {
 
   async #setErrorImage(seq: number, onDecoded?: () => void): Promise<void> {
     const errorBitmap = await getErrorImage(64, 64);
-    if (this.isDisposed()) {
+    if (this.isDisposed() || this.#displayedImageSequenceNumber > seq) {
+      errorBitmap.close();
       return;
     }
-    if (this.#displayedImageSequenceNumber > seq) {
-      return;
-    }
-    this.#decodedImage = errorBitmap;
+    this.#setDecodedImage(errorBitmap);
     this.#textureNeedsUpdate = true;
     this.update();
     this.#showingErrorImage = true;
@@ -550,10 +573,12 @@ export class ImageRenderable extends Renderable<ImageUserData> {
     if (!videoCodecNeedsKeyframeReplay(this.#codec)) {
       return;
     }
-    const existingIndex = this.#videoFrameHistory.findIndex(
+    // Frames arrive in time order, so a re-delivered frame is near the end: search from there.
+    const existingIndex = this.#videoFrameHistory.findLastIndex(
       (entry) => entry.timestampMicros === timestampMicros,
     );
     const historyEntry: VideoFrameHistoryEntry = {
+      // Copy so the entry does not pin the (much larger) chunk buffer the payload is a view into.
       frame: { ...frame, data: frame.data.slice() },
       type: preparedFrame.type,
       decoderConfig: preparedFrame.decoderConfig,
@@ -565,6 +590,16 @@ export class ImageRenderable extends Renderable<ImageUserData> {
         this.#videoFrameHistory[existingIndex]!.frame.data.byteLength;
       this.#videoFrameHistory[existingIndex] = historyEntry;
       return;
+    }
+    if (historyEntry.type === "key") {
+      // A replay only ever starts at a keyframe, so keep just the previous GOP (for a short
+      // backward seek) and the one this keyframe starts. Older frames can never be replayed.
+      const previousKey = this.#videoFrameHistory.findLastIndex((entry) => entry.type === "key");
+      if (previousKey > 0) {
+        for (const evicted of this.#videoFrameHistory.splice(0, previousKey)) {
+          this.#videoFrameHistoryBytes -= evicted.frame.data.byteLength;
+        }
+      }
     }
     this.#videoFrameHistory.push(historyEntry);
     this.#videoFrameHistoryBytes += historyEntry.frame.data.byteLength;
@@ -582,7 +617,7 @@ export class ImageRenderable extends Renderable<ImageUserData> {
   }
 
   #gopForTargetFrame(targetTimestampMicros: number): VideoFrameHistoryEntry[] | undefined {
-    const targetIndex = this.#videoFrameHistory.findIndex(
+    const targetIndex = this.#videoFrameHistory.findLastIndex(
       (entry) => entry.timestampMicros === targetTimestampMicros,
     );
     if (targetIndex < 0) {
@@ -809,14 +844,16 @@ export class ImageRenderable extends Renderable<ImageUserData> {
         !(canvasTexture instanceof THREE.CanvasTexture) ||
         !bitmapDimensionsEqual(decodedImage, canvasTexture.image as ImageBitmap | undefined)
       ) {
-        if (canvasTexture?.image instanceof ImageBitmap) {
-          // don't close the image if it is the error image
-          canvasTexture.image.close();
+        if (canvasTexture?.image !== decodedImage) {
+          this.#releaseBitmap(canvasTexture?.image as ImageBitmap | ImageData | undefined);
         }
         canvasTexture?.dispose();
         this.userData.texture = createCanvasTexture(decodedImage);
         this.#materialNeedsUpdate = true;
       } else {
+        if (canvasTexture.image !== decodedImage) {
+          this.#releaseBitmap(canvasTexture.image as ImageBitmap);
+        }
         canvasTexture.image = decodedImage;
         canvasTexture.needsUpdate = true;
       }
@@ -829,6 +866,8 @@ export class ImageRenderable extends Renderable<ImageUserData> {
         dataTexture.image.width !== decodedImage.width ||
         dataTexture.image.height !== decodedImage.height
       ) {
+        // Switching from a compressed image: the CanvasTexture's bitmap is no longer shown.
+        this.#releaseBitmap(dataTexture?.image as ImageBitmap | ImageData | undefined);
         dataTexture?.dispose();
         dataTexture = createDataTexture(decodedImage);
         this.userData.texture = dataTexture;

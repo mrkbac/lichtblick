@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time, fromNanoSec, toNanoSec, compare } from "@foxglove/rostime";
-import { McapIndexedReader, McapTypes } from "@mcap/core";
+import { type McapIndexedReader, McapTypes } from "@mcap/core";
 
 import Logger from "@lichtblick/log";
 import { ParsedChannel, parseChannel } from "@lichtblick/mcap-support";
@@ -630,7 +630,7 @@ function chunkByteRange(chunk: McapTypes.ChunkIndex): ByteRange {
   let end = chunk.chunkStartOffset + chunk.chunkLength;
   if (chunk.messageIndexOffsets.size > 0) {
     const firstIndex = [...chunk.messageIndexOffsets.values()].reduce((a, b) => (b < a ? b : a));
-    // Only where they follow the chunk; a rebuilt index keeps them elsewhere (in memory)
+    // Only where they follow the chunk; a rebuilt index has them past the end of the file
     if (firstIndex === end) {
       end = firstIndex + chunk.messageIndexLength;
     }

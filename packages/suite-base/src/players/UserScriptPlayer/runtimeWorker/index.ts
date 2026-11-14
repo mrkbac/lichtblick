@@ -16,7 +16,7 @@
 import * as Comlink from "@foxglove/comlink";
 
 import {
-  processMessage,
+  processMessages,
   registerScript,
 } from "@lichtblick/suite-base/players/UserScriptPlayer/runtimeWorker/registry";
 import { enforceFetchIsBlocked, inSharedWorker } from "@lichtblick/suite-base/util/workers";
@@ -54,7 +54,11 @@ const api = {
   },
   // Just check fetch is blocked on registration, don't slow down message processing.
   registerScript: enforceFetchIsBlocked(registerScript),
-  processMessage,
+  processMessages,
+  // Shared workers need to be closed "from the inside" -- they have no terminate() method.
+  close(): void {
+    global.close();
+  },
 };
 
 export type RuntimeWorkerApi = typeof api;

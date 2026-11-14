@@ -1,0 +1,164 @@
+diff --git a/dist/cjs/McapIndexedReader.d.ts b/dist/cjs/McapIndexedReader.d.ts
+index 0c2dea1de85a7609286cb7d41bbfc671d2a13986..023dc38dd89cd0018277fff286e20e214e1a7bcd 100644
+--- a/dist/cjs/McapIndexedReader.d.ts
++++ b/dist/cjs/McapIndexedReader.d.ts
+@@ -13,7 +13,7 @@ export declare class McapIndexedReader<TReadOptions = unknown> {
+     readonly dataEndOffset: bigint;
+     readonly dataSectionCrc?: number;
+     private constructor();
+-    static Initialize<TReadOptions = unknown>({ readable, decompressHandlers, messageIndexCacheSizeBytes, readOptions, }: {
++    static Initialize<TReadOptions = unknown>({ readable, decompressHandlers, messageIndexCacheSizeBytes, chunkCache, readOptions, }: {
+         readable: IReadable<TReadOptions>;
+         /**
+          * When a compressed chunk is encountered, the entry in `decompressHandlers` corresponding to the
+@@ -29,6 +29,15 @@ export declare class McapIndexedReader<TReadOptions = unknown> {
+          * that later queries against different channels can be served from the cache.
+          */
+         messageIndexCacheSizeBytes?: number;
++        /**
++         * Decompressed chunk data by chunk start offset, shared across calls to `readMessages()` (and
++         * across readers of the same file). Consulted before a chunk is read and decompressed, and
++         * filled after. The cache decides what to keep.
++         */
++        chunkCache?: {
++            get(chunkStartOffset: bigint): DataView | undefined;
++            set(chunkStartOffset: bigint, data: DataView): void;
++        };
+         /**
+          * Opaque options passed to each `readable.read()` call during initialization.
+          */
+diff --git a/dist/cjs/McapIndexedReader.js b/dist/cjs/McapIndexedReader.js
+index e445368eba45750ab4483990077a95b8dc949a1b..58eca31a2c3b5c15b14957624b0f35c27c596e2b 100644
+--- a/dist/cjs/McapIndexedReader.js
++++ b/dist/cjs/McapIndexedReader.js
+@@ -24,6 +24,7 @@ class McapIndexedReader {
+     #readable;
+     #messageIndexReadable;
+     #decompressHandlers;
++    #chunkCache;
+     #messageStartTime;
+     #messageEndTime;
+     #attachmentStartTime;
+@@ -35,6 +36,7 @@ class McapIndexedReader {
+         this.metadataIndexes = args.metadataIndexes;
+         this.statistics = args.statistics;
+         this.#decompressHandlers = args.decompressHandlers;
++        this.#chunkCache = args.chunkCache;
+         this.channelsById = args.channelsById;
+         this.schemasById = args.schemasById;
+         this.summaryOffsetsByOpcode = args.summaryOffsetsByOpcode;
+@@ -68,7 +70,7 @@ class McapIndexedReader {
+     #errorWithLibrary(message) {
+         return new Error(`${message} [library=${this.header.library}]`);
+     }
+-    static async Initialize({ readable, decompressHandlers, messageIndexCacheSizeBytes, readOptions, }) {
++    static async Initialize({ readable, decompressHandlers, messageIndexCacheSizeBytes, chunkCache, readOptions, }) {
+         const size = await readable.size();
+         let header;
+         let headerEndOffset;
+@@ -236,6 +238,7 @@ class McapIndexedReader {
+             dataEndOffset,
+             dataSectionCrc,
+             messageIndexCacheSizeBytes,
++            chunkCache,
+         });
+     }
+     /**
+@@ -382,6 +385,15 @@ class McapIndexedReader {
+         }
+     }
+     async #loadChunkData(chunkIndex, options) {
++        const cached = this.#chunkCache?.get(chunkIndex.chunkStartOffset);
++        if (cached) {
++            return cached;
++        }
++        const view = await this.#loadChunkDataUncached(chunkIndex, options);
++        this.#chunkCache?.set(chunkIndex.chunkStartOffset, view);
++        return view;
++    }
++    async #loadChunkDataUncached(chunkIndex, options) {
+         const chunkData = await this.#readable.read(chunkIndex.chunkStartOffset, chunkIndex.chunkLength, options?.readOptions);
+         const chunkReader = new McapByteReader_ts_1.default(new DataView(chunkData.buffer, chunkData.byteOffset, chunkData.byteLength));
+         const chunkRecord = (0, parse_ts_1.parseRecord)(chunkReader, options?.validateCrcs ?? true);
+diff --git a/dist/esm/McapIndexedReader.d.ts b/dist/esm/McapIndexedReader.d.ts
+index 0c2dea1de85a7609286cb7d41bbfc671d2a13986..023dc38dd89cd0018277fff286e20e214e1a7bcd 100644
+--- a/dist/esm/McapIndexedReader.d.ts
++++ b/dist/esm/McapIndexedReader.d.ts
+@@ -13,7 +13,7 @@ export declare class McapIndexedReader<TReadOptions = unknown> {
+     readonly dataEndOffset: bigint;
+     readonly dataSectionCrc?: number;
+     private constructor();
+-    static Initialize<TReadOptions = unknown>({ readable, decompressHandlers, messageIndexCacheSizeBytes, readOptions, }: {
++    static Initialize<TReadOptions = unknown>({ readable, decompressHandlers, messageIndexCacheSizeBytes, chunkCache, readOptions, }: {
+         readable: IReadable<TReadOptions>;
+         /**
+          * When a compressed chunk is encountered, the entry in `decompressHandlers` corresponding to the
+@@ -29,6 +29,15 @@ export declare class McapIndexedReader<TReadOptions = unknown> {
+          * that later queries against different channels can be served from the cache.
+          */
+         messageIndexCacheSizeBytes?: number;
++        /**
++         * Decompressed chunk data by chunk start offset, shared across calls to `readMessages()` (and
++         * across readers of the same file). Consulted before a chunk is read and decompressed, and
++         * filled after. The cache decides what to keep.
++         */
++        chunkCache?: {
++            get(chunkStartOffset: bigint): DataView | undefined;
++            set(chunkStartOffset: bigint, data: DataView): void;
++        };
+         /**
+          * Opaque options passed to each `readable.read()` call during initialization.
+          */
+diff --git a/dist/esm/McapIndexedReader.js b/dist/esm/McapIndexedReader.js
+index 8d96041ff9aec15745f92d850c2d13e1363d6acb..120a4bbacbd7841c8b25170dbf375f6c984ff76d 100644
+--- a/dist/esm/McapIndexedReader.js
++++ b/dist/esm/McapIndexedReader.js
+@@ -21,6 +21,7 @@ export class McapIndexedReader {
+     #readable;
+     #messageIndexReadable;
+     #decompressHandlers;
++    #chunkCache;
+     #messageStartTime;
+     #messageEndTime;
+     #attachmentStartTime;
+@@ -32,6 +33,7 @@ export class McapIndexedReader {
+         this.metadataIndexes = args.metadataIndexes;
+         this.statistics = args.statistics;
+         this.#decompressHandlers = args.decompressHandlers;
++        this.#chunkCache = args.chunkCache;
+         this.channelsById = args.channelsById;
+         this.schemasById = args.schemasById;
+         this.summaryOffsetsByOpcode = args.summaryOffsetsByOpcode;
+@@ -65,7 +67,7 @@ export class McapIndexedReader {
+     #errorWithLibrary(message) {
+         return new Error(`${message} [library=${this.header.library}]`);
+     }
+-    static async Initialize({ readable, decompressHandlers, messageIndexCacheSizeBytes, readOptions, }) {
++    static async Initialize({ readable, decompressHandlers, messageIndexCacheSizeBytes, chunkCache, readOptions, }) {
+         const size = await readable.size();
+         let header;
+         let headerEndOffset;
+@@ -233,6 +235,7 @@ export class McapIndexedReader {
+             dataEndOffset,
+             dataSectionCrc,
+             messageIndexCacheSizeBytes,
++            chunkCache,
+         });
+     }
+     /**
+@@ -379,6 +382,15 @@ export class McapIndexedReader {
+         }
+     }
+     async #loadChunkData(chunkIndex, options) {
++        const cached = this.#chunkCache?.get(chunkIndex.chunkStartOffset);
++        if (cached) {
++            return cached;
++        }
++        const view = await this.#loadChunkDataUncached(chunkIndex, options);
++        this.#chunkCache?.set(chunkIndex.chunkStartOffset, view);
++        return view;
++    }
++    async #loadChunkDataUncached(chunkIndex, options) {
+         const chunkData = await this.#readable.read(chunkIndex.chunkStartOffset, chunkIndex.chunkLength, options?.readOptions);
+         const chunkReader = new McapByteReader(new DataView(chunkData.buffer, chunkData.byteOffset, chunkData.byteLength));
+         const chunkRecord = parseRecord(chunkReader, options?.validateCrcs ?? true);

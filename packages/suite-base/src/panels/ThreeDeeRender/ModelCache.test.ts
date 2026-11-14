@@ -393,4 +393,47 @@ describe("model dependencies", () => {
     expect(await loading).toBeUndefined();
     expect(create).not.toHaveBeenCalled();
   });
+
+  it("caches one-shot blob: URLs by their cacheKey", async () => {
+    // Given
+    const obj = "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n";
+    const { cache, fetchAsset } = cacheWithAssets({ "blob:first": obj, "blob:second": obj });
+    const error = vi.fn();
+    const opts = { overrideMediaType: "model/obj", cacheKey: "data:same-content" };
+    // When
+    const first = await cache.load("blob:first", opts, error);
+    const second = await cache.load("blob:second", opts, error);
+    // Then
+    expect(error).not.toHaveBeenCalled();
+    expect(second).toBe(first);
+    expect(fetchAsset).toHaveBeenCalledTimes(1);
+    await expect(
+      cache.load("blob:second", { overrideMediaType: "model/obj" }, error),
+    ).rejects.toThrow("cacheKey");
+    cache.dispose();
+  });
+
+  it("disposes cached meshes and their edge lines on dispose", async () => {
+    // Given
+    const { cache } = cacheWithAssets({
+      "local-asset://folder/triangle.obj": "v 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n",
+    });
+    const model = await cache.load("local-asset://folder/triangle.obj", {}, vi.fn());
+    const geometries: THREE.BufferGeometry[] = [];
+    model!.traverse((child) => {
+      if (child instanceof THREE.Mesh || child instanceof THREE.Line) {
+        geometries.push(child.geometry as THREE.BufferGeometry);
+      }
+    });
+    expect(geometries).toHaveLength(2); // the mesh and its edges
+    const disposed = geometries.map((geometry) => vi.spyOn(geometry, "dispose"));
+    // When
+    cache.dispose();
+    // Then
+    await vi.waitFor(() => {
+      for (const spy of disposed) {
+        expect(spy).toHaveBeenCalled();
+      }
+    });
+  });
 });

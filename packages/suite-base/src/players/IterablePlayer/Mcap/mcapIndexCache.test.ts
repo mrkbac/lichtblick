@@ -3,7 +3,7 @@
 
 import { McapIndexedReader, McapTypes, McapWriter, TempBuffer } from "@mcap/core";
 
-import { loadDecompressHandlers } from "@lichtblick/mcap-support";
+import { ChunkCache, loadDecompressHandlers } from "@lichtblick/mcap-support";
 
 import { BlobReadable } from "./BlobReadable";
 import { McapIterableSource } from "./McapIterableSource";
@@ -114,7 +114,9 @@ describe("scanWithIndexCache", () => {
     expect(second.offset).toBe(first.offset);
     expect(second.messageCount).toBe(5n);
     expect(second.toAlert()).toEqual(first.toAlert());
-    expect(await readValues(second.toReadable(readableOf(bytes)))).toEqual([1, 2, 3, 4, 5]);
+    expect(await readValues(second.toReadable(readableOf(bytes), new ChunkCache()))).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
   });
 
   it("opens through McapIterableSource from the cache", async () => {
@@ -143,7 +145,9 @@ describe("scanWithIndexCache", () => {
     expect(fromSnapshot.mock.results[0]?.value).toBe(grown);
     expect(scan).toHaveBeenCalledTimes(2);
     expect(grown.messageCount).toBe(6n);
-    expect(await readValues(grown.toReadable(readableOf(full)))).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(await readValues(grown.toReadable(readableOf(full), new ChunkCache()))).toEqual([
+      1, 2, 3, 4, 5, 6,
+    ]);
   });
 
   it("ignores an entry whose bytes no longer match the file", async () => {
@@ -171,6 +175,27 @@ describe("scanWithIndexCache", () => {
 
     expect(files.has(oldest!)).toBe(false);
     expect(files.size).toBe(1);
+  });
+
+  it("evicts the least recently used entry, not the least recently written", async () => {
+    // Given two cached files, of which the older one was opened again since
+    const handlers = await loadDecompressHandlers();
+    const often = await footerless(2);
+    await scanWithIndexCache(readableOf(often), handlers);
+    await scanWithIndexCache(readableOf(await footerless(3)), handlers);
+    const [oftenKey, onceKey] = files.keys();
+    await scanWithIndexCache(readableOf(often), handlers);
+    for (const key of [oftenKey!, onceKey!]) {
+      files.get(key)!.bytes = new Uint8Array(MAX_CACHE_BYTES / 2 - 10);
+    }
+
+    // When a third file needs room
+    await scanWithIndexCache(readableOf(await footerless(4)), handlers);
+
+    // Then the one opened once goes, with its last-use marker
+    expect(files.has(oftenKey!)).toBe(true);
+    expect(files.has(onceKey!)).toBe(false);
+    expect([...files.keys()].filter((name) => name.startsWith(onceKey!))).toEqual([]);
   });
 
   it("scans without OPFS", async () => {
