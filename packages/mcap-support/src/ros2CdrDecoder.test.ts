@@ -394,6 +394,71 @@ describe("createRos2CdrDeserializer", () => {
     }
   });
 
+  it("matches MessageReader for duplicate and reserved-word field names", () => {
+    const definitions: MessageDefinition[] = [
+      {
+        definitions: [
+          { name: "a", type: "uint8" },
+          { name: "class", type: "uint16" },
+          { name: "a", type: "string" }, // duplicate: last value, first position
+          { name: "constructor", type: "float64" },
+          { name: "default", type: "int32", isArray: true },
+        ],
+      },
+    ];
+    const writer = new CdrWriter();
+    writer.uint8(7);
+    writer.uint16(9);
+    writer.string("h");
+    writer.float64(1);
+    writer.sequenceLength(1);
+    writer.int32(5);
+    const data = writer.data;
+    const spy = vi.spyOn(MessageReader.prototype, "readMessage");
+    const { expected, actual } = decodeBoth(definitions, data);
+    expect(spy).toHaveBeenCalledTimes(1); // only the reference: the generated code ran
+    expect(expected).toHaveProperty("value");
+    expect(actual).toEqual(expected);
+  });
+
+  it("matches MessageReader for strings that run past the message but stay in the buffer", () => {
+    const definitions: MessageDefinition[] = [{ definitions: [{ name: "s", type: "string" }] }];
+    const buffer = new Uint8Array([0, 1, 0, 0, 4, 0, 0, 0, 0x61, 0x62, 0x63, 0, 0, 0]);
+    const data = buffer.subarray(0, 10); // the view ends inside the string
+    const { expected, actual } = decodeBoth(definitions, data);
+    expect(actual).toEqual(expected);
+  });
+
+  it("falls back instead of failing on huge or very deep schemas", () => {
+    // 2^30 leaves when inlined: generation stops at the source size cap.
+    const wide: MessageDefinition[] = Array.from({ length: 31 }, (_, i) => ({
+      name: i === 0 ? undefined : `pkg/W${i}`,
+      definitions:
+        i === 30
+          ? [{ name: "x", type: "uint8" }]
+          : [
+              { name: "a", type: `pkg/W${i + 1}`, isComplex: true },
+              { name: "b", type: `pkg/W${i + 1}`, isComplex: true },
+            ],
+    }));
+    // Deep enough to overflow the generator's recursion.
+    const deep: MessageDefinition[] = Array.from({ length: 20_000 }, (_, i) => ({
+      name: i === 0 ? undefined : `pkg/D${i}`,
+      definitions:
+        i === 19_999
+          ? [{ name: "x", type: "uint8" }]
+          : [{ name: "next", type: `pkg/D${i + 1}`, isComplex: true }],
+    }));
+    const data = new Uint8Array([0, 1, 0, 0, 1, 2, 3, 4]);
+    for (const definitions of [wide, deep]) {
+      const spy = vi.spyOn(MessageReader.prototype, "readMessage");
+      const { expected, actual } = decodeBoth(definitions, data);
+      expect(actual).toEqual(expected);
+      expect(spy).toHaveBeenCalledTimes(2); // the reference, and the fallback
+      spy.mockRestore();
+    }
+  });
+
   it("never turns schema text into code", () => {
     const payload = "globalThis.injectedByTest = true";
     const attacks: MessageDefinition[][] = [

@@ -351,10 +351,10 @@ function compile(
     const result = readStruct(rootFields, new Set());
     emit(js`return ${result};`);
     return out.compile<Decoder>(js`view`, js`bytes`, js`rt`) ?? false;
-  } catch (error) {
-    if (error instanceof Unsupported) {
-      return false;
-    }
-    throw error;
+  } catch {
+    // Unsupported schemas, but also anything unexpected (a stack overflow on very deep types, a
+    // generator bug): fail closed to MessageReader rather than failing every message. The
+    // differential tests assert that supported schemas never get here.
+    return false;
   }
 }
