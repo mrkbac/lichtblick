@@ -282,7 +282,7 @@ export async function main(): Promise<void> {
       "font-src": "'self' data:",
       // Include http in the CSP to allow loading images (i.e. map tiles) from http endpoints like localhost
       // Include blob: to allow loading mesh textures fetched as assets and served via object URLs
-      "img-src": "'self' data: https: package: x-foxglove-converted-tiff: http: blob:",
+      "img-src": "'self' data: https: package: http: blob:",
       "media-src": "'self' data: https: http: blob: file:",
     };
     const cspHeader = Object.entries(contentSecurityPolicy)

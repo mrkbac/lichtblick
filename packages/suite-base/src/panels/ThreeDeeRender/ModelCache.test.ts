@@ -3,8 +3,10 @@
 
 import { JSDOM } from "jsdom";
 import * as THREE from "three";
+import UTIF from "utif";
 
 import { MeshUpAxis, ModelCache } from "./ModelCache";
+import { decodeTiffToPng } from "./tiffToPng";
 
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
 
@@ -284,30 +286,64 @@ describe("model dependencies", () => {
     cache.dispose();
   });
 
-  it.each([false, true])("preserves platform TIFF fetching (desktop: %s)", async (desktop) => {
-    // Given
-    vi.stubGlobal("desktopBridge", desktop ? {} : undefined);
-    const textureUrl = desktop
-      ? "x-foxglove-converted-tiff://robot/textures/paint.tiff"
-      : "package://robot/textures/paint.tiff";
-    const { cache, fetchAsset } = cacheWithAssets({
+  it("converts TIFF textures to PNG", async () => {
+    // Given: a 2x1 TIFF with an opaque red and a transparent blue pixel
+    const pixels = new Uint8Array([255, 0, 0, 255, 0, 0, 255, 0]);
+    const drawn: Uint8ClampedArray[] = [];
+    vi.stubGlobal(
+      "ImageData",
+      class {
+        public constructor(public data: Uint8ClampedArray) {}
+      },
+    );
+    vi.stubGlobal(
+      "OffscreenCanvas",
+      class {
+        public getContext() {
+          return { putImageData: (image: ImageData) => drawn.push(image.data) };
+        }
+        public async convertToBlob(options: ImageEncodeOptions) {
+          return new Blob([new Uint8Array(drawn[0]!)], options);
+        }
+      },
+    );
+    // jsdom has no workers; decode in-process like the worker would.
+    vi.stubGlobal(
+      "Worker",
+      class {
+        public onmessage?: (event: { data: Blob | Error }) => void;
+        public postMessage(data: Uint8Array) {
+          decodeTiffToPng(data).then(
+            (blob) => this.onmessage?.({ data: blob }),
+            (error: unknown) => this.onmessage?.({ data: error as Error }),
+          );
+        }
+        public terminate() {}
+      },
+    );
+    const createObjectURL = vi.spyOn(URL, "createObjectURL");
+    const { cache } = cacheWithAssets({
       "package://robot/model.gltf": JSON.stringify({
         asset: { version: "2.0" },
         scene: 0,
         scenes: [{ nodes: [] }],
-        images: [{ uri: "textures/paint.tiff" }],
+        images: [{ uri: "textures/paint.tiff" }, { uri: "textures/broken.tif" }],
       })!,
-      [textureUrl]: new Uint8Array([1]),
+      "package://robot/textures/paint.tiff": new Uint8Array(UTIF.encodeImage(pixels, 2, 1)),
+      "package://robot/textures/broken.tif": new Uint8Array([0x49, 0x49, 42, 0, 1]),
     });
     const error = vi.fn();
     // When
     const model = await cache.load("package://robot/model.gltf", {}, error);
     // Then
     expect(model).toBeDefined();
-    expect(error).not.toHaveBeenCalled();
-    expect(fetchAsset).toHaveBeenCalledWith(textureUrl, {
-      referenceUrl: "package://robot/model.gltf",
-    });
+    expect(drawn).toEqual([new Uint8ClampedArray(pixels)]);
+    expect(createObjectURL).toHaveBeenCalledWith(expect.objectContaining({ type: "image/png" }));
+    expect(error.mock.calls.map(([value]) => (value as Error).message)).toEqual([
+      'Failed to load GLTF asset "package://robot/textures/broken.tif"',
+    ]);
+    expect(console.error).toHaveBeenCalled();
+    vi.mocked(console.error).mockClear();
     cache.dispose();
   });
 

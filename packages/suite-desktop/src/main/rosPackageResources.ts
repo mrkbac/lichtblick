@@ -8,9 +8,7 @@ import { DOMParser } from "@xmldom/xmldom";
 import { protocol, net } from "electron";
 import { promises as fs } from "fs";
 import path from "path";
-import { PNG } from "pngjs";
 import { pathToFileURL } from "url";
-import UTIF from "utif";
 
 import Logger from "@lichtblick/log";
 import { AppSetting } from "@lichtblick/suite-base/src/AppSetting";
@@ -166,64 +164,13 @@ export function registerRosPackageProtocolHandlers(): void {
       return Response.error();
     }
   });
-
-  // Chrome does not support decoding .tiff images natively. As a workaround, the 3D panel's
-  // ModelCache modifies `package://` urls ending in `.tiff?` to x-foxglove-converted-tiff.
-  //
-  // This handler converts the .tiff file into a PNG file which is supported in <img> tags
-  protocol.handle("x-foxglove-converted-tiff", async (request) => {
-    try {
-      // Give preference to the ROS_PACKAGE_PATH app setting over the environment variable
-      const rosPackagePath =
-        getAppSetting<string>(AppSetting.ROS_PACKAGE_PATH) ?? process.env.ROS_PACKAGE_PATH;
-
-      log.info(`Load converted tiff: ${request.url}`);
-      log.info(`ROS_PACKAGE_PATH ${rosPackagePath}`);
-      if (!rosPackagePath) {
-        throw new Error("ROS_PACKAGE_PATH not set");
-      }
-
-      const url = new URL(request.url);
-      const targetPkg = url.host;
-      const relPath = url.pathname;
-
-      const pkgRoot = await findRosPackage(targetPkg, {
-        rosPackagePath,
-      });
-
-      if (!pkgRoot) {
-        throw new Error(
-          `ROS package ${targetPkg} not found in any ROS_PACKAGE_PATH: ${rosPackagePath}.`,
-        );
-      }
-
-      const resolvedResourcePath = path.join(pkgRoot, ...relPath.split("/"));
-
-      const buf = await fs.readFile(resolvedResourcePath);
-      const [ifd] = UTIF.decode(buf);
-      if (!ifd) {
-        throw new Error("TIFF decoding failed");
-      }
-      UTIF.decodeImage(buf, ifd);
-      const png = new PNG({ width: ifd.width, height: ifd.height });
-      png.data = Buffer.from(UTIF.toRGBA8(ifd));
-      const pngData = PNG.sync.write(png);
-      return new Response(new Uint8Array(pngData), { headers: { "Content-Type": "image/png" } });
-    } catch (err: unknown) {
-      log.warn("Error loading from ROS package url", request.url, err);
-      return Response.error();
-    }
-  });
 }
 
 /**
- * Enable fetch for custom URL schemes. The renderer runs on a file:// origin, so these requests are
- * cross-origin and Chromium blocks them unless the scheme is CORS-enabled.
+ * Enable fetch for the package: URL scheme. The renderer runs on a file:// origin, so these requests
+ * are cross-origin and Chromium blocks them unless the scheme is CORS-enabled.
  */
 export function registerRosPackageProtocolSchemes(): void {
   const privileges = { supportFetchAPI: true, corsEnabled: true };
-  protocol.registerSchemesAsPrivileged([
-    { scheme: "package", privileges },
-    { scheme: "x-foxglove-converted-tiff", privileges },
-  ]);
+  protocol.registerSchemesAsPrivileged([{ scheme: "package", privileges }]);
 }
