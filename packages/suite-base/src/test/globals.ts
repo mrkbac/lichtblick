@@ -5,6 +5,8 @@
 Object.assign(globalThis, {
   LICHTBLICK_SUITE_VERSION: "TEST",
   LICHTBLICK_PRODUCT_NAME: "Lichtblick",
+  LICHTBLICK_PRODUCT_HOMEPAGE: "https://lichtblick-suite.github.io/docs/",
+  LICHTBLICK_REPOSITORY_URL: "https://github.com/mrkbac/lichtblick",
   API_URL: "/",
   DEV_WORKSPACE: "",
   OTLP_ENDPOINT: undefined,

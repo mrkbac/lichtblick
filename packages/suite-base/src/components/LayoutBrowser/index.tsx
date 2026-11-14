@@ -31,6 +31,7 @@ import SignInPrompt from "@lichtblick/suite-base/components/LayoutBrowser/SignIn
 import { LayoutTemplateMenu } from "@lichtblick/suite-base/components/LayoutTemplates";
 import { SidebarContent } from "@lichtblick/suite-base/components/SidebarContent";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
   LayoutID,
@@ -468,7 +469,7 @@ export default function LayoutBrowser({
           title={layoutManager.supportsSharing ? (organizations ? "Local" : "Personal") : undefined}
           expanded={personalExpanded}
           onToggleExpanded={togglePersonalExpanded}
-          emptyText="Add a new layout to get started with Lichtblick!"
+          emptyText={`Add a new layout to get started with ${APP_CONFIG.productName}!`}
           items={sortedLayouts?.personal}
         />
         {layoutManager.supportsSharing &&

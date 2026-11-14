@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
@@ -22,11 +23,11 @@ export default class FoxgloveWebSocketDataSourceFactory implements IDataSourceFa
   public docsLinks = [
     {
       label: "ROS 1",
-      url: "https://lichtblick-suite.github.io/docs/docs/connecting-to-data/frameworks/ros1/",
+      url: `${APP_CONFIG.docsUrl}docs/connecting-to-data/frameworks/ros1/`,
     },
     {
       label: "ROS 2",
-      url: "https://lichtblick-suite.github.io/docs/docs/connecting-to-data/frameworks/ros2",
+      url: `${APP_CONFIG.docsUrl}docs/connecting-to-data/frameworks/ros2`,
     },
   ];
 

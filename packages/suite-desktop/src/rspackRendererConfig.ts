@@ -10,7 +10,7 @@ import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import path from "path";
 
 import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
-import { isOverlayRuntimeError, makeConfig } from "@lichtblick/suite-base/rspack.ts";
+import { isOverlayRuntimeError, makeConfig, productInfo } from "@lichtblick/suite-base/rspack.ts";
 import * as palette from "@lichtblick/theme/src/palette.ts";
 
 import type { RspackConfigParams } from "./RspackConfigParams.ts";
@@ -29,7 +29,7 @@ export const rspackRendererConfig =
 
     const appConfig = makeConfig(env, argv, {
       version: params.packageJson.version,
-      productName: params.packageJson.productName,
+      product: productInfo(params.packageJson),
     });
 
     const config: Configuration = {

@@ -111,11 +111,31 @@ function initModuleLocals(packageDir: string | undefined): void {
   dotenv.config({ path: _nodeFileURLToPath(new URL("../../.env", dirHref)) });
 }
 
+/** What the UI shows about the product; one place to rebrand (root package.json). */
+export type ProductInfo = {
+  name: string;
+  /** Documentation site, used for every docs link */
+  homepage: string;
+  /** Web URL of the source repository (releases, license, source links) */
+  repositoryUrl: string;
+};
+
+export function productInfo(packageJson: {
+  productName: string;
+  homepage: string;
+  repository: { url: string };
+}): ProductInfo {
+  return {
+    name: packageJson.productName,
+    homepage: packageJson.homepage,
+    repositoryUrl: packageJson.repository.url.replace(/^git\+/, "").replace(/\.git$/, ""),
+  };
+}
+
 type Options = {
   /** Specify the app version. */
   version: string;
-  /** App name shown in the UI (root package.json `productName`). */
-  productName: string;
+  product: ProductInfo;
   /**
    * Absolute path to the @lichtblick/suite-base package directory.
    * Defaults to the directory of this file.
@@ -144,7 +164,7 @@ export function makeConfig(
   const isDev = argv.mode === "development";
   const isServe = argv.env?.RSPACK_SERVE ?? false;
 
-  const { version, productName } = options;
+  const { version, product } = options;
 
   return {
     resolve: {
@@ -263,7 +283,9 @@ export function makeConfig(
       new rspack.DefinePlugin({
         // Should match webpack-defines.d.ts
         LICHTBLICK_SUITE_VERSION: JSON.stringify(version),
-        LICHTBLICK_PRODUCT_NAME: JSON.stringify(productName),
+        LICHTBLICK_PRODUCT_NAME: JSON.stringify(product.name),
+        LICHTBLICK_PRODUCT_HOMEPAGE: JSON.stringify(product.homepage),
+        LICHTBLICK_REPOSITORY_URL: JSON.stringify(product.repositoryUrl),
         // licht deploys talk to its organization server unless API_URL says otherwise.
         API_URL: JSON.stringify(process.env.API_URL ?? "https://licht-server.marko.im"),
         DEV_WORKSPACE: JSON.stringify(process.env.DEV_WORKSPACE),

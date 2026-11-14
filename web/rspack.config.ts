@@ -7,6 +7,7 @@
 
 import path from "path";
 
+import { productInfo } from "@lichtblick/suite-base/rspack.ts";
 import { type ConfigParams, mainConfig } from "@lichtblick/suite-web/src/rspackConfigs.ts";
 
 import packageJson from "../package.json" with { type: "json" };
@@ -16,7 +17,7 @@ const params: ConfigParams = {
   contextPath: path.resolve(import.meta.dirname, "src"),
   entrypoint: "./entrypoint.tsx",
   prodSourceMap: "hidden-source-map",
-  productName: packageJson.productName,
+  product: productInfo(packageJson),
   // Fork-only: show commit + build time in the version string (Settings > About, start dialog).
   version: `${packageJson.version} (${process.env.CF_PAGES_COMMIT_SHA?.slice(0, 7) ?? "local"}, built ${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC)`,
 };
