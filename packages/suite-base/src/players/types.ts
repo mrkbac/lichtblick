@@ -268,6 +268,8 @@ export type TopicWithSchemaName = Topic & { schemaName: string };
 export type RecordingFileInfo = {
   /** File name, or the last path segment of a remote URL. */
   name?: string;
+  /** When recordings are compared: the prefix this file's topics are shown under, e.g. "/a" */
+  topicPrefix?: string;
   sizeBytes?: number;
   /** Time range of this file's messages. */
   start?: Time;
@@ -276,6 +278,8 @@ export type RecordingFileInfo = {
   channels: {
     id: number;
     topic: string;
+    /** When recordings are compared: the topic's name in the recording, before prefixing */
+    originalTopic?: string;
     schemaName?: string;
     messageEncoding: string;
     schemaEncoding?: string;

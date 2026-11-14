@@ -230,6 +230,8 @@ export type IterableSourceInitializeArgs = {
   url?: string;
   files?: File[];
   urls?: string[];
+  // Compare `files`/`urls` side by side instead of merging them (see MultiSource)
+  compare?: boolean;
   // Fetch credentials for `url`/`urls`, e.g. "include" to send cookies (`ds.includeCredentials`)
   credentials?: RequestCredentials;
   // Optional overrides for multi-file hydration tuning (see MultiSourceHydrationOptions in

@@ -44,7 +44,7 @@ type MultiSourceHydrationOptions = {
   initConcurrency?: number;
 };
 
-export type MultiSource =
+export type MultiSource = (
   | ({
       type: "files";
       files: Blob[];
@@ -64,7 +64,12 @@ export type MultiSource =
       // cache budget, while single-file sessions keep the legacy 50 MiB default from
       // getNewConnection.ts.
       readAheadBufferBytes?: number;
-    } & MultiSourceHydrationOptions);
+    } & MultiSourceHydrationOptions)
+) & {
+  // Keep recordings apart instead of merging them: each file's topics go under its own prefix
+  // (/a, /b, …) and every file is shifted to start at the same time.
+  compare?: boolean;
+};
 
 export type IterableSourceConstructor<T extends IIterableSource, P> = new (args: P) => T;
 

@@ -16,6 +16,8 @@ export type DataSourceFactoryInitializeArgs = {
   // The handle `file` came from, if any (see IterableSourceInitializeArgs)
   handle?: FileSystemFileHandle;
   files?: File[];
+  // Compare `files` side by side instead of merging them into one recording
+  compare?: boolean;
   params?: Record<string, string | undefined>;
   sourceMetadata?: Record<string, unknown>[];
 };
@@ -100,6 +102,8 @@ type FileDataSourceArgs = {
   type: "file";
   files?: File[];
   handles?: FileSystemFileHandle[];
+  // Compare the files side by side instead of merging them into one recording
+  compare?: boolean;
 };
 
 type ConnectionDataSourceArgs = {

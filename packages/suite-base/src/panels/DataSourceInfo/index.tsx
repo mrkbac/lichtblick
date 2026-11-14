@@ -29,6 +29,7 @@ import {
   Typography,
 } from "@mui/material";
 import { Fragment, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
@@ -51,6 +52,7 @@ import {
 import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
+import { CompareView } from "./CompareView";
 import { ActivityChart, ContainerDetails, KeyValueTable, SchemaFields } from "./InspectionViews";
 import { useStyles } from "./index.style";
 import { aggregateBuckets, BUCKET_COUNT, inspectSourceTopics, TopicInspection } from "./inspection";
@@ -88,6 +90,7 @@ function offset(time: Time, start: Time): string {
 }
 
 export function RecordingInspector(): React.JSX.Element {
+  const { t } = useTranslation("dataSourceInfo");
   const { classes, cx } = useStyles();
   const topics = useMessagePipeline(selectTopics);
   const getPipeline = useMessagePipelineGetter();
@@ -126,6 +129,7 @@ export function RecordingInspector(): React.JSX.Element {
   const getMetadata = useMessagePipeline(selectMetadata);
   const datatypes = useMessagePipeline(selectDatatypes);
   const files = useMessagePipeline(selectFiles) ?? [];
+  const comparing = files.some((file) => file.topicPrefix != undefined);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("topic");
   const [ascending, setAscending] = useState(true);
@@ -133,7 +137,9 @@ export function RecordingInspector(): React.JSX.Element {
   const [tree, setTree] = useState(false);
   const [showActivity, setShowActivity] = useState(true);
   const [collapsed, setCollapsed] = useState(new Set<string>());
-  const [tab, setTab] = useState("topics");
+  const [selectedTab, setTab] = useState("topics");
+  // The compare tab goes away when the files are merged again
+  const tab = selectedTab === "compare" && !comparing ? "topics" : selectedTab;
   const [inspections, setInspections] = useState(new Map<string, TopicInspection>());
   const [selected, setSelected] = useState<string>();
   const [scanning, setScanning] = useState<string>();
@@ -486,6 +492,7 @@ export function RecordingInspector(): React.JSX.Element {
           variant="scrollable"
         >
           <Tab value="topics" label="Topics & timing" />
+          {comparing && <Tab value="compare" label={t("compareTab", { count: files.length })} />}
           <Tab value="files" label="File" />
           <Tab value="channels" label={`Channels (${channelCount})`} />
           <Tab value="schemas" label={`Schemas (${schemas.length})`} />
@@ -979,6 +986,9 @@ export function RecordingInspector(): React.JSX.Element {
               </Tooltip>
             </div>
           </>
+        )}
+        {tab === "compare" && comparing && (
+          <CompareView files={files} topicStats={topicStats} inspections={inspections} />
         )}
         {tab === "files" && <ContainerDetails files={files} />}
         {tab === "channels" && (

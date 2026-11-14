@@ -35,6 +35,7 @@ import {
   GetBackfillMessagesArgs,
   ISerializedIterableSource,
 } from "../IIterableSource";
+import { ComparedSource, compareLabel } from "./ComparedSource";
 import { HydratedSourcePool } from "./HydratedSourcePool";
 
 const log = Logger.getLogger(__filename);
@@ -147,13 +148,24 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
       );
     }
 
-    this.sourceImpl.push(...sources);
-
     // Bound local and remote initialization: concurrent MCAP summary parsing can spike worker
     // memory in large multi-file sessions.
     const concurrency = this.dataSource.initConcurrency ?? DEFAULT_INIT_CONCURRENCY;
 
-    return await this.initializeSources(sources, concurrency);
+    if (this.dataSource.compare !== true) {
+      this.sourceImpl.push(...sources);
+      return await this.initializeSources(sources, concurrency);
+    }
+
+    const compared = sources.map((source, i) => new ComparedSource(source, `/${compareLabel(i)}`));
+    this.sourceImpl.push(...compared);
+    const initializations = await this.initializeSources(compared, concurrency);
+    // ponytail: aligns recording starts only; add a per-recording offset when starts differ in content
+    const earliest = initializations.reduce(
+      (min, init) => (compare(init.start, min) < 0 ? init.start : min),
+      initializations[0]!.start,
+    );
+    return compared.map((source) => source.alignStartTo(earliest));
   }
 
   private async initializeSources(

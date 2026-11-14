@@ -21,7 +21,12 @@ export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSo
     return Comlink.proxy(wrapped);
   } else if (args.files) {
     const source = new MultiIterableSource(
-      { type: "files", files: args.files, ...pickDefinedHydrationOverrides(args) },
+      {
+        type: "files",
+        files: args.files,
+        compare: args.compare,
+        ...pickDefinedHydrationOverrides(args),
+      },
       McapIterableSource,
     );
     const wrapped = new WorkerIterableSourceWorker(source);
@@ -40,6 +45,7 @@ export function initialize(args: IterableSourceInitializeArgs): WorkerIterableSo
         type: "urls",
         urls: args.urls,
         credentials: args.credentials,
+        compare: args.compare,
         ...pickDefinedHydrationOverrides(args),
       },
       McapIterableSource,

@@ -22,6 +22,7 @@ import {
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TextMiddleTruncate from "@lichtblick/suite-base/components/TextMiddleTruncate";
 import Timestamp from "@lichtblick/suite-base/components/Timestamp";
+import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { PlayerPresence, RecordingFileInfo } from "@lichtblick/suite-base/players/types";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
@@ -51,6 +52,13 @@ const useStyles = makeStyles<void, "copyButton">()((theme, _params, classes) => 
   },
   secondary: {
     color: theme.palette.text.secondary,
+  },
+  prefix: {
+    fontWeight: "bold",
+  },
+  fileName: {
+    flex: "auto",
+    minWidth: 0,
   },
 }));
 
@@ -257,9 +265,16 @@ function FileRow(props: {
 
   return (
     <Stack title={absoluteRange}>
-      <Typography variant="inherit" component="div">
-        <TextMiddleTruncate text={file.name ?? file.library} />
-      </Typography>
+      <Stack direction="row" gap={0.75} alignItems="baseline">
+        {file.topicPrefix != undefined && (
+          <Typography className={cx(classes.numeric, classes.prefix)} variant="inherit">
+            {file.topicPrefix}
+          </Typography>
+        )}
+        <Typography className={classes.fileName} variant="inherit" component="div">
+          <TextMiddleTruncate text={file.name ?? file.library} />
+        </Typography>
+      </Stack>
       {details && (
         <Typography className={cx(classes.numeric, classes.secondary)} variant="inherit">
           {details}
@@ -272,6 +287,7 @@ function FileRow(props: {
 function FilesField({ startTime }: { startTime?: Time }): React.JSX.Element | null {
   const { t } = useTranslation("dataSourceInfo");
   const files = useMessagePipeline(selectRecordingFiles);
+  const { selectSource, selectedSource, selectedFiles } = usePlayerSelection();
 
   const sortedFiles = useMemo(
     () => files && [...files].sort((a, b) => (a.start && b.start ? compare(a.start, b.start) : 0)),
@@ -283,12 +299,32 @@ function FilesField({ startTime }: { startTime?: Time }): React.JSX.Element | nu
   }
   // With a single file the range would only repeat start, end and duration.
   const recordingStart = sortedFiles.length > 1 ? startTime : undefined;
+  const comparing = sortedFiles.some((file) => file.topicPrefix != undefined);
+  // Reopen the same files merged into one recording, or side by side under /a, /b, …
+  const canToggle =
+    selectedSource?.supportsMultiFile === true && selectedFiles && selectedFiles.length > 1;
   return (
     <Field label={t("files")}>
       <Stack gap={0.75}>
         {sortedFiles.map((file, index) => (
           <FileRow key={`${file.name}-${index}`} file={file} recordingStart={recordingStart} />
         ))}
+        {canToggle === true && (
+          <Button
+            size="small"
+            variant="outlined"
+            title={comparing ? t("mergeFilesHint") : t("compareFilesHint")}
+            onClick={() => {
+              selectSource(selectedSource.id, {
+                type: "file",
+                files: [...selectedFiles],
+                compare: !comparing,
+              });
+            }}
+          >
+            {comparing ? t("mergeFiles") : t("compareFiles")}
+          </Button>
+        )}
       </Stack>
     </Field>
   );

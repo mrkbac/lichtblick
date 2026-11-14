@@ -47,6 +47,7 @@ export const appBar = {
   open: "Open…",
   openDataSources: "Open data sources",
   openLocalFiles: "Open local file(s)…",
+  compareRecordings: "Compare recordings…",
   recentDataSources: "Recent",
   recentlyViewed: "Recently viewed",
   settings: "Settings…",
