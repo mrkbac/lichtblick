@@ -43,6 +43,8 @@ export class HydratedSourcePool {
   #totalWeight = 0;
   #overCapacityReported = false;
   #terminated = false;
+  // Refreshes run one at a time, so a later one replaces (and closes) what an earlier one installed
+  #refreshes: Promise<unknown> = Promise.resolve();
 
   public constructor(options: HydratedSourcePoolOptions) {
     this.#maxCount =
@@ -96,6 +98,12 @@ export class HydratedSourcePool {
    * isn't resident: the next acquire() hydrates the current state instead.
    */
   public async refresh<T>(token: object, value: T): Promise<boolean> {
+    const result = this.#refreshes.then(async () => await this.#refresh(token, value));
+    this.#refreshes = result.catch(() => undefined);
+    return await result;
+  }
+
+  async #refresh(token: object, value: unknown): Promise<boolean> {
     const entry = this.#entries.get(token);
     if (!entry || this.#terminated) {
       return false;

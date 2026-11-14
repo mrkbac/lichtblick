@@ -214,6 +214,30 @@ describe("McapRecoveryScanner", () => {
     expect(await readValues(scanner.toReadable(readableOf(full)))).toEqual([1, 2, 3, 4, 5]);
   });
 
+  it("reads no further than a short step needs", async () => {
+    // Given a file read in short steps
+    const bytes = await makeMcap({ finish: false });
+    const readable = readableOf(bytes);
+    let readBytes = 0n;
+    const counting: McapTypes.IReadable = {
+      size: async () => await readable.size(),
+      read: async (offset, length) => {
+        readBytes += length;
+        return await readable.read(offset, length);
+      },
+    };
+    const scanner = new McapRecoveryScanner(await loadDecompressHandlers());
+
+    // When it is scanned 64 bytes at a time
+    while (await scanner.scan(counting, 64n)) {
+      // keep stepping
+    }
+
+    // Then every byte is read about once, not a whole read window per step
+    expect(scanner.messageCount).toBe(BigInt(MESSAGE_COUNT));
+    expect(readBytes).toBeLessThan(2n * BigInt(bytes.byteLength));
+  });
+
   it("refuses files that are not MCAP", async () => {
     // Given
     const scanner = new McapRecoveryScanner(await loadDecompressHandlers());

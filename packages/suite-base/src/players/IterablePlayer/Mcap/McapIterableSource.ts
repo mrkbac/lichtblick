@@ -292,6 +292,7 @@ export class McapIterableSource implements ISerializedIterableSource {
   // append to the reader's index instead if updates get frequent.
   async #followScan(scan: Promise<void>): Promise<void> {
     const scanDone = scan.then(() => true); // one reaction on `scan`, not one per tick
+    let published = this.#recovery?.offset;
     while (this.#scan === scan) {
       let timer: ReturnType<typeof setTimeout> | undefined;
       const done = await Promise.race([
@@ -306,7 +307,13 @@ export class McapIterableSource implements ISerializedIterableSource {
       if (this.#scan !== scan) {
         return; // terminated
       }
-      await this.#publish({ indexing: !done, final: done });
+      // Nothing new indexed (e.g. a read is slow): don't make the player reload for nothing
+      if (!done && this.#recovery?.offset === published) {
+        continue;
+      }
+      if (await this.#publish({ indexing: !done, final: done })) {
+        published = this.#recovery?.offset;
+      }
       if (done && this.#scan === scan) {
         this.#scan = this.#tail();
         this.#wake?.();

@@ -76,6 +76,22 @@ describe("HydratedSourcePool", () => {
     pool.release(token);
   });
 
+  it("runs overlapping refreshes of one token in order, closing every replaced value", async () => {
+    // GIVEN: a resident entry
+    const pool = new HydratedSourcePool({ maxCount: 4 });
+    const token = {};
+    const hydrator = makeHydrator("old");
+    await pool.admit(token, hydrator, "old");
+
+    // WHEN: two refreshes overlap
+    await Promise.all([pool.refresh(token, "first"), pool.refresh(token, "second")]);
+
+    // THEN: the last one wins and both replaced values are closed once
+    expect(hydrator.close.mock.calls).toEqual([["old"], ["first"]]);
+    expect(await pool.acquire(token, hydrator)).toBe("second");
+    pool.release(token);
+  });
+
   it("hydrates via open() when not resident and allows eviction after release", async () => {
     // GIVEN: an empty pool and a token that has not been hydrated.
     const pool = new HydratedSourcePool({ maxCount: 1 });
