@@ -148,4 +148,20 @@ describe("compareRecordings", () => {
       ["imu", ["ImuRaw", "ImuRaw"]],
     ]);
   });
+
+  it("keeps comparing known rates when one recording has none", () => {
+    const files = [
+      file("/a", [["/imu", "Imu"]], 10),
+      file("/b", [["/imu", "Imu"]], 10),
+      file("/c", [["/imu", "Imu"]], 0),
+    ];
+    const topicStats = new Map([
+      ["/a/imu", { numMessages: 100 }],
+      ["/b/imu", { numMessages: 200 }],
+      ["/c/imu", { numMessages: 1 }],
+    ]);
+    const rows = compareRecordings(files, topicStats);
+    expect(rows[0]!.cells.map((cell) => cell?.hz)).toEqual([10, 20, undefined]);
+    expect(rows[0]!.differences).toEqual(["rate"]);
+  });
 });

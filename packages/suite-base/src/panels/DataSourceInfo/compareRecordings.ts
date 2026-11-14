@@ -40,9 +40,10 @@ function span(first: Time | undefined, last: Time | undefined): number {
 /**
  * Lines up each topic across compared recordings and flags what differs.
  *
- * Every row compares rates on one basis, the first that all of its recordings have: the median
- * rate from a scan of the topic, the rate between the topic's first and last message, or its count
- * over the recording's duration (indexed MCAP summaries only carry counts).
+ * Every row compares rates on one basis, the one most of its recordings have (ties go to the
+ * earlier one): the median rate from a scan of the topic, the rate between the topic's first and
+ * last message, or its count over the recording's duration (indexed MCAP summaries only carry
+ * counts).
  */
 export function compareRecordings(
   files: Immutable<RecordingFileInfo[]>,
@@ -92,15 +93,16 @@ export function compareRecordings(
   });
   return [...rows]
     .map(([topic, candidates]) => {
-      const basis = RATE_BASES.find((key) =>
-        candidates.every((cell) => cell == undefined || cell[key] != undefined),
-      );
+      // The most-preferred basis that covers the most recordings; cells without it stay unknown.
+      const coverage = (key: (typeof RATE_BASES)[number]) =>
+        candidates.filter((cell) => cell?.[key] != undefined).length;
+      const basis = RATE_BASES.reduce((best, key) => (coverage(key) > coverage(best) ? key : best));
       const cells = candidates.map(
         (cell): CompareCell | undefined =>
           cell && {
             count: cell.count,
             schemaName: cell.schemaName,
-            hz: basis && cell[basis],
+            hz: cell[basis],
           },
       );
       const present = cells.filter((cell): cell is CompareCell => cell != undefined);
