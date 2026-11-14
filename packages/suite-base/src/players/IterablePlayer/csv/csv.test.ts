@@ -123,6 +123,14 @@ describe("time columns", () => {
       1700000000123456789n,
     );
     expect(cellToNs("1e3", sec, ",")).toBe(1_000_000_000_000n);
+    // Exponent notation is exact too: 1.7e18 ns is the same instant as 1700000000000000000
+    expect(cellToNs("1.7e18", { type: "number", nsPerUnit: 1n }, ",")).toBe(1700000000000000000n);
+    expect(cellToNs("1.7E9", sec, ",")).toBe(1700000000000000000n);
+    expect(cellToNs("15e-1", sec, ",")).toBe(1_500_000_000n);
+    expect(cellToNs("1e-12", sec, ",")).toBe(0n);
+    expect(cellToNs("1e300", sec, ",")).toBe(10n ** 309n);
+    expect(cellToNs("0e999999999", sec, ",")).toBe(0n);
+    expect(cellToNs("1e-999999999", sec, ",")).toBe(0n);
     expect(cellToNs("1970-01-01T00:00:01.5Z", { type: "date" }, ",")).toBe(1_500_000_000n);
   });
 });

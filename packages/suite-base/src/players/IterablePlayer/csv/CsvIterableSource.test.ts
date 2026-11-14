@@ -115,6 +115,19 @@ describe("CsvIterableSource", () => {
     expect(init.end).toEqual({ sec: 1700000000, nsec: 2 });
   });
 
+  it("accepts the same instant written in exponent notation", async () => {
+    const source = new CsvIterableSource([
+      file(
+        "exp.csv",
+        "time_ns,v\n1700000000000000000,1e300\n1.7e18,1e300\n1700000000000000000,1\n",
+      ),
+    ]);
+    const init = await source.initialize();
+    expect(init.alerts).toEqual([]);
+    expect(init.topicStats.get("/exp")?.numMessages).toBe(3);
+    expect(init.end).toEqual({ sec: 1700000000, nsec: 0 });
+  });
+
   it("does not use a column of infinite values as the time", async () => {
     const source = new CsvIterableSource([file("inf.csv", "time,v\nInfinity,a\nInfinity,b\n")]);
     const init = await source.initialize();

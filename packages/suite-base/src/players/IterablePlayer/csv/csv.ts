@@ -211,21 +211,29 @@ export function numericTimeFormat(header: string, firstValue: number): TimeForma
   return { type: "number", nsPerUnit };
 }
 
-/** Converts a time cell to nanoseconds, exactly for plain decimal numbers. */
+/**
+ * Converts a time cell to nanoseconds. Decimal and exponent notation ("1.5", "1.7e18") are parsed
+ * exactly with BigInt; digits finer than a nanosecond are truncated.
+ */
 export function cellToNs(cell: string, format: TimeFormat, delimiter: string): bigint {
   if (format.type === "date") {
     return BigInt(parseDateMs(cell)) * 1_000_000n;
   }
   const text = numericText(cell, delimiter);
-  const match = /^(-?)(\d*)(?:\.(\d*))?$/.exec(text);
+  const match = /^([+-]?)(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/i.exec(text);
   if (!match) {
-    // Exponent notation and the like: precision of a double is all we can do
+    // Other forms Number() accepts (e.g. hex): precision of a double is all we can do
     return BigInt(Math.round(Number(text) * Number(format.nsPerUnit)));
   }
-  const [, sign, intPart = "", fracPart = ""] = match;
-  const digits = format.nsPerUnit.toString().length - 1; // 10^digits ns per unit
-  const frac = fracPart.slice(0, digits).padEnd(digits, "0");
+  const [, sign, intPart = "", fracPart = "", exponent = "0"] = match;
+  // value = digits * 10^power ns, with nsPerUnit = 10^k
+  const power = Number(exponent) - fracPart.length + format.nsPerUnit.toString().length - 1;
   // BigInt("") is 0n, so ".5" and "5." work too
-  const ns = BigInt(intPart) * format.nsPerUnit + BigInt(frac);
+  const digits = BigInt(intPart + fracPart);
+  // Skip the power for results that are 0 anyway ("0e999999999", "1e-999999999"): it could be huge
+  if (digits === 0n || -power > intPart.length + fracPart.length) {
+    return 0n;
+  }
+  const ns = power >= 0 ? digits * 10n ** BigInt(power) : digits / 10n ** BigInt(-power);
   return sign === "-" ? -ns : ns;
 }
