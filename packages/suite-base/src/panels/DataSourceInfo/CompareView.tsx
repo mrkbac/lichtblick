@@ -1,87 +1,36 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { subtract, toSec } from "@foxglove/rostime";
 import { Chip, FormControlLabel, Switch, TextField, Typography } from "@mui/material";
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { Immutable } from "@lichtblick/suite";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TextMiddleTruncate from "@lichtblick/suite-base/components/TextMiddleTruncate";
 import { RecordingFileInfo, TopicStats } from "@lichtblick/suite-base/players/types";
 
+import { compareRecordings } from "./compareRecordings";
 import { useStyles } from "./index.style";
-
-export type CompareCell = { count?: number; hz?: number; schemaName?: string };
-export type CompareRow = {
-  /** Topic name without the recording prefix */
-  topic: string;
-  /** One cell per recording, undefined when that recording lacks the topic */
-  cells: (CompareCell | undefined)[];
-  differences: ("missing" | "schema" | "rate")[];
-};
-
-// Rates within 10% of each other count as the same: recordings rarely run at exactly equal Hz.
-const RATE_TOLERANCE = 1.1;
-
-/** Lines up each topic across compared recordings and flags what differs. */
-export function compareRecordings(
-  files: Immutable<RecordingFileInfo[]>,
-  topicStats: ReadonlyMap<string, TopicStats> | undefined,
-): CompareRow[] {
-  const rows = new Map<string, (CompareCell | undefined)[]>();
-  files.forEach((file, index) => {
-    const prefix = file.topicPrefix ?? "";
-    for (const channel of file.channels) {
-      const topic = channel.topic.startsWith(prefix) ? channel.topic.slice(prefix.length) : "";
-      const stats = topicStats?.get(channel.topic);
-      const span =
-        stats?.firstMessageTime && stats.lastMessageTime
-          ? toSec(subtract(stats.lastMessageTime, stats.firstMessageTime))
-          : 0;
-      const cells =
-        rows.get(topic) ?? new Array<CompareCell | undefined>(files.length).fill(undefined);
-      cells[index] = {
-        count: stats?.numMessages,
-        hz: stats && stats.numMessages > 1 && span > 0 ? (stats.numMessages - 1) / span : undefined,
-        schemaName: channel.schemaName,
-      };
-      rows.set(topic, cells);
-    }
-  });
-  return [...rows]
-    .map(([topic, cells]) => {
-      const present = cells.filter((cell): cell is CompareCell => cell != undefined);
-      const rates = present.flatMap((cell) => (cell.hz != undefined ? [cell.hz] : []));
-      const differences: CompareRow["differences"] = [];
-      if (present.length < cells.length) {
-        differences.push("missing");
-      }
-      if (new Set(present.map((cell) => cell.schemaName)).size > 1) {
-        differences.push("schema");
-      }
-      if (rates.length > 1 && Math.max(...rates) > Math.min(...rates) * RATE_TOLERANCE) {
-        differences.push("rate");
-      }
-      return { topic, cells, differences };
-    })
-    .sort((a, b) => {
-      const differs = Number(b.differences.length > 0) - Number(a.differences.length > 0);
-      return differs !== 0 ? differs : a.topic.localeCompare(b.topic);
-    });
-}
+import { TopicInspection } from "./inspection";
 
 export function CompareView({
   files,
   topicStats,
+  inspections,
 }: {
   files: Immutable<RecordingFileInfo[]>;
   topicStats: ReadonlyMap<string, TopicStats> | undefined;
+  inspections: ReadonlyMap<string, TopicInspection>;
 }): React.JSX.Element {
+  const { t } = useTranslation("dataSourceInfo");
   const { classes } = useStyles();
   const [query, setQuery] = useState("");
   const [onlyDifferences, setOnlyDifferences] = useState(false);
-  const rows = useMemo(() => compareRecordings(files, topicStats), [files, topicStats]);
+  const rows = useMemo(
+    () => compareRecordings(files, topicStats, inspections),
+    [files, topicStats, inspections],
+  );
   const differing = rows.filter((row) => row.differences.length > 0).length;
   const shown = rows.filter(
     (row) =>
@@ -95,7 +44,7 @@ export function CompareView({
         <TextField
           size="small"
           className={classes.search}
-          placeholder="Search topics…"
+          placeholder={t("compareSearch")}
           value={query}
           onChange={(event) => {
             setQuery(event.target.value);
@@ -111,20 +60,20 @@ export function CompareView({
               }}
             />
           }
-          label={`Only differences (${differing})`}
+          label={t("compareOnlyDifferences", { count: differing })}
         />
       </div>
       <div className={classes.tableWrap}>
         <table className={classes.table}>
           <thead>
             <tr>
-              <th>Topic</th>
+              <th>{t("compareTopic")}</th>
               {files.map((file, index) => (
                 <th key={index} title={file.name}>
                   {file.topicPrefix} · <TextMiddleTruncate text={file.name ?? ""} />
                 </th>
               ))}
-              <th>Differs in</th>
+              <th>{t("compareDiffersIn")}</th>
             </tr>
           </thead>
           <tbody>
@@ -146,7 +95,7 @@ export function CompareView({
                         )}
                       </>
                     ) : (
-                      <span className={classes.stale}>missing</span>
+                      <span className={classes.stale}>{t("compareMissing")}</span>
                     )}
                   </td>
                 ))}
@@ -158,7 +107,7 @@ export function CompareView({
                         size="small"
                         color="warning"
                         variant="outlined"
-                        label={difference}
+                        label={t(`compareDifference.${difference}`)}
                       />
                     ))}
                   </Stack>
@@ -170,7 +119,7 @@ export function CompareView({
       </div>
       {shown.length === 0 && (
         <Typography color="textSecondary" className={classes.emptyNoteY}>
-          {rows.length === 0 ? "Topic comparison needs indexed MCAP files." : "No topics match."}
+          {rows.length === 0 ? t("compareNoTopics") : t("compareNoMatch")}
         </Typography>
       )}
     </>

@@ -33,6 +33,8 @@ export class ComparedSource<MessageType = Uint8Array> implements IIterableSource
   #offsetNs = 0n;
   // Prefixed topic name -> name in the recording
   readonly #originalTopic = new Map<string, string>();
+  // Name in the recording -> prefixed topic name
+  readonly #prefixedTopic = new Map<string, string>();
   #init?: Initialization;
 
   public constructor(source: IIterableSource<MessageType>, prefix: string) {
@@ -126,9 +128,19 @@ export class ComparedSource<MessageType = Uint8Array> implements IIterableSource
     return fromNanoSec(ns < 0n ? 0n : ns);
   }
 
+  // `imu` and `/imu` would both become `/a/imu`; the later one gets a ` (2)`-style suffix instead.
   #prefixed(topic: string): string {
-    const name = prefixTopic(this.#prefix, topic);
+    const known = this.#prefixedTopic.get(topic);
+    if (known != undefined) {
+      return known;
+    }
+    const base = prefixTopic(this.#prefix, topic);
+    let name = base;
+    for (let n = 2; this.#originalTopic.has(name); n++) {
+      name = `${base} (${n})`;
+    }
     this.#originalTopic.set(name, topic);
+    this.#prefixedTopic.set(topic, name);
     return name;
   }
 

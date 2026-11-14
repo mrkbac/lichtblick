@@ -120,4 +120,25 @@ describe("compared recordings", () => {
     expect(prefixTopic("/a", "/imu")).toEqual("/a/imu");
     expect(prefixTopic("/a", "imu")).toEqual("/a/imu");
   });
+
+  it("keeps `imu` and `/imu` apart after prefixing", async () => {
+    const inner = new FakeSource({ file: { startSec: 0 } });
+    const init = await inner.initialize();
+    inner.initialize = async () => ({
+      ...init,
+      topics: [
+        { name: "/imu", schemaName: "Imu" },
+        { name: "imu", schemaName: "Imu" },
+      ],
+    });
+    const compared = new ComparedSource(inner, "/a");
+    const result = await compared.initialize();
+    expect(result.topics.map((topic) => topic.name)).toEqual(["/a/imu", "/a/imu (2)"]);
+
+    const iterator = compared.messageIterator({
+      topics: new Map([["/a/imu (2)", { topic: "/a/imu (2)" }]]),
+    });
+    await iterator.next();
+    expect(inner.lastArgs?.topics).toEqual(new Map([["imu", { topic: "imu" }]]));
+  });
 });

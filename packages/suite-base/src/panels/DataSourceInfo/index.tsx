@@ -29,6 +29,7 @@ import {
   Typography,
 } from "@mui/material";
 import { Fragment, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
@@ -89,6 +90,7 @@ function offset(time: Time, start: Time): string {
 }
 
 export function RecordingInspector(): React.JSX.Element {
+  const { t } = useTranslation("dataSourceInfo");
   const { classes, cx } = useStyles();
   const topics = useMessagePipeline(selectTopics);
   const getPipeline = useMessagePipelineGetter();
@@ -490,7 +492,7 @@ export function RecordingInspector(): React.JSX.Element {
           variant="scrollable"
         >
           <Tab value="topics" label="Topics & timing" />
-          {comparing && <Tab value="compare" label={`Compare (${files.length})`} />}
+          {comparing && <Tab value="compare" label={t("compareTab", { count: files.length })} />}
           <Tab value="files" label="File" />
           <Tab value="channels" label={`Channels (${channelCount})`} />
           <Tab value="schemas" label={`Schemas (${schemas.length})`} />
@@ -985,7 +987,9 @@ export function RecordingInspector(): React.JSX.Element {
             </div>
           </>
         )}
-        {tab === "compare" && comparing && <CompareView files={files} topicStats={topicStats} />}
+        {tab === "compare" && comparing && (
+          <CompareView files={files} topicStats={topicStats} inspections={inspections} />
+        )}
         {tab === "files" && <ContainerDetails files={files} />}
         {tab === "channels" && (
           <>
