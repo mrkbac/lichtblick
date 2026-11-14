@@ -23,9 +23,12 @@ function folderOf(file: File): string | undefined {
  * one folder (each folder is merged into one side), else its own name (each file is a side).
  */
 export function defaultCompareSides(files: readonly File[]): string[] {
-  const byFolder = files.map((file) => folderOf(file) ?? file.name);
-  if (new Set(byFolder).size > 1) {
-    return byFolder;
+  const folders = files.map(folderOf);
+  const distinctFolders = new Set(folders.filter((folder) => folder != undefined));
+  if (distinctFolders.size > 1) {
+    // Loose files next to the folders are each a side of their own
+    const looseNames = uniqueNames(files.map((file) => file.name));
+    return folders.map((folder, index) => folder ?? looseNames[index]!);
   }
   return uniqueNames(files.map((file) => file.name));
 }

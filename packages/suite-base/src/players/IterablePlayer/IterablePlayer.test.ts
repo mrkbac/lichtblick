@@ -307,6 +307,50 @@ describe("IterablePlayer", () => {
     }
   });
 
+  it("loads the current moment again when an update may have moved every message", async () => {
+    // Given a paused player and a source whose update moves its messages (e.g. a compared
+    // recording moved in time), so it reports no known changed ranges
+    const source = new TestSource();
+    const initial = await source.initialize();
+    let released!: () => void;
+    const release = new Promise<void>((resolve) => (released = resolve));
+    const updates: (Initialization | undefined)[] = [{ ...initial }];
+    source.waitForUpdate = async () => {
+      await release;
+      return updates.shift();
+    };
+    const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
+    const states: PlayerState[] = [];
+    player.setListener(async (state) => {
+      states.push(state);
+    });
+    try {
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.endTime).toEqual({ sec: 1, nsec: 0 });
+      });
+      player.seekPlayback({ sec: 0, nsec: 500e6 });
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.currentTime).toEqual({ sec: 0, nsec: 500e6 });
+        expect(states.at(-1)?.activeData?.isPlaying).toBe(false);
+      });
+      const seekTime = states.at(-1)!.activeData!.lastSeekTime;
+
+      // When the update arrives
+      mockDateNow.mockReturnValue(1);
+      released();
+
+      // Then it seeks to the playhead again: panels drop the old messages and get the new ones
+      await vi.waitFor(() => {
+        expect(states.at(-1)?.activeData?.lastSeekTime).not.toBe(seekTime);
+        expect(states.at(-1)?.activeData?.lastSeekTime).toBe(1);
+        expect(states.at(-1)?.activeData?.isPlaying).toBe(false);
+      });
+    } finally {
+      player.close();
+      await player.isClosed;
+    }
+  });
+
   it("restarts the first read when the source grows during it", async () => {
     // Given a source whose first read is still running when it grows
     const source = new TestSource();

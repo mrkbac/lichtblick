@@ -82,11 +82,21 @@ describe("expandPaths and collapsePaths", () => {
     });
   });
 
-  it("drops a configured path when all its sides were removed", () => {
+  it("drops a configured path when any of its sides was removed", () => {
     const expanded = expandPaths(configured, SIDES, style, isTopicPath);
     expect(collapsePaths(expanded.slice(0, 3), configured, PREFIXES)).toEqual(
       configured.slice(0, 2),
     );
+    expect(collapsePaths([...expanded.slice(0, 3), expanded[4]!], configured, PREFIXES)).toEqual(
+      configured.slice(0, 2),
+    );
+  });
+
+  it("keeps a path that names a side single, and keeps its prefix", () => {
+    const own: Path[] = [{ value: "/a/odom.x", enabled: true }];
+    const expanded = expandPaths(own, SIDES, style, isTopicPath);
+    expect(expanded.map((path) => path.value)).toEqual(["/a/odom.x"]);
+    expect(collapsePaths(expanded, own, PREFIXES)).toEqual(own);
   });
 
   it("points settings focus at the configured path", () => {
@@ -109,5 +119,8 @@ describe("defaultCompareSides", () => {
       "y.mcap",
     ]);
     expect(defaultCompareSides([file("x.mcap"), file("x.mcap")])).toEqual(["x.mcap", "x.mcap (2)"]);
+    expect(
+      defaultCompareSides([file("recording.mcap"), file("recording.mcap"), file("other.mcap")]),
+    ).toEqual(["recording.mcap", "recording.mcap (2)", "other.mcap"]);
   });
 });

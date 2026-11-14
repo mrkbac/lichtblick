@@ -87,8 +87,9 @@ const FALLBACK_PANEL_ID = "$unknown_id";
 /** Id suffix of the read-only copies of a panel that show the other compared recordings */
 const COPY_ID_SUFFIX = "@compare-copy";
 
-// Copies of a panel never change its config: the panel itself does
+// Copies of a panel never change its config or take drops: the panel itself does
 const ignoreSaveConfig = (): void => {};
+const ignoreMessagePathDropConfig = (): void => {};
 
 /** Clicks a panel already handled, so the panels around it (Tab panels) ignore them. */
 const panelHandledClicks = new WeakSet<Event>();
@@ -590,6 +591,7 @@ export default function Panel<
                 ...panelContextValue,
                 id: `${childId}${COPY_ID_SUFFIX}`,
                 saveConfig: ignoreSaveConfig,
+                setMessagePathDropConfig: ignoreMessagePathDropConfig,
                 connectToolbarDragHandle: undefined,
               }}
             >

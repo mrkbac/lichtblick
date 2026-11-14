@@ -180,7 +180,11 @@ export class ComparedSource<MessageType = Uint8Array> implements IIterableSource
       return known;
     }
     const base = prefixTopic(this.#prefix, topic);
-    const name = !topic.startsWith("/") && this.#topicNames.has(`/${topic}`) ? `${base} (2)` : base;
+    let name = !topic.startsWith("/") && this.#topicNames.has(`/${topic}`) ? `${base} (2)` : base;
+    // A topic found by a later update never takes a name already given out
+    for (let count = 2; this.#originalTopic.has(name); count++) {
+      name = `${base} (${count})`;
+    }
     this.#originalTopic.set(name, topic);
     this.#prefixedTopic.set(topic, name);
     return name;

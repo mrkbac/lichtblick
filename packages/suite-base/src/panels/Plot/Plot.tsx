@@ -21,6 +21,7 @@ import * as PanelAPI from "@lichtblick/suite-base/PanelAPI";
 import { CompareSideInfo } from "@lichtblick/suite-base/components/Compare/CompareContext";
 import {
   configuredFocus,
+  sidePath,
   useComparedPaths,
 } from "@lichtblick/suite-base/components/Compare/comparedPaths";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
@@ -90,6 +91,10 @@ const Plot = (props: PlotProps): React.JSX.Element => {
     return (path: PlotPath, side: CompareSideInfo, index: number): Partial<PlotPath> => ({
       color: single ? side.color : getLineColor(path.color, index),
       lineDash: SIDE_DASHES[side.index % SIDE_DASHES.length],
+      // The custom time field is read from the same side's messages
+      ...(path.timestampPath != undefined && {
+        timestampPath: sidePath(path.timestampPath, side.prefix),
+      }),
     });
   }, [props.config.paths]);
   const { saveConfig, config } = useComparedPaths(

@@ -733,6 +733,21 @@ export class IterablePlayer implements Player {
         if (this.#nextState === "seek-backfill") {
           // The pending seek resets the playback iterator on the new range
           this.#queueEmitState();
+        } else if (
+          update.updatedRanges == undefined &&
+          this.#currentTime &&
+          (this.#state === "idle" || this.#state === "play")
+        ) {
+          // Any message may have moved (e.g. a compared recording was moved in time): panels
+          // still show the old ones, so load the current moment again like a seek to it
+          this.#lastMessageEvent = undefined;
+          this.#isPlaying ||= this.#playedToEnd;
+          this.#playedToEnd = false;
+          this.#seekTarget = this.#currentTime;
+          this.#untilTime = undefined;
+          this.#lastTickMillis = undefined;
+          this.#lastRangeMillis = undefined;
+          this.#setState("seek-backfill");
         } else if (this.#state === "idle" || this.#state === "play") {
           // The current iterator ends at the old end
           this.#lastMessageEvent = undefined;

@@ -18,6 +18,7 @@ import { MultiIterableSource } from "./MultiIterableSource";
 class FakeSource implements IIterableSource<Uint8Array> {
   public readonly sourceType = "serialized";
   public lastArgs?: MessageIteratorArgs;
+  public waitForUpdate?: () => Promise<Initialization | undefined>;
   readonly #start: Time;
   public constructor({ file }: { file: { startSec: number } }) {
     this.#start = { sec: file.startSec, nsec: 0 };
@@ -220,5 +221,60 @@ describe("compared recordings", () => {
       }
     }
     expect(times[0]).toEqual({ sec: 102, nsec: 500_000_000 });
+  });
+
+  it("keeps names given out when an update finds a topic that would collide", async () => {
+    const inner = new FakeSource({ file: { startSec: 0 } });
+    const init = await inner.initialize();
+    inner.initialize = async () => ({
+      ...init,
+      topics: [{ name: "imu", schemaName: "Imu" }],
+      topicStats: new Map(),
+    });
+    let resolveUpdate: (update: Initialization) => void = () => {};
+    inner.waitForUpdate = async () =>
+      await new Promise<Initialization>((resolve) => {
+        resolveUpdate = resolve;
+      });
+    const compared = new ComparedSource(inner, "/a");
+    expect((await compared.initialize()).topics.map((topic) => topic.name)).toEqual(["/a/imu"]);
+
+    const update = compared.waitForUpdate!();
+    resolveUpdate({
+      ...init,
+      topicStats: new Map(),
+      topics: [
+        { name: "imu", schemaName: "Imu" },
+        { name: "/imu", schemaName: "Imu" },
+      ],
+    });
+    expect((await update)?.topics.map((topic) => topic.name)).toEqual(["/a/imu", "/a/imu (2)"]);
+  });
+
+  it("moves every side later instead of below time zero", async () => {
+    const source = new MultiIterableSource(
+      {
+        type: "files",
+        files: [{ startSec: 0 }, { startSec: 500 }] as unknown as Blob[],
+        compare: ["a", "b"],
+      },
+      FakeSource,
+    );
+    await source.initialize();
+    const update = source.waitForUpdate();
+    await source.setCompareOffsets([0, -1]);
+    const init = await update;
+    expect(init?.compareSides?.map((side) => side.sharedStart.sec)).toEqual([1, 0]);
+
+    const seconds = [];
+    for await (const result of source.messageIterator({
+      topics: new Map([["/b/imu", { topic: "/b/imu" }]]),
+      start: { sec: 0, nsec: 0 },
+    })) {
+      if (result.type === "message-event") {
+        seconds.push(result.msgEvent.receiveTime.sec);
+      }
+    }
+    expect(seconds).toEqual([0, 1, 2]);
   });
 });

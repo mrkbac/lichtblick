@@ -3,61 +3,40 @@
 
 import { MessageEvent } from "@lichtblick/suite";
 import { MessagePipelineContext } from "@lichtblick/suite-base/components/MessagePipeline/types";
-import {
-  PlayerPresence,
-  PlayerState,
-  SubscribePayload,
-} from "@lichtblick/suite-base/players/types";
+import { SubscribePayload } from "@lichtblick/suite-base/players/types";
+import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
+import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
 
 import { SideView } from "./sideView";
 
-function event(topic: string, sec = 1): MessageEvent {
-  return {
-    topic,
-    schemaName: "S",
-    receiveTime: { sec, nsec: 0 },
-    message: { sec },
-    sizeInBytes: 1,
-  };
+function event(topic: string): MessageEvent {
+  return MessageEventBuilder.messageEvent({ topic });
 }
 
 const TOPICS = ["/a/odom", "/b/odom", "/b/only_b", "/script_out"];
+const topics = () => TOPICS.map((name) => PlayerBuilder.topic({ name }));
 
 function context(overrides: Partial<MessagePipelineContext> = {}): MessagePipelineContext {
-  const playerState: PlayerState = {
-    presence: PlayerPresence.PRESENT,
-    progress: {
-      messageCache: {
-        startTime: { sec: 0, nsec: 0 },
+  const playerState = PlayerBuilder.playerState({
+    progress: PlayerBuilder.progress({
+      messageCache: PlayerBuilder.blockCache({
         blocks: [
-          {
+          PlayerBuilder.messageBlock({
             messagesByTopic: { "/a/odom": [event("/a/odom")], "/b/odom": [event("/b/odom")] },
-            sizeInBytes: 2,
-          },
+          }),
           undefined,
         ],
-      },
-    },
-    capabilities: [],
-    profile: undefined,
-    playerId: "p",
-    activeData: {
+      }),
+    }),
+    activeData: PlayerBuilder.activeData({
       messages: [event("/a/odom"), event("/b/odom"), event("/script_out")],
-      totalBytesReceived: 0,
-      currentTime: { sec: 1, nsec: 0 },
-      startTime: { sec: 0, nsec: 0 },
-      endTime: { sec: 2, nsec: 0 },
-      isPlaying: false,
-      speed: 1,
-      lastSeekTime: 0,
-      topics: TOPICS.map((name) => ({ name, schemaName: "S" })),
-      topicStats: new Map(TOPICS.map((name) => [name, { numMessages: 1 }])),
-      datatypes: new Map(),
-    },
-  };
+      topics: topics(),
+      topicStats: new Map(TOPICS.map((name) => [name, PlayerBuilder.topicStats()])),
+    }),
+  });
   return {
     playerState,
-    sortedTopics: TOPICS.map((name) => ({ name, schemaName: "S" })),
+    sortedTopics: topics(),
     sortedServices: [],
     datatypes: new Map(),
     subscriptions: [],
@@ -104,16 +83,31 @@ describe("SideView", () => {
 
   it("renames messages, blocks and per-subscriber messages of its side", () => {
     const mapped = view.mapPublic(context());
+    // Other sides' messages keep their prefixed names, for paths that name a side explicitly
     expect(mapped.playerState.activeData?.messages.map((message) => message.topic)).toEqual([
+      "/a/odom",
       "/odom",
       "/script_out",
     ]);
     expect(
       Object.keys(mapped.playerState.progress.messageCache!.blocks[0]!.messagesByTopic),
-    ).toEqual(["/odom"]);
+    ).toEqual(["/a/odom", "/odom"]);
     expect(mapped.playerState.progress.messageCache!.blocks[1]).toBeUndefined();
     expect([...mapped.messageEventsBySubscriberId.keys()]).toEqual(["panel"]);
     expect(mapped.messageEventsBySubscriberId.get("panel")?.[0]?.topic).toEqual("/odom");
+  });
+
+  it("delivers messages of a topic subscribed with another side's prefix", () => {
+    const mapped = view.mapPublic(
+      context({
+        messageEventsBySubscriberId: new Map([
+          ["panel@compare/b", [event("/a/odom"), event("/b/odom")]],
+        ]),
+      }),
+    );
+    expect(
+      mapped.messageEventsBySubscriberId.get("panel")?.map((message) => message.topic),
+    ).toEqual(["/a/odom", "/odom"]);
   });
 
   it("subscribes to its side's topics under its own subscriber id", () => {

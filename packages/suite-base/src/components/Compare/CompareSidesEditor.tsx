@@ -6,7 +6,7 @@ import AlignHorizontalLeftIcon from "@mui/icons-material/AlignHorizontalLeft";
 import AlignHorizontalRightIcon from "@mui/icons-material/AlignHorizontalRight";
 import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import { Button, IconButton, InputAdornment, TextField, Tooltip, Typography } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
@@ -63,7 +63,8 @@ function SideOffset({
   onOffset,
 }: {
   side: CompareSideInfo;
-  onOffset: (offsetSec: number) => void;
+  /** The new offset, or how to get it from the latest one asked for */
+  onOffset: (offsetSec: number | ((current: number) => number)) => void;
 }): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("compare");
@@ -130,7 +131,7 @@ function SideOffset({
             variant="text"
             title={t("nudge", { step: `${step > 0 ? "+" : ""}${step}` })}
             onClick={() => {
-              onOffset(roundSec(side.offsetSec + step));
+              onOffset((current) => roundSec(current + step));
             }}
           >
             {step > 0 ? "+" : "−"}
@@ -183,10 +184,16 @@ export function CompareSidesEditor(): React.JSX.Element | undefined {
   const compare = useCompare();
   const setOffsets = useMessagePipeline(selectSetOffsets);
   const { t } = useTranslation("compare");
+  // The offsets last asked for: the published ones lag behind while a change applies, so building
+  // the next change from them could undo one to another side
+  const published = compare?.sides.map((side) => side.offsetSec).join(",");
+  const requested = useRef<number[]>([]);
+  useEffect(() => {
+    requested.current = published ? published.split(",").map(Number) : [];
+  }, [published]);
   if (!compare) {
     return undefined;
   }
-  const offsets = compare.sides.map((side) => side.offsetSec);
   return (
     <Stack gap={1.5}>
       <Typography variant="caption" color="text.secondary">
@@ -197,7 +204,18 @@ export function CompareSidesEditor(): React.JSX.Element | undefined {
           key={side.prefix}
           side={side}
           onOffset={(offsetSec) => {
-            setOffsets?.(offsets.map((value, index) => (index === side.index ? offsetSec : value)));
+            const current = compare.sides.map(
+              (other, index) => requested.current[index] ?? other.offsetSec,
+            );
+            const next = current.map((value, index) =>
+              index !== side.index
+                ? value
+                : typeof offsetSec === "function"
+                  ? offsetSec(value)
+                  : offsetSec,
+            );
+            requested.current = next;
+            setOffsets?.(next);
           }}
         />
       ))}

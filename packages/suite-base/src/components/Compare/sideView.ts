@@ -145,18 +145,13 @@ export class SideView {
     return mapped;
   }
 
-  // Events of this side and of no side, renamed
+  // This side's events renamed; others (e.g. explicitly subscribed `/a/x` in side B) as they are
   #mapEvents(events: readonly Immutable<MessageEvent>[]): readonly Immutable<MessageEvent>[] {
     const known = this.#eventArrays.get(events);
     if (known) {
       return known;
     }
-    const mapped: Immutable<MessageEvent>[] = [];
-    for (const event of events) {
-      if (this.fromSide(event.topic) != undefined) {
-        mapped.push(this.#mapEvent(event));
-      }
-    }
+    const mapped = events.map((event) => this.#mapEvent(event));
     this.#eventArrays.set(events, mapped);
     return mapped;
   }
@@ -225,8 +220,9 @@ export class SideView {
     }
     const messagesByTopic: Record<string, readonly Immutable<MessageEvent>[]> = {};
     for (const [topic, events] of Object.entries(block.messagesByTopic)) {
-      const name = this.fromSide(topic);
-      if (name != undefined && (name !== topic || messagesByTopic[name] == undefined)) {
+      // Other sides' topics keep their prefixed names, which never clash with this side's
+      const name = this.fromSide(topic) ?? topic;
+      if (name !== topic || messagesByTopic[name] == undefined) {
         // ponytail: copies each preloaded event of a shown topic once per side to rename it;
         // switch to renaming in the block consumers if that memory shows up in profiles
         messagesByTopic[name] = events.map((event) => this.#mapEvent(event));

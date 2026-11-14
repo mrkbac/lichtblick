@@ -24,6 +24,8 @@ const ORIGIN = "compareOrigin";
 type Origin<P> = {
   /** Index of the path this one was expanded from */
   index: number;
+  /** How many paths were expanded from it: removing any of them removes it */
+  count: number;
   /** The fields expansion set, to tell them from the user's edits */
   generated: Partial<P>;
 };
@@ -61,9 +63,11 @@ export function expandPaths<P extends ComparablePath>(
   style: (path: P, side: CompareSideInfo, pathIndex: number) => Partial<P>,
   isTopicPath: (path: P) => boolean = () => true,
 ): Expanded<P>[] {
+  const prefixes = sides.map((side) => side.prefix);
   return paths.flatMap((path, index): Expanded<P>[] => {
-    if (!isTopicPath(path)) {
-      return [{ ...path, [ORIGIN]: { index, generated: {} } }];
+    // A path already naming a side reads only that side
+    if (!isTopicPath(path) || unsidePath(path.value, prefixes) !== path.value) {
+      return [{ ...path, [ORIGIN]: { index, count: 1, generated: {} } }];
     }
     return sides.map((side) => {
       const generated: Partial<P> = {
@@ -73,7 +77,7 @@ export function expandPaths<P extends ComparablePath>(
           ? { label: `${path.label} (${side.label})` }
           : {}),
       };
-      return { ...path, ...generated, [ORIGIN]: { index, generated } };
+      return { ...path, ...generated, [ORIGIN]: { index, count: sides.length, generated } };
     });
   });
 }
@@ -100,13 +104,17 @@ function restore<P extends ComparablePath>(
       }
     }
   }
-  restored.value = unsidePath(restored.value as string, prefixes);
+  // An edited or added path is read from every side; a configured one stays as it was
+  if (!source || restored.value !== source.value) {
+    restored.value = unsidePath(restored.value as string, prefixes);
+  }
   return restored as P;
 }
 
 /**
  * The configured paths for `expanded` paths edited by a panel: each original path takes the
- * edits made to any of its sides; paths added while expanded are kept, without a side prefix.
+ * edits made to any of its sides and is removed with any of them; paths added while expanded are
+ * kept, without a side prefix.
  */
 export function collapsePaths<P extends ComparablePath>(
   expanded: readonly Expanded<P>[],
@@ -115,8 +123,13 @@ export function collapsePaths<P extends ComparablePath>(
 ): P[] {
   const result: P[] = [];
   const positions = new Map<number, number>();
+  const counts = _.countBy(expanded.flatMap((path) => (path[ORIGIN] ? [path[ORIGIN].index] : [])));
   for (const path of expanded) {
     const origin = path[ORIGIN];
+    // Removing one side of a path removes the path, else the next expansion brings it back
+    if (origin && (counts[origin.index] ?? 0) < origin.count) {
+      continue;
+    }
     const restored = restore(path, original, prefixes);
     const position = origin ? positions.get(origin.index) : undefined;
     if (!origin) {

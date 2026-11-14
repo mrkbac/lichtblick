@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Time, compare } from "@foxglove/rostime";
+import { Time, compare, fromNanoSec } from "@foxglove/rostime";
 import { Semaphore } from "async-mutex";
 
 import Logger from "@lichtblick/log";
@@ -203,10 +203,13 @@ export class MultiIterableSource<T extends ISerializedIterableSource, P>
 
   /** Move each compared side by `offsetsSec[i]` seconds; reported through waitForUpdate() */
   public async setCompareOffsets(offsetsSec: readonly number[]): Promise<void> {
-    const start = this.#compareStart;
-    if (!this.#compared || !start) {
+    if (!this.#compared || !this.#compareStart) {
       return;
     }
+    // Times can't go below zero: a side moved before time zero moves every side later instead
+    const earliestOffset = Math.min(0, ...offsetsSec);
+    const lowest = fromNanoSec(BigInt(Math.round(-earliestOffset * 1e9)));
+    const start = compare(this.#compareStart, lowest) < 0 ? lowest : this.#compareStart;
     this.#compared.forEach((source, side) => {
       const init = source.alignStartTo(start, offsetsSec[side] ?? 0);
       const index = this.#sources.indexOf(source);
