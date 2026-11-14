@@ -373,17 +373,45 @@ describe("McapIterableSource recovery", () => {
     expect(init.alerts[0]?.tip).toMatch(/could not be read/);
   });
 
-  it("recovers mid-read from a corrupt chunk in a file whose summary is intact", async () => {
-    // Given a finished file whose summary still lists the corrupt chunk
+  it("skips a chunk found corrupt mid-read without scanning the file", async () => {
+    // Given a finished file whose summary still lists a corrupt chunk
     const bytes = await makeMcap({ finish: true });
     bytes[await logTimeOffsetInChunk(bytes, 2)]! ^= 0xff;
+    const scanSpy = vi.spyOn(McapRecoveryScanner.prototype, "scan");
 
     // When
-    const { init, values, iteratorAlerts } = await openSource(bytes);
+    const { init, values, iteratorAlerts, source } = await openSource(bytes);
 
-    // Then
+    // Then the rest plays, and only that chunk is gone, for later reads too
     expect(init.alerts).toEqual([]);
     expect(values).toEqual([1, 2, 4, 5]);
+    expect(iteratorAlerts).toEqual([
+      expect.objectContaining({ severity: "warn", message: expect.stringMatching(/damaged/) }),
+    ]);
+    expect(scanSpy).not.toHaveBeenCalled();
+    const again = [];
+    for await (const result of source.messageIterator({
+      topics: new Map([[TOPIC, PlayerBuilder.subscribePayload({ topic: TOPIC })]]),
+    })) {
+      again.push(result.type);
+    }
+    expect(again).toEqual(["message-event", "message-event", "message-event", "message-event"]);
+  });
+
+  it("rebuilds the index with a scan when no chunk explains a read error", async () => {
+    // Given a corrupt chunk that the chunk check doesn't catch
+    const bytes = await makeMcap({ finish: true });
+    bytes[await logTimeOffsetInChunk(bytes, 2)]! ^= 0xff;
+    const checkChunk = await import("./McapRecoveryScanner");
+    vi.spyOn(checkChunk, "checkChunk").mockResolvedValue(undefined);
+    const scanSpy = vi.spyOn(McapRecoveryScanner.prototype, "scan");
+
+    // When
+    const { values, iteratorAlerts } = await openSource(bytes);
+
+    // Then the scan finds and skips it
+    expect(values).toEqual([1, 2, 4, 5]);
+    expect(scanSpy).toHaveBeenCalled();
     expect(iteratorAlerts).toEqual([
       expect.objectContaining({ severity: "warn", message: expect.stringMatching(/damaged/) }),
     ]);
