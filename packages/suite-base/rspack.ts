@@ -127,7 +127,8 @@ export function productInfo(packageJson: {
 }): ProductInfo {
   return {
     name: packageJson.productName,
-    homepage: packageJson.homepage,
+    // Ends with "/" so docs paths can be appended directly
+    homepage: packageJson.homepage.replace(/\/?$/, "/"),
     repositoryUrl: packageJson.repository.url.replace(/^git\+/, "").replace(/\.git$/, ""),
   };
 }
