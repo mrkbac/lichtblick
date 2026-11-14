@@ -16,6 +16,7 @@ import {
   LayerSettingsPointExtension,
   pointSettingsNode,
   PointsRenderable,
+  DECAY_HISTORY_LIMITS,
   RenderObjectHistory,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
 import type { RosObject, RosValue } from "@lichtblick/suite-base/players/types";
@@ -106,6 +107,10 @@ class LaserScanRenderable extends PointsRenderable<LaserScanUserData> {
     return this.userData.originalMessage ?? {};
   }
 
+  public releaseMessage(): void {
+    this.userData.originalMessage = undefined;
+  }
+
   public override instanceDetails(instanceId: number): Record<string, RosValue> | undefined {
     const range =
       instanceId >= 0 && instanceId < this.userData.laserScan.ranges.length
@@ -175,6 +180,7 @@ class LaserScanHistoryRenderable extends Renderable<LaserScanHistoryUserData> {
       },
       parentRenderable: this,
       renderer,
+      limits: DECAY_HISTORY_LIMITS,
     });
     this.add(points);
   }

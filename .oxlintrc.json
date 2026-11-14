@@ -241,6 +241,7 @@
     "@lichtblick/strict-equality": "error",
     "@lichtblick/no-return-promise-resolve": "error",
     "@lichtblick/no-getters-setters": "error",
+    "@lichtblick/no-object-url": "error",
     "@lichtblick/link-target": "error",
     "@lichtblick/lodash-ramda-imports": "error",
     "@lichtblick/ramda-usage": "error",
@@ -564,6 +565,12 @@
         "@lichtblick/no-getters-setters": "off",
         "import-js/order": "off",
         "typescript/no-unnecessary-condition": "off"
+      }
+    },
+    {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.stories.tsx"],
+      "rules": {
+        "@lichtblick/no-object-url": "off"
       }
     },
     {

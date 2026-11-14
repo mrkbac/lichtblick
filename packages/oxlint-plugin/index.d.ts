@@ -11,6 +11,7 @@ type RuleName =
   | "lodash-ramda-imports"
   | "no-boolean-parameters"
   | "no-getters-setters"
+  | "no-object-url"
   | "no-return-promise-resolve"
   | "ramda-usage"
   | "strict-equality";

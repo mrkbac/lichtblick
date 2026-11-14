@@ -92,7 +92,11 @@ export class RenderableModels extends RenderablePrimitive {
     revokeURL: (_: string) => void,
   ): Promise<RenderableModel | undefined> {
     const url = getURL(primitive);
-    const key = primitive.url.length === 0 ? crc32(primitive.data).toString() : primitive.url;
+    // Embedded data is keyed by content: its blob: URL is new on every load.
+    const key =
+      primitive.url.length === 0
+        ? `data:${crc32(primitive.data)}:${primitive.data.byteLength}:${primitive.media_type}`
+        : primitive.url;
 
     let renderable: RenderableModel | undefined;
     try {
@@ -102,6 +106,7 @@ export class RenderableModels extends RenderablePrimitive {
         async () =>
           await this.#loadCachedModel(url, {
             overrideMediaType: primitive.media_type.length > 0 ? primitive.media_type : undefined,
+            cacheKey: primitive.url.length === 0 ? key : undefined,
           }),
       );
       if (cachedModel) {
@@ -217,6 +222,7 @@ export class RenderableModels extends RenderablePrimitive {
             renderable = await this.#createRenderable(
               primitive,
               (model) =>
+                // oxlint-disable-next-line @lichtblick/no-object-url -- #createRenderable revokes it once loaded
                 URL.createObjectURL(
                   new Blob([new Uint8Array(model.data)], { type: model.media_type }),
                 ),
@@ -343,11 +349,11 @@ export class RenderableModels extends RenderablePrimitive {
 
   async #loadCachedModel(
     url: string,
-    opts: { overrideMediaType?: string },
+    opts: { overrideMediaType?: string; cacheKey?: string },
   ): Promise<LoadedModel | undefined> {
     const cachedModel = await this.renderer.modelCache.load(
       url,
-      { overrideMediaType: opts.overrideMediaType },
+      { overrideMediaType: opts.overrideMediaType, cacheKey: opts.cacheKey },
       (err) => {
         this.renderer.settings.errors.add(
           this.userData.settingsPath,

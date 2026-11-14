@@ -27,6 +27,7 @@ export function downloadFiles(files: { blob: Blob; fileName: string }[]): void {
   body.appendChild(link);
 
   const urls = files.map((file) => {
+    // oxlint-disable-next-line @lichtblick/no-object-url -- revoked below after the click
     const url = window.URL.createObjectURL(file.blob);
     link.setAttribute("download", file.fileName);
     link.setAttribute("href", url);

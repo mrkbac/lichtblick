@@ -503,8 +503,29 @@ type RenderObjectHistoryUserData = BaseUserData & {
   settings: LayerSettingsPointExtension;
 };
 
-type DisposableObject = THREE.Object3D & { dispose(): void };
-type HistoryEntry<TRenderable extends DisposableObject> = {
+/** An object kept in a decay history. The history owns it and disposes it on eviction. */
+export type HistoryRenderable = THREE.Object3D & {
+  dispose(): void;
+  /** Its draw count is this entry's share of {@link HistoryLimits.maxPoints}. */
+  readonly geometry: THREE.BufferGeometry;
+  /**
+   * Called once a newer entry is pushed. Drops the message this entry was built from, so a decay
+   * history holds only GPU geometry, not one raw message per entry.
+   */
+  releaseMessage(): void;
+};
+
+/** Required caps on a decay history; the decay time alone does not bound a fast or dense topic. */
+export type HistoryLimits = {
+  maxEntries: number;
+  /** Total points drawn across all entries. */
+  maxPoints: number;
+};
+
+/** ~1000 Hz for 1 s or 10 Hz for 100 s; 10 M points is a few hundred MB of GPU buffers. */
+export const DECAY_HISTORY_LIMITS: HistoryLimits = { maxEntries: 1_000, maxPoints: 10_000_000 };
+
+type HistoryEntry<TRenderable extends HistoryRenderable> = {
   receiveTime: bigint;
   messageTime: bigint;
   renderable: TRenderable;
@@ -516,27 +537,55 @@ type HistoryEntry<TRenderable extends DisposableObject> = {
  * Meant to be extensible for all kinds of renderables that need to show old points over decay time.
  * See LaserScansRenderable and PointCloudsRenderable for examples.
  */
-export class RenderObjectHistory<TRenderable extends DisposableObject> {
+export class RenderObjectHistory<TRenderable extends HistoryRenderable> {
   #history: HistoryEntry<TRenderable>[];
   #parentRenderable: Renderable<RenderObjectHistoryUserData>;
   #renderer: Renderer;
+  readonly #limits: HistoryLimits;
 
   public constructor({
     initial,
     renderer,
     parentRenderable,
+    limits,
   }: {
     initial: HistoryEntry<TRenderable>;
     renderer: Renderer;
     parentRenderable: Renderable<RenderObjectHistoryUserData>;
+    limits: HistoryLimits;
   }) {
     this.#history = [initial];
     this.#renderer = renderer;
     this.#parentRenderable = parentRenderable;
+    this.#limits = limits;
   }
 
   public addHistoryEntry(entry: HistoryEntry<TRenderable>): void {
+    this.latest().renderable.releaseMessage();
     this.#history.push(entry);
+    this.#evictOldest(this.#history.length - this.#limits.maxEntries);
+  }
+
+  /** Disposes the `count` oldest entries, always keeping the latest. */
+  #evictOldest(count: number): void {
+    const evicted = this.#history.splice(0, Math.min(count, this.#history.length - 1));
+    for (const entry of evicted) {
+      this.#parentRenderable.remove(entry.renderable);
+      entry.renderable.dispose();
+    }
+  }
+
+  /** Drops the oldest entries until the drawn points fit in {@link HistoryLimits.maxPoints}. */
+  #enforcePointBudget(): void {
+    let points = 0;
+    for (let i = this.#history.length - 1; i >= 0; i--) {
+      const count = this.#history[i]!.renderable.geometry.drawRange.count;
+      points += Number.isFinite(count) ? count : 0;
+      if (points > this.#limits.maxPoints) {
+        this.#evictOldest(i + 1);
+        return;
+      }
+    }
   }
 
   public forEach(callback: (entry: HistoryEntry<TRenderable>) => void): void {
@@ -549,11 +598,12 @@ export class RenderObjectHistory<TRenderable extends DisposableObject> {
     const decayTime = this.#parentRenderable.userData.settings.decayTime;
     const expireTime =
       decayTime > 0 ? currentTime - BigInt(Math.round(decayTime * 1e9)) : MAX_DURATION;
-    while (pointsHistory.length > 1 && pointsHistory[0]!.receiveTime < expireTime) {
-      const entry = this.#history.shift()!;
-      this.#parentRenderable.remove(entry.renderable);
-      entry.renderable.dispose();
+    let expired = 0;
+    while (expired < pointsHistory.length - 1 && pointsHistory[expired]!.receiveTime < expireTime) {
+      expired++;
     }
+    this.#evictOldest(expired);
+    this.#enforcePointBudget();
   }
 
   /**
