@@ -76,6 +76,10 @@ export interface IDataSourceFactory {
 
   supportsMultiFile?: boolean;
 
+  // Whether several files can be compared side by side (`compare`) instead of merged. Sources that
+  // don't set it only merge, and comparing their files is refused instead of silently merging.
+  supportsCompare?: boolean;
+
   // Initialize a player.
   initialize: (args: DataSourceFactoryInitializeArgs) => Player | undefined;
 }

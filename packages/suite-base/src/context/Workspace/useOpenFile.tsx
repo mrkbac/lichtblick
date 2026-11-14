@@ -76,7 +76,22 @@ export function useOpenFile(
       );
 
       const uniqueExtensions = new Set(processedFiles.map(({ extension }) => extension));
-      if (uniqueExtensions.size > 1) {
+      const sourcesFor = (ext: string | undefined) =>
+        sources.filter(
+          (source) =>
+            source.type === "file" &&
+            ext != undefined &&
+            source.supportedFileTypes?.includes(ext) === true,
+        );
+      // Mixed extensions are fine when one source reads all of them (e.g. .csv and .tsv)
+      const [firstSource, ...otherSources] = sourcesFor([...uniqueExtensions][0]);
+      const oneSourceReadsAll =
+        firstSource != undefined &&
+        otherSources.length === 0 &&
+        [...uniqueExtensions].every(
+          (ext) => firstSource.supportedFileTypes?.includes(ext) === true,
+        );
+      if (uniqueExtensions.size > 1 && !oneSourceReadsAll) {
         throwErrorAndSnackbar(
           `Multiple file extensions detected: ${[...uniqueExtensions].join(
             ", ",
@@ -85,14 +100,7 @@ export function useOpenFile(
       }
 
       const [extension] = uniqueExtensions;
-
-      const matchingSources = sources.filter(
-        (source) =>
-          (source.supportedFileTypes &&
-            source.type === "file" &&
-            source.supportedFileTypes.includes(extension!)) ??
-          false,
-      );
+      const matchingSources = sourcesFor(extension);
 
       if (matchingSources.length === 0) {
         throwErrorAndSnackbar(`Cannot find a source to handle files with extension ${extension}`);
@@ -104,11 +112,15 @@ export function useOpenFile(
         );
       }
 
-      /**
-       * Should be removed when implement the rest of extensions.
-       */
-      if (extension !== ".mcap" && processedFiles.length > 1) {
-        throwErrorAndSnackbar(`The application only support multiple files for MCAP extension.`);
+      if (matchingSources[0]!.supportsMultiFile !== true && processedFiles.length > 1) {
+        throwErrorAndSnackbar(`Opening multiple ${extension} files at once is not supported.`);
+      }
+      if (
+        options?.compare === true &&
+        matchingSources[0]!.supportsCompare !== true &&
+        processedFiles.length > 1
+      ) {
+        throwErrorAndSnackbar(`Comparing ${extension} files side by side is not supported.`);
       }
       selectSource(matchingSources[0]!.id, {
         type: "file",

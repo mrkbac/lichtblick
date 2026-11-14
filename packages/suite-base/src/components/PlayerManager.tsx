@@ -380,7 +380,8 @@ export default function PlayerManager(
                 file: multiFile ? undefined : files[0],
                 handle: multiFile ? undefined : handles?.[0],
                 files: multiFile ? files : undefined,
-                compare: multiFile ? args.compare : undefined,
+                compare:
+                  multiFile && foundSource.supportsCompare === true ? args.compare : undefined,
               });
 
               setBasePlayer(newPlayer);

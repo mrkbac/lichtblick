@@ -10,6 +10,7 @@ import { useMemo, useState } from "react";
 import {
   AppBarProps,
   AppSetting,
+  CsvLocalDataSourceFactory,
   IExtensionLoader,
   FoxgloveWebSocketDataSourceFactory,
   IDataSourceFactory,
@@ -78,6 +79,7 @@ export function WebRoot(props: {
       new FoxgloveWebSocketDataSourceFactory(),
       new RosbridgeDataSourceFactory(),
       new UlogLocalDataSourceFactory(),
+      new CsvLocalDataSourceFactory(),
       new SampleNuscenesDataSourceFactory(),
       new McapLocalDataSourceFactory(),
       new RemoteDataSourceFactory(),

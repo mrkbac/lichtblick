@@ -318,7 +318,7 @@ function FilesField({ startTime }: { startTime?: Time }): React.JSX.Element | nu
   const comparing = sortedFiles.some((file) => file.topicPrefix != undefined);
   // Reopen the same files merged into one recording, or side by side under /a, /b, …
   const canToggle =
-    selectedSource?.supportsMultiFile === true && selectedFiles && selectedFiles.length > 1;
+    selectedSource?.supportsCompare === true && selectedFiles && selectedFiles.length > 1;
   return (
     <Field label={t("files")}>
       <Stack gap={0.75}>

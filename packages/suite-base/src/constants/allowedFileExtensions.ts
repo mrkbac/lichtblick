@@ -9,4 +9,6 @@ export enum AllowedFileExtensions {
   DB3 = ".db3",
   ULG = ".ulg",
   ULOG = ".ulog",
+  CSV = ".csv",
+  TSV = ".tsv",
 }
