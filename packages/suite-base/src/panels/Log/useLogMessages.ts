@@ -4,7 +4,8 @@
 import { compare } from "@foxglove/rostime";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useMessagesByTopic } from "@lichtblick/suite-base/PanelAPI";
+import { pushAll } from "@lichtblick/den/collection";
+import { useMessageHistory } from "@lichtblick/suite-base/PanelAPI";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -13,6 +14,7 @@ import { useSubscribeMessageRange } from "@lichtblick/suite-base/components/Pane
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 
 import { normalizeLogEvent } from "./conversion";
+import { searchByTime } from "./timeIndex";
 import { NormalizedLogMessage } from "./types";
 
 /** Per-topic message limit for live sources, which can't be re-read. */
@@ -23,11 +25,74 @@ const EMPTY: readonly string[] = [];
 const pickKeys = (record: Readonly<Record<string, string>>, keys: ReadonlySet<string>) =>
   Object.fromEntries(Object.entries(record).filter(([key]) => keys.has(key)));
 
-type ByTopic = Record<string, readonly NormalizedLogMessage[]>;
+type RangeState = {
+  /** Topics read from the recorded range (the rest use the live history). */
+  topics: ReadonlySet<string>;
+  /** Their messages, merged by receive time. */
+  items: readonly NormalizedLogMessage[];
+};
+const EMPTY_RANGE: RangeState = { topics: new Set(), items: [] };
 
-/** Copy the growing per-topic arrays so consumers see new references on every flush. */
-const snapshot = (acc: Record<string, NormalizedLogMessage[]>): ByTopic =>
-  Object.fromEntries(Object.entries(acc).map(([topic, messages]) => [topic, messages.slice()]));
+/**
+ * Range messages per topic, and their merge. A flush merges only what arrived since the last
+ * one into the merged list, instead of re-merging every topic from the start.
+ */
+class RangeAccumulator {
+  public byTopic = new Map<string, NormalizedLogMessage[]>();
+  #merged: readonly NormalizedLogMessage[] = [];
+  /** Per topic, how many of its messages are in #merged. */
+  #mergedCount = new Map<string, number>();
+  /** Set when messages were removed: the next flush re-merges everything. */
+  #stale = false;
+
+  public reset(topic: string): NormalizedLogMessage[] {
+    const messages: NormalizedLogMessage[] = [];
+    if (this.byTopic.has(topic)) {
+      this.#stale = true;
+    }
+    this.byTopic.set(topic, messages);
+    return messages;
+  }
+
+  public delete(topic: string): void {
+    this.#stale ||= this.byTopic.delete(topic);
+  }
+
+  public clear(): void {
+    this.byTopic.clear();
+    this.#stale = true;
+  }
+
+  /** A new array, so consumers see a new reference on every flush. */
+  public snapshot(): RangeState {
+    if (this.#stale) {
+      this.#stale = false;
+      this.#merged = [];
+      this.#mergedCount.clear();
+    }
+    const pending: NormalizedLogMessage[][] = [];
+    for (const [topic, messages] of this.byTopic) {
+      const count = this.#mergedCount.get(topic) ?? 0;
+      if (messages.length > count) {
+        pending.push(messages.slice(count));
+      }
+      this.#mergedCount.set(topic, messages.length);
+    }
+    const added = mergeByReceiveTime(pending);
+    const merged = this.#merged;
+    let next: NormalizedLogMessage[];
+    if (added.length === 0) {
+      next = merged.slice();
+    } else {
+      // Only the tail at or after the earliest new message needs merging.
+      const start = searchByTime(merged, added[0]!.receiveTime);
+      next = merged.slice(0, start);
+      pushAll(next, mergeTwo(merged.slice(start), added));
+    }
+    this.#merged = next;
+    return { topics: new Set(this.byTopic.keys()), items: next };
+  }
+}
 
 /** Merge arrays that are each sorted by receiveTime into one sorted array. */
 export function mergeByReceiveTime(
@@ -96,7 +161,7 @@ export function useLogMessages(topics: readonly string[]): {
   const ready = useMessagePipeline(selectReady);
   const subscribeMessageRange = useSubscribeMessageRange();
 
-  const [rangeByTopic, setRangeByTopic] = useState<ByTopic>({});
+  const [range, setRange] = useState<RangeState>(EMPTY_RANGE);
   const [loadingTopics, setLoadingTopics] = useState<ReadonlySet<string>>(new Set());
   const [errorByTopic, setErrorByTopic] = useState<Readonly<Record<string, string>>>({});
   // Bumped by retry() to resubscribe the failed topics
@@ -104,7 +169,7 @@ export function useLogMessages(topics: readonly string[]): {
 
   // Active range subscriptions, keyed by topic. Reset when the player changes.
   const subsRef = useRef(new Map<string, () => void>());
-  const accumulatedRef = useRef<Record<string, NormalizedLogMessage[]>>({});
+  const accumulatedRef = useRef(new RangeAccumulator());
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
@@ -112,7 +177,7 @@ export function useLogMessages(topics: readonly string[]): {
     const acc = accumulatedRef.current;
     const flush = () => {
       flushTimerRef.current = undefined;
-      setRangeByTopic(snapshot(acc));
+      setRange(acc.snapshot());
     };
 
     let added = false;
@@ -125,8 +190,7 @@ export function useLogMessages(topics: readonly string[]): {
         topic,
         rethrowErrors: true,
         onNewRangeIterator: async (iterator) => {
-          const messages: NormalizedLogMessage[] = [];
-          acc[topic] = messages;
+          const messages = acc.reset(topic);
           setLoadingTopics((prev) => new Set(prev).add(topic));
           try {
             for await (const batch of iterator) {
@@ -146,7 +210,7 @@ export function useLogMessages(topics: readonly string[]): {
           } finally {
             if (!cancelled) {
               // Also shows what was read before a failure
-              setRangeByTopic(snapshot(acc));
+              setRange(acc.snapshot());
               setLoadingTopics((prev) => {
                 const next = new Set(prev);
                 next.delete(topic);
@@ -158,7 +222,7 @@ export function useLogMessages(topics: readonly string[]): {
       });
       // onNewRangeIterator runs synchronously when the source supports ranges. Topics without
       // range support (live sources) are not tracked here so they use the live subscription.
-      if (acc[topic] != undefined) {
+      if (acc.byTopic.has(topic)) {
         added = true;
         subs.set(topic, () => {
           cancelled = true;
@@ -173,7 +237,7 @@ export function useLogMessages(topics: readonly string[]): {
     for (const topic of removed) {
       subs.get(topic)?.();
       subs.delete(topic);
-      delete acc[topic];
+      acc.delete(topic);
     }
     if (removed.length > 0) {
       setLoadingTopics((prev) => prev.intersection(wanted));
@@ -181,7 +245,7 @@ export function useLogMessages(topics: readonly string[]): {
     }
     if (added || removed.length > 0) {
       // Publish new (still empty) range topics right away so they skip the live subscription
-      setRangeByTopic(snapshot(acc));
+      setRange(acc.snapshot());
     }
     // playerId: resubscribe after the reset effect below cleared everything
   }, [topics, ready, subscribeMessageRange, playerId, retryCount]);
@@ -195,14 +259,12 @@ export function useLogMessages(topics: readonly string[]): {
         cancel();
       });
       subs.clear();
-      for (const topic of Object.keys(acc)) {
-        delete acc[topic];
-      }
+      acc.clear();
       if (flushTimerRef.current != undefined) {
         clearTimeout(flushTimerRef.current);
         flushTimerRef.current = undefined;
       }
-      setRangeByTopic({});
+      setRange(EMPTY_RANGE);
       setLoadingTopics(new Set());
       setErrorByTopic({});
     };
@@ -214,21 +276,23 @@ export function useLogMessages(topics: readonly string[]): {
     for (const topic of Object.keys(errorByTopic)) {
       subs.get(topic)?.();
       subs.delete(topic);
-      delete acc[topic];
+      acc.delete(topic);
     }
     setErrorByTopic({});
-    setRangeByTopic(snapshot(acc));
+    setRange(acc.snapshot());
     setRetryCount((count) => count + 1);
   }, [errorByTopic]);
 
   const liveTopics = useMemo(() => {
-    const live = topics.filter((topic) => rangeByTopic[topic] == undefined);
+    const live = topics.filter((topic) => !range.topics.has(topic));
     return live.length > 0 ? live : EMPTY;
-  }, [topics, rangeByTopic]);
+  }, [topics, range.topics]);
 
-  const latestLiveByTopic = useMessagesByTopic({
+  // Normalized once on arrival; the raw messages are not kept.
+  const latestLiveByTopic = useMessageHistory({
     topics: liveTopics,
     historySize: LIVE_HISTORY_SIZE,
+    map: normalizeLogEvent,
   });
   // Re-merging and re-filtering the whole live history per message batch is costly, so take
   // live updates at most every FLUSH_INTERVAL_MS (right away after a quiet period).
@@ -254,21 +318,17 @@ export function useLogMessages(topics: readonly string[]): {
     };
   }, [latestLiveByTopic, liveByTopic, liveTopics, lastSeekTime]);
 
+  // Live histories are bounded, so merging them on each (throttled) update is bounded too.
   const items = useMemo(() => {
-    const arrays: (readonly NormalizedLogMessage[])[] = [];
-    for (const topic of topics) {
-      const range = rangeByTopic[topic];
-      if (range) {
-        arrays.push(range);
-      } else {
-        const live = liveByTopic[topic];
-        if (live) {
-          arrays.push(live.map(normalizeLogEvent));
-        }
+    const arrays: (readonly NormalizedLogMessage[])[] = [range.items];
+    for (const topic of liveTopics) {
+      const live = liveByTopic[topic];
+      if (live) {
+        arrays.push(live.toArray());
       }
     }
     return mergeByReceiveTime(arrays);
-  }, [topics, rangeByTopic, liveByTopic]);
+  }, [liveTopics, range.items, liveByTopic]);
 
   const error = Object.entries(errorByTopic)
     .map(([topic, message]) => `${topic}: ${message}`)

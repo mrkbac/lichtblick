@@ -14,22 +14,18 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { useCallback } from "react";
-
-import { ReadonlyRingBuffer, RingBuffer } from "@lichtblick/den/collection";
-import { useDeepMemo } from "@lichtblick/hooks";
 import { MessageEvent, SubscribePayload } from "@lichtblick/suite-base/players/types";
 
-import { useMessageReducer } from "./useMessageReducer";
+import { HistoryByTopic, useMessageHistory } from "./useMessageHistory";
 
-export type MessageHistoryByTopic = Readonly<Record<string, ReadonlyRingBuffer<MessageEvent>>>;
+export type MessageHistoryByTopic = HistoryByTopic<MessageEvent>;
+
+const identity = (message: MessageEvent) => message;
 
 /**
- * useMessagesByTopic makes it easy to request some messages on some topics.
- *
- * Returns the newest `historySize` messages per topic. Each topic's buffer is appended in place
- * (no per-frame copy of the history); the returned record is a new object whenever any topic
- * received messages, so memoize on the record, or use `pushed()` to process only new messages.
+ * useMessagesByTopic makes it easy to request some messages on some topics: the newest
+ * `historySize` whole messages per topic. To keep a long history, keep less per message with
+ * `useMessageHistory` (or `usePathSampleHistory` for message path values).
  *
  * Using this hook will cause the panel to re-render when new messages arrive on the requested topics.
  * - During file playback the panel will re-render when the file is playing or when the user is scrubbing.
@@ -40,44 +36,5 @@ export function useMessagesByTopic(params: {
   /** Required and finite: the number of messages kept per topic. */
   historySize: number;
 }): MessageHistoryByTopic {
-  const { historySize, topics } = params;
-  const requestedTopics = useDeepMemo(topics);
-
-  const addMessages = useCallback(
-    (prev: Record<string, RingBuffer<MessageEvent>>, messages: readonly MessageEvent[]) => {
-      let changed = false;
-      for (const message of messages) {
-        const buffer = prev[message.topic];
-        if (buffer) {
-          buffer.push(message);
-          changed = true;
-        }
-      }
-      return changed ? { ...prev } : prev;
-    },
-    [],
-  );
-
-  const restore = useCallback(
-    (prev?: Record<string, RingBuffer<MessageEvent>>) => {
-      const next: Record<string, RingBuffer<MessageEvent>> = {};
-      // When changing topics, keep the history of topics that are still requested.
-      for (const topic of requestedTopics) {
-        const topicName = typeof topic === "string" ? topic : topic.topic;
-        const prevBuffer = prev?.[topicName];
-        next[topicName] =
-          prevBuffer?.capacity === historySize
-            ? prevBuffer
-            : RingBuffer.from(historySize, prevBuffer ?? []);
-      }
-      return next;
-    },
-    [requestedTopics, historySize],
-  );
-
-  return useMessageReducer({
-    topics: requestedTopics,
-    restore,
-    addMessages,
-  });
+  return useMessageHistory({ ...params, map: identity });
 }
