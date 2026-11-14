@@ -20,6 +20,10 @@ reviews:
   review_status: true
   collapse_walkthrough: false
   sequence_diagrams: true
+  # One-line docstrings added only to satisfy the coverage check are noise
+  pre_merge_checks:
+    docstrings:
+      mode: "off"
 
   path_filters:
     - "!node_modules/**"

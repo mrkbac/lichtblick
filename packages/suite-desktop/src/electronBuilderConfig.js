@@ -83,7 +83,6 @@ function makeElectronBuilderConfig(params) {
         {
           ext: "foxe",
           name: "Lichtblick Extension",
-          mimeType: "application/zip",
         },
       ],
     },
@@ -93,7 +92,6 @@ function makeElectronBuilderConfig(params) {
         arch: ["universal"],
       },
       category: "public.app-category.developer-tools",
-      icon: path.join(__dirname, "../resources/icon/icon.icns"),
       entitlements: path.join(__dirname, "../resources/mac/entitlements.plist"),
       entitlementsInherit: path.join(__dirname, "../resources/mac/entitlements.plist"),
       extraFiles: [
@@ -170,18 +168,6 @@ function makeElectronBuilderConfig(params) {
         ],
       },
     },
-    appx: {
-      applicationId: "LichtblickSuite",
-      backgroundColor: "#f7def6",
-      displayName: "Lichtblick",
-      identityName: "Lichtblick.Suite",
-      publisher: "CN=Lichtblick, O=Lichtblick, L=San Francisco, S=California, C=US",
-      publisherDisplayName: "Lichtblick",
-      languages: ["en-US"],
-      addAutoLaunchExtension: false,
-      showNameOnTiles: false,
-      setBuildNumber: false,
-    },
     dmg: {
       background: path.join(__dirname, "../resources/dmg-background/background.png"),
       contents: [
@@ -202,11 +188,6 @@ function makeElectronBuilderConfig(params) {
         "libxcb-dri3-0",
       ],
       afterInstall: path.join(__dirname, "../resources/linux/deb/postinst"),
-    },
-    snap: {
-      confinement: "strict",
-      grade: "stable",
-      summary: "Integrated visualization and diagnosis tool for robotics",
     },
   };
 }
