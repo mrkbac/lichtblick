@@ -212,8 +212,8 @@ export function numericTimeFormat(header: string, firstValue: number): TimeForma
 }
 
 /**
- * Converts a time cell to nanoseconds. Decimal and exponent notation ("1.5", "1.7e18") are parsed
- * exactly with BigInt; digits finer than a nanosecond are truncated.
+ * Converts a time cell to nanoseconds, exactly with BigInt: decimal and exponent notation ("1.5",
+ * "1.7e18") and hex/octal/binary integers. Digits finer than a nanosecond are truncated.
  */
 export function cellToNs(cell: string, format: TimeFormat, delimiter: string): bigint {
   if (format.type === "date") {
@@ -222,8 +222,9 @@ export function cellToNs(cell: string, format: TimeFormat, delimiter: string): b
   const text = numericText(cell, delimiter);
   const match = /^([+-]?)(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/i.exec(text);
   if (!match) {
-    // Other forms Number() accepts (e.g. hex): precision of a double is all we can do
-    return BigInt(Math.round(Number(text) * Number(format.nsPerUnit)));
+    // The other finite forms Number() accepts are hex, octal and binary integers ("0x1F"), which
+    // BigInt parses exactly too
+    return BigInt(text) * format.nsPerUnit;
   }
   const [, sign, intPart = "", fracPart = "", exponent = "0"] = match;
   // value = digits * 10^power ns, with nsPerUnit = 10^k

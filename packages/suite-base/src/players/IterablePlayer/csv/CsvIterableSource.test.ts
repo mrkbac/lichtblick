@@ -135,6 +135,17 @@ describe("CsvIterableSource", () => {
     ]);
   });
 
+  it("rejects a decrease hidden by hexadecimal notation", async () => {
+    // 0xDE0B6B3A7640000 is 1e18 ns, 1 ns before the first row, but the same double
+    const source = new CsvIterableSource([
+      file("hex.csv", "time_ns\n1000000000000000001\n0xDE0B6B3A7640000\n"),
+    ]);
+    const init = await source.initialize();
+    expect(init.alerts).toEqual([
+      expect.objectContaining({ message: "hex.csv: no time column found" }),
+    ]);
+  });
+
   it("keeps exact nanosecond times of an increasing column", async () => {
     const source = new CsvIterableSource([
       file("ns.csv", "time_ns,v\n1700000000000000001,1\n1700000000000000002,2\n"),

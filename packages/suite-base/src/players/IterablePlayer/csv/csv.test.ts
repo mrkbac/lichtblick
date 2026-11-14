@@ -129,6 +129,8 @@ describe("time columns", () => {
     expect(cellToNs("15e-1", sec, ",")).toBe(1_500_000_000n);
     expect(cellToNs("1e-12", sec, ",")).toBe(0n);
     expect(cellToNs("1e300", sec, ",")).toBe(10n ** 309n);
+    expect(cellToNs("0xDE0B6B3A7640000", { type: "number", nsPerUnit: 1n }, ",")).toBe(10n ** 18n);
+    expect(cellToNs("0X10", sec, ",")).toBe(16_000_000_000n);
     expect(cellToNs("0e999999999", sec, ",")).toBe(0n);
     expect(cellToNs("1e-999999999", sec, ",")).toBe(0n);
     expect(cellToNs("1970-01-01T00:00:01.5Z", { type: "date" }, ",")).toBe(1_500_000_000n);
