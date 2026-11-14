@@ -36,7 +36,7 @@ const RUNTIME_CACHE_NAME = "lichtblick-assets";
  */
 async function cacheLoadedAssets(): Promise<void> {
   const cache = await caches.open(RUNTIME_CACHE_NAME);
-  // addAll's own fetches show up as resource entries too; never cache a URL twice
+  // cacheAsset's own fetches show up as resource entries too; never cache a URL twice
   const seen = new Set<string>();
   new PerformanceObserver((list) => {
     const urls = list
@@ -53,16 +53,23 @@ async function cacheLoadedAssets(): Promise<void> {
         seen.add(url);
         return true;
       });
-    if (urls.length === 0) {
-      return;
+    for (const url of urls) {
+      void cacheAsset(cache, url);
     }
-    // file names are content-hashed, so the HTTP cache copy is always valid: no second download
-    cache
-      .addAll(urls.map((url) => new Request(url, { cache: "force-cache" })))
-      .catch((err: unknown) => {
-        log.warn("Caching loaded assets failed", err);
-      });
   }).observe({ type: "resource", buffered: true });
+}
+
+async function cacheAsset(cache: Cache, url: string): Promise<void> {
+  try {
+    // file names are content-hashed, so the HTTP cache copy is always valid: no second download
+    const response = await fetch(url, { cache: "force-cache" });
+    // same rule as the service worker: the host answers unknown paths with index.html
+    if (response.ok && response.headers.get("content-type")?.startsWith("text/html") !== true) {
+      await cache.put(url, response);
+    }
+  } catch (err: unknown) {
+    log.warn("Caching loaded asset failed", url, err);
+  }
 }
 
 export type MainParams = {

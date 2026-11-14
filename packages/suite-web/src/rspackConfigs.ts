@@ -158,6 +158,17 @@ export const mainConfig =
                     cacheName: RUNTIME_CACHE_NAME,
                     // bounds the files kept from older deploys; a full build has ~300
                     expiration: { maxEntries: 1500, purgeOnQuotaError: true },
+                    plugins: [
+                      {
+                        // The host answers unknown paths (e.g. a chunk removed by a newer deploy)
+                        // with index.html and status 200. Never cache that as the file.
+                        cacheWillUpdate: async ({ response }) =>
+                          response.ok &&
+                          response.headers.get("content-type")?.startsWith("text/html") !== true
+                            ? response
+                            : null,
+                      },
+                    ],
                   },
                 },
               ],
