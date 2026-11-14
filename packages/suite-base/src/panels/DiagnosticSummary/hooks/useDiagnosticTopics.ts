@@ -11,9 +11,16 @@ import { ALLOWED_DATATYPES } from "@lichtblick/suite-base/panels/DiagnosticSumma
 
 export type DiagnosticTopicsConfig = { topics?: string[]; topicToRender?: string };
 
-/** Explicit topic selection, migrating the old single `topicToRender`; undefined = all topics. */
+/**
+ * Explicit topic selection, migrating the old single `topicToRender`; undefined = all topics.
+ * Saved layouts are untrusted: a `topics` that isn't a string array is ignored.
+ */
 export function getConfiguredTopics(config: DiagnosticTopicsConfig): string[] | undefined {
-  return config.topics ?? (config.topicToRender != undefined ? [config.topicToRender] : undefined);
+  const { topics, topicToRender } = config as { topics?: unknown; topicToRender?: unknown };
+  if (Array.isArray(topics)) {
+    return topics.filter((topic): topic is string => typeof topic === "string");
+  }
+  return typeof topicToRender === "string" ? [topicToRender] : undefined;
 }
 
 export type DiagnosticTopics = {
