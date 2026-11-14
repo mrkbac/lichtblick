@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { compare } from "@foxglove/rostime";
 import { McapIndexedReader, McapRecordBuilder, McapWriter, TempBuffer } from "@mcap/core";
 import { Blob } from "node:buffer";
 import type { Mock, MockedClass, MockedFunction } from "vitest";
@@ -245,9 +246,12 @@ describe("McapIterableSource", () => {
     }
     // Together they cover every message added after open
     for (let sec = init.end.sec + 1; sec <= chunkCount; sec++) {
-      expect(updatedRanges.some((range) => range.start.sec <= sec && sec <= range.end.sec)).toBe(
-        true,
-      );
+      const time = { sec, nsec: 0 };
+      expect(
+        updatedRanges.some(
+          (range) => compare(range.start, time) <= 0 && compare(time, range.end) <= 0,
+        ),
+      ).toBe(true);
     }
 
     // Then the source covers the whole file, reports what was recovered, and plays all of it
