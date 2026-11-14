@@ -5,7 +5,14 @@ import { defaultCompareSides } from "@lichtblick/suite-base/util/compareSides";
 
 import { CompareSideInfo } from "./CompareContext";
 import { compareSupport } from "./compareView";
-import { collapsePaths, configuredFocus, expandPaths, sidePath, unsidePath } from "./comparedPaths";
+import {
+  collapsePaths,
+  configuredFocus,
+  expandPaths,
+  expandedSides,
+  sidePath,
+  unsidePath,
+} from "./comparedPaths";
 import { SideView } from "./sideView";
 
 type Path = { value: string; label?: string; enabled: boolean; color?: string };
@@ -140,5 +147,15 @@ describe("compareSupport", () => {
     expect(compareSupport("Plot", { xAxisVal: "custom" }).mode).toEqual("copies");
     expect(compareSupport("Plot", { xAxisVal: "currentCustom" }).mode).toEqual("copies");
     expect(compareSupport("Tab").mode).toEqual("none");
+  });
+
+  it("expands the paths of a plot only when it draws every recording itself", () => {
+    const compare = { sides: SIDES, activeSide: "/a", setActiveSide: vi.fn() } as never;
+    const all = { compareView: { show: "all" } };
+    expect(expandedSides("Plot", { ...all, xAxisVal: "timestamp" }, compare)).toBe(SIDES);
+    // Its copies each show one recording, with the panel-wide x path of that recording
+    expect(expandedSides("Plot", { ...all, xAxisVal: "custom" }, compare)).toBeUndefined();
+    expect(expandedSides("Plot", { ...all, xAxisVal: "currentCustom" }, compare)).toBeUndefined();
+    expect(expandedSides("Plot", { xAxisVal: "timestamp" }, undefined)).toBeUndefined();
   });
 });

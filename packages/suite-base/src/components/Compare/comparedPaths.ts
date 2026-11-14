@@ -8,7 +8,7 @@ import { parseMessagePath, quoteTopicNameIfNeeded } from "@lichtblick/message-pa
 import { prefixTopic } from "@lichtblick/suite-base/players/IterablePlayer/shared/ComparedSource";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
-import { CompareSideInfo, useCompare } from "./CompareContext";
+import { CompareSideInfo, CompareState, useCompare } from "./CompareContext";
 import {
   COMPARE_VIEW_CONFIG_KEY,
   CompareView,
@@ -160,6 +160,25 @@ export function configuredFocus<P>(
 }
 
 /**
+ * The sides a panel of `panelType` with `config` draws itself, if it draws every side: only a
+ * panel drawing them natively, not one shown as a copy per side (see compareSupport)
+ */
+export function expandedSides(
+  panelType: string,
+  config: Readonly<Record<string, unknown>>,
+  compare: CompareState | undefined,
+): readonly CompareSideInfo[] | undefined {
+  if (!compare) {
+    return undefined;
+  }
+  const support = compareSupport(panelType, config);
+  const view = config[COMPARE_VIEW_CONFIG_KEY] as CompareView | undefined;
+  return support.mode === "native" && resolveCompareView(view, support, compare).kind === "all"
+    ? compare.sides
+    : undefined;
+}
+
+/**
  * For a panel drawing every compared side itself: while it shows every side, its config with one
  * path per side, and a saveConfig that writes edits back to the configured paths.
  */
@@ -171,13 +190,7 @@ export function useComparedPaths<C extends { paths: P[] }, P extends ComparableP
   isTopicPath?: (path: P) => boolean,
 ): { config: C; saveConfig: SaveConfig<C>; sides?: readonly CompareSideInfo[] } {
   const compare = useCompare();
-  const view = (config as Record<string, unknown>)[COMPARE_VIEW_CONFIG_KEY] as
-    | CompareView
-    | undefined;
-  const sides =
-    compare && resolveCompareView(view, compareSupport(panelType, config), compare).kind === "all"
-      ? compare.sides
-      : undefined;
+  const sides = expandedSides(panelType, config, compare);
 
   const expandedConfig = useMemo(
     () =>

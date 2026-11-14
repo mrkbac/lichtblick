@@ -739,7 +739,9 @@ export class IterablePlayer implements Player {
         } else if (
           update.updatedRanges == undefined &&
           this.#currentTime &&
-          (this.#state === "idle" || this.#state === "play")
+          (this.#state === "idle" ||
+            this.#state === "play" ||
+            this.#state === "reset-playback-iterator")
         ) {
           // Any message may have moved (e.g. a compared recording was moved in time): panels
           // still show the old ones, so load the current moment again like a seek to it
@@ -747,7 +749,7 @@ export class IterablePlayer implements Player {
           this.#isPlaying ||= this.#playedToEnd;
           this.#playedToEnd = false;
           this.#seekTarget = this.#currentTime;
-          this.#untilTime = undefined;
+          // A playUntil limit stays: the playhead doesn't move
           this.#lastTickMillis = undefined;
           this.#lastRangeMillis = undefined;
           this.#setState("seek-backfill");
