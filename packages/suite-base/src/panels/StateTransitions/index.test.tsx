@@ -47,7 +47,9 @@ vi.mock("@lichtblick/suite-base/components/Panel", () => ({
 vi.mock(
   "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory",
   async (importOriginal) => ({
-    ...(await importOriginal()),
+    ...(await importOriginal<
+      typeof import("@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory")
+    >()),
     usePathSampleHistory: vi.fn(),
   }),
 );

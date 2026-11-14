@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { Time } from "@foxglove/rostime";
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 import { useLatest } from "react-use";
 
 import { filterMap, ReadonlyRingBuffer, RingBuffer } from "@lichtblick/den/collection";
@@ -13,6 +13,7 @@ import {
   MessagePathDataItem,
   useCachedGetMessagePathDataItems,
 } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import { subscribePayloadFromMessagePath } from "@lichtblick/suite-base/players/subscribePayloadFromMessagePath";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import { getTimestampForMessage } from "@lichtblick/suite-base/util/time";
@@ -64,7 +65,12 @@ export function usePathSampleHistory(
 ): PathSampleHistoryByPath {
   const memoizedPaths = useShallowMemo(paths);
   const subscribeTopics = useMemo(
-    () => filterMap(memoizedPaths, (path) => subscribePayloadFromMessagePath(path)),
+    () =>
+      filterMap(memoizedPaths, (path) => {
+        const payload = subscribePayloadFromMessagePath(path);
+        // A field-projected message must keep its header for `headerStamp`.
+        return payload?.fields ? { ...payload, fields: [...payload.fields, "header"] } : payload;
+      }),
     [memoizedPaths],
   );
   const topicByPath = useMemo(
@@ -82,11 +88,22 @@ export function usePathSampleHistory(
   // when any topic appears. New messages use the latest one; the history is kept.
   const decodeRef = useLatest(useCachedGetMessagePathDataItems(memoizedPaths));
 
+  // Paths using `$variables` resolve differently once variables change; their old samples would
+  // mix two filters, so they start over. Other paths keep their history.
+  const { globalVariables } = useGlobalVariables();
+  const variablesKey = memoizedPaths.some((path) => path.includes("$"))
+    ? (JSON.stringify(globalVariables) ?? "")
+    : "";
+  const bufferKeysRef = useRef(new Map<string, string>());
+
   const restore = useCallback(
     (prev?: Record<string, RingBuffer<PathSample>>) => {
       const next: Record<string, RingBuffer<PathSample>> = {};
+      const keys = bufferKeysRef.current;
       for (const path of topicByPath.keys()) {
-        const prevBuffer = prev?.[path];
+        const key = path.includes("$") ? variablesKey : "";
+        const prevBuffer = keys.get(path) === key ? prev?.[path] : undefined;
+        keys.set(path, key);
         next[path] =
           prevBuffer?.capacity === historySize
             ? prevBuffer
@@ -94,7 +111,7 @@ export function usePathSampleHistory(
       }
       return next;
     },
-    [topicByPath, historySize],
+    [topicByPath, historySize, variablesKey],
   );
 
   const addMessages = useCallback(
