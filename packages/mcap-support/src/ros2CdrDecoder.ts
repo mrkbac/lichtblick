@@ -130,16 +130,17 @@ function readString(bytes: Uint8Array, start: number, count: number): string {
 const RUNTIME = { readString };
 
 // [DataView getter, byte size, typed array]
-const NUMERIC: Record<string, [getter: Code, byteSize: number, ctor: Code]> = {
-  int16: [js`getInt16`, 2, js`Int16Array`],
-  uint16: [js`getUint16`, 2, js`Uint16Array`],
-  int32: [js`getInt32`, 4, js`Int32Array`],
-  uint32: [js`getUint32`, 4, js`Uint32Array`],
-  int64: [js`getBigInt64`, 8, js`BigInt64Array`],
-  uint64: [js`getBigUint64`, 8, js`BigUint64Array`],
-  float32: [js`getFloat32`, 4, js`Float32Array`],
-  float64: [js`getFloat64`, 8, js`Float64Array`],
-};
+// A Map, so type names like "toString" don't match inherited object members.
+const NUMERIC = new Map<string, [getter: Code, byteSize: number, ctor: Code]>([
+  ["int16", [js`getInt16`, 2, js`Int16Array`]],
+  ["uint16", [js`getUint16`, 2, js`Uint16Array`]],
+  ["int32", [js`getInt32`, 4, js`Int32Array`]],
+  ["uint32", [js`getUint32`, 4, js`Uint32Array`]],
+  ["int64", [js`getBigInt64`, 8, js`BigInt64Array`]],
+  ["uint64", [js`getBigUint64`, 8, js`BigUint64Array`]],
+  ["float32", [js`getFloat32`, 4, js`Float32Array`]],
+  ["float64", [js`getFloat64`, 8, js`Float64Array`]],
+]);
 
 /**
  * Generates the decoder. All generated text goes through `js`, `ident` and `int` (see
@@ -220,7 +221,7 @@ function compile(
         return v;
       }
       default: {
-        const numeric = NUMERIC[type];
+        const numeric = NUMERIC.get(type);
         if (numeric == undefined) {
           throw new Unsupported();
         }
@@ -253,7 +254,7 @@ function compile(
       advanced(1);
       return v;
     }
-    const numeric = NUMERIC[type];
+    const numeric = NUMERIC.get(type);
     if (numeric != undefined) {
       // Same results as CdrReader.typedArray(): an empty array without aligning, else a view on
       // the input when the host endianness matches and the data is aligned, else a copy.

@@ -367,6 +367,9 @@ describe("createRos2CdrDeserializer", () => {
       ],
       [{ definitions: [{ name: "__proto__", type: "uint8" }] }],
       [{ definitions: [{ name: "has-dash", type: "uint8" }] }],
+      // Type names that are also Object.prototype members.
+      [{ definitions: [{ name: "a", type: "toString" }] }],
+      [{ definitions: [{ name: "a", type: "constructor", isArray: true }] }],
     ];
     const data = new Uint8Array([0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
     for (const definitions of schemas) {
