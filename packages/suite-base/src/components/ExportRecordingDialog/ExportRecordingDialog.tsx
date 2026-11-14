@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { toNanoSec } from "@foxglove/rostime";
-import { McapIndexedReader, McapTypes } from "@mcap/core";
+import type { McapIndexedReader, McapTypes } from "@mcap/core";
 import MyLocationIcon from "@mui/icons-material/MyLocation";
 import {
   Alert,
@@ -37,10 +37,12 @@ import { useTranslation } from "react-i18next";
 import { useAsync } from "react-use";
 
 import {
+  ChunkCache,
   ExportCompression,
   countTimesInRange,
   exportMcap,
   loadDecompressHandlers,
+  openCachedMcapReader,
   readMessageTimes,
 } from "@lichtblick/mcap-support";
 import {
@@ -86,9 +88,10 @@ export function ExportRecordingDialog({ file, onClose }: Props): React.JSX.Eleme
 
   const readable = useMemo(() => new BlobReadable(file), [file]);
   const opened = useAsync(async () => {
-    const newReader = await McapIndexedReader.Initialize({
+    const newReader = await openCachedMcapReader({
       readable,
       decompressHandlers: await loadDecompressHandlers(),
+      chunkCache: new ChunkCache(),
     });
     return { reader: newReader, readable };
   }, [readable]);

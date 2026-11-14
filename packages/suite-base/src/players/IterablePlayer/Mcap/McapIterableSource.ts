@@ -6,15 +6,14 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time, fromNanoSec } from "@foxglove/rostime";
-import { McapIndexedReader, McapTypes } from "@mcap/core";
+import type { McapIndexedReader, McapTypes } from "@mcap/core";
 
 import Log from "@lichtblick/log";
-import { loadDecompressHandlers } from "@lichtblick/mcap-support";
+import { ChunkCache, loadDecompressHandlers, openCachedMcapReader } from "@lichtblick/mcap-support";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { BlobReadable } from "./BlobReadable";
-import { ChunkCache } from "./ChunkCache";
 import { McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
 import type {
   HydratedInner,
@@ -62,11 +61,7 @@ async function tryCreateIndexedReader(
 ): Promise<IndexedReaderResult> {
   let reader: McapIndexedReader;
   try {
-    reader = await McapIndexedReader.Initialize({
-      readable,
-      decompressHandlers,
-      chunkCache,
-    });
+    reader = await openCachedMcapReader({ readable, decompressHandlers, chunkCache });
   } catch (err: unknown) {
     return { status: "recover", error: toError(err) };
   }
@@ -551,7 +546,7 @@ export class McapIterableSource implements ISerializedIterableSource {
     }
     return async (error) => {
       this.#recovery ??= await scanForRecovery(readable, decompressHandlers, error);
-      const reader = await McapIndexedReader.Initialize({
+      const reader = await openCachedMcapReader({
         readable: this.#recovery.toReadable(readable, this.#chunkCache),
         decompressHandlers,
         chunkCache: this.#chunkCache,

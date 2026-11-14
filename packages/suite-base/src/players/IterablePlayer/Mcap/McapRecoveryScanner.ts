@@ -5,7 +5,7 @@ import { crc32 } from "@foxglove/crc";
 import {
   MCAP_MAGIC,
   McapByteReader,
-  McapIndexedReader,
+  type McapIndexedReader,
   McapRecordBuilder,
   McapTypes,
   Opcode,
@@ -13,9 +13,8 @@ import {
   parseRecord,
 } from "@mcap/core";
 
+import { type ChunkCache, openCachedMcapReader } from "@lichtblick/mcap-support";
 import type { PlayerAlert } from "@lichtblick/suite-base/players/types";
-
-import type { ChunkCache } from "./ChunkCache";
 
 const RECORD_PREFIX_LENGTH = 9n; // opcode + content length
 const READ_WINDOW_BYTES = 8n * 1024n * 1024n;
@@ -388,7 +387,7 @@ export class McapRecoveryScanner {
     let chunks = this.#chunkIndexes.length;
     let attachments = this.#attachmentIndexes.length;
     let metadata = this.#metadataIndexes.length;
-    const indexedReader = await McapIndexedReader.Initialize({
+    const indexedReader = await openCachedMcapReader({
       decompressHandlers,
       readable: this.#readable(base, this.#buildSummary(LIVE_SUMMARY_AT), cache),
       chunkCache: cache,

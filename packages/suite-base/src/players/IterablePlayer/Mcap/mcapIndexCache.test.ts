@@ -3,10 +3,9 @@
 
 import { McapIndexedReader, McapTypes, McapWriter, TempBuffer } from "@mcap/core";
 
-import { loadDecompressHandlers } from "@lichtblick/mcap-support";
+import { ChunkCache, loadDecompressHandlers } from "@lichtblick/mcap-support";
 
 import { BlobReadable } from "./BlobReadable";
-import { ChunkCache } from "./ChunkCache";
 import { McapIterableSource } from "./McapIterableSource";
 import { McapRecoveryScanner } from "./McapRecoveryScanner";
 import { MAX_CACHE_BYTES, scanWithIndexCache } from "./mcapIndexCache";

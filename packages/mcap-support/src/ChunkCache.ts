@@ -12,9 +12,9 @@ let nextId = 0;
 
 /**
  * Decompressed chunks of one file by chunk start offset, shared by every McapIndexedReader on it
- * (playback, preloading, plots, backfill each run their own readMessages(), which on its own
- * forgets a chunk as soon as it moves past it). Also holds message indexes rebuilt for chunks of a
- * recovered file (see McapRecoveryScanner).
+ * (see openCachedMcapReader): playback, preloading, plots and backfill each run their own
+ * readMessages(), which on its own forgets a chunk as soon as it moves past it. Also holds message
+ * indexes rebuilt for chunks of a recovered file (see McapRecoveryScanner).
  */
 export class ChunkCache {
   readonly #prefix = `${nextId++}:`;

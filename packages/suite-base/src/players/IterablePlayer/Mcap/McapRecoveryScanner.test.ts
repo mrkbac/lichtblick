@@ -3,11 +3,10 @@
 
 import { McapIndexedReader, McapTypes, McapWriter, TempBuffer } from "@mcap/core";
 
-import { loadDecompressHandlers } from "@lichtblick/mcap-support";
+import { ChunkCache, loadDecompressHandlers } from "@lichtblick/mcap-support";
 import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
 
 import { BlobReadable } from "./BlobReadable";
-import { ChunkCache } from "./ChunkCache";
 import { McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
 import { McapIterableSource } from "./McapIterableSource";
 import { McapRecoveryScanner } from "./McapRecoveryScanner";

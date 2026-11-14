@@ -6,7 +6,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { fromNanoSec } from "@foxglove/rostime";
-import { McapIndexedReader, McapTypes } from "@mcap/core";
+import { McapTypes } from "@mcap/core";
+
+import { ChunkCache, openCachedMcapReader } from "@lichtblick/mcap-support";
 
 import { FileInfo, TopicInfo } from "./types";
 
@@ -14,7 +16,7 @@ export default async function getIndexedMcapInfo(
   file: Blob,
   decompressHandlers: McapTypes.DecompressHandlers,
 ): Promise<FileInfo> {
-  const reader = await McapIndexedReader.Initialize({
+  const reader = await openCachedMcapReader({
     readable: {
       size: async () => BigInt(file.size),
       read: async (offset, length) => {
@@ -26,6 +28,7 @@ export default async function getIndexedMcapInfo(
       },
     },
     decompressHandlers,
+    chunkCache: new ChunkCache(),
   });
 
   let hasMissingSchemas = false;
