@@ -43,6 +43,18 @@ import {
   getTabs,
 } from "@lichtblick/suite-base/util/tabLayout";
 
+/**
+ * Hidden tabs stay laid out under the shown one. `visibility` is inherited but descendants can
+ * override it (e.g. a chart hover bar sets inline `visibility: visible`), which would draw them
+ * over the shown tab, so force it on every descendant; `!important` beats inline styles.
+ */
+export const HIDDEN_TAB_STYLE = {
+  visibility: "hidden",
+  pointerEvents: "none",
+  // csstype has no `!important` variants.
+  "& *": { visibility: "hidden !important" as "hidden" },
+} as const;
+
 const useStyles = makeStyles()((theme) => ({
   root: {
     display: "flex",
@@ -109,10 +121,7 @@ const useStyles = makeStyles()((theme) => ({
     display: "flex",
   },
   // Hidden tabs keep their size, so they don't need laying out again when shown.
-  hiddenTab: {
-    visibility: "hidden",
-    pointerEvents: "none",
-  },
+  hiddenTab: HIDDEN_TAB_STYLE,
 }));
 
 type TabButtonProps = {
