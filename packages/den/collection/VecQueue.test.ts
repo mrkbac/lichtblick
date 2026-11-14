@@ -158,4 +158,22 @@ describe("VecQueue", () => {
     }
     expect(queue.size()).toEqual(0);
   });
+
+  it("should index items from the front across wrap-around and growth", () => {
+    const queue = new VecQueue<number>();
+    let next = 0;
+    let head = 0;
+    for (let round = 0; round < 50; round++) {
+      for (let i = 0; i < 3; i++) {
+        queue.enqueue(next++);
+      }
+      queue.dequeue();
+      head++;
+      for (let i = 0; i < queue.size(); i++) {
+        expect(queue.at(i)).toEqual(head + i);
+      }
+      expect(queue.at(queue.size())).toBeUndefined();
+      expect(queue.at(-1)).toBeUndefined();
+    }
+  });
 });

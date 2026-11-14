@@ -178,3 +178,13 @@ export const processMessage = ({
     };
   }
 };
+
+/** Run the script on a batch of messages: one worker round trip per frame instead of per message. */
+export const processMessages = ({
+  messages,
+  globalVariables,
+}: {
+  messages: readonly unknown[];
+  globalVariables: GlobalVariables;
+}): ProcessMessageOutput[] =>
+  messages.map((message) => processMessage({ message, globalVariables }));

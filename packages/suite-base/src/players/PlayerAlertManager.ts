@@ -7,8 +7,14 @@
 
 import { PlayerAlert } from "@lichtblick/suite-base/players/types";
 
-function alertKey(alert: PlayerAlert): string {
-  return JSON.stringify([alert.severity, alert.message, alert.tip, alert.error?.message]);
+// What the user sees of an alert; two alerts that look the same are the same alert.
+function sameAlert(a: PlayerAlert, b: PlayerAlert): boolean {
+  return (
+    a.severity === b.severity &&
+    a.message === b.message &&
+    a.tip === b.tip &&
+    a.error?.message === b.error?.message
+  );
 }
 
 /**
@@ -37,7 +43,7 @@ export default class PlayerAlertManager {
    */
   public addAlert(id: string, alert: PlayerAlert): boolean {
     const existing = this.#alertsById.get(id);
-    if (existing != undefined && alertKey(existing) === alertKey(alert)) {
+    if (existing != undefined && sameAlert(existing, alert)) {
       return false;
     }
     console[alert.severity].call(console, "Player alert", id, alert);
