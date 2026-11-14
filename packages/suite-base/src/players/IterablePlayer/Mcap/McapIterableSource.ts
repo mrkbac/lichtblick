@@ -383,9 +383,10 @@ export class McapIterableSource implements ISerializedIterableSource {
     // Since the last Initialization handed out, not since this reader last grew: a failed update
     // or a re-hydration may have taken chunks that were never reported
     const range = this.#recovery?.chunkTimeRange(this.#publishedChunks, chunks);
-    init.updatedRanges = range
-      ? [{ start: fromNanoSec(range.start), end: fromNanoSec(range.end) }]
-      : [];
+    // Kept undefined if the inner says earlier chunks changed too
+    init.updatedRanges =
+      init.updatedRanges &&
+      (range ? [{ start: fromNanoSec(range.start), end: fromNanoSec(range.end) }] : []);
     // Its weight grew; the pool may evict something else for it
     await this.#pool?.refresh(this, value);
     return init;
@@ -642,9 +643,12 @@ export class McapIterableSource implements ISerializedIterableSource {
     indexing?: boolean;
   } = {}): Promise<{ opened: OpenedInner; init: Initialization }> {
     const opened = await this.#openInner();
-    const init = await this.#describe(await opened.inner.initialize(), opened.readable, {
-      indexing,
-    });
+    const init = await this.#describe(
+      // A new reader: anything may have changed
+      { ...(await opened.inner.initialize()), updatedRanges: undefined },
+      opened.readable,
+      { indexing },
+    );
     return { opened, init };
   }
 

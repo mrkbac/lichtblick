@@ -71,6 +71,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   #index = {
     chunks: 0,
     channels: new Set<number>(),
+    pendingChannels: new Set<number>(),
     startTime: undefined as bigint | undefined,
     endTime: undefined as bigint | undefined,
     compression: new Map<string, RecordingFileInfo["compression"][number]>(),
@@ -201,8 +202,10 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     }
     index.chunks = reader.chunkIndexes.length;
 
-    // A channel whose schema is missing stays pending: a later chunk may repeat the schema
+    // A channel whose schema is missing stays pending: a later chunk may repeat the schema. Once
+    // added, its messages in earlier chunks become readable too.
     const missingSchemaAlerts: PlayerAlert[] = [];
+    let revived = false;
     for (const channel of reader.channelsById.values()) {
       if (index.channels.has(channel.id)) {
         continue;
@@ -212,8 +215,10 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
           severity: "error",
           message: `Missing schema info for schema id ${channel.schemaId} (channel ${channel.id}, topic ${channel.topic})`,
         });
+        index.pendingChannels.add(channel.id);
         continue;
       }
+      revived ||= index.pendingChannels.delete(channel.id);
       index.channels.add(channel.id);
       this.#addChannel(channel);
     }
@@ -283,6 +288,8 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
         [...index.publishersByTopic].map(([topic, publishers]) => [topic, new Set(publishers)]),
       ),
       topicStats,
+      // What the caller reports as changed is only its new chunks, unless earlier ones changed too
+      updatedRanges: revived ? undefined : [],
     };
   }
 

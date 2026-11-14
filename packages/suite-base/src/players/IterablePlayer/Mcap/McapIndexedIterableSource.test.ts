@@ -56,6 +56,9 @@ describe("McapIndexedIterableSource", () => {
     expect(before.alerts[0]?.message).toMatch(/Missing schema info/);
     expect(after.topics.map((topic) => topic.name)).toEqual(["/example"]);
     expect(after.alerts).toEqual([]);
+    // Its messages in earlier chunks are new too, so not only the new chunks changed
+    expect(before.updatedRanges).toEqual([]);
+    expect(after.updatedRanges).toBeUndefined();
   });
 
   it("returns the correct metadata", async () => {
