@@ -210,20 +210,35 @@ export function acknowledge(
   return index < 0 ? [...inFlight] : inFlight.slice(index + 1);
 }
 
+/**
+ * The offset requests the player hasn't shown yet (see nextOffsets), acknowledged once per
+ * publication: `publication` is the object the player publishes the sides in, which changes only
+ * when the player applies offsets (not when e.g. the active side changes)
+ */
+export function useOffsetRequests(
+  publication: object | undefined,
+  published: readonly number[] | undefined,
+): { current: (readonly number[])[] } {
+  const inFlight = useRef<(readonly number[])[]>([]);
+  const seen = useRef(publication);
+  if (publication && published && seen.current !== publication) {
+    seen.current = publication;
+    inFlight.current = acknowledge(inFlight.current, published);
+  }
+  return inFlight;
+}
+
+const selectPublishedSides = (ctx: MessagePipelineContext) =>
+  ctx.playerState.activeData?.compareSides;
+
 /** The compared recordings with controls to move each along the shared timeline */
 export function CompareSidesEditor(): React.JSX.Element | undefined {
   const compare = useCompare();
   const setOffsets = useMessagePipeline(selectSetOffsets);
+  const publication = useMessagePipeline(selectPublishedSides);
   const { t } = useTranslation("compare");
-  // The offset requests the player hasn't shown yet (see nextOffsets), acknowledged once per
-  // publication: a rerender with the same sides acknowledges nothing
-  const published = compare?.sides.map((side) => side.offsetSec);
-  const inFlight = useRef<(readonly number[])[]>([]);
-  const seenSides = useRef(compare?.sides);
-  if (compare && published && seenSides.current !== compare.sides) {
-    seenSides.current = compare.sides;
-    inFlight.current = acknowledge(inFlight.current, published);
-  }
+  const published = publication?.map((side) => side.offsetSec);
+  const inFlight = useOffsetRequests(publication, published);
   if (!compare) {
     return undefined;
   }

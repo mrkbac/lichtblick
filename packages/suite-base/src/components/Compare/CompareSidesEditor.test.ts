@@ -1,7 +1,11 @@
+/** @jest-environment jsdom */
+
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { acknowledge, nextOffsets } from "./CompareSidesEditor";
+import { renderHook } from "@testing-library/react";
+
+import { acknowledge, nextOffsets, useOffsetRequests } from "./CompareSidesEditor";
 
 describe("offset requests", () => {
   it("keeps a newer request when an older publication arrives", () => {
@@ -50,5 +54,33 @@ describe("offset requests", () => {
       ),
     ).toEqual([[3, 0]]);
     expect(acknowledge([[1, 0]], [5, 5])).toEqual([[1, 0]]);
+  });
+
+  it("acknowledges only on a publication, not on a rerender with other sides objects", () => {
+    // Published [0, 0]; a nudge to 1 and back to 0 are on their way
+    const first = { offsets: [0, 0] };
+    const { result, rerender } = renderHook(
+      ({ publication }: { publication: { offsets: number[] } }) =>
+        useOffsetRequests(publication, publication.offsets),
+      { initialProps: { publication: first } },
+    );
+    result.current.current = [
+      [1, 0],
+      [0, 0],
+    ];
+
+    // Something else rerenders the editor (e.g. the active side changed): same publication
+    rerender({ publication: first });
+    expect(result.current.current).toEqual([
+      [1, 0],
+      [0, 0],
+    ]);
+
+    // The player publishes [1, 0]: the undo is still on its way, and a nudge builds on it
+    rerender({ publication: { offsets: [1, 0] } });
+    expect(result.current.current).toEqual([[0, 0]]);
+    expect(nextOffsets([1, 0], result.current.current, 1, (current) => current + 1)).toEqual([
+      0, 1,
+    ]);
   });
 });
