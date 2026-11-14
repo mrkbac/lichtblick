@@ -41,22 +41,36 @@ export function createRos2CdrDeserializer(
       return fallback(data); // let MessageReader throw its header error
     }
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
-    const kind = view.getUint8(1);
-    const littleEndian = LITTLE_ENDIAN_KINDS.has(kind);
-    const isCdr2 = kind > 3;
-    const slot = (littleEndian ? 1 : 0) + (isCdr2 ? 2 : 0);
+    const slot = VARIANT_OF_KIND[view.getUint8(1)]!;
     const decode = (variants[slot] ??= compile(root.definitions, types, {
-      littleEndian,
-      eightByteAlignment: isCdr2 ? 4 : 8,
+      littleEndian: (slot & 1) === 1,
+      eightByteAlignment: (slot & 2) === 2 ? 4 : 8,
     }));
-    return decode === false ? fallback(data) : decode(view, RUNTIME);
+    return decode === false ? fallback(data) : decode(view, bytesOf(data.buffer), RUNTIME);
   };
 }
 
-type Decoder = (view: DataView, rt: typeof RUNTIME) => unknown;
+type Decoder = (view: DataView, bytes: Uint8Array, rt: typeof RUNTIME) => unknown;
 
 // Encapsulation kinds that are little-endian (see @foxglove/cdr getEncapsulationKindInfo).
-const LITTLE_ENDIAN_KINDS = new Set([0x01, 0x03, 0x07, 0x09, 0x0b, 0x11, 0x13, 0x15]);
+const LITTLE_ENDIAN_KINDS = [0x01, 0x03, 0x07, 0x09, 0x0b, 0x11, 0x13, 0x15];
+// Variant slot per encapsulation kind: bit 0 = little-endian, bit 1 = CDR2 (kind > 3).
+const VARIANT_OF_KIND = Uint8Array.from(
+  { length: 256 },
+  (_, kind) => (LITTLE_ENDIAN_KINDS.includes(kind) ? 1 : 0) | (kind > 3 ? 2 : 0),
+);
+
+// A byte view of the most recent input buffer. Messages from one chunk share a buffer, so this
+// is made once per chunk instead of once per string. Holds on to at most one buffer.
+let lastBuffer: ArrayBufferLike | undefined;
+let lastBytes: Uint8Array = new Uint8Array(0);
+function bytesOf(buffer: ArrayBufferLike): Uint8Array {
+  if (buffer !== lastBuffer) {
+    lastBuffer = buffer;
+    lastBytes = new Uint8Array(buffer);
+  }
+  return lastBytes;
+}
 const HOST_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
 
 function isConstantModule(def: MessageDefinition): boolean {
@@ -65,21 +79,51 @@ function isConstantModule(def: MessageDefinition): boolean {
 
 const textDecoder = new TextDecoder("utf8");
 
-/** Same result as `CdrReader.string()` for `length > 1`; plain ASCII skips TextDecoder. */
-function readString(view: DataView, offset: number, length: number): string {
-  const bytes = new Uint8Array(view.buffer, view.byteOffset + offset, length - 1);
-  const count = bytes.length;
-  if (count > 64) {
-    return textDecoder.decode(bytes);
+// Short ASCII strings repeat a lot (frame ids, names, keys), so they are interned in a small
+// direct-mapped cache: a hit costs one pass over the bytes and allocates nothing.
+const STRING_CACHE_SIZE = 4096; // power of two
+const MAX_CACHED_STRING_LENGTH = 64;
+const stringCache: (string | undefined)[] = new Array(STRING_CACHE_SIZE).fill(undefined);
+
+/**
+ * Same result as `CdrReader.string()` for a string of `count` bytes (without the terminator) at
+ * byte `start` of the input buffer.
+ */
+function readString(bytes: Uint8Array, start: number, count: number): string {
+  if (count > MAX_CACHED_STRING_LENGTH || start + count > bytes.length) {
+    // Bounded by the underlying buffer, not the view, like CdrReader (throws past its end).
+    return textDecoder.decode(new Uint8Array(bytes.buffer, start, count));
+  }
+  // Hash the length and five sampled bytes; the full compare below makes any collision harmless.
+  const last = start + count - 1;
+  let hash = Math.imul(count, 0x9e3779b1) ^ bytes[start]!;
+  hash = Math.imul(hash ^ bytes[last]!, 0x85ebca6b);
+  hash = Math.imul(hash ^ bytes[start + (count >> 1)]!, 0xc2b2ae35);
+  hash = Math.imul(hash ^ bytes[start + (count >> 2)]!, 0x27d4eb2f);
+  hash = Math.imul(hash ^ bytes[last - (count >> 2)]!, 0x165667b1);
+  hash ^= hash >>> 15;
+  const slot = hash & (STRING_CACHE_SIZE - 1);
+  const cached = stringCache[slot];
+  if (cached?.length === count) {
+    // Cached strings are ASCII, so equal bytes also mean the input is ASCII.
+    let i = 0;
+    while (i < count && cached.charCodeAt(i) === bytes[start + i]) {
+      i++;
+    }
+    if (i === count) {
+      return cached;
+    }
+  }
+  for (let i = 0; i < count; i++) {
+    if (bytes[start + i]! >= 0x80) {
+      return textDecoder.decode(new Uint8Array(bytes.buffer, start, count));
+    }
   }
   let ascii = "";
   for (let i = 0; i < count; i++) {
-    const byte = bytes[i]!;
-    if (byte >= 0x80) {
-      return textDecoder.decode(bytes);
-    }
-    ascii += String.fromCharCode(byte);
+    ascii += String.fromCharCode(bytes[start + i]!);
   }
+  stringCache[slot] = ascii;
   return ascii;
 }
 
@@ -160,7 +204,9 @@ function compile(
       case "string": {
         const n = local();
         readUint32(n);
-        emit(js`const ${v} = ${n} <= 1 ? "" : rt.readString(view, o, ${n}); o += ${n};`);
+        emit(
+          js`const ${v} = ${n} <= 1 ? "" : rt.readString(bytes, view.byteOffset + o, ${n} - 1); o += ${n};`,
+        );
         advanced(1);
         return v;
       }
@@ -303,7 +349,7 @@ function compile(
     emit(js`let o = 4;`);
     const result = readStruct(rootFields, new Set());
     emit(js`return ${result};`);
-    return out.compile<Decoder>(js`view`, js`rt`) ?? false;
+    return out.compile<Decoder>(js`view`, js`bytes`, js`rt`) ?? false;
   } catch (error) {
     if (error instanceof Unsupported) {
       return false;

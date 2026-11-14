@@ -378,6 +378,19 @@ describe("createRos2CdrDeserializer", () => {
     }
   });
 
+  it("returns the right string when cached strings collide", () => {
+    const definitions: MessageDefinition[] = [{ definitions: [{ name: "s", type: "string" }] }];
+    const writer = new MessageWriter(definitions);
+    const decode = createRos2CdrDeserializer(definitions);
+    // Same length and same sampled bytes, so they share a cache slot; then a non-ASCII twin.
+    const strings = ["ab1defg", "ab2defg", "ab1defg", "ab1d\u00e9g", "ab2defg"];
+    for (let round = 0; round < 3; round++) {
+      for (const s of strings) {
+        expect(decode(writer.writeMessage({ s }))).toEqual({ s });
+      }
+    }
+  });
+
   it("never turns schema text into code", () => {
     const payload = "globalThis.injectedByTest = true";
     const attacks: MessageDefinition[][] = [
