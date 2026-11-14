@@ -17,11 +17,40 @@ import type { PlayerAlert } from "@lichtblick/suite-base/players/types";
 
 const RECORD_PREFIX_LENGTH = 9n; // opcode + content length
 const READ_WINDOW_BYTES = 8n * 1024n * 1024n;
-const SNAPSHOT_VERSION = 1;
-// Where a live reader (see openLiveReader) finds the message indexes and the summary: far past
-// any real file offset, so neither moves as the file and its index grow
+const SNAPSHOT_VERSION = 2;
+// Where the readers built from the index (see #readable) find the message indexes and the summary:
+// far past any real file offset, so neither moves as the file and its index grow. Chunk i's message
+// indexes are at LIVE_INDEX_AT + i * INDEX_STRIDE; they aren't stored but rebuilt from the chunk
+// when a read needs them, so memory doesn't grow with the message count.
 const LIVE_INDEX_AT = 1n << 62n;
+const INDEX_STRIDE = 1n << 31n;
 const LIVE_SUMMARY_AT = 1n << 63n;
+// MessageIndex record: opcode, record length, channel id, records length, then 16 B per message
+const MESSAGE_INDEX_BASE_BYTES = 15n;
+// Message record fields before the data: channel id, sequence, log time, publish time
+const MESSAGE_HEADER_BYTES = 22;
+// Where a message record's log time is: after opcode, length, channel id and sequence
+const LOG_TIME_OFFSET = 15;
+// Chunk record fields before the records, with an empty compression string
+const CHUNK_HEADER_BYTES = 49;
+/**
+ * Chunks read recently, decompressed, with their rebuilt message indexes. Shared by every scanner
+ * in this worker (keys start with the scanner's id), so it bounds memory however many files are
+ * open. Reading a chunk's message indexes puts it here, and the read of the chunk itself right
+ * after takes it from here instead of decompressing it again; so do later reads of the same chunk
+ * (e.g. backfill reads one topic at a time, the player and the block loader read side by side).
+ */
+const CHUNK_CACHE_BYTES = 16 * 1024 * 1024;
+type CachedChunk = {
+  /** Length of the chunk record in the file */
+  length: bigint;
+  /** The chunk record, uncompressed */
+  record: Uint8Array;
+  /** Its message indexes, as the chunk index's offsets point into them */
+  messageIndexes: Uint8Array;
+};
+const chunkCache = new Map<string, { chunk: Promise<CachedChunk>; bytes: number }>();
+let nextScannerId = 0;
 
 /** A reader on a growing index; `grow()` adds what was scanned since and returns the new chunks */
 export type LiveReader = {
@@ -46,7 +75,6 @@ type SnapshotHeader = {
   chunkCount: number;
   corruptRecords: number;
   unchunkedMessageCount: number;
-  messageIndexLength: number;
 };
 
 /**
@@ -73,17 +101,11 @@ export class McapRecoveryScanner {
   public unreadableBytes = 0n;
 
   #decompressHandlers: McapTypes.DecompressHandlers;
+  #id = nextScannerId++;
   #schemas = new Map<number, McapTypes.Schema>();
   #channels = new Map<number, McapTypes.Channel>();
-  // Message indexes are appended as we go; chunk indexes point into these bytes (offsets relative
-  // to their start) and get shifted when the summary is built. The buffer grows by doubling, so a
-  // reader built mid-scan keeps a view of what existed then while the scan appends behind it.
-  // ponytail: the whole message index stays in memory, ~16 B per message (1e8 messages ≈ 1.6 GB,
-  // up to twice that while the buffer doubles, and one typed array caps it). Fixed-size pages
-  // would drop the doubling; delta-encoded entries (~4 B) or an OPFS spill, read back by range
-  // through the live reader's index offsets, would cut the rest. Worth it once files get there.
-  #messageIndexBuffer = new Uint8Array(0);
-  #messageIndexLength = 0;
+  // Only the chunk-level index is kept: offset, length, time range and channels per chunk. Its
+  // message index offsets point at LIVE_INDEX_AT + i * INDEX_STRIDE (see #readable).
   #chunkIndexes: McapTypes.ChunkIndex[] = [];
   #attachmentIndexes: McapTypes.AttachmentIndex[] = [];
   #metadataIndexes: McapTypes.MetadataIndex[] = [];
@@ -117,13 +139,10 @@ export class McapRecoveryScanner {
 
   /**
    * Everything needed to restore this scanner without scanning again: the counters, then the
-   * same tail `toReadable()` serves (message indexes + summary + footer).
+   * same summary and footer `toReadable()` serves.
    */
   public toSnapshot(): Uint8Array {
-    const tail = concat(
-      this.#messageIndexes(),
-      this.#buildSummary(this.offset + BigInt(this.#messageIndexLength), this.offset),
-    );
+    const tail = this.#buildSummary(LIVE_SUMMARY_AT);
     const header = new TextEncoder().encode(
       JSON.stringify({
         version: SNAPSHOT_VERSION,
@@ -132,7 +151,6 @@ export class McapRecoveryScanner {
         chunkCount: this.chunkCount,
         corruptRecords: this.corruptRecords,
         unchunkedMessageCount: this.unchunkedMessageCount,
-        messageIndexLength: this.#messageIndexLength,
       } satisfies SnapshotHeader),
     );
     const out = new Uint8Array(4 + header.byteLength + tail.byteLength);
@@ -162,10 +180,7 @@ export class McapRecoveryScanner {
     scanner.corruptRecords = header.corruptRecords;
     scanner.unchunkedMessageCount = header.unchunkedMessageCount;
 
-    const tail = snapshot.slice(4 + headerLength);
-    scanner.#messageIndexBuffer = tail.subarray(0, header.messageIndexLength);
-    scanner.#messageIndexLength = header.messageIndexLength;
-    const summary = reader(tail.subarray(header.messageIndexLength));
+    const summary = reader(snapshot.slice(4 + headerLength));
     for (;;) {
       const record = parseRecord(summary, true);
       if (!record) {
@@ -182,12 +197,7 @@ export class McapRecoveryScanner {
           scanner.#channels.set(record.id, record);
           break;
         case "ChunkIndex":
-          scanner.#chunkIndexes.push({
-            ...record,
-            messageIndexOffsets: new Map(
-              [...record.messageIndexOffsets].map(([id, offset]) => [id, offset - scanner.offset]),
-            ),
-          });
+          scanner.#chunkIndexes.push(record);
           break;
         case "AttachmentIndex":
           scanner.#attachmentIndexes.push(record);
@@ -271,43 +281,167 @@ export class McapRecoveryScanner {
   }
 
   /**
-   * The records scanned so far followed by message indexes, a summary and a footer built from the
-   * in-memory index. Safe to call mid-scan: it is a snapshot that later scanning doesn't change.
+   * The records scanned so far plus message indexes, a summary and a footer built from the
+   * in-memory index, at fixed offsets past the file (see LIVE_INDEX_AT). Safe to call mid-scan: it
+   * is a snapshot that later scanning doesn't change.
    */
   public toReadable(base: McapTypes.IReadable): McapTypes.IReadable {
-    const prefixLength = this.offset;
-    const tail = [
-      this.#messageIndexes(),
-      this.#buildSummary(prefixLength + BigInt(this.#messageIndexLength), prefixLength),
-    ];
-    const size = tail.reduce((sum, part) => sum + BigInt(part.byteLength), prefixLength);
+    return this.#readable(base, this.#buildSummary(LIVE_SUMMARY_AT));
+  }
+
+  /**
+   * `base` with the message indexes and `summary` past its end. Message indexes are rebuilt from
+   * their chunk on demand, and the chunk is kept decompressed in `chunkCache` for the read of the
+   * chunk itself that follows.
+   */
+  #readable(base: McapTypes.IReadable, summary: Uint8Array): McapTypes.IReadable {
     return {
-      size: async () => size,
+      size: async () => LIVE_SUMMARY_AT + BigInt(summary.byteLength),
       read: async (offset, length) => {
-        const end = offset + length;
-        if (end <= prefixLength) {
-          return await base.read(offset, length);
+        if (offset >= LIVE_SUMMARY_AT) {
+          const start = Number(offset - LIVE_SUMMARY_AT);
+          return summary.subarray(start, start + Number(length));
         }
-        const out = new Uint8Array(Number(length));
-        if (offset < prefixLength) {
-          out.set(await base.read(offset, prefixLength - offset));
+        if (offset >= LIVE_INDEX_AT) {
+          // A read stays within one chunk's message indexes (see ChunkCursor.loadMessageIndexes)
+          const i = (offset - LIVE_INDEX_AT) / INDEX_STRIDE;
+          const { messageIndexes } = await this.#cachedChunk(base, this.#chunkIndexes[Number(i)]!);
+          const start = Number(offset - LIVE_INDEX_AT - i * INDEX_STRIDE);
+          return messageIndexes.subarray(start, start + Number(length));
         }
-        let partStart = prefixLength;
-        for (const part of tail) {
-          const partEnd = partStart + BigInt(part.byteLength);
-          const from = offset > partStart ? offset : partStart;
-          const to = end < partEnd ? end : partEnd;
-          if (from < to) {
-            out.set(
-              part.subarray(Number(from - partStart), Number(to - partStart)),
-              Number(from - offset),
-            );
+        // ponytail: hands the reader the cached chunk record uncompressed, which is longer than
+        // the `length` it asked for; McapIndexedReader parses one record from what it gets, so
+        // that is fine. It costs two copies of the uncompressed chunk (here and in the reader's
+        // parse), ~10% of a first read; a decompressed-chunk hook in @mcap/core would save both.
+        const cached = chunkCache.get(this.#chunkKey(offset));
+        if (cached && cached.bytes > 0) {
+          const chunk = await cached.chunk;
+          if (length === chunk.length) {
+            return chunk.record;
           }
-          partStart = partEnd;
         }
-        return out;
+        return await base.read(offset, length);
       },
     };
+  }
+
+  #chunkKey(chunkStartOffset: bigint): string {
+    return `${this.#id}:${chunkStartOffset}`;
+  }
+
+  /** The chunk decompressed with its message indexes, from `chunkCache` or rebuilt into it */
+  async #cachedChunk(base: McapTypes.IReadable, chunk: McapTypes.ChunkIndex): Promise<CachedChunk> {
+    const key = this.#chunkKey(chunk.chunkStartOffset);
+    const hit = chunkCache.get(key);
+    if (hit) {
+      chunkCache.delete(key); // most recently used goes last
+      chunkCache.set(key, hit);
+      return await hit.chunk;
+    }
+    const entry = { chunk: this.#rebuildChunk(base, chunk), bytes: 0 };
+    chunkCache.set(key, entry);
+    try {
+      const built = await entry.chunk;
+      entry.bytes = built.record.byteLength + built.messageIndexes.byteLength;
+    } catch (error) {
+      if (chunkCache.get(key) === entry) {
+        chunkCache.delete(key);
+      }
+      throw error;
+    }
+    let total = 0;
+    for (const { bytes } of chunkCache.values()) {
+      total += bytes;
+    }
+    // Oldest first; always keeps the newest, however big, and the ones still being read
+    for (const [oldKey, old] of chunkCache) {
+      if (total <= CHUNK_CACHE_BYTES || old === entry) {
+        break;
+      }
+      if (old.bytes > 0) {
+        total -= old.bytes;
+        chunkCache.delete(oldKey);
+      }
+    }
+    return await entry.chunk;
+  }
+
+  /** Reads and decompresses the chunk and writes its message indexes as #addChunk laid them out */
+  async #rebuildChunk(
+    base: McapTypes.IReadable,
+    chunkIndex: McapTypes.ChunkIndex,
+  ): Promise<CachedChunk> {
+    const changed = () =>
+      new Error(`Chunk at offset ${chunkIndex.chunkStartOffset} changed since it was indexed`);
+    // The chunk header is read in place: parseRecord would copy the records
+    const bytes = await base.read(chunkIndex.chunkStartOffset, chunkIndex.chunkLength);
+    const chunkView = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const compressionLength = bytes.byteLength >= 41 ? chunkView.getUint32(37, true) : -1;
+    const recordsAt = 41 + compressionLength + 8;
+    if (
+      compressionLength < 0 ||
+      chunkView.getUint8(0) !== Opcode.CHUNK ||
+      recordsAt > bytes.byteLength ||
+      BigInt(recordsAt) + chunkView.getBigUint64(recordsAt - 8, true) !== chunkIndex.chunkLength
+    ) {
+      throw changed();
+    }
+    const compression = new TextDecoder().decode(bytes.subarray(41, 41 + compressionLength));
+    const compressed = bytes.subarray(recordsAt);
+    const records =
+      compression === ""
+        ? compressed
+        : this.#decompress(compression, compressed, chunkView.getBigUint64(25, true));
+    // Each channel's MessageIndex record where the chunk index points, filled in one walk
+    const messageIndexes = new Uint8Array(Number(chunkIndex.messageIndexLength));
+    const view = new DataView(messageIndexes.buffer);
+    const cursors = new Map<number, { at: number; end: number }>();
+    const offsets = [...chunkIndex.messageIndexOffsets];
+    const indexAt = offsets[0]?.[1] ?? 0n;
+    offsets.forEach(([channelId, offset], i) => {
+      const at = Number(offset - indexAt);
+      const end = i + 1 < offsets.length ? Number(offsets[i + 1]![1] - indexAt) : view.byteLength;
+      view.setUint8(at, Opcode.MESSAGE_INDEX);
+      view.setBigUint64(at + 1, BigInt(end - at - 9), true);
+      view.setUint16(at + 9, channelId, true);
+      view.setUint32(at + 11, end - at - Number(MESSAGE_INDEX_BASE_BYTES), true);
+      cursors.set(channelId, { at: at + Number(MESSAGE_INDEX_BASE_BYTES), end });
+    });
+    const recordsView = new DataView(records.buffer, records.byteOffset, records.byteLength);
+    walkChunk(records, (channelId, offset) => {
+      const cursor = cursors.get(channelId);
+      if (!cursor || cursor.at >= cursor.end) {
+        throw changed();
+      }
+      // Copied as 32-bit words: no BigInt per message. Offsets in a chunk fit in 32 bits.
+      const logTimeAt = offset + LOG_TIME_OFFSET;
+      view.setUint32(cursor.at, recordsView.getUint32(logTimeAt, true), true);
+      view.setUint32(cursor.at + 4, recordsView.getUint32(logTimeAt + 4, true), true);
+      view.setUint32(cursor.at + 8, offset, true);
+      cursor.at += 16;
+    });
+    for (const cursor of cursors.values()) {
+      if (cursor.at !== cursor.end) {
+        throw changed();
+      }
+    }
+
+    if (compression === "") {
+      return { length: chunkIndex.chunkLength, record: bytes, messageIndexes };
+    }
+    // The same chunk record, uncompressed, so the reader doesn't decompress it again
+    const record = new Uint8Array(CHUNK_HEADER_BYTES + records.byteLength);
+    const header = new DataView(record.buffer);
+    header.setUint8(0, Opcode.CHUNK);
+    header.setBigUint64(1, BigInt(record.byteLength - 9), true);
+    header.setBigUint64(9, chunkView.getBigUint64(9, true), true); // message start time
+    header.setBigUint64(17, chunkView.getBigUint64(17, true), true); // message end time
+    header.setBigUint64(25, BigInt(records.byteLength), true);
+    header.setUint32(33, 0, true); // no CRC: it was checked when the chunk was indexed
+    header.setUint32(37, 0, true); // compression: ""
+    header.setBigUint64(41, BigInt(records.byteLength), true);
+    record.set(records, CHUNK_HEADER_BYTES);
+    return { length: chunkIndex.chunkLength, record, messageIndexes };
   }
 
   /**
@@ -324,33 +458,16 @@ export class McapRecoveryScanner {
     let chunks = this.#chunkIndexes.length;
     let attachments = this.#attachmentIndexes.length;
     let metadata = this.#metadataIndexes.length;
-    const summary = this.#buildSummary(LIVE_SUMMARY_AT, LIVE_INDEX_AT);
     const indexedReader = await McapIndexedReader.Initialize({
       decompressHandlers,
-      readable: {
-        size: async () => LIVE_SUMMARY_AT + BigInt(summary.byteLength),
-        read: async (offset, length) => {
-          if (offset >= LIVE_SUMMARY_AT) {
-            const start = Number(offset - LIVE_SUMMARY_AT);
-            return summary.subarray(start, start + Number(length));
-          }
-          if (offset >= LIVE_INDEX_AT) {
-            // The current buffer: it is reallocated as it grows
-            const start = Number(offset - LIVE_INDEX_AT);
-            return this.#messageIndexBuffer.subarray(start, start + Number(length));
-          }
-          return await base.read(offset, length);
-        },
-      },
+      readable: this.#readable(base, this.#buildSummary(LIVE_SUMMARY_AT)),
     });
     // ponytail: McapIndexedReader has no API to append to its index, so this writes to the fields
     // Initialize built (readMessages reads them on every call). Its private time range stays at
     // what was indexed at open; it is only a default for reads without bounds, so pass bounds.
     const index = indexedReader as unknown as MutableIndex;
     const grow = (): McapTypes.ChunkIndex[] => {
-      const added = this.#chunkIndexes
-        .slice(chunks)
-        .map((chunk) => shiftMessageIndexOffsets(chunk, LIVE_INDEX_AT));
+      const added = this.#chunkIndexes.slice(chunks);
       // Loops, not push(...): a spread of a long list overflows the call stack
       for (const chunk of added) {
         index.chunkIndexes.push(chunk);
@@ -502,42 +619,49 @@ export class McapRecoveryScanner {
     }
   }
 
-  #addChunk(chunk: McapTypes.Chunk, offset: bigint, length: bigint): void {
-    let records = chunk.records;
-    if (chunk.compression !== "") {
-      const decompress = this.#decompressHandlers[chunk.compression];
-      if (!decompress) {
-        throw new Error(`Unsupported compression ${chunk.compression}`);
-      }
-      records = decompress(chunk.records, chunk.uncompressedSize);
+  #decompress(compression: string, records: Uint8Array, uncompressedSize: bigint): Uint8Array {
+    if (compression === "") {
+      return records;
     }
+    const decompress = this.#decompressHandlers[compression];
+    if (!decompress) {
+      throw new Error(`Unsupported compression ${compression}`);
+    }
+    return decompress(records, uncompressedSize);
+  }
+
+  #addChunk(chunk: McapTypes.Chunk, offset: bigint, length: bigint): void {
+    const records = this.#decompress(chunk.compression, chunk.records, chunk.uncompressedSize);
     if (chunk.uncompressedCrc !== 0 && crc32(records) !== chunk.uncompressedCrc) {
       throw new Error("Chunk CRC mismatch");
     }
 
     // Parse everything before touching the index, so a chunk that fails halfway adds nothing.
-    const schemas: McapTypes.Schema[] = [];
-    const channels: McapTypes.Channel[] = [];
-    const messagesByChannel = new Map<number, [logTime: bigint, offset: bigint][]>();
-    const chunkReader = reader(records);
-    while (chunkReader.bytesRemaining() > 0) {
-      const recordOffset = BigInt(chunkReader.offset);
-      const record = parseRecord(chunkReader, true);
-      if (!record) {
-        throw new Error("Chunk ends in the middle of a record");
+    // Per channel only its message count and time range: the offsets are rebuilt when needed.
+    const messagesByChannel = new Map<number, { count: number; start: bigint; end: bigint }>();
+    const recordsView = new DataView(records.buffer, records.byteOffset, records.byteLength);
+    const { schemas, channels } = walkChunk(records, (channelId, recordOffset) => {
+      const logTime = recordsView.getBigUint64(recordOffset + LOG_TIME_OFFSET, true);
+      const messages = messagesByChannel.get(channelId);
+      if (!messages) {
+        messagesByChannel.set(channelId, { count: 1, start: logTime, end: logTime });
+        return;
       }
-      if (record.type === "Schema") {
-        schemas.push(record);
-      } else if (record.type === "Channel") {
-        channels.push(record);
-      } else if (record.type === "Message") {
-        let messages = messagesByChannel.get(record.channelId);
-        if (!messages) {
-          messages = [];
-          messagesByChannel.set(record.channelId, messages);
-        }
-        messages.push([record.logTime, recordOffset]);
-      }
+      messages.count++;
+      messages.start = logTime < messages.start ? logTime : messages.start;
+      messages.end = logTime > messages.end ? logTime : messages.end;
+    });
+
+    // Laid out as #rebuildChunk writes them: in this channel order, each record after the last
+    const indexAt = LIVE_INDEX_AT + BigInt(this.#chunkIndexes.length) * INDEX_STRIDE;
+    const messageIndexOffsets = new Map<number, bigint>();
+    let messageIndexLength = 0n;
+    for (const [channelId, { count }] of messagesByChannel) {
+      messageIndexOffsets.set(channelId, indexAt + messageIndexLength);
+      messageIndexLength += MESSAGE_INDEX_BASE_BYTES + 16n * BigInt(count);
+    }
+    if (messageIndexLength >= INDEX_STRIDE) {
+      throw new Error("Too many messages in one chunk");
     }
 
     this.chunkCount++;
@@ -553,20 +677,14 @@ export class McapRecoveryScanner {
 
     let start: bigint | undefined;
     let end: bigint | undefined;
-    const messageIndexOffsets = new Map<number, bigint>();
-    const messageIndexes = new McapRecordBuilder();
     for (const [channelId, messages] of messagesByChannel) {
-      messages.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
-      start = start == undefined || messages[0]![0] < start ? messages[0]![0] : start;
-      const last = messages[messages.length - 1]![0];
-      end = end == undefined || last > end ? last : end;
-      messageIndexOffsets.set(channelId, BigInt(this.#messageIndexLength + messageIndexes.length));
-      messageIndexes.writeMessageIndex({ channelId, records: messages });
+      start = start == undefined || messages.start < start ? messages.start : start;
+      end = end == undefined || messages.end > end ? messages.end : end;
       this.#channelMessageCounts.set(
         channelId,
-        (this.#channelMessageCounts.get(channelId) ?? 0n) + BigInt(messages.length),
+        (this.#channelMessageCounts.get(channelId) ?? 0n) + BigInt(messages.count),
       );
-      this.messageCount += BigInt(messages.length);
+      this.messageCount += BigInt(messages.count);
     }
     this.#messageStartTime =
       this.#messageStartTime == undefined || start! < this.#messageStartTime
@@ -580,31 +698,15 @@ export class McapRecoveryScanner {
       chunkStartOffset: offset,
       chunkLength: length,
       messageIndexOffsets,
-      messageIndexLength: BigInt(messageIndexes.length),
+      messageIndexLength,
       compression: chunk.compression,
       compressedSize: BigInt(chunk.records.byteLength),
       uncompressedSize: chunk.uncompressedSize,
     });
-    const bytes = messageIndexes.bufferView();
-    const needed = this.#messageIndexLength + bytes.byteLength;
-    if (needed > this.#messageIndexBuffer.byteLength) {
-      const grown = new Uint8Array(Math.max(needed, this.#messageIndexBuffer.byteLength * 2));
-      grown.set(this.#messageIndexes());
-      this.#messageIndexBuffer = grown;
-    }
-    this.#messageIndexBuffer.set(bytes, this.#messageIndexLength);
-    this.#messageIndexLength = needed;
   }
 
-  #messageIndexes(): Uint8Array {
-    return this.#messageIndexBuffer.subarray(0, this.#messageIndexLength);
-  }
-
-  /**
-   * DataEnd, summary, footer and magic, to be placed at `at`; the message indexes are at
-   * `indexesAt`.
-   */
-  #buildSummary(at: bigint, indexesAt: bigint): Uint8Array {
+  /** DataEnd, summary, footer and magic, to be placed at `at` */
+  #buildSummary(at: bigint): Uint8Array {
     const builder = new McapRecordBuilder();
     builder.writeDataEnd({ dataSectionCrc: 0 });
     const summaryStart = at + BigInt(builder.length);
@@ -615,7 +717,7 @@ export class McapRecoveryScanner {
       builder.writeChannel(channel);
     }
     for (const chunkIndex of this.#chunkIndexes) {
-      builder.writeChunkIndex(shiftMessageIndexOffsets(chunkIndex, indexesAt));
+      builder.writeChunkIndex(chunkIndex);
     }
     for (const attachmentIndex of this.#attachmentIndexes) {
       builder.writeAttachmentIndex(attachmentIndex);
@@ -673,21 +775,44 @@ export class McapRecoveryScanner {
   }
 }
 
-/** The chunk index with its message index offsets (relative to the message indexes) placed at `at` */
-function shiftMessageIndexOffsets(chunk: McapTypes.ChunkIndex, at: bigint): McapTypes.ChunkIndex {
-  return {
-    ...chunk,
-    messageIndexOffsets: new Map(
-      [...chunk.messageIndexOffsets].map(([id, offset]) => [id, offset + at]),
-    ),
-  };
-}
-
-function concat(a: Uint8Array, b: Uint8Array): Uint8Array {
-  const out = new Uint8Array(a.byteLength + b.byteLength);
-  out.set(a);
-  out.set(b, a.byteLength);
-  return out;
+/**
+ * Calls `onMessage` for each message in a chunk's records, with the offset of its record in them
+ * (its log time is at offset + LOG_TIME_OFFSET), and returns the schemas and channels in it.
+ * Throws if the records end in the middle of one.
+ */
+function walkChunk(
+  records: Uint8Array,
+  onMessage: (channelId: number, offset: number) => void,
+): { schemas: McapTypes.Schema[]; channels: McapTypes.Channel[] } {
+  const schemas: McapTypes.Schema[] = [];
+  const channels: McapTypes.Channel[] = [];
+  const view = new DataView(records.buffer, records.byteOffset, records.byteLength);
+  for (let offset = 0; offset < records.byteLength; ) {
+    if (offset + 9 > records.byteLength) {
+      throw new Error("Chunk ends in the middle of a record");
+    }
+    const opcode = view.getUint8(offset);
+    const end = offset + 9 + Number(view.getBigUint64(offset + 1, true));
+    if (end > records.byteLength) {
+      throw new Error("Chunk ends in the middle of a record");
+    }
+    // Messages are most of the records: read their header in place, without copying their data
+    if (opcode === Opcode.MESSAGE) {
+      if (end - offset < 9 + MESSAGE_HEADER_BYTES) {
+        throw new Error("Message record is too short");
+      }
+      onMessage(view.getUint16(offset + 9, true), offset);
+    } else if (opcode === Opcode.SCHEMA || opcode === Opcode.CHANNEL) {
+      const record = parseRecord(reader(records.subarray(offset, end)), true);
+      if (record?.type === "Schema") {
+        schemas.push(record);
+      } else if (record?.type === "Channel") {
+        channels.push(record);
+      }
+    }
+    offset = end;
+  }
+  return { schemas, channels };
 }
 
 function reader(bytes: Uint8Array): McapByteReader {

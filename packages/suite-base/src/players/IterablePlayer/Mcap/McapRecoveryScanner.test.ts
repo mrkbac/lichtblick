@@ -459,3 +459,100 @@ describe("McapIndexedIterableSource read errors", () => {
     expect(recover).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("McapRecoveryScanner message indexes", () => {
+  /** One chunk with `count` messages alternating between two topics, without a footer */
+  async function oneChunk(count: number): Promise<Uint8Array<ArrayBuffer>> {
+    const buffer = new TempBuffer();
+    const writer = new McapWriter({ writable: buffer, chunkSize: 1 << 30 });
+    await writer.start({ library: "test", profile: "" });
+    const channels = [];
+    for (const topic of ["/a", "/b"]) {
+      channels.push(
+        await writer.registerChannel({
+          schemaId: 0,
+          topic,
+          messageEncoding: "json",
+          metadata: new Map(),
+        }),
+      );
+    }
+    for (let i = 0; i < count; i++) {
+      const time = BigInt(count - i); // newest first: the index must still come out sorted
+      await writer.addMessage({
+        channelId: channels[i % 2]!,
+        sequence: i,
+        logTime: time,
+        publishTime: time,
+        data: payload(1),
+      });
+    }
+    await writer.end();
+    const bytes = buffer.get();
+    return bytes.slice(0, bytes.byteLength - 8); // no footer magic: recover it
+  }
+
+  it("keeps the same index in memory however many messages a chunk holds", async () => {
+    // Given a chunk with 10 messages and one with 100,000
+    const few = await scan(await oneChunk(10));
+    const many = await scan(await oneChunk(100_000));
+
+    // Then both keep the same: the snapshot holds everything a scanner keeps in memory. Only the
+    // file offset in its header has more digits (an index of every message would add 1.6 MB).
+    expect(many.messageCount).toBe(100_000n);
+    expect(many.toSnapshot().byteLength - few.toSnapshot().byteLength).toBeLessThan(8);
+  });
+
+  it("rebuilds a chunk's message indexes when it is read", async () => {
+    // Given a recovered chunk with messages on two topics
+    const bytes = await oneChunk(1000);
+    const scanner = await scan(bytes);
+    const reader = await McapIndexedReader.Initialize({
+      readable: scanner.toReadable(readableOf(bytes)),
+    });
+
+    // When one topic is read
+    const times = [];
+    for await (const message of reader.readMessages({ topics: ["/b"] })) {
+      times.push(message.logTime);
+    }
+
+    // Then all of its messages come in log time order
+    expect(times).toHaveLength(500);
+    expect(times).toEqual([...times].sort((a, b) => (a < b ? -1 : 1)));
+  });
+
+  it("reads each chunk from the file once, however often it is read", async () => {
+    // Given a live reader on a recovered file that counts reads of its chunks
+    const bytes = await recording(4);
+    const scanner = await scan(bytes);
+    const recovered = await McapIndexedReader.Initialize({
+      readable: scanner.toReadable(readableOf(bytes)),
+    });
+    const starts = new Set(recovered.chunkIndexes.map((chunk) => chunk.chunkStartOffset));
+    let chunkReads = 0;
+    const base = readableOf(bytes);
+    const counting: McapTypes.IReadable = {
+      size: async () => await base.size(),
+      read: async (offset, length) => {
+        chunkReads += starts.has(offset) ? 1 : 0;
+        return await base.read(offset, length);
+      },
+    };
+    const { reader } = await scanner.openLiveReader(counting, await loadDecompressHandlers());
+
+    // When every message is read twice (e.g. backfill and playback)
+    const readAll = async () => {
+      const read = [];
+      for await (const message of reader.readMessages({ startingAt: 0n })) {
+        read.push((JSON.parse(new TextDecoder().decode(message.data)) as { v: number }).v);
+      }
+      return read;
+    };
+    const values = [...(await readAll()), ...(await readAll())];
+
+    // Then each chunk was read once: for its message indexes, and kept for its messages
+    expect(values).toEqual([1, 2, 3, 4, 1, 2, 3, 4]);
+    expect(chunkReads).toBe(4);
+  });
+});

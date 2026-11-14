@@ -198,7 +198,7 @@ export class McapIterableSource implements ISerializedIterableSource {
       return {
         inner: new McapIndexedIterableSource(result.reader, {
           prefetch: (ranges) => {
-            // A rebuilt index keeps message indexes in memory past the end of the real bytes
+            // A rebuilt index has its message indexes past the end of the real bytes
             const end = this.#recovery?.offset;
             remote.prefetch(
               end == undefined
