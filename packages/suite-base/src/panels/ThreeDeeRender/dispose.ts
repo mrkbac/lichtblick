@@ -32,6 +32,10 @@ export function disposeMeshesRecursive(object: THREE.Object3D): void {
       for (const material of materials) {
         disposeMaterial(material);
       }
+    } else if (child instanceof THREE.Line) {
+      // e.g. the edge outlines ModelCache adds to every mesh. Their material is shared, so only
+      // the geometry belongs to this object.
+      child.geometry.dispose();
     }
   });
 }

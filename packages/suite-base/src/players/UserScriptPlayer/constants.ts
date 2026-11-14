@@ -54,8 +54,10 @@ export const ERROR_CODES = {
 };
 
 /**
- * Maximum number of unconsumed results kept in the shared replay buffer per virtual topic.
- * Once the gap between the producer head and the slowest consumer exceeds this limit,
- * the slowest consumer is evicted to bound memory.
+ * Maximum number of results kept in the shared replay buffer of a script output topic. When the
+ * slowest consumer is this far behind, the producer waits for it (backpressure).
  */
 export const MAX_GLOBAL_BUFFER_SIZE = 100;
+
+/** Messages sent to a runtime worker in one round trip while preloading script output. */
+export const TRANSFORM_BATCH_SIZE = 256;

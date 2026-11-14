@@ -1,3 +1,5 @@
+/** @jest-environment jsdom */
+
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
@@ -13,7 +15,13 @@
 //   This source code is licensed under the Apache License, Version 2.0,
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
-import { containsFuncDeclaration, stringifyFuncsInObject, requireImplementation } from "./registry";
+import {
+  containsFuncDeclaration,
+  processMessages,
+  registerScript,
+  requireImplementation,
+  stringifyFuncsInObject,
+} from "./registry";
 
 const someFunc = (a: number, b: number) => a + b;
 const otherArgs = [1, false, "abc"];
@@ -113,5 +121,27 @@ describe("requireImplementation", () => {
     );
 
     expect(requireImplementation("main", map)).toEqual({ y: "hello" });
+  });
+});
+
+describe("processMessages", () => {
+  it("snapshots each output when the script reuses one mutable object", () => {
+    registerScript({
+      projectCode: undefined,
+      scriptCode: `
+        const out = { value: 0 };
+        exports.default = (event) => { out.value = event.message.n; log(out); return out; };
+      `,
+    });
+    const outputs = processMessages({
+      messages: [1, 2, 3].map((n) => ({ message: { n } })),
+      globalVariables: {},
+    });
+    expect(outputs.map((o) => o.message)).toEqual([{ value: 1 }, { value: 2 }, { value: 3 }]);
+    expect(outputs.map((o) => o.userScriptLogs[0]?.value)).toEqual([
+      { value: 1 },
+      { value: 2 },
+      { value: 3 },
+    ]);
   });
 });

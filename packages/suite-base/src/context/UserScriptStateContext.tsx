@@ -36,6 +36,18 @@ export type UserScriptStore = {
   };
 };
 
+/** Logs kept per script; older entries are dropped. A script logging every message is common. */
+export const MAX_USER_SCRIPT_LOGS = 1000;
+
+export function appendLogs(
+  prev: readonly UserScriptLog[],
+  logs: readonly UserScriptLog[],
+): readonly UserScriptLog[] {
+  const keepPrev = Math.max(0, MAX_USER_SCRIPT_LOGS - logs.length);
+  const tail = keepPrev === 0 ? [] : prev.slice(-keepPrev);
+  return tail.concat(logs.length > MAX_USER_SCRIPT_LOGS ? logs.slice(-MAX_USER_SCRIPT_LOGS) : logs);
+}
+
 const UserScriptStateContext = createContext<StoreApi<UserScriptStore> | undefined>(undefined);
 UserScriptStateContext.displayName = "UserScriptStateContext";
 
@@ -72,7 +84,7 @@ function create() {
                 [scriptId]: {
                   diagnostics: [],
                   ...prevState.state.scriptStates[scriptId],
-                  logs: (prevState.state.scriptStates[scriptId]?.logs ?? []).concat(logs), // add logs
+                  logs: appendLogs(prevState.state.scriptStates[scriptId]?.logs ?? [], logs),
                 },
               },
             },

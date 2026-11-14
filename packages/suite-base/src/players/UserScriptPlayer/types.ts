@@ -51,24 +51,20 @@ export type ScriptData = {
   globalVariables: readonly string[];
 };
 
+export type ProcessMessages = (
+  messageEvents: readonly MessageEvent[],
+  globalVariables: GlobalVariables,
+) => Promise<(MessageEvent | undefined)[]>;
+
 export type ScriptRegistration = {
   scriptId: string;
   scriptData: ScriptData;
   inputs: readonly string[];
   output: Topic;
-  processBlockMessage: (
-    messageEvent: MessageEvent,
-    globalVariables: GlobalVariables,
-  ) => Promise<MessageEvent | undefined>;
-  processMessage: (
-    messageEvent: MessageEvent,
-    globalVariables: GlobalVariables,
-  ) => Promise<MessageEvent | undefined>;
+  /** Runs the script on `messageEvents` (one worker round trip); one result per input. */
+  processMessages: ProcessMessages;
   buildMessageProcessor: () => {
-    processMessage: (
-      messageEvent: MessageEvent,
-      globalVariables: GlobalVariables,
-    ) => Promise<MessageEvent | undefined>;
+    processMessages: ProcessMessages;
     terminate: () => void;
   };
   terminate: () => void;

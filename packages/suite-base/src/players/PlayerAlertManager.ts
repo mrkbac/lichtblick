@@ -7,6 +7,16 @@
 
 import { PlayerAlert } from "@lichtblick/suite-base/players/types";
 
+// What the user sees of an alert; two alerts that look the same are the same alert.
+function sameAlert(a: PlayerAlert, b: PlayerAlert): boolean {
+  return (
+    a.severity === b.severity &&
+    a.message === b.message &&
+    a.tip === b.tip &&
+    a.error?.message === b.error?.message
+  );
+}
+
 /**
  * Manages a set of PlayerAlerts keyed by ID. Calls to alerts() will return the same object as
  * long as alerts have not been added/removed; this helps the player pipeline to know when it
@@ -24,10 +34,22 @@ export default class PlayerAlertManager {
     return (this.#alerts ??= Array.from(this.#alertsById.values()));
   }
 
-  public addAlert(id: string, alert: PlayerAlert): void {
+  /**
+   * Set the alert for `id`. An alert is identified by its id plus what the user sees (severity,
+   * message, tip, error message): setting an identical alert again is a no-op, so a source that
+   * fails on every message doesn't log or re-render once per message.
+   *
+   * @returns true if the alerts changed
+   */
+  public addAlert(id: string, alert: PlayerAlert): boolean {
+    const existing = this.#alertsById.get(id);
+    if (existing != undefined && sameAlert(existing, alert)) {
+      return false;
+    }
     console[alert.severity].call(console, "Player alert", id, alert);
     this.#alertsById.set(id, alert);
     this.#alerts = undefined;
+    return true;
   }
 
   public getAlert(id: string): PlayerAlert | undefined {
