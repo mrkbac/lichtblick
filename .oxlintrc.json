@@ -244,6 +244,7 @@
         "licenseType": "MPL-2.0"
       }
     ],
+    "@lichtblick/heavy-imports": "error",
     "@lichtblick/strict-equality": "error",
     "@lichtblick/no-return-promise-resolve": "error",
     "@lichtblick/no-getters-setters": "error",

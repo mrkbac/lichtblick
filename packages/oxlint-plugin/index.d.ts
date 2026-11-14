@@ -6,6 +6,7 @@ import type { RuleTester } from "oxlint/plugins-dev";
 type Rule = Parameters<RuleTester["run"]>[1];
 
 type RuleName =
+  | "heavy-imports"
   | "license-header"
   | "link-target"
   | "lodash-ramda-imports"

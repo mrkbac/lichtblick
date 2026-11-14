@@ -5,6 +5,7 @@
 module.exports = {
   meta: { name: "@lichtblick" },
   rules: {
+    "heavy-imports": require("./heavy-imports"),
     "license-header": require("./license-header"),
     "link-target": require("./link-target"),
     "lodash-ramda-imports": require("./lodash-ramda-imports"),

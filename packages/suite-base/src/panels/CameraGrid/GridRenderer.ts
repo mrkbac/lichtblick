@@ -6,7 +6,7 @@ import { Time, toNanoSec } from "@foxglove/rostime";
 import { VideoPlayer, canonicalVideoCodec, isVideoKeyframe } from "@lichtblick/den/video";
 import Logger from "@lichtblick/log";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
-import { PartialMessage } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtension";
+import type { PartialMessage } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtension";
 import { normalizeAnnotations } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/annotations/normalizeAnnotations";
 import { WorkerImageDecoder } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/WorkerImageDecoder";
 import { isCompressedDepthFormat } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/decodeCompressedDepth";

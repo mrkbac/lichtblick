@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import {
+  type Compilation,
   type Configuration,
   type DevServer,
   type RspackPluginInstance,
@@ -18,6 +19,64 @@ import { generateSW } from "workbox-build";
 import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
 import { isOverlayRuntimeError, makeConfig } from "@lichtblick/suite-base/rspack.ts";
 import * as palette from "@lichtblick/theme/src/palette.ts";
+
+/**
+ * Upper bound for the JS the web app loads before its first render: the entry chunk plus the
+ * chunks index.tsx imports while starting (named "startup-*"). The build fails above it, so a
+ * shared module that pulls in a panel's heavy dependencies (three.js, monaco, a player) is caught
+ * in CI instead of slowing every start. Raise it only for code that is needed to show the app.
+ */
+const STARTUP_JS_BUDGET_BYTES = 4_300_000;
+
+/**
+ * Files (name to size) the app needs to start: the entry chunk group plus the "startup-*" groups
+ * index.tsx imports, with their fonts and other assets. Source maps excluded.
+ */
+function startupAssets(compilation: Compilation): Map<string, number> {
+  const { namedChunkGroups = {} } = compilation.getStats().toJson({
+    all: false,
+    chunkGroups: true,
+    assets: true,
+  });
+  if (!namedChunkGroups["startup-app"] || !namedChunkGroups["startup-webroot"]) {
+    throw new Error("The startup-* chunk groups are missing, see index.tsx");
+  }
+  const files = new Map<string, number>();
+  for (const [name, group] of Object.entries(namedChunkGroups)) {
+    if (name === "main" || name.startsWith("startup-")) {
+      for (const asset of [...(group.assets ?? []), ...(group.auxiliaryAssets ?? [])]) {
+        if (!asset.name.endsWith(".map")) {
+          files.set(asset.name, asset.size ?? 0);
+        }
+      }
+    }
+  }
+  return files;
+}
+
+/** Fails the build when the startup chunks exceed STARTUP_JS_BUDGET_BYTES. */
+const startupBudgetPlugin: RspackPluginInstance = {
+  apply: (compiler) => {
+    compiler.hooks.afterEmit.tap("StartupBudget", (compilation) => {
+      const files = new Map(
+        [...startupAssets(compilation)].filter(([file]) => file.endsWith(".js")),
+      );
+      const total = [...files.values()].reduce((sum, size) => sum + size, 0);
+      if (total > STARTUP_JS_BUDGET_BYTES) {
+        const largest = [...files]
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([file, size]) => `${file} ${(size / 1e6).toFixed(2)} MB`);
+        throw new Error(
+          `Startup JS is ${(total / 1e6).toFixed(2)} MB, over the ${(STARTUP_JS_BUDGET_BYTES / 1e6).toFixed(2)} MB budget. Largest: ${largest.join(", ")}`,
+        );
+      }
+    });
+  },
+};
+
+/** Cache for hashed build files. Must match the cache name in index.tsx. */
+const RUNTIME_CACHE_NAME = "lichtblick-assets";
 
 export type ConfigParams = {
   /** Directory to find `entrypoint` and `tsconfig.json`. */
@@ -75,23 +134,63 @@ export const mainConfig =
 
     // Runs on the files on disk after emit, so only for real builds (the dev server serves from memory)
     if (!isDev && !isServe) {
-      // Precache the whole build so the installed PWA works fully offline, including lazy-loaded
-      // panels, workers and wasm. The new version activates once all app windows are closed, or
-      // when the user clicks the update button in the app bar (see useServiceWorkerUpdate.ts).
+      plugins.push(startupBudgetPlugin);
+      // Precache only what the app needs to start (shell and startup chunks, ~4 MB), so an
+      // installed update starts offline too. Every other build file is hashed and cached on first
+      // use (CacheFirst), so a first visit or a deploy no longer downloads the whole build
+      // (~35 MB). index.tsx copies the chunks a first, uncontrolled visit loaded into the same
+      // cache. Panels never opened online with this version are not available offline.
+      // The new version activates once all app windows are closed, or when the user clicks the
+      // update button in the app bar (see useServiceWorkerUpdate.ts).
       plugins.push({
         apply: (compiler) => {
-          compiler.hooks.afterEmit.tapPromise("GenerateSW", async () => {
+          compiler.hooks.afterEmit.tapPromise("GenerateSW", async (compilation) => {
             await generateSW({
               globDirectory: params.outputPath,
-              globPatterns: ["**/*"],
-              globIgnores: ["**/*.map", "**/*.LICENSE.txt"],
+              globPatterns: [
+                "index.html",
+                "main.*.js",
+                "manifest.webmanifest",
+                "view-link-redirect.js",
+                "favicon*",
+                "*icon-*.png",
+                // startup waits for every font face (see waitForFonts.ts)
+                "*.woff2",
+                ...startupAssets(compilation).keys(),
+              ],
+              // hashed names change with their content: fetch them as is, so the browser can reuse
+              // what the page already downloaded instead of loading every file a second time
+              dontCacheBustURLsMatching: /[0-9a-f]{16}\.\w+$/,
               swDest: path.join(params.outputPath, "sw.js"),
               // serve the precached app shell for any navigation (deep links, file_handlers launches)
               navigateFallback: "index.html",
               // registers its fetch listener first, so /<org>/view links redirect before the fallback
               importScripts: ["view-link-redirect.js"],
-              maximumFileSizeToCacheInBytes: 100 * 1024 * 1024,
               cleanupOutdatedCaches: true,
+              runtimeCaching: [
+                {
+                  // content-hashed file names never change content, so the cached copy is final
+                  urlPattern: ({ url, sameOrigin }) =>
+                    sameOrigin && /\/[\w.-]*[0-9a-f]{16}\.\w+$/.test(url.pathname),
+                  handler: "CacheFirst",
+                  options: {
+                    cacheName: RUNTIME_CACHE_NAME,
+                    // bounds the files kept from older deploys; a full build has ~300
+                    expiration: { maxEntries: 1500, purgeOnQuotaError: true },
+                    plugins: [
+                      {
+                        // The host answers unknown paths (e.g. a chunk removed by a newer deploy)
+                        // with index.html and status 200. Never cache that as the file.
+                        cacheWillUpdate: async ({ response }) =>
+                          response.ok &&
+                          response.headers.get("content-type")?.startsWith("text/html") !== true
+                            ? response
+                            : null,
+                      },
+                    ],
+                  },
+                },
+              ],
             });
           });
         },

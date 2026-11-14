@@ -521,18 +521,32 @@ export default function PlayerManager(
     return _.sortBy(sources, (source) => (source.pinned === true ? 0 : 1));
   }, [recents, currentRecentId]);
 
-  const value: PlayerSelection = {
-    selectSource,
-    closeSource,
-    selectRecent,
-    removeRecent,
-    togglePinRecent,
-    clearRecents,
-    selectedSource,
-    selectedFiles,
-    availableSources: playerSources,
-    recentSources,
-  };
+  const value = useMemo(
+    (): PlayerSelection => ({
+      selectSource,
+      closeSource,
+      selectRecent,
+      removeRecent,
+      togglePinRecent,
+      clearRecents,
+      selectedSource,
+      selectedFiles,
+      availableSources: playerSources,
+      recentSources,
+    }),
+    [
+      selectSource,
+      closeSource,
+      selectRecent,
+      removeRecent,
+      togglePinRecent,
+      clearRecents,
+      selectedSource,
+      selectedFiles,
+      playerSources,
+      recentSources,
+    ],
+  );
 
   return (
     <>

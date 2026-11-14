@@ -34,18 +34,7 @@ export type CameraState = {
   far: number;
 };
 
-export const DEFAULT_CAMERA_STATE: CameraState = {
-  distance: 20,
-  perspective: true,
-  phi: 60,
-  target: [0, 0, 0],
-  targetOffset: [0, 0, 0],
-  targetOrientation: [0, 0, 0, 1],
-  thetaOffset: 45,
-  fovy: 45,
-  near: 0.5,
-  far: 5000,
-};
+export { DEFAULT_CAMERA_STATE } from "./defaults";
 
 export type OrbitControlsConfig = {
   screenSpacePanning: boolean;
