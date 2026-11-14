@@ -18,6 +18,7 @@ export function isTiff(data: Uint8Array): boolean {
  */
 // ponytail: decodes on the main thread; one-off per texture, move to a worker if large TIFFs stutter.
 export async function tiffToPng(data: Uint8Array): Promise<Blob> {
+  assertIfdChainTerminates(data);
   const buffer = data.slice().buffer;
   const [ifd] = UTIF.decode(buffer);
   if (!ifd) {
@@ -36,4 +37,26 @@ export async function tiffToPng(data: Uint8Array): Promise<Blob> {
     0,
   );
   return await canvas.convertToBlob({ type: "image/png" });
+}
+
+/**
+ * UTIF follows the top-level directory chain without a cycle or bounds check, so a malformed file
+ * would hang the renderer. Walk the chain first and reject loops and out-of-range offsets.
+ */
+function assertIfdChainTerminates(data: Uint8Array): void {
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  const littleEndian = data[0] === 0x49;
+  const seen = new Set<number>();
+  let offset = data.byteLength >= 8 ? view.getUint32(4, littleEndian) : -1;
+  while (offset !== 0) {
+    if (offset < 0 || offset + 2 > data.byteLength || seen.has(offset)) {
+      throw new Error("Malformed TIFF directory chain");
+    }
+    seen.add(offset);
+    const nextOffsetAt = offset + 2 + view.getUint16(offset, littleEndian) * 12;
+    if (nextOffsetAt + 4 > data.byteLength) {
+      throw new Error("Malformed TIFF directory chain");
+    }
+    offset = view.getUint32(nextOffsetAt, littleEndian);
+  }
 }

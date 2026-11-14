@@ -315,7 +315,8 @@ describe("model dependencies", () => {
         images: [{ uri: "textures/paint.tiff" }, { uri: "textures/broken.tif" }],
       })!,
       "package://robot/textures/paint.tiff": new Uint8Array(UTIF.encodeImage(pixels, 2, 1)),
-      "package://robot/textures/broken.tif": new Uint8Array([0x49, 0x49, 42, 0, 1]),
+      "package://robot/textures/broken.tif": // Its only directory links back to itself, which would hang an unguarded decoder.
+        new Uint8Array([0x49, 0x49, 42, 0, 8, 0, 0, 0, 0, 0, 8, 0, 0, 0]),
     });
     const error = vi.fn();
     // When

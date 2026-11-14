@@ -406,9 +406,11 @@ export class ModelCache {
           const resolved = new URL(resource, url).toString();
           try {
             const asset = await this.#fetchAsset(resolved, { referenceUrl: url });
-            const blob = isTiff(asset.data)
-              ? await tiffToPng(asset.data)
-              : new Blob([new Uint8Array(asset.data)], { type: asset.mediaType });
+            // Only textures are converted; binary buffers may start with TIFF-like bytes.
+            const blob =
+              !requiredResources.includes(resource) && isTiff(asset.data)
+                ? await tiffToPng(asset.data)
+                : new Blob([new Uint8Array(asset.data)], { type: asset.mediaType });
             return [resolved, blob] as const;
           } catch (error) {
             if (requiredResources.includes(resource)) {
