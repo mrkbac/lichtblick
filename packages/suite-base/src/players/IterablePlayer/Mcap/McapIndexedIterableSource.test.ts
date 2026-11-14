@@ -47,8 +47,19 @@ describe("McapIndexedIterableSource", () => {
     const source = new McapIndexedIterableSource(reader);
     const before = await source.initialize();
 
-    // When the schema shows up (e.g. repeated in a later chunk of a growing index)
+    // When the schema shows up (e.g. repeated in a later chunk of a growing index), and the first
+    // update with it fails reading metadata
     schemas.set(schemaId, schema);
+    const readMetadata = vi.spyOn(reader, "readMetadata").mockImplementationOnce(() => {
+      throw new Error("read failed");
+    });
+    (reader.metadataIndexes as unknown as McapTypes.MetadataIndex[]).push({
+      offset: 0n,
+      length: 0n,
+      name: "example",
+    });
+    await expect(source.initialize()).rejects.toThrow("read failed");
+    readMetadata.mockImplementation(async function* () {});
     const after = await source.initialize();
 
     // Then the channel is added and the alert is gone

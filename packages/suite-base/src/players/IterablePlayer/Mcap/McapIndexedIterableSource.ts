@@ -72,6 +72,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     chunks: 0,
     channels: new Set<number>(),
     pendingChannels: new Set<number>(),
+    revived: false,
     startTime: undefined as bigint | undefined,
     endTime: undefined as bigint | undefined,
     compression: new Map<string, RecordingFileInfo["compression"][number]>(),
@@ -205,7 +206,6 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     // A channel whose schema is missing stays pending: a later chunk may repeat the schema. Once
     // added, its messages in earlier chunks become readable too.
     const missingSchemaAlerts: PlayerAlert[] = [];
-    let revived = false;
     for (const channel of reader.channelsById.values()) {
       if (index.channels.has(channel.id)) {
         continue;
@@ -218,7 +218,8 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
         index.pendingChannels.add(channel.id);
         continue;
       }
-      revived ||= index.pendingChannels.delete(channel.id);
+      // Kept until a call returns, so a retry after a failed metadata read still reports it
+      index.revived ||= index.pendingChannels.delete(channel.id);
       index.channels.add(channel.id);
       this.#addChannel(channel);
     }
@@ -251,6 +252,8 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       }
     }
 
+    const revived = index.revived;
+    index.revived = false;
     const recordingFiles: RecordingFileInfo[] = [
       {
         library: reader.header.library,
