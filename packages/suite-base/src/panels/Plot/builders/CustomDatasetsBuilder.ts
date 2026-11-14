@@ -8,6 +8,7 @@
 import * as Comlink from "@foxglove/comlink";
 import * as _ from "lodash-es";
 
+import { pushAll } from "@lichtblick/den/collection";
 import { ComlinkWrap } from "@lichtblick/den/worker";
 import { MessagePath } from "@lichtblick/message-path";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
@@ -105,7 +106,7 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
         { didSeek, hasRangeSource: this.#hasRangeSource },
         (config) => readSeriesItems(msgEvents, config),
       );
-      this.#pendingDispatch.push(...(seriesActions as UpdateDataAction[]));
+      pushAll(this.#pendingDispatch, seriesActions as UpdateDataAction[]);
       datasetsChanged ||= seriesChanged;
     }
 
@@ -165,7 +166,7 @@ export class CustomDatasetsBuilder implements IDatasetsBuilder {
     const actions = buildFullSeriesActions(this.#series, topic, options, (config) =>
       readSeriesItems(messages, config),
     );
-    this.#pendingDispatch.push(...(actions as UpdateDataAction[]));
+    pushAll(this.#pendingDispatch, actions as UpdateDataAction[]);
   }
 
   public setXPath(path: Immutable<MessagePath> | undefined): void {

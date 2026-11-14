@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as Comlink from "@foxglove/comlink";
-import { IWritable, McapIndexedReader } from "@mcap/core";
+import { IWritable, type McapIndexedReader } from "@mcap/core";
 
 import { ChunkJob, ExportMcapOptions, ExportTopicOptions } from "@lichtblick/mcap-support";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";

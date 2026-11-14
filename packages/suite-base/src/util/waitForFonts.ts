@@ -15,9 +15,12 @@
 //   You may not use this file except in compliance with the License.
 
 /**
- * Wait for the browser to load custom fonts that have already been added to the document (via CSS
- * or the FontFace API) and generic font families.
+ * Wait for every custom font face (Inter and IBM Plex Mono, all weights) declared by CSS or the
+ * FontFace API. Rendering text before fonts are loaded crashed the rendering thread for many
+ * Windows users (a race in Chromium's DirectWrite font cache, see theme/src/typography.ts), so the
+ * app must not render before this resolves. Start it early: the faces are separate files.
  */
 export default async function waitForFonts(): Promise<unknown> {
-  return await Promise.all([...document.fonts].map(async (font) => await font.load()));
+  // allSettled: a face that fails to download (e.g. offline) falls back instead of blocking startup
+  return await Promise.allSettled([...document.fonts].map(async (font) => await font.load()));
 }

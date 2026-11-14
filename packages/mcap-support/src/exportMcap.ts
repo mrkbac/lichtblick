@@ -5,7 +5,13 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { IWritable, McapIndexedReader, McapRecordBuilder, McapTypes, Opcode } from "@mcap/core";
+import {
+  IWritable,
+  type McapIndexedReader,
+  McapRecordBuilder,
+  McapTypes,
+  Opcode,
+} from "@mcap/core";
 
 import { loadDecompressHandlers } from "./decompressHandlers";
 
@@ -589,19 +595,20 @@ export async function readMessageTimes(
   const BATCH = 64;
   const indexBytes: Uint8Array[] = [];
   for (let i = 0; i < reader.chunkIndexes.length; i += BATCH) {
-    indexBytes.push(
-      ...(await Promise.all(
-        reader.chunkIndexes
-          .slice(i, i + BATCH)
-          .map(
-            async (chunk) =>
-              await readable.read(
-                chunk.chunkStartOffset + chunk.chunkLength,
-                chunk.messageIndexLength,
-              ),
-          ),
-      )),
+    const batch = await Promise.all(
+      reader.chunkIndexes
+        .slice(i, i + BATCH)
+        .map(
+          async (chunk) =>
+            await readable.read(
+              chunk.chunkStartOffset + chunk.chunkLength,
+              chunk.messageIndexLength,
+            ),
+        ),
     );
+    for (const bytes of batch) {
+      indexBytes.push(bytes);
+    }
   }
   const perChannel = new Map<number, bigint[]>();
   for (const bytes of indexBytes) {

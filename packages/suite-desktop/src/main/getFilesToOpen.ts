@@ -3,6 +3,8 @@
 
 import * as path from "path";
 
+import { pushAll } from "@lichtblick/den/collection";
+
 import { isFileToOpen } from "./fileUtils";
 import { parseCLIFlags } from "./parseCLIFlags";
 import { resolveSourcePaths } from "./resolveSourcePaths";
@@ -20,7 +22,7 @@ export const getFilesToOpen = (argv: string[]): string[] => {
   // Get file paths passed through the parameter "--source="
   const filesToOpenFromSourceParameter = resolveSourcePaths(parsedCLIFlags.source);
 
-  filesToOpen.push(...filesToOpenFromSourceParameter);
+  pushAll(filesToOpen, filesToOpenFromSourceParameter);
 
   const uniqueFilesToOpen = [...new Set(filesToOpen)];
 

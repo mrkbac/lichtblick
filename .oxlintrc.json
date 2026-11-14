@@ -204,6 +204,12 @@
             "name": "@mui/system",
             "importNames": ["Box"],
             "message": "@mui/Box has performance implications. Use tss-react/mui instead."
+          },
+          {
+            "name": "@mcap/core",
+            "importNames": ["McapIndexedReader"],
+            "allowTypeImports": true,
+            "message": "Open readers with openCachedMcapReader from @lichtblick/mcap-support, so readers of a file share its decompressed chunks."
           }
         ]
       }
@@ -238,15 +244,28 @@
         "licenseType": "MPL-2.0"
       }
     ],
+    "@lichtblick/heavy-imports": "error",
     "@lichtblick/strict-equality": "error",
     "@lichtblick/no-return-promise-resolve": "error",
     "@lichtblick/no-getters-setters": "error",
+    "@lichtblick/no-push-spread": "error",
+    "@lichtblick/no-object-url": "error",
     "@lichtblick/link-target": "error",
     "@lichtblick/lodash-ramda-imports": "error",
     "@lichtblick/ramda-usage": "error",
     "tss-unused-classes/unused-classes": "error"
   },
   "overrides": [
+    {
+      "files": [
+        "packages/mcap-support/src/openCachedMcapReader.ts",
+        "**/*.test.ts",
+        "**/*.test.tsx"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
     {
       "files": ["**/*.ts", "**/*.tsx"],
       "rules": {
@@ -567,6 +586,12 @@
       }
     },
     {
+      "files": ["**/*.test.ts", "**/*.test.tsx", "**/*.stories.tsx"],
+      "rules": {
+        "@lichtblick/no-object-url": "off"
+      }
+    },
+    {
       "files": ["**/*.style.ts"],
       "rules": {
         "tss-unused-classes/unused-classes": "off"
@@ -578,6 +603,15 @@
       ],
       "rules": {
         "@lichtblick/license-header": "off"
+      }
+    },
+    {
+      "files": [
+        "packages/suite-base/src/panels/ThreeDeeRender/**",
+        "packages/suite-base/src/players/**"
+      ],
+      "rules": {
+        "@lichtblick/no-push-spread": "off"
       }
     }
   ],

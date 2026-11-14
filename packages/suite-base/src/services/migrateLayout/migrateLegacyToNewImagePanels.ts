@@ -7,8 +7,10 @@
 
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
 import type { RendererConfig } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
-import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRender/camera";
-import { DEFAULT_PUBLISH_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PublishSettings";
+import {
+  DEFAULT_CAMERA_STATE,
+  DEFAULT_PUBLISH_SETTINGS,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/defaults";
 import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
 

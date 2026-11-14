@@ -22,25 +22,41 @@ type Options = {
   overrideUserDataDir?: string;
 };
 
-export function getAppSetting<T>(
-  key: AppSetting,
-  { overrideUserDataDir }: Options = {},
-): T | undefined {
-  const datastoreDir = path.join(
+function datastoreDir({ overrideUserDataDir }: Options): string {
+  return path.join(
     overrideUserDataDir ?? app.getPath("userData"),
     DATASTORES_DIR_NAME,
     SETTINGS_DATASTORE_NAME,
   );
-  const settingsPath = path.join(datastoreDir, SETTINGS_JSON_DATASTORE_KEY);
+}
+
+export function getAppSetting<T>(key: AppSetting, options: Options = {}): T | undefined {
+  const dir = datastoreDir(options);
+  const settingsPath = path.join(dir, SETTINGS_JSON_DATASTORE_KEY);
 
   try {
-    fs.mkdirSync(datastoreDir, { recursive: true });
+    fs.mkdirSync(dir, { recursive: true });
   } catch {
     // Ignore directory creation errors, including dir already exists
   }
 
   try {
     const settings = JSON.parse(fs.readFileSync(settingsPath, { encoding: "utf8" }));
+    return settings[key];
+  } catch {
+    // Ignore file load or parsing errors, including settings.json not existing
+    return undefined;
+  }
+}
+
+/** Like getAppSetting, without blocking the main process (for per-request handlers). */
+export async function readAppSetting<T>(
+  key: AppSetting,
+  options: Options = {},
+): Promise<T | undefined> {
+  try {
+    const settingsPath = path.join(datastoreDir(options), SETTINGS_JSON_DATASTORE_KEY);
+    const settings = JSON.parse(await fs.promises.readFile(settingsPath, { encoding: "utf8" }));
     return settings[key];
   } catch {
     // Ignore file load or parsing errors, including settings.json not existing

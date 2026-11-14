@@ -22,6 +22,11 @@ overrides:
 ignoredBuiltDependencies:
   - esbuild
 
+# McapIndexedReader takes a shared cache of decompressed chunks (`chunkCache`), so the readers of
+# one file don't each decompress the same chunks again.
+patchedDependencies:
+  "@mcap/core@2.4.0": patches/@mcap__core@2.4.0.patch
+
 # TypeScript looks for @types packages in parent node_modules folders. Hoist them to the root so
 # each workspace doesn't have to repeat the shared ones. Runtime packages stay strict (isolated).
 publicHoistPattern:

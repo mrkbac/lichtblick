@@ -61,6 +61,8 @@ import {
   OverlaySource,
   overlayStyle,
   trackFeatures,
+  trackFlushDelayMs,
+  trackPoint,
   ValueStyle,
 } from "./features";
 import { loadGeoTiff } from "./geotiff";
@@ -470,22 +472,28 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   // Batch incoming messages so long recordings don't re-render once per range batch.
   const pendingTrack = useRef<NavMessage[]>([]);
   const flushTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const appendTrack = useCallback((messages: NavMessage[], cap?: number) => {
-    pendingTrack.current.push(...messages);
-    // Live trails (capped) rebuild less often: each flush redraws the whole retained trail.
-    flushTimer.current ??= setTimeout(
-      () => {
-        flushTimer.current = undefined;
-        const pending = pendingTrack.current;
-        pendingTrack.current = [];
-        setTrackMessages((prev) => {
-          const next = prev.concat(pending);
-          return cap != undefined && next.length > cap ? next.slice(-cap) : next;
-        });
-      },
-      cap == undefined ? 50 : 500,
-    );
-  }, []);
+  const trackLengthRef = useLatest(trackMessages.length);
+  const appendTrack = useCallback(
+    (messages: readonly NavMessage[], cap?: number) => {
+      for (const message of messages) {
+        pendingTrack.current.push(trackPoint(message));
+      }
+      // Live trails (capped) rebuild less often: each flush redraws the whole retained trail.
+      flushTimer.current ??= setTimeout(
+        () => {
+          flushTimer.current = undefined;
+          const pending = pendingTrack.current;
+          pendingTrack.current = [];
+          setTrackMessages((prev) => {
+            const next = prev.concat(pending);
+            return cap != undefined && next.length > cap ? next.slice(-cap) : next;
+          });
+        },
+        trackFlushDelayMs(trackLengthRef.current, cap),
+      );
+    },
+    [trackLengthRef],
+  );
 
   // The full track comes from the recorded range. GeoJSON is deliberately not ranged: each
   // message is a complete scene that replaces the previous one.
@@ -560,10 +568,11 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
             return next;
           });
         },
-        cap == undefined ? 50 : 500,
+        // Each flush recolors the whole track, so it is paced by the track's length.
+        trackFlushDelayMs(trackLengthRef.current, cap),
       );
     },
-    [],
+    [trackLengthRef],
   );
 
   // Recorded values for "color by message path".

@@ -25,6 +25,7 @@ import {
   pointCloudMaterial,
   pointCloudColorEncoding,
   POINT_CLOUD_REQUIRED_FIELDS,
+  DECAY_HISTORY_LIMITS,
   RenderObjectHistory,
   PointsRenderable,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
@@ -117,7 +118,8 @@ const tempFieldReaders: PointCloudFieldReaders = {
 };
 
 type PointCloudUserData = BaseUserData & {
-  pointCloud: PointCloud | PointCloud2;
+  /** Undefined once a newer decay entry exists (see releaseMessage) */
+  pointCloud: PointCloud | PointCloud2 | undefined;
   originalMessage: Record<string, RosValue> | undefined;
 };
 
@@ -129,8 +131,17 @@ class PointCloudRenderable extends PointsRenderable<PointCloudUserData> {
     return this.userData.originalMessage ?? {};
   }
 
+  public releaseMessage(): void {
+    this.userData.pointCloud = undefined;
+    this.userData.originalMessage = undefined;
+    this.decoded = undefined;
+  }
+
   public override instanceDetails(instanceId: number): Record<string, RosValue> | undefined {
     const pointCloud = this.userData.pointCloud;
+    if (!pointCloud) {
+      return undefined; // an older decay entry: only its geometry is kept
+    }
     const data = pointCloud.data;
     const stride = getStride(pointCloud);
     const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
@@ -192,6 +203,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       },
       parentRenderable: this,
       renderer,
+      limits: DECAY_HISTORY_LIMITS,
     });
     this.add(points);
 
@@ -221,6 +233,7 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
       },
       parentRenderable: this,
       renderer,
+      limits: DECAY_HISTORY_LIMITS,
     });
 
     this.add(stixels);
@@ -1248,6 +1261,10 @@ class StixelsRenderable extends Renderable<BaseUserData, /*TRenderer=*/ undefine
     stixels.name = `${userData.topic}:PointCloud:stixels`;
     this.#stixels = stixels;
     this.add(stixels);
+  }
+
+  public releaseMessage(): void {
+    // Holds no message data.
   }
 
   public override dispose(): void {

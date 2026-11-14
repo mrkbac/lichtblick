@@ -11,6 +11,7 @@
 
 // logger channel -> logger
 const channels = new Map<string, Logger>();
+const channelListeners = new Set<() => void>();
 
 const noop = () => {};
 
@@ -30,6 +31,9 @@ class Logger {
     this.#name = name;
     this.setLevel("debug");
     channels.set(name, this);
+    for (const listener of channelListeners) {
+      listener();
+    }
   }
 
   // fully qualified name for the logger
@@ -71,6 +75,14 @@ class Logger {
   // get all logging channels
   public channels(): Logger[] {
     return Array.from(channels.values());
+  }
+
+  /** Calls `listener` whenever a channel is added. Returns a function that unsubscribes. */
+  public onChannelAdded(listener: () => void): () => void {
+    channelListeners.add(listener);
+    return () => {
+      channelListeners.delete(listener);
+    };
   }
 }
 

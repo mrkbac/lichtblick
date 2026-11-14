@@ -40,6 +40,10 @@ import Log from "@lichtblick/log";
 import { parseChannel } from "@lichtblick/mcap-support";
 import { ParameterValue } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import {
+  LIVE_QUEUE_MAX_BYTES,
+  LiveMessageQueue,
+} from "@lichtblick/suite-base/players/LiveMessageQueue";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import {
@@ -53,7 +57,7 @@ import {
   liveHistorySettings,
 } from "@lichtblick/suite-base/players/liveHistory/liveHistorySettings";
 import { supportsLiveRecording } from "@lichtblick/suite-base/players/liveHistory/liveRecordings";
-import { estimateObjectSize } from "@lichtblick/suite-base/players/messageMemoryEstimation";
+import { MessageSizeEstimator } from "@lichtblick/suite-base/players/messageMemoryEstimation";
 import {
   AdvertiseOptions,
   MessageEvent,
@@ -79,7 +83,6 @@ import ExtensionProxySocket, {
 import { JsonMessageWriter } from "./JsonMessageWriter";
 import WorkerSocketAdapter from "./WorkerSocketAdapter";
 import {
-  CURRENT_FRAME_MAXIMUM_SIZE_BYTES,
   FALLBACK_PUBLICATION_ENCODING,
   GET_ALL_PARAMS_PERIOD_MS,
   GET_ALL_PARAMS_REQUEST_ID,
@@ -144,11 +147,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #emittedTopicsStats = new Map<string, TopicStats>(); // Copy of #topicsStats from the last emit.
   #topicsStatsChanged = false;
   #datatypes: MessageDefinitionMap = new Map(); // Datatypes as published by the WebSocket.
-  #parsedMessages: MessageEvent[] = []; // Queue of messages that we'll send in next _emitState() call.
-  #parsedMessagesBytes: number = 0;
   #receivedBytes: number = 0;
   #presence: PlayerPresence = PlayerPresence.INITIALIZING;
   #alerts = new PlayerAlertManager();
+  // Messages that we'll send in the next emitState() call.
+  readonly #parsedMessages = new LiveMessageQueue(LIVE_QUEUE_MAX_BYTES, this.#alerts);
   #numTimeSeeks = 0;
   #profile?: string;
   #urlState: PlayerState["urlState"];
@@ -222,7 +225,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #fetchAssetRequests = new Map<number, (response: FetchAssetResponse) => void>();
   #fetchedAssets = new Map<string, Promise<Asset>>();
   #parameterTypeByName = new Map<string, Parameter["type"]>();
-  #messageSizeEstimateByTopic: Record<string, number> = {};
+  #messageSizes = new MessageSizeEstimator();
 
   public constructor({
     url,
@@ -653,12 +656,11 @@ export default class FoxgloveWebSocketPlayer implements Player {
         const topic = chanInfo.channel.topic;
         const deserializedMessage = chanInfo.parsedChannel.deserialize(data);
 
-        // Lookup the size estimate for this topic or compute it if not found in the cache.
-        let msgSizeEstimate = this.#messageSizeEstimateByTopic[topic];
-        if (msgSizeEstimate == undefined) {
-          msgSizeEstimate = estimateObjectSize(deserializedMessage);
-          this.#messageSizeEstimateByTopic[topic] = msgSizeEstimate;
-        }
+        const msgSizeEstimate = this.#messageSizes.estimate(
+          topic,
+          data.byteLength,
+          deserializedMessage,
+        );
 
         // The history also keeps the received bytes (for export and recording), so count both.
         const sizeInBytes = this.#serverControlsPlayback
@@ -681,28 +683,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
         // While reviewing history, new messages only go into the history.
         if (this.#historyCursor == undefined) {
           this.#parsedMessages.push(msgEvent);
-          this.#parsedMessagesBytes += sizeInBytes;
-        }
-        if (this.#parsedMessagesBytes > CURRENT_FRAME_MAXIMUM_SIZE_BYTES) {
-          this.#alerts.addAlert(`webSocketPlayer:parsedMessageCacheFull`, {
-            severity: "error",
-            message: `WebSocketPlayer maximum frame size (${(
-              CURRENT_FRAME_MAXIMUM_SIZE_BYTES / 1_000_000
-            ).toFixed(
-              2,
-            )}MB) reached. Dropping old messages. This accumulation can occur if the browser tab has been inactive.`,
-          });
-          // Amortize cost of dropping messages by dropping parsedMessages size to
-          // 80% so that it doesn't happen for every message after reaching the limit
-          const evictUntilSize = 0.8 * CURRENT_FRAME_MAXIMUM_SIZE_BYTES;
-          let droppedBytes = 0;
-          let indexToCutBefore = 0;
-          while (this.#parsedMessagesBytes - droppedBytes > evictUntilSize) {
-            droppedBytes += this.#parsedMessages[indexToCutBefore]!.sizeInBytes;
-            indexToCutBefore++;
-          }
-          this.#parsedMessages.splice(0, indexToCutBefore);
-          this.#parsedMessagesBytes -= droppedBytes;
         }
 
         // Update the message count for this topic
@@ -732,8 +712,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#lastClockWallMs = Date.now();
       if (this.#clockTime != undefined && isLessThan(time, this.#clockTime)) {
         this.#numTimeSeeks++;
-        this.#parsedMessages = [];
-        this.#parsedMessagesBytes = 0;
+        this.#parsedMessages.clear();
         // The clock was reset (e.g. a simulation or bag restarted): the history no longer fits.
         if (!this.#serverControlsPlayback) {
           this.#clearHistory();
@@ -1060,9 +1039,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
       this.#updateHistoryAlerts();
     }
 
-    const messages = this.#parsedMessages;
-    this.#parsedMessages = [];
-    this.#parsedMessagesBytes = 0;
+    const messages = this.#parsedMessages.drain();
     const newest = messages.at(-1);
     if (
       newest != undefined &&
@@ -1435,8 +1412,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     const start = this.#history.startTime(latest);
     const target = isLessThan(time, start) ? start : isGreaterThan(time, latest) ? latest : time;
     this.#numTimeSeeks++;
-    this.#parsedMessages = [];
-    this.#parsedMessagesBytes = 0;
+    this.#parsedMessages.clear();
     const topics = new Set(this.#resolvedSubscriptionsByTopic.keys());
     const backfill = this.#history.backfill(target, topics);
     // Seeking past what panels have seen (e.g. Live after a pause): also hand them the messages
@@ -1468,7 +1444,6 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #queueMessages(messages: readonly MessageEvent[]): void {
     for (const msg of messages) {
       this.#parsedMessages.push(msg);
-      this.#parsedMessagesBytes += msg.sizeInBytes;
     }
   }
 
@@ -1830,8 +1805,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
   #handlePlaybackState(state: PlaybackState): void {
     if (state.didSeek) {
       this.#numTimeSeeks++;
-      this.#parsedMessages = [];
-      this.#parsedMessagesBytes = 0;
+      this.#parsedMessages.clear();
     }
     this.#clockTime = fromNanoSec(state.currentTimeNs);
     this.#isPlaying = state.status === PlaybackStatus.Playing;
@@ -1860,7 +1834,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     this.#speed = 1;
     this.#topicsStats = new Map();
     this.#topicsStatsChanged = true;
-    this.#parsedMessages = [];
+    this.#parsedMessages.clear();
     this.#receivedBytes = 0;
     this.#clearHistory();
     this.#lastClockWallMs = Date.now();
@@ -1877,7 +1851,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     }
     this.#fetchAssetRequests.clear();
     this.#parameterTypeByName.clear();
-    this.#messageSizeEstimateByTopic = {};
+    this.#messageSizes.clear();
   }
 
   #updateDataTypes(datatypes: MessageDefinitionMap): void {

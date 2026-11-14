@@ -80,4 +80,31 @@ describe("TransformTree", () => {
     expect(tfTree.frame("c")).toBeUndefined();
     expect(tfTree.frame("d")).toBeUndefined();
   });
+
+  it("keeps only maxStorageTime of history per frame, well below the capacity cap", () => {
+    const sec = BigInt(1e9);
+    const tfTree = new TransformTree(new ObjectPool(Transform.Empty), 10n * sec, 10_000);
+    // 10 Hz for 1000 s: the old capacity-only trim would keep all 10_000 transforms.
+    for (let i = 0n; i < 10_000n; i++) {
+      tfTree.addTransform("b", "a", i * (sec / 10n), tf);
+    }
+    const size = tfTree.frame("b")!.transformsSize();
+    // 10 s window plus up to a quarter window of slack before the amortized trim runs.
+    expect(size).toBeGreaterThanOrEqual(100);
+    expect(size).toBeLessThanOrEqual(126);
+  });
+
+  it("keeps the transform just before the storage window for interpolation", () => {
+    const sec = BigInt(1e9);
+    const tfTree = new TransformTree(new ObjectPool(Transform.Empty), 300n * sec, 10_000);
+    tfTree.addTransform("b", "a", 0n, new Transform([0, 0, 0], [0, 0, 0, 1]));
+    tfTree.addTransform("b", "a", 400n * sec, new Transform([400, 0, 0], [0, 0, 0, 1]));
+    const lower: [bigint, Transform] = [0n, Transform.Empty()];
+    const upper: [bigint, Transform] = [0n, Transform.Empty()];
+    const frame = tfTree.frame("b")!;
+    expect(frame.transformsSize()).toBe(2);
+    expect(frame.findClosestTransforms(lower, upper, 350n * sec, 400n * sec)).toBe(true);
+    expect(lower[0]).toBe(0n);
+    expect(upper[0]).toBe(400n * sec);
+  });
 });

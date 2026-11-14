@@ -6,10 +6,10 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import path from "path";
-import type { Mock } from "vitest";
 
 import {
   findRosPackage,
+  makeCachedRosPackageFinder,
   registerRosPackageProtocolSchemes,
   rosPackageNameAtPath,
 } from "./rosPackageResources";
@@ -32,6 +32,38 @@ describe("rosPackageResources", () => {
     });
   });
 
+  describe("makeCachedRosPackageFinder", () => {
+    it("walks the search path once per package until the path changes", async () => {
+      const find = vi.fn(async (pkg: string) => (pkg === "missing" ? undefined : `/root/${pkg}`));
+      const findCached = makeCachedRosPackageFinder(find);
+
+      await expect(findCached("foo", "/a")).resolves.toBe("/root/foo");
+      await expect(findCached("foo", "/a")).resolves.toBe("/root/foo");
+      expect(find).toHaveBeenCalledTimes(1);
+
+      // misses are retried
+      await findCached("missing", "/a");
+      await findCached("missing", "/a");
+      expect(find).toHaveBeenCalledTimes(3);
+
+      // a new search path clears the cache
+      await findCached("foo", "/b");
+      expect(find).toHaveBeenCalledTimes(4);
+      expect(find).toHaveBeenLastCalledWith("foo", { rosPackagePath: "/b" });
+    });
+
+    it("retries a lookup that failed", async () => {
+      const find = vi
+        .fn<typeof findRosPackage>()
+        .mockRejectedValueOnce(new Error("EACCES"))
+        .mockResolvedValueOnce("/root/foo");
+      const findCached = makeCachedRosPackageFinder(find);
+
+      await expect(findCached("foo", "/a")).rejects.toThrow("EACCES");
+      await expect(findCached("foo", "/a")).resolves.toBe("/root/foo");
+    });
+  });
+
   describe("rosPackageNameAtPath", () => {
     it("should read package name from package.xml file at path", async () => {
       const name = await rosPackageNameAtPath(path.join(PACKAGES_ROOT, "./foo"));
@@ -50,9 +82,6 @@ describe("rosPackageResources", () => {
         rosPackagePath: `${FIXTURES_ROOT}${path.delimiter}${PACKAGES_ROOT}`,
       });
       expect(packagePath).toEqual(path.join(PACKAGES_ROOT, "./foo"));
-
-      expect(console.error).toHaveBeenCalled();
-      (console.error as Mock).mockClear();
     });
 
     it("should find package within process.env.ROS_PACKAGE_PATH", async () => {
@@ -63,9 +92,6 @@ describe("rosPackageResources", () => {
       } finally {
         process.env.ROS_PACKAGE_PATH = undefined;
       }
-
-      expect(console.error).toHaveBeenCalled();
-      (console.error as Mock).mockClear();
     });
 
     it("should find packages recursively within rosPackagePath", async () => {
@@ -73,9 +99,6 @@ describe("rosPackageResources", () => {
         rosPackagePath: PACKAGES_ROOT,
       });
       expect(packagePath).toEqual(path.join(PACKAGES_ROOT, "nested", "child"));
-
-      expect(console.error).toHaveBeenCalled();
-      (console.error as Mock).mockClear();
     });
   });
 });

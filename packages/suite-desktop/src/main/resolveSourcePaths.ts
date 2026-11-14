@@ -5,6 +5,8 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 
+import { pushAll } from "@lichtblick/den/collection";
+
 import { allowedExtensions } from "./constants";
 
 export function getFilesFromDirectory(arg: string): string[] {
@@ -61,9 +63,9 @@ export function resolveSourcePaths(sourceParameter: string | undefined): string[
     const resolvedDirectoryFiles = directoryFiles.map((fileName) =>
       path.join(sourcePath, fileName),
     );
-    filesToOpen.push(...resolvedDirectoryFiles);
+    pushAll(filesToOpen, resolvedDirectoryFiles);
   } else {
-    filesToOpen.push(...resolvedFilePaths);
+    pushAll(filesToOpen, resolvedFilePaths);
   }
 
   return filesToOpen;

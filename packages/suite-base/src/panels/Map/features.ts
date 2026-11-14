@@ -258,6 +258,36 @@ export function createArrowImage(size = 48): ImageData {
   return ctx.getImageData(0, 0, size, size);
 }
 
+/**
+ * How long to batch track updates. Each flush rebuilds and re-uploads the whole track, so wait
+ * longer as it grows: total rebuild work while loading stays proportional to the track length
+ * instead of growing with its square.
+ */
+export function trackFlushDelayMs(trackLength: number, cap?: number): number {
+  // Capped (live) trails start slower: they are redrawn for as long as data arrives.
+  return Math.max(cap == undefined ? 50 : 500, trackLength / 2000);
+}
+
+/**
+ * The part of a fix the track draws and its popup shows. The track keeps every fix of a
+ * recording, so it must not keep the decoded message (covariance, header and other fields).
+ */
+export function trackPoint(event: NavMessage): NavMessage {
+  const { latitude, longitude, altitude, status } = event.message;
+  return {
+    topic: event.topic,
+    schemaName: event.schemaName,
+    receiveTime: event.receiveTime,
+    sizeInBytes: 0,
+    message: {
+      latitude,
+      longitude,
+      altitude,
+      status: status ? { status: status.status, service: status.service } : undefined,
+    },
+  };
+}
+
 export function lngLatOf(event: NavMessage): LngLat {
   return [event.message.longitude, event.message.latitude];
 }

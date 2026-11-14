@@ -215,7 +215,9 @@ export function modifierSuggestions(
     );
   });
   if (streamModifiers && (input == undefined || isNumericStructure(input))) {
-    result.push(...STREAM_MODIFIERS);
+    for (const modifier of STREAM_MODIFIERS) {
+      result.push(modifier);
+    }
   }
   return result;
 }

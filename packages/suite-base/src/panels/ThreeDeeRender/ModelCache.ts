@@ -19,6 +19,7 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import Logger from "@lichtblick/log";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 
+import { disposeMeshesRecursive } from "./dispose";
 import { isTiff, tiffToPng } from "./tiffToPng";
 
 const log = Logger.getLogger(__filename);
@@ -37,6 +38,11 @@ type LoadModelOptions = {
   overrideMediaType?: string;
   /** A URL to e.g. a URDf which may be used to resolve mesh package:// URLs */
   referenceUrl?: string;
+  /**
+   * Cache key to use instead of the URL. Required for one-shot URLs (e.g. `blob:` URLs of embedded
+   * model data), which differ on every load and would otherwise add a cache entry per load.
+   */
+  cacheKey?: string;
 };
 
 export type LoadedModel = (THREE.Group | THREE.Scene) & { hasEmbeddedMaterials?: boolean };
@@ -81,7 +87,10 @@ export class ModelCache {
     opts: LoadModelOptions,
     reportError: ErrorCallback,
   ): Promise<LoadedModel | undefined> {
-    const key = JSON.stringify([url, opts.referenceUrl, opts.overrideMediaType])!;
+    if (url.startsWith("blob:") && opts.cacheKey == undefined) {
+      throw new Error("ModelCache.load() needs a cacheKey for blob: URLs");
+    }
+    const key = JSON.stringify([opts.cacheKey ?? url, opts.referenceUrl, opts.overrideMediaType])!;
     let promise = this.#models.get(key);
     if (!promise) {
       const errors: Error[] = [];
@@ -431,6 +440,7 @@ export class ModelCache {
         continue;
       }
       const [resolved, blob] = entry;
+      // oxlint-disable-next-line @lichtblick/no-object-url -- tracked in #objectUrls, revoked in dispose()
       const objectUrl = URL.createObjectURL(blob);
       this.#objectUrls.set(objectUrl, resolved);
       urls.set(resolved, objectUrl);
@@ -451,6 +461,13 @@ export class ModelCache {
       URL.revokeObjectURL(objectUrl);
     }
     this.#objectUrls.clear();
+    for (const promise of this.#models.values()) {
+      void promise.then(({ model }) => {
+        if (model) {
+          disposeMeshesRecursive(model);
+        }
+      });
+    }
     this.#models.clear();
     // DRACOLoader is only loader that needs to be disposed because it uses a webworker
     this.#dracoLoader?.dispose();

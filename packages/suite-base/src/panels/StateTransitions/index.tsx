@@ -21,6 +21,7 @@ import { AnnotationOptions } from "chartjs-plugin-annotation";
 import * as _ from "lodash-es";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useDebounce } from "use-debounce";
 
 import { parseMessagePath } from "@lichtblick/message-path";
 import { OnClickArg as OnChartClickArgs } from "@lichtblick/suite-base/components/Chart";
@@ -29,7 +30,7 @@ import {
   useComparedPaths,
 } from "@lichtblick/suite-base/components/Compare/comparedPaths";
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
-import useMessagesByPath from "@lichtblick/suite-base/components/MessagePathSyntax/useMessagesByPath";
+import { usePathSampleHistory } from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -44,6 +45,8 @@ import { useStateTransitionsStyles } from "@lichtblick/suite-base/panels/StateTr
 import { parseCondition } from "@lichtblick/suite-base/panels/StateTransitions/condition";
 import {
   EMPTY_ITEMS_BY_PATH,
+  LIVE_HISTORY_SIZE,
+  LIVE_REDRAW_MS,
   EMPTY_PATHS,
   EMPTY_TOPICS,
   STATE_TRANSITION_PLUGINS,
@@ -116,7 +119,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
     isPlayerPresent ? pathStrings : EMPTY_PATHS,
   );
 
-  // When range data is active, skip useMessagesByPath subscriptions entirely
+  // When range data is active, skip the live subscription entirely
   // to avoid wasteful current-frame processing and decoding.
   const hasRangeData = useMemo(
     () =>
@@ -126,7 +129,10 @@ function StateTransitions(props: StateTransitionPanelProps) {
     [decodedMessages, pathStrings],
   );
 
-  const itemsByPath = useMessagesByPath(hasRangeData ? EMPTY_PATHS : pathStrings);
+  const itemsByPath = usePathSampleHistory(
+    hasRangeData ? EMPTY_PATHS : pathStrings,
+    LIVE_HISTORY_SIZE,
+  );
 
   const { height, heightPerTopic } = useMemo(() => {
     const onlyTopicsHeight = paths.length * 64;
@@ -137,7 +143,12 @@ function StateTransitions(props: StateTransitionPanelProps) {
     };
   }, [paths.length]);
 
-  const newItemsByPath = hasRangeData ? EMPTY_ITEMS_BY_PATH : itemsByPath;
+  // The live history grows in place every frame and the chart redraws all of it, so take live
+  // updates at most every LIVE_REDRAW_MS instead of once per message.
+  const [throttledItemsByPath] = useDebounce(itemsByPath, LIVE_REDRAW_MS, {
+    maxWait: LIVE_REDRAW_MS,
+  });
+  const newItemsByPath = hasRangeData ? EMPTY_ITEMS_BY_PATH : throttledItemsByPath;
 
   const showPoints = config.showPoints === true;
 

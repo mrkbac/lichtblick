@@ -32,7 +32,9 @@ for (const scenario of SCENARIOS_UNDER_TEST) {
 
     // Given
     await mainWindow.exposeFunction("recordFrameTimes", (samples: FrameTimeSample[]) => {
-      frameTimeSamples.push(...samples);
+      for (const sample of samples) {
+        frameTimeSamples.push(sample);
+      }
     });
 
     const startedAt = new Date().toISOString();

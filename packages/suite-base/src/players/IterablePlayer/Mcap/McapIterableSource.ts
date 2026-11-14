@@ -6,22 +6,22 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time, fromNanoSec } from "@foxglove/rostime";
-import { McapIndexedReader, McapTypes } from "@mcap/core";
+import type { McapIndexedReader, McapTypes } from "@mcap/core";
 
 import Log from "@lichtblick/log";
-import { loadDecompressHandlers } from "@lichtblick/mcap-support";
+import { ChunkCache, loadDecompressHandlers, openCachedMcapReader } from "@lichtblick/mcap-support";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { BlobReadable } from "./BlobReadable";
-import { McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
+import { CheckChunk, McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
 import type {
   HydratedInner,
   IndexedReaderResult,
   McapSource,
   OpenedInner,
 } from "./McapIterableSource.types";
-import type { LiveReader, McapRecoveryScanner } from "./McapRecoveryScanner";
+import { checkChunk, type LiveReader, type McapRecoveryScanner } from "./McapRecoveryScanner";
 import { McapUnindexedIterableSource } from "./McapUnindexedIterableSource";
 import { RemoteFileReadable } from "./RemoteFileReadable";
 import { scanWithIndexCache } from "./mcapIndexCache";
@@ -57,13 +57,11 @@ export const LIVE_IDLE_MS = 60_000;
 async function tryCreateIndexedReader(
   readable: McapTypes.IReadable,
   decompressHandlers: McapTypes.DecompressHandlers,
+  chunkCache: ChunkCache,
 ): Promise<IndexedReaderResult> {
   let reader: McapIndexedReader;
   try {
-    reader = await McapIndexedReader.Initialize({
-      readable,
-      decompressHandlers,
-    });
+    reader = await openCachedMcapReader({ readable, decompressHandlers, chunkCache });
   } catch (err: unknown) {
     return { status: "recover", error: toError(err) };
   }
@@ -89,6 +87,12 @@ export class McapIterableSource implements ISerializedIterableSource {
   // terminate(). Undefined for "file" sources and for remote sources that fail indexed init or
   // fall back to eager unindexed streaming.
   #persistentReadable: RemoteFileReadable | undefined;
+  // Decompressed chunks, shared by every reader this source opens (all of them pass it), so
+  // playback, preloading, plots and backfill don't each decompress the same chunks. Survives
+  // re-hydration like #persistentReadable.
+  #chunkCache = new ChunkCache();
+  // Chunks found corrupt mid-read, left out of every reader opened on the file's own summary
+  #corruptChunks = new Set<bigint>();
   // Index rebuilt by a forward scan, for files without a usable summary or with corrupt chunks
   #recovery: McapRecoveryScanner | undefined;
   // The recovery scan while it continues in the background, until its last update is published.
@@ -154,7 +158,7 @@ export class McapIterableSource implements ISerializedIterableSource {
     if (result.status === "indexed") {
       return {
         inner: new McapIndexedIterableSource(result.reader, {
-          recover: this.#recoverer(readable, decompressHandlers),
+          ...this.#readErrorHandling(readable, decompressHandlers),
         }),
         indexed: true,
         weightBytes: estimateReaderWeightBytes(result.reader),
@@ -198,7 +202,7 @@ export class McapIterableSource implements ISerializedIterableSource {
       return {
         inner: new McapIndexedIterableSource(result.reader, {
           prefetch: (ranges) => {
-            // A rebuilt index keeps message indexes in memory past the end of the real bytes
+            // A rebuilt index has its message indexes past the end of the real bytes
             const end = this.#recovery?.offset;
             remote.prefetch(
               end == undefined
@@ -210,7 +214,7 @@ export class McapIterableSource implements ISerializedIterableSource {
                   ),
             );
           },
-          recover: this.#recoverer(readable, decompressHandlers),
+          ...this.#readErrorHandling(readable, decompressHandlers),
         }),
         readable,
         indexed: true,
@@ -239,7 +243,7 @@ export class McapIterableSource implements ISerializedIterableSource {
     | { status: "unindexed"; length?: number }
   > {
     if (!this.#recovery) {
-      const result = await tryCreateIndexedReader(readable, decompressHandlers);
+      const result = await tryCreateIndexedReader(readable, decompressHandlers, this.#chunkCache);
       if (result.status !== "recover") {
         return result;
       }
@@ -249,7 +253,11 @@ export class McapIterableSource implements ISerializedIterableSource {
       // Nothing chunked (e.g. messages written without chunks): stream the readable part.
       return { status: "unindexed", length: Number(this.#recovery.offset) };
     }
-    const live = await this.#recovery.openLiveReader(readable, decompressHandlers);
+    const live = await this.#recovery.openLiveReader(
+      readable,
+      decompressHandlers,
+      this.#chunkCache,
+    );
     return { status: "indexed", reader: live.reader, live };
   }
 
@@ -528,21 +536,36 @@ export class McapIterableSource implements ISerializedIterableSource {
   }
 
   /**
-   * For an indexed reader that throws while reading (e.g. a chunk with a bad CRC in an otherwise
-   * complete file): rebuild the index from a scan, which skips the corrupt chunks.
+   * For an indexed reader that throws while reading (e.g. a corrupt chunk in an otherwise complete
+   * file): drop the chunk the read failed on, which takes no scan, so reading resumes as fast in a
+   * huge file as in a small one. Only an error that no chunk explains rebuilds the index.
    */
+  #readErrorHandling(
+    readable: McapTypes.IReadable,
+    decompressHandlers: McapTypes.DecompressHandlers,
+  ): { recover?: RecoverReader; checkChunk?: CheckChunk; corruptChunks?: Set<bigint> } {
+    if (this.#recovery) {
+      return {}; // already built from a scan that validated every chunk
+    }
+    return {
+      // Drops just the corrupt chunk, found by checking a few around the failed read
+      checkChunk: async (chunk) => await checkChunk(readable, decompressHandlers, chunk),
+      corruptChunks: this.#corruptChunks,
+      recover: this.#recoverer(readable, decompressHandlers),
+    };
+  }
+
+  /** For a read error that no corrupt chunk explains: rebuild the index from a scan */
   #recoverer(
     readable: McapTypes.IReadable,
     decompressHandlers: McapTypes.DecompressHandlers,
-  ): RecoverReader | undefined {
-    if (this.#recovery) {
-      return undefined; // already built from a scan that validated every chunk
-    }
+  ): RecoverReader {
     return async (error) => {
       this.#recovery ??= await scanForRecovery(readable, decompressHandlers, error);
-      const reader = await McapIndexedReader.Initialize({
-        readable: this.#recovery.toReadable(readable),
+      const reader = await openCachedMcapReader({
+        readable: this.#recovery.toReadable(readable, this.#chunkCache),
         decompressHandlers,
+        chunkCache: this.#chunkCache,
       });
       // Nothing lost means the summary was fine and the read error came from elsewhere (e.g. the
       // network); reading resumes on the rebuilt index without claiming the file was damaged.
@@ -787,6 +810,7 @@ export class McapIterableSource implements ISerializedIterableSource {
     // (see #persistentReadable) and is only closed when the whole source is torn down.
     this.#persistentReadable?.close();
     this.#persistentReadable = undefined;
+    this.#chunkCache.clear();
     this.#live = undefined;
     this.#scan = undefined;
     this.#interrupt?.();

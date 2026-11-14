@@ -3,11 +3,11 @@
 
 import { McapIndexedReader, McapTypes, McapWriter, TempBuffer } from "@mcap/core";
 
-import { loadDecompressHandlers } from "@lichtblick/mcap-support";
+import { ChunkCache, loadDecompressHandlers } from "@lichtblick/mcap-support";
 import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
 
 import { BlobReadable } from "./BlobReadable";
-import { McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
+import { CheckChunk, McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
 import { McapIterableSource } from "./McapIterableSource";
 import { McapRecoveryScanner } from "./McapRecoveryScanner";
 
@@ -142,7 +142,7 @@ describe("McapRecoveryScanner", () => {
     const scanner = await scan(bytes);
 
     // When
-    const readable = scanner.toReadable(readableOf(bytes));
+    const readable = scanner.toReadable(readableOf(bytes), new ChunkCache());
     const reader = await McapIndexedReader.Initialize({ readable });
     const metadata = [];
     for await (const record of reader.readMetadata()) {
@@ -166,7 +166,9 @@ describe("McapRecoveryScanner", () => {
     // Then
     expect(scanner.messageCount).toBe(BigInt(MESSAGE_COUNT - 1));
     expect(scanner.unreadableBytes).toBeGreaterThan(0n);
-    expect(await readValues(scanner.toReadable(readableOf(bytes)))).toEqual([1, 2, 3, 4]);
+    expect(await readValues(scanner.toReadable(readableOf(bytes), new ChunkCache()))).toEqual([
+      1, 2, 3, 4,
+    ]);
     expect(scanner.toAlert()).toMatchObject({ severity: "warn", message: /damaged/ });
   });
 
@@ -180,7 +182,9 @@ describe("McapRecoveryScanner", () => {
 
     // Then
     expect(scanner.corruptRecords).toBe(1);
-    expect(await readValues(scanner.toReadable(readableOf(bytes)))).toEqual([1, 3, 4, 5]);
+    expect(await readValues(scanner.toReadable(readableOf(bytes), new ChunkCache()))).toEqual([
+      1, 3, 4, 5,
+    ]);
     expect(scanner.toAlert().tip).toMatch(/1 corrupt record/);
   });
 
@@ -195,7 +199,9 @@ describe("McapRecoveryScanner", () => {
     // Then
     expect(scanner.offset).toBe(BigInt(valid.byteLength));
     expect(scanner.unreadableBytes).toBe(100n);
-    expect(await readValues(scanner.toReadable(readableOf(bytes)))).toEqual([1, 2, 3, 4, 5]);
+    expect(await readValues(scanner.toReadable(readableOf(bytes), new ChunkCache()))).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
   });
 
   it("resumes from where the previous scan stopped as the file grows", async () => {
@@ -211,7 +217,9 @@ describe("McapRecoveryScanner", () => {
     // Then
     expect(firstPass).toBeLessThan(BigInt(MESSAGE_COUNT));
     expect(scanner.messageCount).toBe(BigInt(MESSAGE_COUNT));
-    expect(await readValues(scanner.toReadable(readableOf(full)))).toEqual([1, 2, 3, 4, 5]);
+    expect(await readValues(scanner.toReadable(readableOf(full), new ChunkCache()))).toEqual([
+      1, 2, 3, 4, 5,
+    ]);
   });
 
   it("reads no further than a short step needs", async () => {
@@ -281,7 +289,11 @@ describe("McapRecoveryScanner.openLiveReader", () => {
     const scanner = new McapRecoveryScanner(await loadDecompressHandlers());
     const base = readableOf(bytes);
     await scanner.scan(readableOf(await recording(before)));
-    const live = await scanner.openLiveReader(base, await loadDecompressHandlers());
+    const live = await scanner.openLiveReader(
+      base,
+      await loadDecompressHandlers(),
+      new ChunkCache(),
+    );
     const source = new McapIndexedIterableSource(live.reader);
     await source.initialize();
     expect(live.reader.chunkIndexes).toHaveLength(before);
@@ -361,20 +373,53 @@ describe("McapIterableSource recovery", () => {
     expect(init.alerts[0]?.tip).toMatch(/could not be read/);
   });
 
-  it("recovers mid-read from a corrupt chunk in a file whose summary is intact", async () => {
-    // Given a finished file whose summary still lists the corrupt chunk
+  it("skips a chunk found corrupt mid-read without scanning the file", async () => {
+    // Given a finished file whose summary still lists a corrupt chunk
     const bytes = await makeMcap({ finish: true });
     bytes[await logTimeOffsetInChunk(bytes, 2)]! ^= 0xff;
+    const scanSpy = vi.spyOn(McapRecoveryScanner.prototype, "scan");
 
     // When
-    const { init, values, iteratorAlerts } = await openSource(bytes);
+    const { init, values, iteratorAlerts, source } = await openSource(bytes);
 
-    // Then
+    // Then the rest plays, and only that chunk is gone, for later reads too
     expect(init.alerts).toEqual([]);
     expect(values).toEqual([1, 2, 4, 5]);
     expect(iteratorAlerts).toEqual([
       expect.objectContaining({ severity: "warn", message: expect.stringMatching(/damaged/) }),
     ]);
+    expect(scanSpy).not.toHaveBeenCalled();
+    const again = [];
+    for await (const result of source.messageIterator({
+      topics: new Map([[TOPIC, PlayerBuilder.subscribePayload({ topic: TOPIC })]]),
+    })) {
+      again.push(result.type);
+    }
+    expect(again).toEqual(["message-event", "message-event", "message-event", "message-event"]);
+  });
+
+  it("skims past a topic's latest chunk when it turns out corrupt", async () => {
+    // Given a file whose 4th chunk (the latest before 4.5 s) is corrupt
+    const bytes = await makeMcap({ finish: true });
+    bytes[await logTimeOffsetInChunk(bytes, 3)]! ^= 0xff;
+    const source = new McapIterableSource({ type: "file", file: new Blob([bytes]) });
+    await source.initialize();
+
+    // When a skim window ending at 4.5 s finds nothing in its tail and looks for the latest message
+    const values = [];
+    for await (const result of source.messageIterator({
+      topics: new Map([[TOPIC, PlayerBuilder.subscribePayload({ topic: TOPIC })]]),
+      start: { sec: 1, nsec: 0 },
+      end: { sec: 4, nsec: 500_000_000 },
+      skimInterval: { sec: 10, nsec: 0 },
+    })) {
+      if (result.type === "message-event") {
+        values.push(JSON.parse(new TextDecoder().decode(result.msgEvent.message)).v as number);
+      }
+    }
+
+    // Then it falls back to the chunk before the corrupt one
+    expect(values).toEqual([3]);
   });
 
   it("keeps the healthy path free of scans", async () => {
@@ -441,6 +486,41 @@ describe("McapIndexedIterableSource read errors", () => {
     expect(recover).not.toHaveBeenCalled();
   });
 
+  it("rebuilds the index when no chunk explains a read error", async () => {
+    // Given a read that keeps failing although every chunk checks out
+    const reader = await indexedReader();
+    failReads(reader, 2);
+    const checkChunk = vi.fn<CheckChunk>().mockResolvedValue(undefined);
+    const recover = vi.fn<RecoverReader>().mockResolvedValue({
+      reader: await indexedReader(),
+      alert: undefined,
+    });
+
+    // When
+    const values = await collect(new McapIndexedIterableSource(reader, { checkChunk, recover }));
+
+    // Then the chunks were checked, and reading resumed on the rebuilt index
+    expect(values).toEqual([1, 2, 3, 4, 5]);
+    expect(checkChunk).toHaveBeenCalled();
+    expect(recover).toHaveBeenCalledTimes(1);
+  });
+
+  it("drops no chunk when checking it can't read the file", async () => {
+    // Given a read that keeps failing, and a check that can't read the chunk either (offline)
+    const reader = await indexedReader();
+    failReads(reader, Infinity);
+    const checkChunk = vi.fn<CheckChunk>().mockRejectedValue(new Error("offline"));
+    const recover = vi.fn<RecoverReader>();
+    const corruptChunks = new Set<bigint>();
+
+    // When / Then the read error surfaces, and no chunk is taken for corrupt
+    await expect(
+      collect(new McapIndexedIterableSource(reader, { checkChunk, recover, corruptChunks })),
+    ).rejects.toThrow("offline");
+    expect(corruptChunks.size).toBe(0);
+    expect(recover).not.toHaveBeenCalled();
+  });
+
   it("surfaces the error when the recovered reader fails too, instead of retrying forever", async () => {
     // Given a reader and a recovered reader that both always fail
     const reader = await indexedReader();
@@ -457,5 +537,106 @@ describe("McapIndexedIterableSource read errors", () => {
       "read failed",
     );
     expect(recover).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("McapRecoveryScanner message indexes", () => {
+  /** One chunk with `count` messages alternating between two topics, without a footer */
+  async function oneChunk(count: number): Promise<Uint8Array<ArrayBuffer>> {
+    const buffer = new TempBuffer();
+    const writer = new McapWriter({ writable: buffer, chunkSize: 1 << 30 });
+    await writer.start({ library: "test", profile: "" });
+    const channels = [];
+    for (const topic of ["/a", "/b"]) {
+      channels.push(
+        await writer.registerChannel({
+          schemaId: 0,
+          topic,
+          messageEncoding: "json",
+          metadata: new Map(),
+        }),
+      );
+    }
+    for (let i = 0; i < count; i++) {
+      const time = BigInt(count - i); // newest first: the index must still come out sorted
+      await writer.addMessage({
+        channelId: channels[i % 2]!,
+        sequence: i,
+        logTime: time,
+        publishTime: time,
+        data: payload(1),
+      });
+    }
+    await writer.end();
+    const bytes = buffer.get();
+    return bytes.slice(0, bytes.byteLength - 8); // no footer magic: recover it
+  }
+
+  it("keeps the same index in memory however many messages a chunk holds", async () => {
+    // Given a chunk with 10 messages and one with 100,000
+    const few = await scan(await oneChunk(10));
+    const many = await scan(await oneChunk(100_000));
+
+    // Then both keep the same: the snapshot holds everything a scanner keeps in memory. Only the
+    // file offset in its header has more digits (an index of every message would add 1.6 MB).
+    expect(many.messageCount).toBe(100_000n);
+    expect(many.toSnapshot().byteLength - few.toSnapshot().byteLength).toBeLessThan(8);
+  });
+
+  it("rebuilds a chunk's message indexes when it is read", async () => {
+    // Given a recovered chunk with messages on two topics
+    const bytes = await oneChunk(1000);
+    const scanner = await scan(bytes);
+    const reader = await McapIndexedReader.Initialize({
+      readable: scanner.toReadable(readableOf(bytes), new ChunkCache()),
+    });
+
+    // When one topic is read
+    const times = [];
+    for await (const message of reader.readMessages({ topics: ["/b"] })) {
+      times.push(message.logTime);
+    }
+
+    // Then all of its messages come in log time order
+    expect(times).toHaveLength(500);
+    expect(times).toEqual([...times].sort((a, b) => (a < b ? -1 : 1)));
+  });
+
+  it("reads each chunk from the file once, however often it is read", async () => {
+    // Given a live reader on a recovered file that counts reads of its chunks
+    const bytes = await recording(4);
+    const scanner = await scan(bytes);
+    const recovered = await McapIndexedReader.Initialize({
+      readable: scanner.toReadable(readableOf(bytes), new ChunkCache()),
+    });
+    const starts = new Set(recovered.chunkIndexes.map((chunk) => chunk.chunkStartOffset));
+    let chunkReads = 0;
+    const base = readableOf(bytes);
+    const counting: McapTypes.IReadable = {
+      size: async () => await base.size(),
+      read: async (offset, length) => {
+        chunkReads += starts.has(offset) ? 1 : 0;
+        return await base.read(offset, length);
+      },
+    };
+    const { reader } = await scanner.openLiveReader(
+      counting,
+      await loadDecompressHandlers(),
+      new ChunkCache(),
+    );
+
+    // When every message is read by two readers at once (e.g. backfill and playback), then again
+    const readAll = async () => {
+      const read = [];
+      for await (const message of reader.readMessages({ startingAt: 0n })) {
+        read.push((JSON.parse(new TextDecoder().decode(message.data)) as { v: number }).v);
+      }
+      return read;
+    };
+    const values = [...(await Promise.all([readAll(), readAll()])).flat(), ...(await readAll())];
+
+    // Then each chunk was read once: for its message indexes, and kept for its messages
+    expect(values).toEqual([1, 2, 3, 4, 1, 2, 3, 4, 1, 2, 3, 4]);
+    expect(chunkReads).toBe(4);
   });
 });

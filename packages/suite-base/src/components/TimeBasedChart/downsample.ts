@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { pushAll } from "@lichtblick/den/collection";
 import { Point } from "@lichtblick/suite-base/components/Chart/datasets";
 
 import type { PlotViewport } from "./types";
@@ -166,7 +167,10 @@ export function continueDownsample(
       // always add the first datum of an new interval
       newPoints.push(index);
 
-      indices.push(...newPoints.sort((a, b) => a - b));
+      pushAll(
+        indices,
+        newPoints.sort((a, b) => a - b),
+      );
 
       intFirst = { xPixel: x, yPixel: y, index, label };
       intLast = { xPixel: x, yPixel: y, index, label };

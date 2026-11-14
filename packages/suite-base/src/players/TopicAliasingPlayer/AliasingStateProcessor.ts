@@ -112,10 +112,17 @@ export class AliasingStateProcessor implements IStateProcessor {
     return (existing ?? []).concat(this.#alerts);
   });
 
+  // Blocks are replaced, never changed, when they load; so only new blocks are aliased again
+  #aliasedBlocks = new WeakMap<MessageBlock, MessageBlock>();
+
   #aliasBlocks = memoizeWeak((blocks: MessageBlocks): MessageBlocks => {
     return blocks.map((block, idx) => {
       if (!block) {
         return undefined;
+      }
+      const existing = this.#aliasedBlocks.get(block);
+      if (existing) {
+        return existing;
       }
 
       const messagesByTopic = this.#blockProcessors.reduce((acc, processor) => {
@@ -125,10 +132,9 @@ export class AliasingStateProcessor implements IStateProcessor {
         };
       }, block.messagesByTopic);
 
-      return {
-        ...block,
-        messagesByTopic,
-      };
+      const aliased = { ...block, messagesByTopic };
+      this.#aliasedBlocks.set(block, aliased);
+      return aliased;
     });
   });
 

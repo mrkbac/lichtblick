@@ -5,11 +5,14 @@
 module.exports = {
   meta: { name: "@lichtblick" },
   rules: {
+    "heavy-imports": require("./heavy-imports"),
     "license-header": require("./license-header"),
     "link-target": require("./link-target"),
     "lodash-ramda-imports": require("./lodash-ramda-imports"),
     "no-boolean-parameters": require("./no-boolean-parameters"),
     "no-getters-setters": require("./no-getters-setters"),
+    "no-object-url": require("./no-object-url"),
+    "no-push-spread": require("./no-push-spread"),
     "no-return-promise-resolve": require("./no-return-promise-resolve"),
     "ramda-usage": require("./ramda-usage"),
     "strict-equality": require("./strict-equality"),

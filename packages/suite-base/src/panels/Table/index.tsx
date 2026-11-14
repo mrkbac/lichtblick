@@ -60,7 +60,7 @@ function TablePanel({ config, saveConfig }: Props) {
   const topicName = topicRosPath?.topicName ?? "";
   const msgs = useMessagesByTopic({ topics: [topicName], historySize: 1 })[topicName];
   const cachedGetMessagePathDataItems = useCachedGetMessagePathDataItems([topicPath]);
-  const msg = msgs?.[0];
+  const msg = msgs?.last();
   const cachedMessages = msg ? (cachedGetMessagePathDataItems(topicPath, msg) ?? []) : [];
   const firstCachedMessage = cachedMessages[0];
 

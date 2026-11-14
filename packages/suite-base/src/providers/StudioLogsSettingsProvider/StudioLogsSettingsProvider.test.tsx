@@ -55,6 +55,8 @@ describe("StudioLogsSettingsProvider", () => {
   });
 
   const mockLogger = createMockLogger();
+  let channelAddedListener: (() => void) | undefined;
+  const unsubscribeChannelAdded = vi.fn();
 
   const defaultMockState: IStudioLogsSettings = {
     channels: [{ name: BasicBuilder.string(), enabled: true }],
@@ -72,6 +74,10 @@ describe("StudioLogsSettingsProvider", () => {
 
     mockUseLocalStorage.mockReturnValue([{}, vi.fn(), vi.fn()]);
     (mockLog.channels as Mock).mockReturnValue([mockLogger]);
+    (mockLog.onChannelAdded as Mock).mockImplementation((listener: () => void) => {
+      channelAddedListener = listener;
+      return unsubscribeChannelAdded;
+    });
     (mockCreateStudioLogsSettingsStore as Mock).mockReturnValue(mockStore);
     mockStore.getState.mockReturnValue(defaultMockState);
     mockStore.subscribe.mockReturnValue(vi.fn());
@@ -170,6 +176,28 @@ describe("StudioLogsSettingsProvider", () => {
   });
 
   describe("Channel Count Monitoring", () => {
+    it("settles when the store merges channels with the same name", () => {
+      // Given two registered loggers that the store shows as one channel
+      (mockLog.channels as Mock).mockReturnValue([mockLogger, createMockLogger()]);
+      mockStore.getState.mockReturnValue({
+        ...defaultMockState,
+        channels: [{ name: "<root>", enabled: true }],
+      });
+
+      // When
+      render(
+        <StudioLogsSettingsProvider>
+          <div>Test</div>
+        </StudioLogsSettingsProvider>,
+      );
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      // Then
+      expect(mockCreateStudioLogsSettingsStore).toHaveBeenCalledTimes(1);
+    });
+
     it("should recreate store when channel count changes", () => {
       // Given
       (mockLog.channels as Mock).mockReturnValue([mockLogger]);
@@ -189,7 +217,9 @@ describe("StudioLogsSettingsProvider", () => {
       (mockLog.channels as Mock).mockReturnValue([mockLogger, newLogger]);
 
       act(() => {
-        vi.advanceTimersByTime(1000);
+        channelAddedListener?.();
+        channelAddedListener?.();
+        vi.runAllTimers();
       });
 
       // Then
@@ -212,16 +242,16 @@ describe("StudioLogsSettingsProvider", () => {
 
       // When
       act(() => {
-        vi.advanceTimersByTime(2000);
+        channelAddedListener?.();
+        vi.runAllTimers();
       });
 
       // Then
       expect(mockCreateStudioLogsSettingsStore).toHaveBeenCalledTimes(1);
     });
 
-    it("should clean up interval on unmount", () => {
+    it("should stop listening for channels on unmount", () => {
       // Given
-      const clearIntervalSpy = vi.spyOn(global, "clearInterval");
       const { unmount } = render(
         <StudioLogsSettingsProvider>
           <div>Test</div>
@@ -232,7 +262,7 @@ describe("StudioLogsSettingsProvider", () => {
       unmount();
 
       // Then
-      expect(clearIntervalSpy).toHaveBeenCalled();
+      expect(unsubscribeChannelAdded).toHaveBeenCalled();
     });
   });
 
@@ -369,7 +399,9 @@ describe("StudioLogsSettingsProvider", () => {
       (mockLog.channels as Mock).mockReturnValue([mockLogger, newLogger]);
 
       act(() => {
-        vi.advanceTimersByTime(1000);
+        channelAddedListener?.();
+        channelAddedListener?.();
+        vi.runAllTimers();
       });
 
       // Then

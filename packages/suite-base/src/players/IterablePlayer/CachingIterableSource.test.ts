@@ -17,6 +17,8 @@ import {
   MessageIteratorArgs,
 } from "./IIterableSource";
 
+const TEST_CACHE_BYTES = 600 * 1024 * 1024;
+
 class TestSource implements IIterableSource {
   public waitForUpdate?: () => Promise<Initialization | undefined>;
 
@@ -45,7 +47,7 @@ class TestSource implements IIterableSource {
 describe("CachingIterableSource", () => {
   it("should construct and initialize", async () => {
     const source = new TestSource();
-    const bufferedSource = new CachingIterableSource(source);
+    const bufferedSource = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
 
     await bufferedSource.initialize();
     expect(bufferedSource.loadedRanges()).toEqual([{ start: 0, end: 0 }]);
@@ -54,7 +56,7 @@ describe("CachingIterableSource", () => {
   it("doesn't count results a consumer stopped before they were stored", async () => {
     // Given a source with several messages at one time (pending until time moves on)
     const source = new TestSource();
-    const cache = new CachingIterableSource(source);
+    const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
     await cache.initialize();
     source.messageIterator = async function* () {
       for (let i = 0; i < 3; i++) {
@@ -83,7 +85,7 @@ describe("CachingIterableSource", () => {
   it("keeps cached blocks outside the ranges an update changed", async () => {
     // Given a cache with blocks over 0–4 s and 6–9 s
     const source = new TestSource();
-    const cache = new CachingIterableSource(source);
+    const cache = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
     await cache.initialize();
     const reads: MessageIteratorArgs[] = [];
     source.messageIterator = async function* (args) {
@@ -129,7 +131,7 @@ describe("CachingIterableSource", () => {
 
   it("should produce messages that the source produces", async () => {
     const source = new TestSource();
-    const bufferedSource = new CachingIterableSource(source);
+    const bufferedSource = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
 
     await bufferedSource.initialize();
 
@@ -224,7 +226,7 @@ describe("CachingIterableSource", () => {
 
   it("should purge the cache when topics change", async () => {
     const source = new TestSource();
-    const bufferedSource = new CachingIterableSource(source);
+    const bufferedSource = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
 
     await bufferedSource.initialize();
 
@@ -268,7 +270,7 @@ describe("CachingIterableSource", () => {
 
   it("should yield correct messages when starting a new iterator before the the cached items", async () => {
     const source = new TestSource();
-    const bufferedSource = new CachingIterableSource(source);
+    const bufferedSource = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
 
     await bufferedSource.initialize();
 
@@ -491,7 +493,7 @@ describe("CachingIterableSource", () => {
 
   it("should respect end bounds when loading the cache", async () => {
     const source = new TestSource();
-    const bufferedSource = new CachingIterableSource(source);
+    const bufferedSource = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
 
     await bufferedSource.initialize();
 
@@ -552,7 +554,7 @@ describe("CachingIterableSource", () => {
 
   it("should respect end bounds when reading the cache", async () => {
     const source = new TestSource();
-    const bufferedSource = new CachingIterableSource(source);
+    const bufferedSource = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
 
     await bufferedSource.initialize();
 
@@ -620,7 +622,7 @@ describe("CachingIterableSource", () => {
 
   it("should getBackfillMessages from cache", async () => {
     const source = new TestSource();
-    const bufferedSource = new CachingIterableSource(source);
+    const bufferedSource = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
 
     await bufferedSource.initialize();
 
@@ -679,7 +681,10 @@ describe("CachingIterableSource", () => {
 
   it("should getBackfillMessages from multiple cache blocks", async () => {
     const source = new TestSource();
-    const bufferedSource = new CachingIterableSource(source, { maxBlockSize: 100 });
+    const bufferedSource = new CachingIterableSource(source, {
+      maxBlockSize: 100,
+      maxTotalSize: TEST_CACHE_BYTES,
+    });
 
     await bufferedSource.initialize();
 
@@ -794,6 +799,62 @@ describe("CachingIterableSource", () => {
     }
   });
 
+  it("evicts as many blocks as a large message needs to stay under the cap", async () => {
+    const source = new TestSource();
+    const cache = new CachingIterableSource(source, { maxBlockSize: 100, maxTotalSize: 300 });
+    await cache.initialize();
+
+    const sizes = [50, 50, 50, 50, 50, 50, 150];
+    source.messageIterator = async function* () {
+      for (const [i, sizeInBytes] of sizes.entries()) {
+        yield {
+          type: "message-event",
+          msgEvent: {
+            topic: "a",
+            receiveTime: { sec: i, nsec: 0 },
+            message: undefined,
+            sizeInBytes,
+            schemaName: "foo",
+          },
+        };
+      }
+    };
+
+    let maxCacheSize = 0;
+    for await (const result of cache.messageIterator({ topics: mockTopicSelection("a") })) {
+      if (result.type === "message-event") {
+        cache.setCurrentReadHead(result.msgEvent.receiveTime);
+      }
+      maxCacheSize = Math.max(maxCacheSize, cache.getCacheSize());
+    }
+    expect(maxCacheSize).toBeLessThanOrEqual(300);
+  });
+
+  it("rejects a message without a size instead of losing count", async () => {
+    const source = new TestSource();
+    const cache = new CachingIterableSource(source, { maxTotalSize: 300 });
+    await cache.initialize();
+    source.messageIterator = async function* () {
+      yield {
+        type: "message-event",
+        msgEvent: {
+          topic: "a",
+          receiveTime: { sec: 0, nsec: 0 },
+          message: undefined,
+          sizeInBytes: undefined as unknown as number,
+          schemaName: "foo",
+        },
+      };
+    };
+
+    await expect(async () => {
+      const iterator = cache.messageIterator({ topics: mockTopicSelection("a") });
+      while ((await iterator.next()).done !== true) {
+        // read all
+      }
+    }).rejects.toThrow("message size must be a finite, non-negative byte count");
+  });
+
   it("should report full cache as cache fills up", async () => {
     const source = new TestSource();
     const bufferedSource = new CachingIterableSource(source, {
@@ -893,6 +954,7 @@ describe("CachingIterableSource", () => {
     const source = new TestSource();
     const bufferedSource = new CachingIterableSource(source, {
       maxBlockSize: 100,
+      maxTotalSize: TEST_CACHE_BYTES,
     });
 
     await bufferedSource.initialize();
@@ -988,7 +1050,7 @@ describe("CachingIterableSource", () => {
 
   it("should getBackfillMessages from cache where messages have same timestamp", async () => {
     const source = new TestSource();
-    const bufferedSource = new CachingIterableSource(source);
+    const bufferedSource = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
 
     await bufferedSource.initialize();
 
@@ -1066,7 +1128,7 @@ describe("CachingIterableSource", () => {
 
   it("should emit loadedRangesChange once until the ranges are read", async () => {
     const source = new TestSource();
-    const bufferedSource = new CachingIterableSource(source);
+    const bufferedSource = new CachingIterableSource(source, { maxTotalSize: TEST_CACHE_BYTES });
     await bufferedSource.initialize();
 
     source.messageIterator = async function* messageIterator(

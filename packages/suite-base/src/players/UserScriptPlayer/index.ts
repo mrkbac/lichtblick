@@ -22,7 +22,7 @@ import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
 
 import { MutexLocked } from "@lichtblick/den/async";
-import { filterMap } from "@lichtblick/den/collection";
+import { filterMap, VecQueue } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
 import { Metadata, ParameterValue } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
@@ -36,6 +36,7 @@ import { generateTypesLib } from "@lichtblick/suite-base/players/UserScriptPlaye
 import { TransformArgs } from "@lichtblick/suite-base/players/UserScriptPlayer/transformerWorker/types";
 import {
   Diagnostic,
+  ProcessMessages,
   ScriptRegistration,
   UserScriptLog,
 } from "@lichtblick/suite-base/players/UserScriptPlayer/types";
@@ -58,8 +59,14 @@ import { basicDatatypes } from "@lichtblick/suite-base/util/basicDatatypes";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
-import { DIAGNOSTIC_SEVERITY, ERROR_CODES, MAX_GLOBAL_BUFFER_SIZE, SOURCES } from "./constants";
-import type { RuntimeWorkerApi } from "./runtimeWorker";
+import { RuntimeWorker, RuntimeWorkerPool } from "./RuntimeWorkerPool";
+import {
+  DIAGNOSTIC_SEVERITY,
+  ERROR_CODES,
+  MAX_GLOBAL_BUFFER_SIZE,
+  SOURCES,
+  TRANSFORM_BATCH_SIZE,
+} from "./constants";
 import { getPreloadTypes, remapVirtualSubscriptions } from "./subscriptions";
 import type { TransformerWorkerApi } from "./transformerWorker";
 
@@ -104,9 +111,12 @@ type ProtectedState = {
 type CacheConsumerHandle = { index: number };
 
 type BatchIteratorCacheEntry = {
-  results: Readonly<IIterableSourceIteratorResult>[];
+  topic: string;
+  /** Results not yet read by every consumer; `results.at(0)` has index `pruneOffset`. */
+  results: VecQueue<Readonly<IIterableSourceIteratorResult>>;
   done: boolean;
   error?: Error;
+  /** Resolved (and replaced) whenever results are added or consumed, or the cache stops. */
   resolve: () => void;
   promise: Promise<void>;
   processor: { terminate: () => void };
@@ -136,8 +146,8 @@ export default class UserScriptPlayer implements Player {
   // listener for state updates
   #listener?: (arg0: PlayerState) => Promise<void>;
 
-  // Not sure if there is perf issue with unused workers (may just go idle) - requires more research
-  #unusedRuntimeWorkers: Comlink.Remote<RuntimeWorkerApi>[] = [];
+  // Owns every runtime worker; close() disposes it so no worker outlives the player.
+  readonly #runtimeWorkers = new RuntimeWorkerPool(() => UserScriptPlayer.CreateRuntimeWorker());
   #setUserScriptDiagnostics: (scriptId: string, diagnostics: readonly Diagnostic[]) => void;
   #addUserScriptLogs: (scriptId: string, logs: UserScriptLog[]) => void;
   #transformRpc?: Comlink.Remote<TransformerWorkerApi>;
@@ -174,8 +184,6 @@ export default class UserScriptPlayer implements Player {
   // Shared cache for virtual topic batch iterators. One source consumer per topic processes
   // messages through its own worker; multiple panels replay from the shared results array.
   readonly #batchIteratorCache = new Map<string, BatchIteratorCacheEntry>();
-
-  #totalCachedResults: number = 0;
 
   readonly #emitLock = new Mutex();
 
@@ -261,28 +269,25 @@ export default class UserScriptPlayer implements Player {
       return [];
     }
 
-    const identity = <T>(item: T) => item;
-
-    const outputMessages: MessageEvent[] = [];
-    for (const message of inputMessages) {
-      const messagePromises = [];
-      for (const scriptRegistration of scriptRegistrations) {
-        if (
-          this.#scriptSubscriptions[scriptRegistration.output.name] &&
-          scriptRegistration.inputs.includes(message.topic)
-        ) {
-          const messagePromise = scriptRegistration.processMessage(message, globalVariables);
-          messagePromises.push(messagePromise);
+    // One worker round trip per script per frame; scripts run in parallel.
+    const outputs = await Promise.all(
+      scriptRegistrations.map(async (scriptRegistration) => {
+        if (!this.#scriptSubscriptions[scriptRegistration.output.name]) {
+          return [];
         }
-      }
-      if (messagePromises.length === 0) {
-        continue;
-      }
-      const output = await Promise.all(messagePromises);
-      outputMessages.push(...filterMap(output, identity));
-    }
-
-    return outputMessages;
+        const inputs = inputMessages.filter((message) =>
+          scriptRegistration.inputs.includes(message.topic),
+        );
+        if (inputs.length === 0) {
+          return [];
+        }
+        return filterMap(
+          await scriptRegistration.processMessages(inputs, globalVariables),
+          (message) => message,
+        );
+      }),
+    );
+    return outputs.flat();
   }
 
   public setGlobalVariables(globalVariables: GlobalVariables): void {
@@ -380,64 +385,39 @@ export default class UserScriptPlayer implements Player {
     // a specific script. A script may have a problem that may later clear. Using the key we can add/remove
     // alerts for specific user scripts independently of other user scripts.
     const alertKey = `script-id-${scriptId}`;
+    const errorAlert: PlayerAlert = {
+      severity: "error",
+      message: `User Script ${scriptData.name} encountered an error.`,
+      tip: "Open the User Scripts panel and check the Alerts tab for errors.",
+    };
+    const noMessageAlert: PlayerAlert = {
+      severity: "warn",
+      message: `User Script ${scriptData.name} did not produce a message.`,
+      tip: "Check that all code paths in the user script return a message.",
+    };
+    const onRuntimeError = (message: string) => {
+      this.#alertStore.set(alertKey, {
+        severity: "error",
+        message: `User script runtime error: ${message}`,
+      });
+      void this.#queueEmitState();
+    };
+
     const buildMessageProcessor = (): {
-      registration: ScriptRegistration["processMessage"];
+      processMessages: ProcessMessages;
       terminate: () => void;
     } => {
-      // rpc channel for this processor. Lazily created on each message if an unused
-      // channel isn't available.
-      let rpc: undefined | Comlink.Remote<RuntimeWorkerApi>;
+      // Worker for this processor, taken from the pool on first use.
+      let worker: RuntimeWorker | undefined;
 
-      const registration = async (msgEvent: MessageEvent, globalVariables: GlobalVariables) => {
+      const processMessages: ProcessMessages = async (msgEvents, globalVariables) => {
+        if (msgEvents.length === 0) {
+          return [];
+        }
         // Register the script within a web worker to be executed.
-        if (!rpc) {
-          rpc = this.#unusedRuntimeWorkers.pop();
-
-          // initialize a new worker since no unused one is available
-          if (!rpc) {
-            const worker = UserScriptPlayer.CreateRuntimeWorker();
-
-            worker.onerror = (event) => {
-              log.error(event);
-
-              this.#alertStore.set(alertKey, {
-                message: `User script runtime error: ${event.message}`,
-                severity: "error",
-              });
-
-              // trigger listener updates
-              void this.#queueEmitState();
-            };
-
-            const port: MessagePort = worker.port;
-            port.onmessageerror = (event) => {
-              log.error(event);
-
-              this.#alertStore.set(alertKey, {
-                severity: "error",
-                message: `User script runtime error: ${String(event.data)}`,
-              });
-
-              void this.#queueEmitState();
-            };
-            port.start();
-            rpc = Comlink.wrap<RuntimeWorkerApi>(port);
-
-            void rpc.onError(
-              Comlink.proxy((msg: string) => {
-                log.error(msg);
-
-                this.#alertStore.set(alertKey, {
-                  severity: "error",
-                  message: `User script runtime error: ${msg}`,
-                });
-
-                void this.#queueEmitState();
-              }),
-            );
-          }
-
-          const { error, userScriptDiagnostics, userScriptLogs } = await rpc.registerScript({
+        if (!worker) {
+          worker = this.#runtimeWorkers.acquire(onRuntimeError);
+          const { error, userScriptDiagnostics, userScriptLogs } = await worker.rpc.registerScript({
             projectCode,
             scriptCode: transpiledCode,
           });
@@ -451,96 +431,93 @@ export default class UserScriptPlayer implements Player {
                 code: ERROR_CODES.RUNTIME,
               },
             ]);
-            return;
+            return msgEvents.map(() => undefined);
           }
           this.#addUserScriptLogs(scriptId, userScriptLogs);
         }
 
-        const result = await rpc.processMessage({
-          message: {
+        const results = await worker.rpc.processMessages({
+          messages: msgEvents.map((msgEvent) => ({
             topic: msgEvent.topic,
             receiveTime: msgEvent.receiveTime,
             message: msgEvent.message,
             datatype: msgEvent.schemaName,
-          },
+          })),
           globalVariables,
         });
 
-        const allDiagnostics = result.userScriptDiagnostics;
-        if (result.error) {
-          allDiagnostics.push({
-            source: SOURCES.Runtime,
-            severity: DIAGNOSTIC_SEVERITY.Error,
-            message: result.error,
-            code: ERROR_CODES.RUNTIME,
-          });
+        // Apply the results in order, as if the messages had been processed one by one: the
+        // alert reflects the last message, diagnostics the last failing one.
+        const logs: UserScriptLog[] = [];
+        let diagnostics: Diagnostic[] | undefined;
+        let alert: PlayerAlert | undefined;
+        const outputs = results.map((result, i): MessageEvent | undefined => {
+          for (const entry of result.userScriptLogs) {
+            logs.push(entry);
+          }
+          const allDiagnostics = result.userScriptDiagnostics;
+          if (result.error) {
+            allDiagnostics.push({
+              source: SOURCES.Runtime,
+              severity: DIAGNOSTIC_SEVERITY.Error,
+              message: result.error,
+              code: ERROR_CODES.RUNTIME,
+            });
+          }
+          if (allDiagnostics.length > 0) {
+            diagnostics = allDiagnostics;
+            alert = errorAlert;
+            return undefined;
+          }
+          if (!result.message) {
+            alert = noMessageAlert;
+            return undefined;
+          }
+          alert = undefined;
+          const msgEvent = msgEvents[i]!;
+          return {
+            topic: outputTopic,
+            receiveTime: msgEvent.receiveTime,
+            message: result.message,
+            sizeInBytes: msgEvent.sizeInBytes,
+            schemaName: outputDatatype,
+          };
+        });
+
+        this.#addUserScriptLogs(scriptId, logs);
+        if (alert) {
+          this.#alertStore.set(alertKey, alert);
+        } else {
+          // We received a message successfully, so clear any previous problem from this script.
+          this.#alertStore.delete(alertKey);
         }
-
-        this.#addUserScriptLogs(scriptId, result.userScriptLogs);
-
-        if (allDiagnostics.length > 0) {
-          this.#alertStore.set(alertKey, {
-            severity: "error",
-            message: `User Script ${scriptData.name} encountered an error.`,
-            tip: "Open the User Scripts panel and check the Alerts tab for errors.",
-          });
-
-          this.#setUserScriptDiagnostics(scriptId, allDiagnostics);
-          return;
+        if (diagnostics) {
+          this.#setUserScriptDiagnostics(scriptId, diagnostics);
         }
-
-        if (!result.message) {
-          this.#alertStore.set(alertKey, {
-            severity: "warn",
-            message: `User Script ${scriptData.name} did not produce a message.`,
-            tip: "Check that all code paths in the user script return a message.",
-          });
-          return;
-        }
-
-        // At this point we've received a message successfully from the user script, therefore
-        // we clear any previous problem from this script.
-        this.#alertStore.delete(alertKey);
-
-        return {
-          topic: outputTopic,
-          receiveTime: msgEvent.receiveTime,
-          message: result.message,
-          sizeInBytes: msgEvent.sizeInBytes,
-          schemaName: outputDatatype,
-        };
+        return outputs;
       };
 
       const terminate = () => {
         this.#alertStore.delete(alertKey);
-
-        if (rpc) {
-          this.#unusedRuntimeWorkers.push(rpc);
-          rpc = undefined;
+        if (worker) {
+          this.#runtimeWorkers.release(worker);
+          worker = undefined;
         }
       };
 
-      return { registration, terminate };
+      return { processMessages, terminate };
     };
 
     const messageProcessor = buildMessageProcessor();
-    const blockProcessor = buildMessageProcessor();
 
     const result: ScriptRegistration = {
       scriptId,
       scriptData,
       inputs: inputTopics,
       output: { name: outputTopic, schemaName: outputDatatype },
-      processMessage: messageProcessor.registration,
-      processBlockMessage: blockProcessor.registration,
-      buildMessageProcessor: () => {
-        const proc = buildMessageProcessor();
-        return { processMessage: proc.registration, terminate: proc.terminate };
-      },
-      terminate: () => {
-        messageProcessor.terminate();
-        blockProcessor.terminate();
-      },
+      processMessages: messageProcessor.processMessages,
+      buildMessageProcessor,
+      terminate: messageProcessor.terminate,
     };
     state.scriptRegistrationCache.push({ scriptId, userScript, result });
     return result;
@@ -602,13 +579,9 @@ export default class UserScriptPlayer implements Player {
   // (NOT on seek — seek doesn't affect preloaded block data and PlotCoordinator won't re-subscribe).
   #invalidateBatchIteratorCache() {
     for (const cache of this.#batchIteratorCache.values()) {
-      this.#totalCachedResults -= cache.results.length;
-      cache.done = true;
-      cache.resolve();
-      cache.processor.terminate();
+      this.#stopCache(cache);
     }
     this.#batchIteratorCache.clear();
-    this.#alertStore.delete("batch-iterator-buffer-overflow");
   }
 
   // - When we seek (in order to reset state)
@@ -996,6 +969,8 @@ export default class UserScriptPlayer implements Player {
         scriptRegistration.terminate();
       }
     });
+    this.#invalidateBatchIteratorCache();
+    this.#runtimeWorkers.dispose();
     this.#player.close();
     if (this.#transformRpc) {
       void this.#transformRpc.close();
@@ -1068,7 +1043,7 @@ export default class UserScriptPlayer implements Player {
     if (!options) {
       const topic = registration.output.name;
       const existingCache = this.#batchIteratorCache.get(topic);
-      if (existingCache) {
+      if (existingCache?.pruneOffset === 0) {
         return this.#createReplayIterator(existingCache);
       }
 
@@ -1076,7 +1051,12 @@ export default class UserScriptPlayer implements Player {
       if (!inputIterators) {
         return undefined;
       }
-      const cache = this.#startSharedConsumer(registration, inputIterators);
+      // The shared results were already dropped past their start: a late joiner gets its own
+      // pipeline so it still sees the whole range.
+      if (existingCache) {
+        return this.#createIndependentIterator(registration, inputIterators);
+      }
+      const cache = this.#startSharedConsumer(topic, registration, inputIterators);
       this.#batchIteratorCache.set(topic, cache);
       return this.#createReplayIterator(cache);
     }
@@ -1097,7 +1077,7 @@ export default class UserScriptPlayer implements Player {
    */
   static async *#mergeAndTransformIterators(
     inputIterators: AsyncIterableIterator<Readonly<IIterableSourceIteratorResult>>[],
-    processor: { processMessage: ScriptRegistration["processMessage"]; terminate: () => void },
+    processor: { processMessages: ProcessMessages; terminate: () => void },
     globalVariables: GlobalVariables,
   ): AsyncGenerator<Readonly<IIterableSourceIteratorResult>> {
     const source =
@@ -1105,17 +1085,34 @@ export default class UserScriptPlayer implements Player {
         ? inputIterators[0]!
         : UserScriptPlayer.#mergeIteratorsByTime(inputIterators);
 
+    // Messages go to the worker in batches: one round trip per batch instead of per message.
+    let batch: MessageEvent[] = [];
+    const flush = async () => {
+      if (batch.length === 0) {
+        return [];
+      }
+      const outputs = await processor.processMessages(batch, globalVariables);
+      batch = [];
+      return filterMap(outputs, (msgEvent) =>
+        msgEvent ? { type: "message-event" as const, msgEvent } : undefined,
+      );
+    };
+
     try {
       for await (const result of source) {
         if (result.type === "message-event") {
-          const outputMessage = await processor.processMessage(result.msgEvent, globalVariables);
-          if (outputMessage) {
-            yield { type: "message-event" as const, msgEvent: outputMessage };
+          batch.push(result.msgEvent);
+          if (batch.length < TRANSFORM_BATCH_SIZE) {
+            continue;
           }
-        } else {
+        }
+        // Flush before yielding a non-message result so the order is kept.
+        yield* await flush();
+        if (result.type !== "message-event") {
           yield result;
         }
       }
+      yield* await flush();
     } finally {
       for (const iter of inputIterators) {
         await iter.return?.();
@@ -1183,6 +1180,7 @@ export default class UserScriptPlayer implements Player {
   }
 
   #startSharedConsumer(
+    topic: string,
     registration: ScriptRegistration,
     inputIterators: AsyncIterableIterator<Readonly<IIterableSourceIteratorResult>>[],
   ) {
@@ -1190,18 +1188,14 @@ export default class UserScriptPlayer implements Player {
     const globalVariables = this.#globalVariables;
 
     const cache: BatchIteratorCacheEntry = {
-      results: [],
+      topic,
+      results: new VecQueue(),
       done: false,
       error: undefined,
       ...Promise.withResolvers<void>(),
       processor,
       consumers: new Set(),
       pruneOffset: 0,
-    };
-
-    const notify = () => {
-      cache.resolve();
-      ({ promise: cache.promise, resolve: cache.resolve } = Promise.withResolvers<void>());
     };
 
     // Source consumer — processes messages once, populates shared results
@@ -1213,28 +1207,57 @@ export default class UserScriptPlayer implements Player {
           globalVariables,
         );
         for await (const result of source) {
+          // Backpressure: wait for the slowest consumer instead of buffering without bound.
+          while (!cache.done && cache.results.size() >= MAX_GLOBAL_BUFFER_SIZE) {
+            await cache.promise;
+          }
           if (cache.done) {
             break;
           }
-          cache.results.push(result);
-          this.#totalCachedResults++;
-          notify();
+          cache.results.enqueue(result);
+          UserScriptPlayer.#notify(cache);
         }
       } catch (err) {
         cache.error = err as Error;
       } finally {
         cache.done = true;
-        notify();
+        UserScriptPlayer.#notify(cache);
       }
     })();
 
     return cache;
   }
 
-  #createReplayIterator(cache: BatchIteratorCacheEntry) {
+  static #notify(cache: BatchIteratorCacheEntry): void {
+    cache.resolve();
+    ({ promise: cache.promise, resolve: cache.resolve } = Promise.withResolvers<void>());
+  }
+
+  #createReplayIterator(
+    cache: BatchIteratorCacheEntry,
+  ): AsyncIterableIterator<Readonly<IIterableSourceIteratorResult>> {
     const consumer: CacheConsumerHandle = { index: cache.pruneOffset };
     cache.consumers.add(consumer);
-    return this.#replayIteratorImpl(cache, consumer);
+    const gen = this.#replayIteratorImpl(cache, consumer);
+    // A generator that is returned before its first next() never runs its finally block, so leave
+    // the cache here too; otherwise the abandoned consumer would block the producer forever.
+    const leave = () => {
+      this.#leaveCache(cache, consumer);
+    };
+    return {
+      next: async () => await gen.next(),
+      return: async (value?: unknown) => {
+        leave();
+        return await gen.return(value);
+      },
+      throw: async (err?: unknown) => {
+        leave();
+        return await gen.throw(err);
+      },
+      [Symbol.asyncIterator]() {
+        return this;
+      },
+    };
   }
 
   async *#replayIteratorImpl(
@@ -1244,18 +1267,11 @@ export default class UserScriptPlayer implements Player {
     try {
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       while (true) {
-        if (this.#totalCachedResults > MAX_GLOBAL_BUFFER_SIZE) {
-          this.#alertStore.set("batch-iterator-buffer-overflow", {
-            severity: "warn",
-            message: "User script output buffer exceeded",
-            tip: `Maximum ${MAX_GLOBAL_BUFFER_SIZE} cached results reached. Late-joining panels may show incomplete data for user script topics.`,
-          });
-          this.#pruneCache(cache);
-        }
-        const localIndex = consumer.index - cache.pruneOffset;
-        if (localIndex < cache.results.length) {
-          yield cache.results[localIndex]!;
+        const result = cache.results.at(consumer.index - cache.pruneOffset);
+        if (result) {
           consumer.index++;
+          this.#pruneCache(cache);
+          yield result;
         } else if (cache.done) {
           if (cache.error) {
             throw cache.error;
@@ -1266,24 +1282,47 @@ export default class UserScriptPlayer implements Player {
         }
       }
     } finally {
-      cache.consumers.delete(consumer);
+      this.#leaveCache(cache, consumer);
     }
   }
 
+  // Drop results every consumer has read and wake the producer.
   #pruneCache(cache: BatchIteratorCacheEntry) {
     let min = Infinity;
     for (const consumer of cache.consumers) {
-      if (consumer.index < min) {
-        min = consumer.index;
-      }
+      min = Math.min(min, consumer.index);
     }
-    // Prune entries all consumers have passed
-    const prunable = min - cache.pruneOffset;
-    if (prunable > 0) {
-      cache.results.splice(0, prunable);
-      this.#totalCachedResults -= prunable;
-      cache.pruneOffset += prunable;
+    let pruned = false;
+    while (cache.pruneOffset < min && cache.results.size() > 0) {
+      cache.results.dequeue();
+      cache.pruneOffset++;
+      pruned = true;
     }
+    if (pruned) {
+      UserScriptPlayer.#notify(cache);
+    }
+  }
+
+  #leaveCache(cache: BatchIteratorCacheEntry, consumer: CacheConsumerHandle) {
+    if (!cache.consumers.delete(consumer)) {
+      return;
+    }
+    if (cache.consumers.size === 0) {
+      // Nobody reads it any more: stop the producer and free its results and worker.
+      this.#stopCache(cache);
+    } else {
+      this.#pruneCache(cache);
+    }
+  }
+
+  #stopCache(cache: BatchIteratorCacheEntry) {
+    if (this.#batchIteratorCache.get(cache.topic) === cache) {
+      this.#batchIteratorCache.delete(cache.topic);
+    }
+    cache.done = true;
+    cache.results.clear();
+    cache.processor.terminate();
+    UserScriptPlayer.#notify(cache);
   }
 
   #createIndependentIterator(

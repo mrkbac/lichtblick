@@ -5,26 +5,18 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import * as _ from "lodash-es";
-
 import { filterMap } from "@lichtblick/den/collection";
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
 import type { RendererConfig } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
-import { DEFAULT_CAMERA_STATE } from "@lichtblick/suite-base/panels/ThreeDeeRender/camera";
+import {
+  DEFAULT_CAMERA_STATE,
+  DEFAULT_PUBLISH_SETTINGS,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/defaults";
 import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import { getPanelIds } from "@lichtblick/suite-base/util/layoutTree";
 
 import { replacePanel } from "./replacePanel";
 
-const DEFAULT_PUBLISH_SETTINGS: RendererConfig["publish"] = {
-  type: "point",
-  poseTopic: "/move_base_simple/goal",
-  pointTopic: "/clicked_point",
-  poseEstimateTopic: "/initialpose",
-  poseEstimateXDeviation: 0.5,
-  poseEstimateYDeviation: 0.5,
-  poseEstimateThetaDeviation: _.round(Math.PI / 12, 8),
-};
 type LegacyCameraState = {
   distance: number;
   perspective: boolean;

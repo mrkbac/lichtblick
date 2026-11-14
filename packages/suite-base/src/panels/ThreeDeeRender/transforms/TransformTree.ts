@@ -7,7 +7,7 @@
 
 import { ObjectPool } from "@lichtblick/den/collection";
 
-import { CoordinateFrame, MAX_DURATION, FallbackFrameId, AnyFrameId } from "./CoordinateFrame";
+import { CoordinateFrame, FallbackFrameId, AnyFrameId } from "./CoordinateFrame";
 import { Transform } from "./Transform";
 import { Pose } from "./geometry";
 import { Duration, Time } from "./time";
@@ -37,6 +37,13 @@ import { Duration, Time } from "./time";
  */
 export const DEFAULT_MAX_CAPACITY_PER_FRAME = 10_000;
 
+/**
+ * How far back each frame keeps transforms, relative to its newest one. Bounds slow frames, which
+ * would otherwise take a long session to reach {@link DEFAULT_MAX_CAPACITY_PER_FRAME}. Long enough
+ * for long decay times; lookups older than this use the oldest kept transform.
+ */
+export const DEFAULT_MAX_STORAGE_TIME: Duration = 300n * BigInt(1e9);
+
 export enum AddTransformResult {
   NOT_UPDATED,
   UPDATED,
@@ -62,7 +69,7 @@ export class TransformTree {
 
   public constructor(
     transformPool: ObjectPool<Transform>,
-    maxStorageTime = MAX_DURATION,
+    maxStorageTime = DEFAULT_MAX_STORAGE_TIME,
     maxCapacityPerFrame = DEFAULT_MAX_CAPACITY_PER_FRAME,
   ) {
     this.#transformPool = transformPool;

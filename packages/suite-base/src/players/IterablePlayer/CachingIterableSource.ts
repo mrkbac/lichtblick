@@ -12,6 +12,7 @@ import * as _ from "lodash-es";
 import { minIndexBy, sortedIndexByTuple } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
 import { MessageEvent, Time } from "@lichtblick/suite";
+import { ByteBudget } from "@lichtblick/suite-base/players/ByteBudget";
 import { TopicSelection } from "@lichtblick/suite-base/players/types";
 import { Range } from "@lichtblick/suite-base/util/ranges";
 
@@ -57,7 +58,8 @@ type CacheBlock<MessageType> = {
 
 type Options = {
   maxBlockSize?: number;
-  maxTotalSize?: number;
+  /** Required: the cache evicts blocks to stay under it */
+  maxTotalSize: number;
 };
 
 interface EventTypes {
@@ -96,10 +98,7 @@ class CachingIterableSource<MessageType = unknown>
   // messageIterator() drops the cache blocks there
   #updated: { start: Time; end: Time }[] | undefined = [];
 
-  #totalSizeBytes: number = 0;
-
-  // Maximum total cache size
-  #maxTotalSizeBytes: number;
+  #budget: ByteBudget;
 
   // Maximum size per block
   #maxBlockSizeBytes: number;
@@ -109,13 +108,17 @@ class CachingIterableSource<MessageType = unknown>
 
   #nextBlockId: bigint = BigInt(0);
   #evictableBlockCandidates: CacheBlock<MessageType>["id"][] = [];
+  // Set when blocks were added, removed or closed, or the read head left #readHeadBlock, since
+  // #evictableBlockCandidates was computed
+  #candidatesStale = true;
+  #readHeadBlock?: CacheBlock<MessageType>;
 
-  public constructor(source: IIterableSource<MessageType>, opt?: Options) {
+  public constructor(source: IIterableSource<MessageType>, opt: Options) {
     super();
 
     this.#source = source;
-    this.#maxTotalSizeBytes = opt?.maxTotalSize ?? 629145600; // 600MB (was 1GB, reduced to mitigate OOM issues)
-    this.#maxBlockSizeBytes = opt?.maxBlockSize ?? 52428800; // 50MB
+    this.#budget = new ByteBudget(opt.maxTotalSize);
+    this.#maxBlockSizeBytes = opt.maxBlockSize ?? 52428800; // 50MB
   }
 
   public async initialize(): Promise<Initialization> {
@@ -136,6 +139,9 @@ class CachingIterableSource<MessageType = unknown>
 
   public async terminate(): Promise<void> {
     this.#cache.length = 0;
+    this.#budget.reset();
+    this.#candidatesStale = true;
+    this.#readHeadBlock = undefined;
     this.#cachedTopics.clear();
   }
 
@@ -148,7 +154,7 @@ class CachingIterableSource<MessageType = unknown>
   }
 
   public getCacheSize(): number {
-    return this.#totalSizeBytes;
+    return this.#budget.used();
   }
 
   public async *messageIterator(
@@ -173,10 +179,12 @@ class CachingIterableSource<MessageType = unknown>
           (range) => compare(block.start, range.end) <= 0 && compare(block.end, range.start) >= 0,
         );
         if (hit) {
-          this.#totalSizeBytes -= block.size;
+          this.#budget.release(block.size);
         }
         return !hit;
       });
+      this.#candidatesStale = true;
+      this.#readHeadBlock = undefined;
       this.#markLoadedRangesDirty();
     }
     if (
@@ -188,7 +196,9 @@ class CachingIterableSource<MessageType = unknown>
       this.#cachedTopics = args.topics;
       this.#cachedSkimInterval = args.skimInterval;
       this.#cache.length = 0;
-      this.#totalSizeBytes = 0;
+      this.#budget.reset();
+      this.#candidatesStale = true;
+      this.#readHeadBlock = undefined;
       this.#markLoadedRangesDirty();
     }
 
@@ -206,10 +216,7 @@ class CachingIterableSource<MessageType = unknown>
     };
 
     this.#currentReadHead = readHead;
-
-    // Compute evictable block candiates such that canReadMore() returns a correct result as the
-    // callee may stop iterating when canReadMore() returns false.
-    this.#evictableBlockCandidates = this.#findEvictableBlockCandidates(this.#currentReadHead);
+    this.#candidatesStale = true;
 
     for (;;) {
       if (compare(readHead, maxEnd) > 0) {
@@ -225,6 +232,7 @@ class CachingIterableSource<MessageType = unknown>
       if (block && compare(block.start, block.end) === 0 && block.items.length === 0) {
         block = undefined;
         this.#cache.splice(cacheBlockIndex, 1);
+        this.#candidatesStale = true;
         continue;
       }
 
@@ -301,7 +309,7 @@ class CachingIterableSource<MessageType = unknown>
       let lastTime = toNanoSec(sourceReadStart);
 
       const pendingIterResults: [bigint, IteratorResult<MessageType>][] = [];
-      // Pending results are counted in #totalSizeBytes as they are read; false until the last of
+      // Pending results are counted in #budget as they are read; false until the last of
       // them is stored in a block
       let stored = false;
 
@@ -324,6 +332,7 @@ class CachingIterableSource<MessageType = unknown>
               toNanoSec(item.start),
             );
             this.#cache.splice(insertIndex, 0, newBlock);
+            this.#candidatesStale = true;
 
             block = newBlock;
             this.#markLoadedRangesDirty();
@@ -383,7 +392,7 @@ class CachingIterableSource<MessageType = unknown>
           }
 
           // As we add items to pending we also consider them as part of the total size
-          this.#totalSizeBytes += sizeInBytes;
+          this.#budget.add(sizeInBytes);
 
           // Store the latest message in pending results and flush to the block when time moves forward
           pendingIterResults.push([lastTime, iterResult]);
@@ -394,6 +403,8 @@ class CachingIterableSource<MessageType = unknown>
         // We've finished reading our source to the end, close out the block
         if (block) {
           block.end = sourceReadEnd;
+          // May now touch the next block, joining the read head's chain
+          this.#candidatesStale = true;
 
           // update the last time this block was accessed
           block.lastAccess = Date.now();
@@ -437,6 +448,7 @@ class CachingIterableSource<MessageType = unknown>
             toNanoSec(item.start),
           );
           this.#cache.splice(insertIndex, 0, newBlock);
+          this.#candidatesStale = true;
 
           this.#markLoadedRangesDirty();
         }
@@ -445,7 +457,7 @@ class CachingIterableSource<MessageType = unknown>
         // A consumer that stops early (e.g. a seek) leaves results that were counted, not stored
         if (!stored) {
           for (const [, item] of pendingIterResults) {
-            this.#totalSizeBytes -= item.type === "message-event" ? item.msgEvent.sizeInBytes : 0;
+            this.#budget.release(item.type === "message-event" ? item.msgEvent.sizeInBytes : 0);
           }
         }
       }
@@ -624,6 +636,10 @@ class CachingIterableSource<MessageType = unknown>
    */
   public setCurrentReadHead(readHead: Time): void {
     this.#currentReadHead = readHead;
+    const block = this.#readHeadBlock;
+    if (!block || compare(block.start, readHead) > 0 || compare(block.end, readHead) < 0) {
+      this.#candidatesStale = true;
+    }
   }
 
   /**
@@ -632,12 +648,25 @@ class CachingIterableSource<MessageType = unknown>
    * @returns True if more messages can be read, false otherwise.
    */
   public canReadMore(): boolean {
-    if (this.#totalSizeBytes < this.#maxTotalSizeBytes) {
+    if (this.#budget.used() < this.#budget.capacity) {
       // Still room for reading new messages from the source.
       return true;
     }
 
-    return this.#evictableBlockCandidates.length > 0;
+    return this.#evictableCandidates().length > 0;
+  }
+
+  /** The evictable block ids, most evictable first; recomputed only when blocks changed */
+  #evictableCandidates(): CacheBlock<MessageType>["id"][] {
+    if (this.#candidatesStale) {
+      this.#candidatesStale = false;
+      const readHead = this.#currentReadHead;
+      this.#readHeadBlock = this.#cache.find(
+        (block) => compare(block.start, readHead) <= 0 && compare(block.end, readHead) >= 0,
+      );
+      this.#evictableBlockCandidates = this.#findEvictableBlockCandidates(readHead);
+    }
+    return this.#evictableBlockCandidates;
   }
 
   /**
@@ -706,38 +735,29 @@ class CachingIterableSource<MessageType = unknown>
     ];
   }
 
-  // Attempt to purge a cache block if adding sizeInBytes to the cache would exceed the maxTotalSizeBytes
+  // Evicts blocks until sizeInBytes more fit in the budget or nothing else is evictable. The cache
+  // exceeds the budget only by what it can't evict: the blocks from the read head on, which the
+  // reader stops filling once canReadMore() is false.
   // @return true if a block was purged
-  //
-  // Throws if the cache block we want to purge is the active block.
   #maybePurgeCache(opt: { activeBlock?: CacheBlock<MessageType>; sizeInBytes: number }): boolean {
     const { activeBlock, sizeInBytes } = opt;
 
-    // Determine if our total size would exceed max and purge the oldest block
-    if (this.#totalSizeBytes + sizeInBytes <= this.#maxTotalSizeBytes) {
-      return false;
-    }
-
-    // Find evictable block candidates
-    this.#evictableBlockCandidates = this.#findEvictableBlockCandidates(this.#currentReadHead);
-    if (this.#evictableBlockCandidates.length === 0) {
-      return false;
-    }
-
-    // Evict the first evictable candidate
-    const blockId = this.#evictableBlockCandidates.splice(0, 1)[0];
-    const idx = this.#cache.findIndex((item) => item.id === blockId);
-    const block = this.#cache[idx];
-    if (block) {
-      if (block === activeBlock) {
-        throw new Error("Cannot evict the active cache block.");
+    let purged = false;
+    while (!this.#budget.fits(sizeInBytes)) {
+      const blockId = this.#evictableCandidates().shift();
+      if (blockId == undefined) {
+        break;
       }
-      this.#totalSizeBytes -= block.size;
+      const idx = this.#cache.findIndex((item) => item.id === blockId);
+      const block = this.#cache[idx];
+      if (!block || block === activeBlock) {
+        continue;
+      }
+      this.#budget.release(block.size);
       this.#cache.splice(idx, 1);
-      return true;
+      purged = true;
     }
-
-    return false;
+    return purged;
   }
 
   static #FindStartCacheItemIndex(items: [bigint, IteratorResult][], key: bigint) {

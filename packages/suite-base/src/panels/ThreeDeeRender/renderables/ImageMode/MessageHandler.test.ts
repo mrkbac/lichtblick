@@ -19,6 +19,7 @@ import { DeepPartial } from "ts-essentials";
 import { MessageEvent } from "@lichtblick/suite";
 import { HUDItemManager } from "@lichtblick/suite-base/panels/ThreeDeeRender/HUDItemManager";
 import {
+  MAX_SYNC_ENTRIES,
   MessageHandler,
   WAITING_FOR_BOTH_HUD_ITEM,
   WAITING_FOR_CALIBRATION_HUD_ITEM,
@@ -283,6 +284,41 @@ describe("MessageHandler: synchronized = true", () => {
     const state = messageHandler.getRenderStateAndUpdateHUD();
 
     expect(state.cameraInfo).not.toBeUndefined();
+  });
+
+  it("drops the oldest buffered images when annotations never arrive", () => {
+    const hud = new HUDItemManager(() => {});
+    const messageHandler = new MessageHandler(
+      { synchronize: true, annotations: { annotations: { visible: true } } },
+      hud,
+    );
+    messageHandler.setAvailableAnnotationTopics(["annotations"]);
+    const imageCount = BigInt(MAX_SYNC_ENTRIES + 50);
+    for (let time = 1n; time <= imageCount; time++) {
+      messageHandler.handleRawImage(
+        wrapInMessageEvent<RawImage>("image", "foxglove.RawImage", time, {
+          timestamp: fromNanoSec(time),
+        }),
+      );
+    }
+    const annotationsAt = (time: bigint) =>
+      wrapInMessageEvent(
+        "annotations",
+        "foxglove.ImageAnnotations",
+        time,
+        createCircleAnnotations([time]),
+      ) as MessageEvent<ImageAnnotations>;
+
+    // Exactly the newest MAX_SYNC_ENTRIES images are kept: the one before them is gone...
+    const oldestKept = imageCount - BigInt(MAX_SYNC_ENTRIES) + 1n;
+    messageHandler.handleAnnotations(annotationsAt(oldestKept - 1n));
+    expect(messageHandler.getRenderStateAndUpdateHUD().image).toBeUndefined();
+
+    // ...and the oldest kept one still completes a set.
+    messageHandler.handleAnnotations(annotationsAt(oldestKept));
+    expect(messageHandler.getRenderStateAndUpdateHUD().image?.message).toMatchObject({
+      timestamp: fromNanoSec(oldestKept),
+    });
   });
 
   it("handles and shows image in state with no active annotations", () => {
