@@ -67,6 +67,22 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
   #recovering?: Promise<void>;
   // Set once the reader was rebuilt mid-read; yielded by the next messageIterator result
   #recoveryAlert?: PlayerAlert;
+  // What initialize() has processed of the reader's index so far, and what it built from it
+  #index = {
+    chunks: 0,
+    channels: new Set<number>(),
+    pendingChannels: new Set<number>(),
+    revived: false,
+    startTime: undefined as bigint | undefined,
+    endTime: undefined as bigint | undefined,
+    compression: new Map<string, RecordingFileInfo["compression"][number]>(),
+    topicsByName: new Map<string, TopicWithDecodingInfo>(),
+    datatypes: new Map() as RosDatatypes,
+    publishersByTopic: new Map<string, Set<string>>(),
+    alerts: [] as PlayerAlert[],
+    metadataCount: 0,
+    metadata: [] as Metadata[],
+  };
 
   public readonly sourceType = "serialized";
 
@@ -160,123 +176,91 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     return alert ? { type: "alert", connectionId: RECOVERY_CONNECTION_ID, alert } : undefined;
   }
 
+  /**
+   * Can be called again after the reader's index grew (see McapRecoveryScanner.openLiveReader):
+   * only chunks and channels added since the last call are processed, so the cost per call is
+   * O(what is new + channels), not O(chunks).
+   */
   public async initialize(): Promise<Initialization> {
-    let startTime: bigint | undefined;
-    let endTime: bigint | undefined;
-    for (const chunk of this.#reader.chunkIndexes) {
-      if (startTime == undefined || chunk.messageStartTime < startTime) {
-        startTime = chunk.messageStartTime;
+    const reader = this.#reader;
+    const index = this.#index;
+    for (const chunk of reader.chunkIndexes.slice(index.chunks)) {
+      if (index.startTime == undefined || chunk.messageStartTime < index.startTime) {
+        index.startTime = chunk.messageStartTime;
       }
-      if (endTime == undefined || chunk.messageEndTime > endTime) {
-        endTime = chunk.messageEndTime;
+      if (index.endTime == undefined || chunk.messageEndTime > index.endTime) {
+        index.endTime = chunk.messageEndTime;
       }
-    }
-
-    const topicStats = new Map<string, TopicStats>();
-    const topicsByName = new Map<string, TopicWithDecodingInfo>();
-    const datatypes: RosDatatypes = new Map();
-    const alerts: PlayerAlert[] = [];
-    const metadata: Metadata[] = [];
-
-    const publishersByTopic = new Map<string, Set<string>>();
-
-    for (const channel of this.#reader.channelsById.values()) {
-      const schema = this.#reader.schemasById.get(channel.schemaId);
-      if (channel.schemaId !== 0 && schema == undefined) {
-        alerts.push({
-          severity: "error",
-          message: `Missing schema info for schema id ${channel.schemaId} (channel ${channel.id}, topic ${channel.topic})`,
-        });
-        continue;
-      }
-
-      let parsedChannel;
-      try {
-        parsedChannel = parseChannel({ messageEncoding: channel.messageEncoding, schema });
-      } catch (error) {
-        alerts.push({
-          severity: "error",
-          message: `Error in topic ${channel.topic} (channel ${channel.id}): ${toError(error).message}`,
-          error: toError(error),
-        });
-        continue;
-      }
-      this.#channelInfoById.set(channel.id, {
-        channel,
-        parsedChannel,
-        schemaName: schema?.name,
-      });
-
-      let topic = topicsByName.get(channel.topic);
-      if (!topic) {
-        topic = {
-          name: channel.topic,
-          schemaName: schema?.name,
-          messageEncoding: channel.messageEncoding,
-          schemaData: schema?.data,
-          schemaEncoding: schema?.encoding,
-        };
-        topicsByName.set(channel.topic, topic);
-      }
-      const numMessages = this.#reader.statistics?.channelMessageCounts.get(channel.id);
-      if (numMessages != undefined) {
-        const previous = topicStats.get(channel.topic)?.numMessages ?? 0;
-        topicStats.set(channel.topic, { numMessages: previous + Number(numMessages) });
-      }
-
-      // Track the publisher for this topic. "callerid" is defined in the MCAP ROS 1 Well-known
-      // profile at <https://mcap.dev/specification/appendix.html>. We skip the profile check to
-      // allow non-ROS profiles to utilize this functionality as well
-      const publisherId = channel.metadata.get("callerid") ?? String(channel.id);
-      let publishers = publishersByTopic.get(channel.topic);
-      if (!publishers) {
-        publishers = new Set();
-        publishersByTopic.set(channel.topic, publishers);
-      }
-      publishers.add(publisherId);
-
-      // Final datatypes is an unholy union of schemas across all channels
-      for (const [name, datatype] of parsedChannel.datatypes) {
-        datatypes.set(name, datatype);
-      }
-    }
-
-    if (startTime != undefined && endTime != undefined) {
-      this.#avgChunkDurationNs =
-        (endTime - startTime) / BigInt(Math.max(1, this.#reader.chunkIndexes.length));
-    }
-    this.#start = fromNanoSec(startTime ?? 0n);
-    this.#end = fromNanoSec(endTime ?? startTime ?? 0n);
-
-    const metadataGenerator = this.#reader.readMetadata();
-    let metadataIterator = await metadataGenerator.next();
-    while (metadataIterator.done !== true) {
-      metadata.push({
-        name: metadataIterator.value.name,
-        metadata: Object.fromEntries(metadataIterator.value.metadata),
-      });
-      metadataIterator = await metadataGenerator.next();
-    }
-
-    const compression = new Map<string, RecordingFileInfo["compression"][number]>();
-    for (const chunk of this.#reader.chunkIndexes) {
       const format = chunk.compression || "none";
-      const group = compression.get(format) ?? {
+      const group = index.compression.get(format) ?? {
         format,
         compressedBytes: 0,
         uncompressedBytes: 0,
       };
       group.compressedBytes += Number(chunk.compressedSize);
       group.uncompressedBytes += Number(chunk.uncompressedSize);
-      compression.set(format, group);
+      index.compression.set(format, group);
     }
+    index.chunks = reader.chunkIndexes.length;
+
+    // A channel whose schema is missing stays pending: a later chunk may repeat the schema. Once
+    // added, its messages in earlier chunks become readable too.
+    const missingSchemaAlerts: PlayerAlert[] = [];
+    for (const channel of reader.channelsById.values()) {
+      if (index.channels.has(channel.id)) {
+        continue;
+      }
+      if (channel.schemaId !== 0 && !reader.schemasById.has(channel.schemaId)) {
+        missingSchemaAlerts.push({
+          severity: "error",
+          message: `Missing schema info for schema id ${channel.schemaId} (channel ${channel.id}, topic ${channel.topic})`,
+        });
+        index.pendingChannels.add(channel.id);
+        continue;
+      }
+      // Kept until a call returns, so a retry after a failed metadata read still reports it
+      index.revived ||= index.pendingChannels.delete(channel.id);
+      index.channels.add(channel.id);
+      this.#addChannel(channel);
+    }
+
+    const { startTime, endTime } = index;
+    if (startTime != undefined && endTime != undefined) {
+      this.#avgChunkDurationNs =
+        (endTime - startTime) / BigInt(Math.max(1, reader.chunkIndexes.length));
+    }
+    this.#start = fromNanoSec(startTime ?? 0n);
+    this.#end = fromNanoSec(endTime ?? startTime ?? 0n);
+
+    const metadataCount = reader.metadataIndexes.length;
+    if (index.metadataCount !== metadataCount) {
+      // Committed only once every record was read, so a failed read is retried next time
+      const metadata: Metadata[] = [];
+      for await (const record of reader.readMetadata()) {
+        metadata.push({ name: record.name, metadata: Object.fromEntries(record.metadata) });
+      }
+      index.metadata = metadata;
+      index.metadataCount = metadataCount;
+    }
+
+    const topicStats = new Map<string, TopicStats>();
+    for (const { channel } of this.#channelInfoById.values()) {
+      const numMessages = reader.statistics?.channelMessageCounts.get(channel.id);
+      if (numMessages != undefined) {
+        const previous = topicStats.get(channel.topic)?.numMessages ?? 0;
+        topicStats.set(channel.topic, { numMessages: previous + Number(numMessages) });
+      }
+    }
+
+    const revived = index.revived;
+    index.revived = false;
     const recordingFiles: RecordingFileInfo[] = [
       {
-        library: this.#reader.header.library,
-        schemaCount: this.#reader.schemasById.size,
-        compression: [...compression.values()],
-        channels: [...this.#reader.channelsById.values()].map((channel) => {
-          const schema = this.#reader.schemasById.get(channel.schemaId);
+        library: reader.header.library,
+        schemaCount: reader.schemasById.size,
+        compression: [...index.compression.values()].map((group) => ({ ...group })),
+        channels: [...reader.channelsById.values()].map((channel) => {
+          const schema = reader.schemasById.get(channel.schemaId);
           return {
             id: channel.id,
             topic: channel.topic,
@@ -286,7 +270,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
             metadata: Object.fromEntries(channel.metadata),
           };
         }),
-        attachments: this.#reader.attachmentIndexes.map((attachment) => ({
+        attachments: reader.attachmentIndexes.map((attachment) => ({
           name: attachment.name,
           mediaType: attachment.mediaType,
           sizeBytes: Number(attachment.dataSize),
@@ -298,14 +282,62 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       recordingFiles,
       start: this.#start,
       end: this.#end,
-      topics: [...topicsByName.values()],
-      datatypes,
-      profile: this.#reader.header.profile,
-      alerts,
-      metadata,
-      publishersByTopic,
+      topics: [...index.topicsByName.values()],
+      datatypes: new Map(index.datatypes),
+      profile: reader.header.profile,
+      alerts: [...index.alerts, ...missingSchemaAlerts],
+      metadata: index.metadata,
+      publishersByTopic: new Map(
+        [...index.publishersByTopic].map(([topic, publishers]) => [topic, new Set(publishers)]),
+      ),
       topicStats,
+      // What the caller reports as changed is only its new chunks, unless earlier ones changed too
+      updatedRanges: revived ? undefined : [],
     };
+  }
+
+  /** Parses a channel the index didn't have yet and adds its topic, datatypes and publisher */
+  #addChannel(channel: McapTypes.Channel): void {
+    const index = this.#index;
+    const schema = this.#reader.schemasById.get(channel.schemaId);
+    let parsedChannel;
+    try {
+      parsedChannel = parseChannel({ messageEncoding: channel.messageEncoding, schema });
+    } catch (error) {
+      index.alerts.push({
+        severity: "error",
+        message: `Error in topic ${channel.topic} (channel ${channel.id}): ${toError(error).message}`,
+        error: toError(error),
+      });
+      return;
+    }
+    this.#channelInfoById.set(channel.id, { channel, parsedChannel, schemaName: schema?.name });
+
+    if (!index.topicsByName.has(channel.topic)) {
+      index.topicsByName.set(channel.topic, {
+        name: channel.topic,
+        schemaName: schema?.name,
+        messageEncoding: channel.messageEncoding,
+        schemaData: schema?.data,
+        schemaEncoding: schema?.encoding,
+      });
+    }
+
+    // Track the publisher for this topic. "callerid" is defined in the MCAP ROS 1 Well-known
+    // profile at <https://mcap.dev/specification/appendix.html>. We skip the profile check to
+    // allow non-ROS profiles to utilize this functionality as well
+    const publisherId = channel.metadata.get("callerid") ?? String(channel.id);
+    let publishers = index.publishersByTopic.get(channel.topic);
+    if (!publishers) {
+      publishers = new Set();
+      index.publishersByTopic.set(channel.topic, publishers);
+    }
+    publishers.add(publisherId);
+
+    // Final datatypes is an unholy union of schemas across all channels
+    for (const [name, datatype] of parsedChannel.datatypes) {
+      index.datatypes.set(name, datatype);
+    }
   }
 
   public async *messageIterator(
@@ -556,6 +588,8 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       // An single iterator for all the topics could result in iterating through many
       // irrelevant messages to get to an older message on a topic.
       for await (const message of this.#readMessages({
+        // Explicit: a live reader's default lower bound is the start when it was opened
+        startingAt: 0n,
         endingAt: toNanoSec(time),
         topics: [topic],
         reverse: true,
@@ -596,7 +630,8 @@ function chunkByteRange(chunk: McapTypes.ChunkIndex): ByteRange {
   let end = chunk.chunkStartOffset + chunk.chunkLength;
   if (chunk.messageIndexOffsets.size > 0) {
     const firstIndex = [...chunk.messageIndexOffsets.values()].reduce((a, b) => (b < a ? b : a));
-    if (firstIndex + chunk.messageIndexLength > end) {
+    // Only where they follow the chunk; a rebuilt index keeps them elsewhere (in memory)
+    if (firstIndex === end) {
       end = firstIndex + chunk.messageIndexLength;
     }
   }

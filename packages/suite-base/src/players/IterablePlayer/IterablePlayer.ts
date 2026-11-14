@@ -219,6 +219,8 @@ export class IterablePlayer implements Player {
   #playbackIterator?: AsyncIterator<Readonly<IteratorResult>>;
 
   #blockLoader?: BlockLoader;
+  // The block loader's source, whose deserializers an update that keeps the loader refreshes
+  #blockLoaderSource?: DeserializingIterableSource;
   #blockLoadingProcess?: Promise<void>;
 
   #messageRangeSource?: IDeserializedIterableSource;
@@ -704,15 +706,17 @@ export class IterablePlayer implements Player {
         if (!update || this.#isClosing()) {
           return;
         }
-        // ponytail: preloaded blocks are dropped and reloaded on every update; extend the block
-        // loader's range in place if that churn shows up (e.g. tailing a live file).
         await this.#blockLoader?.stopLoading();
         await this.#blockLoadingProcess;
         if (this.#isClosing()) {
           return;
         }
+        // Preloaded blocks are kept, except where the source has new messages
+        const keepBlocks =
+          update.updatedRanges != undefined &&
+          (this.#blockLoader?.grow(update.start, update.end, update.updatedRanges) ?? false);
         this.#alertManager.removeAlerts((id) => id.startsWith("init-alert-"));
-        this.#applyInitialization(update);
+        this.#applyInitialization(update, { keepBlocks });
         this.#blockLoader?.setTopics(this.#preloadTopics);
         this.#blockLoadingProcess = this.#startBlockLoading().catch((err: unknown) => {
           this.#setError((err as Error).message, err as Error);
@@ -741,7 +745,8 @@ export class IterablePlayer implements Player {
     return this.#state === "close" || this.#nextState === "close";
   }
 
-  #applyInitialization(initResult: Initialization): void {
+  /** `keepBlocks`: the block loader was grown to this range already; only update its topics */
+  #applyInitialization(initResult: Initialization, { keepBlocks = false } = {}): void {
     const {
       start,
       end,
@@ -812,7 +817,9 @@ export class IterablePlayer implements Player {
       (this.#messageRangeSource as DeserializingIterableSource).initializeDeserializers(initResult);
     }
 
-    if (this.#enablePreload) {
+    if (keepBlocks) {
+      this.#blockLoaderSource?.initializeDeserializers(initResult);
+    } else if (this.#enablePreload) {
       // --- setup block loader which loads messages for _full_ subscriptions in the "background"
       try {
         let blockLoaderSource;
@@ -822,6 +829,7 @@ export class IterablePlayer implements Player {
           blockLoaderSource = new DeserializingIterableSource(this.#iterableSource);
           // We must not call initialize() here, as the #iterableSource was already initialized above.
           blockLoaderSource.initializeDeserializers(initResult);
+          this.#blockLoaderSource = blockLoaderSource;
         }
 
         this.#blockLoader = new BlockLoader({

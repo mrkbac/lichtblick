@@ -674,8 +674,9 @@ describe("MultiIterableSource", () => {
       // WHEN: one source grows, then both grow again within the interval
       channels[0]!.push(at(10));
       const first = await source.waitForUpdate();
-      channels[0]!.push(at(20));
-      channels[1]!.push(at(30));
+      const range = (sec: number) => ({ start: { sec, nsec: 0 }, end: { sec, nsec: 0 } });
+      channels[0]!.push({ ...at(20), updatedRanges: [range(20)] });
+      channels[1]!.push({ ...at(30), updatedRanges: [range(30)] });
       let second: Initialization | undefined;
       void source.waitForUpdate().then((update) => {
         second = update;
@@ -688,6 +689,9 @@ describe("MultiIterableSource", () => {
       expect(first?.end).toEqual({ sec: 10, nsec: 0 });
       expect(beforeInterval).toBeUndefined();
       expect(second?.end).toEqual({ sec: 30, nsec: 0 });
+      // A source that didn't say what changed makes the merged update say so too
+      expect(first?.updatedRanges).toBeUndefined();
+      expect(second?.updatedRanges).toEqual([range(20), range(30)]);
 
       // WHEN: both sources are done
       channels[0]!.push(undefined);

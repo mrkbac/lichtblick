@@ -18,6 +18,8 @@ import {
 } from "./IIterableSource";
 
 class TestSource implements IIterableSource {
+  public waitForUpdate?: () => Promise<Initialization | undefined>;
+
   public async initialize(): Promise<Initialization> {
     return {
       start: { sec: 0, nsec: 0 },
@@ -47,6 +49,82 @@ describe("CachingIterableSource", () => {
 
     await bufferedSource.initialize();
     expect(bufferedSource.loadedRanges()).toEqual([{ start: 0, end: 0 }]);
+  });
+
+  it("doesn't count results a consumer stopped before they were stored", async () => {
+    // Given a source with several messages at one time (pending until time moves on)
+    const source = new TestSource();
+    const cache = new CachingIterableSource(source);
+    await cache.initialize();
+    source.messageIterator = async function* () {
+      for (let i = 0; i < 3; i++) {
+        yield {
+          type: "message-event",
+          msgEvent: {
+            topic: "a",
+            receiveTime: { sec: 1, nsec: 0 },
+            message: undefined,
+            sizeInBytes: 10,
+            schemaName: "foo",
+          },
+        };
+      }
+    };
+
+    // When a consumer stops after the first one (e.g. on a seek)
+    const iterator = cache.messageIterator({ topics: mockTopicSelection("a") });
+    await iterator.next();
+    await iterator.return?.(undefined);
+
+    // Then nothing is left counted
+    expect(cache.getCacheSize()).toBe(0);
+  });
+
+  it("keeps cached blocks outside the ranges an update changed", async () => {
+    // Given a cache with blocks over 0–4 s and 6–9 s
+    const source = new TestSource();
+    const cache = new CachingIterableSource(source);
+    await cache.initialize();
+    const reads: MessageIteratorArgs[] = [];
+    source.messageIterator = async function* (args) {
+      reads.push(args);
+      yield {
+        type: "message-event",
+        msgEvent: {
+          topic: "a",
+          receiveTime: args.start!,
+          message: undefined,
+          sizeInBytes: 1,
+          schemaName: "foo",
+        },
+      };
+    };
+    const drain = async (start: number, end: number) => {
+      const iterator = cache.messageIterator({
+        topics: mockTopicSelection("a"),
+        start: { sec: start, nsec: 0 },
+        end: { sec: end, nsec: 0 },
+      });
+      let result = await iterator.next();
+      while (result.done !== true) {
+        result = await iterator.next();
+      }
+    };
+    await drain(0, 4);
+    await drain(6, 9);
+
+    // When the source reports new messages in 7–8 s
+    source.waitForUpdate = async () => ({
+      ...(await source.initialize()),
+      updatedRanges: [{ start: { sec: 7, nsec: 0 }, end: { sec: 8, nsec: 0 } }],
+    });
+    await cache.waitForUpdate();
+    reads.length = 0;
+    await drain(0, 4);
+    await drain(6, 9);
+
+    // Then only the changed block is read again
+    expect(reads.map((args) => args.start?.sec)).toEqual([6]);
   });
 
   it("should produce messages that the source produces", async () => {

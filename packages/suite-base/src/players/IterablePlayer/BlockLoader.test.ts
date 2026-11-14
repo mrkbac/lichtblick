@@ -76,6 +76,87 @@ describe("BlockLoader", () => {
     expect.assertions(1);
   });
 
+  it("grows in place, keeping blocks outside the updated range and merging blocks to fit", async () => {
+    // Given 4 one-second blocks loaded with a message each
+    const source = new TestSource();
+    const message = (sec: number): MessageEvent => ({
+      topic: "a",
+      receiveTime: { sec, nsec: 0 },
+      message: undefined,
+      sizeInBytes: 1,
+      schemaName: "foo",
+    });
+    let available = [0, 1, 2, 3].map(message);
+    const reads: MessageIteratorArgs[] = [];
+    source.messageIterator = async function* (args) {
+      reads.push(args);
+      for (const msgEvent of available) {
+        if (
+          (!args.start || msgEvent.receiveTime.sec >= args.start.sec) &&
+          (!args.end || msgEvent.receiveTime.sec <= args.end.sec)
+        ) {
+          yield { type: "message-event", msgEvent };
+        }
+      }
+    };
+    const loader = new BlockLoader({
+      maxBlocks: 4,
+      cacheSizeBytes: 100,
+      minBlockDurationNs: 1,
+      source,
+      start: { sec: 0, nsec: 0 },
+      end: { sec: 3, nsec: 999_999_999 },
+      alertManager: new PlayerAlertManager(),
+    });
+    loader.setTopics(mockTopicSelection("a"));
+    const loadAll = async () => {
+      let last: MessageBlock[] = [];
+      await loader.startLoading({
+        progress: async (progress) => {
+          last = (progress.messageCache?.blocks ?? []) as MessageBlock[];
+          if (progress.fullyLoadedFractionRanges?.[0]?.end === 1) {
+            await loader.stopLoading();
+          }
+        },
+      });
+      return last;
+    };
+    await loadAll();
+
+    // When the source grows to 8 s with new messages in 4–7 s
+    available = [0, 1, 2, 3, 4, 5, 6, 7].map(message);
+    reads.length = 0;
+    const grown = loader.grow({ sec: 0, nsec: 0 }, { sec: 7, nsec: 999_999_999 }, [
+      { start: { sec: 4, nsec: 0 }, end: { sec: 7, nsec: 0 } },
+    ]);
+    const blocks = await loadAll();
+
+    // Then it keeps the first 4 s (merged into two 2 s blocks) and only reads the new range
+    expect(grown).toBe(true);
+    expect(blocks.map((block) => block.messagesByTopic.a?.map((m) => m.receiveTime.sec))).toEqual([
+      [0, 1],
+      [2, 3],
+      [4, 5],
+      [6, 7],
+    ]);
+    expect(reads.length).toBeGreaterThan(0);
+    expect(reads.every((args) => args.start!.sec >= 4)).toBe(true);
+  });
+
+  it("can't grow when the start moved", () => {
+    const loader = new BlockLoader({
+      maxBlocks: 4,
+      cacheSizeBytes: 1,
+      minBlockDurationNs: 1,
+      source: new TestSource(),
+      start: { sec: 1, nsec: 0 },
+      end: { sec: 2, nsec: 0 },
+      alertManager: new PlayerAlertManager(),
+    });
+
+    expect(loader.grow({ sec: 0, nsec: 0 }, { sec: 3, nsec: 0 }, [])).toBe(false);
+  });
+
   it("should load the source into blocks", async () => {
     const source = new TestSource();
 

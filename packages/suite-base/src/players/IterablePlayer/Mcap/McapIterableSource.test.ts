@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { compare } from "@foxglove/rostime";
 import { McapIndexedReader, McapRecordBuilder, McapWriter, TempBuffer } from "@mcap/core";
 import { Blob } from "node:buffer";
 import type { Mock, MockedClass, MockedFunction } from "vitest";
@@ -14,6 +15,7 @@ import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
+import { McapIndexedIterableSource } from "./McapIndexedIterableSource";
 import { McapIterableSource, TAIL_POLL_MS } from "./McapIterableSource";
 import { RemoteFileReadable } from "./RemoteFileReadable";
 import { HydratedSourcePool } from "../shared/HydratedSourcePool";
@@ -236,8 +238,21 @@ describe("McapIterableSource", () => {
     // When the scan finishes
     gate.resolve();
     let last = init;
+    const updatedRanges = [];
     for (let update; (update = await source.waitForUpdate()); ) {
+      // Each update grows the reader in place and says which time range is new
+      expect(update.updatedRanges).toBeDefined();
+      updatedRanges.push(...(update.updatedRanges ?? []));
       last = update;
+    }
+    // Together they cover every message added after open
+    for (let sec = init.end.sec + 1; sec <= chunkCount; sec++) {
+      const time = { sec, nsec: 0 };
+      expect(
+        updatedRanges.some(
+          (range) => compare(range.start, time) <= 0 && compare(time, range.end) <= 0,
+        ),
+      ).toBe(true);
     }
 
     // Then the source covers the whole file, reports what was recovered, and plays all of it
@@ -379,6 +394,46 @@ describe("McapIterableSource", () => {
           "Live: following this file as it is written",
         ]);
         expect(await countMessages(source)).toBe(5);
+      } finally {
+        await source.terminate();
+      }
+    });
+
+    it("reports that anything may have changed after an update failed", async () => {
+      // Given a followed file whose next update fails once, after its reader took the new chunks
+      const snapshots = await recordWithoutFooter(4);
+      const { handle, write } = growingHandle(snapshots[1]!);
+      const source = new McapIterableSource({ type: "file", file: await handle.getFile(), handle });
+      vi.spyOn(console, "error").mockImplementation(() => {});
+      try {
+        await source.initialize();
+        // It fails after the inner initialize() ran, so whatever it took is already consumed
+        const { prototype } = McapIndexedIterableSource;
+        const original = Object.getOwnPropertyDescriptor(prototype, "initialize")!
+          .value as McapIndexedIterableSource["initialize"];
+        const initialize = vi.spyOn(prototype, "initialize").mockImplementationOnce(async function (
+          this: McapIndexedIterableSource,
+        ) {
+          await original.call(this);
+          throw new Error("update failed");
+        });
+
+        // When the file grows, the update fails, and the retry succeeds
+        write(snapshots[2]!);
+        const retried = source.waitForUpdate();
+        await vi.advanceTimersByTimeAsync(TAIL_POLL_MS * 2);
+        const afterFailure = await retried;
+        initialize.mockRestore();
+
+        // Then the retry says anything may have changed, and the next update is ranged again
+        expect(afterFailure?.end).toEqual({ sec: 3, nsec: 0 });
+        expect(afterFailure?.updatedRanges).toBeUndefined();
+        write(snapshots[3]!);
+        const next = source.waitForUpdate();
+        await vi.advanceTimersByTimeAsync(TAIL_POLL_MS);
+        expect((await next)?.updatedRanges).toEqual([
+          { start: { sec: 4, nsec: 0 }, end: { sec: 4, nsec: 0 } },
+        ]);
       } finally {
         await source.terminate();
       }

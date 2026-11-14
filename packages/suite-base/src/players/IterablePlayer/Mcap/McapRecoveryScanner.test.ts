@@ -247,6 +247,94 @@ describe("McapRecoveryScanner", () => {
   });
 });
 
+/** An unfinished recording of `count` chunks of one message; a shorter one is a prefix of it */
+async function recording(count: number): Promise<Uint8Array<ArrayBuffer>> {
+  const buffer = new TempBuffer();
+  const writer = new McapWriter({ writable: buffer, chunkSize: 1 });
+  await writer.start({ library: "test", profile: "" });
+  const channelId = await writer.registerChannel({
+    schemaId: 0,
+    topic: TOPIC,
+    messageEncoding: "json",
+    metadata: new Map(),
+  });
+  for (let i = 1; i <= count; i++) {
+    const time = BigInt(i) * 1_000_000_000n;
+    await writer.addMessage({
+      channelId,
+      sequence: i,
+      logTime: time,
+      publishTime: time,
+      data: payload(i),
+    });
+  }
+  return buffer.get().slice();
+}
+
+describe("McapRecoveryScanner.openLiveReader", () => {
+  /**
+   * Indexes `before` chunks, opens a live reader and source on them, appends one chunk and
+   * applies that update. Returns how many chunk index entries the update touched, and the update.
+   */
+  async function oneUpdate(before: number) {
+    const bytes = await recording(before + 1);
+    const scanner = new McapRecoveryScanner(await loadDecompressHandlers());
+    const base = readableOf(bytes);
+    await scanner.scan(readableOf(await recording(before)));
+    const live = await scanner.openLiveReader(base, await loadDecompressHandlers());
+    const source = new McapIndexedIterableSource(live.reader);
+    await source.initialize();
+    expect(live.reader.chunkIndexes).toHaveLength(before);
+
+    let touched = 0;
+    const index = live.reader as unknown as { chunkIndexes: McapTypes.ChunkIndex[] };
+    index.chunkIndexes = new Proxy(index.chunkIndexes, {
+      get: (target, key, receiver) => {
+        if (typeof key === "string" && /^\d+$/.test(key)) {
+          touched++;
+        }
+        return Reflect.get(target, key, receiver) as unknown;
+      },
+    });
+    await scanner.scan(base);
+    const added = live.grow();
+    const init = await source.initialize();
+    return { touched, added, init, source };
+  }
+
+  it("costs the same per update however many chunks are already indexed", async () => {
+    // Given live readers on few and on many chunks
+    // When one chunk is appended to each
+    const few = await oneUpdate(10);
+    const many = await oneUpdate(2000);
+
+    // Then each update touches only the new chunk index, and the new time range is in the source
+    expect(few.added).toHaveLength(1);
+    expect(many.added).toHaveLength(1);
+    expect(many.touched).toBe(few.touched);
+    expect(many.init.end).toEqual({ sec: 2001, nsec: 0 });
+  });
+
+  it("reads the messages of chunks appended after it was opened", async () => {
+    // Given a live reader opened on part of a recording, grown after the rest was scanned
+    const { source } = await oneUpdate(3);
+
+    // When the new range is read
+    const values = [];
+    for await (const result of source.messageIterator({
+      topics: new Map([[TOPIC, PlayerBuilder.subscribePayload({ topic: TOPIC })]]),
+      start: { sec: 3, nsec: 0 },
+    })) {
+      if (result.type === "message-event") {
+        values.push(JSON.parse(new TextDecoder().decode(result.msgEvent.message)).v as number);
+      }
+    }
+
+    // Then the appended chunk's message is there
+    expect(values).toEqual([3, 4]);
+  });
+});
+
 describe("McapIterableSource recovery", () => {
   it("opens a footer-less file through the rebuilt index and says so", async () => {
     // Given
