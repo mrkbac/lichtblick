@@ -55,30 +55,24 @@ async function cacheLoadedAssets(): Promise<void> {
         return true;
       });
     for (const url of urls) {
-      // each file on its own: one failure doesn't drop the others, and it is retried the next
-      // time the page loads it
-      void cacheAsset(cache, url).then((cached) => {
-        if (!cached) {
-          seen.delete(url);
-        }
-      });
+      // each file on its own, so one failure doesn't drop the others. A failed file stays in
+      // `seen` (its own fetch shows up as a new entry); the next uncontrolled load retries it.
+      void cacheAsset(cache, url);
     }
   }).observe({ type: "resource", buffered: true });
 }
 
-async function cacheAsset(cache: Cache, url: string): Promise<boolean> {
+async function cacheAsset(cache: Cache, url: string): Promise<void> {
   try {
     // file names are content-hashed, so the HTTP cache copy is always valid: no second download
     const response = await fetch(url, { cache: "force-cache" });
     // same rule as the service worker: the host answers unknown paths with index.html
     if (response.ok && response.headers.get("content-type")?.startsWith("text/html") !== true) {
       await cache.put(url, response);
-      return true;
     }
   } catch (err: unknown) {
     log.warn("Caching loaded asset failed", url, err);
   }
-  return false;
 }
 
 export type MainParams = {
