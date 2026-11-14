@@ -182,29 +182,32 @@ function SideOffset({
 
 /**
  * The offsets to ask for when `side` changes: built on the newest request the player hasn't shown
- * yet, else on the published offsets, so quick edits to different sides don't undo each other
+ * yet (the last of `inFlight`), else on the published offsets, so quick edits to different sides
+ * don't undo each other
  */
 export function nextOffsets(
   published: readonly number[],
-  pending: readonly number[] | undefined,
+  inFlight: readonly (readonly number[])[],
   side: number,
   change: number | ((current: number) => number),
 ): number[] {
-  const base = pending ?? published;
+  const base = inFlight.at(-1) ?? published;
   return base.map((value, index) =>
     index !== side ? value : typeof change === "function" ? change(value) : change,
   );
 }
 
 /**
- * The request still on its way once the player published `published`: none when it shows the
- * request, else the request (an older publication never replaces a newer request)
+ * The requests still on their way after the player published `published`. Called only for a new
+ * publication: it acknowledges the oldest request it equals and every one before it (the player
+ * applies them in order, and may skip some), never a newer request that merely equals it
  */
-export function settledRequest(
+export function acknowledge(
+  inFlight: readonly (readonly number[])[],
   published: readonly number[],
-  pending: readonly number[] | undefined,
-): number[] | undefined {
-  return pending && !_.isEqual(pending, published) ? [...pending] : undefined;
+): (readonly number[])[] {
+  const index = inFlight.findIndex((request) => _.isEqual(request, published));
+  return index < 0 ? [...inFlight] : inFlight.slice(index + 1);
 }
 
 /** The compared recordings with controls to move each along the shared timeline */
@@ -212,10 +215,15 @@ export function CompareSidesEditor(): React.JSX.Element | undefined {
   const compare = useCompare();
   const setOffsets = useMessagePipeline(selectSetOffsets);
   const { t } = useTranslation("compare");
-  // The offsets last asked for while the player hasn't shown them yet (see nextOffsets)
+  // The offset requests the player hasn't shown yet (see nextOffsets), acknowledged once per
+  // publication: a rerender with the same sides acknowledges nothing
   const published = compare?.sides.map((side) => side.offsetSec);
-  const pending = useRef<number[] | undefined>(undefined);
-  pending.current = published && settledRequest(published, pending.current);
+  const inFlight = useRef<(readonly number[])[]>([]);
+  const seenSides = useRef(compare?.sides);
+  if (compare && published && seenSides.current !== compare.sides) {
+    seenSides.current = compare.sides;
+    inFlight.current = acknowledge(inFlight.current, published);
+  }
   if (!compare) {
     return undefined;
   }
@@ -229,8 +237,8 @@ export function CompareSidesEditor(): React.JSX.Element | undefined {
           key={side.prefix}
           side={side}
           onOffset={(offsetSec) => {
-            const next = nextOffsets(published!, pending.current, side.index, offsetSec);
-            pending.current = next;
+            const next = nextOffsets(published!, inFlight.current, side.index, offsetSec);
+            inFlight.current = [...inFlight.current, next];
             setOffsets?.(next);
           }}
         />
