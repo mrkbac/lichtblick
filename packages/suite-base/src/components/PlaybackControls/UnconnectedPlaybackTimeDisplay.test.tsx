@@ -9,7 +9,11 @@ import { IAppTimeFormat } from "@lichtblick/suite-base/hooks/useAppTimeFormat";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import clipboard from "@lichtblick/suite-base/util/clipboard";
 
-import { UnconnectedPlaybackTimeDisplay, formatIsoUtc } from "./UnconnectedPlaybackTimeDisplay";
+import {
+  UnconnectedPlaybackTimeDisplay,
+  formatElapsed,
+  formatIsoUtc,
+} from "./UnconnectedPlaybackTimeDisplay";
 
 const appTimeFormat: IAppTimeFormat = {
   formatDate: () => "",
@@ -51,6 +55,41 @@ describe("formatIsoUtc", () => {
   });
 });
 
+describe("formatElapsed", () => {
+  it("keeps nanoseconds", () => {
+    expect(formatElapsed({ sec: 0, nsec: 5 })).toBe("0:00:00.000000005");
+    expect(formatElapsed({ sec: 3723, nsec: 400_000_000 })).toBe("1:02:03.400000000");
+  });
+});
+
+describe("blur", () => {
+  it("does not seek when the time was not edited", () => {
+    const onSeek = vi.fn();
+    render(
+      <ThemeProvider isDark={false}>
+        <UnconnectedPlaybackTimeDisplay
+          appTimeFormat={appTimeFormat}
+          startTime={{ sec: 1, nsec: 0 }}
+          currentTime={{ sec: 2, nsec: 5 }}
+          endTime={{ sec: 3, nsec: 0 }}
+          onSeek={onSeek}
+          onPause={() => {}}
+          isPlaying={false}
+        />
+      </ThemeProvider>,
+    );
+    const input = screen.getByRole<HTMLInputElement>("textbox");
+    fireEvent.focus(input);
+    fireEvent.blur(input);
+    expect(onSeek).not.toHaveBeenCalled();
+
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: "2.5" } });
+    fireEvent.blur(input);
+    expect(onSeek).toHaveBeenCalledWith({ sec: 2, nsec: 500_000_000 });
+  });
+});
+
 describe("time format menu", () => {
   function renderOpenMenu(setTimeFormat = vi.fn(async () => {})) {
     render(
@@ -74,7 +113,7 @@ describe("time format menu", () => {
     renderOpenMenu();
     expect(screen.getByLabelText("Copy current time")).toBeTruthy();
     expect(screen.getByText("2000000005")).toBeTruthy();
-    expect(screen.getByText("0:00:01.000")).toBeTruthy();
+    expect(screen.getByText("0:00:01.000000005")).toBeTruthy();
     expect(screen.getByLabelText("Copy Nanoseconds")).toBeTruthy();
   });
 

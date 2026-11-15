@@ -33,7 +33,7 @@ import { TimeDisplayMethod } from "@lichtblick/suite-base/types/panels";
 import clipboard from "@lichtblick/suite-base/util/clipboard";
 import {
   format,
-  formatDuration,
+  formatHms,
   getValidatedTimeAndMethodFromString,
 } from "@lichtblick/suite-base/util/formatTime";
 import { matchesCombo } from "@lichtblick/suite-base/util/keyboardShortcuts";
@@ -112,6 +112,12 @@ export function formatIsoUtc(time: Time): string {
 
 const COPY_COMBO = { key: "c", mod: true, alt: false };
 
+/** h:mm:ss.nnnnnnnnn, keeping the nanoseconds a millisecond format would round away. */
+export function formatElapsed(elapsed: Time): string {
+  const hms = formatHms(elapsed.sec * 1000, { withMillis: false });
+  return `${hms}.${String(elapsed.nsec).padStart(9, "0")}`;
+}
+
 type TimeFormatRow = {
   /** Display formats can be selected; the others are copy-only. */
   key: TimeDisplayMethod | "ISO" | "NS" | "ELAPSED";
@@ -139,7 +145,7 @@ function timeFormatRows(
     rows.push({
       key: "ELAPSED",
       label: "sinceStart",
-      value: formatDuration(subtractTimes(currentTime, startTime)),
+      value: formatElapsed(subtractTimes(currentTime, startTime)),
     });
   }
   return rows;
@@ -417,7 +423,11 @@ export function UnconnectedPlaybackTimeDisplay({
               e.target.select();
             }}
             onBlur={(e) => {
-              onSubmit(e);
+              // Leaving the field unedited (e.g. tabbing to the copy button) must not seek: the
+              // displayed time is rounded, so re-parsing it would move playback.
+              if (inputText !== currentTimeString) {
+                onSubmit(e);
+              }
               setIsEditing(false);
               timeOutID.current = setTimeout(() => {
                 setHasError(false);
