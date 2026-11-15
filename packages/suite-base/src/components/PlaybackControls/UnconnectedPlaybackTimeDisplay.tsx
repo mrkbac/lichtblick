@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Time, isTimeInRangeInclusive } from "@foxglove/rostime";
+import { Time, isTimeInRangeInclusive, subtract as subtractTimes } from "@foxglove/rostime";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import CheckIcon from "@mui/icons-material/Check";
 import WarningIcon from "@mui/icons-material/Warning";
@@ -16,6 +16,7 @@ import {
   MenuItem,
   ListItemIcon,
   ListItemText,
+  Divider,
   filledInputClasses,
   iconButtonClasses,
   inputBaseClasses,
@@ -23,11 +24,13 @@ import {
 import { useState, useCallback, useMemo, useEffect, MouseEvent, useRef } from "react";
 import { makeStyles } from "tss-react/mui";
 
+import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { IAppTimeFormat } from "@lichtblick/suite-base/hooks/useAppTimeFormat";
 import { TimeDisplayMethod } from "@lichtblick/suite-base/types/panels";
 import {
   format,
+  formatDuration,
   getValidatedTimeAndMethodFromString,
 } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
@@ -81,6 +84,12 @@ const useStyles = makeStyles()((theme) => ({
       marginRight: theme.spacing(-1),
     },
   },
+  copyOnlyRow: {
+    cursor: "default",
+  },
+  rowValue: {
+    fontVariantNumeric: "tabular-nums",
+  },
   textFieldError: {
     outline: `1px solid ${theme.palette.error.main}`,
     outlineOffset: -1,
@@ -92,17 +101,55 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
+/** UTC ISO 8601 with full nanosecond precision, e.g. "2025-06-12T08:50:40.599000000Z". */
+export function formatIsoUtc(time: Time): string {
+  const seconds = new Date(time.sec * 1000).toISOString().slice(0, 19);
+  return `${seconds}.${String(time.nsec).padStart(9, "0")}Z`;
+}
+
+type TimeFormatRow = {
+  /** Display formats can be selected; the others are copy-only. */
+  key: TimeDisplayMethod | "ISO" | "NS" | "ELAPSED";
+  label: string;
+  value: string;
+};
+
+function timeFormatRows(
+  currentTime: Time,
+  startTime: Time | undefined,
+  timeOfDayString: string,
+  timeRawString: string,
+): TimeFormatRow[] {
+  const rows: TimeFormatRow[] = [
+    { key: "TOD", label: "Time of day", value: timeOfDayString },
+    { key: "SEC", label: "Seconds", value: timeRawString },
+    { key: "ISO", label: "UTC (ISO 8601)", value: formatIsoUtc(currentTime) },
+    {
+      key: "NS",
+      label: "Nanoseconds",
+      value: (BigInt(currentTime.sec) * 1_000_000_000n + BigInt(currentTime.nsec)).toString(),
+    },
+  ];
+  if (startTime) {
+    rows.push({
+      key: "ELAPSED",
+      label: "Since start",
+      value: formatDuration(subtractTimes(currentTime, startTime)),
+    });
+  }
+  return rows;
+}
+
 function PlaybackTimeMethodMenu({
   timeFormat,
-  timeRawString,
-  timeOfDayString,
+  rows,
   setTimeFormat,
 }: {
   timeFormat: TimeDisplayMethod;
-  timeRawString?: string;
-  timeOfDayString?: string;
+  rows: TimeFormatRow[];
   setTimeFormat: (format: TimeDisplayMethod) => Promise<void>;
 }): React.JSX.Element {
+  const { classes } = useStyles();
   const [anchorEl, setAnchorEl] = useState<undefined | HTMLElement>(undefined);
   const open = Boolean(anchorEl);
 
@@ -147,35 +194,54 @@ function PlaybackTimeMethodMenu({
           horizontal: "right",
         }}
       >
-        {[
-          { key: "TOD", label: timeOfDayString ?? "Time of Day" },
-          { key: "SEC", label: timeRawString ?? "Seconds" },
-        ].map((option) => (
-          <MenuItem
-            key={option.key}
-            data-testid={`playback-time-display-option-${option.key}`}
-            selected={timeFormat === option.key}
-            onClick={async () => {
-              await setTimeFormat(option.key as TimeDisplayMethod);
-              handleClose();
-            }}
-          >
-            {timeFormat === option.key && (
-              <ListItemIcon>
-                <CheckIcon fontSize="small" />
-              </ListItemIcon>
-            )}
-            <ListItemText
-              inset={timeFormat !== option.key}
-              primary={option.label}
-              slotProps={{
-                primary: {
-                  variant: "inherit",
-                },
+        {rows.flatMap((row) => {
+          const selectable = row.key === "TOD" || row.key === "SEC";
+          const selected = timeFormat === row.key;
+          const item = (
+            <MenuItem
+              key={row.key}
+              data-testid={`playback-time-display-option-${row.key}`}
+              selected={selected}
+              onClick={async () => {
+                if (row.key === "TOD" || row.key === "SEC") {
+                  await setTimeFormat(row.key);
+                  handleClose();
+                }
               }}
-            />
-          </MenuItem>
-        ))}
+              className={selectable ? undefined : classes.copyOnlyRow}
+            >
+              {selected && (
+                <ListItemIcon>
+                  <CheckIcon fontSize="small" />
+                </ListItemIcon>
+              )}
+              <ListItemText
+                inset={!selected}
+                primary={row.value}
+                secondary={row.label}
+                slotProps={{
+                  primary: { variant: "inherit", className: classes.rowValue },
+                }}
+              />
+              {/* Copying must not also select the row. */}
+              <span
+                onClick={(event) => {
+                  event.stopPropagation();
+                }}
+              >
+                <CopyButton
+                  size="small"
+                  iconSize="small"
+                  color="inherit"
+                  aria-label={`Copy ${row.label}`}
+                  getText={() => row.value}
+                />
+              </span>
+            </MenuItem>
+          );
+          // Separate the selectable display formats from the copy-only ones.
+          return row.key === "SEC" ? [item, <Divider key="divider" />] : [item];
+        })}
       </Menu>
     </>
   );
@@ -281,16 +347,25 @@ export function UnconnectedPlaybackTimeDisplay({
               input: {
                 startAdornment: hasError ? <WarningIcon color="error" /> : undefined,
                 endAdornment: (
-                  <PlaybackTimeMethodMenu
-                    {...{
-                      currentTime,
-                      timezone,
-                      timeOfDayString,
-                      timeRawString,
-                      timeFormat: appTimeFormat.timeFormat,
-                      setTimeFormat: appTimeFormat.setTimeFormat,
-                    }}
-                  />
+                  <>
+                    <CopyButton
+                      size="small"
+                      iconSize="small"
+                      color="inherit"
+                      aria-label="Copy current time"
+                      getText={() => currentTimeString ?? ""}
+                    />
+                    <PlaybackTimeMethodMenu
+                      timeFormat={appTimeFormat.timeFormat}
+                      setTimeFormat={appTimeFormat.setTimeFormat}
+                      rows={timeFormatRows(
+                        currentTime,
+                        startTime,
+                        timeOfDayString ?? "",
+                        timeRawString ?? "",
+                      )}
+                    />
+                  </>
                 ),
               },
             }}
