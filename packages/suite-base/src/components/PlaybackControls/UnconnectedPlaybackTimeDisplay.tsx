@@ -22,12 +22,15 @@ import {
   inputBaseClasses,
 } from "@mui/material";
 import { useState, useCallback, useMemo, useEffect, MouseEvent, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { IAppTimeFormat } from "@lichtblick/suite-base/hooks/useAppTimeFormat";
+import { playbackTime } from "@lichtblick/suite-base/i18n/en/playbackTime";
 import { TimeDisplayMethod } from "@lichtblick/suite-base/types/panels";
+import clipboard from "@lichtblick/suite-base/util/clipboard";
 import {
   format,
   formatDuration,
@@ -84,9 +87,6 @@ const useStyles = makeStyles()((theme) => ({
       marginRight: theme.spacing(-1),
     },
   },
-  copyOnlyRow: {
-    cursor: "default",
-  },
   rowValue: {
     fontVariantNumeric: "tabular-nums",
   },
@@ -110,7 +110,7 @@ export function formatIsoUtc(time: Time): string {
 type TimeFormatRow = {
   /** Display formats can be selected; the others are copy-only. */
   key: TimeDisplayMethod | "ISO" | "NS" | "ELAPSED";
-  label: string;
+  label: keyof typeof playbackTime;
   value: string;
 };
 
@@ -121,19 +121,19 @@ function timeFormatRows(
   timeRawString: string,
 ): TimeFormatRow[] {
   const rows: TimeFormatRow[] = [
-    { key: "TOD", label: "Time of day", value: timeOfDayString },
-    { key: "SEC", label: "Seconds", value: timeRawString },
-    { key: "ISO", label: "UTC (ISO 8601)", value: formatIsoUtc(currentTime) },
+    { key: "TOD", label: "timeOfDay", value: timeOfDayString },
+    { key: "SEC", label: "seconds", value: timeRawString },
+    { key: "ISO", label: "isoUtc", value: formatIsoUtc(currentTime) },
     {
       key: "NS",
-      label: "Nanoseconds",
+      label: "nanoseconds",
       value: (BigInt(currentTime.sec) * 1_000_000_000n + BigInt(currentTime.nsec)).toString(),
     },
   ];
   if (startTime) {
     rows.push({
       key: "ELAPSED",
-      label: "Since start",
+      label: "sinceStart",
       value: formatDuration(subtractTimes(currentTime, startTime)),
     });
   }
@@ -150,8 +150,34 @@ function PlaybackTimeMethodMenu({
   setTimeFormat: (format: TimeDisplayMethod) => Promise<void>;
 }): React.JSX.Element {
   const { classes } = useStyles();
+  const { t } = useTranslation("playbackTime");
   const [anchorEl, setAnchorEl] = useState<undefined | HTMLElement>(undefined);
   const open = Boolean(anchorEl);
+  // Shown in place of the row's label, so keyboard copies get feedback too.
+  const [copiedKey, setCopiedKey] = useState<TimeFormatRow["key"] | undefined>();
+
+  useEffect(() => {
+    if (copiedKey == undefined) {
+      return;
+    }
+    const id = setTimeout(() => {
+      setCopiedKey(undefined);
+    }, 1500);
+    return () => {
+      clearTimeout(id);
+    };
+  }, [copiedKey]);
+
+  const copyRow = (row: TimeFormatRow) => {
+    clipboard
+      .copy(row.value)
+      .then(() => {
+        setCopiedKey(row.key);
+      })
+      .catch((err: unknown) => {
+        console.warn(err);
+      });
+  };
 
   const handleClick = (event: MouseEvent<HTMLButtonElement>) => {
     setAnchorEl(event.currentTarget);
@@ -195,20 +221,28 @@ function PlaybackTimeMethodMenu({
         }}
       >
         {rows.flatMap((row) => {
-          const selectable = row.key === "TOD" || row.key === "SEC";
           const selected = timeFormat === row.key;
           const item = (
             <MenuItem
               key={row.key}
               data-testid={`playback-time-display-option-${row.key}`}
               selected={selected}
+              // Display formats are selected; the others are copied, keeping the menu open.
               onClick={async () => {
                 if (row.key === "TOD" || row.key === "SEC") {
                   await setTimeFormat(row.key);
                   handleClose();
+                } else {
+                  copyRow(row);
                 }
               }}
-              className={selectable ? undefined : classes.copyOnlyRow}
+              // The row copy buttons can't take focus inside a menu; Ctrl/Cmd+C copies the focused row.
+              onKeyDown={(event) => {
+                if ((event.ctrlKey || event.metaKey) && event.key === "c") {
+                  event.preventDefault();
+                  copyRow(row);
+                }
+              }}
             >
               {selected && (
                 <ListItemIcon>
@@ -218,7 +252,7 @@ function PlaybackTimeMethodMenu({
               <ListItemText
                 inset={!selected}
                 primary={row.value}
-                secondary={row.label}
+                secondary={copiedKey === row.key ? t("copied") : t(row.label)}
                 slotProps={{
                   primary: { variant: "inherit", className: classes.rowValue },
                 }}
@@ -233,7 +267,7 @@ function PlaybackTimeMethodMenu({
                   size="small"
                   iconSize="small"
                   color="inherit"
-                  aria-label={`Copy ${row.label}`}
+                  aria-label={t("copyValue", { label: t(row.label) })}
                   getText={() => row.value}
                 />
               </span>
@@ -258,6 +292,7 @@ export function UnconnectedPlaybackTimeDisplay({
   isPlaying,
 }: PlaybackTimeDisplayMethodProps): React.JSX.Element {
   const { classes, cx } = useStyles();
+  const { t } = useTranslation("playbackTime");
   const timeOutID = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const timeRawString = useMemo(
@@ -352,7 +387,7 @@ export function UnconnectedPlaybackTimeDisplay({
                       size="small"
                       iconSize="small"
                       color="inherit"
-                      aria-label="Copy current time"
+                      aria-label={t("copyCurrentTime")}
                       getText={() => currentTimeString ?? ""}
                     />
                     <PlaybackTimeMethodMenu

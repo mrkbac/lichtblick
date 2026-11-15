@@ -33,6 +33,7 @@ export * from "./panels";
 export * from "./panelSettings";
 export * from "./panelToolbar";
 export * from "./plot";
+export * from "./playbackTime";
 export * from "./alertsList";
 export * from "./settingsEditor";
 export * from "./stateTransitions";

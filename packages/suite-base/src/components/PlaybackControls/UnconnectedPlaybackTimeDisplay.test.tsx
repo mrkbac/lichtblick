@@ -3,10 +3,11 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 
 import { IAppTimeFormat } from "@lichtblick/suite-base/hooks/useAppTimeFormat";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
+import clipboard from "@lichtblick/suite-base/util/clipboard";
 
 import { UnconnectedPlaybackTimeDisplay, formatIsoUtc } from "./UnconnectedPlaybackTimeDisplay";
 
@@ -51,11 +52,11 @@ describe("formatIsoUtc", () => {
 });
 
 describe("time format menu", () => {
-  it("lists copy-only formats with a copy button each", () => {
+  function renderOpenMenu(setTimeFormat = vi.fn(async () => {})) {
     render(
       <ThemeProvider isDark={false}>
         <UnconnectedPlaybackTimeDisplay
-          appTimeFormat={appTimeFormat}
+          appTimeFormat={{ ...appTimeFormat, setTimeFormat }}
           startTime={{ sec: 1, nsec: 0 }}
           currentTime={{ sec: 2, nsec: 5 }}
           endTime={{ sec: 3, nsec: 0 }}
@@ -65,10 +66,44 @@ describe("time format menu", () => {
         />
       </ThemeProvider>,
     );
-    expect(screen.getByLabelText("Copy current time")).toBeTruthy();
     fireEvent.click(screen.getByTestId("playback-time-display-toggle-button"));
+    return setTimeFormat;
+  }
+
+  it("lists copy-only formats with a copy button each", () => {
+    renderOpenMenu();
+    expect(screen.getByLabelText("Copy current time")).toBeTruthy();
     expect(screen.getByText("2000000005")).toBeTruthy();
     expect(screen.getByText("0:00:01.000")).toBeTruthy();
     expect(screen.getByLabelText("Copy Nanoseconds")).toBeTruthy();
+  });
+
+  it("copies a row without selecting it or closing the menu", async () => {
+    const copy = vi.spyOn(clipboard, "copy").mockResolvedValue();
+    const setTimeFormat = renderOpenMenu();
+
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText("Copy Seconds"));
+    });
+    expect(copy).toHaveBeenLastCalledWith("2.000000005");
+
+    // Copy-only rows copy on activation, which keyboard users reach with Enter.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("playback-time-display-option-NS"));
+    });
+    expect(copy).toHaveBeenLastCalledWith("2000000005");
+    expect(screen.getByText("Copied")).toBeTruthy();
+
+    // Ctrl/Cmd+C copies the focused row, including the selectable ones.
+    await act(async () => {
+      fireEvent.keyDown(screen.getByTestId("playback-time-display-option-SEC"), {
+        key: "c",
+        ctrlKey: true,
+      });
+    });
+    expect(copy).toHaveBeenLastCalledWith("2.000000005");
+
+    expect(setTimeFormat).not.toHaveBeenCalled();
+    expect(screen.getByRole("menu")).toBeTruthy();
   });
 });
