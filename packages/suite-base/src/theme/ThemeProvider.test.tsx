@@ -42,6 +42,25 @@ describe("ThemeProvider theme-color", () => {
     });
   });
 
+  it("sets every per-color-scheme theme-color tag from index.html to the app bar", () => {
+    const tags = (["light", "dark"] as const).map((scheme) => {
+      const meta = document.createElement("meta");
+      meta.name = "theme-color";
+      meta.media = `(prefers-color-scheme: ${scheme})`;
+      meta.content = palette[scheme].appBar.main!;
+      document.head.appendChild(meta);
+      return meta;
+    });
+    try {
+      render(<ThemeProvider isDark />);
+      expect(tags.map((meta) => meta.content)).toEqual([appBar, appBar]);
+    } finally {
+      for (const meta of tags) {
+        meta.remove();
+      }
+    }
+  });
+
   it("keeps the app bar color for a dialog that starts below the app bar", () => {
     const rect = vi
       .spyOn(HTMLElement.prototype, "getBoundingClientRect")

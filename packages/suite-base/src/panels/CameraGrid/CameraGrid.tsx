@@ -42,14 +42,16 @@ const useStyles = makeStyles()((theme) => ({
     display: "grid",
     width: "100%",
     height: "100%",
-    gap: 2,
+    gap: 1,
   },
   tile: {
     position: "relative",
     minWidth: 0,
     minHeight: 0,
     overflow: "hidden",
-    backgroundColor: "#000",
+    backgroundColor: theme.palette.background.default,
+    // Outlines of neighbouring tiles meet in the 1px gap as a single divider line.
+    outline: `1px solid ${theme.palette.divider}`,
     cursor: "zoom-in",
   },
   maximized: {
@@ -91,7 +93,7 @@ const useStyles = makeStyles()((theme) => ({
     justifyContent: "center",
     padding: theme.spacing(1),
     textAlign: "center",
-    color: "rgba(255, 255, 255, 0.6)",
+    color: theme.palette.text.secondary,
     fontSize: theme.typography.caption.fontSize,
     pointerEvents: "none",
     "&[hidden]": { display: "none" },

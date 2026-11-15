@@ -69,12 +69,14 @@ export default function ThemeProvider({
       return;
     }
     // Match the app bar, which the installed PWA draws in the title bar next to the browser's
-    // own controls. Update the existing tag: browsers only read the first theme-color meta.
-    let meta = ownerDocument.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
-    if (!meta) {
-      meta = ownerDocument.createElement("meta");
+    // own controls. index.html ships one tag per prefers-color-scheme so the first paint is right;
+    // set them all, since the app's theme setting can differ from the OS scheme.
+    const metas = [...ownerDocument.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"]')];
+    if (metas.length === 0) {
+      const meta = ownerDocument.createElement("meta");
       meta.name = "theme-color";
       ownerDocument.head.appendChild(meta);
+      metas.push(meta);
     }
     const appBar = muiTheme.palette.appBar.main ?? "";
     // A dialog's backdrop (black at 0.4, see MuiBackdrop) dims the app bar when it covers it; dim
@@ -83,11 +85,17 @@ export default function ThemeProvider({
     // is. Menus and popovers use invisible backdrops and leave the color alone.
     const dimmed = darken(appBar, 0.4);
     const update = () => {
-      const backdrops = ownerDocument.querySelectorAll(
+      const backdrops = ownerDocument.querySelectorAll<HTMLElement>(
         ".MuiBackdrop-root:not(.MuiBackdrop-invisible)",
       );
-      const covered = [...backdrops].some((el) => el.getBoundingClientRect().top <= 0);
-      meta.content = covered ? dimmed : appBar;
+      // A closing dialog's backdrop fades to opacity 0 before it is removed: undim right away.
+      const covered = [...backdrops].some(
+        (el) => el.style.opacity !== "0" && el.getBoundingClientRect().top <= 0,
+      );
+      const content = covered ? dimmed : appBar;
+      for (const meta of metas) {
+        meta.content = content;
+      }
     };
     update();
     // Dialogs open, close, and change size or place (e.g. a dialog switching between a popup

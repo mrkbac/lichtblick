@@ -47,6 +47,8 @@ type Props = {
   selectedObject?: SelectionObject;
   setInteractionsTabType: (arg0?: TabType) => void;
   timezone: string | undefined;
+  /** The panel's other floating controls, shown in the same toolbar below the inspect button. */
+  toolbarItems?: React.ReactNode;
 };
 
 const InteractionsBaseComponent = React.memo<Props>(function InteractionsBaseComponent({
@@ -56,6 +58,7 @@ const InteractionsBaseComponent = React.memo<Props>(function InteractionsBaseCom
   onShowTopicSettings,
   setInteractionsTabType,
   timezone,
+  toolbarItems,
 }: Props) {
   const selectedInteractionData = selectedObject?.object.interactionData;
   const originalMessage = selectedInteractionData?.originalMessage;
@@ -65,6 +68,7 @@ const InteractionsBaseComponent = React.memo<Props>(function InteractionsBaseCom
     <ExpandingToolbar
       tooltip="Inspect objects"
       icon={<Cursor20Regular />}
+      toolbarItems={toolbarItems}
       selectedTab={interactionsTabType}
       onSelectTab={(newSelectedTab) => {
         setInteractionsTabType(newSelectedTab);

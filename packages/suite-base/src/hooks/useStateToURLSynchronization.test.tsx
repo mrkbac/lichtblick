@@ -177,4 +177,26 @@ describe("useStateToURLSynchronization", () => {
     expect(lastCallUrl).toContain("ds=remote-file");
     expect(lastCallUrl).toContain("ds.url=");
   });
+  it("leaves ds out of the url for a local file, which a reload can't reopen from the url", () => {
+    window.history.replaceState(undefined, "", "/?ds=mcap-local-file");
+    const spy = vi.spyOn(window.history, "replaceState");
+
+    (useMessagePipeline as Mock).mockImplementation((selector) =>
+      selector({
+        playerState: {
+          activeData: { currentTime: { sec: 1, nsec: 1 } },
+          capabilities: ["playbackControl"],
+          urlState: { sourceId: "mcap-local-file", parameters: undefined },
+        },
+      }),
+    );
+
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <EventsProvider>{children}</EventsProvider>
+    );
+    renderHook(useStateToURLSynchronization, { wrapper });
+
+    const written = new URL(spy.mock.calls[spy.mock.calls.length - 1]![2] as string);
+    expect(written.searchParams.has("ds")).toBe(false);
+  });
 });

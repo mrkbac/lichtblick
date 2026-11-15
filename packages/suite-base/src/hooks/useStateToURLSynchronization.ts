@@ -65,6 +65,13 @@ export function useStateToURLSynchronization(): void {
       return;
     }
 
+    // Local files have no URL parameters and can't be reopened from the URL; a `ds` for them would
+    // only make a reload fail and skip reopening the file from recents (see PlayerManager).
+    if (stablePlayerUrlState.parameters == undefined) {
+      updateUrl({ ds: undefined, dsParams: {} });
+      return;
+    }
+
     updateUrl({
       ds: stablePlayerUrlState.sourceId,
       dsParams: _.pickBy(

@@ -358,7 +358,7 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
       />
       <UserMenu
         anchorEl={userAnchorEl}
-        open={userMenuOpen && showUserMenu}
+        open={userMenuOpen && showUserMenu && organization.status !== "loading"}
         handleClose={() => {
           setUserAnchorEl(undefined);
         }}

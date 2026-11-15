@@ -225,6 +225,8 @@ const useStyles = makeStyles()((theme) => ({
     top: 10,
     left: "50%",
     transform: "translateX(-50%)",
+    // Stay between the tool bar on the left and the zoom controls on the right (10px insets).
+    maxWidth: `calc(100% - ${2 * (10 + OVERLAY_TOOLBAR_BUTTON_SIZE + 10)}px)`,
   },
 }));
 
