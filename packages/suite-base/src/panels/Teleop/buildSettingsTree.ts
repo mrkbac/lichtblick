@@ -31,17 +31,6 @@ const SCHEMA_PATTERN: Record<OutputType, RegExp> = {
   Joy: /(^|\/)Joy$/,
 };
 
-const EXACT_SCHEMA_PATTERN: Record<OutputType, RegExp> = {
-  Twist: /(^|\/)Twist$/,
-  TwistStamped: /(^|\/)TwistStamped$/,
-  Joy: /(^|\/)Joy$/,
-};
-
-/** Whether a topic of `schemaName` carries exactly the message type the panel publishes */
-export function isExactMessageType(messageType: OutputType, schemaName: string): boolean {
-  return EXACT_SCHEMA_PATTERN[messageType].test(schemaName);
-}
-
 function buttonOptions(buttons: readonly ButtonName[]) {
   return [
     { label: "None", value: "none" },

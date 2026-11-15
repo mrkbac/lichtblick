@@ -19,7 +19,6 @@ import Joystick from "@lichtblick/suite-base/panels/Teleop/Joystick";
 import {
   applySettingsAction,
   buildSettingsTreeTeleop,
-  isExactMessageType,
 } from "@lichtblick/suite-base/panels/Teleop/buildSettingsTree";
 import { BUTTON_LABELS } from "@lichtblick/suite-base/panels/Teleop/constants";
 import {
@@ -42,6 +41,7 @@ import {
 import {
   ButtonName,
   DirectionalPadAction,
+  OutputType,
   PadState,
   TeleopConfig,
   TeleopPanelProps,
@@ -56,6 +56,12 @@ const SCHEMAS = {
   TwistStamped: "geometry_msgs/TwistStamped",
   Joy: "sensor_msgs/Joy",
 } as const;
+
+/** Whether `schemaName` is the ROS 1 or ROS 2 name of the schema the panel publishes */
+function isPublishedSchema(messageType: OutputType, schemaName: string): boolean {
+  const rootType = SCHEMAS[messageType];
+  return schemaName === rootType || schemaName === rootType.replace("/", "/msg/");
+}
 
 type InputSources = {
   /** On-screen controls, held with mouse, touch or pen */
@@ -180,7 +186,7 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
         (item) =>
           item.isTopic &&
           item.rootSchemaName != undefined &&
-          isExactMessageType(config.messageType, item.rootSchemaName),
+          isPublishedSchema(config.messageType, item.rootSchemaName),
         (item) => {
           setConfig((previous) => ({ ...previous, topic: item.topicName }));
         },

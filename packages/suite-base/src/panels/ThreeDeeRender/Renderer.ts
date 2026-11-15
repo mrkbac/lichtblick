@@ -2062,12 +2062,15 @@ export class Renderer extends EventEmitter<RendererEvents> {
 
   /** A topic the 3D scene can draw (e.g. markers, point clouds): dropping it turns it on */
   #isShowableTopic(path: DraggedMessagePath): boolean {
-    return (
-      this.interfaceMode === "3d" &&
-      path.isTopic &&
-      path.rootSchemaName != undefined &&
-      this.schemaSubscriptions.has(path.rootSchemaName)
-    );
+    if (this.interfaceMode !== "3d" || !path.isTopic || path.rootSchemaName == undefined) {
+      return false;
+    }
+    // A topic can also be drawn through a message converter to a schema the scene draws
+    const schemas = [
+      path.rootSchemaName,
+      ...(this.topicsByName?.get(path.topicName)?.convertibleTo ?? []),
+    ];
+    return schemas.some((schema) => this.schemaSubscriptions.has(schema));
   }
 
   public setAnalytics(analytics: IAnalytics): void {

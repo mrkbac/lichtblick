@@ -1660,7 +1660,10 @@ describe("3D Renderer", () => {
       canvas,
       config: { ...defaultRendererConfig, topics: { "/markers": { visible: false } } },
     });
-    renderer.setTopics([{ name: "/markers", schemaName: "visualization_msgs/MarkerArray" }]);
+    renderer.setTopics([
+      { name: "/markers", schemaName: "visualization_msgs/MarkerArray" },
+      { name: "/objects", schemaName: "custom.Objects", convertibleTo: ["foxglove.SceneUpdate"] },
+    ]);
     const markers: DraggedMessagePath = {
       path: "/markers",
       isTopic: true,
@@ -1668,7 +1671,6 @@ describe("3D Renderer", () => {
       topicName: "/markers",
       rootSchemaName: "visualization_msgs/MarkerArray",
     };
-    const settingsSpy = vi.spyOn(renderer.settings, "setNodesForKey");
 
     expect(renderer.getDropStatus([markers])).toEqual({ canDrop: true, effect: "add" });
     // A field of the topic isn't a topic to turn on
@@ -1676,10 +1678,18 @@ describe("3D Renderer", () => {
       renderer.getDropStatus([{ ...markers, path: "/markers.markers", isTopic: false }]),
     ).toEqual({ canDrop: false });
 
+    // A topic converted to a schema the scene draws counts too
+    const objects = { ...markers, path: "/objects", topicName: "/objects" };
+    expect(renderer.getDropStatus([{ ...objects, rootSchemaName: "custom.Objects" }])).toEqual({
+      canDrop: true,
+      effect: "add",
+    });
+
     renderer.handleDrop([markers]);
     expect(renderer.config.topics["/markers"]?.visible).toBe(true);
     // The settings tree shows the topic as visible too
-    expect(settingsSpy).toHaveBeenCalled();
+    const topicNodes = renderer.settings.tree().topics?.children;
+    expect(topicNodes?.["/markers"]?.visible).toBe(true);
 
     renderer.dispose();
   });

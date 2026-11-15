@@ -138,6 +138,8 @@ describe("TeleopPanel", () => {
       expect(
         dropConfig.getDropStatus([topic("/stamped", "geometry_msgs/msg/TwistStamped")]).canDrop,
       ).toBe(false);
+      // Same type name in another package: not the message the panel publishes
+      expect(dropConfig.getDropStatus([topic("/custom", "custom_msgs/Twist")]).canDrop).toBe(false);
       act(() => {
         dropConfig.handleDrop([topic("/nav_vel", "geometry_msgs/msg/Twist")]);
       });
