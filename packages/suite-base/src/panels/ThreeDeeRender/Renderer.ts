@@ -1815,28 +1815,31 @@ export class Renderer extends EventEmitter<RendererEvents> {
     }
     log.debug(`handleTopicsAction(${action.payload.id})`);
 
-    // eslint-disable-next-line @lichtblick/no-boolean-parameters
-    const toggleTopicVisibility = (value: boolean) => {
-      for (const extension of this.sceneExtensions.values()) {
-        for (const node of extension.settingsNodes()) {
-          if (node.path[0] === "topics") {
-            extension.handleSettingsAction({
-              action: "update",
-              payload: { path: [...node.path, "visible"], input: "boolean", value },
-            });
-          }
-        }
-      }
-    };
-
     if (action.payload.id === "show-all") {
-      // Show all topics
-      toggleTopicVisibility(true);
+      this.#setTopicsVisible(true);
     } else if (action.payload.id === "hide-all") {
-      // Hide all topics
-      toggleTopicVisibility(false);
+      this.#setTopicsVisible(false);
     }
   };
+
+  /**
+   * Shows or hides topics (all of them, or only `onlyTopics`) like their visibility checkbox does,
+   * so the config, the settings tree and the renderables all follow.
+   */
+  // eslint-disable-next-line @lichtblick/no-boolean-parameters
+  #setTopicsVisible(value: boolean, onlyTopics?: ReadonlySet<string>): void {
+    for (const extension of this.sceneExtensions.values()) {
+      for (const node of extension.settingsNodes()) {
+        const [root, topic] = node.path;
+        if (root === "topics" && (onlyTopics == undefined || onlyTopics.has(topic ?? ""))) {
+          extension.handleSettingsAction({
+            action: "update",
+            payload: { path: [...node.path, "visible"], input: "boolean", value },
+          });
+        }
+      }
+    }
+  }
 
   #handleCustomLayersAction = (action: SettingsTreeAction): void => {
     const path = action.payload.path;
@@ -2047,11 +2050,14 @@ export class Renderer extends EventEmitter<RendererEvents> {
         for (const extension of this.sceneExtensions.values()) {
           extension.updateConfigForDropPath(draft, path);
         }
-        if (this.#isShowableTopic(path)) {
-          draft.topics[path.topicName] = { ...draft.topics[path.topicName], visible: true };
-        }
       }
     });
+    const topics = paths
+      .filter((path) => this.#isShowableTopic(path))
+      .map((path) => path.topicName);
+    if (topics.length > 0) {
+      this.#setTopicsVisible(true, new Set(topics));
+    }
   };
 
   /** A topic the 3D scene can draw (e.g. markers, point clouds): dropping it turns it on */

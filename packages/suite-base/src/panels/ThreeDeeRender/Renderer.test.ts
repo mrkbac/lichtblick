@@ -1654,8 +1654,13 @@ describe("3D Renderer", () => {
     renderer.dispose();
   });
 
-  it("turns on a dropped topic the scene can draw", () => {
-    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+  it("turns on a dropped topic the scene can draw, like its visibility checkbox", () => {
+    const renderer = new Renderer({
+      ...defaultRendererProps,
+      canvas,
+      config: { ...defaultRendererConfig, topics: { "/markers": { visible: false } } },
+    });
+    renderer.setTopics([{ name: "/markers", schemaName: "visualization_msgs/MarkerArray" }]);
     const markers: DraggedMessagePath = {
       path: "/markers",
       isTopic: true,
@@ -1663,6 +1668,7 @@ describe("3D Renderer", () => {
       topicName: "/markers",
       rootSchemaName: "visualization_msgs/MarkerArray",
     };
+    const settingsSpy = vi.spyOn(renderer.settings, "setNodesForKey");
 
     expect(renderer.getDropStatus([markers])).toEqual({ canDrop: true, effect: "add" });
     // A field of the topic isn't a topic to turn on
@@ -1672,6 +1678,8 @@ describe("3D Renderer", () => {
 
     renderer.handleDrop([markers]);
     expect(renderer.config.topics["/markers"]?.visible).toBe(true);
+    // The settings tree shows the topic as visible too
+    expect(settingsSpy).toHaveBeenCalled();
 
     renderer.dispose();
   });

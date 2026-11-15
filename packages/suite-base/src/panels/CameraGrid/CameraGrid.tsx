@@ -302,13 +302,21 @@ export function CameraGrid({
     context.saveState(config);
   }, [context, config]);
 
-  // Drop image topics from the topic list to add a tile for each
+  // Drop image topics from the topic list to add a tile for each, or show a hidden one again
   useEffect(() => {
     context.unstable_setMessagePathDropConfig(
       addTopicsDrop(
         (item) => item.rootSchemaName != undefined && imageKind(item.rootSchemaName) != undefined,
         (dropped) => {
-          setConfig((prev) => addAllTopics(prev, dropped));
+          setConfig((prev) => {
+            const added = addAllTopics(prev, dropped);
+            return {
+              ...added,
+              tiles: added.tiles.map((tile) =>
+                dropped.includes(tile.topic) ? { ...tile, visible: true } : tile,
+              ),
+            };
+          });
         },
       ),
     );

@@ -32,6 +32,7 @@ import { replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 
 import { useStyles } from "./PieChart.style";
 import { DEFAULT_CONFIG } from "./constants";
+import { isFloat32ArrayPath } from "./isFloat32ArrayPath";
 import type { PieChartConfig, PieChartDatum, PieChartState } from "./types";
 import { useChartData } from "./useChartData";
 import { useSettingsTree } from "./useSettingsTree";
@@ -184,11 +185,11 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
     context.setDefaultPanelTitle(config.path === "" ? undefined : config.path);
   }, [config, context]);
 
-  // Drop an array field from the topic list to chart it
+  // Drop a float32[] field from the topic list to chart it
   useEffect(() => {
     context.unstable_setMessagePathDropConfig(
       replaceDrop(
-        (item) => !item.isTopic,
+        (item) => isFloat32ArrayPath(item.path, context.getTopicSchema, context.getSchema),
         (item) => {
           setConfig((prev) => ({ ...prev, path: item.path }));
         },

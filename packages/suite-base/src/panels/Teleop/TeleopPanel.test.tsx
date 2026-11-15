@@ -135,6 +135,9 @@ describe("TeleopPanel", () => {
       });
 
       expect(dropConfig.getDropStatus([topic("/joy", "sensor_msgs/Joy")]).canDrop).toBe(false);
+      expect(
+        dropConfig.getDropStatus([topic("/stamped", "geometry_msgs/msg/TwistStamped")]).canDrop,
+      ).toBe(false);
       act(() => {
         dropConfig.handleDrop([topic("/nav_vel", "geometry_msgs/msg/Twist")]);
       });
