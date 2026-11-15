@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { CHUNK_CACHE_BYTES, ChunkCache } from "./ChunkCache.ts";
+import { ChunkMessageIndex } from "./ChunkCursor.ts";
 
 const view = (bytes: number) => new DataView(new ArrayBuffer(bytes));
 
@@ -44,6 +45,68 @@ describe("ChunkCache", () => {
     // Then both stay
     expect(cache.get(0n)).toBeDefined();
     expect(cache.getMessageIndexes(0n)).toBeDefined();
+    cache.clear();
+  });
+
+  const messageIndex = (entries: number) =>
+    new ChunkMessageIndex(
+      new BigUint64Array(entries),
+      new Float64Array(entries),
+      new Uint16Array(entries),
+    );
+
+  it("decompresses a chunk that fills the budget once over repeated reads", () => {
+    // Given a chunk as big as the budget, read the way McapIndexedReader does: its parsed index
+    // first, then the chunk
+    const cache = new ChunkCache();
+    let decompressions = 0;
+    const read = () => {
+      if (!cache.getChunkMessageIndex(7n)) {
+        cache.setChunkMessageIndex(7n, messageIndex(1), 0n);
+      }
+      if (!cache.get(0n)) {
+        decompressions++;
+        cache.set(0n, view(CHUNK_CACHE_BYTES));
+      }
+    };
+
+    // When it is read again and again
+    for (let i = 0; i < 3; i++) {
+      read();
+    }
+
+    // Then it was decompressed only the first time
+    expect(decompressions).toBe(1);
+    cache.clear();
+  });
+
+  it("evicts old parsed indexes whose chunks were never loaded", () => {
+    // Given parsed indexes of chunks with nothing to read in the requested range, which together
+    // overflow the budget
+    const cache = new ChunkCache();
+    const quarter = Math.ceil(CHUNK_CACHE_BYTES / 4 / 18);
+    for (let i = 0n; i < 5n; i++) {
+      cache.setChunkMessageIndex(i, messageIndex(quarter), 100n + i);
+    }
+
+    // Then the oldest one went
+    expect(cache.getChunkMessageIndex(0n)).toBeUndefined();
+    expect(cache.getChunkMessageIndex(4n)).toBeDefined();
+    cache.clear();
+  });
+
+  it("counts parsed message indexes against the budget", () => {
+    // Given a parsed index and chunks that together overflow the budget
+    const cache = new ChunkCache();
+    cache.setChunkMessageIndex(7n, messageIndex(1), 9n);
+    cache.set(0n, view(CHUNK_CACHE_BYTES / 2));
+
+    // When the budget is reached
+    cache.set(1n, view(CHUNK_CACHE_BYTES / 2));
+
+    // Then the oldest entry, the index, goes
+    expect(cache.getChunkMessageIndex(7n)).toBeUndefined();
+    expect(cache.get(0n)).toBeDefined();
     cache.clear();
   });
 });
