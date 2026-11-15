@@ -606,4 +606,22 @@ describe("McapWriter", () => {
     await expect(writer.addMessage(message)).rejects.toThrow("An earlier write failed");
     await expect(writer.end()).rejects.toThrow("An earlier write failed");
   });
+
+  it("refuses to go on after a message fails to serialize", async () => {
+    const writer = new McapWriter({ writable: new TempBuffer() });
+    await writer.start({ library: "", profile: "" });
+    const channelId = await writer.registerChannel({
+      topic: "/a",
+      schemaId: 0,
+      messageEncoding: "json",
+      metadata: new Map(),
+    });
+    const data = new Uint8Array(8);
+    structuredClone(data.buffer, { transfer: [data.buffer] }); // detaches data
+    const message = { channelId, data, sequence: 0, logTime: 0n, publishTime: 0n };
+
+    await expect(writer.addMessage(message)).rejects.toThrow();
+    expect(writer.statistics?.messageCount).toBe(0n);
+    await expect(writer.end()).rejects.toThrow("An earlier write failed");
+  });
 });

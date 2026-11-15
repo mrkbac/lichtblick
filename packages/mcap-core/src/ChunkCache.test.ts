@@ -6,6 +6,14 @@ import { CHUNK_CACHE_BYTES, ChunkCache } from "./ChunkCache.ts";
 const view = (bytes: number) => new DataView(new ArrayBuffer(bytes));
 
 describe("ChunkCache", () => {
+  it("returns the same DataView it was given", () => {
+    // McapIndexedReader tracks chunks cached without a CRC check by DataView identity
+    const cache = new ChunkCache();
+    const data = view(8);
+    cache.set(0n, data);
+    expect(cache.get(0n)).toBe(data);
+  });
+
   it("evicts the least recently used chunks past its budget", () => {
     // Given three chunks that fill the budget, the first of them read again since
     const cache = new ChunkCache();
