@@ -311,7 +311,14 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
   }, [renderer]);
 
   const stats = props.enableStats ? (
-    <div id="stats" style={{ position: "absolute", top: "10px", left: "10px" }}>
+    <div
+      id="stats"
+      style={{
+        position: "absolute",
+        top: `calc(10px + ${PANEL_FLOATING_TOOLBAR_HEIGHT})`,
+        left: "10px",
+      }}
+    >
       <Stats />
     </div>
   ) : undefined;

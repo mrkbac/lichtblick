@@ -10,8 +10,9 @@ import {
 } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 
 const COMPACT = `[${COMPACT_PANELS_ATTRIBUTE}]`;
+const PANEL = `.${PANEL_ROOT_CLASS_NAME}`;
 /** The hovered panel itself, not a Tab panel around it. */
-const HOVERED_PANEL = `.${PANEL_ROOT_CLASS_NAME}:hover:not(:has(.${PANEL_ROOT_CLASS_NAME}:hover))`;
+const HOVERED_PANEL = `${PANEL}:hover:not(:has(${PANEL}:hover))`;
 
 export const useStyles = makeStyles()((theme) => ({
   root: {
@@ -49,7 +50,11 @@ export const useStyles = makeStyles()((theme) => ({
       opacity: 0,
       transition: "opacity 80ms ease-in-out",
     },
-    [`${COMPACT} ${HOVERED_PANEL} &, ${COMPACT} &:focus-within`]: { opacity: 1 },
+    // Only the hovered panel's own toolbar: pointing at a Tab panel's strip shows none of the
+    // toolbars of the panels in its tabs.
+    [`${COMPACT} ${HOVERED_PANEL} &:not(${HOVERED_PANEL} ${PANEL} *), ${COMPACT} &:focus-within`]: {
+      opacity: 1,
+    },
   },
   content: {
     display: "flex",
