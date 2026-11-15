@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 
 import { pushAll } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
+import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import {
   APP_SHORTCUTS,
@@ -143,6 +144,7 @@ export function useAppCommands(): {
 } {
   const { t } = useTranslation("commandPalette");
   const showShortcuts = useKeyboardShortcutsStore((state) => state.show);
+  const showCompare = useShowCompareDialog();
   const { recentSources, selectRecent } = usePlayerSelection();
   const { dialogActions, sidebarActions, openPanelSettings } = useWorkspaceActions();
   const leftSidebarOpen = useWorkspaceStore(selectLeftSidebarOpen);
@@ -192,9 +194,7 @@ export function useAppCommands(): {
         id: "open.compare",
         title: t("compareRecordings"),
         keywords: ["mcap", "diff", "side by side", "recording"],
-        run: catchErrors(async () => {
-          await dialogActions.openFile.open({ compare: true });
-        }),
+        run: showCompare,
       },
       {
         id: "open.dialog",
@@ -507,6 +507,7 @@ export function useAppCommands(): {
     return list;
   }, [
     addPanel,
+    showCompare,
     dialogActions,
     endTime,
     exportLayout,

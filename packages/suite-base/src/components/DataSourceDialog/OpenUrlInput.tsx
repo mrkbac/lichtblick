@@ -16,6 +16,7 @@ import {
 import { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
 import { FormField } from "@lichtblick/suite-base/components/DataSourceDialog/FormField";
 import { useStyles } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput.style";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -59,6 +60,7 @@ export function OpenUrlInput({
   const { t } = useTranslation("openDialog");
   const { availableSources, recentSources, selectRecent, selectSource } = usePlayerSelection();
   const { dialogActions } = useWorkspaceActions();
+  const showCompare = useShowCompareDialog();
 
   const [error, setError] = useState<string | undefined>();
   // Source picked from the ⋯ menu; undefined detects it from the input
@@ -244,6 +246,9 @@ export function OpenUrlInput({
           }}
         >
           {t("openLocalFiles")}
+        </Button>
+        <Button className={classes.button} variant="outlined" size="small" onClick={showCompare}>
+          {t("compareRecordings")}
         </Button>
         <Tooltip title={t("connectionType")}>
           <IconButton

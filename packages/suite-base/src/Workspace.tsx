@@ -27,6 +27,7 @@ import { AlertsList } from "@lichtblick/suite-base/components/AlertList/AlertsLi
 import { AppBar } from "@lichtblick/suite-base/components/AppBar";
 import { CommandPalette } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
 import { LayoutShortcutListener } from "@lichtblick/suite-base/components/CommandPalette/layoutShortcuts";
+import { CompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
 import {
   DataSourceDialog,
   DataSourceDialogItem,
@@ -699,6 +700,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       <LayoutTemplateCommands />
       <KeyboardShortcuts />
       <LiveRecordingsDialog />
+      <CompareDialog />
       <div className={classes.container} ref={containerRef} tabIndex={0}>
         {appBar}
         <Sidebars
