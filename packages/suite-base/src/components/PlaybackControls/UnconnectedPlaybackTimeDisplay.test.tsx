@@ -65,21 +65,28 @@ describe("formatElapsed", () => {
 describe("blur", () => {
   it("does not seek when the time was not edited", () => {
     const onSeek = vi.fn();
-    render(
+    const ui = (currentTime: { sec: number; nsec: number }) => (
       <ThemeProvider isDark={false}>
         <UnconnectedPlaybackTimeDisplay
           appTimeFormat={appTimeFormat}
           startTime={{ sec: 1, nsec: 0 }}
-          currentTime={{ sec: 2, nsec: 5 }}
+          currentTime={currentTime}
           endTime={{ sec: 3, nsec: 0 }}
           onSeek={onSeek}
           onPause={() => {}}
           isPlaying={false}
         />
-      </ThemeProvider>,
+      </ThemeProvider>
     );
+    const { rerender } = render(ui({ sec: 2, nsec: 5 }));
     const input = screen.getByRole<HTMLInputElement>("textbox");
     fireEvent.focus(input);
+    fireEvent.blur(input);
+    expect(onSeek).not.toHaveBeenCalled();
+
+    // The time moving while focused must not make blur seek back to the focus-time text
+    fireEvent.focus(input);
+    rerender(ui({ sec: 2, nsec: 700_000_000 }));
     fireEvent.blur(input);
     expect(onSeek).not.toHaveBeenCalled();
 

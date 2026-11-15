@@ -305,6 +305,8 @@ export function UnconnectedPlaybackTimeDisplay({
   const { classes, cx } = useStyles();
   const { t } = useTranslation("playbackTime");
   const timeOutID = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // Whether the user typed since focusing; the current time may change meanwhile.
+  const edited = useRef(false);
 
   const timeRawString = useMemo(
     () => (currentTime ? formatTimeRaw(currentTime) : undefined),
@@ -420,12 +422,13 @@ export function UnconnectedPlaybackTimeDisplay({
               setHasError(false);
               setIsEditing(true);
               setInputText(currentTimeString);
+              edited.current = false;
               e.target.select();
             }}
             onBlur={(e) => {
               // Leaving the field unedited (e.g. tabbing to the copy button) must not seek: the
               // displayed time is rounded, so re-parsing it would move playback.
-              if (inputText !== currentTimeString) {
+              if (edited.current) {
                 onSubmit(e);
               }
               setIsEditing(false);
@@ -435,6 +438,7 @@ export function UnconnectedPlaybackTimeDisplay({
             }}
             onChange={(event) => {
               setInputText(event.target.value);
+              edited.current = true;
             }}
           />
         </form>
