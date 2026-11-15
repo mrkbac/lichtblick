@@ -92,7 +92,18 @@ export function shortcutKeyHandlers<S extends KeyboardShortcut>(
     return shortcut != undefined && runners[shortcut.id as S["id"]]!(event) !== false;
   };
   return Object.fromEntries(
-    bound.flatMap((shortcut) => shortcut.keys.map((combo) => [combo.key.toLowerCase(), dispatch])),
+    bound.flatMap((shortcut) =>
+      shortcut.keys.flatMap((combo) => {
+        const key = combo.key.toLowerCase();
+        // KeyListener falls back to event.code, so non-Latin layouts reach the letter fallback.
+        return /^[a-z]$/.test(key)
+          ? [
+              [key, dispatch],
+              [`Key${key.toUpperCase()}`, dispatch],
+            ]
+          : [[key, dispatch]];
+      }),
+    ),
   );
 }
 

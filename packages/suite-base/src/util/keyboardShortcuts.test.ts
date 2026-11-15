@@ -67,7 +67,7 @@ describe("matching", () => {
     const open = vi.fn();
     const connect = vi.fn(() => false);
     const handlers = shortcutKeyHandlers(SHORTCUTS, { open, connect });
-    expect(Object.keys(handlers)).toEqual(["o"]);
+    expect(Object.keys(handlers)).toEqual(["o", "KeyO"]);
 
     expect(handlers.o!(press("o", { metaKey: true }))).toBe(true);
     expect(open).toHaveBeenCalledTimes(1);
@@ -77,6 +77,9 @@ describe("matching", () => {
     // Unmatched modifiers fall through
     expect(handlers.o!(press("o"))).toBe(false);
     expect(open).toHaveBeenCalledTimes(1);
+    // A Cyrillic layout reaches the handler through event.code
+    expect(handlers.KeyO!(press("щ", { metaKey: true, code: "KeyO" }))).toBe(true);
+    expect(open).toHaveBeenCalledTimes(2);
   });
 });
 

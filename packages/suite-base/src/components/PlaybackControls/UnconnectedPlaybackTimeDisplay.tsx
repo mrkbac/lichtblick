@@ -62,9 +62,11 @@ const useStyles = makeStyles()((theme) => ({
     },
     "&:not(.Mui-disabled):hover": {
       backgroundColor: theme.palette.action.hover,
-
+    },
+    // Opacity rather than visibility, so the buttons stay reachable with Tab.
+    "&:not(.Mui-disabled):hover, &:focus-within": {
       [`.${iconButtonClasses.root}`]: {
-        visibility: "visible",
+        opacity: 1,
       },
     },
     [`.${filledInputClasses.root}`]: {
@@ -84,7 +86,7 @@ const useStyles = makeStyles()((theme) => ({
       borderTopLeftRadius: 0,
       borderBottomLeftRadius: 0,
       borderLeft: `1px solid ${theme.palette.background.paper}`,
-      visibility: "hidden",
+      opacity: 0,
       marginRight: theme.spacing(-1),
     },
   },
