@@ -126,16 +126,10 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
     this.#checkChunk = options?.checkChunk;
     this.#corruptChunks = options?.corruptChunks ?? new Set();
     if (this.#corruptChunks.size > 0) {
-      this.#setChunkIndexes(
+      this.#reader.setChunkIndexes(
         reader.chunkIndexes.filter((chunk) => !this.#corruptChunks.has(chunk.chunkStartOffset)),
       );
     }
-  }
-
-  // ponytail: McapIndexedReader has no API to change its index; readMessages reads this field on
-  // every call (see also McapRecoveryScanner.openLiveReader).
-  #setChunkIndexes(chunkIndexes: readonly McapTypes.ChunkIndex[]): void {
-    (this.#reader as { chunkIndexes: readonly McapTypes.ChunkIndex[] }).chunkIndexes = chunkIndexes;
   }
 
   /**
@@ -177,7 +171,7 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       const error = await checkChunk(chunk);
       if (error) {
         this.#corruptChunks.add(chunk.chunkStartOffset);
-        this.#setChunkIndexes(this.#reader.chunkIndexes.filter((other) => other !== chunk));
+        this.#reader.setChunkIndexes(this.#reader.chunkIndexes.filter((other) => other !== chunk));
         log.info(`Skipping corrupt MCAP chunk at offset ${chunk.chunkStartOffset}`, error);
         this.#recoveryAlert = {
           severity: "warn",

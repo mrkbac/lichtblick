@@ -64,6 +64,7 @@ export class McapWriter {
   #nextChannelId = 0;
   #nextSchemaId = 1;
   #writable: IWritable;
+  #failed: Error | undefined;
   #recordWriter = new McapRecordBuilder();
   #schemas = new Map<number, Schema>();
   #channels = new Map<number, Channel>();
@@ -133,12 +134,16 @@ export class McapWriter {
     if (useChunkIndex) {
       this.#chunkIndices = [];
     }
+    if (!Number.isInteger(startChannelId) || startChannelId < 0 || startChannelId > 0xffff) {
+      throw new Error(`startChannelId ${startChannelId} is not a 16-bit channel id`);
+    }
     this.#nextChannelId = startChannelId;
     this.#chunkSize = chunkSize;
     this.#compressChunk = compressChunk;
   }
 
   public async start(header: Header = { profile: "", library: LIBRARY_IDENTIFIER }): Promise<void> {
+    this.#throwIfFailed();
     this.#dataSectionCrc = crc32Init();
     this.#recordWriter.writeMagic();
     this.#recordWriter.writeHeader(header);
@@ -147,6 +152,7 @@ export class McapWriter {
   }
 
   public async end(): Promise<void> {
+    this.#throwIfFailed();
     await this.#finalizeChunk();
 
     // Flush the data section so its CRC is final. DataEnd, the summary section and the footer
@@ -162,7 +168,8 @@ export class McapWriter {
     const summaryStart = this.#nextRecordOffset();
     const summaryStartInBuffer = this.#recordWriter.length;
 
-    if (this.#repeatSchemas) {
+    // A chunk index refers to channels and schemas, so the summary needs them whenever it has one
+    if (this.#repeatSchemas || this.#chunkIndices) {
       const schemaStart = this.#nextRecordOffset();
       let schemaLength = 0n;
       for (const schema of this.#schemas.values()) {
@@ -175,7 +182,8 @@ export class McapWriter {
       });
     }
 
-    if (this.#repeatChannels) {
+    const summaryHasChannels = this.#repeatChannels || this.#chunkIndices != undefined;
+    if (summaryHasChannels) {
       const channelStart = this.#nextRecordOffset();
       let channelLength = 0n;
       for (const channel of this.#channels.values()) {
@@ -190,7 +198,12 @@ export class McapWriter {
 
     if (this.statistics) {
       const statisticsStart = this.#nextRecordOffset();
-      const statisticsLength = this.#recordWriter.writeStatistics(this.statistics);
+      // Per-channel counts need the Channel records in the summary
+      const statisticsLength = this.#recordWriter.writeStatistics(
+        summaryHasChannels
+          ? this.statistics
+          : { ...this.statistics, channelMessageCounts: new Map() },
+      );
       summaryOffsets.push({
         groupOpcode: Opcode.STATISTICS,
         groupStart: statisticsStart,
@@ -240,10 +253,12 @@ export class McapWriter {
     const summaryOffsetStart = this.#nextRecordOffset();
     const summaryLength = summaryOffsetStart - summaryStart;
 
+    let wroteSummaryOffsets = false;
     if (this.#useSummaryOffsets) {
       for (const summaryOffset of summaryOffsets) {
         if (summaryOffset.groupLength !== 0n) {
           this.#recordWriter.writeSummaryOffset(summaryOffset);
+          wroteSummaryOffsets = true;
         }
       }
     }
@@ -259,7 +274,8 @@ export class McapWriter {
 
     const footer: Footer = {
       summaryStart: summaryLength === 0n ? 0n : summaryStart,
-      summaryOffsetStart: this.#useSummaryOffsets ? summaryOffsetStart : 0n,
+      // Zero when no Summary Offset record follows, as the spec requires
+      summaryOffsetStart: wroteSummaryOffsets ? summaryOffsetStart : 0n,
       summaryCrc: 0,
     };
     const tempBuffer = new DataView(new ArrayBuffer(1 + 8 + 8 + 8));
@@ -277,13 +293,14 @@ export class McapWriter {
     // .buffer is a copy, so reset before awaiting the write
     const data = this.#recordWriter.buffer;
     this.#recordWriter.reset();
-    await this.#writable.write(data);
+    await this.#write(data);
   }
 
   /**
    * Add a schema and return a generated schema id. The schema id is used when adding channels.
    */
   public async registerSchema(info: Omit<Schema, "id">): Promise<number> {
+    this.#throwIfFailed();
     if (this.#nextSchemaId > 0xffff) {
       throw new Error("Too many schemas: MCAP schema ids are 16-bit");
     }
@@ -299,6 +316,7 @@ export class McapWriter {
    * Add a channel and return a generated channel id. The channel id is used when adding messages.
    */
   public async registerChannel(info: Omit<Channel, "id">): Promise<number> {
+    this.#throwIfFailed();
     if (this.#nextChannelId > 0xffff) {
       throw new Error("Too many channels: MCAP channel ids are 16-bit");
     }
@@ -311,6 +329,7 @@ export class McapWriter {
   }
 
   public async addMessage(message: Message): Promise<void> {
+    this.#throwIfFailed();
     // write out channel and schema if we have not yet done so
     if (!this.#writtenChannelIds.has(message.channelId)) {
       const channel = this.#channels.get(message.channelId);
@@ -377,6 +396,7 @@ export class McapWriter {
   }
 
   public async addAttachment(attachment: Attachment): Promise<void> {
+    this.#throwIfFailed();
     const offset = this.#nextRecordOffset();
     const length = this.#recordWriter.writeAttachment(attachment);
     if (this.statistics) {
@@ -399,6 +419,7 @@ export class McapWriter {
   }
 
   public async addMetadata(metadata: Metadata): Promise<void> {
+    this.#throwIfFailed();
     const offset = this.#nextRecordOffset();
     const recordSize = this.#recordWriter.writeMetadata(metadata);
     if (this.statistics) {
@@ -438,7 +459,28 @@ export class McapWriter {
     // .buffer is a copy, so reset before awaiting the write
     const data = this.#recordWriter.buffer;
     this.#recordWriter.reset();
-    await this.#writable.write(data);
+    await this.#write(data);
+  }
+
+  /**
+   * A failed write leaves records that were indexed and counted in the CRC but never written, so
+   * the writer refuses everything after it instead of finishing a file whose index lies.
+   */
+  async #write(data: Uint8Array): Promise<void> {
+    try {
+      await this.#writable.write(data);
+    } catch (error) {
+      this.#failed = error instanceof Error ? error : new Error(String(error));
+      throw error;
+    }
+  }
+
+  #throwIfFailed(): void {
+    if (this.#failed) {
+      throw new Error("An earlier write failed; this MCAP writer can't continue", {
+        cause: this.#failed,
+      });
+    }
   }
 
   async #finalizeChunk(): Promise<void> {

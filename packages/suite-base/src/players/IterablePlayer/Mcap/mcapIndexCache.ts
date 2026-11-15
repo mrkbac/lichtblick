@@ -5,9 +5,7 @@ import { crc32 } from "@foxglove/crc";
 import { Semaphore } from "async-mutex";
 
 import Log from "@lichtblick/log";
-import type { McapTypes } from "@lichtblick/mcap-core";
-
-import { McapRecoveryScanner } from "./McapRecoveryScanner";
+import { McapRecoveryScanner, type McapTypes } from "@lichtblick/mcap-core";
 
 const log = Log.getLogger(__filename);
 

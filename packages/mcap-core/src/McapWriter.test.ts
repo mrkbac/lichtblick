@@ -519,4 +519,91 @@ describe("McapWriter", () => {
       expect(rec.data.every((byte) => byte === i)).toBe(true);
     });
   });
+
+  it("keeps the summary consistent when it omits channels or summary offsets", async () => {
+    async function summary(options: {
+      repeatChannels?: boolean;
+      useStatistics?: boolean;
+      useChunkIndex?: boolean;
+    }) {
+      const buffer = new TempBuffer();
+      const writer = new McapWriter({ writable: buffer, repeatSchemas: false, ...options });
+      await writer.start({ library: "", profile: "" });
+      if (options.useStatistics !== false) {
+        const channelId = await writer.registerChannel({
+          topic: "/a",
+          schemaId: 0,
+          messageEncoding: "json",
+          metadata: new Map(),
+        });
+        await writer.addMessage({
+          channelId,
+          data: new Uint8Array(),
+          sequence: 0,
+          logTime: 0n,
+          publishTime: 0n,
+        });
+      }
+      await writer.end();
+      return readAsMcapStream(buffer.get());
+    }
+
+    // Per-channel counts would refer to Channel records the summary doesn't have
+    const noChannels = await summary({ repeatChannels: false, useChunkIndex: false });
+    expect(noChannels.filter((rec) => rec.type === "Channel")).toHaveLength(1); // only in the chunk
+    const statistics = noChannels.find((rec) => rec.type === "Statistics");
+    expect(statistics).toMatchObject({ messageCount: 1n, channelMessageCounts: new Map() });
+
+    // A chunk index refers to its channels, so they are in the summary anyway, with their counts
+    const indexed = await summary({ repeatChannels: false });
+    expect(indexed.filter((rec) => rec.type === "Channel")).toHaveLength(2); // in the chunk, then the summary
+    expect(indexed.find((rec) => rec.type === "Statistics")).toMatchObject({
+      channelMessageCounts: new Map([[0, 1n]]),
+    });
+
+    // No summary group is written, so no Summary Offset record either
+    const empty = await summary({
+      useStatistics: false,
+      repeatChannels: false,
+      useChunkIndex: false,
+    });
+    expect(empty.some((rec) => rec.type === "SummaryOffset")).toBe(false);
+    expect(empty.find((rec) => rec.type === "Footer")).toMatchObject({ summaryOffsetStart: 0n });
+  });
+
+  it("refuses to go on after a failed write instead of finishing a file whose index lies", async () => {
+    const buffer = new TempBuffer();
+    let fail = false;
+    const writable = {
+      position: () => buffer.position(),
+      write: async (data: Uint8Array) => {
+        if (fail) {
+          throw new Error("disk full");
+        }
+        await buffer.write(data);
+      },
+    };
+    const writer = new McapWriter({ writable, chunkSize: 1 });
+    await writer.start({ library: "", profile: "" });
+    const channelId = await writer.registerChannel({
+      topic: "/a",
+      schemaId: 0,
+      messageEncoding: "json",
+      metadata: new Map(),
+    });
+    const message = {
+      channelId,
+      data: new Uint8Array(),
+      sequence: 0,
+      logTime: 0n,
+      publishTime: 0n,
+    };
+
+    fail = true;
+    await expect(writer.addMessage(message)).rejects.toThrow("disk full");
+    fail = false;
+
+    await expect(writer.addMessage(message)).rejects.toThrow("An earlier write failed");
+    await expect(writer.end()).rejects.toThrow("An earlier write failed");
+  });
 });

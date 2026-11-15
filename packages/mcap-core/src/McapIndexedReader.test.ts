@@ -1536,4 +1536,43 @@ describe("McapIndexedReader", () => {
     expect(receivedOptions.length).toBeGreaterThan(0);
     expect(receivedOptions.every((options) => options === readAttachmentsOptions)).toBe(true);
   });
+
+  it("reads chunks appended to the index, also without time bounds", async () => {
+    const buffer = new TempBuffer();
+    // A tiny chunk size puts each message in its own chunk
+    const writer = new McapWriter({ writable: buffer, chunkSize: 1 });
+    await writer.start({ profile: "", library: "" });
+    const channelId = await writer.registerChannel({
+      topic: "/a",
+      schemaId: 0,
+      messageEncoding: "json",
+      metadata: new Map(),
+    });
+    for (let i = 0; i < 3; i++) {
+      await writer.addMessage({
+        channelId,
+        sequence: i,
+        logTime: BigInt(i),
+        publishTime: BigInt(i),
+        data: new Uint8Array([i]),
+      });
+    }
+    await writer.end();
+    const reader = await McapIndexedReader.Initialize({ readable: makeReadable(buffer.get()) });
+    const chunks = [...reader.chunkIndexes];
+    expect(chunks).toHaveLength(3);
+    const logTimes = async () =>
+      (await collect(reader.readMessages())).map((message) => message.logTime);
+
+    reader.setChunkIndexes(chunks.slice(0, 1));
+    await expect(logTimes()).resolves.toEqual([0n]);
+
+    reader.appendIndex({ chunkIndexes: chunks.slice(1) });
+    expect(reader.chunkIndexes).toEqual(chunks);
+    await expect(logTimes()).resolves.toEqual([0n, 1n, 2n]);
+
+    // Appending the reader's own index adds each entry once
+    reader.appendIndex({ chunkIndexes: reader.chunkIndexes });
+    expect(reader.chunkIndexes).toHaveLength(6);
+  });
 });

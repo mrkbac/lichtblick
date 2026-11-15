@@ -1,14 +1,21 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { McapIndexedReader, McapTypes, McapWriter, TempBuffer } from "@lichtblick/mcap-core";
-import { ChunkCache, loadDecompressHandlers } from "@lichtblick/mcap-support";
+import {
+  BlobReadable,
+  ChunkCache,
+  McapIndexedReader,
+  McapRecoveryScanner,
+  McapTypes,
+  McapWriter,
+  TempBuffer,
+} from "@lichtblick/mcap-core";
+import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
 
-import { BlobReadable } from "./BlobReadable";
 import { CheckChunk, McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
 import { McapIterableSource } from "./McapIterableSource";
-import { McapRecoveryScanner } from "./McapRecoveryScanner";
+import { recoveryAlert } from "./recoveryAlerts";
 
 const TOPIC = "/example";
 const MESSAGE_COUNT = 5;
@@ -132,7 +139,10 @@ describe("McapRecoveryScanner", () => {
     expect(scanner.complete).toBe(false);
     expect(scanner.unreadableBytes).toBe(0n);
     expect(scanner.hasLosses()).toBe(false);
-    expect(scanner.toAlert()).toMatchObject({ severity: "warn", message: /not closed properly/ });
+    expect(recoveryAlert(scanner)).toMatchObject({
+      severity: "warn",
+      message: /not closed properly/,
+    });
   });
 
   it("serves the rebuilt index to McapIndexedReader, including metadata", async () => {
@@ -168,7 +178,7 @@ describe("McapRecoveryScanner", () => {
     expect(await readValues(scanner.toReadable(readableOf(bytes), new ChunkCache()))).toEqual([
       1, 2, 3, 4,
     ]);
-    expect(scanner.toAlert()).toMatchObject({ severity: "warn", message: /damaged/ });
+    expect(recoveryAlert(scanner)).toMatchObject({ severity: "warn", message: /damaged/ });
   });
 
   it("skips a chunk with a bad CRC and keeps the chunks after it", async () => {
@@ -184,7 +194,7 @@ describe("McapRecoveryScanner", () => {
     expect(await readValues(scanner.toReadable(readableOf(bytes), new ChunkCache()))).toEqual([
       1, 3, 4, 5,
     ]);
-    expect(scanner.toAlert().tip).toMatch(/1 corrupt record/);
+    expect(recoveryAlert(scanner).tip).toMatch(/1 corrupt record/);
   });
 
   it("stops at garbage after the last valid record", async () => {
@@ -298,8 +308,8 @@ describe("McapRecoveryScanner.openLiveReader", () => {
     expect(live.reader.chunkIndexes).toHaveLength(before);
 
     let touched = 0;
-    const index = live.reader as unknown as { chunkIndexes: McapTypes.ChunkIndex[] };
-    index.chunkIndexes = new Proxy(index.chunkIndexes, {
+    // The reader appends to this same array, so a proxy on it counts what readers of it touch
+    const counted = new Proxy(live.reader.chunkIndexes, {
       get: (target, key, receiver) => {
         if (typeof key === "string" && /^\d+$/.test(key)) {
           touched++;
@@ -307,6 +317,7 @@ describe("McapRecoveryScanner.openLiveReader", () => {
         return Reflect.get(target, key, receiver) as unknown;
       },
     });
+    vi.spyOn(live.reader, "chunkIndexes", "get").mockReturnValue(counted);
     await scanner.scan(base);
     const added = live.grow();
     const init = await source.initialize();

@@ -28,7 +28,6 @@ describe("ChunkCursor", () => {
       const indexes = builder.buffer;
       const cursor = new ChunkCursor({
         chunkIndex: {
-          type: "ChunkIndex",
           messageStartTime: 10n,
           messageEndTime: 20n,
           chunkStartOffset: 0n,
@@ -116,6 +115,14 @@ describe("McapWriter", () => {
     const channel = { topic: "/a", schemaId: 0, messageEncoding: "json", metadata: new Map() };
     await expect(writer.registerChannel(channel)).resolves.toBe(0xffff);
     await expect(writer.registerChannel(channel)).rejects.toThrow("16-bit");
+  });
+
+  it("rejects a start channel id outside 16 bits", () => {
+    for (const startChannelId of [-1, 0x10000, 1.5]) {
+      expect(() => new McapWriter({ writable: new TempBuffer(), startChannelId })).toThrow(
+        "not a 16-bit channel id",
+      );
+    }
   });
 
   it("does not count a rejected message in the statistics", async () => {

@@ -209,7 +209,7 @@
             "name": "@lichtblick/mcap-core",
             "importNames": ["McapIndexedReader"],
             "allowTypeImports": true,
-            "message": "Open readers with openCachedMcapReader from @lichtblick/mcap-support, so readers of a file share its decompressed chunks."
+            "message": "Open readers with openCachedMcapReader from @lichtblick/mcap-core, so readers of a file share its decompressed chunks."
           }
         ]
       }
@@ -257,8 +257,27 @@
   },
   "overrides": [
     {
+      "files": ["packages/mcap-core/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "./McapIndexedReader.ts",
+                "importNames": ["McapIndexedReader"],
+                "allowTypeImports": true,
+                "message": "Open readers with openCachedMcapReader, so readers of a file share its decompressed chunks."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": [
-        "packages/mcap-support/src/openCachedMcapReader.ts",
+        "packages/mcap-core/src/openCachedMcapReader.ts",
+        "packages/mcap-core/src/index.ts",
         "**/*.test.ts",
         "**/*.test.tsx"
       ],

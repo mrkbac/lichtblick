@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { McapIndexedReader, McapTypes } from "@lichtblick/mcap-core";
-
-import type { ChunkCache } from "./ChunkCache";
+import type { ChunkCache } from "./ChunkCache.ts";
+import { McapIndexedReader } from "./McapIndexedReader.ts";
+import type { DecompressHandlers, IReadable } from "./types.ts";
 
 /**
  * Opens an indexed reader whose decompressed chunks go into `chunkCache`. The only way to open
@@ -12,8 +12,8 @@ import type { ChunkCache } from "./ChunkCache";
  * reader on that file.
  */
 export async function openCachedMcapReader(args: {
-  readable: McapTypes.IReadable;
-  decompressHandlers?: McapTypes.DecompressHandlers;
+  readable: IReadable;
+  decompressHandlers?: DecompressHandlers;
   chunkCache: ChunkCache;
 }): Promise<McapIndexedReader> {
   return await McapIndexedReader.Initialize(args);

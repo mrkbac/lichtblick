@@ -8,7 +8,17 @@ import { ChunkCursor } from "./ChunkCursor.ts";
 import McapByteReader from "./McapByteReader.ts";
 import { MCAP_MAGIC } from "./constants.ts";
 import { parseMagic, parseRecord } from "./parse.ts";
-import type { DecompressHandlers, IReadable, TypedMcapRecords } from "./types.ts";
+import type {
+  AttachmentIndex,
+  Channel,
+  ChunkIndex,
+  DecompressHandlers,
+  IReadable,
+  MetadataIndex,
+  Schema,
+  Statistics,
+  TypedMcapRecords,
+} from "./types.ts";
 
 /**
  * Chunk views cached by a read with `validateCrcs: false`. The first read that validates CRCs
@@ -24,13 +34,13 @@ export type ChunkDataCache = {
 
 type McapIndexedReaderArgs<TReadOptions = unknown> = {
   readable: IReadable<TReadOptions>;
-  chunkIndexes: readonly TypedMcapRecords["ChunkIndex"][];
-  attachmentIndexes: readonly TypedMcapRecords["AttachmentIndex"][];
-  metadataIndexes: readonly TypedMcapRecords["MetadataIndex"][];
-  statistics: TypedMcapRecords["Statistics"] | undefined;
+  chunkIndexes: ChunkIndex[];
+  attachmentIndexes: AttachmentIndex[];
+  metadataIndexes: MetadataIndex[];
+  statistics: Statistics | undefined;
   decompressHandlers?: DecompressHandlers;
-  channelsById: ReadonlyMap<number, TypedMcapRecords["Channel"]>;
-  schemasById: ReadonlyMap<number, TypedMcapRecords["Schema"]>;
+  channelsById: Map<number, Channel>;
+  schemasById: Map<number, Schema>;
   summaryOffsetsByOpcode: ReadonlyMap<number, TypedMcapRecords["SummaryOffset"]>;
   header: TypedMcapRecords["Header"];
   footer: TypedMcapRecords["Footer"];
@@ -44,19 +54,33 @@ type McapIndexedReaderArgs<TReadOptions = unknown> = {
   chunkCache?: ChunkDataCache;
 };
 
+/** Index records to add to an open reader, see `McapIndexedReader.appendIndex` */
+export type McapIndexAppend = {
+  chunkIndexes?: Iterable<ChunkIndex>;
+  attachmentIndexes?: Iterable<AttachmentIndex>;
+  metadataIndexes?: Iterable<MetadataIndex>;
+  /** Added, or replacing the one with the same id */
+  channels?: Iterable<Channel>;
+  /** Added, or replacing the one with the same id */
+  schemas?: Iterable<Schema>;
+  /** Replaces the statistics */
+  statistics?: Statistics;
+};
+
 export class McapIndexedReader<TReadOptions = unknown> {
-  public readonly chunkIndexes: readonly TypedMcapRecords["ChunkIndex"][];
-  public readonly attachmentIndexes: readonly TypedMcapRecords["AttachmentIndex"][];
-  public readonly metadataIndexes: readonly TypedMcapRecords["MetadataIndex"][] = [];
-  public readonly channelsById: ReadonlyMap<number, TypedMcapRecords["Channel"]>;
-  public readonly schemasById: ReadonlyMap<number, TypedMcapRecords["Schema"]>;
-  public readonly statistics: TypedMcapRecords["Statistics"] | undefined;
   public readonly summaryOffsetsByOpcode: ReadonlyMap<number, TypedMcapRecords["SummaryOffset"]>;
   public readonly header: TypedMcapRecords["Header"];
   public readonly footer: TypedMcapRecords["Footer"];
   // Used for appending attachments/metadata to existing MCAP files
   public readonly dataEndOffset: bigint;
   public readonly dataSectionCrc?: number;
+
+  #chunkIndexes: ChunkIndex[];
+  #attachmentIndexes: AttachmentIndex[];
+  #metadataIndexes: MetadataIndex[];
+  #channelsById: Map<number, Channel>;
+  #schemasById: Map<number, Schema>;
+  #statistics: Statistics | undefined;
 
   #readable: IReadable<TReadOptions>;
   #decompressHandlers?: DecompressHandlers;
@@ -69,39 +93,100 @@ export class McapIndexedReader<TReadOptions = unknown> {
 
   private constructor(args: McapIndexedReaderArgs<TReadOptions>) {
     this.#readable = args.readable;
-    this.chunkIndexes = args.chunkIndexes;
-    this.attachmentIndexes = args.attachmentIndexes;
-    this.metadataIndexes = args.metadataIndexes;
-    this.statistics = args.statistics;
+    this.#chunkIndexes = args.chunkIndexes;
+    this.#attachmentIndexes = args.attachmentIndexes;
+    this.#metadataIndexes = args.metadataIndexes;
+    this.#statistics = args.statistics;
     this.#decompressHandlers = args.decompressHandlers;
     this.#chunkCache = args.chunkCache;
-    this.channelsById = args.channelsById;
-    this.schemasById = args.schemasById;
+    this.#channelsById = args.channelsById;
+    this.#schemasById = args.schemasById;
     this.summaryOffsetsByOpcode = args.summaryOffsetsByOpcode;
     this.header = args.header;
     this.footer = args.footer;
     this.dataEndOffset = args.dataEndOffset;
     this.dataSectionCrc = args.dataSectionCrc;
-
     for (const chunk of args.chunkIndexes) {
-      if (this.#messageStartTime == undefined || chunk.messageStartTime < this.#messageStartTime) {
-        this.#messageStartTime = chunk.messageStartTime;
-      }
-      if (this.#messageEndTime == undefined || chunk.messageEndTime > this.#messageEndTime) {
-        this.#messageEndTime = chunk.messageEndTime;
-      }
+      this.#addChunkTimes(chunk);
     }
-
     for (const attachment of args.attachmentIndexes) {
-      if (
-        this.#attachmentStartTime == undefined ||
-        attachment.logTime < this.#attachmentStartTime
-      ) {
-        this.#attachmentStartTime = attachment.logTime;
-      }
-      if (this.#attachmentEndTime == undefined || attachment.logTime > this.#attachmentEndTime) {
-        this.#attachmentEndTime = attachment.logTime;
-      }
+      this.#addAttachmentTimes(attachment);
+    }
+  }
+
+  public get chunkIndexes(): readonly ChunkIndex[] {
+    return this.#chunkIndexes;
+  }
+  public get attachmentIndexes(): readonly AttachmentIndex[] {
+    return this.#attachmentIndexes;
+  }
+  public get metadataIndexes(): readonly MetadataIndex[] {
+    return this.#metadataIndexes;
+  }
+  public get channelsById(): ReadonlyMap<number, Channel> {
+    return this.#channelsById;
+  }
+  public get schemasById(): ReadonlyMap<number, Schema> {
+    return this.#schemasById;
+  }
+  public get statistics(): Statistics | undefined {
+    return this.#statistics;
+  }
+
+  /**
+   * Adds to the index, e.g. of a file that is still being written. Later reads, including reads
+   * without time bounds, see what was added. Costs O(what is added).
+   */
+  public appendIndex(added: McapIndexAppend): void {
+    // Loops, not push(...): a spread of a long list overflows the call stack. Each input is
+    // copied first, so passing this reader's own arrays doesn't loop forever.
+    for (const chunk of Array.from(added.chunkIndexes ?? [])) {
+      this.#chunkIndexes.push(chunk);
+      this.#addChunkTimes(chunk);
+    }
+    for (const attachment of Array.from(added.attachmentIndexes ?? [])) {
+      this.#attachmentIndexes.push(attachment);
+      this.#addAttachmentTimes(attachment);
+    }
+    for (const metadata of Array.from(added.metadataIndexes ?? [])) {
+      this.#metadataIndexes.push(metadata);
+    }
+    for (const channel of added.channels ?? []) {
+      this.#channelsById.set(channel.id, channel);
+    }
+    for (const schema of added.schemas ?? []) {
+      this.#schemasById.set(schema.id, schema);
+    }
+    if (added.statistics) {
+      this.#statistics = added.statistics;
+    }
+  }
+
+  /** Replaces the chunk indexes (e.g. to drop corrupt chunks), and the message time range with them */
+  public setChunkIndexes(chunkIndexes: readonly ChunkIndex[]): void {
+    this.#chunkIndexes = [...chunkIndexes];
+    this.#messageStartTime = undefined;
+    this.#messageEndTime = undefined;
+    for (const chunk of chunkIndexes) {
+      this.#addChunkTimes(chunk);
+    }
+  }
+
+  #addChunkTimes(chunk: ChunkIndex): void {
+    if (this.#messageStartTime == undefined || chunk.messageStartTime < this.#messageStartTime) {
+      this.#messageStartTime = chunk.messageStartTime;
+    }
+    if (this.#messageEndTime == undefined || chunk.messageEndTime > this.#messageEndTime) {
+      this.#messageEndTime = chunk.messageEndTime;
+    }
+  }
+
+  #addAttachmentTimes(attachment: AttachmentIndex): void {
+    if (this.#attachmentStartTime == undefined || attachment.logTime < this.#attachmentStartTime) {
+      this.#attachmentStartTime = attachment.logTime;
+    }
+    if (this.#attachmentEndTime == undefined || attachment.logTime > this.#attachmentEndTime) {
+      this.#attachmentEndTime = attachment.logTime;
     }
   }
 
@@ -600,7 +685,7 @@ export class McapIndexedReader<TReadOptions = unknown> {
   }
 
   async #loadChunkData(
-    chunkIndex: TypedMcapRecords["ChunkIndex"],
+    chunkIndex: ChunkIndex,
     options: { validateCrcs: boolean; readOptions?: TReadOptions },
   ): Promise<DataView> {
     const cached = this.#chunkCache?.get(chunkIndex.chunkStartOffset);
@@ -616,7 +701,7 @@ export class McapIndexedReader<TReadOptions = unknown> {
   }
 
   async #loadChunkDataUncached(
-    chunkIndex: TypedMcapRecords["ChunkIndex"],
+    chunkIndex: ChunkIndex,
     options: { validateCrcs: boolean; readOptions?: TReadOptions },
   ): Promise<DataView> {
     const chunkData = await this.#readable.read(
