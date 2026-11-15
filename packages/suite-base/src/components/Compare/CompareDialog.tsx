@@ -172,13 +172,23 @@ function FileRow(props: FileRowProps): React.JSX.Element {
   );
 }
 
-/** At least two sides, so there is something to compare against */
-function withTwoSides(draft: CompareDraft): CompareDraft {
-  const sides = [...draft.sides];
+// Rows keep their id while rows around them are added or removed, so a file picker that finishes
+// late still fills the row it was opened from
+type DialogSide = CompareDraft["sides"][number] & { id: number };
+type DialogDraft = { shared: File[]; sides: DialogSide[] };
+
+let nextSideId = 0;
+function newSide(files: File[] = [], name = ""): DialogSide {
+  return { id: nextSideId++, name, files };
+}
+
+/** The draft with row ids and at least two sides, so there is something to compare against */
+function toDialogDraft(draft: CompareDraft): DialogDraft {
+  const sides = draft.sides.map((side) => newSide(side.files, side.name));
   while (sides.length < 2) {
-    sides.push({ name: "", files: [] });
+    sides.push(newSide());
   }
-  return { ...draft, sides };
+  return { shared: draft.shared, sides };
 }
 
 function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX.Element {
@@ -186,7 +196,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
   const { t } = useTranslation("compare");
   const hide = useCompareDialog((state) => state.hide);
   const { availableSources, selectSource } = usePlayerSelection();
-  const [draft, setDraft] = useState(() => withTwoSides(initial));
+  const [draft, setDraft] = useState(() => toDialogDraft(initial));
   const [error, setError] = useState<string | undefined>();
 
   const sources = useMemo(
@@ -225,10 +235,10 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
         setError(String(err));
       });
   };
-  const setSide = (index: number, side: Partial<CompareDraft["sides"][number]>) => {
+  const updateSide = (id: number, update: (side: DialogSide) => Partial<DialogSide>) => {
     setDraft((old) => ({
       ...old,
-      sides: old.sides.map((s, i) => (i === index ? { ...s, ...side } : s)),
+      sides: old.sides.map((s) => (s.id === id ? { ...s, ...update(s) } : s)),
     }));
   };
 
@@ -275,7 +285,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
           />
           {draft.sides.map((side, index) => (
             <FileRow
-              key={index}
+              key={side.id}
               swatch={
                 <span
                   className={classes.swatch}
@@ -292,7 +302,8 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
                   placeholder={side.files[0]?.name ?? t("sideName", { label: sideLabel(index) })}
                   slotProps={{ htmlInput: { "aria-label": t("sideNameLabel") } }}
                   onChange={(event) => {
-                    setSide(index, { name: event.target.value });
+                    const name = event.target.value;
+                    updateSide(side.id, () => ({ name }));
                   }}
                 />
               }
@@ -300,16 +311,11 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
               accepts={accepts}
               emptyHint={t("sideEmpty")}
               onFiles={(sideFiles) => {
-                setSide(index, { files: sideFiles });
+                updateSide(side.id, () => ({ files: sideFiles }));
               }}
               onPick={() => {
                 pickInto((picked) => {
-                  setDraft((old) => ({
-                    ...old,
-                    sides: old.sides.map((s, i) =>
-                      i === index ? { ...s, files: [...s.files, ...picked] } : s,
-                    ),
-                  }));
+                  updateSide(side.id, (s) => ({ files: [...s.files, ...picked] }));
                 });
               }}
               onRemoveRow={
@@ -317,7 +323,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
                   ? () => {
                       setDraft((old) => ({
                         ...old,
-                        sides: old.sides.filter((_, i) => i !== index),
+                        sides: old.sides.filter((s) => s.id !== side.id),
                       }));
                     }
                   : undefined
@@ -329,7 +335,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
               size="small"
               startIcon={<AddIcon />}
               onClick={() => {
-                setDraft((old) => ({ ...old, sides: [...old.sides, { name: "", files: [] }] }));
+                setDraft((old) => ({ ...old, sides: [...old.sides, newSide()] }));
               }}
             >
               {t("addRecording")}
@@ -345,7 +351,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
                       for (const file of picked) {
                         const empty = sides.findIndex((s) => s.files.length === 0);
                         if (empty === -1) {
-                          sides.push({ name: "", files: [file] });
+                          sides.push(newSide([file]));
                         } else {
                           sides[empty] = { ...sides[empty]!, files: [file] };
                         }
