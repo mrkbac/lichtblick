@@ -5,6 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import * as _ from "lodash-es";
+
 /**
  * A list of values with type `V` sorted by numeric keys of type `K`
  * (either number or BigInt). Keys are unique, so setting a value with the same
@@ -128,34 +130,7 @@ export class ArrayMap<K, V> {
    * plus 1.
    */
   public binarySearch(key: K): number {
-    const list = this.#list;
-    if (list.length === 0) {
-      return -1;
-    }
-
-    let left = 0;
-    let right = list.length - 1;
-
-    // Quick checks to see if key is outside the bounds of the list
-    if (key < list[left]![0]) {
-      return ~left;
-    } else if (key > list[right]![0]) {
-      return ~(right + 1);
-    }
-
-    while (left <= right) {
-      const mid = (left + right) >> 1;
-      const midKey = list[mid]![0];
-
-      if (midKey === key) {
-        return mid;
-      } else if (key < midKey) {
-        right = mid - 1;
-      } else {
-        left = mid + 1;
-      }
-    }
-
-    return ~left;
+    const index = _.sortedIndexBy<readonly [K, unknown]>(this.#list, [key, undefined], ([k]) => k);
+    return this.#list[index]?.[0] === key ? index : ~index;
   }
 }

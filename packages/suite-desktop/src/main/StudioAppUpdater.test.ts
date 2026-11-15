@@ -16,6 +16,8 @@ vi.mock("electron-updater", () => ({
   },
 }));
 
+vi.mock("../common/webpackDefines", () => ({ LICHTBLICK_PRODUCT_NAME: "Lichtblick" }));
+
 vi.mock("./settings", () => ({
   getAppSetting: vi.fn(),
 }));

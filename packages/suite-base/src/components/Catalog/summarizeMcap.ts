@@ -2,10 +2,14 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { fromNanoSec } from "@foxglove/rostime";
-import type { McapIndexedReader } from "@mcap/core";
 
-import { ChunkCache, loadDecompressHandlers, openCachedMcapReader } from "@lichtblick/mcap-support";
-import { BlobReadable } from "@lichtblick/suite-base/players/IterablePlayer/Mcap/BlobReadable";
+import {
+  BlobReadable,
+  ChunkCache,
+  type McapIndexedReader,
+  openCachedMcapReader,
+} from "@lichtblick/mcap-core";
+import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 
 import { Previews, renderPreviews } from "./preview";
 import { sampleRecording } from "./sampleRecording";
@@ -31,7 +35,7 @@ export async function summarizeMcap(
       chunkCache: new ChunkCache(),
     });
   } catch (err: unknown) {
-    // @mcap/core throws this when the file has no summary section.
+    // @lichtblick/mcap-core throws this when the file has no summary section.
     if (err instanceof Error && err.message.includes("File is not indexed")) {
       return { noSummary: true };
     }

@@ -6,8 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time } from "@foxglove/rostime";
-import type { IWritable } from "@mcap/core";
 
+import type { IWritable } from "@lichtblick/mcap-core";
 import { Immutable, MessageEvent, Metadata, ParameterValue } from "@lichtblick/suite";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { IteratorResult } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";

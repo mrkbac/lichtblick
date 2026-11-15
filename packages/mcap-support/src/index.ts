@@ -8,7 +8,6 @@
 export * from "./parseJsonSchema";
 export * from "./protobufDefinitionsToDatatypes";
 export * from "./parseChannel";
+export { createRos2CdrDeserializer } from "./ros2CdrDecoder";
 export * from "./decompressHandlers";
 export * from "./exportMcap";
-export * from "./ChunkCache";
-export * from "./openCachedMcapReader";

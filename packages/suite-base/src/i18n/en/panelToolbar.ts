@@ -17,7 +17,8 @@ export const panelToolbar = {
   openPictureInPicture: "Open Picture-in-Picture monitor",
   returnToWorkspace: "Return to workspace",
   showPanelWindow: "Show panel window",
-  panelWindowFailed: "Could not open the panel window. Allow pop-ups for Lichtblick and try again.",
+  panelWindowFailed:
+    "Could not open the panel window. Allow pop-ups for {{appName}} and try again.",
   removePanel: "Remove panel",
   splitDown: "Split down",
   splitRight: "Split right",

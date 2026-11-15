@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { AppSettingsSectionKey } from "@lichtblick/suite-base/components/AppSettingsDialog/types";
-import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 
 export const APP_SETTINGS_ABOUT_ITEMS = new Map<
   AppSettingsSectionKey,
@@ -18,7 +18,7 @@ export const APP_SETTINGS_ABOUT_ITEMS = new Map<
       links: [
         {
           title: "Check out our documentation",
-          url: LICHTBLICK_DOCUMENTATION_LINK,
+          url: APP_CONFIG.docsUrl,
         },
       ],
     },
@@ -30,11 +30,11 @@ export const APP_SETTINGS_ABOUT_ITEMS = new Map<
       links: [
         {
           title: "Source code",
-          url: "https://github.com/mrkbac/lichtblick/tree/licht",
+          url: APP_CONFIG.repositoryUrl,
         },
         {
           title: "License terms",
-          url: "https://github.com/mrkbac/lichtblick/blob/licht/LICENSE",
+          url: `${APP_CONFIG.repositoryUrl}/blob/HEAD/LICENSE`,
         },
       ],
     },

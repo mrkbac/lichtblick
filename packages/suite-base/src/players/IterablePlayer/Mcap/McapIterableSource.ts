@@ -6,14 +6,23 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time, fromNanoSec } from "@foxglove/rostime";
-import type { McapIndexedReader, McapTypes } from "@mcap/core";
 
 import Log from "@lichtblick/log";
-import { ChunkCache, loadDecompressHandlers, openCachedMcapReader } from "@lichtblick/mcap-support";
+import {
+  BlobReadable,
+  checkChunk,
+  ChunkCache,
+  type LiveReader,
+  type McapIndexedReader,
+  type McapRecoveryScanner,
+  type McapTypes,
+  openCachedMcapReader,
+} from "@lichtblick/mcap-core";
+import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
-import { BlobReadable } from "./BlobReadable";
+import { leaseDecompressPool } from "./DecompressPool";
 import { CheckChunk, McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
 import type {
   HydratedInner,
@@ -21,7 +30,6 @@ import type {
   McapSource,
   OpenedInner,
 } from "./McapIterableSource.types";
-import { checkChunk, type LiveReader, type McapRecoveryScanner } from "./McapRecoveryScanner";
 import { McapUnindexedIterableSource } from "./McapUnindexedIterableSource";
 import { RemoteFileReadable } from "./RemoteFileReadable";
 import { scanWithIndexCache } from "./mcapIndexCache";
@@ -30,6 +38,7 @@ import {
   estimateAddedWeightBytes,
   estimateReaderWeightBytes,
 } from "./readerWeight";
+import { liveRecoveryAlerts, recoveryAlert } from "./recoveryAlerts";
 import {
   IteratorResult,
   Initialization,
@@ -90,7 +99,10 @@ export class McapIterableSource implements ISerializedIterableSource {
   // Decompressed chunks, shared by every reader this source opens (all of them pass it), so
   // playback, preloading, plots and backfill don't each decompress the same chunks. Survives
   // re-hydration like #persistentReadable.
-  #chunkCache = new ChunkCache();
+  #chunkCache: ChunkCache;
+  // Decompression workers that load chunks ahead of reads of a local file, shared with the other
+  // files in this worker. Released in terminate(), which stops them once no file uses them.
+  #decompressLease: ReturnType<typeof leaseDecompressPool>;
   // Chunks found corrupt mid-read, left out of every reader opened on the file's own summary
   #corruptChunks = new Set<bigint>();
   // Index rebuilt by a forward scan, for files without a usable summary or with corrupt chunks
@@ -123,6 +135,9 @@ export class McapIterableSource implements ISerializedIterableSource {
 
   public constructor(source: McapSource) {
     this.#source = source;
+    // Remote files don't load ahead: extra range requests could delay the ones a seek waits for
+    this.#decompressLease = source.type === "file" ? leaseDecompressPool() : undefined;
+    this.#chunkCache = new ChunkCache(this.#decompressLease?.pool);
   }
 
   // Build a fresh inner source. Returns the readable for remote sources so it can be closed later.
@@ -569,7 +584,10 @@ export class McapIterableSource implements ISerializedIterableSource {
       });
       // Nothing lost means the summary was fine and the read error came from elsewhere (e.g. the
       // network); reading resumes on the rebuilt index without claiming the file was damaged.
-      return { reader, alert: this.#recovery.hasLosses() ? this.#recovery.toAlert() : undefined };
+      return {
+        reader,
+        alert: this.#recovery.hasLosses() ? recoveryAlert(this.#recovery) : undefined,
+      };
     };
   }
 
@@ -717,11 +735,11 @@ export class McapIterableSource implements ISerializedIterableSource {
               message: "This file is still being written; showing it as it was when opened.",
               tip: "To follow it as it grows, open it with Open file or drag and drop in a Chromium-based browser or the desktop app.",
             },
-        ...this.#recovery.toLiveAlerts(),
+        ...liveRecoveryAlerts(this.#recovery),
         ...init.alerts,
       ];
     } else if (this.#recovery) {
-      init.alerts = [this.#recovery.toAlert(), ...init.alerts];
+      init.alerts = [recoveryAlert(this.#recovery), ...init.alerts];
     }
     if (this.#scanError) {
       init.alerts = withScanError(init, this.#scanError).alerts;
@@ -803,6 +821,9 @@ export class McapIterableSource implements ISerializedIterableSource {
   }
 
   public async terminate(): Promise<void> {
+    // First, so a failing teardown step below can't keep the shared workers alive
+    this.#decompressLease?.release();
+    this.#decompressLease = undefined;
     // Pooled inners are torn down by the pool (owned by MultiIterableSource); only release an
     // eagerly-retained inner here.
     await this.#eagerInner?.terminate?.();

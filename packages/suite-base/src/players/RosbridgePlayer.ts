@@ -17,13 +17,13 @@
 import roslib from "@foxglove/roslibjs";
 import { parse as parseMessageDefinition } from "@foxglove/rosmsg";
 import { MessageReader as ROS1MessageReader } from "@foxglove/rosmsg-serialization";
-import { MessageReader as ROS2MessageReader } from "@foxglove/rosmsg2-serialization";
 import { Time, fromMillis, toSec } from "@foxglove/rostime";
 import * as _ from "lodash-es";
 
 import { debouncePromise } from "@lichtblick/den/async";
 import { filterMap } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
+import { createRos2CdrDeserializer } from "@lichtblick/mcap-support";
 import { ParameterValue } from "@lichtblick/suite";
 import {
   LIVE_QUEUE_MAX_BYTES,
@@ -54,6 +54,8 @@ import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Log.getLogger(__dirname);
+
+type MessageDecoder = { readMessage: (data: Uint8Array) => unknown };
 
 const CAPABILITIES = [PLAYER_CAPABILITIES.advertise, PLAYER_CAPABILITIES.callServices];
 
@@ -108,7 +110,7 @@ export default class RosbridgePlayer implements Player {
   #subscribedTopics = new Map<string, Set<string>>(); // A map of topic names to the set of subscriber IDs subscribed to each topic.
   #services = new Map<string, Set<string>>(); // A map of service names to service provider IDs that provide each service.
   #messageReadersByDatatype: {
-    [datatype: string]: ROS1MessageReader | ROS2MessageReader;
+    [datatype: string]: MessageDecoder;
   } = {};
   #start?: Time; // The time at which we started playing.
   #clockTime?: Time; // The most recent published `/clock` time, if available
@@ -303,7 +305,7 @@ export default class RosbridgePlayer implements Player {
         return;
       }
 
-      const messageReaders: Record<string, ROS1MessageReader | ROS2MessageReader> = {};
+      const messageReaders: Record<string, MessageDecoder> = {};
       for (const { type, messageDefinition } of datatypeDescriptions) {
         const parsedDefinition = parseMessageDefinition(messageDefinition, {
           ros2: this.#rosVersion === 2,
@@ -312,7 +314,7 @@ export default class RosbridgePlayer implements Player {
         messageReaders[type] ??=
           this.#rosVersion !== 2
             ? new ROS1MessageReader(parsedDefinition)
-            : new ROS2MessageReader(parsedDefinition);
+            : { readMessage: createRos2CdrDeserializer(parsedDefinition) };
       }
 
       if (topicsMissingDatatypes.length > 0) {

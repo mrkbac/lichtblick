@@ -25,14 +25,20 @@ const suiteBaseSetup = path.join(suiteBaseSrc, "test/setup.ts");
 // Real globals (not compile-time defines) so tests can override them, as with jest's `globals`
 const testGlobals = path.join(suiteBaseSrc, "test/globals.ts");
 
-/** Compiles .ne grammars (like nearley-loader) and exposes .bin/.template/.wasm files as strings. */
+/** Compiles .ne grammars (like nearley-loader) and exposes .bin/.template files as strings
+ * and .wasm files as data: URLs. */
 function testAssets(): Plugin {
   return {
     name: "lichtblick-test-assets",
     enforce: "pre",
     load(id) {
-      if (/\.(bin|template|wasm)$/.test(id)) {
+      if (/\.(bin|template)$/.test(id)) {
         return `export default ${JSON.stringify(fs.readFileSync(id, "utf8"))};`;
+      }
+      if (id.endsWith(".wasm")) {
+        // A URL, as in the app; fetch() reads data: URLs in Node too
+        const url = `data:application/wasm;base64,${fs.readFileSync(id).toString("base64")}`;
+        return `export default ${JSON.stringify(url)};`;
       }
       if (id.endsWith(".ne")) {
         const parser = new nearley.Parser(nearley.Grammar.fromCompiled(nearleyGrammar));
@@ -113,7 +119,7 @@ export default defineConfig({
       ...["den", "oxlint-plugin"].map((name) =>
         project(name, { root: `packages/${name}`, include: ["**/*.test.{ts,tsx}"] }),
       ),
-      ...["mcap-support", "message-path"].map((name) =>
+      ...["mcap-core", "mcap-support", "message-path"].map((name) =>
         project(name, { root: `packages/${name}`, include: ["src/**/*.test.{ts,tsx}"] }),
       ),
       project("benchmark", {

@@ -61,7 +61,6 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
   const { classes, cx } = useStyles();
   const [menuAnchorEl, setMenuAnchorEl] = useState<undefined | HTMLElement>(undefined);
   const [subMenuAnchorEl, setSubmenuAnchorEl] = useState<undefined | HTMLElement>(undefined);
-  const isTouchInteraction = useRef(false);
   const { t } = useTranslation("panelToolbar");
 
   const menuOpen = Boolean(menuAnchorEl);
@@ -77,10 +76,6 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
     splitPanel,
     addPanel,
   } = useCurrentLayoutActions();
-  const handleTouchStart = useCallback(() => {
-    isTouchInteraction.current = true;
-  }, []);
-
   const handleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setSubmenuAnchorEl(undefined);
     setMenuAnchorEl(event.currentTarget);
@@ -91,22 +86,19 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
     setMenuAnchorEl(undefined);
   };
 
-  const handleSubmenuClick = (event: MouseEvent<HTMLElement>) => {
-    if (subMenuAnchorEl !== event.currentTarget) {
-      setSubmenuAnchorEl(event.currentTarget);
-    }
-    if (!isTouchInteraction.current) {
-      setMenuAnchorEl(undefined);
-    }
+  // Clicking or hovering opens the submenu. The menu stays open: the submenu is rendered inside it.
+  const openSubmenu = (event: MouseEvent<HTMLElement>) => {
+    setSubmenuAnchorEl(event.currentTarget);
+  };
+
+  // A mouse press on the submenu's item would take focus from the submenu's search field.
+  const keepSubmenuFocus = (event: MouseEvent<HTMLElement>) => {
+    event.preventDefault();
   };
 
   const handleSubmenuClose = useCallback(() => {
     setSubmenuAnchorEl(undefined);
   }, []);
-
-  const handleSubmenuMouseEnter = (event: MouseEvent<HTMLElement>) => {
-    setSubmenuAnchorEl(event.currentTarget);
-  };
 
   const close = useCallback(() => {
     if (panelContext?.id != undefined) {
@@ -256,7 +248,6 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
         anchorEl={menuAnchorEl}
         open={menuOpen}
         onClose={handleMenuClose}
-        onTouchStart={handleTouchStart}
         anchorOrigin={{ vertical: "bottom", horizontal: "left" }}
         slotProps={{
           list: {
@@ -272,8 +263,9 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
           aria-controls={changePanelOpen ? "change-panel-menu" : undefined}
           aria-haspopup="true"
           aria-expanded={changePanelOpen ? "true" : undefined}
-          onClick={handleSubmenuClick}
-          onMouseEnter={handleSubmenuMouseEnter}
+          onClick={openSubmenu}
+          onMouseDown={keepSubmenuFocus}
+          onMouseEnter={openSubmenu}
         >
           {t("changePanel")}
           <ChevronRightIcon className={classes.icon} fontSize="small" />
@@ -291,8 +283,9 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
             aria-controls={newTabOpen ? "new-tab-menu" : undefined}
             aria-haspopup="true"
             aria-expanded={newTabOpen ? "true" : undefined}
-            onClick={handleSubmenuClick}
-            onMouseEnter={handleSubmenuMouseEnter}
+            onClick={openSubmenu}
+            onMouseDown={keepSubmenuFocus}
+            onMouseEnter={openSubmenu}
           >
             {t("addTab")}
             <ChevronRightIcon className={classes.icon} fontSize="small" />

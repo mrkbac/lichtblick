@@ -6,10 +6,15 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { compare } from "@foxglove/rostime";
-import { McapIndexedReader, McapRecordBuilder, McapWriter, TempBuffer } from "@mcap/core";
 import { Blob } from "node:buffer";
 import type { Mock, MockedClass, MockedFunction } from "vitest";
 
+import {
+  McapIndexedReader,
+  McapRecordBuilder,
+  McapWriter,
+  TempBuffer,
+} from "@lichtblick/mcap-core";
 import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
@@ -305,7 +310,8 @@ describe("McapIterableSource", () => {
     }
     expect(count).toBe(2 * chunkCount);
     await source.terminate();
-  });
+    // Two 64 MiB recordings: close to the default 5 s timeout on CI runners
+  }, 20_000);
 
   describe("a file that is still being written", () => {
     const topics = new Map([["/example", PlayerBuilder.subscribePayload({ topic: "/example" })]]);

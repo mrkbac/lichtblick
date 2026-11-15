@@ -417,8 +417,13 @@ for (const colorScheme of ["light", "dark"] as const) {
     );
     await monitor.getByTestId("window-left-sidebar-button").click();
     await expect(monitor.getByTestId("sidebar-left")).toHaveCount(0);
-    // A second view created through + also stays in this monitor.
-    await monitor.getByTestId("add-tab").click();
+    // A second view created through the panel menu's "New tab" also stays in this monitor.
+    await monitor
+      .getByTestId(/^panel-mouseenter-container Tab!/)
+      .getByTestId("panel-menu")
+      .first()
+      .click();
+    await monitor.getByRole("menuitem", { name: "New tab" }).click();
     await monitor.getByTestId("panel-menu-item Plot").click();
     await expect(monitor.getByRole("tab", { name: "Plot", exact: true })).toHaveAttribute(
       "aria-selected",

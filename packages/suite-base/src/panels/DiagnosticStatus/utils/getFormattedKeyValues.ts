@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { createSelector } from "reselect";
+import memoizeWeak from "memoize-weak";
 
 import { ALLOWED_TAGS } from "@lichtblick/suite-base/panels/DiagnosticStatus/constants";
 import {
@@ -14,8 +14,7 @@ import { sanitize } from "@lichtblick/suite-base/panels/DiagnosticStatus/utils/s
 const HAS_ANY_HTML = new RegExp(`<(${ALLOWED_TAGS.join("|")})`);
 
 // preliminary check to avoid expensive operations when there is no html
-export const getFormattedKeyValues = createSelector(
-  (message: DiagnosticStatusMessage) => message,
+export const getFormattedKeyValues = memoizeWeak(
   (message: DiagnosticStatusMessage): FormattedKeyValue[] => {
     return message.values.map(({ key, value }: KeyValue) => {
       return {

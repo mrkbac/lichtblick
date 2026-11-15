@@ -6,7 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time, fromNanoSec, isLessThan, isGreaterThan } from "@foxglove/rostime";
-import { McapStreamReader, McapTypes } from "@mcap/core";
+
+import { McapStreamReader, McapTypes } from "@lichtblick/mcap-core";
 
 import { TopicInfo, FileInfo } from "./types";
 

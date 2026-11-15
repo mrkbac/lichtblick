@@ -11,6 +11,7 @@ import { JSONTree as Tree } from "react-json-tree";
 import { makeStyles } from "tss-react/mui";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { UserScriptLog } from "@lichtblick/suite-base/players/UserScriptPlayer/types";
 import { useJsonTreeTheme } from "@lichtblick/suite-base/util/globalConstants";
 
@@ -72,8 +73,8 @@ const LogsSection = ({ logs }: { logs: readonly UserScriptLog[] }): React.JSX.El
           No logs to display.
         </Typography>
         <Typography variant="body2" color="textSecondary">
-          Invoke <code>log(someValue)</code> in your Lichtblick Suite node code to see data printed
-          here.
+          Invoke <code>log(someValue)</code> in your {APP_CONFIG.productName} node code to see data
+          printed here.
         </Typography>
       </Stack>
     );

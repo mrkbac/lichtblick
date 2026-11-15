@@ -8,11 +8,6 @@ overrides:
   dompurify@<3.4.17: 3.4.17
   undici@<6.29.1: 6.29.1
 
-patchedDependencies:
-  '@mcap/core@2.4.0':
-    hash: 32c3c746c279d385979cdba998ec9122ce5b0dd523aea57bb11b7aa697bf5d42
-    path: patches/@mcap__core@2.4.0.patch
-
 importers:
 
   .:
@@ -240,6 +235,9 @@ importers:
       eventemitter3:
         specifier: 5.0.4
         version: 5.0.4
+      lodash-es:
+        specifier: 4.18.1
+        version: 4.18.1
       xacro-parser:
         specifier: 0.3.11
         version: 0.3.11
@@ -247,6 +245,9 @@ importers:
       '@lichtblick/suite':
         specifier: workspace:*
         version: link:../suite
+      '@types/lodash-es':
+        specifier: 4.17.12
+        version: 4.17.12
 
   packages/hooks:
     dependencies:
@@ -275,6 +276,25 @@ importers:
 
   packages/log:
     devDependencies:
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+
+  packages/mcap-core:
+    dependencies:
+      '@foxglove/crc':
+        specifier: 1.0.1
+        version: 1.0.1
+      heap-js:
+        specifier: 2.7.1
+        version: 2.7.1
+      lodash-es:
+        specifier: 4.18.1
+        version: 4.18.1
+    devDependencies:
+      '@types/lodash-es':
+        specifier: ^4
+        version: 4.17.12
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -314,9 +334,9 @@ importers:
       '@foxglove/wasm-zstd':
         specifier: 1.0.1
         version: 1.0.1
-      '@mcap/core':
-        specifier: 2.4.0
-        version: 2.4.0(patch_hash=32c3c746c279d385979cdba998ec9122ce5b0dd523aea57bb11b7aa697bf5d42)
+      '@lichtblick/mcap-core':
+        specifier: workspace:*
+        version: link:../mcap-core
       flatbuffers:
         specifier: 25.9.23
         version: 25.9.23
@@ -327,6 +347,9 @@ importers:
         specifier: 8.8.1
         version: 8.8.1
     devDependencies:
+      '@foxglove/cdr':
+        specifier: 3.5.1
+        version: 3.5.1
       typescript:
         specifier: 6.0.3
         version: 6.0.3
@@ -474,6 +497,9 @@ importers:
       '@lichtblick/log':
         specifier: workspace:*
         version: link:../log
+      '@lichtblick/mcap-core':
+        specifier: workspace:*
+        version: link:../mcap-core
       '@lichtblick/mcap-support':
         specifier: workspace:*
         version: link:../mcap-support
@@ -492,9 +518,6 @@ importers:
       '@maplibre/maplibre-gl-style-spec':
         specifier: 26.5.1
         version: 26.5.1
-      '@mcap/core':
-        specifier: 2.4.0
-        version: 2.4.0(patch_hash=32c3c746c279d385979cdba998ec9122ce5b0dd523aea57bb11b7aa697bf5d42)
       '@mui/icons-material':
         specifier: 9.5.0
         version: 9.5.0(@mui/material@9.5.0(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@types/react@19.3.0)(react@19.3.1)
@@ -621,9 +644,6 @@ importers:
       dompurify:
         specifier: 3.4.17
         version: 3.4.17
-      dotenv:
-        specifier: 18.0.9
-        version: 18.0.9
       eventemitter3:
         specifier: 5.0.4
         version: 5.0.4
@@ -723,9 +743,6 @@ importers:
       remark-gfm:
         specifier: 4.0.1
         version: 4.0.1
-      reselect:
-        specifier: 5.3.0
-        version: 5.3.0
       stats.js:
         specifier: 0.17.0
         version: 0.17.0
@@ -744,9 +761,6 @@ importers:
       ts-essentials:
         specifier: 10.2.1
         version: 10.2.1(typescript@6.0.3)
-      ts-key-enum:
-        specifier: 3.0.13
-        version: 3.0.13
       tss-react:
         specifier: 4.9.21
         version: 4.9.21(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@mui/material@9.5.0(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@types/react@19.3.0)(react@19.3.1)
@@ -798,6 +812,9 @@ importers:
       '@lichtblick/log':
         specifier: workspace:*
         version: link:../log
+      '@lichtblick/mcap-core':
+        specifier: workspace:*
+        version: link:../mcap-core
       '@lichtblick/mcap-support':
         specifier: workspace:*
         version: link:../mcap-support
@@ -810,9 +827,6 @@ importers:
       '@lichtblick/theme':
         specifier: workspace:*
         version: link:../theme
-      '@mcap/core':
-        specifier: 2.4.0
-        version: 2.4.0(patch_hash=32c3c746c279d385979cdba998ec9122ce5b0dd523aea57bb11b7aa697bf5d42)
       '@rspack/core':
         specifier: 2.3.1
         version: 2.3.1(@swc/helpers@0.5.23)
@@ -831,9 +845,6 @@ importers:
       colord:
         specifier: 2.10.0
         version: 2.10.0
-      dotenv:
-        specifier: 18.0.9
-        version: 18.0.9
       electron:
         specifier: 45.2.3
         version: 45.2.3
@@ -2021,9 +2032,6 @@ packages:
   '@foxglove/comlink@4.4.3':
     resolution: {integrity: sha512-nzfDPH1SORvsWDEFrtQ1FYYMfdK8OyUTrgxEJKXMlNTNTEoJKsdAp/LFrZya9eVQRnI6h5O6kYpuJai033nVGQ==}
 
-  '@foxglove/crc@0.0.3':
-    resolution: {integrity: sha512-DjIZsnL3CyP/yQ/vUYA9cjrD0a/8YXejI5ZmsaOiT16cLfZcTwaCxIN01/ys4jsy+dZCQ/9DnWFn7AEFbiMDaA==}
-
   '@foxglove/crc@1.0.1':
     resolution: {integrity: sha512-8XeHQma6qxTcVNEnEl433hhdfTUhp4tj3sN+0bIL5+YKpBghQxp3f/sgKQpo4PNMnVB13SliC4wtT9ecNqECjQ==}
 
@@ -2357,9 +2365,6 @@ packages:
 
   '@maplibre/vt-pbf@4.3.3':
     resolution: {integrity: sha512-dEe5XUd64RQbxNxy2OzIkJnwNDWjVmSXjCd0A7zLirm7QJ/WWbmtDFIkfsiM4yt1cplqzG6oSivRYeWx1SM1yg==}
-
-  '@mcap/core@2.4.0':
-    resolution: {integrity: sha512-oN6YaMIltkP8vtc5q8taQfuTVMGBA6M+V64Jf1Emn0FbImfx3MTu/iPv/3eMv/UpPh83KRo8FKN+X8o2/mWpzA==}
 
   '@mui/core-downloads-tracker@9.5.0':
     resolution: {integrity: sha512-PErEpl3Lp+1ZqWYKI7GQU8XSiciAFmLbUAZ7IoaUL598HLy1UAFuEUMEJu8yAS1v8vkXYzWprMVZzky4UwXoOA==}
@@ -4957,11 +4962,6 @@ packages:
     resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
     engines: {node: '>=12'}
 
-  dotenv@18.0.9:
-    resolution: {integrity: sha512-3fVOW4cB02R066PUSwn8O4TJyz9NckQl7F81blIbaq9jKBm2tSmOKky7ZHIXzGvkVPXCSn6jkpziBPZdGFs8Tw==}
-    engines: {node: '>=12'}
-    hasBin: true
-
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
@@ -7062,9 +7062,6 @@ packages:
     resolution: {integrity: sha512-vHjcY2MlAITJhC0eRD/Vv8Vlgmu9Sd3LX9zZvtGzU5ZImdTN3+d6e/4mnTyV8vEbyf1sgNIrWxhWlrys52OkEA==}
     engines: {node: '>=12', npm: '>=6'}
 
-  reselect@5.3.0:
-    resolution: {integrity: sha512-XGoLeRAVzUTcJ1qkxPQhDJyIZ5d6zzZD9nT7AEZOaaU9UbWclhycElmhO+VD5bFeLuzhPBaOV2oXC8uG35ZSpg==}
-
   resize-observer-polyfill@1.5.1:
     resolution: {integrity: sha512-LwZrotdHOo12nQuZlHEmtuXdqGoOD0OhaxopaNFxWzInpEgaLWoVuAMbTzixuosCx2nEG58ngzW3vxdWoxIgdg==}
 
@@ -7652,9 +7649,6 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
-
-  ts-key-enum@3.0.13:
-    resolution: {integrity: sha512-2J5QVm+HLfToI6IpJQADzYYWvJQ0P9i8qV0loewy5UQ9PBcwILkw09te/+NPu6aw8OXIn9jVYOT6xCBZnGg8Yg==}
 
   tsconfig-paths@3.15.0:
     resolution: {integrity: sha512-2Ac2RgzDe/cn48GvOe3M+o82pEFewD3UPbyoUHHdKasHwJKjds4fLXWf/Ux5kATBKN20oaFGu+jbElp1pos0mg==}
@@ -9409,8 +9403,6 @@ snapshots:
 
   '@foxglove/comlink@4.4.3': {}
 
-  '@foxglove/crc@0.0.3': {}
-
   '@foxglove/crc@1.0.1': {}
 
   '@foxglove/electron-socket@2.1.1(electron@45.2.3)':
@@ -9804,12 +9796,6 @@ snapshots:
       '@mapbox/point-geometry': 1.1.0
       '@types/geojson': 7946.0.16
       pbf: 5.1.2
-
-  '@mcap/core@2.4.0(patch_hash=32c3c746c279d385979cdba998ec9122ce5b0dd523aea57bb11b7aa697bf5d42)':
-    dependencies:
-      '@foxglove/crc': 0.0.3
-      heap-js: 2.7.1
-      tslib: 2.9.1
 
   '@mui/core-downloads-tracker@9.5.0': {}
 
@@ -12004,8 +11990,6 @@ snapshots:
       dotenv: 16.6.1
 
   dotenv@16.6.1: {}
-
-  dotenv@18.0.9: {}
 
   dunder-proto@1.0.1:
     dependencies:
@@ -14659,8 +14643,6 @@ snapshots:
     dependencies:
       pe-library: 0.4.1
 
-  reselect@5.3.0: {}
-
   resize-observer-polyfill@1.5.1: {}
 
   resolve-alpn@1.2.1: {}
@@ -15326,8 +15308,6 @@ snapshots:
   ts-essentials@10.2.1(typescript@6.0.3):
     optionalDependencies:
       typescript: 6.0.3
-
-  ts-key-enum@3.0.13: {}
 
   tsconfig-paths@3.15.0:
     dependencies:

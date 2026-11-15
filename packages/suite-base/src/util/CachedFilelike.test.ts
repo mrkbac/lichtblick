@@ -82,6 +82,30 @@ describe("CachedFilelike", () => {
     });
   });
 
+  describe("initial data", () => {
+    it("serves the ranges read while opening without fetching them again", async () => {
+      const data = Uint8Array.from({ length: 100 }, (_, i) => i);
+      const fileReader = new InMemoryFileReader(data);
+      fileReader.open = async () => ({
+        size: 100,
+        initialData: [
+          { offset: 0, data: data.slice(0, 10) },
+          { offset: 90, data: data.slice(90) },
+        ],
+      });
+      const fetch = vi.spyOn(fileReader, "fetch");
+      const cachedFileReader = new CachedFilelike({ fileReader, log, readAheadEnabled: false });
+
+      await expect(cachedFileReader.read(0, 5)).resolves.toEqual(data.slice(0, 5));
+      await expect(cachedFileReader.read(92, 8)).resolves.toEqual(data.slice(92));
+      expect(fetch).not.toHaveBeenCalled();
+
+      // Only the gap between them is requested
+      await expect(cachedFileReader.read(5, 90)).resolves.toEqual(data.slice(5, 95));
+      expect(fetch.mock.calls).toEqual([[10, 80]]);
+    });
+  });
+
   describe("#read", () => {
     it("returns data from the underlying FileReader", async () => {
       const fileReader = new InMemoryFileReader(new Uint8Array([0, 1, 2, 3]));

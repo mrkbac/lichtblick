@@ -7,8 +7,8 @@
 
 export const incompatibleLayoutVersion = {
   desktopText:
-    "This layout was created with a newer version of Lichtblick. Please update to the latest version at ",
+    "This layout was created with a newer version of {{appName}}. Please update to the latest version at ",
   title: "Incompatible layout version",
   webText:
-    "This layout was created with a newer version of Lichtblick. Please refresh your browser.",
+    "This layout was created with a newer version of {{appName}}. Please refresh your browser.",
 };

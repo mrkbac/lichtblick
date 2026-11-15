@@ -1,0 +1,95 @@
+// SPDX-FileCopyrightText: Copyright (c) Foxglove Technologies Inc
+// SPDX-License-Identifier: MIT
+
+import { McapRecordBuilder } from "./McapRecordBuilder.ts";
+import type { Channel, Message, MessageIndex, Schema } from "./types.ts";
+
+type ChunkBuilderOptions = {
+  useMessageIndex?: boolean;
+};
+class ChunkBuilder {
+  #recordWriter = new McapRecordBuilder();
+  #messageIndices: Map<number, MessageIndex> | undefined;
+  #totalMessageCount = 0;
+
+  public messageStartTime = 0n;
+  public messageEndTime = 0n;
+
+  public constructor({ useMessageIndex = true }: ChunkBuilderOptions) {
+    if (useMessageIndex) {
+      this.#messageIndices = new Map();
+    }
+  }
+
+  public get numMessages(): number {
+    return this.#totalMessageCount;
+  }
+
+  public get buffer(): Uint8Array {
+    return this.#recordWriter.buffer;
+  }
+
+  /** A view of the chunk's records (not a copy), valid until the next add or reset. */
+  public bufferView(): Uint8Array {
+    return this.#recordWriter.bufferView();
+  }
+
+  public get byteLength(): number {
+    return this.#recordWriter.length;
+  }
+
+  public get indices(): Iterable<MessageIndex> {
+    if (this.#messageIndices) {
+      return this.#messageIndices.values();
+    }
+    return [];
+  }
+
+  public addSchema(schema: Schema): void {
+    this.#recordWriter.writeSchema(schema);
+  }
+
+  public addChannel(info: Channel): void {
+    if (this.#messageIndices && !this.#messageIndices.has(info.id)) {
+      this.#messageIndices.set(info.id, {
+        channelId: info.id,
+        records: [],
+      });
+    }
+    this.#recordWriter.writeChannel(info);
+  }
+
+  public addMessage(message: Message): void {
+    if (this.#totalMessageCount === 0 || message.logTime < this.messageStartTime) {
+      this.messageStartTime = message.logTime;
+    }
+    if (this.#totalMessageCount === 0 || message.logTime > this.messageEndTime) {
+      this.messageEndTime = message.logTime;
+    }
+
+    if (this.#messageIndices) {
+      let messageIndex = this.#messageIndices.get(message.channelId);
+      if (!messageIndex) {
+        messageIndex = {
+          channelId: message.channelId,
+          records: [],
+        };
+        this.#messageIndices.set(message.channelId, messageIndex);
+      }
+      messageIndex.records.push([message.logTime, BigInt(this.#recordWriter.length)]);
+    }
+
+    this.#totalMessageCount += 1;
+    this.#recordWriter.writeMessage(message);
+  }
+
+  public reset(): void {
+    this.messageStartTime = 0n;
+    this.messageEndTime = 0n;
+    this.#totalMessageCount = 0;
+    this.#messageIndices?.clear();
+    this.#recordWriter.reset();
+  }
+}
+
+export { ChunkBuilder };

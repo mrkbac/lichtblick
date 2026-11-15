@@ -19,7 +19,7 @@ import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/Key
 import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import { useLiveRecordingsDialog } from "@lichtblick/suite-base/components/LiveRecordingsDialog";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
-import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
@@ -199,7 +199,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
         dialogActions.dataSource.open("demo");
       })}
       {item("docs", t("documentation"), () => {
-        window.open(LICHTBLICK_DOCUMENTATION_LINK, "_blank", "noopener,noreferrer");
+        window.open(APP_CONFIG.docsUrl, "_blank", "noopener,noreferrer");
       })}
       {item("about", t("about"), () => {
         dialogActions.preferences.open("about");

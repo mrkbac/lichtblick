@@ -5,8 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { McapTypes } from "@mcap/core";
-
+import { McapTypes } from "@lichtblick/mcap-core";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 const BATCH_GAP_THRESHOLD_BYTES = 64n * 1024n;

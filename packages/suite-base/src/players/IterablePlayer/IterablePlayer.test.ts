@@ -10,7 +10,6 @@ import { fromSec, toSec } from "@foxglove/rostime";
 import * as _ from "lodash-es";
 import type { Mock, MockInstance } from "vitest";
 
-import { signal } from "@lichtblick/den/async";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import {
   InternalSubscribePayload,
@@ -474,7 +473,7 @@ describe("IterablePlayer", () => {
       enablePreload: false,
       sourceId: "test",
     });
-    const ready = signal();
+    const ready = Promise.withResolvers<void>();
     player.setListener(async (state) => {
       if (state.activeData) {
         ready.resolve();
@@ -482,7 +481,7 @@ describe("IterablePlayer", () => {
     });
 
     // Wait until initialization has populated the message range source.
-    await ready;
+    await ready.promise;
 
     // WHEN - asking the player for a point-in-time backfill lookup
     const result = await player.getBackfillMessages({
@@ -629,10 +628,10 @@ describe("IterablePlayer", () => {
     player.setSubscriptions([{ topic }]);
 
     const initialStore = new PlayerStateStore(4);
-    const playingStarted = signal();
-    const seekEmitEntered = signal();
-    const releaseSeekEmit = signal();
-    const resumedAfterSeekEmit = signal();
+    const playingStarted = Promise.withResolvers<void>();
+    const seekEmitEntered = Promise.withResolvers<void>();
+    const releaseSeekEmit = Promise.withResolvers<void>();
+    const resumedAfterSeekEmit = Promise.withResolvers<void>();
 
     let initialized = false;
     let inSeekEmit = false;
@@ -659,7 +658,7 @@ describe("IterablePlayer", () => {
       if (!inSeekEmit && messageNs === 1) {
         inSeekEmit = true;
         seekEmitEntered.resolve();
-        await releaseSeekEmit;
+        await releaseSeekEmit.promise;
       }
 
       if (inSeekEmit && messageNs !== 1 && state.activeData?.currentTime.nsec != undefined) {
@@ -672,17 +671,17 @@ describe("IterablePlayer", () => {
     initialized = true;
 
     player.startPlayback();
-    await playingStarted;
+    await playingStarted.promise;
 
     player.seekPlayback({ sec: 0, nsec: 1 });
-    await seekEmitEntered;
+    await seekEmitEntered.promise;
 
     const stateCountWhileParked = postInitStateCount;
     await new Promise((resolve) => setTimeout(resolve, 50));
     expect(postInitStateCount).toBe(stateCountWhileParked);
 
     releaseSeekEmit.resolve();
-    await resumedAfterSeekEmit;
+    await resumedAfterSeekEmit.promise;
     expect(resumedCurrentNs).toBeDefined();
     expect(resumedCurrentNs!).toBeGreaterThan(1);
 
@@ -876,7 +875,7 @@ describe("IterablePlayer", () => {
       };
     };
 
-    const backfillStarted = signal();
+    const backfillStarted = Promise.withResolvers<void>();
 
     let resolveBackfill: (value?: unknown) => void = () => {};
     const backfillPromise = new Promise((resolve) => {
@@ -898,7 +897,7 @@ describe("IterablePlayer", () => {
     const getIsPlaying = (state: PlayerStateWithoutPlayerId) => state.activeData?.isPlaying;
     // starts a seek backfill does not emit unless it takes too long or it finishes
     player.seekPlayback({ sec: 1, nsec: 0 });
-    await backfillStarted;
+    await backfillStarted.promise;
     // emits state
     let playerStates = await store.done;
     expect(playerStates.map(getIsPlaying)).toEqual([false]);
@@ -931,7 +930,7 @@ describe("IterablePlayer", () => {
     });
 
     let didStartEarly = false;
-    const reachedEnd = signal();
+    const reachedEnd = Promise.withResolvers<void>();
     player.setListener(async (state) => {
       if (!didStartEarly && state.presence === PlayerPresence.PRESENT && state.activeData) {
         didStartEarly = true;
@@ -947,7 +946,7 @@ describe("IterablePlayer", () => {
 
     const timedOut = Symbol("timedOut");
     const result = await Promise.race([
-      reachedEnd.then(() => "reachedEnd"),
+      reachedEnd.promise.then(() => "reachedEnd"),
       new Promise((resolve) => {
         setTimeout(() => {
           resolve(timedOut);
@@ -1001,7 +1000,7 @@ describe("IterablePlayer", () => {
       resolveBackfill = resolve;
     });
 
-    const backfillStarted = signal();
+    const backfillStarted = Promise.withResolvers<void>();
     // replace the message iterator with our own implementation
     // This implementation performs a seekPlayback during backfill.
     // eslint-disable-next-line @typescript-eslint/unbound-method
@@ -1023,7 +1022,7 @@ describe("IterablePlayer", () => {
     store.reset(1);
     // starts a seek backfill does not emit unless it takes too long or it finishes
     player.seekPlayback({ sec: 1, nsec: 0 });
-    await backfillStarted;
+    await backfillStarted.promise;
 
     playerStates = await store.done;
     expect(playerStates.map(getIsPlaying)).toEqual([true]);
@@ -1393,14 +1392,14 @@ describe("IterablePlayer", () => {
     const iteratorSpy = vi.spyOn(source, "messageIterator");
     const player = new IterablePlayer({ source, enablePreload: false, sourceId: "test" });
     player.setSubscriptions([{ topic: defaultTopic }]);
-    const present = signal();
+    const present = Promise.withResolvers<void>();
     player.setListener(async (state) => {
       if (state.presence === PlayerPresence.PRESENT) {
         present.resolve();
       }
     });
     player.setPlaybackSpeed(50);
-    await present;
+    await present.promise;
     player.startPlayback();
 
     await new Promise((resolve) => setTimeout(resolve, 4500));

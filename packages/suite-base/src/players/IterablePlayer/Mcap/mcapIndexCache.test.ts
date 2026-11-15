@@ -1,14 +1,20 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { McapIndexedReader, McapTypes, McapWriter, TempBuffer } from "@mcap/core";
+import {
+  BlobReadable,
+  ChunkCache,
+  McapIndexedReader,
+  McapRecoveryScanner,
+  McapTypes,
+  McapWriter,
+  TempBuffer,
+} from "@lichtblick/mcap-core";
+import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 
-import { ChunkCache, loadDecompressHandlers } from "@lichtblick/mcap-support";
-
-import { BlobReadable } from "./BlobReadable";
 import { McapIterableSource } from "./McapIterableSource";
-import { McapRecoveryScanner } from "./McapRecoveryScanner";
 import { MAX_CACHE_BYTES, scanWithIndexCache } from "./mcapIndexCache";
+import { recoveryAlert } from "./recoveryAlerts";
 
 /** Footer-less recording with one message per chunk; `count` messages at 1s, 2s, … */
 async function footerless(count: number, messageBytes = 1): Promise<Uint8Array<ArrayBuffer>> {
@@ -113,7 +119,7 @@ describe("scanWithIndexCache", () => {
     expect(scan).toHaveBeenCalledTimes(1);
     expect(second.offset).toBe(first.offset);
     expect(second.messageCount).toBe(5n);
-    expect(second.toAlert()).toEqual(first.toAlert());
+    expect(recoveryAlert(second)).toEqual(recoveryAlert(first));
     expect(await readValues(second.toReadable(readableOf(bytes), new ChunkCache()))).toEqual([
       1, 2, 3, 4, 5,
     ]);

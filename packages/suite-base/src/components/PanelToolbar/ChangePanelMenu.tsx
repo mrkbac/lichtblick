@@ -88,7 +88,14 @@ export default function ChangePanelMenu({
           }}
         >
           <Paper elevation={8} className={classes.paper}>
-            <ClickAwayListener onClickAway={onClose}>
+            <ClickAwayListener
+              onClickAway={(event) => {
+                // Clicking the menu item that opened this submenu keeps it open.
+                if (!(event.target instanceof Node && anchorEl?.contains(event.target) === true)) {
+                  onClose();
+                }
+              }}
+            >
               <PanelCatalog
                 mode="list"
                 isMenu

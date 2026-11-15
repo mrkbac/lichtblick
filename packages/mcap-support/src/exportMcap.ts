@@ -11,7 +11,7 @@ import {
   McapRecordBuilder,
   McapTypes,
   Opcode,
-} from "@mcap/core";
+} from "@lichtblick/mcap-core";
 
 import { loadDecompressHandlers } from "./decompressHandlers";
 

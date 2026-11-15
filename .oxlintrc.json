@@ -206,10 +206,10 @@
             "message": "@mui/Box has performance implications. Use tss-react/mui instead."
           },
           {
-            "name": "@mcap/core",
+            "name": "@lichtblick/mcap-core",
             "importNames": ["McapIndexedReader"],
             "allowTypeImports": true,
-            "message": "Open readers with openCachedMcapReader from @lichtblick/mcap-support, so readers of a file share its decompressed chunks."
+            "message": "Open readers with openCachedMcapReader from @lichtblick/mcap-core, so readers of a file share its decompressed chunks."
           }
         ]
       }
@@ -257,8 +257,27 @@
   },
   "overrides": [
     {
+      "files": ["packages/mcap-core/src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              {
+                "name": "./McapIndexedReader.ts",
+                "importNames": ["McapIndexedReader"],
+                "allowTypeImports": true,
+                "message": "Open readers with openCachedMcapReader, so readers of a file share its decompressed chunks."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
       "files": [
-        "packages/mcap-support/src/openCachedMcapReader.ts",
+        "packages/mcap-core/src/openCachedMcapReader.ts",
+        "packages/mcap-core/src/index.ts",
         "**/*.test.ts",
         "**/*.test.tsx"
       ],
@@ -610,6 +629,20 @@
         "packages/suite-base/src/panels/ThreeDeeRender/**",
         "packages/suite-base/src/players/**"
       ],
+      "rules": {
+        "@lichtblick/no-push-spread": "off"
+      }
+    },
+    {
+      "files": ["packages/mcap-core/**"],
+      "rules": {
+        "@lichtblick/license-header": "off",
+        "@lichtblick/no-getters-setters": "off",
+        "@lichtblick/no-boolean-parameters": "off"
+      }
+    },
+    {
+      "files": ["packages/mcap-core/**/*.test.ts"],
       "rules": {
         "@lichtblick/no-push-spread": "off"
       }

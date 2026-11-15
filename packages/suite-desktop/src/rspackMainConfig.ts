@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { type Configuration, rspack } from "@rspack/core";
-import dotenv from "dotenv";
+import fs from "fs";
 import path from "path";
 
 import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
@@ -15,7 +15,10 @@ import type { RspackConfigParams } from "./RspackConfigParams.ts";
 import { createCommonWebpackConfig } from "./rspackCommonConfig.ts";
 
 // Load environment variables from .env
-dotenv.config({ path: path.resolve(import.meta.dirname, "../../../.env") });
+// Load .env if present (Node's built-in loader; existing env vars win)
+if (fs.existsSync(path.resolve(import.meta.dirname, "../../../.env"))) {
+  process.loadEnvFile(path.resolve(import.meta.dirname, "../../../.env"));
+}
 
 export const rspackMainConfig =
   (params: RspackConfigParams) =>

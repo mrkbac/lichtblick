@@ -30,6 +30,9 @@ declare module "@mui/material/styles" {
   }
 }
 
+/** Brand accent (buttons, links, focus, logo). Change this to rebrand. */
+export const ACCENT = "#EF833A";
+
 export const dark: PaletteOptions = {
   name: "dark",
   mode: "dark",
@@ -39,7 +42,7 @@ export const dark: PaletteOptions = {
     primary: "#808080",
     text: "#ffffff",
   },
-  primary: { main: "#EF833A" },
+  primary: { main: ACCENT },
   secondary: { main: "#b1b1b1" },
   error: { main: "#f54966" },
   warning: { main: "#eba800" },
@@ -82,7 +85,7 @@ export const light: PaletteOptions = {
     primary: "#404040",
     text: "#ffffff",
   },
-  primary: { main: "#EF833A" },
+  primary: { main: ACCENT },
   secondary: { main: "#404040" },
   error: { main: "#db3553" },
   warning: { main: "#eba800" },

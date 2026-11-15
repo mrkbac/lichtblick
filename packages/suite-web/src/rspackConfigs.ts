@@ -17,7 +17,11 @@ import path from "path";
 import { generateSW } from "workbox-build";
 
 import type { RspackArgv } from "@lichtblick/suite-base/RspackArgv.ts";
-import { isOverlayRuntimeError, makeConfig } from "@lichtblick/suite-base/rspack.ts";
+import {
+  isOverlayRuntimeError,
+  makeConfig,
+  type ProductInfo,
+} from "@lichtblick/suite-base/rspack.ts";
 import * as palette from "@lichtblick/theme/src/palette.ts";
 
 /**
@@ -88,6 +92,8 @@ export type ConfigParams = {
   prodSourceMap: Configuration["devtool"];
   /** Set the app version information */
   version: string;
+  /** Name and links for the UI, page title and web manifest */
+  product: ProductInfo;
   /** Needs to be overridden for react-router */
   historyApiFallback?: DevServer["historyApiFallback"];
 };
@@ -197,7 +203,10 @@ export const mainConfig =
       });
     }
 
-    const appConfig = makeConfig(env, argv, { version: params.version });
+    const appConfig = makeConfig(env, argv, {
+      version: params.version,
+      product: params.product,
+    });
 
     return {
       name: "main",
@@ -207,6 +216,11 @@ export const mainConfig =
       // `rspack serve` compiles lazy imports on first use, and the recompile reloads every open page.
       // E2E tests run in parallel against one dev server, so build everything up front for them.
       ...(process.env.E2E === "true" && { lazyCompilation: false }),
+      // Each lazy compile adds modules to the shared split chunks, and their names (derived from
+      // the modules they hold) change with it. A page still loading the previous build then asks
+      // for chunk files that no longer exist (404, "Chunk is from another build"). Without split
+      // chunks every async chunk keeps its name across lazy compiles.
+      ...(isServe && { optimization: { splitChunks: false } }),
 
       target: "web",
       context: params.contextPath,
@@ -229,7 +243,20 @@ export const mainConfig =
         ...(appConfig.plugins ?? []),
         new rspack.CopyRspackPlugin({
           patterns: [
-            { from: path.resolve(import.meta.dirname, "..", "public") },
+            {
+              from: path.resolve(import.meta.dirname, "..", "public"),
+              // Name and colors come from package.json productName and the theme palette
+              transform: (input, absoluteFilename) =>
+                absoluteFilename.endsWith("manifest.webmanifest")
+                  ? JSON.stringify({
+                      ...(JSON.parse(input.toString()) as Record<string, unknown>),
+                      name: params.product.name,
+                      short_name: params.product.name,
+                      background_color: palette.dark.background?.default,
+                      theme_color: palette.dark.appBar.main,
+                    })!
+                  : input,
+            },
             ...["LICENSE", "THIRD_PARTY_NOTICES"].map((name) => ({
               from: path.resolve(import.meta.dirname, "../../..", name),
               to: name,
@@ -246,7 +273,7 @@ export const mainConfig =
     <head>
       <meta charset="utf-8">
       <meta name="apple-mobile-web-app-capable" content="yes">
-      <title>Lichtblick</title>
+      <title>${params.product.name}</title>
       <link rel="manifest" href="manifest.webmanifest" />
       <meta name="theme-color" content="${palette.dark.appBar.main}" />
       <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
