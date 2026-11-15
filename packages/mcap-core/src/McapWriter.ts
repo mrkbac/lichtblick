@@ -190,7 +190,12 @@ export class McapWriter {
 
     if (this.statistics) {
       const statisticsStart = this.#nextRecordOffset();
-      const statisticsLength = this.#recordWriter.writeStatistics(this.statistics);
+      // Per-channel counts need the Channel records in the summary, which repeatChannels: false omits
+      const statisticsLength = this.#recordWriter.writeStatistics(
+        this.#repeatChannels
+          ? this.statistics
+          : { ...this.statistics, channelMessageCounts: new Map() },
+      );
       summaryOffsets.push({
         groupOpcode: Opcode.STATISTICS,
         groupStart: statisticsStart,
@@ -240,10 +245,12 @@ export class McapWriter {
     const summaryOffsetStart = this.#nextRecordOffset();
     const summaryLength = summaryOffsetStart - summaryStart;
 
+    let wroteSummaryOffsets = false;
     if (this.#useSummaryOffsets) {
       for (const summaryOffset of summaryOffsets) {
         if (summaryOffset.groupLength !== 0n) {
           this.#recordWriter.writeSummaryOffset(summaryOffset);
+          wroteSummaryOffsets = true;
         }
       }
     }
@@ -259,7 +266,8 @@ export class McapWriter {
 
     const footer: Footer = {
       summaryStart: summaryLength === 0n ? 0n : summaryStart,
-      summaryOffsetStart: this.#useSummaryOffsets ? summaryOffsetStart : 0n,
+      // Zero when no Summary Offset record follows, as the spec requires
+      summaryOffsetStart: wroteSummaryOffsets ? summaryOffsetStart : 0n,
       summaryCrc: 0,
     };
     const tempBuffer = new DataView(new ArrayBuffer(1 + 8 + 8 + 8));

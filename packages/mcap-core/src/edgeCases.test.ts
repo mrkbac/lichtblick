@@ -28,7 +28,6 @@ describe("ChunkCursor", () => {
       const indexes = builder.buffer;
       const cursor = new ChunkCursor({
         chunkIndex: {
-          type: "ChunkIndex",
           messageStartTime: 10n,
           messageEndTime: 20n,
           chunkStartOffset: 0n,

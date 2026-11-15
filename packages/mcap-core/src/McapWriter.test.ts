@@ -519,4 +519,39 @@ describe("McapWriter", () => {
       expect(rec.data.every((byte) => byte === i)).toBe(true);
     });
   });
+
+  it("keeps the summary consistent when it omits channels or summary offsets", async () => {
+    async function summary(options: { repeatChannels?: boolean; useStatistics?: boolean }) {
+      const buffer = new TempBuffer();
+      const writer = new McapWriter({ writable: buffer, repeatSchemas: false, ...options });
+      await writer.start({ library: "", profile: "" });
+      if (options.useStatistics !== false) {
+        const channelId = await writer.registerChannel({
+          topic: "/a",
+          schemaId: 0,
+          messageEncoding: "json",
+          metadata: new Map(),
+        });
+        await writer.addMessage({
+          channelId,
+          data: new Uint8Array(),
+          sequence: 0,
+          logTime: 0n,
+          publishTime: 0n,
+        });
+      }
+      await writer.end();
+      return readAsMcapStream(buffer.get());
+    }
+
+    // Per-channel counts would refer to Channel records the summary doesn't have
+    const noChannels = await summary({ repeatChannels: false });
+    const statistics = noChannels.find((rec) => rec.type === "Statistics");
+    expect(statistics).toMatchObject({ messageCount: 1n, channelMessageCounts: new Map() });
+
+    // No summary group is written, so no Summary Offset record either
+    const empty = await summary({ useStatistics: false, repeatChannels: false });
+    expect(empty.some((rec) => rec.type === "SummaryOffset")).toBe(false);
+    expect(empty.find((rec) => rec.type === "Footer")).toMatchObject({ summaryOffsetStart: 0n });
+  });
 });
