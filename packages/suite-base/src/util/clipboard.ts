@@ -40,7 +40,8 @@ export default {
   async copy(text: string): Promise<void> {
     // attempt to use the new async clipboard methods. If those are not available or fail, fallback to the old
     // `execCommand` method.
-    if (mightActuallyBePartial(navigator.clipboard).writeText != undefined) {
+    // navigator.clipboard is absent in insecure contexts.
+    if (mightActuallyBePartial(navigator).clipboard?.writeText != undefined) {
       try {
         await navigator.clipboard.writeText(text);
         return;
