@@ -5,8 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+/// <reference types="node" />
+
 import { type Configuration, type RuleSetRule, rspack } from "@rspack/core";
-import dotenv from "dotenv";
 import fs from "node:fs";
 import { createRequire as _nodeCreateRequire } from "node:module";
 import path from "node:path";
@@ -107,8 +108,11 @@ function initModuleLocals(packageDir: string | undefined): void {
   const dirHref = _nodePathToFileURL(dir + "/").href;
   currentDirHref = dirHref;
   localRequireInstance = _nodeCreateRequire(dir + "/package.json");
-  // Load environment variables from .env.local
-  dotenv.config({ path: _nodeFileURLToPath(new URL("../../.env", dirHref)) });
+  // Load .env if present (Node's built-in loader; existing env vars win)
+  const envFile = _nodeFileURLToPath(new URL("../../.env", dirHref));
+  if (fs.existsSync(envFile)) {
+    process.loadEnvFile(envFile);
+  }
 }
 
 type Options = {
