@@ -308,7 +308,7 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                   describeChild
                   title={
                     organization.status === "loading"
-                      ? "Loading account…"
+                      ? t("loadingAccount")
                       : (user?.displayName ?? "Profile")
                   }
                   arrow={false}
