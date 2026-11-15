@@ -10,7 +10,7 @@ import { CompressedImage, RawImage } from "@foxglove/schemas";
 import { t } from "i18next";
 import { assert } from "ts-essentials";
 
-import { MultiMap, filterMap } from "@lichtblick/den/collection";
+import { filterMap } from "@lichtblick/den/collection";
 import { selectCameraModel } from "@lichtblick/den/image";
 import { CameraModelsMap } from "@lichtblick/den/image/types";
 import Logger from "@lichtblick/log";
@@ -23,6 +23,7 @@ import {
   ImageUserData,
 } from "./Images/ImageRenderable";
 import { ALL_CAMERA_INFO_SCHEMAS, AnyImage, CompressedVideo } from "./Images/ImageTypes";
+import { MultiMap } from "./Images/MultiMap";
 import { filterCompressedVideoQueue } from "./Images/filterCompressedVideoQueue";
 import {
   normalizeCompressedImage,

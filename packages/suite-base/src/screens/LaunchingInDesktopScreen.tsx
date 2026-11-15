@@ -11,6 +11,7 @@ import { ReactElement, useEffect } from "react";
 import { useSessionStorageValue } from "@lichtblick/hooks";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { LaunchPreferenceValue } from "@lichtblick/suite-base/types/LaunchPreferenceValue";
 
 export function LaunchingInDesktopScreen(): ReactElement {
@@ -71,7 +72,7 @@ export function LaunchingInDesktopScreen(): ReactElement {
         style={{ maxWidth: 480 }}
       >
         <Typography align="center" variant="h2" style={{ fontWeight: 600 }}>
-          Launching Lichtblick…
+          Launching {APP_CONFIG.productName}…
         </Typography>
         <Typography align="center" style={{ fontWeight: 600 }}>
           We’ve directed you to the desktop app.
@@ -89,10 +90,10 @@ export function LaunchingInDesktopScreen(): ReactElement {
             <Link
               color="primary"
               underline="hover"
-              href="https://github.com/lichtblick-suite/lichtblick/releases"
+              href={`${APP_CONFIG.repositoryUrl}/releases`}
               target="_blank"
             >
-              Download Lichtblick
+              Download {APP_CONFIG.productName}
             </Link>
           </Typography>
         </Stack>

@@ -6,7 +6,7 @@ import * as THREE from "three";
 import UTIF from "utif";
 
 import { MeshUpAxis, ModelCache } from "./ModelCache";
-import { decodeTiffToPng } from "./tiffToPng";
+import { decodeTiffToPng } from "./decodeTiffToPng";
 
 vi.mock("three/examples/jsm/libs/draco/draco_decoder.wasm", () => ({ default: "" }));
 

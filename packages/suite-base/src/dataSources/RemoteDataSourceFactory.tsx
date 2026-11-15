@@ -8,6 +8,7 @@
 import path from "path";
 
 import { AllowedFileExtensions } from "@lichtblick/suite-base/constants/allowedFileExtensions";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
@@ -65,11 +66,11 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
   public docsLinks = [
     {
       label: "ROS 1",
-      url: "https://lichtblick-suite.github.io/docs/docs/connecting-to-data/frameworks/ros1/",
+      url: `${APP_CONFIG.docsUrl}docs/connecting-to-data/frameworks/ros1/`,
     },
     {
       label: "MCAP",
-      url: "https://lichtblick-suite.github.io/docs/docs/connecting-to-data/frameworks/mcap/",
+      url: `${APP_CONFIG.docsUrl}docs/connecting-to-data/frameworks/mcap/`,
     },
   ];
 

@@ -12,6 +12,7 @@ import Logger from "@lichtblick/log";
 import { AppSetting } from "@lichtblick/suite-base/src/AppSetting";
 
 import { getAppSetting } from "./settings";
+import { LICHTBLICK_PRODUCT_NAME } from "../common/webpackDefines";
 
 const log = Logger.getLogger(__filename);
 
@@ -66,7 +67,7 @@ class StudioAppUpdater {
     };
     const onNotAvailable = (info: UpdateInfo) => {
       void dialog.showMessageBox({
-        message: `Lichtblick is up to date (version ${info.version}).`,
+        message: `${LICHTBLICK_PRODUCT_NAME} is up to date (version ${info.version}).`,
       });
     };
     const onError = (error: Error) => {
