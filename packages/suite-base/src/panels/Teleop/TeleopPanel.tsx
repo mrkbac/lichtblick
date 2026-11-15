@@ -19,6 +19,7 @@ import Joystick from "@lichtblick/suite-base/panels/Teleop/Joystick";
 import {
   applySettingsAction,
   buildSettingsTreeTeleop,
+  matchesMessageType,
 } from "@lichtblick/suite-base/panels/Teleop/buildSettingsTree";
 import { BUTTON_LABELS } from "@lichtblick/suite-base/panels/Teleop/constants";
 import {
@@ -46,6 +47,7 @@ import {
   TeleopPanelProps,
   TeleopVector,
 } from "@lichtblick/suite-base/panels/Teleop/types";
+import { replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { ros2CommonDatatypes } from "@lichtblick/suite-base/util/ros2CommonDatatypes";
 
@@ -170,6 +172,21 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
   useEffect(() => {
     saveState(config);
   }, [config, saveState]);
+
+  // Drop a topic of the message type from the topic list to publish on it
+  useEffect(() => {
+    context.unstable_setMessagePathDropConfig(
+      replaceDrop(
+        (item) =>
+          item.isTopic &&
+          item.rootSchemaName != undefined &&
+          matchesMessageType(config.messageType, item.rootSchemaName),
+        (item) => {
+          setConfig((previous) => ({ ...previous, topic: item.topicName }));
+        },
+      ),
+    );
+  }, [config.messageType, context]);
 
   const { topic: currentTopic, messageType } = config;
   useEffect(() => {

@@ -31,6 +31,11 @@ const SCHEMA_PATTERN: Record<OutputType, RegExp> = {
   Joy: /(^|\/)Joy$/,
 };
 
+/** Whether the panel can publish its current message type on a topic of `schemaName` */
+export function matchesMessageType(messageType: OutputType, schemaName: string): boolean {
+  return SCHEMA_PATTERN[messageType].test(schemaName);
+}
+
 function buttonOptions(buttons: readonly ButtonName[]) {
   return [
     { label: "None", value: "none" },
@@ -55,7 +60,7 @@ export function buildSettingsTreeTeleop(
 ): SettingsTreeNodes {
   const isJoy = config.messageType === "Joy";
   // topics that already carry this kind of command first
-  const matches = (t: Topic) => SCHEMA_PATTERN[config.messageType].test(t.schemaName);
+  const matches = (t: Topic) => matchesMessageType(config.messageType, t.schemaName);
   const topicItems = [...topics.filter(matches), ...topics.filter((t) => !matches(t))].map(
     (t) => t.name,
   );

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { PanelExtensionContext } from "@lichtblick/suite";
+import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v2.0. If a copy of the MPL was not distributed with this
@@ -43,5 +43,5 @@ export type IndicatorConfig = {
 };
 
 export type IndicatorProps = {
-  context: PanelExtensionContext;
+  context: BuiltinPanelExtensionContext;
 };

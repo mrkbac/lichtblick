@@ -3,11 +3,13 @@
 
 import { TFunction } from "i18next";
 import * as _ from "lodash-es";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 
 import { SettingsTreeNode } from "@lichtblick/suite";
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
+import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { ALLOWED_DATATYPES } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
+import { addTopicsDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 
 export type DiagnosticTopicsConfig = { topics?: string[]; topicToRender?: string };
 
@@ -94,4 +96,25 @@ export function handleTopicToggle(
   const topics =
     value === true ? _.uniq([...selected, topic]) : selected.filter((t) => t !== topic);
   return { topics, topicToRender: undefined };
+}
+
+/** Drop diagnostics topics from the topic list to show the ones that are turned off */
+export function useDiagnosticTopicsDrop(
+  { selected }: DiagnosticTopics,
+  saveConfig: (patch: { topics: string[]; topicToRender: undefined }) => void,
+): void {
+  const { setMessagePathDropConfig } = usePanelContext();
+  useEffect(() => {
+    setMessagePathDropConfig(
+      addTopicsDrop(
+        (item) =>
+          item.rootSchemaName != undefined &&
+          ALLOWED_DATATYPES.includes(item.rootSchemaName) &&
+          !selected.includes(item.topicName),
+        (dropped) => {
+          saveConfig({ topics: _.uniq([...selected, ...dropped]), topicToRender: undefined });
+        },
+      ),
+    );
+  }, [saveConfig, selected, setMessagePathDropConfig]);
 }

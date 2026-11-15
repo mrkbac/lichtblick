@@ -38,6 +38,7 @@ import {
 import {
   getConfiguredTopics,
   handleTopicToggle,
+  useDiagnosticTopicsDrop,
 } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticTopics";
 import { useDiagnosticsPanelData } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticsPanelData";
 import {
@@ -170,6 +171,7 @@ const DiagnosticSummary = (props: DiagnosticSummaryProps): React.JSX.Element => 
     },
     [saveConfig, topics],
   );
+  useDiagnosticTopicsDrop(topics, saveConfig);
 
   useEffect(() => {
     updatePanelSettingsTree({

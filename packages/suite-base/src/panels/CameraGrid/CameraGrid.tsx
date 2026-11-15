@@ -14,8 +14,10 @@ import {
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
-import { Immutable, PanelExtensionContext, SettingsTreeAction, Topic } from "@lichtblick/suite";
+import { Immutable, SettingsTreeAction, Topic } from "@lichtblick/suite";
+import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { useElementSize } from "@lichtblick/suite-base/hooks/useElementSize";
+import { addTopicsDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import { fontMonospace } from "@lichtblick/theme";
 
 import { GridRenderer } from "./GridRenderer";
@@ -211,7 +213,11 @@ function Tile({
   );
 }
 
-export function CameraGrid({ context }: { context: PanelExtensionContext }): React.JSX.Element {
+export function CameraGrid({
+  context,
+}: {
+  context: BuiltinPanelExtensionContext;
+}): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("cameraGrid");
   const [config, setConfig] = useState<CameraGridConfig>(() => ({
@@ -295,6 +301,18 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
   useEffect(() => {
     context.saveState(config);
   }, [context, config]);
+
+  // Drop image topics from the topic list to add a tile for each
+  useEffect(() => {
+    context.unstable_setMessagePathDropConfig(
+      addTopicsDrop(
+        (item) => item.rootSchemaName != undefined && imageKind(item.rootSchemaName) != undefined,
+        (dropped) => {
+          setConfig((prev) => addAllTopics(prev, dropped));
+        },
+      ),
+    );
+  }, [context]);
 
   const actionHandler = useCallback(
     (action: SettingsTreeAction) => {

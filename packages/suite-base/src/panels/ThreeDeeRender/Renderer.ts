@@ -2017,7 +2017,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
   public getDropStatus = (paths: readonly DraggedMessagePath[]): MessagePathDropStatus => {
     const effects: ("add" | "replace")[] = [];
     for (const path of paths) {
-      let effect;
+      let effect: "add" | "replace" | undefined;
       for (const extension of this.sceneExtensions.values()) {
         const maybeEffect = extension.getDropEffectForPath(path);
         if (maybeEffect) {
@@ -2025,6 +2025,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
           break;
         }
       }
+      effect ??= this.#isShowableTopic(path) ? "add" : undefined;
       // if a single path does not have a drop effect, all paths are not droppable
       if (effect == undefined) {
         return { canDrop: false };
@@ -2046,9 +2047,22 @@ export class Renderer extends EventEmitter<RendererEvents> {
         for (const extension of this.sceneExtensions.values()) {
           extension.updateConfigForDropPath(draft, path);
         }
+        if (this.#isShowableTopic(path)) {
+          draft.topics[path.topicName] = { ...draft.topics[path.topicName], visible: true };
+        }
       }
     });
   };
+
+  /** A topic the 3D scene can draw (e.g. markers, point clouds): dropping it turns it on */
+  #isShowableTopic(path: DraggedMessagePath): boolean {
+    return (
+      this.interfaceMode === "3d" &&
+      path.isTopic &&
+      path.rootSchemaName != undefined &&
+      this.schemaSubscriptions.has(path.rootSchemaName)
+    );
+  }
 
   public setAnalytics(analytics: IAnalytics): void {
     this.analytics = analytics;

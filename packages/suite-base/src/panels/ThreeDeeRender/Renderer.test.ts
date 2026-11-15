@@ -1654,6 +1654,28 @@ describe("3D Renderer", () => {
     renderer.dispose();
   });
 
+  it("turns on a dropped topic the scene can draw", () => {
+    const renderer = new Renderer({ ...defaultRendererProps, canvas });
+    const markers: DraggedMessagePath = {
+      path: "/markers",
+      isTopic: true,
+      isLeaf: false,
+      topicName: "/markers",
+      rootSchemaName: "visualization_msgs/MarkerArray",
+    };
+
+    expect(renderer.getDropStatus([markers])).toEqual({ canDrop: true, effect: "add" });
+    // A field of the topic isn't a topic to turn on
+    expect(
+      renderer.getDropStatus([{ ...markers, path: "/markers.markers", isTopic: false }]),
+    ).toEqual({ canDrop: false });
+
+    renderer.handleDrop([markers]);
+    expect(renderer.config.topics["/markers"]?.visible).toBe(true);
+
+    renderer.dispose();
+  });
+
   it("does not set a unfollow pose snapshot  when in follow-pose mode", () => {
     const renderer = new Renderer({
       ...defaultRendererProps,

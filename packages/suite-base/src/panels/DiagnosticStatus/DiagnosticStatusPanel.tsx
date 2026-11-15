@@ -28,7 +28,10 @@ import Stack from "@lichtblick/suite-base/components/Stack";
 import { useStyles } from "@lichtblick/suite-base/panels/DiagnosticStatus/DiagnosticStatusPanel.style";
 import { DiagnosticStatusPanelProps } from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
 import { getDisplayName } from "@lichtblick/suite-base/panels/DiagnosticStatus/utils/getDisplayName";
-import { handleTopicToggle } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticTopics";
+import {
+  handleTopicToggle,
+  useDiagnosticTopicsDrop,
+} from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticTopics";
 import { useDiagnosticsPanelData } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticsPanelData";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 
@@ -115,6 +118,7 @@ const DiagnosticStatusPanel = (props: DiagnosticStatusPanelProps): React.JSX.Ele
     },
     [saveConfig, topics],
   );
+  useDiagnosticTopicsDrop(topics, saveConfig);
 
   useEffect(() => {
     updatePanelSettingsTree({

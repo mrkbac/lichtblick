@@ -7,9 +7,11 @@ import userEvent from "@testing-library/user-event";
 import React from "react";
 import type { Mock } from "vitest";
 
-import { PanelExtensionContext } from "@lichtblick/suite";
 import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";
-import { PanelExtensionAdapter } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import {
+  BuiltinPanelExtensionContext,
+  PanelExtensionAdapter,
+} from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import Indicator from "@lichtblick/suite-base/panels/Indicator";
 import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Indicator/constants";
 import { getMatchingRule } from "@lichtblick/suite-base/panels/Indicator/getMatchingRule";
@@ -29,7 +31,7 @@ vi.mock("./getMatchingRule", () => ({
 
 type Setup = {
   configOverride?: Partial<IndicatorConfig>;
-  contextOverride?: Partial<PanelExtensionContext>;
+  contextOverride?: Partial<BuiltinPanelExtensionContext>;
 };
 
 describe("Indicator Component", () => {
@@ -70,6 +72,8 @@ describe("Indicator Component", () => {
         unstable_subscribeMessageRange: vi.fn(),
         getTopicSchema: vi.fn(),
         getSchema: vi.fn(),
+        unstable_fetchAsset: vi.fn(),
+        unstable_setMessagePathDropConfig: vi.fn(),
         ...contextOverride,
       },
     };

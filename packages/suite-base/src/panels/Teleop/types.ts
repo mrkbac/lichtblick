@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { PanelExtensionContext } from "@lichtblick/suite";
+import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
 export type TeleopPanelProps = {
-  context: PanelExtensionContext;
+  context: BuiltinPanelExtensionContext;
 };
 
 /** Gamepad buttons by role, independent of the index a browser or ROS driver gives them */

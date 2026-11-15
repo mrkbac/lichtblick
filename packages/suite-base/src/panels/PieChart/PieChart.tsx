@@ -25,8 +25,10 @@ import {
 } from "react";
 
 import { parseMessagePath } from "@lichtblick/message-path";
-import { PanelExtensionContext, SettingsTreeAction } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
+import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { useLegendCount } from "@lichtblick/suite-base/components/SettingsTreeEditor/inputs/useLegendCount";
+import { replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 
 import { useStyles } from "./PieChart.style";
 import { DEFAULT_CONFIG } from "./constants";
@@ -37,7 +39,7 @@ import { settingsActionReducer } from "./utils/settingsActionReducer";
 import { stateReducer } from "./utils/stateReducer";
 
 type PieChartProps = {
-  context: PanelExtensionContext;
+  context: BuiltinPanelExtensionContext;
 };
 
 export function formatTooltip(value: unknown, name: string | number | undefined): [string, string] {
@@ -181,6 +183,18 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
     context.saveState(config);
     context.setDefaultPanelTitle(config.path === "" ? undefined : config.path);
   }, [config, context]);
+
+  // Drop an array field from the topic list to chart it
+  useEffect(() => {
+    context.unstable_setMessagePathDropConfig(
+      replaceDrop(
+        (item) => !item.isTopic,
+        (item) => {
+          setConfig((prev) => ({ ...prev, path: item.path }));
+        },
+      ),
+    );
+  }, [context]);
 
   // Register frame/seek render handler
   useEffect(() => {
