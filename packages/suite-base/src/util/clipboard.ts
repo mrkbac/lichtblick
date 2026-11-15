@@ -28,10 +28,8 @@ async function fallbackCopy(text: string) {
     // Legacy path for when the async clipboard API is missing or denied.
     // eslint-disable-next-line @typescript-eslint/no-deprecated
     if (!document.execCommand("copy")) {
-      log.error("Fallback copy to clipboard failed");
+      throw new Error("Fallback copy to clipboard failed");
     }
-  } catch (error: unknown) {
-    log.error("Fallback copy to clipboard failed", error);
   } finally {
     el.remove();
   }
