@@ -13,13 +13,14 @@ import { useTranslation } from "react-i18next";
 import { useStyles } from "@lichtblick/suite-base/components/AppBar/AppMenu.style";
 import { useCommandPaletteStore } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
 import { LAYOUT_SHORTCUTS } from "@lichtblick/suite-base/components/CommandPalette/layoutShortcuts";
+import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
 import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
 import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import { useLiveRecordingsDialog } from "@lichtblick/suite-base/components/LiveRecordingsDialog";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
-import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
@@ -47,6 +48,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
   const exportableFile = useExportableFile();
   const openExport = useTrimStore((state) => state.openExport);
   const showLiveRecordings = useLiveRecordingsDialog((state) => state.show);
+  const showCompare = useShowCompareDialog();
   const showCommandPalette = useCommandPaletteStore((state) => state.show);
   const showShortcuts = useKeyboardShortcutsStore((state) => state.show);
   const { dialogActions } = useWorkspaceActions();
@@ -144,9 +146,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
           shortcut: shortcutLabel(APP_SHORTCUTS, "app.openFile"),
         },
       )}
-      {item("compare-recordings", t("compareRecordings"), async () => {
-        await dialogActions.openFile.open({ compare: true });
-      })}
+      {item("compare-recordings", t("compareRecordings"), showCompare)}
       {item("export-recording", t("exportRecording"), openExport, {
         disabled: !exportableFile,
       })}
@@ -199,7 +199,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
         dialogActions.dataSource.open("demo");
       })}
       {item("docs", t("documentation"), () => {
-        window.open(LICHTBLICK_DOCUMENTATION_LINK, "_blank", "noopener,noreferrer");
+        window.open(APP_CONFIG.docsUrl, "_blank", "noopener,noreferrer");
       })}
       {item("about", t("about"), () => {
         dialogActions.preferences.open("about");

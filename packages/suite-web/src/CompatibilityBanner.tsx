@@ -18,6 +18,7 @@ import { useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { createMuiTheme } from "@lichtblick/theme";
 
 // First Chrome with every Baseline API we use (e.g. Uint8Array.fromBase64)
@@ -104,17 +105,13 @@ function CompatibilityBannerBase({
 
         <div>
           <Typography variant="subtitle2">
-            {prompt} Lichtblick currently requires Chrome v{MINIMUM_CHROME_VERSION}+.
+            {prompt} {APP_CONFIG.productName} currently requires Chrome v{MINIMUM_CHROME_VERSION}+.
           </Typography>
 
           {!isChrome && (
             <Typography variant="body2">
               Check out our{" "}
-              <Link
-                color="inherit"
-                href="https://lichtblick-suite.github.io/docs/browser-support"
-                target="_blank"
-              >
+              <Link color="inherit" href={`${APP_CONFIG.docsUrl}browser-support`} target="_blank">
                 Browser Support documentation
               </Link>{" "}
               for more information.

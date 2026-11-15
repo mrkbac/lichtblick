@@ -152,6 +152,36 @@ describe("DeserializingIterableSources", () => {
     });
   });
 
+  it("slices literal top-level fields, including dotted and prototype-like names", async () => {
+    const source = new TestSource();
+    const deserSource = new DeserializingIterableSource(source);
+    await deserSource.initialize();
+
+    const raw = '{"a":{"b":1},"a.c":2,"constructor":3,"__proto__":{"d":4},"other":5}';
+    source.messageIterator = async function* () {
+      const message = textEncoder.encode(raw);
+      yield {
+        type: "message-event",
+        msgEvent: {
+          topic: "json_topic",
+          receiveTime: { sec: 0, nsec: 0 },
+          message,
+          sizeInBytes: message.byteLength,
+          schemaName: "some_type",
+        },
+      };
+    };
+    const fields = ["a.b", "a.c", "constructor", "__proto__", "missing"];
+    const messageIterator = deserSource.messageIterator({
+      topics: new Map([["json_topic", { topic: "json_topic", fields }]]),
+    });
+
+    const result = await messageIterator.next();
+    const message = (result.value as { msgEvent: { message: object } }).msgEvent.message;
+    expect(JSON.stringify(message)).toBe('{"a.c":2,"constructor":3,"__proto__":{"d":4}}');
+    expect(Object.getPrototypeOf(message)).toBe(Object.prototype);
+  });
+
   it("correctly estimates message sizes for sliced and non-sliced messages", async () => {
     const source = new TestSource();
     const deserSource = new DeserializingIterableSource(source);

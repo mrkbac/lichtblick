@@ -6,9 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import CloseIcon from "@mui/icons-material/Close";
-import WarningAmberIcon from "@mui/icons-material/WarningAmber";
 import {
-  Alert,
   Button,
   Checkbox,
   Dialog,
@@ -16,7 +14,6 @@ import {
   DialogProps,
   DialogTitle,
   FormControlLabel,
-  FormLabel,
   IconButton,
   Link,
   Tab,
@@ -33,9 +30,9 @@ import { useStyles } from "@lichtblick/suite-base/components/AppSettingsDialog/A
 import { APP_SETTINGS_ABOUT_ITEMS } from "@lichtblick/suite-base/components/AppSettingsDialog/constants";
 import { AppSettingsTab } from "@lichtblick/suite-base/components/AppSettingsDialog/types";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
-import { ExperimentalFeatureSettings } from "@lichtblick/suite-base/components/ExperimentalFeatureSettings";
 import LichtblickLogoText from "@lichtblick/suite-base/components/LichtblickLogoText";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
   useWorkspaceStore,
   WorkspaceContextStore,
@@ -78,6 +75,8 @@ export function AppSettingsDialog(
   const [debugModeEnabled = false, setDebugModeEnabled] = useAppConfigurationValue<boolean>(
     AppSetting.SHOW_DEBUG_PANELS,
   );
+  const [memoryIndicatorEnabled = false, setMemoryIndicatorEnabled] =
+    useAppConfigurationValue<boolean>(AppSetting.ENABLE_MEMORY_USE_INDICATOR);
   const { classes, cx, theme } = useStyles();
   const smUp = useMediaQuery(theme.breakpoints.up("sm"));
 
@@ -111,11 +110,7 @@ export function AppSettingsDialog(
         >
           <Tab className={classes.tab} label={t("general")} value="general" />
           <Tab className={classes.tab} label={t("extensions")} value="extensions" />
-          <Tab
-            className={classes.tab}
-            label={t("experimentalFeatures")}
-            value="experimental-features"
-          />
+          <Tab className={classes.tab} label={t("advanced")} value="advanced" />
           <Tab className={classes.tab} label={t("about")} value="about" />
         </Tabs>
         <Stack direction="row" fullHeight overflowY="auto" style={{ scrollbarGutter: "stable" }}>
@@ -137,22 +132,6 @@ export function AppSettingsDialog(
               {/* macOS can't register foxglove:// without declaring it for everyone, see main/settings.ts */}
               {isDesktopApp() && OsContextSingleton?.platform !== "darwin" && <OpenFoxgloveLinks />}
               {isDesktopApp() ? <RosPackagePath /> : <LocalResourceFolders />}
-              <Stack>
-                <FormLabel>{t("advanced")}:</FormLabel>
-                <FormControlLabel
-                  className={classes.formControlLabel}
-                  control={
-                    <Checkbox
-                      className={classes.checkbox}
-                      checked={debugModeEnabled}
-                      onChange={(_, checked) => {
-                        void setDebugModeEnabled(checked);
-                      }}
-                    />
-                  }
-                  label={t("debugModeDescription")}
-                />
-              </Stack>
             </Stack>
           </section>
 
@@ -169,17 +148,35 @@ export function AppSettingsDialog(
           </section>
 
           <section
-            className={cx(classes.tabPanel, {
-              [classes.tabPanelActive]: activeTab === "experimental-features",
-            })}
+            className={cx(classes.tabPanel, { [classes.tabPanelActive]: activeTab === "advanced" })}
           >
-            <Stack gap={2}>
-              <Alert color="warning" icon={<WarningAmberIcon />}>
-                {t("experimentalFeaturesDescription")}
-              </Alert>
-              <Stack paddingLeft={2}>
-                <ExperimentalFeatureSettings />
-              </Stack>
+            <Stack gap={1}>
+              <FormControlLabel
+                className={classes.formControlLabel}
+                control={
+                  <Checkbox
+                    className={classes.checkbox}
+                    checked={debugModeEnabled}
+                    onChange={(_, checked) => {
+                      void setDebugModeEnabled(checked);
+                    }}
+                  />
+                }
+                label={t("debugModeDescription")}
+              />
+              <FormControlLabel
+                className={classes.formControlLabel}
+                control={
+                  <Checkbox
+                    className={classes.checkbox}
+                    checked={memoryIndicatorEnabled}
+                    onChange={(_, checked) => {
+                      void setMemoryIndicatorEnabled(checked);
+                    }}
+                  />
+                }
+                label={t("memoryUseIndicatorDescription")}
+              />
             </Stack>
           </section>
 
@@ -192,12 +189,9 @@ export function AppSettingsDialog(
               </header>
               <Stack direction="row" alignItems="center" gap={1}>
                 <Typography variant="body2">
-                  Lichtblick version {LICHTBLICK_SUITE_VERSION}
+                  {APP_CONFIG.productName} version {APP_CONFIG.version}
                 </Typography>
-                <CopyButton
-                  size="small"
-                  getText={() => LICHTBLICK_SUITE_VERSION?.toString() ?? ""}
-                />
+                <CopyButton size="small" getText={() => APP_CONFIG.version} />
               </Stack>
               {Array.from(APP_SETTINGS_ABOUT_ITEMS.values()).map((item) => {
                 return (

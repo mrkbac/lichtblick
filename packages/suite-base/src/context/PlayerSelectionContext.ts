@@ -139,6 +139,9 @@ export interface PlayerSelection {
   /** Local files backing the current data source, if it was opened from files */
   selectedFiles?: readonly File[];
 
+  /** The side name of each of `selectedFiles` when they are compared side by side */
+  selectedCompare?: readonly string[];
+
   /** List of available data sources */
   availableSources: readonly IDataSourceFactory[];
 

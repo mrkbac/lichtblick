@@ -8,7 +8,9 @@
 import { mergeRsbuildConfig } from "@rsbuild/core";
 import { StorybookConfig } from "storybook-react-rsbuild";
 
-import { makeConfig } from "../packages/suite-base/rspack.ts";
+import { makeConfig, productInfo } from "../packages/suite-base/rspack.ts";
+
+import packageJson from "../package.json";
 
 const storybookConfig: StorybookConfig = {
   // Workaround for https://github.com/storybookjs/storybook/issues/19446
@@ -30,6 +32,7 @@ const storybookConfig: StorybookConfig = {
             { mode: rspackConfig.mode },
             {
               version: "0.0.0-storybook",
+              product: productInfo(packageJson),
               // Required in ESM context (Storybook) where __dirname is not available in webpack.ts.
               packageDir: new URL("../packages/suite-base", import.meta.url).pathname,
             },

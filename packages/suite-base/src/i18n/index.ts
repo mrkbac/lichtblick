@@ -11,6 +11,7 @@ import { initReactI18next } from "react-i18next";
 
 import * as en from "./en";
 import { SESSION_STORAGE_I18N_LANGUAGE } from "../constants/browserStorageKeys";
+import { APP_CONFIG } from "../constants/config";
 
 export const translations = { en };
 
@@ -38,6 +39,8 @@ export async function initI18n(options?: { context?: "browser" | "electron-main"
     defaultNS,
     interpolation: {
       escapeValue: false, // not needed for react as it escapes by default
+      // `{{appName}}` works in every string without passing it at the call site
+      defaultVariables: { appName: APP_CONFIG.productName },
     },
   });
 }

@@ -12,5 +12,7 @@ declare module "i18next" {
     returnNull: false;
     defaultNS: typeof defaultNS;
     resources: (typeof translations)["en"];
+    // Filled in by initI18n, so `t()` callers never pass it
+    defaultVariables: { appName: string };
   }
 }

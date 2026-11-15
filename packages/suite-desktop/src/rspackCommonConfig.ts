@@ -2,14 +2,17 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { type Configuration, rspack } from "@rspack/core";
-import dotenv from "dotenv";
+import fs from "fs";
 import path from "path";
 
-import { swcRule } from "@lichtblick/suite-base/rspack.ts";
+import { productInfo, swcRule } from "@lichtblick/suite-base/rspack.ts";
 
 import type { RspackConfigParams } from "./RspackConfigParams.ts";
 
-dotenv.config({ path: path.resolve(import.meta.dirname, "../../../.env") });
+// Load .env if present (Node's built-in loader; existing env vars win)
+if (fs.existsSync(path.resolve(import.meta.dirname, "../../../.env"))) {
+  process.loadEnvFile(path.resolve(import.meta.dirname, "../../../.env"));
+}
 
 export function createCommonWebpackConfig(
   params: RspackConfigParams,
@@ -28,6 +31,7 @@ export function createCommonWebpackConfig(
         LICHTBLICK_PRODUCT_NAME: JSON.stringify(params.packageJson.productName),
         LICHTBLICK_PRODUCT_VERSION: JSON.stringify(params.packageJson.version),
         LICHTBLICK_PRODUCT_HOMEPAGE: JSON.stringify(params.packageJson.homepage),
+        LICHTBLICK_REPOSITORY_URL: JSON.stringify(productInfo(params.packageJson).repositoryUrl),
         LICHTBLICK_SUITE_VERSION: JSON.stringify(params.packageJson.version),
         API_URL: process.env.API_URL ? JSON.stringify(process.env.API_URL) : undefined,
         DEV_WORKSPACE: process.env.DEV_WORKSPACE

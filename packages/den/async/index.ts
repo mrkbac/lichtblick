@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 export { default as MutexLocked } from "./MutexLocked";
-export { default as signal } from "./signal";
 export { default as debouncePromise } from "./debouncePromise";
 export * from "./promiseTimeout";
 export * from "./Condvar";

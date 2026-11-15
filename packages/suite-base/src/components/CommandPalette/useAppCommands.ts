@@ -7,6 +7,7 @@ import { useTranslation } from "react-i18next";
 
 import { pushAll } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
+import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import {
   APP_SHORTCUTS,
@@ -19,7 +20,6 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { PLAYBACK_SPEED_OPTIONS } from "@lichtblick/suite-base/components/PlaybackSpeedControls";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
-import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
 import {
   LayoutState,
   useCurrentLayoutActions,
@@ -144,6 +144,7 @@ export function useAppCommands(): {
 } {
   const { t } = useTranslation("commandPalette");
   const showShortcuts = useKeyboardShortcutsStore((state) => state.show);
+  const showCompare = useShowCompareDialog();
   const { recentSources, selectRecent } = usePlayerSelection();
   const { dialogActions, sidebarActions, openPanelSettings } = useWorkspaceActions();
   const leftSidebarOpen = useWorkspaceStore(selectLeftSidebarOpen);
@@ -193,9 +194,7 @@ export function useAppCommands(): {
         id: "open.compare",
         title: t("compareRecordings"),
         keywords: ["mcap", "diff", "side by side", "recording"],
-        run: catchErrors(async () => {
-          await dialogActions.openFile.open({ compare: true });
-        }),
+        run: showCompare,
       },
       {
         id: "open.dialog",
@@ -485,7 +484,7 @@ export function useAppCommands(): {
         title: t("documentation"),
         keywords: ["docs", "manual"],
         run: () => {
-          window.open(LICHTBLICK_DOCUMENTATION_LINK, "_blank", "noopener,noreferrer");
+          window.open(APP_CONFIG.docsUrl, "_blank", "noopener,noreferrer");
         },
       },
       {
@@ -508,6 +507,7 @@ export function useAppCommands(): {
     return list;
   }, [
     addPanel,
+    showCompare,
     dialogActions,
     endTime,
     exportLayout,

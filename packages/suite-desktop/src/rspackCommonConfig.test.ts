@@ -15,6 +15,7 @@ function createTestParams(overrides: Partial<RspackConfigParams> = {}): RspackCo
       license: "MPL-2.0",
       author: { name: "Test Author", email: "test@example.com" },
       homepage: "https://example.com",
+      repository: { url: "https://example.com/repo.git" },
     },
     mainContext: "/test/main",
     mainEntrypoint: "./index.ts",

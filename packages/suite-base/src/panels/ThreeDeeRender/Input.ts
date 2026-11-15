@@ -7,7 +7,6 @@
 
 import EventEmitter from "eventemitter3";
 import * as THREE from "three";
-import { Key } from "ts-key-enum";
 
 const MAX_DIST = 1;
 
@@ -42,7 +41,7 @@ export type InputEvents = {
     worldSpaceCursorCoords: THREE.Vector3 | undefined,
     event: WheelEvent,
   ) => void;
-  keydown: (key: Key, event: KeyboardEvent) => void;
+  keydown: (key: KeyboardEvent["key"], event: KeyboardEvent) => void;
 };
 
 export class Input extends EventEmitter<InputEvents> {

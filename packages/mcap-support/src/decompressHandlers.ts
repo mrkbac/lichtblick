@@ -7,6 +7,8 @@
 
 import { McapTypes } from "@lichtblick/mcap-core";
 
+import { loadZstdDecompress } from "./zstd";
+
 let handlersPromise: Promise<McapTypes.DecompressHandlers> | undefined;
 export async function loadDecompressHandlers(): Promise<McapTypes.DecompressHandlers> {
   return await (handlersPromise ??= _loadDecompressHandlers());
@@ -15,10 +17,7 @@ export async function loadDecompressHandlers(): Promise<McapTypes.DecompressHand
 // eslint-disable-next-line no-underscore-dangle
 async function _loadDecompressHandlers(): Promise<McapTypes.DecompressHandlers> {
   const [decompressZstd, decompressLZ4, bzip2] = await Promise.all([
-    import("@foxglove/wasm-zstd").then(async (mod) => {
-      await mod.isLoaded;
-      return mod.decompress;
-    }),
+    loadZstdDecompress(),
     import("@foxglove/wasm-lz4").then(async (mod) => {
       await mod.default.isLoaded;
       return mod.default;
@@ -37,10 +36,8 @@ async function _loadDecompressHandlers(): Promise<McapTypes.DecompressHandlers> 
       return view(decompressed);
     },
 
-    zstd: (buffer, decompressedSize): Uint8Array => {
-      const decompressed = decompressZstd(buffer, Number(decompressedSize));
-      return view(decompressed);
-    },
+    zstd: (buffer, decompressedSize): Uint8Array =>
+      decompressZstd(buffer, Number(decompressedSize)),
   };
 }
 

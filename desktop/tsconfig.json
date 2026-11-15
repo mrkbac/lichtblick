@@ -4,6 +4,7 @@
   "compilerOptions": {
     "lib": ["dom", "es2025", "esnext.typedarrays", "esnext.disposable"],
     "module": "preserve",
+    "types": ["node"],
     "noEmit": true
   }
 }

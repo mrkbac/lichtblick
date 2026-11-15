@@ -8,8 +8,9 @@
 import { type Configuration, rspack } from "@rspack/core";
 import path from "node:path";
 
+import packageJson from "../package.json" with { type: "json" };
 import { resolveConfigs, type RspackArgv } from "../packages/suite-base/RspackArgv.ts";
-import { makeConfig, swcRule } from "../packages/suite-base/rspack.ts";
+import { makeConfig, productInfo, swcRule } from "../packages/suite-base/rspack.ts";
 
 // This is a standalone Electron shell for the benchmark app, separate from the production
 // `desktop/` shell. It intentionally does not depend on `@lichtblick/suite-desktop` (auto-update,
@@ -98,7 +99,10 @@ const preloadConfig = (_env: unknown, argv: RspackArgv): Configuration => {
 const rendererConfig = (env: unknown, argv: RspackArgv): Configuration => {
   const isDev = argv.mode === "development";
 
-  const appConfig = makeConfig(env, argv, { version: "0.0.0-benchmark" });
+  const appConfig = makeConfig(env, argv, {
+    version: "0.0.0-benchmark",
+    product: productInfo(packageJson),
+  });
 
   return {
     name: "renderer",

@@ -21,6 +21,7 @@ import { makeStyles } from "tss-react/mui";
 import { useSessionStorageValue } from "@lichtblick/hooks";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
 import { LaunchPreferenceValue } from "@lichtblick/suite-base/types/LaunchPreferenceValue";
 
@@ -82,7 +83,7 @@ export function LaunchPreferenceScreen(): ReactElement {
 
   return (
     <Dialog open classes={{ paper: classes.paper }}>
-      <DialogTitle className={classes.dialogTitle}>Launch Lichtblick</DialogTitle>
+      <DialogTitle className={classes.dialogTitle}>Launch {APP_CONFIG.productName}</DialogTitle>
       <DialogContent>
         <Grid container spacing={1}>
           {actions.map((action) => (
