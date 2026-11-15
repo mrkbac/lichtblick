@@ -30,6 +30,8 @@ async function fallbackCopy(text: string) {
     if (!document.execCommand("copy")) {
       log.error("Fallback copy to clipboard failed");
     }
+  } catch (error: unknown) {
+    log.error("Fallback copy to clipboard failed", error);
   } finally {
     el.remove();
   }
