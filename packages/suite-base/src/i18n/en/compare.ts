@@ -29,4 +29,24 @@ export const compare = {
   startAtPlayhead: "Start at the playhead",
   endAtPlayhead: "End at the playhead",
   resetOffset: "Reset offset",
+
+  // Compare dialog
+  dialogTitle: "Compare recordings",
+  dialogHint:
+    "Each row is one recording, shown under its own topic prefix (/a, /b, …) with all starting together. Put several files in a row to merge them into that recording.",
+  shared: "In every recording",
+  sharedHint: "Added to each row, e.g. a base recording the rows add their own topics to",
+  sharedEmpty: "Optional",
+  sideName: "Recording {{label}}",
+  sideNameLabel: "Recording name",
+  sideEmpty: "Drop files here",
+  addFiles: "Add files",
+  addRecording: "Add recording",
+  addRecordings: "Add files as recordings…",
+  addRecordingsHint: "Each picked file becomes a recording of its own",
+  removeRecording: "Remove recording",
+  mixedTypes: "All files must be of a type one data source reads.",
+  cancel: "Cancel",
+  compare: "Compare",
+  compareCount: "Compare {{count}} recordings",
 };
