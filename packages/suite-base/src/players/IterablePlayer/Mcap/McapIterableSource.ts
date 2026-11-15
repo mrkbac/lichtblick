@@ -22,6 +22,7 @@ import { loadDecompressHandlers } from "@lichtblick/mcap-support";
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
+import { leaseDecompressPool } from "./DecompressPool";
 import { CheckChunk, McapIndexedIterableSource, RecoverReader } from "./McapIndexedIterableSource";
 import type {
   HydratedInner,
@@ -98,7 +99,10 @@ export class McapIterableSource implements ISerializedIterableSource {
   // Decompressed chunks, shared by every reader this source opens (all of them pass it), so
   // playback, preloading, plots and backfill don't each decompress the same chunks. Survives
   // re-hydration like #persistentReadable.
-  #chunkCache = new ChunkCache();
+  #chunkCache: ChunkCache;
+  // Decompression workers that load chunks ahead of reads of a local file, shared with the other
+  // files in this worker. Released in terminate(), which stops them once no file uses them.
+  #decompressLease: ReturnType<typeof leaseDecompressPool>;
   // Chunks found corrupt mid-read, left out of every reader opened on the file's own summary
   #corruptChunks = new Set<bigint>();
   // Index rebuilt by a forward scan, for files without a usable summary or with corrupt chunks
@@ -131,6 +135,9 @@ export class McapIterableSource implements ISerializedIterableSource {
 
   public constructor(source: McapSource) {
     this.#source = source;
+    // Remote files don't load ahead: extra range requests could delay the ones a seek waits for
+    this.#decompressLease = source.type === "file" ? leaseDecompressPool() : undefined;
+    this.#chunkCache = new ChunkCache(this.#decompressLease?.pool);
   }
 
   // Build a fresh inner source. Returns the readable for remote sources so it can be closed later.
@@ -822,6 +829,8 @@ export class McapIterableSource implements ISerializedIterableSource {
     this.#persistentReadable?.close();
     this.#persistentReadable = undefined;
     this.#chunkCache.clear();
+    this.#decompressLease?.release();
+    this.#decompressLease = undefined;
     this.#live = undefined;
     this.#scan = undefined;
     this.#interrupt?.();
