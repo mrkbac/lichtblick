@@ -14,14 +14,10 @@ export const appSettings = {
   debugModeDescription: "Enable panels and features for debugging {{appName}}",
   desktopApp: "Desktop app",
   displayTimestampsIn: "Display timestamps in",
-  experimentalFeatures: "Experimental features",
-  experimentalFeaturesDescription: "These features are unstable and not recommended for daily use.",
   extensions: "Extensions",
   followSystem: "Follow system",
   general: "General",
   language: "Language",
-  layoutDebugging: "Layout debugging",
-  layoutDebuggingDescription: "Show extra controls for developing and debugging layout storage.",
   light: "Light",
   messageRate: "Message rate",
   stepSize: "Step size",
@@ -34,12 +30,10 @@ export const appSettings = {
   liveRecordingOff: "Off",
   liveRecordingDescription:
     "Every live connection is recorded to an MCAP file in browser storage. When this much space is used, the oldest recordings are deleted. Find them under Live recordings in the app menu.",
-  memoryUseIndicator: "Memory use indicator",
-  memoryUseIndicatorDescription: "Show the app memory use in the sidebar.",
+  memoryUseIndicatorDescription: "Show JavaScript heap use in the app bar",
   syncLichtblickInstances: "Sync {{appName}} instances",
   syncLichtblickInstancesDescription:
     "Activates the button in the right lower corner of the application to sync {{appName}} instances opened.",
-  noExperimentalFeatures: "Currently there are no experimental features.",
   openLinksIn: "Open links in",
   openFoxgloveLinks: "Open foxglove:// links",
   openFoxgloveLinksDescription:
