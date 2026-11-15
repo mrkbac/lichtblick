@@ -310,7 +310,8 @@ describe("McapIterableSource", () => {
     }
     expect(count).toBe(2 * chunkCount);
     await source.terminate();
-  });
+    // Two 64 MiB recordings: close to the default 5 s timeout on CI runners
+  }, 20_000);
 
   describe("a file that is still being written", () => {
     const topics = new Map([["/example", PlayerBuilder.subscribePayload({ topic: "/example" })]]);
