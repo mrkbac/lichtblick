@@ -7,6 +7,7 @@ import {
   formatCombo,
   KeyboardShortcut,
   KeyEventLike,
+  matchesCombo,
   panelShortcutGroups,
   shortcutKeyHandlers,
   ShortcutGroup,
@@ -49,6 +50,17 @@ describe("matching", () => {
     expect(findShortcut(SHORTCUTS, press("?", { shiftKey: true }))?.id).toBe("help");
     // No mod declared, so Cmd+→ (browser navigation) is left alone
     expect(findShortcut(SHORTCUTS, press("ArrowRight", { metaKey: true }))).toBeUndefined();
+  });
+
+  it("matches letters regardless of case, and by physical key on non-Latin layouts", () => {
+    const copy = { key: "c", mod: true, alt: false };
+    expect(matchesCombo(press("C", { ctrlKey: true }), copy)).toBe(true);
+    expect(matchesCombo(press("с", { ctrlKey: true, code: "KeyC" }), copy)).toBe(true);
+    expect(matchesCombo(press("c", { ctrlKey: true, altKey: true }), copy)).toBe(false);
+    // AZERTY: the key at the Q position types "a", so it must not trigger a Q shortcut
+    expect(matchesCombo(press("a", { ctrlKey: true, code: "KeyQ" }), { key: "q", mod: true })).toBe(
+      false,
+    );
   });
 
   it("builds KeyListener handlers that run only bound, matching shortcuts", () => {

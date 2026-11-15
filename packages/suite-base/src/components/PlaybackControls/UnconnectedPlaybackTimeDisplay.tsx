@@ -36,6 +36,7 @@ import {
   formatDuration,
   getValidatedTimeAndMethodFromString,
 } from "@lichtblick/suite-base/util/formatTime";
+import { matchesCombo } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
 import { customTypography } from "@lichtblick/theme";
 
@@ -106,6 +107,8 @@ export function formatIsoUtc(time: Time): string {
   const seconds = new Date(time.sec * 1000).toISOString().slice(0, 19);
   return `${seconds}.${String(time.nsec).padStart(9, "0")}Z`;
 }
+
+const COPY_COMBO = { key: "c", mod: true, alt: false };
 
 type TimeFormatRow = {
   /** Display formats can be selected; the others are copy-only. */
@@ -238,7 +241,7 @@ function PlaybackTimeMethodMenu({
               }}
               // The row copy buttons can't take focus inside a menu; Ctrl/Cmd+C copies the focused row.
               onKeyDown={(event) => {
-                if ((event.ctrlKey || event.metaKey) && event.key === "c") {
+                if (matchesCombo(event, COPY_COMBO)) {
                   event.preventDefault();
                   copyRow(row);
                 }

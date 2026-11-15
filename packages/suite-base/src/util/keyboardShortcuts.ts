@@ -38,11 +38,29 @@ export type KeyboardShortcut = {
 export type KeyEventLike = Pick<
   KeyboardEvent,
   "key" | "metaKey" | "ctrlKey" | "shiftKey" | "altKey"
->;
+> &
+  Partial<Pick<KeyboardEvent, "code">>;
+
+/**
+ * Compares `key` case-insensitively (Caps Lock). On a non-Latin layout (e.g. Cyrillic), a letter
+ * shortcut falls back to the physical key, as browsers do for Ctrl+C. Latin layouts like AZERTY
+ * still match by the typed letter, not its position.
+ */
+function keyMatches(event: KeyEventLike, comboKey: string): boolean {
+  if (event.key.toLowerCase() === comboKey.toLowerCase()) {
+    return true;
+  }
+  return (
+    /^[a-z]$/i.test(comboKey) &&
+    event.key.length === 1 &&
+    event.key.charCodeAt(0) > 0x7f &&
+    event.code === `Key${comboKey.toUpperCase()}`
+  );
+}
 
 export function matchesCombo(event: KeyEventLike, combo: KeyCombo): boolean {
   return (
-    event.key.toLowerCase() === combo.key.toLowerCase() &&
+    keyMatches(event, combo.key) &&
     (event.metaKey || event.ctrlKey) === (combo.mod ?? false) &&
     (combo.shift == undefined || event.shiftKey === combo.shift) &&
     (combo.alt == undefined || event.altKey === combo.alt)
