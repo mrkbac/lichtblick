@@ -23,11 +23,11 @@ export type DecompressWorker = {
 };
 
 /** Decompression workers per source worker, shared by all its files */
-export const DECOMPRESS_WORKERS = 2;
+const DECOMPRESS_WORKERS = 2;
 /** Compressed plus decompressed bytes of chunks being loaded ahead, for all files together */
-export const READ_AHEAD_BYTES = 32 * 1024 * 1024;
+const READ_AHEAD_BYTES = 32 * 1024 * 1024;
 /** Chunks a read keeps loading ahead of the one it is at */
-export const READ_AHEAD_CHUNKS = 8;
+const READ_AHEAD_CHUNKS = 8;
 
 /**
  * Decompresses chunks on worker threads for reads that load chunks ahead (see ChunkReadAhead), so
