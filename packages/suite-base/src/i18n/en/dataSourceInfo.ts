@@ -12,9 +12,11 @@ export const dataSourceInfo = {
   duration: "Duration",
   endTime: "End time",
   files: "Files",
-  compareFiles: "Compare side by side",
+  compareFiles: "Compare…",
   compareFilesHint:
-    "Reopen with each file under its own topic prefix (/a, /b, …), all starting at the same time",
+    "Compare with other recordings, each under its own topic prefix (/a, /b, …), all starting at the same time",
+  editCompare: "Change recordings…",
+  editCompareHint: "Add, remove or regroup the compared recordings",
   mergeFiles: "Merge into one recording",
   mergeFilesHint: "Reopen the files as one recording with shared topics",
   compareTab: "Compare ({{count}})",

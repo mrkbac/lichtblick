@@ -211,6 +211,7 @@ export default function PlayerManager(
 
   const [selectedSource, setSelectedSource] = useState<IDataSourceFactory | undefined>();
   const [selectedFiles, setSelectedFiles] = useState<readonly File[] | undefined>();
+  const [selectedCompare, setSelectedCompare] = useState<readonly string[] | undefined>();
 
   // Sample layout ids for this session, used when localStorage is unavailable.
   const sampleLayoutIds = useRef(new Map<string, { id: LayoutID; version: string }>());
@@ -244,6 +245,7 @@ export default function PlayerManager(
 
       setSelectedSource(foundSource);
       setSelectedFiles(undefined);
+      setSelectedCompare(undefined);
 
       // Sample sources don't need args or prompts to initialize
       if (foundSource.type === "sample") {
@@ -375,16 +377,18 @@ export default function PlayerManager(
             if (files) {
               const multiFile = foundSource.supportsMultiFile === true && files.length > 1;
 
+              const compare =
+                multiFile && foundSource.supportsCompare === true ? args.compare : undefined;
               const newPlayer = initializePlayer({
                 file: multiFile ? undefined : files[0],
                 handle: multiFile ? undefined : handles?.[0],
                 files: multiFile ? files : undefined,
-                compare:
-                  multiFile && foundSource.supportsCompare === true ? args.compare : undefined,
+                compare,
               });
 
               setBasePlayer(newPlayer);
               setSelectedFiles(files);
+              setSelectedCompare(compare);
 
               // Only handles can be reopened after a reload
               if (handles) {
@@ -491,6 +495,7 @@ export default function PlayerManager(
     setBasePlayer(undefined);
     setSelectedSource(undefined);
     setSelectedFiles(undefined);
+    setSelectedCompare(undefined);
     setCurrentRecentId(undefined);
     // Forget the last opened file so a reload doesn't reopen it (the recent entry stays).
     writeLastFile(undefined);
@@ -532,6 +537,7 @@ export default function PlayerManager(
       clearRecents,
       selectedSource,
       selectedFiles,
+      selectedCompare,
       availableSources: playerSources,
       recentSources,
     }),
@@ -544,6 +550,7 @@ export default function PlayerManager(
       clearRecents,
       selectedSource,
       selectedFiles,
+      selectedCompare,
       playerSources,
       recentSources,
     ],

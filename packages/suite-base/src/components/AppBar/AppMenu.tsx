@@ -13,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { useStyles } from "@lichtblick/suite-base/components/AppBar/AppMenu.style";
 import { useCommandPaletteStore } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
 import { LAYOUT_SHORTCUTS } from "@lichtblick/suite-base/components/CommandPalette/layoutShortcuts";
+import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
 import { useExportableFile } from "@lichtblick/suite-base/components/ExportRecordingDialog/exportRecording";
 import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
@@ -47,6 +48,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
   const exportableFile = useExportableFile();
   const openExport = useTrimStore((state) => state.openExport);
   const showLiveRecordings = useLiveRecordingsDialog((state) => state.show);
+  const showCompare = useShowCompareDialog();
   const showCommandPalette = useCommandPaletteStore((state) => state.show);
   const showShortcuts = useKeyboardShortcutsStore((state) => state.show);
   const { dialogActions } = useWorkspaceActions();
@@ -144,9 +146,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
           shortcut: shortcutLabel(APP_SHORTCUTS, "app.openFile"),
         },
       )}
-      {item("compare-recordings", t("compareRecordings"), async () => {
-        await dialogActions.openFile.open({ compare: true });
-      })}
+      {item("compare-recordings", t("compareRecordings"), showCompare)}
       {item("export-recording", t("exportRecording"), openExport, {
         disabled: !exportableFile,
       })}

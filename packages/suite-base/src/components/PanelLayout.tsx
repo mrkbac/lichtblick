@@ -24,14 +24,16 @@ import {
 } from "dockview-react";
 import React, {
   Suspense,
-  createContext,
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { DockPanelContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import { EmptyPanelLayout } from "@lichtblick/suite-base/components/EmptyPanelLayout";
@@ -41,6 +43,12 @@ import {
   getPanelDragData,
   isPanelDrag,
 } from "@lichtblick/suite-base/components/PanelCatalog/panelDrag";
+import PanelContext from "@lichtblick/suite-base/components/PanelContext";
+import {
+  PanelHost,
+  PanelHostContext,
+  PanelSlot,
+} from "@lichtblick/suite-base/components/PanelHostContext";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import {
   LayoutState,
@@ -62,19 +70,19 @@ import {
 } from "@lichtblick/suite-base/util/layout";
 import { layoutsEqual } from "@lichtblick/suite-base/util/layoutTree";
 import { observeContainerSize } from "@lichtblick/suite-base/util/observeContainerSize";
+import { getAllPanelIds } from "@lichtblick/suite-base/util/tabLayout";
 
 import ErrorBoundary from "./ErrorBoundary";
 import { useStyles } from "./PanelLayout.style";
 import { PanelRemounter } from "./PanelRemounter";
 import { getForeignPanelId } from "./PanelTab";
-import { PanelWindow } from "./PanelWindow";
+import { PanelWindow, PanelWindowContext } from "./PanelWindow";
 import { UnknownPanel } from "./UnknownPanel";
 import { clearJunctionCursor, startSashDrag, updateJunctionCursor } from "./sashIntersection";
 import "dockview-react/dist/styles/dockview.css";
 import { useInstallingExtensionsStore } from "../hooks/useInstallingExtensionsStore";
 
 type PanelComponents = ReadonlyMap<string, React.ComponentType<{ childId: string }>>;
-const PanelComponentsContext = createContext<PanelComponents>(new Map());
 
 const DOCKVIEW_THEME: DockviewTheme = {
   name: "lichtblick",
@@ -91,11 +99,136 @@ function panelTitle(panelId: string, customTitle: unknown, panelCatalog: PanelCa
   return panelCatalog.getPanelByType(type)?.title ?? type;
 }
 
-/** Renders one panel inside its dockview group. */
-function DockPanel({ api, containerApi }: IDockviewPanelProps): React.JSX.Element {
-  const id = api.id;
+/** How long a panel no layout shows keeps running, so moving it to another layout keeps it. */
+const HOST_GRACE_MS = 3000;
+
+type HostEntry = {
+  element: HTMLDivElement;
+  slot: PanelSlot;
+  /** The dockview panel showing it; none while it moves between layouts. */
+  owner: object | undefined;
+  timer?: ReturnType<typeof setTimeout>;
+};
+
+const allPanelIdsSelector = (state: LayoutState) => {
+  const data = state.selectedLayout?.data;
+  return data ? getAllPanelIds(data).join("\n") : "";
+};
+
+/**
+ * Renders the panels of one window outside of any dockview, and moves each panel's element into
+ * the dockview panel that shows it. Dockview remounts content that changes dockview (e.g. into a
+ * Tab panel, which has a dockview of its own); this keeps the panel and its state instead.
+ */
+function PanelHostProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
+  const panelCatalog = usePanelCatalog();
+  const panelComponents = useMemo<PanelComponents>(
+    () =>
+      new Map(
+        panelCatalog.getPanels().map((panelInfo) => [panelInfo.type, React.lazy(panelInfo.module)]),
+      ),
+    [panelCatalog],
+  );
+  const [entries] = useState(() => new Map<string, HostEntry>());
+  const [, rerender] = useReducer((count: number) => count + 1, 0);
+
+  const panelIds = useCurrentLayoutSelector(allPanelIdsSelector);
+  const panelIdsRef = useRef(new Set<string>());
+  panelIdsRef.current = useMemo(() => new Set(panelIds.split("\n")), [panelIds]);
+
+  const drop = useCallback(
+    (panelId: string) => {
+      const entry = entries.get(panelId);
+      if (entry != undefined && entry.owner == undefined) {
+        clearTimeout(entry.timer);
+        entries.delete(panelId);
+        rerender();
+      }
+    },
+    [entries],
+  );
+
+  const host = useMemo<PanelHost>(
+    () => ({
+      claim: (panelId, owner, slot) => {
+        let entry = entries.get(panelId);
+        if (entry == undefined) {
+          const element = document.createElement("div");
+          element.style.cssText = "display: flex; width: 100%; height: 100%;";
+          entry = { element, slot, owner };
+          entries.set(panelId, entry);
+        }
+        clearTimeout(entry.timer);
+        entry.owner = owner;
+        entry.slot = slot;
+        rerender();
+        return entry.element;
+      },
+      release: (panelId, owner) => {
+        const entry = entries.get(panelId);
+        if (entry?.owner !== owner) {
+          return;
+        }
+        entry.owner = undefined;
+        if (panelIdsRef.current.has(panelId)) {
+          entry.timer = setTimeout(() => {
+            drop(panelId);
+          }, HOST_GRACE_MS);
+        } else {
+          drop(panelId);
+        }
+      },
+    }),
+    [drop, entries],
+  );
+
+  // A removed panel goes right away instead of running on with its config gone.
+  useEffect(() => {
+    for (const [panelId, entry] of entries) {
+      if (entry.owner == undefined && !panelIdsRef.current.has(panelId)) {
+        drop(panelId);
+      }
+    }
+  }, [drop, entries, panelIds]);
+
+  useEffect(
+    () => () => {
+      for (const entry of entries.values()) {
+        clearTimeout(entry.timer);
+      }
+    },
+    [entries],
+  );
+
+  return (
+    <PanelHostContext.Provider value={host}>
+      {children}
+      {[...entries].map(([panelId, entry]) =>
+        createPortal(
+          <HostedPanel
+            id={panelId}
+            slot={entry.slot}
+            PanelComponent={panelComponents.get(getPanelTypeFromId(panelId))}
+          />,
+          entry.element,
+          panelId,
+        ),
+      )}
+    </PanelHostContext.Provider>
+  );
+}
+
+/** One panel, with what it would get from the layout it is shown in. */
+const HostedPanel = React.memo(function HostedPanel({
+  id,
+  slot,
+  PanelComponent,
+}: {
+  id: string;
+  slot: PanelSlot;
+  PanelComponent: React.ComponentType<{ childId: string }> | undefined;
+}): React.JSX.Element {
   const type = getPanelTypeFromId(id);
-  const panelComponents = useContext(PanelComponentsContext);
   const panelCatalog = usePanelCatalog();
   const customTitleSelector = useCallback(
     (state: LayoutState) => state.selectedLayout?.data?.configById[id]?.[PANEL_TITLE_CONFIG_KEY],
@@ -105,33 +238,71 @@ function DockPanel({ api, containerApi }: IDockviewPanelProps): React.JSX.Elemen
 
   // The tab shows the panel's title when the panel shares its group with others.
   const title = panelTitle(id, customTitle, panelCatalog);
+  const { api } = slot.dock;
   useEffect(() => {
     api.setTitle(title);
   }, [api, title]);
 
-  const dock = useMemo(() => ({ api, containerApi }), [api, containerApi]);
-  const PanelComponent = panelComponents.get(type);
   return (
-    <DockPanelContext.Provider value={dock}>
-      <Suspense
-        fallback={
-          <EmptyState>
-            <CircularProgress size={28} />
-          </EmptyState>
-        }
-      >
-        <PanelWindow title={title}>
-          <PanelRemounter id={id}>
-            {PanelComponent ? (
-              <PanelComponent childId={id} />
-            ) : (
-              <UnknownPanel childId={id} overrideConfig={{ type, id }} />
-            )}
-          </PanelRemounter>
-        </PanelWindow>
-      </Suspense>
-    </DockPanelContext.Provider>
+    <ErrorBoundary>
+      <LayoutTabContext.Provider value={slot.tabPath}>
+        <PanelContext.Provider value={slot.parentPanel}>
+          <PanelWindowContext.Provider value={slot.parentWindow}>
+            <DockPanelContext.Provider value={slot.dock}>
+              <Suspense
+                fallback={
+                  <EmptyState>
+                    <CircularProgress size={28} />
+                  </EmptyState>
+                }
+              >
+                <PanelWindow title={title}>
+                  <PanelRemounter id={id}>
+                    {PanelComponent ? (
+                      <PanelComponent childId={id} />
+                    ) : (
+                      <UnknownPanel childId={id} overrideConfig={{ type, id }} />
+                    )}
+                  </PanelRemounter>
+                </PanelWindow>
+              </Suspense>
+            </DockPanelContext.Provider>
+          </PanelWindowContext.Provider>
+        </PanelContext.Provider>
+      </LayoutTabContext.Provider>
+    </ErrorBoundary>
   );
+});
+
+/** Shows a panel in its dockview group; the panel itself is rendered by the PanelHost. */
+function DockPanel({ api, containerApi }: IDockviewPanelProps): React.JSX.Element {
+  const host = useContext(PanelHostContext);
+  const tabPath = useContext(LayoutTabContext);
+  const parentPanel = useContext(PanelContext);
+  const parentWindow = useContext(PanelWindowContext);
+  const slot = useMemo<PanelSlot>(
+    () => ({ dock: { api, containerApi }, tabPath, parentPanel, parentWindow }),
+    [api, containerApi, tabPath, parentPanel, parentWindow],
+  );
+  const holderRef = useRef<HTMLDivElement>(null);
+  const [owner] = useState(() => ({}));
+
+  useLayoutEffect(() => {
+    const holder = holderRef.current;
+    if (host == undefined || holder == undefined) {
+      return undefined;
+    }
+    const element = host.claim(api.id, owner, slot);
+    // Moving it again would restart iframes and drop focus.
+    if (element.parentElement !== holder) {
+      holder.appendChild(element);
+    }
+    return () => {
+      host.release(api.id, owner);
+    };
+  }, [api.id, host, owner, slot]);
+
+  return <div ref={holderRef} style={{ display: "contents" }} />;
 }
 
 // Panels only depend on their dockview api, so a layout change elsewhere doesn't re-render them.
@@ -181,20 +352,13 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
   const { addPanel, getCurrentLayoutState } = useCurrentLayoutActions();
   const panelCatalog = usePanelCatalog();
   const outerTabs = useContext(LayoutTabContext);
+  const hasHost = useContext(PanelHostContext) != undefined;
   const tabPath = useMemo(
     () => (tabId == undefined ? outerTabs : [...outerTabs, tabId]),
     [outerTabs, tabId],
   );
   const tabPathRef = useRef(tabPath);
   tabPathRef.current = tabPath;
-
-  const panelComponents = useMemo<PanelComponents>(
-    () =>
-      new Map(
-        panelCatalog.getPanels().map((panelInfo) => [panelInfo.type, React.lazy(panelInfo.module)]),
-      ),
-    [panelCatalog],
-  );
 
   const [dockviewApi, setDockviewApi] = useState<DockviewApi>();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -316,44 +480,44 @@ export function UnconnectedPanelLayout(props: Readonly<Props>): React.ReactEleme
     [addPanel, tabId],
   );
 
-  return (
+  const content = (
     <ErrorBoundary>
       {loadingComponent}
       <LayoutTabContext.Provider value={tabPath}>
-        <PanelComponentsContext.Provider value={panelComponents}>
-          {layout == undefined && <EmptyPanelLayout />}
-          <div
-            ref={rootRef}
-            data-panel-layout
-            style={{ display: layout == undefined ? "none" : "contents" }}
-            onPointerDownCapture={(event) => {
-              startSashDrag(event.nativeEvent);
-            }}
-            onPointerMove={(event) => {
-              updateJunctionCursor(event.nativeEvent);
-            }}
-            onPointerOut={(event) => {
-              clearJunctionCursor(event.nativeEvent);
-            }}
-          >
-            <DockviewReact
-              ref={setDockviewElement}
-              disableAutoResizing
-              components={DOCK_COMPONENTS}
-              onReady={onReady}
-              onDidDrop={onDidDrop}
-              theme={DOCKVIEW_THEME}
-              disableFloatingGroups
-              singleTabMode="fullwidth"
-              scrollbars="native"
-              // Render in the group's slot so content follows resizing without a deferred overlay.
-              defaultRenderer="onlyWhenVisible"
-            />
-          </div>
-        </PanelComponentsContext.Provider>
+        {layout == undefined && <EmptyPanelLayout />}
+        <div
+          ref={rootRef}
+          data-panel-layout
+          style={{ display: layout == undefined ? "none" : "contents" }}
+          onPointerDownCapture={(event) => {
+            startSashDrag(event.nativeEvent);
+          }}
+          onPointerMove={(event) => {
+            updateJunctionCursor(event.nativeEvent);
+          }}
+          onPointerOut={(event) => {
+            clearJunctionCursor(event.nativeEvent);
+          }}
+        >
+          <DockviewReact
+            ref={setDockviewElement}
+            disableAutoResizing
+            components={DOCK_COMPONENTS}
+            onReady={onReady}
+            onDidDrop={onDidDrop}
+            theme={DOCKVIEW_THEME}
+            disableFloatingGroups
+            singleTabMode="fullwidth"
+            scrollbars="native"
+            // Render in the group's slot so content follows resizing without a deferred overlay.
+            defaultRenderer="onlyWhenVisible"
+          />
+        </div>
       </LayoutTabContext.Provider>
     </ErrorBoundary>
   );
+  // Layouts nested in Tab panels share the host of the root layout.
+  return hasHost ? content : <PanelHostProvider>{content}</PanelHostProvider>;
 }
 
 function ExtensionsLoadingState(): React.JSX.Element {

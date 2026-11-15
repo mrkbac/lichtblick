@@ -28,6 +28,8 @@ export function usePanelDragHandle(
       const transfer = LocalSelectionTransfer.getInstance<PanelTransfer>();
 
       const handleDragStart = (event: DragEvent) => {
+        // A handle inside another (the grip in a draggable toolbar) starts the drag once.
+        event.stopPropagation();
         // The only panel of the root layout has nowhere to go.
         if (!isInTab && containerApi.totalPanels <= 1) {
           event.preventDefault();
@@ -41,6 +43,15 @@ export function usePanelDragHandle(
           event.dataTransfer.effectAllowed = "move";
           // Firefox only starts a drag that carries data.
           event.dataTransfer.setData("text/plain", api.title ?? api.id);
+          // Whichever handle starts the drag, the whole panel is what's carried, held where it
+          // was grabbed.
+          const panel = api.group.element;
+          const rect = panel.getBoundingClientRect();
+          event.dataTransfer.setDragImage(
+            panel,
+            event.clientX - rect.left,
+            event.clientY - rect.top,
+          );
         }
         onDragStart?.();
       };
