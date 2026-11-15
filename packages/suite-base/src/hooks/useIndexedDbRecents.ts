@@ -52,6 +52,9 @@ type RecentConnectionRecord = RecentRecordCommon & {
 type RecentFileRecord = RecentRecordCommon & {
   type: "file";
   handles: FileSystemFileHandle[];
+  // Side name of each of `handles` when they were compared side by side (see
+  // FileDataSourceArgs.compare). A file in several sides repeats its handle. Missing: merged.
+  compare?: string[];
 };
 
 // Make sure users with old recents can still use them
@@ -84,15 +87,21 @@ interface IRecentsStore {
   save: () => Promise<void>;
 }
 
-function isSameRecent(a: UnsavedRecentRecord, b: UnsavedRecentRecord): boolean {
+export function isSameRecent(a: UnsavedRecentRecord, b: UnsavedRecentRecord): boolean {
   if (a.type !== b.type || a.sourceId !== b.sourceId) {
     return false;
   }
-  // Connections are identified by their arguments, files by name
-  if (a.type === "connection" && b.type === "connection") {
-    return _.isEqual(a.extra, b.extra);
+  // Connections are identified by their arguments, files by name. A comparison also by which
+  // file is in which side, since its title lists each file once.
+  if (a.type === "connection" || b.type === "connection") {
+    return a.type === "connection" && b.type === "connection" && _.isEqual(a.extra, b.extra);
   }
-  return a.title === b.title;
+  const names = (r: typeof a) => r.handles.map((h) => h.name);
+  return (
+    a.title === b.title &&
+    _.isEqual(a.compare, b.compare) &&
+    (a.compare == undefined || _.isEqual(names(a), names(b)))
+  );
 }
 
 function useIndexedDbRecents(): IRecentsStore {

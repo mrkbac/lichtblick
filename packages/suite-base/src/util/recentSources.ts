@@ -1,6 +1,31 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { DataSourceArgs } from "@lichtblick/suite-base/context/PlayerSelectionContext";
+import type { RecentRecord } from "@lichtblick/suite-base/hooks/useIndexedDbRecents";
+
+type FileRecent = Extract<RecentRecord, { type: "file" }>;
+
+/** Reopens a file recent as it was opened: compared side by side when it was */
+export function recentArgs(recent: FileRecent): Extract<DataSourceArgs, { type: "file" }> {
+  return { type: "file", handles: recent.handles, compare: recent.compare };
+}
+
+/**
+ * Title of a file recent: its file names, each once. A comparison leads with its side names, e.g.
+ * `A vs B (base.mcap, a.mcap, b.mcap)`, or just `a.mcap vs b.mcap` when each side is one file
+ * named like the side.
+ */
+export function recentFileTitle(names: readonly string[], compare?: readonly string[]): string {
+  const files = [...new Set(names)].join(", ");
+  if (!compare) {
+    return files;
+  }
+  const sides = [...new Set(compare)];
+  const plain = sides.length === names.length && names.every((name, i) => name === compare[i]);
+  return plain ? sides.join(" vs ") : `${sides.join(" vs ")} (${files})`;
+}
+
 const REMOTE_FILE_EXTENSIONS = [".mcap", ".bag"];
 
 function safeDecode(value: string): string {

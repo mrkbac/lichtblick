@@ -195,11 +195,13 @@ export function makeConfig(
           ]),
         ),
       },
-      // Node built-ins still imported by browser code. Everything else resolves on its own.
+      // Node built-ins imported by dependencies
       fallback: {
-        path: localRequire.resolve("path-browserify"),
-        stream: localRequire.resolve("readable-stream"),
-        // Only reached by Node-only code paths (sql.js, TypeScript, wasm decoders)
+        // xmlbuilder2 subclasses EventEmitter at load
+        events: localRequire.resolve("events"),
+        // Only reached by Node-only code paths (sql.js, sax, TypeScript, wasm decoders)
+        path: false,
+        stream: false,
         crypto: false,
         fs: false,
         module: false,

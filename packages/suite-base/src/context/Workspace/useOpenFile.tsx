@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { enqueueSnackbar } from "notistack";
-import path from "path";
 import { useCallback, useMemo } from "react";
 
 import {
@@ -15,6 +14,7 @@ import {
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { FILE_ACCEPT_TYPE } from "@lichtblick/suite-base/context/Workspace/constants";
 import { normalizeExtensions } from "@lichtblick/suite-base/context/Workspace/utils";
+import { extname } from "@lichtblick/suite-base/util/path";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 
 export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promise<void> {
@@ -61,7 +61,7 @@ export function useOpenFile(sources: readonly IDataSourceFactory[]): () => Promi
         const file = await handle.getFile();
         return {
           file,
-          extension: path.extname(file.name),
+          extension: extname(file.name),
         };
       }),
     );
