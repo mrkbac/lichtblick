@@ -908,7 +908,11 @@ function readAheadPlan(
   if (chunks.some((chunk, i) => i > 0 && compare(chunks[i - 1]!, chunk) > 0)) {
     chunks.sort(compare);
   }
-  return { chunks, position: new Map(chunks.map((chunk, i) => [chunk.chunkStartOffset, i])) };
+  const position = new Map<bigint, number>();
+  for (let i = 0; i < chunks.length; i++) {
+    position.set(chunks[i]!.chunkStartOffset, i);
+  }
+  return { chunks, position };
 }
 
 function compareBigInt(a: bigint, b: bigint): number {

@@ -821,6 +821,9 @@ export class McapIterableSource implements ISerializedIterableSource {
   }
 
   public async terminate(): Promise<void> {
+    // First, so a failing teardown step below can't keep the shared workers alive
+    this.#decompressLease?.release();
+    this.#decompressLease = undefined;
     // Pooled inners are torn down by the pool (owned by MultiIterableSource); only release an
     // eagerly-retained inner here.
     await this.#eagerInner?.terminate?.();
@@ -829,8 +832,6 @@ export class McapIterableSource implements ISerializedIterableSource {
     this.#persistentReadable?.close();
     this.#persistentReadable = undefined;
     this.#chunkCache.clear();
-    this.#decompressLease?.release();
-    this.#decompressLease = undefined;
     this.#live = undefined;
     this.#scan = undefined;
     this.#interrupt?.();

@@ -19,8 +19,12 @@ export type DecompressReply =
 export type DecompressWorker = {
   postMessage(message: DecompressRequest, transfer: Transferable[]): void;
   onmessage: ((event: MessageEvent<DecompressReply>) => void) | null;
+  onerror: ((event: ErrorEvent) => void) | null;
+  onmessageerror: ((event: MessageEvent) => void) | null;
   terminate(): void;
 };
+
+type WorkerEntry = { worker: DecompressWorker; ready: boolean; failed: boolean; busy: number };
 
 /** Decompression workers per source worker, shared by all its files */
 const DECOMPRESS_WORKERS = 2;
@@ -36,11 +40,11 @@ const READ_AHEAD_CHUNKS = 8;
  */
 export class DecompressPool implements ChunkReadAhead {
   public readonly chunks: number;
-  readonly #workers: { worker: DecompressWorker; ready: boolean; busy: number }[];
+  readonly #workers: WorkerEntry[] = [];
   readonly #budget: ByteBudget;
   readonly #pending = new Map<
     number,
-    { resolve: (result: Uint8Array) => void; reject: (error: Error) => void }
+    { resolve: (result: Uint8Array) => void; reject: (error: Error) => void; entry: WorkerEntry }
   >();
   #nextId = 0;
   #disposed = false;
@@ -53,27 +57,57 @@ export class DecompressPool implements ChunkReadAhead {
   }) {
     this.chunks = args.chunks;
     this.#budget = new ByteBudget(args.capacityBytes);
-    this.#workers = Array.from({ length: args.workers }, () => {
-      const entry = { worker: args.createWorker(), ready: false, busy: 0 };
-      entry.worker.onmessage = ({ data }) => {
-        if ("ready" in data) {
-          entry.ready = true;
-          return;
-        }
-        const pending = this.#pending.get(data.id);
-        if (!pending) {
-          return;
-        }
-        this.#pending.delete(data.id);
-        entry.busy--;
-        if ("result" in data) {
-          pending.resolve(data.result);
-        } else {
-          pending.reject(new Error(data.error));
-        }
-      };
-      return entry;
-    });
+    try {
+      for (let i = 0; i < args.workers; i++) {
+        this.#workers.push(this.#startWorker(args.createWorker()));
+      }
+    } catch (error) {
+      // e.g. a SecurityError for the worker script: stop the ones already started
+      for (const { worker } of this.#workers) {
+        worker.terminate();
+      }
+      throw error;
+    }
+  }
+
+  #startWorker(worker: DecompressWorker): WorkerEntry {
+    const entry: WorkerEntry = { worker, ready: false, failed: false, busy: 0 };
+    worker.onmessage = ({ data }) => {
+      if ("ready" in data) {
+        entry.ready = !entry.failed;
+        return;
+      }
+      const pending = this.#pending.get(data.id);
+      if (!pending) {
+        return;
+      }
+      this.#pending.delete(data.id);
+      entry.busy--;
+      if ("result" in data) {
+        pending.resolve(data.result);
+      } else {
+        pending.reject(new Error(data.error));
+      }
+    };
+    // A worker that fails gets no more work, and what it had fails (the reader then loads those
+    // chunks inline), so no read waits on a reply that never comes
+    worker.onerror = worker.onmessageerror = () => {
+      this.#fail(entry);
+    };
+    return entry;
+  }
+
+  #fail(entry: WorkerEntry): void {
+    entry.failed = true;
+    entry.ready = false;
+    entry.worker.terminate();
+    for (const [id, pending] of this.#pending) {
+      if (pending.entry === entry) {
+        this.#pending.delete(id);
+        pending.reject(new Error("Decompression worker failed"));
+      }
+    }
+    entry.busy = 0;
   }
 
   public reserve(bytes: number): boolean {
@@ -114,7 +148,7 @@ export class DecompressPool implements ChunkReadAhead {
     const id = this.#nextId++;
     entry.busy++;
     return await new Promise<Uint8Array>((resolve, reject) => {
-      this.#pending.set(id, { resolve, reject });
+      this.#pending.set(id, { resolve, reject, entry });
       entry.worker.postMessage({ id, compression, buffer, decompressedSize }, [
         buffer.buffer as ArrayBuffer,
       ]);
@@ -146,15 +180,22 @@ export function leaseDecompressPool(): { pool: DecompressPool; release: () => vo
   if (typeof Worker === "undefined") {
     return undefined;
   }
-  shared ??= {
-    pool: new DecompressPool({
-      createWorker: () => new Worker(new URL("./decompress.worker", import.meta.url)),
-      workers: DECOMPRESS_WORKERS,
-      capacityBytes: READ_AHEAD_BYTES,
-      chunks: READ_AHEAD_CHUNKS,
-    }),
-    leases: 0,
-  };
+  if (!shared) {
+    try {
+      shared = {
+        pool: new DecompressPool({
+          createWorker: () => new Worker(new URL("./decompress.worker", import.meta.url)),
+          workers: DECOMPRESS_WORKERS,
+          capacityBytes: READ_AHEAD_BYTES,
+          chunks: READ_AHEAD_CHUNKS,
+        }),
+        leases: 0,
+      };
+    } catch {
+      // Reading ahead is optional: files still play, decompressing inline
+      return undefined;
+    }
+  }
   const lease = shared;
   lease.leases++;
   let released = false;
