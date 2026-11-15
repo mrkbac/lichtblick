@@ -128,12 +128,16 @@ describe("DecompressPool", () => {
     // Then its chunk fails, it is stopped, and later work goes to the other one
     await expect(lost).rejects.toThrow("worker failed");
     expect(workers[0]!.terminated).toBe(true);
-    void pool.decompress("zstd", new Uint8Array([2]), 1n);
-    void pool.decompress("zstd", new Uint8Array([3]), 1n);
+    const later = [
+      pool.decompress("zstd", new Uint8Array([2]), 1n),
+      pool.decompress("zstd", new Uint8Array([3]), 1n),
+    ];
     expect(workers[1]!.requests).toHaveLength(2);
 
-    // When the other crashes too, Then nothing is reserved anymore
+    // When the other crashes too, Then its chunks fail and nothing is reserved anymore
     workers[1]!.crash();
+    await expect(Promise.all(later)).rejects.toThrow("worker failed");
+    await expect(later[1]).rejects.toThrow("worker failed");
     expect(pool.reserve(1)).toBe(false);
   });
 
