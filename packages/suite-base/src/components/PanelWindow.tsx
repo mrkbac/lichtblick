@@ -32,6 +32,7 @@ import { getAllPanelIds } from "@lichtblick/suite-base/util/tabLayout";
 
 import { DockPanelContext } from "./DockPanelContext";
 import { useMonitorSetup } from "./MonitorSetupContext";
+import { PanelHostContext } from "./PanelHostContext";
 import { PanelWindowWorkspace } from "./PanelWindowWorkspace";
 import Stack from "./Stack";
 import { WindowBounds } from "./monitorSetup";
@@ -469,11 +470,14 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           {createPortal(
             <PanelWindowStyles target={target}>
               <DockPanelContext.Provider value={undefined}>
-                <CurrentLayoutContext.Provider value={windowLayout}>
-                  <PanelWindowWorkspace target={target} title={title} rootId={dock?.api.id}>
-                    {children}
-                  </PanelWindowWorkspace>
-                </CurrentLayoutContext.Provider>
+                {/* Layouts in the window render their panels there, with the window's styles. */}
+                <PanelHostContext.Provider value={undefined}>
+                  <CurrentLayoutContext.Provider value={windowLayout}>
+                    <PanelWindowWorkspace target={target} title={title} rootId={dock?.api.id}>
+                      {children}
+                    </PanelWindowWorkspace>
+                  </CurrentLayoutContext.Provider>
+                </PanelHostContext.Provider>
               </DockPanelContext.Provider>
             </PanelWindowStyles>,
             target.document.body,
