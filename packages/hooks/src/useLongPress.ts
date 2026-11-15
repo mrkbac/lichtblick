@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { useCallback, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 type PressEvent = React.MouseEvent | React.TouchEvent;
 
@@ -43,6 +43,9 @@ export function useLongPress(
     clearTimeout(timeout.current);
     target.current?.removeEventListener("touchend", preventGhostClick as EventListener);
   }, []);
+
+  // Cancel a pending press if the component unmounts mid-press.
+  useEffect(() => clear, [clear]);
 
   return {
     onMouseDown: start,

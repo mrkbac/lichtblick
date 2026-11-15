@@ -20,13 +20,19 @@ import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuall
 const log = Log.getLogger(__filename);
 
 async function fallbackCopy(text: string) {
-  const body = document.body;
   const el = document.createElement("textarea");
-  body.appendChild(el);
   el.value = text;
-  el.select();
-  await navigator.clipboard.writeText(el.value);
-  body.removeChild(el);
+  document.body.appendChild(el);
+  try {
+    el.select();
+    // Legacy path for when the async clipboard API is missing or denied.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    if (!document.execCommand("copy")) {
+      log.error("Fallback copy to clipboard failed");
+    }
+  } finally {
+    el.remove();
+  }
 }
 
 export default {
