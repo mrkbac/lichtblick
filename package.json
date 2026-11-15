@@ -9,13 +9,13 @@
   "packageManager": "pnpm@10.34.9",
   "repository": {
     "type": "git",
-    "url": "https://github.com/lichtblick-suite/lichtblick.git"
+    "url": "https://github.com/mrkbac/lichtblick.git"
   },
   "author": {
     "name": "Lichtblick",
     "email": "lichtblick@bmwgroup.com"
   },
-  "homepage": "https://github.com/lichtblick-suite",
+  "homepage": "https://lichtblick-suite.github.io/docs/",
   "engines": {
     "node": ">=26"
   },

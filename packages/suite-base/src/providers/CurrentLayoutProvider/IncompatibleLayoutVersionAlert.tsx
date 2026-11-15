@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import { useTranslation } from "react-i18next";
 
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
 type Props = {
@@ -36,8 +37,8 @@ export function IncompatibleLayoutVersionAlert(props: Props): React.JSX.Element 
         {showDesktopText && (
           <DialogContentText>
             {t("desktopText")}
-            <Link target="_blank" href="https://foxglove.dev/download">
-              https://foxglove.dev/download
+            <Link target="_blank" href={`${APP_CONFIG.repositoryUrl}/releases`}>
+              {`${APP_CONFIG.repositoryUrl}/releases`}
             </Link>
             .
           </DialogContentText>

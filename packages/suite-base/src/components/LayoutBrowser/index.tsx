@@ -468,7 +468,7 @@ export default function LayoutBrowser({
           title={layoutManager.supportsSharing ? (organizations ? "Local" : "Personal") : undefined}
           expanded={personalExpanded}
           onToggleExpanded={togglePersonalExpanded}
-          emptyText="Add a new layout to get started with Lichtblick!"
+          emptyText={t("noPersonalLayouts")}
           items={sortedLayouts?.personal}
         />
         {layoutManager.supportsSharing &&

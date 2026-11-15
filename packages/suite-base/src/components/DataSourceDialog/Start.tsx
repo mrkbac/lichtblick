@@ -35,7 +35,6 @@ import { LiveRecordingsList } from "@lichtblick/suite-base/components/LiveRecord
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
-import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
 import {
   RecentSource,
@@ -348,7 +347,7 @@ export default function Start(): React.JSX.Element {
         >
           {t("exploreSampleData")}
         </Button>
-        <Button size="small" href={LICHTBLICK_DOCUMENTATION_LINK} target="_blank" rel="noopener">
+        <Button size="small" href={APP_CONFIG.docsUrl} target="_blank" rel="noopener">
           {t("viewDocumentation")}
         </Button>
         <div className={classes.spacer} />

@@ -9,6 +9,7 @@ import * as Comlink from "@foxglove/comlink";
 
 import { McapWriter } from "@lichtblick/mcap-core";
 import { loadRewriteChunkDeps } from "@lichtblick/mcap-support";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 
 import { LIVE_RECORDINGS_DIR, liveRecordingLockName } from "./liveRecordings";
 
@@ -111,7 +112,7 @@ async function start(name: string, profile: string, source: Record<string, strin
       chunkSize: CHUNK_SIZE,
       compressChunk: (data) => ({ compression: "zstd", compressedData: compress(data) }),
     });
-    await writer.start({ profile, library: "Lichtblick live recording" });
+    await writer.start({ profile, library: `${APP_CONFIG.productName} live recording` });
     await writer.addMetadata({
       name: LIVE_SOURCE_METADATA,
       metadata: new Map(Object.entries(source)),

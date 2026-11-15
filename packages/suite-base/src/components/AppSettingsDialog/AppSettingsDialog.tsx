@@ -36,6 +36,7 @@ import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import { ExperimentalFeatureSettings } from "@lichtblick/suite-base/components/ExperimentalFeatureSettings";
 import LichtblickLogoText from "@lichtblick/suite-base/components/LichtblickLogoText";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
   useWorkspaceStore,
   WorkspaceContextStore,
@@ -192,12 +193,9 @@ export function AppSettingsDialog(
               </header>
               <Stack direction="row" alignItems="center" gap={1}>
                 <Typography variant="body2">
-                  Lichtblick version {LICHTBLICK_SUITE_VERSION}
+                  {APP_CONFIG.productName} version {APP_CONFIG.version}
                 </Typography>
-                <CopyButton
-                  size="small"
-                  getText={() => LICHTBLICK_SUITE_VERSION?.toString() ?? ""}
-                />
+                <CopyButton size="small" getText={() => APP_CONFIG.version} />
               </Stack>
               {Array.from(APP_SETTINGS_ABOUT_ITEMS.values()).map((item) => {
                 return (

@@ -17,6 +17,7 @@ export type RspackConfigParams = {
     license: string;
     author: { name: string; email: string };
     homepage: string;
+    repository: { url: string };
   };
 
   /** Directory to find `rendererEntrypoint` and `tsconfig.json`. */
