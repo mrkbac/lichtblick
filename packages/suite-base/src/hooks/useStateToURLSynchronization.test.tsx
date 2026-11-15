@@ -21,6 +21,7 @@ import type { Mock } from "vitest";
 
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import PlayerSelectionContext, {
+  IDataSourceFactory,
   PlayerSelection,
 } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useStateToURLSynchronization } from "@lichtblick/suite-base/hooks/useStateToURLSynchronization";
@@ -28,6 +29,19 @@ import EventsProvider from "@lichtblick/suite-base/providers/EventsProvider";
 
 vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext");
 vi.mock("@lichtblick/suite-base/components/MessagePipeline");
+
+function selectionWith(source: Pick<IDataSourceFactory, "id" | "type">): PlayerSelection {
+  return {
+    selectSource: vi.fn(),
+    closeSource: vi.fn(),
+    selectRecent: vi.fn(),
+    removeRecent: vi.fn(),
+    togglePinRecent: vi.fn(),
+    clearRecents: vi.fn(),
+    recentSources: [],
+    availableSources: [{ ...source, displayName: source.id, initialize: () => undefined }],
+  };
+}
 
 describe("useStateToURLSynchronization", () => {
   it("updates the url with a stable source & player state", () => {
@@ -194,9 +208,7 @@ describe("useStateToURLSynchronization", () => {
       }),
     );
 
-    const selection = {
-      availableSources: [{ id: "mcap-local-file", type: "file" }],
-    } as unknown as PlayerSelection;
+    const selection = selectionWith({ id: "mcap-local-file", type: "file" });
     const wrapper = ({ children }: { children: ReactNode }) => (
       <PlayerSelectionContext.Provider value={selection}>
         <EventsProvider>{children}</EventsProvider>
@@ -217,9 +229,7 @@ describe("useStateToURLSynchronization", () => {
         },
       }),
     );
-    const selection = {
-      availableSources: [{ id: "velodyne-device", type: "connection" }],
-    } as unknown as PlayerSelection;
+    const selection = selectionWith({ id: "velodyne-device", type: "connection" });
     const wrapper = ({ children }: { children: ReactNode }) => (
       <PlayerSelectionContext.Provider value={selection}>
         <EventsProvider>{children}</EventsProvider>

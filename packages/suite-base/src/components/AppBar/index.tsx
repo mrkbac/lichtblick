@@ -304,12 +304,17 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
               {showUserMenu && (
                 <Tooltip
                   classes={{ tooltip: classes.tooltip }}
-                  title={user?.displayName ?? "Profile"}
+                  title={
+                    organization.status === "loading"
+                      ? "Loading account…"
+                      : (user?.displayName ?? "Profile")
+                  }
                   arrow={false}
                 >
                   <IconButton
                     className={cx(classes.iconButton, { "Mui-selected": userMenuOpen })}
                     aria-label="User profile menu button"
+                    aria-disabled={organization.status === "loading"}
                     color="inherit"
                     id="user-button"
                     data-tourid="user-button"
