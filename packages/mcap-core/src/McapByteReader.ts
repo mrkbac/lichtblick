@@ -3,8 +3,9 @@
 
 // For performance reasons we use a single TextDecoder instance whose internal state is merely
 // the encoding (defaults to UTF-8). This means that a TextDecoder.decode() call is not affected
-// be previous calls.
-const textDecoder = new TextDecoder();
+// by previous calls. `ignoreBOM` keeps a leading U+FEFF as part of the string: MCAP strings are
+// stored verbatim. Invalid bytes still decode to U+FFFD so a file with one bad string stays readable.
+const textDecoder = new TextDecoder("utf-8", { ignoreBOM: true });
 
 /**
  * Cursor over a `DataView` that reads little-endian primitives, strings, and maps.

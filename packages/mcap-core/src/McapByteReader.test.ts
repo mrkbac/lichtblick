@@ -9,6 +9,12 @@ function readerFromBytes(bytes: number[]): McapByteReader {
 }
 
 describe("McapByteReader", () => {
+  it("keeps a leading U+FEFF in strings and replaces invalid UTF-8", () => {
+    const bytes = new Uint8Array([6, 0, 0, 0, 0xef, 0xbb, 0xbf, 0x61, 0xff, 0x62]);
+    const reader = new McapByteReader(new DataView(bytes.buffer));
+    expect(reader.string()).toBe("\ufeffa\ufffdb");
+  });
+
   it("u8ArrayBorrow shares memory with the source buffer", () => {
     const buffer = new Uint8Array([1, 2, 3, 4]);
     const reader = new McapByteReader(
