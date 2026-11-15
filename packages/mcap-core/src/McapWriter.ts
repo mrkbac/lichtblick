@@ -134,6 +134,9 @@ export class McapWriter {
     if (useChunkIndex) {
       this.#chunkIndices = [];
     }
+    if (!Number.isInteger(startChannelId) || startChannelId < 0 || startChannelId > 0xffff) {
+      throw new Error(`startChannelId ${startChannelId} is not a 16-bit channel id`);
+    }
     this.#nextChannelId = startChannelId;
     this.#chunkSize = chunkSize;
     this.#compressChunk = compressChunk;

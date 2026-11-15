@@ -117,6 +117,14 @@ describe("McapWriter", () => {
     await expect(writer.registerChannel(channel)).rejects.toThrow("16-bit");
   });
 
+  it("rejects a start channel id outside 16 bits", () => {
+    for (const startChannelId of [-1, 0x10000, 1.5]) {
+      expect(() => new McapWriter({ writable: new TempBuffer(), startChannelId })).toThrow(
+        "not a 16-bit channel id",
+      );
+    }
+  });
+
   it("does not count a rejected message in the statistics", async () => {
     const writer = new McapWriter({ writable: new TempBuffer() });
     await writer.start({ profile: "", library: "" });
