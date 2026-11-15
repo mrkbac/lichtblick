@@ -71,7 +71,7 @@ export const rspackQuicklookConfig =
       resolve: {
         extensions: [".js", ".ts", ".tsx", ".json"],
         fallback: {
-          path: "path-browserify",
+          path: false,
           stream: false,
           crypto: false,
           fs: false,

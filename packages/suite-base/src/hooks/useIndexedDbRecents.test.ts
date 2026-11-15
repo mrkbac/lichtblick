@@ -8,7 +8,10 @@
 
 import { act, renderHook, waitFor } from "@testing-library/react";
 
-import useIndexedDbRecents, { MAX_RECENTS } from "@lichtblick/suite-base/hooks/useIndexedDbRecents";
+import useIndexedDbRecents, {
+  isSameRecent,
+  MAX_RECENTS,
+} from "@lichtblick/suite-base/hooks/useIndexedDbRecents";
 
 const connection = (url: string) => ({
   type: "connection" as const,
@@ -141,5 +144,69 @@ describe("useIndexedDbRecents", () => {
     expect(result.current.recents.some((r) => r.title === "ws://pinned")).toBe(true);
     expect(result.current.recents.some((r) => r.title === "ws://host-0")).toBe(false);
     unmount();
+  });
+
+  it("keeps a comparison's side names and repeated handles across a reload", async () => {
+    const handle = (name: string) => ({ kind: "file", name }) as unknown as FileSystemFileHandle;
+    const base = handle("base.mcap");
+    {
+      const { result, unmount } = renderHook(() => useIndexedDbRecents());
+      await waitFor(() => {
+        expect(result.current.recentsLoaded).toBe(true);
+      });
+      act(() => {
+        result.current.addRecent({
+          type: "file",
+          sourceId: "mcap-local-file",
+          title: "A vs B (base.mcap, a.mcap, b.mcap)",
+          handles: [base, handle("a.mcap"), base, handle("b.mcap")],
+          compare: ["A", "A", "B", "B"],
+        });
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      unmount();
+    }
+
+    const { result, unmount } = renderHook(() => useIndexedDbRecents());
+    await waitFor(() => {
+      expect(result.current.recents.some((r) => r.type === "file")).toBe(true);
+    });
+    const recent = result.current.recents.find((r) => r.type === "file");
+    if (recent?.type !== "file") {
+      throw new Error("expected a file recent");
+    }
+    expect(recent.compare).toEqual(["A", "A", "B", "B"]);
+    expect(recent.handles.map((h) => h.name)).toEqual([
+      "base.mcap",
+      "a.mcap",
+      "base.mcap",
+      "b.mcap",
+    ]);
+    // The shared file is still one handle, so it is opened once
+    expect(recent.handles[0]).toBe(recent.handles[2]);
+    unmount();
+  });
+
+  it("tells comparisons of the same files with other sides apart", () => {
+    const recent = (compare: string[] | undefined, names = ["a.mcap", "b.mcap", "c.mcap"]) => ({
+      type: "file" as const,
+      sourceId: "mcap-local-file",
+      title: "A vs B (a.mcap, b.mcap, c.mcap)",
+      handles: names.map((name) => ({ name }) as FileSystemFileHandle),
+      compare,
+    });
+    expect(isSameRecent(recent(["A", "A", "B"]), recent(["A", "A", "B"]))).toBe(true);
+    expect(isSameRecent(recent(["A", "A", "B"]), recent(["A", "B", "B"]))).toBe(false);
+    // Same side names, other files in each side
+    const sides = ["A", "A", "B", "B"];
+    expect(
+      isSameRecent(
+        recent(sides, ["a.mcap", "b.mcap", "a.mcap", "c.mcap"]),
+        recent(sides, ["a.mcap", "c.mcap", "a.mcap", "b.mcap"]),
+      ),
+    ).toBe(false);
+    expect(isSameRecent(recent(undefined), recent(undefined, ["c.mcap"]))).toBe(true);
   });
 });

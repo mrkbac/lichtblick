@@ -7,7 +7,48 @@ import {
   splitRecentTitle,
   hostUrl,
   looksLikeHost,
+  recentArgs,
+  recentFileTitle,
 } from "./recentSources";
+
+describe("recentFileTitle", () => {
+  it("lists merged files", () => {
+    expect(recentFileTitle(["a.mcap", "b.mcap"])).toBe("a.mcap, b.mcap");
+  });
+
+  it("names a comparison of single files by its sides", () => {
+    expect(recentFileTitle(["a.mcap", "b.mcap"], ["a.mcap", "b.mcap"])).toBe("a.mcap vs b.mcap");
+  });
+
+  it("leads with side names and lists a shared file once", () => {
+    expect(
+      recentFileTitle(["base.mcap", "a.mcap", "base.mcap", "b.mcap"], ["A", "A", "B", "B"]),
+    ).toBe("A vs B (base.mcap, a.mcap, b.mcap)");
+  });
+});
+
+describe("recentArgs", () => {
+  const handles = [{ name: "a.mcap" }, { name: "b.mcap" }] as unknown as FileSystemFileHandle[];
+  const recent = {
+    id: "1",
+    type: "file" as const,
+    sourceId: "mcap-local-file",
+    title: "t",
+    handles,
+  };
+
+  it("reopens a comparison side by side", () => {
+    expect(recentArgs({ ...recent, compare: ["A", "B"] })).toEqual({
+      type: "file",
+      handles,
+      compare: ["A", "B"],
+    });
+  });
+
+  it("reopens old recents without side names merged", () => {
+    expect(recentArgs(recent).compare).toBeUndefined();
+  });
+});
 
 describe("splitRecentTitle", () => {
   it("puts the file name first for URLs pointing at a file", () => {
