@@ -8,7 +8,10 @@
 
 import { act, renderHook, waitFor } from "@testing-library/react";
 
-import useIndexedDbRecents, { MAX_RECENTS } from "@lichtblick/suite-base/hooks/useIndexedDbRecents";
+import useIndexedDbRecents, {
+  isSameRecent,
+  MAX_RECENTS,
+} from "@lichtblick/suite-base/hooks/useIndexedDbRecents";
 
 const connection = (url: string) => ({
   type: "connection" as const,
@@ -184,5 +187,18 @@ describe("useIndexedDbRecents", () => {
     // The shared file is still one handle, so it is opened once
     expect(recent.handles[0]).toBe(recent.handles[2]);
     unmount();
+  });
+
+  it("tells comparisons of the same files with other sides apart", () => {
+    const recent = (compare?: string[]) => ({
+      type: "file" as const,
+      sourceId: "mcap-local-file",
+      title: "A vs B (a.mcap, b.mcap, c.mcap)",
+      handles: [],
+      compare,
+    });
+    expect(isSameRecent(recent(["A", "A", "B"]), recent(["A", "A", "B"]))).toBe(true);
+    expect(isSameRecent(recent(["A", "A", "B"]), recent(["A", "B", "B"]))).toBe(false);
+    expect(isSameRecent(recent(), recent())).toBe(true);
   });
 });

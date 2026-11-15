@@ -56,6 +56,7 @@ import {
 } from "@lichtblick/suite-base/context/UserScriptStateContext";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import useIndexedDbRecents, {
+  isSameRecent,
   RecentRecord,
 } from "@lichtblick/suite-base/hooks/useIndexedDbRecents";
 import {
@@ -76,7 +77,8 @@ const log = Logger.getLogger(__filename);
 
 // Per tab, so a reload reopens the file that tab had open
 const LAST_FILE_SOURCE_KEY = "lichtblick.lastFileSource";
-type LastFileSource = { sourceId: string; title: string };
+// `compare` tells comparisons of the same files with other sides apart (see isSameRecent)
+type LastFileSource = { sourceId: string; title: string; compare?: string[] };
 
 // Reopening on reload is a convenience: blocked storage or a bad value must not break the app
 function readLastFile(): LastFileSource | undefined {
@@ -86,7 +88,10 @@ function readLastFile(): LastFileSource | undefined {
       typeof value === "object" &&
       value != undefined &&
       typeof (value as LastFileSource).sourceId === "string" &&
-      typeof (value as LastFileSource).title === "string"
+      typeof (value as LastFileSource).title === "string" &&
+      ((value as LastFileSource).compare == undefined ||
+        (Array.isArray((value as LastFileSource).compare) &&
+          (value as LastFileSource).compare!.every((side) => typeof side === "string")))
     ) {
       return value as LastFileSource;
     }
@@ -409,15 +414,9 @@ export default function PlayerManager(
                     handles.map((h) => h.name),
                     compare,
                   ),
+                  compare: compare ? [...compare] : undefined,
                 };
-                setCurrentRecentId(
-                  addRecent({
-                    type: "file",
-                    ...lastFile,
-                    handles,
-                    compare: compare ? [...compare] : undefined,
-                  }),
-                );
+                setCurrentRecentId(addRecent({ type: "file", ...lastFile, handles }));
                 writeLastFile(lastFile);
               } else {
                 writeLastFile(undefined);
@@ -472,7 +471,7 @@ export default function PlayerManager(
       return;
     }
     const recent = recents.find(
-      (r) => r.type === "file" && r.sourceId === lastFile.sourceId && r.title === lastFile.title,
+      (r) => r.type === "file" && isSameRecent(r, { type: "file", handles: [], ...lastFile }),
     );
     if (recent?.type !== "file") {
       return;

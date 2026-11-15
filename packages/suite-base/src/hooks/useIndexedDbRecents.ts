@@ -87,15 +87,15 @@ interface IRecentsStore {
   save: () => Promise<void>;
 }
 
-function isSameRecent(a: UnsavedRecentRecord, b: UnsavedRecentRecord): boolean {
+export function isSameRecent(a: UnsavedRecentRecord, b: UnsavedRecentRecord): boolean {
   if (a.type !== b.type || a.sourceId !== b.sourceId) {
     return false;
   }
-  // Connections are identified by their arguments, files by name
-  if (a.type === "connection" && b.type === "connection") {
-    return _.isEqual(a.extra, b.extra);
+  // Connections are identified by their arguments, files by name and, when compared, side names
+  if (a.type === "connection" || b.type === "connection") {
+    return a.type === "connection" && b.type === "connection" && _.isEqual(a.extra, b.extra);
   }
-  return a.title === b.title;
+  return a.title === b.title && _.isEqual(a.compare, b.compare);
 }
 
 function useIndexedDbRecents(): IRecentsStore {

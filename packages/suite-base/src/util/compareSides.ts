@@ -106,10 +106,10 @@ export function draftFromFiles(files: readonly File[], compare?: readonly string
   const filesOf = sideNames.map((name) => files.filter((_, index) => names[index] === name));
   const inEvery =
     sideNames.length > 1
-      ? filesOf[0]!.filter((file) => filesOf.every((f) => f.includes(file)))
+      ? [...new Set(filesOf[0])].filter((file) => filesOf.every((f) => f.includes(file)))
       : [];
   // Only shared when every side keeps a file of its own, so no side disappears from the draft
-  const shared = filesOf.every((f) => f.length > inEvery.length) ? inEvery : [];
+  const shared = filesOf.every((f) => f.some((file) => !inEvery.includes(file))) ? inEvery : [];
   return {
     shared,
     sides: sideNames.map((name, index) => {
