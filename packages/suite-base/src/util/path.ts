@@ -5,6 +5,9 @@
 
 /** Last segment of a `/`-separated path, minus `ext` if it ends with it. Same as Node's `path.basename`. */
 export function basename(filePath: string, ext?: string): string {
+  if (ext != undefined && ext !== "" && ext === filePath) {
+    return "";
+  }
   const base = filePath.replace(/\/+$/, "").split("/").pop() ?? "";
   return ext != undefined && ext !== "" && ext !== base && base.endsWith(ext)
     ? base.slice(0, -ext.length)
@@ -15,5 +18,5 @@ export function basename(filePath: string, ext?: string): string {
 export function extname(filePath: string): string {
   const base = basename(filePath);
   const dot = base.lastIndexOf(".");
-  return dot <= 0 || /^\.+$/.test(base) ? "" : base.slice(dot);
+  return dot <= 0 || base === ".." ? "" : base.slice(dot);
 }

@@ -277,7 +277,10 @@
       "files": [
         "benchmark/**",
         "ci/**",
-        "desktop/**",
+        "desktop/main/**",
+        "desktop/preload/**",
+        "desktop/rspack.config.ts",
+        "desktop/electronBuilderConfig.js",
         "e2e/**",
         "web/rspack.config.ts",
         "vitest.config.ts",

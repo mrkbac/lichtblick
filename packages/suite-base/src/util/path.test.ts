@@ -15,6 +15,8 @@ const PATHS = [
   "noext",
   "trailing.",
   "..",
+  "...",
+  "....",
   ".",
   "",
   "/",
@@ -25,6 +27,8 @@ describe("path helpers match node:path (posix)", () => {
   it.each(PATHS)("%j", (p) => {
     expect(basename(p)).toBe(nodePath.posix.basename(p));
     expect(extname(p)).toBe(nodePath.posix.extname(p));
+    expect(basename(p, p)).toBe(nodePath.posix.basename(p, p));
+    expect(basename(p, "example.mcap")).toBe(nodePath.posix.basename(p, "example.mcap"));
     expect(basename(p, ".mcap")).toBe(nodePath.posix.basename(p, ".mcap"));
     expect(basename(p, extname(p))).toBe(nodePath.posix.basename(p, nodePath.posix.extname(p)));
   });
