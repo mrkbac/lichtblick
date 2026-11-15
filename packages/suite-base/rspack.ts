@@ -168,8 +168,10 @@ export function makeConfig(
           ]),
         ),
       },
-      // Node built-ins imported by dependencies. The browser never reaches them, so stub them out.
+      // Node built-ins imported by dependencies
       fallback: {
+        // xmlbuilder2 subclasses EventEmitter at load
+        events: localRequire.resolve("events"),
         // Only reached by Node-only code paths (sql.js, sax, TypeScript, wasm decoders)
         path: false,
         stream: false,

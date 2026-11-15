@@ -72,6 +72,8 @@
       "ignoreDependencies": [
         // ProvidePlugin
         "buffer",
+        // resolve.fallback
+        "events",
         "@svgr/webpack",
         "css-loader",
         "nearley-loader",
