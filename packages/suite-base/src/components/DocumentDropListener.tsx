@@ -15,7 +15,6 @@
 //   You may not use this file except in compliance with the License.
 
 import { useSnackbar } from "notistack";
-import { extname } from "path";
 import { useCallback, useLayoutEffect, useState } from "react";
 
 import Logger from "@lichtblick/log";
@@ -25,6 +24,7 @@ import { AllowedFileExtensions } from "@lichtblick/suite-base/constants/allowedF
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { Namespace } from "@lichtblick/suite-base/types";
 import { rememberFolder } from "@lichtblick/suite-base/util/compareSides";
+import { extname } from "@lichtblick/suite-base/util/path";
 
 const log = Logger.getLogger(__filename);
 

@@ -68,22 +68,18 @@
       ],
       // Shadowed by services/migrateLayout.ts, see the PR description
       "ignore": ["src/services/migrateLayout/{index,migratePanelsState}.ts"],
-      // Named as strings in rspack.ts (loaders and resolve.fallback polyfills)
+      // Named as strings in rspack.ts (loaders and the Buffer polyfill)
       "ignoreDependencies": [
         // ProvidePlugin
         "buffer",
         "@svgr/webpack",
         "css-loader",
         "nearley-loader",
-        "path-browserify",
-        "readable-stream",
         "style-loader"
       ]
     },
     "packages/suite-desktop": {
-      "entry": ["src/electronBuilderConfig.js", "src/afterPack.ts", "src/test/setup.ts"],
-      // Referenced by name in the quicklook rspack `resolve.fallback`
-      "ignoreDependencies": ["path-browserify"]
+      "entry": ["src/electronBuilderConfig.js", "src/afterPack.ts", "src/test/setup.ts"]
     },
     "packages/suite-web": {
       // Loaded into the generated service worker by workbox importScripts (rspackConfigs.ts)
