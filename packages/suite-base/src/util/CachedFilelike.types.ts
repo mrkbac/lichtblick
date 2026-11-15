@@ -12,8 +12,15 @@ export type FileStream = {
   destroy: () => void;
 };
 
+export type FileReaderOpenResult = {
+  size: number;
+  identifier?: string;
+  /** Bytes read while opening, which the caller can cache instead of requesting them again */
+  initialData?: { offset: number; data: Uint8Array }[];
+};
+
 export interface FileReader {
-  open(): Promise<{ size: number }>;
+  open(): Promise<FileReaderOpenResult>;
   fetch(offset: number, length: number): FileStream;
 }
 

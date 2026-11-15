@@ -11,11 +11,11 @@ import { MessageReader as OmgidlMessageReader } from "@foxglove/omgidl-serializa
 import { parseRos2idl } from "@foxglove/ros2idl-parser";
 import { parse as parseRosmsg } from "@foxglove/rosmsg";
 import { MessageReader } from "@foxglove/rosmsg-serialization";
-import { MessageReader as ROS2MessageReader } from "@foxglove/rosmsg2-serialization";
 
 import { parseFlatbufferSchema } from "./parseFlatbufferSchema";
 import { parseJsonSchema } from "./parseJsonSchema";
 import { parseProtobufSchema } from "./parseProtobufSchema";
+import { createRos2CdrDeserializer } from "./ros2CdrDecoder";
 import { MessageDefinitionMap } from "./types";
 
 type Channel = {
@@ -226,11 +226,9 @@ export function parseChannel(
         ? parseRos2idl(schema)
         : parseMessageDefinition(schema, channel.schema.name, { ros2: true });
 
-      const reader = new ROS2MessageReader(parsedDefinitions);
-
       return {
         datatypes: parsedDefinitionsToDatatypes(parsedDefinitions, channel.schema.name),
-        deserialize: (data) => reader.readMessage(data),
+        deserialize: createRos2CdrDeserializer(parsedDefinitions),
       };
     }
   }
