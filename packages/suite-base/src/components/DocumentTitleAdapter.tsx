@@ -11,6 +11,7 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 
 const selectPlayerName = (ctx: MessagePipelineContext) => ctx.playerState.name;
 
@@ -22,12 +23,12 @@ export default function DocumentTitleAdapter(): React.JSX.Element {
 
   useEffect(() => {
     if (!playerName) {
-      window.document.title = "Lichtblick";
+      window.document.title = APP_CONFIG.productName;
       return;
     }
     window.document.title = navigator.userAgent.includes("Mac")
       ? playerName
-      : `${playerName} – Lichtblick`;
+      : `${playerName} – ${APP_CONFIG.productName}`;
   }, [playerName]);
 
   return <></>;

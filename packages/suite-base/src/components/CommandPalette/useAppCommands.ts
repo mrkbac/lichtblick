@@ -19,7 +19,6 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { PLAYBACK_SPEED_OPTIONS } from "@lichtblick/suite-base/components/PlaybackSpeedControls";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
-import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
 import {
   LayoutState,
   useCurrentLayoutActions,
@@ -485,7 +484,7 @@ export function useAppCommands(): {
         title: t("documentation"),
         keywords: ["docs", "manual"],
         run: () => {
-          window.open(LICHTBLICK_DOCUMENTATION_LINK, "_blank", "noopener,noreferrer");
+          window.open(APP_CONFIG.docsUrl, "_blank", "noopener,noreferrer");
         },
       },
       {

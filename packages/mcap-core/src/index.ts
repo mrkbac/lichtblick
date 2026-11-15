@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MIT
 
 export { McapIndexedReader } from "./McapIndexedReader.ts";
-export type { ChunkDataCache, McapIndexAppend } from "./McapIndexedReader.ts";
+export type { ChunkDataCache, ChunkReadAhead, McapIndexAppend } from "./McapIndexedReader.ts";
 export * from "./ChunkCache.ts";
 export { BlobReadable } from "./BlobReadable.ts";
 export { isEmptyMcap } from "./isEmptyMcap.ts";

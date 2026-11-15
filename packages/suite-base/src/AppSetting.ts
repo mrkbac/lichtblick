@@ -23,16 +23,13 @@ export enum AppSetting {
   TELEMETRY_ENABLED = "telemetry.telemetryEnabled",
   CRASH_REPORTING_ENABLED = "telemetry.crashReportingEnabled",
 
-  // Experimental features
+  // Advanced
   SHOW_DEBUG_PANELS = "showDebugPanels",
+  ENABLE_MEMORY_USE_INDICATOR = "dev.memory-use-indicator",
 
   // Miscellaneous
   HIDE_SIGN_IN_PROMPT = "hideSignInPrompt",
   LAUNCH_PREFERENCE = "launchPreference",
   SHOW_OPEN_DIALOG_ON_STARTUP = "ui.open-dialog-startup",
   OPEN_FOXGLOVE_LINKS = "desktop.openFoxgloveLinks",
-
-  // Dev only
-  ENABLE_LAYOUT_DEBUGGING = "enableLayoutDebugging",
-  ENABLE_MEMORY_USE_INDICATOR = "dev.memory-use-indicator",
 }

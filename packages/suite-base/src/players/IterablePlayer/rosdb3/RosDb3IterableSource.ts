@@ -11,6 +11,7 @@ import { stringify } from "@foxglove/rosmsg";
 import { Time, add as addTime } from "@foxglove/rostime";
 
 import { MessageEvent } from "@lichtblick/suite";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { PlayerAlert, TopicStats } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { basicDatatypes } from "@lichtblick/suite-base/util/basicDatatypes";
@@ -95,7 +96,7 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
         alerts.push({
           severity: "warn",
           message: `Topic "${topicDef.name}" has unsupported datatype "${topicDef.type}"`,
-          tip: "ROS 2 .db3 files do not contain message definitions, so only well-known ROS types are supported in Foxglove Studio. As a workaround, you can convert the db3 file to mcap using the mcap CLI. For more information, see: https://lichtblick-suite.github.io/docs/docs/connecting-to-data/frameworks/ros2",
+          tip: `ROS 2 .db3 files do not contain message definitions, so only well-known ROS types are supported in ${APP_CONFIG.productName}. As a workaround, you can convert the db3 file to mcap using the mcap CLI. For more information, see: ${APP_CONFIG.docsUrl}docs/connecting-to-data/frameworks/ros2`,
         });
       } else {
         // Create the full gendeps-like message definition so that parseChannel() can parse it.

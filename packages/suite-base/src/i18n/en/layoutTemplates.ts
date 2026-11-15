@@ -9,6 +9,7 @@ export const layoutTemplates = {
   fromTemplate: "New layout from template",
   fromTemplateCommand: "New layout from template: {{name}}",
   noMatchingTopics: "No matching topics",
+  noPersonalLayouts: "Add a new layout to get started with {{appName}}!",
   topics_one: "{{count}} topic: {{topics}}",
   topics_other: "{{count}} topics: {{topics}}",
 };

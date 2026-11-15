@@ -64,7 +64,7 @@ export const commandPalette = {
   settings: "Open settings",
 
   documentation: "Open documentation",
-  about: "About Lichtblick",
+  about: "About {{appName}}",
   version: "Version {{version}}",
   keyboardShortcuts: "Keyboard shortcuts…",
 };

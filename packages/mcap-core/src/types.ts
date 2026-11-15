@@ -144,5 +144,10 @@ export type DecompressHandlers = {
  */
 export interface IReadable<TReadOptions = unknown> {
   size(): Promise<bigint>;
+  /**
+   * The bytes must stay unchanged after the call: readers keep views of them (uncompressed chunks
+   * in a chunk cache) and several reads may be in flight at once (concurrent reads, read-ahead),
+   * so an implementation must not reuse one buffer across calls.
+   */
   read(offset: bigint, size: bigint, options?: TReadOptions): Promise<Uint8Array>;
 }

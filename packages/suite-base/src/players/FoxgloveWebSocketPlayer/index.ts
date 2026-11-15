@@ -40,6 +40,7 @@ import { IWritable, McapWriter } from "@lichtblick/mcap-core";
 import { parseChannel } from "@lichtblick/mcap-support";
 import { ParameterValue } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
   LIVE_QUEUE_MAX_BYTES,
   LiveMessageQueue,
@@ -1532,7 +1533,10 @@ export default class FoxgloveWebSocketPlayer implements Player {
   public async exportLiveHistory(writable: IWritable): Promise<void> {
     const messages = this.#history.snapshot();
     const writer = new McapWriter({ writable });
-    await writer.start({ profile: this.#profile ?? "", library: "Lichtblick live history" });
+    await writer.start({
+      profile: this.#profile ?? "",
+      library: `${APP_CONFIG.productName} live history`,
+    });
     const schemaIds = new Map<string, number>();
     const channelIds = new Map<ResolvedChannel, number>();
     let sequence = 0;

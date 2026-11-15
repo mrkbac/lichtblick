@@ -9,8 +9,9 @@ import { type Configuration, type RspackPluginInstance, rspack } from "@rspack/c
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
 import path from "node:path";
 
+import packageJson from "../package.json" with { type: "json" };
 import type { RspackArgv } from "../packages/suite-base/RspackArgv.ts";
-import { makeConfig } from "../packages/suite-base/rspack.ts";
+import { makeConfig, productInfo } from "../packages/suite-base/rspack.ts";
 
 const devServer: Configuration["devServer"] = {
   // Everything is served from memory; never serve stale files from disk
@@ -39,7 +40,10 @@ export default (env: unknown, argv: RspackArgv): Configuration => {
     plugins.push(new ReactRefreshRspackPlugin({ resourceQuery: { not: /raw/ } }));
   }
 
-  const appConfig = makeConfig(env, argv, { version: "0.0.0-benchmark" });
+  const appConfig = makeConfig(env, argv, {
+    version: "0.0.0-benchmark",
+    product: productInfo(packageJson),
+  });
 
   const config: Configuration = {
     name: "main",

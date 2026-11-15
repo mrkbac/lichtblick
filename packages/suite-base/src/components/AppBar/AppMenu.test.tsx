@@ -10,7 +10,7 @@ import type { Mock } from "vitest";
 
 import { AppMenuProps } from "@lichtblick/suite-base/components/AppBar/types";
 import { useCommandPaletteStore } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
-import { LICHTBLICK_DOCUMENTATION_LINK } from "@lichtblick/suite-base/constants/documentation";
+import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import AnalyticsContext from "@lichtblick/suite-base/context/AnalyticsContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
@@ -197,11 +197,7 @@ describe("AppMenu", () => {
 
     fireEvent.click(screen.getByText("documentation"));
 
-    expect(window.open).toHaveBeenCalledWith(
-      LICHTBLICK_DOCUMENTATION_LINK,
-      "_blank",
-      "noopener,noreferrer",
-    );
+    expect(window.open).toHaveBeenCalledWith(APP_CONFIG.docsUrl, "_blank", "noopener,noreferrer");
 
     window.open = originalOpen;
   });

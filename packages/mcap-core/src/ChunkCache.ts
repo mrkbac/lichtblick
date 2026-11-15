@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import type { ChunkMessageIndex } from "./ChunkCursor.ts";
+import type { ChunkReadAhead } from "./McapIndexedReader.ts";
 
 /**
  * Bytes of decompressed chunks, parsed message indexes and rebuilt message indexes kept per worker,
@@ -24,6 +25,13 @@ let nextId = 0;
  */
 export class ChunkCache {
   readonly #prefix = `${nextId++}:`;
+
+  /** Loads chunks ahead of every reader on this file, if given (see ChunkReadAhead) */
+  public readonly readAhead?: ChunkReadAhead;
+
+  public constructor(readAhead?: ChunkReadAhead) {
+    this.readAhead = readAhead;
+  }
 
   /** For McapIndexedReader's `chunkCache` option */
   public get(chunkStartOffset: bigint): DataView | undefined {
