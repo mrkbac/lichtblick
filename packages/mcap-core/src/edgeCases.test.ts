@@ -57,7 +57,7 @@ describe("ChunkCursor", () => {
 });
 
 describe("McapIndexedReader chunkCache and CRCs", () => {
-  it("checks the CRC of a chunk cached by a read that skipped it", async () => {
+  async function oneChunkFile(): Promise<TempBuffer> {
     const buffer = new TempBuffer();
     const writer = new McapWriter({ writable: buffer });
     await writer.start({ profile: "", library: "" });
@@ -75,7 +75,24 @@ describe("McapIndexedReader chunkCache and CRCs", () => {
       data: new Uint8Array([1]),
     });
     await writer.end();
+    return buffer;
+  }
 
+  it("rejects a corrupt chunk cached by a read that skipped CRCs", async () => {
+    const buffer = await oneChunkFile();
+    const cache = new Map<bigint, DataView>();
+    const reader = await McapIndexedReader.Initialize({ readable: buffer, chunkCache: cache });
+    // Corrupt the chunk's uncompressed CRC (opcode, length, start/end time, uncompressed size)
+    const crcOffset = Number(reader.chunkIndexes[0]!.chunkStartOffset) + 1 + 8 + 8 + 8 + 8;
+    buffer.get()[crcOffset]! ^= 0xff;
+
+    await expect(collect(reader.readMessages({ validateCrcs: false }))).resolves.toHaveLength(1);
+    expect(cache.size).toBe(1);
+    await expect(collect(reader.readMessages())).rejects.toThrow("Incorrect chunk CRC");
+  });
+
+  it("reuses a cached chunk once a validating read has checked it", async () => {
+    const buffer = await oneChunkFile();
     const cache = new Map<bigint, DataView>();
     const reader = await McapIndexedReader.Initialize({ readable: buffer, chunkCache: cache });
     await collect(reader.readMessages({ validateCrcs: false }));
