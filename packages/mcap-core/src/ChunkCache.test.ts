@@ -48,36 +48,57 @@ describe("ChunkCache", () => {
     cache.clear();
   });
 
-  it("keeps a chunk that fills the budget when its parsed index is added", () => {
-    // Given a chunk as big as the budget
-    const cache = new ChunkCache();
-    const index = new ChunkMessageIndex(
-      new BigUint64Array(1),
-      new Float64Array(1),
-      new Uint16Array(1),
+  const messageIndex = (entries: number) =>
+    new ChunkMessageIndex(
+      new BigUint64Array(entries),
+      new Float64Array(entries),
+      new Uint16Array(entries),
     );
-    cache.set(0n, view(CHUNK_CACHE_BYTES));
 
-    // When its index is added on every read
-    for (let read = 0; read < 2; read++) {
-      cache.setChunkMessageIndex(7n, index);
+  it("decompresses a chunk that fills the budget once over repeated reads", () => {
+    // Given a chunk as big as the budget, read the way McapIndexedReader does: its parsed index
+    // first, then the chunk
+    const cache = new ChunkCache();
+    let decompressions = 0;
+    const read = () => {
+      if (!cache.getChunkMessageIndex(7n)) {
+        cache.setChunkMessageIndex(7n, messageIndex(1), 0n);
+      }
+      if (!cache.get(0n)) {
+        decompressions++;
+        cache.set(0n, view(CHUNK_CACHE_BYTES));
+      }
+    };
 
-      // Then both stay, so the chunk is not decompressed again
-      expect(cache.get(0n)).toBeDefined();
-      expect(cache.getChunkMessageIndex(7n)).toBe(index);
+    // When it is read again and again
+    for (let i = 0; i < 3; i++) {
+      read();
     }
+
+    // Then it was decompressed only the first time
+    expect(decompressions).toBe(1);
+    cache.clear();
+  });
+
+  it("evicts old parsed indexes whose chunks were never loaded", () => {
+    // Given parsed indexes of chunks with nothing to read in the requested range, which together
+    // overflow the budget
+    const cache = new ChunkCache();
+    const quarter = Math.ceil(CHUNK_CACHE_BYTES / 4 / 18);
+    for (let i = 0n; i < 5n; i++) {
+      cache.setChunkMessageIndex(i, messageIndex(quarter), 100n + i);
+    }
+
+    // Then the oldest one went
+    expect(cache.getChunkMessageIndex(0n)).toBeUndefined();
+    expect(cache.getChunkMessageIndex(4n)).toBeDefined();
     cache.clear();
   });
 
   it("counts parsed message indexes against the budget", () => {
     // Given a parsed index and chunks that together overflow the budget
     const cache = new ChunkCache();
-    const index = new ChunkMessageIndex(
-      new BigUint64Array(1),
-      new Float64Array(1),
-      new Uint16Array(1),
-    );
-    cache.setChunkMessageIndex(7n, index);
+    cache.setChunkMessageIndex(7n, messageIndex(1), 9n);
     cache.set(0n, view(CHUNK_CACHE_BYTES / 2));
 
     // When the budget is reached

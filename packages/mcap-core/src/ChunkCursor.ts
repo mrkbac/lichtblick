@@ -148,7 +148,11 @@ function compareEntries(words: Uint32Array, offsets: Float64Array, a: number, b:
 /** Parsed message indexes by message index section offset. See `ChunkDataCache`. */
 export type ChunkMessageIndexCache = {
   getChunkMessageIndex?(messageIndexStartOffset: bigint): ChunkMessageIndex | undefined;
-  setChunkMessageIndex?(messageIndexStartOffset: bigint, index: ChunkMessageIndex): void;
+  setChunkMessageIndex?(
+    messageIndexStartOffset: bigint,
+    index: ChunkMessageIndex,
+    chunkStartOffset: bigint,
+  ): void;
 };
 
 type ChunkCursorParams = {
@@ -307,7 +311,11 @@ export class ChunkCursor {
         new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength),
         this.chunkIndex,
       );
-      cache?.setChunkMessageIndex?.(messageIndexStartOffset, index);
+      cache?.setChunkMessageIndex?.(
+        messageIndexStartOffset,
+        index,
+        this.chunkIndex.chunkStartOffset,
+      );
     }
     this.#index = index;
 

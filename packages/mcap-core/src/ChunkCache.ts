@@ -47,8 +47,13 @@ export class ChunkCache {
     return this.#get(`m${messageIndexStartOffset}`) as ChunkMessageIndex | undefined;
   }
 
-  public setChunkMessageIndex(messageIndexStartOffset: bigint, index: ChunkMessageIndex): void {
-    this.#set(`m${messageIndexStartOffset}`, index);
+  /** Never evicts the decompressed chunk at `chunkStartOffset`, which is read right after. */
+  public setChunkMessageIndex(
+    messageIndexStartOffset: bigint,
+    index: ChunkMessageIndex,
+    chunkStartOffset: bigint,
+  ): void {
+    this.#set(`m${messageIndexStartOffset}`, index, `c${chunkStartOffset}`);
   }
 
   /** Drops this file's entries */
@@ -71,7 +76,8 @@ export class ChunkCache {
     return data;
   }
 
-  #set(key: string, data: DataView | ChunkMessageIndex): void {
+  /** `keep`: another entry this one is used with, so adding this one never evicts it */
+  #set(key: string, data: DataView | ChunkMessageIndex, keep?: string): void {
     const fullKey = this.#prefix + key;
     const old = entries.get(fullKey);
     if (old) {
@@ -80,16 +86,9 @@ export class ChunkCache {
     }
     entries.set(fullKey, data);
     totalBytes += data.byteLength;
-    const kind = key[0];
-    // A parsed index is small next to its chunk and is added just before it is read, so it never
-    // evicts: evicting the chunk would make every read decompress it again. The next chunk added
-    // brings the total back under budget.
-    if (kind === "m") {
-      return;
-    }
-    // Oldest first. Always keeps the newest, however big, and the other half of a recovered chunk
-    // (its records or rebuilt message indexes), so adding one never evicts the other.
-    const sibling = this.#prefix + (kind === "c" ? "i" : "c") + key.slice(1);
+    // Oldest first. Always keeps the newest, however big, and the entry it is used with: the other
+    // half of a recovered chunk (its records or rebuilt message indexes), or a parsed index's chunk.
+    const sibling = this.#prefix + (keep ?? (key.startsWith("c") ? "i" : "c") + key.slice(1));
     for (const [oldKey, oldData] of entries) {
       if (totalBytes <= CHUNK_CACHE_BYTES || oldKey === fullKey) {
         break;
