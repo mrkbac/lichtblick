@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { crc32 } from "@foxglove/crc";
+
 import {
   MCAP_MAGIC,
   McapByteReader,
@@ -11,8 +12,7 @@ import {
   Opcode,
   isKnownOpcode,
   parseRecord,
-} from "@mcap/core";
-
+} from "@lichtblick/mcap-core";
 import { type ChunkCache, openCachedMcapReader } from "@lichtblick/mcap-support";
 import type { PlayerAlert } from "@lichtblick/suite-base/players/types";
 

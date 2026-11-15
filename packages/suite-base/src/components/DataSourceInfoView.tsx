@@ -6,13 +6,13 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { compare, subtract, Time, toMillis } from "@foxglove/rostime";
-import { TempBuffer } from "@mcap/core";
 import { Button, LinearProgress, Skeleton, Typography } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import { formatByteSize } from "@lichtblick/den/format";
+import { TempBuffer } from "@lichtblick/mcap-core";
 import { Immutable } from "@lichtblick/suite";
 import { useCompare } from "@lichtblick/suite-base/components/Compare/CompareContext";
 import { CompareSidesEditor } from "@lichtblick/suite-base/components/Compare/CompareSidesEditor";

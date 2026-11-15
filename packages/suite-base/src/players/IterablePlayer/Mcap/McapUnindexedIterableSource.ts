@@ -16,9 +16,9 @@ import {
   toRFC3339String,
   compare,
 } from "@foxglove/rostime";
-import { McapStreamReader, McapTypes } from "@mcap/core";
 import * as _ from "lodash-es";
 
+import { McapStreamReader, McapTypes } from "@lichtblick/mcap-core";
 import { loadDecompressHandlers, parseChannel, ParsedChannel } from "@lichtblick/mcap-support";
 import { MessageEvent, Metadata } from "@lichtblick/suite";
 import {

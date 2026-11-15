@@ -6,10 +6,10 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time } from "@foxglove/rostime";
-import type { IWritable } from "@mcap/core";
 import * as _ from "lodash-es";
 
 import { MutexLocked } from "@lichtblick/den/async";
+import type { IWritable } from "@lichtblick/mcap-core";
 import { Immutable, Metadata, MessageEvent, ParameterValue } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";

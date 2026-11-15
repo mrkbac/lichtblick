@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { crc32 } from "@foxglove/crc";
-import type { McapTypes } from "@mcap/core";
 import { Semaphore } from "async-mutex";
 
 import Log from "@lichtblick/log";
+import type { McapTypes } from "@lichtblick/mcap-core";
 
 import { McapRecoveryScanner } from "./McapRecoveryScanner";
 

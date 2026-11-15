@@ -6,8 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { fromNanoSec } from "@foxglove/rostime";
-import { McapTypes } from "@mcap/core";
 
+import { McapTypes } from "@lichtblick/mcap-core";
 import { ChunkCache, openCachedMcapReader } from "@lichtblick/mcap-support";
 
 import { FileInfo, TopicInfo } from "./types";

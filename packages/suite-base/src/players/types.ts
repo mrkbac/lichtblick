@@ -16,8 +16,8 @@
 
 import { MessageDefinition } from "@foxglove/message-definition";
 import { Time } from "@foxglove/rostime";
-import type { IWritable } from "@mcap/core";
 
+import type { IWritable } from "@lichtblick/mcap-core";
 import type { MessageEvent, Metadata, ParameterValue } from "@lichtblick/suite";
 import { Immutable } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
