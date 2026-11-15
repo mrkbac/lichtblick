@@ -4,8 +4,8 @@
 import { enqueueSnackbar } from "notistack";
 import path from "path";
 import { useCallback } from "react";
-import { useMountedState } from "react-use";
 
+import { useMountedState } from "@lichtblick/hooks";
 import {
   LayoutData,
   useCurrentLayoutActions,

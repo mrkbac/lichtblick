@@ -25,9 +25,9 @@ import {
 } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLongPress } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
+import { useLongPress } from "@lichtblick/hooks";
 import { LayoutActions } from "@lichtblick/suite";
 import OverlayToolbar from "@lichtblick/suite-base/components/OverlayToolbar";
 import {

@@ -16,7 +16,8 @@
 
 import { Dialog, DialogContent, DialogTitle, DialogActions, Button } from "@mui/material";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useKeyPressEvent } from "react-use";
+
+import { useKeyPressEvent } from "@lichtblick/hooks";
 
 type ConfirmVariant = "danger" | "primary";
 type ConfirmAction = "ok" | "cancel";

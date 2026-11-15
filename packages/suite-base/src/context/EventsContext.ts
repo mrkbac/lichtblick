@@ -7,11 +7,10 @@
 
 import { Time } from "@foxglove/rostime";
 import { createContext } from "react";
-import { AsyncState } from "react-use/lib/useAsyncFn";
 import { StoreApi } from "zustand";
 import { useStoreWithEqualityFn } from "zustand/traditional";
 
-import { useGuaranteedContext } from "@lichtblick/hooks";
+import { AsyncState, useGuaranteedContext } from "@lichtblick/hooks";
 import { Immutable } from "@lichtblick/suite";
 
 /**

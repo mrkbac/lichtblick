@@ -23,8 +23,8 @@ import * as _ from "lodash-es";
 import { useSnackbar } from "notistack";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import useAsyncFn from "react-use/lib/useAsyncFn";
 
+import { useAsyncFn } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import SignInPrompt from "@lichtblick/suite-base/components/LayoutBrowser/SignInPrompt";

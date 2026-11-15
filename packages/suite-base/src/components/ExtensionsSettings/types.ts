@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { ButtonProps } from "@mui/material";
-import { AsyncState } from "react-use/lib/useAsyncFn";
 
+import { AsyncState } from "@lichtblick/hooks";
 import { Immutable } from "@lichtblick/suite";
 import { OperationStatus } from "@lichtblick/suite-base/components/types";
 import { ExtensionMarketplaceDetail } from "@lichtblick/suite-base/context/ExtensionMarketplaceContext";

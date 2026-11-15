@@ -28,10 +28,10 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useMountedState } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
 import { filterMap } from "@lichtblick/den/collection";
+import { useMountedState } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import ChartComponent from "@lichtblick/suite-base/components/Chart/index";
 import { RpcElement, RpcScales } from "@lichtblick/suite-base/components/Chart/types";

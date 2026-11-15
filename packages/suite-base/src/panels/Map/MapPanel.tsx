@@ -21,11 +21,11 @@ import {
   StyleSpecification,
 } from "maplibre-gl";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useLatest } from "react-use";
 import { makeStyles } from "tss-react/mui";
 import { useDebounce } from "use-debounce";
 
 import { filterMap } from "@lichtblick/den/collection";
+import { useLatest } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
 import { MessageEvent, PanelExtensionContext, SettingsTreeAction, Topic } from "@lichtblick/suite";

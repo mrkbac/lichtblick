@@ -6,8 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import * as _ from "lodash-es";
-import { useState } from "react";
-import { useTimeoutFn } from "react-use";
+import { useEffect, useState } from "react";
 import { userEvent } from "storybook/test";
 import { StoryContext, StoryObj } from "storybook-react-rsbuild";
 
@@ -505,32 +504,39 @@ export const GeoJSON: StoryObj = {
 
     // Send a second messaqge on /geo topic. This should replace the previous message but not
     // the /geo2 message.
-    useTimeoutFn(() => {
-      setFixture({
-        topics,
-        frame: {
-          "/geojson_with_update": [
-            {
-              topic: "/geojson_with_update",
-              receiveTime: { sec: 130, nsec: 0 },
-              schemaName: "foxglove.GeoJSON",
-              message: {
-                geojson: JSON.stringify(
-                  makeGeoJsonMessage({
-                    center: {
-                      lat: GeoCenter.lat + 0.2,
-                      lon: GeoCenter.lon + 0.1,
-                    },
-                    key: "/geo",
-                  }),
-                ),
+    useEffect(() => {
+      const timeout = setTimeout(() => {
+        setFixture({
+          topics,
+          frame: {
+            "/geojson_with_update": [
+              {
+                topic: "/geojson_with_update",
+                receiveTime: { sec: 130, nsec: 0 },
+                schemaName: "foxglove.GeoJSON",
+                message: {
+                  geojson: JSON.stringify(
+                    makeGeoJsonMessage({
+                      center: {
+                        lat: GeoCenter.lat + 0.2,
+                        lon: GeoCenter.lon + 0.1,
+                      },
+                      key: "/geo",
+                    }),
+                  ),
+                },
+                sizeInBytes: 10,
               },
-              sizeInBytes: 10,
-            },
-          ],
-        },
-      });
-    }, 1000);
+            ],
+          },
+        });
+      }, 1000);
+      return () => {
+        clearTimeout(timeout);
+      };
+      // Run once on mount; topics is rebuilt every render.
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     return (
       <PanelSetup fixture={fixture} includeSettings>

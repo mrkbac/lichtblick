@@ -15,9 +15,9 @@ import {
 } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLatest } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
+import { useLatest } from "@lichtblick/hooks";
 import { PRESETS } from "@lichtblick/suite-base/panels/Map/layers";
 
 import { Bounds, pickTrack } from "./track";

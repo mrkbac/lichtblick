@@ -6,9 +6,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { ReactNode, useState } from "react";
-import { AsyncState } from "react-use/lib/useAsyncFn";
 import { createStore } from "zustand";
 
+import { AsyncState } from "@lichtblick/hooks";
 import {
   EventsContext,
   EventsStore,

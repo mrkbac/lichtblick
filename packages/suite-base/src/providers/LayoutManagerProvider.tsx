@@ -6,9 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { useContext, useEffect, useMemo } from "react";
-import { useNetworkState } from "react-use";
 
-import { useVisibilityState } from "@lichtblick/hooks";
+import { useOnline, useVisibilityState } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import LayoutManagerContext from "@lichtblick/suite-base/context/LayoutManagerContext";
 import { useLayoutStorage } from "@lichtblick/suite-base/context/LayoutStorageContext";
@@ -42,7 +41,7 @@ export default function LayoutManagerProvider({
     [layoutStorage, remoteLayoutStorage, userProfileStorage, remoteLayoutFavoritesStorage],
   );
 
-  const { online = false } = useNetworkState();
+  const online = useOnline();
   const visibilityState = useVisibilityState();
   useEffect(() => {
     layoutManager.setOnline({ online });

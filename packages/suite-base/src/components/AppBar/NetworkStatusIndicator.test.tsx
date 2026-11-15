@@ -3,17 +3,17 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { render } from "@testing-library/react";
-import { useNetworkState } from "react-use";
 import type { Mock } from "vitest";
 
+import { useOnline } from "@lichtblick/hooks";
 import { NetworkStatusIndicator } from "@lichtblick/suite-base/components/AppBar/NetworkStatusIndicator";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 const API_URL = "https://api.test.com";
 let mockApiUrl: string | undefined = API_URL;
 
-vi.mock("react-use", () => ({
-  useNetworkState: vi.fn(),
+vi.mock("@lichtblick/hooks", () => ({
+  useOnline: vi.fn(),
 }));
 
 vi.mock("@lichtblick/suite-base/constants/config", () => ({
@@ -62,7 +62,7 @@ describe("NetworkStatusIndicator", () => {
 
   it("should not render when no workspace parameter is present", () => {
     mockURL(API_URL);
-    (useNetworkState as Mock).mockReturnValue({ online: true });
+    (useOnline as Mock).mockReturnValue(true);
 
     const { container } = render(<NetworkStatusIndicator />);
 
@@ -72,7 +72,7 @@ describe("NetworkStatusIndicator", () => {
   it("should not render when online", () => {
     const url = `${API_URL}/?workspace=${BasicBuilder.string()}`;
     mockURL(url);
-    (useNetworkState as Mock).mockReturnValue({ online: true });
+    (useOnline as Mock).mockReturnValue(true);
 
     const { container } = render(<NetworkStatusIndicator />);
 
@@ -82,7 +82,7 @@ describe("NetworkStatusIndicator", () => {
   it("should render when offline", () => {
     const url = `${API_URL}/?workspace=${BasicBuilder.string()}`;
     mockURL(url);
-    (useNetworkState as Mock).mockReturnValue({ online: false });
+    (useOnline as Mock).mockReturnValue(false);
 
     const { container } = render(<NetworkStatusIndicator />);
 

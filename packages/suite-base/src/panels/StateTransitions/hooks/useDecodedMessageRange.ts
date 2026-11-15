@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useLatest } from "react-use";
 
+import { useLatest } from "@lichtblick/hooks";
 import { parseMessagePath } from "@lichtblick/message-path";
 import { useCachedGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import {

@@ -3,10 +3,9 @@
 
 import { Time } from "@foxglove/rostime";
 import { useCallback, useMemo, useRef } from "react";
-import { useLatest } from "react-use";
 
 import { filterMap, ReadonlyRingBuffer, RingBuffer } from "@lichtblick/den/collection";
-import { useShallowMemo } from "@lichtblick/hooks";
+import { useLatest, useShallowMemo } from "@lichtblick/hooks";
 import { parseMessagePath } from "@lichtblick/message-path";
 import { useMessageReducer } from "@lichtblick/suite-base/PanelAPI/useMessageReducer";
 import {

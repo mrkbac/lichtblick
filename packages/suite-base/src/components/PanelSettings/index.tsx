@@ -8,8 +8,8 @@
 import { Divider, Typography } from "@mui/material";
 import { useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useUnmount } from "react-use";
 
+import { useLatest } from "@lichtblick/hooks";
 import { SettingsTree } from "@lichtblick/suite";
 import { useConfigById } from "@lichtblick/suite-base/PanelAPI";
 import { PanelSideScope } from "@lichtblick/suite-base/components/Compare/ComparedPanel";
@@ -101,11 +101,17 @@ export default function PanelSettings({
   );
 
   // Automatically deselect the panel we were editing when the settings sidebar closes
-  useUnmount(() => {
+  const onUnmountRef = useLatest(() => {
     if (selectedPanelId != undefined) {
       setSelectedPanelIds([]);
     }
   });
+  useEffect(
+    () => () => {
+      onUnmountRef.current();
+    },
+    [onUnmountRef],
+  );
 
   const panelCatalog = usePanelCatalog();
   const { getCurrentLayoutState: getCurrentLayout, savePanelConfigs } = useCurrentLayoutActions();

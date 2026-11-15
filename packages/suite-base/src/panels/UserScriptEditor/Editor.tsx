@@ -23,8 +23,8 @@ import * as monacoApi from "monaco-editor/editor/editor.api.js";
 import { StandaloneServices } from "monaco-editor/editor/standalone/browser/standaloneServices";
 import * as path from "path";
 import React, { Suspense, ReactElement, useCallback, useEffect, useRef } from "react";
-import { useLatest } from "react-use";
 
+import { useLatest } from "@lichtblick/hooks";
 import ErrorBoundary from "@lichtblick/suite-base/components/ErrorBoundary";
 import getPrettifiedCode from "@lichtblick/suite-base/panels/UserScriptEditor/getPrettifiedCode";
 import { Script } from "@lichtblick/suite-base/panels/UserScriptEditor/script";

@@ -7,10 +7,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { render, waitFor } from "@testing-library/react";
-import { useNetworkState } from "react-use";
 import type { Mock } from "vitest";
 
-import { useVisibilityState } from "@lichtblick/hooks";
+import { useOnline, useVisibilityState } from "@lichtblick/hooks";
 import { useLayoutStorage } from "@lichtblick/suite-base/context/LayoutStorageContext";
 import { RemoteLayoutFavoritesStorageContext } from "@lichtblick/suite-base/context/RemoteLayoutFavoritesStorageContext";
 import { useRemoteLayoutStorage } from "@lichtblick/suite-base/context/RemoteLayoutStorageContext";
@@ -20,7 +19,6 @@ import LayoutManager from "@lichtblick/suite-base/services/LayoutManager/LayoutM
 import MockLayoutManager from "@lichtblick/suite-base/services/LayoutManager/MockLayoutManager";
 
 // Mock dependencies
-vi.mock("react-use");
 vi.mock("@lichtblick/hooks");
 vi.mock("@lichtblick/suite-base/context/LayoutStorageContext");
 vi.mock("@lichtblick/suite-base/context/RemoteLayoutStorageContext");
@@ -35,7 +33,7 @@ vi.mock("@lichtblick/suite-base/services/LayoutManager/LayoutManager", () => ({
 
 describe("LayoutManagerProvider", () => {
   // Mock necessary hooks to render <LayoutManagerProvider /> component, otherwise it will fail
-  (useNetworkState as Mock).mockReturnValue({ online: true });
+  (useOnline as Mock).mockReturnValue(true);
   (useVisibilityState as Mock).mockReturnValue("visible");
   (useLayoutStorage as Mock).mockReturnValue({});
   (useRemoteLayoutStorage as Mock).mockReturnValue({});
@@ -44,8 +42,8 @@ describe("LayoutManagerProvider", () => {
     vi.clearAllMocks();
   });
 
-  it("should call layoutManager.setOnline accordingly with useNetworkState", async () => {
-    (useNetworkState as Mock).mockResolvedValueOnce({ online: false });
+  it("should call layoutManager.setOnline accordingly with useOnline", async () => {
+    (useOnline as Mock).mockReturnValueOnce(false);
 
     // 1 render with true and another with false.
     render(<LayoutManagerProvider />);
@@ -67,7 +65,7 @@ describe("LayoutManagerProvider", () => {
   });
 
   it("should not call layoutManager.syncWithRemote if offline", async () => {
-    (useNetworkState as Mock).mockReturnValueOnce({ online: false });
+    (useOnline as Mock).mockReturnValueOnce(false);
 
     render(<LayoutManagerProvider />);
 

@@ -7,8 +7,8 @@
 
 import { Time } from "@foxglove/rostime";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { useLatest } from "react-use";
 
+import { useLatest } from "@lichtblick/hooks";
 import {
   MessagePipelineContext,
   useMessagePipeline,

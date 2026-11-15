@@ -15,10 +15,10 @@ import {
 } from "@foxglove/schemas";
 import { colord } from "colord";
 import { useCallback, useMemo, useState } from "react";
-import { useAsync } from "react-use";
 import { fireEvent, screen, userEvent, waitFor } from "storybook/test";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
 
+import { useAsync } from "@lichtblick/hooks";
 import { MessageEvent } from "@lichtblick/suite";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import {

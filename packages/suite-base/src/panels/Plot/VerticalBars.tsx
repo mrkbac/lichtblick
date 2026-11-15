@@ -7,8 +7,8 @@
 
 import { toSec } from "@foxglove/rostime";
 import React, { useCallback, useEffect, useLayoutEffect, useRef } from "react";
-import { useLatest } from "react-use";
 
+import { useLatest } from "@lichtblick/hooks";
 import { useMessagePipelineSubscribe } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useHoverValue } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
 import { getPixelForXValue } from "@lichtblick/suite-base/panels/Plot/utils/getPixelForXValue";

@@ -29,8 +29,8 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { useMountedState } from "react-use";
 
+import { useMountedState } from "@lichtblick/hooks";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import useCallbackWithToast from "@lichtblick/suite-base/hooks/useCallbackWithToast";
 import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";

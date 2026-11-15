@@ -3,9 +3,9 @@
 
 import * as _ from "lodash-es";
 import { useEffect, useMemo, useState } from "react";
-import { useAsyncFn } from "react-use";
 import { useDebounce } from "use-debounce";
 
+import { useAsyncFn } from "@lichtblick/hooks";
 import Log from "@lichtblick/log";
 import { UseExtensionSettingsHook } from "@lichtblick/suite-base/components/ExtensionsSettings/types";
 import { useExtensionCatalog } from "@lichtblick/suite-base/context/ExtensionCatalogContext";

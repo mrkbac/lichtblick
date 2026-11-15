@@ -14,11 +14,11 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useAsync } from "react-use";
 import { fireEvent } from "storybook/test";
 import { StoryObj } from "storybook-react-rsbuild";
 import { useImmer } from "use-immer";
 
+import { useAsync } from "@lichtblick/hooks";
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import { triggerWheel } from "@lichtblick/suite-base/stories/PanelSetup";
 import { useReadySignal } from "@lichtblick/suite-base/stories/ReadySignalContext";

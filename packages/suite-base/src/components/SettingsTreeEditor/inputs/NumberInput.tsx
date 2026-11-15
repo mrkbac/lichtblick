@@ -10,9 +10,9 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import { IconButton, TextFieldProps, TextField } from "@mui/material";
 import * as _ from "lodash-es";
 import { ReactNode, useCallback, useRef } from "react";
-import { useLatest } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
+import { useLatest } from "@lichtblick/hooks";
 import { customTypography } from "@lichtblick/theme";
 
 const Constants = {
