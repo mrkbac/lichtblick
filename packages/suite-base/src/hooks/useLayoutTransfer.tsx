@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { enqueueSnackbar } from "notistack";
-import path from "path";
 import { useCallback } from "react";
 import { useMountedState } from "react-use";
 
@@ -16,6 +15,7 @@ import { Layout } from "@lichtblick/suite-base/services/ILayoutStorage";
 import { Namespace } from "@lichtblick/suite-base/types";
 import { downloadTextFile } from "@lichtblick/suite-base/util/download";
 import { validateLayoutData } from "@lichtblick/suite-base/util/layout";
+import { basename, extname } from "@lichtblick/suite-base/util/path";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 
 import { useAnalytics } from "../context/AnalyticsContext";
@@ -43,7 +43,7 @@ export function useLayoutTransfer(): UseLayoutTransfer {
 
   const parseAndInstallLayout = useCallback(
     async (file: File, namespace: Namespace = "local", signal?: AbortSignal) => {
-      const layoutName = path.basename(file.name, path.extname(file.name));
+      const layoutName = basename(file.name, extname(file.name));
       const content = await file.text();
 
       if (!isMounted()) {

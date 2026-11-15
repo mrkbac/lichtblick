@@ -14,8 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import path from "path";
-
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import {
   DIAGNOSTIC_SEVERITY,
@@ -82,7 +80,8 @@ const getArgsToPrint = (args: unknown[]) => {
 
 // Exported for tests.
 export const requireImplementation = (id: string, projectCode: Map<string, string>): unknown => {
-  const requestedFile = `${path.join(DEFAULT_STUDIO_SCRIPT_PREFIX, id)}.js`;
+  // Compiled scripts require siblings as "./name"
+  const requestedFile = `${DEFAULT_STUDIO_SCRIPT_PREFIX}${id.replace(/^(\.\/)+/, "")}.js`;
   for (const [file, source] of projectCode.entries()) {
     if (requestedFile.endsWith(file)) {
       const sourceExports = {};

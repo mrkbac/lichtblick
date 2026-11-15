@@ -5,8 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import path from "path";
-
 import { AllowedFileExtensions } from "@lichtblick/suite-base/constants/allowedFileExtensions";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
@@ -22,6 +20,7 @@ import {
 import { expandVideoSeekBackfill } from "@lichtblick/suite-base/players/IterablePlayer/videoSeekBackfill";
 import { Player } from "@lichtblick/suite-base/players/types";
 import { uniqueNames } from "@lichtblick/suite-base/util/compareSides";
+import { basename, extname } from "@lichtblick/suite-base/util/path";
 
 const initWorkers: Record<string, () => Worker> = {
   ".bag": () => {
@@ -108,7 +107,7 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
     let extension = "";
 
     urls.forEach((url) => {
-      extension = path.extname(new URL(url).pathname);
+      extension = extname(new URL(url).pathname);
       nextExtension = this.checkExtensionMatch(extension, nextExtension);
     });
 
@@ -121,7 +120,7 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
       urls.length < 2 || compareParam == undefined || compareParam === ""
         ? undefined
         : compareParam === "true"
-          ? uniqueNames(urls.map((url) => path.basename(new URL(url).pathname)))
+          ? uniqueNames(urls.map((url) => basename(new URL(url).pathname)))
           : compareParam.split(",");
     const validCompare = compare?.length === urls.length ? compare : undefined;
 
@@ -162,7 +161,7 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
   #validateUrl(newValue: string): Error | undefined {
     try {
       const url = new URL(newValue);
-      const extension = path.extname(url.pathname) as AllowedFileExtensions;
+      const extension = extname(url.pathname) as AllowedFileExtensions;
 
       if (extension.length === 0) {
         return new Error("URL must end with a filename and extension");

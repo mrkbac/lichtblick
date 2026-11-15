@@ -16,7 +16,6 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import path from "path";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
@@ -30,6 +29,7 @@ import {
   draftFromFiles,
   draftToCompare,
 } from "@lichtblick/suite-base/util/compareSides";
+import { extname } from "@lichtblick/suite-base/util/path";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 
 import { SIDE_COLORS, sideLabel } from "./CompareContext";
@@ -210,7 +210,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
     () => [...new Set(sources.flatMap((source) => source.supportedFileTypes ?? []))],
     [sources],
   );
-  const accepts = (file: File) => extensions.includes(path.extname(file.name));
+  const accepts = (file: File) => extensions.includes(extname(file.name));
 
   const pick = async (): Promise<File[]> => {
     const handles = await showOpenFilePicker({
@@ -245,7 +245,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
   const { files, compare } = draftToCompare(draft);
   const sideCount = new Set(compare).size;
   const source = sources.find((s) =>
-    files.every((file) => s.supportedFileTypes?.includes(path.extname(file.name)) === true),
+    files.every((file) => s.supportedFileTypes?.includes(extname(file.name)) === true),
   );
   const mixed = files.length > 0 && source == undefined;
 
