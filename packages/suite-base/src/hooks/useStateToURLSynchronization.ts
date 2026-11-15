@@ -48,12 +48,18 @@ export function useStateToURLSynchronization(): void {
   const selectedEventId = useEvents(selectSelectedEventId);
   const { availableSources } = usePlayerSelection();
 
-  // Sync current time with the url.
+  // Sync current time with the url. Until a player reports its time (no player yet on page load, or
+  // a recording still loading), keep the time from the URL: Workspace seeks to it once it can.
+  // Closing a source clears it (PlayerManager).
+  const hasPlayer = playerUrlState != undefined;
   useEffect(() => {
+    if (!hasPlayer || (canSeek && debouncedCurrentTime == undefined)) {
+      return;
+    }
     updateUrl({
       time: canSeek ? debouncedCurrentTime : undefined,
     });
-  }, [canSeek, debouncedCurrentTime]);
+  }, [canSeek, debouncedCurrentTime, hasPlayer]);
 
   // Sync player state with the url.
   // When an mcap-bundle lookup key is present, skip writing ds/dsParams to avoid URL length issues.

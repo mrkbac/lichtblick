@@ -240,4 +240,22 @@ describe("useStateToURLSynchronization", () => {
     const written = new URL(spy.mock.calls[spy.mock.calls.length - 1]![2] as string);
     expect(written.searchParams.get("ds")).toBe("velodyne-device");
   });
+  it.each([
+    ["no player yet", { capabilities: [] }],
+    [
+      "a recording still loading",
+      { capabilities: ["playbackControl"], urlState: { sourceId: "remote-file", parameters: {} } },
+    ],
+  ])("keeps the url time while there is %s", (_name, playerState) => {
+    window.history.replaceState(undefined, "", "/?time=2024-01-01T00:00:00.000000000Z");
+    (useMessagePipeline as Mock).mockImplementation((selector) => selector({ playerState }));
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <EventsProvider>{children}</EventsProvider>
+    );
+    renderHook(useStateToURLSynchronization, { wrapper });
+
+    expect(new URL(window.location.href).searchParams.get("time")).toBe(
+      "2024-01-01T00:00:00.000000000Z",
+    );
+  });
 });
