@@ -4,7 +4,7 @@
 import { crc32, crc32Final, crc32Init, crc32Update } from "@foxglove/crc";
 import { Heap } from "heap-js";
 
-import { ChunkCursor } from "./ChunkCursor.ts";
+import { ChunkCursor, type ChunkMessageIndexCache } from "./ChunkCursor.ts";
 import McapByteReader from "./McapByteReader.ts";
 import { MCAP_MAGIC } from "./constants.ts";
 import { parseMagic, parseRecord } from "./parse.ts";
@@ -50,12 +50,13 @@ export type ChunkReadAhead = {
 };
 
 /**
- * Decompressed chunk data keyed by chunk start offset. See `McapIndexedReader.Initialize`.
+ * Decompressed chunk data keyed by chunk start offset, and optionally each chunk's parsed message
+ * index keyed by the offset of its message index section. See `McapIndexedReader.Initialize`.
  *
  * `get()` must return the same `DataView` object that was passed to `set()`, not a new view over
  * the same bytes: the reader recognizes chunks cached without a CRC check by object identity.
  */
-export type ChunkDataCache = {
+export type ChunkDataCache = ChunkMessageIndexCache & {
   get(chunkStartOffset: bigint): DataView | undefined;
   set(chunkStartOffset: bigint, data: DataView): void;
   /** Loads chunks ahead of every read on this cache, see ChunkReadAhead */
@@ -574,7 +575,7 @@ export class McapIndexedReader<TReadOptions = unknown> {
     for (let cursor; (cursor = chunkCursors.peek()); ) {
       if (!cursor.hasMessageIndexes()) {
         // If we encounter a chunk whose message indexes have not been loaded yet, load them and re-organize the heap.
-        await cursor.loadMessageIndexes(this.#readable, readOptions);
+        await cursor.loadMessageIndexes(this.#readable, readOptions, this.#chunkCache);
         if (cursor.hasMoreMessages()) {
           chunkCursors.replace(cursor);
         } else {
@@ -595,13 +596,16 @@ export class McapIndexedReader<TReadOptions = unknown> {
         chunkViewCache.set(cursor.chunkIndex.chunkStartOffset, chunkView);
       }
 
-      const [logTime, offset] = cursor.popMessage();
-      if (offset >= BigInt(chunkView.byteLength)) {
+      const entry = cursor.popMessage();
+      const index = cursor.messageIndex();
+      const logTime = index.logTimes[entry]!;
+      const offset = index.offsets[entry]!;
+      if (offset >= chunkView.byteLength) {
         throw this.#errorWithLibrary(
           `Message offset beyond chunk bounds (log time ${logTime}, offset ${offset}, chunk data length ${chunkView.byteLength}) in chunk at offset ${cursor.chunkIndex.chunkStartOffset}`,
         );
       }
-      chunkReader.reset(chunkView, Number(offset));
+      chunkReader.reset(chunkView, offset);
       const record = parseRecord(chunkReader, validateCrcs ?? true);
       if (!record) {
         throw this.#errorWithLibrary(
