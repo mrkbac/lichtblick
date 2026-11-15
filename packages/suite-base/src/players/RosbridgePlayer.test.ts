@@ -16,7 +16,6 @@
 
 import { Time } from "@foxglove/rostime";
 
-import { signal } from "@lichtblick/den/async";
 import RosbridgePlayer from "@lichtblick/suite-base/players/RosbridgePlayer";
 
 const headerMessage = ({
@@ -168,7 +167,7 @@ describe("RosbridgePlayer", () => {
       ],
     });
 
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
     player.setSubscriptions([{ topic: "/topic/A" }]);
     player.setListener(async ({ activeData }) => {
       const { topics } = activeData ?? {};
@@ -182,7 +181,7 @@ describe("RosbridgePlayer", () => {
       sig.resolve();
     });
 
-    await sig;
+    await sig.promise;
   });
 
   describe("parsedMessages", () => {
@@ -222,7 +221,7 @@ describe("RosbridgePlayer", () => {
     it("returns parsedMessages with complex type", async () => {
       player.setSubscriptions([{ topic: "/topic/A" }]);
 
-      const sig = signal();
+      const sig = Promise.withResolvers<void>();
       player.setListener(async ({ activeData }) => {
         const { messages } = activeData ?? {};
         if (!messages) {
@@ -240,13 +239,13 @@ describe("RosbridgePlayer", () => {
 
         sig.resolve();
       });
-      await sig;
+      await sig.promise;
     });
 
     it("returns parsedMessages with basic types", async () => {
       player.setSubscriptions([{ topic: "/topic/B" }]);
 
-      const sig = signal();
+      const sig = Promise.withResolvers<void>();
       player.setListener(async ({ activeData }) => {
         const { messages } = activeData ?? {};
         if (!messages) {
@@ -260,7 +259,7 @@ describe("RosbridgePlayer", () => {
 
         sig.resolve();
       });
-      await sig;
+      await sig.promise;
     });
   });
 });

@@ -17,7 +17,6 @@
 
 import type { Mock } from "vitest";
 
-import { signal } from "@lichtblick/den/async";
 import FakePlayer from "@lichtblick/suite-base/components/MessagePipeline/FakePlayer";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import MockUserScriptPlayerWorker from "@lichtblick/suite-base/players/UserScriptPlayer/MockUserScriptPlayerWorker";
@@ -133,9 +132,8 @@ const upstreamSecond = {
 };
 
 const setListenerHelper = (player: UserScriptPlayer, numPromises: number = 1) => {
-  // eslint-disable-next-line @typescript-eslint/promise-function-async
   const signals = [...new Array(numPromises)].map(() =>
-    signal<{
+    Promise.withResolvers<{
       topicNames: string[];
       messages: readonly MessageEvent[];
       progress?: PlayerState["progress"];
@@ -160,7 +158,8 @@ const setListenerHelper = (player: UserScriptPlayer, numPromises: number = 1) =>
     numEmits += 1;
   });
 
-  return signals;
+  // eslint-disable-next-line @typescript-eslint/promise-function-async
+  return signals.map((s) => s.promise);
 };
 
 // @ts-expect-error MockUserScriptPlayerWorker is not a fully valid SharedWorker but is enough for our needs

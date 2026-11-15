@@ -3,6 +3,7 @@
   "include": ["*.ts"],
   "compilerOptions": {
     "module": "preserve",
+    "types": ["node"],
     "noEmit": true
   }
 }

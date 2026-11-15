@@ -49,7 +49,12 @@ export type ChunkReadAhead = {
   ): Promise<Uint8Array>;
 };
 
-/** Decompressed chunk data keyed by chunk start offset. See `McapIndexedReader.Initialize`. */
+/**
+ * Decompressed chunk data keyed by chunk start offset. See `McapIndexedReader.Initialize`.
+ *
+ * `get()` must return the same `DataView` object that was passed to `set()`, not a new view over
+ * the same bytes: the reader recognizes chunks cached without a CRC check by object identity.
+ */
 export type ChunkDataCache = {
   get(chunkStartOffset: bigint): DataView | undefined;
   set(chunkStartOffset: bigint, data: DataView): void;
