@@ -32,10 +32,7 @@ export class ChunkMessageIndex {
   }
 
   /** Parses a chunk's message index section (the MessageIndex records of all its channels). */
-  public static parse(
-    view: DataView,
-    chunkIndex: ChunkIndex,
-  ): ChunkMessageIndex {
+  public static parse(view: DataView, chunkIndex: ChunkIndex): ChunkMessageIndex {
     // Pass 1: find the entry lists and count the entries
     const lists: { channelId: number; start: number; count: number }[] = [];
     let total = 0;
