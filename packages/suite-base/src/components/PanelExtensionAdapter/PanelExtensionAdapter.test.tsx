@@ -13,7 +13,7 @@ import { render } from "@testing-library/react";
 import { act } from "react";
 import { createStore } from "zustand";
 
-import { Condvar, signal } from "@lichtblick/den/async";
+import { Condvar } from "@lichtblick/den/async";
 import {
   PanelExtensionContext,
   RenderState,
@@ -38,7 +38,7 @@ describe("PanelExtensionAdapter", () => {
   it("should call initPanel", async () => {
     expect.assertions(1);
 
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
     const initPanel = (context: PanelExtensionContext) => {
       expect(context).toBeDefined();
       sig.resolve();
@@ -68,7 +68,7 @@ describe("PanelExtensionAdapter", () => {
 
     // force a re-render to make sure we do not call init panel again
     handle.rerender(<Wrapper />);
-    await sig;
+    await sig.promise;
   });
 
   it("routes nested converter settings through the panel updater", () => {
@@ -261,7 +261,7 @@ describe("PanelExtensionAdapter", () => {
       context.advertise?.("/some/topic", "some_datatype");
     };
 
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
     let passed = false;
     render(
       <ThemeProvider isDark>
@@ -298,7 +298,7 @@ describe("PanelExtensionAdapter", () => {
       </ThemeProvider>,
     );
     await act(async () => undefined);
-    await sig;
+    await sig.promise;
   });
 
   it("should support advertising on multiple topics", async () => {
@@ -308,7 +308,7 @@ describe("PanelExtensionAdapter", () => {
       context.advertise?.("/some/topic", "some_datatype");
       context.advertise?.("/another/topic", "another_datatype");
     };
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
 
     render(
       <ThemeProvider isDark>
@@ -365,7 +365,7 @@ describe("PanelExtensionAdapter", () => {
     );
 
     await act(async () => undefined);
-    await sig;
+    await sig.promise;
   });
 
   it("should support publishing on a topic", async () => {
@@ -378,7 +378,7 @@ describe("PanelExtensionAdapter", () => {
       });
     };
 
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
     let passed = false;
     render(
       <ThemeProvider isDark>
@@ -422,7 +422,7 @@ describe("PanelExtensionAdapter", () => {
     );
 
     await act(async () => undefined);
-    await sig;
+    await sig.promise;
   });
 
   it("should support unadvertising", async () => {
@@ -434,7 +434,7 @@ describe("PanelExtensionAdapter", () => {
       context.unadvertise?.("/some/topic");
     };
 
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
 
     render(
       <ThemeProvider isDark>
@@ -504,7 +504,7 @@ describe("PanelExtensionAdapter", () => {
     );
 
     await act(async () => undefined);
-    await sig;
+    await sig.promise;
   });
 
   it("should unadvertise when unmounting", async () => {
@@ -580,7 +580,7 @@ describe("PanelExtensionAdapter", () => {
     const config = {};
     const saveConfig = () => {};
 
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
 
     const initPanel = (context: PanelExtensionContext) => {
       expect(context).toBeDefined();
@@ -628,7 +628,7 @@ describe("PanelExtensionAdapter", () => {
 
     // force a re-render to make sure we call init panel once
     handle.rerender(<Wrapper />);
-    await sig;
+    await sig.promise;
   });
 
   it("should unsubscribe from all topics when subscribing to empty topics array", async () => {
@@ -636,7 +636,7 @@ describe("PanelExtensionAdapter", () => {
       context.subscribe([] as Subscription[]);
     };
 
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
 
     render(
       <ThemeProvider isDark>
@@ -661,11 +661,11 @@ describe("PanelExtensionAdapter", () => {
     );
 
     await act(async () => undefined);
-    await sig;
+    await sig.promise;
   });
 
   it("should apply sampling when converter supports latest-per-render-tick", async () => {
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
     const initPanel = (context: PanelExtensionContext) => {
       context.subscribe([
         { topic: "/test", convertTo: "dst", sampling: { mode: "latest-per-render-tick" } },
@@ -709,11 +709,11 @@ describe("PanelExtensionAdapter", () => {
     );
 
     await act(async () => undefined);
-    await sig;
+    await sig.promise;
   });
 
   it("should apply sampling for native subscriptions", async () => {
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
     const initPanel = (context: PanelExtensionContext) => {
       context.subscribe([{ topic: "/test", sampling: { mode: "latest-per-render-tick" } }]);
     };
@@ -747,11 +747,11 @@ describe("PanelExtensionAdapter", () => {
     );
 
     await act(async () => undefined);
-    await sig;
+    await sig.promise;
   });
 
   it("should apply sampling when convertTo resolves to the native topic schema", async () => {
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
     const initPanel = (context: PanelExtensionContext) => {
       context.subscribe([
         { topic: "/test", convertTo: "src", sampling: { mode: "latest-per-render-tick" } },
@@ -787,11 +787,11 @@ describe("PanelExtensionAdapter", () => {
     );
 
     await act(async () => undefined);
-    await sig;
+    await sig.promise;
   });
 
   it("should disable sampling when converter does not support latest-per-render-tick", async () => {
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
     const initPanel = (context: PanelExtensionContext) => {
       context.subscribe([
         { topic: "/test", convertTo: "dst", sampling: { mode: "latest-per-render-tick" } },
@@ -827,11 +827,11 @@ describe("PanelExtensionAdapter", () => {
     );
 
     await act(async () => undefined);
-    await sig;
+    await sig.promise;
   });
 
   it("should disable sampling when preload is true even if converter supports it", async () => {
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
     const initPanel = (context: PanelExtensionContext) => {
       context.subscribe([
         {
@@ -873,7 +873,7 @@ describe("PanelExtensionAdapter", () => {
     );
 
     await act(async () => undefined);
-    await sig;
+    await sig.promise;
   });
 
   it("should get and set variables", async () => {
@@ -1247,7 +1247,7 @@ describe("PanelExtensionAdapter", () => {
   });
 
   it("ignores subscriptions after panel unmount", async () => {
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
     const initPanel = vi.fn((context: PanelExtensionContext) => {
       context.watch("currentFrame");
       context.subscribe([{ topic: "x", preload: true }]);
@@ -1283,7 +1283,7 @@ describe("PanelExtensionAdapter", () => {
       [expect.any(String), []],
     ]);
     await act(async () => {
-      await sig;
+      await sig.promise;
     });
     unmount();
     expect(mockSetSubscriptions.mock.calls).toEqual([
@@ -1360,7 +1360,7 @@ describe("PanelExtensionAdapter", () => {
     const config = {};
     const saveConfig = () => {};
 
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
 
     const initPanel = (context: PanelExtensionContext) => {
       expect(context.metadata).toBeDefined();
@@ -1394,7 +1394,7 @@ describe("PanelExtensionAdapter", () => {
 
     // force a re-render to make sure we call init panel once
     handle.rerender(<Wrapper />);
-    await sig;
+    await sig.promise;
   });
 
   it("should handle unstable_subscribeMessageRange when getBatchIterator returns undefined", async () => {
@@ -1409,7 +1409,7 @@ describe("PanelExtensionAdapter", () => {
       expect(typeof cleanup).toBe("function");
     };
 
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
 
     render(
       <ThemeProvider isDark>
@@ -1424,7 +1424,7 @@ describe("PanelExtensionAdapter", () => {
     await act(async () => {
       sig.resolve();
     });
-    await sig;
+    await sig.promise;
   });
 
   it("should return cleanup function from unstable_subscribeMessageRange", async () => {
@@ -1441,7 +1441,7 @@ describe("PanelExtensionAdapter", () => {
       cleanupCalled = true;
     };
 
-    const sig = signal();
+    const sig = Promise.withResolvers<void>();
 
     render(
       <ThemeProvider isDark>
@@ -1456,7 +1456,7 @@ describe("PanelExtensionAdapter", () => {
     await act(async () => {
       sig.resolve();
     });
-    await sig;
+    await sig.promise;
 
     expect(cleanupCalled).toBe(true);
   });
@@ -1507,7 +1507,7 @@ describe("PanelExtensionAdapter", () => {
   describe("getTopicSchema", () => {
     it("returns the schema definition for a known topic", async () => {
       // GIVEN a panel with a topic whose schema is registered in the datatypes
-      const sig = signal<Immutable<MessageDefinition> | undefined>();
+      const sig = Promise.withResolvers<Immutable<MessageDefinition> | undefined>();
 
       // WHEN the panel requests the schema for that topic
       const initPanel = (context: PanelExtensionContext) => {
@@ -1542,7 +1542,7 @@ describe("PanelExtensionAdapter", () => {
       );
 
       await act(async () => undefined);
-      const schema = await sig;
+      const schema = await sig.promise;
 
       // THEN the matching message definition is returned
       expect(schema).toEqual({
@@ -1553,7 +1553,7 @@ describe("PanelExtensionAdapter", () => {
 
     it("returns undefined for an unknown topic", async () => {
       // GIVEN a panel whose fixture does not contain the requested topic
-      const sig = signal<Immutable<MessageDefinition> | undefined>();
+      const sig = Promise.withResolvers<Immutable<MessageDefinition> | undefined>();
 
       // WHEN the panel requests the schema for a nonexistent topic
       const initPanel = (context: PanelExtensionContext) => {
@@ -1588,7 +1588,7 @@ describe("PanelExtensionAdapter", () => {
       );
 
       await act(async () => undefined);
-      const schema = await sig;
+      const schema = await sig.promise;
 
       // THEN no schema is returned
       expect(schema).toBeUndefined();
@@ -1596,7 +1596,7 @@ describe("PanelExtensionAdapter", () => {
 
     it("returns undefined when no active data source is available", async () => {
       // GIVEN a panel with no active data source (empty fixture)
-      const sig = signal<Immutable<MessageDefinition> | undefined>();
+      const sig = Promise.withResolvers<Immutable<MessageDefinition> | undefined>();
 
       // WHEN the panel requests a topic schema
       const initPanel = (context: PanelExtensionContext) => {
@@ -1615,7 +1615,7 @@ describe("PanelExtensionAdapter", () => {
       );
 
       await act(async () => undefined);
-      const schema = await sig;
+      const schema = await sig.promise;
 
       // THEN no schema is returned
       expect(schema).toBeUndefined();
@@ -1623,7 +1623,7 @@ describe("PanelExtensionAdapter", () => {
 
     it("returns undefined when called after the panel is unmounted", async () => {
       // GIVEN a panel context captured while the panel is mounted
-      const sig = signal<PanelExtensionContext>();
+      const sig = Promise.withResolvers<PanelExtensionContext>();
 
       const initPanel = (context: PanelExtensionContext) => {
         sig.resolve(context);
@@ -1656,7 +1656,7 @@ describe("PanelExtensionAdapter", () => {
       );
 
       await act(async () => undefined);
-      const context = await sig;
+      const context = await sig.promise;
 
       // WHEN the panel is unmounted and the schema is requested afterwards
       unmount();
@@ -1669,7 +1669,7 @@ describe("PanelExtensionAdapter", () => {
   describe("getSchema", () => {
     it("returns the schema definition for a known schemaName", async () => {
       // GIVEN a panel with a schema registered in the datatypes
-      const sig = signal<Immutable<MessageDefinition> | undefined>();
+      const sig = Promise.withResolvers<Immutable<MessageDefinition> | undefined>();
 
       // WHEN the panel requests the schema by its name
       const initPanel = (context: PanelExtensionContext) => {
@@ -1704,7 +1704,7 @@ describe("PanelExtensionAdapter", () => {
       );
 
       await act(async () => undefined);
-      const schema = await sig;
+      const schema = await sig.promise;
 
       // THEN the matching message definition is returned
       expect(schema).toEqual({
@@ -1715,7 +1715,7 @@ describe("PanelExtensionAdapter", () => {
 
     it("returns undefined for an unknown schemaName", async () => {
       // GIVEN a panel whose datatypes do not contain the requested schema
-      const sig = signal<Immutable<MessageDefinition> | undefined>();
+      const sig = Promise.withResolvers<Immutable<MessageDefinition> | undefined>();
 
       // WHEN the panel requests a nonexistent schema by name
       const initPanel = (context: PanelExtensionContext) => {
@@ -1750,7 +1750,7 @@ describe("PanelExtensionAdapter", () => {
       );
 
       await act(async () => undefined);
-      const schema = await sig;
+      const schema = await sig.promise;
 
       // THEN no schema is returned
       expect(schema).toBeUndefined();
@@ -1758,7 +1758,7 @@ describe("PanelExtensionAdapter", () => {
 
     it("returns undefined when no active data source is available", async () => {
       // GIVEN a panel with no active data source (empty fixture)
-      const sig = signal<Immutable<MessageDefinition> | undefined>();
+      const sig = Promise.withResolvers<Immutable<MessageDefinition> | undefined>();
 
       // WHEN the panel requests a schema by name
       const initPanel = (context: PanelExtensionContext) => {
@@ -1777,7 +1777,7 @@ describe("PanelExtensionAdapter", () => {
       );
 
       await act(async () => undefined);
-      const schema = await sig;
+      const schema = await sig.promise;
 
       // THEN no schema is returned
       expect(schema).toBeUndefined();
@@ -1785,7 +1785,7 @@ describe("PanelExtensionAdapter", () => {
 
     it("returns undefined when called after the panel is unmounted", async () => {
       // GIVEN a panel context captured while the panel is mounted
-      const sig = signal<PanelExtensionContext>();
+      const sig = Promise.withResolvers<PanelExtensionContext>();
 
       const initPanel = (context: PanelExtensionContext) => {
         sig.resolve(context);
@@ -1818,7 +1818,7 @@ describe("PanelExtensionAdapter", () => {
       );
 
       await act(async () => undefined);
-      const context = await sig;
+      const context = await sig.promise;
 
       // WHEN the panel is unmounted and the schema is requested afterwards
       unmount();
@@ -1853,7 +1853,7 @@ describe("PanelExtensionAdapter", () => {
       const { store, setAlert } = makeAlertsStore();
       const alert = { severity: "error", message: "boom" } as const;
 
-      const sig = signal();
+      const sig = Promise.withResolvers<void>();
       const initPanel = (context: PanelExtensionContext) => {
         (context as BuiltinPanelExtensionContext).unstable_setAlert?.("my-alert", alert);
         sig.resolve();
@@ -1872,7 +1872,7 @@ describe("PanelExtensionAdapter", () => {
         </ThemeProvider>,
       );
       await act(async () => undefined);
-      await sig;
+      await sig.promise;
 
       // THEN setAlert is called with a panel-scoped tag and the alert
       expect(setAlert).toHaveBeenCalledWith(
@@ -1885,7 +1885,7 @@ describe("PanelExtensionAdapter", () => {
       // GIVEN a panel that clears an alert during init
       const { store, clearAlert } = makeAlertsStore();
 
-      const sig = signal();
+      const sig = Promise.withResolvers<void>();
       const initPanel = (context: PanelExtensionContext) => {
         (context as BuiltinPanelExtensionContext).unstable_setAlert?.("my-alert", undefined);
         sig.resolve();
@@ -1904,7 +1904,7 @@ describe("PanelExtensionAdapter", () => {
         </ThemeProvider>,
       );
       await act(async () => undefined);
-      await sig;
+      await sig.promise;
 
       // THEN clearAlert is called with the panel-scoped tag
       expect(clearAlert).toHaveBeenCalledWith(expect.stringMatching(/^panel-alert:.+:my-alert$/));
@@ -1915,7 +1915,7 @@ describe("PanelExtensionAdapter", () => {
       const { store, clearAlert } = makeAlertsStore();
       const alert = { severity: "warn", message: "watch out" } as const;
 
-      const sig = signal();
+      const sig = Promise.withResolvers<void>();
       const initPanel = (context: PanelExtensionContext) => {
         (context as BuiltinPanelExtensionContext).unstable_setAlert?.("my-alert", alert);
         sig.resolve();
@@ -1933,7 +1933,7 @@ describe("PanelExtensionAdapter", () => {
         </ThemeProvider>,
       );
       await act(async () => undefined);
-      await sig;
+      await sig.promise;
       clearAlert.mockClear();
 
       // WHEN the panel is unmounted
