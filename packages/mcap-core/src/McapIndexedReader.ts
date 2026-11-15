@@ -802,11 +802,8 @@ export class McapIndexedReader<TReadOptions = unknown> {
       if (!this.#decompressHandlers?.[chunk.compression]) {
         throw this.#errorWithLibrary(`Unsupported compression ${chunk.compression}`);
       }
-      buffer = await readAhead.decompress(
-        chunk.compression,
-        buffer.slice(),
-        chunk.uncompressedSize,
-      );
+      // `records` is the chunk's own copy and isn't used again, so it can be transferred
+      buffer = await readAhead.decompress(chunk.compression, buffer, chunk.uncompressedSize);
     }
     const view = this.#checkedView(chunk, buffer, options);
     if (!options.validateCrcs) {
