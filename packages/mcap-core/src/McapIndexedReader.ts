@@ -557,12 +557,14 @@ export class McapIndexedReader<TReadOptions = unknown> {
     }
 
     const readAhead = this.#chunkCache?.readAhead;
-    const plan = readAhead ? readAheadPlan(chunksInRange, reverse, relevantChannels) : undefined;
+    // Built on first use, after the first message is out: sorting a huge file's chunks takes a while
+    let plan: ReadAheadPlan | undefined;
 
     // Holds the decompressed chunk data for "active" chunks. Items are added below when a chunk
     // cursor becomes active (i.e. when we first need to access messages from the chunk) and removed
     // when the cursor is removed from the heap.
     const chunkViewCache = new Map<bigint, DataView>();
+    let loadAheadFrom: ChunkIndex | undefined;
     const chunkReader = new McapByteReader(new DataView(new ArrayBuffer(0)));
     for (let cursor; (cursor = chunkCursors.peek()); ) {
       if (!cursor.hasMessageIndexes()) {
@@ -578,12 +580,13 @@ export class McapIndexedReader<TReadOptions = unknown> {
 
       let chunkView = chunkViewCache.get(cursor.chunkIndex.chunkStartOffset);
       if (!chunkView) {
-        const options = { validateCrcs: validateCrcs ?? true, readOptions };
-        chunkView = await this.#loadChunkData(cursor.chunkIndex, options);
-        // Only now, so loading ahead doesn't delay this chunk (the first message after a seek)
-        if (readAhead && plan) {
-          this.#loadAhead(readAhead, plan, cursor.chunkIndex, options);
-        }
+        chunkView = await this.#loadChunkData(cursor.chunkIndex, {
+          validateCrcs: validateCrcs ?? true,
+          readOptions,
+        });
+        // Not yet: loading ahead before this chunk's first message is out would delay it (e.g. the
+        // first message after a seek, which may need other chunks' message indexes read first)
+        loadAheadFrom = cursor.chunkIndex;
         chunkViewCache.set(cursor.chunkIndex.chunkStartOffset, chunkView);
       }
 
@@ -611,6 +614,15 @@ export class McapIndexedReader<TReadOptions = unknown> {
         );
       }
       yield record;
+
+      if (loadAheadFrom && readAhead) {
+        plan ??= readAheadPlan(chunksInRange, reverse, relevantChannels);
+        this.#loadAhead(readAhead, plan, loadAheadFrom, {
+          validateCrcs: validateCrcs ?? true,
+          readOptions,
+        });
+        loadAheadFrom = undefined;
+      }
 
       if (cursor.hasMoreMessages()) {
         // There is no need to reorganize the heap when chunks are ordered and not overlapping.
@@ -889,11 +901,13 @@ function readAheadPlan(
     }
     chunks.push(chunkIndex);
   }
-  chunks.sort(
-    reverse
-      ? (a, b) => compareBigInt(b.messageEndTime, a.messageEndTime)
-      : (a, b) => compareBigInt(a.messageStartTime, b.messageStartTime),
-  );
+  const compare = reverse
+    ? (a: ChunkIndex, b: ChunkIndex) => compareBigInt(b.messageEndTime, a.messageEndTime)
+    : (a: ChunkIndex, b: ChunkIndex) => compareBigInt(a.messageStartTime, b.messageStartTime);
+  // Chunks are usually written in time order already
+  if (chunks.some((chunk, i) => i > 0 && compare(chunks[i - 1]!, chunk) > 0)) {
+    chunks.sort(compare);
+  }
   return { chunks, position: new Map(chunks.map((chunk, i) => [chunk.chunkStartOffset, i])) };
 }
 
