@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Button, Typography } from "@mui/material";
+import { Button, Typography, alpha } from "@mui/material";
 import {
   useCallback,
   useEffect,
@@ -94,6 +94,8 @@ const useStyles = makeStyles()((theme) => ({
     padding: theme.spacing(1),
     textAlign: "center",
     color: theme.palette.text.secondary,
+    // Invisible on an empty tile; dims a frame left under an error so the text stays legible.
+    backgroundColor: alpha(theme.palette.background.default, 0.75),
     fontSize: theme.typography.caption.fontSize,
     pointerEvents: "none",
     "&[hidden]": { display: "none" },

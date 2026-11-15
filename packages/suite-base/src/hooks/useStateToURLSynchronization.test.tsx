@@ -20,6 +20,9 @@ import { ReactNode } from "react";
 import type { Mock } from "vitest";
 
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import PlayerSelectionContext, {
+  PlayerSelection,
+} from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useStateToURLSynchronization } from "@lichtblick/suite-base/hooks/useStateToURLSynchronization";
 import EventsProvider from "@lichtblick/suite-base/providers/EventsProvider";
 
@@ -191,12 +194,40 @@ describe("useStateToURLSynchronization", () => {
       }),
     );
 
+    const selection = {
+      availableSources: [{ id: "mcap-local-file", type: "file" }],
+    } as unknown as PlayerSelection;
     const wrapper = ({ children }: { children: ReactNode }) => (
-      <EventsProvider>{children}</EventsProvider>
+      <PlayerSelectionContext.Provider value={selection}>
+        <EventsProvider>{children}</EventsProvider>
+      </PlayerSelectionContext.Provider>
     );
     renderHook(useStateToURLSynchronization, { wrapper });
 
     const written = new URL(spy.mock.calls[spy.mock.calls.length - 1]![2] as string);
     expect(written.searchParams.has("ds")).toBe(false);
+  });
+  it("keeps ds for a connection without url parameters, which reopens from its id", () => {
+    const spy = vi.spyOn(window.history, "replaceState");
+    (useMessagePipeline as Mock).mockImplementation((selector) =>
+      selector({
+        playerState: {
+          capabilities: [],
+          urlState: { sourceId: "velodyne-device", parameters: undefined },
+        },
+      }),
+    );
+    const selection = {
+      availableSources: [{ id: "velodyne-device", type: "connection" }],
+    } as unknown as PlayerSelection;
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <PlayerSelectionContext.Provider value={selection}>
+        <EventsProvider>{children}</EventsProvider>
+      </PlayerSelectionContext.Provider>
+    );
+    renderHook(useStateToURLSynchronization, { wrapper });
+
+    const written = new URL(spy.mock.calls[spy.mock.calls.length - 1]![2] as string);
+    expect(written.searchParams.get("ds")).toBe("velodyne-device");
   });
 });

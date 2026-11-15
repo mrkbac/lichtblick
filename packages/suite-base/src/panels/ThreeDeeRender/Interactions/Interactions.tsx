@@ -51,7 +51,55 @@ type Props = {
   toolbarItems?: React.ReactNode;
 };
 
-const InteractionsBaseComponent = React.memo<Props>(function InteractionsBaseComponent({
+type SelectedObjectPaneProps = Pick<
+  Props,
+  "addPanel" | "onShowTopicSettings" | "selectedObject" | "timezone"
+>;
+
+// Memoized on its own: the toolbar around it re-renders with the overlay (e.g. on every hover move),
+// the object details only when the selection changes.
+const SelectedObjectPane = React.memo<SelectedObjectPaneProps>(function SelectedObjectPane({
+  addPanel,
+  onShowTopicSettings,
+  selectedObject,
+  timezone,
+}) {
+  const selectedInteractionData = selectedObject?.object.interactionData;
+  const originalMessage = selectedInteractionData?.originalMessage;
+  const instanceDetails = selectedInteractionData?.instanceDetails;
+
+  return (
+    <ToolGroupFixedSizePane>
+      {originalMessage ? (
+        <>
+          {selectedInteractionData.topic && (
+            <TopicLink
+              addPanel={addPanel}
+              onShowTopicSettings={onShowTopicSettings}
+              topic={selectedInteractionData.topic}
+            />
+          )}
+          {instanceDetails ? (
+            <ObjectDetails selectedObject={instanceDetails} timezone={timezone} />
+          ) : (
+            <></>
+          )}
+          <ObjectDetails
+            selectedObject={originalMessage}
+            interactionData={selectedInteractionData}
+            timezone={timezone}
+          />
+        </>
+      ) : (
+        <Typography variant="body2" gutterBottom color="textDisabled">
+          Click an object in the 3D view to select it.
+        </Typography>
+      )}
+    </ToolGroupFixedSizePane>
+  );
+});
+
+function InteractionsBaseComponent({
   addPanel,
   selectedObject,
   interactionsTabType,
@@ -59,11 +107,7 @@ const InteractionsBaseComponent = React.memo<Props>(function InteractionsBaseCom
   setInteractionsTabType,
   timezone,
   toolbarItems,
-}: Props) {
-  const selectedInteractionData = selectedObject?.object.interactionData;
-  const originalMessage = selectedInteractionData?.originalMessage;
-  const instanceDetails = selectedInteractionData?.instanceDetails;
-
+}: Props): React.JSX.Element {
   return (
     <ExpandingToolbar
       tooltip="Inspect objects"
@@ -75,40 +119,17 @@ const InteractionsBaseComponent = React.memo<Props>(function InteractionsBaseCom
       }}
     >
       <ToolGroup name={OBJECT_TAB_TYPE}>
-        <ToolGroupFixedSizePane>
-          {originalMessage ? (
-            <>
-              {selectedInteractionData.topic && (
-                <TopicLink
-                  addPanel={addPanel}
-                  onShowTopicSettings={onShowTopicSettings}
-                  topic={selectedInteractionData.topic}
-                />
-              )}
-              {instanceDetails ? (
-                <ObjectDetails selectedObject={instanceDetails} timezone={timezone} />
-              ) : (
-                <></>
-              )}
-              <ObjectDetails
-                selectedObject={originalMessage}
-                interactionData={selectedInteractionData}
-                timezone={timezone}
-              />
-            </>
-          ) : (
-            <Typography variant="body2" gutterBottom color="textDisabled">
-              Click an object in the 3D view to select it.
-            </Typography>
-          )}
-        </ToolGroupFixedSizePane>
+        <SelectedObjectPane
+          addPanel={addPanel}
+          onShowTopicSettings={onShowTopicSettings}
+          selectedObject={selectedObject}
+          timezone={timezone}
+        />
       </ToolGroup>
     </ExpandingToolbar>
   );
-});
+}
 
-// Wrap the Interactions so that we don't rerender every time any part of the PanelContext config changes, but just the
-// one value that we care about.
 export default function Interactions(props: Props): React.JSX.Element {
   return <InteractionsBaseComponent {...props} />;
 }

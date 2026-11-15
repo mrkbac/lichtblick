@@ -15,6 +15,7 @@ import {
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { EventsStore, useEvents } from "@lichtblick/suite-base/context/EventsContext";
+import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import { AppURLState, updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
 
@@ -45,6 +46,7 @@ export function useStateToURLSynchronization(): void {
     maxWait: 500,
   });
   const selectedEventId = useEvents(selectSelectedEventId);
+  const { availableSources } = usePlayerSelection();
 
   // Sync current time with the url.
   useEffect(() => {
@@ -65,9 +67,13 @@ export function useStateToURLSynchronization(): void {
       return;
     }
 
-    // Local files have no URL parameters and can't be reopened from the URL; a `ds` for them would
-    // only make a reload fail and skip reopening the file from recents (see PlayerManager).
-    if (stablePlayerUrlState.parameters == undefined) {
+    // Local files can't be reopened from the URL; a `ds` for them would only make a reload fail and
+    // skip reopening the file from recents (see PlayerManager).
+    const sourceId = stablePlayerUrlState.sourceId;
+    const source = availableSources.find(
+      (candidate) => candidate.id === sourceId || candidate.legacyIds?.includes(sourceId) === true,
+    );
+    if (source?.type === "file") {
       updateUrl({ ds: undefined, dsParams: {} });
       return;
     }
@@ -87,5 +93,5 @@ export function useStateToURLSynchronization(): void {
         _.isArray,
       ),
     });
-  }, [selectedEventId, stablePlayerUrlState]);
+  }, [availableSources, selectedEventId, stablePlayerUrlState]);
 }

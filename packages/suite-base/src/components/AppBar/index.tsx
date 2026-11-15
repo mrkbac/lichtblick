@@ -317,7 +317,10 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                     aria-haspopup="true"
                     aria-expanded={userMenuOpen ? "true" : undefined}
                     onClick={(event) => {
-                      setUserAnchorEl(event.currentTarget);
+                      // Shown while the session loads only to hold its place; nothing to open yet
+                      if (organization.status !== "loading") {
+                        setUserAnchorEl(event.currentTarget);
+                      }
                     }}
                     data-testid="user-button"
                   >
@@ -358,7 +361,7 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
       />
       <UserMenu
         anchorEl={userAnchorEl}
-        open={userMenuOpen && showUserMenu && organization.status !== "loading"}
+        open={userMenuOpen && showUserMenu}
         handleClose={() => {
           setUserAnchorEl(undefined);
         }}
