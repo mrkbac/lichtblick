@@ -30,7 +30,7 @@ import { OffsetRequest, nextOffsets, pendingRequests } from "./offsetRequests";
 import { SideView } from "./sideView";
 
 /** Colors of sides A, B, C, …, picked to stay apart from each other in light and dark themes */
-const SIDE_COLORS = ["#4e98e2", "#f5a524", "#3ecf8e", "#c678dd", "#ef5b5b", "#2ec4c6"];
+export const SIDE_COLORS = ["#4e98e2", "#f5a524", "#3ecf8e", "#c678dd", "#ef5b5b", "#2ec4c6"];
 
 export type CompareSideInfo = Immutable<CompareSide> & {
   index: number;
@@ -56,7 +56,7 @@ export type CompareState = {
 
 const CompareContext = createContext<CompareState | undefined>(undefined);
 
-function sideLabel(index: number): string {
+export function sideLabel(index: number): string {
   return index < 26 ? String.fromCharCode(65 + index) : `R${index + 1}`;
 }
 

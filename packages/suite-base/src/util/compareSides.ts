@@ -58,3 +58,51 @@ export function uniqueNames(names: readonly string[]): string[] {
     return name;
   });
 }
+
+/** Recordings to compare as the compare dialog edits them */
+export type CompareDraft = {
+  /** Files added to every side, e.g. a base recording the sides add their own topics to */
+  shared: File[];
+  /** One entry per side; a side of several files is merged into one recording */
+  sides: { name: string; files: File[] }[];
+};
+
+/** The files to open and the side name of each (see FileDataSourceArgs.compare) */
+export function draftToCompare(draft: CompareDraft): { files: File[]; compare: string[] } {
+  const sides = draft.sides.filter((side) => side.files.length > 0);
+  const names = uniqueNames(sides.map((side) => side.name.trim() || side.files[0]!.name));
+  const files: File[] = [];
+  const compare: string[] = [];
+  sides.forEach((side, index) => {
+    for (const file of [...draft.shared, ...side.files]) {
+      files.push(file);
+      compare.push(names[index]!);
+    }
+  });
+  return { files, compare };
+}
+
+/**
+ * The draft for files already open: grouped by their side names when compared (a file in every
+ * side is shared), else grouped as defaultCompareSides() would.
+ */
+export function draftFromFiles(files: readonly File[], compare?: readonly string[]): CompareDraft {
+  const names =
+    compare?.length === files.length && compare.length > 0 ? compare : defaultCompareSides(files);
+  const sideNames = [...new Set(names)];
+  const filesOf = sideNames.map((name) => files.filter((_, index) => names[index] === name));
+  const inEvery =
+    sideNames.length > 1
+      ? filesOf[0]!.filter((file) => filesOf.every((f) => f.includes(file)))
+      : [];
+  // Only shared when every side keeps a file of its own, so no side disappears from the draft
+  const shared = filesOf.every((f) => f.length > inEvery.length) ? inEvery : [];
+  return {
+    shared,
+    sides: sideNames.map((name, index) => {
+      const own = filesOf[index]!.filter((file) => !shared.includes(file));
+      // A name that came from the side's first file stays empty, so it follows the files
+      return { name: own[0]?.name === name ? "" : name, files: own };
+    }),
+  };
+}

@@ -15,6 +15,7 @@ import { formatByteSize } from "@lichtblick/den/format";
 import { TempBuffer } from "@lichtblick/mcap-core";
 import { Immutable } from "@lichtblick/suite";
 import { useCompare } from "@lichtblick/suite-base/components/Compare/CompareContext";
+import { useShowCompareDialog } from "@lichtblick/suite-base/components/Compare/CompareDialog";
 import { CompareSidesEditor } from "@lichtblick/suite-base/components/Compare/CompareSidesEditor";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import {
@@ -27,7 +28,6 @@ import Timestamp from "@lichtblick/suite-base/components/Timestamp";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { PlayerPresence, RecordingFileInfo } from "@lichtblick/suite-base/players/types";
-import { defaultCompareSides } from "@lichtblick/suite-base/util/compareSides";
 import { downloadFiles } from "@lichtblick/suite-base/util/download";
 import { formatDuration, formatHms } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeAgo } from "@lichtblick/suite-base/util/recentSources";
@@ -304,6 +304,7 @@ function FilesField({ startTime }: { startTime?: Time }): React.JSX.Element | nu
   const { t } = useTranslation("dataSourceInfo");
   const files = useMessagePipeline(selectRecordingFiles);
   const { selectSource, selectedSource, selectedFiles } = usePlayerSelection();
+  const showCompare = useShowCompareDialog();
 
   const sortedFiles = useMemo(
     () => files && [...files].sort((a, b) => (a.start && b.start ? compare(a.start, b.start) : 0)),
@@ -316,30 +317,40 @@ function FilesField({ startTime }: { startTime?: Time }): React.JSX.Element | nu
   // With a single file the range would only repeat start, end and duration.
   const recordingStart = sortedFiles.length > 1 ? startTime : undefined;
   const comparing = sortedFiles.some((file) => file.topicPrefix != undefined);
-  // Reopen the same files merged into one recording, or side by side under /a, /b, …
-  const canToggle =
-    selectedSource?.supportsCompare === true && selectedFiles && selectedFiles.length > 1;
+  const canCompare = selectedSource?.supportsCompare === true && selectedFiles != undefined;
   return (
     <Field label={t("files")}>
       <Stack gap={0.75}>
         {sortedFiles.map((file, index) => (
           <FileRow key={`${file.name}-${index}`} file={file} recordingStart={recordingStart} />
         ))}
-        {canToggle === true && (
-          <Button
-            size="small"
-            variant="outlined"
-            title={comparing ? t("mergeFilesHint") : t("compareFilesHint")}
-            onClick={() => {
-              selectSource(selectedSource.id, {
-                type: "file",
-                files: [...selectedFiles],
-                compare: comparing ? undefined : defaultCompareSides(selectedFiles),
-              });
-            }}
-          >
-            {comparing ? t("mergeFiles") : t("compareFiles")}
-          </Button>
+        {canCompare && (
+          <Stack direction="row" gap={0.5} flexWrap="wrap">
+            <Button
+              size="small"
+              variant="outlined"
+              title={comparing ? t("editCompareHint") : t("compareFilesHint")}
+              onClick={showCompare}
+            >
+              {comparing ? t("editCompare") : t("compareFiles")}
+            </Button>
+            {/* Merging the very same files again: a file shared by every side is opened once */}
+            {comparing && (
+              <Button
+                size="small"
+                variant="text"
+                title={t("mergeFilesHint")}
+                onClick={() => {
+                  selectSource(selectedSource.id, {
+                    type: "file",
+                    files: [...new Set(selectedFiles)],
+                  });
+                }}
+              >
+                {t("mergeFiles")}
+              </Button>
+            )}
+          </Stack>
         )}
       </Stack>
     </Field>
