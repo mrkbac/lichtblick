@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { renderHook, waitFor } from "@testing-library/react";
-import { createElement, ReactNode } from "react";
+import { ReactNode } from "react";
 import type { Mock } from "vitest";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
@@ -42,16 +42,15 @@ function setup(config: PublishConfig, { confirmResult }: { confirmResult: boolea
       usePublishPanelSettings(config, saveConfig, topics, datatypes, confirmReplace);
     },
     {
-      wrapper: ({ children }: { children: ReactNode }) =>
-        createElement(
-          MockPanelContextProvider,
-          {
-            setMessagePathDropConfig: (dc) => {
-              dropConfig = dc;
-            },
-          },
-          children,
-        ),
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <MockPanelContextProvider
+          setMessagePathDropConfig={(dc) => {
+            dropConfig = dc;
+          }}
+        >
+          {children}
+        </MockPanelContextProvider>
+      ),
     },
   );
   const handler = (
