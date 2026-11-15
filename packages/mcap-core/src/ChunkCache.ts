@@ -80,11 +80,16 @@ export class ChunkCache {
     }
     entries.set(fullKey, data);
     totalBytes += data.byteLength;
+    const kind = key[0];
+    // A parsed index is small next to its chunk and is added just before it is read, so it never
+    // evicts: evicting the chunk would make every read decompress it again. The next chunk added
+    // brings the total back under budget.
+    if (kind === "m") {
+      return;
+    }
     // Oldest first. Always keeps the newest, however big, and the other half of a recovered chunk
     // (its records or rebuilt message indexes), so adding one never evicts the other.
-    const kind = key[0];
-    const sibling =
-      kind === "c" || kind === "i" ? this.#prefix + (kind === "c" ? "i" : "c") + key.slice(1) : "";
+    const sibling = this.#prefix + (kind === "c" ? "i" : "c") + key.slice(1);
     for (const [oldKey, oldData] of entries) {
       if (totalBytes <= CHUNK_CACHE_BYTES || oldKey === fullKey) {
         break;

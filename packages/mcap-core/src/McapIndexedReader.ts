@@ -560,8 +560,9 @@ export class McapIndexedReader<TReadOptions = unknown> {
       }
 
       const entry = cursor.popMessage();
-      const logTime = cursor.messageIndex.logTimes[entry]!;
-      const offset = cursor.messageIndex.offsets[entry]!;
+      const index = cursor.messageIndex();
+      const logTime = index.logTimes[entry]!;
+      const offset = index.offsets[entry]!;
       if (offset >= chunkView.byteLength) {
         throw this.#errorWithLibrary(
           `Message offset beyond chunk bounds (log time ${logTime}, offset ${offset}, chunk data length ${chunkView.byteLength}) in chunk at offset ${cursor.chunkIndex.chunkStartOffset}`,

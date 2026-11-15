@@ -20,15 +20,14 @@ export class ChunkMessageIndex {
   /** Message record offsets in the decompressed chunk */
   public readonly offsets: Float64Array;
   public readonly channelIds: Uint16Array;
+  /** Bytes held, for cache budgets */
+  public readonly byteLength: number;
 
   public constructor(logTimes: BigUint64Array, offsets: Float64Array, channelIds: Uint16Array) {
     this.logTimes = logTimes;
     this.offsets = offsets;
     this.channelIds = channelIds;
-  }
-
-  public get byteLength(): number {
-    return this.logTimes.byteLength + this.offsets.byteLength + this.channelIds.byteLength;
+    this.byteLength = logTimes.byteLength + offsets.byteLength + channelIds.byteLength;
   }
 
   /** Parses a chunk's message index section (the MessageIndex records of all its channels). */
@@ -252,9 +251,9 @@ export class ChunkCursor {
   }
 
   /** The chunk's message index, once `loadMessageIndexes()` has been called */
-  public get messageIndex(): ChunkMessageIndex {
+  public messageIndex(): ChunkMessageIndex {
     if (this.#index == undefined) {
-      throw new Error("loadMessageIndexes() must be called before messageIndex");
+      throw new Error("loadMessageIndexes() must be called before messageIndex()");
     }
     return this.#index;
   }

@@ -48,6 +48,27 @@ describe("ChunkCache", () => {
     cache.clear();
   });
 
+  it("keeps a chunk that fills the budget when its parsed index is added", () => {
+    // Given a chunk as big as the budget
+    const cache = new ChunkCache();
+    const index = new ChunkMessageIndex(
+      new BigUint64Array(1),
+      new Float64Array(1),
+      new Uint16Array(1),
+    );
+    cache.set(0n, view(CHUNK_CACHE_BYTES));
+
+    // When its index is added on every read
+    for (let read = 0; read < 2; read++) {
+      cache.setChunkMessageIndex(7n, index);
+
+      // Then both stay, so the chunk is not decompressed again
+      expect(cache.get(0n)).toBeDefined();
+      expect(cache.getChunkMessageIndex(7n)).toBe(index);
+    }
+    cache.clear();
+  });
+
   it("counts parsed message indexes against the budget", () => {
     // Given a parsed index and chunks that together overflow the budget
     const cache = new ChunkCache();
