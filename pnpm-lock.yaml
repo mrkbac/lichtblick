@@ -624,9 +624,6 @@ importers:
       dompurify:
         specifier: 3.4.17
         version: 3.4.17
-      dotenv:
-        specifier: 18.0.9
-        version: 18.0.9
       eventemitter3:
         specifier: 5.0.4
         version: 5.0.4
@@ -726,9 +723,6 @@ importers:
       remark-gfm:
         specifier: 4.0.1
         version: 4.0.1
-      reselect:
-        specifier: 5.3.0
-        version: 5.3.0
       stats.js:
         specifier: 0.17.0
         version: 0.17.0
@@ -747,9 +741,6 @@ importers:
       ts-essentials:
         specifier: 10.2.1
         version: 10.2.1(typescript@6.0.3)
-      ts-key-enum:
-        specifier: 3.0.13
-        version: 3.0.13
       tss-react:
         specifier: 4.9.21
         version: 4.9.21(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@mui/material@9.5.0(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@emotion/styled@11.14.1(@emotion/react@11.14.0(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react@19.3.1))(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1))(@types/react@19.3.0)(react@19.3.1)
@@ -834,9 +825,6 @@ importers:
       colord:
         specifier: 2.10.0
         version: 2.10.0
-      dotenv:
-        specifier: 18.0.9
-        version: 18.0.9
       electron:
         specifier: 45.2.3
         version: 45.2.3
@@ -4960,11 +4948,6 @@ packages:
     resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
     engines: {node: '>=12'}
 
-  dotenv@18.0.9:
-    resolution: {integrity: sha512-3fVOW4cB02R066PUSwn8O4TJyz9NckQl7F81blIbaq9jKBm2tSmOKky7ZHIXzGvkVPXCSn6jkpziBPZdGFs8Tw==}
-    engines: {node: '>=12'}
-    hasBin: true
-
   dunder-proto@1.0.1:
     resolution: {integrity: sha512-KIN/nDJBQRcXw0MLVhZE9iQHmG68qAVIBg9CqmUYjmQIhgij9U5MFvrqkUL5FbtyyzZuOeOt0zdeRe4UY7ct+A==}
     engines: {node: '>= 0.4'}
@@ -7065,9 +7048,6 @@ packages:
     resolution: {integrity: sha512-vHjcY2MlAITJhC0eRD/Vv8Vlgmu9Sd3LX9zZvtGzU5ZImdTN3+d6e/4mnTyV8vEbyf1sgNIrWxhWlrys52OkEA==}
     engines: {node: '>=12', npm: '>=6'}
 
-  reselect@5.3.0:
-    resolution: {integrity: sha512-XGoLeRAVzUTcJ1qkxPQhDJyIZ5d6zzZD9nT7AEZOaaU9UbWclhycElmhO+VD5bFeLuzhPBaOV2oXC8uG35ZSpg==}
-
   resize-observer-polyfill@1.5.1:
     resolution: {integrity: sha512-LwZrotdHOo12nQuZlHEmtuXdqGoOD0OhaxopaNFxWzInpEgaLWoVuAMbTzixuosCx2nEG58ngzW3vxdWoxIgdg==}
 
@@ -7655,9 +7635,6 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
-
-  ts-key-enum@3.0.13:
-    resolution: {integrity: sha512-2J5QVm+HLfToI6IpJQADzYYWvJQ0P9i8qV0loewy5UQ9PBcwILkw09te/+NPu6aw8OXIn9jVYOT6xCBZnGg8Yg==}
 
   tsconfig-paths@3.15.0:
     resolution: {integrity: sha512-2Ac2RgzDe/cn48GvOe3M+o82pEFewD3UPbyoUHHdKasHwJKjds4fLXWf/Ux5kATBKN20oaFGu+jbElp1pos0mg==}
@@ -12008,8 +11985,6 @@ snapshots:
 
   dotenv@16.6.1: {}
 
-  dotenv@18.0.9: {}
-
   dunder-proto@1.0.1:
     dependencies:
       call-bind-apply-helpers: 1.0.2
@@ -14662,8 +14637,6 @@ snapshots:
     dependencies:
       pe-library: 0.4.1
 
-  reselect@5.3.0: {}
-
   resize-observer-polyfill@1.5.1: {}
 
   resolve-alpn@1.2.1: {}
@@ -15329,8 +15302,6 @@ snapshots:
   ts-essentials@10.2.1(typescript@6.0.3):
     optionalDependencies:
       typescript: 6.0.3
-
-  ts-key-enum@3.0.13: {}
 
   tsconfig-paths@3.15.0:
     dependencies:
