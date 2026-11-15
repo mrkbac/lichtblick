@@ -330,39 +330,56 @@ export class McapWriter {
 
   public async addMessage(message: Message): Promise<void> {
     this.#throwIfFailed();
-    // write out channel and schema if we have not yet done so
+    // Look up the channel and schema to write out first, if not done yet, before changing anything
+    let channel: Channel | undefined;
+    let schema: Schema | undefined;
     if (!this.#writtenChannelIds.has(message.channelId)) {
-      const channel = this.#channels.get(message.channelId);
+      channel = this.#channels.get(message.channelId);
       if (!channel) {
         throw new Error(
           `McapWriter#addMessage failed: missing channel for id ${message.channelId}`,
         );
       }
-
       if (channel.schemaId !== 0 && !this.#writtenSchemaIds.has(channel.schemaId)) {
-        const schema = this.#schemas.get(channel.schemaId);
+        schema = this.#schemas.get(channel.schemaId);
         if (!schema) {
           throw new Error(
             `McapWriter#addMessage failed: missing schema for id ${channel.schemaId}`,
           );
         }
+      }
+    }
+
+    // A serialization error (e.g. a detached data buffer) can leave a partial record behind, so
+    // it fails the writer like a failed write does
+    try {
+      if (schema) {
         if (this.#chunkBuilder) {
           this.#chunkBuilder.addSchema(schema);
         } else {
           this.#recordWriter.writeSchema(schema);
         }
-        this.#writtenSchemaIds.add(channel.schemaId);
+        this.#writtenSchemaIds.add(schema.id);
       }
-
+      if (channel) {
+        if (this.#chunkBuilder) {
+          this.#chunkBuilder.addChannel(channel);
+        } else {
+          this.#recordWriter.writeChannel(channel);
+        }
+        this.#writtenChannelIds.add(channel.id);
+      }
       if (this.#chunkBuilder) {
-        this.#chunkBuilder.addChannel(channel);
+        this.#chunkBuilder.addMessage(message);
       } else {
-        this.#recordWriter.writeChannel(channel);
+        this.#recordWriter.writeMessage(message);
       }
-      this.#writtenChannelIds.add(message.channelId);
+    } catch (error) {
+      this.#failed = error instanceof Error ? error : new Error(String(error));
+      throw error;
     }
 
-    // Count the message only once its channel and schema are known to exist.
+    // Count the message only once it is written
     if (this.statistics) {
       if (this.statistics.messageCount === 0n) {
         this.statistics.messageStartTime = message.logTime;
@@ -383,15 +400,11 @@ export class McapWriter {
     }
 
     if (this.#chunkBuilder) {
-      this.#chunkBuilder.addMessage(message);
       if (this.#chunkBuilder.byteLength > this.#chunkSize) {
         await this.#finalizeChunk();
       }
-    } else {
-      this.#recordWriter.writeMessage(message);
-      if (this.#recordWriter.length > UNCHUNKED_WRITE_BUFFER_SIZE) {
-        await this.#writeRecords();
-      }
+    } else if (this.#recordWriter.length > UNCHUNKED_WRITE_BUFFER_SIZE) {
+      await this.#writeRecords();
     }
   }
 
