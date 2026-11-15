@@ -133,10 +133,9 @@ export default class McapByteReader {
       while (this.offset < endOffset) {
         const key = readKey(this);
         const value = readValue(this);
-        const existingValue = result.get(key);
-        if (existingValue != undefined) {
+        if (result.has(key)) {
           throw new Error(
-            `Duplicate key ${String(key)} (${String(existingValue)} vs ${String(value)})`,
+            `Duplicate key ${String(key)} (${String(result.get(key))} vs ${String(value)})`,
           );
         }
         result.set(key, value);

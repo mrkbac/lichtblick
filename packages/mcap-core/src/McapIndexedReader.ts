@@ -138,16 +138,17 @@ export class McapIndexedReader<TReadOptions = unknown> {
    * without time bounds, see what was added. Costs O(what is added).
    */
   public appendIndex(added: McapIndexAppend): void {
-    // Loops, not push(...): a spread of a long list overflows the call stack
-    for (const chunk of added.chunkIndexes ?? []) {
+    // Loops, not push(...): a spread of a long list overflows the call stack. Each input is
+    // copied first, so passing this reader's own arrays doesn't loop forever.
+    for (const chunk of Array.from(added.chunkIndexes ?? [])) {
       this.#chunkIndexes.push(chunk);
       this.#addChunkTimes(chunk);
     }
-    for (const attachment of added.attachmentIndexes ?? []) {
+    for (const attachment of Array.from(added.attachmentIndexes ?? [])) {
       this.#attachmentIndexes.push(attachment);
       this.#addAttachmentTimes(attachment);
     }
-    for (const metadata of added.metadataIndexes ?? []) {
+    for (const metadata of Array.from(added.metadataIndexes ?? [])) {
       this.#metadataIndexes.push(metadata);
     }
     for (const channel of added.channels ?? []) {

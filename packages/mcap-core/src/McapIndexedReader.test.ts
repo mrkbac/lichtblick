@@ -1570,5 +1570,9 @@ describe("McapIndexedReader", () => {
     reader.appendIndex({ chunkIndexes: chunks.slice(1) });
     expect(reader.chunkIndexes).toEqual(chunks);
     await expect(logTimes()).resolves.toEqual([0n, 1n, 2n]);
+
+    // Appending the reader's own index adds each entry once
+    reader.appendIndex({ chunkIndexes: reader.chunkIndexes });
+    expect(reader.chunkIndexes).toHaveLength(6);
   });
 });
