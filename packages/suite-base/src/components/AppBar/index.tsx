@@ -304,6 +304,8 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
               {showUserMenu && (
                 <Tooltip
                   classes={{ tooltip: classes.tooltip }}
+                  // The button has its own aria-label; the tooltip (e.g. "Loading account…") describes it
+                  describeChild
                   title={
                     organization.status === "loading"
                       ? "Loading account…"
