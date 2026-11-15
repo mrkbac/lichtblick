@@ -7,12 +7,13 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { useEffect, useState } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import type { Mock } from "vitest";
 
 import { MessagePipelineProvider } from "@lichtblick/suite-base/components/MessagePipeline";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import AppConfigurationContext from "@lichtblick/suite-base/context/AppConfigurationContext";
+import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
 import PanelCatalogContext, {
   PanelCatalog,
   PanelInfo,
@@ -39,14 +40,14 @@ class MockPanelCatalog implements PanelCatalog {
 }
 
 /** Provide the real layout contexts with a small panel catalog. */
-function wrapperFor(panelCatalog: PanelCatalog) {
+function wrapperFor(panelCatalog: PanelCatalog, initialState?: Partial<LayoutData>) {
   return function Wrapper({ children }: React.PropsWithChildren) {
     const [config] = useState(() => makeMockAppConfiguration());
 
     return (
       <WorkspaceContextProvider>
         <AppConfigurationContext.Provider value={config}>
-          <MockCurrentLayoutProvider>
+          <MockCurrentLayoutProvider initialState={initialState}>
             <MessagePipelineProvider>
               <PanelStateContextProvider>
                 <ExtensionCatalogProvider loaders={[]}>
@@ -238,5 +239,60 @@ describe("UnconnectedPanelLayout", () => {
 
     unmount();
     expect(unmountA).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a panel mounted when it moves into a nested layout", async () => {
+    // Given a panel beside a panel that holds a layout of its own (like a Tab panel)
+    const NestedLayoutContext = createContext<LayoutNode | undefined>(undefined);
+    const mountA = vi.fn();
+    const unmountA = vi.fn();
+    const PanelA = Object.assign(
+      function PanelA() {
+        useEffect(() => {
+          mountA();
+          return unmountA;
+        }, []);
+        return <input aria-label="Panel A state" />;
+      },
+      { panelType: "a", defaultConfig: {} },
+    );
+    const Nest = Object.assign(
+      function Nest() {
+        const layout = useContext(NestedLayoutContext);
+        return <UnconnectedPanelLayout layout={layout} onChange={() => {}} tabId="nest" />;
+      },
+      { panelType: "nest", defaultConfig: {} },
+    );
+    const catalog = new MockPanelCatalog([
+      { title: "A", type: "a", module: async () => ({ default: Panel(PanelA) }) },
+      { title: "Nest", type: "nest", module: async () => ({ default: Panel(Nest) }) },
+    ]);
+    const ui = (root: LayoutNode, nested: LayoutNode | undefined) => (
+      <NestedLayoutContext.Provider value={nested}>
+        <UnconnectedPanelLayout layout={root} onChange={vi.fn()} />
+      </NestedLayoutContext.Provider>
+    );
+    const { rerender } = render(
+      ui({ direction: "row", children: [{ panels: ["a"] }, { panels: ["nest"] }] }, undefined),
+      {
+        wrapper: wrapperFor(catalog, {
+          layout: { direction: "row", children: [{ panels: ["a"] }, { panels: ["nest"] }] },
+        }),
+      },
+    );
+    const input = await screen.findByRole("textbox", { name: "Panel A state" });
+    fireEvent.change(input, { target: { value: "unsaved panel state" } });
+
+    // When it moves into the nested layout
+    rerender(ui({ panels: ["nest"] }, { panels: ["a"] }));
+
+    // Then it is shown there, the same element with its state
+    await waitFor(() => {
+      expect(input.isConnected).toBe(true);
+      expect(input.closest("[data-panel-layout] [data-panel-layout]")).not.toBeNull();
+    });
+    expect((input as HTMLInputElement).value).toBe("unsaved panel state");
+    expect(mountA).toHaveBeenCalledTimes(1);
+    expect(unmountA).not.toHaveBeenCalled();
   });
 });
