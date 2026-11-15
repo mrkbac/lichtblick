@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type { ChunkReadAhead } from "./McapIndexedReader.ts";
+
 /** Bytes of decompressed chunks (and rebuilt message indexes) kept per worker, for all its files */
 export const CHUNK_CACHE_BYTES = 64 * 1024 * 1024;
 
@@ -18,6 +20,13 @@ let nextId = 0;
  */
 export class ChunkCache {
   readonly #prefix = `${nextId++}:`;
+
+  /** Loads chunks ahead of every reader on this file, if given (see ChunkReadAhead) */
+  public readonly readAhead?: ChunkReadAhead;
+
+  public constructor(readAhead?: ChunkReadAhead) {
+    this.readAhead = readAhead;
+  }
 
   /** For McapIndexedReader's `chunkCache` option */
   public get(chunkStartOffset: bigint): DataView | undefined {

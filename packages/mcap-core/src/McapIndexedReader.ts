@@ -27,6 +27,29 @@ import type {
 const uncheckedChunks = new WeakSet<DataView>();
 
 /**
+ * Decompresses chunks a `readMessages()` call will reach soon, off the calling thread, so it finds
+ * them ready instead of decompressing each one when it gets there. Only read-ahead goes here: a
+ * chunk a read needs right away (its first one, after a seek) is decompressed inline as without it.
+ */
+export type ChunkReadAhead = {
+  /** How many chunks past the one a read is at it keeps loading ahead */
+  readonly chunks: number;
+  /**
+   * Takes `bytes` (a chunk's compressed plus decompressed size) from the read-ahead memory cap.
+   * False when they don't fit or no decompressor is ready; that chunk then isn't loaded ahead.
+   */
+  reserve(bytes: number): boolean;
+  /** Gives back bytes taken by `reserve()`, once the chunk is loaded or its load failed */
+  release(bytes: number): void;
+  /** `buffer` is the caller's own copy, so it can be transferred to another thread */
+  decompress(
+    compression: string,
+    buffer: Uint8Array,
+    decompressedSize: bigint,
+  ): Promise<Uint8Array>;
+};
+
+/**
  * Decompressed chunk data keyed by chunk start offset. See `McapIndexedReader.Initialize`.
  *
  * `get()` must return the same `DataView` object that was passed to `set()`, not a new view over
@@ -35,6 +58,8 @@ const uncheckedChunks = new WeakSet<DataView>();
 export type ChunkDataCache = {
   get(chunkStartOffset: bigint): DataView | undefined;
   set(chunkStartOffset: bigint, data: DataView): void;
+  /** Loads chunks ahead of every read on this cache, see ChunkReadAhead */
+  readonly readAhead?: ChunkReadAhead;
 };
 
 type McapIndexedReaderArgs<TReadOptions = unknown> = {
@@ -90,6 +115,8 @@ export class McapIndexedReader<TReadOptions = unknown> {
   #readable: IReadable<TReadOptions>;
   #decompressHandlers?: DecompressHandlers;
   #chunkCache?: ChunkDataCache;
+  /** Chunks being loaded ahead, by chunk start offset; undefined if that load failed */
+  #loadingAhead = new Map<bigint, Promise<DataView | undefined>>();
 
   #messageStartTime: bigint | undefined;
   #messageEndTime: bigint | undefined;
@@ -514,8 +541,10 @@ export class McapIndexedReader<TReadOptions = unknown> {
     const chunkCursors = new Heap<ChunkCursor>((a, b) => a.compare(b));
     let chunksOrdered = true;
     let prevChunkEndTime: bigint | undefined;
+    const chunksInRange: ChunkIndex[] = [];
     for (const chunkIndex of this.chunkIndexes) {
       if (chunkIndex.messageStartTime <= endingAt && chunkIndex.messageEndTime >= startingAt) {
+        chunksInRange.push(chunkIndex);
         chunkCursors.push(
           new ChunkCursor({
             chunkIndex,
@@ -532,10 +561,15 @@ export class McapIndexedReader<TReadOptions = unknown> {
       }
     }
 
+    const readAhead = this.#chunkCache?.readAhead;
+    // Built on first use, after the first message is out: sorting a huge file's chunks takes a while
+    let plan: ReadAheadPlan | undefined;
+
     // Holds the decompressed chunk data for "active" chunks. Items are added below when a chunk
     // cursor becomes active (i.e. when we first need to access messages from the chunk) and removed
     // when the cursor is removed from the heap.
     const chunkViewCache = new Map<bigint, DataView>();
+    let loadAheadFrom: ChunkIndex | undefined;
     const chunkReader = new McapByteReader(new DataView(new ArrayBuffer(0)));
     for (let cursor; (cursor = chunkCursors.peek()); ) {
       if (!cursor.hasMessageIndexes()) {
@@ -555,6 +589,9 @@ export class McapIndexedReader<TReadOptions = unknown> {
           validateCrcs: validateCrcs ?? true,
           readOptions,
         });
+        // Not yet: loading ahead before this chunk's first message is out would delay it (e.g. the
+        // first message after a seek, which may need other chunks' message indexes read first)
+        loadAheadFrom = cursor.chunkIndex;
         chunkViewCache.set(cursor.chunkIndex.chunkStartOffset, chunkView);
       }
 
@@ -582,6 +619,15 @@ export class McapIndexedReader<TReadOptions = unknown> {
         );
       }
       yield record;
+
+      if (loadAheadFrom && readAhead) {
+        plan ??= readAheadPlan(chunksInRange, reverse, relevantChannels);
+        this.#loadAhead(readAhead, plan, loadAheadFrom, {
+          validateCrcs: validateCrcs ?? true,
+          readOptions,
+        });
+        loadAheadFrom = undefined;
+      }
 
       if (cursor.hasMoreMessages()) {
         // There is no need to reorganize the heap when chunks are ordered and not overlapping.
@@ -697,7 +743,69 @@ export class McapIndexedReader<TReadOptions = unknown> {
     if (cached && !(options.validateCrcs && uncheckedChunks.has(cached))) {
       return cached;
     }
+    const loading = this.#loadingAhead.get(chunkIndex.chunkStartOffset);
+    if (loading) {
+      const ahead = await loading;
+      if (ahead && !(options.validateCrcs && uncheckedChunks.has(ahead))) {
+        return ahead;
+      }
+    }
     const view = await this.#loadChunkDataUncached(chunkIndex, options);
+    if (!options.validateCrcs) {
+      uncheckedChunks.add(view);
+    }
+    this.#chunkCache?.set(chunkIndex.chunkStartOffset, view);
+    return view;
+  }
+
+  /** Starts loading the chunks after `current` in `plan` that aren't cached or loading yet */
+  #loadAhead(
+    readAhead: ChunkReadAhead,
+    plan: ReadAheadPlan,
+    current: ChunkIndex,
+    options: { validateCrcs: boolean; readOptions?: TReadOptions },
+  ): void {
+    const position = plan.position.get(current.chunkStartOffset);
+    if (position == undefined) {
+      return;
+    }
+    const last = Math.min(position + readAhead.chunks, plan.chunks.length - 1);
+    for (let i = position + 1; i <= last; i++) {
+      const chunkIndex = plan.chunks[i]!;
+      const offset = chunkIndex.chunkStartOffset;
+      if (this.#loadingAhead.has(offset) || this.#chunkCache?.get(offset)) {
+        continue;
+      }
+      const bytes = Number(chunkIndex.chunkLength + chunkIndex.uncompressedSize);
+      if (!readAhead.reserve(bytes)) {
+        return;
+      }
+      const loading = this.#loadChunkDataAhead(readAhead, chunkIndex, options)
+        // A failed load ahead isn't reported: the read loads that chunk inline and reports it then
+        .catch(() => undefined)
+        .finally(() => {
+          readAhead.release(bytes);
+          this.#loadingAhead.delete(offset);
+        });
+      this.#loadingAhead.set(offset, loading);
+    }
+  }
+
+  async #loadChunkDataAhead(
+    readAhead: ChunkReadAhead,
+    chunkIndex: ChunkIndex,
+    options: { validateCrcs: boolean; readOptions?: TReadOptions },
+  ): Promise<DataView> {
+    const chunk = await this.#readChunk(chunkIndex, options);
+    let buffer = chunk.records;
+    if (chunk.compression !== "" && buffer.byteLength > 0) {
+      if (!this.#decompressHandlers?.[chunk.compression]) {
+        throw this.#errorWithLibrary(`Unsupported compression ${chunk.compression}`);
+      }
+      // `records` is the chunk's own copy and isn't used again, so it can be transferred
+      buffer = await readAhead.decompress(chunk.compression, buffer, chunk.uncompressedSize);
+    }
+    const view = this.#checkedView(chunk, buffer, options);
     if (!options.validateCrcs) {
       uncheckedChunks.add(view);
     }
@@ -709,6 +817,22 @@ export class McapIndexedReader<TReadOptions = unknown> {
     chunkIndex: ChunkIndex,
     options: { validateCrcs: boolean; readOptions?: TReadOptions },
   ): Promise<DataView> {
+    const chunk = await this.#readChunk(chunkIndex, options);
+    let buffer = chunk.records;
+    if (chunk.compression !== "" && buffer.byteLength > 0) {
+      const decompress = this.#decompressHandlers?.[chunk.compression];
+      if (!decompress) {
+        throw this.#errorWithLibrary(`Unsupported compression ${chunk.compression}`);
+      }
+      buffer = decompress(buffer, chunk.uncompressedSize);
+    }
+    return this.#checkedView(chunk, buffer, options);
+  }
+
+  async #readChunk(
+    chunkIndex: ChunkIndex,
+    options: { validateCrcs: boolean; readOptions?: TReadOptions },
+  ): Promise<TypedMcapRecords["Chunk"]> {
     const chunkData = await this.#readable.read(
       chunkIndex.chunkStartOffset,
       chunkIndex.chunkLength,
@@ -726,15 +850,15 @@ export class McapIndexedReader<TReadOptions = unknown> {
       );
     }
 
-    const chunk = chunkRecord;
-    let buffer = chunk.records;
-    if (chunk.compression !== "" && buffer.byteLength > 0) {
-      const decompress = this.#decompressHandlers?.[chunk.compression];
-      if (!decompress) {
-        throw this.#errorWithLibrary(`Unsupported compression ${chunk.compression}`);
-      }
-      buffer = decompress(buffer, chunk.uncompressedSize);
-    }
+    return chunkRecord;
+  }
+
+  /** The decompressed records as a DataView, after checking their CRC if asked to */
+  #checkedView(
+    chunk: TypedMcapRecords["Chunk"],
+    buffer: Uint8Array,
+    options: { validateCrcs: boolean },
+  ): DataView {
     if (chunk.uncompressedCrc !== 0 && options.validateCrcs) {
       const chunkCrc = crc32(buffer);
       if (chunkCrc !== chunk.uncompressedCrc) {
@@ -746,6 +870,55 @@ export class McapIndexedReader<TReadOptions = unknown> {
 
     return new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   }
+}
+
+type ReadAheadPlan = {
+  /** The chunks a read will load, in the order it reaches them */
+  chunks: ChunkIndex[];
+  position: Map<bigint, number>;
+};
+
+/**
+ * The chunks in a read's time range that hold a message on a channel it wants, ordered by when the
+ * read reaches them: by first message time (last message time, newest first, for a reverse read).
+ */
+function readAheadPlan(
+  chunksInRange: readonly ChunkIndex[],
+  reverse: boolean,
+  relevantChannels: Set<number> | undefined,
+): ReadAheadPlan {
+  const chunks: ChunkIndex[] = [];
+  for (const chunkIndex of chunksInRange) {
+    if (relevantChannels) {
+      let relevant = false;
+      for (const channelId of chunkIndex.messageIndexOffsets.keys()) {
+        if (relevantChannels.has(channelId)) {
+          relevant = true;
+          break;
+        }
+      }
+      if (!relevant) {
+        continue;
+      }
+    }
+    chunks.push(chunkIndex);
+  }
+  const compare = reverse
+    ? (a: ChunkIndex, b: ChunkIndex) => compareBigInt(b.messageEndTime, a.messageEndTime)
+    : (a: ChunkIndex, b: ChunkIndex) => compareBigInt(a.messageStartTime, b.messageStartTime);
+  // Chunks are usually written in time order already
+  if (chunks.some((chunk, i) => i > 0 && compare(chunks[i - 1]!, chunk) > 0)) {
+    chunks.sort(compare);
+  }
+  const position = new Map<bigint, number>();
+  for (let i = 0; i < chunks.length; i++) {
+    position.set(chunks[i]!.chunkStartOffset, i);
+  }
+  return { chunks, position };
+}
+
+function compareBigInt(a: bigint, b: bigint): number {
+  return a < b ? -1 : a > b ? 1 : 0;
 }
 
 /**
