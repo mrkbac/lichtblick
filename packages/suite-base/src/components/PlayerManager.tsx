@@ -67,6 +67,8 @@ import { Player } from "@lichtblick/suite-base/players/types";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { UserScripts } from "@lichtblick/suite-base/types/panels";
 import { updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
+import { rememberHandle } from "@lichtblick/suite-base/util/compareSides";
+import { recentArgs, recentFileTitle } from "@lichtblick/suite-base/util/recentSources";
 
 import { useTrustedUserScripts } from "./useTrustedUserScripts";
 
@@ -349,7 +351,9 @@ export default function PlayerManager(
             // Handles are stored in recents (IndexedDB) so the file can be reopened later.
             // File instances are not: storing a File in IndexedDB copies the entire file.
             if (handles) {
-              for (const handle of handles) {
+              // A file compared in several sides repeats its handle: ask and read it once
+              const uniqueHandles = [...new Set(handles)];
+              for (const handle of uniqueHandles) {
                 const permission = await handle.queryPermission({
                   mode: "read",
                 });
@@ -369,9 +373,15 @@ export default function PlayerManager(
                   }
                 }
               }
-              files = await Promise.all(handles.map(async (f) => await f.getFile()));
+              const fileOf = new Map(
+                await Promise.all(uniqueHandles.map(async (h) => [h, await h.getFile()] as const)),
+              );
               if (!isMounted() || seq !== selectionSeq.current) {
                 return;
+              }
+              files = handles.map((h) => fileOf.get(h)!);
+              for (const [handle, file] of fileOf) {
+                rememberHandle(file, handle);
               }
             }
 
@@ -395,9 +405,19 @@ export default function PlayerManager(
               if (handles) {
                 const lastFile: LastFileSource = {
                   sourceId: foundSource.id,
-                  title: handles.map((h) => h.name).join(", "),
+                  title: recentFileTitle(
+                    handles.map((h) => h.name),
+                    compare,
+                  ),
                 };
-                setCurrentRecentId(addRecent({ type: "file", ...lastFile, handles }));
+                setCurrentRecentId(
+                  addRecent({
+                    type: "file",
+                    ...lastFile,
+                    handles,
+                    compare: compare ? [...compare] : undefined,
+                  }),
+                );
                 writeLastFile(lastFile);
               } else {
                 writeLastFile(undefined);
@@ -468,7 +488,7 @@ export default function PlayerManager(
         return;
       }
       if (permissions.every((p) => p === "granted")) {
-        void selectSource(recent.sourceId, { type: "file", handles: recent.handles });
+        void selectSource(recent.sourceId, recentArgs(recent));
         return;
       }
       // requestPermission needs a user gesture, so ask with a click
@@ -480,7 +500,7 @@ export default function PlayerManager(
             color="inherit"
             onClick={() => {
               closeSnackbar(key);
-              void selectSource(recent.sourceId, { type: "file", handles: recent.handles });
+              void selectSource(recent.sourceId, recentArgs(recent));
             }}
           >
             Reopen
@@ -602,10 +622,7 @@ function createSelectRecentCallback(
         break;
       }
       case "file": {
-        void selectSource(foundRecent.sourceId, {
-          type: "file",
-          handles: foundRecent.handles,
-        });
+        void selectSource(foundRecent.sourceId, recentArgs(foundRecent));
       }
     }
   };

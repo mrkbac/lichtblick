@@ -142,4 +142,47 @@ describe("useIndexedDbRecents", () => {
     expect(result.current.recents.some((r) => r.title === "ws://host-0")).toBe(false);
     unmount();
   });
+
+  it("keeps a comparison's side names and repeated handles across a reload", async () => {
+    const handle = (name: string) => ({ kind: "file", name }) as unknown as FileSystemFileHandle;
+    const base = handle("base.mcap");
+    {
+      const { result, unmount } = renderHook(() => useIndexedDbRecents());
+      await waitFor(() => {
+        expect(result.current.recentsLoaded).toBe(true);
+      });
+      act(() => {
+        result.current.addRecent({
+          type: "file",
+          sourceId: "mcap-local-file",
+          title: "A vs B (base.mcap, a.mcap, b.mcap)",
+          handles: [base, handle("a.mcap"), base, handle("b.mcap")],
+          compare: ["A", "A", "B", "B"],
+        });
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      unmount();
+    }
+
+    const { result, unmount } = renderHook(() => useIndexedDbRecents());
+    await waitFor(() => {
+      expect(result.current.recents.some((r) => r.type === "file")).toBe(true);
+    });
+    const recent = result.current.recents.find((r) => r.type === "file");
+    if (recent?.type !== "file") {
+      throw new Error("expected a file recent");
+    }
+    expect(recent.compare).toEqual(["A", "A", "B", "B"]);
+    expect(recent.handles.map((h) => h.name)).toEqual([
+      "base.mcap",
+      "a.mcap",
+      "base.mcap",
+      "b.mcap",
+    ]);
+    // The shared file is still one handle, so it is opened once
+    expect(recent.handles[0]).toBe(recent.handles[2]);
+    unmount();
+  });
 });

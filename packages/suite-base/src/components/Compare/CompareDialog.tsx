@@ -29,6 +29,8 @@ import {
   CompareDraft,
   draftFromFiles,
   draftToCompare,
+  handlesOf,
+  rememberHandle,
 } from "@lichtblick/suite-base/util/compareSides";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 
@@ -222,7 +224,13 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
         },
       ],
     });
-    return await Promise.all(handles.map(async (handle) => await handle.getFile()));
+    return await Promise.all(
+      handles.map(async (handle) => {
+        const file = await handle.getFile();
+        rememberHandle(file, handle);
+        return file;
+      }),
+    );
   };
   const pickInto = (apply: (picked: File[]) => void) => {
     pick()
@@ -378,7 +386,12 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
           variant="contained"
           disabled={sideCount < 2 || source == undefined}
           onClick={() => {
-            selectSource(source!.id, { type: "file", files, compare });
+            // With a handle for every file the comparison is kept in recents; dropped files have none
+            const handles = handlesOf(files);
+            selectSource(
+              source!.id,
+              handles ? { type: "file", handles, compare } : { type: "file", files, compare },
+            );
             hide();
           }}
         >

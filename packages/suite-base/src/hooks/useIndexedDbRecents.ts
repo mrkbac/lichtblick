@@ -52,6 +52,9 @@ type RecentConnectionRecord = RecentRecordCommon & {
 type RecentFileRecord = RecentRecordCommon & {
   type: "file";
   handles: FileSystemFileHandle[];
+  // Side name of each of `handles` when they were compared side by side (see
+  // FileDataSourceArgs.compare). A file in several sides repeats its handle. Missing: merged.
+  compare?: string[];
 };
 
 // Make sure users with old recents can still use them
