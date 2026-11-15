@@ -91,11 +91,17 @@ export function isSameRecent(a: UnsavedRecentRecord, b: UnsavedRecentRecord): bo
   if (a.type !== b.type || a.sourceId !== b.sourceId) {
     return false;
   }
-  // Connections are identified by their arguments, files by name and, when compared, side names
+  // Connections are identified by their arguments, files by name. A comparison also by which
+  // file is in which side, since its title lists each file once.
   if (a.type === "connection" || b.type === "connection") {
     return a.type === "connection" && b.type === "connection" && _.isEqual(a.extra, b.extra);
   }
-  return a.title === b.title && _.isEqual(a.compare, b.compare);
+  const names = (r: typeof a) => r.handles.map((h) => h.name);
+  return (
+    a.title === b.title &&
+    _.isEqual(a.compare, b.compare) &&
+    (a.compare == undefined || _.isEqual(names(a), names(b)))
+  );
 }
 
 function useIndexedDbRecents(): IRecentsStore {

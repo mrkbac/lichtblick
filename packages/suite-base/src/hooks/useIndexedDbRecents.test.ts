@@ -190,15 +190,23 @@ describe("useIndexedDbRecents", () => {
   });
 
   it("tells comparisons of the same files with other sides apart", () => {
-    const recent = (compare?: string[]) => ({
+    const recent = (compare: string[] | undefined, names = ["a.mcap", "b.mcap", "c.mcap"]) => ({
       type: "file" as const,
       sourceId: "mcap-local-file",
       title: "A vs B (a.mcap, b.mcap, c.mcap)",
-      handles: [],
+      handles: names.map((name) => ({ name }) as FileSystemFileHandle),
       compare,
     });
     expect(isSameRecent(recent(["A", "A", "B"]), recent(["A", "A", "B"]))).toBe(true);
     expect(isSameRecent(recent(["A", "A", "B"]), recent(["A", "B", "B"]))).toBe(false);
-    expect(isSameRecent(recent(), recent())).toBe(true);
+    // Same side names, other files in each side
+    const sides = ["A", "A", "B", "B"];
+    expect(
+      isSameRecent(
+        recent(sides, ["a.mcap", "b.mcap", "a.mcap", "c.mcap"]),
+        recent(sides, ["a.mcap", "c.mcap", "a.mcap", "b.mcap"]),
+      ),
+    ).toBe(false);
+    expect(isSameRecent(recent(undefined), recent(undefined, ["c.mcap"]))).toBe(true);
   });
 });

@@ -56,7 +56,6 @@ import {
 } from "@lichtblick/suite-base/context/UserScriptStateContext";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import useIndexedDbRecents, {
-  isSameRecent,
   RecentRecord,
 } from "@lichtblick/suite-base/hooks/useIndexedDbRecents";
 import {
@@ -77,8 +76,8 @@ const log = Logger.getLogger(__filename);
 
 // Per tab, so a reload reopens the file that tab had open
 const LAST_FILE_SOURCE_KEY = "lichtblick.lastFileSource";
-// `compare` tells comparisons of the same files with other sides apart (see isSameRecent)
-type LastFileSource = { sourceId: string; title: string; compare?: string[] };
+// `recentId` is the recent entry it was opened as; entries stored before it existed match by title
+type LastFileSource = { sourceId: string; title: string; recentId?: string };
 
 // Reopening on reload is a convenience: blocked storage or a bad value must not break the app
 function readLastFile(): LastFileSource | undefined {
@@ -89,9 +88,7 @@ function readLastFile(): LastFileSource | undefined {
       value != undefined &&
       typeof (value as LastFileSource).sourceId === "string" &&
       typeof (value as LastFileSource).title === "string" &&
-      ((value as LastFileSource).compare == undefined ||
-        (Array.isArray((value as LastFileSource).compare) &&
-          (value as LastFileSource).compare!.every((side) => typeof side === "string")))
+      ["string", "undefined"].includes(typeof (value as LastFileSource).recentId)
     ) {
       return value as LastFileSource;
     }
@@ -408,16 +405,19 @@ export default function PlayerManager(
 
               // Only handles can be reopened after a reload
               if (handles) {
-                const lastFile: LastFileSource = {
+                const title = recentFileTitle(
+                  handles.map((h) => h.name),
+                  compare,
+                );
+                const recentId = addRecent({
+                  type: "file",
                   sourceId: foundSource.id,
-                  title: recentFileTitle(
-                    handles.map((h) => h.name),
-                    compare,
-                  ),
+                  title,
+                  handles,
                   compare: compare ? [...compare] : undefined,
-                };
-                setCurrentRecentId(addRecent({ type: "file", ...lastFile, handles }));
-                writeLastFile(lastFile);
+                });
+                setCurrentRecentId(recentId);
+                writeLastFile({ sourceId: foundSource.id, title, recentId });
               } else {
                 writeLastFile(undefined);
               }
@@ -470,8 +470,10 @@ export default function PlayerManager(
     if (!lastFile || new URL(window.location.href).searchParams.has("ds")) {
       return;
     }
-    const recent = recents.find(
-      (r) => r.type === "file" && isSameRecent(r, { type: "file", handles: [], ...lastFile }),
+    const recent = recents.find((r) =>
+      lastFile.recentId != undefined
+        ? r.id === lastFile.recentId
+        : r.type === "file" && r.sourceId === lastFile.sourceId && r.title === lastFile.title,
     );
     if (recent?.type !== "file") {
       return;
