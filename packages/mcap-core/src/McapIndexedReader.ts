@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: MIT
 
 import { crc32, crc32Final, crc32Init, crc32Update } from "@foxglove/crc";
+import { Heap } from "heap-js";
 
 import { ChunkCursor } from "./ChunkCursor.ts";
 import McapByteReader from "./McapByteReader.ts";
-import { MinHeap } from "./MinHeap.ts";
 import { MCAP_MAGIC } from "./constants.ts";
 import { parseMagic, parseRecord } from "./parse.ts";
 import type { DecompressHandlers, IReadable, TypedMcapRecords } from "./types.ts";
@@ -421,7 +421,7 @@ export class McapIndexedReader<TReadOptions = unknown> {
       }
     }
 
-    const chunkCursors = new MinHeap<ChunkCursor>((a, b) => a.compare(b));
+    const chunkCursors = new Heap<ChunkCursor>((a, b) => a.compare(b));
     let chunksOrdered = true;
     let prevChunkEndTime: bigint | undefined;
     for (const chunkIndex of this.chunkIndexes) {

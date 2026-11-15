@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (c) Foxglove Technologies Inc
 // SPDX-License-Identifier: MIT
 
+import * as _ from "lodash-es";
+
 import McapByteReader from "./McapByteReader.ts";
 import { parseRecord } from "./parse.ts";
-import { sortedIndexBy } from "./sortedIndexBy.ts";
-import { sortedLastIndexBy } from "./sortedLastIndex.ts";
 import type { IReadable, TypedMcapRecords } from "./types.ts";
 
 type ChunkCursorParams = {
@@ -214,15 +214,17 @@ export class ChunkCursor {
     // Determine the indexes corresponding to the start and end time.
     const startingAt = reverse ? this.#endingAt : this.#startingAt;
     const endingAt = reverse ? this.#startingAt : this.#endingAt;
-    const iteratee = reverse ? (logTime: bigint) => -logTime : (logTime: bigint) => logTime;
+    const iteratee = reverse
+      ? ([logTime]: [bigint, bigint]) => -logTime
+      : ([logTime]: [bigint, bigint]) => logTime;
     let startIndex: number | undefined;
     let endIndex: number | undefined;
 
     if (startingAt != undefined) {
-      startIndex = sortedIndexBy(this.#orderedMessageOffsets, startingAt, iteratee);
+      startIndex = _.sortedIndexBy(this.#orderedMessageOffsets, [startingAt, 0n], iteratee);
     }
     if (endingAt != undefined) {
-      endIndex = sortedLastIndexBy(this.#orderedMessageOffsets, endingAt, iteratee);
+      endIndex = _.sortedLastIndexBy(this.#orderedMessageOffsets, [endingAt, 0n], iteratee);
     }
 
     // Remove offsets whose log time is outside of the range [startingAt, endingAt] which
