@@ -10,6 +10,9 @@ export const appSettings = {
   advanced: "Advanced",
   askEachTime: "Ask each time",
   colorScheme: "Color scheme",
+  compactPanels: "Compact panels",
+  compactPanelsDescription:
+    "Panel toolbars that only show a title are hidden until you point at the panel, and the others are smaller, so panels get more room.",
   dark: "Dark",
   debugModeDescription: "Enable panels and features for debugging {{appName}}",
   desktopApp: "Desktop app",

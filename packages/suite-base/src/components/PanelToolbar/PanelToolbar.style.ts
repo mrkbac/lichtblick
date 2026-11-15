@@ -3,7 +3,15 @@
 
 import { makeStyles } from "tss-react/mui";
 
-import { PANEL_TOOLBAR_MIN_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
+import { PANEL_ROOT_CLASS_NAME } from "@lichtblick/suite-base/components/PanelRoot";
+import {
+  COMPACT_PANELS_ATTRIBUTE,
+  PANEL_TOOLBAR_HEIGHT,
+} from "@lichtblick/suite-base/components/PanelToolbar/constants";
+
+const COMPACT = `[${COMPACT_PANELS_ATTRIBUTE}]`;
+/** The hovered panel itself, not a Tab panel around it. */
+const HOVERED_PANEL = `.${PANEL_ROOT_CLASS_NAME}:hover:not(:has(.${PANEL_ROOT_CLASS_NAME}:hover))`;
 
 export const useStyles = makeStyles()((theme) => ({
   root: {
@@ -14,7 +22,7 @@ export const useStyles = makeStyles()((theme) => ({
     justifyContent: "flex-end",
     padding: theme.spacing(0.25, 0.75),
     display: "flex",
-    minHeight: PANEL_TOOLBAR_MIN_HEIGHT,
+    minHeight: PANEL_TOOLBAR_HEIGHT,
     backgroundColor: theme.palette.background.paper,
     width: "100%",
     left: 0,
@@ -23,6 +31,25 @@ export const useStyles = makeStyles()((theme) => ({
     position: "relative !important" as any,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     top: "auto !important" as any,
+
+    [`${COMPACT} &`]: {
+      paddingBlock: 0,
+      // Topic and path inputs in toolbars would otherwise keep the toolbar at full height.
+      // `!important` beats the Autocomplete's own size rules, whatever their specificity.
+      ".MuiInputBase-root": { paddingBlock: `${theme.spacing(0.25)} !important` },
+    },
+  },
+  // In compact mode a toolbar with only a title floats over the panel and shows while it's hovered.
+  floating: {
+    [`${COMPACT} &`]: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      position: "absolute !important" as any,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      top: "0 !important" as any,
+      opacity: 0,
+      transition: "opacity 80ms ease-in-out",
+    },
+    [`${COMPACT} ${HOVERED_PANEL} &, ${COMPACT} &:focus-within`]: { opacity: 1 },
   },
   content: {
     display: "flex",

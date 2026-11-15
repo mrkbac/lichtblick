@@ -3,6 +3,8 @@
 
 import { makeStyles } from "tss-react/mui";
 
+import { COMPACT_PANELS_STYLE } from "@lichtblick/suite-base/components/PanelToolbar/constants";
+
 export const useStyles = makeStyles()({
   container: {
     width: "100%",
@@ -13,5 +15,6 @@ export const useStyles = makeStyles()({
     flex: "1 1 100%",
     outline: "none",
     overflow: "hidden",
+    ...COMPACT_PANELS_STYLE,
   },
 });

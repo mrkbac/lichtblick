@@ -5,7 +5,7 @@ import { Slider } from "@mui/material";
 import { createContext, useCallback, useRef, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
-import { PANEL_TOOLBAR_MIN_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
+import { PANEL_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 
 import { CompareSideInfo, CompareState, SideScope, useCompare } from "./CompareContext";
 import {
@@ -62,7 +62,7 @@ const useStyles = makeStyles()((theme) => ({
   },
   handle: {
     position: "absolute",
-    top: PANEL_TOOLBAR_MIN_HEIGHT,
+    top: PANEL_TOOLBAR_HEIGHT,
     bottom: 0,
     width: 16,
     marginLeft: -8,
@@ -169,10 +169,10 @@ export function ComparedPanel({ compare, support, view, panel, copy }: Props): R
   const percent = `${(mix * 100).toFixed(2)}%`;
   const layerStyle: React.CSSProperties =
     resolved.layout === "swipe"
-      ? { clipPath: `inset(${PANEL_TOOLBAR_MIN_HEIGHT}px 0 0 ${percent})` }
+      ? { clipPath: `inset(${PANEL_TOOLBAR_HEIGHT} 0 0 ${percent})` }
       : resolved.layout === "blend"
-        ? { clipPath: `inset(${PANEL_TOOLBAR_MIN_HEIGHT}px 0 0 0)`, opacity: mix }
-        : { clipPath: `inset(${PANEL_TOOLBAR_MIN_HEIGHT}px 0 0 0)`, mixBlendMode: "difference" };
+        ? { clipPath: `inset(${PANEL_TOOLBAR_HEIGHT} 0 0 0)`, opacity: mix }
+        : { clipPath: `inset(${PANEL_TOOLBAR_HEIGHT} 0 0 0)`, mixBlendMode: "difference" };
   return (
     <div ref={containerRef} className={classes.fill} style={{ isolation: "isolate" }}>
       <SideScope side={bottom}>{panel}</SideScope>

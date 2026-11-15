@@ -10,6 +10,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { Immutable } from "@lichtblick/suite";
+import { PANEL_FLOATING_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import { DEFAULT_PLOT_PATH } from "@lichtblick/suite-base/panels/Plot/constants";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { parseColor, toHex8 } from "@lichtblick/suite-base/util/parseColor";
@@ -50,6 +51,7 @@ const useStyles = makeStyles<void, "grid">()(
       zIndex: 1000,
       gap: spacing(0.75),
       padding: spacing(1.5, 3.75, 4, 4.5),
+      paddingTop: `calc(${spacing(1.5)} + ${PANEL_FLOATING_TOOLBAR_HEIGHT})`,
 
       [`.${classes.grid}`]: {
         pointerEvents: "auto",

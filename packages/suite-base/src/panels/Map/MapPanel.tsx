@@ -31,6 +31,7 @@ import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
 import { MessageEvent, PanelExtensionContext, SettingsTreeAction, Topic } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 import { OVERLAY_TOOLBAR_BUTTON_SIZE } from "@lichtblick/suite-base/components/OverlayToolbar";
+import { PANEL_FLOATING_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { turboColorString } from "@lichtblick/suite-base/util/colorUtils";
 import { formatTime } from "@lichtblick/suite-base/util/formatTime";
@@ -146,6 +147,7 @@ const useStyles = makeStyles()((theme) => ({
     width: "100%",
     height: "100%",
     overflow: "hidden",
+    ".maplibregl-ctrl-top-right": { top: PANEL_FLOATING_TOOLBAR_HEIGHT },
     backgroundColor: theme.palette.background.default,
     "& .maplibregl-popup-content": {
       backgroundColor: theme.palette.background.paper,
@@ -197,7 +199,7 @@ const useStyles = makeStyles()((theme) => ({
     // Under the zoom/compass controls; the attribution at the bottom can wrap to several lines.
     position: "absolute",
     right: 10,
-    top: 10 + OVERLAY_TOOLBAR_BUTTON_SIZE * 3 + 10,
+    top: `calc(${10 + OVERLAY_TOOLBAR_BUTTON_SIZE * 3 + 10}px + ${PANEL_FLOATING_TOOLBAR_HEIGHT})`,
     display: "flex",
     flexDirection: "column",
     gap: theme.spacing(0.5),
@@ -222,7 +224,7 @@ const useStyles = makeStyles()((theme) => ({
   },
   notice: {
     position: "absolute",
-    top: 10,
+    top: `calc(10px + ${PANEL_FLOATING_TOOLBAR_HEIGHT})`,
     left: "50%",
     transform: "translateX(-50%)",
   },

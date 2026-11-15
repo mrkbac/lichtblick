@@ -19,7 +19,7 @@ import { ReactElement, Ref } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { PANEL_ROOT_CLASS_NAME } from "@lichtblick/suite-base/components/PanelRoot";
-import { PANEL_TOOLBAR_MIN_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
+import { PANEL_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 
 const useStyles = makeStyles<void, "buttonGroup">()((theme, _params, classes) => {
@@ -70,7 +70,7 @@ const useStyles = makeStyles<void, "buttonGroup">()((theme, _params, classes) =>
         flexDirection: "row",
       },
       "@container backdrop (min-height: 120px)": {
-        marginTop: PANEL_TOOLBAR_MIN_HEIGHT,
+        marginTop: PANEL_TOOLBAR_HEIGHT,
       },
       "@container backdrop (min-width: 240px)": {
         flexDirection: "row",

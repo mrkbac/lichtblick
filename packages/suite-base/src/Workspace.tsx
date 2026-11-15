@@ -50,6 +50,7 @@ import {
 import { MonitorSetupProvider } from "@lichtblick/suite-base/components/MonitorSetupContext";
 import PanelLayout from "@lichtblick/suite-base/components/PanelLayout";
 import PanelSettings from "@lichtblick/suite-base/components/PanelSettings";
+import { COMPACT_PANELS_ATTRIBUTE } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import PlaybackControls from "@lichtblick/suite-base/components/PlaybackControls";
 import Sidebars from "@lichtblick/suite-base/components/Sidebars";
 import { SidebarItem } from "@lichtblick/suite-base/components/Sidebars/types";
@@ -186,6 +187,8 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   useStructureItemsStoreManager();
 
   const [enableDebugMode = false] = useAppConfigurationValue<boolean>(AppSetting.SHOW_DEBUG_PANELS);
+
+  const [compactPanels = false] = useAppConfigurationValue<boolean>(AppSetting.COMPACT_PANELS);
 
   const [enableStudioLogsSidebar = false] = useAppConfigurationValue<boolean>(
     AppSetting.SHOW_DEBUG_PANELS,
@@ -701,7 +704,12 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       <KeyboardShortcuts />
       <LiveRecordingsDialog />
       <CompareDialog />
-      <div className={classes.container} ref={containerRef} tabIndex={0}>
+      <div
+        className={classes.container}
+        ref={containerRef}
+        tabIndex={0}
+        {...{ [COMPACT_PANELS_ATTRIBUTE]: compactPanels ? "" : undefined }}
+      >
         {appBar}
         <Sidebars
           selectedKey=""

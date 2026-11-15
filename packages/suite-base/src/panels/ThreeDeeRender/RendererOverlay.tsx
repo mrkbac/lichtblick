@@ -34,6 +34,7 @@ import {
   PanelContextMenu,
   PanelContextMenuItem,
 } from "@lichtblick/suite-base/components/PanelContextMenu";
+import { PANEL_FLOATING_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import PublishGoalIcon from "@lichtblick/suite-base/components/PublishGoalIcon";
 import PublishPointIcon from "@lichtblick/suite-base/components/PublishPointIcon";
 import PublishPoseEstimateIcon from "@lichtblick/suite-base/components/PublishPoseEstimateIcon";
@@ -64,7 +65,7 @@ const PublishClickIcons: Record<PublishClickType, React.ReactNode> = {
 const useStyles = makeStyles()((theme) => ({
   root: {
     position: "absolute",
-    top: 10,
+    top: `calc(10px + ${PANEL_FLOATING_TOOLBAR_HEIGHT})`,
     right: 10,
     display: "flex",
     flexDirection: "column",
