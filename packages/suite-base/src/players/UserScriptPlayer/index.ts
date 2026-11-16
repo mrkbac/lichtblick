@@ -230,6 +230,27 @@ async function runRegistrations(
   return outputs;
 }
 
+/** Runs `registrations` over `messages` with fresh processor instances, terminated afterwards. */
+async function runFresh(
+  messages: readonly MessageEvent[],
+  registrations: readonly ScriptRegistration[],
+  globalVariables: GlobalVariables,
+): Promise<MessageEvent[]> {
+  const processors = new Map(registrations.map((r) => [r, r.buildMessageProcessor()]));
+  try {
+    return await runRegistrations(
+      messages,
+      registrations,
+      async (registration, inputs) =>
+        await processors.get(registration)!.processMessages(inputs, globalVariables),
+    );
+  } finally {
+    for (const processor of processors.values()) {
+      processor.terminate();
+    }
+  }
+}
+
 export default class UserScriptPlayer implements Player {
   #player: Player;
 
@@ -819,9 +840,7 @@ export default class UserScriptPlayer implements Player {
       validScriptRegistrations.push(scriptRegistration);
     }
 
-    for (const registration of this.#topicConverterRegistrations(state, playerTopics)) {
-      validScriptRegistrations.push(registration);
-    }
+    validScriptRegistrations.push(...this.#topicConverterRegistrations(state, playerTopics));
 
     let changedTopicsRequireEmitState = false;
     state.scriptRegistrations = validScriptRegistrations;
@@ -850,7 +869,7 @@ export default class UserScriptPlayer implements Player {
     }
 
     for (const scriptRegistration of state.scriptRegistrations) {
-      if (!scriptRegistration.scriptId.startsWith(TOPIC_CONVERTER_ALERT_PREFIX)) {
+      if (!isTopicConverter(scriptRegistration)) {
         this.#setUserScriptDiagnostics(scriptRegistration.scriptId, []);
       }
     }
@@ -996,20 +1015,7 @@ export default class UserScriptPlayer implements Player {
         .sort(byReceiveTime);
       // ponytail: fresh converter instances per block, so converter state does not carry across
       // block boundaries; carry it over in time order if a stateful converter needs it.
-      const processors = new Map(needed.map((r) => [r, r.buildMessageProcessor()]));
-      let outputs: MessageEvent[];
-      try {
-        outputs = await runRegistrations(
-          inputs,
-          needed,
-          async (registration, messages) =>
-            await processors.get(registration)!.processMessages(messages, globalVariables),
-        );
-      } finally {
-        for (const processor of processors.values()) {
-          processor.terminate();
-        }
-      }
+      const outputs = await runFresh(inputs, needed, globalVariables);
       const messagesByTopic: Record<string, MessageEvent[]> = { ...block.messagesByTopic };
       let sizeInBytes = block.sizeInBytes;
       for (const topic of outputTopics) {
@@ -1324,26 +1330,18 @@ export default class UserScriptPlayer implements Player {
       return backfill;
     }
 
-    const processors = new Map(registrations.map((r) => [r, r.buildMessageProcessor()]));
-    try {
-      const outputs = await runRegistrations(
-        [...backfill].sort(byReceiveTime),
-        registrations,
-        async (registration, inputs) =>
-          await processors.get(registration)!.processMessages(inputs, this.#globalVariables),
-      );
-      const lastOutputs = new Map<string, MessageEvent>();
-      for (const output of outputs) {
-        if (args.topics.has(output.topic)) {
-          lastOutputs.set(output.topic, output);
-        }
-      }
-      return [...backfill.filter(({ topic }) => args.topics.has(topic)), ...lastOutputs.values()];
-    } finally {
-      for (const processor of processors.values()) {
-        processor.terminate();
+    const outputs = await runFresh(
+      [...backfill].sort(byReceiveTime),
+      registrations,
+      this.#globalVariables,
+    );
+    const lastOutputs = new Map<string, MessageEvent>();
+    for (const output of outputs) {
+      if (args.topics.has(output.topic)) {
+        lastOutputs.set(output.topic, output);
       }
     }
+    return [...backfill.filter(({ topic }) => args.topics.has(topic)), ...lastOutputs.values()];
   }
 
   #collectInputIterators(

@@ -200,6 +200,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
   const { classes, cx, theme } = useStyles();
 
   const indent = props.path.length;
+  const ownKey = props.path.at(-1) ?? "";
   const allowVisibilityToggle = props.settings?.visible != undefined;
   const visible = props.settings?.visible !== false;
   const selectVisibilityFilterEnabled = props.settings?.enableVisibilityFilter === true;
@@ -261,7 +262,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
   const connectChildReorder = useCallback((element: HTMLElement) => {
     const childData = (data: Record<string | symbol, unknown>) =>
       data.type === SETTINGS_CHILD_DRAG_TYPE ? (data as ChildDragData) : undefined;
-    const ownKey = () => latest.current.path[latest.current.path.length - 1] ?? "";
+    const latestKey = () => latest.current.path[latest.current.path.length - 1] ?? "";
     return combine(
       draggable({
         element,
@@ -269,7 +270,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
         getInitialData: (): ChildDragData => ({
           type: SETTINGS_CHILD_DRAG_TYPE,
           parentPath: latest.current.reorderContext?.parentPath ?? [],
-          key: ownKey(),
+          key: latestKey(),
           group: latest.current.reorderContext?.group,
         }),
         onDragStart: () => {
@@ -288,7 +289,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
             return false;
           }
           if (_.isEqual(from.parentPath, context.parentPath)) {
-            return from.key !== ownKey();
+            return from.key !== latestKey();
           }
           return context.group != undefined && from.group === context.group;
         },
@@ -310,7 +311,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
               path: context.parentPath,
               sourcePath: from.parentPath,
               fromKey: from.key,
-              toKey: ownKey(),
+              toKey: latestKey(),
               position: dropEdgeAt(self.element, location.current.input.clientY),
             }),
           );
@@ -378,7 +379,6 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
 
   const handleNodeAction = (actionId: string) => {
     if (reorderContext && (actionId === MOVE_UP_ACTION_ID || actionId === MOVE_DOWN_ACTION_ID)) {
-      const ownKey = props.path[props.path.length - 1] ?? "";
       const index = reorderContext.siblingKeys.indexOf(ownKey);
       const up = actionId === MOVE_UP_ACTION_ID;
       const toKey = reorderContext.siblingKeys[up ? index - 1 : index + 1];
@@ -559,7 +559,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
     const menu: Immutable<EditorSettingsTreeNodeAction>[] = [...menuOnly];
     // Foxglove `childrenReorderable`: default "Move up" / "Move down" items once 2+ children can move.
     if (reorderContext != undefined && reorderContext.siblingKeys.length >= 2) {
-      const index = reorderContext.siblingKeys.indexOf(props.path[props.path.length - 1] ?? "");
+      const index = reorderContext.siblingKeys.indexOf(ownKey);
       menu.push(
         {
           type: "action",
@@ -578,7 +578,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
       );
     }
     return [inline, menu];
-  }, [settings.actions, reorderContext, props.path, t]);
+  }, [settings.actions, reorderContext, ownKey, t]);
 
   const isDragHandleIcon = settings.icon === "DragHandle" && isReorderable;
   const nodeColor = settings.color;
