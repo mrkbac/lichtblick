@@ -56,6 +56,20 @@ describe("settingsActionReducer", () => {
     expect(config).toEqual({ topics: { "/robot.1/tf": { static: true } } });
   });
 
+  it("should forget a configured topic when its remove action is performed", () => {
+    // Given
+    const initial = { topics: { "/old.tf": { static: true }, "/tf": { visible: false } } };
+
+    // When
+    const config = settingsActionReducer(initial, {
+      action: "perform-node-action",
+      payload: { id: "remove", path: ["topics", "/old.tf"] },
+    });
+
+    // Then
+    expect(config).toEqual({ topics: { "/tf": { visible: false } } });
+  });
+
   it("should return the config unchanged when given an unrelated action", () => {
     // Given
     const config = { collapsed: ["map"] };
