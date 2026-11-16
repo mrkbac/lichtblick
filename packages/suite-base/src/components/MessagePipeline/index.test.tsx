@@ -454,6 +454,41 @@ describe("MessagePipelineProvider/useMessagePipeline", () => {
       expect(result.current.messageEventsBySubscriberId.get("tab-b-panel")).toEqual([latched]);
     });
 
+    // A panel reading a few fields gets messages sliced to them. A panel that needs the whole
+    // message must not get such a slice as its cached last message.
+    it.each([
+      { name: "a whole message", fields: undefined, injected: false },
+      { name: "more fields", fields: ["transforms", "header"], injected: false },
+      { name: "the same fields", fields: ["transforms"], injected: true },
+    ])(
+      "injects a sliced message only into a subscriber asking for no more ($name)",
+      async ({ fields, injected }) => {
+        // Given a panel that subscribed to one field before the player delivered the message
+        const player = new FakePlayer();
+        const { Hook, Wrapper } = makeTestHook({ player });
+        const { result } = renderHook(Hook, { wrapper: Wrapper });
+        act(() => {
+          result.current.setSubscriptions("sliced-panel", [
+            { topic: "/tf_static", fields: ["transforms"] },
+          ]);
+        });
+        await doubleAct(async () => {
+          await emitLatched(player);
+        });
+
+        // When that panel leaves and another panel subscribes to the topic
+        act(() => {
+          result.current.setSubscriptions("sliced-panel", []);
+          result.current.setSubscriptions("next-panel", [{ topic: "/tf_static", fields }]);
+        });
+
+        // Then the cached message reaches it only when the slice holds every field it needs
+        expect(result.current.messageEventsBySubscriberId.get("next-panel")).toEqual(
+          injected ? [latched] : undefined,
+        );
+      },
+    );
+
     it.each(["remount", "resume", "advance", "seek"] as const)(
       "keeps a paused recording frame only while its position stays unchanged (%s)",
       async (transition) => {
