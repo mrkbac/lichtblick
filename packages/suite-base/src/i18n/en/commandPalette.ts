@@ -60,6 +60,8 @@ export const commandPalette = {
   openTopicPlaceholder: "Search topics",
   openTopicIn: "in {{panel}}",
   copyTopicName: "Copy topic name",
+  showInSelected: "in selected {{panel}}",
+  addAsNewPanel: "Add as a new panel",
 
   play: "Play",
   pause: "Pause",

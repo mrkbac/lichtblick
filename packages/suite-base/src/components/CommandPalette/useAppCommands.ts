@@ -61,13 +61,24 @@ const log = Logger.getLogger(__filename);
 
 type TopicTarget = {
   panelType: string;
-  config: (topic: string) => PanelConfig;
+  /** Config of a new panel showing `value` (a topic or message path). */
+  config: (value: string) => PanelConfig;
+  /** Config of an existing panel of this type after showing `value` in it too, or instead. */
+  apply: (prev: PanelConfig, value: string) => PanelConfig;
 };
 
-const RAW_MESSAGES: TopicTarget = {
-  panelType: "RawMessages",
-  config: (topic) => ({ topicPath: topic }),
-};
+const obj = (value: unknown): Record<string, unknown> =>
+  typeof value === "object" && value != undefined ? (value as Record<string, unknown>) : {};
+const asArray = (value: unknown): unknown[] => (Array.isArray(value) ? value : []);
+
+/** Panels whose config names one topic: picking a topic replaces it. */
+const singleTopic = (panelType: string, key: string): TopicTarget => ({
+  panelType,
+  config: (topic) => ({ [key]: topic }),
+  apply: (prev, topic) => ({ ...prev, [key]: topic }),
+});
+
+const RAW_MESSAGES = singleTopic("RawMessages", "topicPath");
 
 /**
  * Picks the panels that can show a topic, best first. Matching is by schema name so it works for
@@ -80,19 +91,17 @@ export function topicTargets(schemaName: string | undefined): TopicTarget[] {
     targets.push({
       panelType: "Image",
       config: (topic) => ({ imageMode: { imageTopic: topic } }),
+      apply: (prev, topic) => ({
+        ...prev,
+        imageMode: { ...obj(prev.imageMode), imageTopic: topic },
+      }),
     });
   }
   if (/(^|[/.])Log$/.test(schema)) {
-    targets.push({
-      panelType: "RosOut",
-      config: (topic) => ({ topicToRender: topic }),
-    });
+    targets.push(singleTopic("RosOut", "topicToRender"));
   }
   if (/(^|[/.])DiagnosticArray$/.test(schema)) {
-    targets.push({
-      panelType: "DiagnosticSummary",
-      config: (topic) => ({ topicToRender: topic }),
-    });
+    targets.push(singleTopic("DiagnosticSummary", "topicToRender"));
   }
   if (
     /(PointCloud2?|LaserScan|Marker(Array)?|OccupancyGrid|Grid|Path|Pose(Stamped|Array|InFrame|sInFrame)?|TFMessage|FrameTransforms?|SceneUpdate|PolygonStamped)$/.test(
@@ -102,22 +111,37 @@ export function topicTargets(schemaName: string | undefined): TopicTarget[] {
     targets.push({
       panelType: "3D",
       config: (topic) => ({ topics: { [topic]: { visible: true } } }),
+      // Turns the topic on in the scene; other topics stay as they are.
+      apply: (prev, topic) => {
+        const topics = obj(prev.topics);
+        return {
+          ...prev,
+          topics: { ...topics, [topic]: { ...obj(topics[topic]), visible: true } },
+        };
+      },
     });
   }
-  targets.push(RAW_MESSAGES, {
-    panelType: "Table",
-    config: (topic) => ({ topicPath: topic }),
-  });
+  targets.push(RAW_MESSAGES, singleTopic("Table", "topicPath"));
   return targets;
 }
 
+/** Plot and Watch show many paths, so picking one adds it. */
 const PLOT: TopicTarget = {
   panelType: "Plot",
   config: (path) => ({ paths: [{ ...DEFAULT_PLOT_PATH, value: path }] }),
+  apply: (prev, path) => ({
+    ...prev,
+    // Fill the empty series of a fresh plot instead of adding a second one.
+    paths: [
+      ...asArray(prev.paths).filter((p) => obj(p).value !== ""),
+      { ...DEFAULT_PLOT_PATH, value: path },
+    ],
+  }),
 };
 const WATCH: TopicTarget = {
   panelType: "Watch",
   config: (path) => ({ rows: [newRow(path)] }),
+  apply: (prev, path) => ({ ...prev, rows: [...asArray(prev.rows), newRow(path)] }),
 };
 
 /**
@@ -198,6 +222,7 @@ export function useAppCommands(): {
     setPlaybackConfig,
     changePanelLayout,
     getCurrentLayoutState,
+    savePanelConfigs,
     splitPanel,
     closePanel,
   } = layoutActions;
@@ -343,6 +368,7 @@ export function useAppCommands(): {
         ? { title: customTitle, detail: typeTitle }
         : { title: typeTitle };
     };
+    const panelTitle = (type: string) => panelCatalog.getPanelByType(type)?.title ?? type;
     const selectedTarget = selectedPanelIds.length === 1 ? selectedPanelIds[0] : undefined;
     /** Where else a new panel can go: next to the selected panel, or at an edge of the layout. */
     const placementActions = (idPrefix: string, type: string, config?: PanelConfig): Command[] => {
@@ -392,6 +418,41 @@ export function useAppCommands(): {
       },
       actions: () => placementActions(id, type, config),
     });
+    const selectedType =
+      selectedTarget != undefined ? getPanelTypeFromId(selectedTarget) : undefined;
+    /**
+     * Shows a topic or path. With a panel of the target's type selected it goes into that panel
+     * (e.g. switches the selected Image panel's topic); otherwise it adds a new panel. Tab offers
+     * the other choice and the placements.
+     */
+    const showCommand = (
+      id: string,
+      target: TopicTarget,
+      value: string,
+      fields: Pick<Command, "title" | "detail" | "keywords">,
+    ): Command => {
+      const add = addPanelCommand(id, target.panelType, target.config(value), {
+        ...fields,
+        group: t("openTopicIn", { panel: panelTitle(target.panelType) }),
+      });
+      if (selectedTarget == undefined || selectedType !== target.panelType) {
+        return add;
+      }
+      const panelId = selectedTarget;
+      return {
+        ...fields,
+        id,
+        group: t("showInSelected", { panel: panelLabel(panelId).title }),
+        run: () => {
+          // Read the config when picked so edits made since the palette opened are kept.
+          const prev = getCurrentLayoutState().selectedLayout?.data?.configById[panelId] ?? {};
+          savePanelConfigs({
+            configs: [{ id: panelId, config: target.apply(prev, value), override: true }],
+          });
+        },
+        actions: () => [{ ...add, id: `${id}.new`, title: t("addAsNewPanel"), group: undefined }],
+      };
+    };
     if (layoutData) {
       const panelIds = layoutData.layout != undefined ? getPanelIds(layoutData.layout) : [];
       // Selecting a panel in a background tab would leave it hidden, so bring its tab to front too
@@ -496,24 +557,18 @@ export function useAppCommands(): {
 
     // ---- Topics ----
     if (layoutData && topics && topics.length > 0) {
-      const panelTitle = (type: string) => panelCatalog.getPanelByType(type)?.title ?? type;
       const pathCommands = (query: string): RankedCommand[] =>
         matchMessagePaths(
           query,
           topics.map((topic) => topic.name),
           useStructureItemsByPathStore.getState().structureItemsByPath,
         ).map(({ path, item, positions }) => {
-          const targets = pathTargets(item);
+          // The selected panel's type goes first, so Enter adds the path to that panel.
+          const targets = pathTargets(item).sort(
+            (a, b) => Number(b.panelType === selectedType) - Number(a.panelType === selectedType),
+          );
           const [first, ...rest] = targets.map((target) =>
-            addPanelCommand(
-              `topic.path.${target.panelType}`,
-              target.panelType,
-              target.config(path),
-              {
-                title: path,
-                group: t("openTopicIn", { panel: panelTitle(target.panelType) }),
-              },
-            ),
+            showCommand(`topic.path.${target.panelType}`, target, path, { title: path }),
           );
           return {
             command: {
@@ -524,7 +579,7 @@ export function useAppCommands(): {
               actions: () =>
                 [first!, ...rest].map((cmd, i) => ({
                   ...cmd,
-                  title: panelTitle(targets[i]!.panelType),
+                  title: cmd.group ?? panelTitle(targets[i]!.panelType),
                   group: undefined,
                 })),
             },
@@ -544,10 +599,9 @@ export function useAppCommands(): {
             .flatMap((topic: Topic) =>
               topicTargets(topic.schemaName).map((target) => {
                 const id = `topic.open.${target.panelType}.${topic.name}`;
-                const open = addPanelCommand(id, target.panelType, target.config(topic.name), {
+                const open = showCommand(id, target, topic.name, {
                   title: topic.name,
                   detail: topic.schemaName,
-                  group: t("openTopicIn", { panel: panelTitle(target.panelType) }),
                 });
                 return {
                   ...open,
@@ -718,6 +772,7 @@ export function useAppCommands(): {
     changePanelLayout,
     closePanel,
     getCurrentLayoutState,
+    savePanelConfigs,
     splitPanel,
     setSelectedLayoutId,
     setSelectedPanelIds,

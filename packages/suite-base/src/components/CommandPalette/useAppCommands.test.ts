@@ -5,6 +5,10 @@
 import { renderHook } from "@testing-library/react";
 
 import {
+  MessagePipelineContext,
+  useMessagePipeline,
+} from "@lichtblick/suite-base/components/MessagePipeline";
+import {
   useCurrentLayoutActions,
   useCurrentLayoutSelector,
   useSelectedPanels,
@@ -41,13 +45,16 @@ describe("useAppCommands", () => {
   const setSelectedPanelIds = vi.fn();
   const addLayoutPanel = vi.fn();
   const closePanel = vi.fn();
+  const savePanelConfigs = vi.fn();
   const openPanelSettings = vi.fn();
   // The layout at the time a command runs
   let currentLayout: LayoutNode;
+  let currentConfigs: Record<string, Record<string, unknown>>;
 
   beforeEach(() => {
     vi.clearAllMocks();
     currentLayout = layout;
+    currentConfigs = {};
     vi.mocked(usePlayerSelection).mockReturnValue({
       availableSources: [],
       recentSources: [],
@@ -62,8 +69,9 @@ describe("useAppCommands", () => {
       changePanelLayout,
       addPanel: addLayoutPanel,
       closePanel,
+      savePanelConfigs,
       getCurrentLayoutState: () => ({
-        selectedLayout: { data: { layout: currentLayout, configById: {} } },
+        selectedLayout: { data: { layout: currentLayout, configById: currentConfigs } },
       }),
     } as unknown as ReturnType<typeof useCurrentLayoutActions>);
     vi.mocked(useSelectedPanels).mockReturnValue({
@@ -161,5 +169,39 @@ describe("useAppCommands", () => {
     panel.actions!().find((cmd) => cmd.id.endsWith(".close"))!.run!();
 
     expect(closePanel).toHaveBeenCalledWith({ id: "Plot!c" });
+  });
+
+  it("shows a topic in the selected panel of the same type", async () => {
+    // Given a selected Image panel showing another topic, and an image topic in the data
+    vi.mocked(useSelectedPanels).mockReturnValue({
+      selectedPanelIds: ["Image!a"],
+      setSelectedPanelIds,
+    } as unknown as ReturnType<typeof useSelectedPanels>);
+    vi.mocked(useMessagePipeline).mockImplementation((selector) =>
+      selector({
+        playerState: {
+          activeData: { topics: [{ name: "/cam", schemaName: "sensor_msgs/msg/Image" }] },
+        },
+      } as unknown as MessagePipelineContext),
+    );
+    currentConfigs = { "Image!a": { imageMode: { imageTopic: "/old", calibrationTopic: "/c" } } };
+    const { result } = renderHook(() => useAppCommands());
+
+    // When picking the topic in the Image panel
+    const open = result.current.commands.find((cmd) => cmd.id === "topic.open")!;
+    const items = await open.children!();
+    items.find((cmd) => cmd.id === "topic.open.Image./cam")!.run!();
+
+    // Then the selected panel switches topic, keeping its other settings, and no panel is added
+    expect(savePanelConfigs).toHaveBeenCalledWith({
+      configs: [
+        {
+          id: "Image!a",
+          config: { imageMode: { imageTopic: "/cam", calibrationTopic: "/c" } },
+          override: true,
+        },
+      ],
+    });
+    expect(addLayoutPanel).not.toHaveBeenCalled();
   });
 });

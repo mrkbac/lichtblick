@@ -375,4 +375,12 @@ describe("pathTargets", () => {
     expect(pathTargets(msg).map((t) => t.panelType)).toEqual(["Watch", "RawMessages"]);
     expect(itemTypeName({ structureType: "array", next: num, datatype: "" })).toBe("float64[]");
   });
+
+  it("adds a path to an existing plot, filling its empty series first", () => {
+    const num = { structureType: "primitive", primitiveType: "float64", datatype: "" } as const;
+    const plot = pathTargets(num)[0]!;
+    const fresh = plot.apply({ paths: [{ value: "", enabled: true }] }, "/a.x");
+    const more = plot.apply(fresh, "/a.y");
+    expect((more.paths as { value: string }[]).map((p) => p.value)).toEqual(["/a.x", "/a.y"]);
+  });
 });
