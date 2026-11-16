@@ -318,6 +318,21 @@ export const useStyles = makeStyles()((theme) => ({
     "& dt": { color: theme.palette.text.secondary },
     "& dd": { whiteSpace: "pre-wrap" },
   },
+  qos: {
+    borderCollapse: "collapse",
+    marginBlock: theme.spacing(1),
+    "& th, & td": {
+      padding: theme.spacing(0.5, 1.5, 0.5, 0),
+      borderBottom: `1px solid ${theme.palette.divider}`,
+      fontSize: 12,
+      textAlign: "left",
+      whiteSpace: "nowrap",
+    },
+    "& th": { color: theme.palette.text.secondary, fontWeight: 400 },
+    "& thead th": { fontWeight: 600 },
+  },
+  qosWarning: { color: theme.palette.warning.main },
+  qosDiffers: { "& td": { color: theme.palette.warning.main, fontWeight: 600 } },
   namespace: {
     background: alpha(theme.palette.text.primary, 0.025),
     "& > td:first-of-type > button": {

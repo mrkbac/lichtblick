@@ -53,9 +53,16 @@ import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { CompareView } from "./CompareView";
-import { ActivityChart, ContainerDetails, KeyValueTable, SchemaFields } from "./InspectionViews";
+import {
+  ActivityChart,
+  ContainerDetails,
+  KeyValueTable,
+  QosTable,
+  SchemaFields,
+} from "./InspectionViews";
 import { useStyles } from "./index.style";
 import { aggregateBuckets, BUCKET_COUNT, inspectSourceTopics, TopicInspection } from "./inspection";
+import { conflictingPolicies, parseQosProfiles, QOS_LABELS } from "./qos";
 import { namespaceTotals, topicTreeRows } from "./topicTree";
 
 const selectTopics = (ctx: MessagePipelineContext) => ctx.sortedTopics;
@@ -722,6 +729,10 @@ export function RecordingInspector(): React.JSX.Element {
                         )
                         .map((channel) => ({ ...channel, fileIndex })),
                     );
+                    const qos = channels.flatMap((channel) =>
+                      parseQosProfiles(channel.metadata.offered_qos_profiles),
+                    );
+                    const qosConflicts = conflictingPolicies(qos);
                     return (
                       <Fragment key={topic.name}>
                         <tr data-selected={selected === topic.name}>
@@ -754,6 +765,23 @@ export function RecordingInspector(): React.JSX.Element {
                             {topic.aliasedFromName && (
                               <span className={classes.schemaLabel}>
                                 from {topic.aliasedFromName}
+                              </span>
+                            )}
+                            {qos[0] && (
+                              <span
+                                className={cx(classes.schemaLabel, {
+                                  [classes.qosWarning]: qosConflicts.length > 0,
+                                })}
+                                title={
+                                  qosConflicts.length > 0
+                                    ? `Publishers offer different ${qosConflicts.map((key) => QOS_LABELS[key].toLowerCase()).join(", ")}. A single subscription cannot match all of them.`
+                                    : "Offered QoS"
+                                }
+                              >
+                                {qosConflicts.length > 0
+                                  ? `⚠ Mixed QoS: ${qosConflicts.map((key) => QOS_LABELS[key].toLowerCase()).join(", ")}`
+                                  : `${qos[0].reliability} · ${qos[0].durability} · ${qos[0].history}`}
+                                {qos.length > 1 ? ` · ${qos.length} publishers` : ""}
                               </span>
                             )}
                           </td>
@@ -944,6 +972,19 @@ export function RecordingInspector(): React.JSX.Element {
                                     </div>
                                   ))}
                                 </div>
+                              )}
+                              {qos.length > 0 && (
+                                <>
+                                  <Typography
+                                    variant="caption"
+                                    color="textSecondary"
+                                    className={classes.subheading}
+                                    component="div"
+                                  >
+                                    Offered QoS
+                                  </Typography>
+                                  <QosTable profiles={qos} />
+                                </>
                               )}
                               {topic.schemaName && (
                                 <SchemaFields schemaName={topic.schemaName} datatypes={datatypes} />
