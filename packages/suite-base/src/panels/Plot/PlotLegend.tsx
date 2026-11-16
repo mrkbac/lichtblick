@@ -73,6 +73,7 @@ const useStyles = makeStyles<void, "grid">()(
     rootLeft: {
       alignItems: "flex-start",
       maxWidth: "80%",
+      paddingTop: PANEL_FLOATING_TOOLBAR_HEIGHT,
 
       [`.${classes.grid}`]: {
         overflow: "auto",
@@ -83,6 +84,7 @@ const useStyles = makeStyles<void, "grid">()(
     rootTop: {
       flexDirection: "column",
       maxHeight: "80%",
+      paddingTop: PANEL_FLOATING_TOOLBAR_HEIGHT,
     },
     grid: {
       alignItems: "center",
