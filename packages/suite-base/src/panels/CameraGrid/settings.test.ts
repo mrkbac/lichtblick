@@ -3,7 +3,7 @@
 
 import { SettingsTreeAction } from "@lichtblick/suite";
 
-import { ADD_ALL_ACTION, addAllTopics, settingsReducer } from "./settings";
+import { addAllTopics, settingsReducer } from "./settings";
 import { CameraGridConfig, DEFAULT_CONFIG, makeTile } from "./types";
 
 const topicsOf = (config: CameraGridConfig) => config.tiles.map((tile) => tile.topic);
@@ -20,51 +20,42 @@ const update = (path: string[], value: unknown): SettingsTreeAction =>
 describe("settingsReducer", () => {
   const config: CameraGridConfig = { ...DEFAULT_CONFIG, tiles: ["/a", "/b", "/c"].map(makeTile) };
 
-  it("adds all missing image topics in sorted order after existing ones", () => {
-    const start = { ...DEFAULT_CONFIG, tiles: [makeTile("/z")] };
-    const next = settingsReducer(start, nodeAction(ADD_ALL_ACTION, ["general"]), [
-      "/a",
-      "/b",
-      "/z",
-    ]);
+  it("show all adds missing image topics after existing ones and shows every tile", () => {
+    const start = { ...DEFAULT_CONFIG, tiles: [{ ...makeTile("/z"), visible: false }] };
+    const next = settingsReducer(start, nodeAction("show-all", ["topics"]), ["/a", "/b", "/z"]);
     expect(topicsOf(next)).toEqual(["/z", "/a", "/b"]);
+    expect(next.tiles.every((tile) => tile.visible)).toBe(true);
     expect(addAllTopics(next, ["/a", "/b", "/z"])).toBe(next);
+
+    const hidden = settingsReducer(next, nodeAction("hide-all", ["topics"]), []);
+    expect(topicsOf(hidden)).toEqual(["/z", "/a", "/b"]);
+    expect(hidden.tiles.some((tile) => tile.visible)).toBe(false);
   });
 
-  it("adds a single topic once", () => {
-    const next = settingsReducer(config, update(["general", "add"], "/d"), []);
+  it("turning on a topic without a tile adds it once", () => {
+    const next = settingsReducer(config, update(["topics", "/d", "visible"], true), []);
     expect(topicsOf(next)).toEqual(["/a", "/b", "/c", "/d"]);
-    expect(settingsReducer(next, update(["general", "add"], "/a"), [])).toEqual(next);
+    expect(settingsReducer(config, update(["topics", "/d", "visible"], false), [])).toEqual(config);
+    const hidden = settingsReducer(next, update(["topics", "/a", "visible"], false), []);
+    expect(topicsOf(hidden)).toEqual(["/a", "/b", "/c", "/d"]);
+    expect(hidden.tiles[0]!.visible).toBe(false);
   });
 
-  it("moves and removes tiles", () => {
-    expect(topicsOf(settingsReducer(config, nodeAction("move-up", ["topics", "2"]), []))).toEqual([
+  it("moves tiles", () => {
+    expect(topicsOf(settingsReducer(config, nodeAction("move-up", ["topics", "/c"]), []))).toEqual([
       "/a",
       "/c",
       "/b",
     ]);
-    expect(topicsOf(settingsReducer(config, nodeAction("move-down", ["topics", "0"]), []))).toEqual(
-      ["/b", "/a", "/c"],
-    );
+    expect(
+      topicsOf(settingsReducer(config, nodeAction("move-down", ["topics", "/a"]), [])),
+    ).toEqual(["/b", "/a", "/c"]);
     const dragged = settingsReducer(
       config,
-      { action: "reorder-node", payload: { path: ["topics", "0"], targetPath: ["topics", "2"] } },
+      { action: "reorder-node", payload: { path: ["topics", "/a"], targetPath: ["topics", "/c"] } },
       [],
     );
     expect(topicsOf(dragged)).toEqual(["/b", "/c", "/a"]);
-    expect(topicsOf(settingsReducer(config, nodeAction("remove", ["topics", "1"]), []))).toEqual([
-      "/a",
-      "/c",
-    ]);
-  });
-
-  it("does not switch a tile to a topic already in the grid", () => {
-    expect(settingsReducer(config, update(["topics", "0", "topic"], "/b"), [])).toEqual(config);
-    expect(topicsOf(settingsReducer(config, update(["topics", "0", "topic"], "/x"), []))).toEqual([
-      "/x",
-      "/b",
-      "/c",
-    ]);
   });
 
   it("treats an empty column count as auto", () => {
@@ -78,7 +69,7 @@ describe("settingsReducer", () => {
   it("turns the automatic annotation match into the tile's own pick on the first toggle", () => {
     const start = { ...DEFAULT_CONFIG, tiles: [makeTile("/cam/image")] };
     const available = ["/cam/annotations", "/other/annotations"];
-    const path = (topic: string) => ["topics", "0", "annotations", topic, "visible"];
+    const path = (topic: string) => ["topics", "/cam/image", "annotations", topic, "visible"];
 
     const added = settingsReducer(start, update(path("/other/annotations"), true), [], available);
     expect(added.tiles[0]!.annotationTopics).toEqual(["/cam/annotations", "/other/annotations"]);

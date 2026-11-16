@@ -338,6 +338,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       }),
     [topics],
   );
+  const eligibleTopicsRef = useLatest(eligibleTopics);
 
   const enabledTopics = useMemo(
     () => eligibleTopics.filter((topic) => !config.disabledTopics.includes(topic.name)),
@@ -380,9 +381,16 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         setSavedSources([]);
         return;
       }
-      setConfig((prev) => applySettingsAction(prev, action, savedSourcesRef.current));
+      setConfig((prev) =>
+        applySettingsAction(
+          prev,
+          action,
+          savedSourcesRef.current,
+          eligibleTopicsRef.current.map((topic) => topic.name),
+        ),
+      );
     },
-    [savedSourcesRef],
+    [eligibleTopicsRef, savedSourcesRef],
   );
 
   const layerErrors = useMemo(() => {

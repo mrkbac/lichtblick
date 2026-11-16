@@ -8,6 +8,7 @@
 import { TFunction } from "i18next";
 
 import { SettingsTreeChildren, SettingsTreeNodes } from "@lichtblick/suite";
+import { topicListNode } from "@lichtblick/suite-base/panels/shared/topicList";
 
 import { Config, LogLevel, VisibilityFilter } from "./types";
 
@@ -71,13 +72,11 @@ export function buildSettingsTree(
         },
       },
     },
-    topics: {
-      enableVisibilityFilter: true,
+    topics: topicListNode({
       label: t("topics"),
       error: availableTopics.length === 0 ? t("noLogTopics") : undefined,
       children: visibilityChildren(availableTopics, (topic) => isTopicVisible(config, topic)),
-      actions: showHideActions,
-    },
+    }),
     nameFilter: {
       enableVisibilityFilter: true,
       children: visibilityChildren(availableNames, config.nameFilter ?? {}),
