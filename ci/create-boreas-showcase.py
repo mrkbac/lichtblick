@@ -35,6 +35,7 @@ import jsonschema
 import numpy as np
 from foxglove_schemas_protobuf.CompressedImage_pb2 import CompressedImage
 from foxglove_schemas_protobuf.CompressedVideo_pb2 import CompressedVideo
+from foxglove_schemas_protobuf.LocationFix_pb2 import LocationFix
 from foxglove_schemas_protobuf.PackedElementField_pb2 import PackedElementField
 from foxglove_schemas_protobuf.PointCloud_pb2 import PointCloud
 from foxglove_schemas_protobuf.Pose_pb2 import Pose
@@ -75,7 +76,7 @@ ATTRIBUTION = (
     "its native rate and resolution, H.265 encoded; radar as a Cartesian image and as a point "
     "cloud of the strongest returns; boxes as published at 5 Hz, linearly interpolated per track "
     "on the LiDAR frames in between (marked interpolated) and projected into the camera; ego "
-    "driven route coloured by speed; GPS converted from UTM; accelerations derived from the "
+    "driven route coloured by speed; GPS converted from UTM, altitude left unknown (the dataset's is relative); accelerations derived from the "
     "postprocessed velocities; local pose origin shifted. Original sensor timestamps retained."
 )
 
@@ -107,7 +108,7 @@ CLASS_COLORS = {
 }
 
 # Time (us), topic, schema, message: a JSON object, or a Protobuf message for the
-# heavy sensor topics, whose binary payloads would otherwise be base64 in JSON.
+# heavy sensor topics (binary payloads would otherwise be base64 in JSON) and for GPS (NaN).
 Event = tuple[int, str, str, dict | Message]
 
 
@@ -1281,16 +1282,19 @@ def main() -> None:
                     t,
                     "/boreas/gps",
                     "LocationFix",
-                    {
-                        "timestamp": stamp(t),
-                        "frame_id": "lidar",
-                        "latitude": float(latitude[i]),
-                        "longitude": float(longitude[i]),
-                        "altitude": float(r["altitude"]),
+                    # Protobuf because JSON cannot carry NaN. The dataset's altitude is relative,
+                    # not above the ellipsoid, so it is unknown (NaN, the ROS convention); the
+                    # fix is on the ground under the vehicle, where map layers belong.
+                    LocationFix(
+                        timestamp=pb_time(t),
+                        frame_id="base_link",
+                        latitude=float(latitude[i]),
+                        longitude=float(longitude[i]),
+                        altitude=float("nan"),
                         # The postprocessed solution is centimetre-level; 5 cm is conservative.
-                        "position_covariance": [0.0025, 0, 0, 0, 0.0025, 0, 0, 0, 0.01],
-                        "position_covariance_type": 2,
-                    },
+                        position_covariance=[0.0025, 0, 0, 0, 0.0025, 0, 0, 0, 0.01],
+                        position_covariance_type=LocationFix.DIAGONAL_KNOWN,
+                    ),
                 )
                 yield (
                     t,
