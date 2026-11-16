@@ -35,28 +35,24 @@ import {
 import { Namespace } from "@lichtblick/suite-base/types";
 import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
-import { cloudiniMessageConverter } from "@lichtblick/suite-base/util/cloudini";
+import { CLOUDINI_SCHEMA, cloudiniMessageConverter } from "@lichtblick/suite-base/util/cloudini";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
 const log = Logger.getLogger(__filename);
 
-const BUILTIN_MESSAGE_CONVERTERS: readonly InstalledMessageConverter[] = [cloudiniMessageConverter];
-
-/** Adds the built-in converters for schemas no installed extension converts. An extension the user
- * installed (e.g. the store's Cloudini extension) wins, and both running would convert each
- * message twice. */
+/** Adds the built-in Cloudini converter unless an installed extension converts the same schemas
+ * (e.g. the store's Cloudini extension): the user's extension wins, and both running would convert
+ * each message twice. */
 function withBuiltinConverters(
   converters: readonly InstalledMessageConverter[],
 ): InstalledMessageConverter[] {
-  const fromExtensions = converters.filter((c) => !BUILTIN_MESSAGE_CONVERTERS.includes(c));
-  const unhandled = BUILTIN_MESSAGE_CONVERTERS.filter(
-    (builtin) =>
-      !fromExtensions.some(
-        (c) =>
-          c.fromSchemaName === builtin.fromSchemaName && c.toSchemaName === builtin.toSchemaName,
-      ),
+  const fromExtensions = converters.filter((c) => c !== cloudiniMessageConverter);
+  const overridden = fromExtensions.some(
+    (c) =>
+      c.fromSchemaName === CLOUDINI_SCHEMA &&
+      c.toSchemaName === cloudiniMessageConverter.toSchemaName,
   );
-  return [...unhandled, ...fromExtensions];
+  return overridden ? fromExtensions : [cloudiniMessageConverter, ...fromExtensions];
 }
 
 function createExtensionRegistryStore(

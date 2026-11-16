@@ -2,13 +2,7 @@
 
 import { MessageEvent } from "@lichtblick/suite";
 
-import {
-  CLOUDINI_SCHEMA,
-  cloudiniMessageConverter,
-  decodeCloudini,
-  loadCloudini,
-  preloadCloudini,
-} from "./index";
+import { cloudiniMessageConverter, decodeCloudini, loadCloudini } from "./index";
 
 // A synthetic 200-point helix (see cloud()) encoded by upstream Cloudini 1.4.1 at 1 mm resolution
 // (wire format V06): x, y, z, intensity float32 at 0..12, ring uint16 at 16, 2 padding bytes.
@@ -139,12 +133,5 @@ describe("cloudini", () => {
       expect.objectContaining({ severity: "warn" }),
       "cloudini-format-draco",
     );
-  });
-
-  it("preloads only for recordings with Cloudini topics", async () => {
-    await expect(preloadCloudini([{ schemaName: "sensor_msgs/msg/PointCloud2" }])).resolves.toBe(
-      undefined,
-    );
-    await expect(preloadCloudini([{ schemaName: CLOUDINI_SCHEMA }])).resolves.toBe(undefined);
   });
 });

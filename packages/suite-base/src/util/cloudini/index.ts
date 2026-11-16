@@ -16,13 +16,11 @@ import wasmUrl from "./wasm/cloudini_decoder.wasm";
 
 export const CLOUDINI_SCHEMA = "point_cloud_interfaces/msg/CompressedPointCloud2";
 
-type PointField = { name: string; offset: number; datatype: number; count: number };
-
 type CompressedPointCloud2 = {
   header: { stamp: Time; frame_id: string };
   height: number;
   width: number;
-  fields: PointField[];
+  fields: unknown[];
   is_bigendian: boolean;
   point_step: number;
   row_step: number;
@@ -112,7 +110,7 @@ export const cloudiniMessageConverter: InstalledMessageConverter = {
       return undefined;
     }
     if (!wasm) {
-      // Players preload the decoder, so this is only reached by sources that add topics later
+      // File players preload the decoder; live sources load it here and drop the first message
       loadCloudini().catch((err: unknown) => {
         context?.emitAlert(
           {
