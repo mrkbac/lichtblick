@@ -1,6 +1,15 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import {
+  ArrowAutofitHeight20Regular,
+  Delete20Regular,
+  LocationAdd20Regular,
+  Ruler20Regular,
+  Triangle20Regular,
+  ZoomFit20Regular,
+} from "@fluentui/react-icons";
+
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 
 import { MAP_SCHEMAS } from "./support";
@@ -10,6 +19,29 @@ const docs: PanelDocs = {
     "Shows GPS tracks and GeoJSON on a map, with terrain, custom tile layers, and measuring tools.",
   schemas: MAP_SCHEMAS,
   sections: [
+    {
+      title: "Toolbar",
+      items: [
+        [
+          "Distance and area",
+          "Measure a path, or close it on its first point for an area.",
+          Ruler20Regular,
+        ],
+        [
+          "Height difference",
+          "Height, horizontal and slope distance, and grade; needs 3D terrain.",
+          ArrowAutofitHeight20Regular,
+        ],
+        ["Angle", "Angle at the middle of three points.", Triangle20Regular],
+        [
+          "Pin points",
+          "Label points with coordinates, plus elevation and slope on terrain.",
+          LocationAdd20Regular,
+        ],
+        ["Clear all", "Removes every measurement.", Delete20Regular],
+        ["Zoom to data", "Fits the map to all shown topics.", ZoomFit20Regular],
+      ],
+    },
     {
       title: "Mouse",
       items: [
@@ -23,7 +55,6 @@ const docs: PanelDocs = {
     {
       title: "Measuring",
       items: [
-        ["Tools", "Distance and area, height difference (needs 3D terrain), angle, pin points."],
         ["Place", "Click the map to start a measurement; earlier ones stay on the map."],
         ["End a line", "Double-click or press Enter."],
         ["Close an area", "Click the first point of a distance line."],

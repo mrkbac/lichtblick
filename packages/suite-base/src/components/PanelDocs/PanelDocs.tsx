@@ -13,8 +13,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import type { TFunction } from "i18next";
-import { Fragment, useMemo, useState } from "react";
+import { ComponentType, Fragment, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 import { create } from "zustand";
@@ -24,10 +23,16 @@ import { PanelInfo, usePanelCatalog } from "@lichtblick/suite-base/context/Panel
 import { shortcutRows } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { customTypography } from "@lichtblick/theme";
 
-/** One group of short facts, e.g. "Settings" or "Mouse". Each item is [term, explanation]. */
+/**
+ * One fact: [term, explanation, icon]. Pass the icon of the button the item explains (the same
+ * component the panel renders), so people can match the docs to what they see.
+ */
+export type PanelDocsItem = readonly [term: string, text: string, icon?: ComponentType];
+
+/** One group of short facts, e.g. "Toolbar" or "Mouse". */
 export type PanelDocsSection = {
   title: string;
-  items: readonly (readonly [string, string])[];
+  items: readonly PanelDocsItem[];
 };
 
 /**
@@ -97,20 +102,27 @@ const useStyles = makeStyles()((theme) => ({
   },
   search: { padding: theme.spacing(2, 2, 1) },
   list: { overflowY: "auto", flex: 1 },
-  subItem: { paddingLeft: theme.spacing(4) },
   main: { flex: 1, overflowY: "auto", padding: theme.spacing(2, 3, 3), position: "relative" },
   close: { position: "absolute", top: theme.spacing(1), right: theme.spacing(1) },
-  intro: { margin: theme.spacing(1, 0, 2) },
-  sections: { columnWidth: 340, columnGap: theme.spacing(4) },
-  section: { breakInside: "avoid", marginBottom: theme.spacing(2) },
-  chips: { display: "flex", flexWrap: "wrap", gap: theme.spacing(0.5) },
-  chip: { fontFamily: customTypography.fontMonospace },
-  rows: {
+  intro: { margin: theme.spacing(1, 0, 1) },
+  // One grid for the whole page, so terms line up across sections.
+  grid: {
     display: "grid",
-    gridTemplateColumns: "minmax(80px, max-content) 1fr",
+    gridTemplateColumns: "auto minmax(80px, max-content) 1fr",
     columnGap: theme.spacing(1.5),
     rowGap: theme.spacing(0.5),
+    alignItems: "baseline",
   },
+  sectionTitle: { gridColumn: "1 / -1", marginTop: theme.spacing(2) },
+  fullRow: { gridColumn: "1 / -1" },
+  icon: {
+    display: "flex",
+    alignSelf: "center",
+    color: theme.palette.text.primary,
+    "& svg": { width: 20, height: 20 },
+  },
+  chips: { display: "flex", flexWrap: "wrap", gap: theme.spacing(0.5) },
+  chip: { fontFamily: customTypography.fontMonospace },
   term: { fontWeight: 600 },
   kbd: {
     fontFamily: customTypography.fontMonospace,
@@ -123,23 +135,17 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
-function sectionId(panelType: string, title: string): string {
-  return `panel-guide-${panelType}-${title}`.replace(/\W+/g, "-");
-}
-
-function Section(props: {
-  id: string;
-  title: string;
-  children: React.ReactNode;
-}): React.JSX.Element {
+function SectionTitle(props: { title: string }): React.JSX.Element {
   const { classes } = useStyles();
   return (
-    <section id={props.id} className={classes.section} aria-label={props.title}>
-      <Typography variant="overline" color="text.secondary" component="h3">
-        {props.title}
-      </Typography>
-      {props.children}
-    </section>
+    <Typography
+      variant="overline"
+      color="text.secondary"
+      component="h3"
+      className={classes.sectionTitle}
+    >
+      {props.title}
+    </Typography>
   );
 }
 
@@ -150,7 +156,6 @@ function PanelDocsView(props: { entry: LoadedDocs; words: string[] }): React.JSX
   const { t: tShortcuts } = useTranslation("keyboardShortcuts");
   const { info, docs, schemas } = entry;
   const shortcuts = shortcutRows(info.shortcuts ?? [], (key) => tShortcuts(key));
-  const id = (title: string) => sectionId(info.type, title);
   return (
     <>
       <Typography variant="h4" component="h2" id="panel-guide-title">
@@ -159,10 +164,47 @@ function PanelDocsView(props: { entry: LoadedDocs; words: string[] }): React.JSX
       <Typography variant="body1" className={classes.intro}>
         {docs.intro}
       </Typography>
-      <div className={classes.sections}>
+      <div className={classes.grid}>
+        {docs.sections?.map((section) => (
+          <Fragment key={section.title}>
+            <SectionTitle title={section.title} />
+            {section.items.map(([term, text, Icon]) => (
+              <Fragment key={term}>
+                <span className={classes.icon}>{Icon && <Icon />}</span>
+                <Typography variant="body2" className={classes.term}>
+                  {term}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  {text}
+                </Typography>
+              </Fragment>
+            ))}
+          </Fragment>
+        ))}
+        {shortcuts.length > 0 && (
+          <>
+            <SectionTitle title={t("keyboardShortcuts")} />
+            {shortcuts.map((row) => (
+              <Fragment key={row.id}>
+                <span />
+                <span>
+                  {row.keys.map((key) => (
+                    <kbd key={key} className={classes.kbd}>
+                      {key}
+                    </kbd>
+                  ))}
+                </span>
+                <Typography variant="body2" color="text.secondary">
+                  {row.title}
+                </Typography>
+              </Fragment>
+            ))}
+          </>
+        )}
         {schemas.length > 0 && (
-          <Section id={id(t("supportedSchemas"))} title={t("supportedSchemas")}>
-            <div className={classes.chips}>
+          <>
+            <SectionTitle title={t("supportedSchemas")} />
+            <div className={`${classes.fullRow} ${classes.chips}`}>
               {schemas.map((schema) => (
                 <Chip
                   key={schema}
@@ -177,56 +219,11 @@ function PanelDocsView(props: { entry: LoadedDocs; words: string[] }): React.JSX
                 />
               ))}
             </div>
-          </Section>
-        )}
-        {docs.sections?.map((section) => (
-          <Section key={section.title} id={id(section.title)} title={section.title}>
-            <div className={classes.rows}>
-              {section.items.map(([term, text]) => (
-                <Fragment key={term}>
-                  <Typography variant="body2" className={classes.term}>
-                    {term}
-                  </Typography>
-                  <Typography variant="body2" color="text.secondary">
-                    {text}
-                  </Typography>
-                </Fragment>
-              ))}
-            </div>
-          </Section>
-        ))}
-        {shortcuts.length > 0 && (
-          <Section id={id(t("keyboardShortcuts"))} title={t("keyboardShortcuts")}>
-            <div className={classes.rows}>
-              {shortcuts.map((row) => (
-                <Fragment key={row.id}>
-                  <span>
-                    {row.keys.map((key) => (
-                      <kbd key={key} className={classes.kbd}>
-                        {key}
-                      </kbd>
-                    ))}
-                  </span>
-                  <Typography variant="body2" color="text.secondary">
-                    {row.title}
-                  </Typography>
-                </Fragment>
-              ))}
-            </div>
-          </Section>
+          </>
         )}
       </div>
     </>
   );
-}
-
-/** Section titles in display order, for the navigation tree. */
-function sectionTitles(entry: LoadedDocs, t: TFunction<"panelToolbar">): string[] {
-  return [
-    ...(entry.schemas.length > 0 ? [t("supportedSchemas")] : []),
-    ...(entry.docs.sections ?? []).map((section) => section.title),
-    ...((entry.info.shortcuts?.length ?? 0) > 0 ? [t("keyboardShortcuts")] : []),
-  ];
 }
 
 function PanelGuideDialog(): React.JSX.Element {
@@ -294,38 +291,17 @@ function PanelGuideDialog(): React.JSX.Element {
           slotProps={{ htmlInput: { "aria-label": t("searchPanelGuide"), spellCheck: false } }}
         />
         <List dense className={classes.list}>
-          {visible.map((entry) => {
-            const isSelected = entry === selected;
-            return (
-              <li key={entry.info.type}>
-                <ListItemButton
-                  selected={isSelected}
-                  onClick={() => {
-                    show(entry.info.type);
-                  }}
-                >
-                  <ListItemText primary={entry.info.title} />
-                </ListItemButton>
-                {isSelected && (
-                  <List dense disablePadding>
-                    {sectionTitles(entry, t).map((title) => (
-                      <ListItemButton
-                        key={title}
-                        className={classes.subItem}
-                        onClick={() => {
-                          document
-                            .getElementById(sectionId(entry.info.type, title))
-                            ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                        }}
-                      >
-                        <ListItemText secondary={title} />
-                      </ListItemButton>
-                    ))}
-                  </List>
-                )}
-              </li>
-            );
-          })}
+          {visible.map((entry) => (
+            <ListItemButton
+              key={entry.info.type}
+              selected={entry === selected}
+              onClick={() => {
+                show(entry.info.type);
+              }}
+            >
+              <ListItemText primary={entry.info.title} />
+            </ListItemButton>
+          ))}
           {loaded.value && visible.length === 0 && (
             <ListItemText className={classes.search} secondary={t("noPanelsFound")} />
           )}

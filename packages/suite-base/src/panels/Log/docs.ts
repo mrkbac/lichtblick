@@ -1,6 +1,14 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import {
+  ArrowDown16Regular,
+  ArrowUp16Regular,
+  Copy16Regular,
+  Copy20Filled,
+  TextCaseTitle16Regular,
+} from "@fluentui/react-icons";
+
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 
 import { SUPPORTED_DATATYPES } from "./conversion";
@@ -14,8 +22,11 @@ const docs: PanelDocs = {
       items: [
         ["Terms", "Rows matching any term in the message or node name are shown."],
         ["-term", "Hides rows that match the term."],
-        ["Match case / regex", "Toolbar toggles for case-sensitive or regular-expression terms."],
-        ["Previous / next", "Jump to the previous or next warning or error."],
+        ["Match case", "Makes terms case-sensitive.", TextCaseTitle16Regular],
+        [".* Regex", "Treats terms as regular expressions."],
+        ["Previous problem", "Jumps to the previous warning or error.", ArrowUp16Regular],
+        ["Next problem", "Jumps to the next warning or error.", ArrowDown16Regular],
+        ["Copy logs", "Copies all messages that pass the filters.", Copy20Filled],
       ],
     },
     {
@@ -31,7 +42,7 @@ const docs: PanelDocs = {
       items: [
         ["Click a row", "Seeks playback to that message."],
         ["Severity strip", "Shows where warnings and errors occur; click to seek."],
-        ["Copy", "Copy one message, or all filtered messages from the toolbar."],
+        ["Copy a message", "Hover a row and click its copy button.", Copy16Regular],
         ["Follow playhead", "Scrolling away stops following; the arrow button resumes it."],
       ],
     },

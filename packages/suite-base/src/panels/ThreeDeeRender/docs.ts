@@ -1,7 +1,15 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import {
+  ArrowRouting20Regular,
+  Cursor20Regular,
+  PointScan20Regular,
+  ZoomFit20Regular,
+} from "@fluentui/react-icons";
+
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
+import PublishPointIcon from "@lichtblick/suite-base/components/PublishPointIcon";
 import { COMPRESSED_VIDEO_DATATYPES } from "@lichtblick/suite-base/util/foxgloveSchemas";
 
 import * as foxglove from "./foxglove";
@@ -56,11 +64,24 @@ const docs: PanelDocs = {
     {
       title: "Toolbar",
       items: [
-        ["Measure", "Point, distance, polyline, angle, area, height, and height profile."],
-        ["Measure between frames", "Click two frames' axes for their distance and rotation."],
-        ["Publish", "Click the scene to publish a point, pose, or pose estimate."],
+        ["Inspect objects", "Shows details of the clicked object.", Cursor20Regular],
         ["2D / 3D", "Switches between a top-down and a perspective camera."],
-        ["Zoom to data", "Fits the camera to everything shown."],
+        [
+          "Publish",
+          "Click the scene to publish a point, pose, or pose estimate; long-press to pick which.",
+          PublishPointIcon,
+        ],
+        [
+          "Measure",
+          "Point, distance, polyline, angle, area, height, and height profile.",
+          PointScan20Regular,
+        ],
+        [
+          "Measure between frames",
+          "Click two frames' axes for their distance and rotation.",
+          ArrowRouting20Regular,
+        ],
+        ["Zoom to data", "Fits the camera to everything shown.", ZoomFit20Regular],
       ],
     },
     {

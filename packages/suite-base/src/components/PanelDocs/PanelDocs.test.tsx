@@ -35,7 +35,9 @@ const PANELS: PanelInfo[] = [
     {
       intro: "Shows everything.",
       schemas: ["sensor_msgs/PointCloud2"],
-      sections: [{ title: "Mouse", items: [["Drag", "Pans."]] }],
+      sections: [
+        { title: "Mouse", items: [["Drag", "Pans.", () => <svg data-testid="drag-icon" />]] },
+      ],
     },
     { shortcuts: [{ id: "s.reset", titleKey: "resetView", keys: [{ key: "r" }] }] },
   ),
@@ -90,6 +92,7 @@ describe("PanelGuide", () => {
     expect(await screen.findByText("Shows everything.")).toBeInTheDocument();
     expect(screen.getByText("sensor_msgs/PointCloud2")).toBeInTheDocument();
     expect(screen.getByText("Pans.")).toBeInTheDocument();
+    expect(screen.getByTestId("drag-icon")).toBeInTheDocument();
     expect(screen.getByText("R")).toBeInTheDocument();
     // Panels without docs aren't listed.
     expect(screen.queryByRole("button", { name: "Extension" })).not.toBeInTheDocument();
