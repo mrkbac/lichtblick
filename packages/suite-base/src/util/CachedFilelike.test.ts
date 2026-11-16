@@ -562,6 +562,93 @@ describe("CachedFilelike", () => {
       now.mockRestore();
     });
 
+    it("gives the main connection to a foreground read while it only serves background reads", async () => {
+      // GIVEN: a main connection busy serving a background scan from the start of the file
+      const now = vi.spyOn(Date, "now").mockReturnValue(0);
+      const { fileReader, streams, push } = manualFileReader(200 * MEBIBYTE);
+      const cachedFileReader = new CachedFilelike({
+        fileReader,
+        cacheSizeInBytes: 100 * MEBIBYTE,
+        log,
+      });
+      const scan = cachedFileReader.read(0, MEBIBYTE, { background: true });
+      await delay(0);
+      push(MEBIBYTE);
+      await scan;
+
+      // WHEN: playback reads far into the file (e.g. a seek)
+      void cachedFileReader.read(150 * MEBIBYTE, MEBIBYTE);
+      await delay(0);
+
+      // THEN: the main connection moves there instead of leaving playback to a side fetch
+      expect(streams.map((stream) => [stream.offset, stream.destroyed])).toEqual([
+        [0, true],
+        [150 * MEBIBYTE, false],
+      ]);
+      now.mockRestore();
+    });
+
+    it("does not count a cache hit as the background connection serving playback", async () => {
+      // GIVEN: a main connection that served a background scan, and a foreground read of bytes it
+      // already cached
+      const now = vi.spyOn(Date, "now").mockReturnValue(0);
+      const { fileReader, streams, push } = manualFileReader(200 * MEBIBYTE);
+      const cachedFileReader = new CachedFilelike({
+        fileReader,
+        cacheSizeInBytes: 100 * MEBIBYTE,
+        log,
+      });
+      const scan = cachedFileReader.read(0, MEBIBYTE, { background: true });
+      await delay(0);
+      push(MEBIBYTE);
+      await scan;
+      await cachedFileReader.read(0, MEBIBYTE / 2);
+
+      // WHEN: two far foreground reads arrive
+      void cachedFileReader.read(150 * MEBIBYTE, MEBIBYTE);
+      await delay(0);
+      void cachedFileReader.read(170 * MEBIBYTE, MEBIBYTE);
+      await delay(0);
+
+      // THEN: the first takes over the main connection, the second gets a side fetch
+      expect(streams.map((stream) => [stream.offset, stream.destroyed])).toEqual([
+        [0, true],
+        [150 * MEBIBYTE, false],
+        [170 * MEBIBYTE, false],
+      ]);
+      now.mockRestore();
+    });
+
+    it("serves a background read with its own side fetch, not the main connection or playback's slot", async () => {
+      // GIVEN: a main connection serving playback, and a far playback read in a side fetch
+      const now = vi.spyOn(Date, "now").mockReturnValue(0);
+      const { fileReader, streams, push } = manualFileReader(200 * MEBIBYTE);
+      const cachedFileReader = new CachedFilelike({
+        fileReader,
+        cacheSizeInBytes: 100 * MEBIBYTE,
+        log,
+      });
+      const near = cachedFileReader.read(0, MEBIBYTE);
+      await delay(0);
+      push(MEBIBYTE);
+      await near;
+      void cachedFileReader.read(150 * MEBIBYTE, MEBIBYTE);
+      await delay(0);
+
+      // WHEN: a background scan reads elsewhere, twice
+      void cachedFileReader.read(100 * MEBIBYTE, MEBIBYTE, { background: true });
+      void cachedFileReader.read(120 * MEBIBYTE, MEBIBYTE, { background: true });
+      await delay(0);
+
+      // THEN: one background side fetch starts next to playback's, the main connection stays
+      expect(streams.map((stream) => [stream.offset, stream.destroyed])).toEqual([
+        [0, false],
+        [150 * MEBIBYTE, false],
+        [100 * MEBIBYTE, false],
+      ]);
+      now.mockRestore();
+    });
+
     it("moves the main connection to a far read once it is idle", async () => {
       // GIVEN: a main connection that last served a read a while ago
       const { fileReader, streams, push } = manualFileReader(200 * MEBIBYTE);

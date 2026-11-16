@@ -29,7 +29,10 @@ import { makeStyles } from "tss-react/mui";
 
 import { useLongPress } from "@lichtblick/hooks";
 import { LayoutActions } from "@lichtblick/suite";
-import OverlayToolbar from "@lichtblick/suite-base/components/OverlayToolbar";
+import OverlayToolbar, {
+  OverlayToolGroup,
+  useIsShorterThan,
+} from "@lichtblick/suite-base/components/OverlayToolbar";
 import {
   PanelContextMenu,
   PanelContextMenuItem,
@@ -173,7 +176,10 @@ function extractHoverMetadata(
 export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
   const { t } = useTranslation("threeDee");
   const { classes } = useStyles();
-  const [clickedPosition, setClickedPosition] = useState<{ clientX: number; clientY: number }>({
+  const [clickedPosition, setClickedPosition] = useState<{
+    clientX: number;
+    clientY: number;
+  }>({
     clientX: 0,
     clientY: 0,
   });
@@ -183,7 +189,10 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
   );
   const [interactionsTabType, setInteractionsTabType] = useState<TabType | undefined>(undefined);
   const [hoveredEntities, setHoveredEntities] = useState<HoverEntityInfo[]>([]);
-  const [hoverPosition, setHoverPosition] = useState<{ clientX: number; clientY: number }>({
+  const [hoverPosition, setHoverPosition] = useState<{
+    clientX: number;
+    clientY: number;
+  }>({
     clientX: 0,
     clientY: 0,
   });
@@ -480,6 +489,9 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
     }
   }, [getContextMenuItems, t]);
 
+  // Below this canvas height the measuring buttons fold into one, so the column fits.
+  const foldMeasureTools = useIsShorterThan(props.canvas, 300);
+
   const mousePresenceRef = useRef<HTMLDivElement>(null);
   const mousePresent = usePanelMousePresence(mousePresenceRef);
 
@@ -541,47 +553,62 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
                         <ZoomFit20Regular />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip
-                      placement="left"
-                      title={props.measureActive ? t("stopMeasuring") : t("measure")}
+                    <OverlayToolGroup
+                      collapsed={foldMeasureTools}
+                      label={t("measure")}
+                      icon={
+                        framePicking ? (
+                          <ArrowRouting20Filled />
+                        ) : (
+                          <div className={classes.pointScanIcon}>
+                            {props.measureActive ? <PointScan20Filled /> : <PointScan20Regular />}
+                          </div>
+                        )
+                      }
+                      active={props.measureActive || framePicking}
                     >
-                      <IconButton
-                        data-testid="measure-button"
-                        aria-label={t("measure")}
-                        className={classes.iconButton}
-                        size="small"
-                        aria-pressed={props.measureActive}
-                        onClick={props.onClickMeasure}
+                      <Tooltip
+                        placement="left"
+                        title={props.measureActive ? t("stopMeasuring") : t("measure")}
                       >
-                        <div className={classes.pointScanIcon}>
-                          {props.measureActive ? <PointScan20Filled /> : <PointScan20Regular />}
-                        </div>
-                      </IconButton>
-                    </Tooltip>
+                        <IconButton
+                          data-testid="measure-button"
+                          aria-label={t("measure")}
+                          className={classes.iconButton}
+                          size="small"
+                          aria-pressed={props.measureActive}
+                          onClick={props.onClickMeasure}
+                        >
+                          <div className={classes.pointScanIcon}>
+                            {props.measureActive ? <PointScan20Filled /> : <PointScan20Regular />}
+                          </div>
+                        </IconButton>
+                      </Tooltip>
 
-                    <Tooltip
-                      placement="left"
-                      title={framePicking ? t("stopMeasuringFrames") : t("measureFrames")}
-                    >
-                      <IconButton
-                        data-testid="measure-frames-button"
-                        aria-label={t("measureFrames")}
-                        className={classes.iconButton}
-                        size="small"
-                        aria-pressed={framePicking}
-                        onClick={() => {
-                          if (!framePicking && props.measureActive) {
-                            props.onClickMeasure();
-                          }
-                          if (!framePicking && props.publishActive) {
-                            props.onClickPublish();
-                          }
-                          setFramePicking(!framePicking);
-                        }}
+                      <Tooltip
+                        placement="left"
+                        title={framePicking ? t("stopMeasuringFrames") : t("measureFrames")}
                       >
-                        {framePicking ? <ArrowRouting20Filled /> : <ArrowRouting20Regular />}
-                      </IconButton>
-                    </Tooltip>
+                        <IconButton
+                          data-testid="measure-frames-button"
+                          aria-label={t("measureFrames")}
+                          className={classes.iconButton}
+                          size="small"
+                          aria-pressed={framePicking}
+                          onClick={() => {
+                            if (!framePicking && props.measureActive) {
+                              props.onClickMeasure();
+                            }
+                            if (!framePicking && props.publishActive) {
+                              props.onClickPublish();
+                            }
+                            setFramePicking(!framePicking);
+                          }}
+                        >
+                          {framePicking ? <ArrowRouting20Filled /> : <ArrowRouting20Regular />}
+                        </IconButton>
+                      </Tooltip>
+                    </OverlayToolGroup>
 
                     {publishControls}
                   </>
@@ -601,7 +628,9 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
           selectObject={(selection) => {
             if (selection) {
               const renderable = (
-                selection.object as unknown as { interactionData: { renderable: Renderable } }
+                selection.object as unknown as {
+                  interactionData: { renderable: Renderable };
+                }
               ).interactionData.renderable;
               const instanceIndex = selection.instanceIndex;
               setSelectedRenderables([]);

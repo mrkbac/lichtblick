@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { McapTypes } from "@lichtblick/mcap-core";
+import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 const BATCH_GAP_THRESHOLD_BYTES = 64n * 1024n;
@@ -14,6 +15,7 @@ const BATCH_MAX_COALESCED_BYTES = 4n * 1024n * 1024n;
 type PendingRead = {
   offset: bigint;
   size: bigint;
+  background: boolean;
   resolve: (data: Uint8Array) => void;
   reject: (error: Error) => void;
 };
@@ -24,15 +26,15 @@ type PendingRead = {
  * MCAP files with many small chunks. Reads are merged when the gap between them
  * is smaller than `gapThresholdBytes`, up to a merged span of `maxCoalescedBytes`.
  */
-export class BatchingReadable implements McapTypes.IReadable {
-  readonly #inner: McapTypes.IReadable;
+export class BatchingReadable implements McapTypes.IReadable<ReadOptions> {
+  readonly #inner: McapTypes.IReadable<ReadOptions>;
   readonly #gapThresholdBytes: bigint;
   readonly #maxCoalescedBytes: bigint;
   readonly #pending: PendingRead[] = [];
   #scheduled = false;
 
   public constructor(
-    inner: McapTypes.IReadable,
+    inner: McapTypes.IReadable<ReadOptions>,
     options?: { gapThresholdBytes?: bigint; maxCoalescedBytes?: bigint },
   ) {
     this.#inner = inner;
@@ -44,9 +46,15 @@ export class BatchingReadable implements McapTypes.IReadable {
     return await this.#inner.size();
   }
 
-  public async read(offset: bigint, size: bigint): Promise<Uint8Array> {
+  public async read(offset: bigint, size: bigint, options?: ReadOptions): Promise<Uint8Array> {
     return await new Promise<Uint8Array>((resolve, reject) => {
-      this.#pending.push({ offset, size, resolve, reject });
+      this.#pending.push({
+        offset,
+        size,
+        background: options?.background === true,
+        resolve,
+        reject,
+      });
       if (!this.#scheduled) {
         this.#scheduled = true;
         void Promise.resolve().then(async () => {
@@ -95,7 +103,9 @@ export class BatchingReadable implements McapTypes.IReadable {
       groups.map(async (group) => {
         const groupStart = group.start;
         try {
-          const data = await this.#inner.read(groupStart, group.end - groupStart);
+          // A merged read waits for its most urgent member
+          const background = group.members.every((member) => member.background);
+          const data = await this.#inner.read(groupStart, group.end - groupStart, { background });
           const first = group.members[0];
           if (group.members.length === 1 && first != undefined) {
             // Single-member read: forward unchanged to avoid a copy in this hot path.
