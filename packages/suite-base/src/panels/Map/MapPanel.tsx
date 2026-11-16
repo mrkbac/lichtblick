@@ -198,10 +198,6 @@ const useStyles = makeStyles()((theme) => ({
   // MapLibre adds `.maplibregl-map { position: relative }`, so size explicitly.
   map: { width: "100%", height: "100%" },
   legends: {
-    // Under the zoom/compass controls; the attribution at the bottom can wrap to several lines.
-    position: "absolute",
-    right: 10,
-    top: `calc(${10 + OVERLAY_TOOLBAR_BUTTON_SIZE * 3 + 10}px + ${PANEL_FLOATING_TOOLBAR_HEIGHT})`,
     display: "flex",
     flexDirection: "column",
     gap: theme.spacing(0.5),
@@ -1358,9 +1354,9 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
             setMeasureData={setMeasureData}
             measuringRef={measuringRef}
             onFitToData={dataSize > 0 ? fitToData : undefined}
+            bottomLeft={legends.length > 0 ? <ColorLegends legends={legends} /> : undefined}
           />
         )}
-        {legends.length > 0 && <ColorLegends legends={legends} />}
         {eligibleTopics.length === 0 && (
           <MapNotice>No NavSatFix, LocationFix, or GeoJSON topics</MapNotice>
         )}
