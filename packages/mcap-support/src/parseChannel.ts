@@ -11,8 +11,8 @@ import { MessageReader as OmgidlMessageReader } from "@foxglove/omgidl-serializa
 import { parseRos2idl } from "@foxglove/ros2idl-parser";
 import { parse as parseRosmsg } from "@foxglove/rosmsg";
 import { MessageReader } from "@foxglove/rosmsg-serialization";
-import { Decoder as CborDecoder } from "cbor-x";
-import { Unpackr } from "msgpackr";
+import { Decoder as CborDecoder } from "cbor-x/decode";
+import { Unpackr } from "msgpackr/unpack";
 
 import { parseCapnprotoSchema } from "./parseCapnprotoSchema";
 import { parseFlatbufferSchema } from "./parseFlatbufferSchema";
