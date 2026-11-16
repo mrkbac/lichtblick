@@ -14,15 +14,17 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import PowerInputIcon from "@mui/icons-material/PowerInput";
-import ShowChartIcon from "@mui/icons-material/ShowChart";
-import { IconButton, Tooltip, Typography } from "@mui/material";
+import { Tooltip, Typography } from "@mui/material";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import * as _ from "lodash-es";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
+import {
+  PanelIconButton,
+  usePanelButtonTitle,
+} from "@lichtblick/suite-base/components/PanelButton";
 import {
   useStyles,
   VALUE_FLASH_MS,
@@ -42,6 +44,8 @@ import { HistoryById } from "@lichtblick/suite-base/panels/DiagnosticSummary/uti
 import { openSiblingPlotPanel } from "@lichtblick/suite-base/panels/Plot/utils/openSiblingPlotPanel";
 import { openSiblingStateTransitionsPanel } from "@lichtblick/suite-base/panels/StateTransitions/openSiblingStateTransitionsPanel";
 import { OpenSiblingPanel } from "@lichtblick/suite-base/types/panels";
+
+import { DIAGNOSTIC_STATUS_BUTTONS } from "./buttons";
 
 type Row =
   | { kind: "header" | "message"; key: string; info: DiagnosticInfo }
@@ -87,6 +91,7 @@ export default function DiagnosticTable(props: DiagnosticTableProps): React.JSX.
   } = props;
   const { classes, cx } = useStyles();
   const { t } = useTranslation("diagnostics");
+  const copyValueTitle = usePanelButtonTitle(DIAGNOSTIC_STATUS_BUTTONS.copyValue);
   const rootRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -182,16 +187,13 @@ export default function DiagnosticTable(props: DiagnosticTableProps): React.JSX.
             >
               {info.status.message || "\xa0"}
             </Typography>
-            <IconButton
+            <PanelIconButton
+              button={DIAGNOSTIC_STATUS_BUTTONS.openInStateTransitions}
               className={classes.iconButton}
-              title={t("openInStateTransitions")}
-              size="small"
               onClick={() => {
                 openSiblingStateTransitionsPanel(openSiblingPanel, `${statusPath(info)}.message`);
               }}
-            >
-              <PowerInputIcon fontSize="inherit" />
-            </IconButton>
+            />
           </div>
         );
       case "value": {
@@ -238,14 +240,17 @@ export default function DiagnosticTable(props: DiagnosticTableProps): React.JSX.
                     size="small"
                     iconSize="small"
                     color="inherit"
-                    aria-label={t("copyValue")}
+                    title={copyValueTitle}
                     getText={() => value}
                   />
-                  <IconButton
+                  <PanelIconButton
+                    button={
+                      isNumber
+                        ? DIAGNOSTIC_STATUS_BUTTONS.openInPlot
+                        : DIAGNOSTIC_STATUS_BUTTONS.openInStateTransitions
+                    }
                     className={classes.iconButton}
-                    title={isNumber ? t("openInPlot") : t("openInStateTransitions")}
                     color="inherit"
-                    size="small"
                     data-testid={isNumber ? "open-plot-button" : "open-state-transitions-button"}
                     onClick={() => {
                       if (isNumber) {
@@ -254,13 +259,7 @@ export default function DiagnosticTable(props: DiagnosticTableProps): React.JSX.
                         openSiblingStateTransitionsPanel(openSiblingPanel, valuePath);
                       }
                     }}
-                  >
-                    {isNumber ? (
-                      <ShowChartIcon fontSize="inherit" />
-                    ) : (
-                      <PowerInputIcon fontSize="inherit" />
-                    )}
-                  </IconButton>
+                  />
                 </>
               )}
             </div>
@@ -313,6 +312,7 @@ function HeaderCell(props: {
   const { info, history, range, staleSec, onSeek } = props;
   const { classes, cx } = useStyles();
   const { t } = useTranslation("diagnostics");
+  const copyStatusTitle = usePanelButtonTitle(DIAGNOSTIC_STATUS_BUTTONS.copyStatus);
   const checkHistory = history.get(info.id);
   const levelSince = useLevelSince(info, checkHistory, range, staleSec);
 
@@ -363,7 +363,7 @@ function HeaderCell(props: {
         size="small"
         iconSize="small"
         color="inherit"
-        aria-label={t("copyStatus")}
+        title={copyStatusTitle}
         getText={() => JSON.stringify(info.status, undefined, 2) ?? ""}
       />
     </div>

@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { toSec } from "@foxglove/rostime";
-import AddIcon from "@mui/icons-material/Add";
 import { IconButton, Tooltip } from "@mui/material";
 import { useSnackbar } from "notistack";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -18,6 +17,7 @@ import {
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import Panel from "@lichtblick/suite-base/components/Panel";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
@@ -31,6 +31,7 @@ import { enumValuesByDatatypeAndField } from "@lichtblick/suite-base/util/enums"
 import { useStyles } from "./Watch.style";
 import { Painters, RowAction, WatchRowView, isCompositionEnter } from "./WatchRowView";
 import { Playback, WatchStore, createPlaybackClock } from "./WatchStore";
+import { WATCH_BUTTONS } from "./buttons";
 import { childPaths, compileRows, pathsForEnter, subscriptionsFor } from "./compile";
 import { DEFAULT_CONFIG, WatchConfig, migrateConfig, newRow, parsePastedPaths } from "./config";
 import { copyText } from "./format";
@@ -65,6 +66,7 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
   const { rows, sparklines, flashChanges, showAge, staleAfterSec } = config;
   const { t } = useTranslation("watch");
   const { classes } = useStyles();
+  const addTitle = usePanelButtonTitle(WATCH_BUTTONS.add);
   const { enqueueSnackbar } = useSnackbar();
   const { openSiblingPanel, setMessagePathDropConfig } = usePanelContext();
   const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
@@ -387,10 +389,10 @@ function Watch({ config: rawConfig, saveConfig }: Props): React.JSX.Element {
             supportsStreamModifiers
           />
         </div>
-        <Tooltip title={t("add")}>
+        <Tooltip title={addTitle}>
           <span>
             <IconButton size="small" disabled={draft.trim() === ""} onClick={submitDraft}>
-              <AddIcon fontSize="small" />
+              <WATCH_BUTTONS.add.icon fontSize="small" />
             </IconButton>
           </span>
         </Tooltip>

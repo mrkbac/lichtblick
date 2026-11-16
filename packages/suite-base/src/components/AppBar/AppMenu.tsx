@@ -19,8 +19,8 @@ import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingD
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import { useLiveRecordingsDialog } from "@lichtblick/suite-base/components/LiveRecordingsDialog";
+import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
-import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
@@ -51,6 +51,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
   const showCompare = useShowCompareDialog();
   const showCommandPalette = useCommandPaletteStore((state) => state.show);
   const showShortcuts = useKeyboardShortcutsStore((state) => state.show);
+  const showPanelGuide = usePanelGuideStore((state) => state.show);
   const { dialogActions } = useWorkspaceActions();
   const { importLayout, exportLayout } = useLayoutTransfer();
   const installApp = useInstallPrompt();
@@ -187,6 +188,9 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
       {item("keyboard-shortcuts", t("keyboardShortcuts"), showShortcuts, {
         shortcut: shortcutLabel(APP_SHORTCUTS, "app.showShortcuts"),
       })}
+      {item("panel-guide", t("panelGuide"), () => {
+        showPanelGuide();
+      })}
       {item("settings", t("settings"), () => {
         dialogActions.preferences.open();
       })}
@@ -197,9 +201,6 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
       <Divider />
       {item("demo", t("exploreSampleData"), () => {
         dialogActions.dataSource.open("demo");
-      })}
-      {item("docs", t("documentation"), () => {
-        window.open(APP_CONFIG.docsUrl, "_blank", "noopener,noreferrer");
       })}
       {item("about", t("about"), () => {
         dialogActions.preferences.open("about");

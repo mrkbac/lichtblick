@@ -21,23 +21,25 @@ import {
   createStixelMaterial,
   PointCloudHistoryRenderable,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PointClouds";
+import {
+  DEFAULT_POINT_SETTINGS,
+  LayerSettingsPointExtension,
+  POINT_CLOUD_REQUIRED_FIELDS,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
 import { VelodyneScan } from "@lichtblick/suite-base/types/Messages";
 
 import { autoSelectColorSettings } from "./colorMode";
 import {
   createInstancePickingMaterial,
   createPickingMaterial,
-  DEFAULT_POINT_SETTINGS,
-  LayerSettingsPointExtension,
-  pointSettingsNode,
   pointCloudMaterial,
-  POINT_CLOUD_REQUIRED_FIELDS,
 } from "./pointExtensionUtils";
 import type { AnyRendererSubscription } from "../IRenderer";
 import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../SettingsManager";
 import { VELODYNE_SCAN_DATATYPES } from "../ros";
+import { pointCloudSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose } from "../transforms";
 
@@ -186,18 +188,10 @@ export class VelodyneScans extends SceneExtension<PointCloudHistoryRenderable> {
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsVelodyneScans>;
       const messageFields =
         this.#pointCloudFieldsByTopic.get(topic.name) ?? POINT_CLOUD_REQUIRED_FIELDS;
-      const node: SettingsTreeNodeWithActionHandler = pointSettingsNode(
-        topic,
-        messageFields,
-        config,
-      );
-      node.fields!.stixelsEnabled = {
-        label: "Stixel view",
-        input: "boolean",
-        value: config.stixelsEnabled ?? DEFAULT_SETTINGS.stixelsEnabled,
+      const node: SettingsTreeNodeWithActionHandler = {
+        ...pointCloudSettingsNode(topic, messageFields, config),
+        handler,
       };
-      node.handler = handler;
-      node.icon = "Points";
       entries.push({ path: ["topics", topic.name], node });
     }
     return entries;

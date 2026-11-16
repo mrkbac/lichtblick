@@ -5,13 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  Dismiss12Regular,
-  Add12Regular,
-  ErrorCircle16Filled,
-  Square12Filled,
-  Square12Regular,
-} from "@fluentui/react-icons";
+import { ErrorCircle16Filled, Square12Filled } from "@fluentui/react-icons";
 import { isTime, toSec } from "@foxglove/rostime";
 import { ButtonBase, Checkbox, Tooltip, Typography, buttonBaseClasses } from "@mui/material";
 import { MouseEventHandler } from "react";
@@ -19,6 +13,7 @@ import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import { Immutable } from "@lichtblick/suite";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { useSelectedPanels } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
@@ -26,7 +21,14 @@ import { useSeriesDrag } from "@lichtblick/suite-base/panels/shared/useSeriesDra
 import { getLineColor } from "@lichtblick/suite-base/util/plotColors";
 import { customTypography } from "@lichtblick/theme";
 
+import { PLOT_BUTTONS } from "./buttons";
 import { PlotPath, plotPathDisplayName } from "./utils/config";
+
+const {
+  toggleSeries: ToggleButton,
+  addSeries: AddButton,
+  deleteSeries: DeleteButton,
+} = PLOT_BUTTONS;
 
 type PlotLegendRowProps = Immutable<{
   hasMismatchedDataLength: boolean;
@@ -170,6 +172,9 @@ export function PlotLegendRow({
   const { setSelectedPanelIds } = useSelectedPanels();
   const { classes, cx } = useStyles();
   const { t } = useTranslation("plot");
+  const toggleTitle = usePanelButtonTitle(ToggleButton);
+  const addTitle = usePanelButtonTitle(AddButton);
+  const deleteTitle = usePanelButtonTitle(DeleteButton);
 
   // When there are no series configured we render an extra row to show an "add series" button.
   const isAddSeriesRow = paths.length === 0;
@@ -207,9 +212,9 @@ export function PlotLegendRow({
           className={classes.checkbox}
           checked={path.enabled}
           size="small"
-          title="Toggle visibility"
+          title={toggleTitle}
           style={{ color: getLineColor(path.color, index) }}
-          icon={<Square12Regular />}
+          icon={<ToggleButton.icon />}
           checkedIcon={<Square12Filled />}
           onClick={(event) => {
             event.stopPropagation();
@@ -266,21 +271,21 @@ export function PlotLegendRow({
       <div className={classes.actionButton}>
         {index === paths.length ? (
           <ButtonBase
-            title="Add series"
-            aria-label="Add series"
+            title={addTitle}
+            aria-label={addTitle}
             onClick={onClickPath}
             data-testid="add-series"
           >
-            <Add12Regular />
+            <AddButton.icon />
           </ButtonBase>
         ) : (
           <ButtonBase
-            title="Delete series"
-            aria-label="Delete series"
+            title={deleteTitle}
+            aria-label={deleteTitle}
             onClick={handleDeletePath}
             data-testid="delete-series"
           >
-            <Dismiss12Regular />
+            <DeleteButton.icon />
           </ButtonBase>
         )}
       </div>

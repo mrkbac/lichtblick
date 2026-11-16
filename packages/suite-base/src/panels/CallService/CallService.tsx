@@ -9,7 +9,6 @@ import ReplayIcon from "@mui/icons-material/Replay";
 import UndoIcon from "@mui/icons-material/Undo";
 import {
   Button,
-  IconButton,
   MenuItem,
   Select,
   TextField,
@@ -32,6 +31,7 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useConfirm } from "@lichtblick/suite-base/hooks/useConfirm";
@@ -42,10 +42,13 @@ import {
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { useDefaultPanelTitle } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { findShortcut, shortcutLabel } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { customTypography } from "@lichtblick/theme";
 
-import { useCallServiceSettings } from "./settings";
+import { CALL_SERVICE_BUTTONS } from "./buttons";
+import { CALL_SERVICE_SHORTCUTS } from "./shortcuts";
 import { Config } from "./types";
+import { useCallServiceSettings } from "./useCallServiceSettings";
 
 const MAX_HISTORY = 20;
 
@@ -308,32 +311,24 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
                 </MenuItem>
               ))}
             </Select>
-            <Tooltip title="Copy this call's request into the editor">
-              <IconButton
-                size="small"
-                aria-label="Restore request"
-                onClick={() => {
-                  saveConfig({
-                    serviceName: selected.serviceName,
-                    requestPayload: selected.request,
-                  });
-                }}
-              >
-                <UndoIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Call again with this request">
-              <span>
-                <IconButton
-                  size="small"
-                  aria-label="Re-run call"
-                  disabled={!canCall}
-                  onClick={() => void runCall(selected.serviceName, selected.request)}
-                >
-                  <ReplayIcon fontSize="small" />
-                </IconButton>
-              </span>
-            </Tooltip>
+            <PanelIconButton
+              button={CALL_SERVICE_BUTTONS.restoreRequest}
+              onClick={() => {
+                saveConfig({
+                  serviceName: selected.serviceName,
+                  requestPayload: selected.request,
+                });
+              }}
+            >
+              <UndoIcon fontSize="small" />
+            </PanelIconButton>
+            <PanelIconButton
+              button={CALL_SERVICE_BUTTONS.rerun}
+              disabled={!canCall}
+              onClick={() => void runCall(selected.serviceName, selected.request)}
+            >
+              <ReplayIcon fontSize="small" />
+            </PanelIconButton>
           </>
         )}
       </Stack>
@@ -359,7 +354,7 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
     <div
       className={buttonClasses.wrapper}
       onKeyDown={(event) => {
-        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+        if (findShortcut(CALL_SERVICE_SHORTCUTS, event)?.id === "callService.call") {
           event.preventDefault();
           send();
         }
@@ -388,7 +383,7 @@ export function CallService({ config, saveConfig }: Props): React.JSX.Element {
                 (config.buttonTooltip ?? "") !== ""
                   ? config.buttonTooltip
                   : canSend
-                    ? "Ctrl/Cmd+Enter"
+                    ? shortcutLabel(CALL_SERVICE_SHORTCUTS, "callService.call")
                     : ""
               }
             >

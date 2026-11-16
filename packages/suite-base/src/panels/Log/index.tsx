@@ -14,21 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import {
-  ArrowDown16Regular,
-  ArrowUp16Regular,
-  Copy20Filled,
-  TextCaseTitle16Regular,
-} from "@fluentui/react-icons";
-import {
-  Alert,
-  Button,
-  Divider,
-  IconButton,
-  LinearProgress,
-  Tooltip,
-  Typography,
-} from "@mui/material";
+import { Alert, Button, Divider, LinearProgress, Typography } from "@mui/material";
 import { produce } from "immer";
 import * as _ from "lodash-es";
 import { useSnackbar } from "notistack";
@@ -47,8 +33,8 @@ import {
   selectSeekPlayback,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Panel from "@lichtblick/suite-base/components/Panel";
+import { PanelButton, PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
-import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks/useAppTimeFormat";
 import { FilterTagInput } from "@lichtblick/suite-base/panels/Log/FilterTagInput";
@@ -59,9 +45,10 @@ import clipboard from "@lichtblick/suite-base/util/clipboard";
 
 import LogList, { LogListApi, LogListProps } from "./LogList";
 import { SeverityTimeline } from "./SeverityTimeline";
+import { LOG_BUTTONS } from "./buttons";
 import { SUPPORTED_DATATYPES } from "./conversion";
 import filterMessages, { compileSearch } from "./filterMessages";
-import { buildSettingsTree, isTopicVisible } from "./settings";
+import { buildSettingsTree, defaultConfig, isTopicVisible } from "./settings";
 import { findLevel, lastIndexAtOrBefore } from "./timeIndex";
 import { Config, LogLevel, NormalizedLogMessage } from "./types";
 import { useLogMessages } from "./useLogMessages";
@@ -139,23 +126,17 @@ function PlayheadLogList(props: Omit<LogListProps, "currentTime">): React.JSX.El
 }
 
 function ToggleButton(props: {
-  title: string;
+  button: PanelButton;
   active: boolean;
   onClick: () => void;
-  children: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <Tooltip title={props.title}>
-      <IconButton
-        size="small"
-        color={props.active ? "primary" : "default"}
-        aria-pressed={props.active}
-        aria-label={props.title}
-        onClick={props.onClick}
-      >
-        {props.children}
-      </IconButton>
-    </Tooltip>
+    <PanelIconButton
+      button={props.button}
+      color={props.active ? "primary" : "default"}
+      aria-pressed={props.active}
+      onClick={props.onClick}
+    />
   );
 }
 
@@ -309,12 +290,10 @@ const LogPanel = React.memo(({ config, saveConfig }: Props) => {
     <Stack fullHeight data-testid="log-panel-root">
       <PanelToolbar
         additionalIcons={
-          <ToolbarIconButton
-            title={t("copyLogs")}
+          <PanelIconButton
+            button={LOG_BUTTONS.copy}
             onClick={() => void copy(formatMessages(filteredItems, timeZone))}
-          >
-            <Copy20Filled />
-          </ToolbarIconButton>
+          />
         }
       />
       <Stack direction="row" flexGrow={0} padding={0.5} gap={0.25} alignItems="center">
@@ -325,53 +304,33 @@ const LogPanel = React.memo(({ config, saveConfig }: Props) => {
           error={searchError}
         />
         <ToggleButton
-          title={t("matchCase")}
+          button={LOG_BUTTONS.matchCase}
           active={caseSensitive}
           onClick={() => {
             saveConfig({ caseSensitive: !caseSensitive });
           }}
-        >
-          <TextCaseTitle16Regular />
-        </ToggleButton>
+        />
         <ToggleButton
-          title={t("useRegex")}
+          button={LOG_BUTTONS.regex}
           active={regex}
           onClick={() => {
             saveConfig({ regex: !regex });
           }}
-        >
-          <Typography variant="caption" style={{ fontFamily: "monospace", lineHeight: 1 }}>
-            .*
-          </Typography>
-        </ToggleButton>
-        <Tooltip title={t("previousProblem")}>
-          <span>
-            <IconButton
-              size="small"
-              aria-label={t("previousProblem")}
-              disabled={!hasProblems}
-              onClick={() => {
-                jump(-1);
-              }}
-            >
-              <ArrowUp16Regular />
-            </IconButton>
-          </span>
-        </Tooltip>
-        <Tooltip title={t("nextProblem")}>
-          <span>
-            <IconButton
-              size="small"
-              aria-label={t("nextProblem")}
-              disabled={!hasProblems}
-              onClick={() => {
-                jump(1);
-              }}
-            >
-              <ArrowDown16Regular />
-            </IconButton>
-          </span>
-        </Tooltip>
+        />
+        <PanelIconButton
+          button={LOG_BUTTONS.previousProblem}
+          disabled={!hasProblems}
+          onClick={() => {
+            jump(-1);
+          }}
+        />
+        <PanelIconButton
+          button={LOG_BUTTONS.nextProblem}
+          disabled={!hasProblems}
+          onClick={() => {
+            jump(1);
+          }}
+        />
         <Typography
           variant="caption"
           noWrap
@@ -412,8 +371,6 @@ const LogPanel = React.memo(({ config, saveConfig }: Props) => {
 });
 
 LogPanel.displayName = "Log";
-
-const defaultConfig: Config = { searchTerms: [], minLogLevel: 1 };
 
 export default Panel(
   Object.assign(LogPanel, {

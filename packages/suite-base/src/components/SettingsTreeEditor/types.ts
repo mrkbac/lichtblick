@@ -76,9 +76,9 @@ export type EditorSettingsTree = Omit<SettingsTree, "nodes" | "actionHandler"> &
 export type BuiltinSettingsTreeFieldMessagePath = SettingsTreeField & MessagePathFieldExtras;
 
 /** Widens a built-in message path field to the extension API type without dropping its extra props. */
-export function builtinMessagePathField(
-  field: BuiltinSettingsTreeFieldMessagePath & { input: "messagepath" },
-): SettingsTreeField {
+export function builtinMessagePathField<
+  F extends BuiltinSettingsTreeFieldMessagePath & { input: "messagepath" },
+>(field: F): F {
   return field;
 }
 

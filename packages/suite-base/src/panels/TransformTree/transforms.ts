@@ -14,14 +14,16 @@ import { Quaternion, Vector3 } from "@lichtblick/suite-base/util/geometry";
 
 import { TransformSample } from "./types";
 
+/** Every schema the panel reads transforms from. */
+export const TRANSFORM_SCHEMAS: ReadonlySet<string> = new Set([
+  ...TF_DATATYPES,
+  ...TRANSFORM_STAMPED_DATATYPES,
+  ...FRAME_TRANSFORM_DATATYPES,
+  ...FRAME_TRANSFORMS_DATATYPES,
+]);
+
 export function isTransformSchema(schemaName: string | undefined): boolean {
-  return (
-    schemaName != undefined &&
-    (TF_DATATYPES.has(schemaName) ||
-      TRANSFORM_STAMPED_DATATYPES.has(schemaName) ||
-      FRAME_TRANSFORM_DATATYPES.has(schemaName) ||
-      FRAME_TRANSFORMS_DATATYPES.has(schemaName))
-  );
+  return schemaName != undefined && TRANSFORM_SCHEMAS.has(schemaName);
 }
 
 /**

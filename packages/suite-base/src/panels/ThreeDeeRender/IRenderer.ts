@@ -8,6 +8,7 @@
 import * as THREE from "three";
 
 import type { Immutable, MessageEvent, ParameterValue, VariableValue } from "@lichtblick/suite";
+import type { ColorModeSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
 
 import type { MeshUpAxis } from "./ModelCache";
 import type { PickedRenderable } from "./Picker";
@@ -15,7 +16,6 @@ import type { Renderer } from "./Renderer";
 import type { CameraState } from "./camera";
 import type { LayerSettingsTransform } from "./renderables/FrameAxes";
 import type { PublishClickType } from "./renderables/PublishClickTool";
-import type { ColorModeSettings } from "./renderables/colorMode";
 import type { BaseSettings, CustomLayerSettings } from "./settings";
 import type { AdjustStep, RotationConvention } from "./transforms/transformOffsets";
 

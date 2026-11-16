@@ -70,7 +70,7 @@ import {
 } from "@lichtblick/suite-base/players/types";
 import {
   useDefaultPanelTitle,
-  usePanelSettingsTreeUpdate,
+  useUncheckedPanelSettingsTreeUpdate,
 } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { PanelConfig, SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { assertNever } from "@lichtblick/suite-base/util/assertNever";
@@ -435,7 +435,7 @@ function PanelExtensionAdapter(
     forceConversion,
   ]);
 
-  const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
+  const updatePanelSettingsTree = useUncheckedPanelSettingsTreeUpdate();
 
   const extensionsSettings = useExtensionCatalog(getExtensionPanelSettings);
 

@@ -5,11 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  ArrowCounterclockwise20Regular,
-  TextBulletListLtr20Regular,
-  ZoomIn20Regular,
-} from "@fluentui/react-icons";
 import { Tooltip, Fade, useTheme } from "@mui/material";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -30,16 +25,18 @@ import {
   useMessagePipelineGetter,
   useMessagePipelineSubscribe,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { PanelContextMenu } from "@lichtblick/suite-base/components/PanelContextMenu";
 import { useSubscribeMessageRange } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
-import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
+import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import { PANEL_TITLE_TOOLBAR_SPACE } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TimeBasedChartTooltipContent from "@lichtblick/suite-base/components/TimeBasedChart/TimeBasedChartTooltipContent";
 import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import { DeltaMarkerBars } from "@lichtblick/suite-base/panels/Plot/DeltaMarkerBars";
 import { VerticalBars } from "@lichtblick/suite-base/panels/Plot/VerticalBars";
+import { PLOT_BUTTONS } from "@lichtblick/suite-base/panels/Plot/buttons";
 import useDeltaMeasureMode from "@lichtblick/suite-base/panels/Plot/hooks/useDeltaMeasureMode";
 import usePanning from "@lichtblick/suite-base/panels/Plot/hooks/usePanning";
 import usePlotInteractionHandlers from "@lichtblick/suite-base/panels/Plot/hooks/usePlotInteractionHandlers";
@@ -55,7 +52,6 @@ import {
   getPlotMode,
   isReferenceLinePlotPathType,
 } from "@lichtblick/suite-base/panels/Plot/utils/config";
-import { MeasureModeToolbarButton } from "@lichtblick/suite-base/panels/shared/MeasureModeToolbarButton";
 import { createMeasureModeEscapeHandler } from "@lichtblick/suite-base/panels/shared/measureModeEscapeHandler";
 import useAppendOnlyKey from "@lichtblick/suite-base/panels/shared/useAppendOnlyKey";
 import { enumValuesByDatatypeAndField } from "@lichtblick/suite-base/util/enums";
@@ -399,45 +395,42 @@ const Plot = (props: PlotProps): React.JSX.Element => {
       overflow="hidden"
       position="relative"
     >
-      <MeasureModeToolbarButton
-        active={deltaMeasureMode.active}
-        onToggle={deltaMeasureMode.toggleActive}
-        title={t("measureMode")}
-        testId="plot-measure-mode-toggle"
-      >
-        {canReset && (
-          <ToolbarIconButton
-            title={`${t("resetView")} (double-click)`}
-            aria-label={t("resetView")}
-            onClick={onResetView}
-            data-testid="plot-reset-view-button"
-          >
-            <ArrowCounterclockwise20Regular />
-          </ToolbarIconButton>
-        )}
-        {legendDisplay !== "none" && (
-          <ToolbarIconButton
-            title={t("legend")}
-            aria-label={t("legend")}
-            aria-pressed={showLegend}
-            color={showLegend ? "primary" : "default"}
-            onClick={toggleLegend}
-            data-testid="plot-legend-toggle"
-          >
-            <TextBulletListLtr20Regular />
-          </ToolbarIconButton>
-        )}
-        <ToolbarIconButton
-          title={t("zoomTool")}
-          aria-label={t("zoomTool")}
-          aria-pressed={boxZoomActive}
-          color={boxZoomActive ? "primary" : "default"}
-          onClick={toggleBoxZoom}
-          data-testid="plot-box-zoom-toggle"
-        >
-          <ZoomIn20Regular />
-        </ToolbarIconButton>
-      </MeasureModeToolbarButton>
+      <PanelToolbar
+        additionalIcons={
+          <>
+            {canReset && (
+              <PanelIconButton
+                button={PLOT_BUTTONS.resetView}
+                onClick={onResetView}
+                data-testid="plot-reset-view-button"
+              />
+            )}
+            {legendDisplay !== "none" && (
+              <PanelIconButton
+                button={PLOT_BUTTONS.legend}
+                aria-pressed={showLegend}
+                color={showLegend ? "primary" : "default"}
+                onClick={toggleLegend}
+                data-testid="plot-legend-toggle"
+              />
+            )}
+            <PanelIconButton
+              button={PLOT_BUTTONS.boxZoom}
+              aria-pressed={boxZoomActive}
+              color={boxZoomActive ? "primary" : "default"}
+              onClick={toggleBoxZoom}
+              data-testid="plot-box-zoom-toggle"
+            />
+            <PanelIconButton
+              button={PLOT_BUTTONS.measure}
+              aria-pressed={deltaMeasureMode.active}
+              color={deltaMeasureMode.active ? "primary" : "default"}
+              onClick={deltaMeasureMode.toggleActive}
+              data-testid="plot-measure-mode-toggle"
+            />
+          </>
+        }
+      />
       <Stack
         direction={legendDisplay === "top" ? "column" : "row"}
         flex="auto"

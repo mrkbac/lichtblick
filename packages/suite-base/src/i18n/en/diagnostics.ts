@@ -2,8 +2,6 @@
 
 export const diagnostics = {
   clickToSeek: "Click to seek",
-  copyStatus: "Copy status as JSON",
-  copyValue: "Copy value",
   filter: "Filter",
   general: "General",
   hardwareId: "Hardware ID",
@@ -13,19 +11,19 @@ export const diagnostics = {
   noNodeSelected: "No diagnostic node selected",
   noTopics: "No diagnostics topics available",
   numericPrecision: "Numeric precision",
+  numericPrecisionHelp: "Decimal places for numeric values; empty shows them as received.",
   numericPrecisionPlaceholder: "auto",
-  openInPlot: "Open in Plot panel",
-  openInStateTransitions: "Open in State Transitions panel",
   previousValue: "Previous: {{value}}",
   showHistory: "Show history",
-  showHistoryHelp: "Show a status timeline for each check",
+  showHistoryHelp: "Draws a status timeline next to each check.",
   sortByLevel: "Sort by level",
+  sortByLevelHelp: "Groups checks by level, worst first; off sorts them by name.",
   staleTimeout: "Stale timeout",
-  staleTimeoutHelp:
-    "Number of seconds after which entries will be marked as stale if no new diagnostic message(s) have been received",
+  staleTimeoutHelp: "Seconds without an update before a check is marked stale.",
   staleTimeoutPlaceholder: "{{seconds}} seconds",
   topicNotAvailable: "Topic is not available",
   topics: "Topics",
+  topicsHelp: "DiagnosticArray topics to read; all of them until you turn one off.",
   waitingForDiagnostics: "Waiting for diagnostics…",
   waitingForDiagnosticsFrom: "Waiting for diagnostics from",
 };

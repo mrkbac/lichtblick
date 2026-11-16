@@ -5,15 +5,17 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Add16Regular, Dismiss12Regular } from "@fluentui/react-icons";
+import { Add16Regular } from "@fluentui/react-icons";
 import { Button, ButtonGroup, Stack } from "@mui/material";
 import React, { MouseEvent, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { useSelectedPanels } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import useStyles from "@lichtblick/suite-base/panels/StateTransitions/PathLegend.style";
+import { STATE_TRANSITIONS_BUTTONS } from "@lichtblick/suite-base/panels/StateTransitions/buttons";
 import { DEFAULT_STATE_TRANSITION_PATH } from "@lichtblick/suite-base/panels/StateTransitions/constants";
 import { stateTransitionPathDisplayName } from "@lichtblick/suite-base/panels/StateTransitions/shared";
 import {
@@ -61,6 +63,8 @@ export const PathLegend = React.memo(function PathLegend(props: PathLegendProps)
   const { id: panelId } = usePanelContext();
   const { openPanelSettings } = useWorkspaceActions();
   const { classes } = useStyles();
+  const deleteTitle = usePanelButtonTitle(STATE_TRANSITIONS_BUTTONS.deleteSeries);
+  const DeleteIcon = STATE_TRANSITIONS_BUTTONS.deleteSeries.icon;
 
   const handleDeletePath = useCallback(
     (event: MouseEvent<HTMLButtonElement>, index: number) => {
@@ -116,13 +120,15 @@ export const PathLegend = React.memo(function PathLegend(props: PathLegendProps)
               {paths.length > 0 && (
                 <Button
                   data-testid={`delete-topic-button-${index}`}
+                  title={deleteTitle}
+                  aria-label={deleteTitle}
                   className={classes.dismissIcon}
                   size="small"
                   onClick={(event) => {
                     handleDeletePath(event, index);
                   }}
                 >
-                  <Dismiss12Regular />
+                  <DeleteIcon />
                 </Button>
               )}
             </ButtonGroup>

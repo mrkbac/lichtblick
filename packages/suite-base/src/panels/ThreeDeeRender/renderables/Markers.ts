@@ -6,14 +6,12 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { toNanoSec } from "@foxglove/rostime";
-import { t } from "i18next";
 import * as _ from "lodash-es";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
 
 import { LayerSettingsMarker, TopicMarkers } from "./TopicMarkers";
 import type { AnyRendererSubscription } from "../IRenderer";
-import { SELECTED_ID_VARIABLE } from "../Renderable";
 import type { Renderer } from "../Renderer";
 import { PartialMessage, PartialMessageEvent, SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../SettingsManager";
@@ -27,16 +25,11 @@ import {
   normalizeVector3s,
 } from "../normalizeMessages";
 import { Marker, MarkerArray, MARKER_ARRAY_DATATYPES, MARKER_DATATYPES } from "../ros";
+import { MARKER_DEFAULTS, markerSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose } from "../transforms";
 
-const DEFAULT_SETTINGS: LayerSettingsMarker = {
-  visible: false,
-  showOutlines: true,
-  color: undefined,
-  selectedIdVariable: undefined,
-  namespaces: {},
-};
+const DEFAULT_SETTINGS = MARKER_DEFAULTS;
 
 export class Markers extends SceneExtension<TopicMarkers> {
   public static extensionId = "foxglove.Markers";
@@ -73,25 +66,7 @@ export class Markers extends SceneExtension<TopicMarkers> {
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsMarker>;
 
       const node: SettingsTreeNodeWithActionHandler = {
-        label: topic.name,
-        icon: "Shapes",
-        order: topic.name.toLocaleLowerCase(),
-        fields: {
-          color: { label: t("threeDee:color"), input: "rgba", value: config.color },
-          showOutlines: {
-            label: t("threeDee:showOutline"),
-            input: "boolean",
-            value: config.showOutlines ?? DEFAULT_SETTINGS.showOutlines,
-          },
-          selectedIdVariable: {
-            label: t("threeDee:selectionVariable"),
-            input: "string",
-            help: t("threeDee:selectionVariableHelp"),
-            value: config.selectedIdVariable,
-            placeholder: SELECTED_ID_VARIABLE,
-          },
-        },
-        visible: config.visible ?? DEFAULT_SETTINGS.visible,
+        ...markerSettingsNode(topic, config),
         handler: this.handleSettingsAction,
       };
 

@@ -154,7 +154,6 @@ function makeElectronBuilderConfig(params) {
             UTTypeIcons: { UTTypeIconText: "foxe" },
             UTTypeIdentifier: "dev.foxglove.extension",
             UTTypeTagSpecification: { "public.filename-extension": "foxe" },
-            UTTypeReferenceURL: "https://foxglove.dev/docs/studio/extensions/getting-started",
           },
         ],
         UTImportedTypeDeclarations: [

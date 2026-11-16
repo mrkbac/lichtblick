@@ -76,7 +76,7 @@ describe("PanelExtensionAdapter", () => {
     const saveConfig = vi.fn();
     const updateSettingsTree = vi.fn();
     const settingsTreeSpy = vi
-      .spyOn(PanelStateContextProvider, "usePanelSettingsTreeUpdate")
+      .spyOn(PanelStateContextProvider, "useUncheckedPanelSettingsTreeUpdate")
       .mockReturnValue(updateSettingsTree);
     const config = { topics: { topic: { child: { enabled: false } } } };
     const panelActionHandler = vi.fn();
@@ -1465,7 +1465,7 @@ describe("PanelExtensionAdapter", () => {
     it("should return early for reorder-node actions without saving config", async () => {
       // Given: A mock updatePanelSettingsTree to capture the wrapped actionHandler
       const updatePanelSettingsTreeMock = vi.fn();
-      vi.spyOn(PanelStateContextProvider, "usePanelSettingsTreeUpdate").mockReturnValue(
+      vi.spyOn(PanelStateContextProvider, "useUncheckedPanelSettingsTreeUpdate").mockReturnValue(
         updatePanelSettingsTreeMock,
       );
 

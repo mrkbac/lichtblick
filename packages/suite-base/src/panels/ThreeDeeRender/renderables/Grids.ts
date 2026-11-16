@@ -9,7 +9,7 @@ import { t } from "i18next";
 import * as _ from "lodash-es";
 
 import Logger from "@lichtblick/log";
-import { SettingsTreeAction, SettingsTreeFields } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 
 import { BaseUserData, Renderable } from "../Renderable";
 import type { Renderer } from "../Renderer";
@@ -18,7 +18,8 @@ import { SettingsTreeEntry } from "../SettingsManager";
 import { stringToRgba } from "../color";
 import { vec3TupleApproxEquals } from "../math";
 import { Marker, MarkerAction, MarkerType, TIME_ZERO, Vector3 } from "../ros";
-import { CustomLayerSettings, PRECISION_DEGREES, PRECISION_DISTANCE } from "../settings";
+import { CustomLayerSettings } from "../settings";
+import { GRID_DEFAULTS, GRID_LAYER_ID, gridSettingsNode } from "../settingsNodes/layers";
 import { makePose, xyzrpyToPose } from "../transforms";
 import { RenderableLineList } from "./markers/RenderableLineList";
 
@@ -35,28 +36,10 @@ export type LayerSettingsGrid = CustomLayerSettings & {
   rotation: [number, number, number];
 };
 
-const LAYER_ID = "foxglove.Grid";
-const DEFAULT_SIZE = 10;
-const DEFAULT_DIVISIONS = 10;
-const DEFAULT_LINE_WIDTH = 1;
-const DEFAULT_COLOR = "#248eff";
-const MAX_DIVISIONS = 4096; // The JS heap size is a limiting factor
+const LAYER_ID = GRID_LAYER_ID;
 const LINE_OPTIONS = { worldUnits: false };
 
-const DEFAULT_SETTINGS: LayerSettingsGrid = {
-  visible: true,
-  frameLocked: true,
-  label: "Grid",
-  instanceId: "invalid",
-  layerId: LAYER_ID,
-  frameId: undefined,
-  size: DEFAULT_SIZE,
-  divisions: DEFAULT_DIVISIONS,
-  lineWidth: DEFAULT_LINE_WIDTH,
-  color: DEFAULT_COLOR,
-  position: [0, 0, 0],
-  rotation: [0, 0, 0],
-};
+const DEFAULT_SETTINGS = GRID_DEFAULTS;
 
 export type GridUserData = BaseUserData & {
   settings: LayerSettingsGrid;
@@ -110,75 +93,9 @@ export class Grids extends SceneExtension<GridRenderable> {
       }
 
       const config = layerConfig as Partial<LayerSettingsGrid>;
-      const frameIdOptions = [
-        { label: "<Display frame>", value: undefined },
-        ...this.renderer.coordinateFrameList,
-      ];
-
-      // prettier-ignore
-      const fields: SettingsTreeFields = {
-        frameId: {
-          label: t("threeDee:frame"),
-          input: "select",
-          options: frameIdOptions,
-          value: config.frameId,
-        }, // options is extended in `settings.ts:buildTopicNode()`
-        size: {
-          label: t("threeDee:size"),
-          input: "number",
-          min: 0,
-          step: 0.5,
-          precision: PRECISION_DISTANCE,
-          value: config.size,
-          placeholder: String(DEFAULT_SIZE),
-        },
-        divisions: {
-          label: t("threeDee:divisions"),
-          input: "number",
-          min: 1,
-          max: MAX_DIVISIONS,
-          step: 1,
-          precision: 0,
-          value: config.divisions,
-          placeholder: String(DEFAULT_DIVISIONS),
-        },
-        lineWidth: {
-          label: t("threeDee:lineWidth"),
-          input: "number",
-          min: 0,
-          step: 0.5,
-          precision: 1,
-          value: config.lineWidth,
-          placeholder: String(DEFAULT_LINE_WIDTH),
-        },
-        color: { label: t("threeDee:color"), input: "rgba", value: config.color ?? DEFAULT_COLOR },
-        position: {
-          label: t("threeDee:position"),
-          input: "vec3",
-          labels: ["X", "Y", "Z"],
-          precision: PRECISION_DISTANCE,
-          value: config.position ?? [0, 0, 0],
-        },
-        rotation: {
-          label: t("threeDee:rotation"),
-          input: "vec3",
-          labels: ["R", "P", "Y"],
-          precision: PRECISION_DEGREES,
-          value: config.rotation ?? [0, 0, 0],
-        },
-      };
-
       entries.push({
         path: ["layers", instanceId],
-        node: {
-          label: config.label ?? t("threeDee:grid"),
-          icon: "Grid",
-          fields,
-          visible: config.visible ?? DEFAULT_SETTINGS.visible,
-          actions: [{ type: "action", id: "delete", label: t("threeDee:delete") }],
-          order: layerConfig.order,
-          handler,
-        },
+        node: { ...gridSettingsNode(config, this.renderer.coordinateFrameList), handler },
       });
 
       // Create renderables for new grid layers

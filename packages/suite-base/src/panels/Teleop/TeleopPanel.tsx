@@ -12,6 +12,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 
 import { SettingsTreeAction, Topic } from "@lichtblick/suite";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import DirectionalPad from "@lichtblick/suite-base/panels/Teleop/DirectionalPad";
 import FaceButtons from "@lichtblick/suite-base/panels/Teleop/FaceButtons";
@@ -20,7 +21,9 @@ import {
   applySettingsAction,
   buildSettingsTreeTeleop,
 } from "@lichtblick/suite-base/panels/Teleop/buildSettingsTree";
+import { TELEOP_BUTTONS } from "@lichtblick/suite-base/panels/Teleop/buttons";
 import { BUTTON_LABELS } from "@lichtblick/suite-base/panels/Teleop/constants";
+import { TELEOP_SHORTCUTS } from "@lichtblick/suite-base/panels/Teleop/shortcuts";
 import {
   actionToVector,
   combinePads,
@@ -49,6 +52,7 @@ import {
 } from "@lichtblick/suite-base/panels/Teleop/types";
 import { replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
+import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { ros2CommonDatatypes } from "@lichtblick/suite-base/util/ros2CommonDatatypes";
 
 const SCHEMAS = {
@@ -502,6 +506,7 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
   );
 
   const [focused, setFocused] = useState(false);
+  const stopTitle = usePanelButtonTitle(TELEOP_BUTTONS.stop);
   const isTwist = messageType !== "Joy";
 
   const onKeyDown = (event: React.KeyboardEvent) => {
@@ -515,12 +520,13 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
       return;
     }
     const key = event.key.toLowerCase();
-    if (key === " " || key === "escape") {
+    const shortcut = findShortcut(TELEOP_SHORTCUTS, event);
+    if (shortcut?.id === "teleop.stop") {
       event.preventDefault();
       emergencyStop();
       return;
     }
-    if (isTwist && (key === "+" || key === "=" || key === "-")) {
+    if (isTwist && shortcut?.id === "teleop.speed") {
       changeSpeed(key === "-" ? -0.1 : 0.1);
       return;
     }
@@ -668,8 +674,9 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
                   color="error"
                   onClick={emergencyStop}
                   style={{ flexShrink: 0 }}
+                  title={stopTitle}
                 >
-                  Stop
+                  <TELEOP_BUTTONS.stop.icon />
                 </Button>
               </Stack>
               {controls.length > 0 && (

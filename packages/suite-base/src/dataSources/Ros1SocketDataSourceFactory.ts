@@ -8,7 +8,6 @@
 import { RosNode } from "@foxglove/ros1";
 
 import OsContextSingleton from "@lichtblick/suite-base/OsContextSingleton";
-import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
@@ -23,7 +22,6 @@ class Ros1SocketDataSourceFactory implements IDataSourceFactory {
   public iconName: IDataSourceFactory["iconName"] = "ROS";
   public description =
     "Connect to a running ROS 1 system via a native TCP connection that accesses your ROS master and nodes directly.";
-  public docsLinks = [{ url: `${APP_CONFIG.docsUrl}docs/connecting-to-data/frameworks/ros1/` }];
 
   public formConfig = {
     fields: [

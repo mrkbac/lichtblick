@@ -5,7 +5,7 @@
 
 import { makeStyles } from "tss-react/mui";
 
-import { SettingsTreeFields } from "@lichtblick/suite";
+import type { DocumentedFields } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 
 export const useActionButtonStyles = makeStyles<{ buttonColor?: string }>()(
   (theme, { buttonColor }) => {
@@ -32,15 +32,26 @@ export function formatTime(date: Date): string {
 export function buttonSettingsFields(
   config: { buttonText?: string; buttonTooltip?: string; buttonColor?: string },
   textPlaceholder?: string,
-): SettingsTreeFields {
+): DocumentedFields {
   return {
     buttonText: {
       label: "Title",
+      help: "Label of the button.",
       input: "string",
       value: config.buttonText,
       placeholder: textPlaceholder,
     },
-    buttonTooltip: { label: "Tooltip", input: "string", value: config.buttonTooltip },
-    buttonColor: { label: "Color", input: "rgb", value: config.buttonColor },
+    buttonTooltip: {
+      label: "Tooltip",
+      help: "Tooltip of the button; when empty, it shows the keyboard shortcut.",
+      input: "string",
+      value: config.buttonTooltip,
+    },
+    buttonColor: {
+      label: "Color",
+      help: "Background color of the button.",
+      input: "rgb",
+      value: config.buttonColor,
+    },
   };
 }

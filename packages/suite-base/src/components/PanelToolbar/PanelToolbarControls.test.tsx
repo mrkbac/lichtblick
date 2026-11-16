@@ -9,6 +9,7 @@ import React from "react";
 import type { MockedFunction } from "vitest";
 
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
+import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 import { PanelToolbarControls } from "@lichtblick/suite-base/components/PanelToolbar/PanelToolbarControls";
 import { useSelectedPanels } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import PanelCatalogContext from "@lichtblick/suite-base/context/PanelCatalogContext";
@@ -770,6 +771,35 @@ describe("PanelToolbarControls", () => {
       // Then
       const icon = container.querySelector('[data-testid="ListAltIcon"]');
       expect(icon).toBeInTheDocument();
+    });
+  });
+
+  describe("Given panel docs", () => {
+    beforeEach(() => {
+      usePanelGuideStore.setState({ open: false, panelType: undefined });
+    });
+
+    it("When the panel has no docs Then hides the info button", () => {
+      renderPanelToolbarControls();
+
+      expect(screen.queryByTitle("About this panel")).not.toBeInTheDocument();
+    });
+
+    it("When the info button is clicked Then opens the panel guide at this panel", () => {
+      renderPanelToolbarControls({
+        panelCatalogOverrides: {
+          getPanelByType: vi.fn().mockReturnValue({
+            title: "Test Panel",
+            type: "TestPanel",
+            module: vi.fn(),
+            docs: vi.fn(),
+          }),
+        },
+      });
+
+      fireEvent.click(screen.getByTitle("About this panel"));
+
+      expect(usePanelGuideStore.getState()).toMatchObject({ open: true, panelType: "TestPanel" });
     });
   });
 });

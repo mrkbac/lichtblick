@@ -5,7 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
@@ -20,16 +19,6 @@ export default class FoxgloveWebSocketDataSourceFactory implements IDataSourceFa
   public iconName: IDataSourceFactory["iconName"] = "Flow";
   public description =
     "Connect to a ROS 1, ROS 2, or custom system using the Foxglove WebSocket protocol. For ROS systems, be sure to first install the foxglove_bridge ROS package.";
-  public docsLinks = [
-    {
-      label: "ROS 1",
-      url: `${APP_CONFIG.docsUrl}docs/connecting-to-data/frameworks/ros1/`,
-    },
-    {
-      label: "ROS 2",
-      url: `${APP_CONFIG.docsUrl}docs/connecting-to-data/frameworks/ros2`,
-    },
-  ];
 
   public formConfig = {
     fields: [

@@ -270,7 +270,7 @@ describe("ThreeDeeRender", () => {
     // AND GIVEN an adapter with a converter that handles nested settings
     const updateSettingsTree = vi.fn();
     const settingsTreeSpy = vi
-      .spyOn(PanelStateContextProvider, "usePanelSettingsTreeUpdate")
+      .spyOn(PanelStateContextProvider, "useUncheckedPanelSettingsTreeUpdate")
       .mockReturnValue(updateSettingsTree);
     const initPanel = vi.fn<(context: BuiltinPanelExtensionContext) => void>();
     const adapterView = render(

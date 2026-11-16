@@ -57,6 +57,7 @@ export type PathState = {
 export type AxisTreeField = {
   value: number | undefined;
   label: string;
+  help: string;
   error?: string | undefined;
 };
 

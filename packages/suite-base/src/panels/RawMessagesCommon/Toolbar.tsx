@@ -6,14 +6,11 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import DiffIcon from "@mui/icons-material/Difference";
-import DiffOutlinedIcon from "@mui/icons-material/DifferenceOutlined";
-import SearchIcon from "@mui/icons-material/Search";
-import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
-import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
 import { IconButton, MenuItem, Select, SelectChangeEvent } from "@mui/material";
 import React from "react";
 
 import MessagePathInput from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useStylesToolbar } from "@lichtblick/suite-base/panels/RawMessagesCommon/index.style";
@@ -21,8 +18,13 @@ import {
   PropsToolbar,
   RawMessagesVirtualPanelConfig,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
+import { RAW_MESSAGES_SHORTCUTS } from "@lichtblick/suite-base/panels/RawMessagesVirtual/shortcuts";
+import { shortcutLabel } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
+import { RAW_MESSAGES_BUTTONS } from "./buttons";
 import { PREV_MSG_METHOD, CUSTOM_METHOD } from "./constants";
+
+const { diff: DiffButton, search: SearchButton } = RAW_MESSAGES_BUTTONS;
 
 function ToolbarComponent(props: PropsToolbar): React.JSX.Element {
   const {
@@ -42,36 +44,46 @@ function ToolbarComponent(props: PropsToolbar): React.JSX.Element {
   } = props;
 
   const { classes, cx } = useStylesToolbar();
+  const diffTitle = usePanelButtonTitle(DiffButton);
+  const expandButton = canExpandAll
+    ? RAW_MESSAGES_BUTTONS.expandAll
+    : RAW_MESSAGES_BUTTONS.collapseAll;
+  const expandTitle = usePanelButtonTitle(expandButton);
+  const searchTitle = usePanelButtonTitle(SearchButton);
+  const searchKey = shortcutLabel(RAW_MESSAGES_SHORTCUTS, "rawMessages.search");
 
   return (
     <>
       <PanelToolbar className={classes.toolbar}>
         <IconButton
           className={cx(classes.iconButton, { "Mui-selected": diffEnabled })}
-          title="Toggle diff"
+          title={diffTitle}
+          aria-label={diffTitle}
           onClick={onToggleDiff}
           color={diffEnabled ? "default" : "inherit"}
           size="small"
         >
-          {diffEnabled ? <DiffIcon fontSize="small" /> : <DiffOutlinedIcon fontSize="small" />}
+          {diffEnabled ? <DiffIcon fontSize="small" /> : <DiffButton.icon fontSize="small" />}
         </IconButton>
         <IconButton
           className={classes.iconButton}
-          title={canExpandAll ? "Expand all" : "Collapse all"}
+          title={expandTitle}
+          aria-label={expandTitle}
           onClick={onToggleExpandAll}
           data-testid="expand-all"
           size="small"
         >
-          {canExpandAll ? <UnfoldMoreIcon fontSize="small" /> : <UnfoldLessIcon fontSize="small" />}
+          <expandButton.icon fontSize="small" />
         </IconButton>
         {onToggleSearch && (
           <IconButton
             className={cx(classes.iconButton, { "Mui-selected": searchOpen })}
-            title="Search fields and values (Ctrl+F)"
+            title={searchKey != undefined ? `${searchTitle} (${searchKey})` : searchTitle}
+            aria-label={searchTitle}
             onClick={onToggleSearch}
             size="small"
           >
-            <SearchIcon fontSize="small" />
+            <SearchButton.icon fontSize="small" />
           </IconButton>
         )}
         <Stack fullWidth paddingLeft={0.25}>

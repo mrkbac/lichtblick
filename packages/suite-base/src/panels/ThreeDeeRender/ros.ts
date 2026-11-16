@@ -393,6 +393,19 @@ addRosDataType(IMAGE_MARKER_DATATYPES, "visualization_msgs/ImageMarker");
 export const IMAGE_MARKER_ARRAY_DATATYPES = new Set<string>();
 addRosDataType(IMAGE_MARKER_ARRAY_DATATYPES, "visualization_msgs/ImageMarkerArray");
 
+/** Robot descriptions (URDF XML) published as a string. */
+export const URDF_TOPIC_SCHEMAS = new Set<string>(["std_msgs/String", "std_msgs/msg/String"]);
+
+/** GPS fixes, placed via the location frame. */
+export const LOCATION_SCHEMAS = new Set([
+  "sensor_msgs/NavSatFix",
+  "sensor_msgs/msg/NavSatFix",
+  "ros.sensor_msgs.NavSatFix",
+  "foxglove_msgs/LocationFix",
+  "foxglove_msgs/msg/LocationFix",
+  "foxglove.LocationFix",
+]);
+
 // Expand a single ROS1 dataType into variations for ROS2 and protobufs,
 // then add them to the given output set
 function addRosDataType(output: Set<string>, dataType: string): Set<string> {

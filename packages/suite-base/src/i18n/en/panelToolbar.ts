@@ -6,13 +6,20 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 export const panelToolbar = {
-  addTab: "New tab",
   changePanel: "Change panel",
+  close: "Close",
   closeTab: "Close {{title}}",
   doubleClickToRename: "Double-click or F2 to rename",
   dragToMovePanel: "Drag to move panel",
   fullscreen: "Fullscreen",
+  keyboardAndMouse: "Keyboard and mouse",
   more: "More",
+  buttons: "Buttons",
+  noPanelsFound: "No panels found",
+  panelGuide: "Panel guide",
+  panelGuideSections: "Sections",
+  panelInfo: "About this panel",
+  settings: "Settings",
   openPopout: "Open in new window",
   openPictureInPicture: "Open Picture-in-Picture monitor",
   returnToWorkspace: "Return to workspace",
@@ -20,7 +27,9 @@ export const panelToolbar = {
   panelWindowFailed:
     "Could not open the panel window. Allow pop-ups for {{appName}} and try again.",
   removePanel: "Remove panel",
+  searchPanelGuide: "Search panels, schemas, settings…",
   splitDown: "Split down",
   splitRight: "Split right",
+  supportedSchemas: "Supported schemas",
   tabTitle: "Tab title",
 };

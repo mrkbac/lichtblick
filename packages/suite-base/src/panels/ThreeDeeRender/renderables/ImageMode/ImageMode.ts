@@ -19,7 +19,6 @@ import {
   Immutable,
   MessageEvent,
   SettingsTreeAction,
-  SettingsTreeFields,
   Topic,
 } from "@lichtblick/suite";
 import { PanelContextMenuItem } from "@lichtblick/suite-base/components/PanelContextMenu";
@@ -31,29 +30,26 @@ import {
   RAW_IMAGE_DATATYPES,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/foxglove";
 import {
-  ALL_SUPPORTED_CALIBRATION_SCHEMAS,
-  ALL_SUPPORTED_IMAGE_SCHEMAS,
   CALIBRATION_TOPIC_PATH,
   CALIBRATION_TOPIC_UNAVAILABLE,
   CAMERA_MODEL,
   DEFAULT_FOCAL_LENGTH,
-  DEFAULT_IMAGE_CONFIG,
   IMAGE_MODE_HUD_GROUP_ID,
   IMAGE_TOPIC_DIFFERENT_FRAME,
   IMAGE_TOPIC_PATH,
   IMAGE_TOPIC_UNAVAILABLE,
-  MAX_BRIGHTNESS,
-  MAX_CONTRAST,
-  MIN_BRIGHTNESS,
-  MIN_CONTRAST,
   MISSING_CAMERA_INFO,
   NO_IMAGE_TOPICS_HUD_ITEM,
   REMOVE_IMAGE_TIMEOUT_MS,
-  SUPPORTED_RAW_IMAGE_SCHEMAS,
   BOTH_TOPICS_DO_NOT_EXIST_HUD_ITEM_ID,
   IMAGE_TOPIC_DOES_NOT_EXIST_HUD_ITEM_ID,
   CALIBRATION_TOPIC_DOES_NOT_EXIST_HUD_ITEM_ID,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/constants";
+import {
+  ALL_SUPPORTED_CALIBRATION_SCHEMAS,
+  ALL_SUPPORTED_IMAGE_SCHEMAS,
+  SUPPORTED_RAW_IMAGE_SCHEMAS,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/schemas";
 import {
   ConfigWithDefaults,
   ImageModeEventMap,
@@ -75,6 +71,7 @@ import {
   cameraInfosEqual,
   normalizeCameraInfo,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/projections";
+import { DEFAULT_IMAGE_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/imageMode";
 import { t3D } from "@lichtblick/suite-base/panels/ThreeDeeRender/t3D";
 import { makePose, AnyFrameId } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
@@ -83,7 +80,7 @@ import { downloadFiles } from "@lichtblick/suite-base/util/download";
 import { ImageModeCamera } from "./ImageModeCamera";
 import { MessageHandler, MessageRenderState } from "./MessageHandler";
 import { ImageAnnotations } from "./annotations/ImageAnnotations";
-import type { AnyRendererSubscription, ImageModeConfig, RendererConfig } from "../../IRenderer";
+import type { AnyRendererSubscription, RendererConfig } from "../../IRenderer";
 import type { Renderer } from "../../Renderer";
 import { PartialMessageEvent, SceneExtension } from "../../SceneExtension";
 import { SettingsTreeEntry } from "../../SettingsManager";
@@ -92,10 +89,10 @@ import {
   COMPRESSED_IMAGE_DATATYPES as ROS_COMPRESSED_IMAGE_DATATYPES,
   CameraInfo,
 } from "../../ros";
+import { imageModeSettingsNode } from "../../settingsNodes/imageMode";
 import { topicIsConvertibleToSchema } from "../../topicIsConvertibleToSchema";
 import { ICameraHandler } from "../ICameraHandler";
 import { getTopicMatchPrefix, sortPrefixMatchesToFront } from "../Images/topicPrefixMatching";
-import { colorModeSettingsFields } from "../colorMode";
 
 const log = Logger.getLogger(__filename);
 
@@ -422,16 +419,7 @@ export class ImageMode
 
     const settings = this.getImageModeSettings();
 
-    const {
-      imageTopic: imageTopicName,
-      calibrationTopic,
-      synchronize,
-      flipHorizontal,
-      flipVertical,
-      rotation,
-      brightness,
-      contrast,
-    } = settings;
+    const { imageTopic: imageTopicName, calibrationTopic } = settings;
 
     const imageTopics = filterMap(this.renderer.topics ?? [], (topic) => {
       if (!topicIsConvertibleToSchema(topic, this.supportedImageSchemas)) {
@@ -504,98 +492,24 @@ export class ImageMode
     const calibrationTopicError =
       this.renderer.settings.errors.errors.errorAtPath(CALIBRATION_TOPIC_PATH);
 
-    const fields: SettingsTreeFields = {};
-    fields.imageTopic = {
-      label: t3D("topic"),
-      input: "select",
-      value: imageTopicName,
-      options: imageTopics,
-      error: imageTopicError,
-    };
-    fields.calibrationTopic = {
-      label: "Calibration",
-      input: "select",
-      value: calibrationTopic,
-      options: calibrationTopics,
-      error: calibrationTopicError,
-    };
-    fields.synchronize = {
-      input: "boolean",
-      label: "Sync annotations",
-      value: synchronize,
-    };
-    fields.flipHorizontal = {
-      input: "boolean",
-      label: "Flip horizontal",
-      value: flipHorizontal,
-    };
-    fields.flipVertical = {
-      input: "boolean",
-      label: "Flip vertical",
-      value: flipVertical,
-    };
-    fields.rotation = {
-      input: "toggle",
-      label: "Rotation",
-      value: rotation,
-      options: [
-        { label: "0°", value: 0 },
-        { label: "90°", value: 90 },
-        { label: "180°", value: 180 },
-        { label: "270°", value: 270 },
-      ],
-    };
-    fields.brightness = {
-      input: "slider",
-      label: "Brightness",
-      min: MIN_BRIGHTNESS,
-      max: MAX_BRIGHTNESS,
-      value: brightness,
-      step: 5,
-    };
-    fields.contrast = {
-      input: "slider",
-      label: "Contrast",
-      min: MIN_CONTRAST,
-      max: MAX_CONTRAST,
-      value: contrast,
-      step: 5,
-    };
-
     const imageTopic =
       imageTopicName != undefined ? this.renderer.topicsByName?.get(imageTopicName) : undefined;
     const isRawImageTopic =
       imageTopic != undefined &&
       topicIsConvertibleToSchema(imageTopic, SUPPORTED_RAW_IMAGE_SCHEMAS);
 
-    // color settings only apply to raw images (compressedDepth images decode to raw depth), so we
-    // can hide them otherwise
-    if (isRawImageTopic || this.#imageIsCompressedDepth) {
-      const colorModeFields = colorModeSettingsFields({
-        config: settings as ImageModeConfig,
-
-        defaults: {
-          gradient: DEFAULT_IMAGE_CONFIG.gradient,
-        },
-        modifiers: {
-          supportsPackedRgbModes: false,
-          supportsRgbaFieldsMode: false,
-          hideFlatColor: true,
-          hideExplicitAlpha: true,
-        },
-      });
-
-      Object.assign(fields, colorModeFields);
-    }
-
     return [
       {
         path: ["imageMode"],
         node: {
-          label: "General",
-          defaultExpansionState: "expanded",
+          ...imageModeSettingsNode(settings as ConfigWithDefaults, {
+            imageTopics,
+            calibrationTopics,
+            errors: { imageTopic: imageTopicError, calibrationTopic: calibrationTopicError },
+            // color settings only apply to raw images (compressedDepth decodes to raw depth)
+            showColorMode: isRawImageTopic || this.#imageIsCompressedDepth,
+          }),
           handler,
-          fields,
         },
       },
       ...this.#annotations.settingsNodes(),

@@ -8,6 +8,7 @@
 import { PropsWithChildren, useCallback, useEffect, useState } from "react";
 import { StoreApi, createStore } from "zustand";
 
+import { Immutable } from "@lichtblick/suite";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import {
   ImmutableSettingsTree,
@@ -15,6 +16,7 @@ import {
   PanelStateStore,
   usePanelStateStore,
 } from "@lichtblick/suite-base/context/PanelStateContext";
+import type { DocumentedSettingsTree } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 
 function createPanelStateStore(initialState?: Partial<PanelStateStore>): StoreApi<PanelStateStore> {
   return createStore((set) => {
@@ -55,9 +57,16 @@ function createPanelStateStore(initialState?: Partial<PanelStateStore>): StoreAp
 const updateSettingsTreeSelector = (store: PanelStateStore) => store.updateSettingsTree;
 
 /**
- * Returns updater function for the current panels settings tree.
+ * Returns the updater for the current panel's settings tree. Built-in panels must document every
+ * field (see {@link DocumentedSettingsTree}); extension panels go through
+ * {@link useUncheckedPanelSettingsTreeUpdate}.
  */
-export function usePanelSettingsTreeUpdate(): (newTree: ImmutableSettingsTree) => void {
+export function usePanelSettingsTreeUpdate(): (newTree: Immutable<DocumentedSettingsTree>) => void {
+  return useUncheckedPanelSettingsTreeUpdate();
+}
+
+/** Like {@link usePanelSettingsTreeUpdate}, for trees from extensions, whose fields may lack help. */
+export function useUncheckedPanelSettingsTreeUpdate(): (newTree: ImmutableSettingsTree) => void {
   const { id } = usePanelContext();
   const updateStoreTree = usePanelStateStore(updateSettingsTreeSelector);
 

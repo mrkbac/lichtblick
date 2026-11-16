@@ -18,12 +18,14 @@ import { Immutable, SettingsTreeAction, Topic } from "@lichtblick/suite";
 import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { useElementSize } from "@lichtblick/suite-base/hooks/useElementSize";
 import { addTopicsDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
+import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { fontMonospace } from "@lichtblick/theme";
 
 import { GridRenderer } from "./GridRenderer";
 import { annotationTopicNames, tileAnnotationTopics } from "./annotations";
 import { autoColumns, imageKind, imageTopicNames } from "./layout";
 import { addAllTopics, buildSettingsTree, settingsReducer } from "./settings";
+import { CAMERA_GRID_SHORTCUTS } from "./shortcuts";
 import { CameraGridConfig, DEFAULT_CONFIG, TileConfig } from "./types";
 
 const DEFAULT_ASPECT = 4 / 3;
@@ -410,7 +412,7 @@ export function CameraGrid({
       className={classes.root}
       tabIndex={-1}
       onKeyDown={(event) => {
-        if (event.key === "Escape") {
+        if (findShortcut(CAMERA_GRID_SHORTCUTS, event)?.id === "cameraGrid.restore") {
           setMaximizedTopic(undefined);
         }
       }}

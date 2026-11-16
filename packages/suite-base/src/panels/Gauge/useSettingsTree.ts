@@ -1,20 +1,19 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
+import { TFunction } from "i18next";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
-import { useShallowMemo } from "@lichtblick/hooks";
-import { SettingsTreeNode } from "@lichtblick/suite";
 import { DATA_TYPES } from "@lichtblick/suite-base/panels/Gauge/constants";
+import type { DocumentedNode } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 
 import { ColorMapConfig, ColorModeConfig, SettingsTreeNodesProps } from "./types";
 
 /** Shows the controls for the selected display and reports invalid inclinometer thresholds. */
-export function useSettingsTree({
-  config,
-  pathParseError,
-  error,
-}: SettingsTreeNodesProps): Record<"general", SettingsTreeNode> {
+export function buildSettingsTree(
+  { config, pathParseError, error }: SettingsTreeNodesProps,
+  t: TFunction<"gauge">,
+): Record<"general", DocumentedNode> {
   const {
     colorMap,
     colorMode,
@@ -29,14 +28,13 @@ export function useSettingsTree({
     warningAngle,
     criticalAngle,
   } = config;
-  const { t } = useTranslation("gauge");
-
-  const generalSettings = useMemo(
-    (): SettingsTreeNode => ({
+  return {
+    general: {
       error,
       fields: {
         displayMode: {
           label: t("displayMode"),
+          help: t("displayModeHelp"),
           input: "select",
           value: displayMode,
           options: (["arc", "roll", "pitch"] as const).map((mode) => ({
@@ -46,6 +44,7 @@ export function useSettingsTree({
         },
         path: {
           label: t("messagePath.label"),
+          help: t("messagePath.help"),
           input: "messagepath",
           supportsMathModifiers: true,
           value: path,
@@ -55,6 +54,7 @@ export function useSettingsTree({
         ...(displayMode !== "arc" && {
           angleUnit: {
             label: t("angleUnit"),
+            help: t("angleUnitHelp"),
             input: "select",
             value: angleUnit,
             options: [
@@ -64,6 +64,7 @@ export function useSettingsTree({
           },
           angleRange: {
             label: t("angleRange"),
+            help: t("angleRangeHelp"),
             input: "number",
             value: angleRange,
             error: !(
@@ -75,22 +76,35 @@ export function useSettingsTree({
               ? t("invalidAngles")
               : undefined,
           },
-          warningAngle: { label: t("warningAngle"), input: "number", value: warningAngle },
-          criticalAngle: { label: t("criticalAngle"), input: "number", value: criticalAngle },
+          warningAngle: {
+            label: t("warningAngle"),
+            help: t("warningAngleHelp"),
+            input: "number",
+            value: warningAngle,
+          },
+          criticalAngle: {
+            label: t("criticalAngle"),
+            help: t("criticalAngleHelp"),
+            input: "number",
+            value: criticalAngle,
+          },
         }),
         ...(displayMode === "arc" && {
           minValue: {
             label: t("minValue.label"),
+            help: t("minValue.help"),
             input: "number",
             value: minValue,
           },
           maxValue: {
             label: t("maxValue.label"),
+            help: t("maxValue.help"),
             input: "number",
             value: maxValue,
           },
           colorMode: {
             label: t("colorMode.label"),
+            help: t("colorMode.help"),
             input: "select",
             value: colorMode,
             options: [
@@ -101,6 +115,7 @@ export function useSettingsTree({
           ...(colorMode === ColorModeConfig.COLORMAP && {
             colorMap: {
               label: t("colorMode.options.colorMap"),
+              help: t("colorMap.help"),
               input: "select",
               value: colorMap,
               options: [
@@ -116,38 +131,31 @@ export function useSettingsTree({
           ...(colorMode === ColorModeConfig.GRADIENT && {
             gradient: {
               label: t("colorMode.options.gradient"),
+              help: t("gradientHelp"),
               input: ColorModeConfig.GRADIENT,
               value: gradient,
             },
           }),
           reverse: {
             label: t("reverse.label"),
+            help: t("reverse.help"),
             input: "boolean",
             value: reverse,
           },
         }),
       },
-    }),
-    [
-      error,
-      t,
-      path,
-      minValue,
-      maxValue,
-      colorMode,
-      colorMap,
-      gradient,
-      reverse,
-      pathParseError,
-      displayMode,
-      angleUnit,
-      angleRange,
-      warningAngle,
-      criticalAngle,
-    ],
-  );
+    },
+  };
+}
 
-  return useShallowMemo({
-    general: generalSettings,
-  });
+export function useSettingsTree({
+  config,
+  pathParseError,
+  error,
+}: SettingsTreeNodesProps): Record<"general", DocumentedNode> {
+  const { t } = useTranslation("gauge");
+  return useMemo(
+    () => buildSettingsTree({ config, pathParseError, error }, t),
+    [config, pathParseError, error, t],
+  );
 }

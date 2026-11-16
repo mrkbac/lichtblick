@@ -26,7 +26,9 @@ import {
 } from "@lichtblick/suite-base/context/UserScriptStateContext";
 import DiagnosticsSection from "@lichtblick/suite-base/panels/UserScriptEditor/BottomBar/DiagnosticsSection";
 import LogsSection from "@lichtblick/suite-base/panels/UserScriptEditor/BottomBar/LogsSection";
+import { USER_SCRIPTS_SHORTCUTS } from "@lichtblick/suite-base/panels/UserScriptEditor/shortcuts";
 import { Diagnostic, UserScriptLog } from "@lichtblick/suite-base/players/UserScriptPlayer/types";
+import { shortcutLabel } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 type Props = {
   diagnostics: readonly Diagnostic[];
@@ -176,7 +178,7 @@ const BottomBar = ({
               color="primary"
               variant="contained"
               disabled={isSaved}
-              title="Ctrl/Cmd + S"
+              title={shortcutLabel(USER_SCRIPTS_SHORTCUTS, "userScripts.save")}
               onClick={() => {
                 if (scriptId != undefined) {
                   save();

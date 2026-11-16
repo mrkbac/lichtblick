@@ -23,7 +23,7 @@ const commands: Command[] = [
       { id: "layout.b", title: "Beta", run: () => switchLayout("b") },
     ],
   },
-  { id: "help.docs", title: "Open documentation", run: vi.fn() },
+  { id: "help.panelGuide", title: "Open panel guide", run: vi.fn() },
 ];
 
 function openPalette() {

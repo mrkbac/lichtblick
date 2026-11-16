@@ -13,8 +13,6 @@ import type { Renderer } from "./Renderer";
 import type { BaseSettings } from "./settings";
 import type { Pose } from "./transforms";
 
-export const SELECTED_ID_VARIABLE = "selected_id";
-
 export type BaseUserData = {
   /** Timestamp when the associated `MessageEvent` was received */
   receiveTime: bigint;

@@ -33,12 +33,14 @@ import {
   canonicalVideoCodec,
   isVideoKeyframe,
 } from "@lichtblick/den/video";
+import { ColorModeSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
 
 import { CompressedImageTypes, CompressedVideo } from "./ImageTypes";
 import { PreparedVideoFrame, PreparedVideoFrameStatus, PrepareVideoFrameContext } from "./types";
 import { makeRgba, rgbaGradient, stringToRgba } from "../../color";
 import { Image as RosImage } from "../../ros";
-import { ColorModeSettings, getColorConverter } from "../colorMode";
+import { IMAGE_DEFAULT_COLOR_MODE_SETTINGS } from "../../settingsNodes/imageMode";
+import { getColorConverter } from "../colorMode";
 
 // Codec normalization (`VideoCodec`, `canonicalVideoCodec`, `isVideoKeyframe`) lives in
 // `@lichtblick/den/video` so both the renderer and the player-side seek backfill share a single
@@ -153,15 +155,6 @@ export async function decodeCompressedVideoToBitmap(
   }
 }
 
-export const IMAGE_DEFAULT_COLOR_MODE_SETTINGS: Required<
-  Omit<ColorModeSettings, "colorField" | "minValue" | "maxValue">
-> = {
-  colorMode: "gradient",
-  flatColor: "#ffffff",
-  gradient: ["#000000", "#ffffff"],
-  colorMap: "turbo",
-  explicitAlpha: 0,
-};
 const MIN_MAX_8_BIT = { minValue: 0, maxValue: 255 };
 const MIN_MAX_16_BIT = { minValue: 0, maxValue: 65535 };
 

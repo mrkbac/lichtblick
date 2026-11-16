@@ -6,23 +6,19 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 export const log = {
-  copyLogs: "Copy Logs",
-  copyMessage: "Copy log message",
-  followPlayhead: "Follow playhead",
   hideAll: "Hide all",
   logsCopied: "Logs copied",
   minLogLevel: "Log level",
+  minLogLevelHelp: "Hides messages below the chosen severity.",
   nameFilter: "Namespaces",
+  nameFilterHelp: "Shows or hides messages per node name.",
   nothingToCopy: "Nothing to copy",
   searchPlaceholder: "Search (-term to exclude)",
   showAll: "Show all",
   loadFailed: "Failed to load logs\n{{error}}",
   retry: "Retry",
   invalidRegex: "Invalid regular expression: {{terms}}",
-  matchCase: "Match case",
-  nextProblem: "Next warning or error",
   noLogTopics: "No log topics available",
-  previousProblem: "Previous warning or error",
   topics: "Topics",
-  useRegex: "Use regular expression",
+  topicsHelp: "Shows or hides each log topic.",
 };

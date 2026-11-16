@@ -5,7 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
@@ -20,7 +19,6 @@ class VelodyneDataSourceFactory implements IDataSourceFactory {
   public iconName: IDataSourceFactory["iconName"] = "GenericScan";
   public description =
     "Connect directly to Velodyne Lidar hardware to inspect incoming sensor data.";
-  public docsLinks = [{ url: `${APP_CONFIG.docsUrl}docs/connecting-to-data/frameworks/velodyne/` }];
 
   public formConfig = {
     fields: [{ id: "port", label: "UDP Port", defaultValue: "2369" }],

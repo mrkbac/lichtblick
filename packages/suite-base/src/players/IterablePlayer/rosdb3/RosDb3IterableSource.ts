@@ -96,7 +96,7 @@ export class RosDb3IterableSource implements ISerializedIterableSource {
         alerts.push({
           severity: "warn",
           message: `Topic "${topicDef.name}" has unsupported datatype "${topicDef.type}"`,
-          tip: `ROS 2 .db3 files do not contain message definitions, so only well-known ROS types are supported in ${APP_CONFIG.productName}. As a workaround, you can convert the db3 file to mcap using the mcap CLI. For more information, see: ${APP_CONFIG.docsUrl}docs/connecting-to-data/frameworks/ros2`,
+          tip: `ROS 2 .db3 files do not contain message definitions, so only well-known ROS types are supported in ${APP_CONFIG.productName}. As a workaround, you can convert the db3 file to mcap using the mcap CLI.`,
         });
       } else {
         // Create the full gendeps-like message definition so that parseChannel() can parse it.

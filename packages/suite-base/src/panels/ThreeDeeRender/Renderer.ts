@@ -26,7 +26,6 @@ import {
   SettingsIcon,
   SettingsTreeAction,
   SettingsTreeNodeActionItem,
-  SettingsTreeNodes,
   Topic,
   VariableValue,
 } from "@lichtblick/suite";
@@ -42,8 +41,10 @@ import {
   HUDItem,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/HUDItemManager";
 import { LayerErrors } from "@lichtblick/suite-base/panels/ThreeDeeRender/LayerErrors";
+import { DEFAULT_MESH_UP_AXIS } from "@lichtblick/suite-base/panels/ThreeDeeRender/defaults";
 import { ICameraHandler } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ICameraHandler";
-import { showHideAllValue, topicListNode } from "@lichtblick/suite-base/panels/shared/topicList";
+import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
+import { showHideAllValue } from "@lichtblick/suite-base/panels/shared/topicList";
 import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { palette, fontMonospace } from "@lichtblick/theme";
@@ -58,7 +59,7 @@ import {
   AddMessageEventOptions,
 } from "./IRenderer";
 import { Input } from "./Input";
-import { DEFAULT_MESH_UP_AXIS, ModelCache } from "./ModelCache";
+import { ModelCache } from "./ModelCache";
 import { PickedRenderable, Picker } from "./Picker";
 import type { Renderable } from "./Renderable";
 import { SceneExtension } from "./SceneExtension";
@@ -94,6 +95,7 @@ import {
   Vector3,
 } from "./ros";
 import { SelectEntry } from "./settings";
+import { customLayersRootNode, topicsRootNode } from "./settingsNodes/global";
 import {
   AddTransformResult,
   CoordinateFrame,
@@ -946,11 +948,10 @@ export class Renderer extends EventEmitter<RendererEvents> {
     // "Topics" settings tree node
     const topics: SettingsTreeEntry = {
       path: ["topics"],
-      node: topicListNode({
-        label: i18next.t("threeDee:topics"),
-        children: this.settings.tree()["topics"]?.children ?? {},
+      node: {
+        ...topicsRootNode(this.settings.tree()["topics"]?.children),
         handler: this.#handleTopicsAction,
-      }),
+      },
     };
     return topics;
   }
@@ -960,9 +961,11 @@ export class Renderer extends EventEmitter<RendererEvents> {
     const customLayers: SettingsTreeEntry = {
       path: ["layers"],
       node: {
-        label: `${i18next.t("threeDee:customLayers")}${layerCount > 0 ? ` (${layerCount})` : ""}`,
+        ...customLayersRootNode(
+          layerCount,
+          Array.from(this.#customLayerActions.values()).map((entry) => entry.action),
+        ),
         children: this.settings.tree()["layers"]?.children,
-        actions: Array.from(this.#customLayerActions.values()).map((entry) => entry.action),
         handler: this.#handleCustomLayersAction,
       },
     };
@@ -2100,7 +2103,7 @@ function deselectObject(object: THREE.Object3D) {
  * Creates a skeleton settings tree. The tree contents are filled in by scene extensions.
  * This dictates the order in which groups appear in the settings editor.
  */
-function baseSettingsTree(interfaceMode: InterfaceMode): SettingsTreeNodes {
+function baseSettingsTree(interfaceMode: InterfaceMode): DocumentedNodes {
   const keys: string[] = [];
   keys.push(interfaceMode === "image" ? "imageMode" : "general", "scene");
   if (interfaceMode === "image") {
