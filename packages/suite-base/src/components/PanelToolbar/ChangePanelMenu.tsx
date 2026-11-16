@@ -24,20 +24,13 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
-/**
- * Panel catalog submenu. By default it swaps the current panel for the selected type; with
- * `onPanelSelect` it hands the selection to the caller instead (e.g. to add a new tab).
- */
+/** Panel catalog submenu that swaps the current panel for the selected type. */
 export default function ChangePanelMenu({
-  id = "change-panel-menu",
   anchorEl,
   onClose,
-  onPanelSelect,
 }: {
-  id?: string;
   anchorEl?: HTMLElement;
   onClose: () => void;
-  onPanelSelect?: (selection: PanelSelection) => void;
 }): React.JSX.Element {
   const { classes } = useStyles();
   const panelContext = useContext(PanelContext);
@@ -64,7 +57,7 @@ export default function ChangePanelMenu({
   return (
     <Popper
       {...fixMui35287}
-      id={id}
+      id="change-panel-menu"
       open={open}
       role={undefined}
       anchorEl={anchorEl}
@@ -99,8 +92,8 @@ export default function ChangePanelMenu({
               <PanelCatalog
                 mode="list"
                 isMenu
-                selectedPanelType={onPanelSelect ? undefined : panelContext?.type}
-                onPanelSelect={onPanelSelect ?? handleSwap(panelContext?.id)}
+                selectedPanelType={panelContext?.type}
+                onPanelSelect={handleSwap(panelContext?.id)}
               />
             </ClickAwayListener>
           </Paper>

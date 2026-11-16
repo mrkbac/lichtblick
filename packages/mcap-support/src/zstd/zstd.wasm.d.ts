@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
 // Types for `import url from "./zstd.wasm"`: the bundlers turn it into a URL (asset/resource or

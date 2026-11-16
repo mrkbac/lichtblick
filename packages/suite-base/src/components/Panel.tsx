@@ -333,11 +333,15 @@ export default function Panel<
       () =>
         dock
           ? {
+              // A panel in a Tab panel only maximizes inside the tab's own dock, so maximize the
+              // Tab panel too.
               enterFullscreen: () => {
                 dock.api.maximize();
+                parentPanelContext?.enterFullscreen();
               },
               exitFullscreen: () => {
                 dock.api.exitMaximized();
+                parentPanelContext?.exitFullscreen();
               },
             }
           : {
@@ -646,6 +650,7 @@ export default function Panel<
                 selected={isSelected || (isDragging && isValidTarget && isOver)}
                 data-testid={cx("panel-mouseenter-container", childId)}
                 data-telemetry-id="panel"
+                data-panel-id={childId}
                 ref={panelRootCallbackRef}
               >
                 {!isFullscreen && (

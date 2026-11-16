@@ -831,6 +831,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       pitch: initial.pitch ?? 0,
       maxPitch: 85,
       attributionControl: false,
+      trackResize: false,
     });
     instance.addControl(new AutoHideAttributionControl(), "bottom-right");
     instance.addControl(new NavigationControl({ visualizePitch: true }), "top-right");
@@ -867,10 +868,12 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       context.saveState(viewRef.current);
     });
 
-    // The panel resizes without window resizes, so observe the container directly.
+    // Resizing clears the WebGL canvas; redraw in the same frame or the cleared (black)
+    // canvas is painted until MapLibre's next render. Unthrottled, unlike MapLibre's own
+    // observer (disabled via trackResize), so the map follows a panel drag every frame.
     const Observer = container.ownerDocument.defaultView?.ResizeObserver ?? ResizeObserver;
     const observer = new Observer(() => {
-      instance.resize();
+      instance.resize().redraw();
     });
     observer.observe(container);
     setMap(instance);

@@ -12,7 +12,7 @@ import {
 import { Divider, IconButton, Paper, Tooltip, Typography } from "@mui/material";
 import type { FeatureCollection } from "geojson";
 import { Marker } from "maplibre-gl";
-import type { Map as MapLibreMap, MapMouseEvent, PointLike } from "maplibre-gl";
+import type { IControl, Map as MapLibreMap, MapMouseEvent, PointLike } from "maplibre-gl";
 import {
   RefObject,
   useCallback,
@@ -22,9 +22,13 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { makeStyles } from "tss-react/mui";
 
-import OverlayToolbar from "@lichtblick/suite-base/components/OverlayToolbar";
+import OverlayToolbar, {
+  OverlayToolGroup,
+  useIsShorterThan,
+} from "@lichtblick/suite-base/components/OverlayToolbar";
 import { customTypography } from "@lichtblick/theme";
 
 import { MEASURE_HANDLE_LAYERS } from "./features";
@@ -54,13 +58,37 @@ import {
 /** Handles are picked within this many pixels of the pointer. */
 const HANDLE_PICK_PX = 8;
 
+/** Below this panel height the measuring tools fold into one button, so the column fits. */
+const FOLD_TOOLS_BELOW_PX = 380;
+
+/** The step-by-step hint shows until the user has made and left one measurement. */
+const HINT_SEEN_KEY = "lichtblick.map.measureHintSeen";
+function readHintSeen(): boolean {
+  try {
+    return localStorage.getItem(HINT_SEEN_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function markHintSeen(): void {
+  try {
+    localStorage.setItem(HINT_SEEN_KEY, "1");
+  } catch {
+    // Without storage the hint just keeps showing.
+  }
+}
+
 const TOOLS: {
   tool: MeasureTool;
   title: string;
   icon: React.JSX.Element;
   needsTerrain?: boolean;
 }[] = [
-  { tool: "distance", title: "Measure distance and area", icon: <Ruler20Regular /> },
+  {
+    tool: "distance",
+    title: "Measure distance and area",
+    icon: <Ruler20Regular />,
+  },
   {
     tool: "height",
     title: "Measure height difference",
@@ -76,9 +104,6 @@ const useStyles = makeStyles()((theme) => ({
     position: "absolute",
     top: 10,
     left: 10,
-    display: "flex",
-    gap: theme.spacing(1),
-    alignItems: "flex-start",
     pointerEvents: "none",
   },
   bottomLeft: {
@@ -229,8 +254,14 @@ function summarize(
           `Grade ${stats.gradePercent.toFixed(1)}% (${stats.slopeDegrees.toFixed(1)}°)`,
         ],
         labels: [
-          { at: midpoint(a, b), text: formatHeight(stats.verticalMeters, units) },
-          ...points.map((at, i) => ({ at, text: formatElevation(elevations[i]!, units) })),
+          {
+            at: midpoint(a, b),
+            text: formatHeight(stats.verticalMeters, units),
+          },
+          ...points.map((at, i) => ({
+            at,
+            text: formatElevation(elevations[i]!, units),
+          })),
         ],
       };
     }
@@ -259,7 +290,10 @@ function summarize(
       return {
         title: `Angle ${angles[1]!.toFixed(1)}°`,
         lines,
-        labels: points.map((p, i) => ({ at: p, text: `${angles[i]!.toFixed(1)}°` })),
+        labels: points.map((p, i) => ({
+          at: p,
+          text: `${angles[i]!.toFixed(1)}°`,
+        })),
       };
     }
     case "point":
@@ -489,7 +523,10 @@ export function MapToolbar(props: Props): React.JSX.Element {
       if (drag) {
         const { id, index } = drag;
         drag.moved = true;
-        update(id, (m) => ({ ...m, points: m.points.map((p, i) => (i === index ? lngLat : p)) }));
+        update(id, (m) => ({
+          ...m,
+          points: m.points.map((p, i) => (i === index ? lngLat : p)),
+        }));
         return;
       }
       const handle = pickHandle(event);
@@ -727,7 +764,11 @@ export function MapToolbar(props: Props): React.JSX.Element {
         } else {
           markers.set(
             key,
-            new Marker({ element: labelElement(label.text), anchor: "bottom", offset: [0, -8] })
+            new Marker({
+              element: labelElement(label.text),
+              anchor: "bottom",
+              offset: [0, -8],
+            })
               .setLngLat(label.at)
               .addTo(map),
           );
@@ -758,76 +799,118 @@ export function MapToolbar(props: Props): React.JSX.Element {
       ? "Click to pin points."
       : selected?.status === "drawing"
         ? tool === "distance"
-          ? "Click the first point for an area, double-click to end a line."
-          : `Click ${activeRules?.maxPoints === 3 ? "three points (e.g. cliff foot in the middle, top, and a ground point); every corner is labeled" : "the bottom and the top"}.`
-        : "Click the map to start a measurement.";
+          ? "Click the first point for an area, double-click to end."
+          : activeRules?.maxPoints === 3
+            ? "Click three points; the angle is at the middle one."
+            : "Click the bottom, then the top."
+        : "Click the map to start.";
+  const [hintSeen, setHintSeen] = useState(readHintSeen);
+  useEffect(() => {
+    if (!hintSeen && !tool && measurements.length > 0) {
+      markHintSeen();
+      setHintSeen(true);
+    }
+  }, [hintSeen, measurements.length, tool]);
+
+  // Hosted in MapLibre's top-right stack, so it sits right below zoom and compass.
+  const [controlElement, setControlElement] = useState<HTMLElement>();
+  useEffect(() => {
+    const element = document.createElement("div");
+    element.className = "maplibregl-ctrl";
+    const control: IControl = {
+      onAdd: () => element,
+      onRemove: () => {
+        element.remove();
+      },
+    };
+    map.addControl(control, "top-right");
+    setControlElement(element);
+    return () => {
+      if (map.hasControl(control)) {
+        map.removeControl(control);
+      }
+    };
+  }, [map]);
+  const foldTools = useIsShorterThan(map.getContainer(), FOLD_TOOLS_BELOW_PX);
+  const activeTool = TOOLS.find((t) => t.tool === tool);
 
   return (
     <>
-      <div className={classes.topLeft}>
-        <OverlayToolbar>
-          {TOOLS.map(({ tool: option, title, icon, needsTerrain = false }) => {
-            const disabled = needsTerrain && !hasTerrain;
-            return (
-              <Tooltip
-                key={option}
-                title={disabled ? `${title} (turn on 3D terrain in an elevation layer)` : title}
-                placement="right"
-              >
+      {controlElement &&
+        createPortal(
+          <OverlayToolbar>
+            <Tooltip title="Zoom to data" placement="left">
+              <span>
+                <IconButton
+                  size="small"
+                  aria-label="Zoom to data"
+                  disabled={!onFitToData}
+                  onClick={() => {
+                    onFitToData?.();
+                  }}
+                >
+                  <ZoomFit20Regular />
+                </IconButton>
+              </span>
+            </Tooltip>
+            <Divider />
+            <OverlayToolGroup
+              collapsed={foldTools}
+              label="Measuring tools"
+              icon={activeTool?.icon ?? <Ruler20Regular />}
+              active={tool != undefined}
+            >
+              {TOOLS.map(({ tool: option, title, icon, needsTerrain = false }) => {
+                const disabled = needsTerrain && !hasTerrain;
+                return (
+                  <Tooltip
+                    key={option}
+                    title={disabled ? `${title} (turn on 3D terrain in an elevation layer)` : title}
+                    placement="left"
+                  >
+                    <span>
+                      <IconButton
+                        size="small"
+                        disabled={disabled}
+                        aria-pressed={tool === option}
+                        aria-label={title}
+                        onClick={() => {
+                          setSelectedId(undefined);
+                          setCursor(undefined);
+                          setTool((prev) => (prev === option ? undefined : option));
+                        }}
+                      >
+                        {icon}
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                );
+              })}
+              {/* Always rendered so activating a tool doesn't shift the toolbar. */}
+              <Tooltip title="Clear all measurements" placement="left">
                 <span>
                   <IconButton
                     size="small"
-                    disabled={disabled}
-                    aria-pressed={tool === option}
-                    aria-label={title}
+                    aria-label="Clear all measurements"
+                    disabled={measurements.length === 0}
                     onClick={() => {
+                      setMeasurements([]);
                       setSelectedId(undefined);
-                      setCursor(undefined);
-                      setTool((prev) => (prev === option ? undefined : option));
                     }}
                   >
-                    {icon}
+                    <Delete20Regular />
                   </IconButton>
                 </span>
               </Tooltip>
-            );
-          })}
-          {/* Always rendered so activating a tool doesn't shift the toolbar. */}
-          <Tooltip title="Clear all measurements" placement="right">
-            <span>
-              <IconButton
-                size="small"
-                aria-label="Clear all measurements"
-                disabled={measurements.length === 0}
-                onClick={() => {
-                  setMeasurements([]);
-                  setSelectedId(undefined);
-                }}
-              >
-                <Delete20Regular />
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Divider />
-          <Tooltip title="Zoom to data" placement="right">
-            <span>
-              <IconButton
-                size="small"
-                aria-label="Zoom to data"
-                disabled={!onFitToData}
-                onClick={() => {
-                  onFitToData?.();
-                }}
-              >
-                <ZoomFit20Regular />
-              </IconButton>
-            </span>
-          </Tooltip>
-        </OverlayToolbar>
+            </OverlayToolGroup>
+          </OverlayToolbar>,
+          controlElement,
+        )}
+      <div className={classes.topLeft}>
         {tool && (
           <Paper className={classes.result}>
             <Typography variant="body2" style={{ fontWeight: 600 }}>
-              {summary?.title ?? TOOLS.find((t) => t.tool === tool)?.title}
+              {summary?.title ?? activeTool?.title}
             </Typography>
             {summary?.lines.map((line) => (
               <Typography
@@ -839,12 +922,11 @@ export function MapToolbar(props: Props): React.JSX.Element {
                 {line}
               </Typography>
             ))}
-            <Typography variant="caption" color="textSecondary" style={{ display: "block" }}>
-              {hint} Drag points to move
-              {activeRules?.editableShape === true ? ", click a midpoint to insert" : ""},
-              right-click a point to delete. Click a point to select its measurement; Delete removes
-              it, Esc deselects.
-            </Typography>
+            {!hintSeen && (
+              <Typography variant="caption" color="textSecondary" style={{ display: "block" }}>
+                {hint} Drag to move, right-click to delete.
+              </Typography>
+            )}
           </Paper>
         )}
       </div>
