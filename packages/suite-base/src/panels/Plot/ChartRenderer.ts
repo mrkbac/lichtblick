@@ -20,7 +20,6 @@ import { DEFAULT_ANNOTATION } from "@lichtblick/suite-base/panels/Plot/constants
 import { getChartOptions } from "@lichtblick/suite-base/panels/Plot/utils/getChartOptions";
 import { buildThresholdFills } from "@lichtblick/suite-base/panels/Plot/utils/thresholdFill";
 import { Bounds, Bounds1D } from "@lichtblick/suite-base/types/Bounds";
-import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
 import { isLight, parseColor } from "@lichtblick/suite-base/util/parseColor";
 // Not the package index: it pulls MUI component styles and icons, which crash in a worker
 import { fontMonospace } from "@lichtblick/theme/src/typography";
@@ -678,7 +677,7 @@ export class ChartRenderer {
         });
         break;
       case "panstart":
-        maybeCast<ZoomableChart>(this.#chartInstance)?.$zoom.panStartHandler({
+        (this.#chartInstance as ZoomableChart | undefined)?.$zoom.panStartHandler({
           center: event.center,
           deltaX: event.deltaX,
           deltaY: event.deltaY,
@@ -690,10 +689,10 @@ export class ChartRenderer {
         });
         break;
       case "panmove":
-        maybeCast<ZoomableChart>(this.#chartInstance)?.$zoom.panHandler(event);
+        (this.#chartInstance as ZoomableChart | undefined)?.$zoom.panHandler(event);
         break;
       case "panend":
-        maybeCast<ZoomableChart>(this.#chartInstance)?.$zoom.panEndHandler();
+        (this.#chartInstance as ZoomableChart | undefined)?.$zoom.panEndHandler();
         break;
     }
   }
@@ -704,7 +703,7 @@ export class ChartRenderer {
    */
   #withWheelZoomMode(event: Immutable<WheelInteractionEvent>, zoom: () => void): void {
     // eslint-disable-next-line no-underscore-dangle -- the zoom plugin's resolved options
-    const zoomOptions = maybeCast<ZoomableChart>(this.#chartInstance)?.$zoom._options?.zoom;
+    const zoomOptions = (this.#chartInstance as ZoomableChart | undefined)?.$zoom._options?.zoom;
     if (!zoomOptions) {
       zoom();
       return;

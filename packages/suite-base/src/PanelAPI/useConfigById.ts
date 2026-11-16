@@ -21,7 +21,6 @@ import {
   useExtensionCatalog,
 } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
-import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
 
 import { getPanelTypeFromId } from "../util/layout";
 
@@ -63,7 +62,7 @@ export default function useConfigById<Config extends Record<string, unknown>>(
         return undefined;
       }
 
-      const stateConfig = maybeCast<Config>(state.selectedLayout?.data?.configById[panelId]);
+      const stateConfig = state.selectedLayout?.data?.configById[panelId] as Config | undefined;
       // Panels that keep `topics` as a list (e.g. Diagnostics) don't use per-topic settings;
       // merging would turn the array into an object like `{ 0: "/a" }`.
       if (Array.isArray(stateConfig?.topics)) {
@@ -81,7 +80,7 @@ export default function useConfigById<Config extends Record<string, unknown>>(
       }
 
       // Only return a new object if there's a change
-      return maybeCast<Config>({ ...stateConfig, topics: customSettings });
+      return { ...stateConfig, topics: customSettings } as unknown as Config;
     },
     [panelId, customSettingsByTopic],
   );
