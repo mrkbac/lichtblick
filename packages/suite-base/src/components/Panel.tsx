@@ -650,6 +650,7 @@ export default function Panel<
                 selected={isSelected || (isDragging && isValidTarget && isOver)}
                 data-testid={cx("panel-mouseenter-container", childId)}
                 data-telemetry-id="panel"
+                data-panel-id={childId}
                 ref={panelRootCallbackRef}
               >
                 {!isFullscreen && (

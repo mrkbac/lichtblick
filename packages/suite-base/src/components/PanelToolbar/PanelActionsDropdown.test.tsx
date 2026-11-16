@@ -18,10 +18,8 @@ import PanelCatalogContext, {
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { PanelConfig } from "@lichtblick/suite-base/types/panels";
 
-const addPanel = vi.fn();
 vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext", () => ({
   useCurrentLayoutActions: () => ({
-    addPanel,
     swapPanel: vi.fn(),
     closePanel: vi.fn(),
     splitPanel: vi.fn(),
@@ -73,7 +71,7 @@ describe("panel catalog search focus", () => {
     expect(searchField()).toHaveFocus();
   });
 
-  it("keeps the New tab submenu open with its search focused when its item is clicked", async () => {
+  it("keeps the Change panel submenu open with its search focused when its item is clicked", async () => {
     // Given an open panel menu
     const user = userEvent.setup();
     render(
@@ -83,20 +81,16 @@ describe("panel catalog search focus", () => {
     );
     await user.click(screen.getByTestId("panel-menu"));
 
-    // When "New tab" is clicked, twice
-    await user.click(screen.getByRole("menuitem", { name: "New tab" }));
-    await user.click(screen.getByRole("menuitem", { name: "New tab" }));
+    // When "Change panel" is clicked, twice
+    await user.click(screen.getByRole("menuitem", { name: "Change panel" }));
+    await user.click(screen.getByRole("menuitem", { name: "Change panel" }));
 
-    // Then the submenu stays open with its search focused, and picking a panel adds it as a tab
+    // Then the submenu stays open with its search focused
     expect(searchField()).toHaveFocus();
-    await user.keyboard("raw{Enter}");
-    expect(addPanel).toHaveBeenCalledWith(
-      expect.objectContaining({ position: "center", targetPanelId: "Tab!a" }),
-    );
   });
 
-  it("closes the New tab submenu on a click outside it", async () => {
-    // Given an open New tab submenu
+  it("closes the Change panel submenu on a click outside it", async () => {
+    // Given an open Change panel submenu
     const user = userEvent.setup();
     render(
       <Providers>
@@ -104,7 +98,7 @@ describe("panel catalog search focus", () => {
       </Providers>,
     );
     await user.click(screen.getByTestId("panel-menu"));
-    await user.click(screen.getByRole("menuitem", { name: "New tab" }));
+    await user.click(screen.getByRole("menuitem", { name: "Change panel" }));
     expect(searchField()).toBeInTheDocument();
 
     // When the user clicks outside the submenu and its menu item
