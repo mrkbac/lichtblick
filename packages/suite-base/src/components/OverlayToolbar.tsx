@@ -40,6 +40,7 @@ const useStyles = makeStyles()((theme) => ({
       },
     },
   },
+  popup: { flexDirection: "row", marginLeft: -4 },
 }));
 
 /** Floating panel controls share a surface and fixed-size buttons, including text icons. */
@@ -86,9 +87,13 @@ export function OverlayToolGroup(props: {
   children: ReactNode;
 }): React.JSX.Element {
   const { collapsed, label, icon, active = false, children } = props;
-  const { classes } = useStyles();
+  const { classes, cx } = useStyles();
   const [anchor, setAnchor] = useState<HTMLElement>();
   if (!collapsed) {
+    // The folded button is gone; don't reopen against it on the next fold.
+    if (anchor) {
+      setAnchor(undefined);
+    }
     return <>{children}</>;
   }
   return (
@@ -97,7 +102,7 @@ export function OverlayToolGroup(props: {
         <IconButton
           size="small"
           aria-label={label}
-          aria-haspopup="true"
+          aria-haspopup="dialog"
           aria-expanded={anchor != undefined}
           aria-pressed={active}
           onClick={(event) => {
@@ -117,11 +122,13 @@ export function OverlayToolGroup(props: {
         transformOrigin={{ vertical: "top", horizontal: "right" }}
         slotProps={{
           paper: {
-            className: classes.root,
+            className: cx(classes.root, classes.popup),
             elevation: 4,
-            style: { flexDirection: "row", marginLeft: -4 },
+            role: "dialog",
+            "aria-label": label,
             onClick: (event: React.MouseEvent) => {
-              if (event.target instanceof Element && event.target.closest("button")) {
+              // No instanceof: a popped-out panel's elements come from another window.
+              if ((event.target as Partial<Element>).closest?.("button")) {
                 setAnchor(undefined);
               }
             },

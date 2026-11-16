@@ -83,4 +83,12 @@ it("folds a tool group into one button with a pop-up that closes on use", () => 
   fireEvent.click(screen.getByRole("button", { name: "Ruler" }));
   expect(onRuler).toHaveBeenCalledTimes(1);
   expect(fold).toHaveAttribute("aria-expanded", "false");
+
+  // Unfolding while open drops the pop-up, so folding again doesn't reopen it.
+  fireEvent.click(fold);
+  expect(screen.getByRole("dialog", { name: "Tools" })).toBeInTheDocument();
+  rerender(group({ collapsed: false }));
+  rerender(group({ collapsed: true }));
+  expect(screen.queryByRole("dialog")).toBeNull();
+  expect(screen.getByRole("button", { name: "Tools" })).toHaveAttribute("aria-expanded", "false");
 });
