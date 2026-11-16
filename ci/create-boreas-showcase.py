@@ -10,7 +10,9 @@ al., University of Toronto, CC BY 4.0, https://www.boreas.utias.utoronto.ca/) me
 every panel: native-rate LiDAR, full-resolution camera with calibration and projected boxes,
 radar image and point cloud, tracked 3D objects, the driven route, GPS and vehicle dynamics.
 Every topic is generated lazily and merged in time order, so memory stays flat.
-The file is not committed; it is about 2 GB.
+The file is not committed; it is hosted at SAMPLE_BOREAS_DATA_SOURCE_URL
+(packages/suite-base/src/dataSources/constants.ts) and its layout is
+packages/suite-base/src/dataSources/SampleBoreasLayout.json.
 """
 
 import csv
