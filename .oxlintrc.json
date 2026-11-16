@@ -174,6 +174,22 @@
       {
         "paths": [
           {
+            "name": "path",
+            "message": "The browser bundle stubs this Node built-in out (rspack.ts resolve.fallback), so it would be empty at runtime. Use @lichtblick/suite-base/util/path."
+          },
+          {
+            "name": "node:path",
+            "message": "The browser bundle stubs this Node built-in out (rspack.ts resolve.fallback), so it would be empty at runtime. Use @lichtblick/suite-base/util/path."
+          },
+          {
+            "name": "stream",
+            "message": "The browser bundle stubs this Node built-in out (rspack.ts resolve.fallback), so it would be empty at runtime. Use web streams."
+          },
+          {
+            "name": "node:stream",
+            "message": "The browser bundle stubs this Node built-in out (rspack.ts resolve.fallback), so it would be empty at runtime. Use web streams."
+          },
+          {
             "name": "@emotion/styled",
             "message": "@emotion/styled has performance implications. Use tss-react/mui instead."
           },
@@ -256,6 +272,31 @@
     "tss-unused-classes/unused-classes": "error"
   },
   "overrides": [
+    {
+      // Node-side code (build configs, Electron main/preload, scripts, e2e) may use Node built-ins
+      "files": [
+        "benchmark/**",
+        "ci/**",
+        "desktop/main/**",
+        "desktop/preload/**",
+        "desktop/rspack.config.ts",
+        "desktop/electronBuilderConfig.js",
+        "e2e/**",
+        "web/rspack.config.ts",
+        "vitest.config.ts",
+        "packages/oxlint-plugin/**",
+        "packages/suite-base/rspack.ts",
+        "packages/suite-desktop/src/main/**",
+        "packages/suite-desktop/src/preload/**",
+        "packages/suite-desktop/src/rspack*.ts",
+        "packages/suite-desktop/src/afterPack.ts",
+        "packages/suite-desktop/src/electronBuilderConfig.js",
+        "packages/suite-web/src/rspackConfigs.ts"
+      ],
+      "rules": {
+        "no-restricted-imports": "off"
+      }
+    },
     {
       "files": ["packages/mcap-core/src/**"],
       "rules": {

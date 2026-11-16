@@ -41,6 +41,12 @@ describe("compare drafts", () => {
     expect(draftFromFiles(files, compare)).toEqual(draft);
   });
 
+  it("doesn't share a file that a side only repeats", () => {
+    const draft = draftFromFiles([base, a, base, base], ["x", "x", "y", "y"]);
+    expect(draft.shared).toEqual([]);
+    expect(draft.sides).toHaveLength(2);
+  });
+
   it("doesn't share a file that is a whole side", () => {
     const draft = draftFromFiles([base, base, a], ["x", "y", "y"]);
     expect(draft.shared).toEqual([]);

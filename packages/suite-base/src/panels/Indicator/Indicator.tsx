@@ -26,6 +26,7 @@ import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables
 import { useStyles } from "@lichtblick/suite-base/panels/Indicator/Indicator.style";
 import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Indicator/constants";
 import { stateReducer } from "@lichtblick/suite-base/panels/shared/gaugeAndIndicatorStateReducer";
+import { replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import { GaugeAndIndicatorState } from "@lichtblick/suite-base/panels/shared/types";
 
 import {
@@ -79,6 +80,18 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
     context.saveState(config);
     context.setDefaultPanelTitle(config.path === "" ? undefined : config.path);
   }, [config, context]);
+
+  // Drop a field from the topic list to show it
+  useEffect(() => {
+    context.unstable_setMessagePathDropConfig(
+      replaceDrop(
+        (item) => item.isLeaf,
+        (item) => {
+          setConfig((prev) => ({ ...prev, path: item.path }));
+        },
+      ),
+    );
+  }, [context]);
 
   useEffect(() => {
     context.onRender = (renderState, done) => {

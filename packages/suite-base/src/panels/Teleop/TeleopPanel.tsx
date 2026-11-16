@@ -41,11 +41,13 @@ import {
 import {
   ButtonName,
   DirectionalPadAction,
+  OutputType,
   PadState,
   TeleopConfig,
   TeleopPanelProps,
   TeleopVector,
 } from "@lichtblick/suite-base/panels/Teleop/types";
+import { replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { ros2CommonDatatypes } from "@lichtblick/suite-base/util/ros2CommonDatatypes";
 
@@ -54,6 +56,12 @@ const SCHEMAS = {
   TwistStamped: "geometry_msgs/TwistStamped",
   Joy: "sensor_msgs/Joy",
 } as const;
+
+/** Whether `schemaName` is the ROS 1 or ROS 2 name of the schema the panel publishes */
+function isPublishedSchema(messageType: OutputType, schemaName: string): boolean {
+  const rootType = SCHEMAS[messageType];
+  return schemaName === rootType || schemaName === rootType.replace("/", "/msg/");
+}
 
 type InputSources = {
   /** On-screen controls, held with mouse, touch or pen */
@@ -170,6 +178,21 @@ function TeleopPanel(props: Readonly<TeleopPanelProps>): React.JSX.Element {
   useEffect(() => {
     saveState(config);
   }, [config, saveState]);
+
+  // Drop a topic of exactly the published message type from the topic list to publish on it
+  useEffect(() => {
+    context.unstable_setMessagePathDropConfig(
+      replaceDrop(
+        (item) =>
+          item.isTopic &&
+          item.rootSchemaName != undefined &&
+          isPublishedSchema(config.messageType, item.rootSchemaName),
+        (item) => {
+          setConfig((previous) => ({ ...previous, topic: item.topicName }));
+        },
+      ),
+    );
+  }, [config.messageType, context]);
 
   const { topic: currentTopic, messageType } = config;
   useEffect(() => {

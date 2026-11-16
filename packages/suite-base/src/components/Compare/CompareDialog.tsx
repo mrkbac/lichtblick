@@ -16,7 +16,6 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import path from "path";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
@@ -29,7 +28,10 @@ import {
   CompareDraft,
   draftFromFiles,
   draftToCompare,
+  handlesOf,
+  rememberHandle,
 } from "@lichtblick/suite-base/util/compareSides";
+import { extname } from "@lichtblick/suite-base/util/path";
 import showOpenFilePicker from "@lichtblick/suite-base/util/showOpenFilePicker";
 
 import { SIDE_COLORS, sideLabel } from "./CompareContext";
@@ -210,7 +212,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
     () => [...new Set(sources.flatMap((source) => source.supportedFileTypes ?? []))],
     [sources],
   );
-  const accepts = (file: File) => extensions.includes(path.extname(file.name));
+  const accepts = (file: File) => extensions.includes(extname(file.name));
 
   const pick = async (): Promise<File[]> => {
     const handles = await showOpenFilePicker({
@@ -222,7 +224,13 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
         },
       ],
     });
-    return await Promise.all(handles.map(async (handle) => await handle.getFile()));
+    return await Promise.all(
+      handles.map(async (handle) => {
+        const file = await handle.getFile();
+        rememberHandle(file, handle);
+        return file;
+      }),
+    );
   };
   const pickInto = (apply: (picked: File[]) => void) => {
     pick()
@@ -245,7 +253,7 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
   const { files, compare } = draftToCompare(draft);
   const sideCount = new Set(compare).size;
   const source = sources.find((s) =>
-    files.every((file) => s.supportedFileTypes?.includes(path.extname(file.name)) === true),
+    files.every((file) => s.supportedFileTypes?.includes(extname(file.name)) === true),
   );
   const mixed = files.length > 0 && source == undefined;
 
@@ -378,7 +386,12 @@ function CompareDialogContent({ initial }: { initial: CompareDraft }): React.JSX
           variant="contained"
           disabled={sideCount < 2 || source == undefined}
           onClick={() => {
-            selectSource(source!.id, { type: "file", files, compare });
+            // With a handle for every file the comparison is kept in recents; dropped files have none
+            const handles = handlesOf(files);
+            selectSource(
+              source!.id,
+              handles ? { type: "file", handles, compare } : { type: "file", files, compare },
+            );
             hide();
           }}
         >

@@ -95,7 +95,9 @@ const Plot = (props: PlotProps): React.JSX.Element => {
       ...(path.timestampPath != undefined && {
         timestampPath: sidePath(path.timestampPath, side.prefix),
       }),
-      ...(path.xValue != undefined && { xValue: sidePath(path.xValue, side.prefix) }),
+      ...(path.xValue != undefined && {
+        xValue: sidePath(path.xValue, side.prefix),
+      }),
     });
   }, [props.config.paths]);
   const { saveConfig, config } = useComparedPaths(
@@ -262,21 +264,23 @@ const Plot = (props: PlotProps): React.JSX.Element => {
   useEffect(() => {
     setMessagePathDropConfig({
       getDropStatus(paths) {
-        if (paths.some((path) => !path.isLeaf)) {
-          return { canDrop: false };
-        }
-        return { canDrop: true, effect: "add" };
+        // Only fields are plotted; whole messages dragged along with them are skipped
+        return paths.some((path) => path.isLeaf)
+          ? { canDrop: true, effect: "add" }
+          : { canDrop: false };
       },
       handleDrop(paths) {
         saveConfig((prevConfig) => ({
           ...prevConfig,
           paths: [
             ...prevConfig.paths,
-            ...paths.map((path) => ({
-              value: path.path,
-              enabled: true,
-              timestampMethod: "receiveTime" as const,
-            })),
+            ...paths
+              .filter((path) => path.isLeaf)
+              .map((path) => ({
+                value: path.path,
+                enabled: true,
+                timestampMethod: "receiveTime" as const,
+              })),
           ],
         }));
       },

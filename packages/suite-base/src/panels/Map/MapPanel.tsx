@@ -28,10 +28,12 @@ import { useDebounce } from "use-debounce";
 import { filterMap } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
-import { MessageEvent, PanelExtensionContext, SettingsTreeAction, Topic } from "@lichtblick/suite";
+import { MessageEvent, SettingsTreeAction, Topic } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 import { OVERLAY_TOOLBAR_BUTTON_SIZE } from "@lichtblick/suite-base/components/OverlayToolbar";
+import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { PANEL_FLOATING_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
+import { addTopicsDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { turboColorString } from "@lichtblick/suite-base/util/colorUtils";
 import { formatTime } from "@lichtblick/suite-base/util/formatTime";
@@ -281,7 +283,7 @@ function MapNotice({ children }: { children: string }): React.JSX.Element {
 }
 
 type MapPanelProps = {
-  context: PanelExtensionContext;
+  context: BuiltinPanelExtensionContext;
 };
 
 function MapPanel({ context }: MapPanelProps): React.JSX.Element {
@@ -409,6 +411,21 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       maxNativeZoom: undefined,
     });
   }, [context, config]);
+
+  // Drop a topic that is turned off from the topic list to show it again
+  useEffect(() => {
+    context.unstable_setMessagePathDropConfig(
+      addTopicsDrop(
+        (item) => config.disabledTopics.includes(item.topicName),
+        (dropped) => {
+          setConfig((prev) => ({
+            ...prev,
+            disabledTopics: prev.disabledTopics.filter((topic) => !dropped.includes(topic)),
+          }));
+        },
+      ),
+    );
+  }, [config.disabledTopics, context]);
 
   /** Remember custom sources that actually worked, for reuse in other panels and layouts. */
   const rememberWorkingSource = useCallback(

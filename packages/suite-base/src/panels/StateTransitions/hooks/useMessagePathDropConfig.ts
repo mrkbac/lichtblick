@@ -15,21 +15,23 @@ const useMessagePathDropConfig = (
   useEffect(() => {
     setMessagePathDropConfig({
       getDropStatus(draggedPaths) {
-        if (draggedPaths.some((path) => !path.isLeaf)) {
-          return { canDrop: false };
-        }
-        return { canDrop: true, effect: "add" };
+        // Only fields are plotted; whole messages dragged along with them are skipped
+        return draggedPaths.some((path) => path.isLeaf)
+          ? { canDrop: true, effect: "add" }
+          : { canDrop: false };
       },
       handleDrop(draggedPaths) {
         saveConfig((prevConfig) => ({
           ...prevConfig,
           paths: [
             ...prevConfig.paths,
-            ...draggedPaths.map((path) => ({
-              value: path.path,
-              enabled: true,
-              timestampMethod: "receiveTime" as const,
-            })),
+            ...draggedPaths
+              .filter((path) => path.isLeaf)
+              .map((path) => ({
+                value: path.path,
+                enabled: true,
+                timestampMethod: "receiveTime" as const,
+              })),
           ],
         }));
       },

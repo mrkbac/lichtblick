@@ -1654,6 +1654,46 @@ describe("3D Renderer", () => {
     renderer.dispose();
   });
 
+  it("turns on a dropped topic the scene can draw, like its visibility checkbox", () => {
+    const renderer = new Renderer({
+      ...defaultRendererProps,
+      canvas,
+      config: { ...defaultRendererConfig, topics: { "/markers": { visible: false } } },
+    });
+    renderer.setTopics([
+      { name: "/markers", schemaName: "visualization_msgs/MarkerArray" },
+      { name: "/objects", schemaName: "custom.Objects", convertibleTo: ["foxglove.SceneUpdate"] },
+    ]);
+    const markers: DraggedMessagePath = {
+      path: "/markers",
+      isTopic: true,
+      isLeaf: false,
+      topicName: "/markers",
+      rootSchemaName: "visualization_msgs/MarkerArray",
+    };
+
+    expect(renderer.getDropStatus([markers])).toEqual({ canDrop: true, effect: "add" });
+    // A field of the topic isn't a topic to turn on
+    expect(
+      renderer.getDropStatus([{ ...markers, path: "/markers.markers", isTopic: false }]),
+    ).toEqual({ canDrop: false });
+
+    // A topic converted to a schema the scene draws counts too
+    const objects = { ...markers, path: "/objects", topicName: "/objects" };
+    expect(renderer.getDropStatus([{ ...objects, rootSchemaName: "custom.Objects" }])).toEqual({
+      canDrop: true,
+      effect: "add",
+    });
+
+    renderer.handleDrop([markers]);
+    expect(renderer.config.topics["/markers"]?.visible).toBe(true);
+    // The settings tree shows the topic as visible too
+    const topicNodes = renderer.settings.tree().topics?.children;
+    expect(topicNodes?.["/markers"]?.visible).toBe(true);
+
+    renderer.dispose();
+  });
+
   it("does not set a unfollow pose snapshot  when in follow-pose mode", () => {
     const renderer = new Renderer({
       ...defaultRendererProps,

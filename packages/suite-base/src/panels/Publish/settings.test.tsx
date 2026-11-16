@@ -3,9 +3,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { renderHook, waitFor } from "@testing-library/react";
+import { ReactNode } from "react";
 import type { Mock } from "vitest";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
+import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";
+import { MessagePathDropConfig } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
@@ -33,9 +36,23 @@ function setup(config: PublishConfig, { confirmResult }: { confirmResult: boolea
         : { ...current, ...(update as Partial<PublishConfig>) };
   });
   const confirmReplace = vi.fn(async () => confirmResult);
-  renderHook(() => {
-    usePublishPanelSettings(config, saveConfig, topics, datatypes, confirmReplace);
-  });
+  let dropConfig: MessagePathDropConfig | undefined;
+  renderHook(
+    () => {
+      usePublishPanelSettings(config, saveConfig, topics, datatypes, confirmReplace);
+    },
+    {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <MockPanelContextProvider
+          setMessagePathDropConfig={(dc) => {
+            dropConfig = dc;
+          }}
+        >
+          {children}
+        </MockPanelContextProvider>
+      ),
+    },
+  );
   const handler = (
     updateTree.mock.lastCall![0] as { actionHandler: (a: SettingsTreeAction) => void }
   ).actionHandler;
@@ -45,7 +62,7 @@ function setup(config: PublishConfig, { confirmResult }: { confirmResult: boolea
       payload: { path: ["general", "topicName"], input: "autocomplete", value },
     });
   };
-  return { selectTopic, confirmReplace, getConfig: () => current };
+  return { selectTopic, confirmReplace, getConfig: () => current, getDropConfig: () => dropConfig };
 }
 
 describe("usePublishPanelSettings", () => {
@@ -99,5 +116,23 @@ describe("usePublishPanelSettings", () => {
     await waitFor(() => {
       expect(getConfig().value).toBe('{\n  "b": ""\n}');
     });
+  });
+
+  it("publishes on a topic dropped from the topic list", () => {
+    const { getDropConfig, getConfig } = setup(defaultConfig, { confirmResult: true });
+    const topic = {
+      path: "/b",
+      rootSchemaName: "pkg/B",
+      isTopic: true,
+      isLeaf: false,
+      topicName: "/b",
+    };
+
+    expect(getDropConfig()?.getDropStatus([{ ...topic, path: "/b.b", isTopic: false }])).toEqual({
+      canDrop: false,
+    });
+    getDropConfig()?.handleDrop([topic]);
+
+    expect(getConfig()).toMatchObject({ topicName: "/b", datatype: "pkg/B" });
   });
 });
