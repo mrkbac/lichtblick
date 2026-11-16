@@ -6,10 +6,12 @@ import { MessageDefinition, MessageDefinitionField } from "@foxglove/message-def
 import { parseMessagePath } from "@lichtblick/message-path";
 import { Immutable } from "@lichtblick/suite";
 
+import { NUMERIC_TYPES } from "./constants";
+
 type GetSchema = (name: string) => Immutable<MessageDefinition> | undefined;
 
-/** Whether `path` names a `float32[]` field, the only values the pie chart can show */
-export function isFloat32ArrayPath(
+/** Whether `path` names an array of numbers (e.g. `float32[]`, `uint32[]`), one slice per element */
+export function isNumericArrayPath(
   path: string,
   getTopicSchema: GetSchema,
   getSchema: GetSchema,
@@ -28,5 +30,5 @@ export function isFloat32ArrayPath(
     field = definition.definitions.find((item) => item.name === part.name);
     definition = field?.isComplex === true ? getSchema(field.type) : undefined;
   }
-  return field?.isArray === true && field.isComplex !== true && field.type === "float32";
+  return field?.isArray === true && field.isComplex !== true && NUMERIC_TYPES.includes(field.type);
 }

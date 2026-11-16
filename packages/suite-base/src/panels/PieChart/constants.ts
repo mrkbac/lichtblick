@@ -4,17 +4,21 @@
 // SPDX-FileCopyrightText: Copyright (C) 2025 Takayuki Honda <takayuki.honda@tier4.jp>
 // SPDX-License-Identifier: MPL-2.0
 
-export const SUPPORTED_DATA_TYPES = [
+/** Primitive types the panel can turn into slice values */
+export const NUMERIC_TYPES = [
   "int8",
   "uint8",
   "int16",
   "uint16",
   "int32",
   "uint32",
+  "int64",
+  "uint64",
   "float32",
   "float64",
-  "string",
 ];
+
+export const SUPPORTED_DATA_TYPES = [...NUMERIC_TYPES, "string"];
 
 export const DEFAULT_CONFIG = {
   path: "",

@@ -6,6 +6,7 @@
 
 import * as _ from "lodash-es";
 
+import { parseMessagePath } from "@lichtblick/message-path";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 import PieChartBuilder from "@lichtblick/suite-base/testing/builders/PieChartBuilder";
 
@@ -46,8 +47,25 @@ describe("handleFrame", () => {
 
     const newState = stateReducer(initialState, action);
 
+    // The path names the whole message, which isn't a number
     expect(newState.latestMessage).toEqual(_.last(action.messages));
     expect(newState.latestMatchingQueriedData).toBeUndefined();
+    expect(newState.error?.message).toMatch("numbers");
+  });
+
+  it("reads a float32[] field decoded as a Float32Array", () => {
+    const initialState = PieChartBuilder.pieChartState({
+      parsedPath: parseMessagePath("/t.counts"),
+      latestMatchingQueriedData: undefined,
+    });
+    const message = MessageEventBuilder.messageEvent({
+      topic: "/t",
+      message: { counts: new Float32Array([1, 2, 3]) },
+    });
+
+    const newState = stateReducer(initialState, { type: "frame", messages: [message] });
+
+    expect(newState.latestMatchingQueriedData).toEqual(new Float32Array([1, 2, 3]));
     expect(newState.error).toBeUndefined();
   });
 
