@@ -74,6 +74,14 @@ describe("layout reducers", () => {
       expect(getPanelIds(panels.layout)).toEqual(["Audio!x", "First!a", "Second!b"]);
     });
 
+    it("adds a window panel without taking space from the layout", () => {
+      const panels = panelsReducer(
+        { ...emptyLayout, layout: { ...twoPanels, sizes: [30, 70] } },
+        { type: "ADD_PANEL", payload: { id: "Tab!w", config: { isWindow: true } } },
+      );
+      expect(panels.layout).toMatchObject({ sizes: [0, 30, 70] });
+    });
+
     it("adds a panel next to a target or as a tab", () => {
       const below = panelsReducer(
         { ...emptyLayout, layout: twoPanels },

@@ -74,6 +74,10 @@ export function buildSettingsTree(
             label: topic.name,
             visible: topic.visible,
             error: topic.available ? undefined : t("settings.topicUnavailable"),
+            // Configured topics that left the data source would otherwise stay listed forever.
+            actions: topic.available
+              ? undefined
+              : [{ type: "action", id: "remove", label: t("settings.removeTopic") }],
             fields: {
               static: {
                 input: "boolean",
@@ -91,12 +95,23 @@ export function buildSettingsTree(
 
 /**
  * Handles `["topics", <topic>, "visible" | "static"]` and `["general", "rotationConvention"]`
- * updates from the settings tree.
+ * updates, and the "remove" action on `["topics", <topic>]`, from the settings tree.
  */
 export function settingsActionReducer(
   config: TransformTreeConfig,
   action: SettingsTreeAction,
 ): TransformTreeConfig {
+  if (action.action === "perform-node-action") {
+    const { id, path } = action.payload;
+    if (id !== "remove" || path[0] !== "topics" || path[1] == undefined || !config.topics) {
+      return config;
+    }
+    const topic = path[1];
+    return {
+      ...config,
+      topics: Object.fromEntries(Object.entries(config.topics).filter(([name]) => name !== topic)),
+    };
+  }
   if (action.action !== "update") {
     return config;
   }

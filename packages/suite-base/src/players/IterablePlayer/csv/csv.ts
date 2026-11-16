@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
 // Pure helpers for reading delimited text files (CSV/TSV): row splitting, cell parsing and time

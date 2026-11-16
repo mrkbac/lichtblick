@@ -333,7 +333,13 @@ Notes:
 
 ### License Headers
 
-All source files must include the **MPL-2.0** license header. This is enforced by oxlint via the `@lichtblick/license-header` rule.
+All source files must start with the **MPL-2.0** license header. This is enforced by oxlint via the `@lichtblick/license-header` rule, which auto-fixes new files. New files get only the license identifier:
+
+```typescript
+// SPDX-License-Identifier: MPL-2.0
+```
+
+Existing files keep their upstream copyright line above it; never remove or edit it.
 
 ### File Organization
 
