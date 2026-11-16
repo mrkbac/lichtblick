@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
 /**
@@ -268,6 +267,10 @@ export const panelButtons = {
     help: "Switches between top-down and left-to-right layout.",
   },
   topicGraphServices: { title: "Show services", help: "Shows or hides service nodes." },
+  tabAdd: {
+    title: "New tab",
+    help: "Opens the panel list; the panel you pick becomes a new tab.",
+  },
   tabClose: {
     title: "Close tab",
     help: "Shown on a hovered tab: removes it and its panels. With one tab left, the tab panel is replaced by its contents.",

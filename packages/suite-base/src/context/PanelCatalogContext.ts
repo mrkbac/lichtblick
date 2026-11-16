@@ -20,6 +20,8 @@ export type PanelInfo = {
   title: string;
   type: string;
   description?: string;
+  /** Extra search terms for the command palette, e.g. "tf" for the transform tree. */
+  keywords?: readonly string[];
   thumbnail?: string;
   /** In-app docs behind the panel toolbar's info button; loaded lazily. */
   docs?: () => Promise<{ default: PanelDocs }>;

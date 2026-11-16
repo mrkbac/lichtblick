@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
 import { Time, add, clampTime, fromSec, subtract, toSec } from "@foxglove/rostime";
@@ -6,6 +5,11 @@ import { Fzf } from "fzf";
 import { useEffect } from "react";
 import { create } from "zustand";
 
+import {
+  MessagePathStructureItem,
+  parseMessagePath,
+  quoteTopicNameIfNeeded,
+} from "@lichtblick/message-path";
 import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
 
 export type Command = {
@@ -17,16 +21,24 @@ export type Command = {
   /** Secondary line under the title. */
   detail?: string;
   /** Extra words that should match this command but are not shown. */
-  keywords?: string[];
+  keywords?: readonly string[];
+  /** Only listed once the user types (or after it was used), to keep the empty palette short. */
+  searchOnly?: boolean;
   /** Human readable shortcut, e.g. "⌘O". */
   shortcut?: string;
+  /** More things to do with this item, opened with Tab (e.g. where to place a new panel). */
+  actions?: () => Command[];
 } & (
-  | { run: () => unknown; children?: undefined }
+  | { run: () => unknown; children?: undefined; prefix?: undefined; queryChildren?: undefined }
   | {
       /** Opens a searchable sub-menu with these commands. */
       children: () => Command[] | Promise<Command[]>;
       /** Search placeholder of the sub-menu. */
       placeholder?: string;
+      /** Typing this as the first character at the root opens the sub-menu, e.g. "@". */
+      prefix?: string;
+      /** Extra items computed from the sub-menu query, listed above the ranked items. */
+      queryChildren?: (query: string) => RankedCommand[];
       run?: undefined;
     }
 );
@@ -54,6 +66,7 @@ export function rankCommands(
     return (
       commands
         .map((command) => ({ command, recency: recency(command.id) }))
+        .filter(({ command, recency: r }) => command.searchOnly !== true || r > 0)
         // Array.prototype.sort is stable, so ties keep registration order.
         .sort((a, b) => b.recency - a.recency)
         .slice(0, MAX_RESULTS)
@@ -159,6 +172,59 @@ export function parseSeekInput(
   };
 }
 
+// ---- Message paths ----
+
+export type PathMatch = {
+  path: string;
+  /** Undefined for a typed path that is valid but not in the schema list, e.g. with a modifier. */
+  item?: MessagePathStructureItem;
+  positions: Set<number>;
+};
+
+const MAX_PATH_RESULTS = 50;
+
+/**
+ * Finds message paths for a query that starts with a topic name, e.g. `/odom.pose.x` or, since the
+ * topic mode eats the leading slash, `odom.pose.x`. `paths` maps full paths (quoted topic name +
+ * field path) to their structure. Returns nothing unless the query names a topic.
+ */
+export function matchMessagePaths(
+  query: string,
+  topicNames: readonly string[],
+  paths: ReadonlyMap<string, MessagePathStructureItem>,
+): PathMatch[] {
+  const trimmed = query.trim();
+  const candidates = trimmed.startsWith("/") ? [trimmed] : [trimmed, `/${trimmed}`];
+  for (const text of candidates) {
+    // `/a` is a prefix of `/a.x` and `/a[0]`, but not of `/a/b.x`.
+    const isPathOf = (name: string, path: string) =>
+      path.startsWith(name) && /[.[{]/.test(path.charAt(name.length));
+    // Longest topic first, so `/a/b.x` picks `/a/b` over `/a`.
+    const topic = topicNames
+      .map(quoteTopicNameIfNeeded)
+      .filter((name) => text === name || isPathOf(name, text))
+      .sort((a, b) => b.length - a.length)[0];
+    if (topic == undefined) {
+      continue;
+    }
+    const keys = [...paths.keys()].filter((key) => isPathOf(topic, key));
+    const ranked: PathMatch[] =
+      text === topic
+        ? keys.slice(0, MAX_PATH_RESULTS).map((path) => ({ path, positions: new Set() }))
+        : new Fzf(keys, { limit: MAX_PATH_RESULTS }).find(text).map((result) => ({
+            path: result.item,
+            positions: result.positions,
+          }));
+    const matches = ranked.map((match) => ({ ...match, item: paths.get(match.path) }));
+    // Paths with filters, slices or modifiers aren't in the list, so a valid one is offered as typed.
+    if (/[@[{]/.test(text.slice(topic.length)) && parseMessagePath(text) != undefined) {
+      matches.unshift({ path: text, item: undefined, positions: new Set() });
+    }
+    return matches;
+  }
+  return [];
+}
+
 // ---- Sub-menu navigation ----
 
 export type PaletteLevel = {
@@ -174,7 +240,7 @@ export type PaletteState = { stack: PaletteLevel[] };
 
 export type PaletteAction =
   | { type: "reset" }
-  | { type: "push"; parent: Command; items: Command[] }
+  | { type: "push"; parent: Command; items: Command[]; query?: string }
   | { type: "pop" }
   | { type: "set-query"; query: string }
   | { type: "select"; index: number }
@@ -200,7 +266,7 @@ export function paletteReducer(state: PaletteState, action: PaletteAction): Pale
           {
             parent: action.parent,
             items: action.items,
-            query: "",
+            query: action.query ?? "",
             selectedIndex: 0,
           },
         ],

@@ -66,6 +66,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("3D"),
     type: "3D",
+    keywords: ["scene", "pointcloud", "lidar", "markers", "rviz"],
     description: t("3DPanelDescription"),
     thumbnail: threeDeeRenderThumbnail,
     module: async () => await import("./ThreeDeeRender"),
@@ -95,6 +96,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("image"),
     type: "Image",
+    keywords: ["camera", "video", "picture"],
     description: t("imageDescription"),
     thumbnail: imageThumbnail,
     module: async () => await import("./Image"),
@@ -104,6 +106,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("cameraGrid"),
     type: "CameraGrid",
+    keywords: ["cameras", "images", "multi camera"],
     description: t("cameraGridDescription"),
     thumbnail: cameraGridThumbnail,
     module: async () => await import("./CameraGrid"),
@@ -143,6 +146,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("teleop"),
     type: "Teleop",
+    keywords: ["joystick", "cmd_vel", "drive"],
     description: t("teleopDescription"),
     thumbnail: teleopThumbnail,
     module: async () => await import("./Teleop"),
@@ -152,6 +156,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("map"),
     type: "map",
+    keywords: ["gps", "navsat", "geo"],
     description: t("mapDescription"),
     thumbnail: mapThumbnail,
     module: async () => await import("./Map"),
@@ -170,6 +175,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("plot"),
     type: "Plot",
+    keywords: ["chart", "graph", "timeseries", "line"],
     description: t("plotDescription"),
     thumbnail: plotThumbnail,
     module: async () => await import("./Plot"),
@@ -188,6 +194,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("publish"),
     type: "Publish",
+    keywords: ["send", "rostopic pub"],
     description: t("publishDescription"),
     thumbnail: publishThumbnail,
     module: async () => await import("./Publish"),
@@ -197,6 +204,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("callService"),
     type: "CallService",
+    keywords: ["rosservice", "srv"],
     description: t("callServiceDescription"),
     thumbnail: publishThumbnail,
     module: async () => await import("./CallService"),
@@ -206,6 +214,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("rawMessages"),
     type: "RawMessages",
+    keywords: ["json", "inspect", "echo"],
     description: t("rawMessagesDescription"),
     thumbnail: rawMessagesThumbnail,
     module: async () => await import("./RawMessages"),
@@ -237,6 +246,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("log"),
     type: "RosOut",
+    keywords: ["rosout", "console", "logs"],
     description: t("logDescription"),
     thumbnail: logThumbnail,
     module: async () => await import("./Log"),
@@ -246,6 +256,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("stateTransitions"),
     type: "StateTransitions",
+    keywords: ["enum", "states", "timeline"],
     description: t("stateTransitionsDescription"),
     thumbnail: stateTransitionsThumbnail,
     module: async () => await import("./StateTransitions"),
@@ -265,6 +276,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("topicGraph"),
     type: "TopicGraph",
+    keywords: ["rqt_graph", "nodes", "computation graph"],
     description: t("topicGraphDescription"),
     thumbnail: topicGraphThumbnail,
     module: async () => await import("./TopicGraph"),
@@ -274,6 +286,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("transformTree"),
     type: "TransformTree",
+    keywords: ["tf", "tf_static", "frames", "transforms"],
     description: t("transformTreeDescription"),
     module: async () => await import("./TransformTree"),
     docs: async () => await import("./TransformTree/docs"),
@@ -282,6 +295,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("dataSourceInfo"),
     type: "SourceInfo",
+    keywords: ["topics", "metadata", "info"],
     description: t("dataSourceInfoDescription"),
     thumbnail: dataSourceInfoThumbnail,
     module: async () => await import("./DataSourceInfo"),
@@ -300,6 +314,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("topicHealth"),
     type: "TopicHealth",
+    keywords: ["hz", "frequency", "rate", "stats"],
     description: t("topicHealthDescription"),
     thumbnail: topicHealthThumbnail,
     module: async () => await import("./TopicHealth"),
@@ -326,6 +341,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
   {
     title: t("userScripts"),
     type: "NodePlayground",
+    keywords: ["code", "script", "typescript"],
     description: t("userScriptsDescription"),
     thumbnail: userScriptEditorThumbnail,
     module: async () => await import("./UserScriptEditor"),

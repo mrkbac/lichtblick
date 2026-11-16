@@ -59,7 +59,7 @@ E2E tests:
 - Prefer `undefined` over `null` (except where React APIs require otherwise).
 - Use `tss-react/mui` patterns for styling instead of ad-hoc styling approaches.
 - Keep component structure consistent with the contributing guide (`index.tsx`, component file, `types.ts`, `constants.ts`, `*.style.ts`, tests).
-- New source files should include the MPL-2.0 license header used in this repo.
+- New source files start with `// SPDX-License-Identifier: MPL-2.0` (oxlint adds it). Keep existing copyright lines in other files as they are.
 - If changing UI behavior, validate in both desktop and web modes when relevant.
 
 ## UI Consistency

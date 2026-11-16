@@ -183,9 +183,8 @@ const splitPanel = (
 
 const swapPanel = (
   panelsState: LayoutData,
-  { originalId, type, config }: SwapPanelPayload,
+  { originalId, type, config, newId = getPanelIdForType(type) }: SwapPanelPayload,
 ): LayoutData => {
-  const newId = getPanelIdForType(type);
   const withConfig = savePanelConfigs(panelsState, { configs: [{ id: newId, config }] });
   return finish(mapLayoutTrees(withConfig, (tree) => replacePanel(tree, originalId, newId)));
 };
@@ -232,6 +231,9 @@ function addPanel(
     id,
     position,
     target != undefined ? targetPanelId : undefined,
+    // A monitor window's group is hidden once its window opens; dockview would hand a share of
+    // the layout back to the last sibling only, so it takes none in the first place.
+    withConfig.configById[id]?.isWindow === true ? 0 : undefined,
   );
   return finish(setLayoutTree(removed, location, tree));
 }
