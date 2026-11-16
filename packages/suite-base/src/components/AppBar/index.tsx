@@ -304,12 +304,19 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
               {showUserMenu && (
                 <Tooltip
                   classes={{ tooltip: classes.tooltip }}
-                  title={user?.displayName ?? "Profile"}
+                  // The button has its own aria-label; the tooltip (e.g. "Loading account…") describes it
+                  describeChild
+                  title={
+                    organization.status === "loading"
+                      ? t("loadingAccount")
+                      : (user?.displayName ?? "Profile")
+                  }
                   arrow={false}
                 >
                   <IconButton
                     className={cx(classes.iconButton, { "Mui-selected": userMenuOpen })}
                     aria-label="User profile menu button"
+                    aria-disabled={organization.status === "loading"}
                     color="inherit"
                     id="user-button"
                     data-tourid="user-button"
@@ -317,7 +324,10 @@ export function AppBar(props: AppBarProps): React.JSX.Element {
                     aria-haspopup="true"
                     aria-expanded={userMenuOpen ? "true" : undefined}
                     onClick={(event) => {
-                      setUserAnchorEl(event.currentTarget);
+                      // Shown while the session loads only to hold its place; nothing to open yet
+                      if (organization.status !== "loading") {
+                        setUserAnchorEl(event.currentTarget);
+                      }
                     }}
                     data-testid="user-button"
                   >

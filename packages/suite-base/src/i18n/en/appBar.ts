@@ -8,6 +8,7 @@
 export const appBar = {
   about: "About",
   addPanel: "Add panel",
+  loadingAccount: "Loading account…",
   newWindow: "New window",
   saveMonitorSetup: "Save monitor setup on this computer",
   restoreMonitorSetup: "Restore monitor setup",

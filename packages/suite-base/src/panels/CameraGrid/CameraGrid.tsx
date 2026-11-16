@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Button, Typography } from "@mui/material";
+import { Button, Typography, alpha } from "@mui/material";
 import {
   useCallback,
   useEffect,
@@ -44,14 +44,16 @@ const useStyles = makeStyles()((theme) => ({
     display: "grid",
     width: "100%",
     height: "100%",
-    gap: 2,
+    gap: 1,
   },
   tile: {
     position: "relative",
     minWidth: 0,
     minHeight: 0,
     overflow: "hidden",
-    backgroundColor: "#000",
+    backgroundColor: theme.palette.background.default,
+    // Outlines of neighbouring tiles meet in the 1px gap as a single divider line.
+    outline: `1px solid ${theme.palette.divider}`,
     cursor: "zoom-in",
   },
   maximized: {
@@ -93,7 +95,9 @@ const useStyles = makeStyles()((theme) => ({
     justifyContent: "center",
     padding: theme.spacing(1),
     textAlign: "center",
-    color: "rgba(255, 255, 255, 0.6)",
+    color: theme.palette.text.secondary,
+    // Invisible on an empty tile; dims a frame left under an error so the text stays legible.
+    backgroundColor: alpha(theme.palette.background.default, 0.75),
     fontSize: theme.typography.caption.fontSize,
     pointerEvents: "none",
     "&[hidden]": { display: "none" },
