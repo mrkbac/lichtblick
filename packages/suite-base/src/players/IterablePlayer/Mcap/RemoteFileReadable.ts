@@ -10,6 +10,7 @@ import { Semaphore } from "async-mutex";
 import { McapTypes } from "@lichtblick/mcap-core";
 import BrowserHttpReader from "@lichtblick/suite-base/util/BrowserHttpReader";
 import CachedFilelike from "@lichtblick/suite-base/util/CachedFilelike";
+import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
 
 import { BatchingReadable } from "./BatchingReadable";
 import type { RemoteFileReadableOptions } from "./RemoteFileReadable.types";
@@ -47,13 +48,13 @@ export class RemoteFileReadable {
       readAheadBufferBytes: options?.readAheadBufferBytes,
     });
 
-    const inner: McapTypes.IReadable = {
+    const inner: McapTypes.IReadable<ReadOptions> = {
       size: async () => BigInt(this.#remoteReader.size()),
-      read: async (offset, size) => {
+      read: async (offset, size, readOptions) => {
         if (offset + size > BigInt(Number.MAX_SAFE_INTEGER)) {
           throw new Error(`Read too large: offset ${offset}, size ${size}`);
         }
-        return await this.#remoteReader.read(Number(offset), Number(size));
+        return await this.#remoteReader.read(Number(offset), Number(size), readOptions);
       },
     };
     this.#batchingReadable = new BatchingReadable(inner);
@@ -66,7 +67,7 @@ export class RemoteFileReadable {
   public async size(): Promise<bigint> {
     return BigInt(this.#remoteReader.size());
   }
-  public async read(offset: bigint, size: bigint): Promise<Uint8Array> {
+  public async read(offset: bigint, size: bigint, options?: ReadOptions): Promise<Uint8Array> {
     const start = Number(offset);
     const end = start + Number(size);
     let prefetched = this.#findPrefetched(start, end);
@@ -78,7 +79,7 @@ export class RemoteFileReadable {
     if (prefetched && data) {
       return data.subarray(start - prefetched.start, end - prefetched.start);
     }
-    return await this.#batchingReadable.read(offset, size);
+    return await this.#batchingReadable.read(offset, size, options);
   }
 
   #findPrefetched(start: number, end: number): Prefetched | undefined {

@@ -30,3 +30,8 @@ export interface ILogger {
   warn(..._args: unknown[]): void;
   error(..._args: unknown[]): void;
 }
+
+export type ReadOptions = {
+  /** A read nobody waits on to play (e.g. a whole-file scan): it yields the connection to the rest */
+  background?: boolean;
+};

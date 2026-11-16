@@ -21,6 +21,7 @@ import {
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import { PlayerAlert, RecordingFileInfo, TopicStats } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
+import type { ReadOptions } from "@lichtblick/suite-base/util/CachedFilelike.types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Logger.getLogger(__filename);
@@ -48,6 +49,8 @@ type ReadMessagesArgs = Omit<
   NonNullable<Parameters<McapIndexedReader["readMessages"]>[0]>,
   "validateCrcs"
 >;
+
+const FULL_READ_OPTIONS: ReadOptions = { background: true };
 
 // Alerts from rebuilding the index mid-read; not a real channel id (those are uint16)
 const RECOVERY_CONNECTION_ID = -1;
@@ -464,6 +467,8 @@ export class McapIndexedIterableSource implements ISerializedIterableSource {
       startingAt: toNanoSec(start),
       endingAt: toNanoSec(end),
       topics: topicNames,
+      // Whole-range reads (preloading, panel history) yield remote bandwidth to playback
+      readOptions: args.consumptionType === "full" ? FULL_READ_OPTIONS : undefined,
     })) {
       const alert = this.#takeRecoveryAlert();
       if (alert) {

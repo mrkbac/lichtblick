@@ -67,8 +67,27 @@ describe("BatchingReadable", () => {
 
     // Then
     expect(inner.read).toHaveBeenCalledTimes(1);
-    expect(inner.read).toHaveBeenCalledWith(10n, 20n);
+    expect(inner.read).toHaveBeenCalledWith(10n, 20n, { background: false });
     expect(data).toEqual(expectedBytes(10n, 20n));
+  });
+
+  it("should read a merged span in the background only when every member is a background read", async () => {
+    // Given
+    const inner = makeMockInner();
+    const readable = new BatchingReadable(inner);
+
+    // When a background and a foreground read merge, and two background reads merge
+    await Promise.all([readable.read(0n, 100n, { background: true }), readable.read(100n, 100n)]);
+    await Promise.all([
+      readable.read(0n, 100n, { background: true }),
+      readable.read(100n, 100n, { background: true }),
+    ]);
+
+    // Then the mixed span keeps the foreground read's priority
+    expect(inner.read.mock.calls).toEqual([
+      [0n, 200n, { background: false }],
+      [0n, 200n, { background: true }],
+    ]);
   });
 
   it("should forward the inner buffer unchanged (zero-copy) for a single-member read", async () => {
@@ -99,7 +118,7 @@ describe("BatchingReadable", () => {
 
     // Then
     expect(inner.read).toHaveBeenCalledTimes(1);
-    expect(inner.read).toHaveBeenCalledWith(0n, 300n);
+    expect(inner.read).toHaveBeenCalledWith(0n, 300n, { background: false });
     expect(dataA).toEqual(expectedBytes(0n, 100n));
     expect(dataB).toEqual(expectedBytes(200n, 100n));
   });
@@ -119,7 +138,7 @@ describe("BatchingReadable", () => {
 
     // Then
     expect(inner.read).toHaveBeenCalledTimes(1);
-    expect(inner.read).toHaveBeenCalledWith(0n, bOffset + 100n);
+    expect(inner.read).toHaveBeenCalledWith(0n, bOffset + 100n, { background: false });
     expect(dataA).toEqual(expectedBytes(0n, 100n));
     expect(dataB).toEqual(expectedBytes(bOffset, 100n));
   });
@@ -139,8 +158,8 @@ describe("BatchingReadable", () => {
 
     // Then
     expect(inner.read).toHaveBeenCalledTimes(2);
-    expect(inner.read).toHaveBeenCalledWith(0n, 100n);
-    expect(inner.read).toHaveBeenCalledWith(bOffset, 100n);
+    expect(inner.read).toHaveBeenCalledWith(0n, 100n, { background: false });
+    expect(inner.read).toHaveBeenCalledWith(bOffset, 100n, { background: false });
     expect(dataA).toEqual(expectedBytes(0n, 100n));
     expect(dataB).toEqual(expectedBytes(bOffset, 100n));
   });
@@ -158,8 +177,8 @@ describe("BatchingReadable", () => {
 
     // Then
     expect(inner.read).toHaveBeenCalledTimes(2);
-    expect(inner.read).toHaveBeenCalledWith(0n, 50n);
-    expect(inner.read).toHaveBeenCalledWith(bOffset, 50n);
+    expect(inner.read).toHaveBeenCalledWith(0n, 50n, { background: false });
+    expect(inner.read).toHaveBeenCalledWith(bOffset, 50n, { background: false });
     expect(dataA).toEqual(expectedBytes(0n, 50n));
     expect(dataB).toEqual(expectedBytes(bOffset, 50n));
   });
@@ -179,8 +198,8 @@ describe("BatchingReadable", () => {
 
     // Then
     expect(inner.read).toHaveBeenCalledTimes(2);
-    expect(inner.read).toHaveBeenCalledWith(0n, 4n);
-    expect(inner.read).toHaveBeenCalledWith(bOffset, 4n);
+    expect(inner.read).toHaveBeenCalledWith(0n, 4n, { background: false });
+    expect(inner.read).toHaveBeenCalledWith(bOffset, 4n, { background: false });
     expect(dataA).toEqual(expectedBytes(0n, 4n));
     expect(dataB).toEqual(expectedBytes(bOffset, 4n));
   });
@@ -197,7 +216,7 @@ describe("BatchingReadable", () => {
 
     // Then
     expect(inner.read).toHaveBeenCalledTimes(1);
-    expect(inner.read).toHaveBeenCalledWith(0n, 150n);
+    expect(inner.read).toHaveBeenCalledWith(0n, 150n, { background: false });
     expect(dataA).toEqual(expectedBytes(0n, 100n));
     expect(dataB).toEqual(expectedBytes(50n, 100n));
   });
@@ -253,8 +272,8 @@ describe("BatchingReadable", () => {
 
     // Then
     expect(inner.read).toHaveBeenCalledTimes(2);
-    expect(inner.read).toHaveBeenNthCalledWith(1, 0n, 100n);
-    expect(inner.read).toHaveBeenNthCalledWith(2, 200n, 100n);
+    expect(inner.read).toHaveBeenNthCalledWith(1, 0n, 100n, { background: false });
+    expect(inner.read).toHaveBeenNthCalledWith(2, 200n, 100n, { background: false });
     expect(dataA).toEqual(expectedBytes(0n, 100n));
     expect(dataB).toEqual(expectedBytes(200n, 100n));
   });
@@ -275,8 +294,8 @@ describe("BatchingReadable", () => {
 
     // Then
     expect(inner.read).toHaveBeenCalledTimes(2);
-    expect(inner.read).toHaveBeenCalledWith(0n, 100n);
-    expect(inner.read).toHaveBeenCalledWith(bOffset, 100n);
+    expect(inner.read).toHaveBeenCalledWith(0n, 100n, { background: false });
+    expect(inner.read).toHaveBeenCalledWith(bOffset, 100n, { background: false });
     expect(dataA).toEqual(expectedBytes(0n, 100n));
     expect(dataB).toEqual(expectedBytes(bOffset, 100n));
   });
@@ -294,7 +313,7 @@ describe("BatchingReadable", () => {
     // Then a single merged read happened, but each result owns a buffer sized to
     // its own slice (a copy), not the full 300-byte merged buffer.
     expect(inner.read).toHaveBeenCalledTimes(1);
-    expect(inner.read).toHaveBeenCalledWith(0n, 300n);
+    expect(inner.read).toHaveBeenCalledWith(0n, 300n, { background: false });
     expect(dataA.byteLength).toBe(100);
     expect(dataB.byteLength).toBe(100);
     expect(dataA.buffer.byteLength).toBe(100);

@@ -19,7 +19,7 @@ import * as _ from "lodash-es";
 import Logger from "@lichtblick/log";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
-import type { FileReader, FileStream, ILogger } from "./CachedFilelike.types";
+import type { FileReader, FileStream, ILogger, ReadOptions } from "./CachedFilelike.types";
 import VirtualLRUBuffer from "./VirtualLRUBuffer";
 import { getNewConnection } from "./getNewConnection";
 import { Range } from "./ranges";
@@ -51,6 +51,9 @@ type ReadRequest = {
   sideFetch?: boolean;
   // A one-off fetch for this read failed, so it is left to the main connection.
   sideFetchFailed?: boolean;
+  background: boolean;
+  // Its bytes were cached when it came in, so the main connection did not serve it
+  cached: boolean;
 };
 
 export default class CachedFilelike implements Filelike {
@@ -76,7 +79,12 @@ export default class CachedFilelike implements Filelike {
 
   // When a read was last resolved while the main connection was open, or when it was opened.
   #lastMainServeTime = 0;
-  #sideFetchCount = 0;
+  // Side fetches running for foreground and for background reads; each kind has its own slots, so
+  // a scan keeps moving during playback but never holds up a read playback waits on
+  readonly #sideFetches = { foreground: 0, background: 0 };
+  // When the main connection last served a foreground read; one that serves only background reads
+  // (or nothing yet) is taken over by the next foreground read instead of sending it to a side fetch
+  #lastForegroundServeTime = Number.NEGATIVE_INFINITY;
 
   // The range.end of the last read request that we resolved. Useful for reading ahead a bit.
   #lastResolvedCallbackEnd?: number;
@@ -144,7 +152,7 @@ export default class CachedFilelike implements Filelike {
 
   // Potentially performance-sensitive; await can be expensive
   // eslint-disable-next-line @typescript-eslint/promise-function-async
-  public read(offset: number, length: number): Promise<Uint8Array> {
+  public read(offset: number, length: number, options?: ReadOptions): Promise<Uint8Array> {
     if (this.#closed) {
       return Promise.reject(new Error("CachedFilelike is closed"));
     }
@@ -175,7 +183,14 @@ export default class CachedFilelike implements Filelike {
             return;
           }
 
-          this.#readRequests.push({ range, resolve, reject, requestTime: Date.now() });
+          this.#readRequests.push({
+            range,
+            resolve,
+            reject,
+            requestTime: Date.now(),
+            background: options?.background === true,
+            cached: this.#virtualBuffer.hasData(range.start, range.end),
+          });
           this.#updateState();
         })
         .catch((err: unknown) => {
@@ -291,7 +306,7 @@ export default class CachedFilelike implements Filelike {
       return;
     }
 
-    this.#readRequests = this.#readRequests.filter(({ range, resolve }) => {
+    this.#readRequests = this.#readRequests.filter(({ range, resolve, background, cached }) => {
       if (!this.#virtualBuffer.hasData(range.start, range.end)) {
         return true;
       }
@@ -299,6 +314,9 @@ export default class CachedFilelike implements Filelike {
       this.#lastResolvedCallbackEnd = range.end;
       if (this.#currentConnection) {
         this.#lastMainServeTime = Date.now();
+        if (!background && !cached) {
+          this.#lastForegroundServeTime = this.#lastMainServeTime;
+        }
       }
       const buffer = this.#virtualBuffer.slice(range.start, range.end);
 
@@ -318,33 +336,52 @@ export default class CachedFilelike implements Filelike {
         readAheadEnabled: this.#readAheadEnabled,
         readAheadBufferBytes: this.#readAheadBufferBytes,
       });
-    const waiting = this.#readRequests.filter(({ sideFetch }) => sideFetch !== true);
+    // Foreground reads (playback, backfill) first, then background ones (whole-file scans), each
+    // oldest first: a scan from the start of the file must not hold up a seek into its middle
+    const waiting = this.#readRequests
+      .filter(({ sideFetch }) => sideFetch !== true)
+      .sort((a, b) => Number(a.background) - Number(b.background));
+    const next = waiting[0];
+    const now = Date.now();
+    const servesForeground = now - this.#lastForegroundServeTime < MAIN_CONNECTION_IDLE_MS;
 
     // Several readers (playback plus per-topic range iterators) can read at offsets far apart.
     // Moving the single connection to every far read tears down the stream the nearby readers are
     // using, and they then wait behind each hop. While the main connection is in use, serve reads
-    // it won't reach with their own fetch instead.
-    if (this.#currentConnection && Date.now() - this.#lastMainServeTime < MAIN_CONNECTION_IDLE_MS) {
+    // it won't reach with their own fetch instead. A foreground read takes over a connection that
+    // only serves background reads.
+    if (
+      this.#currentConnection &&
+      (next?.background === false
+        ? servesForeground
+        : now - this.#lastMainServeTime < MAIN_CONNECTION_IDLE_MS)
+    ) {
       for (const request of waiting) {
-        if (this.#sideFetchCount >= MAX_SIDE_FETCHES) {
-          break;
-        }
-        if (request.sideFetchFailed !== true && connectionFor(request.range)) {
+        const kind = request.background ? "background" : "foreground";
+        if (
+          this.#sideFetches[kind] < MAX_SIDE_FETCHES &&
+          request.sideFetchFailed !== true &&
+          connectionFor(request.range)
+        ) {
           this.#startSideFetch(request);
         }
       }
       return;
     }
 
-    const newConnection = connectionFor(waiting[0]?.range);
+    const newConnection = connectionFor(next?.range);
     if (newConnection) {
+      if (next?.background === false) {
+        this.#lastForegroundServeTime = now;
+      }
       this.#setConnection(newConnection);
     }
   }
 
   #startSideFetch(request: ReadRequest): void {
     request.sideFetch = true;
-    this.#sideFetchCount++;
+    const kind = request.background ? "background" : "foreground";
+    this.#sideFetches[kind]++;
     this.#readUncached(request.range)
       .then((data) => {
         // The main connection may have delivered this range first; then the read is resolved already.
@@ -364,7 +401,7 @@ export default class CachedFilelike implements Filelike {
         }, MAIN_CONNECTION_IDLE_MS);
       })
       .finally(() => {
-        this.#sideFetchCount--;
+        this.#sideFetches[kind]--;
         this.#updateState();
       });
   }
