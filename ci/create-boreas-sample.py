@@ -5,12 +5,15 @@
 # SPDX-License-Identifier: MPL-2.0
 """Build the Boreas demo MCAP: uv run ci/create-boreas-sample.py (after pnpm install).
 
+--large builds a 2-minute full-resolution test file (about 1 GB) instead of the 20-second demo.
+
 The dataset is CC BY 4.0 (Keenan Burnett et al., University of Toronto,
 https://www.boreas.utias.utoronto.ca/); attribution is embedded in the MCAP metadata.
 The file is not committed: upload the output to the host behind
 SAMPLE_BOREAS_DATA_SOURCE_URL (packages/suite-base/src/dataSources/constants.ts).
 """
 
+import argparse
 import base64
 import csv
 import io
@@ -36,22 +39,30 @@ from scipy.spatial.transform import Rotation
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path(tempfile.gettempdir()) / "lichtblick-boreas"
-OUTPUT = CACHE / "boreas-sample.mcap"
 SEQUENCE = "boreas-2021-09-02-11-42"
 BASE = "https://boreas.s3.amazonaws.com/"
 LICENSE = "https://creativecommons.org/licenses/by/4.0/"
-ATTRIBUTION = (
-    "Boreas: A Multi-Season Autonomous Driving Dataset, Keenan Burnett et al., "
-    "University of Toronto. https://www.boreas.utias.utoronto.ca/ — CC BY 4.0. "
-    "Adapted for Lichtblick: 20-second excerpt starting 170 seconds into "
-    f"{SEQUENCE}; camera sampled at 10 Hz, resized to 1280 pixels wide and H.265 encoded; "
-    "LiDAR sampled at 5 Hz with every fourth point retained, coordinates rounded to 12 "
-    "mantissa bits and intensity stored as 8 bits; radar sampled at 4 Hz, range bins "
-    "averaged in pairs and stored as a JPEG polar intensity image (columns: range, rows: azimuth); "
-    "recorded IMU at 200 Hz and postprocessed GPS at 10 Hz; local pose origin shifted. "
-    "GPS altitude is the dataset's relative altitude, not height above sea level. "
-    "Original selected sensor timestamps retained. No motion compensation added."
-)
+
+
+def attribution(seconds: int, large: bool) -> str:
+    lidar = (
+        "LiDAR sampled at 5 Hz with all points and full-precision coordinates and intensity; "
+        "radar sampled at 4 Hz and stored as a PNG polar intensity image (columns: range, rows: azimuth); "
+        if large
+        else "LiDAR sampled at 5 Hz with every fourth point retained, coordinates rounded to 12 "
+        "mantissa bits and intensity stored as 8 bits; radar sampled at 4 Hz, range bins "
+        "averaged in pairs and stored as a JPEG polar intensity image (columns: range, rows: azimuth); "
+    )
+    return (
+        "Boreas: A Multi-Season Autonomous Driving Dataset, Keenan Burnett et al., "
+        "University of Toronto. https://www.boreas.utias.utoronto.ca/ — CC BY 4.0. "
+        f"Adapted for Lichtblick: {seconds}-second excerpt starting 170 seconds into "
+        f"{SEQUENCE}; camera sampled at 10 Hz, resized to 1280 pixels wide and H.265 encoded; "
+        f"{lidar}"
+        "recorded IMU at 200 Hz and postprocessed GPS at 10 Hz; local pose origin shifted. "
+        "GPS altitude is the dataset's relative altitude, not height above sea level. "
+        "Original selected sensor timestamps retained. No motion compensation added."
+    )
 
 
 def fetch(key: str) -> Path:
@@ -63,12 +74,15 @@ def fetch(key: str) -> Path:
                 with urllib.request.urlopen(BASE + key, timeout=120) as response:
                     data = response.read()
                 break
-            # urlopen wraps connection timeouts in URLError; other errors (e.g. 404) raise at once.
-            except (TimeoutError, urllib.error.URLError) as error:
-                timed_out = isinstance(error, TimeoutError) or isinstance(
-                    error.reason, TimeoutError
+            # urlopen wraps connection errors in URLError; other errors (e.g. 404) raise at once.
+            except (TimeoutError, ConnectionResetError, urllib.error.URLError) as error:
+                cause = (
+                    error.reason if isinstance(error, urllib.error.URLError) else error
                 )
-                if not timed_out or attempt == 2:
+                if (
+                    not isinstance(cause, (TimeoutError, ConnectionResetError))
+                    or attempt == 2
+                ):
                     raise
                 print(f"Retrying download ({error}): {key}", flush=True)
         # Write then rename, so an interrupted run never leaves a truncated cache entry.
@@ -86,17 +100,25 @@ def stamp(microseconds: int) -> dict[str, int]:
 
 
 def frames(sensor: str, start: int, end: int, interval: int) -> list[tuple[int, str]]:
-    query = urllib.parse.urlencode(
-        {
-            "list-type": "2",
-            "prefix": f"{SEQUENCE}/{sensor}/",
-            "max-keys": 1000,
-            "start-after": f"{SEQUENCE}/{sensor}/{start}",
-        }
-    )
-    with urllib.request.urlopen(BASE + "?" + query, timeout=90) as response:
-        listing = ET.fromstring(response.read())
-    keys = [x.text for x in listing.findall("{*}Contents/{*}Key") if x.text]
+    keys: list[str] = []
+    after = f"{SEQUENCE}/{sensor}/{start}"
+    # S3 lists at most 1000 keys per page; page until the excerpt is covered.
+    while True:
+        query = urllib.parse.urlencode(
+            {
+                "list-type": "2",
+                "prefix": f"{SEQUENCE}/{sensor}/",
+                "max-keys": 1000,
+                "start-after": after,
+            }
+        )
+        with urllib.request.urlopen(BASE + "?" + query, timeout=90) as response:
+            listing = ET.fromstring(response.read())
+        page = [x.text for x in listing.findall("{*}Contents/{*}Key") if x.text]
+        keys += page
+        if not page or int(Path(page[-1]).stem) >= end:
+            break
+        after = page[-1]
     candidates = sorted(
         (int(Path(k).stem), k) for k in keys if k.endswith((".png", ".bin"))
     )
@@ -114,6 +136,14 @@ def frames(sensor: str, start: int, end: int, interval: int) -> list[tuple[int, 
 
 
 def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--large", action="store_true", help="2-minute full-resolution test file"
+    )
+    large = parser.parse_args().large
+    seconds = 120 if large else 20
+    output_path = CACHE / ("boreas-large.mcap" if large else "boreas-sample.mcap")
+    credit = attribution(seconds, large)
     schemas = json.loads(
         subprocess.check_output(
             [
@@ -135,7 +165,7 @@ def main() -> None:
         )
     )
     start = int(poses[0]["GPSTime"]) + 170_000_000
-    end = start + 20_000_000
+    end = start + seconds * 1_000_000
     selected = [p for p in poses if start <= int(p["GPSTime"]) < end]
     origin = np.array(
         [float(selected[0][k]) for k in ("easting", "northing", "altitude")]
@@ -237,17 +267,22 @@ def main() -> None:
     for t, key in lidar:
         raw = download(key)
         assert len(raw) % 24 == 0
-        source = np.frombuffer(raw, dtype="<f4").reshape(-1, 6)[::4]
+        source = np.frombuffer(raw, dtype="<f4").reshape(-1, 6)
+        if not large:
+            source = source[::4]
         assert np.isfinite(source[:, :4]).all() and len(source) > 1000
-        # Rounding to 12 mantissa bits (<3 cm at 100 m) and 8-bit intensity compress far better.
-        xyz = (source[:, :3].view("<u4") & np.uint32(0xFFFFF800)).view("<f4")
-        # Zero padding keeps a 4-byte-aligned stride (the 3D panel's fast path) and compresses away.
-        points = np.zeros(
-            len(source),
-            dtype=[("xyz", "<f4", 3), ("intensity", "u1"), ("pad", "u1", 3)],
-        )
-        points["xyz"] = xyz
-        points["intensity"] = np.clip(np.rint(source[:, 3]), 0, 255)
+        if large:
+            points = np.ascontiguousarray(source[:, :4])
+        else:
+            # Rounding to 12 mantissa bits (<3 cm at 100 m) and 8-bit intensity compress far better.
+            xyz = (source[:, :3].view("<u4") & np.uint32(0xFFFFF800)).view("<f4")
+            # Zero padding keeps a 4-byte-aligned stride (the 3D panel's fast path) and compresses away.
+            points = np.zeros(
+                len(source),
+                dtype=[("xyz", "<f4", 3), ("intensity", "u1"), ("pad", "u1", 3)],
+            )
+            points["xyz"] = xyz
+            points["intensity"] = np.clip(np.rint(source[:, 3]), 0, 255)
         events.append(
             (
                 t,
@@ -266,7 +301,7 @@ def main() -> None:
                             {"name": k, "offset": i * 4, "type": 7}
                             for i, k in enumerate(("x", "y", "z"))
                         ),
-                        {"name": "intensity", "offset": 12, "type": 1},
+                        {"name": "intensity", "offset": 12, "type": 7 if large else 1},
                     ],
                     "data": base64.b64encode(points.tobytes()).decode(),
                 },
@@ -332,8 +367,11 @@ def main() -> None:
         intensity[raw[:, 10] != 255] = 0
         encoded = io.BytesIO()
         image = Image.fromarray(intensity)
-        image = image.resize((image.width // 2, image.height), Image.Resampling.BOX)
-        image.save(encoded, format="JPEG", quality=85)
+        if large:
+            image.save(encoded, format="PNG")
+        else:
+            image = image.resize((image.width // 2, image.height), Image.Resampling.BOX)
+            image.save(encoded, format="JPEG", quality=85)
         events.append(
             (
                 t,
@@ -342,7 +380,7 @@ def main() -> None:
                 {
                     "timestamp": stamp(t),
                     "frame_id": "radar",
-                    "format": "jpeg",
+                    "format": "png" if large else "jpeg",
                     "data": base64.b64encode(encoded.getvalue()).decode(),
                 },
             )
@@ -393,19 +431,22 @@ def main() -> None:
                 )
             )
     counts = Counter(topic for _, topic, _, _ in events)
-    assert counts["/boreas/lidar"] >= 95 and counts["/boreas/camera"] >= 195, counts
-    assert (
-        counts["/boreas/radar"] >= 75
-        and counts["/boreas/imu"] >= 3900
-        and counts["/boreas/gps"] >= 195
-    ), counts
+    # Nominal rates per second, with ~5% slack for gaps in the recording.
+    for topic, rate in {
+        "/boreas/lidar": 5,
+        "/boreas/camera": 10,
+        "/boreas/radar": 4,
+        "/boreas/imu": 200,
+        "/boreas/gps": 10,
+    }.items():
+        assert counts[topic] >= rate * seconds * 0.95, counts
     with urllib.request.urlopen(
         "https://raw.githubusercontent.com/foxglove/foxglove-sdk/main/LICENSE",
         timeout=30,
     ) as response:
         schema_license = response.read().decode()
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    intermediate = CACHE / "boreas-unrechunked.mcap"
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    intermediate = output_path.with_suffix(".unrechunked.mcap")
     validators = {
         name: jsonschema.Draft7Validator(schema) for name, schema in schemas.items()
     }
@@ -426,7 +467,7 @@ def main() -> None:
         writer.add_metadata(
             "attribution",
             {
-                "credit": ATTRIBUTION,
+                "credit": credit,
                 "license": LICENSE,
                 "source": BASE + SEQUENCE + "/",
                 "schema_license": schema_license,
@@ -441,7 +482,7 @@ def main() -> None:
                 publish_time=t * 1000,
             )
         writer.finish()
-    staged = OUTPUT.with_suffix(".pending.mcap")
+    staged = output_path.with_suffix(".pending.mcap")
     subprocess.run(
         [
             "uvx",
@@ -471,14 +512,14 @@ def main() -> None:
         assert (
             Counter(channel.topic for _, channel, _ in reader.iter_messages()) == counts
         )
-        assert next(reader.iter_metadata()).metadata["credit"] == ATTRIBUTION
+        assert next(reader.iter_metadata()).metadata["credit"] == credit
         duration = (
             summary.statistics.message_end_time - summary.statistics.message_start_time
         ) / 1e9
-        assert 19.9 <= duration <= 20, duration
-    staged.replace(OUTPUT)
+        assert seconds - 0.1 <= duration <= seconds, duration
+    staged.replace(output_path)
     print(
-        f"Validated {OUTPUT}: {OUTPUT.stat().st_size:,} bytes, {duration:.3f} seconds, {dict(counts)}"
+        f"Validated {output_path}: {output_path.stat().st_size:,} bytes, {duration:.3f} seconds, {dict(counts)}"
     )
 
 
