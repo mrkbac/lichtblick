@@ -8,16 +8,68 @@
 import { useCallback } from "react";
 
 import { PanelSelection } from "@lichtblick/suite-base/components/PanelCatalog";
-import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
+import {
+  useCurrentLayoutActions,
+  useSelectedPanels,
+} from "@lichtblick/suite-base/context/CurrentLayoutContext";
+import { AddPanelPayload } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
 import { getPanelIdForType } from "@lichtblick/suite-base/util/layout";
+import { isTabPanel } from "@lichtblick/suite-base/util/tabLayout";
 
+export type PanelBox = { id: string; width: number; height: number };
+
+/**
+ * Where a new panel goes: it splits one panel instead of squeezing the whole layout. That is the
+ * selected panel if exactly one is selected and visible, else the largest visible panel. The split
+ * runs along the panel's longer side. Undefined when nothing is visible (layout default applies).
+ */
+export function splitPlacement(
+  panels: readonly PanelBox[],
+  selectedIds: readonly string[],
+): Pick<AddPanelPayload, "position" | "targetPanelId"> | undefined {
+  // Tab panels contain other panels; split the panel inside the shown tab instead.
+  const visible = panels.filter((p) => p.width > 0 && p.height > 0 && !isTabPanel(p.id));
+  const selected =
+    selectedIds.length === 1 ? visible.find((p) => p.id === selectedIds[0]) : undefined;
+  const target =
+    selected ??
+    visible.reduce<PanelBox | undefined>(
+      (best, p) => (best == undefined || p.width * p.height > best.width * best.height ? p : best),
+      undefined,
+    );
+  if (target == undefined) {
+    return undefined;
+  }
+  return {
+    targetPanelId: target.id,
+    position: target.width >= target.height ? "right" : "bottom",
+  };
+}
+
+/**
+ * Sizes of the panels on screen, from the `data-panel-id` attribute set by `Panel`. Panels in
+ * background tabs keep their size but are `visibility: hidden`, so they count as zero.
+ */
+function measurePanels(): PanelBox[] {
+  return Array.from(document.querySelectorAll<HTMLElement>("[data-panel-id]"), (el) => {
+    const rect = el.checkVisibility({ visibilityProperty: true })
+      ? el.getBoundingClientRect()
+      : { width: 0, height: 0 };
+    return { id: el.dataset.panelId ?? "", width: rect.width, height: rect.height };
+  });
+}
+
+/** Adds a panel next to the panel the user is working on and selects it. */
 export default function useAddPanel(): (selection: PanelSelection) => void {
   const { addPanel } = useCurrentLayoutActions();
+  const { getSelectedPanelIds, setSelectedPanelIds } = useSelectedPanels();
   return useCallback(
     ({ type, config }: PanelSelection) => {
       const id = getPanelIdForType(type);
-      addPanel({ id, config });
+      addPanel({ id, config, ...splitPlacement(measurePanels(), getSelectedPanelIds()) });
+      // Selected, so its settings are one step away and the next new panel goes next to it.
+      setSelectedPanelIds([id]);
     },
-    [addPanel],
+    [addPanel, getSelectedPanelIds, setSelectedPanelIds],
   );
 }
