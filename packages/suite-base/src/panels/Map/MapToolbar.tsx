@@ -22,6 +22,7 @@ import OverlayToolbar, {
   useIsShorterThan,
 } from "@lichtblick/suite-base/components/OverlayToolbar";
 import { PanelButton, usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
+import { PANEL_FLOATING_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { customTypography } from "@lichtblick/theme";
 
@@ -125,6 +126,12 @@ const useStyles = makeStyles()((theme) => ({
     position: "absolute",
     bottom: 36,
     left: 10,
+    // Stay below the panel toolbar; the legends scroll when they don't fit.
+    maxHeight: `calc(100% - 46px - ${PANEL_FLOATING_TOOLBAR_HEIGHT})`,
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "flex-start",
+    gap: theme.spacing(0.5),
     pointerEvents: "none",
   },
   result: {
@@ -167,6 +174,8 @@ type Props = {
   /** Set while a measure tool is active, so the panel ignores clicks on data. */
   measuringRef: RefObject<boolean>;
   onFitToData: (() => void) | undefined;
+  /** Shown above the cursor coordinates, next to the scale (e.g. color legends). */
+  bottomLeft?: React.ReactNode;
 };
 
 /** Elevation without the display exaggeration, or undefined without 3D terrain. */
@@ -404,7 +413,8 @@ let nextMeasurementId = 1;
 
 /** Measurement tools and map gesture controls drawn over the map. */
 export function MapToolbar(props: Props): React.JSX.Element {
-  const { map, units, showCoordinates, setMeasureData, measuringRef, onFitToData } = props;
+  const { map, units, showCoordinates, setMeasureData, measuringRef, onFitToData, bottomLeft } =
+    props;
   const { classes } = useStyles();
   const [tool, setTool] = useState<MeasureTool>();
   // Finished measurements stay on the map; the selected one is drawn into and edited.
@@ -938,9 +948,10 @@ export function MapToolbar(props: Props): React.JSX.Element {
           </Paper>
         )}
       </div>
-      {showCoordinates && (
+      {(showCoordinates || bottomLeft != undefined) && (
         <div className={classes.bottomLeft}>
-          <CursorCoordinates map={map} units={units} />
+          {bottomLeft}
+          {showCoordinates && <CursorCoordinates map={map} units={units} />}
         </div>
       )}
     </>

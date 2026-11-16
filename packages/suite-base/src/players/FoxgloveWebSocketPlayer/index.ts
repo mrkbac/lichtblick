@@ -539,11 +539,23 @@ export default class FoxgloveWebSocketPlayer implements Player {
           let schemaEncoding;
           let schemaData;
           if (
-            channel.encoding === "json" &&
+            ["json", "cbor", "msgpack"].includes(channel.encoding) &&
             (channel.schemaEncoding == undefined || channel.schemaEncoding === "jsonschema")
           ) {
             schemaEncoding = "jsonschema";
             schemaData = textEncoder.encode(channel.schema);
+          } else if (
+            ["json", "cbor", "msgpack"].includes(channel.encoding) &&
+            channel.schemaEncoding === ""
+          ) {
+            schemaEncoding = "";
+            schemaData = new Uint8Array();
+          } else if (
+            channel.encoding === "capnproto" &&
+            (channel.schemaEncoding == undefined || channel.schemaEncoding === "capnproto")
+          ) {
+            schemaEncoding = "capnproto";
+            schemaData = Uint8Array.fromBase64(channel.schema);
           } else if (
             channel.encoding === "protobuf" &&
             (channel.schemaEncoding == undefined || channel.schemaEncoding === "protobuf")

@@ -14,8 +14,8 @@ import { useLayoutStorage } from "@lichtblick/suite-base/context/LayoutStorageCo
 import { useRemoteLayoutFavoritesStorage } from "@lichtblick/suite-base/context/RemoteLayoutFavoritesStorageContext";
 import { useRemoteLayoutStorage } from "@lichtblick/suite-base/context/RemoteLayoutStorageContext";
 import { UserProfileStorageContext } from "@lichtblick/suite-base/context/UserProfileStorageContext";
+import { LayoutManagerChangeEvent } from "@lichtblick/suite-base/services/ILayoutManager";
 import LayoutManager from "@lichtblick/suite-base/services/LayoutManager/LayoutManager";
-import delay from "@lichtblick/suite-base/util/delay";
 
 const log = Logger.getLogger(__filename);
 
@@ -33,6 +33,24 @@ export function nextSyncDelayMs(failures: number, random = Math.random()): numbe
     return SYNC_INTERVAL_MS * (0.9 + 0.2 * random);
   }
   return random * Math.min(SYNC_INTERVAL_MS, RETRY_BASE_MS * 2 ** failures);
+}
+
+/** Held by the one tab of this origin that syncs; the others wait for it. */
+export const SYNC_LOCK_NAME = "lichtblick-layout-sync";
+/** Carries layout changes between tabs of this origin, which share the layout storage. */
+export const CHANGES_CHANNEL_NAME = "lichtblick-layout-changes";
+
+/** Resolves after `ms`, or as soon as `signal` aborts. */
+async function abortableDelay(ms: number, signal: AbortSignal): Promise<void> {
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(done, ms);
+    signal.addEventListener("abort", done, { once: true });
+    function done() {
+      clearTimeout(timer);
+      signal.removeEventListener("abort", done);
+      resolve();
+    }
+  });
 }
 
 export default function LayoutManagerProvider({
@@ -64,18 +82,48 @@ export default function LayoutManagerProvider({
     void layoutManager.loadFavorites();
   }, [layoutManager]);
 
-  // Sync periodically when logged in, online, and the app is not hidden
+  // Tell other tabs about changes made here, and show theirs: they re-read the shared storage.
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") {
+      return;
+    }
+    const channel = new BroadcastChannel(CHANGES_CHANNEL_NAME);
+    let receiving = false;
+    const onChange = (event: LayoutManagerChangeEvent) => {
+      if (!receiving) {
+        channel.postMessage(event);
+      }
+    };
+    channel.onmessage = ({ data }: MessageEvent<LayoutManagerChangeEvent>) => {
+      // emitChange calls the listeners synchronously, so our own listener sees the flag.
+      receiving = true;
+      try {
+        layoutManager.emitChange(data);
+      } finally {
+        receiving = false;
+      }
+    };
+    layoutManager.on("change", onChange);
+    return () => {
+      layoutManager.off("change", onChange);
+      channel.close();
+    };
+  }, [layoutManager]);
+
+  // Sync periodically when logged in, online, and the app is not hidden. Only one visible tab of
+  // this origin syncs at a time (it holds the lock); the others get its changes over the channel.
   const enableSyncing = remoteLayoutStorage != undefined && online && visibilityState === "visible";
   useEffect(() => {
     if (!enableSyncing) {
       return;
     }
     const controller = new AbortController();
-    void (async () => {
+    const { signal } = controller;
+    const syncLoop = async () => {
       let failures = 0;
-      while (!controller.signal.aborted) {
+      while (!signal.aborted) {
         try {
-          await layoutManager.syncWithRemote(controller.signal);
+          await layoutManager.syncWithRemote(signal);
           failures = 0;
         } catch (error) {
           log.error("Sync failed:", error);
@@ -83,9 +131,15 @@ export default function LayoutManagerProvider({
         }
         const duration = nextSyncDelayMs(failures);
         log.debug("Waiting", (duration / 1000).toFixed(2), "sec for next sync", { failures });
-        await delay(duration);
+        await abortableDelay(duration, signal);
       }
-    })();
+    };
+    if (typeof navigator !== "undefined" && "locks" in navigator) {
+      // Rejects with an AbortError when this tab stops waiting for the lock.
+      navigator.locks.request(SYNC_LOCK_NAME, { signal }, syncLoop).catch(() => {});
+    } else {
+      void syncLoop();
+    }
     return () => {
       log.debug("Canceling layout sync due to effect cleanup callback");
       controller.abort();
