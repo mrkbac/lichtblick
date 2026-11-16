@@ -54,6 +54,40 @@ export function applyServiceWorkerUpdate(worker: ServiceWorker): void {
   worker.postMessage({ type: "SKIP_WAITING" });
 }
 
+const STALE_RELOAD_KEY = "staleChunkReloadAt";
+const STALE_RELOAD_COOLDOWN_MS = 30_000;
+
+/**
+ * A lazy chunk failed to load, most likely because a newer deploy replaced this build's files.
+ * Switch to the newest version: activate the updated service worker if there is one (that reloads
+ * every window), else reload. Does nothing if it already tried recently, so a chunk that fails for
+ * another reason (offline, still missing after the reload) can't cause a reload loop.
+ * Returns whether it started a reload.
+ */
+export async function reloadToLatestVersion(): Promise<boolean> {
+  const lastAttempt = Number(sessionStorage.getItem(STALE_RELOAD_KEY) ?? 0);
+  if (Date.now() - lastAttempt < STALE_RELOAD_COOLDOWN_MS) {
+    return false;
+  }
+  sessionStorage.setItem(STALE_RELOAD_KEY, String(Date.now()));
+
+  const container = navigator.serviceWorker as ServiceWorkerContainer | undefined;
+  const hasUpdate = await checkForServiceWorkerUpdate().catch((error: unknown) => {
+    log.warn("Service worker update check failed", error);
+    return false;
+  });
+  const waiting = hasUpdate ? (await container?.getRegistration())?.waiting : undefined;
+  if (container && waiting) {
+    container.addEventListener("controllerchange", () => {
+      window.location.reload();
+    });
+    applyServiceWorkerUpdate(waiting);
+  } else {
+    window.location.reload();
+  }
+  return true;
+}
+
 /**
  * Returns the installed-and-waiting new service worker, if any. Never applies it on its own:
  * pass it to applyServiceWorkerUpdate to update. Once it takes over, every open window reloads

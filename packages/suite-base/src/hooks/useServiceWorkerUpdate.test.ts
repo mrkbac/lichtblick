@@ -5,7 +5,7 @@
 
 import type { Mock } from "vitest";
 
-import { checkForServiceWorkerUpdate } from "./useServiceWorkerUpdate";
+import { checkForServiceWorkerUpdate, reloadToLatestVersion } from "./useServiceWorkerUpdate";
 
 type FakeWorker = EventTarget & { state: string; postMessage: Mock };
 
@@ -54,5 +54,38 @@ describe("checkForServiceWorkerUpdate", () => {
   it("rejects when the update fails to install", async () => {
     mockRegistration("redundant");
     await expect(checkForServiceWorkerUpdate()).rejects.toThrow("failed to install");
+  });
+});
+
+describe("reloadToLatestVersion", () => {
+  const reload = vi.fn();
+  beforeEach(() => {
+    sessionStorage.clear();
+    reload.mockClear();
+    Object.defineProperty(window, "location", {
+      configurable: true,
+      value: { reload },
+    });
+  });
+
+  it("activates the updated service worker instead of reloading into the old build", async () => {
+    const registration = mockRegistration("installed");
+    Object.assign(navigator.serviceWorker, { addEventListener: vi.fn() });
+    await expect(reloadToLatestVersion()).resolves.toBe(true);
+    expect(registration.waiting?.postMessage).toHaveBeenCalledWith({ type: "SKIP_WAITING" });
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("reloads when there is no update", async () => {
+    mockRegistration(undefined);
+    await expect(reloadToLatestVersion()).resolves.toBe(true);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
+  it("tries only once per cooldown, so a persistent failure can't loop", async () => {
+    mockRegistration(undefined);
+    await reloadToLatestVersion();
+    await expect(reloadToLatestVersion()).resolves.toBe(false);
+    expect(reload).toHaveBeenCalledTimes(1);
   });
 });
