@@ -11,13 +11,13 @@ import type { Mock } from "vitest";
 import { SettingsTreeAction } from "@lichtblick/suite";
 import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";
 import { DEFAULT_STATE_TRANSITION_PATH } from "@lichtblick/suite-base/panels/StateTransitions/constants";
+import { usePanelSettings } from "@lichtblick/suite-base/panels/StateTransitions/hooks/usePanelSettings";
 import {
   buildSettingsTree,
   makeRootSeriesNode,
   makeSeriesNode,
   setSeriesAction,
-  usePanelSettings,
-} from "@lichtblick/suite-base/panels/StateTransitions/hooks/usePanelSettings";
+} from "@lichtblick/suite-base/panels/StateTransitions/settings";
 import {
   IUsePanelSettings,
   PathState,
@@ -114,17 +114,20 @@ describe("makeSeriesNode", () => {
       input: "messagepath",
       supportsMathModifiers: true,
       label: "labels.messagePath",
+      help: "labels.messagePathHelp",
       validTypes: PLOTABLE_ROS_TYPES,
       value: seriesNode.path.value,
     });
     expect(fields!.label).toEqual({
       input: "string",
       label: "labels.label",
+      help: "labels.labelHelp",
       value: seriesNode.path.label,
     });
     expect(fields!.timestampMethod).toEqual({
       input: "select",
       label: "labels.timestamp",
+      help: "labels.timestampHelp",
       options: [
         { label: "labels.timestampReceiveTime", value: "receiveTime" },
         { label: "labels.timestampHeaderStamp", value: "headerStamp" },
@@ -258,6 +261,7 @@ describe("buildSettingsTree", () => {
     expect(general!.label).toEqual("labels.general");
     expect(general!.fields!.isSynced).toEqual({
       label: "labels.sync",
+      help: "labels.syncHelp",
       input: "boolean",
       value: config.isSynced,
     });
@@ -267,6 +271,7 @@ describe("buildSettingsTree", () => {
     expect(xAxis!.label).toEqual("xAxis");
     expect(xAxis!.fields!.xAxisLabel).toEqual({
       label: "labels.axisLabel",
+      help: "labels.axisLabelHelp",
       input: "string",
       value: config.xAxisLabel,
     });
@@ -308,6 +313,7 @@ describe("buildSettingsTree", () => {
 
     expect(xAxis!.fields!.xAxisLabel).toEqual({
       label: "labels.axisLabel",
+      help: "labels.axisLabelHelp",
       input: "string",
       value: label,
     });
@@ -324,6 +330,7 @@ describe("buildSettingsTree", () => {
 
     expect(xAxis!.fields!.xAxisLabel).toEqual({
       label: "labels.axisLabel",
+      help: "labels.axisLabelHelp",
       input: "string",
       value: undefined,
     });

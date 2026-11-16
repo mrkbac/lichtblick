@@ -14,7 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { Cursor20Regular } from "@fluentui/react-icons";
 import { Typography } from "@mui/material";
 import React from "react";
 
@@ -23,10 +22,12 @@ import ExpandingToolbar, {
   ToolGroup,
   ToolGroupFixedSizePane,
 } from "@lichtblick/suite-base/components/ExpandingToolbar";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 
 import ObjectDetails from "./ObjectDetails";
 import TopicLink from "./TopicLink";
 import { InteractionData } from "./types";
+import { THREE_DEE_BUTTONS } from "../buttons";
 import { Pose } from "../transforms";
 
 export const OBJECT_TAB_TYPE = "Selected object";
@@ -108,10 +109,12 @@ function InteractionsBaseComponent({
   timezone,
   toolbarItems,
 }: Props): React.JSX.Element {
+  const title = usePanelButtonTitle(THREE_DEE_BUTTONS.inspect);
+  const Icon = THREE_DEE_BUTTONS.inspect.icon;
   return (
     <ExpandingToolbar
-      tooltip="Inspect objects"
-      icon={<Cursor20Regular />}
+      tooltip={title}
+      icon={<Icon />}
       toolbarItems={toolbarItems}
       selectedTab={interactionsTabType}
       onSelectTab={(newSelectedTab) => {

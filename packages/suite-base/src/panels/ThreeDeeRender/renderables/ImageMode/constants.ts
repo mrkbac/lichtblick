@@ -6,20 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { HUDItem } from "@lichtblick/suite-base/panels/ThreeDeeRender/HUDItemManager";
-import { IMAGE_DEFAULT_COLOR_MODE_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/decodeImage";
 import { t3D } from "@lichtblick/suite-base/panels/ThreeDeeRender/t3D";
-
-import {
-  CAMERA_CALIBRATION_DATATYPES,
-  COMPRESSED_IMAGE_DATATYPES,
-  COMPRESSED_VIDEO_DATATYPES,
-  RAW_IMAGE_DATATYPES,
-} from "../../foxglove";
-import {
-  IMAGE_DATATYPES as ROS_IMAGE_DATATYPES,
-  COMPRESSED_IMAGE_DATATYPES as ROS_COMPRESSED_IMAGE_DATATYPES,
-  CAMERA_INFO_DATATYPES,
-} from "../../ros";
 
 export const IMAGE_TOPIC_PATH = ["imageMode", "imageTopic"];
 export const DECODE_IMAGE_ERR_KEY = "CreateBitmap";
@@ -45,32 +32,6 @@ export const CAMERA_MODEL = "CameraModel";
 export const DEFAULT_FOCAL_LENGTH = 500;
 export const REMOVE_IMAGE_TIMEOUT_MS = 50;
 
-export const ALL_SUPPORTED_IMAGE_SCHEMAS = new Set([
-  ...ROS_IMAGE_DATATYPES,
-  ...ROS_COMPRESSED_IMAGE_DATATYPES,
-  ...RAW_IMAGE_DATATYPES,
-  ...COMPRESSED_IMAGE_DATATYPES,
-  ...COMPRESSED_VIDEO_DATATYPES,
-]);
-
-export const SUPPORTED_RAW_IMAGE_SCHEMAS = new Set([
-  ...RAW_IMAGE_DATATYPES,
-  ...ROS_IMAGE_DATATYPES,
-]);
-
-export const ALL_SUPPORTED_CALIBRATION_SCHEMAS = new Set([
-  ...CAMERA_INFO_DATATYPES,
-  ...CAMERA_CALIBRATION_DATATYPES,
-]);
-
-export const MIN_BRIGHTNESS = 0;
-export const MAX_BRIGHTNESS = 100;
-export const INITIAL_BRIGHTNESS = (MAX_BRIGHTNESS + MIN_BRIGHTNESS) / 2;
-
-export const MIN_CONTRAST = 0;
-export const MAX_CONTRAST = 100;
-export const INITIAL_CONTRAST = (MAX_CONTRAST + MIN_CONTRAST) / 2;
-
 // Brightness should be in the range of -1 and 1.
 // It was trimmed by 0.4 to improve visualization.
 export const LOWER_BRIGHTNESS_LIMIT = -0.6;
@@ -86,16 +47,6 @@ export const NO_IMAGE_TOPICS_HUD_ITEM: HUDItem = {
   group: IMAGE_MODE_HUD_GROUP_ID,
   getMessage: () => t3D("noImageTopicsAvailable"),
   displayType: "empty",
-};
-
-export const DEFAULT_IMAGE_CONFIG = {
-  synchronize: false,
-  flipHorizontal: false,
-  flipVertical: false,
-  rotation: 0 as 0 | 90 | 180 | 270,
-  brightness: INITIAL_BRIGHTNESS,
-  contrast: INITIAL_CONTRAST,
-  ...IMAGE_DEFAULT_COLOR_MODE_SETTINGS,
 };
 
 export const VERTEX_SHADER = `

@@ -5,8 +5,9 @@ import { TFunction } from "i18next";
 import { produce } from "immer";
 import * as _ from "lodash-es";
 
-import { SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 import type { RotationConvention } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms/transformOffsets";
+import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 
 import { defaultIsStatic } from "./transforms";
 import { TransformTreeConfig } from "./types";
@@ -49,7 +50,7 @@ export function buildSettingsTree(
   malformedTopics: ReadonlySet<string>,
   convention: RotationConvention,
   t: TFunction<"transformTree">,
-): SettingsTreeNodes {
+): DocumentedNodes {
   return {
     general: {
       label: t("settings.general"),
@@ -68,6 +69,7 @@ export function buildSettingsTree(
     },
     topics: {
       label: t("settings.topics"),
+      help: t("settings.topicsHelp"),
       enableVisibilityFilter: true,
       children: Object.fromEntries(
         topics.map((topic) => [

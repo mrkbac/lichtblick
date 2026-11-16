@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import type * as Foxglove from "@foxglove/extension";
 import { compare, toSec } from "@foxglove/rostime";
 import memoizeWeak from "memoize-weak";
 import { Writable } from "ts-essentials";
@@ -65,6 +66,25 @@ export type BuilderRenderStateInput = Immutable<{
   config?: RenderStateConfig | undefined;
 }>;
 
+/** Render state delivered to extensions, including fields only Foxglove-built extensions read. */
+export type ExtensionRenderState = RenderState & Foxglove.RenderState;
+
+/** Host and port of a live WebSocket data source, as Foxglove's `RenderState.connection`. */
+export function connectionFromUrl(url: unknown): ExtensionRenderState["connection"] {
+  if (typeof url !== "string") {
+    return undefined;
+  }
+  try {
+    const { protocol, hostname, port } = new URL(url);
+    if (protocol !== "ws:" && protocol !== "wss:") {
+      return undefined;
+    }
+    return { host: hostname, port: port ? Number(port) : protocol === "wss:" ? 443 : 80 };
+  } catch {
+    return undefined;
+  }
+}
+
 type BuildRenderStateFn = (input: BuilderRenderStateInput) => Immutable<RenderState> | undefined;
 
 /**
@@ -102,10 +122,13 @@ function initRenderStateBuilder(): BuildRenderStateFn {
       new Map(topics.map((topic) => [topic.name, topic.schemaName])),
   );
 
-  const prevRenderState: Writable<Immutable<RenderState>> = {};
+  // Keep the same connection object while the URL is unchanged so it doesn't trigger renders.
+  let prevConnectionUrl: unknown;
+  let prevConnection: ExtensionRenderState["connection"];
+  const prevRenderState: Writable<Immutable<ExtensionRenderState>> = {};
 
   function updateRenderStateField<T>(
-    field: keyof RenderState,
+    field: keyof ExtensionRenderState,
     newValue: T,
     prevValue: T,
     shouldRender: { value: boolean },
@@ -230,10 +253,13 @@ function initRenderStateBuilder(): BuildRenderStateFn {
       if (sortedTopics !== prevSortedTopics || prevMessageConverters !== messageConverters) {
         shouldRender.value = true;
 
-        const topics = sortedTopics.map((topic): Topic => {
-          const newTopic: Topic = {
+        const topics = sortedTopics.map((topic) => {
+          const newTopic: Topic & Foxglove.Topic = {
             name: topic.name,
             schemaName: topic.schemaName ?? "",
+            // Deprecated Foxglove alias of schemaName that older Foxglove extensions still read.
+            // eslint-disable-next-line @typescript-eslint/no-deprecated
+            datatype: topic.schemaName ?? "",
           };
 
           if (messageConverters) {
@@ -319,6 +345,8 @@ function initRenderStateBuilder(): BuildRenderStateFn {
       if ((newBlocks != undefined && prevBlocks !== newBlocks) || conversionsChanged) {
         shouldRender.value = true;
         const blocksToProcess = newBlocks ?? prevBlocks ?? [];
+        // Deprecated in Foxglove's API only; still part of Lichtblick's.
+        // eslint-disable-next-line @typescript-eslint/no-deprecated
         const frames: MessageEvent[] = (renderState.allFrames = []);
         // only populate allFrames with topics that the panel wants to preload
         const topicsToPreloadForPanel = Array.from(
@@ -397,6 +425,16 @@ function initRenderStateBuilder(): BuildRenderStateFn {
 
     if (watchedFields.has("colorScheme")) {
       updateRenderStateField("colorScheme", colorScheme, renderState.colorScheme, shouldRender);
+    }
+
+    if (watchedFields.has("connection")) {
+      const url = playerState?.urlState?.parameters?.url;
+      if (url !== prevConnectionUrl) {
+        prevConnectionUrl = url;
+        prevConnection = connectionFromUrl(url);
+      }
+      const connection = prevConnection;
+      updateRenderStateField("connection", connection, renderState.connection, shouldRender);
     }
 
     if (watchedFields.has("appSettings")) {

@@ -6,14 +6,15 @@ import { LayerErrors } from "@lichtblick/suite-base/panels/ThreeDeeRender/LayerE
 import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
 import { MISSING_TRANSFORM } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/transforms";
 import { PointCloud2, PointFieldType } from "@lichtblick/suite-base/panels/ThreeDeeRender/ros";
+import { ColorModeSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
+import { DEFAULT_POINT_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
 import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updatePose";
 
 import { createStixelMaterial, PointCloudHistoryRenderable } from "./PointClouds";
-import { ColorModeSettings, getColorConverter } from "./colorMode";
+import { getColorConverter } from "./colorMode";
 import {
   createInstancePickingMaterial,
   createPickingMaterial,
-  DEFAULT_POINT_SETTINGS,
   pointCloudMaterial,
 } from "./pointExtensionUtils";
 

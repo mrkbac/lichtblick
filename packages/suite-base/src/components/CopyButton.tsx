@@ -35,6 +35,8 @@ function CopyButtonComponent(
     className?: string;
     edge?: IconButtonProps["edge"];
     "aria-label"?: string;
+    /** Tooltip (and default accessible name) of the icon button. Defaults to "Copy to clipboard". */
+    title?: string;
   }>,
 ): React.JSX.Element {
   const {
@@ -46,6 +48,7 @@ function CopyButtonComponent(
     iconSize = "medium",
     getText,
     "aria-label": ariaLabel,
+    title = "Copy to clipboard",
   } = props;
   const theme = useTheme();
   const [copied, setCopied] = useState(false);
@@ -88,14 +91,14 @@ function CopyButtonComponent(
 
   if (children == undefined) {
     return (
-      <Tooltip arrow title={copied ? "Copied" : "Copy to clipboard"}>
+      <Tooltip arrow title={copied ? "Copied" : title}>
         <IconButton
           edge={edge}
           className={className}
           size={size}
           onClick={handleCopy}
           color={copied ? "success" : color}
-          aria-label={ariaLabel ?? "Copy to clipboard"}
+          aria-label={ariaLabel ?? title}
         >
           {copied ? checkIcon : copyIcon}
         </IconButton>

@@ -3,15 +3,11 @@
 
 import { foxgloveMessageSchemas } from "@foxglove/schemas/internal";
 import CheckIcon from "@mui/icons-material/Check";
-import CopyAllIcon from "@mui/icons-material/CopyAll";
-import FilterIcon from "@mui/icons-material/FilterAlt";
-import StateTransitionsIcon from "@mui/icons-material/PowerInput";
-import ScatterPlotIcon from "@mui/icons-material/ScatterPlot";
-import LineChartIcon from "@mui/icons-material/ShowChart";
 import * as _ from "lodash-es";
 
 import { MessagePathStructureItem, PrimitiveType } from "@lichtblick/message-path";
 import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import { RAW_MESSAGES_BUTTONS } from "@lichtblick/suite-base/panels/RawMessagesCommon/buttons";
 import {
   DATA_ARRAY_PREVIEW_LIMIT,
   PATH_NAME_AGGREGATOR,
@@ -298,8 +294,8 @@ export const getCopyAction = (
   return {
     key: "Copy",
     activeColor: copied ? "success" : "primary",
-    tooltip: copied ? "Copied" : "Copy to Clipboard",
-    icon: copied ? <CheckIcon fontSize="inherit" /> : <CopyAllIcon fontSize="inherit" />,
+    button: RAW_MESSAGES_BUTTONS.copyValue,
+    feedback: copied ? { tooltip: "Copied", icon: <CheckIcon fontSize="inherit" /> } : undefined,
     onClick: () => {
       handleCopy(JSON.stringify(itemValue, copyMessageReplacer, 2) ?? "");
     },
@@ -309,8 +305,7 @@ export const getCopyAction = (
 export const getFilterAction = (onFilter: () => void): ValueActionItem => {
   return {
     key: "Filter",
-    tooltip: "Filter on this value",
-    icon: <FilterIcon fontSize="inherit" />,
+    button: RAW_MESSAGES_BUTTONS.filter,
     onClick: onFilter,
   };
 };
@@ -321,8 +316,7 @@ export const getLineChartAction = (
 ): ValueActionItem => {
   return {
     key: "line",
-    tooltip: "Plot this value on a line chart",
-    icon: <LineChartIcon fontSize="inherit" />,
+    button: RAW_MESSAGES_BUTTONS.plotLine,
     onClick: openPlotPanel(singleSlicePath),
   };
 };
@@ -333,8 +327,7 @@ export const getScatterPlotAction = (
 ): ValueActionItem => {
   return {
     key: "scatter",
-    tooltip: "Plot this value on a scatter plot",
-    icon: <ScatterPlotIcon fontSize="inherit" />,
+    button: RAW_MESSAGES_BUTTONS.plotScatter,
     onClick: openPlotPanel(multiSlicePath),
   };
 };
@@ -345,8 +338,7 @@ export const getStateTransitionsAction = (
 ): ValueActionItem => {
   return {
     key: "stateTransitions",
-    tooltip: "View state transitions for this value",
-    icon: <StateTransitionsIcon fontSize="inherit" />,
+    button: RAW_MESSAGES_BUTTONS.stateTransitions,
     onClick: openStateTransitionsPanel(singleSlicePath),
   };
 };

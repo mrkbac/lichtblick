@@ -13,6 +13,7 @@ import { LineSegmentsGeometry } from "three/examples/jsm/lines/LineSegmentsGeome
 import { Renderable } from "../Renderable";
 import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
+import { isThreeDeeShortcut } from "../shortcuts";
 import { AnyFrameId, CoordinateFrame } from "../transforms";
 import {
   frameTransform,
@@ -960,14 +961,14 @@ export class MeasurementTool extends SceneExtension<Renderable, MeasurementToolE
       return;
     }
     const placing = (this.#draft?.points.length ?? 0) > 1;
-    if (event.key === "Escape") {
+    if (isThreeDeeShortcut("3d.finishMeasurement", event)) {
       if (placing) {
         this.#finishDraft();
       } else {
         this.stopMeasuring();
       }
       event.preventDefault();
-    } else if (event.key === "Backspace" || event.key === "Delete") {
+    } else if (isThreeDeeShortcut("3d.deleteMeasurement", event)) {
       if (placing) {
         // Remove the last placed point, keeping the one under the cursor
         this.#draft!.points.splice(-2, 1);

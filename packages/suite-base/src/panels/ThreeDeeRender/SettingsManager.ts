@@ -8,13 +8,18 @@
 import EventEmitter from "eventemitter3";
 import { produce } from "immer";
 
-import { SettingsTreeAction, SettingsTreeNode, SettingsTreeNodes } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
+import type {
+  DocumentedNode,
+  DocumentedNodes,
+} from "@lichtblick/suite-base/panels/shared/documentedSettings";
 
 import { LayerErrors, Path } from "./LayerErrors";
 
 export type ActionHandler = (action: SettingsTreeAction) => void;
 
-export type SettingsTreeNodeWithActionHandler = SettingsTreeNode & { handler?: ActionHandler };
+/** Every field in the 3D settings tree needs `help`: the sidebar shows it and the guide lists it. */
+export type SettingsTreeNodeWithActionHandler = DocumentedNode & { handler?: ActionHandler };
 
 export type SettingsTreeEntry = { path: Path; node: SettingsTreeNodeWithActionHandler };
 
@@ -32,7 +37,7 @@ export class SettingsManager extends EventEmitter<SettingsManagerEvents> {
 
   #globalSettingsEntryValidators: NodeValidator[] = [];
 
-  public constructor(baseTree: SettingsTreeNodes) {
+  public constructor(baseTree: DocumentedNodes) {
     super();
 
     this.#root = { children: baseTree };
@@ -87,7 +92,7 @@ export class SettingsManager extends EventEmitter<SettingsManagerEvents> {
     this.emit("update");
   }
 
-  public tree(): SettingsTreeNodes {
+  public tree(): DocumentedNodes {
     return this.#root.children!;
   }
 
@@ -143,7 +148,7 @@ export class SettingsManager extends EventEmitter<SettingsManagerEvents> {
   };
 }
 
-function removeNodeAtPath(root: SettingsTreeNode, path: Path): boolean {
+function removeNodeAtPath(root: DocumentedNode, path: Path): boolean {
   if (path.length === 0) {
     return false;
   }
@@ -165,7 +170,7 @@ function removeNodeAtPath(root: SettingsTreeNode, path: Path): boolean {
   return removeNodeAtPath(nextNode, path.slice(1));
 }
 
-function clearChildren(root: SettingsTreeNode, path: Path): void {
+function clearChildren(root: DocumentedNode, path: Path): void {
   if (path.length === 0) {
     return;
   }
@@ -184,7 +189,7 @@ function clearChildren(root: SettingsTreeNode, path: Path): void {
   clearChildren(nextNode, path.slice(1));
 }
 
-function addNodeAtPath(root: SettingsTreeNode, path: Path, node: SettingsTreeNode): void {
+function addNodeAtPath(root: DocumentedNode, path: Path, node: DocumentedNode): void {
   if (path.length === 0) {
     throw new Error(`Empty path for settings node "${node.label}"`);
   }
@@ -205,7 +210,7 @@ function addNodeAtPath(root: SettingsTreeNode, path: Path, node: SettingsTreeNod
   curNode.children[lastSegment] = node;
 }
 
-function setLabelAtPath(root: SettingsTreeNode, path: Path, label: string): void {
+function setLabelAtPath(root: DocumentedNode, path: Path, label: string): void {
   if (path.length === 0) {
     throw new Error(`Empty path for settings label "${label}"`);
   }

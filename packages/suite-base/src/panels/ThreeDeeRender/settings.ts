@@ -5,7 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import type { SettingsTreeField } from "@lichtblick/suite";
+import type { DocumentedField } from "@lichtblick/suite-base/panels/shared/documentedSettings";
+
+import type { ColorRGBA } from "./ros";
 
 export type SelectEntry = { label: string; value: string };
 
@@ -25,6 +27,7 @@ export type BaseSettings = {
 
 export type LayerSettingsEntity = BaseSettings & {
   showOutlines: boolean | undefined;
+  showLabels?: boolean;
   color: string | undefined;
   selectedIdVariable: string | undefined;
 };
@@ -46,13 +49,21 @@ export type CustomLayerSettings = BaseSettings & {
 export const PRECISION_DISTANCE = 3; // [1mm]
 export const PRECISION_DEGREES = 1;
 
+/** Global variable set to the selected marker or entity id unless a topic overrides it. */
+export const SELECTED_ID_VARIABLE = "selected_id";
+
+/** Length of a drawn coordinate axis (shaft plus head) in meters. */
+export const AXIS_LENGTH = 0.2;
+
 export function fieldSize(
   label: string,
+  help: string,
   value: number | undefined,
   placeholder?: string | number,
-): SettingsTreeField {
+): DocumentedField {
   return {
     label,
+    help,
     input: "number",
     min: 0,
     step: 0.5,
@@ -62,9 +73,10 @@ export function fieldSize(
   };
 }
 
-export function fieldScaleVec3(label: string, value: Vec3): SettingsTreeField {
+export function fieldScaleVec3(label: string, help: string, value: Vec3): DocumentedField {
   return {
     label,
+    help,
     input: "vec3",
     labels: ["X", "Y", "Z"],
     step: 0.5,
@@ -75,11 +87,13 @@ export function fieldScaleVec3(label: string, value: Vec3): SettingsTreeField {
 
 export function fieldLineWidth(
   label: string,
+  help: string,
   value: number | undefined,
   placeholder?: string | number,
-): SettingsTreeField {
+): DocumentedField {
   return {
     label,
+    help,
     input: "number",
     min: 0,
     step: 0.005,
@@ -89,6 +103,14 @@ export function fieldLineWidth(
   };
 }
 
-export function fieldGradient(label: string, value: TwoColors): SettingsTreeField {
-  return { label, input: "gradient", value };
+export function fieldGradient(label: string, help: string, value: TwoColors): DocumentedField {
+  return { label, help, input: "gradient", value };
+}
+
+/** Lives here rather than in color.ts so light settings modules can use it without three.js. */
+export function rgbaToCssString(color: ColorRGBA): string {
+  const r = Math.trunc(color.r * 255);
+  const g = Math.trunc(color.g * 255);
+  const b = Math.trunc(color.b * 255);
+  return `rgba(${r}, ${g}, ${b}, ${color.a})`;
 }

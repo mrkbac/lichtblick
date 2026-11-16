@@ -292,6 +292,22 @@ describe("MessagePathInput Component", () => {
       expect(options[1]!.textContent).toBe(topic2.name);
     });
 
+    it("only suggests topics listed in validTopics", async () => {
+      mockTopics = [
+        { name: "/a", schemaName: "std_msgs/String" },
+        { name: "/b", schemaName: "std_msgs/String" },
+      ];
+      mockDatatypes = new Map();
+
+      renderComponent({ path: "", validTopics: ["/b"] });
+      const input = screen.getByRole("combobox");
+      fireEvent.click(input);
+      fireEvent.focus(input);
+
+      const options = await screen.findAllByRole("option");
+      expect(options.map((option) => option.textContent)).toEqual(["/b"]);
+    });
+
     it("should resolve to 'topicName' when typing partial topic name", async () => {
       const topic1 = { name: `/camera/${BasicBuilder.string()}`, schemaName: "std_msgs/String" };
       const topic2 = { name: `/camera/${BasicBuilder.string()}`, schemaName: "std_msgs/String" };

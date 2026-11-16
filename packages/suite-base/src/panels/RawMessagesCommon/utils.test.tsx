@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
+import { RAW_MESSAGES_BUTTONS } from "@lichtblick/suite-base/panels/RawMessagesCommon/buttons";
 import { NodeState } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
 import {
   dataWithoutWrappingArray,
@@ -934,8 +935,8 @@ describe("getCopyAction", () => {
         // Then
         expect(resultFalse.key).toBe("Copy");
         expect(resultFalse.activeColor).toBe("primary");
-        expect(resultFalse.tooltip).toBe("Copy to Clipboard");
-        expect(resultFalse.icon).toBeDefined();
+        expect(resultFalse.button).toBe(RAW_MESSAGES_BUTTONS.copyValue);
+        expect(resultFalse.feedback).toBeUndefined();
       });
 
       it("then should call handleCopy with stringified JSON when clicked", () => {
@@ -959,8 +960,8 @@ describe("getCopyAction", () => {
         // Then
         expect(resultTrue.key).toBe("Copy");
         expect(resultTrue.activeColor).toBe("success");
-        expect(resultTrue.tooltip).toBe("Copied");
-        expect(resultTrue.icon).toBeDefined();
+        expect(resultTrue.feedback?.tooltip).toBe("Copied");
+        expect(resultTrue.feedback?.icon).toBeDefined();
       });
     });
   });
@@ -974,8 +975,7 @@ describe("getFilterAction", () => {
       it("then should return filter action with correct properties", () => {
         // Then
         expect(result.key).toBe("Filter");
-        expect(result.tooltip).toBe("Filter on this value");
-        expect(result.icon).toBeDefined();
+        expect(result.button).toBe(RAW_MESSAGES_BUTTONS.filter);
       });
 
       it("then should call onFilter when clicked", () => {
@@ -999,8 +999,7 @@ describe("getLineChartAction", () => {
       it("then should return line chart action with correct properties", () => {
         // Then
         expect(result.key).toBe("line");
-        expect(result.tooltip).toBe("Plot this value on a line chart");
-        expect(result.icon).toBeDefined();
+        expect(result.button).toBe(RAW_MESSAGES_BUTTONS.plotLine);
       });
 
       it("then should call openPlotPanel with path when clicked", () => {
@@ -1027,8 +1026,7 @@ describe("getScatterPlotAction", () => {
       it("then should return scatter plot action with correct properties", () => {
         // Then
         expect(result.key).toBe("scatter");
-        expect(result.tooltip).toBe("Plot this value on a scatter plot");
-        expect(result.icon).toBeDefined();
+        expect(result.button).toBe(RAW_MESSAGES_BUTTONS.plotScatter);
       });
 
       it("then should call openPlotPanel with path when clicked", () => {
@@ -1055,8 +1053,7 @@ describe("getStateTransitionsAction", () => {
       it("then should return state transitions action with correct properties", () => {
         // Then
         expect(result.key).toBe("stateTransitions");
-        expect(result.tooltip).toBe("View state transitions for this value");
-        expect(result.icon).toBeDefined();
+        expect(result.button).toBe(RAW_MESSAGES_BUTTONS.stateTransitions);
       });
 
       it("then should call openStateTransitionsPanel with path when clicked", () => {

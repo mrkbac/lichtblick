@@ -1,14 +1,13 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import CloseIcon from "@mui/icons-material/Close";
-import { IconButton } from "@mui/material";
 import React, { type CSSProperties, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 
 import { Immutable } from "@lichtblick/suite";
+import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import { useDeltaOverlayStyles } from "@lichtblick/suite-base/panels/shared/DeltaOverlay.style";
 import { MISSING_VALUE_PLACEHOLDER } from "@lichtblick/suite-base/panels/shared/constants";
+import { DELTA_OVERLAY_BUTTONS } from "@lichtblick/suite-base/panels/shared/deltaOverlayButtons";
 import { DeltaResult } from "@lichtblick/suite-base/panels/shared/types";
 
 export type DeltaOverlaySeriesLabel = {
@@ -63,7 +62,6 @@ export const DeltaOverlay = React.memo(function DeltaOverlay(
     onRemoveMarkerB,
     style,
   } = props;
-  const { t } = useTranslation("plot");
   const { classes } = useDeltaOverlayStyles();
   const overlayRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{
@@ -174,18 +172,16 @@ export const DeltaOverlay = React.memo(function DeltaOverlay(
         <div className={classes.value}>{renderFormattedY(deltaY)}</div>
 
         {xValueA != undefined ? (
-          <IconButton
+          <PanelIconButton
+            button={DELTA_OVERLAY_BUTTONS.removeMarkerA}
             className={classes.removeButton}
-            size="small"
             disableRipple
             data-testid="delta-overlay-remove-marker-a"
             data-delta-overlay-action
-            aria-label={t("removeMarkerA")}
-            title={t("removeMarkerA")}
             onClick={onRemoveMarkerA}
           >
-            <CloseIcon fontSize="small" />
-          </IconButton>
+            <DELTA_OVERLAY_BUTTONS.removeMarkerA.icon fontSize="small" />
+          </PanelIconButton>
         ) : (
           <div />
         )}
@@ -203,18 +199,16 @@ export const DeltaOverlay = React.memo(function DeltaOverlay(
         <div className={classes.value}>{renderFormattedY(yValueA)}</div>
 
         {xValueB != undefined ? (
-          <IconButton
+          <PanelIconButton
+            button={DELTA_OVERLAY_BUTTONS.removeMarkerB}
             className={classes.removeButton}
-            size="small"
             disableRipple
             data-testid="delta-overlay-remove-marker-b"
             data-delta-overlay-action
-            aria-label={t("removeMarkerB")}
-            title={t("removeMarkerB")}
             onClick={onRemoveMarkerB}
           >
-            <CloseIcon fontSize="small" />
-          </IconButton>
+            <DELTA_OVERLAY_BUTTONS.removeMarkerB.icon fontSize="small" />
+          </PanelIconButton>
         ) : (
           <div />
         )}

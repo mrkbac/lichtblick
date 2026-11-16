@@ -31,6 +31,7 @@ export class RenderableTextViewFacing extends RenderableMarker {
   }
 
   public override dispose(): void {
+    this.#label.visible = true; // pooled labels are shared; don't hand out a hidden one
     this.renderer.labelPool.release(this.#label);
   }
 
@@ -38,6 +39,7 @@ export class RenderableTextViewFacing extends RenderableMarker {
     super.update(newMarker, receiveTime);
     const marker = this.userData.marker;
 
+    this.#label.visible = this.getSettings()?.showLabels ?? true;
     this.#label.setText(marker.text);
     const alpha = marker.color.a;
     this.#label.setColor(

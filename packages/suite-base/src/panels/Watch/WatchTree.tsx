@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import AddIcon from "@mui/icons-material/Add";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
 import { IconButton, Tooltip } from "@mui/material";
@@ -9,10 +8,12 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { quoteFieldNameIfNeeded } from "@lichtblick/message-path";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import { useSeriesDrag } from "@lichtblick/suite-base/panels/shared/useSeriesDrag";
 import { isTypedArray } from "@lichtblick/suite-base/types/isTypedArray";
 
 import { useStyles } from "./Watch.style";
+import { WATCH_BUTTONS } from "./buttons";
 import { formatValue, isExpandable } from "./format";
 
 const MAX_CHILDREN = 200;
@@ -53,6 +54,7 @@ type NodeProps = {
 function TreeNode({ name, value, path, depth, onAddPath }: NodeProps): React.JSX.Element {
   const { t } = useTranslation("watch");
   const { classes } = useStyles();
+  const addAsRowTitle = usePanelButtonTitle(WATCH_BUTTONS.addAsRow);
   const [open, setOpen] = useState(false);
   const expandable = isExpandable(value);
   // Fields can be dragged onto other panels, e.g. a Plot
@@ -84,15 +86,15 @@ function TreeNode({ name, value, path, depth, onAddPath }: NodeProps): React.JSX
         </span>
         <span className={classes.treeValue}>{formatValue(value, undefined)}</span>
         <span data-actions className={classes.treeActions}>
-          <Tooltip title={t("addAsRow")}>
+          <Tooltip title={addAsRowTitle}>
             <IconButton
               size="small"
-              aria-label={t("addAsRow")}
+              aria-label={addAsRowTitle}
               onClick={(event) => {
                 onAddPath(path, { shiftKey: event.shiftKey });
               }}
             >
-              <AddIcon fontSize="inherit" />
+              <WATCH_BUTTONS.addAsRow.icon fontSize="inherit" />
             </IconButton>
           </Tooltip>
         </span>

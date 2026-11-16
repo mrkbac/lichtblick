@@ -7,7 +7,7 @@
 
 import { toNanoSec } from "@foxglove/rostime";
 
-import { SettingsTreeAction, SettingsTreeFields } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
 import type { AnyRendererSubscription } from "../IRenderer";
@@ -20,7 +20,7 @@ import {
   onlyLastByTopicMessage,
 } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
-import { makeRgba, rgbaToCssString, stringToRgba } from "../color";
+import { makeRgba, stringToRgba } from "../color";
 import { normalizeHeader, normalizeVector3s } from "../normalizeMessages";
 import {
   Marker,
@@ -32,6 +32,7 @@ import {
   TIME_ZERO,
 } from "../ros";
 import { BaseSettings } from "../settings";
+import { POLYGON_DEFAULTS, polygonSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose } from "../transforms";
 import { RenderableLineStrip } from "./markers/RenderableLineStrip";
@@ -41,16 +42,7 @@ export type LayerSettingsPolygon = BaseSettings & {
   color: string;
 };
 
-const DEFAULT_COLOR = { r: 124 / 255, g: 107 / 255, b: 1, a: 1 };
-const DEFAULT_LINE_WIDTH = 0.1;
-
-const DEFAULT_COLOR_STR = rgbaToCssString(DEFAULT_COLOR);
-
-const DEFAULT_SETTINGS: LayerSettingsPolygon = {
-  visible: false,
-  lineWidth: DEFAULT_LINE_WIDTH,
-  color: DEFAULT_COLOR_STR,
-};
+const DEFAULT_SETTINGS = POLYGON_DEFAULTS;
 
 export type PolygonUserData = BaseUserData & {
   settings: LayerSettingsPolygon;
@@ -96,29 +88,9 @@ export class Polygons extends SceneExtension<PolygonRenderable> {
       }
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsPolygon>;
 
-      // prettier-ignore
-      const fields: SettingsTreeFields = {
-        lineWidth: {
-          label: "Line Width",
-          input: "number",
-          min: 0,
-          placeholder: String(DEFAULT_LINE_WIDTH),
-          step: 0.005,
-          precision: 3,
-          value: config.lineWidth,
-        },
-        color: { label: "Color", input: "rgba", value: config.color ?? DEFAULT_COLOR_STR },
-      };
-
       entries.push({
         path: ["topics", topic.name],
-        node: {
-          label: topic.name,
-          icon: "Star",
-          fields,
-          visible: config.visible ?? DEFAULT_SETTINGS.visible,
-          handler,
-        },
+        node: { ...polygonSettingsNode(topic, config), handler },
       });
     }
     return entries;

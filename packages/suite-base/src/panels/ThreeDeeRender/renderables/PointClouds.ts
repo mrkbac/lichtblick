@@ -18,16 +18,18 @@ import {
   disposeCubeMaterials,
   createInstancePickingMaterial,
   createPickingMaterial,
-  DEFAULT_POINT_SETTINGS,
-  LayerSettingsPointExtension,
-  pointSettingsNode,
   pointCloudMaterial,
   pointCloudColorEncoding,
-  POINT_CLOUD_REQUIRED_FIELDS,
   DECAY_HISTORY_LIMITS,
   RenderObjectHistory,
   PointsRenderable,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
+import { colorFieldComputedPrefix } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
+import {
+  DEFAULT_POINT_SETTINGS,
+  LayerSettingsPointExtension,
+  POINT_CLOUD_REQUIRED_FIELDS,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
 import type { RosObject, RosValue } from "@lichtblick/suite-base/players/types";
 
 import {
@@ -35,7 +37,6 @@ import {
   ColorConverter,
   colorHasTransparency,
   getColorConverter,
-  colorFieldComputedPrefix,
 } from "./colorMode";
 import type { AnyRendererSubscription } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
@@ -56,6 +57,7 @@ import {
   PointField,
   PointFieldType,
 } from "../ros";
+import { pointCloudSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose, Pose } from "../transforms";
 import { FieldReader, getReader, isSupportedField } from "./pointClouds/fieldReaders";
@@ -904,18 +906,10 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
       }
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsPointClouds>;
       const messageFields = this.#fieldsByTopic.get(topic.name) ?? POINT_CLOUD_REQUIRED_FIELDS;
-      const node: SettingsTreeNodeWithActionHandler = pointSettingsNode(
-        topic,
-        messageFields,
-        config,
-      );
-      node.fields!.stixelsEnabled = {
-        label: "Stixel view",
-        input: "boolean",
-        value: config.stixelsEnabled ?? DEFAULT_SETTINGS.stixelsEnabled,
+      const node: SettingsTreeNodeWithActionHandler = {
+        ...pointCloudSettingsNode(topic, messageFields, config),
+        handler,
       };
-      node.handler = handler;
-      node.icon = "Points";
       entries.push({ path: ["topics", topic.name], node });
     }
     return entries;

@@ -34,6 +34,7 @@ import {
   Viewport,
 } from "./builders/IDatasetsBuilder";
 import { isDerivedSeries } from "./builders/utils";
+import { DEFAULT_SLIDING_WINDOW_SECONDS } from "./constants";
 import {
   ConfigBounds,
   Dataset,
@@ -61,7 +62,6 @@ const log = Logger.getLogger(__filename);
 const replaceUndefinedWithEmptyDataset = (dataset: Dataset | undefined) => dataset ?? { data: [] };
 
 /** Window size of a sliding time window that has no size set yet */
-export const DEFAULT_SLIDING_WINDOW_SECONDS = 10;
 
 /**
  * PlotCoordinator interfaces commands and updates between the dataset builder and the chart

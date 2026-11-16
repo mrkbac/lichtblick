@@ -5,9 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { Delete20Regular, Edit20Regular } from "@fluentui/react-icons";
 import {
-  IconButton,
   InputBase,
   ListItem,
   ListItemButton,
@@ -17,6 +15,12 @@ import {
 } from "@mui/material";
 import { ChangeEventHandler, FocusEventHandler, KeyboardEvent, useCallback, useState } from "react";
 import { makeStyles } from "tss-react/mui";
+
+import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
+import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
+
+import { USER_SCRIPTS_BUTTONS } from "../buttons";
+import { USER_SCRIPTS_SHORTCUTS } from "../shortcuts";
 
 const useStyles = makeStyles()((theme) => ({
   input: {
@@ -74,10 +78,11 @@ export function ScriptListItem({
       if (label === "") {
         return;
       }
-      if (event.key === "Escape") {
+      const shortcut = findShortcut(USER_SCRIPTS_SHORTCUTS, event);
+      if (shortcut?.id === "userScripts.cancelRename") {
         setLabel(title);
         setEditMode(false);
-      } else if (event.key === "Enter") {
+      } else if (shortcut?.id === "userScripts.rename") {
         setEditMode(false);
         onRename(label);
       }
@@ -97,7 +102,7 @@ export function ScriptListItem({
   }, [label, onRename]);
 
   const onButtonKeyDown = useCallback((event: KeyboardEvent) => {
-    if (event.key === "Enter") {
+    if (findShortcut(USER_SCRIPTS_SHORTCUTS, event)?.id === "userScripts.rename") {
       setEditMode(true);
     }
   }, []);
@@ -109,26 +114,14 @@ export function ScriptListItem({
       secondaryAction={
         <>
           {!editMode && (
-            <IconButton
-              size="small"
-              aria-title="rename"
-              title="Rename"
+            <PanelIconButton
+              button={USER_SCRIPTS_BUTTONS.rename}
               onClick={() => {
                 setEditMode(true);
               }}
-            >
-              <Edit20Regular />
-            </IconButton>
+            />
           )}
-          <IconButton
-            size="small"
-            aria-title="delete"
-            title="Delete"
-            color="error"
-            onClick={onDelete}
-          >
-            <Delete20Regular />
-          </IconButton>
+          <PanelIconButton button={USER_SCRIPTS_BUTTONS.delete} color="error" onClick={onDelete} />
         </>
       }
     >

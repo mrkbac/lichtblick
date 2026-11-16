@@ -15,7 +15,7 @@ import type { EditorDidMount } from "../UserScriptEditor/MonacoEditor";
 vi.mock("monaco-editor/languages/definitions/markdown/register.js", () => ({}));
 vi.mock("../UserScriptEditor/theme", () => ({ themes: [] }));
 vi.mock("@lichtblick/suite-base/components/PanelToolbar", () => ({ default: () => <div /> }));
-vi.mock("./settings", () => ({ useNotesSettings: vi.fn() }));
+vi.mock("./useNotesSettings", () => ({ useNotesSettings: vi.fn() }));
 
 const mocks = vi.hoisted(() => ({
   decorate: vi.fn(),
@@ -255,9 +255,9 @@ describe("Notes", () => {
   });
 
   it.each([
-    { name: "Escape", keyCode: 9 },
-    { name: "Cmd+Enter", keyCode: 3, metaKey: true },
-    { name: "Ctrl+Enter", keyCode: 3, ctrlKey: true },
+    { name: "Escape", key: "Escape" },
+    { name: "Cmd+Enter", key: "Enter", metaKey: true },
+    { name: "Ctrl+Enter", key: "Enter", ctrlKey: true },
   ])("saves and blurs on $name", ({ name: _name, ...key }) => {
     // Given pending typing in the editor.
     const { saveConfig } = setup();
@@ -266,7 +266,11 @@ describe("Notes", () => {
     const stopPropagation = vi.fn();
     // When the leave-editor shortcut is pressed.
     act(() => {
-      mocks.keyDown!({ ...key, preventDefault, stopPropagation } as unknown as IKeyboardEvent);
+      mocks.keyDown!({
+        browserEvent: { metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, ...key },
+        preventDefault,
+        stopPropagation,
+      } as unknown as IKeyboardEvent);
     });
     // Then it saves and releases focus, without removing the editor.
     expect(saveConfig).toHaveBeenCalledWith({ text: "draft" });
@@ -279,7 +283,9 @@ describe("Notes", () => {
   it("keeps ordinary Enter as an editing key", () => {
     setup();
     act(() => {
-      mocks.keyDown!({ keyCode: 3 } as IKeyboardEvent);
+      mocks.keyDown!({
+        browserEvent: { key: "Enter", metaKey: false, ctrlKey: false },
+      } as unknown as IKeyboardEvent);
     });
     expect(mocks.blur).not.toHaveBeenCalled();
   });

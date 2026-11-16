@@ -9,91 +9,25 @@ import { produce } from "immer";
 import * as _ from "lodash-es";
 import { useCallback, useEffect, useMemo } from "react";
 
-import { Immutable, SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
+import { Immutable, SettingsTreeAction } from "@lichtblick/suite";
 import {
   isEditedMessage,
   sampleMessageJson,
 } from "@lichtblick/suite-base/components/MessageEditor/messageJson";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
-import { buttonSettingsFields } from "@lichtblick/suite-base/panels/shared/actionButton";
 import { replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import { Topic } from "@lichtblick/suite-base/players/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
+import { buildSettingsTree, defaultConfig } from "./settingsTree";
 import { PublishConfig } from "./types";
 
-export const defaultConfig: PublishConfig = {
-  buttonText: "Publish",
-  buttonTooltip: "",
-  advancedView: true,
-  value: "{}",
-  publishRate: 1,
-};
+export { defaultConfig };
 
 /** Asks the user whether an edited message may be replaced by a new template. */
 type ConfirmReplace = (schemaName: string) => Promise<boolean>;
-
-function datatypeError(schemaNames: string[], datatype?: string) {
-  if (!datatype) {
-    return "Message schema cannot be empty";
-  }
-  if (!schemaNames.includes(datatype)) {
-    return "Schema name not found";
-  }
-  return undefined;
-}
-
-function topicError(topicName?: string) {
-  if (!topicName) {
-    return "Topic cannot be empty";
-  }
-  return undefined;
-}
-
-const buildSettingsTree = (
-  config: PublishConfig,
-  schemaNames: string[],
-  topics: readonly Topic[],
-): SettingsTreeNodes => ({
-  general: {
-    fields: {
-      topicName: {
-        label: "Topic",
-        input: "autocomplete",
-        error: topicError(config.topicName),
-        value: config.topicName ?? "",
-        items: topics.map((t) => t.name),
-      },
-      datatype: {
-        label: "Message schema",
-        input: "autocomplete",
-        error: datatypeError(schemaNames, config.datatype),
-        items: schemaNames,
-        value: config.datatype ?? "",
-      },
-      advancedView: {
-        label: "Editing mode",
-        input: "boolean",
-        value: config.advancedView,
-      },
-      publishRate: {
-        label: "Repeat rate (Hz)",
-        help: "Rate used by the repeat button",
-        input: "number",
-        min: 0.1,
-        max: 1000,
-        step: 1,
-        value: config.publishRate ?? defaultConfig.publishRate,
-      },
-    },
-  },
-  button: {
-    label: "Button",
-    fields: buttonSettingsFields(config),
-  },
-});
 
 export function usePublishPanelSettings(
   config: PublishConfig,

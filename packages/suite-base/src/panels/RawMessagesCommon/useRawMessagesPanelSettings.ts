@@ -4,7 +4,7 @@
 import { useCallback, useEffect } from "react";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
-import { FONT_SIZE_OPTIONS } from "@lichtblick/suite-base/panels/RawMessagesCommon/constants";
+import { buildSettingsTree } from "@lichtblick/suite-base/panels/RawMessagesCommon/settings";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 
 /**
@@ -44,25 +44,7 @@ export function useRawMessagesPanelSettings({
   useEffect(() => {
     updatePanelSettingsTree({
       actionHandler,
-      nodes: {
-        general: {
-          label: "General",
-          fields: {
-            fontSize: {
-              label: "Font size",
-              input: "select",
-              options: [
-                { label: "auto", value: undefined },
-                ...FONT_SIZE_OPTIONS.map((value) => ({
-                  label: `${value} px`,
-                  value,
-                })),
-              ],
-              value: fontSize,
-            },
-          },
-        },
-      },
+      nodes: buildSettingsTree(fontSize),
     });
   }, [actionHandler, fontSize, updatePanelSettingsTree]);
 }

@@ -25,7 +25,7 @@ import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { CameraState, DEFAULT_CAMERA_STATE, DEFAULT_ORBIT_CONTROLS_CONFIG } from "../camera";
-import { PRECISION_DEGREES, PRECISION_DISTANCE } from "../settings";
+import { frameSettingsNode, viewSettingsNode } from "../settingsNodes/global";
 
 const DISPLAY_FRAME_NOT_FOUND = "DISPLAY_FRAME_NOT_FOUND";
 
@@ -138,83 +138,8 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
   }
 
   #cameraSettingsNode(): SettingsTreeEntry {
-    const config = this.renderer.config;
-    const { cameraState: camera } = config;
-    const handler = this.handleSettingsAction;
-
-    return {
-      path: ["cameraState"],
-      node: {
-        label: t("threeDee:view"),
-        actions: [{ type: "action", id: "reset-camera", label: t("threeDee:reset") }],
-        handler,
-        fields: {
-          syncCamera: {
-            label: t("threeDee:syncCamera"),
-            input: "boolean",
-            error: this.renderer.cameraSyncError(),
-            value: config.scene.syncCamera ?? false,
-            help: t("threeDee:syncCameraHelp"),
-          },
-          distance: {
-            label: t("threeDee:distance"),
-            input: "number",
-            step: 1,
-            precision: PRECISION_DISTANCE,
-            value: camera.distance,
-          },
-          perspective: {
-            label: t("threeDee:perspective"),
-            input: "boolean",
-            value: camera.perspective,
-          },
-          targetOffset: {
-            label: t("threeDee:target"),
-            input: "vec3",
-            labels: ["X", "Y", "Z"],
-            precision: PRECISION_DISTANCE,
-            value: [...camera.targetOffset],
-          },
-          thetaOffset: {
-            label: t("threeDee:theta"),
-            input: "number",
-            step: 1,
-            precision: PRECISION_DEGREES,
-            value: camera.thetaOffset,
-          },
-          ...(camera.perspective && {
-            phi: {
-              label: t("threeDee:phi"),
-              input: "number",
-              step: 1,
-              precision: PRECISION_DEGREES,
-              value: camera.phi,
-            },
-            fovy: {
-              label: t("threeDee:fovy"),
-              input: "number",
-              step: 1,
-              precision: PRECISION_DEGREES,
-              value: camera.fovy,
-            },
-          }),
-          near: {
-            label: t("threeDee:near"),
-            input: "number",
-            step: DEFAULT_CAMERA_STATE.near,
-            precision: PRECISION_DISTANCE,
-            value: camera.near,
-          },
-          far: {
-            label: t("threeDee:far"),
-            input: "number",
-            step: 1,
-            precision: PRECISION_DISTANCE,
-            value: camera.far,
-          },
-        },
-      },
-    };
+    const node = viewSettingsNode(this.renderer.config, this.renderer.cameraSyncError());
+    return { path: ["cameraState"], node: { ...node, handler: this.handleSettingsAction } };
   }
 
   #frameSettingsNode(): SettingsTreeEntry {
@@ -239,38 +164,12 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
 
     const followTfError = this.renderer.settings.errors.errors.errorAtPath(FOLLOW_TF_PATH);
 
-    const followModeOptions = [
-      { label: t("threeDee:pose"), value: "follow-pose" },
-      { label: t("threeDee:position"), value: "follow-position" },
-      { label: t("threeDee:fixed"), value: "follow-none" },
-    ];
-    const followModeValue = this.renderer.config.followMode;
-
-    return {
-      path: ["general"],
-      node: {
-        label: t("threeDee:frame"),
-        fields: {
-          followTf: {
-            label: t("threeDee:displayFrame"),
-            help: t("threeDee:displayFrameHelp"),
-            input: "select",
-            options: followTfOptions,
-            value: followTfValue,
-            error: followTfError,
-          },
-          followMode: {
-            label: t("threeDee:followMode"),
-            help: t("threeDee:followModeHelp"),
-            input: "select",
-            options: followModeOptions,
-            value: followModeValue,
-          },
-        },
-        defaultExpansionState: "expanded",
-        handler,
-      },
-    };
+    const node = frameSettingsNode(
+      { followTf: followTfValue, followMode: this.renderer.config.followMode },
+      followTfOptions,
+      followTfError,
+    );
+    return { path: ["general"], node: { ...node, handler } };
   }
   public override handleSettingsAction = (action: SettingsTreeAction): void => {
     if (action.action === "perform-node-action" && action.payload.id === "reset-camera") {

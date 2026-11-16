@@ -14,13 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import PlusIcon from "@mui/icons-material/AddBoxOutlined";
-import MinusIcon from "@mui/icons-material/IndeterminateCheckBoxOutlined";
-import KeyboardArrowLeftIcon from "@mui/icons-material/KeyboardArrowLeft";
-import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
-import KeyboardDoubleArrowLeftIcon from "@mui/icons-material/KeyboardDoubleArrowLeft";
-import KeyboardDoubleArrowRightIcon from "@mui/icons-material/KeyboardDoubleArrowRight";
-import { Container, IconButton, MenuItem, Select, Typography } from "@mui/material";
+import { Container, MenuItem, Select, Typography } from "@mui/material";
 import {
   ExpandedState,
   PaginationState,
@@ -34,9 +28,11 @@ import React from "react";
 import { makeStyles } from "tss-react/mui";
 
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
+import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 
 import TableCell from "./TableCell";
+import { TABLE_BUTTONS } from "./buttons";
 import { sanitizeAccessorPath } from "./sanitizeAccessorPath";
 import { CellValue, MergedColumnsType, TableFeatures, tableFeatureSet } from "./types";
 
@@ -161,17 +157,19 @@ const memoizedCellRenderer = memoizeWeak((accessorPath: string, id: string) => {
 function Expander(info: Readonly<CellContext<TableFeatures, CellValue>>) {
   const { classes } = useStyles();
   const { row } = info;
+  const button = row.getIsExpanded() ? TABLE_BUTTONS.collapseCell : TABLE_BUTTONS.expandRow;
+  const Icon = button.icon;
   return (
-    <IconButton
+    <PanelIconButton
+      button={button}
       className={classes.iconButton}
-      size="small"
       data-testid={`expand-row-${row.index}`}
       onClick={() => {
         row.toggleExpanded();
       }}
     >
-      {row.getIsExpanded() ? <MinusIcon fontSize="small" /> : <PlusIcon fontSize="small" />}
-    </IconButton>
+      <Icon fontSize="small" />
+    </PanelIconButton>
   );
 }
 
@@ -339,44 +337,52 @@ export default function Table({
             paddingTop={0.5}
             alignItems="center"
           >
-            <IconButton
+            <PanelIconButton
+              button={TABLE_BUTTONS.firstPage}
+              size="medium"
               onClick={() => {
                 table.setPageIndex(0);
               }}
               disabled={!table.getCanPreviousPage()}
             >
-              <KeyboardDoubleArrowLeftIcon fontSize="small" />
-            </IconButton>
-            <IconButton
+              <TABLE_BUTTONS.firstPage.icon fontSize="small" />
+            </PanelIconButton>
+            <PanelIconButton
+              button={TABLE_BUTTONS.previousPage}
+              size="medium"
               onClick={() => {
                 table.previousPage();
               }}
               disabled={!table.getCanPreviousPage()}
             >
-              <KeyboardArrowLeftIcon fontSize="small" />
-            </IconButton>
+              <TABLE_BUTTONS.previousPage.icon fontSize="small" />
+            </PanelIconButton>
             <Typography variant="inherit" align="center" noWrap style={{ flex: "auto" }}>
               Page{" "}
               <strong>
                 {table.state.pagination.pageIndex + 1} of {table.getPageOptions().length}
               </strong>
             </Typography>
-            <IconButton
+            <PanelIconButton
+              button={TABLE_BUTTONS.nextPage}
+              size="medium"
               onClick={() => {
                 table.nextPage();
               }}
               disabled={!table.getCanNextPage()}
             >
-              <KeyboardArrowRightIcon fontSize="small" />
-            </IconButton>
-            <IconButton
+              <TABLE_BUTTONS.nextPage.icon fontSize="small" />
+            </PanelIconButton>
+            <PanelIconButton
+              button={TABLE_BUTTONS.lastPage}
+              size="medium"
               onClick={() => {
                 table.setPageIndex(table.getPageCount() - 1);
               }}
               disabled={!table.getCanNextPage()}
             >
-              <KeyboardDoubleArrowRightIcon fontSize="small" />
-            </IconButton>
+              <TABLE_BUTTONS.lastPage.icon fontSize="small" />
+            </PanelIconButton>
             <Select
               value={pageSize}
               size="small"

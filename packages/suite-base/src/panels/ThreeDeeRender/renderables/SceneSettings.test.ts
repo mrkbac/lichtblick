@@ -18,10 +18,11 @@ import {
   DEFAULT_CAMERA_STATE,
   DEFAULT_ORBIT_CONTROLS_CONFIG,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/camera";
+import { DEFAULT_LABEL_SCALE_FACTOR } from "@lichtblick/suite-base/panels/ThreeDeeRender/defaults";
 import { DEFAULT_PUBLISH_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PublishSettings";
 
 import { RendererConfig } from "../IRenderer";
-import { DEFAULT_LABEL_SCALE_FACTOR, SceneSettings } from "./SceneSettings";
+import { SceneSettings } from "./SceneSettings";
 
 // --- OrbitControls mock ---
 

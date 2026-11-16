@@ -10,7 +10,7 @@ import type { Mock } from "vitest";
 
 import { AppMenuProps } from "@lichtblick/suite-base/components/AppBar/types";
 import { useCommandPaletteStore } from "@lichtblick/suite-base/components/CommandPalette/CommandPalette";
-import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
+import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 import AnalyticsContext from "@lichtblick/suite-base/context/AnalyticsContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
@@ -189,16 +189,13 @@ describe("AppMenu", () => {
     expect(mockHandleClose).toHaveBeenCalledTimes(2);
   });
 
-  it("opens documentation link in Help menu", () => {
-    const originalOpen = window.open;
-    window.open = vi.fn();
-
+  it("opens the in-app panel guide instead of external documentation", () => {
+    usePanelGuideStore.setState({ open: false, panelType: undefined });
     renderAppMenu();
 
-    fireEvent.click(screen.getByText("documentation"));
+    expect(screen.queryByText("documentation")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("panelGuide"));
 
-    expect(window.open).toHaveBeenCalledWith(APP_CONFIG.docsUrl, "_blank", "noopener,noreferrer");
-
-    window.open = originalOpen;
+    expect(usePanelGuideStore.getState().open).toBe(true);
   });
 });

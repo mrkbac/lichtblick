@@ -431,4 +431,46 @@ describe("FieldEditor", () => {
       },
     });
   });
+
+  describe("Foxglove settings fields", () => {
+    it("renders a multiline-string input and dispatches its updates", async () => {
+      const { props } = await renderComponent({
+        field: { input: "multiline-string", label, value: "a" },
+      });
+
+      const textarea = screen
+        .getByTestId("FieldEditor-MultilineTextField")
+        .querySelector("textarea")!;
+      fireEvent.change(textarea, { target: { value: "a\nb" } });
+
+      expect(props.actionHandler).toHaveBeenCalledWith({
+        action: "update",
+        payload: { path: props.path, input: "multiline-string", value: "a\nb" },
+      });
+    });
+
+    it("shows the caption under the field", async () => {
+      const caption = BasicBuilder.string();
+      await renderComponent({ field: { input: "string", label, caption } });
+
+      expect(screen.getByTestId("FieldEditor-caption")).toHaveTextContent(caption);
+    });
+
+    it("shows a warning unless there is an error", async () => {
+      const warning = BasicBuilder.string();
+      const { rerender, props } = await renderComponent({
+        field: { input: "string", label, warning },
+      });
+      expect(screen.getByTestId("FieldEditor-warning")).toBeInTheDocument();
+
+      rerender(
+        <FieldEditor
+          actionHandler={props.actionHandler}
+          path={props.path}
+          field={{ input: "string", label, warning, error: BasicBuilder.string() }}
+        />,
+      );
+      expect(screen.queryByTestId("FieldEditor-warning")).not.toBeInTheDocument();
+    });
+  });
 });

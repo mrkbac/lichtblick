@@ -10,9 +10,11 @@ import Add from "@mui/icons-material/Add";
 import Addchart from "@mui/icons-material/Addchart";
 import AutoAwesome from "@mui/icons-material/AutoAwesome";
 import Points from "@mui/icons-material/BlurOn";
+import Cached from "@mui/icons-material/Cached";
 import Check from "@mui/icons-material/Check";
 import Circle from "@mui/icons-material/Circle";
 import Clear from "@mui/icons-material/Clear";
+import Copy from "@mui/icons-material/ContentCopy";
 import Delete from "@mui/icons-material/Delete";
 import Walk from "@mui/icons-material/DirectionsWalk";
 import DragHandle from "@mui/icons-material/DragIndicator";
@@ -20,6 +22,7 @@ import Flag from "@mui/icons-material/Flag";
 import Folder from "@mui/icons-material/Folder";
 import FolderOpen from "@mui/icons-material/FolderOpen";
 import Grid from "@mui/icons-material/GridOn";
+import Altitude from "@mui/icons-material/Height";
 import Hive from "@mui/icons-material/HiveOutlined";
 import Shapes from "@mui/icons-material/Interests";
 import World from "@mui/icons-material/Language";
@@ -38,21 +41,25 @@ import Settings from "@mui/icons-material/Settings";
 import Share from "@mui/icons-material/Share";
 import SouthEast from "@mui/icons-material/SouthEast";
 import Star from "@mui/icons-material/StarOutlined";
+import Sync from "@mui/icons-material/Sync";
 import Timeline from "@mui/icons-material/Timeline";
 import Topic from "@mui/icons-material/Topic";
+import Tune from "@mui/icons-material/Tune";
 import Collapse from "@mui/icons-material/UnfoldLess";
 import Expand from "@mui/icons-material/UnfoldMore";
 import Cells from "@mui/icons-material/ViewComfy";
 import Cube from "@mui/icons-material/ViewInAr";
 import ImageProjection from "@mui/icons-material/Vrpano";
 
-import { SettingsIcon } from "@lichtblick/suite";
+import { EditorSettingsIcon } from "./types";
 
-const icons: Record<SettingsIcon, typeof Add> = {
+const icons: Record<EditorSettingsIcon, typeof Add> = {
   Add,
   Addchart,
+  Altitude,
   AutoAwesome,
   Background,
+  Cached,
   Camera,
   Cells,
   Check,
@@ -60,6 +67,7 @@ const icons: Record<SettingsIcon, typeof Add> = {
   Clear,
   Clock,
   Collapse,
+  Copy,
   Cube,
   Delete,
   DragHandle,
@@ -85,8 +93,10 @@ const icons: Record<SettingsIcon, typeof Add> = {
   Share,
   SouthEast,
   Star,
+  Sync,
   Timeline,
   Topic,
+  Tune,
   Walk,
   World,
 };

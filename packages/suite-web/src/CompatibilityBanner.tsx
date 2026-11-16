@@ -9,7 +9,6 @@ import { Dismiss20Filled, Warning24Filled } from "@fluentui/react-icons";
 import {
   Button,
   IconButton,
-  Link,
   ThemeProvider as MuiThemeProvider,
   Portal,
   Typography,
@@ -107,16 +106,6 @@ function CompatibilityBannerBase({
           <Typography variant="subtitle2">
             {prompt} {APP_CONFIG.productName} currently requires Chrome v{MINIMUM_CHROME_VERSION}+.
           </Typography>
-
-          {!isChrome && (
-            <Typography variant="body2">
-              Check out our{" "}
-              <Link color="inherit" href={`${APP_CONFIG.docsUrl}browser-support`} target="_blank">
-                Browser Support documentation
-              </Link>{" "}
-              for more information.
-            </Typography>
-          )}
         </div>
       </Stack>
 

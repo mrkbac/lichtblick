@@ -62,23 +62,23 @@ export function isValidMapMessage(msgEvent: MessageEvent): msgEvent is MapPanelM
   );
 }
 
+/** Schemas the Map panel reads. */
+export const MAP_SCHEMAS: ReadonlySet<string> = new Set([
+  "sensor_msgs/NavSatFix",
+  "sensor_msgs/msg/NavSatFix",
+  "ros.sensor_msgs.NavSatFix",
+  "foxglove_msgs/LocationFix",
+  "foxglove_msgs/msg/LocationFix",
+  "foxglove.LocationFix",
+  "foxglove::LocationFix",
+  "foxglove_msgs/GeoJSON",
+  "foxglove_msgs/msg/GeoJSON",
+  "foxglove::GeoJSON",
+  "foxglove.GeoJSON",
+]);
+
 export function isSupportedSchema(schemaName: string): boolean {
-  switch (schemaName) {
-    case "sensor_msgs/NavSatFix":
-    case "sensor_msgs/msg/NavSatFix":
-    case "ros.sensor_msgs.NavSatFix":
-    case "foxglove_msgs/LocationFix":
-    case "foxglove_msgs/msg/LocationFix":
-    case "foxglove.LocationFix":
-    case "foxglove::LocationFix":
-    case "foxglove_msgs/GeoJSON":
-    case "foxglove_msgs/msg/GeoJSON":
-    case "foxglove::GeoJSON":
-    case "foxglove.GeoJSON":
-      return true;
-    default:
-      return false;
-  }
+  return MAP_SCHEMAS.has(schemaName);
 }
 
 export function isGeoJSONSchema(schemaName: string): boolean {

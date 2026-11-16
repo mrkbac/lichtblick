@@ -15,36 +15,52 @@ import ArrowRightIcon from "@mui/icons-material/ArrowRight";
 import CheckIcon from "@mui/icons-material/Check";
 import EditIcon from "@mui/icons-material/Edit";
 import ErrorIcon from "@mui/icons-material/Error";
+import WarningIcon from "@mui/icons-material/Warning";
 import { Button, Divider, IconButton, TextField, Tooltip, Typography } from "@mui/material";
 import { TFunction } from "i18next";
 import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
-import React, { ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  ChangeEvent,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { useImmer } from "use-immer";
 
 import { filterMap } from "@lichtblick/den/collection";
-import {
-  Immutable,
-  SettingsTreeAction,
-  SettingsTreeField,
-  SettingsTreeNode,
-  SettingsTreeNodeActionItem,
-  SettingsTreeNodes,
-} from "@lichtblick/suite";
+import { parseMessagePath, quoteTopicNameIfNeeded } from "@lichtblick/message-path";
+import { Immutable } from "@lichtblick/suite";
 import {
   HighlightChars,
   substringPositions,
 } from "@lichtblick/suite-base/components/HighlightChars";
+import { ContextInternal as MessagePipelineContextInternal } from "@lichtblick/suite-base/components/MessagePipeline";
+import { DraggedMessagePath } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { useStyles } from "@lichtblick/suite-base/components/SettingsTreeEditor/NodeEditor.style";
-import { SETTINGS_NODE_DRAG_TYPE } from "@lichtblick/suite-base/components/SettingsTreeEditor/constants";
 import {
+  SETTINGS_CHILD_DRAG_TYPE,
+  SETTINGS_NODE_DRAG_TYPE,
+} from "@lichtblick/suite-base/components/SettingsTreeEditor/constants";
+import {
+  ChildReorderContext,
   DragItem,
+  EditorSettingsTreeAction,
+  EditorSettingsTreeField,
+  EditorSettingsTreeNode,
+  EditorSettingsTreeNodeAction,
+  EditorSettingsTreeNodeActionItem,
+  EditorSettingsTreeNodes,
   NodeEditorProps,
   NodeEditorState,
   SelectVisibilityFilterValue,
 } from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { useMessagePathDrag } from "@lichtblick/suite-base/services/messagePathDragging";
 
 import { FieldEditor } from "./FieldEditor";
 import { NodeActionsMenu } from "./NodeActionsMenu";
@@ -73,11 +89,11 @@ const SelectVisibilityFilterOptions: (t: TFunction<"settingsEditor">) => {
   { label: t("listVisible"), value: "visible" },
   { label: t("listInvisible"), value: "invisible" },
 ];
-function showVisibleFilter(child: Immutable<SettingsTreeNode>): boolean {
+function showVisibleFilter(child: Immutable<EditorSettingsTreeNode>): boolean {
   // want to show children with undefined visibility
   return child.visible !== false;
 }
-function showInvisibleFilter(child: Immutable<SettingsTreeNode>): boolean {
+function showInvisibleFilter(child: Immutable<EditorSettingsTreeNode>): boolean {
   // want to show children with undefined visibility
   return child.visible !== true;
 }
@@ -92,7 +108,7 @@ const getSelectVisibilityFilterField = (t: TFunction<"settingsEditor">) =>
 export const handleDropNode = (
   item: DragItem,
   targetPath: readonly string[],
-  actionHandler: (action: SettingsTreeAction) => void,
+  actionHandler: (action: EditorSettingsTreeAction) => void,
 ): void => {
   actionHandler({
     action: "reorder-node",
@@ -103,8 +119,76 @@ export const handleDropNode = (
   });
 };
 
+type ChildDragData = {
+  type: typeof SETTINGS_CHILD_DRAG_TYPE;
+  parentPath: readonly string[];
+  key: string;
+  group: string | undefined;
+};
+
+/** The half of `element` that `clientY` is over: a drop there lands before or after the node. */
+export function dropEdgeAt(element: Element, clientY: number): "before" | "after" {
+  const rect = element.getBoundingClientRect();
+  return clientY < rect.top + rect.height / 2 ? "before" : "after";
+}
+
+/** Builds the Foxglove `reorder-children` action; `sourcePath` is only set for cross-parent moves. */
+export function reorderChildrenAction(args: {
+  path: readonly string[];
+  sourcePath: readonly string[];
+  fromKey: string;
+  toKey: string;
+  position: "before" | "after";
+}): EditorSettingsTreeAction {
+  const { path, sourcePath, fromKey, toKey, position } = args;
+  return {
+    action: "reorder-children",
+    payload: _.isEqual(path, sourcePath)
+      ? { path, fromKey, toKey, position }
+      : { path, sourcePath, fromKey, toKey, position },
+  };
+}
+
+const MOVE_UP_ACTION_ID = "lichtblick:reorder-move-up";
+const MOVE_DOWN_ACTION_ID = "lichtblick:reorder-move-down";
+
+/** The drag payload for a node's `drag` setting, in the shape panels accept from the topic list. */
+function nodeDragItem(
+  drag: Immutable<EditorSettingsTreeNode>["drag"],
+  schemaNameOf: (topicName: string) => string | undefined,
+): DraggedMessagePath | undefined {
+  if (drag == undefined) {
+    return undefined;
+  }
+  if (drag.type === "topic") {
+    return {
+      path: quoteTopicNameIfNeeded(drag.topicName),
+      rootSchemaName: schemaNameOf(drag.topicName),
+      isTopic: true,
+      isLeaf: false,
+      topicName: drag.topicName,
+    };
+  }
+  const parsed = parseMessagePath(drag.value);
+  const topicName = parsed?.topicName ?? drag.value;
+  return {
+    path: drag.value,
+    rootSchemaName: schemaNameOf(topicName),
+    isTopic: parsed?.messagePath.length === 0,
+    isLeaf: drag.isLeaf === true,
+    topicName,
+  };
+}
+
 function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Element {
-  const { actionHandler, defaultOpen = true, filter, focusedPath, settings = {} } = props;
+  const {
+    actionHandler,
+    defaultOpen = true,
+    filter,
+    focusedPath,
+    reorderContext,
+    settings = {},
+  } = props;
   const [state, setState] = useImmer<NodeEditorState>({
     editing: false,
     focusedPath: undefined,
@@ -116,16 +200,21 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
   const { classes, cx, theme } = useStyles();
 
   const indent = props.path.length;
+  const ownKey = props.path.at(-1) ?? "";
   const allowVisibilityToggle = props.settings?.visible != undefined;
   const visible = props.settings?.visible !== false;
   const selectVisibilityFilterEnabled = props.settings?.enableVisibilityFilter === true;
-  const isReorderable = settings.reorderable === true;
+  // Lichtblick API: `reorderable: true` dispatches "reorder-node". Children of a Foxglove
+  // `childrenReorderable` parent use `reorderContext` and dispatch "reorder-children" instead.
+  const isReorderable = reorderContext == undefined && settings.reorderable === true;
+  const childDragEnabled = reorderContext?.dragEnabled === true;
 
   // Drag and drop for reorderable nodes: a node can be dropped onto a sibling to reorder it.
   const [isDragging, setIsDragging] = useState(false);
-  const [isDropTarget, setIsDropTarget] = useState(false);
-  const latest = useRef({ path: props.path, actionHandler });
-  latest.current = { path: props.path, actionHandler };
+  // Which edge of this node a dragged node would land on; shown as a line on that edge.
+  const [dropEdge, setDropEdge] = useState<"before" | "after" | undefined>();
+  const latest = useRef({ path: props.path, actionHandler, reorderContext });
+  latest.current = { path: props.path, actionHandler, reorderContext };
 
   const connectReorder = useCallback((element: HTMLElement) => {
     const sourcePath = (data: Record<string | symbol, unknown>) =>
@@ -154,13 +243,13 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
         element,
         canDrop: ({ source }) => canDropOnThis(sourcePath(source.data)),
         onDragEnter: () => {
-          setIsDropTarget(true);
+          setDropEdge("before");
         },
         onDragLeave: () => {
-          setIsDropTarget(false);
+          setDropEdge(undefined);
         },
         onDrop: ({ source }) => {
-          setIsDropTarget(false);
+          setDropEdge(undefined);
           const path = sourcePath(source.data);
           if (path != undefined) {
             handleDropNode({ path }, latest.current.path, latest.current.actionHandler);
@@ -170,15 +259,102 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
     );
   }, []);
 
+  const connectChildReorder = useCallback((element: HTMLElement) => {
+    const childData = (data: Record<string | symbol, unknown>) =>
+      data.type === SETTINGS_CHILD_DRAG_TYPE ? (data as ChildDragData) : undefined;
+    const latestKey = () => latest.current.path[latest.current.path.length - 1] ?? "";
+    return combine(
+      draggable({
+        element,
+        canDrag: () => latest.current.reorderContext?.dragEnabled === true,
+        getInitialData: (): ChildDragData => ({
+          type: SETTINGS_CHILD_DRAG_TYPE,
+          parentPath: latest.current.reorderContext?.parentPath ?? [],
+          key: latestKey(),
+          group: latest.current.reorderContext?.group,
+        }),
+        onDragStart: () => {
+          setIsDragging(true);
+        },
+        onDrop: () => {
+          setIsDragging(false);
+        },
+      }),
+      dropTargetForElements({
+        element,
+        canDrop: ({ source }) => {
+          const from = childData(source.data);
+          const context = latest.current.reorderContext;
+          if (from == undefined || context?.dragEnabled !== true) {
+            return false;
+          }
+          if (_.isEqual(from.parentPath, context.parentPath)) {
+            return from.key !== latestKey();
+          }
+          return context.group != undefined && from.group === context.group;
+        },
+        onDrag: ({ location, self }) => {
+          setDropEdge(dropEdgeAt(self.element, location.current.input.clientY));
+        },
+        onDragLeave: () => {
+          setDropEdge(undefined);
+        },
+        onDrop: ({ source, location, self }) => {
+          setDropEdge(undefined);
+          const from = childData(source.data);
+          const context = latest.current.reorderContext;
+          if (from == undefined || context == undefined) {
+            return;
+          }
+          latest.current.actionHandler(
+            reorderChildrenAction({
+              path: context.parentPath,
+              sourcePath: from.parentPath,
+              fromKey: from.key,
+              toKey: latestKey(),
+              position: dropEdgeAt(self.element, location.current.input.clientY),
+            }),
+          );
+        },
+      }),
+    );
+  }, []);
+
+  const isChildReorderable = reorderContext != undefined;
   const headerRef = useCallback(
     (el: HTMLDivElement | null) => {
       rootRef.current = el;
-      return el != undefined && isReorderable ? connectReorder(el) : undefined;
+      if (el == undefined) {
+        return undefined;
+      }
+      if (isChildReorderable) {
+        return connectChildReorder(el);
+      }
+      return isReorderable ? connectReorder(el) : undefined;
     },
-    [connectReorder, isReorderable],
+    [connectChildReorder, connectReorder, isChildReorderable, isReorderable],
   );
 
-  const selectVisibilityFilter = (action: SettingsTreeAction) => {
+  // Foxglove `drag`: the label can be dragged onto panels like a topic list row.
+  const pipelineStore = useContext(MessagePipelineContextInternal);
+  const dragItem = nodeDragItem(
+    settings.drag,
+    (topicName) =>
+      pipelineStore?.getState().public.sortedTopics.find((topic) => topic.name === topicName)
+        ?.schemaName,
+  );
+  const { dragRef: nodeDragRef } = useMessagePathDrag({
+    item: dragItem ?? {
+      path: "",
+      rootSchemaName: undefined,
+      isTopic: false,
+      isLeaf: false,
+      topicName: "",
+    },
+    selected: false,
+  });
+
+  const selectVisibilityFilter = (action: EditorSettingsTreeAction) => {
     if (action.action === "update" && action.payload.input === "select") {
       setState((draft) => {
         draft.visibilityFilter = action.payload.value as SelectVisibilityFilterValue;
@@ -186,7 +362,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
     }
   };
 
-  const textFilterHandler = (action: SettingsTreeAction) => {
+  const textFilterHandler = (action: EditorSettingsTreeAction) => {
     if (action.action === "update" && action.payload.input === "string") {
       setState((draft) => {
         draft.textFilter = action.payload.value as string;
@@ -202,6 +378,23 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
   };
 
   const handleNodeAction = (actionId: string) => {
+    if (reorderContext && (actionId === MOVE_UP_ACTION_ID || actionId === MOVE_DOWN_ACTION_ID)) {
+      const index = reorderContext.siblingKeys.indexOf(ownKey);
+      const up = actionId === MOVE_UP_ACTION_ID;
+      const toKey = reorderContext.siblingKeys[up ? index - 1 : index + 1];
+      if (index !== -1 && toKey != undefined) {
+        actionHandler(
+          reorderChildrenAction({
+            path: reorderContext.parentPath,
+            sourcePath: reorderContext.parentPath,
+            fromKey: ownKey,
+            toKey,
+            position: up ? "before" : "after",
+          }),
+        );
+      }
+      return;
+    }
     actionHandler({ action: "perform-node-action", payload: { id: actionId, path: props.path } });
   };
 
@@ -231,7 +424,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
   const entries = useMemo(() => Object.entries(fields ?? {}), [fields]);
 
   const renderFieldEditor = useCallback(
-    (key: string, field: Immutable<SettingsTreeField>) => (
+    (key: string, field: Immutable<EditorSettingsTreeField>) => (
       <FieldEditor
         key={key}
         field={field}
@@ -258,7 +451,17 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
     return undefined;
   }, [state.visibilityFilter]);
 
-  const preparedNodes = useMemo(() => prepareSettingsNodes(children ?? {}), [children]);
+  const childrenReorderable = settings.childrenReorderable;
+  // With `childrenReorderable`, the entry order of `children` is the display order.
+  const preparedNodes = useMemo(
+    () =>
+      childrenReorderable != undefined && childrenReorderable !== false
+        ? Object.entries(children ?? {}).filter(
+            (entry): entry is [string, Immutable<EditorSettingsTreeNode>] => entry[1] != undefined,
+          )
+        : prepareSettingsNodes(children ?? {}),
+    [children, childrenReorderable],
+  );
 
   const visibilityFilteredNodes = useMemo(() => {
     if (!filterFn) {
@@ -271,9 +474,29 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
     if (state.textFilter.length === 0) {
       return visibilityFilteredNodes;
     }
-    const nodesRecord: Immutable<SettingsTreeNodes> = Object.fromEntries(visibilityFilteredNodes);
+    const nodesRecord: Immutable<EditorSettingsTreeNodes> =
+      Object.fromEntries(visibilityFilteredNodes);
     return prepareSettingsNodes(filterTreeNodes(nodesRecord, state.textFilter));
   }, [visibilityFilteredNodes, state.textFilter]);
+
+  const childReorderContext = useMemo((): ChildReorderContext | undefined => {
+    if (childrenReorderable == undefined || childrenReorderable === false) {
+      return undefined;
+    }
+    const siblingKeys = preparedNodes
+      .filter(([, child]) => child.reorderable !== false)
+      .map(([key]) => key);
+    if (siblingKeys.length < 2 && typeof childrenReorderable !== "object") {
+      return undefined;
+    }
+    return {
+      parentPath: props.path,
+      group: typeof childrenReorderable === "object" ? childrenReorderable.group : undefined,
+      siblingKeys,
+      // Never drag against a partial list: a tree-wide filter may have hidden some children.
+      dragEnabled: (filter ?? "").length === 0 && filteredNodes.length === preparedNodes.length,
+    };
+  }, [childrenReorderable, preparedNodes, filteredNodes.length, filter, props.path]);
 
   const childNodes = useMemo(() => {
     return filterMap(filteredNodes, ([key, child]) => (
@@ -285,9 +508,10 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
         key={key}
         settings={child}
         path={makeStablePath(props.path, key)}
+        reorderContext={child.reorderable === false ? undefined : childReorderContext}
       />
     ));
-  }, [filteredNodes, actionHandler, filter, focusedPath, props.path]);
+  }, [filteredNodes, actionHandler, filter, focusedPath, props.path, childReorderContext]);
 
   const IconComponent = settings.icon ? icons[settings.icon] : undefined;
 
@@ -326,17 +550,38 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
     [toggleEditing],
   );
 
-  const [inlineActions, menuActions] = useMemo(
-    () =>
-      _.partition(
-        settings.actions,
-        (action): action is SettingsTreeNodeActionItem =>
-          action.type === "action" && action.display === "inline",
-      ),
-    [settings.actions],
-  );
+  const [inlineActions, menuActions] = useMemo(() => {
+    const [inline, menuOnly] = _.partition(
+      settings.actions,
+      (action): action is EditorSettingsTreeNodeActionItem =>
+        action.type === "action" && action.display === "inline",
+    );
+    const menu: Immutable<EditorSettingsTreeNodeAction>[] = [...menuOnly];
+    // Foxglove `childrenReorderable`: default "Move up" / "Move down" items once 2+ children can move.
+    if (reorderContext != undefined && reorderContext.siblingKeys.length >= 2) {
+      const index = reorderContext.siblingKeys.indexOf(ownKey);
+      menu.push(
+        {
+          type: "action",
+          id: MOVE_UP_ACTION_ID,
+          label: t("moveUp"),
+          icon: "MoveUp",
+          disabled: index <= 0,
+        },
+        {
+          type: "action",
+          id: MOVE_DOWN_ACTION_ID,
+          label: t("moveDown"),
+          icon: "MoveDown",
+          disabled: index === -1 || index >= reorderContext.siblingKeys.length - 1,
+        },
+      );
+    }
+    return [inline, menu];
+  }, [settings.actions, reorderContext, ownKey, t]);
 
   const isDragHandleIcon = settings.icon === "DragHandle" && isReorderable;
+  const nodeColor = settings.color;
 
   const iconItem = useMemo(() => {
     if (props.settings?.error) {
@@ -360,6 +605,22 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
       );
     }
 
+    if (props.settings?.warning) {
+      return (
+        <Tooltip
+          arrow
+          title={<Typography variant="subtitle2">{props.settings.warning}</Typography>}
+        >
+          <WarningIcon
+            fontSize="small"
+            color="warning"
+            data-testid="node-warning-icon"
+            style={{ marginRight: theme.spacing(0.5) }}
+          />
+        </Tooltip>
+      );
+    }
+
     if (IconComponent && !isDragHandleIcon) {
       return (
         <IconComponent
@@ -367,14 +628,39 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
           color="inherit"
           style={{
             marginRight: theme.spacing(0.5),
-            opacity: 0.8,
+            opacity: nodeColor ? 1 : 0.8,
+            color: nodeColor,
+          }}
+        />
+      );
+    }
+
+    if (nodeColor) {
+      return (
+        <span
+          data-testid="node-color-swatch"
+          style={{
+            width: 10,
+            height: 10,
+            flex: "none",
+            borderRadius: 2,
+            background: nodeColor,
+            marginRight: theme.spacing(0.75),
           }}
         />
       );
     }
 
     return <></>;
-  }, [IconComponent, classes.errorTooltip, props.settings?.error, theme, isDragHandleIcon]);
+  }, [
+    IconComponent,
+    classes.errorTooltip,
+    props.settings?.error,
+    props.settings?.warning,
+    nodeColor,
+    theme,
+    isDragHandleIcon,
+  ]);
 
   const dragHandleIcon = useMemo(() => {
     if (isDragHandleIcon && IconComponent) {
@@ -399,12 +685,13 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
           [classes.focusedNode]: isFocused,
           [classes.nodeHeaderVisible]: visible,
           [classes.nodeHeaderDragging]: isDragging,
-          [classes.nodeHeaderDropTarget]: isDropTarget,
+          [classes.nodeHeaderDropBefore]: dropEdge === "before",
+          [classes.nodeHeaderDropAfter]: dropEdge === "after",
         })}
         ref={headerRef}
         style={{
           opacity: isDragging ? 0.5 : 1,
-          cursor: isReorderable ? "grab" : undefined,
+          cursor: isReorderable || childDragEnabled ? "grab" : undefined,
         }}
       >
         <div
@@ -458,7 +745,14 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
               noWrap={true}
               variant="subtitle2"
               color={visible ? "textPrimary" : "textDisabled"}
-              style={{ flex: "1 1 auto", fontWeight: indent < 2 ? 600 : 400 }}
+              style={{
+                flex: "1 1 auto",
+                fontWeight: indent < 2 ? 600 : 400,
+                cursor: dragItem ? "grab" : undefined,
+              }}
+              title={settings.help}
+              ref={dragItem ? nodeDragRef : undefined}
+              data-testid={dragItem ? "settings-node-drag-source" : undefined}
             >
               <HighlightChars
                 str={settings.label ?? t("general")}
@@ -499,25 +793,35 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
                 payload: { id: action.id, path: props.path },
               });
             };
-            return Icon ? (
-              <IconButton
-                key={action.id}
-                onClick={handler}
-                title={action.label}
-                className={classes.actionButton}
-              >
-                <Icon fontSize="small" />
-              </IconButton>
-            ) : (
-              <Button
-                key={action.id}
-                onClick={handler}
-                size="small"
-                color="inherit"
-                className={classes.actionButton}
-              >
-                {action.label}
-              </Button>
+            const disabled = action.disabled === true;
+            const color = action.color ?? "inherit";
+            return (
+              // The span keeps the tooltip working while the button is disabled.
+              <Tooltip key={action.id} title={action.tooltip ?? (Icon ? action.label : "")} arrow>
+                <span>
+                  {Icon ? (
+                    <IconButton
+                      onClick={handler}
+                      aria-label={action.label}
+                      disabled={disabled}
+                      color={color === "inherit" ? "default" : color}
+                      className={classes.actionButton}
+                    >
+                      <Icon fontSize="small" />
+                    </IconButton>
+                  ) : (
+                    <Button
+                      onClick={handler}
+                      size="small"
+                      disabled={disabled}
+                      color={color}
+                      className={classes.actionButton}
+                    >
+                      {action.label}
+                    </Button>
+                  )}
+                </span>
+              </Tooltip>
             );
           })}
 

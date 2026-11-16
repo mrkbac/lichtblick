@@ -1,15 +1,17 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import CheckIcon from "@mui/icons-material/Check";
-import ClearIcon from "@mui/icons-material/Clear";
-import { IconButton, InputBase, Switch, Tooltip } from "@mui/material";
+import { InputBase, Switch, Tooltip } from "@mui/material";
 import { ReactElement, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { ParameterValue } from "@lichtblick/suite";
+import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
+import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { customTypography } from "@lichtblick/theme";
 
+import { PARAMETERS_BUTTONS } from "./buttons";
+import { PARAMETERS_SHORTCUT } from "./shortcuts";
 import { formatValue, hexToBytes, parameterType } from "./utils";
 
 const useStyles = makeStyles()((theme) => ({
@@ -146,12 +148,13 @@ export function ParameterEditor({
             setError(undefined);
           }}
           onKeyDown={(event) => {
-            if (event.key === "Enter" && !event.shiftKey) {
+            const shortcut = findShortcut(
+              [PARAMETERS_SHORTCUT.submitValue, PARAMETERS_SHORTCUT.resetValue],
+              event,
+            );
+            if (shortcut != undefined) {
               event.preventDefault();
-              submit();
-            } else if (event.key === "Escape") {
-              event.preventDefault();
-              reset();
+              (shortcut === PARAMETERS_SHORTCUT.submitValue ? submit : reset)();
             }
           }}
           onBlur={() => {
@@ -164,16 +167,8 @@ export function ParameterEditor({
       </Tooltip>
       {dirty && (
         <>
-          <Tooltip title="Submit (Enter)">
-            <IconButton size="small" onClick={submit}>
-              <CheckIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Reset (Esc)">
-            <IconButton size="small" onClick={reset}>
-              <ClearIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          <PanelIconButton button={PARAMETERS_BUTTONS.submitValue} onClick={submit} />
+          <PanelIconButton button={PARAMETERS_BUTTONS.resetValue} onClick={reset} />
         </>
       )}
     </div>

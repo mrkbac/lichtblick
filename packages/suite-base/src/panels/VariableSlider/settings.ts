@@ -5,81 +5,52 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { produce } from "immer";
-import * as _ from "lodash-es";
-import { useCallback, useEffect } from "react";
-
-import { SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
-import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
-import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 
 import { VariableSliderConfig } from "./types";
 
-function buildSettingsTree(config: VariableSliderConfig): SettingsTreeNodes {
+export const defaultConfig: VariableSliderConfig = {
+  sliderProps: {
+    min: 0,
+    max: 10,
+    step: 1,
+  },
+  globalVariableName: "globalVariable",
+};
+
+export function buildSettingsTree(config: VariableSliderConfig): DocumentedNodes {
   return {
     general: {
       label: "General",
       fields: {
         min: {
           label: "Min",
+          help: "Lowest value the slider can set.",
           input: "number",
           placeholder: "min",
           value: config.sliderProps.min,
         },
         max: {
           label: "Max",
+          help: "Highest value the slider can set.",
           input: "number",
           placeholder: "max",
           value: config.sliderProps.max,
         },
         step: {
           label: "Step",
+          help: "Increment between slider positions.",
           input: "number",
           placeholder: "step",
           value: config.sliderProps.step,
         },
         globalVariableName: {
           label: "Variable name",
+          help: "Layout variable the slider sets; reference it in message paths as $name.",
           input: "string",
           value: config.globalVariableName,
         },
       },
     },
   };
-}
-
-export function useVariableSliderSettings(
-  config: VariableSliderConfig,
-  saveConfig: SaveConfig<VariableSliderConfig>,
-): void {
-  const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
-
-  const actionHandler = useCallback(
-    (action: SettingsTreeAction) => {
-      if (action.action !== "update") {
-        return;
-      }
-
-      saveConfig(
-        produce<VariableSliderConfig>((draft) => {
-          const path = action.payload.path.slice(1);
-          if (["min", "max"].includes(path[0] ?? "")) {
-            _.set(draft, ["sliderProps", ...path], action.payload.value);
-          } else if (path[0] === "step" && action.payload.input === "number") {
-            draft.sliderProps.step = action.payload.value;
-          } else {
-            _.set(draft, path, action.payload.value);
-          }
-        }),
-      );
-    },
-    [saveConfig],
-  );
-
-  useEffect(() => {
-    updatePanelSettingsTree({
-      actionHandler,
-      nodes: buildSettingsTree(config),
-    });
-  }, [actionHandler, config, updatePanelSettingsTree]);
 }

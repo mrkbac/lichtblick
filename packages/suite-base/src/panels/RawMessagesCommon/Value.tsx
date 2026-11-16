@@ -5,15 +5,16 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import DragIndicatorIcon from "@mui/icons-material/DragIndicator";
 import { Tooltip, useTheme } from "@mui/material";
 import React, { useCallback, useMemo, useState, useRef, useEffect } from "react";
 import { withStyles } from "tss-react/mui";
 
 import HoverableIconButton from "@lichtblick/suite-base/components/HoverableIconButton";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { openSiblingPlotPanel } from "@lichtblick/suite-base/panels/Plot/utils/openSiblingPlotPanel";
 import HighlightedValue from "@lichtblick/suite-base/panels/RawMessagesCommon/HighlightedValue";
+import { RAW_MESSAGES_BUTTONS } from "@lichtblick/suite-base/panels/RawMessagesCommon/buttons";
 import { useStylesValue } from "@lichtblick/suite-base/panels/RawMessagesCommon/index.style";
 import { PropsValue, ValueActionItem } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
 import {
@@ -39,6 +40,39 @@ const StyledIconButton = withStyles(HoverableIconButton, (theme) => ({
     },
   },
 }));
+
+const DragButton = RAW_MESSAGES_BUTTONS.dragValue;
+
+function DragHandle(props: {
+  dragRef: (element: HTMLElement | null) => (() => void) | undefined;
+  className: string;
+}): React.JSX.Element {
+  const title = usePanelButtonTitle(DragButton);
+  return (
+    <Tooltip arrow title={title} placement="top">
+      <span ref={props.dragRef} className={props.className}>
+        <DragButton.icon fontSize="inherit" />
+      </span>
+    </Tooltip>
+  );
+}
+
+function ValueActionButton({ action }: { action: ValueActionItem }): React.JSX.Element {
+  const title = usePanelButtonTitle(action.button);
+  const Icon = action.button.icon;
+  return (
+    <Tooltip arrow title={action.feedback?.tooltip ?? title} placement="top">
+      <StyledIconButton
+        size="small"
+        aria-label={title}
+        activeColor={action.activeColor}
+        onClick={action.onClick}
+        color="inherit"
+        icon={action.feedback?.icon ?? <Icon fontSize="inherit" />}
+      />
+    </Tooltip>
+  );
+}
 
 function Value(props: PropsValue): React.JSX.Element {
   const timeOutID = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -178,23 +212,9 @@ function Value(props: PropsValue): React.JSX.Element {
       {pointerOver && (
         <span className={classes.hoverActions}>
           {/* A grip instead of the whole value, so the value text stays selectable */}
-          {dragRef && (
-            <Tooltip arrow title="Drag to a panel" placement="top">
-              <span ref={dragRef} className={classes.dragHandle}>
-                <DragIndicatorIcon fontSize="inherit" />
-              </span>
-            </Tooltip>
-          )}
+          {dragRef && <DragHandle dragRef={dragRef} className={classes.dragHandle} />}
           {availableActions.map((action) => (
-            <Tooltip key={action.key} arrow title={action.tooltip} placement="top">
-              <StyledIconButton
-                size="small"
-                activeColor={action.activeColor}
-                onClick={action.onClick}
-                color="inherit"
-                icon={action.icon}
-              />
-            </Tooltip>
+            <ValueActionButton key={action.key} action={action} />
           ))}
         </span>
       )}

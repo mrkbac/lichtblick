@@ -2,11 +2,12 @@
 
 import { KeyboardShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
-/** Display only: handled by the note editor. */
+/** The keys are bound by the note editor from this list; the click is handled by its task toggle. */
 export const NOTES_SHORTCUTS = [
   {
     id: "notes.finish",
     titleKey: "finishNote",
     keys: [{ key: "Escape" }, { key: "Enter", mod: true }],
   },
+  { id: "notes.toggleTask", titleKey: "notesToggleTask", keys: [], mouse: [{ action: "click" }] },
 ] as const satisfies readonly KeyboardShortcut[];

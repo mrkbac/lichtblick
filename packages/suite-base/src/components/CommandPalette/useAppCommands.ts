@@ -28,6 +28,7 @@ import {
   selectStartPlayback,
   selectStartTime,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
+import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 import { PLAYBACK_SPEED_OPTIONS } from "@lichtblick/suite-base/components/PlaybackSpeedControls";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
@@ -726,11 +727,11 @@ export function useAppCommands(): {
     push(
       t("groupHelp"),
       {
-        id: "help.docs",
-        title: t("documentation"),
-        keywords: ["docs", "manual"],
+        id: "help.panelGuide",
+        title: t("panelGuide"),
+        keywords: ["docs", "documentation", "manual", "help"],
         run: () => {
-          window.open(APP_CONFIG.docsUrl, "_blank", "noopener,noreferrer");
+          usePanelGuideStore.getState().show();
         },
       },
       {

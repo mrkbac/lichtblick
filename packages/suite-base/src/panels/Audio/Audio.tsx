@@ -1,13 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import {
-  ErrorCircle20Regular,
-  Speaker220Regular,
-  SpeakerMute20Regular,
-} from "@fluentui/react-icons";
+import { ErrorCircle20Regular, SpeakerMute20Regular } from "@fluentui/react-icons";
 import { subtract, toSec } from "@foxglove/rostime";
-import { Button, IconButton, Slider, Tooltip, Typography } from "@mui/material";
+import { Button, Slider, Typography } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { keyframes } from "tss-react";
@@ -23,6 +19,7 @@ import {
   useMessagePipelineGetter,
   useMessagePipelineSubscribe,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -36,6 +33,7 @@ import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { AudioPlayer } from "./AudioPlayer";
 import { Waveform } from "./Waveform";
+import { AUDIO_BUTTONS } from "./buttons";
 import { AUDIO_SCHEMAS, extractAudioChunk } from "./decode";
 import { buildSettingsTree, FORMAT_LABELS, settingsUpdate } from "./settings";
 import { AudioConfig } from "./types";
@@ -253,16 +251,13 @@ export function Audio({ config, saveConfig }: Props): React.JSX.Element {
       <PanelToolbar />
       {body}
       <Stack direction="row" alignItems="center" gap={1} paddingX={1} paddingY={0.5}>
-        <Tooltip title={config.muted ? t("unmute") : t("mute")}>
-          <IconButton
-            size="small"
-            aria-label={config.muted ? t("unmute") : t("mute")}
-            aria-pressed={config.muted}
-            onClick={toggleMute}
-          >
-            {config.muted ? <SpeakerMute20Regular /> : <Speaker220Regular />}
-          </IconButton>
-        </Tooltip>
+        <PanelIconButton
+          button={AUDIO_BUTTONS.mute}
+          aria-pressed={config.muted}
+          onClick={toggleMute}
+        >
+          {config.muted ? <SpeakerMute20Regular /> : undefined}
+        </PanelIconButton>
         <Slider
           size="small"
           aria-label={t("volume")}

@@ -31,6 +31,7 @@ export const appBar = {
   exportLayoutToFile: "Export layout to file…",
   commandPalette: "Command palette…",
   keyboardShortcuts: "Keyboard shortcuts",
+  panelGuide: "Panel guide",
   exportRecording: "Export recording…",
   liveRecordings: "Live recordings…",
   extensions: "Extensions…",

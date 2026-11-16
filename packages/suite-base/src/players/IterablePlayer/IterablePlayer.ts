@@ -21,7 +21,7 @@ import * as _ from "lodash-es";
 import { debouncePromise } from "@lichtblick/den/async";
 import { filterMap } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
-import { Immutable, MessageEvent, Metadata, ParameterValue } from "@lichtblick/suite";
+import { Immutable, Metadata, ParameterValue } from "@lichtblick/suite";
 import { DeserializingIterableSource } from "@lichtblick/suite-base/players/IterablePlayer/DeserializingIterableSource";
 import { freezeMetadata } from "@lichtblick/suite-base/players/IterablePlayer/freezeMetadata";
 import PlayerAlertManager from "@lichtblick/suite-base/players/PlayerAlertManager";
@@ -38,12 +38,14 @@ import {
   PublishPayload,
   RecordingFileInfo,
   CompareSide,
+  MessageEvent,
   SubscribePayload,
   Topic,
   TopicSelection,
   TopicStats,
 } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
+import { preloadCloudini } from "@lichtblick/suite-base/util/cloudini";
 import delay from "@lichtblick/suite-base/util/delay";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { toError } from "@lichtblick/suite-base/util/toError";
@@ -223,6 +225,8 @@ export class IterablePlayer implements Player {
 
   // Some states register an abort controller to signal they should abort
   #abort?: AbortController;
+  /** Aborted by close(): ends waits that #abort must not end, such as the decoder preload */
+  #closeAbort = new AbortController();
 
   // The iterator for reading messages during playback
   #playbackIterator?: AsyncIterator<Readonly<IteratorResult>>;
@@ -577,6 +581,7 @@ export class IterablePlayer implements Player {
   }
 
   public close(): void {
+    this.#closeAbort.abort();
     this.#setState("close");
   }
 
@@ -698,8 +703,15 @@ export class IterablePlayer implements Player {
 
     if (!this.#hasError && this.#start) {
       // Wait a bit until panels have had the chance to subscribe to topics before we start
-      // playback.
-      await delay(START_DELAY_MS);
+      // playback. Built-in decoders load meanwhile, so the first frame is not dropped; closing the
+      // player ends that wait.
+      await Promise.all([
+        delay(START_DELAY_MS),
+        preloadCloudini(this.#providerTopics, this.#closeAbort.signal),
+      ]);
+      if (this.#isClosing()) {
+        return;
+      }
 
       this.#blockLoader?.setTopics(this.#preloadTopics);
 

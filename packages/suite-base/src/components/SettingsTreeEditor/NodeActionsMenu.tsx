@@ -6,7 +6,16 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import MoreVertIcon from "@mui/icons-material/MoreVert";
-import { Menu, MenuItem, IconButton, ListItemIcon, ListItemText, Divider } from "@mui/material";
+import {
+  Menu,
+  MenuItem,
+  IconButton,
+  ListItemIcon,
+  ListItemText,
+  Divider,
+  Tooltip,
+  useTheme,
+} from "@mui/material";
 import { useCallback, useMemo, useState } from "react";
 
 import { NodeActionsMenuProps } from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
@@ -18,6 +27,7 @@ export function NodeActionsMenu({
   actions,
   onSelectAction,
 }: NodeActionsMenuProps): React.JSX.Element {
+  const theme = useTheme();
   const [anchorEl, setAnchorEl] = useState<undefined | HTMLButtonElement>(undefined);
   const open = Boolean(anchorEl);
 
@@ -83,23 +93,37 @@ export function NodeActionsMenu({
             );
           }
           const Icon = action.icon ? icons[action.icon] : undefined;
+          const disabled = action.disabled === true;
           return (
-            <MenuItem
-              data-testid={`node-actions-menu-item-${action.id}`}
-              key={action.id}
-              onClick={() => {
-                handleClose(action.id);
-              }}
-            >
-              {Icon && (
-                <ListItemIcon data-testid={`node-actions-menu-item-icon-${action.id}`}>
-                  <Icon fontSize="small" />
-                </ListItemIcon>
-              )}
-              <ListItemText inset={!Icon && anyItemHasIcon} disableTypography>
-                {action.label}
-              </ListItemText>
-            </MenuItem>
+            <Tooltip key={action.id} title={action.tooltip} placement="left" arrow>
+              <MenuItem
+                data-testid={`node-actions-menu-item-${action.id}`}
+                aria-disabled={disabled}
+                style={{
+                  opacity: disabled ? theme.palette.action.disabledOpacity : undefined,
+                  cursor: disabled ? "default" : undefined,
+                  color:
+                    action.color != undefined && action.color !== "inherit"
+                      ? theme.palette[action.color].main
+                      : undefined,
+                }}
+                onClick={() => {
+                  // Not `disabled` on MenuItem: that drops pointer events, hiding the tooltip.
+                  if (!disabled) {
+                    handleClose(action.id);
+                  }
+                }}
+              >
+                {Icon && (
+                  <ListItemIcon data-testid={`node-actions-menu-item-icon-${action.id}`}>
+                    <Icon fontSize="small" />
+                  </ListItemIcon>
+                )}
+                <ListItemText inset={!Icon && anyItemHasIcon} disableTypography>
+                  {action.label}
+                </ListItemText>
+              </MenuItem>
+            </Tooltip>
           );
         })}
       </Menu>

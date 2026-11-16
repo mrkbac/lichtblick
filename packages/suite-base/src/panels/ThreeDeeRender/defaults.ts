@@ -5,6 +5,7 @@
 // `three` and other heavy imports: importing it must not pull the renderer into the entry chunk.
 
 import type { RendererConfig } from "./IRenderer";
+import type { MeshUpAxis } from "./ModelCache";
 import type { CameraState } from "./camera";
 
 export const DEFAULT_CAMERA_STATE: CameraState = {
@@ -29,3 +30,7 @@ export const DEFAULT_PUBLISH_SETTINGS: RendererConfig["publish"] = {
   poseEstimateYDeviation: 0.5,
   poseEstimateThetaDeviation: 0.26179939, // π/12, rounded to 8 digits
 };
+
+export const DEFAULT_MESH_UP_AXIS: MeshUpAxis = "y_up";
+
+export const DEFAULT_LABEL_SCALE_FACTOR = 1;

@@ -12,11 +12,13 @@ import { useDebouncedCallback } from "use-debounce";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 import { headingDecorations } from "./headingDecorations";
-import { useNotesSettings } from "./settings";
+import { NOTES_SHORTCUTS } from "./shortcuts";
 import { toggleTask } from "./toggleTask";
 import { NotesConfig } from "./types";
+import { useNotesSettings } from "./useNotesSettings";
 import MonacoEditor, { EditorDidMount, EditorWillMount } from "../UserScriptEditor/MonacoEditor";
 import { themes } from "../UserScriptEditor/theme";
 
@@ -110,10 +112,11 @@ export function Notes({ config, saveConfig }: Props): React.JSX.Element {
       updateHeadings();
       const blur = instance.onDidBlurEditorText(() => save.flush());
       const keys = instance.onKeyDown((event) => {
-        if (
-          event.keyCode === monaco.KeyCode.Escape ||
-          (event.keyCode === monaco.KeyCode.Enter && (event.metaKey || event.ctrlKey))
-        ) {
+        // Esc during IME composition dismisses the candidates; it must not leave the editor.
+        if (event.browserEvent.isComposing) {
+          return;
+        }
+        if (findShortcut(NOTES_SHORTCUTS, event.browserEvent)?.id === "notes.finish") {
           event.preventDefault();
           event.stopPropagation();
           save.flush();

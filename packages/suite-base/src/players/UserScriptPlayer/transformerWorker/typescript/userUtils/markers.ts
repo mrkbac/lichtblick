@@ -42,7 +42,7 @@ export interface ImageMarker {
 /**
  * buildRosMarker builds a complete Marker message from an optional set of args.
  *
- * See https://foxglove.dev/docs/panels/3d for a list of supported Marker types
+ * The 3D panel's guide lists the supported marker schemas.
  *
  * @param args override any defaults in the marker fields
  * @returns an IRosMarker instance with default values for any omitted args
@@ -107,7 +107,7 @@ export function buildRosMarker(args?: Partial<IRosMarker>): IRosMarker {
 /**
  * buildImageMarker builds a complete Marker message from an optional set of args.
  *
- * See https://foxglove.dev/docs/studio/panels/image for a list of supported Marker types
+ * The Image panel's guide lists the supported annotation schemas.
  *
  * @param args override any defaults in the marker fields
  * @returns an ImageMarker instance with default values for any omitted args
