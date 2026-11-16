@@ -17,6 +17,7 @@ import { updatePose } from "../updatePose";
 export type LayerSettingsMarker = BaseSettings & {
   color: string | undefined;
   showOutlines: boolean | undefined;
+  showLabels?: boolean;
   selectedIdVariable: string | undefined;
   namespaces: Record<string, LayerSettingsMarkerNamespace>;
 };

@@ -181,6 +181,7 @@ export const threeDee = {
   translationHelp: "Translation from the parent frame, in meters.",
   markerColorHelp: "Overrides the color of every marker on this topic.",
   showOutlineHelp: "Draws dark edges around cubes, spheres, cylinders, arrows and meshes.",
+  showLabelsHelp: "Draws text labels. Turn off to hide labels without hiding the shapes.",
   poseTypeHelp: "Draws each pose as coordinate axes or as an arrow.",
   poseArrayTypeHelp: "Draws each pose as axes or an arrow, or all poses as one line.",
   axisLengthHelp: "Length of the axes, in meters.",
@@ -284,6 +285,7 @@ export const threeDee = {
   selectionVariableHelp:
     "When selecting a marker, this global variable will be set to the marker ID",
   showOutline: "Show outline",
+  showLabels: "Show labels",
 
   // Poses
   covariance: "Covariance",

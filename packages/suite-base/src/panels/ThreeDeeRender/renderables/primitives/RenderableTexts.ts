@@ -51,6 +51,7 @@ export class RenderableTexts extends RenderablePrimitive {
         throw new Error("invariant: labels array smaller than requested");
       }
 
+      label.visible = this.userData.settings.showLabels ?? true;
       label.setText(text.text);
       label.setColor(SRGBToLinear(color.r), SRGBToLinear(color.g), SRGBToLinear(color.b), color.a);
 
@@ -80,6 +81,7 @@ export class RenderableTexts extends RenderablePrimitive {
     if (i < this.#labels.length) {
       // cuts off remaining labels and loops through  them  release to from labelpool
       for (const label of this.#labels.splice(i)) {
+        label.visible = true;
         this.#labelPool.release(label);
       }
     }
@@ -87,6 +89,7 @@ export class RenderableTexts extends RenderablePrimitive {
 
   public override dispose(): void {
     for (const label of this.#labels) {
+      label.visible = true; // pooled labels are shared; don't hand out a hidden one
       this.#labelPool.release(label);
     }
   }

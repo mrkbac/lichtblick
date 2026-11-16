@@ -27,6 +27,7 @@ export type BaseSettings = {
 
 export type LayerSettingsEntity = BaseSettings & {
   showOutlines: boolean | undefined;
+  showLabels?: boolean;
   color: string | undefined;
   selectedIdVariable: string | undefined;
 };
