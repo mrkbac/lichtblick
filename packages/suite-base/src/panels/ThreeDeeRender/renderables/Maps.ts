@@ -690,7 +690,7 @@ export class Maps extends SceneExtension<MapRenderable> {
       this.renderer.updateConfig((draft) => {
         const config = draft.layers[instanceId] as Partial<LayerSettingsMap> | undefined;
         if (config) {
-          config.layers ??= _.cloneDeep(DEFAULT_SETTINGS.layers);
+          config.layers ??= structuredClone(DEFAULT_SETTINGS.layers);
           applyLayerStackAction(config.layers, action, 2, saved);
         }
       });
@@ -704,7 +704,7 @@ export class Maps extends SceneExtension<MapRenderable> {
 
   #handleAddMap = (instanceId: string): void => {
     log.info(`Creating ${LAYER_ID} layer ${instanceId}`);
-    const config: LayerSettingsMap = { ..._.cloneDeep(DEFAULT_SETTINGS), instanceId };
+    const config: LayerSettingsMap = { ...structuredClone(DEFAULT_SETTINGS), instanceId };
     this.renderer.updateConfig((draft) => {
       const maxOrderLayer = _.maxBy(Object.values(draft.layers), (layer) => layer?.order);
       draft.layers[instanceId] = { ...config, order: 1 + (maxOrderLayer?.order ?? 0) };
