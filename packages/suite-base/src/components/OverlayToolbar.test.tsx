@@ -13,7 +13,7 @@ import "@testing-library/jest-dom/vitest";
 
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
-import OverlayToolbar from "./OverlayToolbar";
+import OverlayToolbar, { OverlayToolGroup } from "./OverlayToolbar";
 
 it.each([false, true])("keeps floating controls consistent (dark: %s)", (isDark) => {
   const onClick = vi.fn();
@@ -38,7 +38,9 @@ it.each([false, true])("keeps floating controls consistent (dark: %s)", (isDark)
   expect(camera).toHaveStyle({ width: "32px", height: "32px" });
   expect(unavailable).toHaveStyle({ width: "32px", height: "32px" });
   expect(unavailable).toBeDisabled();
-  expect(screen.getByTestId("toolbar")).toHaveStyle({ pointerEvents: "auto" });
+  expect(screen.getByTestId("toolbar")).toHaveStyle({
+    pointerEvents: "auto",
+  });
   fireEvent.click(camera);
   expect(onClick).toHaveBeenCalledTimes(1);
   const activeBackground = getComputedStyle(camera).backgroundColor;
@@ -54,4 +56,31 @@ it.each([false, true])("keeps floating controls consistent (dark: %s)", (isDark)
   expect(getComputedStyle(screen.getByRole("button", { name: "Camera" })).backgroundColor).not.toBe(
     activeBackground,
   );
+});
+
+it("folds a tool group into one button with a pop-up that closes on use", () => {
+  const onRuler = vi.fn();
+  const group = ({ collapsed }: { collapsed: boolean }) => (
+    <ThemeProvider isDark={false}>
+      <OverlayToolbar>
+        <OverlayToolGroup collapsed={collapsed} label="Tools" icon="T" active>
+          <IconButton aria-label="Ruler" onClick={onRuler}>
+            R
+          </IconButton>
+        </OverlayToolGroup>
+      </OverlayToolbar>
+    </ThemeProvider>
+  );
+  const { rerender } = render(group({ collapsed: false }));
+  expect(screen.queryByRole("button", { name: "Tools" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Ruler" })).toBeInTheDocument();
+
+  rerender(group({ collapsed: true }));
+  expect(screen.queryByRole("button", { name: "Ruler" })).toBeNull();
+  const fold = screen.getByRole("button", { name: "Tools" });
+  expect(fold).toHaveAttribute("aria-pressed", "true");
+  fireEvent.click(fold);
+  fireEvent.click(screen.getByRole("button", { name: "Ruler" }));
+  expect(onRuler).toHaveBeenCalledTimes(1);
+  expect(fold).toHaveAttribute("aria-expanded", "false");
 });
