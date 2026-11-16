@@ -36,16 +36,15 @@ import {
 } from "@lichtblick/suite-base/context/PanelStateContext";
 import { PanelConfig } from "@lichtblick/suite-base/types/panels";
 import { getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
-import { getAllPanelIds } from "@lichtblick/suite-base/util/tabLayout";
+import {
+  getAllPanelIds,
+  getFallbackPanelId,
+  getVisiblePanelIds,
+  isTabPanel,
+} from "@lichtblick/suite-base/util/tabLayout";
 
 const selectLayoutData = (state: LayoutState) => state.selectedLayout?.data;
 const EMPTY_IDS: readonly string[] = [];
-
-const singlePanelIdSelector = (state: LayoutState) => {
-  const data = state.selectedLayout?.data;
-  const panelIds = data ? getAllPanelIds(data) : [];
-  return panelIds.length === 1 ? panelIds[0] : undefined;
-};
 
 const selectIncrementSequenceNumber = (store: PanelStateStore) => store.incrementSequenceNumber;
 
@@ -64,7 +63,6 @@ export default function PanelSettings({
   selectedPanelIdsForTests,
 }: PanelSettingsProps): React.JSX.Element {
   const { t } = useTranslation("panelSettings");
-  const candidate = useCurrentLayoutSelector(singlePanelIdSelector);
   const data = useCurrentLayoutSelector(selectLayoutData);
   const inWindow = useContext(PanelWindowContext)?.isOpen === true;
   const detached = useMonitorSetup()?.detachedPanelIds ?? EMPTY_IDS;
@@ -77,23 +75,36 @@ export default function PanelSettings({
       ),
     [data, detached, inWindow],
   );
-  const singlePanelId = candidate != undefined && !hidden.has(candidate) ? candidate : undefined;
-  const {
-    selectedPanelIds: originalSelectedPanelIds,
-    setSelectedPanelIds,
-    selectAllPanels,
-  } = useSelectedPanels();
+  const visiblePanelIds = useMemo(
+    () => (data ? getVisiblePanelIds(data).filter((id) => !hidden.has(id)) : []),
+    [data, hidden],
+  );
+  const { selectedPanelIds: originalSelectedPanelIds, setSelectedPanelIds } = useSelectedPanels();
   const selectedPanelIds = useMemo(
     () => selectedPanelIdsForTests ?? originalSelectedPanelIds.filter((id) => !hidden.has(id)),
     [hidden, originalSelectedPanelIds, selectedPanelIdsForTests],
   );
 
-  // If no panel is selected and there is only one panel in the layout, select it
+  // Always show something. A panel still on screen (e.g. in another split) stays selected. When
+  // nothing is selected, the selected panel went off screen because its tab was switched away, or
+  // the Tab panel itself was selected (clicking its tab strip), show the first panel of that tab.
+  const singleId = selectedPanelIds.length === 1 ? selectedPanelIds[0] : undefined;
+  const needsFallback =
+    selectedPanelIds.length === 0 ||
+    (singleId != undefined && (!visiblePanelIds.includes(singleId) || isTabPanel(singleId)));
+  const fallbackPanelId = useMemo(
+    () => (needsFallback && data ? getFallbackPanelId(data, singleId, hidden) : undefined),
+    [data, hidden, needsFallback, singleId],
+  );
   useEffect(() => {
-    if (selectedPanelIds.length === 0 && singlePanelId != undefined) {
-      selectAllPanels();
+    if (
+      selectedPanelIdsForTests == undefined &&
+      fallbackPanelId != undefined &&
+      fallbackPanelId !== singleId
+    ) {
+      setSelectedPanelIds([fallbackPanelId]);
     }
-  }, [selectAllPanels, selectedPanelIds, singlePanelId]);
+  }, [fallbackPanelId, selectedPanelIdsForTests, setSelectedPanelIds, singleId]);
 
   const selectedPanelId = useMemo(
     () => (selectedPanelIds.length === 1 ? selectedPanelIds[0] : undefined),
