@@ -11,6 +11,7 @@ import * as React from "react";
 import { makeStyles } from "tss-react/mui";
 
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
+import { ATTRIBUTION_AUTO_HIDE_MS } from "@lichtblick/suite-base/panels/Map/layers";
 import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
 import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 
@@ -73,6 +74,22 @@ export function HUD(props: HUDProps): React.ReactElement {
     return [groups.empty ?? [], groups.notice ?? [], groups.attribution ?? []];
   }, [hudItems]);
 
+  // Hide after ATTRIBUTION_AUTO_HIDE_MS; show it again whenever the attribution text changes (e.g. another map layer is added).
+  const attribution = attributions.map((item) => item.getMessage()).join(" · ");
+  const [hiddenAttribution, setHiddenAttribution] = React.useState("");
+  React.useEffect(() => {
+    if (attribution === "") {
+      setHiddenAttribution("");
+      return;
+    }
+    const timer = setTimeout(() => {
+      setHiddenAttribution(attribution);
+    }, ATTRIBUTION_AUTO_HIDE_MS);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [attribution]);
+
   if (hudItems.length === 0) {
     return <></>;
   }
@@ -82,7 +99,6 @@ export function HUD(props: HUDProps): React.ReactElement {
     return <EmptyState className={classes.empty}>{highPriorityEmptyState.getMessage()}</EmptyState>;
   }
 
-  const attribution = attributions.map((item) => item.getMessage()).join(" · ");
   return (
     <>
       {notices.length > 0 && (
@@ -92,7 +108,9 @@ export function HUD(props: HUDProps): React.ReactElement {
           ))}
         </div>
       )}
-      {attribution !== "" && <div className={classes.attribution}>{attribution}</div>}
+      {attribution !== "" && attribution !== hiddenAttribution && (
+        <div className={classes.attribution}>{attribution}</div>
+      )}
     </>
   );
 }
