@@ -12,11 +12,16 @@ import memoizeWeak from "memoize-weak";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { SettingsTreeAction, SettingsTreeField } from "@lichtblick/suite";
+import { Immutable } from "@lichtblick/suite";
 import { useConfigById } from "@lichtblick/suite-base/PanelAPI";
 import { FieldEditor } from "@lichtblick/suite-base/components/SettingsTreeEditor/FieldEditor";
 import { useStyles } from "@lichtblick/suite-base/components/SettingsTreeEditor/SettingsTreeEditor.style";
-import { SettingsTreeEditorProps } from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
+import {
+  EditorSettingsTree,
+  EditorSettingsTreeAction,
+  EditorSettingsTreeField,
+  SettingsTreeEditorProps,
+} from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useSelectedPanels } from "@lichtblick/suite-base/context/CurrentLayoutContext";
 import { usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogContext";
@@ -30,8 +35,10 @@ const makeStablePath = memoizeWeak((key: string) => [key]);
 
 export default function SettingsTreeEditor({
   variant,
-  settings,
+  settings: lichtblickSettings,
 }: Readonly<SettingsTreeEditorProps>): React.JSX.Element {
+  // Foxglove extensions pass settings with Foxglove-only fields and get Foxglove-only actions back.
+  const settings = lichtblickSettings as Immutable<EditorSettingsTree>;
   const { classes } = useStyles();
   const { actionHandler, focusedPath } = settings;
   const [filterText, setFilterText] = useState<string>("");
@@ -79,7 +86,7 @@ export default function SettingsTreeEditor({
     typeof config?.[PANEL_TITLE_CONFIG_KEY] === "string"
       ? config[PANEL_TITLE_CONFIG_KEY]
       : undefined;
-  const panelTitleField = useMemo<SettingsTreeField>(
+  const panelTitleField = useMemo<EditorSettingsTreeField>(
     () => ({
       input: "string",
       label: t("title"),
@@ -89,7 +96,7 @@ export default function SettingsTreeEditor({
     [customPanelTitle, defaultPanelTitle, panelInfo?.title, t],
   );
   const handleTitleChange = useCallback(
-    (action: SettingsTreeAction) => {
+    (action: EditorSettingsTreeAction) => {
       if (action.action === "update" && action.payload.path[0] === PANEL_TITLE_CONFIG_KEY) {
         saveConfig({ [PANEL_TITLE_CONFIG_KEY]: action.payload.value });
       }

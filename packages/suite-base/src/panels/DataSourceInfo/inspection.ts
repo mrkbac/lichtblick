@@ -7,10 +7,9 @@
 
 import { Time, fromNanoSec, toNanoSec } from "@foxglove/rostime";
 
-import { MessageEvent } from "@lichtblick/suite";
 import { MessagePipelineContext } from "@lichtblick/suite-base/components/MessagePipeline";
 import { IteratorResult } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
-import { Topic } from "@lichtblick/suite-base/players/types";
+import { MessageEvent, Topic } from "@lichtblick/suite-base/players/types";
 
 export const BUCKET_COUNT = 48;
 

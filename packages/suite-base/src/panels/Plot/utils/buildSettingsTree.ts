@@ -6,6 +6,7 @@ import memoizeWeak from "memoize-weak";
 
 import { parseMessagePath } from "@lichtblick/message-path";
 import { SettingsTreeFields, SettingsTreeNode, SettingsTreeNodes } from "@lichtblick/suite";
+import { builtinMessagePathField } from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
 import { DEFAULT_SLIDING_WINDOW_SECONDS } from "@lichtblick/suite-base/panels/Plot/PlotCoordinator";
 import { DEFAULT_PLOT_PATH } from "@lichtblick/suite-base/panels/Plot/constants";
 import { MakeRootSeriesNode, MakeSeriesNode } from "@lichtblick/suite-base/panels/Plot/types";
@@ -52,14 +53,14 @@ const makeSeriesNode = memoizeWeak(
       reorderable: canReorder,
       icon: canReorder ? ("DragHandle" as const) : undefined,
       fields: {
-        value: {
+        value: builtinMessagePathField({
           input: "messagepath",
           label: isReferenceLine ? t("value") : t("messagePath"),
           supportsMathModifiers: true,
-          supportsStreamModifiers,
+          supportsTimeSeriesMessagePathFunctions: supportsStreamModifiers,
           validTypes: PLOTABLE_ROS_TYPES,
           value: path.value,
-        },
+        }),
         label: {
           input: "string",
           label: t("label"),

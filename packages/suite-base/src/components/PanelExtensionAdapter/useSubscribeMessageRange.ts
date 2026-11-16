@@ -23,6 +23,8 @@ export type UseSubscribeMessageRange = (
   args: SubscribeMessageRangeArgs & {
     /** Let read errors reach `onNewRangeIterator`; by default the range just ends early */
     rethrowErrors?: boolean;
+    /** Deprecated Foxglove name of `onNewRangeIterator`, still passed by older Foxglove extensions */
+    onReset?: SubscribeMessageRangeArgs["onNewRangeIterator"];
   },
 ) => () => void;
 
@@ -48,10 +50,10 @@ export function useSubscribeMessageRange(
   emitAlertRef.current = emitAlert;
 
   return useCallback(
-    ({ topic, convertTo, onNewRangeIterator, rethrowErrors }) => {
+    ({ topic, convertTo, start, end, onNewRangeIterator, onReset, rethrowErrors }) => {
       const { sortedTopics, getBatchIterator } = getMessagePipelineContext();
 
-      const rawBatchIterator = getBatchIterator(topic);
+      const rawBatchIterator = getBatchIterator(topic, { start, end });
       if (!rawBatchIterator) {
         return () => {};
       }
@@ -66,7 +68,8 @@ export function useSubscribeMessageRange(
         rethrowErrors,
       });
 
-      onNewRangeIterator(messageEventIterable).catch((err: unknown) => {
+      // oxlint-disable-next-line typescript/no-unnecessary-condition -- untyped extensions may omit it
+      (onNewRangeIterator ?? onReset)?.(messageEventIterable).catch((err: unknown) => {
         log.error("Error in useSubscribeMessageRange onNewRangeIterator:", err);
       });
 

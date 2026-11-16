@@ -163,6 +163,7 @@ function createExtensionRegistryStore(
         panelSettings,
         panels,
         topicAliasFunctions,
+        topicConverters,
         cameraModels,
       }: ContributionPoints,
     ) => {
@@ -177,6 +178,7 @@ function createExtensionRegistryStore(
           ...state.installedTopicAliasFunctions!,
           ...topicAliasFunctions,
         ],
+        installedTopicConverters: [...state.installedTopicConverters, ...topicConverters],
         panelSettings: { ...state.panelSettings, ...panelSettings },
         installedCameraModels: new Map([
           ...state.installedCameraModels,
@@ -198,19 +200,29 @@ function createExtensionRegistryStore(
       try {
         installedExtensions.push(extension);
 
-        const { messageConverters, panelSettings, panels, topicAliasFunctions, cameraModels } =
-          contributionPoints;
+        const {
+          messageConverters,
+          panelSettings,
+          panels,
+          topicAliasFunctions,
+          topicConverters,
+          cameraModels,
+        } = contributionPoints;
         const unwrappedExtensionSource = await loadSingleExtension(
           extension,
           loader,
           orgCacheLoader,
         );
-        const newContributionPoints = buildContributionPoints(extension, unwrappedExtensionSource);
+        const newContributionPoints = await buildContributionPoints(
+          extension,
+          unwrappedExtensionSource,
+        );
 
         Object.assign(panels, newContributionPoints.panels);
         _.merge(panelSettings, newContributionPoints.panelSettings);
         pushAll(messageConverters, newContributionPoints.messageConverters);
         pushAll(topicAliasFunctions, newContributionPoints.topicAliasFunctions);
+        pushAll(topicConverters, newContributionPoints.topicConverters);
 
         for (const [name, builder] of newContributionPoints.cameraModels) {
           if (cameraModels.has(name)) {
@@ -268,6 +280,7 @@ function createExtensionRegistryStore(
         panels: {},
         panelSettings: {},
         topicAliasFunctions: [],
+        topicConverters: [],
         cameraModels: new Map(),
       };
 
@@ -302,6 +315,7 @@ function createExtensionRegistryStore(
         installedPanels: contributionPoints.panels,
         installedMessageConverters: contributionPoints.messageConverters,
         installedTopicAliasFunctions: contributionPoints.topicAliasFunctions,
+        installedTopicConverters: contributionPoints.topicConverters,
         installedCameraModels: contributionPoints.cameraModels,
         panelSettings: contributionPoints.panelSettings,
       });
@@ -368,6 +382,7 @@ function createExtensionRegistryStore(
       installedMessageConverters: mockMessageConverters ?? [],
       installedPanels: {},
       installedTopicAliasFunctions: [],
+      installedTopicConverters: [],
       installedCameraModels: new Map(),
       loadedExtensions: new Set<string>(),
       panelSettings: _.merge(

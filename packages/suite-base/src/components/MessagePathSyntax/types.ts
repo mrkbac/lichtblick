@@ -48,6 +48,8 @@ export type MessagePathInputBaseProps = {
   path: string; // A path of the form `/topic.some_field[:]{id==42}.x`
   index?: number; // Optional index field which gets passed to `onChange` (so you don't have to create anonymous functions)
   onChange: (value: string, index?: number) => void;
+  /** Only suggest paths from these topics in autocomplete. */
+  validTopics?: readonly string[];
   validTypes?: readonly string[]; // Valid types, like "message", "array", or "primitive", or a ROS primitive like "float64"
   noMultiSlices?: boolean; // Don't suggest slices with multiple values `[:]`, only single values like `[0]`.
   placeholder?: string;

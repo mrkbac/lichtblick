@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import type * as Foxglove from "@foxglove/extension";
 import * as _ from "lodash-es";
 import React from "react";
 import ReactDOM from "react-dom";
@@ -11,7 +12,6 @@ import {
   RegisterMessageConverterArgs,
   ExtensionContext,
   TopicAliasFunction,
-  ExtensionModule,
   ExtensionPanelRegistration,
   RegisterCameraModelArgs,
 } from "@lichtblick/suite";
@@ -20,28 +20,37 @@ import {
   ContributionPoints,
   RegisteredPanel,
 } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
+import { InstalledTopicConverter } from "@lichtblick/suite-base/players/UserScriptPlayer/topicConverters";
 import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
 
 const log = Logger.getLogger(__filename);
 
-export function buildContributionPoints(
+export async function buildContributionPoints(
   extension: ExtensionInfo,
   unwrappedExtensionSource: string,
-): ContributionPoints {
+): Promise<ContributionPoints> {
   // registered panels stored by their fully qualified id
   // the fully qualified id is the extension name + panel name
   const panels: Record<string, RegisteredPanel> = {};
   const messageConverters: InstalledMessageConverter[] = [];
   const panelSettings: ExtensionSettings = {};
   const topicAliasFunctions: ContributionPoints["topicAliasFunctions"] = [];
+  const topicConverters: InstalledTopicConverter[] = [];
   const cameraModels: CameraModelsMap = new Map();
 
   log.debug(`Mounting extension ${extension.qualifiedName}`);
 
   const module = { exports: {} };
   const require = (name: string) => {
-    return { react: React, "react-dom": ReactDOM }[name];
+    // The API packages are type-only, but bundlers may still emit a require for them
+    // (Foxglove's build marks `@foxglove/extension` as external).
+    return {
+      react: React,
+      "react-dom": ReactDOM,
+      "@foxglove/extension": {},
+      "@lichtblick/suite": {},
+    }[name];
   };
 
   const extensionMode =
@@ -51,10 +60,13 @@ export function buildContributionPoints(
         ? "test"
         : "development";
 
-  const ctx: ExtensionContext = {
+  // Typed as both APIs so tsc checks that Foxglove-built extensions can call every method.
+  const ctx: ExtensionContext & Foxglove.ExtensionContext = {
     mode: extensionMode,
 
-    registerPanel: (registration: ExtensionPanelRegistration) => {
+    registerPanel: (
+      registration: ExtensionPanelRegistration | Foxglove.ExtensionPanelRegistration,
+    ) => {
       log.debug(`Extension ${extension.qualifiedName} registering panel: ${registration.name}`);
 
       const panelId = `${extension.qualifiedName}.${registration.name}`;
@@ -67,11 +79,33 @@ export function buildContributionPoints(
         extensionId: extension.id,
         extensionName: extension.qualifiedName,
         extensionNamespace: extension.namespace,
-        registration,
+        // PanelExtensionAdapter's context also provides the Foxglove-only members.
+        registration: registration as ExtensionPanelRegistration,
       };
     },
 
-    registerMessageConverter: <Src>(messageConverter: RegisterMessageConverterArgs<Src>) => {
+    registerMessageConverter: (
+      args:
+        | RegisterMessageConverterArgs<never>
+        // Old Foxglove extensions still call the deprecated overload.
+        // eslint-disable-next-line @typescript-eslint/no-deprecated
+        | Foxglove.LegacyRegisterMessageConverterArgs<never>
+        | Foxglove.RegisterMessageConverterArgsSchema<never>
+        | Foxglove.RegisterMessageConverterArgsTopic,
+    ) => {
+      // Foxglove extensions may also register topic converters (`type: "topic"`), which turn
+      // input topics into a new output topic. UserScriptPlayer runs them.
+      if ("type" in args && args.type === "topic") {
+        const converter = args;
+        log.debug(
+          `Extension ${extension.qualifiedName} registering topic converter to: ${converter.outputTopic}`,
+        );
+        topicConverters.push({ extensionId: extension.id, converter });
+        return;
+      }
+      // Foxglove's schema converters are Lichtblick converters plus `type: "schema"`.
+      const messageConverter: RegisterMessageConverterArgs<never> = args;
+
       log.debug(
         `Extension ${extension.qualifiedName} registering message converter from: ${messageConverter.fromSchemaName} to: ${messageConverter.toSchemaName}`,
       );
@@ -102,13 +136,20 @@ export function buildContributionPoints(
 
   try {
     // eslint-disable-next-line no-new-func, @typescript-eslint/no-implied-eval
-    const fn = new Function("module", "require", unwrappedExtensionSource);
+    const fn = new Function("module", "exports", "require", unwrappedExtensionSource);
 
     // load the extension module exports
-    fn(module, require, {});
-    const wrappedExtensionModule = module.exports as ExtensionModule;
+    fn(module, module.exports, require);
 
-    wrappedExtensionModule.activate(ctx);
+    // Extensions export `activate` directly or as `export default { activate }`, and may return a
+    // promise (async initialization) that must settle before the extension counts as loaded.
+    type Activate = (extensionContext: ExtensionContext) => unknown;
+    const exports = module.exports as { activate?: Activate; default?: { activate?: Activate } };
+    const activate = exports.activate ?? exports.default?.activate;
+    if (!activate) {
+      throw new Error(`Extension ${extension.qualifiedName} does not export an activate function`);
+    }
+    await activate(ctx);
   } catch (err: unknown) {
     log.error(err);
   }
@@ -117,6 +158,7 @@ export function buildContributionPoints(
     panels,
     messageConverters,
     topicAliasFunctions,
+    topicConverters,
     panelSettings,
     cameraModels,
   };

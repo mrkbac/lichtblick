@@ -162,8 +162,6 @@ export type MessageEvent<T = unknown> = {
    * useful for statistics tracking and cache eviction.
    */
   sizeInBytes: number;
-  /** Exact serialized payload size before decoding, when supplied by the data source. */
-  serializedSizeInBytes?: number;
 
   /**
    * When subscribing to a topic using the `convertTo` option, the message event `message`
@@ -296,6 +294,18 @@ export type SubscribeMessageRangeArgs = {
    * Topic to be subscribed to.
    */
   topic: string;
+
+  /**
+   * Inclusive start of the range, in log time. When omitted, reading starts at the beginning of
+   * the data source.
+   */
+  start?: Time;
+
+  /**
+   * Inclusive end of the range, in log time. When omitted, reading continues to the end of the
+   * data source. If `end` is before `start`, the range is empty and no messages are delivered.
+   */
+  end?: Time;
 
   /**
    * Convert messages to this schema before delivering to the subscriber.
@@ -505,7 +515,9 @@ export type PanelExtensionContext = {
   setDefaultPanelTitle(defaultTitle: string | undefined): void;
 
   /**
-   * Enables subscription to retrieve complete message history for a specified topic from the active data source.
+   * Enables subscription to retrieve message history for a specified topic from the active data source.
+   * By default the complete history is read; set {@link SubscribeMessageRangeArgs.start | start} and/or
+   * {@link SubscribeMessageRangeArgs.end | end} to read only that window.
    *
    * See {@link SubscribeMessageRangeArgs} for more information on behavior.
    *
@@ -779,8 +791,6 @@ export type SettingsTreeFieldMessagePath = {
   validTypes?: string[];
   /** True if the input should allow math modifiers like @abs. */
   supportsMathModifiers?: boolean;
-  /** True if the input should allow a time-series modifier like @derivative or @delta. */
-  supportsStreamModifiers?: boolean;
 };
 
 export type SettingsTreeFieldNumber = {

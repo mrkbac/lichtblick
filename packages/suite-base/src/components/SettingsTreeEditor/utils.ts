@@ -7,18 +7,20 @@
 
 import * as _ from "lodash-es";
 
-import { Immutable, SettingsTreeNode, SettingsTreeNodes } from "@lichtblick/suite";
+import { Immutable } from "@lichtblick/suite";
+
+import { EditorSettingsTreeNode, EditorSettingsTreeNodes } from "./types";
 
 /**
  * Filters and sorts roots to prepare them for rendering.
  */
 export function prepareSettingsNodes(
-  roots: Immutable<SettingsTreeNodes>,
-): Immutable<Array<[string, SettingsTreeNode]>> {
+  roots: Immutable<EditorSettingsTreeNodes>,
+): Immutable<Array<[string, EditorSettingsTreeNode]>> {
   // Use sortBy here for stable sorting.
   return _.sortBy(
     Object.entries(roots).filter(
-      (entry): entry is [string, SettingsTreeNode] => entry[1] != undefined,
+      (entry): entry is [string, EditorSettingsTreeNode] => entry[1] != undefined,
     ),
     (entry) => entry[1].order,
   );
@@ -28,10 +30,10 @@ export function prepareSettingsNodes(
  * Recursively filter out nodes that don't match the given filter.
  */
 export function filterTreeNodes(
-  nodes: Immutable<SettingsTreeNodes>,
+  nodes: Immutable<EditorSettingsTreeNodes>,
   filter: string,
-): Immutable<SettingsTreeNodes> {
-  const result: Record<string, Immutable<SettingsTreeNode>> = {};
+): Immutable<EditorSettingsTreeNodes> {
+  const result: Record<string, Immutable<EditorSettingsTreeNode>> = {};
   Object.entries(nodes).forEach(([key, node]) => {
     if (node == undefined) {
       return;

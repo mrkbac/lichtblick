@@ -3,7 +3,7 @@
 
 import { makeStyles } from "tss-react/mui";
 
-export const useStyles = makeStyles<void, "error">()((theme, _params, classes) => ({
+export const useStyles = makeStyles<void, "error" | "warning">()((theme, _params, classes) => ({
   autocomplete: {
     ".MuiInputBase-root.MuiInputBase-sizeSmall": {
       paddingInline: 0,
@@ -19,7 +19,12 @@ export const useStyles = makeStyles<void, "error">()((theme, _params, classes) =
       opacity: 1,
     },
   },
+  caption: {
+    gridColumn: "2 / span 1",
+    marginRight: theme.spacing(0.5),
+  },
   error: {},
+  warning: {},
   fieldLabel: {
     color: theme.palette.text.secondary,
     overflow: "hidden",
@@ -38,6 +43,10 @@ export const useStyles = makeStyles<void, "error">()((theme, _params, classes) =
     },
     [`&.${classes.error} .MuiInputBase-root, .MuiInputBase-root.${classes.error}`]: {
       outline: `1px ${theme.palette.error.main} solid`,
+      outlineOffset: -1,
+    },
+    [`&.${classes.warning} .MuiInputBase-root, .MuiInputBase-root.${classes.warning}`]: {
+      outline: `1px ${theme.palette.warning.main} solid`,
       outlineOffset: -1,
     },
   },
