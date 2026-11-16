@@ -1,14 +1,17 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { MessagePathStructureItem } from "@lichtblick/message-path";
+
 import {
   Command,
   initialPaletteState,
+  matchMessagePaths,
   paletteReducer,
   parseSeekInput,
   rankCommands,
 } from "./commands";
-import { formatOffset, topicTargets } from "./useAppCommands";
+import { formatOffset, itemTypeName, pathTargets, topicTargets } from "./useAppCommands";
 
 const cmd = (id: string, title: string, extra: Partial<Command> = {}): Command =>
   ({
@@ -86,6 +89,29 @@ describe("rankCommands", () => {
 
     // Then the exact match still wins
     expect(ids(ranked)[0]).toBe("c");
+  });
+
+  it("hides search-only commands until typed, then finds them by keyword", () => {
+    // Given root panel commands that are search-only, next to commands that also fuzzy-match "tf"
+    const withPanels = [
+      cmd("toggle", "Toggle left sidebar", { group: "View" }),
+      cmd("tt", "Transform Tree", {
+        group: "Add panel",
+        keywords: ["TransformTree", "tf", "frames"],
+        searchOnly: true,
+      }),
+      cmd("plot", "Plot", { group: "Add panel", keywords: ["Plot", "chart"], searchOnly: true }),
+    ];
+
+    // When ranking with no query, with "tf", and with no query after using the plot command
+    const empty = rankCommands(withPanels, "", []);
+    const tf = rankCommands(withPanels, "tf", []);
+    const recentPlot = rankCommands(withPanels, "", ["plot"]);
+
+    // Then search-only commands stay out of the empty list unless recent, and "tf" leads to the tree
+    expect(ids(empty)).toEqual(["toggle"]);
+    expect(ids(tf)[0]).toBe("tt");
+    expect(ids(recentPlot)).toEqual(["plot", "toggle"]);
   });
 });
 
@@ -305,5 +331,48 @@ describe("formatOffset", () => {
 
     // Then it reads as [h:]m:ss.mmm
     expect(result).toBe(text);
+  });
+});
+
+describe("matchMessagePaths", () => {
+  const f64 = { structureType: "primitive", primitiveType: "float64", datatype: "" } as const;
+  const paths = new Map<string, MessagePathStructureItem>([
+    ["/odom.pose.position.x", f64],
+    ["/odom.pose.position.y", f64],
+    ["/odom/raw.value", f64],
+    ["/imu.linear_acceleration.z", f64],
+  ]);
+  const topics = ["/odom", "/odom/raw", "/imu"];
+  const found = (query: string) => matchMessagePaths(query, topics, paths).map((m) => m.path);
+
+  it("lists fields of the named topic, also without the leading slash", () => {
+    expect(found("/odom.pose.y")[0]).toBe("/odom.pose.position.y");
+    expect(found("odom.pose.y")[0]).toBe("/odom.pose.position.y");
+    expect(found("/odom")).toEqual(["/odom.pose.position.x", "/odom.pose.position.y"]);
+  });
+
+  it("picks the longest topic and ignores queries that don't name a topic", () => {
+    expect(found("/odom/raw.v")).toEqual(["/odom/raw.value"]);
+    expect(found("pose")).toEqual([]);
+    expect(found("/odometry")).toEqual([]);
+  });
+
+  it("offers a valid typed path that is not in the list first", () => {
+    const matches = matchMessagePaths("/odom.pose.position.x.@abs", topics, paths);
+    expect(matches[0]).toMatchObject({ path: "/odom.pose.position.x.@abs", item: undefined });
+  });
+});
+
+describe("pathTargets", () => {
+  it("plots numbers and watches messages", () => {
+    const num = { structureType: "primitive", primitiveType: "float64", datatype: "" } as const;
+    const msg = {
+      structureType: "message",
+      nextByName: {},
+      datatype: "geometry_msgs/Pose",
+    } as const;
+    expect(pathTargets(num).map((t) => t.panelType)).toEqual(["Plot", "Watch", "RawMessages"]);
+    expect(pathTargets(msg).map((t) => t.panelType)).toEqual(["Watch", "RawMessages"]);
+    expect(itemTypeName({ structureType: "array", next: num, datatype: "" })).toBe("float64[]");
   });
 });
