@@ -73,11 +73,12 @@ export const transformTree = {
     intrinsic: "Intrinsic XYZ (own axes)",
     topics: "Topics",
     topicsHelp:
-      "Every transform topic in the data source. Hide one to leave its frames out of the tree; mark one Static to load it from the whole recording.",
-    static: "Static",
+      "Every transform topic in the data source. Hide one to leave its frames out of the tree; treat one as static to load it from the whole recording.",
+    static: "Treat as static (latched)",
     staticHelp:
-      "Static transforms are loaded from the whole recording and never reported as stale.",
+      "For topics like tf_static that publish fixed transforms once: they are loaded from the whole recording, so they survive seeks, and are never reported as stale. On by default for topics whose name ends in tf_static.",
     topicUnavailable: "Topic is not in the current data source",
+    removeTopic: "Remove from list",
   },
   warnings: {
     multipleParents: "Published with more than one parent: {{parents}}",
