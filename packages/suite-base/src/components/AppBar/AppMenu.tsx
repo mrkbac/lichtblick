@@ -19,6 +19,7 @@ import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingD
 import { useKeyboardShortcutsStore } from "@lichtblick/suite-base/components/KeyboardShortcuts/KeyboardShortcuts";
 import { APP_SHORTCUTS } from "@lichtblick/suite-base/components/KeyboardShortcuts/appShortcuts";
 import { useLiveRecordingsDialog } from "@lichtblick/suite-base/components/LiveRecordingsDialog";
+import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
@@ -51,6 +52,7 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
   const showCompare = useShowCompareDialog();
   const showCommandPalette = useCommandPaletteStore((state) => state.show);
   const showShortcuts = useKeyboardShortcutsStore((state) => state.show);
+  const showPanelGuide = usePanelGuideStore((state) => state.show);
   const { dialogActions } = useWorkspaceActions();
   const { importLayout, exportLayout } = useLayoutTransfer();
   const installApp = useInstallPrompt();
@@ -186,6 +188,9 @@ export function AppMenu(props: AppMenuProps): React.JSX.Element {
       })}
       {item("keyboard-shortcuts", t("keyboardShortcuts"), showShortcuts, {
         shortcut: shortcutLabel(APP_SHORTCUTS, "app.showShortcuts"),
+      })}
+      {item("panel-guide", t("panelGuide"), () => {
+        showPanelGuide();
       })}
       {item("settings", t("settings"), () => {
         dialogActions.preferences.open();

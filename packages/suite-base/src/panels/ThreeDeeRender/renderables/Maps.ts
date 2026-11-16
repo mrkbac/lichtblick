@@ -40,6 +40,7 @@ import { SceneExtension, onlyLastByTopicMessage } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import type { MapAnchor } from "../SharedMap";
 import { normalizeTime } from "../normalizeMessages";
+import { LOCATION_SCHEMAS } from "../ros";
 import { CustomLayerSettings, PRECISION_DISTANCE } from "../settings";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose } from "../transforms";
@@ -51,15 +52,6 @@ const MAX_LATITUDE = 85.051129;
 
 /** The 3D panel renders 3D Tiles on top of what the Map panel offers. */
 const SOURCE_KINDS: readonly SourceKind[] = [...MAP_SOURCE_KINDS, "3dtiles"];
-
-const LOCATION_SCHEMAS = new Set([
-  "sensor_msgs/NavSatFix",
-  "sensor_msgs/msg/NavSatFix",
-  "ros.sensor_msgs.NavSatFix",
-  "foxglove_msgs/LocationFix",
-  "foxglove_msgs/msg/LocationFix",
-  "foxglove.LocationFix",
-]);
 
 type LocationMessage = {
   header?: { frame_id?: string; stamp?: Time };

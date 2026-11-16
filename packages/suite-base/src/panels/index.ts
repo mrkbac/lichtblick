@@ -53,6 +53,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("3DPanelDescription"),
     thumbnail: threeDeeRenderThumbnail,
     module: async () => await import("./ThreeDeeRender"),
+    docs: async () => await import("./ThreeDeeRender/docs"),
     shortcuts: THREE_DEE_SHORTCUTS,
   },
   {
@@ -61,6 +62,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("ROSDiagnosticsDetailDescription"),
     thumbnail: diagnosticStatusThumbnail,
     module: async () => await import("./DiagnosticStatus"),
+    docs: async () => await import("./DiagnosticStatus/docs"),
     hasCustomToolbar: true,
   },
   {
@@ -69,6 +71,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("ROSDiagnosticSummaryDescription"),
     thumbnail: diagnosticSummaryThumbnail,
     module: async () => await import("./DiagnosticSummary"),
+    docs: async () => await import("./DiagnosticSummary/docs"),
     hasCustomToolbar: true,
   },
   {
@@ -77,6 +80,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("imageDescription"),
     thumbnail: imageThumbnail,
     module: async () => await import("./Image"),
+    docs: async () => await import("./Image/docs"),
   },
   {
     title: t("cameraGrid"),
@@ -84,6 +88,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("cameraGridDescription"),
     thumbnail: cameraGridThumbnail,
     module: async () => await import("./CameraGrid"),
+    docs: async () => await import("./CameraGrid/docs"),
     shortcuts: CAMERA_GRID_SHORTCUTS,
   },
   {
@@ -92,6 +97,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("indicatorDescription"),
     thumbnail: indicatorThumbnail,
     module: async () => await import("./Indicator"),
+    docs: async () => await import("./Indicator/docs"),
   },
   {
     title: t("tab"),
@@ -99,6 +105,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("tabDescription"),
     thumbnail: tabThumbnail,
     module: async () => await import("./Tab"),
+    docs: async () => await import("./Tab/docs"),
     hasCustomToolbar: true,
     // Created by stacking panels onto each other, not from the panel list.
     hidden: true,
@@ -109,6 +116,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("gaugeDescription"),
     thumbnail: gaugeThumbnail,
     module: async () => await import("./Gauge"),
+    docs: async () => await import("./Gauge/docs"),
   },
   {
     title: t("teleop"),
@@ -116,6 +124,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("teleopDescription"),
     thumbnail: teleopThumbnail,
     module: async () => await import("./Teleop"),
+    docs: async () => await import("./Teleop/docs"),
     shortcuts: TELEOP_SHORTCUTS,
   },
   {
@@ -124,6 +133,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("mapDescription"),
     thumbnail: mapThumbnail,
     module: async () => await import("./Map"),
+    docs: async () => await import("./Map/docs"),
     shortcuts: MAP_SHORTCUTS,
   },
   {
@@ -132,6 +142,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("parametersDescription"),
     thumbnail: parametersThumbnail,
     module: async () => await import("./Parameters"),
+    docs: async () => await import("./Parameters/docs"),
   },
   {
     title: t("plot"),
@@ -139,6 +150,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("plotDescription"),
     thumbnail: plotThumbnail,
     module: async () => await import("./Plot"),
+    docs: async () => await import("./Plot/docs"),
     shortcuts: PLOT_SHORTCUTS,
   },
   {
@@ -147,6 +159,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("pieChartDescription"),
     thumbnail: pieChartThumbnail,
     module: async () => await import("./PieChart"),
+    docs: async () => await import("./PieChart/docs"),
   },
   {
     title: t("publish"),
@@ -154,6 +167,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("publishDescription"),
     thumbnail: publishThumbnail,
     module: async () => await import("./Publish"),
+    docs: async () => await import("./Publish/docs"),
     shortcuts: PUBLISH_SHORTCUTS,
   },
   {
@@ -162,6 +176,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("callServiceDescription"),
     thumbnail: publishThumbnail,
     module: async () => await import("./CallService"),
+    docs: async () => await import("./CallService/docs"),
     shortcuts: CALL_SERVICE_SHORTCUTS,
   },
   {
@@ -170,6 +185,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("rawMessagesDescription"),
     thumbnail: rawMessagesThumbnail,
     module: async () => await import("./RawMessages"),
+    docs: async () => await import("./RawMessages/docs"),
     shortcuts: RAW_MESSAGES_SHORTCUTS,
     hasCustomToolbar: true,
   },
@@ -180,6 +196,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("rawMessagesDescription"),
     thumbnail: rawMessagesThumbnail,
     module: async () => await import("./RawMessagesVirtual"),
+    docs: async () => await import("./RawMessages/docs"),
     shortcuts: RAW_MESSAGES_SHORTCUTS,
     hasCustomToolbar: true,
     hidden: true,
@@ -190,6 +207,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("audioDescription"),
     thumbnail: audioThumbnail,
     module: async () => await import("./Audio"),
+    docs: async () => await import("./Audio/docs"),
   },
   {
     title: t("log"),
@@ -197,6 +215,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("logDescription"),
     thumbnail: logThumbnail,
     module: async () => await import("./Log"),
+    docs: async () => await import("./Log/docs"),
   },
   {
     title: t("stateTransitions"),
@@ -204,6 +223,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("stateTransitionsDescription"),
     thumbnail: stateTransitionsThumbnail,
     module: async () => await import("./StateTransitions"),
+    docs: async () => await import("./StateTransitions/docs"),
     shortcuts: STATE_TRANSITIONS_SHORTCUTS,
   },
   {
@@ -212,6 +232,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("tableDescription"),
     thumbnail: tableThumbnail,
     module: async () => await import("./Table"),
+    docs: async () => await import("./Table/docs"),
     hasCustomToolbar: true,
   },
   {
@@ -220,12 +241,14 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("topicGraphDescription"),
     thumbnail: topicGraphThumbnail,
     module: async () => await import("./TopicGraph"),
+    docs: async () => await import("./TopicGraph/docs"),
   },
   {
     title: t("transformTree"),
     type: "TransformTree",
     description: t("transformTreeDescription"),
     module: async () => await import("./TransformTree"),
+    docs: async () => await import("./TransformTree/docs"),
   },
   {
     title: t("dataSourceInfo"),
@@ -233,6 +256,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("dataSourceInfoDescription"),
     thumbnail: dataSourceInfoThumbnail,
     module: async () => await import("./DataSourceInfo"),
+    docs: async () => await import("./DataSourceInfo/docs"),
   },
   {
     title: t("notes"),
@@ -240,6 +264,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("notesDescription"),
     thumbnail: notesThumbnail,
     module: async () => await import("./Notes"),
+    docs: async () => await import("./Notes/docs"),
     shortcuts: NOTES_SHORTCUTS,
   },
   {
@@ -248,6 +273,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("topicHealthDescription"),
     thumbnail: topicHealthThumbnail,
     module: async () => await import("./TopicHealth"),
+    docs: async () => await import("./TopicHealth/docs"),
   },
   {
     title: t("watch"),
@@ -255,6 +281,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("watchDescription"),
     thumbnail: watchThumbnail,
     module: async () => await import("./Watch"),
+    docs: async () => await import("./Watch/docs"),
   },
   {
     title: t("variableSlider"),
@@ -262,6 +289,7 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("variableSliderDescription"),
     thumbnail: variableSliderThumbnail,
     module: async () => await import("./VariableSlider"),
+    docs: async () => await import("./VariableSlider/docs"),
   },
   {
     title: t("userScripts"),
@@ -269,11 +297,13 @@ export const getBuiltin: (t: TFunction<"panels">) => PanelInfo[] = (t) => [
     description: t("userScriptsDescription"),
     thumbnail: userScriptEditorThumbnail,
     module: async () => await import("./UserScriptEditor"),
+    docs: async () => await import("./UserScriptEditor/docs"),
   },
   {
     title: t("studioPlaybackPerformance"),
     type: "PlaybackPerformance",
     description: t("studioPlaybackPerformanceDescription"),
     module: async () => await import("./PlaybackPerformance"),
+    docs: async () => await import("./PlaybackPerformance/docs"),
   },
 ];

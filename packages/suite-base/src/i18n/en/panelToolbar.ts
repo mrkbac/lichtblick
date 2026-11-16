@@ -8,11 +8,16 @@
 export const panelToolbar = {
   addTab: "New tab",
   changePanel: "Change panel",
+  close: "Close",
   closeTab: "Close {{title}}",
   doubleClickToRename: "Double-click or F2 to rename",
   dragToMovePanel: "Drag to move panel",
   fullscreen: "Fullscreen",
+  keyboardShortcuts: "Keyboard shortcuts",
   more: "More",
+  noPanelsFound: "No panels found",
+  panelGuide: "Panel guide",
+  panelInfo: "About this panel",
   openPopout: "Open in new window",
   openPictureInPicture: "Open Picture-in-Picture monitor",
   returnToWorkspace: "Return to workspace",
@@ -20,7 +25,9 @@ export const panelToolbar = {
   panelWindowFailed:
     "Could not open the panel window. Allow pop-ups for {{appName}} and try again.",
   removePanel: "Remove panel",
+  searchPanelGuide: "Search panels, schemas, settings…",
   splitDown: "Split down",
   splitRight: "Split right",
+  supportedSchemas: "Supported schemas",
   tabTitle: "Tab title",
 };

@@ -51,6 +51,7 @@ import {
   MarkerType,
   Quaternion,
   Vector3,
+  URDF_TOPIC_SCHEMAS,
 } from "../ros";
 import {
   BaseSettings,
@@ -127,7 +128,6 @@ const DEFAULT_CUSTOM_SETTINGS: LayerSettingsCustomUrdf = {
   displayMode: "auto",
   fallbackColor: DEFAULT_COLOR_STR,
 };
-const URDF_TOPIC_SCHEMAS = new Set<string>(["std_msgs/String", "std_msgs/msg/String"]);
 
 const tempVec3a = new THREE.Vector3();
 const tempVec3b = new THREE.Vector3();
