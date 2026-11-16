@@ -67,6 +67,8 @@ import { Player } from "@lichtblick/suite-base/players/types";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
 import { UserScripts } from "@lichtblick/suite-base/types/panels";
 import { updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
+import { rememberHandle } from "@lichtblick/suite-base/util/compareSides";
+import { recentArgs, recentFileTitle } from "@lichtblick/suite-base/util/recentSources";
 
 import { useTrustedUserScripts } from "./useTrustedUserScripts";
 
@@ -74,7 +76,8 @@ const log = Logger.getLogger(__filename);
 
 // Per tab, so a reload reopens the file that tab had open
 const LAST_FILE_SOURCE_KEY = "lichtblick.lastFileSource";
-type LastFileSource = { sourceId: string; title: string };
+// `recentId` is the recent entry it was opened as; entries stored before it existed match by title
+type LastFileSource = { sourceId: string; title: string; recentId?: string };
 
 // Reopening on reload is a convenience: blocked storage or a bad value must not break the app
 function readLastFile(): LastFileSource | undefined {
@@ -84,7 +87,8 @@ function readLastFile(): LastFileSource | undefined {
       typeof value === "object" &&
       value != undefined &&
       typeof (value as LastFileSource).sourceId === "string" &&
-      typeof (value as LastFileSource).title === "string"
+      typeof (value as LastFileSource).title === "string" &&
+      ["string", "undefined"].includes(typeof (value as LastFileSource).recentId)
     ) {
       return value as LastFileSource;
     }
@@ -349,7 +353,9 @@ export default function PlayerManager(
             // Handles are stored in recents (IndexedDB) so the file can be reopened later.
             // File instances are not: storing a File in IndexedDB copies the entire file.
             if (handles) {
-              for (const handle of handles) {
+              // A file compared in several sides repeats its handle: ask and read it once
+              const uniqueHandles = [...new Set(handles)];
+              for (const handle of uniqueHandles) {
                 const permission = await handle.queryPermission({
                   mode: "read",
                 });
@@ -369,9 +375,15 @@ export default function PlayerManager(
                   }
                 }
               }
-              files = await Promise.all(handles.map(async (f) => await f.getFile()));
+              const fileOf = new Map(
+                await Promise.all(uniqueHandles.map(async (h) => [h, await h.getFile()] as const)),
+              );
               if (!isMounted() || seq !== selectionSeq.current) {
                 return;
+              }
+              files = handles.map((h) => fileOf.get(h)!);
+              for (const [handle, file] of fileOf) {
+                rememberHandle(file, handle);
               }
             }
 
@@ -393,12 +405,19 @@ export default function PlayerManager(
 
               // Only handles can be reopened after a reload
               if (handles) {
-                const lastFile: LastFileSource = {
+                const title = recentFileTitle(
+                  handles.map((h) => h.name),
+                  compare,
+                );
+                const recentId = addRecent({
+                  type: "file",
                   sourceId: foundSource.id,
-                  title: handles.map((h) => h.name).join(", "),
-                };
-                setCurrentRecentId(addRecent({ type: "file", ...lastFile, handles }));
-                writeLastFile(lastFile);
+                  title,
+                  handles,
+                  compare: compare ? [...compare] : undefined,
+                });
+                setCurrentRecentId(recentId);
+                writeLastFile({ sourceId: foundSource.id, title, recentId });
               } else {
                 writeLastFile(undefined);
               }
@@ -451,8 +470,10 @@ export default function PlayerManager(
     if (!lastFile || new URL(window.location.href).searchParams.has("ds")) {
       return;
     }
-    const recent = recents.find(
-      (r) => r.type === "file" && r.sourceId === lastFile.sourceId && r.title === lastFile.title,
+    const recent = recents.find((r) =>
+      lastFile.recentId != undefined
+        ? r.id === lastFile.recentId
+        : r.type === "file" && r.sourceId === lastFile.sourceId && r.title === lastFile.title,
     );
     if (recent?.type !== "file") {
       return;
@@ -468,7 +489,7 @@ export default function PlayerManager(
         return;
       }
       if (permissions.every((p) => p === "granted")) {
-        void selectSource(recent.sourceId, { type: "file", handles: recent.handles });
+        void selectSource(recent.sourceId, recentArgs(recent));
         return;
       }
       // requestPermission needs a user gesture, so ask with a click
@@ -480,7 +501,7 @@ export default function PlayerManager(
             color="inherit"
             onClick={() => {
               closeSnackbar(key);
-              void selectSource(recent.sourceId, { type: "file", handles: recent.handles });
+              void selectSource(recent.sourceId, recentArgs(recent));
             }}
           >
             Reopen
@@ -602,10 +623,7 @@ function createSelectRecentCallback(
         break;
       }
       case "file": {
-        void selectSource(foundRecent.sourceId, {
-          type: "file",
-          handles: foundRecent.handles,
-        });
+        void selectSource(foundRecent.sourceId, recentArgs(foundRecent));
       }
     }
   };
