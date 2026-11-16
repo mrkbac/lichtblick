@@ -4,7 +4,6 @@
 import { Time } from "@foxglove/rostime";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { Immutable, MessageEvent } from "@lichtblick/suite";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import {
   MessagePipelineContext,
@@ -12,20 +11,9 @@ import {
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
-import type { PartialMessage } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtension";
-import { WorkerImageDecoder } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/WorkerImageDecoder";
-import { isCompressedDepthFormat } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/decodeCompressedDepth";
-import { decodeCompressedImageToBitmap } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/decodeImage";
-import {
-  normalizeCompressedImage,
-  normalizeRawImage,
-  normalizeRosImage,
-} from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/imageNormalizers";
+import type { WorkerImageDecoder } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/WorkerImageDecoder";
 
 import {
-  COMPRESSED_IMAGE_SCHEMAS,
-  RAW_IMAGE_SCHEMAS,
-  THUMBNAIL_WIDTH,
   ThumbnailCache,
   findCachedMessage,
   previewableTopics,
@@ -33,7 +21,6 @@ import {
   resolvePreviewTopic,
   timeBucket,
 } from "./scrubPreview";
-import * as foxglove from "../../panels/ThreeDeeRender/foxglove";
 
 const DEBOUNCE_MS = 40;
 
@@ -51,30 +38,6 @@ export function usePreviewTopic(): {
   const topics = useMessagePipeline(selectTopics);
   const imageTopics = useMemo(() => previewableTopics(topics), [topics]);
   return { imageTopics, topic: resolvePreviewTopic(setting, imageTopics), setting, setSetting };
-}
-
-async function decodeThumbnail(
-  { schemaName, message }: Immutable<MessageEvent>,
-  getWorker: () => WorkerImageDecoder,
-): Promise<ImageBitmap | undefined> {
-  const resizeWidth = Math.round(THUMBNAIL_WIDTH * window.devicePixelRatio);
-  if (COMPRESSED_IMAGE_SCHEMAS.has(schemaName)) {
-    const image = normalizeCompressedImage(
-      message as PartialMessage<{ format: string; data: Uint8Array }>,
-    );
-    if (isCompressedDepthFormat(image.format)) {
-      return await createImageBitmap(await getWorker().decode(image, {}), { resizeWidth });
-    }
-    return await decodeCompressedImageToBitmap(image, resizeWidth);
-  }
-  if (RAW_IMAGE_SCHEMAS.has(schemaName)) {
-    const image = foxglove.RAW_IMAGE_DATATYPES.has(schemaName)
-      ? normalizeRawImage(message as Parameters<typeof normalizeRawImage>[0])
-      : normalizeRosImage(message as Parameters<typeof normalizeRosImage>[0]);
-    const imageData = await getWorker().decode(image, {});
-    return await createImageBitmap(imageData, { resizeWidth });
-  }
-  return undefined;
 }
 
 /**
@@ -129,7 +92,8 @@ export function useScrubPreview(stamp: Time | undefined): ImageBitmap | undefine
         if (!msg || signal.aborted) {
           return undefined;
         }
-        return await decodeThumbnail(msg, () => (workerRef.current ??= new WorkerImageDecoder()));
+        const { decodeThumbnail } = await import("./decodeThumbnail");
+        return await decodeThumbnail(msg, workerRef);
       },
     });
   }, [cache, getPipeline, playerId, stamp, topic]);

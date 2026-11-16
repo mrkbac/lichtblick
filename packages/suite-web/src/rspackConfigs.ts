@@ -30,7 +30,7 @@ import * as palette from "@lichtblick/theme/src/palette.ts";
  * shared module that pulls in a panel's heavy dependencies (three.js, monaco, a player) is caught
  * in CI instead of slowing every start. Raise it only for code that is needed to show the app.
  */
-const STARTUP_JS_BUDGET_BYTES = 4_300_000;
+const STARTUP_JS_BUDGET_BYTES = 3_900_000;
 
 /**
  * Files (name to size) the app needs to start: the entry chunk group plus the "startup-*" groups

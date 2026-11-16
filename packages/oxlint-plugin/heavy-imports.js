@@ -20,8 +20,8 @@ const HEAVY_MODULES = [
       /\/panels\/ThreeDeeRender\//,
       // loaded with import() only
       /\/components\/DataSourceDialog\/Snow\.tsx$/,
-      // math classes only (Color, Quaternion, Euler), which tree-shake to a few KB
-      /\/util\/(colorUtils|quatToEuler)\.ts$/,
+      // No math-class exemption: importing even one class (Vector3, Euler) puts ~270 KB of
+      // three.core into the importing chunk, because its classes don't tree-shake apart.
     ],
   },
   {

@@ -14,8 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import * as THREE from "three";
-
 // prettier-ignore
 const turboColormapData = [
   [0.18995, 0.07176, 0.23217],
@@ -274,10 +272,10 @@ const turboColormapData = [
   [0.50664, 0.02354, 0.00863],
   [0.49321, 0.01963, 0.00955],
   [0.4796, 0.01583, 0.01055],
-].map((xyz) => new THREE.Vector3().fromArray(xyz));
+];
 
 // Adapted from https://gist.github.com/mikhailov-work/ee72ba4191942acecc03fe6da94fc73f
-export function turboColor(x: number): THREE.Vector3 {
+function turboColor(x: number): [number, number, number] {
   // eslint-disable-next-line no-param-reassign
   x = Math.max(0.0, Math.min(1.0, x));
   const a = Math.trunc(x * 255.0);
@@ -285,10 +283,14 @@ export function turboColor(x: number): THREE.Vector3 {
   const f = x * 255.0 - a;
   const colorA = turboColormapData[a]!;
   const colorB = turboColormapData[b]!;
-  return colorA.clone().lerp(colorB, f).multiplyScalar(255);
+  return [0, 1, 2].map((i) => (colorA[i]! + (colorB[i]! - colorA[i]!) * f) * 255) as [
+    number,
+    number,
+    number,
+  ];
 }
 
 export function turboColorString(pct: number): string {
   const rgb = turboColor(pct);
-  return `rgb(${Math.round(rgb.x)}, ${Math.round(rgb.y)}, ${Math.round(rgb.z)})`;
+  return `rgb(${Math.round(rgb[0])}, ${Math.round(rgb[1])}, ${Math.round(rgb[2])})`;
 }
