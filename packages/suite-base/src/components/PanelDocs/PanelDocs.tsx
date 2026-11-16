@@ -19,13 +19,14 @@ import { makeStyles } from "tss-react/mui";
 import { create } from "zustand";
 
 import { useAsync } from "@lichtblick/hooks";
+import OverlayToolbar from "@lichtblick/suite-base/components/OverlayToolbar";
 import { PanelInfo, usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogContext";
 import { shortcutRows } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { customTypography } from "@lichtblick/theme";
 
 /**
- * One fact: [term, explanation, icon]. Pass the icon of the button the item explains (the same
- * component the panel renders), so people can match the docs to what they see.
+ * One fact: [term, explanation, icon]. For an item about a button, pass the icon (or label)
+ * component the panel renders in that button; the guide draws it in a real, inert overlay button.
  */
 export type PanelDocsItem = readonly [term: string, text: string, icon?: ComponentType];
 
@@ -111,16 +112,13 @@ const useStyles = makeStyles()((theme) => ({
     gridTemplateColumns: "auto minmax(80px, max-content) 1fr",
     columnGap: theme.spacing(1.5),
     rowGap: theme.spacing(0.5),
-    alignItems: "baseline",
+    alignItems: "center",
   },
   sectionTitle: { gridColumn: "1 / -1", marginTop: theme.spacing(2) },
   fullRow: { gridColumn: "1 / -1" },
-  icon: {
-    display: "flex",
-    alignSelf: "center",
-    color: theme.palette.text.primary,
-    "& svg": { width: 20, height: 20 },
-  },
+  // A picture of the button, not a control.
+  button: { pointerEvents: "none", width: "fit-content" },
+
   chips: { display: "flex", flexWrap: "wrap", gap: theme.spacing(0.5) },
   chip: { fontFamily: customTypography.fontMonospace },
   term: { fontWeight: 600 },
@@ -134,6 +132,18 @@ const useStyles = makeStyles()((theme) => ({
     borderRadius: theme.shape.borderRadius,
   },
 }));
+
+/** The real overlay button the item explains, inert, so docs match what people see. */
+function ButtonPreview({ icon: Icon }: { icon: ComponentType }): React.JSX.Element {
+  const { classes } = useStyles();
+  return (
+    <OverlayToolbar className={classes.button} aria-hidden>
+      <IconButton size="small" component="span" tabIndex={-1} disableRipple>
+        <Icon />
+      </IconButton>
+    </OverlayToolbar>
+  );
+}
 
 function SectionTitle(props: { title: string }): React.JSX.Element {
   const { classes } = useStyles();
@@ -170,7 +180,7 @@ function PanelDocsView(props: { entry: LoadedDocs; words: string[] }): React.JSX
             <SectionTitle title={section.title} />
             {section.items.map(([term, text, Icon]) => (
               <Fragment key={term}>
-                <span className={classes.icon}>{Icon && <Icon />}</span>
+                <span>{Icon && <ButtonPreview icon={Icon} />}</span>
                 <Typography variant="body2" className={classes.term}>
                   {term}
                 </Typography>

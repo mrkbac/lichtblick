@@ -48,6 +48,7 @@ import { InteractionContextMenu, Interactions, SelectionObject, TabType } from "
 import { HoverTooltip } from "./Interactions/HoverTooltip";
 import type { HoverEntityInfo } from "./Interactions/types";
 import { MeasurePanel } from "./MeasurePanel";
+import PerspectiveButtonLabel from "./PerspectiveButtonLabel";
 import type { PickedRenderable } from "./Picker";
 import { Renderable } from "./Renderable";
 import { useRenderer, useRendererEvent } from "./RendererContext";
@@ -82,13 +83,6 @@ const useStyles = makeStyles()((theme) => ({
     display: "flex",
     justifyContent: "center",
     alignItems: "center",
-  },
-  threeDeeButton: {
-    fontFamily: customTypography.fontMonospace,
-    fontFeatureSettings: theme.typography.caption.fontFeatureSettings,
-    fontSize: theme.typography.caption.fontSize,
-    fontWeight: theme.typography.fontWeightBold,
-    lineHeight: "1em",
   },
   resetViewButton: {
     position: "absolute",
@@ -534,7 +528,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
                         aria-label={t("perspectiveCamera")}
                         onClick={props.onTogglePerspective}
                       >
-                        <span className={classes.threeDeeButton}>3D</span>
+                        <PerspectiveButtonLabel />
                       </IconButton>
                     </Tooltip>
                     <Tooltip placement="left" title={t("zoomToData")}>

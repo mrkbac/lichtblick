@@ -12,6 +12,7 @@ import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/Pane
 import PublishPointIcon from "@lichtblick/suite-base/components/PublishPointIcon";
 import { COMPRESSED_VIDEO_DATATYPES } from "@lichtblick/suite-base/util/foxgloveSchemas";
 
+import PerspectiveButtonLabel from "./PerspectiveButtonLabel";
 import * as foxglove from "./foxglove";
 import * as ros from "./ros";
 
@@ -65,7 +66,11 @@ const docs: PanelDocs = {
       title: "Toolbar",
       items: [
         ["Inspect objects", "Shows details of the clicked object.", Cursor20Regular],
-        ["2D / 3D", "Switches between a top-down and a perspective camera."],
+        [
+          "2D / 3D",
+          "Switches between a top-down and a perspective camera.",
+          PerspectiveButtonLabel,
+        ],
         [
           "Publish",
           "Click the scene to publish a point, pose, or pose estimate; long-press to pick which.",
