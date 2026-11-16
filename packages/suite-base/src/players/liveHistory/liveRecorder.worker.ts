@@ -101,6 +101,7 @@ async function start(name: string, profile: string, source: Record<string, strin
     const file = await dir.getFileHandle(name, { create: true });
     const handle = await file.createSyncAccessHandle();
     let position = 0n;
+    let flushed = 0n;
     const writer = new McapWriter({
       writable: {
         position: () => position,
@@ -127,7 +128,11 @@ async function start(name: string, profile: string, source: Record<string, strin
       channelIds: new Map(),
       schemaIds: new Map(),
       flushTimer: setInterval(() => {
-        handle.flush();
+        // Nothing written since the last fsync: don't wake the disk.
+        if (position !== flushed) {
+          flushed = position;
+          handle.flush();
+        }
       }, FLUSH_INTERVAL_MS),
       releaseLock,
     };
