@@ -146,11 +146,14 @@ class MapRenderable extends Renderable<MapUserData> {
     this.#disposed = true;
     this.#updateSoon.cancel();
     for (const asset of this.#assets.values()) {
-      void asset.then((value) => {
-        if ("coordinates" in value) {
-          URL.revokeObjectURL(value.url);
-        }
-      }, _.noop);
+      void asset.then(
+        (value) => {
+          if ("coordinates" in value) {
+            URL.revokeObjectURL(value.url);
+          }
+        },
+        () => {},
+      );
     }
     for (const tileset of this.#tilesets.values()) {
       tileset.tiles.dispose();
@@ -200,8 +203,8 @@ class MapRenderable extends Renderable<MapUserData> {
   // URL fields update on every keystroke; load once typing pauses.
   #updateSoon = _.debounce(() => {
     // Rejects only when the layer is removed mid-load.
-    this.#updateStyle().catch(_.noop);
-    this.#syncTilesets().catch(_.noop);
+    this.#updateStyle().catch(() => {});
+    this.#syncTilesets().catch(() => {});
   }, URL_DEBOUNCE_MS);
 
   /** Vector styles and GeoTIFFs, fetched once per URL. */
@@ -284,7 +287,7 @@ class MapRenderable extends Renderable<MapUserData> {
         this.#setLayerError(layer.id, errors.get(layer.id));
       }
     }
-    this.#attribution = _.uniq(attributions).join(" ");
+    this.#attribution = [...new Set(attributions)].join(" ");
     const style = composeStyle({
       layers,
       vectorStyles,

@@ -323,8 +323,7 @@ export function withBuildings3d(
   if (layers.some((layer) => layer.type === "fill-extrusion")) {
     return layers;
   }
-  const index = _.findLastIndex(
-    layers,
+  const index = layers.findLastIndex(
     (layer) => layer.type === "fill" && layer["source-layer"] === "building",
   );
   const fill = layers[index];

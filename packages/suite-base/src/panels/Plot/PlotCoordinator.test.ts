@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 import type { Theme } from "@mui/material";
 import { EventEmitter } from "eventemitter3";
-import * as _ from "lodash-es";
 import type { Mock, Mocked } from "vitest";
 
 import { parseMessagePath } from "@lichtblick/message-path";
@@ -444,8 +443,8 @@ describe("PlotCoordinator", () => {
 
       expect(simpleGetMessagePathDataItems).toHaveBeenCalledTimes(2);
       expect(plotCoordinator["currentValuesByConfigIndex"]).toEqual([
-        _.last(itemsResponse[0]),
-        _.last(itemsResponse[1]),
+        itemsResponse[0]!.at(-1),
+        itemsResponse[1]!.at(-1),
       ]);
     });
 

@@ -7,7 +7,6 @@
 
 import { compare, Time } from "@foxglove/rostime";
 import i18next from "i18next";
-import * as _ from "lodash-es";
 import { RefObject } from "react";
 import { createStore, StoreApi } from "zustand";
 import { shallow } from "zustand/shallow";
@@ -505,7 +504,7 @@ export function reducer(
       return {
         ...prevState,
         publishersById: newPublishersById,
-        allPublishers: _.flatten(Object.values(newPublishersById)),
+        allPublishers: Object.values(newPublishersById).flat(),
       };
     }
   }

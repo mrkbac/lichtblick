@@ -16,7 +16,6 @@
 
 import { useTheme } from "@mui/material";
 import { TFunction } from "i18next";
-import * as _ from "lodash-es";
 import { ComponentProps, ReactNode, useLayoutEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -277,7 +276,7 @@ function UnconnectedPanelSetup(props: UnconnectedProps): React.JSX.Element | nul
     }
     dTypes = dummyDatatypes;
   }
-  const allData = _.flatten(Object.values(frame));
+  const allData = Object.values(frame).flat();
 
   const inner = (
     <div

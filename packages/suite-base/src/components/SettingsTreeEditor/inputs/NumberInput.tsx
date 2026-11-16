@@ -102,7 +102,7 @@ export function NumberInput(
 
   const latestValue = useLatest(value);
 
-  const placeHolderValue = _.isFinite(Number(props.placeholder))
+  const placeHolderValue = Number.isFinite(Number(props.placeholder))
     ? Number(props.placeholder)
     : undefined;
 
@@ -127,7 +127,7 @@ export function NumberInput(
       isDragging.current = true;
       event.currentTarget.setPointerCapture(event.pointerId);
       const scrubStart = latestValue.current ?? placeHolderValue ?? 0;
-      scrubValue.current = _.isFinite(scrubStart) ? scrubStart : 0;
+      scrubValue.current = Number.isFinite(scrubStart) ? scrubStart : 0;
     },
     [latestValue, placeHolderValue],
   );

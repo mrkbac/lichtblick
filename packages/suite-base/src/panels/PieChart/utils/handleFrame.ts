@@ -4,8 +4,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2025 Takayuki Honda <takayuki.honda@tier4.jp>
 // SPDX-License-Identifier: MPL-2.0
 
-import * as _ from "lodash-es";
-
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 
 import type { PieChartState, PieChartAction } from "../types";
@@ -17,7 +15,7 @@ export type HandleFrameProps = {
 
 export function handleFrame({ state, action }: HandleFrameProps): PieChartState {
   if (state.pathParseError != undefined) {
-    return { ...state, latestMessage: _.last(action.messages), error: undefined };
+    return { ...state, latestMessage: action.messages.at(-1), error: undefined };
   }
   let latestMatchingQueriedData = state.latestMatchingQueriedData;
   let latestMessage = state.latestMessage;

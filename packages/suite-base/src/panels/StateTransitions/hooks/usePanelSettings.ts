@@ -182,7 +182,9 @@ export function buildSettingsTree(
   t: TFunction<"stateTransitions">,
 ): SettingsTreeNodes {
   const maxXError =
-    _.isNumber(xAxisMinValue) && _.isNumber(xAxisMaxValue) && xAxisMinValue >= xAxisMaxValue
+    typeof xAxisMinValue === "number" &&
+    typeof xAxisMaxValue === "number" &&
+    xAxisMinValue >= xAxisMaxValue
       ? t("maxXError")
       : undefined;
 

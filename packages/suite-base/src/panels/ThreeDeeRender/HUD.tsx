@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Chip } from "@mui/material";
-import * as _ from "lodash-es";
 import * as React from "react";
 import { makeStyles } from "tss-react/mui";
 
@@ -70,7 +69,7 @@ export function HUD(props: HUDProps): React.ReactElement {
   );
 
   const [emptyStates, notices, attributions] = React.useMemo(() => {
-    const groups = _.groupBy(hudItems, (i) => i.displayType);
+    const groups = Object.groupBy(hudItems, (i) => i.displayType);
     return [groups.empty ?? [], groups.notice ?? [], groups.attribution ?? []];
   }, [hudItems]);
 
