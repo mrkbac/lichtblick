@@ -4,6 +4,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2025 Takayuki Honda <takayuki.honda@tier4.jp>
 // SPDX-License-Identifier: MPL-2.0
 
+import { parseMessagePath } from "@lichtblick/message-path";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 import PieChartBuilder from "@lichtblick/suite-base/testing/builders/PieChartBuilder";
 
@@ -44,8 +45,25 @@ describe("handleFrame", () => {
 
     const newState = stateReducer(initialState, action);
 
+    // The path names the whole message, which isn't a number
     expect(newState.latestMessage).toEqual(action.messages.at(-1));
     expect(newState.latestMatchingQueriedData).toBeUndefined();
+    expect(newState.error?.message).toMatch("numbers");
+  });
+
+  it("reads a float32[] field decoded as a Float32Array", () => {
+    const initialState = PieChartBuilder.pieChartState({
+      parsedPath: parseMessagePath("/t.counts"),
+      latestMatchingQueriedData: undefined,
+    });
+    const message = MessageEventBuilder.messageEvent({
+      topic: "/t",
+      message: { counts: new Float32Array([1, 2, 3]) },
+    });
+
+    const newState = stateReducer(initialState, { type: "frame", messages: [message] });
+
+    expect(newState.latestMatchingQueriedData).toEqual(new Float32Array([1, 2, 3]));
     expect(newState.error).toBeUndefined();
   });
 
