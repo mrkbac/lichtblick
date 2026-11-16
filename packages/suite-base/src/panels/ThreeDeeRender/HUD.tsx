@@ -79,6 +79,7 @@ export function HUD(props: HUDProps): React.ReactElement {
   const [hiddenAttribution, setHiddenAttribution] = React.useState("");
   React.useEffect(() => {
     if (attribution === "") {
+      setHiddenAttribution("");
       return;
     }
     const timer = setTimeout(() => {
