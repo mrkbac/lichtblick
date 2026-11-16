@@ -79,7 +79,6 @@ export function useExtensionOperations(
       setOperationStatus(OperationStatus.UNINSTALLING);
 
       try {
-        await new Promise((resolve) => setTimeout(resolve, 200));
         await uninstallExtension(extension.namespace ?? "local", extension.id);
         enqueueSnackbar(`${extension.name} uninstalled successfully`, { variant: "success" });
         analytics.logEvent(AppEvent.EXTENSION_UNINSTALL, { type: extension.id });

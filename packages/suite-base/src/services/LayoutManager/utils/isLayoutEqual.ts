@@ -8,6 +8,7 @@
 import * as _ from "lodash-es";
 
 import { LayoutData } from "@lichtblick/suite-base/context/CurrentLayoutContext/actions";
+import { omitUndefined } from "@lichtblick/suite-base/util/omitUndefined";
 
 /**
  * isLayoutEqual compares two LayoutData instances for "equality". If the two instances are
@@ -35,8 +36,8 @@ export function isLayoutEqual(baseline: LayoutData, current: LayoutData): boolea
   // All top-level fields other than configById must be deeply equal.
   // Strip keys whose value is undefined in current so extra undefined entries don't
   // register as differences (preserving the original behaviour).
-  const strippedRestCurrent = _.omitBy(restCurrent, _.isUndefined);
-  if (!_.isEqual(_.omitBy(restBaseline, _.isUndefined), strippedRestCurrent)) {
+  const strippedRestCurrent = omitUndefined(restCurrent);
+  if (!_.isEqual(omitUndefined(restBaseline), strippedRestCurrent)) {
     return false;
   }
 

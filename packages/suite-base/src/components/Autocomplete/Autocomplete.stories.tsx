@@ -14,7 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import * as _ from "lodash-es";
 import { fireEvent, within } from "storybook/test";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
 
@@ -91,7 +90,7 @@ export const SortWhenFilteringFalse: Story = {
 
 export const ManyItems: Story = {
   args: {
-    items: _.range(1, 1000).map((i) => `item_${i}`),
+    items: Array.from({ length: 999 }, (_, i) => `item_${i + 1}`),
   },
   play: clickInput,
 };

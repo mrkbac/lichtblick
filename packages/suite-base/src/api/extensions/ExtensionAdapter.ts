@@ -2,8 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { IExtensionApiResponse } from "@lichtblick/suite-base/api/extensions/types";
-import { StoredExtension } from "@lichtblick/suite-base/services/IExtensionStorage";
-import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
+import { ExtensionInfo, StoredExtension } from "@lichtblick/suite-base/types/Extensions";
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class ExtensionAdapter {

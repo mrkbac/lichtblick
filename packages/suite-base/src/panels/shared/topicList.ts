@@ -30,8 +30,8 @@ export function topicListNode<T extends SettingsTreeNode>(
   };
 }
 
-export const SHOW_ALL_ACTION = "show-all";
-export const HIDE_ALL_ACTION = "hide-all";
+const SHOW_ALL_ACTION = "show-all";
+const HIDE_ALL_ACTION = "hide-all";
 
 /** The visibility a "Show all" / "Hide all" action sets, or undefined for any other action. */
 export function showHideAllValue(action: SettingsTreeAction): boolean | undefined {

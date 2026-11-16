@@ -57,6 +57,7 @@ import {
 } from "@lichtblick/suite-base/panels/Plot/utils/config";
 import { MeasureModeToolbarButton } from "@lichtblick/suite-base/panels/shared/MeasureModeToolbarButton";
 import { createMeasureModeEscapeHandler } from "@lichtblick/suite-base/panels/shared/measureModeEscapeHandler";
+import { addPathsDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import useAppendOnlyKey from "@lichtblick/suite-base/panels/shared/useAppendOnlyKey";
 import { enumValuesByDatatypeAndField } from "@lichtblick/suite-base/util/enums";
 import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
@@ -261,29 +262,11 @@ const Plot = (props: PlotProps): React.JSX.Element => {
   }, [boxZoomActive, deltaMeasureMode, isHovered, keyDownHandlers, toggleBoxZoom]);
 
   useEffect(() => {
-    setMessagePathDropConfig({
-      getDropStatus(paths) {
-        // Only fields are plotted; whole messages dragged along with them are skipped
-        return paths.some((path) => path.isLeaf)
-          ? { canDrop: true, effect: "add" }
-          : { canDrop: false };
-      },
-      handleDrop(paths) {
-        saveConfig((prevConfig) => ({
-          ...prevConfig,
-          paths: [
-            ...prevConfig.paths,
-            ...paths
-              .filter((path) => path.isLeaf)
-              .map((path) => ({
-                value: path.path,
-                enabled: true,
-                timestampMethod: "receiveTime" as const,
-              })),
-          ],
-        }));
-      },
-    });
+    setMessagePathDropConfig(
+      addPathsDrop((added) => {
+        saveConfig((prevConfig) => ({ ...prevConfig, paths: [...prevConfig.paths, ...added] }));
+      }),
+    );
   }, [saveConfig, setMessagePathDropConfig]);
 
   useEffect(() => {

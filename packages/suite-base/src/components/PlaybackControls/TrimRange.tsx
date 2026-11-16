@@ -14,13 +14,13 @@ import { makeStyles } from "tss-react/mui";
 
 import { useTrimStore } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import {
-  MessagePipelineContext,
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import {
   selectCurrentTime,
   selectEndTime,
+  selectHasCurrentTime,
   selectStartTime,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -77,7 +77,6 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
-const selectHasCurrentTime = (ctx: MessagePipelineContext) => selectCurrentTime(ctx) != undefined;
 const NO_KEY_HANDLERS = {};
 
 /** Reads the playhead on demand, so callers don't re-render on every playback tick. */

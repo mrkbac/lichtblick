@@ -135,7 +135,6 @@ export default function ExtensionList({
 
     for (const extension of extensionsToUninstall) {
       try {
-        await new Promise((resolve) => setTimeout(resolve, 100));
         await uninstallExtension(extension.namespace ?? "local", extension.id);
         successCount++;
         analytics.logEvent(AppEvent.EXTENSION_UNINSTALL, {

@@ -31,7 +31,7 @@ import { CompareDialog } from "@lichtblick/suite-base/components/Compare/Compare
 import {
   DataSourceDialog,
   DataSourceDialogItem,
-} from "@lichtblick/suite-base/components/DataSourceDialog";
+} from "@lichtblick/suite-base/components/DataSourceDialog/DataSourceDialog";
 import { START_ADDRESS_INPUT_ID } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
 import DataSourceSidebar from "@lichtblick/suite-base/components/DataSourceSidebar/DataSourceSidebar";
 import DocumentDropListener from "@lichtblick/suite-base/components/DocumentDropListener";
@@ -48,6 +48,7 @@ import {
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import {
+  selectIsPlaying,
   selectPausePlayback,
   selectPlayerId,
   selectPlayerPresence,
@@ -65,9 +66,9 @@ import Stack from "@lichtblick/suite-base/components/Stack";
 import {
   StudioLogsSettings,
   StudioLogsSettingsSidebar,
-} from "@lichtblick/suite-base/components/StudioLogsSettings";
+} from "@lichtblick/suite-base/components/StudioLogsSettings/StudioLogsSettings";
 import { SyncAdapters } from "@lichtblick/suite-base/components/SyncAdapters";
-import { TopicList } from "@lichtblick/suite-base/components/TopicList";
+import { TopicList } from "@lichtblick/suite-base/components/TopicList/TopicList";
 import VariablesList from "@lichtblick/suite-base/components/VariablesList";
 import { WorkspaceDialogs } from "@lichtblick/suite-base/components/WorkspaceDialogs";
 import { AllowedFileExtensions } from "@lichtblick/suite-base/constants/allowedFileExtensions";
@@ -107,8 +108,6 @@ const log = Logger.getLogger(__filename);
 
 const selectPlayerIsPresent = ({ playerState }: MessagePipelineContext) =>
   playerState.presence !== PlayerPresence.NOT_PRESENT;
-const selectIsPlaying = (ctx: MessagePipelineContext) =>
-  ctx.playerState.activeData?.isPlaying === true;
 const selectPlayUntil = (ctx: MessagePipelineContext) => ctx.playUntil;
 const selectEventsSupported = (store: EventsStore) => store.eventsSupported;
 const selectSelectEvent = (store: EventsStore) => store.selectEvent;

@@ -52,6 +52,7 @@ import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import { Topic, TopicStats } from "@lichtblick/suite-base/players/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { omitUndefined } from "@lichtblick/suite-base/util/omitUndefined";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import {
@@ -318,7 +319,7 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
     (topic: string, change: Partial<TopicSettings>) => {
       saveConfig(
         produce<TopicHealthConfig>((draft) => {
-          const next = _.omitBy({ ...draft.topics[topic], ...change }, _.isUndefined);
+          const next = omitUndefined({ ...draft.topics[topic], ...change });
           if (_.isEmpty(next)) {
             delete draft.topics[topic];
           } else {

@@ -21,6 +21,11 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectPlayerCapabilities,
+  selectPlayerId,
+  selectStartTime,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { Topic } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
@@ -34,18 +39,6 @@ function selectTopics(ctx: MessagePipelineContext) {
 
 function selectServices(ctx: MessagePipelineContext) {
   return ctx.sortedServices;
-}
-
-function selectStartTime(ctx: MessagePipelineContext) {
-  return ctx.playerState.activeData?.startTime;
-}
-
-function selectCapabilities(ctx: MessagePipelineContext) {
-  return ctx.playerState.capabilities;
-}
-
-function selectPlayerId(ctx: MessagePipelineContext) {
-  return ctx.playerState.playerId;
 }
 
 // Metadata about the source of data currently being displayed.
@@ -70,7 +63,7 @@ export function useDataSourceInfo(): Immutable<DataSourceInfo> {
   const topics = useMessagePipeline(selectTopics);
   const services = useMessagePipeline(selectServices);
   const startTime = useMessagePipeline(selectStartTime);
-  const capabilities = useMessagePipeline(selectCapabilities);
+  const capabilities = useMessagePipeline(selectPlayerCapabilities);
   const playerId = useMessagePipeline(selectPlayerId);
 
   // we want the returned object to have a stable identity

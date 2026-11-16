@@ -2,7 +2,7 @@
 
 export const commandPalette = {
   title: "Command palette",
-  placeholder: "Search commands, / topics, @ panels, # layouts, ? help, or a time like 1:02",
+  placeholder: "Search commands, / topics, @ panels, # layouts, or a time like 1:02",
   noResults: "No matching commands",
   loading: "Loading…",
   back: "Back",
@@ -81,6 +81,4 @@ export const commandPalette = {
   about: "About {{appName}}",
   version: "Version {{version}}",
   keyboardShortcuts: "Keyboard shortcuts…",
-  searchModes: "Search modes…",
-  searchModesPlaceholder: "Type a prefix at the start of the search",
 };

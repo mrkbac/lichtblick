@@ -68,7 +68,7 @@ vi.mock("@lichtblick/suite-base/components/AppBar", () => ({
 vi.mock("@lichtblick/suite-base/components/AlertList/AlertsList", () => ({
   AlertsList: () => undefined,
 }));
-vi.mock("@lichtblick/suite-base/components/DataSourceDialog", () => ({
+vi.mock("@lichtblick/suite-base/components/DataSourceDialog/DataSourceDialog", () => ({
   DataSourceDialog: () => undefined,
 }));
 vi.mock("@lichtblick/suite-base/components/DataSourceSidebar/DataSourceSidebar", () => ({
@@ -118,14 +118,14 @@ vi.mock("@lichtblick/suite-base/components/Stack", () => ({
   __esModule: true,
   default: ({ children }: React.PropsWithChildren) => <>{children}</>,
 }));
-vi.mock("@lichtblick/suite-base/components/StudioLogsSettings", () => ({
+vi.mock("@lichtblick/suite-base/components/StudioLogsSettings/StudioLogsSettings", () => ({
   StudioLogsSettings: () => undefined,
   StudioLogsSettingsSidebar: () => undefined,
 }));
 vi.mock("@lichtblick/suite-base/components/SyncAdapters", () => ({
   SyncAdapters: () => undefined,
 }));
-vi.mock("@lichtblick/suite-base/components/TopicList", () => ({
+vi.mock("@lichtblick/suite-base/components/TopicList/TopicList", () => ({
   TopicList: () => undefined,
 }));
 vi.mock("@lichtblick/suite-base/components/VariablesList", () => ({

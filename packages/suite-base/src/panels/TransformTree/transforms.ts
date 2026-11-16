@@ -116,13 +116,12 @@ function transformsOf(message: unknown): readonly unknown[] {
 
 /**
  * Extracts every well-formed transform from a TF message of any supported schema. Malformed
- * transforms are skipped, and `onMalformed` is called once for each.
+ * transforms are skipped; `malformed` says whether there were any.
  */
 export function samplesFromMessage(
   schemaName: string,
   message: unknown,
-  onMalformed?: () => void,
-): TransformSample[] {
+): { samples: TransformSample[]; malformed: boolean } {
   let candidates: (TransformSample | undefined)[];
   if (TF_DATATYPES.has(schemaName)) {
     candidates = transformsOf(message).map(fromRos);
@@ -133,11 +132,8 @@ export function samplesFromMessage(
   } else if (FRAME_TRANSFORM_DATATYPES.has(schemaName)) {
     candidates = [fromFoxglove(message)];
   } else {
-    return [];
+    return { samples: [], malformed: false };
   }
   const samples = candidates.filter((sample) => sample != undefined);
-  for (let i = samples.length; i < candidates.length; i++) {
-    onMalformed?.();
-  }
-  return samples;
+  return { samples, malformed: samples.length < candidates.length };
 }

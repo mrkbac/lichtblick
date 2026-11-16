@@ -3,7 +3,7 @@
 import { MessageDefinitionField } from "@foxglove/message-definition";
 
 import type { ParsedChannel } from "./parseChannel";
-import { readString } from "./ros2CdrDecoder";
+import { HOST_LITTLE_ENDIAN, readString } from "./ros2CdrDecoder";
 import { MessageDefinitionMap } from "./types";
 
 /**
@@ -297,6 +297,9 @@ function readStructList<T>(msg: Message, p: number | undefined, read: (s: Struct
   if (p == undefined || !msg.list(p)) {
     return [];
   }
+  if (msg.elementSize === 1) {
+    throw new Error("Cap'n Proto bit list cannot be read as a struct list");
+  }
   const { count, start, stride, elementDataBytes, elementPtrCount } = msg;
   const out: T[] = [];
   for (let i = 0; i < count; i++) {
@@ -495,8 +498,16 @@ const TYPED_ARRAYS = {
   float64: Float64Array,
 } as const;
 
-// Capnp is little-endian; typed arrays use the host's order.
-const LITTLE_ENDIAN_HOST = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+/** Adds the datatype field `name` (when it has one) to `definitions`. */
+function define(
+  definitions: MessageDefinitionField[] | undefined,
+  name: string | undefined,
+  field: Omit<MessageDefinitionField, "name">,
+): void {
+  if (name != undefined) {
+    definitions?.push({ name, ...field });
+  }
+}
 
 class Compiler {
   readonly #nodes: Map<bigint, NodeInfo>;
@@ -521,10 +532,9 @@ class Compiler {
     if (existing) {
       return existing;
     }
-    const slot: { read?: Reader } = {};
-    this.#structReaders.set(id, (msg, s) => slot.read!(msg, s));
+    // The forwarder only runs while decoding, after `compiled` is assigned.
+    this.#structReaders.set(id, (msg, s) => compiled(msg, s));
     const compiled = this.#compileStruct(id);
-    slot.read = compiled;
     this.#structReaders.set(id, compiled);
     return compiled;
   }
@@ -636,21 +646,16 @@ class Compiler {
     name: string | undefined,
     definitions: MessageDefinitionField[] | undefined,
   ): PointerReader | undefined {
-    const define = (field: Omit<MessageDefinitionField, "name">) => {
-      if (name != undefined) {
-        definitions?.push({ name, ...field });
-      }
-    };
     switch (type.kind) {
       case "text":
-        define({ type: "string" });
+        define(definitions, name, { type: "string" });
         return (msg, p) => msg.text(p) ?? "";
       case "data":
-        define({ type: "uint8", isArray: true });
+        define(definitions, name, { type: "uint8", isArray: true });
         return (msg, p) => msg.data(p) ?? new Uint8Array();
       case "struct": {
         const node = this.#node(type.typeId);
-        define({ type: node.displayName, isComplex: true });
+        define(definitions, name, { type: node.displayName, isComplex: true });
         const read = this.struct(type.typeId);
         // An unset struct is undefined, not its defaults: expanding defaults would never end
         // for recursive types.
@@ -671,18 +676,13 @@ class Compiler {
     name: string | undefined,
     definitions: MessageDefinitionField[] | undefined,
   ): PointerReader | undefined {
-    const define = (field: Omit<MessageDefinitionField, "name">) => {
-      if (name != undefined) {
-        definitions?.push({ name, ...field, isArray: true });
-      }
-    };
     switch (element.kind) {
       case "void":
       case "interface":
       case "anyPointer":
         return undefined;
       case "bool":
-        define({ type: "bool" });
+        define(definitions, name, { type: "bool", isArray: true });
         return (msg, p) => {
           if (!msg.list(p)) {
             return [];
@@ -700,7 +700,7 @@ class Compiler {
         };
       case "enum":
         this.#enumConstants(element.typeId, definitions ?? []);
-        define({ type: "uint16" });
+        define(definitions, name, { type: "uint16", isArray: true });
         return this.#numericList("uint16");
       case "text":
       case "data":
@@ -710,7 +710,10 @@ class Compiler {
           return undefined;
         }
         if (element.kind !== "list") {
-          define({ type: element.kind === "text" ? "string" : "uint8" });
+          define(definitions, name, {
+            type: element.kind === "text" ? "string" : "uint8",
+            isArray: true,
+          });
         }
         return (msg, p) => {
           if (!msg.list(p)) {
@@ -729,31 +732,12 @@ class Compiler {
       }
       case "struct": {
         const node = this.#node(element.typeId);
-        define({ type: node.displayName, isComplex: true });
+        define(definitions, name, { type: node.displayName, isComplex: true, isArray: true });
         const read = this.struct(element.typeId);
-        return (msg, p) => {
-          if (!msg.list(p)) {
-            return [];
-          }
-          if (msg.elementSize === 1) {
-            throw new Error("Cap'n Proto bit list cannot be read as a struct list");
-          }
-          const { count, start, stride, elementDataBytes, elementPtrCount } = msg;
-          const out = new Array<unknown>(count);
-          for (let i = 0; i < count; i++) {
-            const data = start + i * stride;
-            out[i] = read(msg, {
-              data,
-              dataBytes: elementDataBytes,
-              ptrs: data + elementDataBytes,
-              ptrCount: elementPtrCount,
-            });
-          }
-          return out;
-        };
+        return (msg, p) => readStructList(msg, p, (s) => read(msg, s));
       }
       default:
-        define({ type: element.kind });
+        define(definitions, name, { type: element.kind, isArray: true });
         return this.#numericList(element.kind);
     }
   }
@@ -767,7 +751,8 @@ class Compiler {
         return new ArrayType(0);
       }
       const { count, start, stride, elementDataBytes } = msg;
-      if (stride === size && LITTLE_ENDIAN_HOST) {
+      // Capnp is little-endian; typed arrays use the host's order.
+      if (stride === size && HOST_LITTLE_ENDIAN) {
         // A view when aligned (the usual case: segments are word aligned), else one copy.
         const offset = msg.bytes.byteOffset + start;
         return offset % size === 0

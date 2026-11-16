@@ -8,7 +8,6 @@
 import { Button, Dialog, DialogActions, DialogContent, TextField, Typography } from "@mui/material";
 import { SyntheticEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { useKeyPressEvent } from "@lichtblick/hooks";
 import Stack from "@lichtblick/suite-base/components/Stack";
 
 type PromptOptions = {
@@ -76,8 +75,6 @@ function ModalPrompt({
     },
     [originalOnComplete],
   );
-
-  useKeyPressEvent("Enter", onConfirmAction);
 
   // Ensure we still call onComplete(undefined) when the component unmounts, if it hasn't been
   // called already

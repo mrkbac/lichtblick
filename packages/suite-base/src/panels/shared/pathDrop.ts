@@ -1,15 +1,12 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import { Dispatch, SetStateAction, useEffect } from "react";
+
 import {
+  BuiltinPanelExtensionContext,
   DraggedMessagePath,
   MessagePathDropConfig,
 } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
-
-/** True for a dragged topic, or a field of one, whose schema is in `schemas` */
-export const hasSchema =
-  (schemas: ReadonlySet<string>) =>
-  (item: DraggedMessagePath): boolean =>
-    item.rootSchemaName != undefined && schemas.has(item.rootSchemaName);
 
 /** For a panel showing one path or topic: dropping one item it `accepts` replaces it. */
 export function replaceDrop(
@@ -44,4 +41,38 @@ export function addTopicsDrop(
       add([...new Set(items.filter(accepts).map((item) => item.topicName))]);
     },
   };
+}
+
+/** For a series panel: adds each dropped field as an enabled series; whole messages are skipped. */
+export function addPathsDrop(
+  add: (paths: { value: string; enabled: true; timestampMethod: "receiveTime" }[]) => void,
+): MessagePathDropConfig {
+  return {
+    getDropStatus: (items) =>
+      items.some((item) => item.isLeaf) ? { canDrop: true, effect: "add" } : { canDrop: false },
+    handleDrop: (items) => {
+      add(
+        items
+          .filter((item) => item.isLeaf)
+          .map((item) => ({ value: item.path, enabled: true, timestampMethod: "receiveTime" })),
+      );
+    },
+  };
+}
+
+/** For a panel showing one field in `config.path`: dropping a field replaces it. */
+export function useReplacePathDrop<C extends { path: string }>(
+  context: Pick<BuiltinPanelExtensionContext, "unstable_setMessagePathDropConfig">,
+  setConfig: Dispatch<SetStateAction<C>>,
+): void {
+  useEffect(() => {
+    context.unstable_setMessagePathDropConfig(
+      replaceDrop(
+        (item) => item.isLeaf,
+        (item) => {
+          setConfig((prev) => ({ ...prev, path: item.path }));
+        },
+      ),
+    );
+  }, [context, setConfig]);
 }

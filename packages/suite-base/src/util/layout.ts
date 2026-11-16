@@ -34,7 +34,7 @@ export function getPanelTypeFromId(id: string): string {
   return id.split("!")[0] ?? "";
 }
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
+export function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value != undefined && !Array.isArray(value);
 }
 

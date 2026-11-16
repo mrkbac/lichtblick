@@ -65,7 +65,7 @@ This prevents Worker leaks if the wrapping object is GC'd without explicit dispo
 ### AbortSignal Transfer
 
 ```typescript
-import { abortSignalTransferHandler } from "@lichtblick/comlink-transfer-handlers";
+import { abortSignalTransferHandler } from "@lichtblick/suite-base/players/IterablePlayer/abortSignalTransferHandler";
 
 // Register BEFORE any Comlink communication
 Comlink.transferHandlers.set("abortsignal", abortSignalTransferHandler);

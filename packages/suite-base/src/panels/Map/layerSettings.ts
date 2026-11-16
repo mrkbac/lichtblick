@@ -10,6 +10,7 @@ import {
   SettingsTreeNodeAction,
 } from "@lichtblick/suite";
 import { moveItem, moveUpDownActions } from "@lichtblick/suite-base/panels/utils";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import {
   hiddenVectorGroups,
@@ -25,10 +26,6 @@ import {
 } from "./layers";
 
 // The map layer stack's settings, shared by the Map panel and the 3D panel's Map layer.
-
-export function newLayerId(): string {
-  return Math.random().toString(36).slice(2, 10);
-}
 
 /** Source kinds MapLibre renders; the 3D panel adds "3dtiles". */
 export const MAP_SOURCE_KINDS: readonly SourceKind[] = ["raster", "vector", "dem", "geotiff"];
@@ -459,7 +456,7 @@ export function applyLayerStackAction(
         case "add-layer":
           // New layers go on top; a transparent overlay is the most common addition.
           layers.unshift({
-            id: newLayerId(),
+            id: randomUUID(),
             source: "esri-transportation",
             visible: true,
             opacity: 1,

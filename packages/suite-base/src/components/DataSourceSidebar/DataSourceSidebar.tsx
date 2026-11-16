@@ -14,7 +14,7 @@ import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePip
 import { selectPlayerPresence } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { SidebarContent } from "@lichtblick/suite-base/components/SidebarContent";
 import Stack from "@lichtblick/suite-base/components/Stack";
-import { TopicList } from "@lichtblick/suite-base/components/TopicList";
+import { TopicList } from "@lichtblick/suite-base/components/TopicList/TopicList";
 import WssErrorModal from "@lichtblick/suite-base/components/WssErrorModal";
 import { useWorkspaceActions } from "@lichtblick/suite-base/context/Workspace/useWorkspaceActions";
 import useAlertCount from "@lichtblick/suite-base/hooks/useAlertCount";

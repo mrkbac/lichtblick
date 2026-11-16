@@ -109,13 +109,6 @@ export const useCommandPaletteStore = create<{
   },
 }));
 
-/** The sub-menu command whose prefix `text` starts with, if any. */
-function findPrefixCommand(commands: readonly Command[], text: string): Command | undefined {
-  return commands.find(
-    (cmd) => cmd.children != undefined && cmd.prefix != undefined && text.startsWith(cmd.prefix),
-  );
-}
-
 /** Mounts the Cmd/Ctrl+K shortcut; the palette itself only renders while open. */
 export function CommandPalette(): React.JSX.Element {
   const open = useCommandPaletteStore((state) => state.open);
@@ -297,7 +290,14 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }): React.JSX.E
             const value = event.target.value;
             // A prefix typed (or pasted) into the empty root search opens its mode, e.g. "@".
             const mode =
-              isRoot && level.query === "" ? findPrefixCommand(rootCommands, value) : undefined;
+              isRoot && level.query === ""
+                ? rootCommands.find(
+                    (cmd) =>
+                      cmd.children != undefined &&
+                      cmd.prefix != undefined &&
+                      value.startsWith(cmd.prefix),
+                  )
+                : undefined;
             if (mode) {
               void execute(mode, value.slice(mode.prefix!.length));
               return;

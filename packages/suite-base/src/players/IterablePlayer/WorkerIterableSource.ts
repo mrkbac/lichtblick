@@ -7,7 +7,6 @@
 
 import * as Comlink from "@foxglove/comlink";
 
-import { abortSignalTransferHandler } from "@lichtblick/comlink-transfer-handlers";
 import { promiseTimeout } from "@lichtblick/den/async";
 import { ComlinkWrap } from "@lichtblick/den/worker";
 import Log from "@lichtblick/log";
@@ -25,6 +24,7 @@ import type {
   Initialization,
 } from "./IIterableSource";
 import type { WorkerIterableSourceWorker } from "./WorkerIterableSourceWorker";
+import { abortSignalTransferHandler } from "./abortSignalTransferHandler";
 
 const log = Log.getLogger(__filename);
 

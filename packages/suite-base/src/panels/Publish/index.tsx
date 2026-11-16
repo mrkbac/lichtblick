@@ -30,6 +30,7 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectPlayerPresence } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -56,10 +57,6 @@ type Props = {
 
 function selectDataSourceProfile(ctx: MessagePipelineContext) {
   return ctx.playerState.profile;
-}
-
-function selectPlayerPresence(ctx: MessagePipelineContext) {
-  return ctx.playerState.presence;
 }
 
 function Publish(props: Props) {

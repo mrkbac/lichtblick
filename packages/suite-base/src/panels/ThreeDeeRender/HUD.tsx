@@ -7,6 +7,7 @@
 
 import { Chip } from "@mui/material";
 import * as React from "react";
+import { keyframes } from "tss-react";
 import { makeStyles } from "tss-react/mui";
 
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
@@ -16,6 +17,8 @@ import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 
 import { HUDItem } from "./HUDItemManager";
 import { useRendererProperty } from "./RendererContext";
+
+const hide = keyframes`to { visibility: hidden; }`;
 
 const useStyles = makeStyles()((theme) => ({
   root: {
@@ -47,6 +50,7 @@ const useStyles = makeStyles()((theme) => ({
     whiteSpace: "nowrap",
     overflow: "hidden",
     textOverflow: "ellipsis",
+    animation: `${hide} 0s ${ATTRIBUTION_AUTO_HIDE_MS}ms forwards`,
   },
   empty: {
     backgroundColor: theme.palette.background.default,
@@ -73,21 +77,7 @@ export function HUD(props: HUDProps): React.ReactElement {
     return [groups.empty ?? [], groups.notice ?? [], groups.attribution ?? []];
   }, [hudItems]);
 
-  // Hide after ATTRIBUTION_AUTO_HIDE_MS; show it again whenever the attribution text changes (e.g. another map layer is added).
   const attribution = attributions.map((item) => item.getMessage()).join(" · ");
-  const [hiddenAttribution, setHiddenAttribution] = React.useState("");
-  React.useEffect(() => {
-    if (attribution === "") {
-      setHiddenAttribution("");
-      return;
-    }
-    const timer = setTimeout(() => {
-      setHiddenAttribution(attribution);
-    }, ATTRIBUTION_AUTO_HIDE_MS);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [attribution]);
 
   if (hudItems.length === 0) {
     return <></>;
@@ -107,8 +97,12 @@ export function HUD(props: HUDProps): React.ReactElement {
           ))}
         </div>
       )}
-      {attribution !== "" && attribution !== hiddenAttribution && (
-        <div className={classes.attribution}>{attribution}</div>
+      {/* Hides itself after ATTRIBUTION_AUTO_HIDE_MS; the key shows it again whenever the text
+          changes (e.g. another map layer is added). */}
+      {attribution !== "" && (
+        <div key={attribution} className={classes.attribution}>
+          {attribution}
+        </div>
       )}
     </>
   );

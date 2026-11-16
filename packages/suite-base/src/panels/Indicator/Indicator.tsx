@@ -26,8 +26,9 @@ import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables
 import { useStyles } from "@lichtblick/suite-base/panels/Indicator/Indicator.style";
 import { DEFAULT_CONFIG } from "@lichtblick/suite-base/panels/Indicator/constants";
 import { stateReducer } from "@lichtblick/suite-base/panels/shared/gaugeAndIndicatorStateReducer";
-import { replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
+import { useReplacePathDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import { GaugeAndIndicatorState } from "@lichtblick/suite-base/panels/shared/types";
+import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import {
   AlertSnapshot,
@@ -82,16 +83,7 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
   }, [config, context]);
 
   // Drop a field from the topic list to show it
-  useEffect(() => {
-    context.unstable_setMessagePathDropConfig(
-      replaceDrop(
-        (item) => item.isLeaf,
-        (item) => {
-          setConfig((prev) => ({ ...prev, path: item.path }));
-        },
-      ),
-    );
-  }, [context]);
+  useReplacePathDrop(context, setConfig);
 
   useEffect(() => {
     context.onRender = (renderState, done) => {
@@ -123,7 +115,7 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
   }, [context, dispatch]);
 
   // unique across tabs so panels in different tabs don't replace each other's notifications
-  const [notificationTag] = useState(() => Math.random().toString(36).slice(2));
+  const [notificationTag] = useState(randomUUID);
 
   // Shown in the settings; also follows changes made in the browser's site settings
   const [notificationPermission, setNotificationPermission] = useState(getNotificationPermission);

@@ -14,8 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import * as _ from "lodash-es";
-
 // toggles an item in an array based on reference equality
 // or an optional predicate to determine if the item should be toggled in/out
 // this function is pure - it always returns a new array
@@ -24,7 +22,7 @@ export default function toggle<T>(
   item: T,
   predicate: (arg0: T) => boolean = (el) => el === item,
 ): T[] {
-  const newArray = _.reject(array, predicate);
+  const newArray = array.filter((el) => !predicate(el));
   if (newArray.length === array.length) {
     newArray.push(item);
   }

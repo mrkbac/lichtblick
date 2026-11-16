@@ -17,8 +17,6 @@
 import { Dialog, DialogContent, DialogTitle, DialogActions, Button } from "@mui/material";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { useKeyPressEvent } from "@lichtblick/hooks";
-
 type ConfirmVariant = "danger" | "primary";
 type ConfirmAction = "ok" | "cancel";
 
@@ -54,10 +52,6 @@ function ConfirmModal(props: ConfirmModalProps) {
     [originalOnComplete],
   );
 
-  useKeyPressEvent("Enter", () => {
-    onComplete("ok");
-  });
-
   // Ensure we still call onComplete(undefined) when the component unmounts, if it hasn't been
   // called already
   useEffect(() => {
@@ -84,6 +78,7 @@ function ConfirmModal(props: ConfirmModalProps) {
       variant="contained"
       color={props.variant === "danger" ? "error" : "primary"}
       type="submit"
+      autoFocus
     >
       {props.ok ?? "OK"}
     </Button>,

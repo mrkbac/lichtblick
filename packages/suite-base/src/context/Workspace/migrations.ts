@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { AppSettingsTab } from "@lichtblick/suite-base/components/AppSettingsDialog/types";
-import { DataSourceDialogItem } from "@lichtblick/suite-base/components/DataSourceDialog";
+import { DataSourceDialogItem } from "@lichtblick/suite-base/components/DataSourceDialog/DataSourceDialog";
 import { IDataSourceFactory } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import {
   LeftSidebarItemKey,

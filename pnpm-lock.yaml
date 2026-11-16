@@ -215,15 +215,6 @@ importers:
 
   packages/@types/memoize-weak: {}
 
-  packages/comlink-transfer-handlers:
-    devDependencies:
-      '@foxglove/comlink':
-        specifier: 4.4.3
-        version: 4.4.3
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
-
   packages/den:
     dependencies:
       '@foxglove/comlink':
@@ -494,9 +485,6 @@ importers:
       '@foxglove/xmlrpc':
         specifier: 1.4.0
         version: 1.4.0
-      '@lichtblick/comlink-transfer-handlers':
-        specifier: workspace:*
-        version: link:../comlink-transfer-handlers
       '@lichtblick/den':
         specifier: workspace:*
         version: link:../den

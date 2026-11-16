@@ -18,7 +18,7 @@ import { ChevronLeft20Regular, ChevronRight20Regular } from "@fluentui/react-ico
 import { add as addTimes, fromSec } from "@foxglove/rostime";
 import { Typography, alpha, useTheme } from "@mui/material";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDebounce } from "use-debounce";
 
@@ -36,6 +36,7 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { selectPlayerPresence } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Panel from "@lichtblick/suite-base/components/Panel";
+import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TimeBasedChart from "@lichtblick/suite-base/components/TimeBasedChart";
@@ -52,7 +53,6 @@ import {
 } from "@lichtblick/suite-base/panels/StateTransitions/constants";
 import useChartScalesAndBounds from "@lichtblick/suite-base/panels/StateTransitions/hooks/useChartScalesAndBounds";
 import { useDecodedMessageRange } from "@lichtblick/suite-base/panels/StateTransitions/hooks/useDecodedMessageRange";
-import useMessagePathDropConfig from "@lichtblick/suite-base/panels/StateTransitions/hooks/useMessagePathDropConfig";
 import { usePanelSettings } from "@lichtblick/suite-base/panels/StateTransitions/hooks/usePanelSettings";
 import useStateTransitionsData from "@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsData";
 import useStateTransitionsDeltaMode from "@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsDeltaMode";
@@ -62,6 +62,7 @@ import { DeltaOverlay } from "@lichtblick/suite-base/panels/shared/DeltaOverlay"
 import { MeasureModeToolbarButton } from "@lichtblick/suite-base/panels/shared/MeasureModeToolbarButton";
 import { computeDeltaDisplay } from "@lichtblick/suite-base/panels/shared/deltaMarkers";
 import { createMeasureModeEscapeHandler } from "@lichtblick/suite-base/panels/shared/measureModeEscapeHandler";
+import { addPathsDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import useAppendOnlyKey from "@lichtblick/suite-base/panels/shared/useAppendOnlyKey";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
@@ -90,7 +91,14 @@ function StateTransitions(props: StateTransitionPanelProps) {
 
   const [focusedPath, setFocusedPath] = useState<undefined | string[]>(undefined);
 
-  useMessagePathDropConfig(saveConfig);
+  const { setMessagePathDropConfig } = usePanelContext();
+  useEffect(() => {
+    setMessagePathDropConfig(
+      addPathsDrop((added) => {
+        saveConfig((prevConfig) => ({ ...prevConfig, paths: [...prevConfig.paths, ...added] }));
+      }),
+    );
+  }, [saveConfig, setMessagePathDropConfig]);
 
   const { startTime, currentTimeSinceStart, endTimeSinceStart } = useStateTransitionsTime();
 
