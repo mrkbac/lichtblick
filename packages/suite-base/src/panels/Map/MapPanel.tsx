@@ -198,10 +198,12 @@ const useStyles = makeStyles()((theme) => ({
   // MapLibre adds `.maplibregl-map { position: relative }`, so size explicitly.
   map: { width: "100%", height: "100%" },
   legends: {
+    minHeight: 0,
+    overflowY: "auto",
+    pointerEvents: "auto",
     display: "flex",
     flexDirection: "column",
     gap: theme.spacing(0.5),
-    pointerEvents: "none",
   },
   legend: {
     width: 180,

@@ -29,6 +29,7 @@ import OverlayToolbar, {
   OverlayToolGroup,
   useIsShorterThan,
 } from "@lichtblick/suite-base/components/OverlayToolbar";
+import { PANEL_FLOATING_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import { customTypography } from "@lichtblick/theme";
 
 import { MEASURE_HANDLE_LAYERS } from "./features";
@@ -110,6 +111,8 @@ const useStyles = makeStyles()((theme) => ({
     position: "absolute",
     bottom: 36,
     left: 10,
+    // Stay below the panel toolbar; the legends scroll when they don't fit.
+    maxHeight: `calc(100% - 46px - ${PANEL_FLOATING_TOOLBAR_HEIGHT})`,
     display: "flex",
     flexDirection: "column",
     alignItems: "flex-start",
