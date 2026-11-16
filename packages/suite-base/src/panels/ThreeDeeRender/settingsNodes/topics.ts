@@ -77,6 +77,12 @@ export function markerSettingsNode(
         input: "boolean",
         value: config.showOutlines ?? MARKER_DEFAULTS.showOutlines,
       },
+      showLabels: {
+        label: t("threeDee:showLabels"),
+        help: t("threeDee:showLabelsHelp"),
+        input: "boolean",
+        value: config.showLabels ?? true,
+      },
       selectedIdVariable: {
         label: t("threeDee:selectionVariable"),
         input: "string",
@@ -109,6 +115,12 @@ export function sceneEntitySettingsNode(
         help: "Draws dark edges around cubes, spheres, cylinders, arrows and models.",
         input: "boolean",
         value: config.showOutlines ?? SCENE_ENTITY_DEFAULTS.showOutlines,
+      },
+      showLabels: {
+        label: t("threeDee:showLabels"),
+        help: t("threeDee:showLabelsHelp"),
+        input: "boolean",
+        value: config.showLabels ?? true,
       },
       selectedIdVariable: {
         label: "Selection Variable",
