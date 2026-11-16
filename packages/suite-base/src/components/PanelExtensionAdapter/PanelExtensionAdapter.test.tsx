@@ -22,6 +22,7 @@ import {
   Subscription,
   SettingsTreeAction,
 } from "@lichtblick/suite";
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import MockPanelContextProvider from "@lichtblick/suite-base/components/MockPanelContextProvider";
 import { AlertsContext, AlertsContextStore } from "@lichtblick/suite-base/context/AlertsContext";
 import { useHoverValue } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
@@ -1180,6 +1181,70 @@ describe("PanelExtensionAdapter", () => {
         expect(delivered()).toContain("latched@2");
       },
     );
+  });
+
+  it("renders a hidden panel in batches and everything right away once shown", async () => {
+    const frames: number[][] = [];
+    const initPanel = vi.fn((context: PanelExtensionContext) => {
+      context.watch("currentFrame");
+      context.subscribe([{ topic: "x" }]);
+      context.onRender = (renderState, done) => {
+        if (renderState.currentFrame) {
+          frames.push(renderState.currentFrame.map((msg) => msg.message as number));
+        }
+        done();
+      };
+    });
+    const message = (value: number): MessageEvent => ({
+      topic: "x",
+      receiveTime: { sec: value, nsec: 0 },
+      sizeInBytes: 0,
+      message: value,
+      schemaName: "foo",
+    });
+    // One fixture per value: a new fixture is a new pipeline frame, and showing the panel is not.
+    const fixtures = new Map<number, Fixture>();
+    const fixtureFor = (value: number) => {
+      let fixture = fixtures.get(value);
+      if (!fixture) {
+        fixture = { topics: [{ name: "x", schemaName: "foo" }], frame: { x: [message(value)] } };
+        fixtures.set(value, fixture);
+      }
+      return fixture;
+    };
+    const Wrapper = ({ visible, value }: { visible: boolean; value: number }) => (
+      <ThemeProvider isDark>
+        <MockPanelContextProvider>
+          <PanelSetup fixture={fixtureFor(value)}>
+            <PanelVisibleContext.Provider value={visible}>
+              <PanelExtensionAdapter config={{}} saveConfig={() => {}} initPanel={initPanel} />
+            </PanelVisibleContext.Provider>
+          </PanelSetup>
+        </MockPanelContextProvider>
+      </ThemeProvider>
+    );
+    const flush = async () => {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    };
+
+    const handle = render(<Wrapper visible={false} value={1} />);
+    await flush();
+    const rendersBefore = frames.length;
+    handle.rerender(<Wrapper visible={false} value={2} />);
+    await flush();
+    handle.rerender(<Wrapper visible={false} value={3} />);
+    await flush();
+    // Hidden: new frames wait for the next batch instead of rendering each.
+    expect(frames.length).toBe(rendersBefore);
+
+    handle.rerender(<Wrapper visible value={3} />);
+    await flush();
+    // Shown: one render right away with everything that arrived while hidden. (The mock pipeline
+    // re-emits the current message on every React render, so values can repeat.)
+    expect(frames.length).toBe(rendersBefore + 1);
+    expect(new Set(frames.at(-1))).toEqual(new Set([1, 2, 3]));
   });
 
   it("should call pause frame with new frame and resume after rendering", async () => {
