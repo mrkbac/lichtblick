@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import type { TilesRenderer } from "3d-tiles-renderer";
+import type { Ellipsoid, TilesRenderer } from "3d-tiles-renderer";
 import { toNanoSec } from "@foxglove/rostime";
 import { t } from "i18next";
 import * as _ from "lodash-es";
@@ -108,7 +108,36 @@ const URL_DEBOUNCE_MS = 500;
 
 type MapUserData = BaseUserData & { settings: LayerSettingsMap };
 
-type Tileset = { url: string; tiles: TilesRenderer; group: THREE.Group; camera?: THREE.Camera };
+type Tileset = {
+  url: string;
+  tiles: TilesRenderer;
+  group: THREE.Group;
+  camera?: THREE.Camera;
+  /** Ellipsoid height of the tiles' surface under the fix, once measured. */
+  ground?: number;
+  /** Tiles changed since the last measurement. */
+  groundStale: boolean;
+};
+
+const GROUND_PROBE_HEIGHT = 10_000;
+const groundRay = new THREE.Raycaster();
+
+/** Ellipsoid height of the first surface of `object` (in Earth-centered coordinates) below a point. */
+export function groundHeight(
+  object: THREE.Object3D,
+  ellipsoid: Ellipsoid,
+  lat: number,
+  lon: number,
+): number | undefined {
+  const latRad = THREE.MathUtils.degToRad(lat);
+  const lonRad = THREE.MathUtils.degToRad(lon);
+  const ray = groundRay.ray;
+  ellipsoid.getCartographicToPosition(latRad, lonRad, GROUND_PROBE_HEIGHT, ray.origin);
+  ellipsoid.getCartographicToNormal(latRad, lonRad, ray.direction).negate();
+  ray.applyMatrix4(object.matrixWorld); // Rigid, so hit distances stay in meters.
+  const hit = groundRay.intersectObject(object, true)[0];
+  return hit ? GROUND_PROBE_HEIGHT - hit.distance : undefined;
+}
 
 /** MapLibre style sources and geographically placed 3D Tiles for a map layer. */
 class MapRenderable extends Renderable<MapUserData> {
@@ -123,6 +152,7 @@ class MapRenderable extends Renderable<MapUserData> {
   #attribution = "";
   #anchor?: Anchor;
   #tilesets = new Map<string, Tileset>();
+  #ellipsoid?: Ellipsoid;
   /** Async loads check this so nothing is created after dispose(). */
   #disposed = false;
 
@@ -193,6 +223,10 @@ class MapRenderable extends Renderable<MapUserData> {
     }
     if (anchor !== this.#anchor) {
       this.#anchor = anchor;
+      for (const tileset of this.#tilesets.values()) {
+        tileset.ground = undefined;
+        tileset.groundStale = true;
+      }
       this.#placeTilesets();
     }
   }
@@ -322,7 +356,8 @@ class MapRenderable extends Renderable<MapUserData> {
     if (missing.length === 0) {
       return;
     }
-    const { TilesRenderer } = await import("3d-tiles-renderer");
+    const { TilesRenderer, WGS84_ELLIPSOID } = await import("3d-tiles-renderer");
+    this.#ellipsoid = WGS84_ELLIPSOID;
     const { GLTFExtensionsPlugin } = await import("3d-tiles-renderer/plugins");
     if (this.#disposed) {
       return;
@@ -335,8 +370,16 @@ class MapRenderable extends Renderable<MapUserData> {
       }
       const tiles = new TilesRenderer(url);
       tiles.registerPlugin(new GLTFExtensionsPlugin({ dracoLoader: createBundledDracoLoader() }));
+      const group = new THREE.Group();
+      group.matrixAutoUpdate = false;
+      group.add(tiles.group);
+      this.add(group);
+      const tileset: Tileset = { url, tiles, group, groundStale: true };
       tiles.addEventListener("needs-update", () => {
         this.renderer.queueAnimationFrame();
+      });
+      tiles.addEventListener("load-model", () => {
+        tileset.groundStale = true; // Finer tiles refine the ground height.
       });
       tiles.addEventListener("load-root-tileset", () => {
         this.#setLayerError(id, undefined);
@@ -345,42 +388,43 @@ class MapRenderable extends Renderable<MapUserData> {
       tiles.addEventListener("load-error", (event: { error?: unknown }) => {
         this.#setLayerError(id, `Failed to load 3D tiles: ${String(event.error)}`);
       });
-      const group = new THREE.Group();
-      group.matrixAutoUpdate = false;
-      group.add(tiles.group);
-      this.add(group);
-      this.#tilesets.set(id, { url, tiles, group });
+      this.#tilesets.set(id, tileset);
     }
     this.#placeTilesets();
   }
 
-  /** Map Earth-centered tile coordinates into the ENU frame so the fix lands on its frame. */
+  /**
+   * Map Earth-centered tile coordinates into the ENU frame so the tiles' ground under the fix meets
+   * the fix's frame, raised by the Z offset. Until the ground is measured, the fix altitude
+   * (WGS 84 ellipsoid height, same datum as the tiles) is the best guess.
+   */
   #placeTilesets(): void {
-    if (this.#tilesets.size === 0) {
+    const anchor = this.#anchor;
+    const ellipsoid = this.#ellipsoid;
+    if (!ellipsoid) {
       return;
     }
-    const anchor = this.#anchor;
-    void import("3d-tiles-renderer").then(({ WGS84_ELLIPSOID }) => {
-      for (const [id, tileset] of this.#tilesets) {
-        tileset.group.visible = anchor != undefined;
-        if (!anchor) {
-          continue;
-        }
-        const layer = this.userData.settings.layers.find((l) => l.id === id);
-        // Earth-centered → ENU at the fix; the height offset raises the tiles.
-        const ellipsoidToEnu = WGS84_ELLIPSOID.getEastNorthUpFrame(
+    for (const [id, tileset] of this.#tilesets) {
+      tileset.group.visible = anchor != undefined;
+      if (!anchor) {
+        continue;
+      }
+      const layer = this.userData.settings.layers.find((l) => l.id === id);
+      const ground = tileset.ground ?? anchor.altitude ?? 0;
+      const ellipsoidToEnu = ellipsoid
+        .getEastNorthUpFrame(
           THREE.MathUtils.degToRad(anchor.lat),
           THREE.MathUtils.degToRad(anchor.lon),
-          (anchor.altitude ?? 0) - (layer?.heightOffset ?? 0),
+          ground - this.userData.settings.zOffset - (layer?.heightOffset ?? 0),
           new THREE.Matrix4(),
-        ).invert();
-        tileset.group.matrix
-          .makeTranslation(anchor.position.x, anchor.position.y, anchor.position.z)
-          .multiply(ellipsoidToEnu);
-        tileset.group.matrixWorldNeedsUpdate = true;
-      }
-      this.renderer.queueAnimationFrame();
-    });
+        )
+        .invert();
+      tileset.group.matrix
+        .makeTranslation(anchor.position.x, anchor.position.y, anchor.position.z)
+        .multiply(ellipsoidToEnu);
+      tileset.group.matrixWorldNeedsUpdate = true;
+    }
+    this.renderer.queueAnimationFrame();
   }
 
   public updateTilesets(): void {
@@ -400,6 +444,21 @@ class MapRenderable extends Renderable<MapUserData> {
       }
       tileset.tiles.setResolutionFromRenderer(camera, this.renderer.gl);
       tileset.tiles.update();
+      this.#measureGround(tileset);
+    }
+  }
+
+  #measureGround(tileset: Tileset): void {
+    const anchor = this.#anchor;
+    if (!tileset.groundStale || !anchor || !this.#ellipsoid) {
+      return;
+    }
+    tileset.groundStale = false;
+    tileset.group.updateMatrixWorld(true);
+    const ground = groundHeight(tileset.tiles.group, this.#ellipsoid, anchor.lat, anchor.lon);
+    if (ground != undefined && Math.abs(ground - (tileset.ground ?? Infinity)) > 0.01) {
+      tileset.ground = ground;
+      this.#placeTilesets();
     }
   }
 }
@@ -628,7 +687,7 @@ export class Maps extends SceneExtension<MapRenderable> {
               step: 0.1,
               precision: PRECISION_DISTANCE,
               value: config.zOffset,
-              help: "Height of the 2D map in meters above the ENU frame's XY plane",
+              help: "Height of the map's ground in meters above the location fix's frame",
             },
           },
           visible: config.visible,
