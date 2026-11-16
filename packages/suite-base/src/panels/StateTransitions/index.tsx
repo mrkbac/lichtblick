@@ -17,7 +17,6 @@
 import { add as addTimes, fromSec } from "@foxglove/rostime";
 import { Typography, alpha, useTheme } from "@mui/material";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
-import * as _ from "lodash-es";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDebounce } from "use-debounce";
@@ -31,10 +30,10 @@ import {
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import { usePathSampleHistory } from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
 import {
-  MessagePipelineContext,
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectPlayerPresence } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
@@ -71,8 +70,6 @@ import { defaultConfig } from "./settings";
 import { StateTransitionPanelProps } from "./types";
 
 const MATCH_EPSILON = 1e-6;
-
-const selectPlayerPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
 
 // Compared recordings get a row each, named by their topic (`/a/…`, `/b/…`)
 const sameStyle = () => ({});
@@ -208,7 +205,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
     () => matchStarts.filter((x) => x <= now + MATCH_EPSILON).length,
     [now, matchStarts],
   );
-  const previousMatch = _.findLast(matchStarts, (x) => x < now - MATCH_EPSILON);
+  const previousMatch = matchStarts.findLast((x) => x < now - MATCH_EPSILON);
   const nextMatch = matchStarts.find((x) => x > now + MATCH_EPSILON);
 
   const seekToNextMatch = useCallback(() => {

@@ -129,11 +129,14 @@ class MapRenderable extends Renderable<MapUserData> {
     this.#disposed = true;
     this.#updateSoon.cancel();
     for (const asset of this.#assets.values()) {
-      void asset.then((value) => {
-        if ("coordinates" in value) {
-          URL.revokeObjectURL(value.url);
-        }
-      }, _.noop);
+      void asset.then(
+        (value) => {
+          if ("coordinates" in value) {
+            URL.revokeObjectURL(value.url);
+          }
+        },
+        () => {},
+      );
     }
     for (const tileset of this.#tilesets.values()) {
       tileset.tiles.dispose();
@@ -183,8 +186,8 @@ class MapRenderable extends Renderable<MapUserData> {
   // URL fields update on every keystroke; load once typing pauses.
   #updateSoon = _.debounce(() => {
     // Rejects only when the layer is removed mid-load.
-    this.#updateStyle().catch(_.noop);
-    this.#syncTilesets().catch(_.noop);
+    this.#updateStyle().catch(() => {});
+    this.#syncTilesets().catch(() => {});
   }, URL_DEBOUNCE_MS);
 
   /** Vector styles and GeoTIFFs, fetched once per URL. */
@@ -267,7 +270,7 @@ class MapRenderable extends Renderable<MapUserData> {
         this.#setLayerError(layer.id, errors.get(layer.id));
       }
     }
-    this.#attribution = _.uniq(attributions).join(" ");
+    this.#attribution = [...new Set(attributions)].join(" ");
     const style = composeStyle({
       layers,
       vectorStyles,
@@ -627,7 +630,7 @@ export class Maps extends SceneExtension<MapRenderable> {
       this.renderer.updateConfig((draft) => {
         const config = draft.layers[instanceId] as Partial<LayerSettingsMap> | undefined;
         if (config) {
-          config.layers ??= _.cloneDeep(DEFAULT_SETTINGS.layers);
+          config.layers ??= structuredClone(DEFAULT_SETTINGS.layers);
           applyLayerStackAction(config.layers, action, 2, saved);
         }
       });
@@ -641,7 +644,7 @@ export class Maps extends SceneExtension<MapRenderable> {
 
   #handleAddMap = (instanceId: string): void => {
     log.info(`Creating ${LAYER_ID} layer ${instanceId}`);
-    const config: LayerSettingsMap = { ..._.cloneDeep(DEFAULT_SETTINGS), instanceId };
+    const config: LayerSettingsMap = { ...structuredClone(DEFAULT_SETTINGS), instanceId };
     this.renderer.updateConfig((draft) => {
       const maxOrderLayer = _.maxBy(Object.values(draft.layers), (layer) => layer?.order);
       draft.layers[instanceId] = { ...config, order: 1 + (maxOrderLayer?.order ?? 0) };

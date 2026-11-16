@@ -13,6 +13,13 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectCurrentTime,
+  selectEndTime,
+  selectPlayerCapabilities,
+  selectPlayerId,
+  selectStartTime,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import { TopicStats } from "@lichtblick/suite-base/players/types";
 import { LiveTopicRates } from "@lichtblick/suite-base/util/LiveTopicRates";
@@ -23,16 +30,9 @@ const EMPTY_TOPIC_STATS = new Map<string, TopicStats>();
 /** How often live rates are re-evaluated when no messages arrive, so a stopped publisher drops to 0. */
 const LIVE_TICK_MS = 500;
 
-const selectCurrentTime = ({ playerState }: MessagePipelineContext) =>
-  playerState.activeData?.currentTime;
 const selectHasCurrentTime = (ctx: MessagePipelineContext) => selectCurrentTime(ctx) != undefined;
-const selectStartTime = ({ playerState }: MessagePipelineContext) =>
-  playerState.activeData?.startTime;
-const selectEndTime = ({ playerState }: MessagePipelineContext) => playerState.activeData?.endTime;
 const selectTopicStats = (ctx: MessagePipelineContext) =>
   ctx.playerState.activeData?.topicStats ?? EMPTY_TOPIC_STATS;
-const selectPlayerCapabilities = (ctx: MessagePipelineContext) => ctx.playerState.capabilities;
-const selectPlayerId = (ctx: MessagePipelineContext) => ctx.playerState.playerId;
 
 type FrequenciesByTopic = Record<string, undefined | number>;
 const EMPTY_FREQUENCIES: FrequenciesByTopic = {};

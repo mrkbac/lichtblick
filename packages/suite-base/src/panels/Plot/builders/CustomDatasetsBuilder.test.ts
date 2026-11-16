@@ -554,8 +554,8 @@ describe("CustomDatasetsBuilder", () => {
         if (type === "current") {
           builder.handlePlayerState(buildPlayerState({ messages }));
         } else {
-          const byTopic = _.groupBy(messages, (item) => item.topic);
-          for (const topicMessages of Object.values(byTopic)) {
+          const byTopic = Map.groupBy(messages, (item) => item.topic);
+          for (const topicMessages of byTopic.values()) {
             builder.handleMessageRange(topicMessages, { isReset: false });
           }
         }

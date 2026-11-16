@@ -18,7 +18,7 @@ import {
   useState,
 } from "react";
 
-import { useLatest, useSynchronousMountedState, useValueChangedDebugLog } from "@lichtblick/hooks";
+import { useLatest, useMountedState, useValueChangedDebugLog } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import {
   AppSettingValue,
@@ -71,7 +71,6 @@ import {
 } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { PanelConfig, SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { assertNever } from "@lichtblick/suite-base/util/assertNever";
-import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { PanelConfigVersionError } from "./PanelConfigVersionError";
@@ -165,7 +164,7 @@ function PanelExtensionAdapter(
   //
   // We store the config in a ref to avoid re-initializing the panel when the react config
   // changes.
-  const initialState = useLatest(maybeCast<RenderStateConfig>(config));
+  const initialState = useLatest(config as RenderStateConfig | undefined);
 
   const messagePipelineContext = useMessagePipeline(selectContext);
 
@@ -184,7 +183,7 @@ function PanelExtensionAdapter(
   const { openSiblingPanel, setMessagePathDropConfig, type: panelName } = usePanelContext();
 
   const [panelId] = useState(() => randomUUID());
-  const isMounted = useSynchronousMountedState();
+  const isMounted = useMountedState();
   const [error, setError] = useState<Error | undefined>();
   const [forceConversion, setForceConversion] = useState(new Set<string>());
   const [watchedFields, setWatchedFields] = useState(new Set<keyof RenderState>());

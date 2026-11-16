@@ -4,10 +4,8 @@
 import { fromSec, toSec } from "@foxglove/rostime";
 import { useCallback, useMemo } from "react";
 
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectSeekPlayback } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { DEFAULT_SECONDS_UNTIL_STALE } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
 import { useDiagnosticHistory } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticHistory";
 import {
@@ -37,8 +35,6 @@ export type DiagnosticsPanelData = {
   /** Seeks playback; undefined if the data source can't seek. */
   seek: ((seconds: number) => void) | undefined;
 };
-
-const selectSeekPlayback = (ctx: MessagePipelineContext) => ctx.seekPlayback;
 
 /** Everything both diagnostics panels need, wired together once. */
 export function useDiagnosticsPanelData(

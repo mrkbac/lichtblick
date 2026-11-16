@@ -5,8 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import * as _ from "lodash-es";
-
 import { canonicalVideoCodec, VideoCodec } from "@lichtblick/den/video";
 import { MessageEvent } from "@lichtblick/suite";
 
@@ -36,8 +34,8 @@ export function filterCompressedVideoQueue(
   const originalIndex = new Map<MessageEvent<CompressedVideo>, number>();
   msgs.forEach((msg, index) => originalIndex.set(msg, index));
 
-  const msgsByTopic = _.groupBy(msgs, (msg) => msg.topic);
-  const kept: MessageEvent<CompressedVideo>[] = Object.values(msgsByTopic).flatMap(filterTopic);
+  const msgsByTopic = Map.groupBy(msgs, (msg) => msg.topic);
+  const kept: MessageEvent<CompressedVideo>[] = [...msgsByTopic.values()].flatMap(filterTopic);
 
   kept.sort((a, b) => (originalIndex.get(a) ?? 0) - (originalIndex.get(b) ?? 0));
   return kept;

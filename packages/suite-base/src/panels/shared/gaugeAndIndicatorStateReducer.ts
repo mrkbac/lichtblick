@@ -1,7 +1,5 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
-import * as _ from "lodash-es";
-
 import { parseMessagePath } from "@lichtblick/message-path";
 import { MessageEvent } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
@@ -27,7 +25,7 @@ function handleFrameActionState({
   state: GaugeAndIndicatorState;
 }): GaugeAndIndicatorState {
   if (state.pathParseError != undefined) {
-    return { ...state, latestMessage: _.last(messages), error: undefined };
+    return { ...state, latestMessage: messages.at(-1), error: undefined };
   }
   if (!state.parsedPath) {
     return { ...state, error: undefined };

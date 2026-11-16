@@ -18,6 +18,11 @@ import {
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectCurrentTime,
+  selectEndTime,
+  selectStartTime,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Stack from "@lichtblick/suite-base/components/Stack";
 
 const HANDLE_WIDTH = 8;
@@ -72,9 +77,6 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
-const selectStartTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
-const selectEndTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
-const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
 const selectHasCurrentTime = (ctx: MessagePipelineContext) => selectCurrentTime(ctx) != undefined;
 const NO_KEY_HANDLERS = {};
 

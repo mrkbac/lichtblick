@@ -8,7 +8,7 @@ import type { SubscribePayload, TopicSelection } from "@lichtblick/suite-base/pl
 /** The subscription without unset keys and with its fields in order, to compare by meaning. */
 function normalize(subscription: SubscribePayload): Partial<SubscribePayload> {
   const { fields, ...rest } = _.omitBy(subscription, _.isUndefined) as SubscribePayload;
-  return fields == undefined ? rest : { ...rest, fields: _.sortBy(_.uniq(fields)) };
+  return fields == undefined ? rest : { ...rest, fields: _.sortBy([...new Set(fields)]) };
 }
 
 /**

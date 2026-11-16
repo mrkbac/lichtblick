@@ -7,13 +7,9 @@
 
 import { useEffect } from "react";
 
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectPlayerName } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
-
-const selectPlayerName = (ctx: MessagePipelineContext) => ctx.playerState.name;
 
 /**
  * DocumentTitleAdapter sets the document title based on the currently selected player

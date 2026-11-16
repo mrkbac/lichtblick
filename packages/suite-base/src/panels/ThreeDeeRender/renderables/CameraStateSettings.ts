@@ -174,7 +174,7 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
   public override handleSettingsAction = (action: SettingsTreeAction): void => {
     if (action.action === "perform-node-action" && action.payload.id === "reset-camera") {
       this.renderer.updateConfig((draft) => {
-        draft.cameraState = _.cloneDeep(DEFAULT_CAMERA_STATE);
+        draft.cameraState = structuredClone(DEFAULT_CAMERA_STATE);
       });
       this.updateSettingsTree();
       return;

@@ -874,7 +874,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     const next = parseTransformOffsets(this.renderer.variables.get(TRANSFORM_OFFSETS_VARIABLE));
     const now = Date.now();
     this.#published = this.#published.filter(({ time }) => now - time <= ECHO_TIMEOUT_MS);
-    const index = _.findLastIndex(this.#published, ({ value }) => _.isEqual(value, next));
+    const index = this.#published.findLastIndex(({ value }) => _.isEqual(value, next));
     if (index >= 0 && index < this.#published.length - 1) {
       // A late echo of an older edit of ours; the newer value is already applied
       this.#published = this.#published.slice(index + 1);

@@ -16,7 +16,6 @@
 //   You may not use this file except in compliance with the License.
 
 import { renderHook } from "@testing-library/react";
-import * as _ from "lodash-es";
 
 import MockMessagePipelineProvider from "@lichtblick/suite-base/components/MessagePipeline/MockMessagePipelineProvider";
 import { SubscribePayload } from "@lichtblick/suite-base/players/types";
@@ -145,7 +144,7 @@ describe("useBlocksSubscriptions", () => {
     const c3 = result.current;
 
     // Both identities change.
-    progress = { messageCache: _.cloneDeep(progress.messageCache) };
+    progress = { messageCache: structuredClone(progress.messageCache) };
     rerender({ subscriptions: stableSubscriptions });
     const c4 = result.current;
 

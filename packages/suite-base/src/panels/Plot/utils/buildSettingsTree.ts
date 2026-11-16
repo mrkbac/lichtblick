@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { TFunction } from "i18next";
-import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
 
 import { parseMessagePath } from "@lichtblick/message-path";
@@ -381,8 +380,8 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Doc
       : undefined;
 
   const maxXError =
-    _.isNumber(config.minXValue) &&
-    _.isNumber(config.maxXValue) &&
+    typeof config.minXValue === "number" &&
+    typeof config.maxXValue === "number" &&
     config.minXValue >= config.maxXValue
       ? t("maxXError")
       : undefined;
@@ -639,7 +638,7 @@ function xRangeFields(
       label: t("min"),
       help: t("minHelp"),
       input: "number",
-      value: _.isNumber(config.minXValue) ? config.minXValue : undefined,
+      value: typeof config.minXValue === "number" ? config.minXValue : undefined,
       placeholder: "auto",
     },
     maxXValue: {
@@ -647,7 +646,7 @@ function xRangeFields(
       help: t("maxHelp"),
       input: "number",
       error: maxXError,
-      value: _.isNumber(config.maxXValue) ? config.maxXValue : undefined,
+      value: typeof config.maxXValue === "number" ? config.maxXValue : undefined,
       placeholder: "auto",
     },
   };

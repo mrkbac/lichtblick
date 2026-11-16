@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { PopoverPosition, PopoverReference } from "@mui/material";
-import * as _ from "lodash-es";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
 
 import PlayerSelectionContext, {
@@ -34,7 +33,7 @@ export default {
     anchorPosition: { top: 0, left: 0 },
     anchorReference: "anchorPosition",
     disablePortal: true,
-    handleClose: _.noop,
+    handleClose: () => {},
   },
   decorators: [
     (Story, { args }): React.JSX.Element => (

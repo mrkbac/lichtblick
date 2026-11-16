@@ -14,6 +14,11 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectPlayerName,
+  selectPlayerPresence,
+  selectSeekPlayback,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TextMiddleTruncate from "@lichtblick/suite-base/components/TextMiddleTruncate";
 import WssErrorModal from "@lichtblick/suite-base/components/WssErrorModal";
@@ -74,10 +79,7 @@ const useStyles = makeStyles<void, "adornmentError">()((theme, _params, _classes
   },
 }));
 
-const selectPlayerName = (ctx: MessagePipelineContext) => ctx.playerState.name;
-const selectPlayerPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
 const selectPlayerAlerts = (ctx: MessagePipelineContext) => ctx.playerState.alerts;
-const selectSeek = (ctx: MessagePipelineContext) => ctx.seekPlayback;
 
 export function DataSource(): React.JSX.Element {
   const { t } = useTranslation("appBar");
@@ -86,7 +88,7 @@ export function DataSource(): React.JSX.Element {
   const playerName = useMessagePipeline(selectPlayerName);
   const playerPresence = useMessagePipeline(selectPlayerPresence);
   const playerAlerts = useMessagePipeline(selectPlayerAlerts) ?? [];
-  const seek = useMessagePipeline(selectSeek);
+  const seek = useMessagePipeline(selectSeekPlayback);
 
   const { sidebarActions } = useWorkspaceActions();
   const { closeSource } = usePlayerSelection();

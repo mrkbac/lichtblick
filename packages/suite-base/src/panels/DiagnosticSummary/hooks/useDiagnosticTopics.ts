@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import * as _ from "lodash-es";
 import { useEffect, useMemo } from "react";
 
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
@@ -43,7 +42,7 @@ export function useDiagnosticTopics(config: DiagnosticTopicsConfig): DiagnosticT
   const configuredKey = configured?.join("\n");
 
   return useMemo(() => {
-    const available = _.uniq(availableKey === "" ? [] : availableKey.split("\n"));
+    const available = [...new Set(availableKey === "" ? [] : availableKey.split("\n"))];
     const selected =
       configuredKey == undefined
         ? available
@@ -72,7 +71,7 @@ export function handleTopicToggle(
   }
   const topic = path[1];
   const topics =
-    value === true ? _.uniq([...selected, topic]) : selected.filter((t) => t !== topic);
+    value === true ? [...new Set([...selected, topic])] : selected.filter((t) => t !== topic);
   return { topics, topicToRender: undefined };
 }
 
@@ -90,7 +89,7 @@ export function useDiagnosticTopicsDrop(
           ALLOWED_DATATYPES.includes(item.rootSchemaName) &&
           !selected.includes(item.topicName),
         (dropped) => {
-          saveConfig({ topics: _.uniq([...selected, ...dropped]), topicToRender: undefined });
+          saveConfig({ topics: [...new Set([...selected, ...dropped])], topicToRender: undefined });
         },
       ),
     );

@@ -7,18 +7,16 @@
 
 import { useEffect, useMemo, useRef } from "react";
 
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+  selectPausePlayback,
+  selectPlayerPresence,
+  selectStartPlayback,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 
 import { getScenarioFromUrl } from "./registry";
-
-const selectPlayerPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
-const selectStartPlayback = (ctx: MessagePipelineContext) => ctx.startPlayback;
-const selectPausePlayback = (ctx: MessagePipelineContext) => ctx.pausePlayback;
 
 /**
  * When the app URL has a `?scenario=<id>` query param, looks up the scenario and drives the app

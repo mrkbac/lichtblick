@@ -36,3 +36,32 @@ export const getTopicToSchemaNameMap = (
   topicToSchemaNameMapCache.set(sortedTopics, result);
   return result;
 };
+
+// Shared selectors so panels and components don't each redefine the same one-liners
+type Ctx = MessagePipelineContext;
+type PlayerState = Ctx["playerState"];
+type ActiveData = NonNullable<PlayerState["activeData"]>;
+export const selectCurrentTime = (ctx: Ctx): ActiveData["currentTime"] | undefined =>
+  ctx.playerState.activeData?.currentTime;
+export const selectStartTime = (ctx: Ctx): ActiveData["startTime"] | undefined =>
+  ctx.playerState.activeData?.startTime;
+export const selectEndTime = (ctx: Ctx): ActiveData["endTime"] | undefined =>
+  ctx.playerState.activeData?.endTime;
+export const selectTopicStats = (ctx: Ctx): ActiveData["topicStats"] | undefined =>
+  ctx.playerState.activeData?.topicStats;
+export const selectRecordingFiles = (ctx: Ctx): ActiveData["recordingFiles"] | undefined =>
+  ctx.playerState.activeData?.recordingFiles;
+export const selectLastSeekTime = (ctx: Ctx): ActiveData["lastSeekTime"] | undefined =>
+  ctx.playerState.activeData?.lastSeekTime;
+export const selectPlayerPresence = (ctx: Ctx): PlayerState["presence"] => ctx.playerState.presence;
+export const selectPlayerId = (ctx: Ctx): PlayerState["playerId"] => ctx.playerState.playerId;
+export const selectPlayerName = (ctx: Ctx): PlayerState["name"] => ctx.playerState.name;
+export const selectPlayerCapabilities = (ctx: Ctx): PlayerState["capabilities"] =>
+  ctx.playerState.capabilities;
+export const selectSeekPlayback = (ctx: Ctx): Ctx["seekPlayback"] => ctx.seekPlayback;
+export const selectPausePlayback = (ctx: Ctx): Ctx["pausePlayback"] => ctx.pausePlayback;
+export const selectStartPlayback = (ctx: Ctx): Ctx["startPlayback"] => ctx.startPlayback;
+export const selectGetBatchIterator = (ctx: Ctx): Ctx["getBatchIterator"] => ctx.getBatchIterator;
+export const selectInspectionIterator = (ctx: Ctx): Ctx["getInspectionIterator"] =>
+  ctx.getInspectionIterator;
+export const selectSortedTopics = (ctx: Ctx): Ctx["sortedTopics"] => ctx.sortedTopics;

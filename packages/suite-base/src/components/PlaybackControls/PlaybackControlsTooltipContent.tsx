@@ -16,10 +16,8 @@ import {
   sideSharedEnd,
   useCompare,
 } from "@lichtblick/suite-base/components/Compare/CompareContext";
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectStartTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import {
   TimelineInteractionStateStore,
   useTimelineInteractionState,
@@ -68,7 +66,6 @@ const useStyles = makeStyles()((theme) => ({
 }));
 
 const selectHoveredEvents = (store: TimelineInteractionStateStore) => store.eventsAtHoverValue;
-const selectStartTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
 
 function Thumbnail({ bitmap, className }: { bitmap: ImageBitmap; className: string }) {
   const ref = useRef<HTMLCanvasElement>(null);

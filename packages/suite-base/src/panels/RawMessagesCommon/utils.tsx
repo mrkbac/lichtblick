@@ -152,8 +152,8 @@ for (const schema of Object.values(foxgloveMessageSchemas)) {
 
 export function getMessageDocumentationLink(datatype: string): string | undefined {
   const parts = datatype.split(/[/.]/);
-  const pkg = _.first(parts);
-  const filename = _.last(parts);
+  const pkg = parts[0];
+  const filename = parts.at(-1);
 
   if (pkg != undefined && ROS1_COMMON_MSG_PACKAGES.has(pkg)) {
     return `https://docs.ros.org/api/${pkg}/html/msg/${filename}.html`;

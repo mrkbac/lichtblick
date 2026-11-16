@@ -188,7 +188,7 @@ function layerNode(
           label: "Style",
           input: "select",
           value: layer.source,
-          options: _.flatMap(PRESETS, (preset, value) =>
+          options: Object.entries(PRESETS).flatMap(([value, preset]) =>
             preset.variant?.provider === variant.provider
               ? [{ label: preset.variant.style, value }]
               : [],
@@ -343,11 +343,13 @@ function updateLayer(
     if (group === "buildings" && show) {
       layer.buildings3d = value === "3d";
     }
-    layer.hiddenGroups = _.uniq(
-      hiddenVectorGroups(layer)
-        .filter((g) => g !== group)
-        .concat(show ? [] : [group]),
-    );
+    layer.hiddenGroups = [
+      ...new Set(
+        hiddenVectorGroups(layer)
+          .filter((g) => g !== group)
+          .concat(show ? [] : [group]),
+      ),
+    ];
     layer.vectorContent = undefined;
     return;
   }

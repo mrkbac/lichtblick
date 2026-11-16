@@ -19,10 +19,18 @@ import { MessageEvent, SettingsTreeAction } from "@lichtblick/suite";
 import { useMessageReducer } from "@lichtblick/suite-base/PanelAPI";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import {
-  MessagePipelineContext,
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectEndTime,
+  selectGetBatchIterator,
+  selectInspectionIterator,
+  selectPlayerCapabilities,
+  selectPlayerId,
+  selectSortedTopics,
+  selectStartTime,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
@@ -73,14 +81,6 @@ const STATUS_LABELS: Record<TopicHealthStatus, string> = {
   stale: "Stale",
   unmeasured: "Not measured",
 };
-
-const selectTopics = (ctx: MessagePipelineContext) => ctx.sortedTopics;
-const selectCapabilities = (ctx: MessagePipelineContext) => ctx.playerState.capabilities;
-const selectPlayerId = (ctx: MessagePipelineContext) => ctx.playerState.playerId;
-const selectStart = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
-const selectEnd = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
-const selectBatchIterator = (ctx: MessagePipelineContext) => ctx.getBatchIterator;
-const selectInspectionIterator = (ctx: MessagePipelineContext) => ctx.getInspectionIterator;
 
 type Snapshot = {
   stats?: ReadonlyMap<string, TopicStats>;
@@ -180,11 +180,11 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
   const { classes, cx } = useStyles();
   const detailedStatsTitle = usePanelButtonTitle(TOPIC_HEALTH_BUTTONS.detailedStats);
   const openInRawMessagesTitle = usePanelButtonTitle(TOPIC_HEALTH_BUTTONS.openInRawMessages);
-  const topics = useMessagePipeline(selectTopics);
-  const capabilities = useMessagePipeline(selectCapabilities);
-  const start = useMessagePipeline(selectStart);
-  const end = useMessagePipeline(selectEnd);
-  const getBatchIterator = useMessagePipeline(selectBatchIterator);
+  const topics = useMessagePipeline(selectSortedTopics);
+  const capabilities = useMessagePipeline(selectPlayerCapabilities);
+  const start = useMessagePipeline(selectStartTime);
+  const end = useMessagePipeline(selectEndTime);
+  const getBatchIterator = useMessagePipeline(selectGetBatchIterator);
   const getInspectionIterator = useMessagePipeline(selectInspectionIterator);
   const getPipeline = useMessagePipelineGetter();
   const { openSiblingPanel } = usePanelContext();

@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { TFunction } from "i18next";
-import * as _ from "lodash-es";
 
 import { DEFAULT_SECONDS_UNTIL_STALE } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
 import type { DiagnosticTopics } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticTopics";
@@ -23,7 +22,7 @@ export function buildTopicsSettingsNode(
   t: TFunction<"diagnostics">,
 ): DocumentedNode {
   const children: Record<string, DocumentedNode> = {};
-  for (const topic of _.uniq([...available, ...selected])) {
+  for (const topic of [...new Set([...available, ...selected])]) {
     children[topic] = {
       label: topic,
       visible: selected.includes(topic),

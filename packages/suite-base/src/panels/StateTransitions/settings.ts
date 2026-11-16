@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { TFunction } from "i18next";
-import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
 
 import { SettingsTreeNodeActionItem } from "@lichtblick/suite";
@@ -180,7 +179,9 @@ export function buildSettingsTree(
   t: TFunction<"stateTransitions">,
 ): DocumentedNodes {
   const maxXError =
-    _.isNumber(xAxisMinValue) && _.isNumber(xAxisMaxValue) && xAxisMinValue >= xAxisMaxValue
+    typeof xAxisMinValue === "number" &&
+    typeof xAxisMaxValue === "number" &&
+    xAxisMinValue >= xAxisMaxValue
       ? t("maxXError")
       : undefined;
 
