@@ -1,6 +1,11 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import BookmarksIcon from "@mui/icons-material/BookmarksOutlined";
+import ReplayIcon from "@mui/icons-material/Replay";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
+import UndoIcon from "@mui/icons-material/Undo";
+
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 
 const docs: PanelDocs = {
@@ -18,15 +23,16 @@ const docs: PanelDocs = {
       title: "Request",
       items: [
         ["Form / JSON", "Edit fields in a form or as raw JSON."],
-        ["Presets", "Save the current request under a name and load it later."],
+        ["Presets", "Save the current request under a name and load it later.", BookmarksIcon],
+        ["Reset to template", "Replaces the request with an empty template.", RestartAltIcon],
       ],
     },
     {
       title: "Response",
       items: [
         ["History", "Pick an earlier call to see its response and latency."],
-        ["Restore request", "Copies that call's request back into the editor."],
-        ["Re-run", "Calls again with that call's request."],
+        ["Restore request", "Copies that call's request back into the editor.", UndoIcon],
+        ["Re-run", "Calls again with that call's request.", ReplayIcon],
       ],
     },
   ],

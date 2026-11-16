@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import InsightsIcon from "@mui/icons-material/Insights";
+import OpenInNewIcon from "@mui/icons-material/OpenInNew";
+
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 
 const docs: PanelDocs = {
@@ -15,10 +18,15 @@ const docs: PanelDocs = {
           "Expected",
           "Type an expected rate; leave empty to learn it from the data, 0 disables monitoring.",
         ],
-        ["Topic name", "Click to open the topic in a Raw Messages panel."],
+        [
+          "Open in Raw Messages",
+          "Click this or the topic name to open the topic in a Raw Messages panel.",
+          OpenInNewIcon,
+        ],
         [
           "Detailed statistics",
           "Scans or subscribes to a topic for jitter, max gap and bandwidth.",
+          InsightsIcon,
         ],
         [
           "Not measured",

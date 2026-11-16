@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import BookmarksIcon from "@mui/icons-material/BookmarksOutlined";
+import RepeatIcon from "@mui/icons-material/Repeat";
+import RestartAltIcon from "@mui/icons-material/RestartAlt";
+
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 
 const docs: PanelDocs = {
@@ -20,8 +24,9 @@ const docs: PanelDocs = {
       title: "Editor",
       items: [
         ["Form / JSON", "Edit fields in a form or as raw JSON."],
-        ["Presets", "Save the current message under a name and load it later."],
-        ["Repeat", "Publishes continuously at the repeat rate until stopped."],
+        ["Presets", "Save the current message under a name and load it later.", BookmarksIcon],
+        ["Reset to template", "Replaces the message with an empty template.", RestartAltIcon],
+        ["Repeat", "Publishes continuously at the repeat rate until stopped.", RepeatIcon],
       ],
     },
     {

@@ -31,6 +31,7 @@ const docs: PanelDocs = {
     {
       title: "Tips",
       items: [
+        ["Stop", "Publishes a zero command; release all controls to drive again."],
         ["Speed slider", "Scales all velocities; turbo drives at full max while held."],
         [
           "Gamepad not listed",

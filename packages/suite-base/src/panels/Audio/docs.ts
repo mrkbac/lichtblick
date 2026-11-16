@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { Speaker220Regular } from "@fluentui/react-icons";
+
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 
 import { AUDIO_SCHEMAS } from "./decode";
@@ -21,12 +23,18 @@ const docs: PanelDocs = {
       ],
     },
     {
+      title: "Controls",
+      items: [
+        ["Mute", "Mutes or unmutes playback.", Speaker220Regular],
+        ["Volume", "Slider next to the mute button."],
+      ],
+    },
+    {
       title: "Settings",
       items: [
         ["Format", "Overrides the message's format field."],
         ["Sample rate (Hz)", "Used when the message has no sample_rate field."],
         ["Channels", "Used when the message has no number_of_channels field."],
-        ["Volume", "Also adjustable, and mutable, from the panel's controls."],
       ],
     },
     {

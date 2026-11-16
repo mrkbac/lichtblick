@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
+import PublishPointIcon from "@lichtblick/suite-base/components/PublishPointIcon";
 import { ALLOWED_DATATYPES } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
 
 const docs: PanelDocs = {
@@ -28,7 +29,7 @@ const docs: PanelDocs = {
       title: "Mouse",
       items: [
         ["Click a row", "Opens the check in a Diagnostics – Detail panel."],
-        ["Pin", "Keeps a check at the top of the list."],
+        ["Pin", "Keeps a check at the top of the list.", PublishPointIcon],
         ["Click the timeline", "Seeks playback to that time."],
         ["Drop a topic", "Drag a diagnostics topic onto the panel to add it."],
       ],

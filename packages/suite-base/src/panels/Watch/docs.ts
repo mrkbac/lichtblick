@@ -1,6 +1,13 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import AddIcon from "@mui/icons-material/Add";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
+import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
+import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
+import LibraryAddOutlinedIcon from "@mui/icons-material/LibraryAddOutlined";
+
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 
 const docs: PanelDocs = {
@@ -16,10 +23,13 @@ const docs: PanelDocs = {
         [
           "Add rows",
           "Type a path, paste several (one per line) or drag fields from the topic list.",
+          AddIcon,
         ],
+        ["Expand", "Shows the value as a tree.", KeyboardArrowRightIcon],
         [
-          "Expand",
-          "Shows the value as a tree; + adds a field as a row, Shift + adds every field below.",
+          "Add as row",
+          "In the tree, adds that field as a row; Shift-click adds every field below it.",
+          AddIcon,
         ],
       ],
     },
@@ -28,7 +38,10 @@ const docs: PanelDocs = {
       items: [
         ["Click a name", "Opens the path in a Plot panel."],
         ["Drag a row", "Reorder it, or drop it on another panel such as a Plot."],
-        ["Row buttons", "Copy the value, edit the path, duplicate or remove the row."],
+        ["Copy value", "Copies the row's current value.", ContentCopyIcon],
+        ["Edit path", "Edits the row's message path.", EditOutlinedIcon],
+        ["Duplicate", "Adds a copy of the row below it.", LibraryAddOutlinedIcon],
+        ["Remove", "Removes the row.", DeleteOutlineIcon],
       ],
     },
     {

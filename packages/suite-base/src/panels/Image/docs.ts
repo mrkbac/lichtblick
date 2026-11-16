@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { ArrowDownload20Regular, Cursor20Regular } from "@fluentui/react-icons";
+
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 import { ALL_SUPPORTED_ANNOTATION_SCHEMAS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/annotations/normalizeAnnotations";
 import {
@@ -17,6 +19,13 @@ const docs: PanelDocs = {
     ...ALL_SUPPORTED_ANNOTATION_SCHEMAS,
   ],
   sections: [
+    {
+      title: "Toolbar",
+      items: [
+        ["Inspect objects", "Shows details of the clicked object.", Cursor20Regular],
+        ["Download image", "Saves the current frame as an image.", ArrowDownload20Regular],
+      ],
+    },
     {
       title: "Settings",
       items: [

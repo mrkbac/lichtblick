@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import CloseIcon from "@mui/icons-material/Close";
+
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 
 const docs: PanelDocs = {
@@ -16,6 +18,7 @@ const docs: PanelDocs = {
         [
           "Close a tab",
           "Removes it and its panels. With one tab left, the tab panel is replaced by its contents.",
+          CloseIcon,
         ],
       ],
     },

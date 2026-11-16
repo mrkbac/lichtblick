@@ -33,6 +33,7 @@ const docs: PanelDocs = {
           "Copy as…",
           "Copy the adjusted transform as a URDF joint, static_transform_publisher command or YAML.",
         ],
+        ["Reset", "Removes the offset from the frame."],
         ["Show original", "Temporarily render the recorded transforms, ignoring all offsets."],
         ["from / to", "Hover a frame to measure between two frames; shared with 3D panels."],
       ],

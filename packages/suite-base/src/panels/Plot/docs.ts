@@ -1,12 +1,35 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import {
+  Add12Regular,
+  ArrowCounterclockwise20Regular,
+  Dismiss12Regular,
+  PointScan20Regular,
+  Square12Regular,
+  TextBulletListLtr20Regular,
+  ZoomIn20Regular,
+} from "@fluentui/react-icons";
+
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 
 const docs: PanelDocs = {
   intro:
     "Plots numeric values from any message path over time, against an index, or against another path.",
   sections: [
+    {
+      title: "Toolbar",
+      items: [
+        ["Measure delta", "Places P1/P2 markers and shows range statistics.", PointScan20Regular],
+        [
+          "Zoom tool",
+          "Drag a box to zoom; Alt/Option zooms only X, Shift only Y.",
+          ZoomIn20Regular,
+        ],
+        ["Legend", "Shows or hides the legend.", TextBulletListLtr20Regular],
+        ["Reset view", "Appears after zooming or panning.", ArrowCounterclockwise20Regular],
+      ],
+    },
     {
       title: "Data",
       items: [
@@ -36,13 +59,10 @@ const docs: PanelDocs = {
           "Legend",
           "Click a series to open its settings; drag it onto another panel to add it there.",
         ],
+        ["Toggle visibility", "Legend checkbox that hides or shows a series.", Square12Regular],
+        ["Add series", "Last legend row; adds a series.", Add12Regular],
+        ["Delete series", "Removes a series from the legend.", Dismiss12Regular],
         ["Right-click", "Copy values at cursor, download CSV, or save as PNG."],
-      ],
-    },
-    {
-      title: "Tips",
-      items: [
-        ["Measure delta", "Toolbar button that places P1/P2 markers and shows range statistics."],
       ],
     },
   ],

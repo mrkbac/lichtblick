@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import VolumeUpIcon from "@mui/icons-material/VolumeUp";
+
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 
 const docs: PanelDocs = {
@@ -31,7 +33,7 @@ const docs: PanelDocs = {
     {
       title: "Tips",
       items: [
-        ["Mute alerts", "Speaker button in the panel silences all of its alerts."],
+        ["Mute alerts", "Speaker button in the panel silences all of its alerts.", VolumeUpIcon],
         ["No false alarms", "Alerts don't fire on load, after a seek, or after editing a rule."],
       ],
     },
