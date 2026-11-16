@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { AllowedFileExtensions } from "@lichtblick/suite-base/constants/allowedFileExtensions";
-import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
   IDataSourceFactory,
   DataSourceFactoryInitializeArgs,
@@ -62,16 +61,6 @@ class RemoteDataSourceFactory implements IDataSourceFactory {
   public iconName: IDataSourceFactory["iconName"] = "FileASPX";
   public supportedFileTypes = fileTypesAllowed;
   public description = "Open pre-recorded .bag or .mcap files from a remote location.";
-  public docsLinks = [
-    {
-      label: "ROS 1",
-      url: `${APP_CONFIG.docsUrl}docs/connecting-to-data/frameworks/ros1/`,
-    },
-    {
-      label: "MCAP",
-      url: `${APP_CONFIG.docsUrl}docs/connecting-to-data/frameworks/mcap/`,
-    },
-  ];
 
   public formConfig = {
     fields: [

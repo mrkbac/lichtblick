@@ -13,7 +13,7 @@ export const openDialog = {
   createAFreeAccount: "Create a free account",
   dontShowThisAgain: "Don't show this again on startup",
   exploreSampleData: "Explore sample data",
-  viewDocumentation: "View documentation",
+  openPanelGuide: "Panel guide",
   learnMore: "Learn more",
   needHelp: "Need help?",
   needHelpDescription: "View our documentation, or check out the tutorials on the Foxglove blog.",

@@ -12,18 +12,6 @@ export const APP_SETTINGS_ABOUT_ITEMS = new Map<
   }
 >([
   [
-    "documentation",
-    {
-      subheader: "Documentation",
-      links: [
-        {
-          title: "Check out our documentation",
-          url: APP_CONFIG.docsUrl,
-        },
-      ],
-    },
-  ],
-  [
     "legal",
     {
       subheader: "Legal",

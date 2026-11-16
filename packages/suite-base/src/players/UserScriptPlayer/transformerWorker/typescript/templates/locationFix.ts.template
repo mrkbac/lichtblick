@@ -1,9 +1,5 @@
-// This example shows how to publish a foxglove.LocationFix message
-//
-// https://foxglove.dev/docs/studio/messages/location-fix
-//
-// You can visualize this message with the Map panel
-// https://foxglove.dev/docs/studio/panels/map
+// This example shows how to publish a foxglove.LocationFix message.
+// You can visualize this message with the Map panel.
 
 import { Input } from "./types";
 import { LocationFix, PositionCovarianceType } from "@foxglove/schemas";
