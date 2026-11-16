@@ -5,7 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { Encoder as CborEncoder } from "cbor-x";
 import fs from "fs";
+import { Packr } from "msgpackr";
 import { FileDescriptorSet, IFileDescriptorSet } from "protobufjs/ext/descriptor";
 
 import { parseChannel } from "./parseChannel";
@@ -25,6 +27,58 @@ describe("parseChannel", () => {
     expect(channel.deserialize(new TextEncoder().encode(JSON.stringify({ value: "hi" })))).toEqual({
       value: "hi",
     });
+  });
+
+  it("treats the empty schema encoding as no schema for json", () => {
+    const channel = parseChannel({
+      messageEncoding: "json",
+      schema: { name: "X", encoding: "", data: new Uint8Array() },
+    });
+    expect(channel.deserialize(new TextEncoder().encode('{"a":1}'))).toEqual({ a: 1 });
+  });
+
+  it.each([
+    // {1: "one"}: a map with an integer key, as raw wire bytes
+    [
+      "cbor",
+      (value: unknown) => new CborEncoder({ useRecords: false }).encode(value),
+      [0xa1, 0x01, 0x63],
+    ],
+    [
+      "msgpack",
+      (value: unknown) => new Packr({ useRecords: false }).pack(value),
+      [0x81, 0x01, 0xa3],
+    ],
+  ])("works with %s, schemaless or with jsonschema", (messageEncoding, encode, intKeyMap) => {
+    const value = { s: "hi", n: -1.5, big: 2n ** 60n, bytes: new Uint8Array([1, 2]), list: [1] };
+    for (const schema of [
+      undefined,
+      { name: "X", encoding: "", data: new Uint8Array() },
+      {
+        name: "X",
+        encoding: "jsonschema",
+        data: new TextEncoder().encode(
+          JSON.stringify({ type: "object", properties: { s: { type: "string" } } }),
+        ),
+      },
+    ]) {
+      const channel = parseChannel({ messageEncoding, schema });
+      const decoded = channel.deserialize(encode(value)) as typeof value;
+      expect(decoded).toEqual({ ...value, bytes: expect.anything() });
+      expect([...decoded.bytes]).toEqual([1, 2]);
+    }
+    // Maps with non-string keys come out as plain objects, which message paths can walk.
+    expect(
+      parseChannel({ messageEncoding, schema: undefined }).deserialize(
+        new Uint8Array([...intKeyMap, ...new TextEncoder().encode("one")]),
+      ),
+    ).toEqual({ 1: "one" });
+    expect(() =>
+      parseChannel({
+        messageEncoding,
+        schema: { name: "X", encoding: "protobuf", data: new Uint8Array() },
+      }),
+    ).toThrow(/not supported/);
   });
 
   it("works with flatbuffer", () => {
