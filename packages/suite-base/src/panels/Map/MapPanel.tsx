@@ -10,7 +10,6 @@ import { Chip, alpha } from "@mui/material";
 import type { FeatureCollection, Position } from "geojson";
 import * as _ from "lodash-es";
 import {
-  AttributionControl,
   GeoJSONSource,
   LngLatBounds,
   Map as MapLibreMap,
@@ -41,6 +40,7 @@ import { darkColor, lineColors } from "@lichtblick/suite-base/util/plotColors";
 import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
+import { AutoHideAttributionControl } from "./AutoHideAttributionControl";
 import { MapToolbar } from "./MapToolbar";
 import { normalize, Sample, sampleAt, speedUnitLabel, speedValues, valueRange } from "./colorBy";
 import {
@@ -824,7 +824,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       maxPitch: 85,
       attributionControl: false,
     });
-    instance.addControl(new AttributionControl({ compact: true }), "bottom-right");
+    instance.addControl(new AutoHideAttributionControl(), "bottom-right");
     instance.addControl(new NavigationControl({ visualizePitch: true }), "top-right");
 
     instance.on("styleimagemissing", (event) => {
