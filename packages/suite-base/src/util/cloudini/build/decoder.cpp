@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
 // Decode-only entry points for the Cloudini WASM module. Unlike upstream's wasm_functions.cpp, the
