@@ -161,7 +161,7 @@ export const mainConfig =
             };
             await writeFile(
               path.join(params.outputPath, ASSET_LIST_FILE),
-              JSON.stringify(assetList),
+              JSON.stringify(assetList) ?? "",
             );
             await generateSW({
               globDirectory: params.outputPath,
