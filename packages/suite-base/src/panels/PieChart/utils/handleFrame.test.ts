@@ -4,8 +4,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2025 Takayuki Honda <takayuki.honda@tier4.jp>
 // SPDX-License-Identifier: MPL-2.0
 
-import * as _ from "lodash-es";
-
 import { parseMessagePath } from "@lichtblick/message-path";
 import MessageEventBuilder from "@lichtblick/suite-base/testing/builders/MessageEventBuilder";
 import PieChartBuilder from "@lichtblick/suite-base/testing/builders/PieChartBuilder";
@@ -48,7 +46,7 @@ describe("handleFrame", () => {
     const newState = stateReducer(initialState, action);
 
     // The path names the whole message, which isn't a number
-    expect(newState.latestMessage).toEqual(_.last(action.messages));
+    expect(newState.latestMessage).toEqual(action.messages.at(-1));
     expect(newState.latestMatchingQueriedData).toBeUndefined();
     expect(newState.error?.message).toMatch("numbers");
   });

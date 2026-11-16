@@ -7,7 +7,6 @@
 
 import { MessageDefinition } from "@foxglove/message-definition";
 import { Fzf, FzfResultItem, basicMatch } from "fzf";
-import * as _ from "lodash-es";
 import { useMemo } from "react";
 
 import { Immutable } from "@lichtblick/suite";
@@ -85,7 +84,7 @@ export function useTopicListSearch(params: UseTopicListSearchParams): TopicListI
   const treeItems = useMemo(() => {
     const results: TopicListItem[] = [];
 
-    const messagePathResultsByTopicName = _.groupBy(
+    const messagePathResultsByTopicName = Object.groupBy(
       messagePathResults,
       (item) => item.item.topic.name,
     );

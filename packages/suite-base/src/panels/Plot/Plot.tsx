@@ -11,7 +11,6 @@ import {
   ZoomIn20Regular,
 } from "@fluentui/react-icons";
 import { Tooltip, Fade, useTheme } from "@mui/material";
-import * as _ from "lodash-es";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -350,7 +349,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
     const isCanvasTarget = (entry: Immutable<ResizeObserverEntry>) => entry.target === canvasDiv;
     const Observer = canvasDiv.ownerDocument.defaultView?.ResizeObserver ?? ResizeObserver;
     const resizeObserver = new Observer((entries) => {
-      const entry = _.findLast(entries, isCanvasTarget);
+      const entry = entries.findLast(isCanvasTarget);
       if (entry != undefined) {
         plotCoordinator.setSize({
           width: entry.contentRect.width,

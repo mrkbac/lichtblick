@@ -107,10 +107,10 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
 
     // Initialize the camera from default settings overlaid with persisted settings
     const cameraState: CameraState = _.merge(
-      _.cloneDeep(DEFAULT_CAMERA_STATE),
+      structuredClone(DEFAULT_CAMERA_STATE),
       partialConfig?.cameraState,
     );
-    const publish = _.merge(_.cloneDeep(DEFAULT_PUBLISH_SETTINGS), partialConfig?.publish);
+    const publish = _.merge(structuredClone(DEFAULT_PUBLISH_SETTINGS), partialConfig?.publish);
 
     const transforms = (partialConfig?.transforms ?? {}) as Record<
       string,

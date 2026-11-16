@@ -45,6 +45,7 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectPlayerPresence } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import SyncInstanceToggle from "@lichtblick/suite-base/components/PlaybackControls/SwitchSyncInstances/SyncInstanceToggle";
 import { useStyles } from "@lichtblick/suite-base/components/PlaybackControls/index.style";
 import { useDirectionalSeek } from "@lichtblick/suite-base/components/PlaybackControls/useDirectionalSeek";
@@ -68,7 +69,6 @@ import { ScrubPreviewMenu } from "./ScrubPreviewMenu";
 import Scrubber from "./Scrubber";
 import { TrimBar, useTrimKeyHandlers } from "./TrimRange";
 
-const selectPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
 const selectHasLiveHistory = (ctx: MessagePipelineContext) =>
   ctx.playerState.capabilities.includes(PLAYER_CAPABILITIES.liveHistory);
 const selectPlaybackRepeat = (store: WorkspaceContextStore) => store.playbackControls.repeat;
@@ -90,7 +90,7 @@ export default function PlaybackControls({
   isPlaying,
   getTimeInfo,
 }: PlaybackControlsProps): React.JSX.Element {
-  const presence = useMessagePipeline(selectPresence);
+  const presence = useMessagePipeline(selectPlayerPresence);
   const hasLiveHistory = useMessagePipeline(selectHasLiveHistory);
   const { t } = useTranslation("exportRecording");
 

@@ -7,7 +7,6 @@
 
 import { Time, toNanoSec } from "@foxglove/rostime";
 import { NumericType, PackedElementField, PointCloud } from "@foxglove/schemas";
-import * as _ from "lodash-es";
 import * as THREE from "three";
 
 import { SettingsTreeAction, MessageEvent } from "@lichtblick/suite";
@@ -875,10 +874,9 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
     if (msgs.length === 0) {
       return msgs;
     }
-    const msgsByTopic = _.groupBy(msgs, (msg) => msg.topic);
+    const msgsByTopic = Map.groupBy(msgs, (msg) => msg.topic);
     const finalQueue: MessageEvent<T>[] = [];
-    for (const topic in msgsByTopic) {
-      const topicMsgs = msgsByTopic[topic]!;
+    for (const [topic, topicMsgs] of msgsByTopic) {
       const userSettings = (this.renderer.config.topics[topic] ??
         {}) as Partial<LayerSettingsPointClouds>;
       // if the topic has a decaytime add all messages to queue for topic

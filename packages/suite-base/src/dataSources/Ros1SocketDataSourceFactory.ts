@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { RosNode } from "@foxglove/ros1";
-import * as _ from "lodash-es";
 
 import OsContextSingleton from "@lichtblick/suite-base/OsContextSingleton";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
@@ -56,7 +55,7 @@ class Ros1SocketDataSourceFactory implements IDataSourceFactory {
     }
 
     const hostname = args.params?.hostname;
-    if (!_.isUndefined(hostname) && !_.isString(hostname)) {
+    if (hostname != undefined && typeof hostname !== "string") {
       throw new Error(`Unable to initialize Ros1. Invalid hostname ${hostname}`);
     }
 

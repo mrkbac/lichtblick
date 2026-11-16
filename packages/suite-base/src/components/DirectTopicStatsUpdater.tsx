@@ -13,6 +13,10 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectPlayerCapabilities,
+  selectPlayerId,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { useTopicPublishFrequencies } from "@lichtblick/suite-base/hooks/useTopicPublishFrequences";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import { TopicStats } from "@lichtblick/suite-base/players/types";
@@ -22,8 +26,6 @@ const EMPTY_TOPIC_STATS = new Map<string, TopicStats>();
 
 const selectTopicStats = (ctx: MessagePipelineContext) =>
   ctx.playerState.activeData?.topicStats ?? EMPTY_TOPIC_STATS;
-const selectPlayerId = (ctx: MessagePipelineContext) => ctx.playerState.playerId;
-const selectPlayerCapabilities = (ctx: MessagePipelineContext) => ctx.playerState.capabilities;
 
 type StatSample = {
   time: Time;

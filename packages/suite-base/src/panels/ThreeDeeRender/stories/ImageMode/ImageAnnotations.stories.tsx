@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { ImageAnnotations, PointsAnnotationType } from "@foxglove/schemas";
-import * as _ from "lodash-es";
 import { useEffect, useState } from "react";
 import { screen, userEvent } from "storybook/test";
 import { StoryObj } from "storybook-react-rsbuild";
@@ -788,7 +787,7 @@ const AnnotationsUpdateStory = (
 };
 
 function moveAnnotations(annotation: Partial<ImageAnnotations>, vector: { x: number; y: number }) {
-  const newAnnotation = _.cloneDeep(annotation);
+  const newAnnotation = structuredClone(annotation);
 
   newAnnotation.circles?.forEach(({ position }) => {
     position.x += vector.x;

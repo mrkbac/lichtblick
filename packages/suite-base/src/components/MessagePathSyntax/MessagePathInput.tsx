@@ -70,37 +70,39 @@ export function getFirstInvalidVariableFromRosPath(
 ): { variableName: string; loc: number } | undefined {
   const { messagePath } = rosPath;
   const globalVars = Object.keys(globalVariables);
-  return _.flatMap(messagePath, (path) => {
-    const messagePathParts = [];
-    if (
-      path.type === "filter" &&
-      typeof path.value === "object" &&
-      !globalVars.includes(path.value.variableName)
-    ) {
-      const [variableName, loc] = [path.value.variableName, path.valueLoc];
-      messagePathParts.push({ variableName, loc });
-    } else if (path.type === "modifier") {
-      for (const arg of path.args) {
-        if (
-          typeof arg === "object" &&
-          "variableName" in arg &&
-          !globalVars.includes(arg.variableName)
-        ) {
-          messagePathParts.push({ variableName: arg.variableName, loc: arg.startLoc });
+  return messagePath
+    .flatMap((path) => {
+      const messagePathParts = [];
+      if (
+        path.type === "filter" &&
+        typeof path.value === "object" &&
+        !globalVars.includes(path.value.variableName)
+      ) {
+        const [variableName, loc] = [path.value.variableName, path.valueLoc];
+        messagePathParts.push({ variableName, loc });
+      } else if (path.type === "modifier") {
+        for (const arg of path.args) {
+          if (
+            typeof arg === "object" &&
+            "variableName" in arg &&
+            !globalVars.includes(arg.variableName)
+          ) {
+            messagePathParts.push({ variableName: arg.variableName, loc: arg.startLoc });
+          }
+        }
+      } else if (path.type === "slice") {
+        if (typeof path.start === "object" && !globalVars.includes(path.start.variableName)) {
+          const [variableName, loc] = [path.start.variableName, path.start.startLoc];
+          messagePathParts.push({ variableName, loc });
+        }
+        if (typeof path.end === "object" && !globalVars.includes(path.end.variableName)) {
+          const [variableName, loc] = [path.end.variableName, path.end.startLoc];
+          messagePathParts.push({ variableName, loc });
         }
       }
-    } else if (path.type === "slice") {
-      if (typeof path.start === "object" && !globalVars.includes(path.start.variableName)) {
-        const [variableName, loc] = [path.start.variableName, path.start.startLoc];
-        messagePathParts.push({ variableName, loc });
-      }
-      if (typeof path.end === "object" && !globalVars.includes(path.end.variableName)) {
-        const [variableName, loc] = [path.end.variableName, path.end.startLoc];
-        messagePathParts.push({ variableName, loc });
-      }
-    }
-    return messagePathParts;
-  }).find(({ variableName }) => !tryToSetDefaultGlobalVar(variableName, setGlobalVariables));
+      return messagePathParts;
+    })
+    .find(({ variableName }) => !tryToSetDefaultGlobalVar(variableName, setGlobalVariables));
 }
 
 type AutocompleteState = {
@@ -158,7 +160,7 @@ export function getModifierResultFieldAutocomplete(
   options: { validTypes?: readonly string[]; noMultiSlices?: boolean },
 ): AutocompleteState | undefined {
   const parts = rosPath.messagePath;
-  const modifierIndex = _.findLastIndex(parts, (part) => part.type === "modifier");
+  const modifierIndex = parts.findLastIndex((part) => part.type === "modifier");
   const modifier = parts[modifierIndex];
   if (
     rosPath.modifier != undefined ||

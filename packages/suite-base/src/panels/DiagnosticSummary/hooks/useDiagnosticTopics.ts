@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { TFunction } from "i18next";
-import * as _ from "lodash-es";
 import { useEffect, useMemo } from "react";
 
 import { SettingsTreeNode } from "@lichtblick/suite";
@@ -45,7 +44,7 @@ export function useDiagnosticTopics(config: DiagnosticTopicsConfig): DiagnosticT
   const configuredKey = configured?.join("\n");
 
   return useMemo(() => {
-    const available = _.uniq(availableKey === "" ? [] : availableKey.split("\n"));
+    const available = [...new Set(availableKey === "" ? [] : availableKey.split("\n"))];
     const selected =
       configuredKey == undefined
         ? available
@@ -66,7 +65,7 @@ export function buildTopicsSettingsNode(
   t: TFunction<"diagnostics">,
 ): SettingsTreeNode {
   const children: Record<string, SettingsTreeNode> = {};
-  for (const topic of _.uniq([...available, ...selected])) {
+  for (const topic of [...new Set([...available, ...selected])]) {
     children[topic] = {
       label: topic,
       visible: selected.includes(topic),
@@ -94,7 +93,7 @@ export function handleTopicToggle(
   }
   const topic = path[1];
   const topics =
-    value === true ? _.uniq([...selected, topic]) : selected.filter((t) => t !== topic);
+    value === true ? [...new Set([...selected, topic])] : selected.filter((t) => t !== topic);
   return { topics, topicToRender: undefined };
 }
 
@@ -112,7 +111,7 @@ export function useDiagnosticTopicsDrop(
           ALLOWED_DATATYPES.includes(item.rootSchemaName) &&
           !selected.includes(item.topicName),
         (dropped) => {
-          saveConfig({ topics: _.uniq([...selected, ...dropped]), topicToRender: undefined });
+          saveConfig({ topics: [...new Set([...selected, ...dropped])], topicToRender: undefined });
         },
       ),
     );

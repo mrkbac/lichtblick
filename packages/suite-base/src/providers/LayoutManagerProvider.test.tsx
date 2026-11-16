@@ -14,7 +14,9 @@ import { useLayoutStorage } from "@lichtblick/suite-base/context/LayoutStorageCo
 import { RemoteLayoutFavoritesStorageContext } from "@lichtblick/suite-base/context/RemoteLayoutFavoritesStorageContext";
 import { useRemoteLayoutStorage } from "@lichtblick/suite-base/context/RemoteLayoutStorageContext";
 import { UserProfileStorageContext } from "@lichtblick/suite-base/context/UserProfileStorageContext";
-import LayoutManagerProvider from "@lichtblick/suite-base/providers/LayoutManagerProvider";
+import LayoutManagerProvider, {
+  nextSyncDelayMs,
+} from "@lichtblick/suite-base/providers/LayoutManagerProvider";
 import LayoutManager from "@lichtblick/suite-base/services/LayoutManager/LayoutManager";
 import MockLayoutManager from "@lichtblick/suite-base/services/LayoutManager/MockLayoutManager";
 
@@ -117,5 +119,12 @@ describe("LayoutManagerProvider", () => {
       expect.objectContaining({ userProfile, remoteFavorites }),
     );
     expect(mockLayoutManager.loadFavorites).toHaveBeenCalled();
+  });
+
+  it("waits about two minutes between successful syncs and backs off after failures", () => {
+    expect(nextSyncDelayMs(0, 0)).toBe(108_000);
+    expect(nextSyncDelayMs(0, 1)).toBe(132_000);
+    expect(nextSyncDelayMs(1, 0.5)).toBe(30_000);
+    expect(nextSyncDelayMs(10, 1)).toBe(120_000);
   });
 });

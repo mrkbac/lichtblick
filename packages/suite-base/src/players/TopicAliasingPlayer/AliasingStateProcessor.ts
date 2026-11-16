@@ -5,7 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
 
 import { Immutable as Im, MessageEvent } from "@lichtblick/suite";
@@ -184,14 +183,14 @@ export class AliasingStateProcessor implements IStateProcessor {
       topics: Map<string, Set<string>>,
       subcriptions: Im<SubscribePayload[]>,
     ): Map<string, Set<string>> => {
-      const subscriptionsByTopic = _.groupBy(subcriptions, (sub) => sub.topic);
+      const subscribedTopics = new Set(subcriptions.map((sub) => sub.topic));
       const mappedTopics = new Map<string, Set<string>>();
       for (const [id, values] of topics) {
         const mappedValues = [...values].flatMap((value) => {
           // If we have a subscription to the unmapped topic, include that, otherwise include
           // the mapped topics.
           const mapped = this.#mapping.get(value);
-          if (subscriptionsByTopic[value]) {
+          if (subscribedTopics.has(value)) {
             return [value, ...(mapped ?? [])];
           } else if (mapped) {
             return mapped;
