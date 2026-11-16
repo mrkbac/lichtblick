@@ -108,7 +108,7 @@ const props: ComponentProps<typeof ChartComponent> = {
   type: "scatter",
 };
 
-const propsWithDatalabels = _.cloneDeep(props);
+const propsWithDatalabels = structuredClone(props);
 if (propsWithDatalabels.data!.datasets[0]?.datalabels) {
   propsWithDatalabels.data!.datasets[0].datalabels.display = true;
 }

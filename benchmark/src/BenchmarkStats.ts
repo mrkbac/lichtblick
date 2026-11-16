@@ -4,8 +4,6 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
-import { std } from "mathjs";
-
 import Log from "@lichtblick/log";
 
 const log = Log.getLogger(__filename);
@@ -35,13 +33,16 @@ class BenchmarkStats {
       const totalFrameMs = values.reduce((a, b) => a + b, 0);
       const avgFrameMs = totalFrameMs / values.length;
 
-      const sortedFrameMs = values.sort();
+      const sortedFrameMs = values.sort((a, b) => a - b);
       const medianFrameMs = sortedFrameMs[Math.floor(sortedFrameMs.length * 0.5)]!;
       const p90FrameMs = sortedFrameMs[Math.floor(sortedFrameMs.length * 0.9)]!;
-      const stddev = std(values);
+      // Sample standard deviation (n - 1), as mathjs std() computed it
+      const stddev = Math.sqrt(
+        values.reduce((sum, v) => sum + (v - avgFrameMs) ** 2, 0) / (values.length - 1),
+      );
 
       log.info(
-        `Frame time (filtered) average: ${String(avgFrameMs)}, median: ${String(medianFrameMs)}, P90: ${String(p90FrameMs)}, stddev: ${String(stddev.values)}`,
+        `Frame time (filtered) average: ${String(avgFrameMs)}, median: ${String(medianFrameMs)}, P90: ${String(p90FrameMs)}, stddev: ${String(stddev)}`,
       );
 
       const record = (window as { recordFrameTimes?: RecordFrameTimesFn }).recordFrameTimes;

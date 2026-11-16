@@ -7,7 +7,6 @@
 
 import { useTheme } from "@mui/material";
 import { produce } from "immer";
-import * as _ from "lodash-es";
 import { useCallback, useMemo, useState, useEffect } from "react";
 import { userEvent, within } from "storybook/test";
 import { StoryObj } from "storybook-react-rsbuild";
@@ -812,7 +811,7 @@ function Wrapper({ nodes }: { nodes: SettingsTreeNodes }): React.JSX.Element {
         if (action.payload.id === "remove-grid" || action.payload.id === "remove-background") {
           setDynamicNodes((oldNodes) => {
             const newNodes = { ...oldNodes };
-            delete newNodes[_.last(action.payload.path)!];
+            delete newNodes[action.payload.path.at(-1)!];
             return newNodes;
           });
         }

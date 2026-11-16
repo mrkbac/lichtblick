@@ -18,7 +18,6 @@ import { ChevronLeft20Regular, ChevronRight20Regular } from "@fluentui/react-ico
 import { add as addTimes, fromSec } from "@foxglove/rostime";
 import { Typography, alpha, useTheme } from "@mui/material";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
-import * as _ from "lodash-es";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useDebounce } from "use-debounce";
@@ -205,7 +204,7 @@ function StateTransitions(props: StateTransitionPanelProps) {
     () => matchStarts.filter((x) => x <= now + MATCH_EPSILON).length,
     [now, matchStarts],
   );
-  const previousMatch = _.findLast(matchStarts, (x) => x < now - MATCH_EPSILON);
+  const previousMatch = matchStarts.findLast((x) => x < now - MATCH_EPSILON);
   const nextMatch = matchStarts.find((x) => x > now + MATCH_EPSILON);
 
   const seekToNextMatch = useCallback(() => {

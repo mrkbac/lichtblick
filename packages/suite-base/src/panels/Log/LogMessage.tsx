@@ -15,7 +15,6 @@
 //   You may not use this file except in compliance with the License.
 
 import { Copy16Regular } from "@fluentui/react-icons";
-import * as _ from "lodash-es";
 import React from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
@@ -128,7 +127,7 @@ export default React.memo(function LogMessage(props: {
       }
     >
       <div>
-        <span>[{_.padStart(strLevel, 5, " ")}]</span>
+        <span>[{strLevel.padStart(5, " ")}]</span>
         <span>
           [
           <Stamp stamp={stamp} timestampFormat={timestampFormat} timeZone={timeZone} />]

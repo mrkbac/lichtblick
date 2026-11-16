@@ -37,11 +37,13 @@ const colorExpansion = lineColors.map((color) => [
   ...[0, 90, 180, 270].map((deg) => toHex6(parseColor(color).rotate(deg))),
 ]);
 
-export const expandedLineColors = _.uniq(
-  _.range(0, colorExpansion[0]!.length)
-    .map((i) => colorExpansion.map((colors) => colors[i]!))
-    .flat(),
-);
+export const expandedLineColors = [
+  ...new Set(
+    _.range(0, colorExpansion[0]!.length)
+      .map((i) => colorExpansion.map((colors) => colors[i]!))
+      .flat(),
+  ),
+];
 
 // RGB brightening by a percent of 255; colord only has HSL lighten.
 function brighten(color: string, percent: number): string {
