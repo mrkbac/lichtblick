@@ -14,7 +14,9 @@ import {
   isEditedMessage,
   sampleMessageJson,
 } from "@lichtblick/suite-base/components/MessageEditor/messageJson";
+import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { buttonSettingsFields } from "@lichtblick/suite-base/panels/shared/actionButton";
+import { replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import { Topic } from "@lichtblick/suite-base/players/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
@@ -158,4 +160,24 @@ export function usePublishPanelSettings(
       nodes: buildSettingsTree(config, schemaNames, topics),
     });
   }, [actionHandler, config, schemaNames, topics, updatePanelSettingsTree]);
+
+  // Drop a topic from the topic list to publish on it, like picking it in the settings
+  const { setMessagePathDropConfig } = usePanelContext();
+  useEffect(() => {
+    setMessagePathDropConfig(
+      replaceDrop(
+        (item) => item.isTopic,
+        (item) => {
+          actionHandler({
+            action: "update",
+            payload: {
+              path: ["general", "topicName"],
+              input: "autocomplete",
+              value: item.topicName,
+            },
+          });
+        },
+      ),
+    );
+  }, [actionHandler, setMessagePathDropConfig]);
 }

@@ -20,11 +20,28 @@ import { ReactNode } from "react";
 import type { Mock } from "vitest";
 
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import PlayerSelectionContext, {
+  IDataSourceFactory,
+  PlayerSelection,
+} from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { useStateToURLSynchronization } from "@lichtblick/suite-base/hooks/useStateToURLSynchronization";
 import EventsProvider from "@lichtblick/suite-base/providers/EventsProvider";
 
 vi.mock("@lichtblick/suite-base/context/CurrentLayoutContext");
 vi.mock("@lichtblick/suite-base/components/MessagePipeline");
+
+function selectionWith(source: Pick<IDataSourceFactory, "id" | "type">): PlayerSelection {
+  return {
+    selectSource: vi.fn(),
+    closeSource: vi.fn(),
+    selectRecent: vi.fn(),
+    removeRecent: vi.fn(),
+    togglePinRecent: vi.fn(),
+    clearRecents: vi.fn(),
+    recentSources: [],
+    availableSources: [{ ...source, displayName: source.id, initialize: () => undefined }],
+  };
+}
 
 describe("useStateToURLSynchronization", () => {
   it("updates the url with a stable source & player state", () => {
@@ -176,5 +193,69 @@ describe("useStateToURLSynchronization", () => {
     const lastCallUrl = calls[calls.length - 1]?.[2] as string | undefined;
     expect(lastCallUrl).toContain("ds=remote-file");
     expect(lastCallUrl).toContain("ds.url=");
+  });
+  it("leaves ds out of the url for a local file, which a reload can't reopen from the url", () => {
+    window.history.replaceState(undefined, "", "/?ds=mcap-local-file");
+    const spy = vi.spyOn(window.history, "replaceState");
+
+    (useMessagePipeline as Mock).mockImplementation((selector) =>
+      selector({
+        playerState: {
+          activeData: { currentTime: { sec: 1, nsec: 1 } },
+          capabilities: ["playbackControl"],
+          urlState: { sourceId: "mcap-local-file", parameters: undefined },
+        },
+      }),
+    );
+
+    const selection = selectionWith({ id: "mcap-local-file", type: "file" });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <PlayerSelectionContext.Provider value={selection}>
+        <EventsProvider>{children}</EventsProvider>
+      </PlayerSelectionContext.Provider>
+    );
+    renderHook(useStateToURLSynchronization, { wrapper });
+
+    const written = new URL(spy.mock.calls[spy.mock.calls.length - 1]![2] as string);
+    expect(written.searchParams.has("ds")).toBe(false);
+  });
+  it("keeps ds for a connection without url parameters, which reopens from its id", () => {
+    const spy = vi.spyOn(window.history, "replaceState");
+    (useMessagePipeline as Mock).mockImplementation((selector) =>
+      selector({
+        playerState: {
+          capabilities: [],
+          urlState: { sourceId: "velodyne-device", parameters: undefined },
+        },
+      }),
+    );
+    const selection = selectionWith({ id: "velodyne-device", type: "connection" });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <PlayerSelectionContext.Provider value={selection}>
+        <EventsProvider>{children}</EventsProvider>
+      </PlayerSelectionContext.Provider>
+    );
+    renderHook(useStateToURLSynchronization, { wrapper });
+
+    const written = new URL(spy.mock.calls[spy.mock.calls.length - 1]![2] as string);
+    expect(written.searchParams.get("ds")).toBe("velodyne-device");
+  });
+  it.each([
+    ["no player yet", { capabilities: [] }],
+    [
+      "a recording still loading",
+      { capabilities: ["playbackControl"], urlState: { sourceId: "remote-file", parameters: {} } },
+    ],
+  ])("keeps the url time while there is %s", (_name, playerState) => {
+    window.history.replaceState(undefined, "", "/?time=2024-01-01T00:00:00.000000000Z");
+    (useMessagePipeline as Mock).mockImplementation((selector) => selector({ playerState }));
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <EventsProvider>{children}</EventsProvider>
+    );
+    renderHook(useStateToURLSynchronization, { wrapper });
+
+    expect(new URL(window.location.href).searchParams.get("time")).toBe(
+      "2024-01-01T00:00:00.000000000Z",
+    );
   });
 });

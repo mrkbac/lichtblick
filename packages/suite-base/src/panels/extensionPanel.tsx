@@ -4,10 +4,12 @@
 import { ComponentType, useMemo } from "react";
 
 import { useCrash } from "@lichtblick/hooks";
-import { PanelExtensionContext } from "@lichtblick/suite";
 import { CaptureErrorBoundary } from "@lichtblick/suite-base/components/CaptureErrorBoundary";
 import Panel from "@lichtblick/suite-base/components/Panel";
-import { PanelExtensionAdapter } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import {
+  BuiltinPanelExtensionContext,
+  PanelExtensionAdapter,
+} from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { createSyncRoot } from "@lichtblick/suite-base/panels/createSyncRoot";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
@@ -20,10 +22,10 @@ type Config = Record<string, unknown>;
  */
 export function extensionPanel(
   panelType: string,
-  Component: ComponentType<{ context: PanelExtensionContext }>,
+  Component: ComponentType<{ context: BuiltinPanelExtensionContext }>,
   { dark = false }: { dark?: boolean } = {},
 ): ReturnType<typeof Panel<Config, { config: Config; saveConfig: SaveConfig<Config> }>> {
-  function initPanel(crash: ReturnType<typeof useCrash>, context: PanelExtensionContext) {
+  function initPanel(crash: ReturnType<typeof useCrash>, context: BuiltinPanelExtensionContext) {
     const panel = <Component context={context} />;
     return createSyncRoot(
       <CaptureErrorBoundary onError={crash}>

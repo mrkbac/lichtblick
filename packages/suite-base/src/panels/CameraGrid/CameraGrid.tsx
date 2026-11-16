@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Button, Typography } from "@mui/material";
+import { Button, Typography, alpha } from "@mui/material";
 import {
   useCallback,
   useEffect,
@@ -14,8 +14,10 @@ import {
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
-import { Immutable, PanelExtensionContext, SettingsTreeAction, Topic } from "@lichtblick/suite";
+import { Immutable, SettingsTreeAction, Topic } from "@lichtblick/suite";
+import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { useElementSize } from "@lichtblick/suite-base/hooks/useElementSize";
+import { addTopicsDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import { fontMonospace } from "@lichtblick/theme";
 
 import { GridRenderer } from "./GridRenderer";
@@ -42,14 +44,16 @@ const useStyles = makeStyles()((theme) => ({
     display: "grid",
     width: "100%",
     height: "100%",
-    gap: 2,
+    gap: 1,
   },
   tile: {
     position: "relative",
     minWidth: 0,
     minHeight: 0,
     overflow: "hidden",
-    backgroundColor: "#000",
+    backgroundColor: theme.palette.background.default,
+    // Outlines of neighbouring tiles meet in the 1px gap as a single divider line.
+    outline: `1px solid ${theme.palette.divider}`,
     cursor: "zoom-in",
   },
   maximized: {
@@ -91,7 +95,9 @@ const useStyles = makeStyles()((theme) => ({
     justifyContent: "center",
     padding: theme.spacing(1),
     textAlign: "center",
-    color: "rgba(255, 255, 255, 0.6)",
+    color: theme.palette.text.secondary,
+    // Invisible on an empty tile; dims a frame left under an error so the text stays legible.
+    backgroundColor: alpha(theme.palette.background.default, 0.75),
     fontSize: theme.typography.caption.fontSize,
     pointerEvents: "none",
     "&[hidden]": { display: "none" },
@@ -211,7 +217,11 @@ function Tile({
   );
 }
 
-export function CameraGrid({ context }: { context: PanelExtensionContext }): React.JSX.Element {
+export function CameraGrid({
+  context,
+}: {
+  context: BuiltinPanelExtensionContext;
+}): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("cameraGrid");
   const [config, setConfig] = useState<CameraGridConfig>(() => ({
@@ -295,6 +305,26 @@ export function CameraGrid({ context }: { context: PanelExtensionContext }): Rea
   useEffect(() => {
     context.saveState(config);
   }, [context, config]);
+
+  // Drop image topics from the topic list to add a tile for each, or show a hidden one again
+  useEffect(() => {
+    context.unstable_setMessagePathDropConfig(
+      addTopicsDrop(
+        (item) => item.rootSchemaName != undefined && imageKind(item.rootSchemaName) != undefined,
+        (dropped) => {
+          setConfig((prev) => {
+            const added = addAllTopics(prev, dropped);
+            return {
+              ...added,
+              tiles: added.tiles.map((tile) =>
+                dropped.includes(tile.topic) ? { ...tile, visible: true } : tile,
+              ),
+            };
+          });
+        },
+      ),
+    );
+  }, [context]);
 
   const actionHandler = useCallback(
     (action: SettingsTreeAction) => {

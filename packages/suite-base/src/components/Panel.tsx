@@ -76,7 +76,7 @@ import { OpenSiblingPanel, PanelConfig, SaveConfig } from "@lichtblick/suite-bas
 import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import { getSiblingGroup } from "@lichtblick/suite-base/util/layoutTree";
-import { findLayoutTree } from "@lichtblick/suite-base/util/tabLayout";
+import { findLayoutTree, TAB_PANEL_TYPE } from "@lichtblick/suite-base/util/tabLayout";
 
 const MAX_PANEL_LOGS = 1000;
 
@@ -480,20 +480,24 @@ export default function Panel<
     }, []);
     const connectDragHandle = usePanelDragHandle(onDragStart);
 
+    // A Tab panel holds other panels: an overlay over it would cover them and take their drops
+    const showDropOverlay = isDragging && type !== TAB_PANEL_TYPE;
     const panelOverlayProps = useMemo(() => {
       const overlayProps: PanelOverlayProps = {
         open:
-          isDragging || quickActionsKeyPressed || (isSelected && numSelectedPanelsIfSelected > 1),
+          showDropOverlay ||
+          quickActionsKeyPressed ||
+          (isSelected && numSelectedPanelsIfSelected > 1),
         variant: undefined,
         highlightMode: undefined,
         actions: undefined,
         dropMessage,
       };
 
-      if (isDragging && !isValidTarget) {
+      if (showDropOverlay && !isValidTarget) {
         overlayProps.variant = "invalidDropTarget";
       }
-      if (isDragging && isOver) {
+      if (showDropOverlay && isOver) {
         overlayProps.variant = "validDropTarget";
       }
       if (isSelected && numSelectedPanelsIfSelected > 1) {
@@ -547,7 +551,6 @@ export default function Panel<
       childId,
       dropMessage,
       groupSelectedPanels,
-      isDragging,
       isOver,
       isSelected,
       isValidTarget,
@@ -555,6 +558,7 @@ export default function Panel<
       quickActionsKeyPressed,
       removePanel,
       setSelectedPanelIds,
+      showDropOverlay,
       split,
     ]);
 

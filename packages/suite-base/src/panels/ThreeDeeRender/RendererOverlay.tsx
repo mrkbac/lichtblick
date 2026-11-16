@@ -495,100 +495,99 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
               selectedObject={selectedObject}
               setInteractionsTabType={setInteractionsTabType}
               timezone={props.timezone}
+              toolbarItems={
+                props.interfaceMode === "image" ? (
+                  <Tooltip placement="left" title={t("downloadImage")}>
+                    <IconButton
+                      data-testid="download-image-button"
+                      aria-label={t("downloadImage")}
+                      className={classes.iconButton}
+                      size="small"
+                      onClick={onDownloadImage}
+                    >
+                      <ArrowDownload20Regular />
+                    </IconButton>
+                  </Tooltip>
+                ) : (
+                  <>
+                    <Tooltip
+                      placement="left"
+                      describeChild
+                      title={
+                        <>
+                          {perspectiveLabel} <kbd className={classes.kbd}>3</kbd>
+                        </>
+                      }
+                    >
+                      <IconButton
+                        className={classes.iconButton}
+                        size="small"
+                        aria-pressed={props.perspective}
+                        aria-label={t("perspectiveCamera")}
+                        onClick={props.onTogglePerspective}
+                      >
+                        <span className={classes.threeDeeButton}>3D</span>
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip placement="left" title={t("zoomToData")}>
+                      <IconButton
+                        aria-label={t("zoomToData")}
+                        className={classes.iconButton}
+                        size="small"
+                        onClick={() => renderer?.zoomToData()}
+                      >
+                        <ZoomFit20Regular />
+                      </IconButton>
+                    </Tooltip>
+                    <Tooltip
+                      placement="left"
+                      title={props.measureActive ? t("stopMeasuring") : t("measure")}
+                    >
+                      <IconButton
+                        data-testid="measure-button"
+                        aria-label={t("measure")}
+                        className={classes.iconButton}
+                        size="small"
+                        aria-pressed={props.measureActive}
+                        onClick={props.onClickMeasure}
+                      >
+                        <div className={classes.pointScanIcon}>
+                          {props.measureActive ? <PointScan20Filled /> : <PointScan20Regular />}
+                        </div>
+                      </IconButton>
+                    </Tooltip>
+
+                    <Tooltip
+                      placement="left"
+                      title={framePicking ? t("stopMeasuringFrames") : t("measureFrames")}
+                    >
+                      <IconButton
+                        data-testid="measure-frames-button"
+                        aria-label={t("measureFrames")}
+                        className={classes.iconButton}
+                        size="small"
+                        aria-pressed={framePicking}
+                        onClick={() => {
+                          if (!framePicking && props.measureActive) {
+                            props.onClickMeasure();
+                          }
+                          if (!framePicking && props.publishActive) {
+                            props.onClickPublish();
+                          }
+                          setFramePicking(!framePicking);
+                        }}
+                      >
+                        {framePicking ? <ArrowRouting20Filled /> : <ArrowRouting20Regular />}
+                      </IconButton>
+                    </Tooltip>
+
+                    {publishControls}
+                  </>
+                )
+              }
             />
           )
         }
-        {props.interfaceMode === "image" && mousePresent && (
-          <OverlayToolbar>
-            <Tooltip placement="left" title={t("downloadImage")}>
-              <IconButton
-                data-testid="download-image-button"
-                aria-label={t("downloadImage")}
-                className={classes.iconButton}
-                size="small"
-                onClick={onDownloadImage}
-              >
-                <ArrowDownload20Regular />
-              </IconButton>
-            </Tooltip>
-          </OverlayToolbar>
-        )}
-        {props.interfaceMode === "3d" && (
-          <OverlayToolbar>
-            <Tooltip
-              placement="left"
-              describeChild
-              title={
-                <>
-                  {perspectiveLabel} <kbd className={classes.kbd}>3</kbd>
-                </>
-              }
-            >
-              <IconButton
-                className={classes.iconButton}
-                size="small"
-                aria-pressed={props.perspective}
-                aria-label={t("perspectiveCamera")}
-                onClick={props.onTogglePerspective}
-              >
-                <span className={classes.threeDeeButton}>3D</span>
-              </IconButton>
-            </Tooltip>
-            <Tooltip placement="left" title={t("zoomToData")}>
-              <IconButton
-                aria-label={t("zoomToData")}
-                className={classes.iconButton}
-                size="small"
-                onClick={() => renderer?.zoomToData()}
-              >
-                <ZoomFit20Regular />
-              </IconButton>
-            </Tooltip>
-            <Tooltip
-              placement="left"
-              title={props.measureActive ? t("stopMeasuring") : t("measure")}
-            >
-              <IconButton
-                data-testid="measure-button"
-                aria-label={t("measure")}
-                className={classes.iconButton}
-                size="small"
-                aria-pressed={props.measureActive}
-                onClick={props.onClickMeasure}
-              >
-                <div className={classes.pointScanIcon}>
-                  {props.measureActive ? <PointScan20Filled /> : <PointScan20Regular />}
-                </div>
-              </IconButton>
-            </Tooltip>
-
-            <Tooltip
-              placement="left"
-              title={framePicking ? t("stopMeasuringFrames") : t("measureFrames")}
-            >
-              <IconButton
-                data-testid="measure-frames-button"
-                aria-label={t("measureFrames")}
-                className={classes.iconButton}
-                size="small"
-                aria-pressed={framePicking}
-                onClick={() => {
-                  if (!framePicking && props.measureActive) {
-                    props.onClickMeasure();
-                  }
-                  if (!framePicking && props.publishActive) {
-                    props.onClickPublish();
-                  }
-                  setFramePicking(!framePicking);
-                }}
-              >
-                {framePicking ? <ArrowRouting20Filled /> : <ArrowRouting20Regular />}
-              </IconButton>
-            </Tooltip>
-
-            {publishControls}
-          </OverlayToolbar>
-        )}
       </div>
       {clickedObjects.length > 1 && !selectedObject && (
         <InteractionContextMenu
