@@ -7,7 +7,6 @@
 /* eslint-disable no-underscore-dangle -- Emscripten prefixes the module's exports with "_" */
 
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
-import delay from "@lichtblick/suite-base/util/delay";
 
 import type { CloudiniModule } from "./wasm/cloudini_decoder";
 import wasmUrl from "./wasm/cloudini_decoder.wasm";
@@ -47,19 +46,40 @@ export async function loadCloudini(): Promise<void> {
 }
 
 const PRELOAD_TIMEOUT_MS = 5000;
+const MAX_WASM_SIZE = 0xffff_ffff;
 
 /** Loads the decoder if any topic needs it. Never rejects (the converter reports errors) and waits
- * at most PRELOAD_TIMEOUT_MS, so a stalled download cannot hold up playback. */
-export async function preloadCloudini(topics: readonly { schemaName?: string }[]): Promise<void> {
-  if (topics.some((topic) => topic.schemaName === CLOUDINI_SCHEMA)) {
-    await Promise.race([loadCloudini().catch(() => {}), delay(PRELOAD_TIMEOUT_MS)]);
+ * at most PRELOAD_TIMEOUT_MS, or until `signal` aborts, so a stalled download cannot hold up
+ * playback or closing. The load itself keeps going for later messages. */
+export async function preloadCloudini(
+  topics: readonly { schemaName?: string }[],
+  signal?: AbortSignal,
+): Promise<void> {
+  if (!topics.some((topic) => topic.schemaName === CLOUDINI_SCHEMA)) {
+    return;
   }
+  // a hand-rolled race: every contender settles the same promise, and the timer is cleared
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, PRELOAD_TIMEOUT_MS);
+    const done = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+    signal?.addEventListener("abort", done, { once: true });
+    void loadCloudini()
+      .catch(() => {})
+      .finally(done);
+  });
 }
 
 /** Decodes a Cloudini payload into `decodedSize` bytes of PointCloud2 data. Requires loadCloudini(). */
 export function decodeCloudini(payload: Uint8Array, decodedSize: number): Uint8Array {
   if (!wasm) {
     throw new Error("Cloudini decoder is not loaded");
+  }
+  // WASM takes 32-bit sizes: a larger one would wrap and pass the decoder's own size check
+  if (!Number.isSafeInteger(decodedSize) || decodedSize < 0 || decodedSize > MAX_WASM_SIZE) {
+    throw new Error(`Invalid decoded size ${decodedSize}`);
   }
   if (decodedSize === 0) {
     return new Uint8Array(0);

@@ -224,6 +224,8 @@ export class IterablePlayer implements Player {
 
   // Some states register an abort controller to signal they should abort
   #abort?: AbortController;
+  /** Aborted by close(): ends waits that #abort must not end, such as the decoder preload */
+  #closeAbort = new AbortController();
 
   // The iterator for reading messages during playback
   #playbackIterator?: AsyncIterator<Readonly<IteratorResult>>;
@@ -578,6 +580,7 @@ export class IterablePlayer implements Player {
   }
 
   public close(): void {
+    this.#closeAbort.abort();
     this.#setState("close");
   }
 
@@ -699,8 +702,15 @@ export class IterablePlayer implements Player {
 
     if (!this.#hasError && this.#start) {
       // Wait a bit until panels have had the chance to subscribe to topics before we start
-      // playback. Built-in decoders load meanwhile, so the first frame is not dropped.
-      await Promise.all([delay(START_DELAY_MS), preloadCloudini(this.#providerTopics)]);
+      // playback. Built-in decoders load meanwhile, so the first frame is not dropped; closing the
+      // player ends that wait.
+      await Promise.all([
+        delay(START_DELAY_MS),
+        preloadCloudini(this.#providerTopics, this.#closeAbort.signal),
+      ]);
+      if (this.#isClosing()) {
+        return;
+      }
 
       this.#blockLoader?.setTopics(this.#preloadTopics);
 

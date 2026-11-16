@@ -103,6 +103,9 @@ describe("cloudini", () => {
   it("rejects a payload whose size does not match the message", () => {
     expect(() => decodeCloudini(PAYLOAD, POINTS * STEP - 1)).toThrow(/does not match/);
     expect(() => decodeCloudini(new Uint8Array([1, 2, 3]), 16)).toThrow();
+    // 2^32 + 4000 would wrap to the real size 4000 in WASM's 32-bit arguments
+    expect(() => decodeCloudini(PAYLOAD, 2 ** 32 + POINTS * STEP)).toThrow(/Invalid decoded size/);
+    expect(() => decodeCloudini(PAYLOAD, -1)).toThrow(/Invalid decoded size/);
   });
 
   it("converts to PointCloud2 once per message", () => {
@@ -134,4 +137,14 @@ describe("cloudini", () => {
       "cloudini-format-draco",
     );
   });
+
+  it("stops waiting for a stalled download when aborted", async () => {
+    vi.resetModules();
+    vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise<Response>(() => {}));
+    const fresh = await import("./index");
+    const abort = new AbortController();
+    const waiting = fresh.preloadCloudini([{ schemaName: fresh.CLOUDINI_SCHEMA }], abort.signal);
+    abort.abort();
+    await expect(waiting).resolves.toBeUndefined();
+  }, 1000);
 });
