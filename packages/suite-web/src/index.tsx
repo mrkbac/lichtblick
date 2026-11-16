@@ -15,6 +15,7 @@ import { reloadToLatestVersion } from "@lichtblick/suite-base/hooks/useServiceWo
 import waitForFonts from "@lichtblick/suite-base/util/waitForFonts";
 
 import { CompatibilityBanner } from "./CompatibilityBanner";
+import { ASSET_LIST_FILE, type AssetList, HASHED_FILE, RUNTIME_CACHE_NAME } from "./assetCache";
 import { canRenderApp } from "./canRenderApp";
 
 const log = Logger.getLogger(__filename);
@@ -27,9 +28,6 @@ function LogAfterRender(props: React.PropsWithChildren): React.JSX.Element {
   }, []);
   return <>{props.children}</>;
 }
-
-/** Must match RUNTIME_CACHE_NAME in rspackConfigs.ts */
-const RUNTIME_CACHE_NAME = "lichtblick-assets";
 
 /**
  * An uncontrolled page (first visit, force refresh) loads its chunks past the service worker.
@@ -50,8 +48,7 @@ function cacheLoadedAssets(): void {
       .filter((url) => {
         const { origin, pathname } = new URL(url);
         // same rule as the service worker's runtime cache route
-        const cacheable =
-          origin === location.origin && /\/[\w.-]*[0-9a-f]{16}\.\w+$/.test(pathname);
+        const cacheable = origin === location.origin && HASHED_FILE.test(pathname);
         if (!cacheable || seen.has(url)) {
           return false;
         }
@@ -77,6 +74,50 @@ async function cacheAsset(cachePromise: Promise<Cache>, url: string): Promise<vo
     }
   } catch (err: unknown) {
     log.warn("Caching loaded asset failed", url, err);
+  }
+}
+
+/** Parallel downloads while filling the cache, so the app's own requests aren't starved */
+const CACHE_ALL_CONCURRENCY = 4;
+
+/**
+ * The installed app works offline, so download every file of this build into the runtime cache
+ * (a browser tab only caches what it loads). Drops cached files of other builds, which this version
+ * never requests.
+ */
+async function cacheAllAssets(): Promise<void> {
+  try {
+    // build files sit next to sw.js; the page itself may be at a deep link
+    const { scope } = await navigator.serviceWorker.ready;
+    const response = await fetch(new URL(ASSET_LIST_FILE, scope), { cache: "no-store" });
+    const assetList = (await response.json()) as AssetList;
+    if (assetList.version !== LICHTBLICK_SUITE_VERSION) {
+      // A newer build is deployed; it fills the cache once the update activates
+      return;
+    }
+    const cache = await caches.open(RUNTIME_CACHE_NAME);
+    const wanted = new Set(assetList.files.map((file) => new URL(file, scope).href));
+    const cached = new Set<string>();
+    for (const request of await cache.keys()) {
+      if (wanted.has(request.url)) {
+        cached.add(request.url);
+      } else {
+        await cache.delete(request);
+      }
+    }
+    const missing = [...wanted].filter((url) => !cached.has(url));
+    log.info(`Caching ${missing.length} of ${wanted.size} build files for offline use`);
+    const cachePromise = Promise.resolve(cache);
+    await Promise.all(
+      Array.from({ length: CACHE_ALL_CONCURRENCY }, async () => {
+        let url: string | undefined;
+        while ((url = missing.pop()) != undefined) {
+          await cacheAsset(cachePromise, url);
+        }
+      }),
+    );
+  } catch (err: unknown) {
+    log.warn("Caching all build files failed", err);
   }
 }
 
@@ -115,6 +156,9 @@ export async function main(getParams: () => Promise<MainParams> = async () => ({
     });
     if (!navigator.serviceWorker.controller) {
       cacheLoadedAssets();
+    }
+    if (matchMedia("(display-mode: standalone), (display-mode: window-controls-overlay)").matches) {
+      void cacheAllAssets();
     }
     // Keep the offline cache from being evicted under storage pressure
     void navigator.storage.persist();

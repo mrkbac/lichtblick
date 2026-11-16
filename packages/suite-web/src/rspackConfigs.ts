@@ -13,6 +13,7 @@ import {
   rspack,
 } from "@rspack/core";
 import { ReactRefreshRspackPlugin } from "@rspack/plugin-react-refresh";
+import { writeFile } from "fs/promises";
 import path from "path";
 import { generateSW } from "workbox-build";
 
@@ -23,6 +24,8 @@ import {
   type ProductInfo,
 } from "@lichtblick/suite-base/rspack.ts";
 import * as palette from "@lichtblick/theme/src/palette.ts";
+
+import { ASSET_LIST_FILE, type AssetList, HASHED_FILE, RUNTIME_CACHE_NAME } from "./assetCache.ts";
 
 /**
  * Upper bound for the JS the web app loads before its first render: the entry chunk plus the
@@ -78,9 +81,6 @@ const startupBudgetPlugin: RspackPluginInstance = {
     });
   },
 };
-
-/** Cache for hashed build files. Must match the cache name in index.tsx. */
-const RUNTIME_CACHE_NAME = "lichtblick-assets";
 
 export type ConfigParams = {
   /** Directory to find `entrypoint` and `tsconfig.json`. */
@@ -143,14 +143,26 @@ export const mainConfig =
       plugins.push(startupBudgetPlugin);
       // Precache only what the app needs to start (shell and startup chunks, ~4 MB), so an
       // installed update starts offline too. Every other build file is hashed and cached on first
-      // use (CacheFirst), so a first visit or a deploy no longer downloads the whole build
-      // (~35 MB). index.tsx copies the chunks a first, uncontrolled visit loaded into the same
-      // cache. Panels never opened online with this version are not available offline.
+      // use (CacheFirst), so a browser tab never downloads the whole build (~25 MB). index.tsx
+      // copies the chunks a first, uncontrolled visit loaded into the same cache, and the
+      // installed app downloads the rest of ASSET_LIST_FILE in the background, so every panel
+      // works offline there.
       // The new version activates once all app windows are closed, or when the user clicks the
       // update button in the app bar (see useServiceWorkerUpdate.ts).
       plugins.push({
         apply: (compiler) => {
           compiler.hooks.afterEmit.tapPromise("GenerateSW", async (compilation) => {
+            const assetList: AssetList = {
+              version: params.version,
+              files: compilation
+                .getAssets()
+                .map((asset) => asset.name)
+                .filter((name) => HASHED_FILE.test(`/${name}`)),
+            };
+            await writeFile(
+              path.join(params.outputPath, ASSET_LIST_FILE),
+              JSON.stringify(assetList),
+            );
             await generateSW({
               globDirectory: params.outputPath,
               globPatterns: [
@@ -175,7 +187,8 @@ export const mainConfig =
               cleanupOutdatedCaches: true,
               runtimeCaching: [
                 {
-                  // content-hashed file names never change content, so the cached copy is final
+                  // content-hashed file names never change content, so the cached copy is final.
+                  // HASHED_FILE inlined: workbox copies this function's source into sw.js.
                   urlPattern: ({ url, sameOrigin }) =>
                     sameOrigin && /\/[\w.-]*[0-9a-f]{16}\.\w+$/.test(url.pathname),
                   handler: "CacheFirst",
