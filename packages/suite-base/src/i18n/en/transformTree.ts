@@ -73,10 +73,11 @@ export const transformTree = {
     extrinsic: "Extrinsic xyz (ROS, fixed axes)",
     intrinsic: "Intrinsic XYZ (own axes)",
     topics: "Topics",
-    static: "Static",
+    static: "Treat as static (latched)",
     staticHelp:
-      "Static transforms are loaded from the whole recording and never reported as stale.",
+      "For topics like tf_static that publish fixed transforms once: they are loaded from the whole recording, so they survive seeks, and are never reported as stale. On by default for topics whose name ends in tf_static.",
     topicUnavailable: "Topic is not in the current data source",
+    removeTopic: "Remove from list",
   },
   warnings: {
     multipleParents: "Published with more than one parent: {{parents}}",

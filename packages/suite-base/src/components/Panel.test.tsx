@@ -208,7 +208,7 @@ describe("Panel", () => {
     expect(renderFn.mock.calls.length).toEqual(2);
   });
 
-  it("maximizes its dockview group for fullscreen inside a dock layout", () => {
+  it("maximizes its dockview group and its parent Tab panel for fullscreen inside a dock layout", () => {
     function FullscreenComponent(_props: DummyProps): React.JSX.Element {
       const ctx = useContext(PanelContext);
       return (
@@ -244,11 +244,18 @@ describe("Panel", () => {
       React.ContextType<typeof DockPanelContext>
     >;
 
+    // A panel inside a Tab panel only maximizes within the tab's own dock
+    const parent = { enterFullscreen: vi.fn(), exitFullscreen: vi.fn() };
+
     render(
       <PanelSetup>
-        <DockPanelContext.Provider value={dock}>
-          <FullscreenPanel childId="FullscreenDummy!1" />
-        </DockPanelContext.Provider>
+        <PanelContext.Provider
+          value={parent as unknown as NonNullable<React.ContextType<typeof PanelContext>>}
+        >
+          <DockPanelContext.Provider value={dock}>
+            <FullscreenPanel childId="FullscreenDummy!1" />
+          </DockPanelContext.Provider>
+        </PanelContext.Provider>
       </PanelSetup>,
     );
 
@@ -256,10 +263,12 @@ describe("Panel", () => {
       fireEvent.click(screen.getByText("enter"));
     });
     expect(api.maximize).toHaveBeenCalled();
+    expect(parent.enterFullscreen).toHaveBeenCalled();
     act(() => {
       fireEvent.click(screen.getByText("exit"));
     });
     expect(api.exitMaximized).toHaveBeenCalled();
+    expect(parent.exitFullscreen).toHaveBeenCalled();
     expect(screen.getByText("enter")).toBeInTheDocument();
   });
 

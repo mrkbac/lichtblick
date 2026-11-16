@@ -89,10 +89,10 @@ function equalSizes(count: number): number[] {
 
 function sizesOf(split: LayoutSplit): number[] {
   const { sizes, children } = split;
-  if (sizes?.length !== children.length || sizes.some((size) => !(size > 0))) {
+  const total = sizes?.reduce((a, b) => a + b, 0) ?? 0;
+  if (sizes?.length !== children.length || sizes.some((size) => !(size >= 0)) || !(total > 0)) {
     return equalSizes(children.length);
   }
-  const total = sizes.reduce((a, b) => a + b, 0);
   return sizes.map((size) => (size / total) * 100);
 }
 
@@ -206,21 +206,24 @@ function wrap(
   existing: LayoutNode,
   added: LayoutNode,
   position: Exclude<LayoutDropPosition, "center">,
+  addedSize: number,
 ): LayoutSplit {
   const direction = position === "left" || position === "right" ? "row" : "column";
   const before = position === "left" || position === "top";
-  return { direction, children: before ? [added, existing] : [existing, added], sizes: [50, 50] };
+  const sizes = before ? [addedSize, 100 - addedSize] : [100 - addedSize, addedSize];
+  return { direction, children: before ? [added, existing] : [existing, added], sizes };
 }
 
 /**
  * Insert `panelId` next to the group holding `targetPanelId` ("center" adds it as a tab), or along
- * an edge of the whole layout when there is no target.
+ * an edge of the whole layout when there is no target. `addedSize` is the new split's share (%).
  */
 export function insertPanel(
   node: LayoutNode | undefined,
   panelId: string,
   position: LayoutDropPosition,
   targetPanelId?: string,
+  addedSize = 50,
 ): LayoutNode {
   const added: LayoutGroup = { panels: [panelId] };
   const rest = removePanels(node, [panelId]);
@@ -232,9 +235,9 @@ export function insertPanel(
     if (position === "center") {
       return isLayoutGroup(rest)
         ? { panels: [...rest.panels, panelId], active: panelId }
-        : normalizeLayout(wrap(rest, added, "right"))!;
+        : normalizeLayout(wrap(rest, added, "right", addedSize))!;
     }
-    return normalizeLayout(wrap(rest, added, position))!;
+    return normalizeLayout(wrap(rest, added, position, addedSize))!;
   }
   return normalizeLayout(
     mapGroups(rest, (group) => {
@@ -244,7 +247,7 @@ export function insertPanel(
       if (position === "center") {
         return { panels: [...group.panels, panelId], active: panelId };
       }
-      return wrap(group, added, position);
+      return wrap(group, added, position, addedSize);
     }),
   )!;
 }

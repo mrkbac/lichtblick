@@ -232,6 +232,9 @@ function addPanel(
     id,
     position,
     target != undefined ? targetPanelId : undefined,
+    // A monitor window's group is hidden once its window opens; dockview would hand a share of
+    // the layout back to the last sibling only, so it takes none in the first place.
+    withConfig.configById[id]?.isWindow === true ? 0 : undefined,
   );
   return finish(setLayoutTree(removed, location, tree));
 }
