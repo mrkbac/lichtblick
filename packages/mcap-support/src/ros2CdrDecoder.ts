@@ -55,12 +55,8 @@ export function createRos2CdrDeserializer(
     if (decode === false) {
       return fallback(data);
     }
-    // Strings are read from the message's own bytes; an input Uint8Array is used as is.
-    const bytes =
-      data instanceof Uint8Array
-        ? data
-        : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-    return decode(view, bytes, RUNTIME);
+    // Strings are read from the message's own bytes.
+    return decode(view, asBytes(data), RUNTIME);
   };
 }
 
@@ -74,7 +70,14 @@ const VARIANT_OF_KIND = Uint8Array.from(
   (_, kind) => (LITTLE_ENDIAN_KINDS.includes(kind) ? 1 : 0) | (kind > 3 ? 2 : 0),
 );
 
-const HOST_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+export const HOST_LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+
+/** The bytes of `data`: a Uint8Array as is, else a Uint8Array view on the same memory. */
+export function asBytes(data: ArrayBufferView): Uint8Array {
+  return data instanceof Uint8Array
+    ? data
+    : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+}
 
 /** A message with no data fields: a CDR header and one placeholder byte, like CdrReader reads. */
 function readEmptyStruct(data: ArrayBufferView): Record<string, never> {

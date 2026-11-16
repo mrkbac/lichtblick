@@ -16,7 +16,6 @@
 
 import { subtract as subtractTimes, toSec } from "@foxglove/rostime";
 import { Typography } from "@mui/material";
-import * as _ from "lodash-es";
 import React, { ReactElement } from "react";
 
 import { Immutable } from "@lichtblick/suite";
@@ -52,7 +51,10 @@ function PlaybackPerformanceItem(props: PlaybackPerformanceItemProps): ReactElem
           {props.label}
         </Typography>
         <Typography variant="body2" color="textSecondary">
-          {(_.sumBy(props.points, "value") / props.points.length).toFixed(props.decimalPlaces)} avg
+          {(
+            props.points.reduce((sum, point) => sum + point.value, 0) / props.points.length
+          ).toFixed(props.decimalPlaces)}{" "}
+          avg
         </Typography>
       </Stack>
     </Stack>

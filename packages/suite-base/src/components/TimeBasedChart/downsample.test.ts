@@ -53,7 +53,7 @@ describe("downsampleTimeseries", () => {
 
     const numPoints = 10_000;
     const deltaX = realBounds.bounds.x.max / numPoints;
-    const dataset = _.range(0, numPoints).map((v) => {
+    const dataset = Array.from({ length: numPoints }, (_unused, v) => {
       const x = v * deltaX;
       return {
         x,

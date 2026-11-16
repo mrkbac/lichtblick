@@ -5,7 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import * as _ from "lodash-es";
 import { useEffect, useState } from "react";
 import { userEvent } from "storybook/test";
 import { StoryContext, StoryObj } from "storybook-react-rsbuild";
@@ -32,10 +31,11 @@ const EMPTY_MESSAGE: NavSatFixMsg = {
   position_covariance: [1, 0, 0, 0, 1, 0, 0, 0, 1],
   position_covariance_type: NavSatFixPositionCovarianceType.COVARIANCE_TYPE_UNKNOWN,
 };
-const OFFSET_MESSAGE = _.tap(structuredClone(EMPTY_MESSAGE), (message) => {
-  message.latitude += 0.1;
-  message.longitude += 0.1;
-});
+const OFFSET_MESSAGE = {
+  ...EMPTY_MESSAGE,
+  latitude: EMPTY_MESSAGE.latitude + 0.1,
+  longitude: EMPTY_MESSAGE.longitude + 0.1,
+};
 
 function makeGeoJsonMessage({
   center,

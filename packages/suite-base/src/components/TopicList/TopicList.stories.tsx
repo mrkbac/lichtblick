@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { ros2humble } from "@foxglove/rosmsg-msgs-common";
-import * as _ from "lodash-es";
 import { fireEvent, userEvent, waitFor, within } from "storybook/test";
 import { Meta, StoryObj } from "storybook-react-rsbuild";
 
@@ -101,8 +100,9 @@ export const ContextMenuMultipleTopics: Story = {
   play: async ({ canvasElement }) => {
     const topic1s = await findAllByTextContent(canvasElement, "/topic_1", 2);
     const topic2s = await findAllByTextContent(canvasElement, "/topic_2", 2);
-    for (const [topic1, topic2] of _.zip(topic1s, topic2s)) {
-      if (!topic1 || !topic2) {
+    for (const [i, topic1] of topic1s.entries()) {
+      const topic2 = topic2s[i];
+      if (!topic2) {
         continue;
       }
       await fireEvent.click(topic1);
