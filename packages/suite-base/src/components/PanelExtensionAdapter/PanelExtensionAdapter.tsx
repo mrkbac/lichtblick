@@ -18,7 +18,7 @@ import {
   useState,
 } from "react";
 
-import { useLatest, useSynchronousMountedState, useValueChangedDebugLog } from "@lichtblick/hooks";
+import { useLatest, useMountedState, useValueChangedDebugLog } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import {
   AppSettingValue,
@@ -183,7 +183,7 @@ function PanelExtensionAdapter(
   const { openSiblingPanel, setMessagePathDropConfig, type: panelName } = usePanelContext();
 
   const [panelId] = useState(() => randomUUID());
-  const isMounted = useSynchronousMountedState();
+  const isMounted = useMountedState();
   const [error, setError] = useState<Error | undefined>();
   const [forceConversion, setForceConversion] = useState(new Set<string>());
   const [watchedFields, setWatchedFields] = useState(new Set<keyof RenderState>());
