@@ -1,175 +1,73 @@
 <h1 align="center">Lichtblick</h1>
 
-<div align="center">
-  <a href="https://github.com/lichtblick-suite/lichtblick/stargazers"><img src="https://img.shields.io/github/stars/lichtblick-suite/lichtblick" alt="Stars Badge"/></a>
-  <a href="https://github.com/lichtblick-suite/lichtblick/network/members"><img src="https://img.shields.io/github/forks/lichtblick-suite/lichtblick" alt="Forks Badge"/></a>
-  <a href="https://github.com/lichtblick-suite/lichtblick/pulls"><img src="https://img.shields.io/github/issues-pr/lichtblick-suite/lichtblick" alt="Pull Requests Badge"/></a>
-  <a href="https://github.com/lichtblick-suite/lichtblick/issues"><img src="https://img.shields.io/github/issues/lichtblick-suite/lichtblick" alt="Issues Badge"/></a>
-  <a href="https://github.com/lichtblick-suite/lichtblick/issues"><img src="https://img.shields.io/github/package-json/v/lichtblick-suite/lichtblick" alt="Versions Badge"/></a>
-  <a href="https://github.com/lichtblick-suite/lichtblick/graphs/contributors"><img alt="GitHub contributors" src="https://img.shields.io/github/contributors/lichtblick-suite/lichtblick?color=2b9348"></a>
-  <a href="https://opensource.org/licenses/MPL-2.0"><img src="https://img.shields.io/badge/License-MPL_2.0-brightgreen.svg" alt="License: MPL 2.0"></a>
-  <a href="https://github.com/lichtblick-suite/lichtblick/actions/workflows/e2e-regression.yml?query=branch%3Adevelop"><img src="https://img.shields.io/github/actions/workflow/status/lichtblick-suite/lichtblick/e2e-regression.yml?branch=develop&label=E2E%20Regression%20(develop)" alt="E2E Regression (develop)"/></a>
-  <a href="https://github.com/lichtblick-suite/lichtblick/actions/workflows/e2e-regression.yml?query=branch%3Amain"><img src="https://img.shields.io/github/actions/workflow/status/lichtblick-suite/lichtblick/e2e-regression.yml?branch=main&label=E2E%20Regression%20(main)" alt="E2E Regression (main)"/></a>
-
-  <br />
-<p  align="center">
-Lichtblick is an integrated visualization and diagnosis tool for robotics, available in your browser or as a desktop app on Linux, Windows, and macOS.
+<p align="center">
+Visualization and diagnosis for robotics, in your browser or as a desktop app on Linux, Windows, and macOS.
 </p>
-  <p align="center">
-    <img alt="Lichtblick screenshot" src="resources/screenshot.png">
-  </p>
-</div>
 
-## :rocket: Try Lichtblick
+<p align="center">
+  <img alt="Lichtblick screenshot" src="resources/screenshot.png">
+</p>
 
-**[Try Lichtblick now in your browser!](https://lichtblick-suite.github.io/lichtblick/)**
+## :rocket: Try it
 
-No installation required - experience the full power of Lichtblick directly in your web browser!
+**[Open Lichtblick in your browser](https://licht.marko.im/)**: no install. **[Open the sample](https://licht.marko.im/?ds=sample-boreas)** (or "Explore sample data" on the start screen) for a camera, LiDAR, radar, GPS and IMU recording with a layout that shows off the panels.
 
-## :book: Documentation
+## :sparkles: Highlights
 
-Looking for guidance on using Lichtblick? Check out our [official documentation here!](https://lichtblick-suite.github.io/docs/)
+<p align="center">
+  <img alt="Lichtblick playing the Boreas showcase recording" src="resources/demo.webp" width="100%">
+</p>
 
-We are actively updating our documentation with new features, stay tunned! :rocket:
+- **Recordings**: MCAP (with ROS 1/2, Protobuf, CDR, JSON, CBOR, MessagePack, Cap'n Proto), ROS bags, ULog, CSV/TSV. Broken or still-growing MCAP files open while their index is rebuilt.
+- **Live data**: Foxglove WebSocket and Rosbridge, with a rolling history you can pause, seek and replay, and every live session recorded to MCAP in the browser.
+- **Compare recordings** side by side, shift them in time, and plot them on one chart.
+- **Panels**: 3D, Image and Camera Grid, Map (MapLibre, 3D buildings), Plot (FFT, histogram, thresholds), Watch, Raw Messages, Log, Topic Health, Transform Tree, Teleop, Audio, Gauge, Notes, and more.
+- **Layouts**: tabs, drag topics and fields onto any panel, undo/redo, starter templates that pick topics by schema.
+- **Command palette** (<kbd>Cmd/Ctrl</kbd>+<kbd>K</kbd>) for panels, topics, message paths and actions.
+- **Extensions**: runs Foxglove-built extensions.
+
+## :hammer_and_wrench: Development
+
+Requires [Node.js](https://nodejs.org/) 26+ and [pnpm](https://pnpm.io/) (`npm install --global pnpm` switches to the version pinned in `package.json`).
+
+```sh
+git clone https://github.com/mrkbac/lichtblick.git
+cd lichtblick
+pnpm install
+```
+
+```sh
+pnpm web:serve        # web app on http://localhost:8080
+
+pnpm desktop:serve    # desktop: dev server, then in a second terminal
+pnpm desktop:start    # launch Electron
+```
+
+On Ubuntu, if the desktop app has GPU issues, run it with `LIBGL_ALWAYS_SOFTWARE=1 pnpm desktop:start`.
+
+### Production builds
+
+```sh
+pnpm web:build:prod                 # output in web/.webpack
+pnpm desktop:build:prod             # then one of:
+pnpm package:linux                  # .deb and .tar.gz in dist/
+pnpm package:darwin
+pnpm package:win
+pnpm clean                          # remove build output
+```
+
+The Linux `.tar.gz` does not install system libraries. Installing Chrome usually brings them; otherwise launch from a terminal and install whatever library it names (typically `libgtk-3-0 libnss3 libasound2 libgbm1 libxtst6`).
 
 ## :satellite: Telemetry
 
-Lichtblick includes an **opt-in, privacy-respecting** [OpenTelemetry](https://opentelemetry.io/)
-integration used to understand how the app is used (e.g. which menu actions or panel types
-people interact with) and to help detect performance regressions.
+Off unless the build sets `OTLP_ENDPOINT`; there is no runtime toggle. When enabled, only a fixed set of named UI events (see [`AppEvent`](packages/suite-base/src/services/IAnalytics.ts)) with anonymous random IDs is sent as OTLP/HTTP logs and traces to `${OTLP_ENDPOINT}/v1/logs` and `/v1/traces`, rate-limited per session. No message data, file contents or personal data.
 
-- **Off by default.** Telemetry is only active if the specific build you're running was
-  compiled with an OTLP collector endpoint (`OTLP_ENDPOINT` at build time). Official public
-  builds do not enable this unless explicitly configured — if no endpoint is compiled in,
-  nothing is ever collected or sent, and there is no runtime toggle to turn it on.
-- **No PII.** Only anonymous, randomly-generated device/session identifiers are attached to
-  events — no user accounts, file contents, message data, or personally identifiable
-  information is ever captured.
-- **Bounded, named events only.** Only a fixed, closed set of named UI interaction events (see
-  [`AppEvent`](packages/suite-base/src/services/IAnalytics.ts)) can be emitted — e.g. layout
-  selection/creation, panel add/remove, app menu clicks — as OpenTelemetry logs and traces.
-  There is no free-form event capture and no keystroke/input logging.
-- **Rate-limited.** A token-bucket rate limiter bounds how much telemetry any single session
-  can emit.
+## :pencil: License
 
-If you're building your own distribution and want to enable it, set `OTLP_ENDPOINT` in your .env file — the app will export OTLP/HTTP logs
-and traces to `${OTLP_ENDPOINT}/v1/logs` and `${OTLP_ENDPOINT}/v1/traces`.
-
-**Dependencies:**
-
-- [Node.js](https://nodejs.org/en/) v16.10+
-
-<hr/>
-
-## :rocket: Getting started
-
-### :whale: From Docker
-
-To run lichtblick via docker you can run:
-
-```sh
-docker run --rm -p 8080:8080 ghcr.io/lichtblick-suite/lichtblick:latest
-```
-
-And open in your browser: http://localhost:8080/
-
-### 📑 From source code
-
-Clone the repository:
-
-```sh
-$ git clone https://github.com/lichtblick-suite/lichtblick.git
-```
-
-Install pnpm (it switches to the version pinned in `package.json`):
-
-```sh
-$ npm install --global pnpm
-```
-
-Install packages from `package.json`:
-
-```sh
-$ pnpm install
-```
-
-Launch the development environment:
-
-```sh
-# To launch the desktop app (run scripts in different terminals):
-$ pnpm desktop:serve        # start the Rspack dev server
-$ pnpm desktop:start        # launch electron (make sure the desktop:serve finished to build)
-
-# To launch the web app:
-$ pnpm run web:serve        # it will be avaiable in http://localhost:8080
-```
-
-:warning: Ubuntu users: the application may present some issues using GPU. In order to bypass the GPU and process it using directly the CPU (software), please run lichtblick using the variable `LIBGL_ALWAYS_SOFTWARE` set to `1`:
-
-```sh
-$ LIBGL_ALWAYS_SOFTWARE=1 pnpm desktop:start
-```
-
-## :hammer_and_wrench: Building Lichtblick
-
-Build the application for production using these commands:
-
-```sh
-# To build the desktop apps:
-$ pnpm run desktop:build:prod   # compile necessary files
-
-- pnpm run package:win         # Package for windows
-- pnpm run package:darwin      # Package for macOS
-- pnpm run package:linux       # Package for linux
-
-# To build the web app:
-$ pnpm run web:build:prod
-
-# It is possible to clean up build files using the following command:
-$ pnpm run clean
-```
-
-- The desktop builds are located in the `dist` directory, and the web builds are found in the `web/.webpack` directory.
-
-## :warning: Note on Linux dependencies (.tar.gz only)
-
-When installing the **`.tar.gz` package**, unlike the `.deb`, **system dependencies are not installed automatically**.
-In many cases, if you already have **Google Chrome** or another Chromium-based application installed, Lichtblick will run fine since these applications bring most of the required libraries.
-
-However, if you see errors about missing libraries when launching Lichtblick, you will need to install them manually.
-The most common missing dependencies are:
-
-- `libgtk-3-0`
-- `libatk1.0-0`
-- `libatk-bridge2.0-0`
-- `libatspi2.0-0`
-- `libnss3`
-- `libnspr4`
-- `libasound2`
-- `libcups2`
-- `libnotify4`
-- `libxtst6`
-- `xdg-utils`
-- `libdrm2`
-- `libgbm1`
-- `libxcb-dri3-0`
-
-Example (Debian/Ubuntu):
-
-```bash
-sudo apt-get update && sudo apt-get install libgtk-3-0 libatk1.0-0 libatk-bridge2.0-0 libatspi2.0-0 libnss3 libnspr4 libasound2 libcups2 libnotify4 libxtst6 xdg-utils libdrm2 libgbm1 libxcb-dri3-0
-```
-
-👉 **Recommendation**: if using the `.tar.gz`, always check the error messages in the terminal. They will indicate which library is missing so you can install it manually.
-
-## :pencil: License (Open Source)
-
-Lichtblick follows an open core licensing model. Most functionality is available in this repository, and can be reproduced or modified per the terms of the [Mozilla Public License v2.0](/LICENSE).
-
-## :handshake: Contributing
-
-Contributions are welcome! Lichtblick is primarily built in TypeScript and ReactJS. All potential contributors must agree to the Contributor License Agreement outlined in [CONTRIBUTING.md](CONTRIBUTING.md).
+[Mozilla Public License v2.0](/LICENSE). See [CONTRIBUTING.md](CONTRIBUTING.md) to contribute.
 
 ## :star: Credits
 
-Lichtblick originally began as a fork of [Foxglove Studio](https://github.com/foxglove/studio), an open-source project developed by [Foxglove](https://foxglove.dev/).
+This is a fork of **[Lichtblick](https://github.com/lichtblick-suite/lichtblick)** by BMW AG and the Lichtblick contributors, licensed under MPL 2.0. Most of this code comes from upstream Lichtblick; thank you to everyone who built and maintains it. Lichtblick itself began as a fork of [Foxglove Studio](https://github.com/foxglove/studio) by [Foxglove](https://foxglove.dev/).
+
+The sample recording and the screenshot's recording are adapted from the [Boreas dataset](https://www.boreas.utias.utoronto.ca/) (CC BY 4.0, Keenan Burnett et al., University of Toronto).
