@@ -27,5 +27,7 @@
 # The only unhashed scripts: the service worker and the script it imports must pick up new deploys
 /sw.js
     ! Cache-Control
+    Cache-Control: no-cache
 /view-link-redirect.js
     ! Cache-Control
+    Cache-Control: no-cache
