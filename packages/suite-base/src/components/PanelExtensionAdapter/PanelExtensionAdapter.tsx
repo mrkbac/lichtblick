@@ -11,6 +11,7 @@ import { produce } from "immer";
 import {
   CSSProperties,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -31,6 +32,7 @@ import {
   Time,
   VariableValue,
 } from "@lichtblick/suite";
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -77,6 +79,7 @@ import { assertNever } from "@lichtblick/suite-base/util/assertNever";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { PanelConfigVersionError } from "./PanelConfigVersionError";
+import { HiddenFrames } from "./hiddenFrames";
 import { ExtensionRenderState, RenderStateConfig, initRenderStateBuilder } from "./renderState";
 import {
   BuiltinPanelExtensionContext,
@@ -302,6 +305,9 @@ function PanelExtensionAdapter(
   // Keep the last message of a newly subscribed topic until a rendered
   // frame has delivered it (see UndeliveredMessages).
   const [undelivered] = useState(() => new UndeliveredMessages());
+  // A hidden panel keeps every message but renders them in batches (see HiddenFrames).
+  const visible = useContext(PanelVisibleContext);
+  const [hiddenFrames] = useState(() => new HiddenFrames());
   // Pending frames belong to the seek that produced them.
   const lastSeekTimeRef = useRef(playerState.activeData?.lastSeekTime);
   const lastCurrentTimeRef = useRef(playerState.activeData?.currentTime);
@@ -331,10 +337,12 @@ function PanelExtensionAdapter(
       compare(currentTime, lastCurrentTimeRef.current) !== 0;
     if (lastSeekTime !== lastSeekTimeRef.current || seekAcknowledged) {
       undelivered.clearPending();
+      hiddenFrames.clear();
     }
     lastSeekTimeRef.current = lastSeekTime;
     lastCurrentTimeRef.current = currentTime;
     undelivered.hold(messageEvents);
+    hiddenFrames.add(messageEvents, { visible });
 
     /**
      * We need to check that the panel has been initialized because the renderFn function is being
@@ -347,10 +355,16 @@ function PanelExtensionAdapter(
       return;
     }
 
+    const now = performance.now();
+    if (hiddenFrames.shouldWait({ visible, now })) {
+      return;
+    }
+    const pipelineFrame = hiddenFrames.take(messageEvents, now);
+
     const subscribedTopics = new Set(localSubscriptions.map((sub) => sub.topic));
     const currentFrame = deliverHeld
-      ? undelivered.frameFor(messageEvents, subscribedTopics)
-      : messageEvents;
+      ? undelivered.frameFor(pipelineFrame, subscribedTopics)
+      : pipelineFrame;
 
     const renderState = buildRenderState({
       appSettings,
@@ -417,6 +431,7 @@ function PanelExtensionAdapter(
     emitMessageConverterAlert,
     globalVariables,
     heldRetry,
+    hiddenFrames,
     hoverValue,
     localSubscriptions,
     messageConverters,
@@ -430,6 +445,7 @@ function PanelExtensionAdapter(
     sortedTopics,
     sortedServices,
     undelivered,
+    visible,
     watchedFields,
     initialState,
     forceConversion,

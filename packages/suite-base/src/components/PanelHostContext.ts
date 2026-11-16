@@ -14,6 +14,8 @@ export type PanelSlot = {
   /** The panel the showing layout is in (a Tab panel), if any. */
   parentPanel: ContextType<typeof PanelContext>;
   parentWindow: ContextType<typeof PanelWindowContext>;
+  /** Whether the layout showing the panel can be seen (see PanelVisibleContext). */
+  layoutVisible: boolean;
 };
 
 /**
