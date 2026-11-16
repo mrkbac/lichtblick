@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: MPL-2.0
 
+import { WGS84_ELLIPSOID } from "3d-tiles-renderer";
+import * as THREE from "three";
+
 import { ObjectPool } from "@lichtblick/den/collection";
 
 import type { Renderer } from "../Renderer";
 import { Transform, TransformTree } from "../transforms";
-import { LayerSettingsMap, Maps } from "./Maps";
+import { LayerSettingsMap, Maps, groundHeight } from "./Maps";
 
 vi.mock("../ModelCache", () => ({ createBundledDracoLoader: vi.fn() }));
 
@@ -114,5 +117,47 @@ describe("Maps location frame", () => {
     expect(fields).toHaveProperty("locationFrame");
     expect(fields).toHaveProperty("zOffset");
     maps.dispose();
+  });
+});
+
+describe("Maps ground height", () => {
+  it("drops a NaN fix altitude", () => {
+    const { maps, locate } = setup("base_link");
+    maps.getSubscriptions()[0]!.subscription.handler({
+      topic: "/gps",
+      schemaName: "foxglove.LocationFix",
+      receiveTime: { sec: 1532402927, nsec: 647951000 },
+      message: { latitude: 1.3, longitude: 103.8, altitude: NaN },
+      sizeInBytes: 18,
+    });
+    maps.startFrame(1532402927647951000n, "map", "map");
+    expect(locate.mock.lastCall?.[0]).toEqual(expect.objectContaining({ altitude: undefined }));
+    maps.dispose();
+  });
+
+  it("measures the tiles' ground height under the fix", () => {
+    // A tile surface 123 m above the ellipsoid, placed somewhere in the scene.
+    const lat = 48.1;
+    const lon = 11.5;
+    const surface = new THREE.Mesh(
+      new THREE.PlaneGeometry(1000, 1000),
+      new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }),
+    );
+    surface.matrixAutoUpdate = false;
+    WGS84_ELLIPSOID.getEastNorthUpFrame(
+      THREE.MathUtils.degToRad(lat),
+      THREE.MathUtils.degToRad(lon),
+      123,
+      surface.matrix,
+    );
+    const tiles = new THREE.Group();
+    tiles.add(surface);
+    const placed = new THREE.Group();
+    placed.position.set(5, -7, 300);
+    placed.rotation.z = 0.4;
+    placed.add(tiles);
+    placed.updateMatrixWorld(true);
+    expect(groundHeight(tiles, WGS84_ELLIPSOID, lat, lon)).toBeCloseTo(123, 3);
+    expect(groundHeight(tiles, WGS84_ELLIPSOID, -lat, lon)).toBeUndefined();
   });
 });
