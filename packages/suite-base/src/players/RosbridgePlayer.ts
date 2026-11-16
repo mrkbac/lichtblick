@@ -105,6 +105,9 @@ export default class RosbridgePlayer implements Player {
   #closed: boolean = false; // Whether the player has been completely closed using close().
   #providerTopics?: TopicWithSchemaName[]; // Topics as published by the WebSocket.
   #providerTopicsStats = new Map<string, TopicStats>(); // topic names to topic statistics.
+  // Topic stats handed out last; a new Map only when a count changed, so consumers compare by reference.
+  #emittedTopicsStats = new Map<string, TopicStats>();
+  #topicsStatsChanged = false;
   #providerDatatypes?: RosDatatypes; // Datatypes as published by the WebSocket.
   #publishedTopics = new Map<string, Set<string>>(); // A map of topic names to the set of publisher IDs publishing each topic.
   #subscribedTopics = new Map<string, Set<string>>(); // A map of topic names to the set of subscriber IDs subscribed to each topic.
@@ -331,6 +334,7 @@ export default class RosbridgePlayer implements Player {
       const topicsSet = new Set<string>(topics.map((topic) => topic.name));
       for (const topic of this.#providerTopicsStats.keys()) {
         if (!topicsSet.has(topic)) {
+          this.#topicsStatsChanged = true;
           this.#providerTopicsStats.delete(topic);
         }
       }
@@ -364,8 +368,17 @@ export default class RosbridgePlayer implements Player {
     } finally {
       this.#emitState();
 
-      // Regardless of what happens, request topics again in a little bit.
-      this.#requestTopicsTimeout = setTimeout(() => void this.#requestTopics(), 3000);
+      // Regardless of what happens, request topics again in a little bit. A hidden window polls
+      // again as soon as it is shown, instead of every 3 s in the background.
+      this.#requestTopicsTimeout = setTimeout(() => {
+        if (document.hidden) {
+          document.addEventListener("visibilitychange", () => void this.#requestTopics(), {
+            once: true,
+          });
+        } else {
+          void this.#requestTopics();
+        }
+      }, 3000);
     }
   }
 
@@ -407,6 +420,10 @@ export default class RosbridgePlayer implements Player {
 
     const currentTime = this.#getCurrentTime();
     const messages = this.#parsedMessages.drain();
+    if (this.#topicsStatsChanged) {
+      this.#topicsStatsChanged = false;
+      this.#emittedTopicsStats = new Map(this.#providerTopicsStats);
+    }
     return this.#listener({
       name: this.#url,
       presence: this.#presence,
@@ -432,8 +449,7 @@ export default class RosbridgePlayer implements Player {
         // that we don't accidentally hit falsy checks.
         lastSeekTime: 1,
         topics: providerTopics,
-        // Always copy topic stats since message counts and timestamps are being updated
-        topicStats: new Map(this.#providerTopicsStats),
+        topicStats: this.#emittedTopicsStats,
         datatypes: providerDatatypes,
         publishedTopics: this.#publishedTopics,
         subscribedTopics: this.#subscribedTopics,
@@ -542,6 +558,8 @@ export default class RosbridgePlayer implements Player {
               this.#providerTopicsStats.set(topicName, stats);
             }
             stats.numMessages++;
+            this.#topicsStatsChanged = true;
+            this.#topicsStatsChanged = true;
           }
         } catch (error) {
           this.#alerts.addAlert(alertId, {
@@ -563,6 +581,7 @@ export default class RosbridgePlayer implements Player {
         this.#topicSubscriptions.delete(topicName);
 
         // Reset the message count for this topic
+        this.#topicsStatsChanged = true;
         this.#providerTopicsStats.delete(topicName);
       }
     }

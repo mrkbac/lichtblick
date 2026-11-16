@@ -73,6 +73,9 @@ export default class Ros1Player implements Player {
   #closed: boolean = false; // Whether the player has been completely closed using close().
   #providerTopics?: TopicWithSchemaName[]; // Topics as advertised by rosmaster.
   #providerTopicsStats = new Map<string, TopicStats>(); // topic names to topic statistics.
+  // Topic stats handed out last; a new Map only when a count changed, so consumers compare by reference.
+  #emittedTopicsStats = new Map<string, TopicStats>();
+  #topicsStatsChanged = false;
   #providerDatatypes: RosDatatypes = new Map(); // All ROS message definitions received from subscriptions and set by publishers.
   #publishedTopics = new Map<string, Set<string>>(); // A map of topic names to the set of publisher IDs publishing each topic.
   #subscribedTopics = new Map<string, Set<string>>(); // A map of topic names to the set of subscriber IDs subscribed to each topic.
@@ -229,6 +232,7 @@ export default class Ros1Player implements Player {
         const topicsSet = new Set<string>(topics.map((topic) => topic.name));
         for (const topic of this.#providerTopicsStats.keys()) {
           if (!topicsSet.has(topic)) {
+            this.#topicsStatsChanged = true;
             this.#providerTopicsStats.delete(topic);
           }
         }
@@ -317,6 +321,10 @@ export default class Ros1Player implements Player {
 
     const currentTime = this.#getCurrentTime();
     const messages = this.#parsedMessages.drain();
+    if (this.#topicsStatsChanged) {
+      this.#topicsStatsChanged = false;
+      this.#emittedTopicsStats = new Map(this.#providerTopicsStats);
+    }
     return this.#listener({
       name: this.#url,
       presence: this.#presence,
@@ -342,8 +350,7 @@ export default class Ros1Player implements Player {
         // that we don't accidentally hit falsy checks.
         lastSeekTime: 1,
         topics: providerTopics,
-        // Always copy topic stats since message counts and timestamps are being updated
-        topicStats: new Map(this.#providerTopicsStats),
+        topicStats: this.#emittedTopicsStats,
         datatypes: this.#providerDatatypes,
         publishedTopics: this.#publishedTopics,
         subscribedTopics: this.#subscribedTopics,
@@ -423,6 +430,7 @@ export default class Ros1Player implements Player {
         this.#rosNode.unsubscribe(topicName);
 
         // Reset the message count for this topic
+        this.#topicsStatsChanged = true;
         this.#providerTopicsStats.delete(topicName);
       }
     }
@@ -465,6 +473,7 @@ export default class Ros1Player implements Player {
         this.#providerTopicsStats.set(topic, stats);
       }
       stats.numMessages++;
+      this.#topicsStatsChanged = true;
       stats.firstMessageTime ??= receiveTime;
       if (stats.lastMessageTime == undefined) {
         stats.lastMessageTime = receiveTime;
