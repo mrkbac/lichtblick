@@ -109,7 +109,7 @@ describe("RemoteFileReadable", () => {
       const result = await reader.read(BigInt(100), BigInt(50));
 
       // Then it should call CachedFilelike.read with Number values
-      expect(mockRead).toHaveBeenCalledWith(100, 50);
+      expect(mockRead).toHaveBeenCalledWith(100, 50, { background: false });
       expect(result).toEqual(new Uint8Array([1, 2, 3]));
     });
 
