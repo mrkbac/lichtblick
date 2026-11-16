@@ -69,11 +69,13 @@ export class ChunkMessageIndex {
       throw new Error(`${view.byteLength - pos} bytes remaining in message index section`);
     }
 
-    // Pass 2: copy the entries out in file order
+    // Pass 2: copy the entries out in file order, noting whether that order is sorted (one
+    // channel, or channels that don't overlap in time)
     const logTimes = new BigUint64Array(total);
     const words = new Uint32Array(logTimes.buffer);
     const offsets = new Float64Array(total);
     const channelIds = new Uint16Array(total);
+    let sorted = true;
     let i = 0;
     for (const { channelId, start, count } of lists) {
       for (let entry = start, end = start + count * 16; entry < end; entry += 16, i++) {
@@ -85,9 +87,12 @@ export class ChunkMessageIndex {
         }
         offsets[i] = offsetHi * 0x100000000 + view.getUint32(entry + 8, true);
         channelIds[i] = channelId;
+        if (sorted && i > 0 && compareEntries(words, offsets, i - 1, i) > 0) {
+          sorted = false;
+        }
       }
     }
-    return ChunkMessageIndex.#sorted(logTimes, offsets, channelIds, chunkIndex);
+    return ChunkMessageIndex.#sorted(logTimes, offsets, channelIds, chunkIndex, sorted);
   }
 
   /**
@@ -95,7 +100,10 @@ export class ChunkMessageIndex {
    * Message records, as the MCAP spec asks readers to do for such chunks.
    */
   public static scan(view: DataView, chunkIndex: ChunkIndex): ChunkMessageIndex {
-    const found: { logTime: bigint; offset: number; channelId: number }[] = [];
+    const logTimes: bigint[] = [];
+    const offsets: number[] = [];
+    const channelIds: number[] = [];
+    let sorted = true;
     let pos = 0;
     while (view.byteLength - pos >= 9) {
       const opcode = view.getUint8(pos);
@@ -111,69 +119,59 @@ export class ChunkMessageIndex {
         if (recordLength < 22n) {
           throw new Error(`Message record at offset ${pos} is too short`);
         }
-        found.push({
-          logTime: view.getBigUint64(start + 6, true),
-          offset: pos,
-          channelId: view.getUint16(start, true),
-        });
+        const logTime = view.getBigUint64(start + 6, true);
+        sorted &&= logTimes.length === 0 || logTimes[logTimes.length - 1]! <= logTime;
+        logTimes.push(logTime);
+        offsets.push(pos);
+        channelIds.push(view.getUint16(start, true));
       }
       pos = start + Number(recordLength);
     }
-    const logTimes = new BigUint64Array(found.length);
-    const offsets = new Float64Array(found.length);
-    const channelIds = new Uint16Array(found.length);
-    for (let i = 0; i < found.length; i++) {
-      logTimes[i] = found[i]!.logTime;
-      offsets[i] = found[i]!.offset;
-      channelIds[i] = found[i]!.channelId;
-    }
-    return ChunkMessageIndex.#sorted(logTimes, offsets, channelIds, chunkIndex);
+    return ChunkMessageIndex.#sorted(
+      BigUint64Array.from(logTimes),
+      Float64Array.from(offsets),
+      Uint16Array.from(channelIds),
+      chunkIndex,
+      sorted,
+    );
   }
 
-  /** Sorts entries by logTime then offset (unless already sorted) and checks the chunk's times */
+  /** Sorts entries by logTime then offset (unless `sorted` already) and checks the chunk's times */
   static #sorted(
     logTimes: BigUint64Array,
     offsets: Float64Array,
     channelIds: Uint16Array,
     chunkIndex: ChunkIndex,
+    sorted: boolean,
   ): ChunkMessageIndex {
     const total = logTimes.length;
     const words = new Uint32Array(logTimes.buffer);
-    // Already sorted for one channel, or channels that don't overlap in time
-    let sorted = true;
-    for (let i = 1; i < total && sorted; i++) {
-      sorted = compareEntries(words, offsets, i - 1, i) <= 0;
+    if (!sorted) {
+      const order = new Uint32Array(total);
+      for (let j = 0; j < total; j++) {
+        order[j] = j;
+      }
+      order.sort((a, b) => compareEntries(words, offsets, a, b));
+      const sortedLogTimes = new BigUint64Array(total);
+      const sortedWords = new Uint32Array(sortedLogTimes.buffer);
+      const sortedOffsets = new Float64Array(total);
+      const sortedChannelIds = new Uint16Array(total);
+      for (let j = 0; j < total; j++) {
+        const from = order[j]!;
+        sortedWords[2 * j] = words[2 * from]!;
+        sortedWords[2 * j + 1] = words[2 * from + 1]!;
+        sortedOffsets[j] = offsets[from]!;
+        sortedChannelIds[j] = channelIds[from]!;
+      }
+      return ChunkMessageIndex.#sorted(
+        sortedLogTimes,
+        sortedOffsets,
+        sortedChannelIds,
+        chunkIndex,
+        true,
+      );
     }
-    if (sorted) {
-      return ChunkMessageIndex.#checked(logTimes, offsets, channelIds, chunkIndex);
-    }
-    const order = new Uint32Array(total);
-    for (let j = 0; j < total; j++) {
-      order[j] = j;
-    }
-    order.sort((a, b) => compareEntries(words, offsets, a, b));
-    const sortedLogTimes = new BigUint64Array(total);
-    const sortedWords = new Uint32Array(sortedLogTimes.buffer);
-    const sortedOffsets = new Float64Array(total);
-    const sortedChannelIds = new Uint16Array(total);
-    for (let j = 0; j < total; j++) {
-      const from = order[j]!;
-      sortedWords[2 * j] = words[2 * from]!;
-      sortedWords[2 * j + 1] = words[2 * from + 1]!;
-      sortedOffsets[j] = offsets[from]!;
-      sortedChannelIds[j] = channelIds[from]!;
-    }
-    return ChunkMessageIndex.#checked(sortedLogTimes, sortedOffsets, sortedChannelIds, chunkIndex);
-  }
 
-  /** Checks that sorted entries lie within the chunk's message times */
-  static #checked(
-    logTimes: BigUint64Array,
-    offsets: Float64Array,
-    channelIds: Uint16Array,
-    chunkIndex: ChunkIndex,
-  ): ChunkMessageIndex {
-    const total = logTimes.length;
     if (total > 0) {
       const first = logTimes[0]!;
       if (first < chunkIndex.messageStartTime) {
@@ -323,7 +321,7 @@ export class ChunkCursor {
    */
   public async loadMessageIndexes<TReadOptions>(
     readable: IReadable<TReadOptions>,
-    loadChunk: () => Promise<DataView>,
+    loadChunk: (chunkIndex: ChunkIndex) => Promise<DataView>,
     readOptions?: TReadOptions,
     cache?: ChunkMessageIndexCache,
   ): Promise<void> {
@@ -332,7 +330,7 @@ export class ChunkCursor {
       const key = this.chunkIndex.chunkStartOffset;
       let index = cache?.getChunkMessageIndex?.(key);
       if (!index) {
-        index = ChunkMessageIndex.scan(await loadChunk(), this.chunkIndex);
+        index = ChunkMessageIndex.scan(await loadChunk(this.chunkIndex), this.chunkIndex);
         cache?.setChunkMessageIndex?.(key, index, key);
       }
       this.#setIndex(index);

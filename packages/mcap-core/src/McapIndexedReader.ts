@@ -572,19 +572,20 @@ export class McapIndexedReader<TReadOptions = unknown> {
     const chunkViewCache = new Map<bigint, DataView>();
     let loadAheadFrom: ChunkIndex | undefined;
     const chunkReader = new McapByteReader(new DataView(new ArrayBuffer(0)));
+    // A chunk without message indexes is loaded to scan it, and kept for its messages. Declared
+    // outside the loop: a closure over the loop's variables would allocate on every message.
+    const loadChunk = async (chunkIndex: ChunkIndex) => {
+      const view = await this.#loadChunkData(chunkIndex, {
+        validateCrcs: validateCrcs ?? true,
+        readOptions,
+      });
+      chunkViewCache.set(chunkIndex.chunkStartOffset, view);
+      return view;
+    };
     for (let cursor; (cursor = chunkCursors.peek()); ) {
       const chunkOffset = cursor.chunkIndex.chunkStartOffset;
       if (!cursor.hasMessageIndexes()) {
         // If we encounter a chunk whose message indexes have not been loaded yet, load them and re-organize the heap.
-        // A chunk without message indexes is loaded here to scan it, and kept for its messages.
-        const loadChunk = async () => {
-          const view = await this.#loadChunkData(cursor.chunkIndex, {
-            validateCrcs: validateCrcs ?? true,
-            readOptions,
-          });
-          chunkViewCache.set(chunkOffset, view);
-          return view;
-        };
         await cursor.loadMessageIndexes(this.#readable, loadChunk, readOptions, this.#chunkCache);
         if (cursor.hasMoreMessages()) {
           chunkCursors.replace(cursor);
