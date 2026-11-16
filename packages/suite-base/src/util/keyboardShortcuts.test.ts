@@ -7,6 +7,7 @@ import {
   formatCombo,
   KeyboardShortcut,
   KeyEventLike,
+  matchesCombo,
   panelShortcutGroups,
   shortcutKeyHandlers,
   ShortcutGroup,
@@ -51,11 +52,22 @@ describe("matching", () => {
     expect(findShortcut(SHORTCUTS, press("ArrowRight", { metaKey: true }))).toBeUndefined();
   });
 
+  it("matches letters regardless of case, and by physical key on non-Latin layouts", () => {
+    const copy = { key: "c", mod: true, alt: false };
+    expect(matchesCombo(press("C", { ctrlKey: true }), copy)).toBe(true);
+    expect(matchesCombo(press("с", { ctrlKey: true, code: "KeyC" }), copy)).toBe(true);
+    expect(matchesCombo(press("c", { ctrlKey: true, altKey: true }), copy)).toBe(false);
+    // AZERTY: the key at the Q position types "a", so it must not trigger a Q shortcut
+    expect(matchesCombo(press("a", { ctrlKey: true, code: "KeyQ" }), { key: "q", mod: true })).toBe(
+      false,
+    );
+  });
+
   it("builds KeyListener handlers that run only bound, matching shortcuts", () => {
     const open = vi.fn();
     const connect = vi.fn(() => false);
     const handlers = shortcutKeyHandlers(SHORTCUTS, { open, connect });
-    expect(Object.keys(handlers)).toEqual(["o"]);
+    expect(Object.keys(handlers)).toEqual(["o", "KeyO"]);
 
     expect(handlers.o!(press("o", { metaKey: true }))).toBe(true);
     expect(open).toHaveBeenCalledTimes(1);
@@ -65,6 +77,9 @@ describe("matching", () => {
     // Unmatched modifiers fall through
     expect(handlers.o!(press("o"))).toBe(false);
     expect(open).toHaveBeenCalledTimes(1);
+    // A Cyrillic layout reaches the handler through event.code
+    expect(handlers.KeyO!(press("щ", { metaKey: true, code: "KeyO" }))).toBe(true);
+    expect(open).toHaveBeenCalledTimes(2);
   });
 });
 
