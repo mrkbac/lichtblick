@@ -77,16 +77,12 @@ export function DirectTopicStatsUpdater({
       const topic = field.dataset.topic;
       const stat = latestStats.current.get(topic);
       if (field.dataset.topicStat === "count") {
-        if (stat) {
-          field.innerText = stat.numMessages.toLocaleString();
-        } else {
-          field.innerText = EM_DASH;
-        }
+        setText(field, stat ? stat.numMessages.toLocaleString() : EM_DASH);
       }
 
       if (field.dataset.topicStat === "frequency") {
         const frequency = latestFrequenciesByTopic.current[topic];
-        field.innerText = frequency != undefined ? `${frequency.toFixed(2)} Hz` : EM_DASH;
+        setText(field, frequency != undefined ? `${frequency.toFixed(2)} Hz` : EM_DASH);
         // A live rate of 0 means the publisher went quiet
         const stale = !latestIsStaticSource.current && frequency === 0;
         field.dataset.stale = String(stale);
@@ -149,4 +145,11 @@ export function DirectTopicStatsUpdater({
   }, [updateStats]);
 
   return <div ref={rootRef} style={{ display: "none" }} />;
+}
+
+/** Writes only a changed text: every write invalidates layout, and most stats don't change per update. */
+function setText(field: HTMLElement, text: string): void {
+  if (field.textContent !== text) {
+    field.textContent = text;
+  }
 }

@@ -186,7 +186,12 @@ function PlotLegendComponent(props: Props): React.JSX.Element {
       return;
     }
     const handler = (values: readonly unknown[]) => {
-      setCurrentValuesBySeriesIndex(values.slice());
+      // Emitted every frame; keep the old array when no value changed, so the legend doesn't re-render.
+      setCurrentValuesBySeriesIndex((prev) =>
+        prev?.length === values.length && values.every((value, i) => Object.is(value, prev[i]))
+          ? prev
+          : values.slice(),
+      );
     };
     coordinator.on("currentValuesChanged", handler);
     return () => {
