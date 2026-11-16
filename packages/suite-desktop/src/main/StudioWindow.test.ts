@@ -55,9 +55,6 @@ vi.mock("../common/webpackDefines", () => ({ LICHTBLICK_PRODUCT_NAME: "Lichtblic
 vi.mock("./StudioAppUpdater", () => ({
   default: { Instance: () => ({ checkNow: vi.fn(), canCheckForUpdates: () => false }) },
 }));
-vi.mock("./telemetry", () => ({
-  getTelemetrySettings: () => ({ crashReportingEnabled: false, telemetryEnabled: false }),
-}));
 vi.mock("./getDevModeIcon", () => ({ default: () => undefined }));
 
 (global as unknown as { MAIN_WINDOW_WEBPACK_ENTRY: string }).MAIN_WINDOW_WEBPACK_ENTRY = "file://";

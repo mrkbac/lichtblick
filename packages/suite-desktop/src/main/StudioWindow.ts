@@ -30,7 +30,6 @@ import { palette } from "@lichtblick/theme";
 import StudioAppUpdater from "./StudioAppUpdater";
 import getDevModeIcon from "./getDevModeIcon";
 import { simulateUserClick } from "./simulateUserClick";
-import { getTelemetrySettings } from "./telemetry";
 import { encodeRendererArg } from "../common/rendererArgs";
 import { LICHTBLICK_PRODUCT_NAME } from "../common/webpackDefines";
 
@@ -64,7 +63,6 @@ function getTitleBarOverlayOptions(): TitleBarOverlayOptions {
 }
 
 function newStudioWindow(deepLinks: string[] = [], reloadMainWindow: () => void): BrowserWindow {
-  const { crashReportingEnabled, telemetryEnabled } = getTelemetrySettings();
   const preloadPath = path.join(app.getAppPath(), "main", "preload.js");
 
   const macTrafficLightInset =
@@ -87,11 +85,7 @@ function newStudioWindow(deepLinks: string[] = [], reloadMainWindow: () => void)
       sandbox: false, // Allow preload script to access Node builtins
       preload: preloadPath,
       nodeIntegration: false,
-      additionalArguments: [
-        `--allowCrashReporting=${crashReportingEnabled ? "1" : "0"}`,
-        `--allowTelemetry=${telemetryEnabled ? "1" : "0"}`,
-        encodeRendererArg("deepLinks", deepLinks),
-      ],
+      additionalArguments: [encodeRendererArg("deepLinks", deepLinks)],
       // Disable webSecurity in development so we can make XML-RPC calls, load
       // remote data, etc. In production, the app is served from file:// URLs so
       // the Origin header is not sent, disabling the CORS
