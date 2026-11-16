@@ -21,13 +21,11 @@ import React, { MouseEvent, useCallback, useContext, useMemo, useRef, useState }
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
-import { PanelSelection } from "@lichtblick/suite-base/components/PanelCatalog";
 import PanelContext from "@lichtblick/suite-base/components/PanelContext";
 import ChangePanelMenu from "@lichtblick/suite-base/components/PanelToolbar/ChangePanelMenu";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
 import { PanelWindowContext } from "@lichtblick/suite-base/components/PanelWindow";
 import { useCurrentLayoutActions } from "@lichtblick/suite-base/context/CurrentLayoutContext";
-import { getPanelIdForType } from "@lichtblick/suite-base/util/layout";
 
 type Props = {
   isUnknownPanel: boolean;
@@ -66,7 +64,6 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
   const menuOpen = Boolean(menuAnchorEl);
   // The open submenu is the one anchored at its menu item.
   const changePanelOpen = subMenuAnchorEl?.id === "change-panel-button";
-  const newTabOpen = subMenuAnchorEl?.id === "new-tab-button";
 
   const panelContext = useContext(PanelContext);
   const panelWindow = useContext(PanelWindowContext);
@@ -74,7 +71,6 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
     getCurrentLayoutState: getCurrentLayout,
     closePanel,
     splitPanel,
-    addPanel,
   } = useCurrentLayoutActions();
   const handleMenuClick = (event: React.MouseEvent<HTMLButtonElement>) => {
     setSubmenuAnchorEl(undefined);
@@ -118,19 +114,6 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
       handleMenuClose();
     },
     [getCurrentLayout, splitPanel],
-  );
-
-  const addTab = useCallback(
-    ({ type, config }: PanelSelection) => {
-      addPanel({
-        id: getPanelIdForType(type),
-        config,
-        position: "center",
-        targetPanelId: panelContext?.id,
-      });
-      handleMenuClose();
-    },
-    [addPanel, panelContext?.id],
   );
 
   const enterFullscreen = useCallback(() => {
@@ -273,29 +256,6 @@ function PanelActionsDropdownComponent({ isUnknownPanel }: Props): React.JSX.Ele
         <ChangePanelMenu
           anchorEl={changePanelOpen ? subMenuAnchorEl : undefined}
           onClose={handleSubmenuClose}
-        />
-        {!isUnknownPanel && (
-          <MenuItem
-            className={classes.menuItem}
-            selected={newTabOpen}
-            id="new-tab-button"
-            data-testid="panel-menu-new-tab"
-            aria-controls={newTabOpen ? "new-tab-menu" : undefined}
-            aria-haspopup="true"
-            aria-expanded={newTabOpen ? "true" : undefined}
-            onClick={openSubmenu}
-            onMouseDown={keepSubmenuFocus}
-            onMouseEnter={openSubmenu}
-          >
-            {t("addTab")}
-            <ChevronRightIcon className={classes.icon} fontSize="small" />
-          </MenuItem>
-        )}
-        <ChangePanelMenu
-          id="new-tab-menu"
-          anchorEl={newTabOpen ? subMenuAnchorEl : undefined}
-          onClose={handleSubmenuClose}
-          onPanelSelect={addTab}
         />
         <Divider variant="middle" />
         {menuItems.map((item, idx) =>
