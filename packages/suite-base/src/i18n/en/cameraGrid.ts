@@ -6,17 +6,13 @@ export const cameraGrid = {
   emptyIntro: "Show many camera topics side by side.",
   addAllImageTopicsCount: "Add all compressed image topics ({{count}})",
   onlyRawImageTopics:
-    "Only raw image topics are available. Add them one by one in the panel settings.",
+    "Only raw image topics are available. Turn them on one by one in the panel settings.",
   allCamerasHidden: "All cameras are hidden.",
   waitingForImageTopics: "Waiting for image topics…",
   waitingForImages: "Waiting for images…",
 
   // Settings
   general: "General",
-  addAllImageTopics: "Add all compressed image topics",
-  removeAll: "Remove all",
-  addCamera: "Add camera",
-  addCameraTooltip: "Pick an image topic to add it to the grid",
   columns: "Columns",
   columnsAuto: "Auto",
   showTopic: "Show topic",
@@ -24,8 +20,6 @@ export const cameraGrid = {
   cameras: "Cameras",
   moveUp: "Move up",
   moveDown: "Move down",
-  remove: "Remove",
-  topic: "Topic",
   scaling: "Scaling",
   scalingFit: "Fit",
   scalingFill: "Fill",
