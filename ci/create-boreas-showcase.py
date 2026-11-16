@@ -188,6 +188,35 @@ def rgba(rgb: tuple[float, float, float], a: float = 1.0) -> dict[str, float]:
     return {"r": rgb[0], "g": rgb[1], "b": rgb[2], "a": a}
 
 
+IDENTITY_POSE = {
+    "position": {"x": 0.0, "y": 0.0, "z": 0.0},
+    "orientation": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+}
+PRIMITIVES = (
+    "arrows",
+    "cubes",
+    "cylinders",
+    "lines",
+    "spheres",
+    "texts",
+    "triangles",
+    "models",
+)
+
+
+def entity(t: int, frame_id: str, id: str, metadata: dict, **primitives: list) -> dict:
+    """A foxglove SceneEntity; the schema requires every primitive list, so absent ones are []."""
+    return {
+        "timestamp": stamp(t),
+        "frame_id": frame_id,
+        "id": id,
+        "lifetime": {"sec": 0, "nsec": 0},
+        "frame_locked": False,
+        "metadata": [{"key": k, "value": v} for k, v in metadata.items()],
+        **{k: primitives.get(k, []) for k in PRIMITIVES},
+    }
+
+
 def pose_rotation(row: dict[str, str]) -> Rotation:
     # Boreas defines C_enu_sensor = Rx(-roll) Ry(-pitch) Rz(-heading).
     return Rotation.from_euler(
@@ -751,22 +780,20 @@ def main() -> None:
                     }
                 )
             entities.append(
-                {
-                    "timestamp": stamp(t),
-                    "frame_id": "map",
+                entity(
+                    t,
+                    "map",
                     # The track number, so a click in 3D ($selected_id) matches tracks[].id.
-                    "id": str(number),
-                    "lifetime": {"sec": 0, "nsec": 0},
-                    "frame_locked": False,
-                    "metadata": [
-                        {"key": "class", "value": box.cls},
-                        {"key": "track", "value": str(number)},
-                        {"key": "lidar_points", "value": str(box.points)},
-                        {"key": "speed_kmh", "value": f"{speed * 3.6:.1f}"},
-                        {"key": "interpolated", "value": str(box.interpolated).lower()},
-                    ],
-                    "arrows": arrows,
-                    "cubes": [
+                    str(number),
+                    {
+                        "class": box.cls,
+                        "track": str(number),
+                        "lidar_points": str(box.points),
+                        "speed_kmh": f"{speed * 3.6:.1f}",
+                        "interpolated": str(box.interpolated).lower(),
+                    },
+                    arrows=arrows,
+                    cubes=[
                         {
                             "pose": {
                                 "position": vec(box.position),
@@ -776,14 +803,10 @@ def main() -> None:
                             "color": rgba(color, 0.18),
                         }
                     ],
-                    "cylinders": [],
-                    "lines": [
+                    lines=[
                         {
                             "type": 2,
-                            "pose": {
-                                "position": vec(np.zeros(3)),
-                                "orientation": quat(Rotation.identity()),
-                            },
+                            "pose": IDENTITY_POSE,
                             "thickness": 0.06,
                             "scale_invariant": False,
                             "points": [
@@ -794,14 +817,13 @@ def main() -> None:
                             "indices": [],
                         }
                     ],
-                    "spheres": [],
-                    "texts": [
+                    texts=[
                         {
                             "pose": {
                                 "position": vec(
                                     box.position + [0, 0, box.size[2] / 2 + 0.6]
                                 ),
-                                "orientation": quat(Rotation.identity()),
+                                "orientation": IDENTITY_POSE["orientation"],
                             },
                             "billboard": True,
                             "font_size": 12,
@@ -812,9 +834,7 @@ def main() -> None:
                     ]
                     if labelled_here
                     else [],
-                    "triangles": [],
-                    "models": [],
-                }
+                )
             )
         return entities
 
@@ -870,23 +890,15 @@ def main() -> None:
                     del history[uuid]
             cls = {b.uuid: b.cls for b in boxes}
             trails = [
-                {
-                    "timestamp": stamp(t),
-                    "frame_id": "map",
-                    "id": str(track_numbers[uuid]),
-                    "lifetime": {"sec": 0, "nsec": 0},
-                    "frame_locked": False,
-                    "metadata": [{"key": "track", "value": str(track_numbers[uuid])}],
-                    "arrows": [],
-                    "cubes": [],
-                    "cylinders": [],
-                    "lines": [
+                entity(
+                    t,
+                    "map",
+                    str(track_numbers[uuid]),
+                    {"track": str(track_numbers[uuid])},
+                    lines=[
                         {
                             "type": 0,
-                            "pose": {
-                                "position": vec(np.zeros(3)),
-                                "orientation": quat(Rotation.identity()),
-                            },
+                            "pose": IDENTITY_POSE,
                             "thickness": 0.12,
                             "scale_invariant": False,
                             "points": [vec(p) for p in trail],
@@ -895,11 +907,7 @@ def main() -> None:
                             "indices": [],
                         }
                     ],
-                    "spheres": [],
-                    "texts": [],
-                    "triangles": [],
-                    "models": [],
-                }
+                )
                 for uuid, trail in history.items()
                 if len(trail) > 1 and np.linalg.norm(trail[-1] - trail[0]) > 1.0
             ]
@@ -997,44 +1005,27 @@ def main() -> None:
         ) / np.diff(lidar_poses.times[inside] / 1e6)
         speeds = np.append(speeds, speeds[-1])[::5]
         top = max(float(speeds.max()), 1.0)
-        path_entity = {
-            "id": "route",
-            "frame_id": "map",
-            "lifetime": {"sec": 0, "nsec": 0},
-            "frame_locked": False,
-            "metadata": [{"key": "max_speed_kmh", "value": f"{top * 3.6:.1f}"}],
-            "arrows": [],
-            "cubes": [],
-            "cylinders": [],
-            "lines": [
-                {
-                    "type": 0,
-                    "pose": {
-                        "position": vec(np.zeros(3)),
-                        "orientation": quat(Rotation.identity()),
-                    },
-                    "thickness": 0.25,
-                    "scale_invariant": False,
-                    "points": [vec(p + [0, 0, GROUND_Z + 0.03]) for p in path],
-                    "color": rgba((1, 1, 1)),
-                    # Slow is blue, fast is red.
-                    "colors": [
-                        rgba((s / top, 0.35, 1 - s / top), 0.85) for s in speeds
-                    ],
-                    "indices": [],
-                }
-            ],
-            "spheres": [],
-            "texts": [],
-            "triangles": [],
-            "models": [],
+        line = {
+            "type": 0,
+            "pose": IDENTITY_POSE,
+            "thickness": 0.25,
+            "scale_invariant": False,
+            "points": [vec(p + [0, 0, GROUND_Z + 0.03]) for p in path],
+            "color": rgba((1, 1, 1)),
+            # Slow is blue, fast is red.
+            "colors": [rgba((s / top, 0.35, 1 - s / top), 0.85) for s in speeds],
+            "indices": [],
         }
+        metadata = {"max_speed_kmh": f"{top * 3.6:.1f}"}
         for t in range(START, END, 1_000_000):
             yield (
                 t,
                 "/boreas/route",
                 "SceneUpdate",
-                {"deletions": [], "entities": [{**path_entity, "timestamp": stamp(t)}]},
+                {
+                    "deletions": [],
+                    "entities": [entity(t, "map", "route", metadata, lines=[line])],
+                },
             )
 
     def camera() -> Iterator[Event]:
@@ -1066,7 +1057,7 @@ def main() -> None:
             position, rotation = camera_poses.at(t)
             points: list[dict] = []
             texts: list[dict] = []
-            for box in boxes_at_time(t):
+            for box in boxes_at(t, labelled, label_times):
                 corners = rotation.inv().apply(box_corners(box) - position)
                 if (corners[:, 2] < 1.0).any():
                     continue
@@ -1176,9 +1167,6 @@ def main() -> None:
             yield from packets_out(encoder.encode(frame))
         yield from packets_out(encoder.encode(None))
         assert not pending and not held_logs
-
-    def boxes_at_time(t: int) -> list[Box]:
-        return boxes_at(t, labelled, label_times)
 
     def radar() -> Iterator[Event]:
         size, resolution = 1000, 0.12  # 120 m square, where street structure is visible
@@ -1416,7 +1404,9 @@ def main() -> None:
                         "values": values,
                     }
                 )
-            boxes = boxes_at_time(int(lidar_times[lidar_times < t][-1]))
+            boxes = boxes_at(
+                int(lidar_times[lidar_times < t][-1]), labelled, label_times
+            )
             status.append(
                 {
                     "level": 0,
