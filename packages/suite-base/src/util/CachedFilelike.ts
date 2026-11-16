@@ -52,6 +52,8 @@ type ReadRequest = {
   // A one-off fetch for this read failed, so it is left to the main connection.
   sideFetchFailed?: boolean;
   background: boolean;
+  // Its bytes were cached when it came in, so the main connection did not serve it
+  cached: boolean;
 };
 
 export default class CachedFilelike implements Filelike {
@@ -187,6 +189,7 @@ export default class CachedFilelike implements Filelike {
             reject,
             requestTime: Date.now(),
             background: options?.background === true,
+            cached: this.#virtualBuffer.hasData(range.start, range.end),
           });
           this.#updateState();
         })
@@ -303,7 +306,7 @@ export default class CachedFilelike implements Filelike {
       return;
     }
 
-    this.#readRequests = this.#readRequests.filter(({ range, resolve, background }) => {
+    this.#readRequests = this.#readRequests.filter(({ range, resolve, background, cached }) => {
       if (!this.#virtualBuffer.hasData(range.start, range.end)) {
         return true;
       }
@@ -311,7 +314,7 @@ export default class CachedFilelike implements Filelike {
       this.#lastResolvedCallbackEnd = range.end;
       if (this.#currentConnection) {
         this.#lastMainServeTime = Date.now();
-        if (!background) {
+        if (!background && !cached) {
           this.#lastForegroundServeTime = this.#lastMainServeTime;
         }
       }
