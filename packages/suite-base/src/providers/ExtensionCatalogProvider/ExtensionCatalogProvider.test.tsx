@@ -14,6 +14,7 @@ import { useConfigById } from "@lichtblick/suite-base/PanelAPI";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import {
   ContributionPoints,
+  ExtensionCatalog,
   ExtensionData,
   InstallExtensionsResult,
   useExtensionCatalog,
@@ -28,10 +29,16 @@ import ExtensionBuilder from "@lichtblick/suite-base/testing/builders/ExtensionB
 import { Namespace } from "@lichtblick/suite-base/types";
 import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
+import { CLOUDINI_SCHEMA, cloudiniMessageConverter } from "@lichtblick/suite-base/util/cloudini";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import ExtensionCatalogProvider from "./ExtensionCatalogProvider";
+
+/** Converters registered by extensions, without the built-in ones */
+function extensionConverters(catalog: Pick<ExtensionCatalog, "installedMessageConverters">) {
+  return catalog.installedMessageConverters?.filter(({ extensionId }) => extensionId != undefined);
+}
 
 vi.mock("@lichtblick/suite-base/util/isDesktopApp", () => ({ default: vi.fn() }));
 
@@ -314,8 +321,7 @@ describe("ExtensionCatalogProvider", () => {
     await waitFor(() => {
       expect(loadExtension).toHaveBeenCalledTimes(1);
     });
-    expect(result.current.installedMessageConverters?.length).toEqual(1);
-    expect(result.current.installedMessageConverters).toEqual([
+    expect(extensionConverters(result.current)).toEqual([
       {
         converter: expect.any(Function),
         extensionId: expect.any(String),
@@ -324,6 +330,45 @@ describe("ExtensionCatalogProvider", () => {
         toSchemaName: "to.Schema",
       },
     ]);
+  });
+
+  it("prefers an installed extension's Cloudini converter over the built-in one", async () => {
+    const source = `
+      module.exports = {
+        activate: function(ctx) {
+          ctx.registerMessageConverter({
+            fromSchemaName: "${CLOUDINI_SCHEMA}",
+            toSchemaName: "sensor_msgs/msg/PointCloud2",
+            converter: function(msg) { return msg; },
+          });
+        }
+      };
+    `;
+    const loadExtension = vi.fn().mockResolvedValue({ raw: source });
+    const extension = ExtensionBuilder.extensionInfo({ namespace: "local" });
+    const loader: IExtensionLoader = {
+      type: "browser",
+      namespace: extension.namespace!,
+      getExtension: vi.fn(),
+      getExtensions: vi.fn().mockResolvedValue([extension]),
+      loadExtension,
+      installExtension: vi.fn(),
+      uninstallExtension: vi.fn(),
+    };
+
+    const { result } = await setup({ loadersOverride: [loader] });
+
+    await waitFor(() => {
+      expect(loadExtension).toHaveBeenCalledTimes(1);
+    });
+    expect(result.current.installedMessageConverters).toEqual([
+      expect.objectContaining({ fromSchemaName: CLOUDINI_SCHEMA, extensionId: extension.id }),
+    ]);
+
+    await act(async () => {
+      await result.current.uninstallExtension(extension.namespace!, extension.id);
+    });
+    expect(result.current.installedMessageConverters).toEqual([cloudiniMessageConverter]);
   });
 
   it("should register multiple message converters", async () => {
@@ -363,8 +408,7 @@ describe("ExtensionCatalogProvider", () => {
     await waitFor(() => {
       expect(loadExtension).toHaveBeenCalledTimes(1);
     });
-    expect(result.current.installedMessageConverters?.length).toBe(2);
-    expect(result.current.installedMessageConverters).toEqual([
+    expect(extensionConverters(result.current)).toEqual([
       {
         converter: expect.any(Function),
         extensionId: expect.any(String),
@@ -734,7 +778,7 @@ describe("ExtensionCatalogProvider", () => {
       expect(result.current.isExtensionInstalled(extensionInfo.id)).toBe(false);
       expect(result.current.installedExtensions?.length).toBe(0);
       expect(result.current.installedPanels).toEqual({});
-      expect(result.current.installedMessageConverters?.length).toBe(0);
+      expect(result.current.installedMessageConverters).toEqual([cloudiniMessageConverter]);
       expect(result.current.installedTopicAliasFunctions?.length).toBe(0);
       expect(result.current.installedCameraModels.size).toBe(0);
     });
@@ -1002,8 +1046,8 @@ describe("ExtensionCatalogProvider", () => {
       expect(result.current.installedExtensions).toContainEqual(
         expect.objectContaining({ id: extensionInfo.id }),
       );
-      expect(result.current.installedMessageConverters).toHaveLength(1);
-      expect(result.current.installedMessageConverters![0]).toEqual({
+      expect(extensionConverters(result.current)).toHaveLength(1);
+      expect(extensionConverters(result.current)![0]).toEqual({
         ...messageConverter,
         converter: expect.any(Function),
       });
