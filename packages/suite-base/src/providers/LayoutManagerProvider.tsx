@@ -19,8 +19,21 @@ import delay from "@lichtblick/suite-base/util/delay";
 
 const log = Logger.getLogger(__filename);
 
-const SYNC_INTERVAL_BASE_MS = 30_000;
-const SYNC_INTERVAL_MAX_MS = 3 * 60_000;
+/** Time between syncs while they succeed. Every sync is at least one request per organization. */
+const SYNC_INTERVAL_MS = 2 * 60_000;
+const RETRY_BASE_MS = 30_000;
+
+/**
+ * How long to wait before the next sync: the steady interval (±10% so tabs don't line up) after a
+ * success, exponential backoff with full jitter after failures, capped at the steady interval.
+ * https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
+ */
+export function nextSyncDelayMs(failures: number, random = Math.random()): number {
+  if (failures === 0) {
+    return SYNC_INTERVAL_MS * (0.9 + 0.2 * random);
+  }
+  return random * Math.min(SYNC_INTERVAL_MS, RETRY_BASE_MS * 2 ** failures);
+}
 
 export default function LayoutManagerProvider({
   children,
@@ -68,10 +81,7 @@ export default function LayoutManagerProvider({
           log.error("Sync failed:", error);
           failures++;
         }
-        // Exponential backoff with jitter:
-        // https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/
-        const duration =
-          Math.random() * Math.min(SYNC_INTERVAL_MAX_MS, SYNC_INTERVAL_BASE_MS * 2 ** failures);
+        const duration = nextSyncDelayMs(failures);
         log.debug("Waiting", (duration / 1000).toFixed(2), "sec for next sync", { failures });
         await delay(duration);
       }
