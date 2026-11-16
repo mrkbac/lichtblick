@@ -1,14 +1,14 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { ArrowDownload20Regular, Cursor20Regular } from "@fluentui/react-icons";
-
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
+import { IMAGE_BUTTONS } from "@lichtblick/suite-base/panels/ThreeDeeRender/buttons";
 import { ALL_SUPPORTED_ANNOTATION_SCHEMAS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/annotations/normalizeAnnotations";
 import {
   ALL_SUPPORTED_CALIBRATION_SCHEMAS,
   ALL_SUPPORTED_IMAGE_SCHEMAS,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/schemas";
+import { imageGuideSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/guide";
 
 const docs: PanelDocs = {
   intro:
@@ -18,34 +18,9 @@ const docs: PanelDocs = {
     ...ALL_SUPPORTED_CALIBRATION_SCHEMAS,
     ...ALL_SUPPORTED_ANNOTATION_SCHEMAS,
   ],
+  buttons: Object.values(IMAGE_BUTTONS),
+  settings: imageGuideSettings,
   sections: [
-    {
-      title: "Toolbar",
-      items: [
-        ["Inspect objects", "Shows details of the clicked object.", Cursor20Regular],
-        ["Download image", "Saves the current frame as an image.", ArrowDownload20Regular],
-      ],
-    },
-    {
-      title: "Settings",
-      items: [
-        ["Topic", "The image topic; a matching calibration topic is picked automatically."],
-        ["Calibration", "Camera info used to project 3D topics; None shows the image only."],
-        ["Sync annotations", "Only draw annotations whose timestamp matches the image."],
-        ["Rotation / Flip", "Rotate in 90° steps or mirror the image."],
-        ["Brightness / Contrast", "Adjust how the image is drawn."],
-        ["Image annotations", "Toggle annotation topics drawn over the image."],
-      ],
-    },
-    {
-      title: "Mouse",
-      items: [
-        ["Wheel", "Zoom at the cursor."],
-        ["Drag", "Pan the image."],
-        ["Reset view", "Button that appears after zooming or panning."],
-        ["Right-click", "Download image saves the current frame."],
-      ],
-    },
     {
       title: "Tips",
       items: [["Raw images", "Color mode settings appear for raw and depth images."]],

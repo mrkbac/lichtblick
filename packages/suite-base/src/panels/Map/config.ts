@@ -9,14 +9,13 @@ import { produce } from "immer";
 import * as _ from "lodash-es";
 
 import { parseMessagePath } from "@lichtblick/message-path";
-import {
-  SettingsTreeAction,
-  SettingsTreeFields,
-  SettingsTreeNode,
-  SettingsTreeNodes,
-  Topic,
-} from "@lichtblick/suite";
+import { SettingsTreeAction, Topic } from "@lichtblick/suite";
 import { PLOTABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/shared/constants";
+import type {
+  DocumentedFields,
+  DocumentedNode,
+  DocumentedNodes,
+} from "@lichtblick/suite-base/panels/shared/documentedSettings";
 import { lineColors } from "@lichtblick/suite-base/util/plotColors";
 
 import type { Units } from "./geo";
@@ -123,7 +122,7 @@ export function normalizeConfig(initial: unknown): Config {
   };
 }
 
-function colorScaleFields(style: TopicStyle): SettingsTreeFields {
+function colorScaleFields(style: TopicStyle): DocumentedFields {
   const pathError =
     style.colorBy === "path" && style.colorPath
       ? parseMessagePath(style.colorPath) == undefined
@@ -139,6 +138,7 @@ function colorScaleFields(style: TopicStyle): SettingsTreeFields {
             value: style.colorPath ?? "",
             validTypes: PLOTABLE_ROS_TYPES,
             error: pathError,
+            help: "A numeric field of any topic; its value at each fix's time sets the color.",
           }
         : undefined,
     colorMin: {
@@ -146,18 +146,25 @@ function colorScaleFields(style: TopicStyle): SettingsTreeFields {
       input: "number",
       value: style.colorMin,
       placeholder: "auto",
+      help: "Value at the low end of the color scale. Leave empty to fit the data.",
     },
     colorMax: {
       label: "Scale max",
       input: "number",
       value: style.colorMax,
       placeholder: "auto",
+      help: "Value at the high end of the color scale. Leave empty to fit the data.",
     },
-    colorReverse: { label: "Reverse colors", input: "boolean", value: style.colorReverse === true },
+    colorReverse: {
+      label: "Reverse colors",
+      input: "boolean",
+      value: style.colorReverse === true,
+      help: "Flips the color scale, so low values get the high-end color.",
+    },
   };
 }
 
-function topicNode(config: Config, topic: Omit<Topic, "datatype">): SettingsTreeNode {
+function topicNode(config: Config, topic: Omit<Topic, "datatype">): DocumentedNode {
   const color = config.topicColors[topic.name];
   const style = config.topicStyles[topic.name] ?? {};
   const isNav = !isGeoJSONSchema(topic.schemaName);
@@ -187,8 +194,16 @@ function topicNode(config: Config, topic: Omit<Topic, "datatype">): SettingsTree
           { label: "Automatic", value: "Automatic" },
           { label: "Custom", value: "Custom" },
         ],
+        help: "Automatic picks a color per topic from the palette; Custom lets you choose one.",
       },
-      color: color ? { label: "Color", input: "rgb", value: color } : undefined,
+      color: color
+        ? {
+            label: "Color",
+            input: "rgb",
+            value: color,
+            help: "The color you chose for this topic.",
+          }
+        : undefined,
       history: isNav
         ? {
             label: "Track",
@@ -211,6 +226,7 @@ function topicNode(config: Config, topic: Omit<Topic, "datatype">): SettingsTree
             min: 1,
             max: 20,
             step: 1,
+            help: "Radius in pixels of the track points and current position; lines scale with it.",
           }
         : undefined,
       accuracy: isNav
@@ -230,17 +246,18 @@ export function buildSettingsTree(
   eligibleTopics: Omit<Topic, "datatype">[],
   saved: readonly SourceParams[],
   layerErrors: ReadonlyMap<string, string>,
-): SettingsTreeNodes {
+): DocumentedNodes {
   const followOptions = eligibleTopics
     .filter((t) => !isGeoJSONSchema(t.schemaName) && !config.disabledTopics.includes(t.name))
     .map((t) => ({ label: t.name, value: t.name }));
 
-  const general: SettingsTreeFields = {
+  const general: DocumentedFields = {
     followTopic: {
       label: "Follow topic",
       input: "select",
       value: config.followTopic,
       options: [{ label: "Off", value: "" }, ...followOptions],
+      help: "Keeps this topic's latest position centered on the map.",
     },
     followMode: config.followTopic
       ? {
@@ -262,6 +279,7 @@ export function buildSettingsTree(
         { label: "Flat (Web Mercator)", value: "mercator" },
         { label: "Globe", value: "globe" },
       ],
+      help: "A flat map, or a globe that shows the Earth's curvature when zoomed out.",
     },
     units: {
       label: "Units",
@@ -272,27 +290,31 @@ export function buildSettingsTree(
         { label: "Imperial", value: "imperial" },
         { label: "Nautical", value: "nautical" },
       ],
+      help: "Units of the scale bar, measurements, elevations, and speeds.",
     },
     allowRotation: {
       label: "Rotate and tilt",
       input: "boolean",
       value: config.allowRotation,
-      help: "Right-drag or ctrl+drag to rotate and tilt the map.",
+      help: "Lets you rotate and tilt the map.",
     },
     showScale: {
       label: "Scale bar",
       input: "boolean",
       value: config.showScale,
+      help: "Shows a scale bar on the map.",
     },
     showCoordinates: {
       label: "Cursor coordinates",
       input: "boolean",
       value: config.showCoordinates,
+      help: "Shows the latitude, longitude, and terrain elevation under the cursor; it can be copied.",
     },
   };
 
-  const layers: SettingsTreeNode = {
+  const layers: DocumentedNode = {
     label: "Map layers",
+    help: "Stacked top-most first: base maps, overlays, elevation, or your own sources.",
     actions: layerStackActions(saved),
     children: layerStackChildren(config.layers, saved, MAP_SOURCE_KINDS, (layer) =>
       layerErrors.get(layer.id),
@@ -304,6 +326,7 @@ export function buildSettingsTree(
     layers,
     topics: {
       label: "Topics",
+      help: "Every topic with a supported schema. Hide one to remove it from the map.",
       children: Object.fromEntries(eligibleTopics.map((t) => [t.name, topicNode(config, t)])),
     },
   };

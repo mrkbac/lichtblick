@@ -6,19 +6,42 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { TFunction } from "i18next";
+import * as _ from "lodash-es";
 
-import { SettingsTreeFields, SettingsTreeNodes } from "@lichtblick/suite";
 import { DEFAULT_SECONDS_UNTIL_STALE } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
-import {
-  buildTopicsSettingsNode,
-  DiagnosticTopics,
-} from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticTopics";
+import type { DiagnosticTopics } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticTopics";
 import { DiagnosticSummaryConfig } from "@lichtblick/suite-base/panels/DiagnosticSummary/types";
+import type {
+  DocumentedField,
+  DocumentedNode,
+  DocumentedNodes,
+} from "@lichtblick/suite-base/panels/shared/documentedSettings";
+
+/** Settings node listing every diagnostics topic with a visibility toggle. */
+export function buildTopicsSettingsNode(
+  { available, selected }: DiagnosticTopics,
+  t: TFunction<"diagnostics">,
+): DocumentedNode {
+  const children: Record<string, DocumentedNode> = {};
+  for (const topic of _.uniq([...available, ...selected])) {
+    children[topic] = {
+      label: topic,
+      visible: selected.includes(topic),
+      error: available.includes(topic) ? undefined : t("topicNotAvailable"),
+    };
+  }
+  return {
+    label: t("topics"),
+    help: t("topicsHelp"),
+    error: available.length === 0 ? t("noTopics") : undefined,
+    children,
+  };
+}
 
 export function staleTimeoutField(
   value: number | undefined,
   t: TFunction<"diagnostics">,
-): SettingsTreeFields[string] {
+): DocumentedField {
   return {
     label: t("staleTimeout"),
     help: t("staleTimeoutHelp"),
@@ -35,12 +58,17 @@ export function buildSettingsTree(
   config: DiagnosticSummaryConfig,
   topics: DiagnosticTopics,
   t: TFunction<"diagnostics">,
-): SettingsTreeNodes {
+): DocumentedNodes {
   return {
     general: {
       label: t("general"),
       fields: {
-        sortByLevel: { label: t("sortByLevel"), input: "boolean", value: config.sortByLevel },
+        sortByLevel: {
+          label: t("sortByLevel"),
+          help: t("sortByLevelHelp"),
+          input: "boolean",
+          value: config.sortByLevel,
+        },
         showHistory: {
           label: t("showHistory"),
           help: t("showHistoryHelp"),

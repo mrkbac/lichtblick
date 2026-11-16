@@ -14,7 +14,6 @@ import { SettingsTreeAction, MessageEvent } from "@lichtblick/suite";
 import {
   DEFAULT_POINT_SETTINGS,
   LayerSettingsPointExtension,
-  pointSettingsNode,
   PointsRenderable,
   DECAY_HISTORY_LIMITS,
   RenderObjectHistory,
@@ -32,6 +31,7 @@ import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../Setting
 import { LASERSCAN_DATATYPES as FOXGLOVE_LASERSCAN_DATATYPES } from "../foxglove";
 import { normalizeFloat32Array, normalizeTime, normalizePose } from "../normalizeMessages";
 import { LASERSCAN_DATATYPES as ROS_LASERSCAN_DATATYPES, LaserScan as RosLaserScan } from "../ros";
+import { laserScanSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { Pose } from "../transforms";
 import { MISSING_TRANSFORM } from "./transforms";
@@ -57,8 +57,6 @@ type LaserScanHistoryUserData = BaseUserData & {
   latestLaserScan: NormalizedLaserScan;
   latestOriginalMessage: Record<string, RosValue> | undefined;
 };
-
-const LASERSCAN_FIELDS = ["range", "intensity"];
 
 const ALL_LASERSCAN_DATATYPES = new Set<string>([
   ...FOXGLOVE_LASERSCAN_DATATYPES,
@@ -393,17 +391,10 @@ export class LaserScans extends SceneExtension<LaserScanHistoryRenderable> {
         continue;
       }
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsLaserScan>;
-      const messageFields = LASERSCAN_FIELDS;
-      // Cubes aren't supported: the laser scan shader computes positions from ranges on the GPU
-      const node: SettingsTreeNodeWithActionHandler = pointSettingsNode(
-        topic,
-        messageFields,
-        config,
-        undefined,
-        ["circle", "square"],
-      );
-      node.handler = handler;
-      node.icon = "Radar";
+      const node: SettingsTreeNodeWithActionHandler = {
+        ...laserScanSettingsNode(topic, config),
+        handler,
+      };
       entries.push({ path: ["topics", topic.name], node });
     }
     return entries;

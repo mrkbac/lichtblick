@@ -15,16 +15,7 @@
 //   You may not use this file except in compliance with the License.
 
 import AddIcon from "@mui/icons-material/Add";
-import ArrowBackIcon from "@mui/icons-material/ArrowBack";
-import {
-  Button,
-  CircularProgress,
-  Container,
-  Divider,
-  IconButton,
-  Link,
-  Typography,
-} from "@mui/material";
+import { Button, CircularProgress, Container, Divider, Link, Typography } from "@mui/material";
 import React, { Suspense, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Group as PanelGroup,
@@ -34,9 +25,10 @@ import {
 } from "react-resizable-panels";
 import { makeStyles } from "tss-react/mui";
 
-import { SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import Panel from "@lichtblick/suite-base/components/Panel";
+import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import {
@@ -56,7 +48,9 @@ import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import Config from "./Config";
+import { USER_SCRIPTS_BUTTONS } from "./buttons";
 import { Script } from "./script";
+import { buildSettingsTree, defaultConfig } from "./settings";
 
 const Editor = React.lazy(
   async () => await import("@lichtblick/suite-base/panels/UserScriptEditor/Editor"),
@@ -129,20 +123,6 @@ const useStyles = makeStyles()((theme) => ({
     },
   },
 }));
-
-function buildSettingsTree(config: Config): SettingsTreeNodes {
-  return {
-    general: {
-      fields: {
-        autoFormatOnSave: {
-          input: "boolean",
-          label: "Auto-format on save",
-          value: config.autoFormatOnSave,
-        },
-      },
-    },
-  };
-}
 
 const WelcomeScreen = ({ addNewNode }: { addNewNode: (code?: string) => void }) => {
   const { classes } = useStyles();
@@ -393,9 +373,11 @@ function UserScriptEditor(props: Props) {
           {scriptBackStack.length > 1 && (
             <Stack direction="row" alignItems="center" gap={1}>
               {scriptBackStack.length > 1 && (
-                <IconButton title="Go back" data-testid="go-back" size="small" onClick={goBack}>
-                  <ArrowBackIcon />
-                </IconButton>
+                <PanelIconButton
+                  button={USER_SCRIPTS_BUTTONS.goBack}
+                  data-testid="go-back"
+                  onClick={goBack}
+                />
               )}
               {selectedNodeId != undefined && selectedScript && (
                 <div style={{ position: "relative" }}>{inputTitle}</div>
@@ -464,10 +446,6 @@ function UserScriptEditor(props: Props) {
   );
 }
 
-const defaultConfig: Config = {
-  selectedNodeId: undefined,
-  autoFormatOnSave: true,
-};
 export default Panel(
   Object.assign(UserScriptEditor, {
     panelType: "NodePlayground",

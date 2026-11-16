@@ -4,6 +4,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { act, fireEvent, render, screen } from "@testing-library/react";
+import type { Mock } from "vitest";
 import "@testing-library/jest-dom/vitest";
 
 import {
@@ -35,19 +36,39 @@ const PANELS: PanelInfo[] = [
     {
       intro: "Shows everything.",
       schemas: ["sensor_msgs/PointCloud2"],
-      sections: [
-        { title: "Mouse", items: [["Drag", "Pans.", () => <svg data-testid="drag-icon" />]] },
+      buttons: [
+        { id: "logCopy", icon: () => <svg data-testid="copy-icon" />, placement: "toolbar" },
+      ],
+      settings: () => ({
+        general: {
+          label: "View",
+          actions: [
+            { type: "action", id: "reset", label: "Reset view", help: "Restores the defaults." },
+            { type: "action", id: "silent", label: "Undocumented" },
+          ],
+          fields: { size: { input: "number", label: "Size", help: "Point size in pixels." } },
+        },
+      }),
+      sections: [{ title: "Data", items: [["Paths", "Any numeric field."]] }],
+    },
+    {
+      shortcuts: [
+        {
+          id: "s.reset",
+          titleKey: "resetView",
+          keys: [{ key: "r" }],
+          mouse: [{ action: "drag", button: "right" }],
+        },
       ],
     },
-    { shortcuts: [{ id: "s.reset", titleKey: "resetView", keys: [{ key: "r" }] }] },
   ),
   { title: "Extension", type: "Extension", module: vi.fn() },
 ];
 
-function renderGuide() {
+function renderGuide(panels = PANELS) {
   const catalog = {
-    getPanels: () => PANELS,
-    getPanelByType: (type: string) => PANELS.find((info) => info.type === type),
+    getPanels: () => panels,
+    getPanelByType: (type: string) => panels.find((info) => info.type === type),
   };
   render(
     <ThemeProvider isDark={false}>
@@ -83,7 +104,7 @@ describe("PanelGuide", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
-  it("opens at the requested panel with its schemas, sections, and shortcuts", async () => {
+  it("opens at the requested panel with its generated buttons, settings, and input", async () => {
     renderGuide();
     act(() => {
       usePanelGuideStore.getState().show("Scene");
@@ -91,9 +112,18 @@ describe("PanelGuide", () => {
 
     expect(await screen.findByText("Shows everything.")).toBeInTheDocument();
     expect(screen.getByText("sensor_msgs/PointCloud2")).toBeInTheDocument();
-    expect(screen.getByText("Pans.")).toBeInTheDocument();
-    expect(screen.getByTestId("drag-icon")).toBeInTheDocument();
+    // Buttons: icon from the declaration, title and help from panelButtons.
+    expect(screen.getByTestId("copy-icon")).toBeInTheDocument();
+    expect(screen.getByText("Copies all messages that pass the filters.")).toBeInTheDocument();
+    // Settings: from the builder, under the node's label.
+    expect(screen.getByText("Settings › View")).toBeInTheDocument();
+    expect(screen.getByText("Point size in pixels.")).toBeInTheDocument();
+    expect(screen.getByText("Restores the defaults.")).toBeInTheDocument();
+    expect(screen.queryByText("Undocumented")).not.toBeInTheDocument();
+    expect(screen.getByText("Any numeric field.")).toBeInTheDocument();
+    // Keyboard and mouse: keys and gestures of one declaration.
     expect(screen.getByText("R")).toBeInTheDocument();
+    expect(screen.getByText("Right-drag")).toBeInTheDocument();
     // Panels without docs aren't listed.
     expect(screen.queryByRole("button", { name: "Extension" })).not.toBeInTheDocument();
   });
@@ -111,5 +141,23 @@ describe("PanelGuide", () => {
     fireEvent.click(screen.getByRole("button", { name: "Grid" }));
     expect(screen.getByText("Shows cameras.")).toBeInTheDocument();
     expect(screen.getByText("sensor_msgs/Image")).toBeInTheDocument();
+  });
+
+  it("skips a panel whose docs fail to load and still shows the others", async () => {
+    const broken: PanelInfo = {
+      title: "Broken",
+      type: "Broken",
+      module: vi.fn(),
+      docs: async () => await Promise.reject(new Error("chunk failed")),
+    };
+    renderGuide([...PANELS, broken]);
+    act(() => {
+      usePanelGuideStore.getState().show("Scene");
+    });
+
+    expect(await screen.findByText("Shows everything.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Broken" })).not.toBeInTheDocument();
+    expect(console.error).toHaveBeenCalled();
+    (console.error as Mock).mockClear();
   });
 });

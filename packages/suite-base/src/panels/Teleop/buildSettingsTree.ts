@@ -3,12 +3,7 @@
 
 import { produce } from "immer";
 
-import {
-  SettingsTreeAction,
-  SettingsTreeFields,
-  SettingsTreeNodes,
-  Topic,
-} from "@lichtblick/suite";
+import { SettingsTreeAction, Topic } from "@lichtblick/suite";
 import {
   AXIS_LABELS,
   BUTTON_LABELS,
@@ -24,6 +19,10 @@ import {
   TeleopConfig,
   TwistField,
 } from "@lichtblick/suite-base/panels/Teleop/types";
+import type {
+  DocumentedFields,
+  DocumentedNodes,
+} from "@lichtblick/suite-base/panels/shared/documentedSettings";
 
 const SCHEMA_PATTERN: Record<OutputType, RegExp> = {
   Twist: /(^|\/)Twist(Stamped)?$/,
@@ -52,7 +51,7 @@ export function buildSettingsTreeTeleop(
   config: TeleopConfig,
   topics: readonly Topic[],
   gamepadIds: readonly string[] = [],
-): SettingsTreeNodes {
+): DocumentedNodes {
   const isJoy = config.messageType === "Joy";
   // topics that already carry this kind of command first
   const matches = (t: Topic) => SCHEMA_PATTERN[config.messageType].test(t.schemaName);
@@ -69,7 +68,7 @@ export function buildSettingsTreeTeleop(
       : []),
   ];
 
-  const mappingFields: SettingsTreeFields = {};
+  const mappingFields: DocumentedFields = {};
   for (const field of TWIST_FIELDS) {
     const { input, max } = config.mapping[field];
     const name = field.replace("-", ".");
@@ -78,6 +77,7 @@ export function buildSettingsTreeTeleop(
       input: "select",
       value: input,
       options: Object.entries(AXIS_LABELS).map(([value, label]) => ({ label, value })),
+      help: `Which stick or trigger drives ${name}`,
     };
     if (input !== "none") {
       mappingFields[`${field}-max`] = {
@@ -100,6 +100,7 @@ export function buildSettingsTreeTeleop(
           input: "autocomplete",
           value: config.topic,
           items: topicItems,
+          help: "Topic to publish on. Topics that already carry the chosen message type are listed first",
         },
         messageType: {
           label: "Message type",
@@ -113,7 +114,12 @@ export function buildSettingsTreeTeleop(
           help: "Joy sends the raw sticks and buttons in the layout of the ROS 2 joy driver, for robots that run teleop_twist_joy or their own mapping",
         },
         ...(config.messageType !== "Twist" && {
-          frameId: { label: "Frame ID", input: "string", value: config.frameId },
+          frameId: {
+            label: "Frame ID",
+            input: "string",
+            value: config.frameId,
+            help: "Written to the header of each published message",
+          },
         }),
         publishRate: {
           label: "Publish rate (Hz)",
@@ -152,12 +158,13 @@ export function buildSettingsTreeTeleop(
             { label: "D-pad", value: "dpad" },
             { label: "Hidden", value: "none" },
           ],
+          help: "Which controls the panel draws for mouse and touch input",
         },
         keyboard: {
           label: "Keyboard",
           input: "boolean",
           value: config.keyboard,
-          help: "While the panel is focused: WASD or arrows move the left stick, Q/E the right stick, Shift is turbo, Space or Esc stops",
+          help: "Drive with the keyboard while the panel is focused",
         },
       },
     },
@@ -176,6 +183,7 @@ export function buildSettingsTreeTeleop(
             input: "select",
             value: config.gamepadId,
             options: deviceOptions,
+            help: "Which connected gamepad to read",
           },
           gamepadDeadzone: {
             label: "Deadzone",
@@ -185,6 +193,7 @@ export function buildSettingsTreeTeleop(
             max: 0.9,
             step: 0.05,
             precision: 2,
+            help: "Stick movement below this fraction is ignored",
           },
           ...(!isJoy && {
             enableButton: buttonField(

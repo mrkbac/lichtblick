@@ -3,25 +3,26 @@
 
 import { TFunction } from "i18next";
 
-import { SettingsTreeNodes } from "@lichtblick/suite";
 import { DiagnosticStatusConfig } from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
+import type { DiagnosticTopics } from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticTopics";
 import {
   buildTopicsSettingsNode,
-  DiagnosticTopics,
-} from "@lichtblick/suite-base/panels/DiagnosticSummary/hooks/useDiagnosticTopics";
-import { staleTimeoutField } from "@lichtblick/suite-base/panels/DiagnosticSummary/utils/buildSettingsTree";
+  staleTimeoutField,
+} from "@lichtblick/suite-base/panels/DiagnosticSummary/utils/buildSettingsTree";
+import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 
 export function buildStatusPanelSettingsTree(
   config: DiagnosticStatusConfig,
   topics: DiagnosticTopics,
   t: TFunction<"diagnostics">,
-): SettingsTreeNodes {
+): DocumentedNodes {
   return {
     general: {
       label: t("general"),
       fields: {
         numericPrecision: {
           label: t("numericPrecision"),
+          help: t("numericPrecisionHelp"),
           input: "number",
           min: 0,
           max: 17,

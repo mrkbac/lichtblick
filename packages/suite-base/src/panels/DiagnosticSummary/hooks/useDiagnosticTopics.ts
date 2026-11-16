@@ -1,11 +1,9 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { TFunction } from "i18next";
 import * as _ from "lodash-es";
 import { useEffect, useMemo } from "react";
 
-import { SettingsTreeNode } from "@lichtblick/suite";
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { ALLOWED_DATATYPES } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
@@ -58,26 +56,6 @@ export function useDiagnosticTopics(config: DiagnosticTopicsConfig): DiagnosticT
       subscribed: selected.filter((topic) => available.includes(topic)),
     };
   }, [availableKey, configuredKey]);
-}
-
-/** Settings node listing every diagnostics topic with a visibility toggle. */
-export function buildTopicsSettingsNode(
-  { available, selected }: DiagnosticTopics,
-  t: TFunction<"diagnostics">,
-): SettingsTreeNode {
-  const children: Record<string, SettingsTreeNode> = {};
-  for (const topic of _.uniq([...available, ...selected])) {
-    children[topic] = {
-      label: topic,
-      visible: selected.includes(topic),
-      error: available.includes(topic) ? undefined : t("topicNotAvailable"),
-    };
-  }
-  return {
-    label: t("topics"),
-    error: available.length === 0 ? t("noTopics") : undefined,
-    children,
-  };
 }
 
 /**

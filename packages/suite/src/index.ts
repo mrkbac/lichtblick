@@ -934,6 +934,11 @@ export type SettingsTreeNodeActionItem = {
   label: string;
 
   /**
+   * Optional help text explaining what the action does, shown on hover.
+   */
+  help?: string;
+
+  /**
    * Optional icon to display with the action.
    */
   icon?: SettingsIcon;
@@ -988,6 +993,11 @@ export type SettingsTreeNode = {
    * An optional label shown at the top of this node.
    */
   label?: string;
+
+  /**
+   * Optional help text explaining the node, shown when hovering its label.
+   */
+  help?: string;
 
   /**
    * True if the node label can be edited by the user.

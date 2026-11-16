@@ -18,7 +18,6 @@ import {
   FS_SRGB_TO_LINEAR,
   NEEDS_MIN_MAX,
   autoSelectColorSettings,
-  colorModeSettingsFields,
   getColorConverter,
 } from "./colorMode";
 import type { AnyRendererSubscription } from "../IRenderer";
@@ -31,9 +30,10 @@ import {
   onlyLastByTopicMessage,
 } from "../SceneExtension";
 import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../SettingsManager";
-import { rgbaToCssString, rgbaToLinear, stringToRgba } from "../color";
+import { rgbaToLinear, stringToRgba } from "../color";
 import { normalizeByteArray, normalizePose, normalizeTime } from "../normalizeMessages";
 import { BaseSettings } from "../settings";
+import { FOXGLOVE_GRID_DEFAULTS, foxgloveGridSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { FieldReader, getReader } from "./pointClouds/fieldReaders";
 
@@ -54,11 +54,6 @@ const floatTextureColorModes: GridColorModeSettings["colorMode"][] = ["gradient"
 
 const INVALID_LICHTBLICK_GRID = "INVALID_LICHTBLICK_GRID";
 
-const DEFAULT_COLOR_MAP = "turbo";
-const DEFAULT_FLAT_COLOR = { r: 1, g: 1, b: 1, a: 1 };
-const DEFAULT_MIN_COLOR = { r: 100 / 255, g: 47 / 255, b: 105 / 255, a: 1 };
-const DEFAULT_MAX_COLOR = { r: 227 / 255, g: 177 / 255, b: 135 / 255, a: 1 };
-
 const COLOR_MODE_TO_GLSL: {
   [K in GridColorModeSettings["colorMode"] as `COLOR_MODE_${K extends "rgba-fields"
     ? "RGBA"
@@ -77,18 +72,7 @@ const COLOR_MAP_TO_GLSL: {
   COLOR_MAP_RAINBOW: 1,
 };
 
-const DEFAULT_SETTINGS: LayerSettingsFoxgloveGrid = {
-  visible: false,
-  frameLocked: false,
-  colorMode: "flat",
-  minValue: undefined,
-  maxValue: undefined,
-  flatColor: rgbaToCssString(DEFAULT_FLAT_COLOR),
-  colorField: undefined,
-  gradient: [rgbaToCssString(DEFAULT_MIN_COLOR), rgbaToCssString(DEFAULT_MAX_COLOR)],
-  colorMap: DEFAULT_COLOR_MAP,
-  explicitAlpha: 1,
-};
+const DEFAULT_SETTINGS = FOXGLOVE_GRID_DEFAULTS;
 
 interface GridShaderMaterial extends THREE.ShaderMaterial {
   uniforms: {
@@ -423,25 +407,8 @@ export class FoxgloveGrid extends SceneExtension<FoxgloveGridRenderable> {
       }
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsFoxgloveGrid>;
 
-      const colorModeFields = colorModeSettingsFields({
-        msgFields: this.#fieldsByTopic.get(topic.name),
-        config,
-        defaults: DEFAULT_SETTINGS,
-        modifiers: { supportsPackedRgbModes: false, supportsRgbaFieldsMode: true },
-      });
-
       const node: SettingsTreeNodeWithActionHandler = {
-        order: topic.name.toLocaleLowerCase(),
-        icon: "Cells",
-        visible: config.visible ?? DEFAULT_SETTINGS.visible,
-        fields: {
-          ...colorModeFields,
-          frameLocked: {
-            label: "Frame lock",
-            input: "boolean",
-            value: config.frameLocked ?? DEFAULT_SETTINGS.frameLocked,
-          },
-        },
+        ...foxgloveGridSettingsNode(topic, config, this.#fieldsByTopic.get(topic.name)),
         handler,
       };
 

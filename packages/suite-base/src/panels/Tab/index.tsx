@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import CloseIcon from "@mui/icons-material/Close";
 import { ButtonBase } from "@mui/material";
 import { getPanelData } from "dockview-react";
 import { DragEvent, useCallback, useMemo, useState } from "react";
@@ -9,6 +8,7 @@ import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import Panel from "@lichtblick/suite-base/components/Panel";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import { getPanelDragData } from "@lichtblick/suite-base/components/PanelCatalog/panelDrag";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { UnconnectedPanelLayout } from "@lichtblick/suite-base/components/PanelLayout";
@@ -26,6 +26,7 @@ import {
 import { usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogContext";
 import { LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import {
   PANEL_TITLE_CONFIG_KEY,
   getPanelIdForType,
@@ -39,6 +40,9 @@ import {
   getActiveTabIndex,
   getTabs,
 } from "@lichtblick/suite-base/util/tabLayout";
+
+import { TAB_BUTTONS } from "./buttons";
+import { TAB_SHORTCUTS } from "./shortcuts";
 
 /**
  * Hidden tabs stay laid out under the shown one. `visibility` is inherited but descendants can
@@ -144,6 +148,8 @@ function TabButton(props: TabButtonProps): React.JSX.Element {
   const [editing, setEditing] = useState(false);
   const [isOver, setIsOver] = useState(false);
   const hover = useDragHoverActivation(onSelect);
+  const closeTitle = usePanelButtonTitle(TAB_BUTTONS.close);
+  const CloseIcon = TAB_BUTTONS.close.icon;
 
   if (editing) {
     return (
@@ -171,10 +177,11 @@ function TabButton(props: TabButtonProps): React.JSX.Element {
         if (event.target !== event.currentTarget) {
           return;
         }
-        if (event.key === "Enter" || event.key === " ") {
+        const shortcut = findShortcut(TAB_SHORTCUTS, event);
+        if (shortcut?.id === "tab.select") {
           event.preventDefault();
           onSelect();
-        } else if (event.key === "F2") {
+        } else if (shortcut?.id === "tab.rename") {
           event.preventDefault();
           setEditing(true);
         }
@@ -207,6 +214,7 @@ function TabButton(props: TabButtonProps): React.JSX.Element {
       {closable && (
         <ButtonBase
           className={cx(classes.close, "close")}
+          title={closeTitle}
           aria-label={t("closeTab", { title })}
           onClick={(event) => {
             event.stopPropagation();

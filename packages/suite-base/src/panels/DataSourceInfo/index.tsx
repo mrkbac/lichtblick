@@ -16,7 +16,6 @@ import {
   Button,
   Chip,
   InputAdornment,
-  IconButton,
   LinearProgress,
   MenuItem,
   Tab,
@@ -40,6 +39,10 @@ import {
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import Panel from "@lichtblick/suite-base/components/Panel";
+import {
+  PanelIconButton,
+  usePanelButtonTitle,
+} from "@lichtblick/suite-base/components/PanelButton";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { isRecordingSource, PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
@@ -54,6 +57,7 @@ import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { CompareView } from "./CompareView";
 import { ActivityChart, ContainerDetails, KeyValueTable, SchemaFields } from "./InspectionViews";
+import { SOURCE_INFO_BUTTONS } from "./buttons";
 import { useStyles } from "./index.style";
 import { aggregateBuckets, BUCKET_COUNT, inspectSourceTopics, TopicInspection } from "./inspection";
 import { namespaceTotals, topicTreeRows } from "./topicTree";
@@ -92,6 +96,7 @@ function offset(time: Time, start: Time): string {
 export function RecordingInspector(): React.JSX.Element {
   const { t } = useTranslation("dataSourceInfo");
   const { classes, cx } = useStyles();
+  const copyTopicTitle = usePanelButtonTitle(SOURCE_INFO_BUTTONS.copyTopicName);
   const topics = useMessagePipeline(selectTopics);
   const getPipeline = useMessagePipelineGetter();
   // Live players emit a new topicStats map per message, so sample it instead of re-rendering per emit.
@@ -558,10 +563,8 @@ export function RecordingInspector(): React.JSX.Element {
                   <MenuItem value="average">Bytes / message</MenuItem>
                   <MenuItem value="interval">Largest interval</MenuItem>
                 </TextField>
-                <IconButton
-                  size="small"
-                  aria-label="Reverse sort direction"
-                  title={ascending ? "Ascending" : "Descending"}
+                <PanelIconButton
+                  button={SOURCE_INFO_BUTTONS.sortDirection}
                   onClick={() => {
                     setAscending(!ascending);
                   }}
@@ -571,7 +574,7 @@ export function RecordingInspector(): React.JSX.Element {
                   ) : (
                     <ArrowDownwardIcon fontSize="small" />
                   )}
-                </IconButton>
+                </PanelIconButton>
                 <TextField
                   select
                   size="small"
@@ -742,6 +745,8 @@ export function RecordingInspector(): React.JSX.Element {
                               <CopyButton
                                 size="small"
                                 iconSize="small"
+                                className={classes.topicCopy}
+                                title={copyTopicTitle}
                                 getText={() => topic.name}
                               />
                             </div>

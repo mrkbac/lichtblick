@@ -7,11 +7,9 @@
 
 import { toNanoSec } from "@foxglove/rostime";
 import { PoseInFrame } from "@foxglove/schemas";
-import { t } from "i18next";
 import * as _ from "lodash-es";
-import * as THREE from "three";
 
-import { SettingsTreeAction, SettingsTreeFields } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
 import { Axis, AXIS_LENGTH } from "./Axis";
@@ -25,7 +23,7 @@ import {
   SceneExtension,
 } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
-import { makeRgba, rgbaToCssString, stringToRgba } from "../color";
+import { makeRgba, stringToRgba } from "../color";
 import { POSE_IN_FRAME_DATATYPES } from "../foxglove";
 import {
   normalizeHeader,
@@ -45,7 +43,8 @@ import {
   PoseWithCovariance,
   ColorRGBA,
 } from "../ros";
-import { BaseSettings, PRECISION_DISTANCE } from "../settings";
+import { BaseSettings } from "../settings";
+import { POSE_DEFAULTS, poseSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose } from "../transforms";
 import { RenderableArrow } from "./markers/RenderableArrow";
@@ -62,25 +61,7 @@ export type LayerSettingsPose = BaseSettings & {
   covarianceColor: string;
 };
 
-const DEFAULT_TYPE: DisplayType = "axis";
-const DEFAULT_AXIS_SCALE = AXIS_LENGTH;
-const DEFAULT_ARROW_SCALE: THREE.Vector3Tuple = [1, 0.15, 0.15];
-const DEFAULT_COLOR = { r: 124 / 255, g: 107 / 255, b: 1, a: 1 };
-const DEFAULT_SHOW_COVARIANCE = true;
-const DEFAULT_COVARIANCE_COLOR = { r: 198 / 255, g: 107 / 255, b: 1, a: 0.25 };
-
-const DEFAULT_COLOR_STR = rgbaToCssString(DEFAULT_COLOR);
-const DEFAULT_COVARIANCE_COLOR_STR = rgbaToCssString(DEFAULT_COVARIANCE_COLOR);
-
-const DEFAULT_SETTINGS: LayerSettingsPose = {
-  type: DEFAULT_TYPE,
-  visible: false,
-  axisScale: DEFAULT_AXIS_SCALE,
-  arrowScale: DEFAULT_ARROW_SCALE,
-  color: DEFAULT_COLOR_STR,
-  showCovariance: DEFAULT_SHOW_COVARIANCE,
-  covarianceColor: DEFAULT_COVARIANCE_COLOR_STR,
-};
+const DEFAULT_SETTINGS = POSE_DEFAULTS;
 
 export type PoseUserData = BaseUserData & {
   settings: LayerSettingsPose;
@@ -148,70 +129,10 @@ export class Poses extends SceneExtension<PoseRenderable> {
         continue;
       }
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsPose>;
-      const type = config.type ?? DEFAULT_TYPE;
-
-      const fields: SettingsTreeFields = {
-        type: {
-          label: t("threeDee:type"),
-          input: "select",
-          options: [
-            { label: t("threeDee:poseDisplayTypeAxis"), value: "axis" },
-            { label: t("threeDee:poseDisplayTypeArrow"), value: "arrow" },
-          ],
-          value: type,
-        },
-      };
-      if (type === "axis") {
-        fields["axisScale"] = {
-          label: t("threeDee:scale"),
-          input: "number",
-          step: 0.5,
-          min: 0,
-          precision: PRECISION_DISTANCE,
-          value: config.axisScale ?? DEFAULT_AXIS_SCALE,
-        };
-      } else {
-        fields["arrowScale"] = {
-          label: t("threeDee:scale"),
-          input: "vec3",
-          labels: ["X", "Y", "Z"],
-          step: 0.5,
-          precision: PRECISION_DISTANCE,
-          value: config.arrowScale ?? DEFAULT_ARROW_SCALE,
-        };
-        fields["color"] = {
-          label: t("threeDee:color"),
-          input: "rgba",
-          value: config.color ?? DEFAULT_COLOR_STR,
-        };
-      }
-
-      if (isPoseWithCovarianceStamped) {
-        const showCovariance = config.showCovariance ?? DEFAULT_SHOW_COVARIANCE;
-        const covarianceColor = config.covarianceColor ?? DEFAULT_COVARIANCE_COLOR_STR;
-
-        fields["showCovariance"] = {
-          label: t("threeDee:covariance"),
-          input: "boolean",
-          value: showCovariance,
-        };
-        if (showCovariance) {
-          fields["covarianceColor"] = {
-            label: t("threeDee:covarianceColor"),
-            input: "rgba",
-            value: covarianceColor,
-          };
-        }
-      }
-
       entries.push({
         path: ["topics", topic.name],
         node: {
-          label: topic.name,
-          icon: "Flag",
-          fields,
-          visible: config.visible ?? DEFAULT_SETTINGS.visible,
-          order: topic.name.toLocaleLowerCase(),
+          ...poseSettingsNode(topic, config, { hasCovariance: isPoseWithCovarianceStamped }),
           handler,
         },
       });

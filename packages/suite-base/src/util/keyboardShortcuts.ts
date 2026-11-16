@@ -21,6 +21,19 @@ export type KeyCombo = {
   alt?: boolean;
 };
 
+/** One mouse gesture, e.g. a right-drag or an Alt-click. */
+export type MouseGesture = {
+  action: "click" | "double-click" | "drag" | "scroll" | "hover" | "long-press" | "drop";
+  /** Left when left out. */
+  button?: "right" | "middle";
+  /** Cmd on macOS, Ctrl elsewhere. */
+  mod?: boolean;
+  /** The Control key on every platform (e.g. map libraries' Ctrl-drag). */
+  ctrl?: boolean;
+  shift?: boolean;
+  alt?: boolean;
+};
+
 /**
  * A keyboard shortcut, declared once. The same declaration feeds the shortcut overlay and, via
  * {@link shortcutKeyHandlers} or {@link findShortcut}, the key handling itself, so the two can't
@@ -30,8 +43,13 @@ export type KeyboardShortcut = {
   id: string;
   /** Key in the keyboardShortcuts i18n namespace. */
   titleKey: KeyboardShortcutTitleKey;
-  /** Alternative bindings, all shown in the overlay. */
+  /** Alternative bindings, all shown in the overlay. Empty for a mouse-only action. */
   keys: readonly KeyCombo[];
+  /**
+   * Mouse gestures for the same action, shown next to the keys. Pointer handling is the panel's
+   * own, so these are declared for display; keep them next to the keys so both change together.
+   */
+  mouse?: readonly MouseGesture[];
 };
 
 /** The parts of a DOM or React keyboard event that shortcuts look at. */
@@ -147,6 +165,58 @@ export function formatCombo(combo: KeyCombo): string {
   return formatKeyboardShortcut(label, modifiers);
 }
 
+const MOUSE_ACTION_LABELS: Record<MouseGesture["action"], string> = {
+  click: "Click",
+  "double-click": "Double-click",
+  drag: "Drag",
+  scroll: "Scroll",
+  hover: "Hover",
+  "long-press": "Long-press",
+  drop: "Drop",
+};
+
+/** Formats a gesture with platform modifiers, e.g. "Right-drag" or "⌥Click". */
+export function formatGesture(gesture: MouseGesture): string {
+  const modifiers: ModifierKeys[] = [];
+  if (gesture.mod === true) {
+    modifiers.push("Meta");
+  }
+  if (gesture.ctrl === true) {
+    modifiers.push("Control");
+  }
+  if (gesture.alt === true) {
+    modifiers.push("Alt");
+  }
+  if (gesture.shift === true) {
+    modifiers.push("Shift");
+  }
+  const action = MOUSE_ACTION_LABELS[gesture.action];
+  const label =
+    gesture.button == undefined
+      ? action
+      : `${gesture.button === "right" ? "Right" : "Middle"}-${action.toLowerCase()}`;
+  return formatKeyboardShortcut(label, modifiers);
+}
+
+/** A declared shortcut by id, e.g. to link it from a button declaration. */
+export function shortcutById<S extends KeyboardShortcut>(shortcuts: readonly S[], id: S["id"]): S {
+  const shortcut = shortcuts.find((entry) => entry.id === id);
+  if (shortcut == undefined) {
+    throw new Error(`Unknown shortcut ${id}`);
+  }
+  return shortcut;
+}
+
+/** The first key binding, or else the first gesture, e.g. "Z" or "Double-click". */
+export function firstBindingLabel(shortcut: KeyboardShortcut): string | undefined {
+  const combo = shortcut.keys[0];
+  if (combo != undefined) {
+    return formatCombo(combo);
+  }
+  const gesture = shortcut.mouse?.[0];
+  return gesture != undefined ? formatGesture(gesture) : undefined;
+}
+
 /** The first binding of a declared shortcut, e.g. "⌘K", for menus and the command palette. */
 export function shortcutLabel<S extends KeyboardShortcut>(
   shortcuts: readonly S[],
@@ -167,7 +237,7 @@ export function shortcutRows(
   return shortcuts.map((shortcut) => ({
     id: shortcut.id,
     title: translate(shortcut.titleKey),
-    keys: shortcut.keys.map(formatCombo),
+    keys: [...shortcut.keys.map(formatCombo), ...(shortcut.mouse ?? []).map(formatGesture)],
   }));
 }
 

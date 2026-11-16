@@ -11,16 +11,10 @@ import * as THREE from "three";
 import Logger from "@lichtblick/log";
 import { MessageEvent, SettingsTreeAction, Time } from "@lichtblick/suite";
 import { loadGeoTiff } from "@lichtblick/suite-base/panels/Map/geotiff";
-import {
-  MAP_SOURCE_KINDS,
-  applyLayerStackAction,
-  layerStackActions,
-  layerStackChildren,
-} from "@lichtblick/suite-base/panels/Map/layerSettings";
+import { applyLayerStackAction } from "@lichtblick/suite-base/panels/Map/layerSettings";
 import {
   ImageOverlay,
   MapLayer,
-  SourceKind,
   SourceParams,
   composeStyle,
   fetchVectorStyle,
@@ -41,17 +35,22 @@ import { SettingsTreeEntry } from "../SettingsManager";
 import type { MapAnchor } from "../SharedMap";
 import { normalizeTime } from "../normalizeMessages";
 import { LOCATION_SCHEMAS } from "../ros";
-import { CustomLayerSettings, PRECISION_DISTANCE } from "../settings";
+import { CustomLayerSettings } from "../settings";
+import {
+  MAP_DEFAULTS,
+  MAP_LAYER_ID,
+  MAP_LAYER_SOURCE_KINDS,
+  mapSettingsNode,
+} from "../settingsNodes/layers";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose } from "../transforms";
 
 const log = Logger.getLogger(__filename);
 
-const LAYER_ID = "lichtblick.Map";
+const LAYER_ID = MAP_LAYER_ID;
 const MAX_LATITUDE = 85.051129;
 
-/** The 3D panel renders 3D Tiles on top of what the Map panel offers. */
-const SOURCE_KINDS: readonly SourceKind[] = [...MAP_SOURCE_KINDS, "3dtiles"];
+const SOURCE_KINDS = MAP_LAYER_SOURCE_KINDS;
 
 type LocationMessage = {
   header?: { frame_id?: string; stamp?: Time };
@@ -76,15 +75,7 @@ export type LayerSettingsMap = CustomLayerSettings & {
   enuFrame?: string;
 };
 
-const DEFAULT_SETTINGS: LayerSettingsMap = {
-  visible: true,
-  frameLocked: true,
-  label: "Map",
-  instanceId: "invalid",
-  layerId: LAYER_ID,
-  layers: [{ id: "base", source: "ofm-liberty", visible: true, opacity: 1 }],
-  zOffset: 0,
-};
+const DEFAULT_SETTINGS = MAP_DEFAULTS;
 
 const withDefaults = (config: Partial<LayerSettingsMap>): LayerSettingsMap => ({
   ...DEFAULT_SETTINGS,
@@ -581,57 +572,14 @@ export class Maps extends SceneExtension<MapRenderable> {
       entries.push({
         path: ["layers", instanceId],
         node: {
-          label: config.label,
-          icon: "Map",
-          fields: {
-            locationTopic: {
-              label: "Location topic",
-              input: "select",
-              options: [
-                { label: "Auto", value: undefined },
-                ...locationTopics.map((topic) => ({ label: topic.name, value: topic.name })),
-              ],
-              value: config.locationTopic,
-              help: "NavSatFix or LocationFix topic that places the map. For fixes without a frame_id, select the location frame; otherwise the fix is placed at the ENU frame's origin.",
-            },
-            locationFrame: {
-              label: t("threeDee:locationFrame"),
-              input: "select",
-              options: [
-                { label: t("threeDee:locationFrameFromMessage"), value: undefined },
-                ...this.renderer.coordinateFrameList,
-              ],
-              value: config.locationFrame,
-              help: t("threeDee:locationFrameHelp"),
-            },
-            enuFrame: {
-              label: "ENU frame",
-              input: "select",
-              options: [
-                { label: "<Fixed frame>", value: undefined },
-                ...this.renderer.coordinateFrameList,
-              ],
-              value: config.enuFrame,
-              help: "Frame whose X axis points east, Y north and Z up.",
-            },
-            zOffset: {
-              label: "Z offset",
-              input: "number",
-              step: 0.1,
-              precision: PRECISION_DISTANCE,
-              value: config.zOffset,
-              help: "Height of the 2D map in meters above the ENU frame's XY plane",
-            },
-          },
-          visible: config.visible,
-          actions: [
-            ...layerStackActions(saved),
-            { type: "action", id: "delete", label: t("threeDee:delete") },
-          ],
-          children: layerStackChildren(config.layers, saved, SOURCE_KINDS, (layer) =>
-            errors?.get(layer.id),
+          ...mapSettingsNode(
+            config,
+            locationTopics.map((topic) => topic.name),
+            this.renderer.coordinateFrameList,
+            saved,
+            SOURCE_KINDS,
+            (layer) => errors?.get(layer.id),
           ),
-          order: layerConfig.order,
           handler: this.handleSettingsAction,
         },
       });

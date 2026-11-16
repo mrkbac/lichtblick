@@ -3,8 +3,12 @@
 
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 
+import { DEFAULT_CONFIG } from "./constants";
+import { buildSettingsTree } from "./settings";
+
 const docs: PanelDocs = {
   intro: "Shows the latest values of a float32 array as shares of a pie chart.",
+  settings: () => buildSettingsTree(DEFAULT_CONFIG, 1),
   sections: [
     {
       title: "Data",
@@ -13,20 +17,7 @@ const docs: PanelDocs = {
           "Message path",
           "A float32[] field; each element becomes one slice, as a percentage of the sum.",
         ],
-        ["Drag and drop", "Drop a float32[] field from the topic list to chart it."],
       ],
-    },
-    {
-      title: "Settings",
-      items: [
-        ["Title", "Shown above the chart."],
-        ["Legend controls", "Add or remove legend name fields."],
-        ["Legend N", 'Name of the Nth slice; empty shows "Data N".'],
-      ],
-    },
-    {
-      title: "Mouse",
-      items: [["Hover", "Shows a slice's name and percentage."]],
     },
   ],
 };

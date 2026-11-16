@@ -4,6 +4,8 @@
 import { Divider, Paper, Typography } from "@mui/material";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { isThreeDeeShortcut } from "@lichtblick/suite-base/panels/ThreeDeeRender/shortcuts";
+
 import { useStyles } from "./HoverTooltip.style";
 import {
   HOVER_TOOLTIP_DWELL_MS,
@@ -234,7 +236,7 @@ export function HoverTooltip({
       return undefined;
     }
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (isThreeDeeShortcut("3d.closeDetails", e)) {
         clearTimeout(graceTimer.current);
         clearTimeout(leaveTimer.current);
         setMode("hidden");

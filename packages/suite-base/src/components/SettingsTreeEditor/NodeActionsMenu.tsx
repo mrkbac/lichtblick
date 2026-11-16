@@ -87,6 +87,7 @@ export function NodeActionsMenu({
             <MenuItem
               data-testid={`node-actions-menu-item-${action.id}`}
               key={action.id}
+              title={action.help}
               onClick={() => {
                 handleClose(action.id);
               }}

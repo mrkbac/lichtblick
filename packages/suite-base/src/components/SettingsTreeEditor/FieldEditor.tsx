@@ -385,7 +385,7 @@ function FieldLabel({
     return (
       <div className={classes.multiLabelWrapper}>
         <Typography
-          title={field.label}
+          title={field.help ?? field.label}
           variant="subtitle2"
           noWrap
           color="textSecondary"
@@ -412,7 +412,7 @@ function FieldLabel({
     return (
       <div className={classes.multiLabelWrapper}>
         <Typography
-          title={field.label}
+          title={field.help ?? field.label}
           variant="subtitle2"
           noWrap
           color="textSecondary"

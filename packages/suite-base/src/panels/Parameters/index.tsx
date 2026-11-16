@@ -14,22 +14,15 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import AccountTreeOutlinedIcon from "@mui/icons-material/AccountTreeOutlined";
-import ClearIcon from "@mui/icons-material/Clear";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
 import FileDownloadOutlinedIcon from "@mui/icons-material/FileDownloadOutlined";
 import FileUploadOutlinedIcon from "@mui/icons-material/FileUploadOutlined";
 import PhotoCameraOutlinedIcon from "@mui/icons-material/PhotoCameraOutlined";
 import SearchIcon from "@mui/icons-material/Search";
-import UnfoldLessIcon from "@mui/icons-material/UnfoldLess";
-import UnfoldMoreIcon from "@mui/icons-material/UnfoldMore";
-import ViewListIcon from "@mui/icons-material/ViewList";
 import {
   Alert,
   Button,
   Divider,
   FormControlLabel,
-  IconButton,
   InputAdornment,
   InputBase,
   ListItemIcon,
@@ -38,7 +31,6 @@ import {
   MenuItem,
   Switch,
   ToggleButton,
-  Tooltip,
   Typography,
 } from "@mui/material";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -53,14 +45,21 @@ import {
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import Panel from "@lichtblick/suite-base/components/Panel";
+import {
+  PanelIconButton,
+  usePanelButtonTitle,
+} from "@lichtblick/suite-base/components/PanelButton";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { downloadTextFile } from "@lichtblick/suite-base/util/download";
+import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { ParameterRow } from "./ParameterRow";
+import { PARAMETERS_BUTTONS } from "./buttons";
+import { PARAMETERS_SHORTCUT } from "./shortcuts";
 import {
   allGroupKeys,
   buildRows,
@@ -196,6 +195,7 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
   const listRef = useRef<HTMLDivElement>(null);
 
   const changed = useChangedParameters(parameters);
+  const regexTitle = usePanelButtonTitle(PARAMETERS_BUTTONS.regex);
 
   const snapshot = compareTo != undefined ? snapshots[compareTo] : undefined;
   const snapshotValues = useMemo(() => {
@@ -349,7 +349,7 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
             setQuery(event.target.value);
           }}
           onKeyDown={(event) => {
-            if (event.key === "Escape") {
+            if (findShortcut([PARAMETERS_SHORTCUT.clearFilter], event)) {
               setQuery("");
             }
           }}
@@ -365,71 +365,50 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
                   {visibleNames.length} / {allNames.length}
                 </Typography>
               )}
-              <Tooltip title="Use regular expression">
-                <ToggleButton
-                  className={classes.regex}
-                  value="regex"
-                  size="small"
-                  selected={regex}
-                  onChange={() => {
-                    setRegex(!regex);
-                  }}
-                >
-                  .*
-                </ToggleButton>
-              </Tooltip>
+              <ToggleButton
+                className={classes.regex}
+                value="regex"
+                size="small"
+                title={regexTitle}
+                aria-label={regexTitle}
+                selected={regex}
+                onChange={() => {
+                  setRegex(!regex);
+                }}
+              >
+                <PARAMETERS_BUTTONS.regex.icon />
+              </ToggleButton>
             </>
           }
         />
-        <Tooltip title={tree ? "Show flat list" : "Group by namespace"}>
-          <IconButton
-            size="small"
-            onClick={() => {
-              saveConfig({ flat: tree });
-            }}
-          >
-            {tree ? (
-              <ViewListIcon fontSize="small" />
-            ) : (
-              <AccountTreeOutlinedIcon fontSize="small" />
-            )}
-          </IconButton>
-        </Tooltip>
+        <PanelIconButton
+          button={tree ? PARAMETERS_BUTTONS.flatList : PARAMETERS_BUTTONS.groupByNamespace}
+          onClick={() => {
+            saveConfig({ flat: tree });
+          }}
+        />
         {tree && (
           <>
-            <Tooltip title="Expand all">
-              <IconButton
-                size="small"
-                onClick={() => {
-                  saveConfig({ collapsed: [] });
-                }}
-              >
-                <UnfoldMoreIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Collapse all">
-              <IconButton
-                size="small"
-                onClick={() => {
-                  saveConfig({ collapsed: allGroupKeys(allNames) });
-                }}
-              >
-                <UnfoldLessIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            <PanelIconButton
+              button={PARAMETERS_BUTTONS.expandAll}
+              onClick={() => {
+                saveConfig({ collapsed: [] });
+              }}
+            />
+            <PanelIconButton
+              button={PARAMETERS_BUTTONS.collapseAll}
+              onClick={() => {
+                saveConfig({ collapsed: allGroupKeys(allNames) });
+              }}
+            />
           </>
         )}
-        <Tooltip title="Snapshots">
-          <IconButton
-            size="small"
-            aria-label="Snapshots"
-            onClick={(event) => {
-              setMenuAnchor(event.currentTarget);
-            }}
-          >
-            <PhotoCameraOutlinedIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
+        <PanelIconButton
+          button={PARAMETERS_BUTTONS.snapshots}
+          onClick={(event) => {
+            setMenuAnchor(event.currentTarget);
+          }}
+        />
         <input
           ref={fileInput}
           type="file"
@@ -491,30 +470,22 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
             }}
           >
             <ListItemText primary={snap.name} secondary="Compare with current" />
-            <Tooltip title="Export as YAML">
-              <IconButton
-                size="small"
-                aria-label={`Export ${snap.name}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  downloadTextFile(snap.yaml, `${snap.name.replace(/[^\w.-]+/g, "_")}.yaml`);
-                }}
-              >
-                <FileDownloadOutlinedIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
-            <Tooltip title="Delete snapshot">
-              <IconButton
-                size="small"
-                aria-label={`Delete ${snap.name}`}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  deleteSnapshot(index);
-                }}
-              >
-                <DeleteOutlineIcon fontSize="small" />
-              </IconButton>
-            </Tooltip>
+            <PanelIconButton
+              button={PARAMETERS_BUTTONS.exportSnapshot}
+              aria-label={`Export ${snap.name}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                downloadTextFile(snap.yaml, `${snap.name.replace(/[^\w.-]+/g, "_")}.yaml`);
+              }}
+            />
+            <PanelIconButton
+              button={PARAMETERS_BUTTONS.deleteSnapshot}
+              aria-label={`Delete ${snap.name}`}
+              onClick={(event) => {
+                event.stopPropagation();
+                deleteSnapshot(index);
+              }}
+            />
           </MenuItem>
         ))}
       </Menu>
@@ -568,17 +539,12 @@ function Parameters({ config, saveConfig }: Props): ReactElement {
               </Button>
             </>
           )}
-          <Tooltip title="Stop comparing">
-            <IconButton
-              size="small"
-              aria-label="Stop comparing"
-              onClick={() => {
-                startCompare(undefined);
-              }}
-            >
-              <ClearIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          <PanelIconButton
+            button={PARAMETERS_BUTTONS.stopComparing}
+            onClick={() => {
+              startCompare(undefined);
+            }}
+          />
         </div>
       )}
       {rows.length === 0 ? (

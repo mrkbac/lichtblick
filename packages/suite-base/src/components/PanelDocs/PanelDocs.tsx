@@ -13,24 +13,25 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
-import { ComponentType, Fragment, useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 import { create } from "zustand";
 
 import { useAsync } from "@lichtblick/hooks";
-import OverlayToolbar from "@lichtblick/suite-base/components/OverlayToolbar";
+import Log from "@lichtblick/log";
+import { PanelButton, PanelButtonPreview } from "@lichtblick/suite-base/components/PanelButton";
 import { PanelInfo, usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogContext";
+import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 import { shortcutRows } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { customTypography } from "@lichtblick/theme";
 
-/**
- * One fact: [term, explanation, icon]. For an item about a button, pass the icon (or label)
- * component the panel renders in that button; the guide draws it in a real, inert overlay button.
- */
-export type PanelDocsItem = readonly [term: string, text: string, icon?: ComponentType];
+const log = Log.getLogger(__filename);
 
-/** One group of short facts, e.g. "Toolbar" or "Mouse". */
+/** One fact the panel's declarations can't tell: [term, explanation]. */
+export type PanelDocsItem = readonly [term: string, text: string];
+
+/** One group of short facts, e.g. "Data". */
 export type PanelDocsSection = {
   title: string;
   items: readonly PanelDocsItem[];
@@ -38,17 +39,52 @@ export type PanelDocsSection = {
 
 /**
  * In-app documentation for a panel, shown in the panel guide (the ⓘ button in a panel's toolbar,
- * or the app menu). Lives next to the panel and loads lazily, so it can import the panel's own
- * schema constants and the list can't drift from what the panel reads.
+ * or the app menu). Lives next to the panel and loads lazily. Everything the panel declares comes
+ * from those declarations, so docs can't drift: buttons from its `buttons.ts`, settings from its
+ * own settings builder, keyboard and mouse input from `PanelInfo.shortcuts`, schemas from its
+ * constants. `sections` hold only what no declaration can tell.
  */
 export type PanelDocs = {
   /** One short sentence: what the panel is for. */
   intro: string;
   /** Schemas the panel reads, from the panel's own constants. */
   schemas?: Iterable<string>;
-  /** Short, high-value facts. Keyboard shortcuts come from the panel's `shortcuts`. */
+  /** The panel's declared buttons, in the order it draws them. */
+  buttons?: readonly PanelButton[];
+  /** The panel's settings tree for its default config, built by the panel's own builder. */
+  settings?: () => DocumentedNodes;
+  /** Short facts no declaration covers, e.g. what a message path accepts. */
   sections?: readonly PanelDocsSection[];
 };
+
+/** [label path, label, help] rows for every documented node and field, in tree order. */
+export function settingsRows(
+  nodes: DocumentedNodes,
+  path: readonly string[] = [],
+): { path: string; label: string; help: string }[] {
+  return Object.values(nodes).flatMap((node) => {
+    if (node == undefined) {
+      return [];
+    }
+    const nodePath = node.label != undefined ? [...path, node.label] : path;
+    const rows = [];
+    if (node.help != undefined && node.label != undefined) {
+      rows.push({ path: path.join(" › "), label: node.label, help: node.help });
+    }
+    for (const field of Object.values(node.fields ?? {})) {
+      if (field != undefined) {
+        rows.push({ path: nodePath.join(" › "), label: field.label, help: field.help });
+      }
+    }
+    // Actions (e.g. "Add all") are listed when they explain themselves.
+    for (const action of node.actions ?? []) {
+      if (action.type === "action" && action.help != undefined) {
+        rows.push({ path: nodePath.join(" › "), label: action.label, help: action.help });
+      }
+    }
+    return [...rows, ...settingsRows(node.children ?? {}, nodePath)];
+  });
+}
 
 /**
  * Merges encoding variants of one schema (ROS 1/2 `pkg/msg/Name`, `ros.pkg.Name`, `foxglove::X`,
@@ -84,10 +120,15 @@ export const usePanelGuideStore = create<{
   },
 }));
 
+type Row = { term: string; text: string; button?: PanelButton };
+type Section = { title: string; rows: Row[] };
+
 type LoadedDocs = {
   info: PanelInfo;
   docs: PanelDocs;
   schemas: string[];
+  /** Buttons, custom sections, and settings, in display order. */
+  sections: Section[];
   /** Lower-cased text the search matches against. */
   haystack: string;
 };
@@ -116,8 +157,6 @@ const useStyles = makeStyles()((theme) => ({
   },
   sectionTitle: { gridColumn: "1 / -1", marginTop: theme.spacing(2) },
   fullRow: { gridColumn: "1 / -1" },
-  // A picture of the button, not a control.
-  button: { pointerEvents: "none", width: "fit-content" },
 
   chips: { display: "flex", flexWrap: "wrap", gap: theme.spacing(0.5) },
   chip: { fontFamily: customTypography.fontMonospace },
@@ -132,18 +171,6 @@ const useStyles = makeStyles()((theme) => ({
     borderRadius: theme.shape.borderRadius,
   },
 }));
-
-/** The real overlay button the item explains, inert, so docs match what people see. */
-function ButtonPreview({ icon: Icon }: { icon: ComponentType }): React.JSX.Element {
-  const { classes } = useStyles();
-  return (
-    <OverlayToolbar className={classes.button} aria-hidden>
-      <IconButton size="small" component="span" tabIndex={-1} disableRipple>
-        <Icon />
-      </IconButton>
-    </OverlayToolbar>
-  );
-}
 
 function SectionTitle(props: { title: string }): React.JSX.Element {
   const { classes } = useStyles();
@@ -164,7 +191,7 @@ function PanelDocsView(props: { entry: LoadedDocs; words: string[] }): React.JSX
   const { classes } = useStyles();
   const { t } = useTranslation("panelToolbar");
   const { t: tShortcuts } = useTranslation("keyboardShortcuts");
-  const { info, docs, schemas } = entry;
+  const { info, schemas } = entry;
   const shortcuts = shortcutRows(info.shortcuts ?? [], (key) => tShortcuts(key));
   return (
     <>
@@ -172,15 +199,16 @@ function PanelDocsView(props: { entry: LoadedDocs; words: string[] }): React.JSX
         {info.title}
       </Typography>
       <Typography variant="body1" className={classes.intro}>
-        {docs.intro}
+        {entry.docs.intro}
       </Typography>
       <div className={classes.grid}>
-        {docs.sections?.map((section) => (
+        {entry.sections.map((section) => (
           <Fragment key={section.title}>
             <SectionTitle title={section.title} />
-            {section.items.map(([term, text, Icon]) => (
-              <Fragment key={term}>
-                <span>{Icon && <ButtonPreview icon={Icon} />}</span>
+            {section.rows.map(({ term, text, button }, index) => (
+              // Merged settings nodes can repeat a label (e.g. two "Scale" fields).
+              <Fragment key={`${index}:${term}`}>
+                <span>{button && <PanelButtonPreview button={button} />}</span>
                 <Typography variant="body2" className={classes.term}>
                   {term}
                 </Typography>
@@ -193,7 +221,7 @@ function PanelDocsView(props: { entry: LoadedDocs; words: string[] }): React.JSX
         ))}
         {shortcuts.length > 0 && (
           <>
-            <SectionTitle title={t("keyboardShortcuts")} />
+            <SectionTitle title={t("keyboardAndMouse")} />
             {shortcuts.map((row) => (
               <Fragment key={row.id}>
                 <span />
@@ -239,6 +267,7 @@ function PanelDocsView(props: { entry: LoadedDocs; words: string[] }): React.JSX
 function PanelGuideDialog(): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("panelToolbar");
+  const { t: tButtons } = useTranslation("panelButtons");
   const hide = usePanelGuideStore((state) => state.hide);
   const show = usePanelGuideStore((state) => state.show);
   const selectedType = usePanelGuideStore((state) => state.panelType);
@@ -248,22 +277,62 @@ function PanelGuideDialog(): React.JSX.Element {
   // Load every panel's docs up front, so search also finds panels by schema.
   const loaded = useAsync(async () => {
     const panels = panelCatalog.getPanels().filter((info) => info.docs != undefined);
-    return await Promise.all(
+    // One panel's broken docs (e.g. a stale chunk after a deploy) must not hide the others.
+    const results = await Promise.allSettled(
       panels.map(async (info): Promise<LoadedDocs> => {
         const docs = (await info.docs!()).default;
         const schemas = schemaDisplayNames(docs.schemas ?? []);
+        const sections: Section[] = [];
+        if (docs.buttons != undefined && docs.buttons.length > 0) {
+          sections.push({
+            title: t("buttons"),
+            rows: docs.buttons.map((button) => ({
+              term: tButtons(`${button.id}.title`),
+              text: tButtons(`${button.id}.help`),
+              button,
+            })),
+          });
+        }
+        for (const section of docs.sections ?? []) {
+          sections.push({
+            title: section.title,
+            rows: section.items.map(([term, text]) => ({ term, text })),
+          });
+        }
+        // One section per settings node, titled by its path, e.g. "Settings › Topics".
+        const settings = new Map<string, Row[]>();
+        for (const row of settingsRows(docs.settings?.() ?? {})) {
+          const title = [t("settings"), row.path].filter(Boolean).join(" › ");
+          settings.set(title, [
+            ...(settings.get(title) ?? []),
+            { term: row.label, text: row.help },
+          ]);
+        }
+        for (const [title, rows] of settings) {
+          sections.push({ title, rows });
+        }
         const haystack = [
           info.title,
           docs.intro,
           ...schemas,
-          ...(docs.sections ?? []).flatMap((section) => [section.title, ...section.items.flat()]),
+          ...sections.flatMap((section) => [
+            section.title,
+            ...section.rows.flatMap((row) => [row.term, row.text]),
+          ]),
         ]
           .join("\n")
           .toLowerCase();
-        return { info, docs, schemas, haystack };
+        return { info, docs, schemas, sections, haystack };
       }),
     );
-  }, [panelCatalog]);
+    return results.flatMap((result, index) => {
+      if (result.status === "fulfilled") {
+        return [result.value];
+      }
+      log.error(`Failed to load docs for ${panels[index]?.type}`, result.reason);
+      return [];
+    });
+  }, [panelCatalog, t, tButtons]);
 
   const entries = useMemo(() => loaded.value ?? [], [loaded.value]);
   const words = useMemo(() => query.toLowerCase().split(/\s+/).filter(Boolean), [query]);

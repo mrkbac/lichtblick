@@ -42,6 +42,7 @@ describe("useSettingsTree", () => {
     expect(general).toBeDefined();
     expect(general.fields!.path).toEqual({
       label: "messagePath.label",
+      help: "messagePath.help",
       input: "messagepath",
       supportsMathModifiers: true,
       value: props.config.path,
@@ -50,16 +51,19 @@ describe("useSettingsTree", () => {
     });
     expect(general.fields!.minValue).toEqual({
       label: "minValue.label",
+      help: "minValue.help",
       input: "number",
       value: props.config.minValue,
     });
     expect(general.fields!.maxValue).toEqual({
       label: "maxValue.label",
+      help: "maxValue.help",
       input: "number",
       value: props.config.maxValue,
     });
     expect(general.fields!.colorMode).toEqual({
       label: "colorMode.label",
+      help: "colorMode.help",
       input: "select",
       value: props.config.colorMode,
       options: expect.any(Array),
@@ -80,6 +84,7 @@ describe("useSettingsTree", () => {
 
     expect(general.fields!.gradient).toEqual({
       label: "colorMode.options.gradient",
+      help: "gradientHelp",
       input: props.config.colorMode,
       value: props.config.gradient,
     });
@@ -98,6 +103,7 @@ describe("useSettingsTree", () => {
 
     expect(general.fields!.reverse).toEqual({
       label: "reverse.label",
+      help: "reverse.help",
       input: "boolean",
       value: props.config.reverse,
     });

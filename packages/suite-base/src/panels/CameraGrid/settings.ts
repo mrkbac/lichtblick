@@ -4,8 +4,9 @@
 import { TFunction } from "i18next";
 import { produce } from "immer";
 
-import { SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 import { sortPrefixMatchesToFront } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/topicPrefixMatching";
+import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 import { moveItem, moveUpDownActions } from "@lichtblick/suite-base/panels/utils";
 
 import { tileAnnotationTopics } from "./annotations";
@@ -27,18 +28,18 @@ export function buildSettingsTree(
   imageTopics: string[],
   annotationTopics: string[],
   t: TFunction<"cameraGrid">,
-): SettingsTreeNodes {
+): DocumentedNodes {
   const shown = new Set(config.tiles.map((tile) => tile.topic));
   const addable = imageTopics.filter((topic) => !shown.has(topic));
 
-  const tiles: SettingsTreeNodes = {};
+  const tiles: DocumentedNodes = {};
   config.tiles.forEach((tile, index) => {
     const topicOptions = [tile.topic, ...addable].map((topic) => ({ label: topic, value: topic }));
     const shownAnnotations = new Set(tileAnnotationTopics(tile, annotationTopics));
     // Same order as the Image panel: topics next to the image topic first.
     const annotationOptions = [...annotationTopics];
     sortPrefixMatchesToFront(annotationOptions, tile.topic, (topic) => topic);
-    const annotationNodes: SettingsTreeNodes = {};
+    const annotationNodes: DocumentedNodes = {};
     for (const topic of annotationOptions) {
       annotationNodes[topic] = { label: topic, visible: shownAnnotations.has(topic) };
     }
@@ -52,9 +53,16 @@ export function buildSettingsTree(
         { type: "action", id: "remove", label: t("remove"), icon: "Delete", display: "inline" },
       ],
       fields: {
-        topic: { label: t("topic"), input: "select", value: tile.topic, options: topicOptions },
+        topic: {
+          label: t("topic"),
+          help: t("topicHelp"),
+          input: "select",
+          value: tile.topic,
+          options: topicOptions,
+        },
         fit: {
           label: t("scaling"),
+          help: t("scalingHelp"),
           input: "toggle",
           value: tile.fit,
           options: [
@@ -64,22 +72,30 @@ export function buildSettingsTree(
         },
         rotation: {
           label: t("rotation"),
+          help: t("rotationHelp"),
           input: "select",
           value: tile.rotation,
           options: ROTATION_OPTIONS,
         },
         flipHorizontal: {
           label: t("flipHorizontal"),
+          help: t("flipHorizontalHelp"),
           input: "boolean",
           value: tile.flipHorizontal,
         },
-        flipVertical: { label: t("flipVertical"), input: "boolean", value: tile.flipVertical },
+        flipVertical: {
+          label: t("flipVertical"),
+          help: t("flipVerticalHelp"),
+          input: "boolean",
+          value: tile.flipVertical,
+        },
       },
       children:
         annotationOptions.length > 0
           ? {
               annotations: {
                 label: t("annotations"),
+                help: t("annotationsHelp"),
                 enableVisibilityFilter: true,
                 children: annotationNodes,
               },
@@ -96,6 +112,7 @@ export function buildSettingsTree(
           type: "action",
           id: ADD_ALL_ACTION,
           label: t("addAllImageTopics"),
+          help: t("addAllImageTopicsHelp"),
           icon: "Grid",
           display: "inline",
         },
@@ -104,6 +121,7 @@ export function buildSettingsTree(
       fields: {
         add: {
           label: t("addCamera"),
+          help: t("addCameraHelp"),
           input: "select",
           value: undefined,
           tooltip: t("addCameraTooltip"),
@@ -112,6 +130,7 @@ export function buildSettingsTree(
         },
         columns: {
           label: t("columns"),
+          help: t("columnsHelp"),
           input: "number",
           min: 1,
           step: 1,
@@ -119,9 +138,15 @@ export function buildSettingsTree(
           placeholder: t("columnsAuto"),
           value: config.columns,
         },
-        showLabels: { label: t("showTopic"), input: "boolean", value: config.showLabels },
+        showLabels: {
+          label: t("showTopic"),
+          help: t("showTopicHelp"),
+          input: "boolean",
+          value: config.showLabels,
+        },
         showTimestamps: {
           label: t("showTimestamp"),
+          help: t("showTimestampHelp"),
           input: "boolean",
           value: config.showTimestamps,
         },
@@ -139,7 +164,7 @@ export function buildSettingsTree(
         },
       },
     },
-    topics: { label: t("cameras"), children: tiles },
+    topics: { label: t("cameras"), help: t("camerasHelp"), children: tiles },
   };
 }
 

@@ -3,16 +3,19 @@
 
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
-import RestoreIcon from "@mui/icons-material/Restore";
-import { Checkbox, IconButton, Tooltip, Typography } from "@mui/material";
+import { Checkbox, Typography } from "@mui/material";
 import { memo, ReactElement } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { ParameterValue } from "@lichtblick/suite";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
+import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
+import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { customTypography } from "@lichtblick/theme";
 
 import { ParameterEditor } from "./ParameterEditor";
+import { PARAMETERS_BUTTONS } from "./buttons";
+import { PARAMETERS_SHORTCUT } from "./shortcuts";
 import { DiffStatus, formatValue, parameterType, Row } from "./utils";
 
 const INDENT_PX = 14;
@@ -126,7 +129,7 @@ export const ParameterRow = memo(function ParameterRowImpl(props: ParameterRowPr
           onToggle(row.key);
         }}
         onKeyDown={(event) => {
-          if (event.key === "Enter" || event.key === " ") {
+          if (findShortcut([PARAMETERS_SHORTCUT.toggleNamespace], event)) {
             event.preventDefault();
             onToggle(row.key);
           }
@@ -198,17 +201,13 @@ export const ParameterRow = memo(function ParameterRowImpl(props: ParameterRowPr
       </div>
       {canApply && (
         <>
-          <Tooltip title="Restore snapshot value">
-            <IconButton
-              size="small"
-              aria-label={`Restore ${name}`}
-              onClick={() => {
-                onSubmit(name, snapshotValue);
-              }}
-            >
-              <RestoreIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+          <PanelIconButton
+            button={PARAMETERS_BUTTONS.restoreValue}
+            aria-label={`Restore ${name}`}
+            onClick={() => {
+              onSubmit(name, snapshotValue);
+            }}
+          />
           <Checkbox
             size="small"
             checked={selected}

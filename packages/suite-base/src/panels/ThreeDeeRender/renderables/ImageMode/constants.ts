@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { HUDItem } from "@lichtblick/suite-base/panels/ThreeDeeRender/HUDItemManager";
-import { IMAGE_DEFAULT_COLOR_MODE_SETTINGS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/decodeImage";
 import { t3D } from "@lichtblick/suite-base/panels/ThreeDeeRender/t3D";
 
 export const IMAGE_TOPIC_PATH = ["imageMode", "imageTopic"];
@@ -39,13 +38,15 @@ export {
   SUPPORTED_RAW_IMAGE_SCHEMAS,
 } from "./schemas";
 
-export const MIN_BRIGHTNESS = 0;
-export const MAX_BRIGHTNESS = 100;
-export const INITIAL_BRIGHTNESS = (MAX_BRIGHTNESS + MIN_BRIGHTNESS) / 2;
-
-export const MIN_CONTRAST = 0;
-export const MAX_CONTRAST = 100;
-export const INITIAL_CONTRAST = (MAX_CONTRAST + MIN_CONTRAST) / 2;
+export {
+  DEFAULT_IMAGE_CONFIG,
+  INITIAL_BRIGHTNESS,
+  INITIAL_CONTRAST,
+  MAX_BRIGHTNESS,
+  MAX_CONTRAST,
+  MIN_BRIGHTNESS,
+  MIN_CONTRAST,
+} from "../../settingsNodes/imageMode";
 
 // Brightness should be in the range of -1 and 1.
 // It was trimmed by 0.4 to improve visualization.
@@ -62,16 +63,6 @@ export const NO_IMAGE_TOPICS_HUD_ITEM: HUDItem = {
   group: IMAGE_MODE_HUD_GROUP_ID,
   getMessage: () => t3D("noImageTopicsAvailable"),
   displayType: "empty",
-};
-
-export const DEFAULT_IMAGE_CONFIG = {
-  synchronize: false,
-  flipHorizontal: false,
-  flipVertical: false,
-  rotation: 0 as 0 | 90 | 180 | 270,
-  brightness: INITIAL_BRIGHTNESS,
-  contrast: INITIAL_CONTRAST,
-  ...IMAGE_DEFAULT_COLOR_MODE_SETTINGS,
 };
 
 export const VERTEX_SHADER = `

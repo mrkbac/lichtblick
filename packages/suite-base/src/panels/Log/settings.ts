@@ -7,9 +7,14 @@
 
 import { TFunction } from "i18next";
 
-import { SettingsTreeChildren, SettingsTreeNodes } from "@lichtblick/suite";
+import type {
+  DocumentedNode,
+  DocumentedNodes,
+} from "@lichtblick/suite-base/panels/shared/documentedSettings";
 
 import { Config, LogLevel, VisibilityFilter } from "./types";
+
+export const defaultConfig: Config = { searchTerms: [], minLogLevel: 1 };
 
 // Create the log level options nodes once since they don't change per render.
 const LOG_LEVEL_OPTIONS = [
@@ -38,7 +43,7 @@ export function isTopicVisible(
 function visibilityChildren(
   names: readonly string[],
   filter: VisibilityFilter | ((name: string) => boolean),
-): SettingsTreeChildren {
+): Record<string, DocumentedNode> {
   return Object.fromEntries(
     names.map((name) => [
       name,
@@ -55,7 +60,7 @@ export function buildSettingsTree(
   availableTopics: readonly string[],
   availableNames: readonly string[],
   t: TFunction<"log">,
-): SettingsTreeNodes {
+): DocumentedNodes {
   const showHideActions = [
     { id: "show-all", type: "action" as const, label: t("showAll") },
     { id: "hide-all", type: "action" as const, label: t("hideAll") },
@@ -66,6 +71,7 @@ export function buildSettingsTree(
         minLogLevel: {
           input: "select",
           label: t("minLogLevel"),
+          help: t("minLogLevelHelp"),
           value: config.minLogLevel,
           options: LOG_LEVEL_OPTIONS,
         },
@@ -74,6 +80,7 @@ export function buildSettingsTree(
     topics: {
       enableVisibilityFilter: true,
       label: t("topics"),
+      help: t("topicsHelp"),
       error: availableTopics.length === 0 ? t("noLogTopics") : undefined,
       children: visibilityChildren(availableTopics, (topic) => isTopicVisible(config, topic)),
       actions: showHideActions,
@@ -82,6 +89,7 @@ export function buildSettingsTree(
       enableVisibilityFilter: true,
       children: visibilityChildren(availableNames, config.nameFilter ?? {}),
       label: t("nameFilter"),
+      help: t("nameFilterHelp"),
       actions: showHideActions,
     },
   };

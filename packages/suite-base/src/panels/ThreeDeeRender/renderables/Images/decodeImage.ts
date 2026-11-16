@@ -38,6 +38,7 @@ import { CompressedImageTypes, CompressedVideo } from "./ImageTypes";
 import { PreparedVideoFrame, PreparedVideoFrameStatus, PrepareVideoFrameContext } from "./types";
 import { makeRgba, rgbaGradient, stringToRgba } from "../../color";
 import { Image as RosImage } from "../../ros";
+import { IMAGE_DEFAULT_COLOR_MODE_SETTINGS } from "../../settingsNodes/imageMode";
 import { ColorModeSettings, getColorConverter } from "../colorMode";
 
 // Codec normalization (`VideoCodec`, `canonicalVideoCodec`, `isVideoKeyframe`) lives in
@@ -153,15 +154,7 @@ export async function decodeCompressedVideoToBitmap(
   }
 }
 
-export const IMAGE_DEFAULT_COLOR_MODE_SETTINGS: Required<
-  Omit<ColorModeSettings, "colorField" | "minValue" | "maxValue">
-> = {
-  colorMode: "gradient",
-  flatColor: "#ffffff",
-  gradient: ["#000000", "#ffffff"],
-  colorMap: "turbo",
-  explicitAlpha: 0,
-};
+export { IMAGE_DEFAULT_COLOR_MODE_SETTINGS };
 const MIN_MAX_8_BIT = { minValue: 0, maxValue: 255 };
 const MIN_MAX_16_BIT = { minValue: 0, maxValue: 65535 };
 

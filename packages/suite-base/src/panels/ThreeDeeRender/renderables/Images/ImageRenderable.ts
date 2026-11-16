@@ -41,6 +41,10 @@ import {
 import { PreparedVideoFrame, PreparedVideoFrameStatus } from "./types";
 import { CameraInfo } from "../../ros";
 import {
+  DEFAULT_PLANAR_PROJECTION_FACTOR,
+  DEFAULT_PROJECTION_DISTANCE,
+} from "../../settingsNodes/topics";
+import {
   DECODE_IMAGE_ERR_KEY,
   FRAGMENT_SHADER,
   IMAGE_TOPIC_PATH,
@@ -62,13 +66,11 @@ export interface ImageRenderableSettings extends Partial<ColorModeSettings> {
   contrast: number;
 }
 
-const DEFAULT_DISTANCE = 1;
-const DEFAULT_PLANAR_PROJECTION_FACTOR = 0;
 export const IMAGE_RENDERABLE_DEFAULT_SETTINGS: ImageRenderableSettings = {
   visible: false,
   frameLocked: true,
   cameraInfoTopic: undefined,
-  distance: DEFAULT_DISTANCE,
+  distance: DEFAULT_PROJECTION_DISTANCE,
   planarProjectionFactor: DEFAULT_PLANAR_PROJECTION_FACTOR,
   color: "#ffffff",
   brightness: INITIAL_BRIGHTNESS,

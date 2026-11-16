@@ -2,32 +2,31 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
+import { sharedI18nObject } from "@lichtblick/suite-base/i18n";
 
+import { TRANSFORM_TREE_BUTTONS } from "./buttons";
+import { buildSettingsTree, DEFAULT_ROTATION_CONVENTION } from "./settings";
 import { TRANSFORM_SCHEMAS } from "./transforms";
 
 const docs: PanelDocs = {
   intro:
     "Inspect the coordinate frame tree with live transforms, publish rates and broken or stale frames.",
   schemas: TRANSFORM_SCHEMAS,
+  buttons: Object.values(TRANSFORM_TREE_BUTTONS),
+  settings: () =>
+    buildSettingsTree(
+      // One example topic, so the per-topic fields are listed too.
+      [{ name: "Transforms", visible: true, isStatic: false, available: true }],
+      DEFAULT_ROTATION_CONVENTION,
+      sharedI18nObject.getFixedT(null, "transformTree"),
+    ),
   sections: [
     {
-      title: "Settings",
+      title: "Offset editor",
       items: [
-        ["Rotation angles", "Show roll, pitch and yaw as extrinsic xyz (ROS) or intrinsic XYZ."],
-        ["Topics", "Hide transform topics you don't want in the tree."],
-        [
-          "Static",
-          "Per topic: load it from the whole recording and never report it as stale. On by default for topics named *tf_static.",
-        ],
-      ],
-    },
-    {
-      title: "Interactions",
-      items: [
-        ["Click a frame", "Opens the offset editor to adjust that transform in every panel."],
         [
           "Offset / Result",
-          "Type an offset on top of the recorded transform, or type the result you want.",
+          "Type an offset on top of the recorded transform, or type the result you want. Offsets apply in every panel of the layout.",
         ],
         [
           "Copy as…",
@@ -35,7 +34,6 @@ const docs: PanelDocs = {
         ],
         ["Reset", "Removes the offset from the frame."],
         ["Show original", "Temporarily render the recorded transforms, ignoring all offsets."],
-        ["from / to", "Hover a frame to measure between two frames; shared with 3D panels."],
       ],
     },
     {
@@ -43,10 +41,7 @@ const docs: PanelDocs = {
       items: [
         ["Multiple parents", "A frame was published with more than one parent."],
         ["Stale", "No update for several expected periods."],
-        [
-          "Disconnected trees",
-          "The frames form more than one tree; hover the badge to see the roots.",
-        ],
+        ["Disconnected trees", "The frames form more than one tree; the badge lists their roots."],
       ],
     },
   ],

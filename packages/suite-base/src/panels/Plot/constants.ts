@@ -7,6 +7,8 @@ import { PlotConfig, PlotPath } from "@lichtblick/suite-base/panels/Plot/utils/c
 
 export const DEFAULT_SIDEBAR_DIMENSION = 240;
 
+export const DEFAULT_SLIDING_WINDOW_SECONDS = 10;
+
 export const DEFAULT_ANNOTATION: AnnotationOptions = {
   type: "line",
   display: true,

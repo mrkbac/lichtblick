@@ -13,12 +13,11 @@ import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 
-import {
-  SettingsTreeAction,
-  SettingsTreeChildren,
-  SettingsTreeFields,
-  SettingsTreeNodeAction,
-} from "@lichtblick/suite";
+import { SettingsTreeAction, SettingsTreeNodeAction } from "@lichtblick/suite";
+import type {
+  DocumentedFields,
+  DocumentedNodes,
+} from "@lichtblick/suite-base/panels/shared/documentedSettings";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 import clipboard from "@lichtblick/suite-base/util/clipboard";
 
@@ -27,14 +26,25 @@ import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { getLuminance, stringToRgb } from "../color";
-import { isTransformPreloadEnabled, MAX_TRANSFORM_MESSAGES } from "../constants";
-import { BaseSettings, fieldSize, PRECISION_DISTANCE } from "../settings";
+import { BaseSettings, PRECISION_DISTANCE } from "../settings";
+import {
+  DEFAULT_ADJUST_STEP,
+  DEFAULT_AXIS_SCALE,
+  DEFAULT_EDITABLE,
+  DEFAULT_LINE_COLOR_STR,
+  DEFAULT_LINE_WIDTH_PX,
+  DEFAULT_ROTATION_CONVENTION,
+  DEFAULT_TF_LABEL_SIZE,
+  frameFields,
+  PRECISION_ADJUST_DEGREES,
+  transformSettingsNode,
+} from "../settingsNodes/global";
+import { isThreeDeeShortcut } from "../shortcuts";
 import { CoordinateFrame, Duration, makePose, MAX_DURATION, Transform } from "../transforms";
 import { Axis, AXIS_LENGTH } from "./Axis";
 import { DEFAULT_LABEL_SCALE_FACTOR } from "./SceneSettings";
 import {
   ADJUST_STEPS,
-  AdjustStep,
   applyOffset,
   EMPTY_OFFSETS,
   FrameOffset,
@@ -66,12 +76,6 @@ export type LayerSettingsTransform = BaseSettings & {
 const PICKING_LINE_SIZE = 6;
 const PI_2 = Math.PI / 2;
 
-const DEFAULT_EDITABLE = false;
-const DEFAULT_ADJUST_STEP: AdjustStep = "medium";
-// Intrinsic XYZ was the only convention before it became a setting
-const DEFAULT_ROTATION_CONVENTION: RotationConvention = "intrinsic";
-/** Precision of the offset and result rotation fields, finer than PRECISION_DEGREES */
-const PRECISION_ADJUST_DEGREES = 3;
 const NUDGE_KEYS = new Set<string>([
   "ArrowUp",
   "ArrowDown",
@@ -87,11 +91,6 @@ const MAX_UNDO_STEPS = 100;
 const ECHO_TIMEOUT_MS = 2000;
 const KEYBOARD_HUD_ID = "transforms-keyboard-adjust";
 const ORIGINAL_HUD_ID = "transforms-show-original";
-
-const DEFAULT_AXIS_SCALE = 1;
-const DEFAULT_LINE_WIDTH_PX = 2;
-const DEFAULT_LINE_COLOR_STR = "#ffff00";
-const DEFAULT_TF_LABEL_SIZE = 0.2;
 
 const DEFAULT_SETTINGS: LayerSettingsTransform = {
   visible: true,
@@ -210,122 +209,15 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     const frameCount = this.renderer.coordinateFrameList.length;
     const editable = config.scene.transforms?.editable ?? DEFAULT_EDITABLE;
     const hasOffsets = Object.keys(this.#offsets.frames).length > 0;
-    const children: SettingsTreeChildren = {
-      settings: {
-        label: t("threeDee:settings"),
-        defaultExpansionState: "collapsed",
-        order: 0,
-        fields: {
-          editable: {
-            label: t("threeDee:editable"),
-            input: "boolean",
-            value: editable,
-          },
-          ...(editable && {
-            adjustStep: {
-              label: t("threeDee:adjustStep"),
-              input: "select",
-              value: config.scene.transforms?.adjustStep ?? DEFAULT_ADJUST_STEP,
-              options: [
-                { label: t("threeDee:adjustStepFine"), value: "fine" },
-                { label: t("threeDee:adjustStepMedium"), value: "medium" },
-                { label: t("threeDee:adjustStepCoarse"), value: "coarse" },
-              ],
-            },
-            keyboardFrame: {
-              label: t("threeDee:keyboardFrame"),
-              help: t("threeDee:keyboardFrameHelp"),
-              input: "select",
-              value: config.scene.transforms?.keyboardFrame ?? "",
-              options: [
-                { label: t("threeDee:keyboardFrameNone"), value: "" },
-                ...this.renderer.coordinateFrameList.filter(
-                  ({ value }) => this.renderer.transformTree.frame(value)?.parent() != undefined,
-                ),
-              ],
-            },
-          }),
-          ...((editable || hasOffsets) && {
-            showOriginal: {
-              label: t("threeDee:showOriginal"),
-              help: t("threeDee:showOriginalHelp"),
-              input: "boolean",
-              value: this.#offsets.showOriginal === true,
-            },
-          }),
-          rotationConvention: {
-            label: t("threeDee:rotationConvention"),
-            help: this.#rotationHelp(),
-            input: "select",
-            value: this.#convention(),
-            options: [
-              { label: t("threeDee:rotationConventionExtrinsic"), value: "extrinsic" },
-              { label: t("threeDee:rotationConventionIntrinsic"), value: "intrinsic" },
-            ],
-          },
-          showLabel: {
-            label: t("threeDee:labels"),
-            input: "boolean",
-            value: config.scene.transforms?.showLabel ?? true,
-          },
-          ...((config.scene.transforms?.showLabel ?? true) && {
-            labelSize: {
-              label: t("threeDee:labelSize"),
-              input: "number",
-              min: 0,
-              step: 0.01,
-              precision: 2,
-              placeholder: String(DEFAULT_TF_LABEL_SIZE),
-              value: config.scene.transforms?.labelSize,
-            },
-          }),
-          axisScale: fieldSize(
-            t("threeDee:axisScale"),
-            config.scene.transforms?.axisScale,
-            DEFAULT_AXIS_SCALE,
-          ),
-          lineWidth: {
-            label: t("threeDee:lineWidth"),
-            input: "number",
-            min: 0,
-            step: 0.5,
-            precision: 1,
-            value: config.scene.transforms?.lineWidth,
-            placeholder: String(DEFAULT_LINE_WIDTH_PX),
-          },
-          lineColor: {
-            label: t("threeDee:lineColor"),
-            input: "rgb",
-            value: config.scene.transforms?.lineColor ?? DEFAULT_LINE_COLOR_STR,
-          },
-          enablePreloading: {
-            label: t("threeDee:enablePreloading"),
-            input: "boolean",
-            value: isTransformPreloadEnabled(config),
-            tooltip: t("threeDee:enablePreloadingTooltip"),
-          },
-          maxPreloadMessages: {
-            label: t("threeDee:maxPreloadMessages"),
-            input: "number",
-            min: 1000,
-            max: 50000,
-            step: 1000,
-            value: config.scene.transforms?.maxPreloadMessages ?? MAX_TRANSFORM_MESSAGES,
-            tooltip: t("threeDee:maxPreloadMessagesTooltip"),
-            disabled: !isTransformPreloadEnabled(config),
-          },
-        },
-        actions: isTransformPreloadEnabled(config)
-          ? [
-              {
-                id: "clear-preload-buffer",
-                type: "action",
-                label: t("threeDee:clearPreloadBuffer"),
-                display: "menu",
-              },
-            ]
-          : undefined,
-      },
+    const keyboardFrames = this.renderer.coordinateFrameList.filter(
+      ({ value }) => this.renderer.transformTree.frame(value)?.parent() != undefined,
+    );
+    const children: DocumentedNodes = {
+      settings: transformSettingsNode(config, {
+        keyboardFrames,
+        showOriginal: this.#offsets.showOriginal === true,
+        hasOffsets,
+      }),
     };
 
     let order = 1;
@@ -352,6 +244,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
         path: ["transforms"],
         node: {
           label: `${t("threeDee:transforms")}${frameCount > 0 ? ` (${frameCount})` : ""}`,
+          help: t("threeDee:transformsHelp"),
           actions: [
             { id: "show-all", type: "action", label: t("threeDee:showAll") },
             { id: "hide-all", type: "action", label: t("threeDee:hideAll") },
@@ -724,12 +617,6 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     this.#updateFrameAxis(renderable);
   }
 
-  #rotationHelp(): string {
-    return this.#convention() === "extrinsic"
-      ? t("threeDee:rotationConventionHelpExtrinsic")
-      : t("threeDee:rotationConventionHelpIntrinsic");
-  }
-
   #convention(): RotationConvention {
     return this.renderer.config.scene.transforms?.rotationConvention ?? DEFAULT_ROTATION_CONVENTION;
   }
@@ -765,19 +652,19 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
   #buildFrameFields(
     frame: CoordinateFrame | undefined,
     offset: FrameOffset | undefined,
-  ): SettingsTreeFields {
+  ): DocumentedFields {
     const parentFrameId = frame?.parent()?.id;
+    const config = this.renderer.config;
     if (!frame || parentFrameId == undefined) {
-      return {
-        parent: { label: t("threeDee:parent"), input: "string", readonly: true, value: "<root>" },
-      };
+      return frameFields(
+        { parentFrameId: undefined, age: undefined, historySize: 0 },
+        config,
+        undefined,
+      );
     }
 
-    const config = this.renderer.config;
-    const editable = config.scene.transforms?.editable ?? DEFAULT_EDITABLE;
     const step = ADJUST_STEPS[config.scene.transforms?.adjustStep ?? DEFAULT_ADJUST_STEP];
     const convention = this.#convention();
-    const rotationHelp = this.#rotationHelp();
     const currentTime = this.renderer.currentTime;
     const recorded = this.#recorded(frame);
     let ageValue: string | undefined;
@@ -788,95 +675,30 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     }
     // Unadjusted frames show one Translation/Rotation pair, editable when adjusting is on. Only
     // adjusted frames need the full Recorded / Offset / Result breakdown.
-    const adjusted = offset != undefined;
     const result = recorded ? applyOffset(recorded.position, recorded.rotation, offset) : undefined;
+    const rpy = (rotation: Quat) =>
+      roundVec3(quatToEulerDegrees(rotation, convention), PRECISION_ADJUST_DEGREES);
 
-    const fields: SettingsTreeFields = {
-      parent: {
-        label: t("threeDee:parent"),
-        input: "string",
-        readonly: true,
-        value: parentFrameId,
+    return frameFields(
+      {
+        parentFrameId,
+        age: ageValue,
+        historySize: frame.transformsSize(),
+        adjusted: offset && {
+          recordedXyz: recorded ? roundVec3(recorded.position, PRECISION_DISTANCE) : undefined,
+          recordedRpy: recorded ? rpy(recorded.rotation) : undefined,
+          offsetXyz: offset.xyz,
+          offsetRpy: roundVec3(
+            convertEulerDegrees(offset.rpy, "intrinsic", convention),
+            PRECISION_ADJUST_DEGREES,
+          ),
+        },
+        resultXyz: result ? roundVec3(result.position, PRECISION_DISTANCE) : undefined,
+        resultRpy: result ? rpy(result.rotation) : undefined,
       },
-      age: { label: t("threeDee:age"), input: "string", readonly: true, value: ageValue },
-      historySize: {
-        label: t("threeDee:historySize"),
-        input: "string",
-        readonly: true,
-        value: String(frame.transformsSize()),
-      },
-    };
-
-    if (adjusted) {
-      fields.xyz = {
-        label: t("threeDee:recordedTranslation"),
-        input: "vec3",
-        precision: PRECISION_DISTANCE,
-        labels: ["X", "Y", "Z"],
-        readonly: true,
-        value: recorded ? roundVec3(recorded.position, PRECISION_DISTANCE) : undefined,
-      };
-      fields.rpy = {
-        label: t("threeDee:recordedRotation"),
-        help: rotationHelp,
-        input: "vec3",
-        precision: PRECISION_ADJUST_DEGREES,
-        labels: ["R", "P", "Y"],
-        readonly: true,
-        value: recorded
-          ? roundVec3(quatToEulerDegrees(recorded.rotation, convention), PRECISION_ADJUST_DEGREES)
-          : undefined,
-      };
-      fields.xyzOffset = {
-        label: t("threeDee:translationOffset"),
-        help: t("threeDee:translationOffsetHelp"),
-        input: "vec3",
-        precision: PRECISION_DISTANCE,
-        step: step.meters,
-        labels: ["X", "Y", "Z"],
-        readonly: !editable,
-        value: offset.xyz,
-      };
-      fields.rpyCoefficient = {
-        label: t("threeDee:rotationOffset"),
-        help: `${t("threeDee:rotationOffsetHelp")} ${rotationHelp}`,
-        input: "vec3",
-        precision: PRECISION_ADJUST_DEGREES,
-        step: step.degrees,
-        min: -180,
-        max: 180,
-        labels: ["R", "P", "Y"],
-        readonly: !editable,
-        value: roundVec3(
-          convertEulerDegrees(offset.rpy, "intrinsic", convention),
-          PRECISION_ADJUST_DEGREES,
-        ),
-      };
-    }
-
-    fields.resultXyz = {
-      label: adjusted ? t("threeDee:resultTranslation") : t("threeDee:translation"),
-      help: editable ? t("threeDee:resultHelp") : undefined,
-      input: "vec3",
-      precision: PRECISION_DISTANCE,
-      step: step.meters,
-      labels: ["X", "Y", "Z"],
-      readonly: !editable || !result,
-      value: result ? roundVec3(result.position, PRECISION_DISTANCE) : undefined,
-    };
-    fields.resultRpy = {
-      label: adjusted ? t("threeDee:resultRotation") : t("threeDee:rotation"),
-      help: editable ? `${t("threeDee:resultHelp")} ${rotationHelp}` : rotationHelp,
-      input: "vec3",
-      precision: PRECISION_ADJUST_DEGREES,
-      step: step.degrees,
-      labels: ["R", "P", "Y"],
-      readonly: !editable || !result,
-      value: result
-        ? roundVec3(quatToEulerDegrees(result.rotation, convention), PRECISION_ADJUST_DEGREES)
-        : undefined,
-    };
-    return fields;
+      config,
+      step,
+    );
   }
 
   #frameActions(
@@ -1081,10 +903,9 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
 
     const transforms = this.renderer.config.scene.transforms;
     const editable = transforms?.editable ?? DEFAULT_EDITABLE;
-    const modifier = event.metaKey || event.ctrlKey;
     const key = event.key;
 
-    if (!modifier && !event.altKey && key.toLowerCase() === "o") {
+    if (isThreeDeeShortcut("3d.toggleOriginal", event)) {
       const hasOffsets = Object.keys(this.#offsets.frames).length > 0;
       if (editable || hasOffsets || this.#offsets.showOriginal === true) {
         this.#setShowOriginal({ showOriginal: this.#offsets.showOriginal !== true });
@@ -1095,7 +916,7 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     if (!editable) {
       return;
     }
-    if (modifier && !event.shiftKey && key.toLowerCase() === "z") {
+    if (isThreeDeeShortcut("3d.undoOffset", event)) {
       if (this.#history.length > 0) {
         this.#undo();
         consume(event);
@@ -1104,7 +925,12 @@ export class FrameAxes extends SceneExtension<FrameAxisRenderable> {
     }
 
     const frameId = transforms?.keyboardFrame;
-    if (modifier || frameId == undefined || !NUDGE_KEYS.has(key)) {
+    // NUDGE_KEYS maps each key to an axis; the declaration decides which of them are bound
+    if (
+      !isThreeDeeShortcut("3d.nudgeFrame", event) ||
+      frameId == undefined ||
+      !NUDGE_KEYS.has(key)
+    ) {
       return;
     }
     const step = ADJUST_STEPS[transforms?.adjustStep ?? DEFAULT_ADJUST_STEP];

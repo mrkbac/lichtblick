@@ -5,18 +5,19 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { SettingsTreeNodes } from "@lichtblick/suite";
+import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 
 import { TopicHealthConfig } from "./health";
 
 /** Only topics with overrides get a node; the table edits expectations inline. */
-export function buildSettingsTree(config: TopicHealthConfig): SettingsTreeNodes {
+export function buildSettingsTree(config: TopicHealthConfig): DocumentedNodes {
   return {
     general: {
       label: "General",
       fields: {
         tolerancePercent: {
           label: "Slow below expected by (%)",
+          help: "How far below the expected rate a topic may fall before it counts as slow.",
           input: "number",
           min: 0,
           max: 100,
@@ -25,6 +26,7 @@ export function buildSettingsTree(config: TopicHealthConfig): SettingsTreeNodes 
         },
         sortByStatus: {
           label: "Problems first",
+          help: "Sorts slow and stale topics to the top instead of alphabetically.",
           input: "boolean",
           value: config.sortByStatus ?? false,
         },
@@ -32,6 +34,7 @@ export function buildSettingsTree(config: TopicHealthConfig): SettingsTreeNodes 
     },
     topics: {
       label: "Topic overrides",
+      help: "Topics whose expected rate, stale time or detailed statistics you changed.",
       children: Object.fromEntries(
         Object.keys(config.topics)
           .sort()
@@ -59,7 +62,7 @@ export function buildSettingsTree(config: TopicHealthConfig): SettingsTreeNodes 
                   },
                   deepStats: {
                     label: "Detailed statistics",
-                    help: "Subscribes to the topic on live sources.",
+                    help: "Scans the recording, or subscribes on live sources, for jitter, max gap and bandwidth.",
                     input: "boolean",
                     value: settings.deepStats ?? false,
                   },

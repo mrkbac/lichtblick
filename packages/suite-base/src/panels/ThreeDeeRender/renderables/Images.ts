@@ -7,14 +7,13 @@
 
 import { toNanoSec } from "@foxglove/rostime";
 import { CompressedImage, RawImage } from "@foxglove/schemas";
-import { t } from "i18next";
 import { assert } from "ts-essentials";
 
 import { filterMap } from "@lichtblick/den/collection";
 import { selectCameraModel } from "@lichtblick/den/image";
 import { CameraModelsMap } from "@lichtblick/den/image/types";
 import Logger from "@lichtblick/log";
-import { SettingsTreeAction, SettingsTreeFields } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 import { ALL_SUPPORTED_IMAGE_SCHEMAS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/constants";
 
 import {
@@ -52,7 +51,8 @@ import {
   CompressedImage as RosCompressedImage,
   Image as RosImage,
 } from "../ros";
-import { BaseSettings, PRECISION_DISTANCE } from "../settings";
+import { BaseSettings } from "../settings";
+import { imageProjectionSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose, AnyFrameId } from "../transforms";
 
@@ -223,43 +223,9 @@ export class Images extends SceneExtension<ImageRenderable> {
       cameraInfoOptions.sort();
       sortPrefixMatchesToFront(cameraInfoOptions, imageTopic, (option) => option.value);
 
-      const fields: SettingsTreeFields = {
-        cameraInfoTopic: {
-          label: t("threeDee:cameraInfo"),
-          input: "select",
-          options: cameraInfoOptions,
-          value: config.cameraInfoTopic,
-        },
-        distance: {
-          label: t("threeDee:distance"),
-          input: "number",
-          placeholder: String(IMAGE_RENDERABLE_DEFAULT_SETTINGS.distance),
-          step: 0.1,
-          precision: PRECISION_DISTANCE,
-          value: config.distance,
-        },
-        planarProjectionFactor: {
-          label: t("threeDee:planarProjectionFactor"),
-          input: "number",
-          placeholder: String(IMAGE_RENDERABLE_DEFAULT_SETTINGS.planarProjectionFactor),
-          min: 0,
-          max: 1,
-          step: 0.1,
-          precision: 2,
-          value: config.planarProjectionFactor,
-        },
-        color: { label: t("threeDee:color"), input: "rgba", value: config.color },
-      };
-
       entries.push({
         path: ["topics", imageTopic],
-        node: {
-          icon: "ImageProjection",
-          fields,
-          visible: config.visible ?? IMAGE_RENDERABLE_DEFAULT_SETTINGS.visible,
-          order: imageTopic.toLocaleLowerCase(),
-          handler,
-        },
+        node: { ...imageProjectionSettingsNode(topic, config, cameraInfoOptions), handler },
       });
     }
     return entries;

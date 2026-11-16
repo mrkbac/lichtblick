@@ -10,13 +10,14 @@ import * as THREE from "three";
 import type { Renderer } from "../Renderer";
 import { arrowHeadSubdivisions, arrowShaftSubdivisions, DetailLevel } from "../lod";
 import { ColorRGBA } from "../ros";
+import { AXIS_LENGTH } from "../settings";
 
 const SHAFT_LENGTH = 0.154;
 const SHAFT_DIAMETER = 0.02;
-const HEAD_LENGTH = 0.046;
+const HEAD_LENGTH = AXIS_LENGTH - SHAFT_LENGTH;
 const HEAD_DIAMETER = 0.05;
 
-export const AXIS_LENGTH = SHAFT_LENGTH + HEAD_LENGTH;
+export { AXIS_LENGTH };
 
 const RED_COLOR = new THREE.Color(0x9c3948);
 const GREEN_COLOR = new THREE.Color(0x88dd04);

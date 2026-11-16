@@ -457,6 +457,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
             <Typography
               noWrap={true}
               variant="subtitle2"
+              title={settings.help}
               color={visible ? "textPrimary" : "textDisabled"}
               style={{ flex: "1 1 auto", fontWeight: indent < 2 ? 600 : 400 }}
             >
@@ -503,7 +504,8 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
               <IconButton
                 key={action.id}
                 onClick={handler}
-                title={action.label}
+                title={action.help != undefined ? `${action.label}: ${action.help}` : action.label}
+                aria-label={action.label}
                 className={classes.actionButton}
               >
                 <Icon fontSize="small" />
@@ -514,6 +516,7 @@ function NodeEditorComponent(props: Readonly<NodeEditorProps>): React.JSX.Elemen
                 onClick={handler}
                 size="small"
                 color="inherit"
+                title={action.help}
                 className={classes.actionButton}
               >
                 {action.label}

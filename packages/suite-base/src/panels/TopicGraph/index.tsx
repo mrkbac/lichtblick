@@ -14,12 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import {
-  ArrowBidirectionalUpDown20Regular,
-  PageFit20Regular,
-  Diamond20Filled,
-  RectangleLandscape20Regular,
-} from "@fluentui/react-icons";
 import { FormControlLabel, IconButton, Radio, RadioGroup, Tooltip } from "@mui/material";
 import Cytoscape from "cytoscape";
 import { useCallback, useMemo, useRef, useState } from "react";
@@ -29,11 +23,13 @@ import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import ExpandingToolbar, { ToolGroup } from "@lichtblick/suite-base/components/ExpandingToolbar";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import Panel from "@lichtblick/suite-base/components/Panel";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import { PANEL_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import { measureTextWidth } from "@lichtblick/suite-base/util/measureTextWidth";
 
 import Graph, { GraphMutation } from "./Graph";
+import { TOPIC_GRAPH_BUTTONS } from "./buttons";
 
 const LABEL_MAX_WIDTH = 200;
 const STYLESHEET: Cytoscape.StylesheetStyle[] = [
@@ -330,6 +326,10 @@ function TopicGraph() {
     setShowServices(!showServices);
   }, [showServices]);
 
+  const zoomFitTitle = usePanelButtonTitle(TOPIC_GRAPH_BUTTONS.zoomFit);
+  const orientationTitle = usePanelButtonTitle(TOPIC_GRAPH_BUTTONS.orientation);
+  const servicesTitle = usePanelButtonTitle(TOPIC_GRAPH_BUTTONS.services);
+
   if (publishedTopics == undefined) {
     return (
       <>
@@ -347,32 +347,29 @@ function TopicGraph() {
           checked={topicVisibility !== "none"}
           dataTest="set-topic-visibility"
           tooltip={topicVisibilityTooltip}
-          icon={<Diamond20Filled />}
+          icon={<TOPIC_GRAPH_BUTTONS.topics.icon />}
           toolbarItems={
             <>
-              <Tooltip placement="left" title="Zoom fit">
-                <IconButton size="small" aria-label="Zoom fit" onClick={onZoomFit}>
-                  <PageFit20Regular />
+              <Tooltip placement="left" title={zoomFitTitle}>
+                <IconButton size="small" aria-label={zoomFitTitle} onClick={onZoomFit}>
+                  <TOPIC_GRAPH_BUTTONS.zoomFit.icon />
                 </IconButton>
               </Tooltip>
-              <Tooltip placement="left" title="Orientation">
-                <IconButton size="small" aria-label="Orientation" onClick={toggleOrientation}>
-                  <ArrowBidirectionalUpDown20Regular
+              <Tooltip placement="left" title={orientationTitle}>
+                <IconButton size="small" aria-label={orientationTitle} onClick={toggleOrientation}>
+                  <TOPIC_GRAPH_BUTTONS.orientation.icon
                     style={{ transform: `rotate(${lrOrientation ? 90 : 0}deg)` }}
                   />
                 </IconButton>
               </Tooltip>
-              <Tooltip
-                placement="left"
-                title={showServices ? "Showing services" : "Hiding services"}
-              >
+              <Tooltip placement="left" title={servicesTitle}>
                 <IconButton
                   size="small"
                   aria-pressed={showServices}
-                  aria-label={showServices ? "Showing services" : "Hiding services"}
+                  aria-label={servicesTitle}
                   onClick={toggleShowServices}
                 >
-                  <RectangleLandscape20Regular />
+                  <TOPIC_GRAPH_BUTTONS.services.icon />
                 </IconButton>
               </Tooltip>
             </>

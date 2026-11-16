@@ -5,23 +5,14 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { TFunction } from "i18next";
 import { produce } from "immer";
 import * as _ from "lodash-es";
-import memoizeWeak from "memoize-weak";
 import { useCallback, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
-import {
-  SettingsTreeAction,
-  SettingsTreeField,
-  SettingsTreeNode,
-  SettingsTreeNodeActionItem,
-  SettingsTreeNodes,
-} from "@lichtblick/suite";
-import { parseCondition } from "@lichtblick/suite-base/panels/StateTransitions/condition";
+import { SettingsTreeAction } from "@lichtblick/suite";
 import { DEFAULT_STATE_TRANSITION_PATH } from "@lichtblick/suite-base/panels/StateTransitions/constants";
-import { PLOTABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/shared/constants";
+import { buildSettingsTree } from "@lichtblick/suite-base/panels/StateTransitions/settings";
 import {
   assignDefaultColorsToSeries,
   handleReorderSeriesAction,
@@ -29,192 +20,7 @@ import {
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
-import { stateTransitionPathDisplayName } from "../shared";
-import {
-  AxisTreeField,
-  IUsePanelSettings,
-  PathState,
-  SeriesAction,
-  SeriesActionId,
-  StateTransitionConfig,
-} from "../types";
-
-// Note - we use memoizeWeak here instead of react memoization to allow us to memoize
-// at the level of individual nodes in our tree. This keeps our DOM updates small since
-// the NodeEditor component is wrapped in a React.memo.
-
-export function setSeriesAction({ label, icon, id }: SeriesAction): SettingsTreeNodeActionItem {
-  return {
-    display: "inline",
-    icon,
-    id,
-    label,
-    type: "action",
-  };
-}
-
-export const makeSeriesNode = memoizeWeak(
-  (
-    index: number,
-    {
-      path,
-      canDelete,
-      canReorder,
-      isArray,
-    }: PathState & { canDelete: boolean; canReorder: boolean },
-    t: TFunction<"stateTransitions">,
-  ): SettingsTreeNode => {
-    const action = setSeriesAction({
-      label: t("labels.deleteSeries"),
-      id: SeriesActionId.DELETE,
-      icon: "Clear",
-    });
-    return {
-      actions: canDelete ? [action] : [],
-      label: stateTransitionPathDisplayName(path, index),
-      reorderable: canReorder,
-      icon: canReorder ? ("DragHandle" as const) : undefined,
-      fields: {
-        value: {
-          ...(isArray ? { error: t("pathErrorMessage") } : {}),
-          input: "messagepath",
-          supportsMathModifiers: true,
-          label: t("labels.messagePath"),
-          validTypes: PLOTABLE_ROS_TYPES,
-          value: path.value,
-        },
-        condition: {
-          input: "string",
-          label: t("labels.condition"),
-          help: t("labels.conditionHelp"),
-          placeholder: '> 2, == "ERROR"',
-          value: path.condition,
-          ...(path.condition && !parseCondition(path.condition)
-            ? { error: t("conditionErrorMessage") }
-            : {}),
-        },
-        label: {
-          input: "string",
-          label: t("labels.label"),
-          value: path.label,
-        },
-        timestampMethod: {
-          input: "select",
-          label: t("labels.timestamp"),
-          options: [
-            { label: t("labels.timestampReceiveTime"), value: "receiveTime" },
-            { label: t("labels.timestampHeaderStamp"), value: "headerStamp" },
-          ],
-          value: path.timestampMethod,
-        },
-      },
-    };
-  },
-);
-
-export const makeRootSeriesNode = memoizeWeak(
-  (paths: PathState[], t: TFunction<"stateTransitions">): SettingsTreeNode => {
-    const children = Object.fromEntries(
-      paths.length === 0
-        ? [
-            [
-              "0",
-              makeSeriesNode(
-                0,
-                {
-                  path: DEFAULT_STATE_TRANSITION_PATH,
-                  isArray: false,
-                  canDelete: false,
-                  canReorder: false,
-                },
-                t,
-              ),
-            ],
-          ]
-        : paths.map(({ path, isArray }, index) => [
-            `${index}`,
-            makeSeriesNode(
-              index,
-              {
-                path,
-                isArray,
-                canDelete: true,
-                canReorder: paths.length > 1,
-              },
-              t,
-            ),
-          ]),
-    );
-    return {
-      label: t("labels.series"),
-      children,
-      actions: [
-        setSeriesAction({
-          label: t("labels.addSeries"),
-          id: SeriesActionId.ADD,
-          icon: "Addchart",
-        }),
-      ],
-    };
-  },
-);
-
-function setAxis({ value, label, error }: AxisTreeField): SettingsTreeField {
-  return {
-    label,
-    input: "number",
-    value,
-    placeholder: "auto",
-    error,
-  };
-}
-
-export function buildSettingsTree(
-  {
-    isSynced,
-    xAxisMaxValue,
-    xAxisMinValue,
-    xAxisRange,
-    xAxisLabel,
-    showPoints,
-  }: StateTransitionConfig,
-  paths: PathState[],
-  t: TFunction<"stateTransitions">,
-): SettingsTreeNodes {
-  const maxXError =
-    _.isNumber(xAxisMinValue) && _.isNumber(xAxisMaxValue) && xAxisMinValue >= xAxisMaxValue
-      ? t("maxXError")
-      : undefined;
-
-  return {
-    general: {
-      label: t("labels.general"),
-      fields: {
-        isSynced: { label: t("labels.sync"), input: "boolean", value: isSynced },
-        showPoints: {
-          help: t("labels.helpGeneral"),
-          input: "boolean",
-          label: t("labels.showPoints"),
-          value: showPoints,
-        },
-      },
-    },
-    xAxis: {
-      label: t("xAxis"),
-      fields: {
-        xAxisLabel: {
-          label: t("labels.axisLabel"),
-          input: "string",
-          value: xAxisLabel,
-        },
-        xAxisMaxValue: setAxis({ label: t("max"), value: xAxisMaxValue, error: maxXError }),
-        xAxisMinValue: setAxis({ label: t("min"), value: xAxisMinValue }),
-        xAxisRange: setAxis({ label: t("secondsRange"), value: xAxisRange }),
-      },
-    },
-    paths: makeRootSeriesNode(paths, t),
-  };
-}
+import { IUsePanelSettings, PathState, SeriesActionId, StateTransitionConfig } from "../types";
 
 export function usePanelSettings(
   config: StateTransitionConfig,

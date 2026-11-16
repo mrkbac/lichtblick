@@ -158,6 +158,7 @@ describe("buildSettingsTree", () => {
 
     expect(tree.xAxis?.fields?.xAxisLabel).toEqual({
       label: "axisLabel",
+      help: "axisLabelHelp",
       input: "string",
       value: axisLabel,
     });
@@ -170,6 +171,7 @@ describe("buildSettingsTree", () => {
 
     expect(tree.xAxis?.fields?.xAxisLabel).toEqual({
       label: "axisLabel",
+      help: "axisLabelHelp",
       input: "string",
       value: undefined,
     });
@@ -182,6 +184,7 @@ describe("buildSettingsTree", () => {
 
     expect(tree.yAxis?.fields?.yAxisLabel).toEqual({
       label: "axisLabel",
+      help: "axisLabelHelp",
       input: "string",
       value: axisLabel,
     });
@@ -194,6 +197,7 @@ describe("buildSettingsTree", () => {
 
     expect(tree.yAxis?.fields?.yAxisLabel).toEqual({
       label: "axisLabel",
+      help: "axisLabelHelp",
       input: "string",
       value: undefined,
     });

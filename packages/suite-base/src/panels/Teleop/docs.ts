@@ -2,10 +2,30 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
+import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
+
+import { buildSettingsTreeTeleop } from "./buildSettingsTree";
+import { TELEOP_BUTTONS } from "./buttons";
+import { DEFAULT_CONFIG } from "./constants";
+
+/** Settings of the Twist default plus the ones shown only for Joy output (e.g. frame ID). */
+function allSettings(): DocumentedNodes {
+  const twist = buildSettingsTreeTeleop(DEFAULT_CONFIG, []);
+  const joy = buildSettingsTreeTeleop({ ...DEFAULT_CONFIG, messageType: "Joy" }, []);
+  const merged: DocumentedNodes = {};
+  for (const key of new Set([...Object.keys(twist), ...Object.keys(joy)])) {
+    const node = twist[key] ?? joy[key];
+    // Joy first so its extra fields keep their place in the order
+    merged[key] = node && { ...node, fields: { ...joy[key]?.fields, ...twist[key]?.fields } };
+  }
+  return merged;
+}
 
 const docs: PanelDocs = {
   intro:
     "Drives a robot by publishing velocity or gamepad commands from on-screen sticks, keyboard, or a gamepad.",
+  buttons: Object.values(TELEOP_BUTTONS),
+  settings: allSettings,
   sections: [
     {
       title: "Data",
@@ -14,30 +34,13 @@ const docs: PanelDocs = {
           "Output",
           "Publishes Twist, TwistStamped, or Joy; needs a data source that supports publishing.",
         ],
-        ["Drag and drop", "Drop a topic of the published message type to publish on it."],
-      ],
-    },
-    {
-      title: "Settings",
-      items: [
-        ["Topic / Message type", "Where and what to publish; defaults to /cmd_vel as Twist."],
-        ["Publish rate (Hz)", "How often a held command is repeated."],
-        ["Stop on release", "Publish a zero command when every control is released."],
-        ["Velocity", "Which stick or trigger drives each twist field, and its max value."],
-        ["On-screen", "Joystick, two joysticks, D-pad, or hidden."],
-        ["Gamepad", "Deadzone plus enable (deadman), turbo, stop, and speed buttons."],
       ],
     },
     {
       title: "Tips",
       items: [
-        ["Stop", "Publishes a zero command; release all controls to drive again."],
         ["Speed slider", "Scales all velocities; turbo drives at full max while held."],
-        [
-          "Gamepad not listed",
-          "Browsers only report a gamepad after one of its buttons is pressed.",
-        ],
-        ["Keyboard", "Drive keys work while the panel is focused."],
+        ["Keyboard", "Drive keys work only while the panel itself is focused."],
       ],
     },
   ],

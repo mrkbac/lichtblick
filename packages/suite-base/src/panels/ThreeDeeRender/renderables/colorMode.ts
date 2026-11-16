@@ -5,35 +5,24 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { t } from "i18next";
 import * as THREE from "three";
-
-import { SettingsTreeFields, SettingsTreeNode } from "@lichtblick/suite";
-import { BaseSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/settings";
 
 import { rgbaGradient, rgbaToLinear, SRGBToLinear, stringToRgba } from "../color";
 import { clamp } from "../math";
 import type { ColorRGBA } from "../ros";
+import {
+  bestColorByField,
+  type ColorModeSettings,
+  hasSeparateRgbaFields,
+} from "../settingsNodes/colorMode";
+
+export { colorFieldComputedPrefix, NEEDS_MIN_MAX } from "../settingsNodes/colorMode";
+export type { ColorModeSettings } from "../settingsNodes/colorMode";
 
 export type ColorConverter = (output: ColorRGBA, colorValue: number) => void;
 
 const tempColor1 = { r: 0, g: 0, b: 0, a: 0 };
 const tempColor2 = { r: 0, g: 0, b: 0, a: 0 };
-export const NEEDS_MIN_MAX = ["gradient", "colormap"];
-
-export const colorFieldComputedPrefix = "_auto_";
-
-export interface ColorModeSettings {
-  colorMode: "flat" | "gradient" | "colormap" | "rgb" | "rgba" | "rgba-fields";
-  flatColor: string;
-  colorField?: string;
-  gradient: [string, string];
-  colorMap: "turbo" | "rainbow";
-  explicitAlpha: number;
-  minValue?: number;
-  maxValue?: number;
-}
-
 export function getColorConverter<
   Settings extends ColorModeSettings & {
     readonly colorMode: Exclude<ColorModeSettings["colorMode"], "rgba-fields">;
@@ -182,8 +171,6 @@ function turboLinearCached(output: ColorRGBA, pct: number): void {
   output.b = TurboLookup[offset + 2]!;
   output.a = 1;
 }
-export const RGBA_PACKED_FIELDS = new Set<string>(["rgb", "rgba"]);
-export const INTENSITY_FIELDS = new Set<string>(["intensity", "i"]);
 
 /**
  * Mutates output to select optimal color settings given a list of fields
@@ -227,186 +214,6 @@ export function autoSelectColorSettings<Settings extends ColorModeSettings>(
       return;
     }
   }
-}
-
-function bestColorByField(
-  fields: string[],
-  { supportsPackedRgbModes }: { supportsPackedRgbModes: boolean },
-): string | undefined {
-  if (supportsPackedRgbModes) {
-    // first priority is color fields
-    for (const field of fields) {
-      if (RGBA_PACKED_FIELDS.has(field.toLowerCase())) {
-        return field;
-      }
-    }
-  }
-  // second priority is intensity fields
-  for (const field of fields) {
-    if (INTENSITY_FIELDS.has(field.toLowerCase())) {
-      return field;
-    }
-  }
-  // third is 'z', then the first field
-  return fields.find((field) => field === "z") ?? fields[0];
-}
-
-function hasSeparateRgbaFields(fields: string[]): boolean {
-  let r = false;
-  let g = false;
-  let b = false;
-  let a = false;
-  for (const field of fields) {
-    switch (field) {
-      case "red":
-        r = true;
-        break;
-      case "green":
-        g = true;
-        break;
-      case "blue":
-        b = true;
-        break;
-      case "alpha":
-        a = true;
-        break;
-    }
-  }
-  return r && g && b && a;
-}
-
-export function colorModeSettingsFields<Settings extends ColorModeSettings & BaseSettings>({
-  msgFields,
-  config,
-  defaults,
-  modifiers: { supportsPackedRgbModes, supportsRgbaFieldsMode, hideFlatColor, hideExplicitAlpha },
-}: {
-  msgFields?: string[];
-  config: Partial<Settings>;
-  defaults: Pick<Settings, "gradient">;
-  modifiers: {
-    supportsPackedRgbModes: boolean;
-    supportsRgbaFieldsMode: boolean;
-    hideFlatColor?: boolean;
-    hideExplicitAlpha?: boolean;
-  };
-}): NonNullable<SettingsTreeNode["fields"]> {
-  const colorMode = config.colorMode ?? (hideFlatColor === true ? "gradient" : "flat");
-  const flatColor = config.flatColor ?? "#ffffff";
-  const gradient = config.gradient;
-  const colorMap = config.colorMap ?? "turbo";
-  const explicitAlpha = config.explicitAlpha ?? 1;
-  const minValue = config.minValue;
-  const maxValue = config.maxValue;
-
-  const fields: SettingsTreeFields = {};
-
-  const colorModeOptions = [
-    { label: t("threeDee:colorModeColorMap"), value: "colormap" },
-    { label: t("threeDee:gradient"), value: "gradient" },
-  ];
-
-  if (hideFlatColor !== true) {
-    colorModeOptions.push({ label: t("threeDee:colorModeFlat"), value: "flat" });
-  }
-  if (msgFields && msgFields.length > 0) {
-    if (supportsPackedRgbModes) {
-      colorModeOptions.push(
-        { label: t("threeDee:colorModeBgrPacked"), value: "rgb" },
-        { label: t("threeDee:colorModeBgraPacked"), value: "rgba" },
-      );
-    }
-    if (supportsRgbaFieldsMode && hasSeparateRgbaFields(msgFields)) {
-      colorModeOptions.push({
-        label: t("threeDee:colorModeRgbaSeparateFields"),
-        value: "rgba-fields",
-      });
-    }
-  }
-
-  fields.colorMode = {
-    label: t("threeDee:colorMode"),
-    input: "select",
-    value: colorMode,
-    options: colorModeOptions,
-  };
-
-  if (colorMode === "flat") {
-    fields.flatColor = { label: t("threeDee:flatColor"), input: "rgba", value: flatColor };
-  } else if (colorMode !== "rgba-fields") {
-    if (msgFields) {
-      const colorFieldOptions = msgFields.map((field) => ({ label: field, value: field }));
-
-      colorFieldOptions.push({
-        label: t("threeDee:ColorFieldComputedDistance"),
-        value: colorFieldComputedPrefix + "distance",
-      });
-
-      const colorField =
-        config.colorField ?? bestColorByField(msgFields, { supportsPackedRgbModes });
-      fields.colorField = {
-        label: t("threeDee:colorBy"),
-        input: "select",
-        options: colorFieldOptions,
-        value: colorField,
-      };
-    }
-
-    switch (colorMode) {
-      case "gradient":
-        fields.gradient = {
-          label: t("threeDee:gradient"),
-          input: "gradient",
-          value: gradient ?? defaults.gradient,
-        };
-        break;
-      case "colormap":
-        fields.colorMap = {
-          label: t("threeDee:colorModeColorMap"),
-          input: "select",
-          options: [
-            { label: "Turbo", value: "turbo" },
-            { label: "Rainbow", value: "rainbow" },
-          ],
-          value: colorMap,
-        };
-        break;
-      default:
-        break;
-    }
-
-    if (hideExplicitAlpha !== true && (colorMode === "colormap" || colorMode === "rgb")) {
-      fields.explicitAlpha = {
-        label: t("threeDee:opacity"),
-        input: "number",
-        step: 0.1,
-        placeholder: "1",
-        precision: 3,
-        min: 0,
-        max: 1,
-        value: explicitAlpha,
-      };
-    }
-
-    if (NEEDS_MIN_MAX.includes(colorMode)) {
-      fields.minValue = {
-        label: t("threeDee:valueMin"),
-        input: "number",
-        placeholder: "auto",
-        precision: 4,
-        value: minValue,
-      };
-      fields.maxValue = {
-        label: t("threeDee:valueMax"),
-        input: "number",
-        placeholder: "auto",
-        precision: 4,
-        value: maxValue,
-      };
-    }
-  }
-
-  return fields;
 }
 
 const tempColor = { r: 0, g: 0, b: 0, a: 0 };

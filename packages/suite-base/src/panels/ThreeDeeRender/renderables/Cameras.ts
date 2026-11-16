@@ -7,12 +7,11 @@
 
 import { toNanoSec } from "@foxglove/rostime";
 import { CameraCalibration } from "@foxglove/schemas";
-import { t } from "i18next";
 
 import { selectCameraModel } from "@lichtblick/den/image";
 import { CameraModelsMap } from "@lichtblick/den/image/types";
 import Logger from "@lichtblick/log";
-import { ICameraModel, SettingsTreeAction, SettingsTreeFields } from "@lichtblick/suite";
+import { ICameraModel, SettingsTreeAction } from "@lichtblick/suite";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
 import { RenderableLineList } from "./markers/RenderableLineList";
@@ -22,7 +21,7 @@ import { BaseUserData, Renderable } from "../Renderable";
 import type { Renderer } from "../Renderer";
 import { PartialMessageEvent, SceneExtension, onlyLastByTopicMessage } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
-import { makeRgba, rgbaToCssString, stringToRgba } from "../color";
+import { makeRgba, stringToRgba } from "../color";
 import { CAMERA_CALIBRATION_DATATYPES } from "../foxglove";
 import {
   CameraInfo,
@@ -34,7 +33,8 @@ import {
   TIME_ZERO,
   Vector3,
 } from "../ros";
-import { BaseSettings, fieldLineWidth, PRECISION_DISTANCE } from "../settings";
+import { BaseSettings } from "../settings";
+import { CAMERA_INFO_DEFAULTS, cameraInfoSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose } from "../transforms";
 
@@ -48,24 +48,9 @@ export type LayerSettingsCameraInfo = BaseSettings & {
   color: string;
 };
 
-const DEFAULT_DISTANCE = 1;
-const DEFAULT_PLANAR_PROJECTION_FACTOR = 0;
-const DEFAULT_WIDTH = 0.01;
-
-const DEFAULT_COLOR = { r: 124 / 255, g: 107 / 255, b: 1, a: 1 };
-
-const DEFAULT_COLOR_STR = rgbaToCssString(DEFAULT_COLOR);
-
 const CAMERA_MODEL = "CameraModel";
 
-const DEFAULT_SETTINGS: LayerSettingsCameraInfo = {
-  visible: false,
-  frameLocked: true,
-  distance: DEFAULT_DISTANCE,
-  planarProjectionFactor: DEFAULT_PLANAR_PROJECTION_FACTOR,
-  width: DEFAULT_WIDTH,
-  color: DEFAULT_COLOR_STR,
-};
+const DEFAULT_SETTINGS = CAMERA_INFO_DEFAULTS;
 
 export type CameraInfoUserData = BaseUserData & {
   settings: LayerSettingsCameraInfo;
@@ -127,42 +112,9 @@ export class Cameras extends SceneExtension<CameraInfoRenderable> {
       }
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsCameraInfo>;
 
-      const fields: SettingsTreeFields = {
-        distance: {
-          label: t("threeDee:distance"),
-          input: "number",
-          placeholder: String(DEFAULT_DISTANCE),
-          step: 0.1,
-          precision: PRECISION_DISTANCE,
-          value: config.distance,
-        },
-        planarProjectionFactor: {
-          label: t("threeDee:planarProjectionFactor"),
-          input: "number",
-          placeholder: String(DEFAULT_PLANAR_PROJECTION_FACTOR),
-          min: 0,
-          max: 1,
-          step: 0.1,
-          precision: 2,
-          value: config.planarProjectionFactor,
-        },
-        width: fieldLineWidth(t("threeDee:lineWidth"), config.width, DEFAULT_WIDTH),
-        color: {
-          label: t("threeDee:color"),
-          input: "rgba",
-          value: config.color ?? DEFAULT_COLOR_STR,
-        },
-      };
-
       entries.push({
         path: ["topics", topic.name],
-        node: {
-          icon: "Camera",
-          fields,
-          visible: config.visible ?? DEFAULT_SETTINGS.visible,
-          handler,
-          order: topic.name.toLocaleLowerCase(),
-        },
+        node: { ...cameraInfoSettingsNode(topic, config), handler },
       });
     }
     return entries;

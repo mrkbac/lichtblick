@@ -5,14 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  ArrowDownload20Regular,
-  ZoomFit20Regular,
-  ArrowRouting20Filled,
-  ArrowRouting20Regular,
-  PointScan20Regular,
-  PointScan20Filled,
-} from "@fluentui/react-icons";
+import { ArrowRouting20Filled } from "@fluentui/react-icons";
 import {
   Button,
   IconButton,
@@ -33,6 +26,7 @@ import OverlayToolbar, {
   OverlayToolGroup,
   useIsShorterThan,
 } from "@lichtblick/suite-base/components/OverlayToolbar";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import {
   PanelContextMenu,
   PanelContextMenuItem,
@@ -43,6 +37,7 @@ import PublishPointIcon from "@lichtblick/suite-base/components/PublishPointIcon
 import PublishPoseEstimateIcon from "@lichtblick/suite-base/components/PublishPoseEstimateIcon";
 import { usePanelMousePresence } from "@lichtblick/suite-base/hooks/usePanelMousePresence";
 import { HUD } from "@lichtblick/suite-base/panels/ThreeDeeRender/HUD";
+import { shortcutLabel } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 import { customTypography } from "@lichtblick/theme";
 
@@ -51,13 +46,14 @@ import { InteractionContextMenu, Interactions, SelectionObject, TabType } from "
 import { HoverTooltip } from "./Interactions/HoverTooltip";
 import type { HoverEntityInfo } from "./Interactions/types";
 import { MeasurePanel } from "./MeasurePanel";
-import PerspectiveButtonLabel from "./PerspectiveButtonLabel";
 import type { PickedRenderable } from "./Picker";
 import { Renderable } from "./Renderable";
 import { useRenderer, useRendererEvent } from "./RendererContext";
 import { Stats } from "./Stats";
+import { IMAGE_BUTTONS, MeasureIcon, THREE_DEE_BUTTONS } from "./buttons";
 import { MouseEventObject } from "./camera";
 import { PublishClickType } from "./renderables/PublishClickTool";
+import { THREE_DEE_SHORTCUTS } from "./shortcuts";
 import { InterfaceMode } from "./types";
 
 const PublishClickIcons: Record<PublishClickType, React.ReactNode> = {
@@ -80,12 +76,6 @@ const useStyles = makeStyles()((theme) => ({
   iconButton: {
     position: "relative",
     pointerEvents: "auto",
-  },
-  pointScanIcon: {
-    transform: "rotate(45deg)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
   },
   resetViewButton: {
     position: "absolute",
@@ -388,8 +378,21 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
   const longPressPublishEvent = useLongPress(onLongPressPublish);
 
   const theme = useTheme();
-  const publishLabel = t(props.publishActive ? "clickToCancel" : "clickToPublish");
+  const publishTitle = usePanelButtonTitle(THREE_DEE_BUTTONS.publish);
+  const perspectiveTitle = usePanelButtonTitle(THREE_DEE_BUTTONS.perspective);
+  const zoomToDataTitle = usePanelButtonTitle(THREE_DEE_BUTTONS.zoomToData);
+  const measureTitle = usePanelButtonTitle(THREE_DEE_BUTTONS.measure);
+  const measureFramesTitle = usePanelButtonTitle(THREE_DEE_BUTTONS.measureFrames);
+  const downloadTitle = usePanelButtonTitle(IMAGE_BUTTONS.download);
+  const resetViewTitle = usePanelButtonTitle(IMAGE_BUTTONS.resetView);
+  const publishLabel = props.publishActive ? t("clickToCancel") : publishTitle;
   const perspectiveLabel = t(props.perspective ? "switchTo2DCamera" : "switchTo3DCamera");
+  const perspectiveKey = shortcutLabel(THREE_DEE_SHORTCUTS, "3d.togglePerspective");
+  const ResetViewLabel = IMAGE_BUTTONS.resetView.icon;
+  const DownloadIcon = IMAGE_BUTTONS.download.icon;
+  const PerspectiveIcon = THREE_DEE_BUTTONS.perspective.icon;
+  const ZoomToDataIcon = THREE_DEE_BUTTONS.zoomToData.icon;
+  const MeasureFramesIcon = THREE_DEE_BUTTONS.measureFrames.icon;
 
   // Publish control is only available if the canPublish prop is true and we have a fixed frame in the renderer
   const showPublishControl =
@@ -404,7 +407,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
           aria-pressed={props.publishActive}
           ref={publishClickButtonRef}
           onClick={props.onClickPublish}
-          aria-label={t("publish")}
+          aria-label={publishTitle}
           data-testid="publish-button"
         >
           {selectedPublishClickIcon}
@@ -469,8 +472,13 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
 
   const resetViewButton = showResetViewButton && (
     <OverlayToolbar className={classes.resetViewButton}>
-      <Button color="inherit" onClick={onResetView} data-testid="reset-view">
-        {t("resetView")}
+      <Button
+        color="inherit"
+        onClick={onResetView}
+        data-testid="reset-view"
+        aria-label={resetViewTitle}
+      >
+        <ResetViewLabel />
       </Button>
     </OverlayToolbar>
   );
@@ -511,15 +519,15 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
               timezone={props.timezone}
               toolbarItems={
                 props.interfaceMode === "image" ? (
-                  <Tooltip placement="left" title={t("downloadImage")}>
+                  <Tooltip placement="left" title={downloadTitle}>
                     <IconButton
                       data-testid="download-image-button"
-                      aria-label={t("downloadImage")}
+                      aria-label={downloadTitle}
                       className={classes.iconButton}
                       size="small"
                       onClick={onDownloadImage}
                     >
-                      <ArrowDownload20Regular />
+                      <DownloadIcon />
                     </IconButton>
                   </Tooltip>
                 ) : (
@@ -529,7 +537,10 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
                       describeChild
                       title={
                         <>
-                          {perspectiveLabel} <kbd className={classes.kbd}>3</kbd>
+                          {perspectiveLabel}{" "}
+                          {perspectiveKey != undefined && (
+                            <kbd className={classes.kbd}>{perspectiveKey}</kbd>
+                          )}
                         </>
                       }
                     >
@@ -537,61 +548,57 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
                         className={classes.iconButton}
                         size="small"
                         aria-pressed={props.perspective}
-                        aria-label={t("perspectiveCamera")}
+                        aria-label={perspectiveTitle}
                         onClick={props.onTogglePerspective}
                       >
-                        <PerspectiveButtonLabel />
+                        <PerspectiveIcon />
                       </IconButton>
                     </Tooltip>
-                    <Tooltip placement="left" title={t("zoomToData")}>
+                    <Tooltip placement="left" title={zoomToDataTitle}>
                       <IconButton
-                        aria-label={t("zoomToData")}
+                        aria-label={zoomToDataTitle}
                         className={classes.iconButton}
                         size="small"
                         onClick={() => renderer?.zoomToData()}
                       >
-                        <ZoomFit20Regular />
+                        <ZoomToDataIcon />
                       </IconButton>
                     </Tooltip>
                     <OverlayToolGroup
                       collapsed={foldMeasureTools}
-                      label={t("measure")}
+                      label={measureTitle}
                       icon={
                         framePicking ? (
                           <ArrowRouting20Filled />
                         ) : (
-                          <div className={classes.pointScanIcon}>
-                            {props.measureActive ? <PointScan20Filled /> : <PointScan20Regular />}
-                          </div>
+                          <MeasureIcon filled={props.measureActive} />
                         )
                       }
                       active={props.measureActive || framePicking}
                     >
                       <Tooltip
                         placement="left"
-                        title={props.measureActive ? t("stopMeasuring") : t("measure")}
+                        title={props.measureActive ? t("stopMeasuring") : measureTitle}
                       >
                         <IconButton
                           data-testid="measure-button"
-                          aria-label={t("measure")}
+                          aria-label={measureTitle}
                           className={classes.iconButton}
                           size="small"
                           aria-pressed={props.measureActive}
                           onClick={props.onClickMeasure}
                         >
-                          <div className={classes.pointScanIcon}>
-                            {props.measureActive ? <PointScan20Filled /> : <PointScan20Regular />}
-                          </div>
+                          <MeasureIcon filled={props.measureActive} />
                         </IconButton>
                       </Tooltip>
 
                       <Tooltip
                         placement="left"
-                        title={framePicking ? t("stopMeasuringFrames") : t("measureFrames")}
+                        title={framePicking ? t("stopMeasuringFrames") : measureFramesTitle}
                       >
                         <IconButton
                           data-testid="measure-frames-button"
-                          aria-label={t("measureFrames")}
+                          aria-label={measureFramesTitle}
                           className={classes.iconButton}
                           size="small"
                           aria-pressed={framePicking}
@@ -605,7 +612,7 @@ export function RendererOverlay(props: Readonly<Props>): React.JSX.Element {
                             setFramePicking(!framePicking);
                           }}
                         >
-                          {framePicking ? <ArrowRouting20Filled /> : <ArrowRouting20Regular />}
+                          {framePicking ? <ArrowRouting20Filled /> : <MeasureFramesIcon />}
                         </IconButton>
                       </Tooltip>
                     </OverlayToolGroup>

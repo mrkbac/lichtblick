@@ -14,14 +14,14 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import MinusIcon from "@mui/icons-material/IndeterminateCheckBoxOutlined";
-import { IconButton } from "@mui/material";
 import { Row } from "@tanstack/react-table";
 import React, { PropsWithChildren } from "react";
 import { makeStyles } from "tss-react/mui";
 
+import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import { CellValue, TableFeatures } from "@lichtblick/suite-base/panels/Table/types";
 
+import { TABLE_BUTTONS } from "./buttons";
 import { sanitizeAccessorPath } from "./sanitizeAccessorPath";
 
 const useStyles = makeStyles()((theme) => ({
@@ -59,9 +59,13 @@ export default function TableCell({
     return (
       <div>
         {isExpanded && (
-          <IconButton size="small" onClick={toggleIsExpanded} className={classes.iconButton}>
-            <MinusIcon fontSize="small" />
-          </IconButton>
+          <PanelIconButton
+            button={TABLE_BUTTONS.collapseCell}
+            onClick={toggleIsExpanded}
+            className={classes.iconButton}
+          >
+            <TABLE_BUTTONS.collapseCell.icon fontSize="small" />
+          </PanelIconButton>
         )}
         {children}
       </div>

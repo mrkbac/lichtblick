@@ -5,17 +5,17 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { t } from "i18next";
 import * as _ from "lodash-es";
 
-import { SettingsTreeAction, SettingsTreeFields } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 
-import { DEFAULT_MESH_UP_AXIS } from "../ModelCache";
 import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
+import { DEFAULT_LABEL_SCALE_FACTOR } from "../defaults";
+import { sceneSettingsNode } from "../settingsNodes/global";
 
-export const DEFAULT_LABEL_SCALE_FACTOR = 1;
+export { DEFAULT_LABEL_SCALE_FACTOR };
 
 export class SceneSettings extends SceneExtension {
   public static extensionId = "foxglove.SceneSettings";
@@ -31,106 +31,11 @@ export class SceneSettings extends SceneExtension {
   }
 
   public override settingsNodes(): SettingsTreeEntry[] {
-    const config = this.renderer.config;
-    const handler = this.handleSettingsAction;
-
-    const fields: SettingsTreeFields = {
-      enableStats: {
-        label: t("threeDee:renderStats"),
-        input: "boolean",
-        value: config.scene.enableStats,
-      },
-      debugPicking: {
-        label: t("threeDee:debugPicking"),
-        input: "boolean",
-        value: this.renderer.debugPicking,
-      },
-      backgroundColor: {
-        label: t("threeDee:background"),
-        input: "rgb",
-        value: config.scene.backgroundColor,
-      },
-      labelScaleFactor: {
-        label: t("threeDee:labelScale"),
-        help: t("threeDee:labelScaleHelp"),
-        input: "number",
-        min: 0,
-        step: 0.1,
-        precision: 2,
-        value: config.scene.labelScaleFactor,
-        placeholder: String(DEFAULT_LABEL_SCALE_FACTOR),
-      },
-      ignoreColladaUpAxis: {
-        label: t("threeDee:ignoreColladaUpAxis"),
-        help: t("threeDee:ignoreColladaUpAxisHelp"),
-        input: "boolean",
-        value: config.scene.ignoreColladaUpAxis,
-        error:
-          (config.scene.ignoreColladaUpAxis ?? false) !==
-          this.renderer.modelCache.options.ignoreColladaUpAxis
-            ? t("threeDee:takeEffectAfterReboot")
-            : undefined,
-      },
-      meshUpAxis: {
-        label: t("threeDee:meshUpAxis"),
-        help: t("threeDee:meshUpAxisHelp"),
-        input: "select",
-        value: config.scene.meshUpAxis ?? DEFAULT_MESH_UP_AXIS,
-        options: [
-          { label: t("threeDee:YUp"), value: "y_up" },
-          { label: t("threeDee:ZUp"), value: "z_up" },
-        ],
-        error:
-          (config.scene.meshUpAxis ?? DEFAULT_MESH_UP_AXIS) !==
-          this.renderer.modelCache.options.meshUpAxis
-            ? t("threeDee:takeEffectAfterReboot")
-            : undefined,
-      },
-      mainLightMode: {
-        label: t("threeDee:mainLightMode"),
-        help: t("threeDee:mainLightModeHelp"),
-        input: "select",
-        value: config.scene.mainLightMode ?? "fixed",
-        options: [
-          { label: t("threeDee:mainLightFixed"), value: "fixed" },
-          { label: t("threeDee:mainLightHeadlight"), value: "headlight" },
-        ],
-      },
-      directionalLightIntensity: {
-        label: t("threeDee:directionalLightIntensity"),
-        input: "number",
-        min: 0,
-        step: 0.1,
-        precision: 2,
-        value: config.scene.directionalLightIntensity,
-        placeholder: String(Math.PI),
-      },
-      hemisphereLightIntensity: {
-        label: t("threeDee:hemisphereLightIntensity"),
-        input: "number",
-        min: 0,
-        step: 0.1,
-        precision: 2,
-        value: config.scene.hemisphereLightIntensity,
-        placeholder: String(0.5 * Math.PI),
-      },
-    };
-
-    if (process.env.NODE_ENV === "production") {
-      delete fields.debugPicking;
-    }
-    return [
-      {
-        path: ["scene"],
-        node: {
-          label: t("threeDee:scene"),
-          actions: [{ type: "action", id: "reset-scene", label: t("threeDee:reset") }],
-          fields,
-          defaultExpansionState: "collapsed",
-          handler,
-        },
-      },
-    ];
+    const node = sceneSettingsNode(this.renderer.config.scene, {
+      debugPicking: this.renderer.debugPicking,
+      loaded: this.renderer.modelCache.options,
+    });
+    return [{ path: ["scene"], node: { ...node, handler: this.handleSettingsAction } }];
   }
 
   public override handleSettingsAction = (action: SettingsTreeAction): void => {

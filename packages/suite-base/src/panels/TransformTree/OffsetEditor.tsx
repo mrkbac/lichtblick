@@ -1,12 +1,11 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { Dismiss12Regular, Info16Regular } from "@fluentui/react-icons";
+import { Info16Regular } from "@fluentui/react-icons";
 import {
   Button,
   Checkbox,
   FormControlLabel,
-  IconButton,
   Menu,
   MenuItem,
   ToggleButton,
@@ -16,6 +15,7 @@ import {
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import { NumberInput } from "@lichtblick/suite-base/components/SettingsTreeEditor/inputs/NumberInput";
 import {
   ADJUST_STEPS,
@@ -33,8 +33,11 @@ import {
   Vec3,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms/transformOffsets";
 import clipboard from "@lichtblick/suite-base/util/clipboard";
+import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 import { useStyles } from "./TransformTree.style";
+import { TRANSFORM_TREE_BUTTONS } from "./buttons";
+import { TRANSFORM_TREE_SHORTCUTS } from "./shortcuts";
 
 const PRECISION_METERS = 3;
 const PRECISION_DEGREES = 3;
@@ -153,7 +156,7 @@ export function OffsetEditor({
           }}
           // ↑/↓ nudge by the step like the ‹ › buttons, Shift for 10 steps
           onKeyDown={(event) => {
-            if (event.key !== "ArrowUp" && event.key !== "ArrowDown") {
+            if (findShortcut(TRANSFORM_TREE_SHORTCUTS, event)?.id !== "transformTree.nudgeValue") {
               return;
             }
             event.preventDefault();
@@ -200,7 +203,7 @@ export function OffsetEditor({
       className={classes.editor}
       data-testid="offset-editor"
       onKeyDown={(event) => {
-        if (event.key === "Escape") {
+        if (findShortcut(TRANSFORM_TREE_SHORTCUTS, event)?.id === "transformTree.closeEditor") {
           onClose();
         }
       }}
@@ -226,9 +229,7 @@ export function OffsetEditor({
             </ToggleButton>
           ))}
         </ToggleButtonGroup>
-        <IconButton size="small" aria-label={t("editor.close")} onClick={onClose}>
-          <Dismiss12Regular />
-        </IconButton>
+        <PanelIconButton button={TRANSFORM_TREE_BUTTONS.closeEditor} onClick={onClose} />
       </div>
       <div className={classes.editorGrid}>
         {block("xyz", current.xyz, roundTo(result.position, PRECISION_METERS))}

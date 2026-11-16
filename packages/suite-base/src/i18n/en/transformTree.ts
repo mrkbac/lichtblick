@@ -40,19 +40,18 @@ export const transformTree = {
   notYetPublished: "Not published yet at this point in the recording; values are from later on",
   adjusted: "adjusted",
   adjustedDetails: "Adjusted: values include an offset. Recorded x, y, z: {{xyz}}",
-  selectToAdjust: "Click or press Enter to adjust, Esc to close",
+  selectToAdjust: "Select the row to adjust its offset",
   editor: {
     title: "Adjust {{frame}}",
     stepLabel: "Step size",
     step: { fine: "1 mm · 0.01°", medium: "1 cm · 0.1°", coarse: "10 cm · 1°" },
-    close: "Close",
     offset: "Offset",
     offsetHelp:
-      "Applied on top of the recorded transform: translation along the parent's axes, then the rotation around the frame's own origin. ↑/↓ change a value by the step size, Shift+↑/↓ by 10 steps, Esc closes.",
+      "Applied on top of the recorded transform: translation along the parent's axes, then the rotation around the frame's own origin.",
     result: "Result",
     resultNoData: "No transform at the current time yet; edit the offset or wait for data.",
     resultHelp:
-      "The transform that is rendered. Type a value here and the offset is computed for you. ↑/↓ change a value by the step size, Shift+↑/↓ by 10 steps, Esc closes.",
+      "The transform that is rendered. Type a value here and the offset is computed for you.",
     rotationConvention: {
       extrinsic:
         "Offset and Result angles turn around the parent's fixed axes: x, then y, then z (extrinsic xyz, as in tf2 getRPY and URDF rpy). Change it in the panel settings.",
@@ -73,6 +72,8 @@ export const transformTree = {
     extrinsic: "Extrinsic xyz (ROS, fixed axes)",
     intrinsic: "Intrinsic XYZ (own axes)",
     topics: "Topics",
+    topicsHelp:
+      "Every transform topic in the data source. Hide one to leave its frames out of the tree; mark one Static to load it from the whole recording.",
     static: "Static",
     staticHelp:
       "Static transforms are loaded from the whole recording and never reported as stale.",

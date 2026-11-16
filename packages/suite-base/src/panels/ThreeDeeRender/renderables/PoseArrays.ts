@@ -7,11 +7,10 @@
 
 import { toNanoSec } from "@foxglove/rostime";
 import { PosesInFrame } from "@foxglove/schemas";
-import { t } from "i18next";
 import * as _ from "lodash-es";
 import * as THREE from "three";
 
-import { SettingsTreeAction, SettingsTreeFields, Topic } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
 import { Axis, AXIS_LENGTH } from "./Axis";
@@ -26,7 +25,7 @@ import {
   SceneExtension,
 } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
-import { makeRgba, rgbaGradient, rgbaToCssString, stringToRgba } from "../color";
+import { makeRgba, rgbaGradient, stringToRgba } from "../color";
 import { POSES_IN_FRAME_DATATYPES } from "../foxglove";
 import { normalizeHeader, normalizePose, normalizeTime } from "../normalizeMessages";
 import {
@@ -39,19 +38,17 @@ import {
   MarkerType,
   MarkerAction,
 } from "../ros";
+import { BaseSettings } from "../settings";
 import {
-  BaseSettings,
-  fieldGradient,
-  fieldLineWidth,
-  fieldScaleVec3,
-  fieldSize,
-} from "../settings";
+  POSE_ARRAY_DEFAULTS,
+  poseArrayDefaultType as getDefaultType,
+  poseArraySettingsNode,
+} from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose, Pose } from "../transforms";
 import { RenderableArrow } from "./markers/RenderableArrow";
 import { RenderableLineStrip } from "./markers/RenderableLineStrip";
 
-type GradientRgba = [ColorRGBA, ColorRGBA];
 type Gradient = [string, string];
 type DisplayType = "axis" | "arrow" | "line";
 
@@ -63,33 +60,12 @@ export type LayerSettingsPoseArray = BaseSettings & {
   gradient: Gradient;
 };
 
-const DEFAULT_TYPE: DisplayType = "axis";
-const DEFAULT_AXIS_SCALE = AXIS_LENGTH;
-const DEFAULT_ARROW_SCALE: THREE.Vector3Tuple = [1, 0.15, 0.15];
-const DEFAULT_LINE_WIDTH = 0.2;
-const DEFAULT_GRADIENT: GradientRgba = [
-  { r: 124 / 255, g: 107 / 255, b: 1, a: 1 },
-  { r: 124 / 255, g: 107 / 255, b: 1, a: 0.5 },
-];
-
 const MISMATCHED_FRAME_ID = "MISMATCHED_FRAME_ID";
 
 const TIME_ZERO = { sec: 0, nsec: 0 };
 const COLOR_WHITE = { r: 1, g: 1, b: 1, a: 1 };
 
-const DEFAULT_GRADIENT_STR: Gradient = [
-  rgbaToCssString(DEFAULT_GRADIENT[0]),
-  rgbaToCssString(DEFAULT_GRADIENT[1]),
-];
-
-const DEFAULT_SETTINGS: LayerSettingsPoseArray = {
-  visible: false,
-  type: DEFAULT_TYPE,
-  axisScale: DEFAULT_AXIS_SCALE,
-  arrowScale: DEFAULT_ARROW_SCALE,
-  lineWidth: DEFAULT_LINE_WIDTH,
-  gradient: DEFAULT_GRADIENT_STR,
-};
+const DEFAULT_SETTINGS = POSE_ARRAY_DEFAULTS;
 
 const tempColor1 = makeRgba();
 const tempColor2 = makeRgba();
@@ -187,53 +163,9 @@ export class PoseArrays extends SceneExtension<PoseArrayRenderable> {
         continue;
       }
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsPoseArray>;
-      const displayType = config.type ?? getDefaultType(topic);
-      const { axisScale, lineWidth } = config;
-      const arrowScale = config.arrowScale ?? DEFAULT_ARROW_SCALE;
-      const gradient = config.gradient ?? DEFAULT_GRADIENT_STR;
-
-      const fields: SettingsTreeFields = {
-        type: {
-          label: t("threeDee:type"),
-          input: "select",
-          options: [
-            { label: t("threeDee:poseDisplayTypeAxis"), value: "axis" },
-            { label: t("threeDee:poseDisplayTypeArrow"), value: "arrow" },
-            { label: t("threeDee:poseDisplayTypeLine"), value: "line" },
-          ],
-          value: displayType,
-        },
-      };
-      switch (displayType) {
-        case "axis":
-          fields["axisScale"] = fieldSize(t("threeDee:scale"), axisScale, DEFAULT_AXIS_SCALE);
-          break;
-        case "arrow":
-          fields["arrowScale"] = fieldScaleVec3(t("threeDee:scale"), arrowScale);
-          break;
-        case "line":
-          fields["lineWidth"] = fieldLineWidth(
-            t("threeDee:lineWidth"),
-            lineWidth,
-            DEFAULT_LINE_WIDTH,
-          );
-          break;
-      }
-
-      // Axis does not currently support gradients. This could possibly be done with tinting
-      if (displayType !== "axis") {
-        fields["gradient"] = fieldGradient(t("threeDee:gradient"), gradient);
-      }
-
       entries.push({
         path: ["topics", topic.name],
-        node: {
-          label: topic.name,
-          icon: topicIsConvertibleToSchema(topic, NAV_PATH_DATATYPES) ? "Timeline" : "Flag",
-          fields,
-          visible: config.visible ?? DEFAULT_SETTINGS.visible,
-          handler,
-        },
+        node: { ...poseArraySettingsNode(topic, config), handler },
       });
     }
     return entries;
@@ -491,10 +423,6 @@ export class PoseArrays extends SceneExtension<PoseArrayRenderable> {
       }
     }
   }
-}
-
-function getDefaultType(topic: Topic | undefined): DisplayType {
-  return topic != undefined && NAV_PATH_DATATYPES.has(topic.schemaName) ? "line" : DEFAULT_TYPE;
 }
 
 function setObjectPose(object: THREE.Object3D, pose: Pose): void {

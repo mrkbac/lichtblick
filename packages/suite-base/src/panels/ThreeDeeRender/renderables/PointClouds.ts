@@ -21,7 +21,6 @@ import {
   createPickingMaterial,
   DEFAULT_POINT_SETTINGS,
   LayerSettingsPointExtension,
-  pointSettingsNode,
   pointCloudMaterial,
   pointCloudColorEncoding,
   POINT_CLOUD_REQUIRED_FIELDS,
@@ -57,6 +56,7 @@ import {
   PointField,
   PointFieldType,
 } from "../ros";
+import { pointCloudSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose, Pose } from "../transforms";
 import { FieldReader, getReader, isSupportedField } from "./pointClouds/fieldReaders";
@@ -906,18 +906,10 @@ export class PointClouds extends SceneExtension<PointCloudHistoryRenderable> {
       }
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsPointClouds>;
       const messageFields = this.#fieldsByTopic.get(topic.name) ?? POINT_CLOUD_REQUIRED_FIELDS;
-      const node: SettingsTreeNodeWithActionHandler = pointSettingsNode(
-        topic,
-        messageFields,
-        config,
-      );
-      node.fields!.stixelsEnabled = {
-        label: "Stixel view",
-        input: "boolean",
-        value: config.stixelsEnabled ?? DEFAULT_SETTINGS.stixelsEnabled,
+      const node: SettingsTreeNodeWithActionHandler = {
+        ...pointCloudSettingsNode(topic, messageFields, config),
+        handler,
       };
-      node.handler = handler;
-      node.icon = "Points";
       entries.push({ path: ["topics", topic.name], node });
     }
     return entries;

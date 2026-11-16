@@ -6,10 +6,11 @@ import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
 
 import { parseMessagePath } from "@lichtblick/message-path";
-import { SettingsTreeFields, SettingsTreeNode, SettingsTreeNodes } from "@lichtblick/suite";
-import { DEFAULT_SLIDING_WINDOW_SECONDS } from "@lichtblick/suite-base/panels/Plot/PlotCoordinator";
-import { DEFAULT_PLOT_PATH } from "@lichtblick/suite-base/panels/Plot/constants";
-import { MakeRootSeriesNode, MakeSeriesNode } from "@lichtblick/suite-base/panels/Plot/types";
+import {
+  DEFAULT_PLOT_PATH,
+  DEFAULT_SLIDING_WINDOW_SECONDS,
+} from "@lichtblick/suite-base/panels/Plot/constants";
+import type { MakeRootSeriesNode, MakeSeriesNode } from "@lichtblick/suite-base/panels/Plot/types";
 import {
   getPlotMode,
   getTimeWindow,
@@ -20,6 +21,11 @@ import {
   yBound,
 } from "@lichtblick/suite-base/panels/Plot/utils/config";
 import { PLOTABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/shared/constants";
+import type {
+  DocumentedFields,
+  DocumentedNode,
+  DocumentedNodes,
+} from "@lichtblick/suite-base/panels/shared/documentedSettings";
 import { lineColors } from "@lichtblick/suite-base/util/plotColors";
 
 const makeSeriesNode = memoizeWeak(
@@ -32,7 +38,7 @@ const makeSeriesNode = memoizeWeak(
     t,
     xAxisVal,
     shadeSeriesOptions,
-  }: MakeSeriesNode): SettingsTreeNode => {
+  }: MakeSeriesNode): DocumentedNode => {
     const actions = [];
     const isReferenceLine = isReferenceLinePlotPathType(path);
 
@@ -56,6 +62,7 @@ const makeSeriesNode = memoizeWeak(
         value: {
           input: "messagepath",
           label: isReferenceLine ? t("value") : t("messagePath"),
+          help: isReferenceLine ? t("referenceValueHelp") : t("seriesPathHelp"),
           supportsMathModifiers: true,
           supportsStreamModifiers,
           validTypes: PLOTABLE_ROS_TYPES,
@@ -64,16 +71,19 @@ const makeSeriesNode = memoizeWeak(
         label: {
           input: "string",
           label: t("label"),
+          help: t("seriesLabelHelp"),
           value: path.label,
         },
         color: {
           input: "rgb",
           label: t("color"),
+          help: t("colorHelp"),
           value: path.color ?? lineColors[index % lineColors.length],
         },
         lineSize: {
           input: "number",
           label: t("lineSize"),
+          help: t("lineSizeHelp"),
           value: path.lineSize,
           step: 0.2,
           min: 0,
@@ -92,16 +102,18 @@ function seriesFields(
   path: PlotPath,
   t: MakeSeriesNode["t"],
   xAxisVal: MakeSeriesNode["xAxisVal"],
-): SettingsTreeFields {
+): DocumentedFields {
   return {
     showLine: {
       input: "boolean",
       label: t("showLine"),
+      help: t("showLineHelp"),
       value: path.showLine ?? true,
     },
     interpolation: {
       input: "select",
       label: t("interpolation"),
+      help: t("interpolationHelp"),
       options: [
         { label: t("linear"), value: "linear" },
         { label: t("step"), value: "step" },
@@ -111,6 +123,7 @@ function seriesFields(
     axis: {
       input: "select",
       label: t("yAxis"),
+      help: t("seriesAxisHelp"),
       options: [
         { label: t("primary"), value: "primary" },
         { label: t("secondary"), value: "secondary" },
@@ -120,6 +133,7 @@ function seriesFields(
     timestampMethod: {
       input: "select",
       label: t("timestamp"),
+      help: t("timestampMethodHelp"),
       options: [
         { label: t("receiveTime"), value: "receiveTime" },
         { label: t("headerStamp"), value: "headerStamp" },
@@ -131,6 +145,7 @@ function seriesFields(
       timestampPath: {
         input: "messagepath",
         label: t("timestampField"),
+        help: t("timestampFieldHelp"),
         validTypes: TIMESTAMP_FIELD_TYPES,
         value: path.timestampPath ?? "",
         error: timestampPathError(path, t),
@@ -140,6 +155,7 @@ function seriesFields(
       smoothing: {
         input: "number",
         label: t("movingAverage"),
+        help: t("movingAverageHelp"),
         value: path.smoothing,
         min: 0,
         step: 1,
@@ -151,6 +167,7 @@ function seriesFields(
       xValue: {
         input: "messagepath",
         label: t("xValue"),
+        help: t("xValueHelp"),
         supportsMathModifiers: true,
         validTypes: PLOTABLE_ROS_TYPES,
         value: path.xValue ?? "",
@@ -169,7 +186,7 @@ function referenceLineFields(
   path: PlotPath,
   t: MakeSeriesNode["t"],
   shadeSeriesOptions: MakeSeriesNode["shadeSeriesOptions"],
-): SettingsTreeFields {
+): DocumentedFields {
   const horizontal = path.referenceLineAxis !== "x";
   const shade = path.referenceLineShade ?? "none";
   const shadeSeries = path.referenceLineShadeSeries ?? "";
@@ -177,6 +194,7 @@ function referenceLineFields(
     referenceLineAxis: {
       input: "select",
       label: t("orientation"),
+      help: t("orientationHelp"),
       options: [
         { label: t("horizontal"), value: "y" },
         { label: t("vertical"), value: "x" },
@@ -187,6 +205,7 @@ function referenceLineFields(
       axis: {
         input: "select",
         label: t("yAxis"),
+        help: t("seriesAxisHelp"),
         options: [
           { label: t("primary"), value: "primary" },
           { label: t("secondary"), value: "secondary" },
@@ -197,6 +216,7 @@ function referenceLineFields(
     referenceLineDashed: {
       input: "boolean",
       label: t("dashed"),
+      help: t("dashedHelp"),
       value: path.referenceLineDashed ?? true,
     },
     ...(horizontal &&
@@ -204,6 +224,7 @@ function referenceLineFields(
         referenceLineShade: {
           input: "select",
           label: t("shade"),
+          help: t("shadeHelp"),
           options: [
             { label: t("none"), value: "none" },
             { label: t("shadeAbove"), value: "above" },
@@ -218,6 +239,7 @@ function referenceLineFields(
         referenceLineShadeSeries: {
           input: "select",
           label: t("shadeSeries"),
+          help: t("shadeSeriesHelp"),
           options: [{ label: t("allSeriesOnAxis"), value: "" }, ...shadeSeriesOptions],
           value: shadeSeries,
           error:
@@ -278,7 +300,7 @@ const makeRootSeriesNode = memoizeWeak(
     t,
     xAxisVal,
     canShade,
-  }: MakeRootSeriesNode): SettingsTreeNode => {
+  }: MakeRootSeriesNode): DocumentedNode => {
     const shadeSeriesOptions = canShade === true ? makeShadeSeriesOptions(paths) : undefined;
     const children = Object.fromEntries(
       paths.length === 0
@@ -313,6 +335,7 @@ const makeRootSeriesNode = memoizeWeak(
     );
     return {
       label: t("series"),
+      help: t("seriesHelp"),
       children,
       actions: [
         {
@@ -344,7 +367,7 @@ function makeShadeSeriesOptions(paths: PlotPath[]): { label: string; value: stri
   return Array.from(options, ([value, label]) => ({ label, value }));
 }
 
-export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): SettingsTreeNodes {
+export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): DocumentedNodes {
   const minY = yBound(config.minYValue);
   const maxY = yBound(config.maxYValue);
   const maxYError =
@@ -368,7 +391,12 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
     general: {
       label: t("general"),
       fields: {
-        isSynced: { label: t("syncWithOtherPlots"), input: "boolean", value: config.isSynced },
+        isSynced: {
+          label: t("syncWithOtherPlots"),
+          help: t("syncWithOtherPlotsHelp"),
+          input: "boolean",
+          value: config.isSynced,
+        },
         ...plotModeFields(config, t),
       },
     },
@@ -377,6 +405,7 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
       fields: {
         legendDisplay: {
           label: t("position"),
+          help: t("legendPositionHelp"),
           input: "select",
           value: config.legendDisplay,
           options: [
@@ -388,6 +417,7 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
         },
         showPlotValuesInLegend: {
           label: t("showValues"),
+          help: t("showValuesHelp"),
           input: "boolean",
           value: config.showPlotValuesInLegend,
         },
@@ -399,11 +429,13 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
       fields: {
         yAxisLabel: {
           label: t("axisLabel"),
+          help: t("axisLabelHelp"),
           input: "string",
           value: config.yAxisLabel,
         },
         showYAxisLabels: {
           label: t("showLabels"),
+          help: t("showLabelsHelp"),
           input: "boolean",
           value: config.showYAxisLabels,
         },
@@ -419,12 +451,14 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
         },
         minYValue: {
           label: t("min"),
+          help: t("minHelp"),
           input: "number",
           value: minY,
           placeholder: "auto",
         },
         maxYValue: {
           label: t("max"),
+          help: t("maxHelp"),
           input: "number",
           error: maxYError,
           value: maxY,
@@ -432,11 +466,13 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
         },
         showYAxisGrid: {
           label: t("showGridLines"),
+          help: t("showGridLinesHelp"),
           input: "boolean",
           value: config.showYAxisGrid ?? true,
         },
         yAxisLogScale: {
           label: t("logScale"),
+          help: t("logScaleHelp"),
           input: "boolean",
           value: config.yAxisLogScale ?? false,
         },
@@ -448,22 +484,26 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
       fields: {
         y2AxisLabel: {
           label: t("axisLabel"),
+          help: t("axisLabelHelp"),
           input: "string",
           value: config.y2AxisLabel,
         },
         showY2AxisLabels: {
           label: t("showLabels"),
+          help: t("showLabelsHelp"),
           input: "boolean",
           value: config.showY2AxisLabels ?? true,
         },
         minY2Value: {
           label: t("min"),
+          help: t("minHelp"),
           input: "number",
           value: config.minY2Value,
           placeholder: "auto",
         },
         maxY2Value: {
           label: t("max"),
+          help: t("maxHelp"),
           input: "number",
           error: maxY2Error,
           value: config.maxY2Value,
@@ -471,11 +511,13 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
         },
         showY2AxisGrid: {
           label: t("showGridLines"),
+          help: t("showGridLinesHelp"),
           input: "boolean",
           value: config.showY2AxisGrid ?? false,
         },
         y2AxisLogScale: {
           label: t("logScale"),
+          help: t("logScaleHelp"),
           input: "boolean",
           value: config.y2AxisLogScale ?? false,
         },
@@ -487,11 +529,13 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
       fields: {
         xAxisLabel: {
           label: t("axisLabel"),
+          help: t("axisLabelHelp"),
           input: "string",
           value: config.xAxisLabel,
         },
         xAxisVal: {
           label: t("value"),
+          help: t("xAxisValueHelp"),
           input: "select",
           value: config.xAxisVal,
           options: [
@@ -505,6 +549,7 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
           config.xAxisVal === "currentCustom" || config.xAxisVal === "custom"
             ? {
                 label: t("messagePath"),
+                help: t("xAxisPathHelp"),
                 input: "messagepath",
                 supportsMathModifiers: true,
                 value: config.xAxisPath?.value ?? "",
@@ -514,11 +559,13 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
 
         showXAxisLabels: {
           label: t("showLabels"),
+          help: t("showLabelsHelp"),
           input: "boolean",
           value: config.showXAxisLabels,
         },
         showXAxisGrid: {
           label: t("showGridLines"),
+          help: t("showGridLinesHelp"),
           input: "boolean",
           value: config.showXAxisGrid ?? true,
         },
@@ -536,7 +583,7 @@ export function buildSettingsTree(config: PlotConfig, t: TFunction<"plot">): Set
 }
 
 /** Time plots can show each series' frequency spectrum or value histogram instead */
-function plotModeFields(config: PlotConfig, t: MakeSeriesNode["t"]): SettingsTreeFields {
+function plotModeFields(config: PlotConfig, t: MakeSeriesNode["t"]): DocumentedFields {
   if (config.xAxisVal !== "timestamp") {
     return {};
   }
@@ -544,6 +591,7 @@ function plotModeFields(config: PlotConfig, t: MakeSeriesNode["t"]): SettingsTre
   return {
     plotMode: {
       label: t("display"),
+      help: t("displayHelp"),
       input: "select",
       value: plotMode,
       options: [
@@ -555,6 +603,7 @@ function plotModeFields(config: PlotConfig, t: MakeSeriesNode["t"]): SettingsTre
     ...(plotMode !== "time" && {
       analysisRange: {
         label: t("analyzedData"),
+        help: t("analyzedDataHelp"),
         input: "select",
         value: config.analysisRange ?? "visible",
         options: [
@@ -566,6 +615,7 @@ function plotModeFields(config: PlotConfig, t: MakeSeriesNode["t"]): SettingsTre
     ...(plotMode === "histogram" && {
       histogramBins: {
         label: t("histogramBins"),
+        help: t("histogramBinsHelp"),
         input: "number",
         value: config.histogramBins,
         min: 1,
@@ -583,16 +633,18 @@ function xRangeFields(
   config: PlotConfig,
   t: MakeSeriesNode["t"],
   maxXError: string | undefined,
-): SettingsTreeFields {
-  const minMax: SettingsTreeFields = {
+): DocumentedFields {
+  const minMax: DocumentedFields = {
     minXValue: {
       label: t("min"),
+      help: t("minHelp"),
       input: "number",
       value: _.isNumber(config.minXValue) ? config.minXValue : undefined,
       placeholder: "auto",
     },
     maxXValue: {
       label: t("max"),
+      help: t("maxHelp"),
       input: "number",
       error: maxXError,
       value: _.isNumber(config.maxXValue) ? config.maxXValue : undefined,
@@ -607,6 +659,7 @@ function xRangeFields(
       ...(isPathXAxis && {
         axisScales: {
           label: t("axisScales"),
+          help: t("axisScalesHelp"),
           input: "select",
           value: config.axisScales ?? "independent",
           options: [
@@ -622,6 +675,7 @@ function xRangeFields(
   return {
     timestampFormat: {
       label: t("timestampFormat"),
+      help: t("timestampFormatHelp"),
       input: "select",
       value: config.timestampFormat ?? "relative",
       options: [
@@ -632,6 +686,7 @@ function xRangeFields(
     },
     timeWindow: {
       label: t("timeWindow"),
+      help: t("timeWindowHelp"),
       input: "select",
       value: timeWindow,
       options: [
@@ -643,6 +698,7 @@ function xRangeFields(
     ...(timeWindow === "sliding" && {
       followingViewWidth: {
         label: t("windowSize"),
+        help: t("windowSizeHelp"),
         input: "number",
         min: 0,
         placeholder: String(DEFAULT_SLIDING_WINDOW_SECONDS),
@@ -650,6 +706,7 @@ function xRangeFields(
       },
       playheadPosition: {
         label: t("playheadPosition"),
+        help: t("playheadPositionHelp"),
         input: "select",
         value: config.playheadPosition ?? "right",
         options: [

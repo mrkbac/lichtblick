@@ -3,7 +3,8 @@
 
 import { TFunction } from "i18next";
 
-import { SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
+import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 
 import {
   AUDIO_FORMATS,
@@ -35,19 +36,21 @@ export function buildSettingsTree(
   topic: string | undefined,
   audioTopics: readonly string[],
   t: TFunction<"audio">,
-): SettingsTreeNodes {
+): DocumentedNodes {
   return {
     general: {
       label: t("general"),
       fields: {
         topic: {
           label: t("topic"),
+          help: t("topicHelp"),
           input: "autocomplete",
           value: topic ?? "",
           items: [...audioTopics],
         },
         format: {
           label: t("format"),
+          help: t("formatHelp"),
           input: "select",
           value: config.format,
           options: [
@@ -75,6 +78,7 @@ export function buildSettingsTree(
         },
         volume: {
           label: t("volume"),
+          help: t("volumeHelp"),
           input: "slider",
           value: config.volume,
           min: 0,

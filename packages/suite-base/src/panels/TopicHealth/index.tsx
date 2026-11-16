@@ -6,10 +6,8 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { Time, subtract, toSec } from "@foxglove/rostime";
-import InsightsIcon from "@mui/icons-material/Insights";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
-import OpenInNewIcon from "@mui/icons-material/OpenInNew";
 import SearchIcon from "@mui/icons-material/Search";
 import { IconButton, InputBase, Tooltip } from "@mui/material";
 import { produce } from "immer";
@@ -26,6 +24,7 @@ import {
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import Panel from "@lichtblick/suite-base/components/Panel";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import {
@@ -46,6 +45,7 @@ import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/Pan
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
+import { TOPIC_HEALTH_BUTTONS } from "./buttons";
 import {
   DEFAULT_CONFIG,
   DEFAULT_TOLERANCE_PERCENT,
@@ -178,6 +178,8 @@ type Props = {
 
 function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
   const { classes, cx } = useStyles();
+  const detailedStatsTitle = usePanelButtonTitle(TOPIC_HEALTH_BUTTONS.detailedStats);
+  const openInRawMessagesTitle = usePanelButtonTitle(TOPIC_HEALTH_BUTTONS.openInRawMessages);
   const topics = useMessagePipeline(selectTopics);
   const capabilities = useMessagePipeline(selectCapabilities);
   const start = useMessagePipeline(selectStart);
@@ -675,17 +677,17 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
                           size="small"
                           color={deep ? "primary" : "default"}
                           aria-pressed={deep}
-                          aria-label={`Detailed statistics for ${row.topic.name}`}
+                          aria-label={`${detailedStatsTitle} for ${row.topic.name}`}
                           onClick={() => {
                             updateTopic(row.topic.name, {
                               deepStats: deep ? undefined : true,
                             });
                           }}
                         >
-                          <InsightsIcon fontSize="inherit" />
+                          <TOPIC_HEALTH_BUTTONS.detailedStats.icon fontSize="inherit" />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Open in Raw Messages">
+                      <Tooltip title={openInRawMessagesTitle}>
                         <IconButton
                           size="small"
                           aria-label={`Open ${row.topic.name} in Raw Messages`}
@@ -693,7 +695,7 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
                             openTopic(row.topic.name);
                           }}
                         >
-                          <OpenInNewIcon fontSize="inherit" />
+                          <TOPIC_HEALTH_BUTTONS.openInRawMessages.icon fontSize="inherit" />
                         </IconButton>
                       </Tooltip>
                     </td>

@@ -2,36 +2,28 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
-import PublishPointIcon from "@lichtblick/suite-base/components/PublishPointIcon";
-import { ALLOWED_DATATYPES } from "@lichtblick/suite-base/panels/DiagnosticSummary/constants";
+import { sharedI18nObject } from "@lichtblick/suite-base/i18n";
+
+import { DIAGNOSTIC_SUMMARY_BUTTONS } from "./buttons";
+import { ALLOWED_DATATYPES, DEFAULT_CONFIG } from "./constants";
+import { buildSettingsTree } from "./utils/buildSettingsTree";
 
 const docs: PanelDocs = {
   intro: "Lists every diagnostic check with its current level, worst first.",
   schemas: ALLOWED_DATATYPES,
+  buttons: Object.values(DIAGNOSTIC_SUMMARY_BUTTONS),
+  settings: () =>
+    buildSettingsTree(
+      DEFAULT_CONFIG,
+      { available: [], selected: [], subscribed: [] },
+      sharedI18nObject.getFixedT(null, "diagnostics"),
+    ),
   sections: [
     {
       title: "Toolbar",
       items: [
-        ["Level", "Hide checks below the chosen level (OK, WARN, ERROR, STALE)."],
+        ["Level", "Hides checks below the chosen level (OK, WARN, ERROR, STALE)."],
         ["Filter", "Fuzzy-matches hardware ID and check name."],
-      ],
-    },
-    {
-      title: "Settings",
-      items: [
-        ["Topics", "Which DiagnosticArray topics to read; all of them by default."],
-        ["Sort by level", "Group checks by level, worst first; off sorts by name."],
-        ["Show history", "Draw a status timeline for each check."],
-        ["Stale timeout", "Seconds without updates before a check is marked stale."],
-      ],
-    },
-    {
-      title: "Mouse",
-      items: [
-        ["Click a row", "Opens the check in a Diagnostics – Detail panel."],
-        ["Pin", "Keeps a check at the top of the list.", PublishPointIcon],
-        ["Click the timeline", "Seeks playback to that time."],
-        ["Drop a topic", "Drag a diagnostics topic onto the panel to add it."],
       ],
     },
   ],

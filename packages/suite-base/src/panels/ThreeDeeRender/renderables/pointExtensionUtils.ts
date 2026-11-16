@@ -5,163 +5,28 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { t } from "i18next";
 import * as THREE from "three";
 
-import { SettingsTreeNode, Topic } from "@lichtblick/suite";
 import { DynamicBufferGeometry } from "@lichtblick/suite-base/panels/ThreeDeeRender/DynamicBufferGeometry";
 import { BaseUserData, Renderable } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderable";
 import type { Renderer } from "@lichtblick/suite-base/panels/ThreeDeeRender/Renderer";
-import { rgbaToCssString } from "@lichtblick/suite-base/panels/ThreeDeeRender/color";
 import {
   MISSING_TRANSFORM,
   missingTransformMessage,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/transforms";
-import { BaseSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/settings";
 import { MAX_DURATION } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
 import { updatePose } from "@lichtblick/suite-base/panels/ThreeDeeRender/updatePose";
 
 import { LaserScanMaterial } from "./LaserScans";
-import {
-  colorHasTransparency,
-  ColorModeSettings,
-  colorModeSettingsFields,
-  FS_SRGB_TO_LINEAR,
-} from "./colorMode";
-import { POINTCLOUD_DATATYPES as LICHTBLICK_POINTCLOUD_DATATYPES } from "../foxglove";
-import { POINTCLOUD_DATATYPES as ROS_POINTCLOUD_DATATYPES } from "../ros";
+import { colorHasTransparency, FS_SRGB_TO_LINEAR } from "./colorMode";
+import type { LayerSettingsPointExtension } from "../settingsNodes/topics";
 
-export type LayerSettingsPointExtension = BaseSettings &
-  ColorModeSettings & {
-    pointSize: number;
-    pointShape: PointShape;
-    /** Edge length in meters when `pointShape` is "cube" */
-    cubeSize: number;
-    decayTime: number;
-  };
-
-export type PointShape = "circle" | "square" | "cube";
-const ALL_POINT_SHAPES: readonly PointShape[] = ["circle", "square", "cube"];
-
-const DEFAULT_POINT_SIZE = 1.5;
-const DEFAULT_POINT_SHAPE = "circle";
-const DEFAULT_CUBE_SIZE = 0.1;
-const DEFAULT_COLOR_MAP = "turbo";
-const DEFAULT_FLAT_COLOR = { r: 1, g: 1, b: 1, a: 1 };
-const DEFAULT_MIN_COLOR = { r: 100 / 255, g: 47 / 255, b: 105 / 255, a: 1 };
-const DEFAULT_MAX_COLOR = { r: 227 / 255, g: 177 / 255, b: 135 / 255, a: 1 };
-
-// used by LaserScans, VelodyneScans, and PointClouds
-export const DEFAULT_POINT_SETTINGS: LayerSettingsPointExtension = {
-  visible: false,
-  frameLocked: false,
-  pointSize: DEFAULT_POINT_SIZE,
-  pointShape: DEFAULT_POINT_SHAPE,
-  cubeSize: DEFAULT_CUBE_SIZE,
-  decayTime: 0,
-  colorMode: "flat",
-  flatColor: rgbaToCssString(DEFAULT_FLAT_COLOR),
-  colorField: undefined,
-  gradient: [rgbaToCssString(DEFAULT_MIN_COLOR), rgbaToCssString(DEFAULT_MAX_COLOR)],
-  colorMap: DEFAULT_COLOR_MAP,
-  explicitAlpha: 1,
-  minValue: undefined,
-  maxValue: undefined,
-};
-
-export const POINT_CLOUD_REQUIRED_FIELDS = ["x", "y", "z"];
-
-const SHAPE_LABELS = {
-  circle: "threeDee:pointShapeCircle",
-  square: "threeDee:pointShapeSquare",
-  cube: "threeDee:pointShapeCube",
-} as const;
-
-/**
- * Creates settings node for Point cloud and scan topics
- * @param topic - topic to get settings node for
- * @param messageFields - message fields or required fields for the topic
- * @param config - current topic settings
- * @param defaultSettings - (optional) default settings to use
- * @param shapes - (optional) point shapes offered in the settings
- * @returns  - settings node for the topic
- */
-export function pointSettingsNode(
-  topic: Topic,
-  messageFields: string[],
-  config: Partial<LayerSettingsPointExtension>,
-  defaultSettings: LayerSettingsPointExtension = DEFAULT_POINT_SETTINGS,
-  shapes: readonly PointShape[] = ALL_POINT_SHAPES,
-): SettingsTreeNode {
-  const pointSize = config.pointSize;
-  const pointShape = config.pointShape ?? "circle";
-  const decayTime = config.decayTime;
-
-  const checkColorsForDatatypes = (pointCloudDatatypes: Set<string>): boolean => {
-    return (
-      pointCloudDatatypes.has(topic.schemaName) ||
-      (topic.convertibleTo ?? []).some((item) => pointCloudDatatypes.has(item))
-    );
-  };
-
-  const colorModeFields = colorModeSettingsFields({
-    msgFields: messageFields,
-    config,
-    defaults: defaultSettings,
-    modifiers: {
-      supportsPackedRgbModes: checkColorsForDatatypes(ROS_POINTCLOUD_DATATYPES),
-      supportsRgbaFieldsMode: checkColorsForDatatypes(LICHTBLICK_POINTCLOUD_DATATYPES),
-    },
-  });
-
-  const node: SettingsTreeNode = {
-    order: topic.name.toLocaleLowerCase(),
-    visible: config.visible ?? defaultSettings.visible,
-    fields: {
-      pointShape: {
-        label: t("threeDee:pointShape"),
-        input: "select",
-        options: shapes.map((shape) => ({ label: t(SHAPE_LABELS[shape]), value: shape })),
-        value: pointShape,
-      },
-      ...(pointShape === "cube"
-        ? {
-            cubeSize: {
-              label: t("threeDee:cubeSize"),
-              input: "number",
-              step: 0.05,
-              placeholder: String(defaultSettings.cubeSize),
-              precision: 3,
-              value: config.cubeSize,
-              min: 0,
-            },
-          }
-        : {
-            pointSize: {
-              label: t("threeDee:pointSize"),
-              input: "number",
-              step: 1,
-              placeholder: "2",
-              precision: 2,
-              value: pointSize,
-              min: 0,
-            },
-          }),
-      decayTime: {
-        label: t("threeDee:decayTime"),
-        input: "number",
-        step: 0.5,
-        placeholder: t("threeDee:decayTimeDefaultZeroSeconds"),
-        min: 0,
-        precision: 3,
-        value: decayTime,
-      },
-      ...colorModeFields,
-    },
-  };
-
-  return node;
-}
+export {
+  DEFAULT_POINT_SETTINGS,
+  POINT_CLOUD_REQUIRED_FIELDS,
+  pointSettingsNode,
+} from "../settingsNodes/topics";
+export type { LayerSettingsPointExtension } from "../settingsNodes/topics";
 
 /**
  * Creates a THREE.Points object for a point cloud and scan messages
