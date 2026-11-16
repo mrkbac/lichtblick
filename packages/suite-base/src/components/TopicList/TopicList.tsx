@@ -10,10 +10,10 @@ import { List, ListItem, ListItemText, PopoverPosition, Skeleton } from "@mui/ma
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { MouseEvent, useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLatest } from "react-use";
 import { useDebounce } from "use-debounce";
 
 import { filterMap } from "@lichtblick/den/collection";
+import { useLatest } from "@lichtblick/hooks";
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import { DirectTopicStatsUpdater } from "@lichtblick/suite-base/components/DirectTopicStatsUpdater";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";

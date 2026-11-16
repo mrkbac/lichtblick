@@ -9,10 +9,9 @@ import * as _ from "lodash-es";
 import { useSnackbar } from "notistack";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useAsync, useAsyncFn, useMountedState } from "react-use";
 import { shallow } from "zustand/shallow";
 
-import { useShallowMemo } from "@lichtblick/hooks";
+import { useAsync, useAsyncFn, useMountedState, useShallowMemo } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { VariableValue } from "@lichtblick/suite";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";

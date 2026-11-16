@@ -8,9 +8,12 @@
 import { Menu, MenuItem, MenuItemProps, MenuProps } from "@mui/material";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useCopyToClipboard } from "react-use";
 
+import Log from "@lichtblick/log";
 import { DraggedMessagePath } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import clipboard from "@lichtblick/suite-base/util/clipboard";
+
+const log = Log.getLogger(__filename);
 
 export function ContextMenu(props: {
   messagePaths: DraggedMessagePath[];
@@ -18,7 +21,6 @@ export function ContextMenu(props: {
   onClose: () => void;
 }): React.JSX.Element {
   const { messagePaths, anchorPosition, onClose } = props;
-  const [, copyToClipboard] = useCopyToClipboard();
   const { t } = useTranslation("topicList");
 
   const menuItems = useMemo(() => {
@@ -34,7 +36,11 @@ export function ContextMenu(props: {
             : t("copyTopicNames"),
         onClick: () => {
           onClose();
-          copyToClipboard(messagePaths.map((item) => item.path).join("\n"));
+          clipboard
+            .copy(messagePaths.map((item) => item.path).join("\n"))
+            .catch((error: unknown) => {
+              log.error("Failed to copy to clipboard", error);
+            });
         },
       },
     ];
@@ -45,13 +51,15 @@ export function ContextMenu(props: {
           const schemaName = messagePaths[0]?.rootSchemaName;
           if (schemaName != undefined) {
             onClose();
-            copyToClipboard(schemaName);
+            clipboard.copy(schemaName).catch((error: unknown) => {
+              log.error("Failed to copy to clipboard", error);
+            });
           }
         },
       });
     }
     return items;
-  }, [t, onClose, copyToClipboard, messagePaths]);
+  }, [t, onClose, messagePaths]);
 
   return (
     <Menu

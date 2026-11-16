@@ -6,9 +6,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { useEffect, useRef } from "react";
-import { useAsync } from "react-use";
 import { useDebounce } from "use-debounce";
 
+import { useAsync } from "@lichtblick/hooks";
 import Log from "@lichtblick/log";
 import { LOCAL_STORAGE_STUDIO_LAYOUT_KEY } from "@lichtblick/suite-base/constants/browserStorageKeys";
 import {

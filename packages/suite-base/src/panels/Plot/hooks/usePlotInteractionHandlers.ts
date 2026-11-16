@@ -4,9 +4,9 @@
 import { add as addTimes, fromSec, isTime, subtract, toSec } from "@foxglove/rostime";
 import { useCallback, useRef, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useMountedState } from "react-use";
 
 import { debouncePromise } from "@lichtblick/den/async";
+import { useMountedState } from "@lichtblick/hooks";
 import { Immutable } from "@lichtblick/suite";
 import { useMessagePipelineGetter } from "@lichtblick/suite-base/components/MessagePipeline";
 import { PanelContextMenuItem } from "@lichtblick/suite-base/components/PanelContextMenu";

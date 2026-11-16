@@ -16,10 +16,10 @@ import * as Comlink from "@foxglove/comlink";
 import { ChartOptions } from "chart.js";
 import * as _ from "lodash-es";
 import { useCallback, useLayoutEffect, useRef, useState } from "react";
-import { useMountedState } from "react-use";
 import { assert } from "ts-essentials";
 
 import { ComlinkWrap } from "@lichtblick/den/worker";
+import { useMountedState } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import ChartJsMux, {
   ChartUpdateMessage,

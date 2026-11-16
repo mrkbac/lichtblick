@@ -7,9 +7,9 @@
 
 import { Dialog } from "@mui/material";
 import { lazy, Suspense, useCallback, useLayoutEffect, useMemo, useRef } from "react";
-import { useMountedState } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
+import { useMountedState } from "@lichtblick/hooks";
 import { APP_BAR_HEIGHT } from "@lichtblick/suite-base/components/AppBar/constants";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";

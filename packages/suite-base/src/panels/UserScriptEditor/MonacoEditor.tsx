@@ -3,7 +3,8 @@
 
 import * as monacoApi from "monaco-editor/editor/editor.api.js";
 import { ReactElement, useEffect, useRef } from "react";
-import { useLatest } from "react-use";
+
+import { useLatest } from "@lichtblick/hooks";
 
 type Monaco = typeof monacoApi;
 type Editor = monacoApi.editor.IStandaloneCodeEditor;

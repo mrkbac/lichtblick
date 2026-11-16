@@ -25,9 +25,8 @@ import React, {
   useSyncExternalStore,
 } from "react";
 import { Transition } from "react-transition-group";
-import { useMountedState } from "react-use";
 
-import { useShallowMemo } from "@lichtblick/hooks";
+import { useMountedState, useShallowMemo } from "@lichtblick/hooks";
 import { useConfigById } from "@lichtblick/suite-base/PanelAPI";
 import { useCompare } from "@lichtblick/suite-base/components/Compare/CompareContext";
 import { ComparedPanel } from "@lichtblick/suite-base/components/Compare/ComparedPanel";

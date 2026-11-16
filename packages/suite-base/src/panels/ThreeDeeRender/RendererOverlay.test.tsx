@@ -40,13 +40,6 @@ vi.mock("@lichtblick/suite-base/hooks/usePanelMousePresence", () => {
   };
 });
 
-vi.mock("react-use", () => {
-  return {
-    __esModule: true,
-    useLongPress: () => ({}),
-  };
-});
-
 vi.mock("@lichtblick/suite-base/panels/ThreeDeeRender/HUD", () => {
   return {
     __esModule: true,

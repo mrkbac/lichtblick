@@ -6,9 +6,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { useEffect, useState } from "react";
-import { useAsync } from "react-use";
 import { StoryObj } from "storybook-react-rsbuild";
 
+import { useAsync } from "@lichtblick/hooks";
 import PanelSetup, { Fixture } from "@lichtblick/suite-base/stories/PanelSetup";
 import delay from "@lichtblick/suite-base/util/delay";
 

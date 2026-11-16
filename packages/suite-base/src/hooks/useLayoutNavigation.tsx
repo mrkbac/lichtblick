@@ -3,8 +3,8 @@
 
 import * as _ from "lodash-es";
 import { MouseEvent, Dispatch } from "react";
-import useAsyncFn from "react-use/lib/useAsyncFn";
 
+import { useAsyncFn } from "@lichtblick/hooks";
 import { useLayoutBrowserReducer } from "@lichtblick/suite-base/components/LayoutBrowser/reducer";
 import {
   LayoutSelectionState,

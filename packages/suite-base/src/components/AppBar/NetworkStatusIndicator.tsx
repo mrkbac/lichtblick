@@ -5,8 +5,8 @@ import { CloudOff20Regular } from "@fluentui/react-icons";
 import { Tooltip, Typography } from "@mui/material";
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { useNetworkState } from "react-use";
 
+import { useOnline } from "@lichtblick/hooks";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 
 import { useStyles } from "./NetworkStatusIndicator.style";
@@ -14,7 +14,7 @@ import { useStyles } from "./NetworkStatusIndicator.style";
 export function NetworkStatusIndicator(): React.JSX.Element | undefined {
   const { classes } = useStyles();
   const { t } = useTranslation("appBar");
-  const { online = true } = useNetworkState();
+  const online = useOnline();
 
   const url: URL = React.useMemo(() => new URL(window.location.href), []);
   const workspace: string | undefined = React.useMemo(

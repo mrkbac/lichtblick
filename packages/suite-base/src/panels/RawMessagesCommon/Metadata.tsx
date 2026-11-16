@@ -16,8 +16,8 @@
 
 import { Link, Typography } from "@mui/material";
 import { useCallback } from "react";
-import { useLatest } from "react-use";
 
+import { useLatest } from "@lichtblick/hooks";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useStylesMetadata } from "@lichtblick/suite-base/panels/RawMessagesCommon/index.style";

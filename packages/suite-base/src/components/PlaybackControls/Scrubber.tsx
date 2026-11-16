@@ -14,9 +14,9 @@ import {
 } from "@foxglove/rostime";
 import { Fade, PopperProps, Tooltip } from "@mui/material";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useLatest } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
+import { useLatest } from "@lichtblick/hooks";
 import { CompareTimelineOverlay } from "@lichtblick/suite-base/components/Compare/CompareTimelineOverlay";
 import { clampTimeToCut } from "@lichtblick/suite-base/components/ExportRecordingDialog/trimStore";
 import {

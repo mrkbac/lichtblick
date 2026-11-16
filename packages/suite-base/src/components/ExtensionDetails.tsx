@@ -9,9 +9,9 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import { Button, Link, Tab, Tabs, Typography, Divider } from "@mui/material";
 import DOMPurify from "dompurify";
 import { useState } from "react";
-import { useAsync, useMountedState } from "react-use";
 
 import { formatByteSize } from "@lichtblick/den/format";
+import { useAsync, useMountedState } from "@lichtblick/hooks";
 import { useStylesExtensionDetails } from "@lichtblick/suite-base/components/ExtensionDetails.style";
 import { InstallButton } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionActionButton/InstallButton";
 import { UninstallButton } from "@lichtblick/suite-base/components/ExtensionsSettings/components/ExtensionActionButton/UninstallButton";

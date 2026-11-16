@@ -33,8 +33,8 @@ import {
 } from "@mui/material";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useAsync } from "react-use";
 
+import { useAsync } from "@lichtblick/hooks";
 import {
   BlobReadable,
   ChunkCache,

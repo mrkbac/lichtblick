@@ -27,9 +27,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { useLatest, useMountedState } from "react-use";
 
-import { useWarnImmediateReRender } from "@lichtblick/hooks";
+import { useLatest, useMountedState, useWarnImmediateReRender } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { Immutable } from "@lichtblick/suite";
 import { CompareProvider } from "@lichtblick/suite-base/components/Compare/CompareContext";

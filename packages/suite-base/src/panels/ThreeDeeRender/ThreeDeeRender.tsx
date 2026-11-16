@@ -18,10 +18,10 @@ import React, {
   useSyncExternalStore,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { useLatest } from "react-use";
 import { DeepPartial } from "ts-essentials";
 import { useDebouncedCallback } from "use-debounce";
 
+import { useLatest } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import {
   Immutable,
