@@ -103,6 +103,8 @@ export type SwapPanelPayload = {
   originalId: string;
   type: string;
   config: PanelConfig;
+  /** Id of the new panel, formatted as by `getPanelIdForType`; generated when unset. */
+  newId?: string;
 };
 export type SWAP_PANEL = { type: "SWAP_PANEL"; payload: SwapPanelPayload };
 

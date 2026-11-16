@@ -19,6 +19,8 @@ export type PanelInfo = {
   title: string;
   type: string;
   description?: string;
+  /** Extra search terms for the command palette, e.g. "tf" for the transform tree. */
+  keywords?: readonly string[];
   thumbnail?: string;
   help?: React.ReactNode;
 
