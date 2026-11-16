@@ -6,7 +6,6 @@ import * as _ from "lodash-es";
 import { Immutable, SettingsTree, SettingsTreeNode } from "@lichtblick/suite";
 import { getTopicToSchemaNameMap } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { BuildSettingsTreeProps } from "@lichtblick/suite-base/components/PanelSettings/types";
-import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
 
 export const buildSettingsTree = ({
   config,
@@ -25,7 +24,7 @@ export const buildSettingsTree = ({
 
   const topicToSchemaNameMap = getTopicToSchemaNameMap(messagePipelineState());
   const topics = Object.keys(settingsTree.nodes.topics.children ?? {});
-  const topicsConfig = maybeCast<{ topics: Record<string, unknown> }>(config)?.topics;
+  const topicsConfig = (config as { topics: Record<string, unknown> } | undefined)?.topics;
   const topicsSettings = topics.reduce<Record<string, SettingsTreeNode | undefined>>(
     (acc, topic) => {
       const schemaName = topicToSchemaNameMap[topic];

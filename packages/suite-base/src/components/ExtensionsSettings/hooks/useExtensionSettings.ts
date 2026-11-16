@@ -32,11 +32,11 @@ const useExtensionSettings = (): UseExtensionSettingsHook => {
 
   const groupedMarketplaceEntries = useMemo(() => {
     const entries = marketplaceEntries.value ?? [];
-    return _.groupBy(entries, (entry) => entry.namespace ?? "default");
+    return Map.groupBy(entries, (entry) => entry.namespace ?? "default");
   }, [marketplaceEntries]);
 
   const groupedMarketplaceData = useMemo(() => {
-    return Object.entries(groupedMarketplaceEntries).map(([namespace, entries]) => ({
+    return [...groupedMarketplaceEntries].map(([namespace, entries]) => ({
       namespace,
       entries: entries
         .filter((entry) => entry.name.toLowerCase().includes(debouncedFilterText.toLowerCase()))
@@ -72,7 +72,7 @@ const useExtensionSettings = (): UseExtensionSettingsHook => {
   }, [installed, marketplaceMap]);
 
   const namespacedEntries = useMemo(
-    () => _.groupBy(installedEntries, (entry) => entry.namespace),
+    () => Map.groupBy(installedEntries, (entry) => String(entry.namespace)),
     [installedEntries],
   );
 
@@ -82,7 +82,7 @@ const useExtensionSettings = (): UseExtensionSettingsHook => {
     });
   }, [refreshMarketplaceEntries]);
 
-  const namespacedData = Object.entries(namespacedEntries).map(([namespace, entries]) => ({
+  const namespacedData = [...namespacedEntries].map(([namespace, entries]) => ({
     namespace,
     entries: entries
       .filter((entry) => entry.name.toLowerCase().includes(debouncedFilterText.toLowerCase()))

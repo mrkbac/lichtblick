@@ -39,10 +39,13 @@ import { useDeepMemo } from "@lichtblick/hooks";
 import { SettingsTreeAction, Time } from "@lichtblick/suite";
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import {
-  MessagePipelineContext,
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectCurrentTime,
+  selectSeekPlayback,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
@@ -128,9 +131,6 @@ type Props = {
   saveConfig: SaveConfig<Config>;
 };
 
-const selectSeek = (ctx: MessagePipelineContext) => ctx.seekPlayback;
-const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
-
 /** Subscribes to the playhead so that the panel itself doesn't re-render every frame. */
 function PlayheadLogList(props: Omit<LogListProps, "currentTime">): React.JSX.Element {
   const currentTime = useMessagePipeline(selectCurrentTime);
@@ -166,7 +166,7 @@ const LogPanel = React.memo(({ config, saveConfig }: Props) => {
   const { timeZone } = useAppTimeFormat();
   const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
   const { t } = useTranslation("log");
-  const seekPlayback = useMessagePipeline(selectSeek);
+  const seekPlayback = useMessagePipeline(selectSeekPlayback);
   const getMessagePipeline = useMessagePipelineGetter();
   const listApi = useRef<LogListApi>(null);
 

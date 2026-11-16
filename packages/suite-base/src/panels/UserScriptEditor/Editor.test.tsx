@@ -22,8 +22,8 @@ let mockOpenHandler:
     ) => Promise<unknown>)
   | undefined = undefined;
 
-vi.mock("monaco-editor/features/register.all.js", () => ({}));
 vi.mock("monaco-editor/languages/definitions/typescript/register.js", () => ({}));
+
 vi.mock("monaco-editor/languages/features/typescript/register.js", () => ({
   typescriptDefaults: {
     addExtraLib: vi.fn(() => ({ dispose: vi.fn() })),

@@ -14,7 +14,6 @@ import {
   Paper,
   buttonClasses,
 } from "@mui/material";
-import * as _ from "lodash-es";
 import { ReactElement, Ref } from "react";
 import { makeStyles } from "tss-react/mui";
 
@@ -134,7 +133,7 @@ export function PanelOverlay(props: PanelOverlayProps): React.JSX.Element | null
   const { classes, cx } = useStyles();
 
   return (
-    <ClickAwayListener onClickAway={onClickAway ?? _.noop}>
+    <ClickAwayListener onClickAway={onClickAway ?? (() => {})}>
       <Backdrop
         transitionDuration={0}
         unmountOnExit

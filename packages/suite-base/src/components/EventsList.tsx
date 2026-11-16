@@ -18,10 +18,8 @@ import {
 import { useCallback, useMemo } from "react";
 import { makeStyles } from "tss-react/mui";
 
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectSeekPlayback } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import {
   EventsStore,
@@ -60,7 +58,6 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
-const selectSeek = (ctx: MessagePipelineContext) => ctx.seekPlayback;
 const selectEventFilter = (store: EventsStore) => store.filter;
 const selectSetEventFilter = (store: EventsStore) => store.setFilter;
 const selectEvents = (store: EventsStore) => store.events;
@@ -75,7 +72,7 @@ export function EventsList(): React.JSX.Element {
   const selectedEventId = useEvents(selectSelectedEventId);
   const selectEvent = useEvents(selectSelectEvent);
   const { formatTime } = useAppTimeFormat();
-  const seek = useMessagePipeline(selectSeek);
+  const seek = useMessagePipeline(selectSeekPlayback);
   const eventsAtHoverValue = useTimelineInteractionState(selectEventsAtHoverValue);
   const hoveredEvent = useTimelineInteractionState(selectHoveredEvent);
   const setHoveredEvent = useTimelineInteractionState(selectSetHoveredEvent);

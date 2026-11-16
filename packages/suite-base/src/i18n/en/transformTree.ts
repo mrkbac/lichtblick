@@ -76,6 +76,8 @@ export const transformTree = {
     staticHelp:
       "For topics like tf_static that publish fixed transforms once: they are loaded from the whole recording, so they survive seeks, and are never reported as stale. On by default for topics whose name ends in tf_static.",
     topicUnavailable: "Topic is not in the current data source",
+    malformedTransforms:
+      "Skipped transforms with missing or invalid fields (frame ids, translation, rotation or stamp)",
     removeTopic: "Remove from list",
   },
   warnings: {

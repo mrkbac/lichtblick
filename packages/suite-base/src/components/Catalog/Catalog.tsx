@@ -260,7 +260,8 @@ export default function Catalog({
   }, [recordings, query, sort, area, gpsTopic]);
 
   const gpsTopics = useMemo(
-    () => _.uniq(recordings.flatMap((r) => r.tracks?.map((track) => track.topic) ?? [])).sort(),
+    () =>
+      [...new Set(recordings.flatMap((r) => r.tracks?.map((track) => track.topic) ?? []))].sort(),
     [recordings],
   );
 

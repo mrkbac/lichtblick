@@ -22,6 +22,14 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectEndTime,
+  selectPlayerName,
+  selectPlayerPresence,
+  selectRecordingFiles,
+  selectStartTime,
+  selectTopicStats,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TextMiddleTruncate from "@lichtblick/suite-base/components/TextMiddleTruncate";
 import Timestamp from "@lichtblick/suite-base/components/Timestamp";
@@ -65,19 +73,12 @@ const useStyles = makeStyles<void, "copyButton">()((theme, _params, classes) => 
   },
 }));
 
-const selectPlayerName = (ctx: MessagePipelineContext) => ctx.playerState.name;
-const selectPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
-const selectStartTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
-const selectEndTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
 const selectIsLive = (ctx: MessagePipelineContext) => ctx.seekPlayback == undefined;
 const selectTopics = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.topics;
-const selectTopicStats = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.topicStats;
 const selectLiveStats = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.liveStats;
 const selectTotalBytes = (ctx: MessagePipelineContext) =>
   ctx.playerState.activeData?.totalBytesReceived;
 const selectExportLiveHistory = (ctx: MessagePipelineContext) => ctx.exportLiveHistory;
-const selectRecordingFiles = (ctx: MessagePipelineContext) =>
-  ctx.playerState.activeData?.recordingFiles;
 
 const RELATIVE_TIME_REFRESH_MS = 10_000;
 
@@ -140,7 +141,7 @@ function Field(props: {
 function SourceField(): React.JSX.Element {
   const { t } = useTranslation("dataSourceInfo");
   const playerName = useMessagePipeline(selectPlayerName);
-  const presence = useMessagePipeline(selectPresence);
+  const presence = useMessagePipeline(selectPlayerPresence);
 
   let value: React.ReactNode;
   if (presence === PlayerPresence.INITIALIZING) {
@@ -461,7 +462,7 @@ export function DataSourceInfoView({
 }: {
   disableSource?: boolean;
 }): React.JSX.Element {
-  const presence = useMessagePipeline(selectPresence);
+  const presence = useMessagePipeline(selectPlayerPresence);
   const startTime = useMessagePipeline(selectStartTime);
   const isLive = useMessagePipeline(selectIsLive);
 

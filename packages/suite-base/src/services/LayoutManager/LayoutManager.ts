@@ -41,7 +41,6 @@ import { toError } from "@lichtblick/suite-base/util/toError";
 
 import { migratePanelsState } from "../migrateLayout";
 import { NamespacedLayoutStorage } from "./NamespacedLayoutStorage";
-import WriteThroughLayoutCache from "./WriteThroughLayoutCache";
 import { emitBusyStatus } from "./utils/emitBusyStatus";
 
 const log = Logger.getLogger(__filename);
@@ -130,8 +129,9 @@ export default class LayoutManager implements ILayoutManager {
     remoteFavorites?: IRemoteLayoutFavoritesStorage;
   }) {
     this.local = new MutexLocked(
+      // No in-memory copy: other tabs write the same storage, so every read goes to it.
       new NamespacedLayoutStorage(
-        new WriteThroughLayoutCache(local),
+        local,
         remote
           ? LayoutManager.REMOTE_STORAGE_NAMESPACE_PREFIX + remote.workspace
           : LayoutManager.LOCAL_STORAGE_NAMESPACE,
@@ -178,6 +178,11 @@ export default class LayoutManager implements ILayoutManager {
     listener: EventEmitter.EventListener<LayoutManagerEventTypes, E>,
   ): void {
     this.emitter.off(name, listener);
+  }
+
+  /** Emits a change that happened elsewhere (another tab), synchronously. */
+  public emitChange(event: LayoutManagerChangeEvent): void {
+    this.emitter.emit("change", event);
   }
 
   private notifyChangeListeners(event: LayoutManagerChangeEvent) {

@@ -32,7 +32,7 @@ const EMPTY_MESSAGE: NavSatFixMsg = {
   position_covariance: [1, 0, 0, 0, 1, 0, 0, 0, 1],
   position_covariance_type: NavSatFixPositionCovarianceType.COVARIANCE_TYPE_UNKNOWN,
 };
-const OFFSET_MESSAGE = _.tap(_.cloneDeep(EMPTY_MESSAGE), (message) => {
+const OFFSET_MESSAGE = _.tap(structuredClone(EMPTY_MESSAGE), (message) => {
   message.latitude += 0.1;
   message.longitude += 0.1;
 });

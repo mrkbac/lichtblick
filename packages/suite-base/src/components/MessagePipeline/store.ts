@@ -7,7 +7,6 @@
 
 import { compare, Time } from "@foxglove/rostime";
 import i18next from "i18next";
-import * as _ from "lodash-es";
 import { RefObject } from "react";
 import { createStore, StoreApi } from "zustand";
 import { shallow } from "zustand/shallow";
@@ -19,6 +18,7 @@ import {
   mergeSubscriptions,
 } from "@lichtblick/suite-base/components/MessagePipeline/subscriptions";
 import { isRecordingSource, PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
+import { subscriptionCovers } from "@lichtblick/suite-base/players/subscriptionEquality";
 import {
   AdvertiseOptions,
   Player,
@@ -45,6 +45,11 @@ export function defaultPlayerState(player?: Player): PlayerState {
   };
 }
 
+type CachedMessageEvent = {
+  messageEvent: MessageEvent;
+  fields: Immutable<SubscribePayload>["fields"];
+};
+
 export type MessagePipelineInternalState = {
   dispatch: (action: MessagePipelineStateAction) => void;
 
@@ -69,9 +74,12 @@ export type MessagePipelineInternalState = {
    * for dispatching messages needs to iterate over the array of IDs.
    */
   subscriberIdsByTopic: Map<string, string[]>;
-  /** This holds the last message emitted by the player on each topic. Attempt to use this before falling back to player backfill.
+  /**
+   * The last message emitted by the player on each topic, to hand to panels that subscribe later
+   * before falling back to player backfill. `fields` are the fields it was sliced to (undefined:
+   * the whole message), so a panel that needs more fields never gets a sliced message.
    */
-  lastMessageEventByTopic: Map<string, MessageEvent>;
+  lastMessageEventByTopic: Map<string, CachedMessageEvent>;
   /** Function to call when react render has completed with the latest state */
   renderDone?: () => void;
 
@@ -335,10 +343,16 @@ function updateSubscriberAction(
   // current time.
   const currentTime = prevState.public.playerState.activeData?.currentTime;
   const messagesForSubscriber = [];
-  for (const topic of newTopicsForId) {
-    const msgEvent = lastMessageEventByTopic.get(topic);
-    if (msgEvent && (!currentTime || compare(msgEvent.receiveTime, currentTime) <= 0)) {
-      messagesForSubscriber.push(msgEvent);
+  for (const payload of action.payloads) {
+    const cached = newTopicsForId.has(payload.topic)
+      ? lastMessageEventByTopic.get(payload.topic)
+      : undefined;
+    if (
+      cached &&
+      subscriptionCovers({ topic: payload.topic, fields: cached.fields }, payload) &&
+      (!currentTime || compare(cached.messageEvent.receiveTime, currentTime) <= 0)
+    ) {
+      messagesForSubscriber.push(cached.messageEvent);
     }
   }
 
@@ -408,10 +422,21 @@ function updatePlayerStateAction(
 
   // Put messages into per-subscriber queues
   if (messages && messages !== prevState.public.playerState.activeData?.messages) {
+    // Playback messages follow the non-preload subscriptions, sliced to their fields.
+    // ponytail: assumes the player already applies the latest subscriptions; a frame it emits
+    // just after a change can still be sliced the old way, so panels must not trust shapes.
+    const fieldsByTopic = new Map(
+      prevState.public.subscriptions
+        .filter((sub) => sub.preloadType !== "full")
+        .map((sub) => [sub.topic, sub.fields]),
+    );
     for (const messageEvent of messages) {
       // Save the last message on every topic to send the last message
       // to newly subscribed panels.
-      lastMessageEventByTopic.set(messageEvent.topic, messageEvent);
+      lastMessageEventByTopic.set(messageEvent.topic, {
+        messageEvent,
+        fields: fieldsByTopic.get(messageEvent.topic),
+      });
 
       seenTopics.add(messageEvent.topic);
       const ids = subscriberIdsByTopic.get(messageEvent.topic);
@@ -505,7 +530,7 @@ export function reducer(
       return {
         ...prevState,
         publishersById: newPublishersById,
-        allPublishers: _.flatten(Object.values(newPublishersById)),
+        allPublishers: Object.values(newPublishersById).flat(),
       };
     }
   }

@@ -1086,7 +1086,7 @@ describe("IterablePlayer", () => {
       await store.add(state);
     });
     const playerStates = await store.done;
-    expect(_.last(playerStates)!.alerts).toEqual([
+    expect(playerStates.at(-1)!.alerts).toEqual([
       {
         message: "Inconsistent datatype for topic: A",
         severity: "warn",

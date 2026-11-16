@@ -230,7 +230,7 @@ type LegacyConfig = Partial<
 export function migrateConfig(saved: unknown): TeleopConfig {
   const { upButton, downButton, leftButton, rightButton, ...rest } = (saved ??
     {}) as Partial<TeleopConfig> & LegacyConfig;
-  const config = _.merge(_.cloneDeep(DEFAULT_CONFIG), rest);
+  const config = _.merge(structuredClone(DEFAULT_CONFIG), rest);
   if (rest.mapping == undefined && (upButton ?? downButton ?? leftButton ?? rightButton)) {
     config.mapping = _.mapValues(DEFAULT_CONFIG.mapping, () => ({
       input: "none" as const,
