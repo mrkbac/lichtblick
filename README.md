@@ -64,4 +64,6 @@ Off unless the build sets `OTLP_ENDPOINT`; there is no runtime toggle. When enab
 
 ## :star: Credits
 
-A fork of [Lichtblick](https://github.com/lichtblick-suite/lichtblick), which began as a fork of [Foxglove Studio](https://github.com/foxglove/studio). The sample recording is adapted from the [Boreas dataset](https://www.boreas.utias.utoronto.ca/) (CC BY 4.0, Keenan Burnett et al., University of Toronto).
+This is a fork of **[Lichtblick](https://github.com/lichtblick-suite/lichtblick)** by BMW AG and the Lichtblick contributors, licensed under MPL 2.0. Most of this code comes from upstream Lichtblick; thank you to everyone who built and maintains it. Lichtblick itself began as a fork of [Foxglove Studio](https://github.com/foxglove/studio) by [Foxglove](https://foxglove.dev/).
+
+The sample recording is adapted from the [Boreas dataset](https://www.boreas.utias.utoronto.ca/) (CC BY 4.0, Keenan Burnett et al., University of Toronto).
