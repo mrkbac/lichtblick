@@ -1,0 +1,269 @@
+{
+  "configById": {
+    "3D!boreas": {
+      "cameraState": {
+        "distance": 35,
+        "perspective": true,
+        "phi": 60,
+        "target": [0, 0, 0],
+        "targetOffset": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 1,
+        "far": 5000
+      },
+      "scene": {},
+      "transforms": {},
+      "topics": {
+        "/boreas/lidar": {
+          "visible": true,
+          "colorField": "intensity",
+          "colorMode": "colormap",
+          "colorMap": "turbo"
+        }
+      },
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "followMode": "follow-pose",
+      "followTf": "lidar",
+      "imageMode": {}
+    },
+    "Image!boreas": {
+      "imageMode": {
+        "imageTopic": "/boreas/camera",
+        "synchronize": false,
+        "rotation": 0,
+        "annotations": {}
+      },
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [0, 0, 0],
+        "targetOffset": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      }
+    },
+    "Plot!speed": {
+      "paths": [
+        {
+          "value": "/boreas/motion.speed",
+          "enabled": true,
+          "timestampMethod": "receiveTime"
+        }
+      ],
+      "minYValue": "",
+      "maxYValue": "",
+      "showLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "sidebarDimension": 240,
+      "lichtblickPanelTitle": "Speed (m/s)"
+    },
+    "Notes!about": {
+      "text": "# Boreas urban drive\n\n20 seconds near a busy Toronto intersection.\nCamera · LiDAR · radar · GPS · IMU\nPlay, seek, or explore the sensor tabs.\n\nCC BY 4.0 — Keenan Burnett et al.\nUniversity of Toronto\nhttps://creativecommons.org/licenses/by/4.0/\nhttps://www.boreas.utias.utoronto.ca/\n\nBoreas: A Multi-Season Autonomous Driving Dataset\nKeenan Burnett, David J. Yoon, Yuchen Wu, Andrew Z. Li, Haowei\nZhang, Shichen Lu, Jingxing Qian, Wei-Kang Tseng, Andrew\nLambert, Keith Y. K. Leung, Angela P. Schoellig, and Timothy D.\nBarfoot\n\nAdapted for Lichtblick:\n20 seconds starting 170 seconds into `boreas-2021-09-02-11-42`;\ncamera sampled at 10 Hz, resized to 1280 × 1070 and H.265\nencoded (no B-frames, one-second GOPs, repeated VPS/SPS/PPS);\nLiDAR sampled at 5 Hz with every fourth point retained,\ncoordinates rounded to under 3 cm and 8-bit intensity. Radar at\n4 Hz is shown as a JPEG polar intensity image: horizontal axis\nis range (0.1192 m per bin, original bins averaged in pairs),\nvertical axis is azimuth sample index. Recorded 200 Hz IMU and 10 Hz postprocessed GPS\nare included. GPS latitude/longitude are converted from radians\nto degrees; altitude retains the dataset’s relative datum, not\nheight above sea level. Recorded poses and velocities are\nincluded, with a shifted local origin. Original sensor\ntimestamps are retained. No additional LiDAR motion compensation\nis applied. Camera and LiDAR are independent views; no projected\noverlays are included. Original sensor extrinsics are included\nas static transforms. IMU axes follow the Applanix source\nconvention; acceleration is the supplied processed acceleration,\nnot raw accelerometer output.\n\nPaper: https://doi.org/10.1177/02783649231160195\nAttribution is also embedded in the MCAP metadata.\nNo endorsement by the dataset authors is implied.\n"
+    },
+    "RawMessages!motion": {
+      "topicPath": "/boreas/motion",
+      "diffEnabled": false
+    },
+    "SourceInfo!boreas": {},
+    "TransformTree!boreas": {},
+    "TopicHealth!boreas": {},
+    "Tab!inspect": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "Map",
+          "layout": {
+            "panels": ["map!boreas"]
+          }
+        },
+        {
+          "title": "Radar",
+          "layout": {
+            "panels": ["Image!radar"]
+          }
+        },
+        {
+          "title": "IMU",
+          "layout": {
+            "panels": ["Plot!imu"]
+          }
+        },
+        {
+          "title": "Motion",
+          "layout": {
+            "panels": ["RawMessages!motion"]
+          }
+        },
+        {
+          "title": "Transforms",
+          "layout": {
+            "panels": ["TransformTree!boreas"]
+          }
+        },
+        {
+          "title": "Topics",
+          "layout": {
+            "panels": ["TopicHealth!boreas"]
+          }
+        },
+        {
+          "title": "Source",
+          "layout": {
+            "panels": ["SourceInfo!boreas"]
+          }
+        }
+      ]
+    },
+    "Image!radar": {
+      "imageMode": {
+        "imageTopic": "/boreas/radar",
+        "synchronize": false,
+        "rotation": 0,
+        "annotations": {}
+      },
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [0, 0, 0],
+        "targetOffset": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "lichtblickPanelTitle": "Radar · range × azimuth"
+    },
+    "map!boreas": {
+      "followTopic": "/boreas/gps",
+      "zoomLevel": 17,
+      "followMode": "center",
+      "layers": [
+        {
+          "id": "base",
+          "source": "osm",
+          "visible": true,
+          "opacity": 1
+        }
+      ]
+    },
+    "Plot!imu": {
+      "paths": [
+        {
+          "value": "/boreas/imu.accel_x",
+          "enabled": true,
+          "timestampMethod": "receiveTime"
+        },
+        {
+          "value": "/boreas/imu.accel_y",
+          "enabled": true,
+          "timestampMethod": "receiveTime"
+        },
+        {
+          "value": "/boreas/imu.accel_z",
+          "enabled": true,
+          "timestampMethod": "receiveTime"
+        }
+      ],
+      "minYValue": "",
+      "maxYValue": "",
+      "showLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": false,
+      "sidebarDimension": 240,
+      "lichtblickPanelTitle": "IMU acceleration (m/s²)"
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "direction": "row",
+    "children": [
+      {
+        "direction": "column",
+        "children": [
+          {
+            "panels": ["3D!boreas"]
+          },
+          {
+            "panels": ["Plot!speed"]
+          }
+        ],
+        "sizes": [75, 25]
+      },
+      {
+        "direction": "column",
+        "children": [
+          {
+            "panels": ["Image!boreas"]
+          },
+          {
+            "panels": ["Tab!inspect"]
+          },
+          {
+            "panels": ["Notes!about"]
+          }
+        ],
+        "sizes": [45, 25, 30]
+      }
+    ],
+    "sizes": [60, 40]
+  },
+  "version": 2
+}

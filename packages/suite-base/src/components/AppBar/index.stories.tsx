@@ -155,8 +155,8 @@ export const DataSources: Story = {
     (Story: React.ComponentType): React.JSX.Element => {
       const playerStates: (MockMessagePipelineProps & { label?: string })[] = [
         {
-          name: "Adapted from nuScenes dataset. Copyright © 2020 nuScenes. https://www.nuscenes.org/terms-of-use",
-          urlState: { sourceId: "sample-nuscenes" },
+          name: "Boreas — Keenan Burnett et al. CC BY 4.0. Trimmed and converted to MCAP.",
+          urlState: { sourceId: "sample-boreas" },
         },
         ...fileSources,
         ...remoteSources,
