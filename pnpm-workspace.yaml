@@ -16,6 +16,11 @@ overrides:
   "dompurify@<3.4.17": 3.4.17
   # @actions/tool-cache 2.x pulls undici 5 (several high advisories, e.g. GHSA-2m5v-pch6-74hx).
   "undici@<6.29.1": 6.29.1
+  # Bundle one copy of each instead of two (both copies shipped in the web build):
+  # omgidl-serialization pins cdr 3.5.0, rosbag2 asks for schemas ^1, utif for pako ^1.
+  "@foxglove/omgidl-serialization>@foxglove/cdr": 3.5.1
+  "@foxglove/rosbag2>@foxglove/schemas": 2.3.1
+  "utif>pako": ^2.2.0
 
 # esbuild (only used by Storybook) works without its postinstall check; listing it silences the
 # "ignored build scripts" warning.
