@@ -13,9 +13,10 @@ import { MessageDefinitionMap } from "./types";
  * messages. https://capnproto.org/encoding.html
  *
  * Each struct gets one decoder built from closures with all offsets, defaults and element sizes
- * resolved up front, so decoding a message is pointer chasing plus DataView reads. Numeric lists
- * become typed arrays (one memcpy), Data becomes a Uint8Array copy, so decoded messages never pin
- * the source buffer.
+ * resolved up front, so decoding a message is pointer chasing plus DataView reads. Data and
+ * numeric lists are views into the message (numeric lists are copied only when misaligned), like
+ * the CDR decoder: MCAP readers already give each message its own buffer, so a view pins nothing
+ * extra and a big point cloud costs no memcpy.
  *
  * Interfaces and AnyPointer (including generic parameters) are skipped: there is nothing to
  * show for a capability, and an untyped pointer cannot be decoded without its type.
@@ -191,7 +192,7 @@ class Message {
     if (this.elementSize !== 2) {
       throw new Error("Cap'n Proto Data is not a byte list");
     }
-    return this.bytes.slice(this.start, this.start + this.count);
+    return this.bytes.subarray(this.start, this.start + this.count);
   }
 }
 
@@ -768,8 +769,11 @@ class Compiler {
       }
       const { count, start, stride, elementDataBytes } = msg;
       if (stride === size && LITTLE_ENDIAN_HOST) {
-        // One copy, into a buffer the typed array owns (aligned, does not pin the message).
-        return new ArrayType(msg.bytes.slice(start, start + count * size).buffer);
+        // A view when aligned (the usual case: segments are word aligned), else one copy.
+        const offset = msg.bytes.byteOffset + start;
+        return offset % size === 0
+          ? new ArrayType(msg.bytes.buffer as ArrayBuffer, offset, count)
+          : new ArrayType(msg.bytes.slice(start, start + count * size).buffer);
       }
       // Upgraded lists (struct elements whose first field is the value) or big-endian hosts.
       const out = new ArrayType(count);

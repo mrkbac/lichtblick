@@ -98,10 +98,19 @@ describe("capnproto", () => {
     expect(msg.floats[2999]).toBe(2999);
   });
 
-  it("returns typed arrays that do not alias the message buffer", () => {
+  it("returns views into the message, copying only misaligned numeric lists", () => {
     const data = fixture("msg_full.bin");
-    const msg = parse("test.capnp:All").deserialize(data) as { floats: Float32Array };
-    expect(msg.floats.buffer).not.toBe(data.buffer);
+    const decoder = parse("test.capnp:All");
+    const msg = decoder.deserialize(data) as { floats: Float32Array; data: Uint8Array };
+    expect(msg.floats.buffer).toBe(data.buffer);
+    expect(msg.data.buffer).toBe(data.buffer);
+
+    const shifted = new Uint8Array(data.length + 1);
+    shifted.set(data, 1);
+    const misaligned = decoder.deserialize(shifted.subarray(1)) as typeof msg;
+    expect(misaligned.floats).toEqual(new Float32Array([0.5, 1.5, 2.5]));
+    expect(misaligned.floats.buffer).not.toBe(shifted.buffer);
+    expect(misaligned.data.buffer).toBe(shifted.buffer);
   });
 
   it("builds datatypes with groups, enums and nested structs", () => {
