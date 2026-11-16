@@ -596,11 +596,19 @@ def main() -> None:
     speed = np.linalg.norm(velocity, axis=1)
     # 0.2 s moving averages keep differentiated signals readable.
     kernel = np.ones(20) / 20
-    smooth_speed = np.convolve(speed, kernel, mode="same")
+    # Edge padding keeps the averages honest at the excerpt's ends (zero padding would fake
+    # a ramp, and with it tens of m/s² of acceleration).
+    smooth_speed = np.convolve(
+        np.pad(speed, (10, 9), mode="edge"), kernel, mode="valid"
+    )
     accel_long = np.gradient(smooth_speed, nav_seconds)
     # Yaw rate from the course over ground (counter-clockwise positive); undefined when stopped.
     course = np.unwrap(np.arctan2(velocity[:, 1], velocity[:, 0]))
-    yaw_rate = np.convolve(np.gradient(course, nav_seconds), kernel, mode="same")
+    yaw_rate = np.convolve(
+        np.pad(np.gradient(course, nav_seconds), (10, 9), mode="edge"),
+        kernel,
+        mode="valid",
+    )
     yaw_rate[smooth_speed < 1] = 0
     heading = np.degrees(np.arctan2(velocity[:, 0], velocity[:, 1])) % 360
     longitude, latitude = to_wgs84.transform(
@@ -1144,14 +1152,21 @@ def main() -> None:
                     "ImageAnnotations",
                     annotations(t),
                 )
+                # Gap logs wait for the frames before them; the encoder holds frames back.
+                while held_logs and held_logs[0][0] <= t:
+                    yield held_logs.pop(0)
+
+        held_logs: list[Event] = []
 
         for i, (t, key) in enumerate(camera_frames):
             if i > 0 and t - camera_frames[i - 1][0] > 150_000:
-                yield log(
-                    t,
-                    3,
-                    "/camera_driver",
-                    f"Camera frame gap {(t - camera_frames[i - 1][0]) / 1000:.0f} ms",
+                held_logs.append(
+                    log(
+                        t,
+                        3,
+                        "/camera_driver",
+                        f"Camera frame gap {(t - camera_frames[i - 1][0]) / 1000:.0f} ms",
+                    )
                 )
             image = Image.open(io.BytesIO(download(key))).convert("RGB")
             assert image.size == CAMERA_SIZE, image.size
@@ -1160,7 +1175,7 @@ def main() -> None:
             pending.append(t)
             yield from packets_out(encoder.encode(frame))
         yield from packets_out(encoder.encode(None))
-        assert not pending
+        assert not pending and not held_logs
 
     def boxes_at_time(t: int) -> list[Box]:
         return boxes_at(t, labelled, label_times)
@@ -1564,6 +1579,10 @@ def main() -> None:
             summary.statistics.message_end_time - summary.statistics.message_start_time
         ) / 1e9
         assert SECONDS - 0.2 <= duration <= SECONDS, duration
+        # Read every chunk, so their CRCs are checked too, not just the summary.
+        assert summary.chunk_indexes
+        streamed = sum(1 for _ in reader.iter_messages(log_time_order=False))
+        assert streamed == sum(counts.values()), (streamed, sum(counts.values()))
     staged.replace(OUTPUT)
     intermediate.unlink()
     print(
