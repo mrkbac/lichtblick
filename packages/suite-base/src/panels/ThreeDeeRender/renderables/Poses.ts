@@ -10,9 +10,10 @@ import { PoseInFrame } from "@foxglove/schemas";
 import * as _ from "lodash-es";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
+import { AXIS_LENGTH } from "@lichtblick/suite-base/panels/ThreeDeeRender/settings";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
-import { Axis, AXIS_LENGTH } from "./Axis";
+import { Axis } from "./Axis";
 import type { AnyRendererSubscription } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
 import type { Renderer } from "../Renderer";

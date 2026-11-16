@@ -2,17 +2,19 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import {
-  INITIAL_BRIGHTNESS,
-  INITIAL_CONTRAST,
   LOWER_BRIGHTNESS_LIMIT,
   LOWER_CONTRAST_LIMIT,
+  UPPER_BRIGHTNESS_LIMIT,
+  UPPER_CONTRAST_LIMIT,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/constants";
+import {
+  INITIAL_BRIGHTNESS,
+  INITIAL_CONTRAST,
   MAX_BRIGHTNESS,
   MAX_CONTRAST,
   MIN_BRIGHTNESS,
   MIN_CONTRAST,
-  UPPER_BRIGHTNESS_LIMIT,
-  UPPER_CONTRAST_LIMIT,
-} from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/constants";
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/imageMode";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
 import { clampBrightness, clampContrast } from "./utils";

@@ -32,22 +32,6 @@ export const CAMERA_MODEL = "CameraModel";
 export const DEFAULT_FOCAL_LENGTH = 500;
 export const REMOVE_IMAGE_TIMEOUT_MS = 50;
 
-export {
-  ALL_SUPPORTED_CALIBRATION_SCHEMAS,
-  ALL_SUPPORTED_IMAGE_SCHEMAS,
-  SUPPORTED_RAW_IMAGE_SCHEMAS,
-} from "./schemas";
-
-export {
-  DEFAULT_IMAGE_CONFIG,
-  INITIAL_BRIGHTNESS,
-  INITIAL_CONTRAST,
-  MAX_BRIGHTNESS,
-  MAX_CONTRAST,
-  MIN_BRIGHTNESS,
-  MIN_CONTRAST,
-} from "../../settingsNodes/imageMode";
-
 // Brightness should be in the range of -1 and 1.
 // It was trimmed by 0.4 to improve visualization.
 export const LOWER_BRIGHTNESS_LIMIT = -0.6;

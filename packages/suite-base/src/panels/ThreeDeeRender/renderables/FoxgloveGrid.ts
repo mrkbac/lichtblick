@@ -11,15 +11,13 @@ import * as THREE from "three";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
 import { GRID_DATATYPES } from "@lichtblick/suite-base/panels/ThreeDeeRender/foxglove";
-import type { RosValue } from "@lichtblick/suite-base/players/types";
-
 import {
   ColorModeSettings,
-  FS_SRGB_TO_LINEAR,
   NEEDS_MIN_MAX,
-  autoSelectColorSettings,
-  getColorConverter,
-} from "./colorMode";
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
+import type { RosValue } from "@lichtblick/suite-base/players/types";
+
+import { FS_SRGB_TO_LINEAR, autoSelectColorSettings, getColorConverter } from "./colorMode";
 import type { AnyRendererSubscription } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";
 import type { Renderer } from "../Renderer";

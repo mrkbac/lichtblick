@@ -13,7 +13,7 @@ import ViewListIcon from "@mui/icons-material/ViewList";
 import type { SvgIconProps } from "@mui/material";
 import type { ComponentType } from "react";
 
-import type { PanelButton } from "@lichtblick/suite-base/components/PanelButton";
+import { type PanelButton, RegexLabel } from "@lichtblick/suite-base/components/PanelButton";
 
 import { PARAMETERS_SHORTCUT } from "./shortcuts";
 
@@ -21,10 +21,6 @@ function small(Icon: ComponentType<SvgIconProps>): ComponentType {
   return function SmallIcon() {
     return <Icon fontSize="small" />;
   };
-}
-
-function RegexLabel(): React.JSX.Element {
-  return <span style={{ fontFamily: "monospace" }}>.*</span>;
 }
 
 export const PARAMETERS_BUTTONS = {

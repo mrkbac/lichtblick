@@ -21,13 +21,6 @@ import { LaserScanMaterial } from "./LaserScans";
 import { colorHasTransparency, FS_SRGB_TO_LINEAR } from "./colorMode";
 import type { LayerSettingsPointExtension } from "../settingsNodes/topics";
 
-export {
-  DEFAULT_POINT_SETTINGS,
-  POINT_CLOUD_REQUIRED_FIELDS,
-  pointSettingsNode,
-} from "../settingsNodes/topics";
-export type { LayerSettingsPointExtension } from "../settingsNodes/topics";
-
 /**
  * Creates a THREE.Points object for a point cloud and scan messages
  * @param topic - topic name string for naming geometry

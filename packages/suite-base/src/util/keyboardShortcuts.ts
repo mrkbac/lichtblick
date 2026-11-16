@@ -221,8 +221,7 @@ export function shortcutLabel<S extends KeyboardShortcut>(
   shortcuts: readonly S[],
   id: S["id"],
 ): string | undefined {
-  const combo = shortcuts.find((shortcut) => shortcut.id === id)?.keys[0];
-  return combo != undefined ? formatCombo(combo) : undefined;
+  return firstBindingLabel(shortcutById(shortcuts, id));
 }
 
 /** A row in the shortcut overlay. */

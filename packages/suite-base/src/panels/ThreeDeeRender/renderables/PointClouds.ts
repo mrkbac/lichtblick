@@ -18,15 +18,18 @@ import {
   disposeCubeMaterials,
   createInstancePickingMaterial,
   createPickingMaterial,
-  DEFAULT_POINT_SETTINGS,
-  LayerSettingsPointExtension,
   pointCloudMaterial,
   pointCloudColorEncoding,
-  POINT_CLOUD_REQUIRED_FIELDS,
   DECAY_HISTORY_LIMITS,
   RenderObjectHistory,
   PointsRenderable,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
+import { colorFieldComputedPrefix } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
+import {
+  DEFAULT_POINT_SETTINGS,
+  LayerSettingsPointExtension,
+  POINT_CLOUD_REQUIRED_FIELDS,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
 import type { RosObject, RosValue } from "@lichtblick/suite-base/players/types";
 
 import {
@@ -34,7 +37,6 @@ import {
   ColorConverter,
   colorHasTransparency,
   getColorConverter,
-  colorFieldComputedPrefix,
 } from "./colorMode";
 import type { AnyRendererSubscription } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";

@@ -14,6 +14,8 @@ import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 
 import { SettingsTreeAction, SettingsTreeNodeAction } from "@lichtblick/suite";
+import { DEFAULT_LABEL_SCALE_FACTOR } from "@lichtblick/suite-base/panels/ThreeDeeRender/defaults";
+import { AXIS_LENGTH } from "@lichtblick/suite-base/panels/ThreeDeeRender/settings";
 import type {
   DocumentedFields,
   DocumentedNodes,
@@ -41,8 +43,7 @@ import {
 } from "../settingsNodes/global";
 import { isThreeDeeShortcut } from "../shortcuts";
 import { CoordinateFrame, Duration, makePose, MAX_DURATION, Transform } from "../transforms";
-import { Axis, AXIS_LENGTH } from "./Axis";
-import { DEFAULT_LABEL_SCALE_FACTOR } from "./SceneSettings";
+import { Axis } from "./Axis";
 import {
   ADJUST_STEPS,
   applyOffset,

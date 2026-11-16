@@ -15,8 +15,6 @@ import { SettingsTreeEntry } from "../SettingsManager";
 import { DEFAULT_LABEL_SCALE_FACTOR } from "../defaults";
 import { sceneSettingsNode } from "../settingsNodes/global";
 
-export { DEFAULT_LABEL_SCALE_FACTOR };
-
 export class SceneSettings extends SceneExtension {
   public static extensionId = "foxglove.SceneSettings";
   public constructor(renderer: Renderer, name: string = SceneSettings.extensionId) {

@@ -16,9 +16,6 @@ import {
   hasSeparateRgbaFields,
 } from "../settingsNodes/colorMode";
 
-export { colorFieldComputedPrefix, NEEDS_MIN_MAX } from "../settingsNodes/colorMode";
-export type { ColorModeSettings } from "../settingsNodes/colorMode";
-
 export type ColorConverter = (output: ColorRGBA, colorValue: number) => void;
 
 const tempColor1 = { r: 0, g: 0, b: 0, a: 0 };

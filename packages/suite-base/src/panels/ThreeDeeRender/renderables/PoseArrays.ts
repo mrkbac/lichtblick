@@ -11,9 +11,10 @@ import * as _ from "lodash-es";
 import * as THREE from "three";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
+import { AXIS_LENGTH } from "@lichtblick/suite-base/panels/ThreeDeeRender/settings";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
-import { Axis, AXIS_LENGTH } from "./Axis";
+import { Axis } from "./Axis";
 import { createArrowMarker } from "./Poses";
 import type { AnyRendererSubscription } from "../IRenderer";
 import { BaseUserData, Renderable } from "../Renderable";

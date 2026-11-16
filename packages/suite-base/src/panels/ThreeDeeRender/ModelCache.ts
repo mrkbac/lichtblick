@@ -25,7 +25,6 @@ import { isTiff, tiffToPng } from "./tiffToPng";
 const log = Logger.getLogger(__filename);
 
 export type MeshUpAxis = "y_up" | "z_up";
-export { DEFAULT_MESH_UP_AXIS } from "./defaults";
 
 export type ModelCacheOptions = {
   edgeMaterial: THREE.Material;

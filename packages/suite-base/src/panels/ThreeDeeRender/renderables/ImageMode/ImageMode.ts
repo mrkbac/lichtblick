@@ -30,13 +30,10 @@ import {
   RAW_IMAGE_DATATYPES,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/foxglove";
 import {
-  ALL_SUPPORTED_CALIBRATION_SCHEMAS,
-  ALL_SUPPORTED_IMAGE_SCHEMAS,
   CALIBRATION_TOPIC_PATH,
   CALIBRATION_TOPIC_UNAVAILABLE,
   CAMERA_MODEL,
   DEFAULT_FOCAL_LENGTH,
-  DEFAULT_IMAGE_CONFIG,
   IMAGE_MODE_HUD_GROUP_ID,
   IMAGE_TOPIC_DIFFERENT_FRAME,
   IMAGE_TOPIC_PATH,
@@ -44,11 +41,15 @@ import {
   MISSING_CAMERA_INFO,
   NO_IMAGE_TOPICS_HUD_ITEM,
   REMOVE_IMAGE_TIMEOUT_MS,
-  SUPPORTED_RAW_IMAGE_SCHEMAS,
   BOTH_TOPICS_DO_NOT_EXIST_HUD_ITEM_ID,
   IMAGE_TOPIC_DOES_NOT_EXIST_HUD_ITEM_ID,
   CALIBRATION_TOPIC_DOES_NOT_EXIST_HUD_ITEM_ID,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/constants";
+import {
+  ALL_SUPPORTED_CALIBRATION_SCHEMAS,
+  ALL_SUPPORTED_IMAGE_SCHEMAS,
+  SUPPORTED_RAW_IMAGE_SCHEMAS,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/schemas";
 import {
   ConfigWithDefaults,
   ImageModeEventMap,
@@ -70,6 +71,7 @@ import {
   cameraInfosEqual,
   normalizeCameraInfo,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/projections";
+import { DEFAULT_IMAGE_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/imageMode";
 import { t3D } from "@lichtblick/suite-base/panels/ThreeDeeRender/t3D";
 import { makePose, AnyFrameId } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";

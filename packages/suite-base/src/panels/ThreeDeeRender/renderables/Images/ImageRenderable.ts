@@ -28,6 +28,11 @@ import {
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/utils";
 import { WorkerImageDecoder } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/WorkerImageDecoder";
 import { projectPixel } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/projections";
+import { ColorModeSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/colorMode";
+import {
+  INITIAL_BRIGHTNESS,
+  INITIAL_CONTRAST,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/imageMode";
 import { RosValue } from "@lichtblick/suite-base/players/types";
 
 import { AnyImage, CompressedVideo } from "./ImageTypes";
@@ -48,11 +53,8 @@ import {
   DECODE_IMAGE_ERR_KEY,
   FRAGMENT_SHADER,
   IMAGE_TOPIC_PATH,
-  INITIAL_BRIGHTNESS,
-  INITIAL_CONTRAST,
   VERTEX_SHADER,
 } from "../ImageMode/constants";
-import { ColorModeSettings } from "../colorMode";
 
 const log = Logger.getLogger(__filename);
 export interface ImageRenderableSettings extends Partial<ColorModeSettings> {

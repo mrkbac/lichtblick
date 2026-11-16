@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { IconButton, IconButtonProps } from "@mui/material";
+import { IconButton, IconButtonProps, Typography } from "@mui/material";
 import { ComponentType, ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -48,16 +48,13 @@ export function PanelIconButton(props: PanelIconButtonProps): React.JSX.Element 
   const content = children ?? <Icon />;
   // A disabled button gets no pointer events, so its wrapper carries the tooltip.
   const tooltip = rest.disabled === true ? undefined : title;
-  const element =
-    button.placement === "toolbar" ? (
-      <ToolbarIconButton title={tooltip} aria-label={title} {...rest}>
-        {content}
-      </ToolbarIconButton>
-    ) : (
-      <IconButton size="small" title={tooltip} aria-label={title} {...rest}>
-        {content}
-      </IconButton>
-    );
+  const toolbar = button.placement === "toolbar";
+  const Button = toolbar ? ToolbarIconButton : IconButton;
+  const element = (
+    <Button size={toolbar ? undefined : "small"} title={tooltip} aria-label={title} {...rest}>
+      {content}
+    </Button>
+  );
   return rest.disabled === true ? (
     <span title={title} style={{ display: "inline-flex" }}>
       {element}
@@ -86,5 +83,14 @@ export function PanelButtonPreview(props: { button: PanelButton }): React.JSX.El
         preview
       )}
     </span>
+  );
+}
+
+/** The ".*" label of a regular-expression toggle, for use as a declared button's icon. */
+export function RegexLabel(): React.JSX.Element {
+  return (
+    <Typography variant="caption" style={{ fontFamily: "monospace", lineHeight: 1 }}>
+      .*
+    </Typography>
   );
 }

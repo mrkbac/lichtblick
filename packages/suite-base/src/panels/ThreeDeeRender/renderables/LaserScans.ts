@@ -11,12 +11,14 @@ import * as THREE from "three";
 
 import { SettingsTreeAction, MessageEvent } from "@lichtblick/suite";
 import {
-  DEFAULT_POINT_SETTINGS,
-  LayerSettingsPointExtension,
   PointsRenderable,
   DECAY_HISTORY_LIMITS,
   RenderObjectHistory,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/pointExtensionUtils";
+import {
+  DEFAULT_POINT_SETTINGS,
+  LayerSettingsPointExtension,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
 import type { RosObject, RosValue } from "@lichtblick/suite-base/players/types";
 import { emptyPose } from "@lichtblick/suite-base/util/Pose";
 

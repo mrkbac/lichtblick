@@ -8,17 +8,8 @@ import {
   TextCaseTitle16Regular,
 } from "@fluentui/react-icons";
 import DoubleArrowDownIcon from "@mui/icons-material/KeyboardDoubleArrowDown";
-import { Typography } from "@mui/material";
 
-import type { PanelButton } from "@lichtblick/suite-base/components/PanelButton";
-
-function RegexLabel(): React.JSX.Element {
-  return (
-    <Typography variant="caption" style={{ fontFamily: "monospace", lineHeight: 1 }}>
-      .*
-    </Typography>
-  );
-}
+import { type PanelButton, RegexLabel } from "@lichtblick/suite-base/components/PanelButton";
 
 export const LOG_BUTTONS = {
   copy: { id: "logCopy", icon: Copy20Filled, placement: "toolbar" },

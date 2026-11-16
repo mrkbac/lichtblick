@@ -14,7 +14,7 @@ import { selectCameraModel } from "@lichtblick/den/image";
 import { CameraModelsMap } from "@lichtblick/den/image/types";
 import Logger from "@lichtblick/log";
 import { SettingsTreeAction } from "@lichtblick/suite";
-import { ALL_SUPPORTED_IMAGE_SCHEMAS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/constants";
+import { ALL_SUPPORTED_IMAGE_SCHEMAS } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/schemas";
 
 import {
   IMAGE_RENDERABLE_DEFAULT_SETTINGS,

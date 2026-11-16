@@ -21,16 +21,18 @@ import {
   createStixelMaterial,
   PointCloudHistoryRenderable,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PointClouds";
+import {
+  DEFAULT_POINT_SETTINGS,
+  LayerSettingsPointExtension,
+  POINT_CLOUD_REQUIRED_FIELDS,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
 import { VelodyneScan } from "@lichtblick/suite-base/types/Messages";
 
 import { autoSelectColorSettings } from "./colorMode";
 import {
   createInstancePickingMaterial,
   createPickingMaterial,
-  DEFAULT_POINT_SETTINGS,
-  LayerSettingsPointExtension,
   pointCloudMaterial,
-  POINT_CLOUD_REQUIRED_FIELDS,
 } from "./pointExtensionUtils";
 import type { AnyRendererSubscription } from "../IRenderer";
 import type { Renderer } from "../Renderer";
