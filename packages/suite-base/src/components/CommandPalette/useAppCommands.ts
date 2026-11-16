@@ -521,7 +521,12 @@ export function useAppCommands(): {
               id: `topic.path.${path}`,
               detail: item ? itemTypeName(item) : undefined,
               // Tab lists every panel for this path; Tab again picks where it goes.
-              actions: () => [first!, ...rest].map((cmd) => ({ ...cmd, title: cmd.group! })),
+              actions: () =>
+                [first!, ...rest].map((cmd, i) => ({
+                  ...cmd,
+                  title: panelTitle(targets[i]!.panelType),
+                  group: undefined,
+                })),
             },
             positions,
           };
