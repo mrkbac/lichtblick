@@ -1,6 +1,306 @@
 {
   "configById": {
-    "3D!boreas": {
+    "Tab!main": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "Drive",
+          "layout": {
+            "direction": "row",
+            "children": [
+              {
+                "direction": "column",
+                "children": [
+                  {
+                    "panels": ["3D!drive"]
+                  },
+                  {
+                    "direction": "row",
+                    "children": [
+                      {
+                        "panels": ["Gauge!speed"]
+                      },
+                      {
+                        "panels": ["Gauge!roll"]
+                      },
+                      {
+                        "panels": ["Gauge!pitch"]
+                      },
+                      {
+                        "direction": "column",
+                        "children": [
+                          {
+                            "panels": ["Indicator!drive"]
+                          },
+                          {
+                            "panels": ["Indicator!vru"]
+                          }
+                        ],
+                        "sizes": [50, 50]
+                      }
+                    ],
+                    "sizes": [28, 24, 24, 24]
+                  }
+                ],
+                "sizes": [72, 28]
+              },
+              {
+                "direction": "column",
+                "children": [
+                  {
+                    "panels": ["Image!camera"]
+                  },
+                  {
+                    "panels": ["map!drive"]
+                  },
+                  {
+                    "panels": ["Watch!vehicle"]
+                  }
+                ],
+                "sizes": [42, 33, 25]
+              }
+            ],
+            "sizes": [60, 40]
+          }
+        },
+        {
+          "title": "Perception",
+          "layout": {
+            "direction": "row",
+            "children": [
+              {
+                "direction": "column",
+                "children": [
+                  {
+                    "panels": ["CameraGrid!sensors"]
+                  },
+                  {
+                    "panels": ["Plot!objects"]
+                  }
+                ],
+                "sizes": [60, 40]
+              },
+              {
+                "direction": "column",
+                "children": [
+                  {
+                    "panels": ["Table!tracks"]
+                  },
+                  {
+                    "direction": "row",
+                    "children": [
+                      {
+                        "panels": ["PieChart!classes"]
+                      },
+                      {
+                        "direction": "column",
+                        "children": [
+                          {
+                            "panels": ["GlobalVariableSliderPanel!track"]
+                          },
+                          {
+                            "panels": ["RawMessages!track"]
+                          }
+                        ],
+                        "sizes": [22, 78]
+                      }
+                    ],
+                    "sizes": [45, 55]
+                  }
+                ],
+                "sizes": [55, 45]
+              }
+            ],
+            "sizes": [55, 45]
+          }
+        },
+        {
+          "title": "Dynamics",
+          "layout": {
+            "direction": "row",
+            "children": [
+              {
+                "direction": "column",
+                "children": [
+                  {
+                    "panels": ["Plot!speed"]
+                  },
+                  {
+                    "panels": ["StateTransitions!drive"]
+                  }
+                ],
+                "sizes": [60, 40]
+              },
+              {
+                "direction": "column",
+                "children": [
+                  {
+                    "panels": ["Plot!lateral"]
+                  },
+                  {
+                    "panels": ["Plot!comfort"]
+                  },
+                  {
+                    "panels": ["Plot!trajectory"]
+                  }
+                ],
+                "sizes": [33, 33, 34]
+              }
+            ],
+            "sizes": [55, 45]
+          }
+        },
+        {
+          "title": "Health",
+          "layout": {
+            "direction": "row",
+            "children": [
+              {
+                "direction": "column",
+                "children": [
+                  {
+                    "panels": ["DiagnosticSummary!all"]
+                  },
+                  {
+                    "panels": ["DiagnosticStatusPanel!lidar"]
+                  }
+                ],
+                "sizes": [50, 50]
+              },
+              {
+                "direction": "column",
+                "children": [
+                  {
+                    "panels": ["RosOut!log"]
+                  },
+                  {
+                    "panels": ["TopicHealth!all"]
+                  }
+                ],
+                "sizes": [50, 50]
+              },
+              {
+                "direction": "column",
+                "children": [
+                  {
+                    "panels": ["TopicGraph!all"]
+                  },
+                  {
+                    "panels": ["TransformTree!all"]
+                  },
+                  {
+                    "panels": ["PlaybackPerformance!all"]
+                  }
+                ],
+                "sizes": [45, 40, 15]
+              }
+            ],
+            "sizes": [34, 33, 33]
+          }
+        },
+        {
+          "title": "Recording",
+          "layout": {
+            "direction": "row",
+            "children": [
+              {
+                "panels": ["SourceInfo!all"]
+              },
+              {
+                "direction": "column",
+                "children": [
+                  {
+                    "panels": ["NodePlayground!comfort"]
+                  },
+                  {
+                    "panels": ["Notes!about"]
+                  }
+                ],
+                "sizes": [55, 45]
+              }
+            ],
+            "sizes": [55, 45]
+          }
+        }
+      ]
+    },
+    "3D!drive": {
+      "cameraState": {
+        "distance": 45,
+        "perspective": true,
+        "phi": 55,
+        "target": [0, 0, 0],
+        "targetOffset": [0, 0, 0],
+        "targetOrientation": [0, 0, 0, 1],
+        "thetaOffset": 20,
+        "fovy": 45,
+        "near": 1,
+        "far": 5000
+      },
+      "scene": {},
+      "transforms": {},
+      "topics": {
+        "/boreas/lidar": {
+          "visible": true,
+          "colorField": "intensity",
+          "colorMode": "colormap",
+          "colorMap": "turbo",
+          "pointSize": 1.5
+        },
+        "/boreas/radar/points": {
+          "visible": true,
+          "colorMode": "flat",
+          "flatColor": "#ff4d6d",
+          "pointSize": 5,
+          "pointShape": "circle"
+        },
+        "/boreas/objects": {
+          "visible": true
+        },
+        "/boreas/objects/trails": {
+          "visible": true
+        },
+        "/boreas/route": {
+          "visible": true
+        }
+      },
+      "layers": {
+        "map": {
+          "layerId": "lichtblick.Map",
+          "visible": true,
+          "locationTopic": "/boreas/gps",
+          "layers": [
+            {
+              "id": "labels",
+              "source": "ofm-liberty",
+              "visible": true,
+              "opacity": 1,
+              "hiddenGroups": ["areas", "buildings"]
+            },
+            {
+              "id": "base",
+              "source": "esri-imagery",
+              "visible": true,
+              "opacity": 1
+            }
+          ]
+        }
+      },
+      "publish": {
+        "type": "point",
+        "poseTopic": "/move_base_simple/goal",
+        "pointTopic": "/clicked_point",
+        "poseEstimateTopic": "/initialpose",
+        "poseEstimateXDeviation": 0.5,
+        "poseEstimateYDeviation": 0.5,
+        "poseEstimateThetaDeviation": 0.26179939
+      },
+      "followMode": "follow-pose",
+      "followTf": "base_link",
+      "imageMode": {},
+      "lichtblickPanelTitle": "3D: LiDAR, radar, tracked objects"
+    },
+    "Image!camera": {
       "cameraState": {
         "distance": 35,
         "perspective": true,
@@ -18,9 +318,13 @@
       "topics": {
         "/boreas/lidar": {
           "visible": true,
-          "colorField": "intensity",
+          "colorField": "x",
           "colorMode": "colormap",
-          "colorMap": "turbo"
+          "colorMap": "turbo",
+          "pointSize": 2
+        },
+        "/boreas/objects": {
+          "visible": true
         }
       },
       "layers": {},
@@ -35,235 +339,485 @@
       },
       "followMode": "follow-pose",
       "followTf": "lidar",
-      "imageMode": {}
-    },
-    "Image!boreas": {
       "imageMode": {
-        "imageTopic": "/boreas/camera",
+        "imageTopic": "/boreas/camera/image",
+        "calibrationTopic": "/boreas/camera/calibration",
         "synchronize": false,
         "rotation": 0,
         "annotations": {}
       },
-      "cameraState": {
-        "distance": 20,
-        "perspective": true,
-        "phi": 60,
-        "target": [0, 0, 0],
-        "targetOffset": [0, 0, 0],
-        "targetOrientation": [0, 0, 0, 1],
-        "thetaOffset": 45,
-        "fovy": 45,
-        "near": 0.5,
-        "far": 5000
+      "lichtblickPanelTitle": "Camera with LiDAR and boxes projected"
+    },
+    "Gauge!speed": {
+      "path": "/boreas/motion.speed.@mul(3.6)",
+      "minValue": 0,
+      "maxValue": 60,
+      "colorMode": "colormap",
+      "colorMap": "red-yellow-green",
+      "reverse": true,
+      "displayMode": "arc",
+      "lichtblickPanelTitle": "Speed (km/h)"
+    },
+    "Gauge!roll": {
+      "path": "/boreas/motion.roll",
+      "minValue": -10,
+      "maxValue": 10,
+      "displayMode": "roll",
+      "angleUnit": "degrees",
+      "angleRange": 30,
+      "warningAngle": 5,
+      "criticalAngle": 10,
+      "colorMode": "colormap",
+      "colorMap": "red-yellow-green",
+      "reverse": false,
+      "lichtblickPanelTitle": "Roll"
+    },
+    "Gauge!pitch": {
+      "path": "/boreas/motion.pitch",
+      "minValue": -10,
+      "maxValue": 10,
+      "displayMode": "pitch",
+      "angleUnit": "degrees",
+      "angleRange": 30,
+      "warningAngle": 5,
+      "criticalAngle": 10,
+      "colorMode": "colormap",
+      "colorMap": "red-yellow-green",
+      "reverse": false,
+      "lichtblickPanelTitle": "Pitch"
+    },
+    "Indicator!drive": {
+      "path": "/boreas/vehicle/state.drive_state",
+      "style": "background",
+      "fallbackColor": "#555",
+      "fallbackLabel": "Unknown",
+      "alertsMuted": true,
+      "rules": [
+        {
+          "operator": "=",
+          "rawValue": "0",
+          "color": "#6b7280",
+          "label": "Stopped"
+        },
+        {
+          "operator": "=",
+          "rawValue": "1",
+          "color": "#22c55e",
+          "label": "Accelerating"
+        },
+        {
+          "operator": "=",
+          "rawValue": "2",
+          "color": "#3b82f6",
+          "label": "Cruising"
+        },
+        {
+          "operator": "=",
+          "rawValue": "3",
+          "color": "#ef4444",
+          "label": "Braking"
+        }
+      ],
+      "lichtblickPanelTitle": "Drive state"
+    },
+    "Indicator!vru": {
+      "path": "/boreas/objects/tracks.tracks[0].distance_m",
+      "style": "bulb",
+      "fallbackColor": "#22c55e",
+      "fallbackLabel": "Clear",
+      "alertsMuted": true,
+      "rules": [
+        {
+          "operator": "<",
+          "rawValue": "8",
+          "color": "#ef4444",
+          "label": "Object < 8 m"
+        },
+        {
+          "operator": "<",
+          "rawValue": "15",
+          "color": "#f59e0b",
+          "label": "Object < 15 m"
+        }
+      ],
+      "lichtblickPanelTitle": "Nearest object"
+    },
+    "map!drive": {
+      "followTopic": "/boreas/gps",
+      "followMode": "heading",
+      "zoomLevel": 17.5,
+      "pitch": 40,
+      "projection": "mercator",
+      "units": "metric",
+      "layers": [
+        {
+          "id": "labels",
+          "source": "ofm-liberty",
+          "visible": true,
+          "opacity": 1,
+          "hiddenGroups": ["areas", "buildings"]
+        },
+        {
+          "id": "base",
+          "source": "esri-imagery",
+          "visible": true,
+          "opacity": 1
+        }
+      ],
+      "topicStyles": {
+        "/boreas/gps": {
+          "history": "line",
+          "colorBy": "speed",
+          "accuracy": true
+        }
       },
-      "followMode": "follow-pose",
-      "scene": {},
-      "transforms": {},
-      "topics": {},
-      "layers": {},
-      "publish": {
-        "type": "point",
-        "poseTopic": "/move_base_simple/goal",
-        "pointTopic": "/clicked_point",
-        "poseEstimateTopic": "/initialpose",
-        "poseEstimateXDeviation": 0.5,
-        "poseEstimateYDeviation": 0.5,
-        "poseEstimateThetaDeviation": 0.26179939
+      "lichtblickPanelTitle": "Map: route, events, speed"
+    },
+    "Watch!vehicle": {
+      "sparklines": true,
+      "flashChanges": true,
+      "showAge": false,
+      "staleAfterSec": 2,
+      "rows": [
+        {
+          "id": "speed",
+          "path": "/boreas/motion.speed.@mul(3.6)",
+          "label": "Speed",
+          "unit": "km/h",
+          "precision": 1
+        },
+        {
+          "id": "heading",
+          "path": "/boreas/motion.heading",
+          "label": "Heading",
+          "unit": "°",
+          "precision": 0
+        },
+        {
+          "id": "tracks",
+          "path": "/boreas/objects/tracks.total",
+          "label": "Tracked objects"
+        },
+        {
+          "id": "nearest",
+          "path": "/boreas/objects/tracks.nearest_distance",
+          "label": "Nearest object",
+          "unit": "m",
+          "precision": 1
+        },
+        {
+          "id": "selected",
+          "path": "/boreas/objects/tracks.tracks[:]{id==$selected_id}.distance_m",
+          "label": "Selected object",
+          "unit": "m",
+          "precision": 1
+        }
+      ]
+    },
+    "CameraGrid!sensors": {
+      "showLabels": true,
+      "showTimestamps": true,
+      "linkZoom": false,
+      "syncAnnotations": false,
+      "tiles": [
+        {
+          "topic": "/boreas/camera/image",
+          "visible": true,
+          "fit": "fit",
+          "rotation": 0,
+          "flipHorizontal": false,
+          "flipVertical": false
+        },
+        {
+          "topic": "/boreas/radar/image",
+          "visible": true,
+          "fit": "fit",
+          "rotation": 0,
+          "flipHorizontal": false,
+          "flipVertical": false
+        }
+      ],
+      "lichtblickPanelTitle": "Camera with 2D boxes · radar"
+    },
+    "Plot!objects": {
+      "paths": [
+        {
+          "value": "/boreas/objects/tracks.cars",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Cars",
+          "interpolation": "step"
+        },
+        {
+          "value": "/boreas/objects/tracks.pedestrians",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Pedestrians",
+          "interpolation": "step"
+        },
+        {
+          "value": "/boreas/objects/tracks.cyclists",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Cyclists",
+          "interpolation": "step"
+        },
+        {
+          "value": "/boreas/objects/tracks.nearest_distance",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Nearest (m)",
+          "axis": "secondary"
+        },
+        {
+          "value": "/boreas/objects/tracks.tracks[:]{id==$selected_id}.distance_m",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Selected object (m)",
+          "axis": "secondary"
+        }
+      ],
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "sidebarDimension": 240,
+      "lichtblickPanelTitle": "Objects around the vehicle",
+      "y2AxisLabel": "m",
+      "minY2Value": 0,
+      "timeWindow": "automatic"
+    },
+    "Table!tracks": {
+      "topicPath": "/boreas/objects/tracks.tracks",
+      "lichtblickPanelTitle": "Tracks, nearest first"
+    },
+    "PieChart!classes": {
+      "path": "/boreas/objects/class_counts.counts",
+      "title": "Objects by class",
+      "legend1": "Car",
+      "legend2": "Pedestrian",
+      "legend3": "Cyclist",
+      "legend4": "Other"
+    },
+    "GlobalVariableSliderPanel!track": {
+      "globalVariableName": "track",
+      "sliderProps": {
+        "min": 1,
+        "max": 200,
+        "step": 1
       }
+    },
+    "RawMessages!track": {
+      "topicPath": "/boreas/objects/tracks.tracks[:]{track==$track}",
+      "diffEnabled": false,
+      "lichtblickPanelTitle": "Track inspector ($track)"
     },
     "Plot!speed": {
       "paths": [
         {
-          "value": "/boreas/motion.speed",
+          "value": "/boreas/motion.speed.@mul(3.6)",
           "enabled": true,
-          "timestampMethod": "receiveTime"
+          "timestampMethod": "receiveTime",
+          "label": "Speed (km/h)"
+        },
+        {
+          "value": "/boreas/motion.accel_long",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Longitudinal (m/s²)",
+          "axis": "secondary"
+        },
+        {
+          "value": "50",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Speed limit",
+          "referenceLineShade": "above",
+          "referenceLineShadeSeries": "/boreas/motion.speed.@mul(3.6)"
         }
       ],
-      "minYValue": "",
-      "maxYValue": "",
       "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
       "isSynced": true,
       "xAxisVal": "timestamp",
       "showXAxisLabels": true,
       "showYAxisLabels": true,
-      "legendDisplay": "floating",
-      "showPlotValuesInLegend": false,
       "sidebarDimension": 240,
-      "lichtblickPanelTitle": "Speed (m/s)"
+      "lichtblickPanelTitle": "Speed and acceleration",
+      "y2AxisLabel": "m/s²",
+      "timeWindow": "automatic"
     },
-    "Notes!about": {
-      "text": "# Boreas urban drive\n\n20 seconds near a busy Toronto intersection.\nCamera · LiDAR · radar · GPS · IMU\nPlay, seek, or explore the sensor tabs.\n\nCC BY 4.0 — Keenan Burnett et al.\nUniversity of Toronto\nhttps://creativecommons.org/licenses/by/4.0/\nhttps://www.boreas.utias.utoronto.ca/\n\nBoreas: A Multi-Season Autonomous Driving Dataset\nKeenan Burnett, David J. Yoon, Yuchen Wu, Andrew Z. Li, Haowei\nZhang, Shichen Lu, Jingxing Qian, Wei-Kang Tseng, Andrew\nLambert, Keith Y. K. Leung, Angela P. Schoellig, and Timothy D.\nBarfoot\n\nAdapted for Lichtblick:\n20 seconds starting 170 seconds into `boreas-2021-09-02-11-42`;\ncamera sampled at 10 Hz, resized to 1280 × 1070 and H.265\nencoded (no B-frames, one-second GOPs, repeated VPS/SPS/PPS);\nLiDAR sampled at 5 Hz with every fourth point retained,\ncoordinates rounded to under 3 cm and 8-bit intensity. Radar at\n4 Hz is shown as a JPEG polar intensity image: horizontal axis\nis range (0.1192 m per bin, original bins averaged in pairs),\nvertical axis is azimuth sample index. Recorded 200 Hz IMU and 10 Hz postprocessed GPS\nare included. GPS latitude/longitude are converted from radians\nto degrees; altitude retains the dataset’s relative datum, not\nheight above sea level. Recorded poses and velocities are\nincluded, with a shifted local origin. Original sensor\ntimestamps are retained. No additional LiDAR motion compensation\nis applied. Camera and LiDAR are independent views; no projected\noverlays are included. Original sensor extrinsics are included\nas static transforms. IMU axes follow the Applanix source\nconvention; acceleration is the supplied processed acceleration,\nnot raw accelerometer output.\n\nPaper: https://doi.org/10.1177/02783649231160195\nAttribution is also embedded in the MCAP metadata.\nNo endorsement by the dataset authors is implied.\n"
-    },
-    "RawMessages!motion": {
-      "topicPath": "/boreas/motion",
-      "diffEnabled": false
-    },
-    "SourceInfo!boreas": {},
-    "TransformTree!boreas": {},
-    "TopicHealth!boreas": {},
-    "Tab!inspect": {
-      "activeTabIdx": 0,
-      "tabs": [
-        {
-          "title": "Map",
-          "layout": {
-            "panels": ["map!boreas"]
-          }
-        },
-        {
-          "title": "Radar",
-          "layout": {
-            "panels": ["Image!radar"]
-          }
-        },
-        {
-          "title": "IMU",
-          "layout": {
-            "panels": ["Plot!imu"]
-          }
-        },
-        {
-          "title": "Motion",
-          "layout": {
-            "panels": ["RawMessages!motion"]
-          }
-        },
-        {
-          "title": "Transforms",
-          "layout": {
-            "panels": ["TransformTree!boreas"]
-          }
-        },
-        {
-          "title": "Topics",
-          "layout": {
-            "panels": ["TopicHealth!boreas"]
-          }
-        },
-        {
-          "title": "Source",
-          "layout": {
-            "panels": ["SourceInfo!boreas"]
-          }
-        }
-      ]
-    },
-    "Image!radar": {
-      "imageMode": {
-        "imageTopic": "/boreas/radar",
-        "synchronize": false,
-        "rotation": 0,
-        "annotations": {}
-      },
-      "cameraState": {
-        "distance": 20,
-        "perspective": true,
-        "phi": 60,
-        "target": [0, 0, 0],
-        "targetOffset": [0, 0, 0],
-        "targetOrientation": [0, 0, 0, 1],
-        "thetaOffset": 45,
-        "fovy": 45,
-        "near": 0.5,
-        "far": 5000
-      },
-      "followMode": "follow-pose",
-      "scene": {},
-      "transforms": {},
-      "topics": {},
-      "layers": {},
-      "publish": {
-        "type": "point",
-        "poseTopic": "/move_base_simple/goal",
-        "pointTopic": "/clicked_point",
-        "poseEstimateTopic": "/initialpose",
-        "poseEstimateXDeviation": 0.5,
-        "poseEstimateYDeviation": 0.5,
-        "poseEstimateThetaDeviation": 0.26179939
-      },
-      "lichtblickPanelTitle": "Radar · range × azimuth"
-    },
-    "map!boreas": {
-      "followTopic": "/boreas/gps",
-      "zoomLevel": 17,
-      "followMode": "center",
-      "layers": [
-        {
-          "id": "base",
-          "source": "osm",
-          "visible": true,
-          "opacity": 1
-        }
-      ]
-    },
-    "Plot!imu": {
+    "StateTransitions!drive": {
+      "isSynced": true,
+      "showPoints": false,
       "paths": [
         {
-          "value": "/boreas/imu.accel_x",
-          "enabled": true,
-          "timestampMethod": "receiveTime"
+          "value": "/boreas/vehicle/state.drive_state",
+          "label": "Drive state",
+          "timestampMethod": "receiveTime",
+          "enabled": true
         },
         {
-          "value": "/boreas/imu.accel_y",
-          "enabled": true,
-          "timestampMethod": "receiveTime"
+          "value": "/boreas/vehicle/state.turn",
+          "label": "Turning",
+          "timestampMethod": "receiveTime",
+          "enabled": true
         },
         {
-          "value": "/boreas/imu.accel_z",
+          "value": "/boreas/objects/tracks.nearest_distance",
+          "label": "Object within 10 m",
+          "condition": "< 10",
+          "timestampMethod": "receiveTime",
+          "enabled": true
+        },
+        {
+          "value": "/diagnostics.status[:]{hardware_id==\"camera\"}.level",
+          "label": "Camera warning",
+          "condition": "> 0",
+          "timestampMethod": "receiveTime",
+          "enabled": true
+        }
+      ]
+    },
+    "Plot!lateral": {
+      "paths": [
+        {
+          "value": "/boreas/motion.accel_lat",
           "enabled": true,
-          "timestampMethod": "receiveTime"
+          "timestampMethod": "receiveTime",
+          "label": "Lateral (m/s²)"
         }
       ],
-      "minYValue": "",
-      "maxYValue": "",
       "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
       "isSynced": true,
       "xAxisVal": "timestamp",
       "showXAxisLabels": true,
       "showYAxisLabels": true,
-      "legendDisplay": "floating",
-      "showPlotValuesInLegend": false,
       "sidebarDimension": 240,
-      "lichtblickPanelTitle": "IMU acceleration (m/s²)"
+      "lichtblickPanelTitle": "Lateral acceleration distribution",
+      "plotMode": "histogram",
+      "analysisRange": "all"
+    },
+    "Plot!comfort": {
+      "paths": [
+        {
+          "value": "/studio_script/comfort.total_g",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Total g"
+        },
+        {
+          "value": "/studio_script/comfort.comfort",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Comfort score",
+          "axis": "secondary"
+        }
+      ],
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "sidebarDimension": 240,
+      "lichtblickPanelTitle": "Ride comfort (user script)",
+      "y2AxisLabel": "score"
+    },
+    "Plot!trajectory": {
+      "paths": [
+        {
+          "value": "/boreas/tf.translation.y",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "Path"
+        }
+      ],
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "showPlotValuesInLegend": true,
+      "isSynced": true,
+      "xAxisVal": "custom",
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "sidebarDimension": 240,
+      "lichtblickPanelTitle": "Driven path (map frame, m)",
+      "xAxisPath": {
+        "value": "/boreas/tf.translation.x",
+        "enabled": true
+      },
+      "axisScales": "equal"
+    },
+    "DiagnosticSummary!all": {
+      "minLevel": 0,
+      "pinnedIds": [],
+      "hardwareIdFilter": "",
+      "sortByLevel": true,
+      "showHistory": true,
+      "topics": ["/diagnostics"]
+    },
+    "DiagnosticStatusPanel!lidar": {
+      "topics": ["/diagnostics"],
+      "selectedHardwareId": "lidar",
+      "selectedName": "lidar: Velodyne Alpha Prime LiDAR"
+    },
+    "RosOut!log": {
+      "searchTerms": [],
+      "minLogLevel": 2,
+      "topics": {},
+      "regex": false,
+      "lichtblickPanelTitle": "Events (info and above)"
+    },
+    "TopicHealth!all": {
+      "tolerancePercent": 20,
+      "sortByStatus": true,
+      "topics": {
+        "/boreas/lidar": {
+          "expectedHz": 10,
+          "deepStats": true
+        },
+        "/boreas/camera/image": {
+          "expectedHz": 12.5,
+          "deepStats": true
+        },
+        "/boreas/radar/image": {
+          "expectedHz": 4
+        }
+      }
+    },
+    "TopicGraph!all": {},
+    "TransformTree!all": {},
+    "PlaybackPerformance!all": {},
+    "SourceInfo!all": {},
+    "NodePlayground!comfort": {
+      "selectedNodeId": "comfort",
+      "autoFormatOnSave": true
+    },
+    "Notes!about": {
+      "fontSize": 13,
+      "text": "# Boreas showcase drive\n\n60 seconds through a busy Toronto intersection, every sensor at full rate:\n128-beam LiDAR (10 Hz, all points), 5 MP camera with calibration, Navtech radar,\nGNSS/INS, and 3D boxes for every car, pedestrian and cyclist.\n\n## Things to try\n- [ ] Click a box in the 3D panel: the Watch row and the Perception plot follow it.\n- [ ] Move the track slider on the Perception tab to inspect any track.\n- [ ] Open the Health tab and seek to a camera frame gap.\n- [ ] Edit the Ride comfort script on this tab; its plot updates live.\n- [ ] Sort the tracks table by speed.\n\n## Credits\nBoreas: A Multi-Season Autonomous Driving Dataset. Keenan Burnett et al.,\nUniversity of Toronto. CC BY 4.0.\nhttps://www.boreas.utias.utoronto.ca/ · https://creativecommons.org/licenses/by/4.0/\n\nAdapted for Lichtblick: boxes interpolated between the 5 Hz labels and stitched across\nthe dataset's 20-second tracking segments; dynamics, logs and diagnostics derived from\nthe recorded data.\n"
     }
   },
-  "globalVariables": {},
-  "userNodes": {},
+  "globalVariables": {
+    "selected_id": "",
+    "track": 1
+  },
+  "userNodes": {
+    "comfort": {
+      "name": "Ride comfort",
+      "sourceCode": "// Ride comfort from the recorded accelerations: g-forces and a 0-100 score.\n// Output topics of user scripts can be plotted like any recorded topic.\nimport { Input } from \"./types\";\n\nexport const inputs = [\"/boreas/motion\"];\nexport const output = \"/studio_script/comfort\";\n\ntype Output = {\n  lateral_g: number;\n  longitudinal_g: number;\n  total_g: number;\n  comfort: number;\n};\n\nexport default function script(event: Input<\"/boreas/motion\">): Output {\n  const lateral = event.message.accel_lat / 9.81;\n  const longitudinal = event.message.accel_long / 9.81;\n  const total = Math.hypot(lateral, longitudinal);\n  // Around 0.3 g most passengers start to feel uncomfortable.\n  const comfort = Math.max(0, 100 - (total / 0.3) * 100);\n  return { lateral_g: lateral, longitudinal_g: longitudinal, total_g: total, comfort };\n}\n"
+    }
+  },
   "playbackConfig": {
     "speed": 1
   },
-  "layout": {
-    "direction": "row",
-    "children": [
-      {
-        "direction": "column",
-        "children": [
-          {
-            "panels": ["3D!boreas"]
-          },
-          {
-            "panels": ["Plot!speed"]
-          }
-        ],
-        "sizes": [75, 25]
-      },
-      {
-        "direction": "column",
-        "children": [
-          {
-            "panels": ["Image!boreas"]
-          },
-          {
-            "panels": ["Tab!inspect"]
-          },
-          {
-            "panels": ["Notes!about"]
-          }
-        ],
-        "sizes": [45, 25, 30]
-      }
-    ],
-    "sizes": [60, 40]
-  },
+  "layout": { "panels": ["Tab!main"] },
   "version": 2
 }
