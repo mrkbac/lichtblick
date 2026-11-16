@@ -4,7 +4,7 @@
 // Streamed with HTTP range requests; the host must allow CORS GET/HEAD with a Range header.
 // Rebuild the file with `uv run ci/create-boreas-sample.py`.
 export const SAMPLE_BOREAS_DATA_SOURCE_URL =
-  "https://REPLACE-WITH-R2-PUBLIC-HOST.invalid/boreas-sample.mcap";
+  "https://pub-28ff7cafca60457aa0fb10e79c70ff4b.r2.dev/boreas-sample.mcap";
 export const SAMPLE_BOREAS_DATA_SOURCE_ID = "sample-boreas";
 export const SAMPLE_BOREAS_DATA_SOURCE_TYPE = "sample";
 export const SAMPLE_BOREAS_DATA_SOURCE_DISPLAY_NAME = "Sample: Boreas";
