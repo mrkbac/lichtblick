@@ -5,6 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import * as _ from "lodash-es";
+
 import { Immutable } from "@lichtblick/suite";
 import { mergeSubscriptions } from "@lichtblick/suite-base/components/MessagePipeline/subscriptions";
 import { SubscribePayload } from "@lichtblick/suite-base/players/types";
@@ -42,9 +44,24 @@ export function remapVirtualSubscriptions(
   subscriptions: SubscribePayload[],
   inputsByOutputTopic: Map<string, readonly string[]>,
 ): Immutable<SubscribePayload[]> {
+  // Data-source topics behind a virtual topic; topic converters may read other virtual topics.
+  const sourceInputs = (topic: string, seen = new Set<string>()): string[] => {
+    const inputs = inputsByOutputTopic.get(topic);
+    if (!inputs || seen.has(topic)) {
+      return inputs ? [] : [topic];
+    }
+    seen.add(topic);
+    return inputs.flatMap((input) => sourceInputs(input, seen));
+  };
+
   // Pair all subscriptions with their user script input topics (if any)
   const payloadInputsPairs = subscriptions
-    .map((v): SubscriberInputs => [v, inputsByOutputTopic.get(v.topic)])
+    .map(
+      (v): SubscriberInputs => [
+        v,
+        inputsByOutputTopic.has(v.topic) ? _.uniq(sourceInputs(v.topic)) : undefined,
+      ],
+    )
     .filter(([, topics]) => topics?.length !== 0);
 
   return mergeSubscriptions(

@@ -10,8 +10,10 @@ import "@testing-library/jest-dom/vitest";
 
 import { Immutable, SettingsTreeAction, SettingsTreeNode } from "@lichtblick/suite";
 import {
+  dropEdgeAt,
   handleDropNode,
   NodeEditor,
+  reorderChildrenAction,
 } from "@lichtblick/suite-base/components/SettingsTreeEditor/NodeEditor";
 import {
   FieldEditorProps,
@@ -683,5 +685,133 @@ describe("NodeEditor inline actions", () => {
         payload: { id: actionId, path },
       });
     });
+  });
+});
+
+describe("NodeEditor Foxglove settings API", () => {
+  it("builds reorder-children actions, with sourcePath only for cross-parent moves", () => {
+    const base = { fromKey: "a", toKey: "b", position: "before" as const };
+    expect(reorderChildrenAction({ ...base, path: ["p"], sourcePath: ["p"] })).toEqual({
+      action: "reorder-children",
+      payload: { path: ["p"], ...base },
+    });
+    expect(reorderChildrenAction({ ...base, path: ["p"], sourcePath: ["q"] })).toEqual({
+      action: "reorder-children",
+      payload: { path: ["p"], sourcePath: ["q"], ...base },
+    });
+  });
+
+  function renderReorderableParent(filter?: string) {
+    const actionHandler = vi.fn();
+    render(
+      <NodeEditor
+        actionHandler={actionHandler}
+        path={["list"]}
+        filter={filter}
+        settings={{
+          label: "List",
+          childrenReorderable: true,
+          children: {
+            a: { label: "A" },
+            b: { label: "B" },
+            pinned: { label: "Pinned", reorderable: false },
+          },
+        }}
+      />,
+    );
+    return actionHandler;
+  }
+
+  it("adds Move up / Move down to reorderable children and dispatches reorder-children", () => {
+    const actionHandler = renderReorderableParent();
+
+    // Only "a" and "b" are reorderable, so only they get a menu.
+    const menus = screen.getAllByTestId("node-actions-menu-button");
+    expect(menus).toHaveLength(2);
+
+    fireEvent.click(menus[1]!);
+    fireEvent.click(screen.getByRole("menuitem", { name: /move up/i }));
+    expect(actionHandler).toHaveBeenCalledWith({
+      action: "reorder-children",
+      payload: { path: ["list"], fromKey: "b", toKey: "a", position: "before" },
+    });
+
+    actionHandler.mockClear();
+    fireEvent.click(menus[1]!);
+    fireEvent.click(screen.getByRole("menuitem", { name: /move down/i }));
+    expect(actionHandler).not.toHaveBeenCalled(); // "b" is already last
+  });
+
+  it("allows dragging children only while no filter hides any of them", () => {
+    renderReorderableParent();
+    expect(screen.getByText("A").closest('[class*="nodeHeader"]')).toHaveStyle({ cursor: "grab" });
+    expect(screen.getByText("Pinned").closest('[class*="nodeHeader"]')).not.toHaveStyle({
+      cursor: "grab",
+    });
+  });
+
+  it("disables child drag while a tree filter is active", () => {
+    renderReorderableParent("a");
+    expect(screen.getByText("A").closest('[class*="nodeHeader"]')).not.toHaveStyle({
+      cursor: "grab",
+    });
+  });
+
+  it("shows the warning icon only without an error", () => {
+    const { rerender, props } = setupFn({ settings: { label: "x", warning: "careful" } });
+    expect(screen.getByTestId("node-warning-icon")).toBeInTheDocument();
+
+    rerender(<NodeEditor {...props} settings={{ label: "x", warning: "careful", error: "bad" }} />);
+    expect(screen.queryByTestId("node-warning-icon")).not.toBeInTheDocument();
+  });
+
+  it("shows a color swatch when color is set without an icon, and help as the label title", () => {
+    setupFn({ settings: { label: "Colored", color: "rgb(255, 0, 0)", help: "Some help" } });
+    expect(screen.getByTestId("node-color-swatch")).toHaveStyle({
+      background: "rgb(255, 0, 0)",
+    });
+    expect(screen.getByTitle("Some help")).toHaveTextContent("Colored");
+  });
+
+  it("makes the label a drag source when drag is set", () => {
+    setupFn({ settings: { label: "Dragged", drag: { type: "topic", topicName: "/t" } } });
+    expect(screen.getByTestId("settings-node-drag-source")).toHaveTextContent("Dragged");
+  });
+
+  it("disables inline actions marked disabled", () => {
+    const { props } = setupFn({
+      settings: {
+        label: "x",
+        actions: [
+          {
+            type: "action",
+            id: "go",
+            label: "Go",
+            display: "inline",
+            icon: "Sync",
+            disabled: true,
+          },
+        ],
+      },
+    });
+    const button = screen.getByRole("button", { name: "Go" });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(props.actionHandler).not.toHaveBeenCalled();
+  });
+});
+
+describe("dropEdgeAt", () => {
+  const element = {
+    getBoundingClientRect: () => ({ top: 100, height: 20 }),
+  } as unknown as Element;
+
+  it.each([
+    [100, "before"],
+    [109, "before"],
+    [110, "after"],
+    [119, "after"],
+  ])("clientY %d lands %s", (clientY, expected) => {
+    expect(dropEdgeAt(element, clientY)).toBe(expected);
   });
 });

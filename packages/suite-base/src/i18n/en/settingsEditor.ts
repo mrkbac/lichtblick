@@ -18,6 +18,8 @@ export const settingsEditor = {
   listAll: "List all",
   listInvisible: "List invisible",
   listVisible: "List visible",
+  moveDown: "Move down",
+  moveUp: "Move up",
   searchPanelSettings: "Search panel settings…",
   showAll: "Show All",
   title: "Title",

@@ -40,7 +40,10 @@ import {
   useCurrentLayoutActions,
   useCurrentLayoutSelector,
 } from "@lichtblick/suite-base/context/CurrentLayoutContext";
-import { ExtensionCatalogContext } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
+import {
+  ExtensionCatalog,
+  ExtensionCatalogContext,
+} from "@lichtblick/suite-base/context/ExtensionCatalogContext";
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import PlayerSelectionContext, {
   DataSourceArgs,
@@ -197,6 +200,28 @@ export default function PlayerManager(
 
     return userScriptPlayer;
   }, [globalVariablesRef, topicAliasPlayer, userScriptActions]);
+
+  // Foxglove topic converters from extensions run in the user script player.
+  useEffect(() => {
+    if (!player) {
+      return;
+    }
+    const setTopicConverters = (converters: ExtensionCatalog["installedTopicConverters"]) => {
+      player.setTopicConverters(converters).catch((error: unknown) => {
+        log.error(error);
+      });
+    };
+    let topicConverters = extensionCatalogContext?.getState().installedTopicConverters ?? [];
+    if (topicConverters.length > 0) {
+      setTopicConverters(topicConverters);
+    }
+    return extensionCatalogContext?.subscribe((state) => {
+      if (topicConverters !== state.installedTopicConverters) {
+        topicConverters = state.installedTopicConverters;
+        setTopicConverters(topicConverters);
+      }
+    });
+  }, [extensionCatalogContext, player]);
 
   // During layout switches, selectedLayout.data is briefly undefined (loading: true)
   useLayoutEffect(() => {

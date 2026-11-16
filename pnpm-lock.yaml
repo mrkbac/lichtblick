@@ -431,6 +431,9 @@ importers:
       '@foxglove/electron-socket':
         specifier: 2.1.1
         version: 2.1.1(electron@45.2.3)
+      '@foxglove/extension':
+        specifier: 3.5.0
+        version: 3.5.0
       '@foxglove/message-definition':
         specifier: 0.5.0
         version: 0.5.0
@@ -512,6 +515,9 @@ importers:
       '@lichtblick/suite':
         specifier: workspace:*
         version: link:../suite
+      '@lichtblick/suite-upstream':
+        specifier: npm:@lichtblick/suite@1.31.0
+        version: '@lichtblick/suite@1.31.0'
       '@lichtblick/test-builders':
         specifier: 1.0.1
         version: 1.0.1(lodash-es@4.18.1)
@@ -2031,6 +2037,9 @@ packages:
     peerDependencies:
       electron: '>=12'
 
+  '@foxglove/extension@3.5.0':
+    resolution: {integrity: sha512-AH/AD3k7UO7aHi/9UUOjMzg1DBaWL3RUuvHwUcDXgUwblzjGI8/w18yepi9P9uJ9xhQfNx4uQfL+1MJo4QjjjA==}
+
   '@foxglove/just-fetch@1.3.1':
     resolution: {integrity: sha512-14HBAXjTlKFUbJaQTdmaleS8p56+OP0Tu2YviM6NVHTHh++AQ4dP/+BTJznRb1zGvMNLwzOkCLr0X5tyzuhz8A==}
 
@@ -2305,6 +2314,12 @@ packages:
 
   '@leichtgewicht/ip-codec@2.0.5':
     resolution: {integrity: sha512-Vo+PSpZG2/fmgmiNzYK9qWRh8h/CHrwD0mo1h1DzL4yzHNSfWYujGTYsWGreD000gcgmZ7K4Ys6Tx9TxtsKdDw==}
+
+  '@lichtblick/message-definition@1.0.0':
+    resolution: {integrity: sha512-7/PLENDjYSmZuGp79Cis2tOCrqTGtUTrNtObycqEZKB87OBekSxTGdO5uA6KLNHxKcRftbtXAX+YF5xa/RaxLA==}
+
+  '@lichtblick/suite@1.31.0':
+    resolution: {integrity: sha512-ddT+xKmGZ50dfJujm6aGh+uBYg0TCsI7JkXI6z9sf4MgWwnIxcmkD9p1grfnw5V92ZIkaSdUe+TuTwW1uIzotg==}
 
   '@lichtblick/test-builders@1.0.1':
     resolution: {integrity: sha512-Ujdv82EAOqmccljqx6/Z2i4MO9XZwGiTVCTzV/RfsQb0CgJ4SmH6YZim+WtL4FINtvwNY9VKQYRBQKVftCIUag==}
@@ -9294,6 +9309,8 @@ snapshots:
       electron: 45.2.3
       eventemitter3: 4.0.7
 
+  '@foxglove/extension@3.5.0': {}
+
   '@foxglove/just-fetch@1.3.1':
     dependencies:
       node-fetch: 3.3.2
@@ -9614,6 +9631,12 @@ snapshots:
   '@kurkle/color@0.3.4': {}
 
   '@leichtgewicht/ip-codec@2.0.5': {}
+
+  '@lichtblick/message-definition@1.0.0': {}
+
+  '@lichtblick/suite@1.31.0':
+    dependencies:
+      '@lichtblick/message-definition': 1.0.0
 
   '@lichtblick/test-builders@1.0.1(lodash-es@4.18.1)':
     dependencies:

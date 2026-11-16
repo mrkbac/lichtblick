@@ -24,7 +24,7 @@ import { MutexLocked } from "@lichtblick/den/async";
 import { filterMap, VecQueue } from "@lichtblick/den/collection";
 import Log from "@lichtblick/log";
 import type { IWritable } from "@lichtblick/mcap-core";
-import { Metadata, ParameterValue } from "@lichtblick/suite";
+import { Immutable, Metadata, ParameterValue } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import {
@@ -43,11 +43,14 @@ import {
 import { hasTransformerErrors } from "@lichtblick/suite-base/players/UserScriptPlayer/utils";
 import {
   AdvertiseOptions,
+  BlockCache,
+  MessageBlock,
   MessageEvent,
   Player,
   PlayerAlert,
   PlayerState,
   PlayerStateActiveData,
+  Progress,
   PublishPayload,
   SubscribePayload,
   Topic,
@@ -68,9 +71,16 @@ import {
   TRANSFORM_BATCH_SIZE,
 } from "./constants";
 import { getPreloadTypes, remapVirtualSubscriptions } from "./subscriptions";
+import {
+  buildTopicConverterRegistration,
+  InstalledTopicConverter,
+  topicConverterOutput,
+} from "./topicConverters";
 import type { TransformerWorkerApi } from "./transformerWorker";
 
 const log = Log.getLogger(__filename);
+
+const TOPIC_CONVERTER_ALERT_PREFIX = "topic-converter:";
 
 // TypeScript's built-in lib only accepts strings for the scriptURL. However, webpack only
 // understands `new URL()` to properly build the worker entry point:
@@ -133,6 +143,93 @@ function isSortedByReceiveTime(messages: readonly MessageEvent[]): boolean {
   return true;
 }
 
+/**
+ * Groups registrations into stages: each stage only reads data-source topics and outputs of earlier
+ * stages, so topic converters can be chained. Registrations in a dependency cycle (or depending on
+ * one) never become ready and are returned as `cyclic`.
+ */
+function dependencyStages(registrations: readonly ScriptRegistration[]): {
+  stages: ScriptRegistration[][];
+  cyclic: ScriptRegistration[];
+} {
+  const stages: ScriptRegistration[][] = [];
+  let pending = registrations;
+  for (;;) {
+    const pendingOutputs = new Set(pending.map(({ output }) => output.name));
+    const ready = pending.filter(
+      ({ inputs }) => !inputs.some((input) => pendingOutputs.has(input)),
+    );
+    if (ready.length === 0) {
+      return { stages, cyclic: [...pending] };
+    }
+    stages.push(ready);
+    pending = pending.filter((registration) => !ready.includes(registration));
+  }
+}
+
+/** The registrations producing `topics`, plus every registration they read from. */
+function withDependencies(
+  registrations: Iterable<ScriptRegistration>,
+  topics: Iterable<string>,
+): ScriptRegistration[] {
+  const byOutput = new Map<string, ScriptRegistration>();
+  for (const registration of registrations) {
+    byOutput.set(registration.output.name, registration);
+  }
+  const needed = new Set<ScriptRegistration>();
+  const visit = (topic: string) => {
+    const registration = byOutput.get(topic);
+    if (registration && !needed.has(registration)) {
+      needed.add(registration);
+      registration.inputs.forEach(visit);
+    }
+  };
+  for (const topic of topics) {
+    visit(topic);
+  }
+  return [...needed];
+}
+
+const isTopicConverter = ({ scriptId }: ScriptRegistration) =>
+  scriptId.startsWith(TOPIC_CONVERTER_ALERT_PREFIX);
+
+const byReceiveTime = (a: MessageEvent, b: MessageEvent) => compare(a.receiveTime, b.receiveTime);
+
+/**
+ * Runs `registrations` over `messages` (sorted by receive time) stage by stage; later stages also
+ * see the outputs of earlier ones. Returns only the outputs.
+ */
+async function runRegistrations(
+  messages: readonly MessageEvent[],
+  registrations: readonly ScriptRegistration[],
+  process: (
+    registration: ScriptRegistration,
+    inputs: readonly MessageEvent[],
+  ) => Promise<readonly (MessageEvent | undefined)[]>,
+): Promise<MessageEvent[]> {
+  const outputs: MessageEvent[] = [];
+  let available = messages;
+  for (const stage of dependencyStages(registrations).stages) {
+    // One worker round trip per script; scripts in a stage run in parallel.
+    const stageInputs = available;
+    const stageOutputs = (
+      await Promise.all(
+        stage.map(async (registration) => {
+          const inputs = stageInputs.filter(({ topic }) => registration.inputs.includes(topic));
+          return inputs.length === 0
+            ? []
+            : filterMap(await process(registration, inputs), (message) => message);
+        }),
+      )
+    ).flat();
+    if (stageOutputs.length > 0) {
+      outputs.push(...stageOutputs);
+      available = available.concat(stageOutputs).sort(byReceiveTime);
+    }
+  }
+  return outputs;
+}
+
 export default class UserScriptPlayer implements Player {
   #player: Player;
 
@@ -186,6 +283,18 @@ export default class UserScriptPlayer implements Player {
   readonly #batchIteratorCache = new Map<string, BatchIteratorCacheEntry>();
 
   readonly #emitLock = new Mutex();
+
+  // Foxglove topic converters from extensions; they run in this thread like user scripts.
+  #topicConverters: Immutable<InstalledTopicConverter[]> = [];
+
+  // Preloaded blocks with topic converter outputs added, per source block. Replaced (dropping all
+  // entries) whenever the registrations or the preloaded converter outputs change.
+  #convertedBlocks = new WeakMap<MessageBlock, MessageBlock>();
+  #convertedBlocksKey: { registrations: readonly ScriptRegistration[]; outputs: string } = {
+    registrations: [],
+    outputs: "",
+  };
+  #lastMessageCache?: { source: BlockCache; converted: BlockCache };
 
   // exposed as a static to allow testing to mock/replace
   public static CreateTransformWorker = (): SharedWorker => {
@@ -269,25 +378,13 @@ export default class UserScriptPlayer implements Player {
       return [];
     }
 
-    // One worker round trip per script per frame; scripts run in parallel.
-    const outputs = await Promise.all(
-      scriptRegistrations.map(async (scriptRegistration) => {
-        if (!this.#scriptSubscriptions[scriptRegistration.output.name]) {
-          return [];
-        }
-        const inputs = inputMessages.filter((message) =>
-          scriptRegistration.inputs.includes(message.topic),
-        );
-        if (inputs.length === 0) {
-          return [];
-        }
-        return filterMap(
-          await scriptRegistration.processMessages(inputs, globalVariables),
-          (message) => message,
-        );
-      }),
+    // Run what subscribers want, plus the scripts or converters those read from.
+    const outputs = await runRegistrations(
+      inputMessages,
+      withDependencies(scriptRegistrations, Object.keys(this.#scriptSubscriptions)),
+      async (registration, inputs) => await registration.processMessages(inputs, globalVariables),
     );
-    return outputs.flat();
+    return outputs.filter(({ topic }) => this.#scriptSubscriptions[topic] != undefined);
   }
 
   public setGlobalVariables(globalVariables: GlobalVariables): void {
@@ -320,34 +417,53 @@ export default class UserScriptPlayer implements Player {
       await this.#resetWorkersUnlocked(state);
       this.#setSubscriptionsUnlocked(this.#subscriptions, state);
 
-      const playerState = this.#playerState;
-      const lastActive = state.lastPlayerStateActiveData;
-      // If we have previous player state and are paused, then we re-emit the last active data so
-      // any panels that want our output topic get the updated message.
-      //
-      // Note: Until we learn otherwise, we assume that if a player is playing, it will emit new
-      // player state that will output new messages so we don't emit here while playing.
-      if (playerState && lastActive?.isPlaying === false) {
-        return {
-          ...playerState,
-          activeData: {
-            ...lastActive,
-            // We want to avoid re-emitting upstream data source messages into panels to maintain
-            // the invariant that the player emits a data-source message into "currentFrame" only once.
-            //
-            // Using an empty messages array will make user script player only emit the script output
-            // messages as a result of the updated script.
-            messages: [],
-          },
-        };
-      }
-
-      return undefined;
+      return this.#pausedStateToReemit(state);
     });
 
     if (newPlayerState) {
       await this.#onPlayerState(newPlayerState);
     }
+  }
+
+  /** Called when the installed Foxglove topic converters change. */
+  public async setTopicConverters(converters: Immutable<InstalledTopicConverter[]>): Promise<void> {
+    const newPlayerState = await this.#protectedState.runExclusive(async (state) => {
+      this.#topicConverters = converters;
+      this.#invalidateBatchIteratorCache();
+      this.#memoizedScriptTopics = this.#memoizedScriptTopics.map((t) => ({ ...t }));
+      await this.#resetWorkersUnlocked(state);
+      this.#setSubscriptionsUnlocked(this.#subscriptions, state);
+      return this.#pausedStateToReemit(state);
+    });
+
+    if (newPlayerState) {
+      await this.#onPlayerState(newPlayerState);
+    }
+  }
+
+  // If we have previous player state and are paused, then we re-emit the last active data so
+  // any panels that want our output topic get the updated message.
+  //
+  // Note: Until we learn otherwise, we assume that if a player is playing, it will emit new
+  // player state that will output new messages so we don't emit here while playing.
+  #pausedStateToReemit(state: ProtectedState): PlayerState | undefined {
+    const playerState = this.#playerState;
+    const lastActive = state.lastPlayerStateActiveData;
+    if (playerState && lastActive?.isPlaying === false) {
+      return {
+        ...playerState,
+        activeData: {
+          ...lastActive,
+          // We want to avoid re-emitting upstream data source messages into panels to maintain
+          // the invariant that the player emits a data-source message into "currentFrame" only once.
+          //
+          // Using an empty messages array will make user script player only emit the script output
+          // messages as a result of the updated script.
+          messages: [],
+        },
+      };
+    }
+    return undefined;
   }
 
   // Defines the inputs/outputs and worker interface of a user script.
@@ -594,7 +710,11 @@ export default class UserScriptPlayer implements Player {
     // This early return is an optimization measure so that the
     // `scriptRegistrations` array is not re-defined, which will invalidate
     // downstream caches. (i.e. `this._getTopics`)
-    if (state.scriptRegistrations.length === 0 && Object.entries(state.userScripts).length === 0) {
+    if (
+      state.scriptRegistrations.length === 0 &&
+      Object.entries(state.userScripts).length === 0 &&
+      this.#topicConverters.length === 0
+    ) {
       return;
     }
 
@@ -604,23 +724,27 @@ export default class UserScriptPlayer implements Player {
     }
     state.scriptRegistrations = [];
 
-    const rosLib = await this.#getLib(
-      state,
-      this.#rosLibGenerator,
-      this.#userScriptActions.setUserScriptRosLib,
-    );
-    const typesLib = await this.#getLib(
-      state,
-      this.#typesLibGenerator,
-      this.#userScriptActions.setUserScriptTypesLib,
-    );
+    // Libs are only needed to compile user scripts; topic converters alone don't need them.
+    let allScriptRegistrations: ScriptRegistration[] = [];
+    if (state.scriptRegistrations.length > 0 || Object.keys(state.userScripts).length > 0) {
+      const rosLib = await this.#getLib(
+        state,
+        this.#rosLibGenerator,
+        this.#userScriptActions.setUserScriptRosLib,
+      );
+      const typesLib = await this.#getLib(
+        state,
+        this.#typesLibGenerator,
+        this.#userScriptActions.setUserScriptTypesLib,
+      );
 
-    const allScriptRegistrations = await Promise.all(
-      Object.entries(state.userScripts).map(
-        async ([scriptId, userScript]) =>
-          await this.#createScriptRegistration(scriptId, userScript, state, rosLib, typesLib),
-      ),
-    );
+      allScriptRegistrations = await Promise.all(
+        Object.entries(state.userScripts).map(
+          async ([scriptId, userScript]) =>
+            await this.#createScriptRegistration(scriptId, userScript, state, rosLib, typesLib),
+        ),
+      );
+    }
 
     const validScriptRegistrations: ScriptRegistration[] = [];
     const playerTopics = new Set(state.lastPlayerStateActiveData.topics.map((topic) => topic.name));
@@ -695,6 +819,10 @@ export default class UserScriptPlayer implements Player {
       validScriptRegistrations.push(scriptRegistration);
     }
 
+    for (const registration of this.#topicConverterRegistrations(state, playerTopics)) {
+      validScriptRegistrations.push(registration);
+    }
+
     let changedTopicsRequireEmitState = false;
     state.scriptRegistrations = validScriptRegistrations;
 
@@ -722,7 +850,9 @@ export default class UserScriptPlayer implements Player {
     }
 
     for (const scriptRegistration of state.scriptRegistrations) {
-      this.#setUserScriptDiagnostics(scriptRegistration.scriptId, []);
+      if (!scriptRegistration.scriptId.startsWith(TOPIC_CONVERTER_ALERT_PREFIX)) {
+        this.#setUserScriptDiagnostics(scriptRegistration.scriptId, []);
+      }
     }
 
     // If we have new topics after processing the script registrations we need to emit a new
@@ -749,6 +879,167 @@ export default class UserScriptPlayer implements Player {
       };
       await this.#queueEmitState();
     }
+  }
+
+  /**
+   * Registrations for the installed topic converters whose output topic is usable; the others are
+   * reported as player alerts. Must run after user script outputs are in `inputsByOutputTopic`.
+   */
+  #topicConverterRegistrations(
+    state: ProtectedState,
+    playerTopics: ReadonlySet<string>,
+  ): ScriptRegistration[] {
+    for (const key of this.#alertStore.keys()) {
+      if (key.startsWith(TOPIC_CONVERTER_ALERT_PREFIX)) {
+        this.#alertStore.delete(key);
+      }
+    }
+
+    const registrations: ScriptRegistration[] = [];
+    for (const installed of this.#topicConverters) {
+      const { topic, schemaName } = topicConverterOutput(installed.converter);
+      const alertKey = `${TOPIC_CONVERTER_ALERT_PREFIX}${installed.extensionId}:${topic}`;
+      const problem =
+        topic === "" || schemaName === "" || typeof installed.converter.create !== "function"
+          ? "needs an output topic, an output schema name and a create function"
+          : playerTopics.has(topic)
+            ? "outputs to a topic that is already present in the data source"
+            : state.inputsByOutputTopic.has(topic)
+              ? "outputs to a topic that another user script or topic converter already produces"
+              : undefined;
+      if (problem) {
+        this.#alertStore.set(alertKey, {
+          severity: "error",
+          message: `Topic converter for "${topic}" from extension ${installed.extensionId} ${problem}.`,
+        });
+        continue;
+      }
+
+      const registration = buildTopicConverterRegistration(installed, (error) => {
+        this.#alertStore.set(alertKey, {
+          severity: "error",
+          message: `Topic converter for "${topic}" from extension ${installed.extensionId} failed.`,
+          error: toError(error),
+        });
+        void this.#queueEmitState();
+      });
+      state.inputsByOutputTopic.set(topic, registration.inputs);
+      registrations.push(registration);
+    }
+
+    // Converters may read other converters' or user scripts' outputs, but not in a cycle.
+    const { cyclic } = dependencyStages(registrations);
+    for (const registration of cyclic) {
+      const topic = registration.output.name;
+      state.inputsByOutputTopic.delete(topic);
+      this.#alertStore.set(registration.scriptId, {
+        severity: "error",
+        message: `Topic converter for "${topic}" reads its own output through a cycle of topic converters.`,
+      });
+    }
+    return registrations.filter((registration) => !cyclic.includes(registration));
+  }
+
+  /**
+   * Adds the outputs of topic converters subscribed with `preloadType: "full"` to the preloaded
+   * blocks, so they show up in `allFrames`. Each block is converted once, with fresh converter
+   * instances, as soon as all of its source inputs are loaded.
+   */
+  async #withConvertedBlocks(
+    progress: Progress,
+    registrations: readonly ScriptRegistration[],
+  ): Promise<Progress> {
+    const source = progress.messageCache;
+    const converters = registrations.filter(isTopicConverter);
+    const preloaded = converters.filter(
+      ({ output }) => this.#scriptSubscriptions[output.name]?.preloadType === "full",
+    );
+    if (!source || preloaded.length === 0) {
+      return progress;
+    }
+    const outputTopics = new Set(preloaded.map(({ output }) => output.name));
+    const key = { registrations, outputs: [...outputTopics].sort().join("\n") };
+    if (
+      key.registrations !== this.#convertedBlocksKey.registrations ||
+      key.outputs !== this.#convertedBlocksKey.outputs
+    ) {
+      this.#convertedBlocksKey = key;
+      this.#convertedBlocks = new WeakMap();
+      this.#lastMessageCache = undefined;
+    }
+    if (this.#lastMessageCache?.source === source) {
+      return { ...progress, messageCache: this.#lastMessageCache.converted };
+    }
+
+    // User script outputs are never in blocks, so converters reading them get no input there.
+    const needed = withDependencies(converters, outputTopics);
+    const virtualTopics = new Set(registrations.map(({ output }) => output.name));
+    const sourceTopics = _.uniq(
+      needed.flatMap(({ inputs }) => inputs.filter((input) => !virtualTopics.has(input))),
+    );
+    const globalVariables = this.#globalVariables;
+
+    const convertBlock = async (block: MessageBlock): Promise<MessageBlock> => {
+      const cached = this.#convertedBlocks.get(block);
+      if (cached) {
+        return cached;
+      }
+      const loaded = sourceTopics.every(
+        (topic) =>
+          block.messagesByTopic[topic] != undefined && block.needTopics?.has(topic) !== true,
+      );
+      if (!loaded) {
+        return block; // converted once its inputs finish loading (the block is replaced then)
+      }
+      const inputs = sourceTopics
+        .flatMap((topic) => block.messagesByTopic[topic]!)
+        .sort(byReceiveTime);
+      // ponytail: fresh converter instances per block, so converter state does not carry across
+      // block boundaries; carry it over in time order if a stateful converter needs it.
+      const processors = new Map(needed.map((r) => [r, r.buildMessageProcessor()]));
+      let outputs: MessageEvent[];
+      try {
+        outputs = await runRegistrations(
+          inputs,
+          needed,
+          async (registration, messages) =>
+            await processors.get(registration)!.processMessages(messages, globalVariables),
+        );
+      } finally {
+        for (const processor of processors.values()) {
+          processor.terminate();
+        }
+      }
+      const messagesByTopic: Record<string, MessageEvent[]> = { ...block.messagesByTopic };
+      let sizeInBytes = block.sizeInBytes;
+      for (const topic of outputTopics) {
+        messagesByTopic[topic] = [];
+      }
+      for (const output of outputs) {
+        if (outputTopics.has(output.topic)) {
+          messagesByTopic[output.topic]!.push(output);
+          sizeInBytes += output.sizeInBytes;
+        }
+      }
+      const converted: MessageBlock = { ...block, messagesByTopic, sizeInBytes };
+      this.#convertedBlocks.set(block, converted);
+      return converted;
+    };
+
+    const blocks = await Promise.all(
+      source.blocks.map(async (block) => (block ? await convertBlock(block) : undefined)),
+    );
+    const previous = this.#lastMessageCache?.converted;
+    // Keep the previous array when no block changed, so panels don't re-process allFrames.
+    const converted: BlockCache =
+      previous &&
+      previous.startTime === source.startTime &&
+      previous.blocks.length === blocks.length &&
+      previous.blocks.every((block, i) => block === blocks[i])
+        ? previous
+        : { ...source, blocks };
+    this.#lastMessageCache = { source, converted };
+    return { ...progress, messageCache: converted };
   }
 
   async #getLib(
@@ -880,6 +1171,10 @@ export default class UserScriptPlayer implements Player {
 
         return {
           ...playerState,
+          progress: await this.#withConvertedBlocks(
+            playerState.progress,
+            state.scriptRegistrations,
+          ),
           activeData: {
             ...activeData,
             messages: currentFrameMessages,
@@ -1003,16 +1298,52 @@ export default class UserScriptPlayer implements Player {
     return this.#getVirtualBatchIterator(registration, options);
   }
 
-  // Script-output (virtual) topics aren't supported for point-in-time backfill — that would
-  // require re-running the transform against historical input backfill. Real topics pass through.
+  // Topic converter outputs are backfilled by backfilling their inputs and running them through
+  // fresh converter instances; the last output per requested topic is returned. User script
+  // outputs are not backfilled (their processors report alerts and diagnostics as a side effect).
   public async getBackfillMessages(args: GetBackfillMessagesArgs): Promise<MessageEvent[]> {
-    const realTopics = new Map(
-      Array.from(args.topics).filter(([topic]) => !this.#outputTopicRegistrations.has(topic)),
+    const virtualTopics = this.#outputTopicRegistrations;
+    const registrations = withDependencies(
+      [...virtualTopics.values()].filter(isTopicConverter),
+      args.topics.keys(),
     );
+    const realTopics = new Map([...args.topics].filter(([topic]) => !virtualTopics.has(topic)));
+    for (const { inputs } of registrations) {
+      for (const input of inputs) {
+        if (!virtualTopics.has(input) && !realTopics.has(input)) {
+          realTopics.set(input, { topic: input });
+        }
+      }
+    }
     if (realTopics.size === 0) {
       return [];
     }
-    return (await this.#player.getBackfillMessages?.({ ...args, topics: realTopics })) ?? [];
+    const backfill =
+      (await this.#player.getBackfillMessages?.({ ...args, topics: realTopics })) ?? [];
+    if (registrations.length === 0) {
+      return backfill;
+    }
+
+    const processors = new Map(registrations.map((r) => [r, r.buildMessageProcessor()]));
+    try {
+      const outputs = await runRegistrations(
+        [...backfill].sort(byReceiveTime),
+        registrations,
+        async (registration, inputs) =>
+          await processors.get(registration)!.processMessages(inputs, this.#globalVariables),
+      );
+      const lastOutputs = new Map<string, MessageEvent>();
+      for (const output of outputs) {
+        if (args.topics.has(output.topic)) {
+          lastOutputs.set(output.topic, output);
+        }
+      }
+      return [...backfill.filter(({ topic }) => args.topics.has(topic)), ...lastOutputs.values()];
+    } finally {
+      for (const processor of processors.values()) {
+        processor.terminate();
+      }
+    }
   }
 
   #collectInputIterators(
@@ -1021,7 +1352,8 @@ export default class UserScriptPlayer implements Player {
   ): AsyncIterableIterator<Readonly<IIterableSourceIteratorResult>>[] | undefined {
     const iterators: AsyncIterableIterator<Readonly<IIterableSourceIteratorResult>>[] = [];
     for (const inputTopic of inputTopics) {
-      const iter = this.#player.getBatchIterator(inputTopic, options);
+      // Through this player, so a topic converter can read another virtual topic.
+      const iter = this.getBatchIterator(inputTopic, options);
       if (iter) {
         iterators.push(iter);
       }

@@ -970,6 +970,7 @@ describe("ExtensionCatalogProvider", () => {
         messageConverters: [messageConverter],
         cameraModels: new Map(),
         topicAliasFunctions,
+        topicConverters: [],
         panelSettings: {
           panelA: {
             schemaA: {
@@ -1031,6 +1032,7 @@ describe("ExtensionCatalogProvider", () => {
         messageConverters: [],
         cameraModels: new Map(),
         topicAliasFunctions: [],
+        topicConverters: [],
         panelSettings: {},
         panels: {},
       };
@@ -1066,6 +1068,7 @@ describe("ExtensionCatalogProvider", () => {
         messageConverters: [],
         cameraModels: new Map(),
         topicAliasFunctions: [],
+        topicConverters: [],
         panelSettings: {},
         panels: {},
       };

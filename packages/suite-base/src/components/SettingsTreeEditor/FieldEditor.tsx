@@ -7,6 +7,7 @@
 
 import CancelIcon from "@mui/icons-material/Cancel";
 import ErrorIcon from "@mui/icons-material/Error";
+import WarningIcon from "@mui/icons-material/Warning";
 import {
   Autocomplete,
   MenuItem,
@@ -22,11 +23,15 @@ import {
 } from "@mui/material";
 import React, { useCallback } from "react";
 
-import { Immutable, SettingsTreeAction, SettingsTreeField } from "@lichtblick/suite";
+import { Immutable } from "@lichtblick/suite";
 import MessagePathInput from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput";
 import { useStyles } from "@lichtblick/suite-base/components/SettingsTreeEditor/FieldEditor.style";
 import { LegendControls } from "@lichtblick/suite-base/components/SettingsTreeEditor/inputs/LegendControls";
-import { FieldEditorProps } from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
+import {
+  EditorSettingsTreeAction,
+  EditorSettingsTreeField,
+  FieldEditorProps,
+} from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
@@ -42,8 +47,8 @@ function FieldInput({
   field,
   path,
 }: {
-  actionHandler: (action: SettingsTreeAction) => void;
-  field: Immutable<SettingsTreeField>;
+  actionHandler: (action: EditorSettingsTreeAction) => void;
+  field: Immutable<EditorSettingsTreeField>;
   path: readonly string[];
 }): React.JSX.Element {
   const { classes, cx } = useStyles();
@@ -175,6 +180,28 @@ function FieldInput({
           }}
         />
       );
+    case "multiline-string":
+      return (
+        <TextField
+          data-testid="FieldEditor-MultilineTextField"
+          variant="filled"
+          size="small"
+          fullWidth
+          multiline
+          minRows={2}
+          maxRows={12}
+          disabled={field.disabled}
+          value={field.value ?? ""}
+          placeholder={field.placeholder}
+          slotProps={{ input: { readOnly: field.readonly } }}
+          onChange={(event) => {
+            actionHandler({
+              action: "update",
+              payload: { path, input: "multiline-string", value: event.target.value },
+            });
+          }}
+        />
+      );
     case "boolean":
       return (
         <ToggleButtonGroup
@@ -238,10 +265,11 @@ function FieldInput({
           path={field.value ?? ""}
           disabled={field.disabled}
           readOnly={field.readonly}
-          supportsMathModifiers={field.supportsMathModifiers}
-          supportsStreamModifiers={field.supportsStreamModifiers}
+          supportsMathModifiers={field.supportsMathModifiers ?? field.supportsMessagePathFunctions}
+          supportsStreamModifiers={field.supportsTimeSeriesMessagePathFunctions}
           onChange={handleMessagePathChange}
           validTypes={field.validTypes}
+          validTopics={field.validTopics}
         />
       );
     case "select": {
@@ -377,7 +405,7 @@ function FieldInput({
 
 function FieldLabel({
   field,
-}: Readonly<{ field: Immutable<SettingsTreeField> }>): React.JSX.Element {
+}: Readonly<{ field: Immutable<EditorSettingsTreeField> }>): React.JSX.Element {
   const { classes } = useStyles();
 
   if (field.input === "vec2") {
@@ -472,6 +500,15 @@ function FieldEditorComponent(props: Readonly<FieldEditorProps>): React.JSX.Elem
             <ErrorIcon color="error" fontSize="small" />
           </Tooltip>
         )}
+        {!props.field.error && props.field.warning && (
+          <Tooltip
+            arrow
+            placement="top"
+            title={<Typography variant="subtitle2">{props.field.warning}</Typography>}
+          >
+            <WarningIcon color="warning" fontSize="small" data-testid="FieldEditor-warning" />
+          </Tooltip>
+        )}
         <FieldLabel field={props.field} />
       </Stack>
       <Tooltip
@@ -484,11 +521,24 @@ function FieldEditorComponent(props: Readonly<FieldEditorProps>): React.JSX.Elem
         }
       >
         <div
-          className={cx(classes.fieldWrapper, { [classes.error]: props.field.error != undefined })}
+          className={cx(classes.fieldWrapper, {
+            [classes.error]: props.field.error != undefined,
+            [classes.warning]: props.field.error == undefined && props.field.warning != undefined,
+          })}
         >
           <FieldInput actionHandler={props.actionHandler} field={props.field} path={props.path} />
         </div>
       </Tooltip>
+      {props.field.caption && (
+        <Typography
+          variant="caption"
+          color="text.secondary"
+          className={classes.caption}
+          data-testid="FieldEditor-caption"
+        >
+          {props.field.caption}
+        </Typography>
+      )}
       <Stack paddingBottom={0.25} style={{ gridColumn: "span 2" }} />
     </>
   );
