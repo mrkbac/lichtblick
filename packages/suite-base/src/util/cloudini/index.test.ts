@@ -142,9 +142,12 @@ describe("cloudini", () => {
     vi.resetModules();
     vi.spyOn(globalThis, "fetch").mockReturnValue(new Promise<Response>(() => {}));
     const fresh = await import("./index");
+    const topics = [{ schemaName: fresh.CLOUDINI_SCHEMA }];
     const abort = new AbortController();
-    const waiting = fresh.preloadCloudini([{ schemaName: fresh.CLOUDINI_SCHEMA }], abort.signal);
+    const waiting = fresh.preloadCloudini(topics, abort.signal);
     abort.abort();
     await expect(waiting).resolves.toBeUndefined();
+    // aborted before the call, e.g. the player closed while its source initialized
+    await expect(fresh.preloadCloudini(topics, abort.signal)).resolves.toBeUndefined();
   }, 1000);
 });

@@ -55,7 +55,8 @@ export async function preloadCloudini(
   topics: readonly { schemaName?: string }[],
   signal?: AbortSignal,
 ): Promise<void> {
-  if (!topics.some((topic) => topic.schemaName === CLOUDINI_SCHEMA)) {
+  // an already-aborted signal never fires "abort" (e.g. closed while the source initialized)
+  if (signal?.aborted === true || !topics.some((topic) => topic.schemaName === CLOUDINI_SCHEMA)) {
     return;
   }
   // a hand-rolled race: every contender settles the same promise, and the timer is cleared
