@@ -198,14 +198,12 @@ const useStyles = makeStyles()((theme) => ({
   // MapLibre adds `.maplibregl-map { position: relative }`, so size explicitly.
   map: { width: "100%", height: "100%" },
   legends: {
-    // Under the zoom/compass controls; the attribution at the bottom can wrap to several lines.
-    position: "absolute",
-    right: 10,
-    top: `calc(${10 + OVERLAY_TOOLBAR_BUTTON_SIZE * 3 + 10}px + ${PANEL_FLOATING_TOOLBAR_HEIGHT})`,
+    minHeight: 0,
+    overflowY: "auto",
+    pointerEvents: "auto",
     display: "flex",
     flexDirection: "column",
     gap: theme.spacing(0.5),
-    pointerEvents: "none",
   },
   legend: {
     width: 180,
@@ -340,6 +338,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       }),
     [topics],
   );
+  const eligibleTopicsRef = useLatest(eligibleTopics);
 
   const enabledTopics = useMemo(
     () => eligibleTopics.filter((topic) => !config.disabledTopics.includes(topic.name)),
@@ -382,9 +381,16 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
         setSavedSources([]);
         return;
       }
-      setConfig((prev) => applySettingsAction(prev, action, savedSourcesRef.current));
+      setConfig((prev) =>
+        applySettingsAction(
+          prev,
+          action,
+          savedSourcesRef.current,
+          eligibleTopicsRef.current.map((topic) => topic.name),
+        ),
+      );
     },
-    [savedSourcesRef],
+    [eligibleTopicsRef, savedSourcesRef],
   );
 
   const layerErrors = useMemo(() => {
@@ -453,12 +459,14 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   // --- Subscriptions ----------------------------------------------------------------------
 
   // Message paths that color a track, parsed. Stable unless the set of paths changes.
-  const colorPathsKey = _.uniq(
-    enabledTopics.flatMap((topic) => {
-      const style = config.topicStyles[topic.name];
-      return style?.colorBy === "path" && style.colorPath ? [style.colorPath] : [];
-    }),
-  )
+  const colorPathsKey = [
+    ...new Set(
+      enabledTopics.flatMap((topic) => {
+        const style = config.topicStyles[topic.name];
+        return style?.colorBy === "path" && style.colorPath ? [style.colorPath] : [];
+      }),
+    ),
+  ]
     .sort()
     .join("\n");
   const colorPaths = useMemo(
@@ -604,8 +612,8 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     setPathSamples(new Map());
     pendingSamples.current = new Map();
     pathRangeTopicsRef.current = new Set();
-    const byTopic = _.groupBy(colorPaths, ({ parsed }) => parsed.topicName);
-    const unsubscribes = Object.entries(byTopic).map(([topic, paths]) =>
+    const byTopic = Map.groupBy(colorPaths, ({ parsed }) => parsed.topicName);
+    const unsubscribes = [...byTopic].map(([topic, paths]) =>
       context.unstable_subscribeMessageRange({
         topic,
         onNewRangeIterator: async (iterator) => {
@@ -674,9 +682,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       const [geo, nav] = _.partition(frame, isGeoJSONMessage) as [GeoJsonMessage[], NavMessage[]];
       if (nav.length > 0) {
         // Only replace topics present in this frame; other topics keep their last position.
-        setCurrentNav(
-          (prev) => new Map([...prev, ...Object.entries(_.groupBy(nav, (m) => m.topic))]),
-        );
+        setCurrentNav((prev) => new Map([...prev, ...Map.groupBy(nav, (m) => m.topic)]));
         // Live sources have no recorded range: build the track from what arrives.
         const live = nav.filter((m) => !rangeTopicsRef.current.has(m.topic));
         if (live.length > 0) {
@@ -709,9 +715,9 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
     () => trackMessages.filter((m) => enabledNames.has(m.topic)),
     [enabledNames, trackMessages],
   );
-  const trackByTopic = useMemo(() => _.groupBy(visibleTrack, (m) => m.topic), [visibleTrack]);
+  const trackByTopic = useMemo(() => Map.groupBy(visibleTrack, (m) => m.topic), [visibleTrack]);
   const trackTimesByTopic = useMemo(
-    () => _.mapValues(trackByTopic, (m) => m.map(eventTimeSec)),
+    () => new Map([...trackByTopic].map(([topic, m]) => [topic, m.map(eventTimeSec)])),
     [trackByTopic],
   );
 
@@ -724,13 +730,13 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       range: [number, number];
       reverse: boolean;
     }[] = [];
-    for (const [topic, messages] of Object.entries(trackByTopic)) {
+    for (const [topic, messages] of trackByTopic) {
       const style = config.topicStyles[topic];
       const colorBy = style?.colorBy ?? "topic";
       if (colorBy === "topic") {
         continue;
       }
-      const times = trackTimesByTopic[topic] ?? [];
+      const times = trackTimesByTopic.get(topic) ?? [];
       const values =
         colorBy === "speed"
           ? speedValues(
@@ -783,7 +789,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       if (!current) {
         continue;
       }
-      const history = trackByTopic[topic] ?? [];
+      const history = trackByTopic.get(topic) ?? [];
       const end = _.sortedLastIndexBy(history, current, eventTimeSec);
       const heading = headingFromTrack([...history.slice(Math.max(0, end - 500), end), current]);
       if (heading != undefined) {
@@ -1116,8 +1122,8 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
   useEffect(() => {
     let best: NavMessage | undefined;
     if (previewTime != undefined) {
-      for (const [topic, messages] of Object.entries(trackByTopic)) {
-        const index = _.sortedLastIndex(trackTimesByTopic[topic], previewTime);
+      for (const [topic, messages] of trackByTopic) {
+        const index = _.sortedLastIndex(trackTimesByTopic.get(topic), previewTime);
         const candidate = messages[index - 1];
         if (candidate && (!best || eventTimeSec(candidate) > eventTimeSec(best))) {
           best = candidate;
@@ -1361,9 +1367,9 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
             setMeasureData={setMeasureData}
             measuringRef={measuringRef}
             onFitToData={dataSize > 0 ? fitToData : undefined}
+            bottomLeft={legends.length > 0 ? <ColorLegends legends={legends} /> : undefined}
           />
         )}
-        {legends.length > 0 && <ColorLegends legends={legends} />}
         {eligibleTopics.length === 0 && (
           <MapNotice>No NavSatFix, LocationFix, or GeoJSON topics</MapNotice>
         )}

@@ -9,15 +9,11 @@ import { useTheme } from "@mui/material";
 import { useEffect, useRef } from "react";
 
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectEndTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { useAppConfigurationValue, useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { format } from "@lichtblick/suite-base/util/formatTime";
 import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
-
-const selectEndTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
 
 export function EndTimestamp(): React.JSX.Element | null {
   const endTime = useMessagePipeline(selectEndTime);

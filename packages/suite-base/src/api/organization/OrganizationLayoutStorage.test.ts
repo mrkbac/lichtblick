@@ -89,7 +89,7 @@ describe("OrganizationLayoutStorage", () => {
     ]);
   });
 
-  it("sends If-Match with the known revision and reports a stale one as a conflict", async () => {
+  it("sends If-Match with the known revision and reports someone else's newer one as a conflict", async () => {
     const { storage, requests } = setup((request) => {
       if (request.method === "POST") {
         return json(201, layout("mine", "a", 4));
@@ -98,7 +98,7 @@ describe("OrganizationLayoutStorage", () => {
         type: "about:blank",
         title: "Stale",
         status: 412,
-        current: layout("mine", "a", 5),
+        current: { ...layout("mine", "a", 5), updatedBy: { id: "user-2", displayName: "Other" } },
       });
     });
     await storage.saveNewLayout({
@@ -121,6 +121,63 @@ describe("OrganizationLayoutStorage", () => {
     expect(route(put)).toBe("PUT /v1/organizations/mine/layouts/a");
     expect(put.headers.get("If-Match")).toBe('"4"');
     expect(await put.json()).toEqual({ displayName: "Renamed", data: layoutData });
+  });
+
+  it("writes on top of a newer revision the user saved elsewhere (another tab)", async () => {
+    const { storage, requests } = setup((request) => {
+      if (request.method === "POST") {
+        return json(201, layout("mine", "a", 4));
+      }
+      if (request.headers.get("If-Match") === '"4"') {
+        return json(412, {
+          type: "about:blank",
+          title: "Stale",
+          status: 412,
+          current: layout("mine", "a", 5),
+        });
+      }
+      return json(200, layout("mine", "a", 6));
+    });
+    await storage.saveNewLayout({
+      id: "a" as LayoutID,
+      name: "Layout a",
+      permission: "ORG_WRITE",
+      data: layoutData,
+      organizationId: "mine",
+    });
+
+    const result = await storage.updateLayout({
+      id: "a" as LayoutID,
+      externalId: "a",
+      name: "Renamed",
+      savedAt: "2026-11-04T00:00:09Z" as ISO8601Timestamp,
+    });
+
+    expect(result.status).toBe("success");
+    expect(requests.slice(1).map((r) => r.headers.get("If-Match"))).toEqual(['"4"', '"5"']);
+  });
+
+  it("finds a layout this tab never listed in the user's organizations before writing it", async () => {
+    // Only the syncing tab lists layouts; another tab can still rename or delete one.
+    const { storage, requests } = setup((request) => {
+      const r = route(request);
+      if (r === "GET /v1/organizations/team/layouts/a") {
+        return json(404, { type: "about:blank", title: "Not found", status: 404 });
+      }
+      if (r === "GET /v1/organizations/mine/layouts/a") {
+        return json(200, layout("mine", "a", 3));
+      }
+      return new Response(undefined, { status: 204 });
+    });
+
+    expect(await storage.deleteLayout("a")).toBe(true);
+
+    expect(requests.map(route)).toEqual([
+      "GET /v1/organizations/team/layouts/a",
+      "GET /v1/organizations/mine/layouts/a",
+      "DELETE /v1/organizations/mine/layouts/a",
+    ]);
+    expect(requests.at(-1)!.headers.get("If-Match")).toBe('"3"');
   });
 
   it("treats a retried create of its own layout as success", async () => {

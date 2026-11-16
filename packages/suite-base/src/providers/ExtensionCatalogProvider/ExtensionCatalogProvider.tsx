@@ -227,7 +227,7 @@ function createExtensionRegistryStore(
         );
         const newContributionPoints = buildContributionPoints(extension, unwrappedExtensionSource);
 
-        _.assign(panels, newContributionPoints.panels);
+        Object.assign(panels, newContributionPoints.panels);
         _.merge(panelSettings, newContributionPoints.panelSettings);
         pushAll(messageConverters, newContributionPoints.messageConverters);
         pushAll(topicAliasFunctions, newContributionPoints.topicAliasFunctions);

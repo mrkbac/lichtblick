@@ -103,7 +103,7 @@ const stringCache: (string | undefined)[] = new Array(STRING_CACHE_SIZE).fill(un
  * Same result as `CdrReader.string()` for a string of `count` bytes (without the terminator) at
  * offset `start` of the message `bytes`.
  */
-function readString(bytes: Uint8Array, start: number, count: number): string {
+export function readString(bytes: Uint8Array, start: number, count: number): string {
   if (count > MAX_CACHED_STRING_LENGTH || start + count > bytes.length) {
     // Bounded by the underlying buffer, not the message, like CdrReader (throws past its end).
     return textDecoder.decode(new Uint8Array(bytes.buffer, bytes.byteOffset + start, count));

@@ -32,7 +32,7 @@ import { replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 
 import { useStyles } from "./PieChart.style";
 import { DEFAULT_CONFIG } from "./constants";
-import { isFloat32ArrayPath } from "./isFloat32ArrayPath";
+import { isNumericArrayPath } from "./isNumericArrayPath";
 import type { PieChartConfig, PieChartDatum, PieChartState } from "./types";
 import { useChartData } from "./useChartData";
 import { useSettingsTree } from "./useSettingsTree";
@@ -134,10 +134,7 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
 
   // Extract raw values from queried message data
   const rawValue = useMemo(
-    () =>
-      state.latestMatchingQueriedData instanceof Float32Array
-        ? state.latestMatchingQueriedData
-        : new Float32Array(),
+    () => state.latestMatchingQueriedData ?? new Float32Array(),
     [state.latestMatchingQueriedData],
   );
 
@@ -185,11 +182,11 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
     context.setDefaultPanelTitle(config.path === "" ? undefined : config.path);
   }, [config, context]);
 
-  // Drop a float32[] field from the topic list to chart it
+  // Drop a numeric array field from the topic list to chart it
   useEffect(() => {
     context.unstable_setMessagePathDropConfig(
       replaceDrop(
-        (item) => isFloat32ArrayPath(item.path, context.getTopicSchema, context.getSchema),
+        (item) => isNumericArrayPath(item.path, context.getTopicSchema, context.getSchema),
         (item) => {
           setConfig((prev) => ({ ...prev, path: item.path }));
         },
@@ -243,9 +240,9 @@ export function PieChart({ context }: PieChartProps): React.JSX.Element {
 
   return (
     <div className={classes.root}>
-      <h1 className={classes.title}>{config.title} </h1>
-      {rawValue.length === 0 ? (
-        <div>No data available</div>
+      <h1 className={classes.title}>{config.title}</h1>
+      {chartData.length === 0 ? (
+        <div>{state.error?.message ?? "No data available"}</div>
       ) : (
         <div className={classes.chart}>
           <canvas ref={canvasRef} />

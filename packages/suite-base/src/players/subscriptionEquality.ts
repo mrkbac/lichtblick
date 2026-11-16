@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
 import * as _ from "lodash-es";
@@ -9,7 +8,7 @@ import type { SubscribePayload, TopicSelection } from "@lichtblick/suite-base/pl
 /** The subscription without unset keys and with its fields in order, to compare by meaning. */
 function normalize(subscription: SubscribePayload): Partial<SubscribePayload> {
   const { fields, ...rest } = _.omitBy(subscription, _.isUndefined) as SubscribePayload;
-  return fields == undefined ? rest : { ...rest, fields: _.sortBy(_.uniq(fields)) };
+  return fields == undefined ? rest : { ...rest, fields: _.sortBy([...new Set(fields)]) };
 }
 
 /**

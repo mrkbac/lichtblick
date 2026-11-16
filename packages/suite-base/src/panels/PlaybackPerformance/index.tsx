@@ -48,7 +48,7 @@ function PlaybackPerformanceItem(props: PlaybackPerformanceItemProps): ReactElem
       />
       <Stack>
         <Typography variant="body2">
-          {(_.last(props.points) ?? { value: 0 }).value.toFixed(props.decimalPlaces)}
+          {(props.points.at(-1) ?? { value: 0 }).value.toFixed(props.decimalPlaces)}
           {props.label}
         </Typography>
         <Typography variant="body2" color="textSecondary">

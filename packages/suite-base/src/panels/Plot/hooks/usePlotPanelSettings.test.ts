@@ -3,7 +3,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { act, renderHook } from "@testing-library/react";
-import * as _ from "lodash-es";
 import type { Mock } from "vitest";
 
 import {
@@ -38,7 +37,7 @@ describe("handleUpdateAction", () => {
   it("should update path", () => {
     const initialConfig = PlotBuilder.config({ paths: [] });
     const input: HandleUpdateAction = {
-      draft: _.cloneDeep(initialConfig),
+      draft: structuredClone(initialConfig),
       path: ["paths", "0", BasicBuilder.string()],
       value: BasicBuilder.string(),
     };
@@ -51,7 +50,7 @@ describe("handleUpdateAction", () => {
   it("should update path when has visible", () => {
     const initialConfig = PlotBuilder.config({ paths: [] });
     const input: HandleUpdateAction = {
-      draft: _.cloneDeep(initialConfig),
+      draft: structuredClone(initialConfig),
       path: ["paths", "0", "visible"],
       value: BasicBuilder.boolean(),
     };
@@ -67,7 +66,7 @@ describe("handleUpdateAction", () => {
       showLegend: false,
     });
     const input: HandleUpdateAction = {
-      draft: _.cloneDeep(initialConfig),
+      draft: structuredClone(initialConfig),
       path: ["legend", "legendDisplay"],
       value: BasicBuilder.string(),
     };
@@ -81,7 +80,7 @@ describe("handleUpdateAction", () => {
   it("should update xAxisPath", () => {
     const initialConfig = PlotBuilder.config({ paths: [] });
     const input: HandleUpdateAction = {
-      draft: _.cloneDeep(initialConfig),
+      draft: structuredClone(initialConfig),
       path: ["xAxis", "xAxisPath"],
       value: BasicBuilder.string(),
     };
@@ -98,7 +97,7 @@ describe("handleUpdateAction", () => {
   it("should update minXValue and maxXValue to undefined", () => {
     const initialConfig = PlotBuilder.config({ paths: [] });
     const input: HandleUpdateAction = {
-      draft: _.cloneDeep(initialConfig),
+      draft: structuredClone(initialConfig),
       path: [BasicBuilder.string(), "followingViewWidth"],
       value: BasicBuilder.string(),
     };
@@ -114,7 +113,7 @@ describe("handleUpdateAction", () => {
     (path1) => {
       const initialConfig = PlotBuilder.config({ paths: [] });
       const input: HandleUpdateAction = {
-        draft: _.cloneDeep(initialConfig),
+        draft: structuredClone(initialConfig),
         path: [BasicBuilder.string(), path1],
         value: BasicBuilder.string(),
       };
@@ -132,7 +131,7 @@ describe("handleAddSeriesAction", () => {
     ({ paths }) => {
       const initialConfig = PlotBuilder.config({ paths });
       const input: HandleAction = {
-        draft: _.cloneDeep(initialConfig),
+        draft: structuredClone(initialConfig),
       };
       const initialLength = paths.length;
 
@@ -165,7 +164,7 @@ describe("handleDeleteSeriesAction", () => {
   it("should delete a serie", () => {
     const initialConfig = PlotBuilder.config();
     const input: HandleDeleteSeriesAction = {
-      draft: _.cloneDeep(initialConfig),
+      draft: structuredClone(initialConfig),
       index: 1,
     };
 
@@ -248,7 +247,7 @@ describe("handleMoveSeriesAction", () => {
     const paths = PlotBuilder.paths(pathCount);
     const initialConfig = PlotBuilder.config({ paths });
     const input: HandleMoveSeriesAction = {
-      draft: _.cloneDeep(initialConfig),
+      draft: structuredClone(initialConfig),
       index,
       direction,
     };

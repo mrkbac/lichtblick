@@ -1,23 +1,20 @@
-// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
 import { subtract, toSec } from "@foxglove/rostime";
 
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+  selectEndTime,
+  selectStartTime,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 
 import { sideSharedEnd, useCompare } from "./CompareContext";
-
-const selectStart = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
-const selectEnd = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
 
 /** Where each compared recording lies on the playback bar, as a thin bar in its color */
 export function CompareTimelineOverlay(): React.JSX.Element | undefined {
   const compare = useCompare();
-  const startTime = useMessagePipeline(selectStart);
-  const endTime = useMessagePipeline(selectEnd);
+  const startTime = useMessagePipeline(selectStartTime);
+  const endTime = useMessagePipeline(selectEndTime);
   if (!compare || !startTime || !endTime) {
     return undefined;
   }

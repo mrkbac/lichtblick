@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
 import * as _ from "lodash-es";
@@ -76,7 +75,7 @@ export function pickChunks(
     }
     return best;
   });
-  return _.uniq(picked).map((i) => chunks[i]!);
+  return [...new Set(picked)].map((i) => chunks[i]!);
 }
 
 /**
@@ -104,7 +103,7 @@ export async function sampleRecording(
   const channels = [...gpsChannels, ...imageChannels];
 
   const gpsTopics = new Set(gpsChannels.map((c) => c.topic));
-  const topics = _.uniq(channels.map((c) => c.topic));
+  const topics = [...new Set(channels.map((c) => c.topic))];
   const deserializers = new Map(
     channels.map((c) => [
       c.id,

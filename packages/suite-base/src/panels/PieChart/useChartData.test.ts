@@ -8,6 +8,7 @@
 import { renderHook } from "@testing-library/react";
 
 import PieChartBuilder from "@lichtblick/suite-base/testing/builders/PieChartBuilder";
+import { expandedLineColors } from "@lichtblick/suite-base/util/plotColors";
 
 import { useChartData } from "./useChartData";
 
@@ -30,9 +31,9 @@ describe("useChartData", () => {
     const { result } = renderHook(() => useChartData(rawValue, config));
 
     expect(result.current).toEqual([
-      { name: "Data 1", value: 16.666666666666664, color: "hsl(200, 20%, 50%)" },
-      { name: "Data 2", value: 33.33333333333333, color: "hsl(213.33333333333334, 20%, 45%)" },
-      { name: "Data 3", value: 50, color: "hsl(226.66666666666666, 20%, 40%)" },
+      { name: "Data 1", value: 16.666666666666664, color: expandedLineColors[0] },
+      { name: "Data 2", value: 33.33333333333333, color: expandedLineColors[1] },
+      { name: "Data 3", value: 50, color: expandedLineColors[2] },
     ]);
   });
 
@@ -45,9 +46,9 @@ describe("useChartData", () => {
     });
     const { result } = renderHook(() => useChartData(rawValue, config));
     expect(result.current).toEqual([
-      { name: "Legend A", value: 16.666666666666664, color: "hsl(200, 20%, 50%)" },
-      { name: "Legend B", value: 33.33333333333333, color: "hsl(213.33333333333334, 20%, 45%)" },
-      { name: "Legend C", value: 50, color: "hsl(226.66666666666666, 20%, 40%)" },
+      { name: "Legend A", value: 16.666666666666664, color: expandedLineColors[0] },
+      { name: "Legend B", value: 33.33333333333333, color: expandedLineColors[1] },
+      { name: "Legend C", value: 50, color: expandedLineColors[2] },
     ]);
   });
 
@@ -59,8 +60,8 @@ describe("useChartData", () => {
     });
     const { result } = renderHook(() => useChartData(rawValue, config));
     expect(result.current).toEqual([
-      { name: "Data 1", value: 33.33333333333333, color: "hsl(200, 20%, 50%)" },
-      { name: "Valid Legend", value: 66.66666666666666, color: "hsl(220, 20%, 45%)" },
+      { name: "Data 1", value: 33.33333333333333, color: expandedLineColors[0] },
+      { name: "Valid Legend", value: 66.66666666666666, color: expandedLineColors[1] },
     ]);
   });
 
@@ -69,7 +70,30 @@ describe("useChartData", () => {
     const config = PieChartBuilder.pieChartConfig({ legend1: "Single Data" });
     const { result } = renderHook(() => useChartData(rawValue, config));
     expect(result.current).toEqual([
-      { name: "Single Data", value: 100, color: "hsl(200, 20%, 50%)" },
+      { name: "Single Data", value: 100, color: expandedLineColors[0] },
     ]);
+  });
+
+  it("returns no slices when nothing is positive", () => {
+    const config = PieChartBuilder.pieChartConfig();
+    expect(renderHook(() => useChartData(new Float32Array([0, 0]), config)).result.current).toEqual(
+      [],
+    );
+    expect(
+      renderHook(() => useChartData(new Float32Array([-1, 0]), config)).result.current,
+    ).toEqual([]);
+  });
+
+  it("treats negative values as empty slices", () => {
+    const config = PieChartBuilder.pieChartConfig();
+    const { result } = renderHook(() => useChartData(new Float32Array([-5, 10]), config));
+    expect(result.current.map((datum) => datum.value)).toEqual([0, 100]);
+  });
+
+  it("keeps slice colors distinct past ten values", () => {
+    const config = PieChartBuilder.pieChartConfig();
+    const rawValue = new Float32Array(Array.from({ length: 12 }, () => 1));
+    const { result } = renderHook(() => useChartData(rawValue, config));
+    expect(new Set(result.current.map((datum) => datum.color)).size).toBe(12);
   });
 });

@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { MessageDefinition } from "@foxglove/message-definition";
-import * as _ from "lodash-es";
 
 import { quoteFieldNameIfNeeded, quoteTopicNameIfNeeded } from "@lichtblick/message-path";
 import { Immutable } from "@lichtblick/suite";
@@ -89,11 +88,11 @@ export function getMessagePathSearchItems(
 ): { items: MessagePathSearchItem[]; itemsByTopicName: Map<string, MessagePathSearchItem[]> } {
   const items: MessagePathSearchItem[] = [];
   const itemsByTopicName = new Map<string, MessagePathSearchItem[]>();
-  const topicsBySchemaName = _.groupBy(
+  const topicsBySchemaName = Map.groupBy(
     allTopics.filter((topic) => topic.schemaName != undefined),
-    (topic) => topic.schemaName,
+    (topic) => topic.schemaName!,
   );
-  for (const [schemaName, topics] of Object.entries(topicsBySchemaName)) {
+  for (const [schemaName, topics] of topicsBySchemaName) {
     const schema = schemasByName.get(schemaName);
     if (!schema) {
       continue;

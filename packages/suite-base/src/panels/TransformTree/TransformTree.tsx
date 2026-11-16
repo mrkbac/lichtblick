@@ -8,17 +8,15 @@ import { TFunction } from "i18next";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { Immutable, SettingsTreeAction } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 import {
   useBlocksSubscriptions,
   useDataSourceInfo,
   useMessageReducer,
 } from "@lichtblick/suite-base/PanelAPI";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -47,7 +45,7 @@ import {
   withFrameOffset,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/transforms/transformOffsets";
 import { formatSeconds } from "@lichtblick/suite-base/panels/TopicHealth/health";
-import { MessageEvent, SubscribePayload } from "@lichtblick/suite-base/players/types";
+import { SubscribePayload } from "@lichtblick/suite-base/players/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
@@ -60,7 +58,14 @@ import {
   settingsActionReducer,
 } from "./settings";
 import { isTransformSchema } from "./transforms";
-import { addTransformEvents, buildRows, measureBetween, mergeEntries } from "./tree";
+import {
+  addTransformState,
+  buildRows,
+  EMPTY_TRANSFORM_STATE,
+  measureBetween,
+  mergeEntries,
+  TransformState,
+} from "./tree";
 import { FrameEntries, FrameEntry, FrameRow, FrameWarning, TransformTreeConfig } from "./types";
 
 type Props = {
@@ -70,13 +75,8 @@ type Props = {
 
 const EMPTY_ENTRIES: FrameEntries = new Map();
 
-const addEntries = (prev: FrameEntries, events: Immutable<MessageEvent[]>): FrameEntries =>
-  addTransformEvents(prev, events);
-
 const onlyTopics = (entries: FrameEntries, topics: ReadonlySet<string>): FrameEntries =>
   new Map([...entries].filter(([, entry]) => topics.has(entry.topic)));
-
-const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
 
 const NO_COLLAPSED: ReadonlySet<string> = new Set();
 
@@ -196,26 +196,20 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
     },
     [config, saveConfig],
   );
-  useEffect(() => {
-    updatePanelSettingsTree({
-      actionHandler: settingsActionHandler,
-      nodes: buildSettingsTree(resolvedTopics, convention, t),
-    });
-  }, [convention, resolvedTopics, settingsActionHandler, t, updatePanelSettingsTree]);
 
   // Entries remember every parent a frame had, including from topics that are now hidden, so
   // start over when the visible topics change. useMessageReducer calls `restore` on a seek and
   // whenever `restore` itself changes, so a new function per topic set resets the state.
   const restoreEntries = useMemo(() => {
     void visibleTopics;
-    return (): FrameEntries => EMPTY_ENTRIES;
+    return (): TransformState => EMPTY_TRANSFORM_STATE;
   }, [visibleTopics]);
 
   // Dynamic and static transforms around the current playback position.
-  const streamed = useMessageReducer<FrameEntries>({
+  const streamed = useMessageReducer<TransformState>({
     topics: visibleTopics,
     restore: restoreEntries,
-    addMessages: addEntries,
+    addMessages: addTransformState,
   });
 
   // Static transforms are published once, usually at the start of a recording, so a seek would
@@ -227,17 +221,35 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
   const staticBlocks = useBlocksSubscriptions(staticSubscriptions);
   const preloadedStatic = useMemo(
     () =>
-      addTransformEvents(
-        EMPTY_ENTRIES,
+      addTransformState(
+        EMPTY_TRANSFORM_STATE,
         staticBlocks.flatMap((block) => Object.values(block).flat()),
       ),
     [staticBlocks],
   );
 
   const current = useMemo(
-    () => onlyTopics(mergeEntries(preloadedStatic, streamed), visibleTopicSet),
+    () => onlyTopics(mergeEntries(preloadedStatic.entries, streamed.entries), visibleTopicSet),
     [preloadedStatic, streamed, visibleTopicSet],
   );
+  const malformedTopics = useMemo(
+    () => new Set([...preloadedStatic.malformedTopics, ...streamed.malformedTopics]),
+    [preloadedStatic.malformedTopics, streamed.malformedTopics],
+  );
+
+  useEffect(() => {
+    updatePanelSettingsTree({
+      actionHandler: settingsActionHandler,
+      nodes: buildSettingsTree(resolvedTopics, malformedTopics, convention, t),
+    });
+  }, [
+    convention,
+    malformedTopics,
+    resolvedTopics,
+    settingsActionHandler,
+    t,
+    updatePanelSettingsTree,
+  ]);
 
   // Every frame seen for this data source, so the tree keeps its shape across seeks.
   const knownRef = useRef({ playerId, visibleTopics, entries: EMPTY_ENTRIES });
@@ -338,6 +350,9 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
         messages.set(`topic:${topic.name}`, `${topic.name}: ${t("settings.topicUnavailable")}`);
       }
     }
+    for (const topic of malformedTopics) {
+      messages.set(`malformed:${topic}`, `${topic}: ${t("settings.malformedTransforms")}`);
+    }
     for (const row of allRows) {
       for (const warning of row.warnings) {
         if (warning !== "noData") {
@@ -360,7 +375,7 @@ export function TransformTree({ config, saveConfig }: Props): React.JSX.Element 
       }
     }
     loggedRef.current = new Set(messages.keys());
-  }, [allRows, logError, resolvedTopics, roots, t]);
+  }, [allRows, logError, malformedTopics, resolvedTopics, roots, t]);
 
   const toggleCollapsed = useCallback(
     (frame: string) => {

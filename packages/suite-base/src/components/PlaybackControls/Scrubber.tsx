@@ -23,6 +23,12 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectCurrentTime,
+  selectEndTime,
+  selectPlayerPresence,
+  selectStartTime,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import {
   useClearHoverValue,
@@ -65,12 +71,8 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
-const selectStartTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
-const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
-const selectEndTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
 const selectRanges = (ctx: MessagePipelineContext) =>
   ctx.playerState.progress.fullyLoadedFractionRanges;
-const selectPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
 
 type Props = {
   onSeek: (seekTo: Time) => void;
@@ -85,7 +87,7 @@ export default function Scrubber(props: Props): React.JSX.Element {
   const startTime = useMessagePipeline(selectStartTime);
   const currentTime = useMessagePipeline(selectCurrentTime);
   const endTime = useMessagePipeline(selectEndTime);
-  const presence = useMessagePipeline(selectPresence);
+  const presence = useMessagePipeline(selectPlayerPresence);
   const ranges = useMessagePipeline(selectRanges);
 
   const setHoverValue = useSetHoverValue();

@@ -8,11 +8,11 @@
 
 import { renderHook } from "@testing-library/react";
 
-import { useSynchronousMountedState } from "./useSynchronousMountedState";
+import { useMountedState } from "./useMountedState";
 
-describe("useSynchronousMountedState", () => {
+describe("useMountedState", () => {
   it("tracks mounted state", () => {
-    const { result, unmount, rerender } = renderHook(useSynchronousMountedState, {
+    const { result, unmount, rerender } = renderHook(useMountedState, {
       wrapper({ children }) {
         return <div>{children}</div>;
       },

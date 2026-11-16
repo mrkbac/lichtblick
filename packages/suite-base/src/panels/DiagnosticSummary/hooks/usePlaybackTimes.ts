@@ -5,17 +5,14 @@ import { areEqual, Time } from "@foxglove/rostime";
 import { useCallback, useEffect, useState } from "react";
 
 import {
-  MessagePipelineContext,
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectLastSeekTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 
 export type PlaybackTimes = { start?: Time; end?: Time; current?: Time };
 
 const DEFAULT_UPDATE_INTERVAL_MS = 250;
-
-const selectLastSeekTime = (ctx: MessagePipelineContext) =>
-  ctx.playerState.activeData?.lastSeekTime;
 
 const same = (a?: Time, b?: Time) => (a && b ? areEqual(a, b) : a === b);
 const isSame = (a: PlaybackTimes, b: PlaybackTimes) =>

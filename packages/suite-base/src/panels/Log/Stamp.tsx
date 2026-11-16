@@ -14,15 +14,13 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import * as _ from "lodash-es";
-
 import { Time } from "@lichtblick/suite";
 import { TimeDisplayMethod } from "@lichtblick/suite-base/types/panels";
 import { formatTime } from "@lichtblick/suite-base/util/formatTime";
 
 // pad the start of `val` with 0's to make the total string length `count` size
 function PadStart(val: unknown, count: number) {
-  return _.padStart(`${val}`, count, "0");
+  return String(val).padStart(count, "0");
 }
 
 type Props = {

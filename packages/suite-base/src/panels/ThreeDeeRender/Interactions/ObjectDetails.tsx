@@ -63,7 +63,7 @@ function ObjectDetails({ interactionData, selectedObject, timezone }: Props): Re
           getItemString(nodeType, data, itemType, itemString, keyPath, timezone)
         }
         labelRenderer={(markerKeyPath, _p1, _p2, _hasChildren) => {
-          const label = _.first(markerKeyPath);
+          const label = markerKeyPath[0];
           return <span style={{ padding: "0 4px 0 0" }}>{label}</span>;
         }}
         valueRenderer={(label) => {

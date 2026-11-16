@@ -14,6 +14,11 @@ import {
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import {
+  selectCurrentTime,
+  selectEndTime,
+  selectStartTime,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
+import {
   TimelineHoverCursor,
   usePublishPlaybackHover,
 } from "@lichtblick/suite-base/components/TimelineHoverCursor";
@@ -43,7 +48,6 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
-const selectStartTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
 /**
  * Duration rounded up to a power-of-two step of at most 1/1024 of it, so a live source's growing
  * end time redraws only when columns could actually shift (by under one at 1024 px), not every tick.
@@ -61,8 +65,6 @@ const selectDurationSec = (ctx: MessagePipelineContext) => {
   const { startTime, endTime } = ctx.playerState.activeData ?? {};
   return roundUpDuration(startTime && endTime ? toSec(subtractTimes(endTime, startTime)) : 0);
 };
-const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
-const selectEndTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
 const exactDurationSec = (start: Time, end: Time | undefined) =>
   end ? toSec(subtractTimes(end, start)) : 0;
 

@@ -17,6 +17,7 @@ import {
   Topic,
 } from "@lichtblick/suite";
 import { PLOTABLE_ROS_TYPES } from "@lichtblick/suite-base/panels/shared/constants";
+import { showHideAllValue, topicListNode } from "@lichtblick/suite-base/panels/shared/topicList";
 import { lineColors } from "@lichtblick/suite-base/util/plotColors";
 
 import type { Units } from "./geo";
@@ -302,10 +303,10 @@ export function buildSettingsTree(
   return {
     general: { label: "General", fields: general },
     layers,
-    topics: {
+    topics: topicListNode({
       label: "Topics",
       children: Object.fromEntries(eligibleTopics.map((t) => [t.name, topicNode(config, t)])),
-    },
+    }),
   };
 }
 
@@ -368,8 +369,18 @@ export function applySettingsAction(
   config: Config,
   action: SettingsTreeAction,
   saved: readonly SourceParams[],
+  /** Topics "Hide all" turns off. */
+  topicNames: readonly string[] = [],
 ): Config {
   return produce(config, (draft) => {
+    const showAll = showHideAllValue(action);
+    if (showAll != undefined && action.payload.path[0] === "topics") {
+      draft.disabledTopics = showAll ? [] : [...topicNames];
+      if (!showAll) {
+        draft.followTopic = "";
+      }
+      return;
+    }
     switch (action.action) {
       case "update": {
         const { path, value } = action.payload;

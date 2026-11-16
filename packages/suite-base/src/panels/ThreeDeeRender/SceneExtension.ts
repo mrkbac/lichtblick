@@ -275,9 +275,9 @@ export function onlyLastByTopicMessage<T>(msgs: MessageEvent<T>[]): MessageEvent
    * ALSO: for message converters. Both the original message and converted message are in the queue. This depends on the
    * converted message being after the original message. Which is currently the case.
    */
-  const msgsByTopic = _.groupBy(msgs, (msg) => msg.topic);
+  const msgsByTopic = Map.groupBy(msgs, (msg) => msg.topic);
 
-  const list = Object.values(msgsByTopic).map((topicMsgs) => topicMsgs[topicMsgs.length - 1]!);
+  const list = [...msgsByTopic.values()].map((topicMsgs) => topicMsgs[topicMsgs.length - 1]!);
 
   return list;
 }

@@ -31,7 +31,15 @@ import { useImmer } from "use-immer";
 
 import Logger from "@lichtblick/log";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
-import { MessagePipelineContext } from "@lichtblick/suite-base/components/MessagePipeline/types";
+import {
+  selectCurrentTime,
+  selectEndTime,
+  selectGetBatchIterator,
+  selectPausePlayback,
+  selectSeekPlayback,
+  selectStartTime,
+  selectTopicStats,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { RESULT_TYPE_MESSAGE_EVENT } from "@lichtblick/suite-base/components/TopicList/constants";
 import {
   calculateOptimalWindowMs,
@@ -51,13 +59,6 @@ const logNavigationError = (direction: "next" | "previous", error: unknown): voi
   log.warn(`Error navigating to ${direction} message: ${message}`);
 };
 
-const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
-const selectStartTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
-const selectEndTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
-const selectTopicStats = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.topicStats;
-const selectSeekPlayback = (ctx: MessagePipelineContext) => ctx.seekPlayback;
-const selectPausePlayback = (ctx: MessagePipelineContext) => ctx.pausePlayback;
-const selectGetBatchIterator = (ctx: MessagePipelineContext) => ctx.getBatchIterator;
 const selectNothing = () => undefined;
 
 enableMapSet();

@@ -14,6 +14,7 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { EventsStore, useEvents } from "@lichtblick/suite-base/context/EventsContext";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
@@ -21,7 +22,6 @@ import { AppURLState, updateAppURLState } from "@lichtblick/suite-base/util/appU
 
 const selectCanSeek = (ctx: MessagePipelineContext) =>
   isRecordingSource(ctx.playerState.capabilities);
-const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
 const selectUrlState = (ctx: MessagePipelineContext) => ctx.playerState.urlState;
 const selectSelectedEventId = (store: EventsStore) => store.selectedEventId;
 

@@ -10,10 +10,8 @@ import { CircularProgress, Divider, IconButton, Tab, Tabs } from "@mui/material"
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectPlayerPresence } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { SidebarContent } from "@lichtblick/suite-base/components/SidebarContent";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { TopicList } from "@lichtblick/suite-base/components/TopicList";
@@ -30,8 +28,6 @@ import { AlertBadge } from "./utils";
 type Props = {
   disableToolbar?: boolean;
 };
-
-const selectPlayerPresence = ({ playerState }: MessagePipelineContext) => playerState.presence;
 
 type DataSourceSidebarTab = "topics" | "alerts";
 

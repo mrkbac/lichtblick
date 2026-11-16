@@ -17,10 +17,8 @@ import { useLatest } from "@lichtblick/hooks";
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import { DirectTopicStatsUpdater } from "@lichtblick/suite-base/components/DirectTopicStatsUpdater";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectPlayerPresence } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { DraggedMessagePath } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import SearchBar from "@lichtblick/suite-base/components/SearchBar/SearchBar";
 import { ContextMenu } from "@lichtblick/suite-base/components/TopicList/ContextMenu";
@@ -35,8 +33,6 @@ import { TopicRow } from "./TopicRow";
 import { useMultiSelection } from "./useMultiSelection";
 import { useOpenMessagePathsInPanel } from "./useOpenMessagePathsInPanel";
 import { useTopicListSearch } from "./useTopicListSearch";
-
-const selectPlayerPresence = ({ playerState }: MessagePipelineContext) => playerState.presence;
 
 export function TopicList(): React.JSX.Element {
   const { t } = useTranslation("topicList");

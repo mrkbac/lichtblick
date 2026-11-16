@@ -5,16 +5,18 @@
 // SPDX-License-Identifier: MPL-2.0
 import { useMemo } from "react";
 
+import { expandedLineColors } from "@lichtblick/suite-base/util/plotColors";
+
 import type { PieChartConfig, PieChartDatum } from "./types";
 
 export function useChartData(rawValue: Float32Array, config: PieChartConfig): PieChartDatum[] {
   return useMemo(() => {
-    if (rawValue.length === 0) {
+    // A slice can't be negative; without a positive total there is nothing to divide up
+    const rawArray = Array.from(rawValue, (value) => Math.max(value, 0));
+    const total = rawArray.reduce((sum, val) => sum + val, 0);
+    if (total <= 0) {
       return [];
     }
-
-    const rawArray = Array.from(rawValue);
-    const total = rawArray.reduce((sum, val) => sum + val, 0);
 
     return rawArray.map((value, index) => {
       const percentage = (value / total) * 100;
@@ -25,7 +27,7 @@ export function useChartData(rawValue: Float32Array, config: PieChartConfig): Pi
       return {
         name,
         value: percentage,
-        color: `hsl(${(index / rawArray.length) * 40 + 200}, 20%, ${50 - index * 5}%)`,
+        color: expandedLineColors[index % expandedLineColors.length]!,
       };
     });
   }, [rawValue, config]);

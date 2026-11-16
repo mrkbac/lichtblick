@@ -16,7 +16,6 @@ export { useMemoryInfo } from "./useMemoryInfo";
 export * from "./selectWithUnstableIdentityWarning";
 export * from "./useCrash";
 export * from "./useSessionStorageValue";
-export * from "./useSynchronousMountedState";
 export * from "./useAsyncFn";
 export * from "./useKeyPressEvent";
 export * from "./useLatest";

@@ -149,6 +149,22 @@ describe("applySettingsAction", () => {
     expect(config.topicStyles["/gps"]).toEqual({ history: "line" });
   });
 
+  it("hides and shows all topics", () => {
+    const followed = apply(base, update(["general", "followTopic"], "/gps"));
+    const hideAll = {
+      action: "perform-node-action",
+      payload: { id: "hide-all", path: ["topics"] },
+    };
+    const hidden = applySettingsAction(followed, hideAll as SettingsTreeAction, [], ["/gps", "/b"]);
+    expect(hidden.disabledTopics).toEqual(["/gps", "/b"]);
+    expect(hidden.followTopic).toBe("");
+    const showAll = {
+      action: "perform-node-action",
+      payload: { id: "show-all", path: ["topics"] },
+    };
+    expect(apply(hidden, showAll as SettingsTreeAction).disabledTopics).toEqual([]);
+  });
+
   it("resets the camera when rotation is turned off", () => {
     const config = apply(
       { ...base, bearing: 30, pitch: 45 },
