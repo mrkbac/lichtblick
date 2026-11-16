@@ -18,6 +18,7 @@ export const panelToolbar = {
   buttons: "Buttons",
   noPanelsFound: "No panels found",
   panelGuide: "Panel guide",
+  panelGuideSections: "Sections",
   panelInfo: "About this panel",
   settings: "Settings",
   openPopout: "Open in new window",

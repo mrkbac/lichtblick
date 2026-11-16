@@ -120,14 +120,25 @@ export const usePanelGuideStore = create<{
   },
 }));
 
-type Row = { term: string; text: string; button?: PanelButton };
+type Row = {
+  term: string;
+  text: string;
+  button?: PanelButton;
+  /** Formatted keys and gestures, for keyboard and mouse rows. */
+  keys?: string[];
+  /** Sub-heading the row sits under, e.g. a settings node's path. */
+  group?: string;
+};
 type Section = { title: string; rows: Row[] };
 
 type LoadedDocs = {
   info: PanelInfo;
   docs: PanelDocs;
   schemas: string[];
-  /** Buttons, custom sections, and settings, in display order. */
+  /**
+   * In display order: the panel's hand-written facts first, then what's generated from its
+   * declarations (buttons, settings, keyboard and mouse). Schemas come last.
+   */
   sections: Section[];
   /** Lower-cased text the search matches against. */
   haystack: string;
@@ -155,8 +166,22 @@ const useStyles = makeStyles()((theme) => ({
     rowGap: theme.spacing(0.5),
     alignItems: "center",
   },
-  sectionTitle: { gridColumn: "1 / -1", marginTop: theme.spacing(2) },
+  // Clears the sticky jump bar when jumped to.
+  sectionTitle: { gridColumn: "1 / -1", marginTop: theme.spacing(2), scrollMarginTop: 48 },
+  groupTitle: { gridColumn: "2 / -1", marginTop: theme.spacing(1.5), fontWeight: 600 },
   fullRow: { gridColumn: "1 / -1" },
+  // Stays visible while scrolling, so long pages (e.g. 3D settings) stay navigable.
+  jump: {
+    position: "sticky",
+    top: theme.spacing(-2),
+    zIndex: 1,
+    display: "flex",
+    flexWrap: "wrap",
+    gap: theme.spacing(0.5),
+    padding: theme.spacing(1, 0),
+    backgroundColor: theme.palette.background.paper,
+    backgroundImage: "inherit",
+  },
 
   chips: { display: "flex", flexWrap: "wrap", gap: theme.spacing(0.5) },
   chip: { fontFamily: customTypography.fontMonospace },
@@ -172,13 +197,16 @@ const useStyles = makeStyles()((theme) => ({
   },
 }));
 
-function SectionTitle(props: { title: string }): React.JSX.Element {
+const sectionId = (index: number) => `panel-guide-section-${index}`;
+
+function SectionTitle(props: { title: string; id: string }): React.JSX.Element {
   const { classes } = useStyles();
   return (
     <Typography
       variant="overline"
       color="text.secondary"
       component="h3"
+      id={props.id}
       className={classes.sectionTitle}
     >
       {props.title}
@@ -190,9 +218,11 @@ function PanelDocsView(props: { entry: LoadedDocs; words: string[] }): React.JSX
   const { entry, words } = props;
   const { classes } = useStyles();
   const { t } = useTranslation("panelToolbar");
-  const { t: tShortcuts } = useTranslation("keyboardShortcuts");
-  const { info, schemas } = entry;
-  const shortcuts = shortcutRows(info.shortcuts ?? [], (key) => tShortcuts(key));
+  const { info, schemas, sections } = entry;
+  const titles = [...sections.map((section) => section.title)];
+  if (schemas.length > 0) {
+    titles.push(t("supportedSchemas"));
+  }
   return (
     <>
       <Typography variant="h4" component="h2" id="panel-guide-title">
@@ -201,17 +231,52 @@ function PanelDocsView(props: { entry: LoadedDocs; words: string[] }): React.JSX
       <Typography variant="body1" className={classes.intro}>
         {entry.docs.intro}
       </Typography>
+      {titles.length > 2 && (
+        <nav className={classes.jump} aria-label={t("panelGuideSections")}>
+          {titles.map((title, index) => (
+            <Chip
+              key={title}
+              size="small"
+              variant="outlined"
+              label={title}
+              onClick={() => {
+                document.getElementById(sectionId(index))?.scrollIntoView({ behavior: "smooth" });
+              }}
+            />
+          ))}
+        </nav>
+      )}
       <div className={classes.grid}>
-        {entry.sections.map((section) => (
+        {sections.map((section, sectionIndex) => (
           <Fragment key={section.title}>
-            <SectionTitle title={section.title} />
-            {section.rows.map(({ term, text, button }, index) => (
+            <SectionTitle title={section.title} id={sectionId(sectionIndex)} />
+            {section.rows.map(({ term, text, button, keys, group }, index) => (
               // Merged settings nodes can repeat a label (e.g. two "Scale" fields).
               <Fragment key={`${index}:${term}`}>
+                {group != undefined && group !== section.rows[index - 1]?.group && (
+                  <Typography
+                    variant="body2"
+                    color="primary"
+                    component="h4"
+                    className={classes.groupTitle}
+                  >
+                    {group}
+                  </Typography>
+                )}
                 <span>{button && <PanelButtonPreview button={button} />}</span>
-                <Typography variant="body2" className={classes.term}>
-                  {term}
-                </Typography>
+                {keys != undefined ? (
+                  <span>
+                    {keys.map((key) => (
+                      <kbd key={key} className={classes.kbd}>
+                        {key}
+                      </kbd>
+                    ))}
+                  </span>
+                ) : (
+                  <Typography variant="body2" className={classes.term}>
+                    {term}
+                  </Typography>
+                )}
                 <Typography variant="body2" color="text.secondary">
                   {text}
                 </Typography>
@@ -219,29 +284,9 @@ function PanelDocsView(props: { entry: LoadedDocs; words: string[] }): React.JSX
             ))}
           </Fragment>
         ))}
-        {shortcuts.length > 0 && (
-          <>
-            <SectionTitle title={t("keyboardAndMouse")} />
-            {shortcuts.map((row) => (
-              <Fragment key={row.id}>
-                <span />
-                <span>
-                  {row.keys.map((key) => (
-                    <kbd key={key} className={classes.kbd}>
-                      {key}
-                    </kbd>
-                  ))}
-                </span>
-                <Typography variant="body2" color="text.secondary">
-                  {row.title}
-                </Typography>
-              </Fragment>
-            ))}
-          </>
-        )}
         {schemas.length > 0 && (
           <>
-            <SectionTitle title={t("supportedSchemas")} />
+            <SectionTitle title={t("supportedSchemas")} id={sectionId(sections.length)} />
             <div className={`${classes.fullRow} ${classes.chips}`}>
               {schemas.map((schema) => (
                 <Chip
@@ -268,6 +313,7 @@ function PanelGuideDialog(): React.JSX.Element {
   const { classes } = useStyles();
   const { t } = useTranslation("panelToolbar");
   const { t: tButtons } = useTranslation("panelButtons");
+  const { t: tShortcuts } = useTranslation("keyboardShortcuts");
   const hide = usePanelGuideStore((state) => state.hide);
   const show = usePanelGuideStore((state) => state.show);
   const selectedType = usePanelGuideStore((state) => state.panelType);
@@ -282,7 +328,11 @@ function PanelGuideDialog(): React.JSX.Element {
       panels.map(async (info): Promise<LoadedDocs> => {
         const docs = (await info.docs!()).default;
         const schemas = schemaDisplayNames(docs.schemas ?? []);
-        const sections: Section[] = [];
+        // Hand-written facts first: they're what the panel's declarations can't tell.
+        const sections: Section[] = (docs.sections ?? []).map((section) => ({
+          title: section.title,
+          rows: section.items.map(([term, text]) => ({ term, text })),
+        }));
         if (docs.buttons != undefined && docs.buttons.length > 0) {
           sections.push({
             title: t("buttons"),
@@ -293,23 +343,23 @@ function PanelGuideDialog(): React.JSX.Element {
             })),
           });
         }
-        for (const section of docs.sections ?? []) {
+        // One section; each settings node's path is a sub-heading.
+        const settings = settingsRows(docs.settings?.() ?? {}).map(
+          (row): Row => ({ term: row.label, text: row.help, group: row.path || undefined }),
+        );
+        if (settings.length > 0) {
+          sections.push({ title: t("settings"), rows: settings });
+        }
+        const shortcuts = shortcutRows(info.shortcuts ?? [], (key) => tShortcuts(key));
+        if (shortcuts.length > 0) {
           sections.push({
-            title: section.title,
-            rows: section.items.map(([term, text]) => ({ term, text })),
+            title: t("keyboardAndMouse"),
+            rows: shortcuts.map((row) => ({
+              term: row.keys.join(" "),
+              text: row.title,
+              keys: row.keys,
+            })),
           });
-        }
-        // One section per settings node, titled by its path, e.g. "Settings › Topics".
-        const settings = new Map<string, Row[]>();
-        for (const row of settingsRows(docs.settings?.() ?? {})) {
-          const title = [t("settings"), row.path].filter(Boolean).join(" › ");
-          settings.set(title, [
-            ...(settings.get(title) ?? []),
-            { term: row.label, text: row.help },
-          ]);
-        }
-        for (const [title, rows] of settings) {
-          sections.push({ title, rows });
         }
         const haystack = [
           info.title,
@@ -332,7 +382,7 @@ function PanelGuideDialog(): React.JSX.Element {
       log.error(`Failed to load docs for ${panels[index]?.type}`, result.reason);
       return [];
     });
-  }, [panelCatalog, t, tButtons]);
+  }, [panelCatalog, t, tButtons, tShortcuts]);
 
   const entries = useMemo(() => loaded.value ?? [], [loaded.value]);
   const words = useMemo(() => query.toLowerCase().split(/\s+/).filter(Boolean), [query]);

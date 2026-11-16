@@ -116,7 +116,7 @@ describe("PanelGuide", () => {
     expect(screen.getByTestId("copy-icon")).toBeInTheDocument();
     expect(screen.getByText("Copies all messages that pass the filters.")).toBeInTheDocument();
     // Settings: from the builder, under the node's label.
-    expect(screen.getByText("Settings › View")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "View" })).toBeInTheDocument();
     expect(screen.getByText("Point size in pixels.")).toBeInTheDocument();
     expect(screen.getByText("Restores the defaults.")).toBeInTheDocument();
     expect(screen.queryByText("Undocumented")).not.toBeInTheDocument();
@@ -124,6 +124,10 @@ describe("PanelGuide", () => {
     // Keyboard and mouse: keys and gestures of one declaration.
     expect(screen.getByText("R")).toBeInTheDocument();
     expect(screen.getByText("Right-drag")).toBeInTheDocument();
+    // Hand-written facts first, then the generated sections, schemas last.
+    expect(
+      screen.getAllByRole("heading", { level: 3 }).map((heading) => heading.textContent),
+    ).toEqual(["Data", "Buttons", "Settings", "Keyboard and mouse", "Supported schemas"]);
     // Panels without docs aren't listed.
     expect(screen.queryByRole("button", { name: "Extension" })).not.toBeInTheDocument();
   });
