@@ -15,7 +15,7 @@ import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-import { BuilderRenderStateInput, initRenderStateBuilder } from "./renderState";
+import { BuilderRenderStateInput, connectionFromUrl, initRenderStateBuilder } from "./renderState";
 
 function makeInitialState(): BuilderRenderStateInput {
   return {
@@ -136,7 +136,7 @@ describe("renderState", () => {
     const state = buildRenderState(input);
 
     expect(state).toEqual({
-      topics: [{ name: "test", schemaName: "schema", convertibleTo: ["more"] }],
+      topics: [{ name: "test", schemaName: "schema", datatype: "schema", convertibleTo: ["more"] }],
     });
   });
 
@@ -152,8 +152,37 @@ describe("renderState", () => {
     const state = buildRenderState(input);
 
     expect(state).toEqual({
-      topics: [{ name: "test", schemaName: "schema" }],
+      topics: [{ name: "test", schemaName: "schema", datatype: "schema" }],
     });
+  });
+
+  it("provides Foxglove's connection field for live WebSocket sources", () => {
+    const { buildRenderState, input } = setup({
+      watchedFields: new Set(["connection"]),
+      playerState: {
+        presence: PlayerPresence.PRESENT,
+        progress: {},
+        capabilities: [],
+        profile: undefined,
+        playerId: "p",
+        urlState: { sourceId: "ws", parameters: { url: "ws://localhost:8765" } },
+      },
+    });
+
+    const first = buildRenderState(input) as { connection?: unknown } | undefined;
+    expect(first?.connection).toEqual({ host: "localhost", port: 8765 });
+    // Unchanged URL keeps the same object and doesn't trigger another render.
+    expect(buildRenderState({ ...input })).toBeUndefined();
+  });
+
+  it.each([
+    ["wss://example.com/path", { host: "example.com", port: 443 }],
+    ["ws://example.com", { host: "example.com", port: 80 }],
+    ["https://example.com", undefined],
+    ["not a url", undefined],
+    [undefined, undefined],
+  ])("connectionFromUrl(%s)", (url, expected) => {
+    expect(connectionFromUrl(url)).toEqual(expected);
   });
 
   it("should provide services", () => {
@@ -215,7 +244,7 @@ describe("renderState", () => {
       endTime: { sec: 100, nsec: 1 },
       startTime: { sec: 1, nsec: 1 },
       previewTime: 3.500000001,
-      topics: [{ name: "test", schemaName: "schema" }],
+      topics: [{ name: "test", schemaName: "schema", datatype: "schema" }],
     });
   });
 
@@ -245,7 +274,7 @@ describe("renderState", () => {
     });
 
     expect(state).toEqual({
-      topics: [{ name: "test", schemaName: "schema" }],
+      topics: [{ name: "test", schemaName: "schema", datatype: "schema" }],
       currentFrame: [
         {
           topic: "test",
@@ -295,8 +324,8 @@ describe("renderState", () => {
 
     expect(state).toEqual({
       topics: [
-        { name: "another", schemaName: "schema" },
-        { name: "test", schemaName: "schema" },
+        { name: "another", schemaName: "schema", datatype: "schema" },
+        { name: "test", schemaName: "schema", datatype: "schema" },
       ],
       currentFrame: [
         {
@@ -360,8 +389,8 @@ describe("renderState", () => {
 
     expect(state).toEqual({
       topics: [
-        { name: "test1", schemaName: "schema" },
-        { name: "test2", schemaName: "schema" },
+        { name: "test1", schemaName: "schema", datatype: "schema" },
+        { name: "test2", schemaName: "schema", datatype: "schema" },
       ],
       allFrames: [
         makeBlock("test1", { nsec: 0, sec: 1 }),
@@ -439,7 +468,9 @@ describe("renderState", () => {
     });
 
     expect(state).toEqual({
-      topics: [{ name: "test", schemaName: "schema", convertibleTo: ["otherSchema"] }],
+      topics: [
+        { name: "test", schemaName: "schema", datatype: "schema", convertibleTo: ["otherSchema"] },
+      ],
       currentFrame: [
         {
           topic: "test",
@@ -537,11 +568,13 @@ describe("renderState", () => {
         {
           name: "another",
           schemaName: "srcschema",
+          datatype: "srcschema",
           convertibleTo: ["destschema"],
         },
         {
           name: "test",
           schemaName: "srcschemade",
+          datatype: "srcschemade",
           convertibleTo: ["stschema"],
         },
       ],
@@ -650,6 +683,7 @@ describe("renderState", () => {
         {
           name: "test",
           schemaName: "schema",
+          datatype: "schema",
           convertibleTo: ["otherSchema", "anotherSchema"],
         },
       ],
@@ -791,7 +825,9 @@ describe("renderState", () => {
     });
 
     expect(state).toEqual({
-      topics: [{ name: "test", schemaName: "schema", convertibleTo: ["otherSchema"] }],
+      topics: [
+        { name: "test", schemaName: "schema", datatype: "schema", convertibleTo: ["otherSchema"] },
+      ],
       currentFrame: [
         {
           topic: "test",
@@ -1098,11 +1134,13 @@ describe("renderState", () => {
         {
           name: "test",
           schemaName: "schema",
+          datatype: "schema",
           convertibleTo: ["otherSchema", "anotherSchema"],
         },
         {
           name: "test2",
           schemaName: "schema2",
+          datatype: "schema2",
         },
       ],
       currentFrame: expect.any(Array),

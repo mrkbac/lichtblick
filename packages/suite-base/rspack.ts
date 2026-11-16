@@ -291,7 +291,6 @@ export function makeConfig(
         // Should match webpack-defines.d.ts
         LICHTBLICK_SUITE_VERSION: JSON.stringify(version),
         LICHTBLICK_PRODUCT_NAME: JSON.stringify(product.name),
-        LICHTBLICK_PRODUCT_HOMEPAGE: JSON.stringify(product.homepage),
         LICHTBLICK_REPOSITORY_URL: JSON.stringify(product.repositoryUrl),
         // licht deploys talk to its organization server unless API_URL says otherwise.
         API_URL: JSON.stringify(process.env.API_URL ?? "https://licht-server.marko.im"),

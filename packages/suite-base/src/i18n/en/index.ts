@@ -29,6 +29,7 @@ export * from "./log";
 export * from "./notes";
 export * from "./openDialog";
 export * from "./panelConfigVersionGuard";
+export * from "./panelButtons";
 export * from "./panels";
 export * from "./panelSettings";
 export * from "./panelToolbar";

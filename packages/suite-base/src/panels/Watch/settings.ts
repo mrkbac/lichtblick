@@ -3,7 +3,12 @@
 
 import { TFunction } from "i18next";
 
-import { SettingsTreeAction, SettingsTreeNodes } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
+import { builtinMessagePathField } from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
+import type {
+  DocumentedNode,
+  DocumentedNodes,
+} from "@lichtblick/suite-base/panels/shared/documentedSettings";
 
 import { WatchConfig, WatchRow, newRow, validStaleAfter } from "./config";
 
@@ -11,8 +16,8 @@ export function buildSettingsTree(
   config: WatchConfig,
   rowErrors: ReadonlyMap<string, string>,
   t: TFunction<"watch">,
-): SettingsTreeNodes {
-  const children: SettingsTreeNodes = {};
+): DocumentedNodes {
+  const children: Record<string, DocumentedNode> = {};
   for (const row of config.rows) {
     children[row.id] = {
       label: row.label ?? row.path,
@@ -24,16 +29,24 @@ export function buildSettingsTree(
         { type: "action", id: "remove", label: t("remove"), icon: "Delete", display: "inline" },
       ],
       fields: {
-        path: {
+        path: builtinMessagePathField({
           label: t("path"),
+          help: t("pathHelp"),
           input: "messagepath",
           value: row.path,
           supportsMathModifiers: true,
-          supportsStreamModifiers: true,
+          supportsTimeSeriesMessagePathFunctions: true,
+        }),
+        label: {
+          label: t("label"),
+          help: t("labelHelp"),
+          input: "string",
+          value: row.label,
+          placeholder: row.path,
         },
-        label: { label: t("label"), input: "string", value: row.label, placeholder: row.path },
         precision: {
           label: t("precision"),
+          help: t("precisionHelp"),
           input: "number",
           min: 0,
           max: 15,
@@ -42,9 +55,10 @@ export function buildSettingsTree(
           placeholder: t("auto"),
           value: row.precision,
         },
-        unit: { label: t("unit"), input: "string", value: row.unit },
+        unit: { label: t("unit"), help: t("unitHelp"), input: "string", value: row.unit },
         staleAfterSec: {
           label: t("staleAfter"),
+          help: t("rowStaleAfterHelp"),
           input: "number",
           min: 0,
           step: 1,
@@ -58,9 +72,24 @@ export function buildSettingsTree(
     general: {
       label: t("general"),
       fields: {
-        sparklines: { label: t("sparklines"), input: "boolean", value: config.sparklines },
-        flashChanges: { label: t("flashChanges"), input: "boolean", value: config.flashChanges },
-        showAge: { label: t("showAge"), input: "boolean", value: config.showAge },
+        sparklines: {
+          label: t("sparklines"),
+          help: t("sparklinesHelp"),
+          input: "boolean",
+          value: config.sparklines,
+        },
+        flashChanges: {
+          label: t("flashChanges"),
+          help: t("flashChangesHelp"),
+          input: "boolean",
+          value: config.flashChanges,
+        },
+        showAge: {
+          label: t("showAge"),
+          help: t("showAgeHelp"),
+          input: "boolean",
+          value: config.showAge,
+        },
         staleAfterSec: {
           label: t("staleAfter"),
           help: t("staleAfterHelp"),
@@ -73,6 +102,7 @@ export function buildSettingsTree(
     },
     rows: {
       label: t("rows"),
+      help: t("rowsHelp"),
       actions: [{ type: "action", id: "add", label: t("addRow"), icon: "Add", display: "inline" }],
       children,
     },

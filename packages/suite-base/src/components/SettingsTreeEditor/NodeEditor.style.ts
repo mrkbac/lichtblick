@@ -107,8 +107,12 @@ export const useStyles = makeStyles()((theme) => ({
   nodeHeaderDragging: {
     opacity: 0.5,
   },
-  nodeHeaderDropTarget: {
+  nodeHeaderDropBefore: {
     backgroundColor: parseColor(theme.palette.primary.main).alpha(0.2).toRgbString(),
-    borderTop: `2px solid ${theme.palette.primary.main}`,
+    boxShadow: `inset 0 2px 0 ${theme.palette.primary.main}`,
+  },
+  nodeHeaderDropAfter: {
+    backgroundColor: parseColor(theme.palette.primary.main).alpha(0.2).toRgbString(),
+    boxShadow: `inset 0 -2px 0 ${theme.palette.primary.main}`,
   },
 }));

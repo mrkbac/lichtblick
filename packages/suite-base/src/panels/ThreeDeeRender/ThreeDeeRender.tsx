@@ -45,6 +45,7 @@ import {
   MAX_TRANSFORM_MESSAGES,
   isTransformPreloadEnabled,
 } from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
+import { SELECTED_ID_VARIABLE } from "@lichtblick/suite-base/panels/ThreeDeeRender/settings";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceFolders";
@@ -52,7 +53,6 @@ import { localResourceFolders } from "@lichtblick/suite-base/util/localResourceF
 import type { ImageModeConfig, RendererConfig, RendererSubscription } from "./IRenderer";
 import type { Path } from "./LayerErrors";
 import type { PickedRenderable } from "./Picker";
-import { SELECTED_ID_VARIABLE } from "./Renderable";
 import { Renderer } from "./Renderer";
 import { RendererContext, useRendererEvent, useRendererProperty } from "./RendererContext";
 import { RendererOverlay } from "./RendererOverlay";

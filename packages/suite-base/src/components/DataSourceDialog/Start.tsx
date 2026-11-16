@@ -32,6 +32,7 @@ import DontShowThisAgainCheckbox from "@lichtblick/suite-base/components/DataSou
 import { OpenUrlInput } from "@lichtblick/suite-base/components/DataSourceDialog/OpenUrlInput";
 import { useStyles } from "@lichtblick/suite-base/components/DataSourceDialog/index.style";
 import { LiveRecordingsList } from "@lichtblick/suite-base/components/LiveRecordingsList";
+import { usePanelGuideStore } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 import { RecentSourceLabel } from "@lichtblick/suite-base/components/RecentSourceLabel";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
@@ -347,8 +348,13 @@ export default function Start(): React.JSX.Element {
         >
           {t("exploreSampleData")}
         </Button>
-        <Button size="small" href={APP_CONFIG.docsUrl} target="_blank" rel="noopener">
-          {t("viewDocumentation")}
+        <Button
+          size="small"
+          onClick={() => {
+            usePanelGuideStore.getState().show();
+          }}
+        >
+          {t("openPanelGuide")}
         </Button>
         <div className={classes.spacer} />
         <DontShowThisAgainCheckbox />

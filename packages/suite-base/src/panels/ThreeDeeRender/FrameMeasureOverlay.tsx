@@ -10,6 +10,7 @@ import type { Renderer } from "./Renderer";
 import { useRendererEvent } from "./RendererContext";
 import type { FrameAxes } from "./renderables/FrameAxes";
 import { frameTransform } from "./renderables/measure/geometry";
+import { isThreeDeeShortcut } from "./shortcuts";
 import {
   clearFrames,
   findMissingLink,
@@ -142,7 +143,7 @@ export function FrameMeasureOverlay({
       setHovered(frameAt(cursor));
     }, HOVER_PICK_INTERVAL_MS);
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
+      if (isThreeDeeShortcut("3d.finishMeasurement", event)) {
         onStopPicking();
       }
     };

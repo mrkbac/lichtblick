@@ -2,10 +2,11 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { fromSec } from "@foxglove/rostime";
-import { IconButton, ListItem, ListItemButton, ListItemText, Typography } from "@mui/material";
+import { ListItem, ListItemButton, ListItemText, Typography } from "@mui/material";
 import React, { useCallback } from "react";
 import { useTranslation } from "react-i18next";
 
+import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import PublishPointIcon from "@lichtblick/suite-base/components/PublishPointIcon";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { DiagnosticInfo } from "@lichtblick/suite-base/panels/DiagnosticStatus/types";
@@ -21,6 +22,8 @@ import {
   formatElapsed,
   levelAt,
 } from "@lichtblick/suite-base/panels/DiagnosticSummary/utils/history";
+
+import { DIAGNOSTIC_SUMMARY_BUTTONS } from "./buttons";
 
 export type NodeRowProps = {
   info: DiagnosticInfo;
@@ -91,8 +94,9 @@ function DiagnosticNodeRow(props: Readonly<NodeRowProps>) {
         onClick={handleClick}
         data-testid="diagnostic-row-button"
       >
-        <IconButton
-          size="small"
+        <PanelIconButton
+          button={DIAGNOSTIC_SUMMARY_BUTTONS.pin}
+          aria-pressed={isPinned}
           onClick={(event) => {
             handleClickPin();
             event.stopPropagation();
@@ -101,7 +105,7 @@ function DiagnosticNodeRow(props: Readonly<NodeRowProps>) {
           data-testid="diagnostic-row-icon"
         >
           <PublishPointIcon fontSize="small" color={isPinned ? "inherit" : "disabled"} />
-        </IconButton>
+        </PanelIconButton>
         <ListItemText
           primary={info.displayName}
           secondary={info.status.message}

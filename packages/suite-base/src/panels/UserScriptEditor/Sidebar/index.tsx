@@ -5,21 +5,18 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  DocumentOnePageSparkle24Regular,
-  Script24Regular,
-  Toolbox24Regular,
-} from "@fluentui/react-icons";
 import { Divider, Paper, Tab, Tabs, tabClasses, tabsClasses } from "@mui/material";
 import * as monacoApi from "monaco-editor/editor/editor.api.js";
 import { SyntheticEvent, useCallback, useMemo, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { Script } from "@lichtblick/suite-base/panels/UserScriptEditor/script";
 import { UserScript, UserScripts } from "@lichtblick/suite-base/types/panels";
 import { parseColor } from "@lichtblick/suite-base/util/parseColor";
 
+import { USER_SCRIPTS_BUTTONS } from "../buttons";
 import { ScriptsList } from "./ScriptsList";
 import { Templates } from "./Templates";
 import { Utilities } from "./Utilities";
@@ -81,6 +78,9 @@ export function Sidebar({
   addNewScript: addNewNode,
 }: SidebarProps): React.JSX.Element {
   const { classes } = useStyles();
+  const scriptsTitle = usePanelButtonTitle(USER_SCRIPTS_BUTTONS.scripts);
+  const utilitiesTitle = usePanelButtonTitle(USER_SCRIPTS_BUTTONS.utilities);
+  const templatesTitle = usePanelButtonTitle(USER_SCRIPTS_BUTTONS.templates);
   const [activeTab, setActiveTab] = useState<TabOption>(false);
 
   const gotoUtils = useCallback(
@@ -160,24 +160,24 @@ export function Sidebar({
           <Tab
             disableRipple
             value="nodes"
-            title={`Scripts (${Object.keys(userScripts).length})`}
-            icon={<Script24Regular />}
+            title={`${scriptsTitle} (${Object.keys(userScripts).length})`}
+            icon={<USER_SCRIPTS_BUTTONS.scripts.icon />}
             data-testid="node-explorer"
             onClick={activeTab === "nodes" ? handleClose : undefined}
           />
           <Tab
             disableRipple
             value="utils"
-            title="Utilities"
-            icon={<Toolbox24Regular />}
+            title={utilitiesTitle}
+            icon={<USER_SCRIPTS_BUTTONS.utilities.icon />}
             data-testid="utils-explorer"
             onClick={activeTab === "utils" ? handleClose : undefined}
           />
           <Tab
             disableRipple
             value="templates"
-            title="Templates"
-            icon={<DocumentOnePageSparkle24Regular />}
+            title={templatesTitle}
+            icon={<USER_SCRIPTS_BUTTONS.templates.icon />}
             data-testid="templates-explorer"
             onClick={activeTab === "templates" ? handleClose : undefined}
           />

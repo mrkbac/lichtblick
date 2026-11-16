@@ -20,15 +20,10 @@ import {
   UrdfJoint,
 } from "@lichtblick/den/urdf";
 import Logger from "@lichtblick/log";
-import {
-  SettingsTreeAction,
-  SettingsTreeChildren,
-  SettingsTreeField,
-  SettingsTreeFields,
-} from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 import { makeRgba, stringToRgba } from "@lichtblick/suite-base/panels/ThreeDeeRender/color";
+import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
 import { eulerToQuaternion } from "@lichtblick/suite-base/util/geometry";
-import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { isValidUrl } from "@lichtblick/suite-base/util/isValidURL";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
@@ -51,19 +46,24 @@ import {
   MarkerType,
   Quaternion,
   Vector3,
+  URDF_TOPIC_SCHEMAS,
 } from "../ros";
+import { BaseSettings, CustomLayerSettings } from "../settings";
 import {
-  BaseSettings,
-  CustomLayerSettings,
-  PRECISION_DEGREES,
-  PRECISION_DISTANCE,
-} from "../settings";
+  CUSTOM_URDF_DEFAULTS,
+  customUrdfSettingsNode,
+  URDF_DEFAULTS,
+  URDF_LAYER_ID,
+  urdfJointNode,
+  urdfJointsNodes,
+  urdfSettingsNode,
+} from "../settingsNodes/layers";
 import { Pose, makePose, TransformTree } from "../transforms";
 import { updatePose } from "../updatePose";
 
 const log = Logger.getLogger(__filename);
 
-const LAYER_ID = "foxglove.Urdf";
+const LAYER_ID = URDF_LAYER_ID;
 const TOPIC_NAME = "/robot_description";
 
 /** ID of fake "topic" used to represent the /robot_description parameter */
@@ -81,8 +81,6 @@ const RAD2DEG = 180 / Math.PI;
 const DEFAULT_COLOR_STR = "#ffffff";
 const DEFAULT_COLOR = stringToRgba(makeRgba(), DEFAULT_COLOR_STR);
 const VEC3_ONE = { x: 1, y: 1, z: 1 };
-const XYZ_LABEL: [string, string, string] = ["X", "Y", "Z"];
-const RPY_LABEL: [string, string, string] = ["R", "P", "Y"];
 
 export type LayerSettingsUrdf = BaseSettings & {
   instanceId: string; // This will be set to the topic name
@@ -103,31 +101,9 @@ export type LayerSettingsCustomUrdf = CustomLayerSettings & {
   fallbackColor?: string;
 };
 
-const DEFAULT_SETTINGS: LayerSettingsUrdf = {
-  visible: false,
-  frameLocked: true,
-  instanceId: "invalid",
-  displayMode: "auto",
-  label: "URDF",
-  fallbackColor: DEFAULT_COLOR_STR,
-};
+const DEFAULT_SETTINGS = URDF_DEFAULTS;
 
-const DEFAULT_CUSTOM_SETTINGS: LayerSettingsCustomUrdf = {
-  visible: true,
-  frameLocked: true,
-  label: "URDF",
-  instanceId: "invalid",
-  layerId: LAYER_ID,
-  sourceType: "url",
-  url: "",
-  filePath: "",
-  parameter: "",
-  topic: "",
-  framePrefix: "",
-  displayMode: "auto",
-  fallbackColor: DEFAULT_COLOR_STR,
-};
-const URDF_TOPIC_SCHEMAS = new Set<string>(["std_msgs/String", "std_msgs/msg/String"]);
+const DEFAULT_CUSTOM_SETTINGS = CUSTOM_URDF_DEFAULTS;
 
 const tempVec3a = new THREE.Vector3();
 const tempVec3b = new THREE.Vector3();
@@ -248,57 +224,22 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
 
   public override settingsNodes(): SettingsTreeEntry[] {
     const entries: SettingsTreeEntry[] = [];
-    const baseDisplayModeField: SettingsTreeField = {
-      label: "Display mode",
-      input: "select",
-      options: [
-        {
-          label: "Auto",
-          value: "auto",
-        },
-        {
-          label: "Visual",
-          value: "visual",
-        },
-        {
-          label: "Collision",
-          value: "collision",
-        },
-      ],
-    };
-    const baseFallbackColorField: SettingsTreeField = {
-      label: "Color",
-      help: "Fallback color used in case a link does not specify any color itself",
-      input: "rgb",
-    };
+    const children = (key: string) =>
+      urdfChildren(
+        this.#transformsByInstanceId.get(key),
+        this.renderer.transformTree,
+        this.#jointStates,
+      );
 
     // /robot_description topic entry
     const topic = this.renderer.topicsByName?.get(TOPIC_NAME);
     if (topic != undefined) {
       const config = (this.renderer.config.topics[TOPIC_NAME] ?? {}) as Partial<LayerSettingsUrdf>;
-      const fields: SettingsTreeFields = {
-        displayMode: {
-          ...baseDisplayModeField,
-          value: config.displayMode ?? DEFAULT_SETTINGS.displayMode,
-        },
-        fallbackColor: {
-          ...baseFallbackColorField,
-          value: config.fallbackColor ?? DEFAULT_SETTINGS.fallbackColor,
-        },
-      };
       entries.push({
         path: ["topics", TOPIC_NAME],
         node: {
-          label: TOPIC_NAME,
-          icon: "PrecisionManufacturing",
-          fields,
-          visible: config.visible ?? DEFAULT_SETTINGS.visible,
+          ...urdfSettingsNode(TOPIC_NAME, config, children(TOPIC_NAME)),
           handler: this.#handleTopicSettingsAction,
-          children: urdfChildren(
-            this.#transformsByInstanceId.get(TOPIC_NAME),
-            this.renderer.transformTree,
-            this.#jointStates,
-          ),
         },
       });
     }
@@ -307,147 +248,30 @@ export class Urdfs extends SceneExtension<UrdfRenderable> {
     const parameter = this.renderer.parameters?.get(PARAM_NAME);
     if (parameter != undefined) {
       const config = (this.renderer.config.topics[PARAM_KEY] ?? {}) as Partial<LayerSettingsUrdf>;
-
-      const fields: SettingsTreeFields = {
-        displayMode: {
-          ...baseDisplayModeField,
-          value: config.displayMode ?? DEFAULT_SETTINGS.displayMode,
-        },
-        fallbackColor: {
-          ...baseFallbackColorField,
-          value: config.fallbackColor ?? DEFAULT_SETTINGS.fallbackColor,
-        },
-      };
-
       entries.push({
         path: ["topics", PARAM_KEY],
         node: {
-          label: PARAM_DISPLAY_NAME,
-          icon: "PrecisionManufacturing",
-          fields,
-          visible: config.visible ?? DEFAULT_SETTINGS.visible,
+          ...urdfSettingsNode(PARAM_DISPLAY_NAME, config, children(PARAM_KEY)),
           handler: this.#handleTopicSettingsAction,
-          children: urdfChildren(
-            this.#transformsByInstanceId.get(PARAM_KEY),
-            this.renderer.transformTree,
-            this.#jointStates,
-          ),
         },
       });
     }
 
     // Custom layer entries
+    const urdfTopics = filterMap(this.renderer.topics ?? [], (_topic) =>
+      URDF_TOPIC_SCHEMAS.has(_topic.schemaName) ? _topic.name : undefined,
+    );
+    const urdfParameters = filterMap(this.renderer.parameters ?? [], ([paramName, value]) =>
+      typeof value === "string" ? paramName : undefined,
+    );
     for (const [instanceId, layerConfig] of Object.entries(this.renderer.config.layers)) {
       if (layerConfig?.layerId === LAYER_ID) {
         const config = layerConfig as Partial<LayerSettingsCustomUrdf>;
-
-        const fields: SettingsTreeFields = {
-          sourceType: {
-            label: "Source",
-            input: "select",
-            value: config.sourceType ?? DEFAULT_CUSTOM_SETTINGS.sourceType,
-            options: [
-              {
-                label: "URL",
-                value: "url",
-              },
-              {
-                label: "File path (Desktop only)",
-                value: "filePath",
-                disabled: !isDesktopApp(),
-              },
-              {
-                label: "Parameter",
-                value: "param",
-              },
-              {
-                label: "Topic",
-                value: "topic",
-              },
-            ],
-          },
-          url:
-            (config.sourceType ?? DEFAULT_CUSTOM_SETTINGS.sourceType) === "url"
-              ? {
-                  label: "URL",
-                  input: "string",
-                  placeholder: "package://",
-                  help: "package:// URL or http(s) URL pointing to a Unified Robot Description Format (URDF) XML file",
-                  value: config.url ?? DEFAULT_CUSTOM_SETTINGS.url,
-                }
-              : undefined,
-          filePath:
-            config.sourceType === "filePath"
-              ? {
-                  label: "File path",
-                  input: "string",
-                  help: "Absolute file path (desktop app only)",
-                  value: config.filePath ?? DEFAULT_CUSTOM_SETTINGS.filePath,
-                  disabled: !isDesktopApp(),
-                }
-              : undefined,
-          topic:
-            config.sourceType === "topic"
-              ? {
-                  label: "Topic",
-                  input: "autocomplete",
-                  value: config.topic ?? DEFAULT_CUSTOM_SETTINGS.topic,
-                  items: filterMap(this.renderer.topics ?? [], (_topic) =>
-                    URDF_TOPIC_SCHEMAS.has(_topic.schemaName) ? _topic.name : undefined,
-                  ),
-                }
-              : undefined,
-          parameter:
-            config.sourceType === "param"
-              ? {
-                  label: "Parameter",
-                  input: "autocomplete",
-                  value: config.parameter ?? DEFAULT_CUSTOM_SETTINGS.parameter,
-                  items: filterMap(this.renderer.parameters ?? [], ([paramName, value]) =>
-                    typeof value === "string" ? paramName : undefined,
-                  ),
-                }
-              : undefined,
-          label: {
-            label: "Label",
-            input: "string",
-            value: config.label ?? DEFAULT_CUSTOM_SETTINGS.label,
-          },
-          framePrefix: {
-            label: "Frame prefix",
-            input: "string",
-            help: "Prefix to apply to all frame names (also often called tfPrefix)",
-            placeholder: "Frame prefix",
-            value: config.framePrefix ?? "",
-          },
-          displayMode: {
-            ...baseDisplayModeField,
-            value: config.displayMode ?? DEFAULT_CUSTOM_SETTINGS.displayMode,
-          },
-          fallbackColor: {
-            ...baseFallbackColorField,
-            value: config.fallbackColor ?? DEFAULT_SETTINGS.fallbackColor,
-          },
-        };
-
         entries.push({
           path: ["layers", instanceId],
           node: {
-            label: config.label ?? "Grid",
-            icon: "PrecisionManufacturing",
-            fields,
-            visible: config.visible ?? DEFAULT_CUSTOM_SETTINGS.visible,
-            actions: [
-              { type: "action", id: "duplicate", label: "Duplicate" },
-              { type: "action", id: "delete", label: "Delete" },
-            ],
-            order: layerConfig.order,
+            ...customUrdfSettingsNode(config, urdfTopics, urdfParameters, children(instanceId)),
             handler: this.#handleLayerSettingsAction,
-            children: urdfChildren(
-              this.#transformsByInstanceId.get(instanceId),
-              this.renderer.transformTree,
-              this.#jointStates,
-            ),
           },
         });
       }
@@ -1227,257 +1051,27 @@ function urdfChildren(
   transforms: TransformData[] | undefined,
   transformTree: TransformTree,
   jointStates: Map<string, JointPosition>,
-): SettingsTreeChildren {
+): DocumentedNodes {
   if (!transforms) {
     return {};
   }
 
-  const jointChildren: SettingsTreeChildren = {};
+  const jointChildren: DocumentedNodes = {};
   for (const { joint } of transforms) {
-    const frameId = joint.child;
-    const frame = transformTree.getOrCreateFrame(frameId);
-
-    const { x, y, z } = joint.origin.xyz;
-    const { x: roll, y: pitch, z: yaw } = joint.origin.rpy;
-    const { x: aX, y: aY, z: aZ } = joint.axis;
-    const fields: SettingsTreeFields = {};
-    fields.jointType = {
-      label: "Type",
-      input: "string",
-      readonly: true,
-      value: joint.jointType,
-    };
-
-    switch (joint.jointType) {
-      case "fixed":
-        break;
-      case "continuous":
-      case "revolute": {
-        const min = joint.limit ? joint.limit.lower * RAD2DEG : -180;
-        const max = joint.limit ? joint.limit.upper * RAD2DEG : 180;
-        let manualDegrees: number | undefined;
-        const jointStateRadians = jointStates.get(joint.name)?.position;
-
-        if (frame.offsetEulerDegrees) {
-          // Convert the Euler degrees to a quaternion
-          const quaternion = eulerDegreesToQuaternion(frame.offsetEulerDegrees);
-          const radians = signedAngleAroundAxis(quaternion, joint.axis);
-          manualDegrees = radians * RAD2DEG;
-        }
-
-        fields.manual = {
-          label: "Manual angle",
-          input: "number",
-          precision: PRECISION_DEGREES,
-          step: 1,
-          min,
-          max,
-          value: manualDegrees,
-        };
-
-        if (jointStateRadians != undefined) {
-          fields.jointState = {
-            label: "JointState angle",
-            input: "number",
-            precision: PRECISION_DEGREES,
-            min,
-            max,
-            readonly: true,
-            value: jointStateRadians * RAD2DEG,
-          };
-        }
-        break;
+    const frame = transformTree.getOrCreateFrame(joint.child);
+    let manual: number | undefined;
+    if (joint.jointType === "continuous" || joint.jointType === "revolute") {
+      if (frame.offsetEulerDegrees) {
+        // Convert the Euler degrees to a quaternion
+        const quaternion = eulerDegreesToQuaternion(frame.offsetEulerDegrees);
+        manual = signedAngleAroundAxis(quaternion, joint.axis) * RAD2DEG;
       }
-      case "prismatic": {
-        const min = joint.limit?.lower;
-        const max = joint.limit?.upper;
-        const manualPosition = frame.offsetPosition
-          ? signedDistanceAlongAxis(frame.offsetPosition, joint.axis)
-          : undefined;
-        const jointStatePosition = jointStates.get(joint.name)?.position;
-
-        fields.manual = {
-          label: "Manual position",
-          input: "number",
-          precision: PRECISION_DISTANCE,
-          step: 0.01,
-          min,
-          max,
-          value: manualPosition,
-        };
-        if (jointStatePosition != undefined) {
-          fields.jointState = {
-            label: "JointState position",
-            input: "number",
-            precision: PRECISION_DISTANCE,
-            min,
-            max,
-            readonly: true,
-            value: jointStatePosition,
-          };
-        }
-        break;
-      }
-      case "floating":
-      case "planar":
-        // Motion could be supported for these types in the future
-        break;
+    } else if (joint.jointType === "prismatic" && frame.offsetPosition) {
+      manual = signedDistanceAlongAxis(frame.offsetPosition, joint.axis);
     }
-
-    fields.position = {
-      label: "Position",
-      input: "vec3",
-      labels: XYZ_LABEL,
-      precision: PRECISION_DISTANCE,
-      readonly: true,
-      value: [x, y, z],
-    };
-    fields.rotation = {
-      label: "Rotation",
-      input: "vec3",
-      labels: RPY_LABEL,
-      precision: PRECISION_DEGREES,
-      readonly: true,
-      value: [roll * RAD2DEG, pitch * RAD2DEG, yaw * RAD2DEG],
-    };
-    fields.parent = {
-      label: "Parent",
-      input: "string",
-      readonly: true,
-      value: joint.parent,
-    };
-    fields.child = {
-      label: "Child",
-      input: "string",
-      readonly: true,
-      value: joint.child,
-    };
-    if (joint.jointType !== "fixed") {
-      fields.axis = {
-        label: "Axis",
-        input: "vec3",
-        labels: XYZ_LABEL,
-        precision: PRECISION_DISTANCE,
-        readonly: true,
-        value: [aX, aY, aZ],
-      };
-    }
-    if (joint.calibration) {
-      const { rising, falling } = joint.calibration;
-      fields.calibration = {
-        label: "Calibration",
-        input: "vec2",
-        labels: ["↑", "↓"],
-        readonly: true,
-        value: [rising, falling],
-      };
-    }
-    if (joint.dynamics) {
-      const { damping, friction } = joint.dynamics;
-      fields.damping = {
-        label: "Damping",
-        input: "number",
-        precision: PRECISION_DISTANCE,
-        readonly: true,
-        value: damping,
-      };
-      fields.friction = {
-        label: "Friction",
-        input: "number",
-        precision: PRECISION_DISTANCE,
-        readonly: true,
-        value: friction,
-      };
-    }
-    if (joint.limit) {
-      const { effort, velocity } = joint.limit;
-      if (joint.jointType !== "continuous" && joint.jointType !== "fixed") {
-        const { upper, lower } = joint.limit;
-        const isAngular = joint.jointType === "revolute";
-        const upperValue = isAngular ? upper * RAD2DEG : upper;
-        const lowerValue = isAngular ? lower * RAD2DEG : lower;
-        fields.limit = {
-          label: "Limit",
-          input: "vec2",
-          labels: ["↑", "↓"],
-          readonly: true,
-          precision: isAngular ? PRECISION_DEGREES : PRECISION_DISTANCE,
-          value: [upperValue, lowerValue],
-        };
-      }
-      fields.effort = {
-        label: "Limit effort",
-        input: "number",
-        precision: PRECISION_DISTANCE,
-        readonly: true,
-        value: effort,
-      };
-      fields.velocity = {
-        label: "Limit velocity",
-        input: "number",
-        precision: PRECISION_DISTANCE,
-        readonly: true,
-        value: velocity,
-      };
-    }
-    if (joint.mimic) {
-      const { joint: mimicJoint, multiplier, offset } = joint.mimic;
-      fields.mimicJoint = {
-        label: "Mimic joint",
-        input: "string",
-        readonly: true,
-        value: mimicJoint,
-      };
-      fields.mimicMultiplier = {
-        label: "Mimic multiplier",
-        input: "number",
-        precision: PRECISION_DISTANCE,
-        readonly: true,
-        value: multiplier,
-      };
-      fields.mimicOffset = {
-        label: "Mimic offset",
-        input: "number",
-        precision: PRECISION_DISTANCE,
-        readonly: true,
-        value: offset,
-      };
-    }
-    if (joint.safetyController) {
-      const { softUpperLimit, softLowerLimit, kPosition, kVelocity } = joint.safetyController;
-      fields.softLimit = {
-        label: "Soft limit",
-        input: "vec2",
-        labels: ["↑", "↓"],
-        readonly: true,
-        value: [softUpperLimit, softLowerLimit],
-      };
-      fields.kPosition = {
-        label: "k_position",
-        input: "number",
-        precision: PRECISION_DISTANCE,
-        readonly: true,
-        value: kPosition,
-      };
-      fields.kVelocity = {
-        label: "k_velocity",
-        input: "number",
-        precision: PRECISION_DISTANCE,
-        readonly: true,
-        value: kVelocity,
-      };
-    }
-    jointChildren[joint.name] = { label: joint.name, fields, defaultExpansionState: "collapsed" };
+    jointChildren[joint.name] = urdfJointNode(joint, manual, jointStates.get(joint.name)?.position);
   }
-
-  const children: SettingsTreeChildren = {
-    joints: {
-      label: "Joints",
-      defaultExpansionState: "collapsed",
-      children: jointChildren,
-    },
-  };
-  return children;
+  return urdfJointsNodes(jointChildren);
 }
 
 function eulerDegreesToQuaternion(eulerDegrees: vec3): THREE.Quaternion {

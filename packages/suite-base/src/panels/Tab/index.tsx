@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import AddIcon from "@mui/icons-material/Add";
-import CloseIcon from "@mui/icons-material/Close";
 import { ButtonBase, Popover } from "@mui/material";
 import { getPanelData } from "dockview-react";
 import { DragEvent, useCallback, useMemo, useState } from "react";
@@ -10,6 +8,10 @@ import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
 import Panel from "@lichtblick/suite-base/components/Panel";
+import {
+  PanelIconButton,
+  usePanelButtonTitle,
+} from "@lichtblick/suite-base/components/PanelButton";
 import { PanelCatalog, PanelSelection } from "@lichtblick/suite-base/components/PanelCatalog";
 import { getPanelDragData } from "@lichtblick/suite-base/components/PanelCatalog/panelDrag";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
@@ -20,7 +22,6 @@ import {
   useDragHoverActivation,
 } from "@lichtblick/suite-base/components/PanelTab";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
-import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
 import {
   LayoutState,
   useCurrentLayoutActions,
@@ -29,6 +30,7 @@ import {
 import { usePanelCatalog } from "@lichtblick/suite-base/context/PanelCatalogContext";
 import { LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import {
   PANEL_TITLE_CONFIG_KEY,
   getPanelIdForType,
@@ -42,6 +44,9 @@ import {
   getActiveTabIndex,
   getTabs,
 } from "@lichtblick/suite-base/util/tabLayout";
+
+import { TAB_BUTTONS } from "./buttons";
+import { TAB_SHORTCUTS } from "./shortcuts";
 
 /**
  * Hidden tabs stay laid out under the shown one. `visibility` is inherited but descendants can
@@ -147,6 +152,8 @@ function TabButton(props: TabButtonProps): React.JSX.Element {
   const [editing, setEditing] = useState(false);
   const [isOver, setIsOver] = useState(false);
   const hover = useDragHoverActivation(onSelect);
+  const closeTitle = usePanelButtonTitle(TAB_BUTTONS.close);
+  const CloseIcon = TAB_BUTTONS.close.icon;
 
   if (editing) {
     return (
@@ -174,10 +181,11 @@ function TabButton(props: TabButtonProps): React.JSX.Element {
         if (event.target !== event.currentTarget) {
           return;
         }
-        if (event.key === "Enter" || event.key === " ") {
+        const shortcut = findShortcut(TAB_SHORTCUTS, event);
+        if (shortcut?.id === "tab.select") {
           event.preventDefault();
           onSelect();
-        } else if (event.key === "F2") {
+        } else if (shortcut?.id === "tab.rename") {
           event.preventDefault();
           setEditing(true);
         }
@@ -210,6 +218,7 @@ function TabButton(props: TabButtonProps): React.JSX.Element {
       {closable && (
         <ButtonBase
           className={cx(classes.close, "close")}
+          title={closeTitle}
           aria-label={t("closeTab", { title })}
           onClick={(event) => {
             event.stopPropagation();
@@ -248,7 +257,6 @@ type Props = { config: TabPanelConfig; saveConfig: SaveConfig<TabPanelConfig> };
  */
 function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
   const { classes, cx } = useStyles();
-  const { t } = useTranslation("panelToolbar");
   const { id: panelId } = usePanelContext();
   const { addPanel } = useCurrentLayoutActions();
   const panelCatalog = usePanelCatalog();
@@ -354,15 +362,13 @@ function TabPanel({ config, saveConfig }: Props): React.JSX.Element {
     <div className={classes.root}>
       <PanelToolbar
         additionalIcons={
-          <ToolbarIconButton
-            title={t("addTab")}
+          <PanelIconButton
+            button={TAB_BUTTONS.add}
             data-testid="add-tab"
             onClick={(event) => {
               setCatalogAnchor(event.currentTarget);
             }}
-          >
-            <AddIcon />
-          </ToolbarIconButton>
+          />
         }
       >
         <div

@@ -13,11 +13,11 @@ describe("buildContributionPoints", () => {
     vi.clearAllMocks();
   });
 
-  it("should initialize contribution objects", () => {
+  it("should initialize contribution objects", async () => {
     const consoleErrorMock = vi.spyOn(console, "error").mockImplementation(() => {});
     const extensionInfo = ExtensionBuilder.extensionInfo();
 
-    const result = buildContributionPoints(extensionInfo, "");
+    const result = await buildContributionPoints(extensionInfo, "");
 
     expect(result).toHaveProperty("panels", {});
     expect(result).toHaveProperty("messageConverters", []);
@@ -26,7 +26,7 @@ describe("buildContributionPoints", () => {
     consoleErrorMock.mockRestore();
   });
 
-  it("should register a panel", () => {
+  it("should register a panel", async () => {
     const extensionInfo = ExtensionBuilder.extensionInfo();
     const panelName = BasicBuilder.string();
     const panelId = `${extensionInfo.qualifiedName}.${panelName}`;
@@ -44,7 +44,7 @@ describe("buildContributionPoints", () => {
       };
     `;
 
-    const result = buildContributionPoints(extensionInfo, extensionSource);
+    const result = await buildContributionPoints(extensionInfo, extensionSource);
 
     expect(result.panels[panelId]).toBeDefined();
     expect(result.panels[panelId]).toEqual(
@@ -61,7 +61,7 @@ describe("buildContributionPoints", () => {
     delete (globalThis as any).panel;
   });
 
-  it("should warn when trying to register a duplicate panel", () => {
+  it("should warn when trying to register a duplicate panel", async () => {
     const logWarnMock = vi.spyOn(console, "warn").mockImplementation(() => {});
     const extensionInfo = ExtensionBuilder.extensionInfo();
     const panelName = BasicBuilder.string();
@@ -81,7 +81,7 @@ describe("buildContributionPoints", () => {
       };
     `;
 
-    const result = buildContributionPoints(extensionInfo, extensionSource);
+    const result = await buildContributionPoints(extensionInfo, extensionSource);
 
     expect(result.panels[panelId]).toBeDefined();
     expect(logWarnMock).toHaveBeenCalledWith(
@@ -91,7 +91,7 @@ describe("buildContributionPoints", () => {
     logWarnMock.mockRestore();
   });
 
-  it("should register a message converter", () => {
+  it("should register a message converter", async () => {
     const extensionInfo = ExtensionBuilder.extensionInfo();
     const messageConverter: InstalledMessageConverter = {
       fromSchemaName: BasicBuilder.string(),
@@ -110,7 +110,7 @@ describe("buildContributionPoints", () => {
       };
     `;
 
-    const result = buildContributionPoints(extensionInfo, extensionSource);
+    const result = await buildContributionPoints(extensionInfo, extensionSource);
 
     expect(result.messageConverters).toHaveLength(1);
     expect(result.messageConverters).toHaveLength(1);
@@ -122,7 +122,7 @@ describe("buildContributionPoints", () => {
     delete (globalThis as any).messageConverter;
   });
 
-  it("should register a message converter with panel settings", () => {
+  it("should register a message converter with panel settings", async () => {
     const extensionInfo = ExtensionBuilder.extensionInfo();
     const panelSettingsA: PanelSettings<unknown> = {
       defaultConfig: BasicBuilder.genericDictionary(String),
@@ -153,7 +153,7 @@ describe("buildContributionPoints", () => {
       };
     `;
 
-    const result = buildContributionPoints(extensionInfo, extensionSource);
+    const result = await buildContributionPoints(extensionInfo, extensionSource);
 
     expect(result.panelSettings).toBeDefined();
     expect(Object.keys(result.panelSettings)).toHaveLength(2);
@@ -170,7 +170,44 @@ describe("buildContributionPoints", () => {
     delete (globalThis as any).messageConverter;
   });
 
-  it("registers topic aliases correctly", () => {
+  it("loads Foxglove-style modules: default export, async activate, external API require", async () => {
+    const extensionSource = `
+      require("@foxglove/extension");
+      exports.default = {
+        activate: async (ctx) => {
+          await Promise.resolve();
+          ctx.registerMessageConverter({ type: "schema", fromSchemaName: "a", toSchemaName: "b", converter: (m) => m });
+        }
+      };
+    `;
+
+    const result = await buildContributionPoints(ExtensionBuilder.extensionInfo(), extensionSource);
+
+    expect(result.messageConverters).toEqual([
+      expect.objectContaining({ fromSchemaName: "a", toSchemaName: "b" }),
+    ]);
+  });
+
+  it("logs a rejected async activate and keeps earlier registrations", async () => {
+    const logErrorMock = vi.spyOn(console, "error").mockImplementation(() => {});
+    const extensionSource = `
+      module.exports = {
+        activate: async (ctx) => {
+          ctx.registerMessageConverter({ fromSchemaName: "a", toSchemaName: "b", converter: (m) => m });
+          await Promise.resolve();
+          throw new Error("boom");
+        }
+      };
+    `;
+
+    const result = await buildContributionPoints(ExtensionBuilder.extensionInfo(), extensionSource);
+
+    expect(result.messageConverters).toHaveLength(1);
+    expect(logErrorMock).toHaveBeenCalled();
+    logErrorMock.mockRestore();
+  });
+
+  it("registers topic aliases correctly", async () => {
     const extensionInfo = ExtensionBuilder.extensionInfo();
     const aliasFunction: TopicAliasFunction = vi.fn();
 
@@ -183,7 +220,7 @@ describe("buildContributionPoints", () => {
       };
     `;
 
-    const result = buildContributionPoints(extensionInfo, extensionSource);
+    const result = await buildContributionPoints(extensionInfo, extensionSource);
 
     expect(result.topicAliasFunctions).toHaveLength(1);
     expect(result.topicAliasFunctions[0]!.extensionId).toBe(extensionInfo.id);

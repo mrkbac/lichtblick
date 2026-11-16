@@ -22,7 +22,6 @@ export const threeDee = {
   lineWidth: "Line width",
   position: "Position",
   reset: "Reset",
-  zoomToData: "Zoom to data",
   rotation: "Rotation",
   scale: "Scale",
   gradient: "Gradient",
@@ -90,12 +89,10 @@ export const threeDee = {
   adjustStepMedium: "Medium (1 cm, 0.1°)",
   adjustStepCoarse: "Coarse (10 cm, 1°)",
   keyboardFrame: "Keyboard adjusts",
-  keyboardFrameHelp:
-    "With the pointer over the panel, keys step the result values: arrows move X/Y, PageUp/PageDown move Z, hold Alt to change pitch/yaw/roll, Shift for 10× steps, O shows the original, Ctrl/Cmd+Z undoes",
+  keyboardFrameHelp: "Frame that keyboard adjustments move while the pointer is over the panel.",
   keyboardFrameNone: "None",
   showOriginal: "Show original",
-  showOriginalHelp:
-    "Render recorded transforms without adjustments, in every panel of this layout (key: O)",
+  showOriginalHelp: "Render recorded transforms without adjustments, in every panel of this layout",
   adjustWithKeyboard: "Adjust with keyboard",
   resetAdjustment: "Reset adjustment",
   resetAllAdjustments: "Reset all adjustments",
@@ -149,6 +146,88 @@ export const threeDee = {
   // Topics
   topics: "Topics",
 
+  // Settings help (one sentence per field, shown on hover and in the panel guide)
+  topicsHelp:
+    "Every topic this panel can show. Toggle visibility here and expand a topic for its settings.",
+  customLayersHelp: "Grids, robot models and maps that don't come from a topic.",
+  transformsHelp:
+    "Coordinate frames from transform messages. Toggle a frame's axes, inspect or adjust its transform.",
+  imageAnnotationsHelp: "Annotation topics drawn over the image.",
+  renderStatsHelp: "Shows rendering statistics such as the frame rate over the scene.",
+  debugPickingHelp:
+    "Renders the buffer used to pick objects instead of the scene, to debug selection.",
+  backgroundHelp: "Scene background color. Empty follows the app's light or dark theme.",
+  directionalLightIntensityHelp: "Brightness of the main light.",
+  hemisphereLightIntensityHelp: "Brightness of the ambient sky and ground light.",
+  cameraDistanceHelp: "Distance from the camera to its target, in meters.",
+  perspectiveHelp: "Perspective 3D view. Off shows an orthographic top-down view.",
+  targetHelp: "Point the camera looks at, offset from the display frame's origin (m).",
+  thetaHelp: "Camera rotation around the vertical axis, in degrees.",
+  phiHelp: "Camera tilt from straight down, in degrees.",
+  fovyHelp: "Vertical field of view, in degrees.",
+  nearHelp: "Closest distance drawn. Anything nearer the camera is cut off.",
+  farHelp: "Farthest distance drawn. Anything beyond is cut off.",
+  editableHelp: "Lets you offset each frame's translation and rotation.",
+  adjustStepHelp: "Step size of the offset inputs and keyboard adjustments.",
+  frameLabelsHelp: "Shows each frame's name next to its axes.",
+  frameLabelSizeHelp: "Height of the frame name labels.",
+  frameAxisScaleHelp: "Size of each frame's axes.",
+  frameLineWidthHelp: "Width in pixels of the line from each frame to its parent.",
+  frameLineColorHelp: "Color of the line from each frame to its parent.",
+  parentHelp: "The frame this frame's transform is relative to.",
+  ageHelp: "How long ago the transform in use was recorded, relative to the playhead.",
+  historySizeHelp: "Number of transforms stored for this frame.",
+  recordedTranslationHelp: "Translation from the parent frame as recorded, in meters.",
+  translationHelp: "Translation from the parent frame, in meters.",
+  markerColorHelp: "Overrides the color of every marker on this topic.",
+  showOutlineHelp: "Draws dark edges around cubes, spheres, cylinders, arrows and meshes.",
+  poseTypeHelp: "Draws each pose as coordinate axes or as an arrow.",
+  poseArrayTypeHelp: "Draws each pose as axes or an arrow, or all poses as one line.",
+  axisLengthHelp: "Length of the axes, in meters.",
+  arrowScaleHelp: "Arrow length (X) and thickness (Y, Z), in meters.",
+  arrowColorHelp: "Color of the arrow.",
+  covarianceHelp: "Shows the position covariance as an ellipsoid.",
+  covarianceColorHelp: "Color of the covariance ellipsoid.",
+  pathLineWidthHelp: "Width of the line through the poses, in meters.",
+  poseGradientHelp: "Colors from the first pose to the last.",
+  occupancyColorModeHelp:
+    "Custom blends between your colors; Map and Costmap use the rviz palettes; Raw shows cell values as gray levels.",
+  minColorHelp: "Color of free cells (0); values up to 100 blend toward the max color.",
+  maxColorHelp: "Color of fully occupied cells (100).",
+  unknownColorHelp: "Color of unknown cells (-1).",
+  invalidColorHelp: "Color of cells outside -1 to 100.",
+  frameLockHelp:
+    "Moves the data with its frame. Off keeps it where it was when the message arrived.",
+  cameraInfoHelp: "Calibration that places the image in the scene.",
+  imageDistanceHelp: "Distance from the camera at which the image is drawn, in meters.",
+  frustumDistanceHelp: "Length of the drawn camera frustum, in meters.",
+  planarProjectionFactorHelp:
+    "0 projects onto a sphere around the camera, 1 onto a flat plane; values between blend.",
+  imageColorHelp: "Tints the image; the alpha sets its opacity.",
+  frustumLineWidthHelp: "Width of the frustum lines, in meters.",
+  frustumColorHelp: "Color of the frustum lines.",
+  pointShapeHelp: "Shape drawn for each point.",
+  pointSizeHelp: "Point size in pixels.",
+  cubeSizeHelp: "Edge length of each cube, in meters.",
+  decayTimeHelp: "Seconds that older messages stay visible. 0 shows only the latest one.",
+  colorModeHelp:
+    "How to color: one flat color, a gradient or color map over a field's value, or colors stored in the message.",
+  flatColorHelp: "Color used for everything on this topic.",
+  colorByHelp:
+    "Field whose value picks the color. Distance (auto) uses the distance from the frame's origin.",
+  gradientHelp: "Colors for the min and max value; values in between blend.",
+  colorMapHelp: "Color map spread from the min to the max value.",
+  opacityHelp: "Opacity applied to the computed colors.",
+  valueMinHelp: "Value mapped to the first color. Empty picks it from the data.",
+  valueMaxHelp: "Value mapped to the last color. Empty picks it from the data.",
+  gridFrameHelp: "Frame the grid is attached to.",
+  gridSizeHelp: "Width and length of the grid, in meters.",
+  gridDivisionsHelp: "Number of cells along each side.",
+  gridLineWidthHelp: "Width of the grid lines, in pixels.",
+  gridColorHelp: "Color of the grid lines.",
+  gridPositionHelp: "Offset of the grid's center in its frame, in meters.",
+  gridRotationHelp: "Rotation of the grid in its frame (roll, pitch, yaw) in degrees.",
+
   // Custom layers
   addGrid: "Add Grid",
   addMap: "Add Map",
@@ -161,7 +240,6 @@ export const threeDee = {
 
   // Image annotations
   imageAnnotations: "Image annotations",
-  resetView: "Reset view",
   downloadImage: "Download image",
 
   // Images
@@ -215,13 +293,11 @@ export const threeDee = {
   poseDisplayTypeLine: "Line",
 
   // Camera controls
-  perspectiveCamera: "3D camera",
   switchTo2DCamera: "Switch to 2D camera",
   switchTo3DCamera: "Switch to 3D camera",
 
   // Publish
   clickToCancel: "Click to cancel",
-  clickToPublish: "Click to publish",
   publish: "Publish",
   publishTopicHelp: "The topic on which to publish",
   publishTypeHelp: "The type of message to publish when clicking in the scene",
@@ -246,7 +322,6 @@ export const threeDee = {
   waitingForSyncAnnotations: "Waiting for synchronized annotations…",
 
   // Measurement tool
-  measure: "Measure",
   stopMeasuring: "Stop measuring",
   measurePoint: "Point",
   measureDistance: "Distance",
@@ -267,7 +342,6 @@ export const threeDee = {
   measureCopyAll: "Copy all",
   measureClearAll: "Clear all",
   // Frame-to-frame measurement
-  measureFrames: "Measure between frames",
   stopMeasuringFrames: "Stop picking frames",
   frameMeasureTitle: "Frame to frame",
   frameMeasureFrom: "From",
@@ -296,6 +370,4 @@ export const threeDee = {
     "Roll, pitch and yaw turn around the frame's own axes: X, then Y, then Z, each turn on the already rotated axes (intrinsic XYZ).",
   frameMeasureFromBadge: "from",
   frameMeasureToBadge: "to",
-  frameMeasureFromHere: "Measure from here",
-  frameMeasureToHere: "Measure to here",
 };

@@ -3,12 +3,11 @@
 
 import * as _ from "lodash-es";
 
-import {
-  SettingsTreeAction,
-  SettingsTreeFields,
-  SettingsTreeNode,
-  SettingsTreeNodeAction,
-} from "@lichtblick/suite";
+import { SettingsTreeAction, SettingsTreeNodeAction } from "@lichtblick/suite";
+import type {
+  DocumentedFields,
+  DocumentedNode,
+} from "@lichtblick/suite-base/panels/shared/documentedSettings";
 import { moveItem, moveUpDownActions } from "@lichtblick/suite-base/panels/utils";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
@@ -72,7 +71,7 @@ function sourceOptions(saved: readonly SourceParams[], kinds: readonly SourceKin
   ];
 }
 
-function customSourceFields(kind: SourceKind, custom: SourceParams): SettingsTreeFields {
+function customSourceFields(kind: SourceKind, custom: SourceParams): DocumentedFields {
   const tiled = kind === "raster" || kind === "dem";
   const urlHelp: Record<SourceKind, string> = {
     raster:
@@ -85,7 +84,7 @@ function customSourceFields(kind: SourceKind, custom: SourceParams): SettingsTre
     geotiff:
       "GeoTIFF in WGS84 (EPSG:4326), Web Mercator (EPSG:3857), or UTM (EPSG:326xx/327xx). Large files are downsampled to 4096 px.",
   };
-  const fields: SettingsTreeFields = {
+  const fields: DocumentedFields = {
     url: {
       label:
         kind === "vector"
@@ -123,6 +122,7 @@ function customSourceFields(kind: SourceKind, custom: SourceParams): SettingsTre
       input: "select",
       value: custom.tileSize ?? 256,
       options: [256, 512].map((size) => ({ label: `${size} px`, value: size })),
+      help: "Pixel size of the server's tiles. Most XYZ servers use 256.",
     };
   }
   if (kind === "raster") {
@@ -134,6 +134,7 @@ function customSourceFields(kind: SourceKind, custom: SourceParams): SettingsTre
         { label: "XYZ (y down)", value: "xyz" },
         { label: "TMS (y up)", value: "tms" },
       ],
+      help: "TMS servers count tile rows from the bottom. Switch if the tiles land in the wrong place.",
     };
   }
   if (kind === "dem") {
@@ -145,6 +146,7 @@ function customSourceFields(kind: SourceKind, custom: SourceParams): SettingsTre
         { label: "Terrarium", value: "terrarium" },
         { label: "Mapbox Terrain-RGB", value: "mapbox" },
       ],
+      help: "How the server packs elevation into tile colors. A wrong choice gives wildly wrong heights.",
     };
   }
   if (kind !== "vector") {
@@ -153,6 +155,7 @@ function customSourceFields(kind: SourceKind, custom: SourceParams): SettingsTre
       input: "string",
       value: custom.attribution,
       placeholder: "© Data provider",
+      help: "Credit for the data, shown in the map's attribution.",
     };
   }
   return fields;
@@ -165,16 +168,17 @@ function layerNode(
   saved: readonly SourceParams[],
   kinds: readonly SourceKind[],
   error: string | undefined,
-): SettingsTreeNode {
+): DocumentedNode {
   const kind =
     layer.source === "custom" ? (layer.custom?.kind ?? "raster") : PRESETS[layer.source]?.kind;
   const variant = PRESETS[layer.source]?.variant;
-  const fields: SettingsTreeFields = {
+  const fields: DocumentedFields = {
     source: {
       label: "Source",
       input: "select",
       value: layer.source === "custom" ? `custom:${kind}` : providerKey(layer.source),
       options: sourceOptions(saved, kinds),
+      help: "A built-in map, a custom source of your own, or a custom source used before.",
     },
     style: variant
       ? {
@@ -186,6 +190,7 @@ function layerNode(
               ? [{ label: preset.variant.style, value }]
               : [],
           ),
+          help: "The provider's map style.",
         }
       : undefined,
     ...(layer.source === "custom" && kind
@@ -211,7 +216,7 @@ function layerNode(
                 { label: "Flat", value: "flat" },
                 { label: "3D", value: "3d" },
               ],
-              help: "3D extrudes buildings by height from zoom 14. Tilt the map (right-drag or ctrl+drag) to see them.",
+              help: "3D extrudes buildings by height from zoom 14. Tilt the map to see them.",
             }
           : {
               label,
@@ -220,7 +225,7 @@ function layerNode(
               help:
                 group === "areas"
                   ? "Turn off land and water to use the map as an overlay, e.g. roads and labels on satellite imagery."
-                  : undefined,
+                  : `Shows the style's ${label.toLowerCase()}.`,
             };
     }
   }
@@ -230,6 +235,7 @@ function layerNode(
       label: "Hillshade",
       input: "boolean",
       value: layer.hillshade !== false,
+      help: "Shades slopes from the elevation data.",
     };
     if (layer.hillshade !== false) {
       fields.opacity = {
@@ -239,13 +245,14 @@ function layerNode(
         min: 0,
         max: 1,
         step: 0.05,
+        help: "Strength of the hillshade.",
       };
     }
     fields.terrain = {
       label: "3D terrain",
       input: "boolean",
       value: layer.terrain === true,
-      help: "Raise the map by elevation. Tilt the map (right-drag or ctrl+drag) to see it.",
+      help: "Raise the map by elevation. Tilt the map to see it.",
     };
     if (layer.terrain === true) {
       fields.exaggeration = {
@@ -255,6 +262,7 @@ function layerNode(
         min: 0.1,
         max: 5,
         step: 0.1,
+        help: "Multiplies heights to make relief easier to see. Measurements use the real heights.",
       };
     }
   } else if (kind === "3dtiles") {
@@ -274,6 +282,7 @@ function layerNode(
       min: 0,
       max: 1,
       step: 0.05,
+      help: "Lower it to see the layers below through this one.",
     };
   }
 
@@ -414,7 +423,7 @@ export function layerStackChildren(
   saved: readonly SourceParams[],
   kinds: readonly SourceKind[],
   errorFor: (layer: MapLayer) => string | undefined,
-): Record<string, SettingsTreeNode> {
+): Record<string, DocumentedNode> {
   return Object.fromEntries(
     layers.map((layer, i) => [
       String(i),

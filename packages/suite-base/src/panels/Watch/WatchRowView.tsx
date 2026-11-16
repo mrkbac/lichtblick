@@ -1,26 +1,26 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import DeleteOutlineIcon from "@mui/icons-material/DeleteOutlined";
-import EditOutlinedIcon from "@mui/icons-material/EditOutlined";
 import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
-import LibraryAddOutlinedIcon from "@mui/icons-material/LibraryAddOutlined";
 import { IconButton, Tooltip } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import MessagePathInput from "@lichtblick/suite-base/components/MessagePathSyntax/MessagePathInput";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import { useSeriesDrag } from "@lichtblick/suite-base/panels/shared/useSeriesDrag";
+import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 import { useStyles } from "./Watch.style";
 import { HISTORY_SIZE, WatchStore, historyValues } from "./WatchStore";
 import { WatchTree } from "./WatchTree";
+import { WATCH_BUTTONS } from "./buttons";
 import { Schema, pathsForEnter } from "./compile";
 import { WatchRow } from "./config";
 import { EnumNames, autoDecimals, formatAge, formatValue, isExpandable, isStale } from "./format";
+import { WATCH_SHORTCUTS } from "./shortcuts";
 
 export const DRAG_TYPE = "application/x-lichtblick-watch-row";
 const FLASH_MS = 600;
@@ -103,7 +103,7 @@ function PathEditor({
       ref={containerRef}
       className={classes.nameEditor}
       onKeyDown={(event) => {
-        if (event.key === "Escape") {
+        if (findShortcut(WATCH_SHORTCUTS, event)?.id === "watch.cancelEdit") {
           finish(undefined);
         } else if (event.key === "Enter" && !isCompositionEnter(event)) {
           // A prevented Enter picked an autocomplete suggestion: it only fills the input, which
@@ -213,6 +213,12 @@ export const WatchRowView = memo(function WatchRowViewInner({
   const { t } = useTranslation("watch");
   const { classes, cx } = useStyles();
   const theme = useTheme();
+  const buttonTitles = {
+    copyValue: usePanelButtonTitle(WATCH_BUTTONS.copyValue),
+    editPath: usePanelButtonTitle(WATCH_BUTTONS.editPath),
+    duplicate: usePanelButtonTitle(WATCH_BUTTONS.duplicate),
+    remove: usePanelButtonTitle(WATCH_BUTTONS.remove),
+  };
   const [expanded, setExpanded] = useState(false);
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -414,7 +420,7 @@ export const WatchRowView = memo(function WatchRowViewInner({
                 onAction("openInPlot", row.id);
               }}
               onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
+                if (findShortcut(WATCH_SHORTCUTS, event)?.id === "watch.openInPlot") {
                   event.preventDefault();
                   onAction("openInPlot", row.id);
                 }
@@ -429,44 +435,44 @@ export const WatchRowView = memo(function WatchRowViewInner({
         {sparklines && <canvas ref={sparkRef} className={classes.sparkline} />}
         {showAge && <span ref={ageRef} data-age className={classes.age} />}
         <span data-actions className={classes.actions}>
-          <Tooltip title={t("copyValue")}>
+          <Tooltip title={buttonTitles.copyValue}>
             <IconButton
               size="small"
               onClick={() => {
                 onAction("copy", row.id);
               }}
             >
-              <ContentCopyIcon fontSize="inherit" />
+              <WATCH_BUTTONS.copyValue.icon fontSize="inherit" />
             </IconButton>
           </Tooltip>
-          <Tooltip title={t("editPath")}>
+          <Tooltip title={buttonTitles.editPath}>
             <IconButton
               size="small"
               onClick={() => {
                 onAction("edit", row.id);
               }}
             >
-              <EditOutlinedIcon fontSize="inherit" />
+              <WATCH_BUTTONS.editPath.icon fontSize="inherit" />
             </IconButton>
           </Tooltip>
-          <Tooltip title={t("duplicate")}>
+          <Tooltip title={buttonTitles.duplicate}>
             <IconButton
               size="small"
               onClick={() => {
                 onAction("duplicate", row.id);
               }}
             >
-              <LibraryAddOutlinedIcon fontSize="inherit" />
+              <WATCH_BUTTONS.duplicate.icon fontSize="inherit" />
             </IconButton>
           </Tooltip>
-          <Tooltip title={t("remove")}>
+          <Tooltip title={buttonTitles.remove}>
             <IconButton
               size="small"
               onClick={() => {
                 onAction("remove", row.id);
               }}
             >
-              <DeleteOutlineIcon fontSize="inherit" />
+              <WATCH_BUTTONS.remove.icon fontSize="inherit" />
             </IconButton>
           </Tooltip>
         </span>

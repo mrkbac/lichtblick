@@ -14,6 +14,7 @@ import { useGuaranteedContext } from "@lichtblick/hooks";
 import { ExtensionPanelRegistration, Immutable, PanelSettings } from "@lichtblick/suite";
 import { ExtensionSettings } from "@lichtblick/suite-base/components/PanelSettings/types";
 import { TopicAliasFunctions } from "@lichtblick/suite-base/players/TopicAliasingPlayer/TopicAliasingPlayer";
+import { InstalledTopicConverter } from "@lichtblick/suite-base/players/UserScriptPlayer/topicConverters";
 import { TypeExtensionLoader } from "@lichtblick/suite-base/services/extension/IExtensionLoader";
 import { Namespace } from "@lichtblick/suite-base/types";
 import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
@@ -84,6 +85,7 @@ export type ExtensionCatalog = Immutable<{
   installedPanels: undefined | Record<string, RegisteredPanel>;
   installedMessageConverters: undefined | InstalledMessageConverter[];
   installedTopicAliasFunctions: undefined | TopicAliasFunctions;
+  installedTopicConverters: InstalledTopicConverter[];
   installedCameraModels: CameraModelsMap;
   panelSettings: undefined | ExtensionSettings;
 }>;
@@ -92,6 +94,7 @@ export type ContributionPoints = {
   panels: Record<string, RegisteredPanel>;
   messageConverters: InstalledMessageConverter[];
   topicAliasFunctions: TopicAliasFunctions;
+  topicConverters: InstalledTopicConverter[];
   panelSettings: ExtensionSettings;
   cameraModels: CameraModelsMap;
 };

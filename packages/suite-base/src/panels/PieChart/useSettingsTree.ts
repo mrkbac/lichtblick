@@ -6,10 +6,10 @@
 import { useMemo } from "react";
 
 import { useShallowMemo } from "@lichtblick/hooks";
-import { SettingsTreeNode, SettingsTreeNodes } from "@lichtblick/suite";
 
-import { SUPPORTED_DATA_TYPES } from "./constants";
+import { buildSettingsTree } from "./settings";
 import type { PieChartConfig } from "./types";
+import type { DocumentedNodes } from "../shared/documentedSettings";
 
 export type UseSettingsTreeProps = {
   config: PieChartConfig;
@@ -23,42 +23,10 @@ export function useSettingsTree({
   pathParseError,
   error,
   legendCount,
-}: UseSettingsTreeProps): SettingsTreeNodes {
-  const generalSettings = useMemo((): SettingsTreeNode => {
-    const fields: SettingsTreeNode["fields"] = {
-      legendControls: {
-        label: "Legend controls",
-        input: "legendcontrols",
-      },
-      path: {
-        label: "Message path",
-        input: "messagepath",
-        supportsMathModifiers: true,
-        value: config.path,
-        error: pathParseError,
-        validTypes: SUPPORTED_DATA_TYPES,
-      },
-      title: {
-        label: "Title",
-        input: "string",
-        value: config.title,
-      },
-    };
-
-    for (let i = 1; i <= legendCount; i++) {
-      const key = `legend${i}` as const;
-      fields[key] = {
-        label: `Legend ${i}`,
-        input: "string",
-        value: config[key] ?? "",
-      };
-    }
-
-    return {
-      error,
-      fields,
-    };
-  }, [config, pathParseError, error, legendCount]);
-
-  return useShallowMemo({ general: generalSettings });
+}: UseSettingsTreeProps): DocumentedNodes {
+  const general = useMemo(
+    () => buildSettingsTree(config, legendCount, pathParseError, error).general,
+    [config, pathParseError, error, legendCount],
+  );
+  return useShallowMemo({ general });
 }

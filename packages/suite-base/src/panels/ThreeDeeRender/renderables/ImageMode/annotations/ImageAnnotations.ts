@@ -7,7 +7,6 @@
 
 import { ImageAnnotations as FoxgloveImageAnnotations } from "@foxglove/schemas";
 import { LabelPool } from "@foxglove/three-text";
-import { t } from "i18next";
 import * as THREE from "three";
 import { Opaque } from "ts-essentials";
 
@@ -31,6 +30,7 @@ import { ALL_SUPPORTED_ANNOTATION_SCHEMAS } from "./normalizeAnnotations";
 import { Annotation } from "./types";
 import { AnyRendererSubscription, ImageModeConfig } from "../../../IRenderer";
 import { SettingsTreeEntry } from "../../../SettingsManager";
+import { imageAnnotationsRootNode } from "../../../settingsNodes/imageMode";
 import { topicIsConvertibleToSchema } from "../../../topicIsConvertibleToSchema";
 import { sortPrefixMatchesToFront } from "../../Images/topicPrefixMatching";
 import { MessageHandler, MessageRenderState } from "../MessageHandler";
@@ -242,11 +242,7 @@ export class ImageAnnotations extends THREE.Object3D {
 
     entries.push({
       path: ["imageAnnotations"],
-      node: {
-        label: t("threeDee:imageAnnotations"),
-        enableVisibilityFilter: true,
-        defaultExpansionState: "expanded",
-      },
+      node: imageAnnotationsRootNode(),
     });
     const config = this.#context.config();
 

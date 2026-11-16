@@ -19,23 +19,19 @@ export type ImageKind =
   | "compressed-foxglove"
   | "video";
 
+const IMAGE_KINDS: readonly (readonly [ReadonlySet<string>, ImageKind])[] = [
+  [ROS_IMAGE_DATATYPES, "raw-ros"],
+  [FOXGLOVE_RAW_IMAGE_DATATYPES, "raw-foxglove"],
+  [ROS_COMPRESSED_IMAGE_DATATYPES, "compressed-ros"],
+  [FOXGLOVE_COMPRESSED_IMAGE_DATATYPES, "compressed-foxglove"],
+  [COMPRESSED_VIDEO_DATATYPES, "video"],
+];
+
+/** Every image schema the grid shows. */
+export const IMAGE_SCHEMAS: readonly string[] = IMAGE_KINDS.flatMap(([schemas]) => [...schemas]);
+
 export function imageKind(schemaName: string): ImageKind | undefined {
-  if (ROS_IMAGE_DATATYPES.has(schemaName)) {
-    return "raw-ros";
-  }
-  if (FOXGLOVE_RAW_IMAGE_DATATYPES.has(schemaName)) {
-    return "raw-foxglove";
-  }
-  if (ROS_COMPRESSED_IMAGE_DATATYPES.has(schemaName)) {
-    return "compressed-ros";
-  }
-  if (FOXGLOVE_COMPRESSED_IMAGE_DATATYPES.has(schemaName)) {
-    return "compressed-foxglove";
-  }
-  if (COMPRESSED_VIDEO_DATATYPES.has(schemaName)) {
-    return "video";
-  }
-  return undefined;
+  return IMAGE_KINDS.find(([schemas]) => schemas.has(schemaName))?.[1];
 }
 
 /** Raw images cost far more bandwidth than compressed ones, so they are never added automatically. */

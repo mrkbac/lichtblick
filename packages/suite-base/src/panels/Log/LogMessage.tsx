@@ -14,17 +14,17 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { Copy16Regular } from "@fluentui/react-icons";
 import React from "react";
-import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import useLogStyles from "@lichtblick/suite-base/panels/Log/useLogStyles";
 import { TimeDisplayMethod } from "@lichtblick/suite-base/types/panels";
 import { customTypography } from "@lichtblick/theme";
 
 import LevelToString from "./LevelToString";
 import Stamp from "./Stamp";
+import { LOG_BUTTONS } from "./buttons";
 import { NormalizedLogMessage } from "./types";
 
 const useStyles = makeStyles()((theme) => ({
@@ -94,7 +94,7 @@ export default React.memo(function LogMessage(props: {
 
   const { classes, cx } = useStyles();
   const { classes: logClasses } = useLogStyles();
-  const { t } = useTranslation("log");
+  const copyTitle = usePanelButtonTitle(LOG_BUTTONS.copyMessage);
 
   const strLevel = LevelToString(msg.level);
   const stamp = msg.stamp;
@@ -152,14 +152,14 @@ export default React.memo(function LogMessage(props: {
         <button
           type="button"
           className={cx(classes.copyButton, "copy-button")}
-          title={t("copyMessage")}
-          aria-label={t("copyMessage")}
+          title={copyTitle}
+          aria-label={copyTitle}
           onClick={(event) => {
             event.stopPropagation();
             onCopy(msg);
           }}
         >
-          <Copy16Regular />
+          <LOG_BUTTONS.copyMessage.icon />
         </button>
       )}
     </div>

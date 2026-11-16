@@ -4,7 +4,7 @@
 import { Object3DEventMap } from "three";
 
 import { ImageModeConfig } from "@lichtblick/suite-base/panels/ThreeDeeRender/IRenderer";
-import { DEFAULT_IMAGE_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/constants";
+import { DEFAULT_IMAGE_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/imageMode";
 
 export interface ImageModeEventMap extends Object3DEventMap {
   hasModifiedViewChanged: object;

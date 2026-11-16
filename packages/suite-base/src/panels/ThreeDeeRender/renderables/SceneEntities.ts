@@ -27,7 +27,6 @@ import { SettingsTreeAction } from "@lichtblick/suite";
 
 import { TopicEntities } from "./TopicEntities";
 import type { AnyRendererSubscription } from "../IRenderer";
-import { SELECTED_ID_VARIABLE } from "../Renderable";
 import type { Renderer } from "../Renderer";
 import { PartialMessage, PartialMessageEvent, SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../SettingsManager";
@@ -41,16 +40,12 @@ import {
   normalizeByteArray,
 } from "../normalizeMessages";
 import { LayerSettingsEntity } from "../settings";
+import { SCENE_ENTITY_DEFAULTS, sceneEntitySettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 import { makePose } from "../transforms";
 import { PrimitivePool } from "./primitives/PrimitivePool";
 
-const SCENE_ENTITIES_DEFAULT_SETTINGS: LayerSettingsEntity = {
-  showOutlines: true,
-  visible: false,
-  color: undefined,
-  selectedIdVariable: undefined,
-};
+const SCENE_ENTITIES_DEFAULT_SETTINGS = SCENE_ENTITY_DEFAULTS;
 
 export class FoxgloveSceneEntities extends SceneExtension<TopicEntities> {
   public static extensionId = "foxglove.SceneEntities";
@@ -79,25 +74,7 @@ export class FoxgloveSceneEntities extends SceneExtension<TopicEntities> {
       const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsEntity>;
 
       const node: SettingsTreeNodeWithActionHandler = {
-        label: topic.name,
-        icon: "Shapes",
-        order: topic.name.toLocaleLowerCase(),
-        fields: {
-          color: { label: "Color", input: "rgba", value: config.color },
-          showOutlines: {
-            label: "Show outlines",
-            input: "boolean",
-            value: config.showOutlines ?? SCENE_ENTITIES_DEFAULT_SETTINGS.showOutlines,
-          },
-          selectedIdVariable: {
-            label: "Selection Variable",
-            input: "string",
-            help: "When selecting a SceneEntity, this global variable will be set to the entity ID",
-            value: config.selectedIdVariable,
-            placeholder: SELECTED_ID_VARIABLE,
-          },
-        },
-        visible: config.visible ?? SCENE_ENTITIES_DEFAULT_SETTINGS.visible,
+        ...sceneEntitySettingsNode(topic, config),
         handler: this.handleSettingsAction,
       };
 

@@ -216,9 +216,9 @@ export const useStyles = makeStyles()((theme) => ({
     minWidth: 220,
     maxWidth: 300,
     "& > div": { display: "flex", alignItems: "center", gap: 4 },
-    "& button[aria-label='Copy to clipboard']": { opacity: 0.35 },
     "&:hover button": { opacity: 1 },
   },
+  topicCopy: { opacity: 0.35 },
   topicButton: {
     textAlign: "left",
     display: "block",

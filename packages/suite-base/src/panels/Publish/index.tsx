@@ -16,7 +16,6 @@
 
 import { MessageDefinition } from "@foxglove/message-definition";
 import CommonRosTypes from "@foxglove/rosmsg-msgs-common";
-import RepeatIcon from "@mui/icons-material/Repeat";
 import StopIcon from "@mui/icons-material/Stop";
 import { Button, Tooltip, Typography } from "@mui/material";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -32,6 +31,7 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { selectPlayerPresence } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Panel from "@lichtblick/suite-base/components/Panel";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import useCallbackWithToast from "@lichtblick/suite-base/hooks/useCallbackWithToast";
@@ -45,9 +45,12 @@ import { PLAYER_CAPABILITIES } from "@lichtblick/suite-base/players/constants";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { useDefaultPanelTitle } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { findShortcut, shortcutLabel } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { ros2CommonDatatypes } from "@lichtblick/suite-base/util/ros2CommonDatatypes";
 
+import { PUBLISH_BUTTONS } from "./buttons";
 import { defaultConfig, usePublishPanelSettings } from "./settings";
+import { PUBLISH_SHORTCUTS } from "./shortcuts";
 import { PublishConfig } from "./types";
 
 type Props = {
@@ -71,6 +74,7 @@ function Publish(props: Props) {
   const [confirm, confirmModal] = useConfirm();
   const [repeating, setRepeating] = useState(false);
   const [lastPublished, setLastPublished] = useState<Date>();
+  const repeatTitle = usePanelButtonTitle(PUBLISH_BUTTONS.repeat);
 
   const datatypes = useMemo(() => {
     // Add common ROS datatypes, depending on the data source profile. The distro is unknown here;
@@ -197,7 +201,7 @@ function Publish(props: Props) {
     <div
       className={classes.wrapper}
       onKeyDown={(event) => {
-        if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+        if (findShortcut(PUBLISH_SHORTCUTS, event)?.id === "publish.publish") {
           event.preventDefault();
           void onPublishClicked();
         }
@@ -245,13 +249,13 @@ function Publish(props: Props) {
               </Typography>
             )}
             {config.advancedView && (
-              <Tooltip title={repeating ? "Stop publishing" : `Publish repeatedly at ${rate} Hz`}>
+              <Tooltip title={repeating ? "Stop publishing" : `${repeatTitle} (${rate} Hz)`}>
                 <span>
                   <Button
                     variant="outlined"
                     color={repeating ? "error" : "inherit"}
                     disabled={!repeating && !canPublish}
-                    startIcon={repeating ? <StopIcon /> : <RepeatIcon />}
+                    startIcon={repeating ? <StopIcon /> : <PUBLISH_BUTTONS.repeat.icon />}
                     onClick={() => {
                       setRepeating(!repeating);
                     }}
@@ -267,7 +271,7 @@ function Publish(props: Props) {
                 (config.buttonTooltip ?? "") !== ""
                   ? config.buttonTooltip
                   : canPublish
-                    ? "Ctrl/Cmd+Enter"
+                    ? (shortcutLabel(PUBLISH_SHORTCUTS, "publish.publish") ?? "")
                     : ""
               }
             >

@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import BookmarksIcon from "@mui/icons-material/BookmarksOutlined";
 import DeleteIcon from "@mui/icons-material/DeleteOutlined";
-import RestartAltIcon from "@mui/icons-material/RestartAlt";
 import {
   Button,
   Divider,
@@ -22,12 +20,14 @@ import { useMemo, useState } from "react";
 import { makeStyles } from "tss-react/mui";
 
 import { Immutable } from "@lichtblick/suite";
+import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { usePrompt } from "@lichtblick/suite-base/hooks/usePrompt";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 import { customTypography } from "@lichtblick/theme";
 
 import { MessageForm, canShowForm } from "./MessageForm";
+import { MESSAGE_EDITOR_BUTTONS } from "./buttons";
 import { ParsedMessage, sampleMessageJson, stringifyMessage } from "./messageJson";
 
 export type MessageEditorMode = "form" | "json";
@@ -176,20 +176,15 @@ export function MessageEditor(props: Props): React.JSX.Element {
           onChange={onChange}
         />
         {template != undefined && (
-          <Tooltip title="Reset to an empty template">
-            <span>
-              <IconButton
-                size="small"
-                aria-label="Reset to template"
-                disabled={value === template}
-                onClick={() => {
-                  onChange(template);
-                }}
-              >
-                <RestartAltIcon fontSize="small" />
-              </IconButton>
-            </span>
-          </Tooltip>
+          <PanelIconButton
+            button={MESSAGE_EDITOR_BUTTONS.resetToTemplate}
+            disabled={value === template}
+            onClick={() => {
+              onChange(template);
+            }}
+          >
+            <MESSAGE_EDITOR_BUTTONS.resetToTemplate.icon fontSize="small" />
+          </PanelIconButton>
         )}
       </Stack>
       <div className={classes.body}>{body}</div>
@@ -219,17 +214,14 @@ function PresetMenu(
 
   return (
     <>
-      <Tooltip title="Presets">
-        <IconButton
-          size="small"
-          aria-label="Presets"
-          onClick={(event) => {
-            setAnchor(event.currentTarget);
-          }}
-        >
-          <BookmarksIcon fontSize="small" />
-        </IconButton>
-      </Tooltip>
+      <PanelIconButton
+        button={MESSAGE_EDITOR_BUTTONS.presets}
+        onClick={(event) => {
+          setAnchor(event.currentTarget);
+        }}
+      >
+        <MESSAGE_EDITOR_BUTTONS.presets.icon fontSize="small" />
+      </PanelIconButton>
       <Menu
         anchorEl={anchor}
         open={anchor != undefined}

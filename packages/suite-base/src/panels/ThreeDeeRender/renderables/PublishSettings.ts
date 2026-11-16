@@ -5,7 +5,6 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { t } from "i18next";
 import * as _ from "lodash-es";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
@@ -15,6 +14,7 @@ import type { Renderer } from "../Renderer";
 import { SceneExtension } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
 import { DEFAULT_PUBLISH_SETTINGS } from "../defaults";
+import { publishSettingsNode } from "../settingsNodes/global";
 
 export { DEFAULT_PUBLISH_SETTINGS };
 
@@ -38,66 +38,8 @@ export class PublishSettings extends SceneExtension {
   }
 
   public override settingsNodes(): SettingsTreeEntry[] {
-    const config = this.renderer.config;
-    const { publish } = config;
-    const handler = this.handleSettingsAction;
-
-    return [
-      {
-        path: ["publish"],
-        node: {
-          label: t("threeDee:publish"),
-          fields: {
-            type: {
-              label: t("threeDee:type"),
-              input: "select",
-              value: publish.type,
-              options: [
-                { label: t("threeDee:publishTypePoint"), value: "point" },
-                { label: t("threeDee:publishTypePose"), value: "pose" },
-                {
-                  label: t("threeDee:publishTypePoseEstimate"),
-                  value: "pose_estimate",
-                },
-              ],
-              help: t("threeDee:publishTypeHelp"),
-            },
-            topic: {
-              label: t("threeDee:topic"),
-              input: "string",
-              value: {
-                point: publish.pointTopic,
-                pose: publish.poseTopic,
-                pose_estimate: publish.poseEstimateTopic,
-              }[publish.type],
-              help: t("threeDee:publishTopicHelp"),
-            },
-            ...(publish.type === "pose_estimate" && {
-              poseEstimateXDeviation: {
-                label: t("threeDee:xDeviation"),
-                input: "number",
-                value: publish.poseEstimateXDeviation,
-                help: t("threeDee:xDeviationHelp"),
-              },
-              poseEstimateYDeviation: {
-                label: t("threeDee:yDeviation"),
-                input: "number",
-                value: publish.poseEstimateYDeviation,
-                help: t("threeDee:yDeviationHelp"),
-              },
-              poseEstimateThetaDeviation: {
-                label: t("threeDee:thetaDeviation"),
-                input: "number",
-                value: publish.poseEstimateThetaDeviation,
-                help: t("threeDee:thetaDeviationHelp"),
-              },
-            }),
-          },
-          defaultExpansionState: "collapsed",
-          handler,
-        },
-      },
-    ];
+    const node = publishSettingsNode(this.renderer.config.publish);
+    return [{ path: ["publish"], node: { ...node, handler: this.handleSettingsAction } }];
   }
 
   public override handleSettingsAction = (action: SettingsTreeAction): void => {

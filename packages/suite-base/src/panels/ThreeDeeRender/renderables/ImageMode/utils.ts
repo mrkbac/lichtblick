@@ -4,13 +4,15 @@
 import {
   LOWER_BRIGHTNESS_LIMIT,
   LOWER_CONTRAST_LIMIT,
+  UPPER_BRIGHTNESS_LIMIT,
+  UPPER_CONTRAST_LIMIT,
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/constants";
+import {
   MAX_BRIGHTNESS,
   MAX_CONTRAST,
   MIN_BRIGHTNESS,
   MIN_CONTRAST,
-  UPPER_BRIGHTNESS_LIMIT,
-  UPPER_CONTRAST_LIMIT,
-} from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ImageMode/constants";
+} from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/imageMode";
 
 function mapRange(
   value: number,

@@ -56,6 +56,7 @@ import {
   selectStartPlayback,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { MonitorSetupProvider } from "@lichtblick/suite-base/components/MonitorSetupContext";
+import { PanelGuide } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 import PanelLayout from "@lichtblick/suite-base/components/PanelLayout";
 import PanelSettings from "@lichtblick/suite-base/components/PanelSettings";
 import { COMPACT_PANELS_ATTRIBUTE } from "@lichtblick/suite-base/components/PanelToolbar/constants";
@@ -703,6 +704,7 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
       <CommandPalette />
       <LayoutTemplateCommands />
       <KeyboardShortcuts />
+      <PanelGuide />
       <LiveRecordingsDialog />
       <CompareDialog />
       <div

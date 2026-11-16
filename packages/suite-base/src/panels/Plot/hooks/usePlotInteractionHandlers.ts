@@ -17,6 +17,7 @@ import {
   useSetHoverValue,
   useTimelineInteractionState,
 } from "@lichtblick/suite-base/context/TimelineInteractionStateContext";
+import { PLOT_SHORTCUTS } from "@lichtblick/suite-base/panels/Plot/shortcuts";
 import {
   ElementAtPixelArgs,
   UseHoverHandlersHook as UsePlotInteractionHandlers,
@@ -293,14 +294,18 @@ const usePlotInteractionHandlers = ({
           return true;
         },
       },
-      keyUpHandlers: {
-        v: () => {
-          coordinator?.resetZoomMode();
-        },
-        b: () => {
-          coordinator?.resetZoomMode();
-        },
-      },
+      // Releasing a held zoom-mode key restores the default mode
+      keyUpHandlers: Object.fromEntries(
+        PLOT_SHORTCUTS.filter(({ id }) => id === "plot.zoomY" || id === "plot.zoomXY").flatMap(
+          ({ keys }) =>
+            keys.map(({ key }) => [
+              key.toLowerCase(),
+              () => {
+                coordinator?.resetZoomMode();
+              },
+            ]),
+        ),
+      ),
     };
   }, [coordinator, onResetView]);
 

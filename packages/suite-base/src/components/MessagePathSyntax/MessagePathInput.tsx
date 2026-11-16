@@ -236,6 +236,7 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
     path,
     prioritizedDatatype,
     validTypes,
+    validTopics,
     placeholder,
     noMultiSlices,
     inputStyle,
@@ -365,8 +366,11 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
   }, [globalVariables, rosPath, setGlobalVariables]);
 
   const topicNamesAutocompleteItems = useMemo(
-    () => topics.map(({ name }) => quoteTopicNameIfNeeded(name)),
-    [topics],
+    () =>
+      topics
+        .filter(({ name }) => validTopics?.includes(name) ?? true)
+        .map(({ name }) => quoteTopicNameIfNeeded(name)),
+    [topics, validTopics],
   );
 
   const topicNamesAndFieldsAutocompleteItems = useMemo(() => {
@@ -380,10 +384,16 @@ export default React.memo<MessagePathInputBaseProps>(function MessagePathInput(
 
     let index = topicCount;
     for (const key of structureItemsByPath.keys()) {
-      result[index++] = key;
+      if (
+        validTopics == undefined ||
+        validTopics.includes(parseMessagePath(key)?.topicName ?? "")
+      ) {
+        result[index++] = key;
+      }
     }
+    result.length = index;
     return result;
-  }, [structureItemsByPath, topicNamesAutocompleteItems]);
+  }, [structureItemsByPath, topicNamesAutocompleteItems, validTopics]);
 
   const autocompleteType = useMemo(() => {
     if (!rosPath) {

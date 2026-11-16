@@ -6,8 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import VolumeOffIcon from "@mui/icons-material/VolumeOff";
-import VolumeUpIcon from "@mui/icons-material/VolumeUp";
-import { IconButton, Typography } from "@mui/material";
+import { Typography } from "@mui/material";
 import {
   memo,
   useCallback,
@@ -21,6 +20,7 @@ import {
 
 import { parseMessagePath } from "@lichtblick/message-path";
 import { SettingsTreeAction } from "@lichtblick/suite";
+import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
 import { useStyles } from "@lichtblick/suite-base/panels/Indicator/Indicator.style";
@@ -40,8 +40,9 @@ import {
   sendTestAlert,
   showAlertNotification,
 } from "./alerts";
+import { INDICATOR_BUTTONS } from "./buttons";
 import { getMatchingRule } from "./getMatchingRule";
-import { settingsActionReducer, useSettingsTree } from "./settings";
+import { buildSettingsTree, settingsActionReducer } from "./settings";
 import { IndicatorAlertSound, IndicatorConfig, IndicatorProps, RawValueIndicator } from "./types";
 
 export function Indicator({ context }: IndicatorProps): React.JSX.Element {
@@ -177,11 +178,9 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
     [config.path, config.rules, notificationTag, requestPermission],
   );
 
-  const settingsTree = useSettingsTree(
-    config,
-    pathParseError,
-    error?.message,
-    notificationPermission,
+  const settingsTree = useMemo(
+    () => buildSettingsTree(config, pathParseError, error?.message, notificationPermission),
+    [config, pathParseError, error?.message, notificationPermission],
   );
   useEffect(() => {
     context.updatePanelSettingsEditor({
@@ -272,15 +271,14 @@ export function Indicator({ context }: IndicatorProps): React.JSX.Element {
         {style === "background" && <Background label={label} textColor={textColor} />}
       </Stack>
       {rules.some(hasAlert) && (
-        <IconButton
+        <PanelIconButton
+          button={INDICATOR_BUTTONS.muteAlerts}
           className={classes.muteButton}
-          size="small"
           onClick={toggleMuted}
-          title={alertsMuted ? "Unmute alerts" : "Mute alerts"}
-          aria-label={alertsMuted ? "Unmute alerts" : "Mute alerts"}
+          aria-pressed={alertsMuted}
         >
-          {alertsMuted ? <VolumeOffIcon fontSize="small" /> : <VolumeUpIcon fontSize="small" />}
-        </IconButton>
+          {alertsMuted ? <VolumeOffIcon fontSize="small" /> : undefined}
+        </PanelIconButton>
       )}
     </Stack>
   );

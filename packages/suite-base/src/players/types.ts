@@ -18,7 +18,11 @@ import { MessageDefinition } from "@foxglove/message-definition";
 import { Time } from "@foxglove/rostime";
 
 import type { IWritable } from "@lichtblick/mcap-core";
-import type { MessageEvent, Metadata, ParameterValue } from "@lichtblick/suite";
+import type {
+  MessageEvent as SuiteMessageEvent,
+  Metadata,
+  ParameterValue,
+} from "@lichtblick/suite";
 import { Immutable } from "@lichtblick/suite";
 import { Asset } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { GlobalVariables } from "@lichtblick/suite-base/hooks/useGlobalVariables";
@@ -32,7 +36,11 @@ import { Range } from "@lichtblick/suite-base/util/ranges";
 import { NotificationSeverity } from "@lichtblick/suite-base/util/sendNotification";
 
 // re-exported until other import sites are updated from players/types to @lichtblick/suite
-export type { MessageEvent };
+/** The extension API MessageEvent plus internal fields that are not part of the extension API. */
+export type MessageEvent<T = unknown> = SuiteMessageEvent<T> & {
+  /** Exact serialized payload size before decoding, when supplied by the data source. */
+  serializedSizeInBytes?: number;
+};
 
 export type MessageDefinitionsByTopic = {
   [topic: string]: string;

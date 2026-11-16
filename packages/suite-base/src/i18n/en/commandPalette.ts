@@ -77,7 +77,7 @@ export const commandPalette = {
   toggleRightSidebar: "Toggle right sidebar",
   settings: "Open settings",
 
-  documentation: "Open documentation",
+  panelGuide: "Open panel guide",
   about: "About {{appName}}",
   version: "Version {{version}}",
   keyboardShortcuts: "Keyboard shortcuts…",

@@ -32,7 +32,7 @@ describe("useSettingsTree", () => {
     const { result } = renderHook(() => useSettingsTree(props));
     const { general } = result.current;
 
-    expect(general?.fields?.path).toEqual({
+    expect(general?.fields?.path).toMatchObject({
       label: "Message path",
       input: "messagepath",
       supportsMathModifiers: true,
@@ -41,25 +41,25 @@ describe("useSettingsTree", () => {
       validTypes: SUPPORTED_DATA_TYPES,
     });
 
-    expect(general?.fields?.title).toEqual({
+    expect(general?.fields?.title).toMatchObject({
       label: "Title",
       input: "string",
       value: "My Pie Chart",
     });
 
-    expect(general?.fields?.legend1).toEqual({
+    expect(general?.fields?.legend1).toMatchObject({
       label: "Legend 1",
       input: "string",
       value: "1",
     });
 
-    expect(general?.fields?.legend2).toEqual({
+    expect(general?.fields?.legend2).toMatchObject({
       label: "Legend 2",
       input: "string",
       value: "2",
     });
 
-    expect(general?.fields?.legendControls).toEqual({
+    expect(general?.fields?.legendControls).toMatchObject({
       label: "Legend controls",
       input: "legendcontrols",
     });

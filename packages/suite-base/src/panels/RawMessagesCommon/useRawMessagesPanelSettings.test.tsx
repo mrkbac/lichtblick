@@ -46,6 +46,7 @@ describe("useRawMessagesPanelSettings", () => {
             fields: {
               fontSize: {
                 label: "Font size",
+                help: expect.any(String),
                 input: "select",
                 options: [
                   { label: "auto", value: undefined },

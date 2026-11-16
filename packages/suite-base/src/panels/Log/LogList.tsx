@@ -14,18 +14,18 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import DoubleArrowDownIcon from "@mui/icons-material/KeyboardDoubleArrowDown";
 import { Fab } from "@mui/material";
 import { elementScroll, useVirtualizer } from "@tanstack/react-virtual";
 import { useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from "react";
-import { useTranslation } from "react-i18next";
 
 import { Time } from "@lichtblick/suite";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import { useAppTimeFormat } from "@lichtblick/suite-base/hooks";
 import { NormalizedLogMessage } from "@lichtblick/suite-base/panels/Log/types";
 
 import { useStyles } from "./LogList.style";
 import LogMessage from "./LogMessage";
+import { LOG_BUTTONS } from "./buttons";
 import { DEFAULT_ROW_HEIGHT } from "./constants";
 import { lastIndexAtOrBefore } from "./timeIndex";
 
@@ -53,7 +53,7 @@ export type LogListProps = {
  */
 function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): React.JSX.Element {
   const { classes } = useStyles();
-  const { t } = useTranslation("log");
+  const followTitle = usePanelButtonTitle(LOG_BUTTONS.followPlayhead);
   const { timeFormat, timeZone } = useAppTimeFormat();
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -218,12 +218,12 @@ function LogList({ items, currentTime, onSeek, onCopy, apiRef }: LogListProps): 
       {!following && (
         <Fab
           size="small"
-          title={t("followPlayhead")}
+          title={followTitle}
           onClick={follow}
           className={classes.floatingButton}
           data-testid="scroll-to-bottom-button"
         >
-          <DoubleArrowDownIcon />
+          <LOG_BUTTONS.followPlayhead.icon />
         </Fab>
       )}
     </div>

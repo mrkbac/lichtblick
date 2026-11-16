@@ -15,17 +15,57 @@
 //   You may not use this file except in compliance with the License.
 
 import { Slider, Typography, useTheme } from "@mui/material";
-import { useCallback, useState } from "react";
+import { produce } from "immer";
+import * as _ from "lodash-es";
+import { useCallback, useEffect, useState } from "react";
 import { useDebouncedCallback } from "use-debounce";
 
+import { SettingsTreeAction } from "@lichtblick/suite";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
+import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
 
-import { useVariableSliderSettings } from "./settings";
+import { buildSettingsTree, defaultConfig } from "./settings";
 import { VariableSliderConfig } from "./types";
+
+function useVariableSliderSettings(
+  config: VariableSliderConfig,
+  saveConfig: SaveConfig<VariableSliderConfig>,
+): void {
+  const updatePanelSettingsTree = usePanelSettingsTreeUpdate();
+
+  const actionHandler = useCallback(
+    (action: SettingsTreeAction) => {
+      if (action.action !== "update") {
+        return;
+      }
+
+      saveConfig(
+        produce<VariableSliderConfig>((draft) => {
+          const path = action.payload.path.slice(1);
+          if (["min", "max"].includes(path[0] ?? "")) {
+            _.set(draft, ["sliderProps", ...path], action.payload.value);
+          } else if (path[0] === "step" && action.payload.input === "number") {
+            draft.sliderProps.step = action.payload.value;
+          } else {
+            _.set(draft, path, action.payload.value);
+          }
+        }),
+      );
+    },
+    [saveConfig],
+  );
+
+  useEffect(() => {
+    updatePanelSettingsTree({
+      actionHandler,
+      nodes: buildSettingsTree(config),
+    });
+  }, [actionHandler, config, updatePanelSettingsTree]);
+}
 
 type Props = {
   config: VariableSliderConfig;
@@ -94,15 +134,6 @@ function VariableSliderPanel(props: Props): React.JSX.Element {
     </Stack>
   );
 }
-
-const defaultConfig: VariableSliderConfig = {
-  sliderProps: {
-    min: 0,
-    max: 10,
-    step: 1,
-  },
-  globalVariableName: "globalVariable",
-};
 
 export default Panel(
   Object.assign(VariableSliderPanel, {

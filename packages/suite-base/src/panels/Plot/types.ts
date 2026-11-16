@@ -203,10 +203,8 @@ export type UseHoverHandlersHook = {
     "plot.zoomXY": () => void;
     "plot.resetView": () => boolean;
   };
-  keyUpHandlers: {
-    v: () => void;
-    b: () => void;
-  };
+  /** By key: releasing a held zoom-mode key of {@link PLOT_SHORTCUTS} restores the default. */
+  keyUpHandlers: Record<string, () => void>;
   getPanelContextMenuItems: () => PanelContextMenuItem[];
   /** True while the mouse is over the plot */
   isHovered: () => boolean;

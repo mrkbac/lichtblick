@@ -1,14 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import {
-  ArrowAutofitHeight20Regular,
-  Delete20Regular,
-  LocationAdd20Regular,
-  Ruler20Regular,
-  Triangle20Regular,
-  ZoomFit20Regular,
-} from "@fluentui/react-icons";
 import { Divider, IconButton, Paper, Tooltip, Typography } from "@mui/material";
 import type { FeatureCollection } from "geojson";
 import { Marker } from "maplibre-gl";
@@ -29,10 +21,13 @@ import OverlayToolbar, {
   OverlayToolGroup,
   useIsShorterThan,
 } from "@lichtblick/suite-base/components/OverlayToolbar";
+import { PanelButton, usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import { PANEL_FLOATING_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import { useLocalStorage } from "@lichtblick/suite-base/hooks/useLocalStorage";
+import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { customTypography } from "@lichtblick/theme";
 
+import { MAP_BUTTONS } from "./buttons";
 import { MEASURE_HANDLE_LAYERS } from "./features";
 import {
   bearingDegrees,
@@ -56,6 +51,7 @@ import {
   terrainSlope,
   TOOL_RULES,
 } from "./measure";
+import { MAP_SHORTCUTS } from "./shortcuts";
 
 /** Handles are picked within this many pixels of the pointer. */
 const HANDLE_PICK_PX = 8;
@@ -66,26 +62,45 @@ const FOLD_TOOLS_BELOW_PX = 380;
 /** The step-by-step hint shows until the user has made and left one measurement. */
 const HINT_SEEN_KEY = "lichtblick.map.measureHintSeen";
 
-const TOOLS: {
-  tool: MeasureTool;
-  title: string;
-  icon: React.JSX.Element;
-  needsTerrain?: boolean;
-}[] = [
-  {
-    tool: "distance",
-    title: "Measure distance and area",
-    icon: <Ruler20Regular />,
-  },
-  {
-    tool: "height",
-    title: "Measure height difference",
-    icon: <ArrowAutofitHeight20Regular />,
-    needsTerrain: true,
-  },
-  { tool: "angle", title: "Measure angle", icon: <Triangle20Regular /> },
-  { tool: "point", title: "Pin points", icon: <LocationAdd20Regular /> },
+const TOOLS: { tool: MeasureTool; button: PanelButton; needsTerrain?: boolean }[] = [
+  { tool: "distance", button: MAP_BUTTONS.distance },
+  { tool: "height", button: MAP_BUTTONS.height, needsTerrain: true },
+  { tool: "angle", button: MAP_BUTTONS.angle },
+  { tool: "point", button: MAP_BUTTONS.point },
 ];
+
+/** Keys that only act on a measurement being drawn. */
+const DRAWING_ONLY_SHORTCUTS: ReadonlySet<string> = new Set(["map.finish", "map.deleteLastPoint"]);
+
+/** An overlay icon button titled from its declaration, with a tooltip to the left. */
+function OverlayButton(props: {
+  button: PanelButton;
+  /** Replaces the declared title in the tooltip, e.g. why the button is disabled. */
+  tooltip?: (title: string) => string;
+  icon?: React.ReactNode;
+  disabled?: boolean;
+  pressed?: boolean;
+  onClick: () => void;
+}): React.JSX.Element {
+  const { button, tooltip, icon, disabled, pressed, onClick } = props;
+  const title = usePanelButtonTitle(button);
+  const Icon = button.icon;
+  return (
+    <Tooltip title={tooltip?.(title) ?? title} placement="left">
+      <span>
+        <IconButton
+          size="small"
+          aria-label={title}
+          aria-pressed={pressed}
+          disabled={disabled}
+          onClick={onClick}
+        >
+          {icon ?? <Icon />}
+        </IconButton>
+      </span>
+    </Tooltip>
+  );
+}
 
 const useStyles = makeStyles()((theme) => ({
   topLeft: {
@@ -623,27 +638,36 @@ export function MapToolbar(props: Props): React.JSX.Element {
       }
       const current = selected();
       const drawing = current?.status === "drawing";
-      if (event.key === "Escape") {
-        if (current && drawing && TOOL_RULES[current.tool].lines && current.points.length >= 2) {
-          finish(current.id);
-        } else if (current) {
-          setSelectedId(undefined);
-          setCursor(undefined);
-        } else {
-          setTool(undefined);
-        }
-      } else if (event.key === "Enter" && current && drawing) {
-        finish(current.id);
-      } else if ((event.key === "Backspace" || event.key === "Delete") && current) {
-        if (drawing && event.key === "Backspace") {
-          removePoint(current.id, current.points.length - 1);
-        } else {
-          // Delete the selected measurement.
+      const shortcut = findShortcut(
+        MAP_SHORTCUTS.filter((s) => drawing || !DRAWING_ONLY_SHORTCUTS.has(s.id)),
+        event,
+      );
+      switch (shortcut?.id) {
+        case "map.cancel":
+          if (current && drawing && TOOL_RULES[current.tool].lines && current.points.length >= 2) {
+            finish(current.id);
+          } else if (current) {
+            setSelectedId(undefined);
+            setCursor(undefined);
+          } else {
+            setTool(undefined);
+          }
+          break;
+        case "map.finish":
+          finish(current!.id);
+          break;
+        case "map.deleteLastPoint":
+          removePoint(current!.id, current!.points.length - 1);
+          break;
+        case "map.deleteMeasurement":
+          if (!current) {
+            return;
+          }
           update(current.id, () => undefined);
           setSelectedId(undefined);
-        }
-      } else {
-        return;
+          break;
+        default:
+          return;
       }
       event.preventDefault();
       event.stopPropagation();
@@ -831,75 +855,59 @@ export function MapToolbar(props: Props): React.JSX.Element {
   }, [map]);
   const foldTools = useIsShorterThan(map.getContainer(), FOLD_TOOLS_BELOW_PX);
   const activeTool = TOOLS.find((t) => t.tool === tool);
+  const activeToolTitle = usePanelButtonTitle(activeTool?.button ?? MAP_BUTTONS.measuringTools);
+  const measuringToolsTitle = usePanelButtonTitle(MAP_BUTTONS.measuringTools);
+  const ActiveToolIcon = (activeTool?.button ?? MAP_BUTTONS.measuringTools).icon;
 
   return (
     <>
       {controlElement &&
         createPortal(
           <OverlayToolbar>
-            <Tooltip title="Zoom to data" placement="left">
-              <span>
-                <IconButton
-                  size="small"
-                  aria-label="Zoom to data"
-                  disabled={!onFitToData}
-                  onClick={() => {
-                    onFitToData?.();
-                  }}
-                >
-                  <ZoomFit20Regular />
-                </IconButton>
-              </span>
-            </Tooltip>
+            <OverlayButton
+              button={MAP_BUTTONS.zoomToData}
+              disabled={!onFitToData}
+              onClick={() => {
+                onFitToData?.();
+              }}
+            />
             <Divider />
             <OverlayToolGroup
               collapsed={foldTools}
-              label="Measuring tools"
-              icon={activeTool?.icon ?? <Ruler20Regular />}
+              label={measuringToolsTitle}
+              icon={<ActiveToolIcon />}
               active={tool != undefined}
             >
-              {TOOLS.map(({ tool: option, title, icon, needsTerrain = false }) => {
+              {TOOLS.map(({ tool: option, button, needsTerrain = false }) => {
                 const disabled = needsTerrain && !hasTerrain;
                 return (
-                  <Tooltip
+                  <OverlayButton
                     key={option}
-                    title={disabled ? `${title} (turn on 3D terrain in an elevation layer)` : title}
-                    placement="left"
-                  >
-                    <span>
-                      <IconButton
-                        size="small"
-                        disabled={disabled}
-                        aria-pressed={tool === option}
-                        aria-label={title}
-                        onClick={() => {
-                          setSelectedId(undefined);
-                          setCursor(undefined);
-                          setTool((prev) => (prev === option ? undefined : option));
-                        }}
-                      >
-                        {icon}
-                      </IconButton>
-                    </span>
-                  </Tooltip>
+                    button={button}
+                    tooltip={
+                      disabled
+                        ? (title) => `${title} (turn on 3D terrain in an elevation layer)`
+                        : undefined
+                    }
+                    disabled={disabled}
+                    pressed={tool === option}
+                    onClick={() => {
+                      setSelectedId(undefined);
+                      setCursor(undefined);
+                      setTool((prev) => (prev === option ? undefined : option));
+                    }}
+                  />
                 );
               })}
               {/* Always rendered so activating a tool doesn't shift the toolbar. */}
-              <Tooltip title="Clear all measurements" placement="left">
-                <span>
-                  <IconButton
-                    size="small"
-                    aria-label="Clear all measurements"
-                    disabled={measurements.length === 0}
-                    onClick={() => {
-                      setMeasurements([]);
-                      setSelectedId(undefined);
-                    }}
-                  >
-                    <Delete20Regular />
-                  </IconButton>
-                </span>
-              </Tooltip>
+              <OverlayButton
+                button={MAP_BUTTONS.clearAll}
+                disabled={measurements.length === 0}
+                onClick={() => {
+                  setMeasurements([]);
+                  setSelectedId(undefined);
+                }}
+              />
             </OverlayToolGroup>
           </OverlayToolbar>,
           controlElement,
@@ -908,7 +916,7 @@ export function MapToolbar(props: Props): React.JSX.Element {
         {tool && (
           <Paper className={classes.result}>
             <Typography variant="body2" style={{ fontWeight: 600 }}>
-              {summary?.title ?? activeTool?.title}
+              {summary?.title ?? activeToolTitle}
             </Typography>
             {summary?.lines.map((line) => (
               <Typography

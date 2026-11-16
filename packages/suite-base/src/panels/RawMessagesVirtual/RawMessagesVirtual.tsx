@@ -42,6 +42,8 @@ import {
   handleStepKeyDown,
 } from "@lichtblick/suite-base/panels/RawMessagesCommon/utils";
 import { VirtualizedTree } from "@lichtblick/suite-base/panels/RawMessagesVirtual/VirtualizedTree";
+import { RAW_MESSAGES_SHORTCUTS } from "@lichtblick/suite-base/panels/RawMessagesVirtual/shortcuts";
+import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element => {
   const { classes } = useStylesRawMessagesVirtual();
@@ -274,7 +276,7 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
       tabIndex={-1}
       className={classes.root}
       onKeyDown={(event) => {
-        if ((event.metaKey || event.ctrlKey) && event.key === "f") {
+        if (findShortcut(RAW_MESSAGES_SHORTCUTS, event)?.id === "rawMessages.search") {
           event.preventDefault();
           setSearch((old) => old ?? "");
           return;
@@ -313,7 +315,7 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
               setSearch(event.target.value);
             }}
             onKeyDown={(event) => {
-              if (event.key === "Escape") {
+              if (findShortcut(RAW_MESSAGES_SHORTCUTS, event)?.id === "rawMessages.closeSearch") {
                 setSearch(undefined);
               }
             }}

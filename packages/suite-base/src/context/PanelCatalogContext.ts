@@ -7,6 +7,7 @@
 
 import { ComponentType, createContext, useContext } from "react";
 
+import type { PanelDocs } from "@lichtblick/suite-base/components/PanelDocs/PanelDocs";
 import { PanelStatics } from "@lichtblick/suite-base/components/types";
 import { Namespace } from "@lichtblick/suite-base/types";
 import { PanelConfig } from "@lichtblick/suite-base/types/panels";
@@ -22,7 +23,8 @@ export type PanelInfo = {
   /** Extra search terms for the command palette, e.g. "tf" for the transform tree. */
   keywords?: readonly string[];
   thumbnail?: string;
-  help?: React.ReactNode;
+  /** In-app docs behind the panel toolbar's info button; loaded lazily. */
+  docs?: () => Promise<{ default: PanelDocs }>;
 
   /** Set this to true if a panel has custom toolbar items and so cannot be renamed. */
   hasCustomToolbar?: boolean;

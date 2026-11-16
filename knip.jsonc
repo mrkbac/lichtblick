@@ -2,7 +2,8 @@
   "$schema": "https://unpkg.com/knip@6/schema.json",
   // Vitest reads `@jest-environment jsdom` docblocks; knip maps them to this package
   // tslib: helpers for `importHelpers` in @lichtblick/tsconfig
-  "ignoreDependencies": ["jest-environment-jsdom", "tslib"],
+  // @lichtblick/suite-upstream: source read from disk by extensionApiCompatibility.test.ts
+  "ignoreDependencies": ["jest-environment-jsdom", "tslib", "@lichtblick/suite-upstream"],
   // Exports only used in their own file are fine
   "ignoreExportsUsedInFile": true,
   "ignoreIssues": {

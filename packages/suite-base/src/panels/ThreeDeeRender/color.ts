@@ -81,13 +81,6 @@ export function rgbToThreeColor(output: THREE.Color, rgb: ColorRGB): THREE.Color
   return output.setRGB(rgb.r, rgb.g, rgb.b).convertSRGBToLinear();
 }
 
-export function rgbaToCssString(color: ColorRGBA): string {
-  const r = Math.trunc(color.r * 255);
-  const g = Math.trunc(color.g * 255);
-  const b = Math.trunc(color.b * 255);
-  return `rgba(${r}, ${g}, ${b}, ${color.a})`;
-}
-
 export function rgbaToLinear(output: ColorRGBA, color: ColorRGBA): ColorRGBA {
   output.r = SRGBToLinear(color.r);
   output.g = SRGBToLinear(color.g);

@@ -95,6 +95,7 @@ export function removeExtensionData({
     | "installedPanels"
     | "installedMessageConverters"
     | "installedTopicAliasFunctions"
+    | "installedTopicConverters"
     | "installedCameraModels"
   >;
 }): Pick<
@@ -103,6 +104,7 @@ export function removeExtensionData({
   | "installedPanels"
   | "installedMessageConverters"
   | "installedTopicAliasFunctions"
+  | "installedTopicConverters"
   | "installedCameraModels"
 > {
   const {
@@ -110,6 +112,7 @@ export function removeExtensionData({
     installedPanels,
     installedMessageConverters,
     installedTopicAliasFunctions,
+    installedTopicConverters,
     installedCameraModels,
   } = state;
 
@@ -130,6 +133,9 @@ export function removeExtensionData({
     installedTopicAliasFunctions: stillInstalledElsewhere
       ? installedTopicAliasFunctions
       : installedTopicAliasFunctions?.filter(({ extensionId }) => extensionId !== id),
+    installedTopicConverters: stillInstalledElsewhere
+      ? installedTopicConverters
+      : installedTopicConverters.filter(({ extensionId }) => extensionId !== id),
     installedCameraModels: stillInstalledElsewhere
       ? installedCameraModels
       : new Map([...installedCameraModels].filter(([, { extensionId }]) => extensionId !== id)),
@@ -153,7 +159,7 @@ export async function tryInstallSingleLoader(
     });
     const externalId = loader.type === "server" ? info.externalId : undefined;
     const { raw } = await loader.loadExtension(getExtensionLoadId(loader, info));
-    const contributionPoints = buildContributionPoints(info, raw);
+    const contributionPoints = await buildContributionPoints(info, raw);
     return { loaderType: loader.type, success: true, info, contributionPoints, externalId };
   } catch (error) {
     return {

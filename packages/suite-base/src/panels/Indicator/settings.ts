@@ -8,10 +8,12 @@
 import { produce } from "immer";
 import * as _ from "lodash-es";
 import memoizeWeak from "memoize-weak";
-import { useMemo } from "react";
 
-import { useShallowMemo } from "@lichtblick/hooks";
-import { SettingsTreeAction, SettingsTreeNode, SettingsTreeNodes } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
+import type {
+  DocumentedNode,
+  DocumentedNodes,
+} from "@lichtblick/suite-base/panels/shared/documentedSettings";
 import { moveItem, moveUpDownActions } from "@lichtblick/suite-base/panels/utils";
 
 import { NotificationPermissionState, describeNotificationPermission, hasAlert } from "./alerts";
@@ -88,12 +90,19 @@ export function settingsActionReducer(
 }
 
 const memoizedCreateRuleNode = memoizeWeak(
-  (rule: IndicatorRule, i: number, rules: readonly IndicatorRule[]): SettingsTreeNode => {
+  (rule: IndicatorRule, i: number, rules: readonly IndicatorRule[]): DocumentedNode => {
     return {
       label: ruleToString(rule),
       actions: [
         ...(hasAlert(rule)
-          ? [{ type: "action" as const, id: "test-alert", label: "Send test alert" }]
+          ? [
+              {
+                type: "action" as const,
+                id: "test-alert",
+                label: "Send test alert",
+                tooltip: "Plays this rule's alert now.",
+              },
+            ]
           : []),
         { type: "action", id: "delete-rule", label: "Delete rule", icon: "Delete" },
         ...moveUpDownActions(i, rules.length),
@@ -103,6 +112,7 @@ const memoizedCreateRuleNode = memoizeWeak(
       fields: {
         operator: {
           label: "Comparison",
+          help: "How the value is compared with Compare with.",
           input: "select",
           value: rule.operator,
           options: [
@@ -115,16 +125,19 @@ const memoizedCreateRuleNode = memoizeWeak(
         },
         rawValue: {
           label: "Compare with",
+          help: "Value to compare against: true/false or a number for boolean and numeric data, text for strings.",
           input: "string",
           value: rule.rawValue,
         },
         color: {
           label: "Color",
+          help: "Bulb or background color while this rule matches.",
           input: "rgb",
           value: rule.color,
         },
         label: {
           label: "Label",
+          help: "Text shown while this rule matches.",
           input: "string",
           value: rule.label,
         },
@@ -155,7 +168,7 @@ const memoizedCreateRuleNode = memoizeWeak(
 export function notificationSettings(
   rules: readonly IndicatorRule[],
   permission: NotificationPermissionState,
-): Pick<SettingsTreeNode, "fields" | "actions"> {
+): Pick<DocumentedNode, "fields" | "actions"> {
   if (!rules.some((rule) => rule.alertNotify === true)) {
     return {};
   }
@@ -177,19 +190,21 @@ export function notificationSettings(
   };
 }
 
-export function useSettingsTree(
+export function buildSettingsTree(
   config: IndicatorConfig,
   pathParseError: string | undefined,
   error: string | undefined,
   notificationPermission: NotificationPermissionState,
-): SettingsTreeNodes {
-  const { path, style, rules } = config;
-  const generalSettings: SettingsTreeNode = useMemo(
-    () => ({
+): DocumentedNodes {
+  const { path, style, rules, fallbackColor, fallbackLabel } = config;
+  const notifications = notificationSettings(rules, notificationPermission);
+  return {
+    general: {
       error,
       fields: {
         path: {
           label: "Message path",
+          help: "The value the rules check: a boolean, number or string, or a message with a data field.",
           input: "messagepath",
           supportsMathModifiers: true,
           value: path,
@@ -197,6 +212,7 @@ export function useSettingsTree(
         },
         style: {
           label: "Style",
+          help: "Bulb draws a colored light; Background colors the whole panel.",
           input: "select",
           value: style,
           options: [
@@ -205,58 +221,38 @@ export function useSettingsTree(
           ],
         },
       },
-    }),
-    [error, path, pathParseError, style],
-  );
-
-  const { fallbackColor, fallbackLabel } = config;
-  const notifications = useMemo(
-    () => notificationSettings(rules, notificationPermission),
-    [notificationPermission, rules],
-  );
-  const ruleSettings: SettingsTreeNode = useMemo(
-    () => ({
+    },
+    rules: {
       label: "Rules (first matching rule wins)",
+      help: "Checked top to bottom; the first rule that matches sets the color and label.",
       ...notifications,
       actions: [
         { type: "action", id: "add-rule", label: "Add rule", icon: "Add" },
         ...(notifications.actions ?? []),
       ],
-      children: Object.fromEntries(
-        rules
-          .map((rule, i) => [i.toString(), memoizedCreateRuleNode(rule, i, rules)])
-          .concat([
-            [
-              "default",
-              {
-                label: "Otherwise",
-                fields: {
-                  fallbackColor: {
-                    label: "Color",
-                    input: "rgb",
-                    value: fallbackColor,
-                    help: "Color to use when no other rules match",
-                  },
-                  fallbackLabel: {
-                    label: "Label",
-                    input: "string",
-                    value: fallbackLabel,
-                    help: "Label to use when no other rules match",
-                  },
-                },
-                actions: [
-                  { type: "action", id: "add-rule-above", label: "Add rule above", icon: "Add" },
-                ],
-              },
-            ],
-          ]),
-      ),
-    }),
-    [fallbackColor, fallbackLabel, notifications, rules],
-  );
-
-  return useShallowMemo({
-    general: generalSettings,
-    rules: ruleSettings,
-  });
+      children: {
+        ...Object.fromEntries(
+          rules.map((rule, i) => [i.toString(), memoizedCreateRuleNode(rule, i, rules)]),
+        ),
+        default: {
+          label: "Otherwise",
+          fields: {
+            fallbackColor: {
+              label: "Color",
+              input: "rgb",
+              value: fallbackColor,
+              help: "Color to use when no other rules match",
+            },
+            fallbackLabel: {
+              label: "Label",
+              input: "string",
+              value: fallbackLabel,
+              help: "Label to use when no other rules match",
+            },
+          },
+          actions: [{ type: "action", id: "add-rule-above", label: "Add rule above", icon: "Add" }],
+        },
+      },
+    },
+  };
 }

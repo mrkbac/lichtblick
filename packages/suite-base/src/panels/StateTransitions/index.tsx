@@ -14,7 +14,6 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
-import { ChevronLeft20Regular, ChevronRight20Regular } from "@fluentui/react-icons";
 import { add as addTimes, fromSec } from "@foxglove/rostime";
 import { Typography, alpha, useTheme } from "@mui/material";
 import { AnnotationOptions } from "chartjs-plugin-annotation";
@@ -36,8 +35,9 @@ import {
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { selectPlayerPresence } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Panel from "@lichtblick/suite-base/components/Panel";
+import { PanelIconButton } from "@lichtblick/suite-base/components/PanelButton";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
-import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
+import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TimeBasedChart from "@lichtblick/suite-base/components/TimeBasedChart";
 import { PathLegend } from "@lichtblick/suite-base/panels/StateTransitions/PathLegend";
@@ -59,7 +59,6 @@ import useStateTransitionsDeltaMode from "@lichtblick/suite-base/panels/StateTra
 import useStateTransitionsTime from "@lichtblick/suite-base/panels/StateTransitions/hooks/useStateTransitionsTime";
 import { STATE_TRANSITIONS_SHORTCUTS } from "@lichtblick/suite-base/panels/StateTransitions/shortcuts";
 import { DeltaOverlay } from "@lichtblick/suite-base/panels/shared/DeltaOverlay";
-import { MeasureModeToolbarButton } from "@lichtblick/suite-base/panels/shared/MeasureModeToolbarButton";
 import { computeDeltaDisplay } from "@lichtblick/suite-base/panels/shared/deltaMarkers";
 import { createMeasureModeEscapeHandler } from "@lichtblick/suite-base/panels/shared/measureModeEscapeHandler";
 import { addPathsDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
@@ -67,7 +66,9 @@ import useAppendOnlyKey from "@lichtblick/suite-base/panels/shared/useAppendOnly
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
-import { StateTransitionConfig, StateTransitionPanelProps } from "./types";
+import { STATE_TRANSITIONS_BUTTONS } from "./buttons";
+import { defaultConfig } from "./settings";
+import { StateTransitionPanelProps } from "./types";
 
 const MATCH_EPSILON = 1e-6;
 
@@ -324,42 +325,42 @@ function StateTransitions(props: StateTransitionPanelProps) {
 
   return (
     <Stack flexGrow={1} overflow="hidden" style={{ zIndex: 0 }}>
-      <MeasureModeToolbarButton
-        active={deltaMode.active}
-        onToggle={deltaMode.toggleActive}
-        title={t("measureMode")}
-        testId="state-transitions-measure-mode-toggle"
-      >
-        {hasCondition && (
+      <PanelToolbar
+        additionalIcons={
           <>
-            <ToolbarIconButton
-              title={t("previousMatch")}
-              aria-label={t("previousMatch")}
-              onClick={seekToPreviousMatch}
-              disabled={previousMatch == undefined}
-              data-testid="state-transitions-previous-match"
-            >
-              <ChevronLeft20Regular />
-            </ToolbarIconButton>
-            <Typography
-              variant="caption"
-              data-testid="state-transitions-match-count"
-              color="textSecondary"
-            >
-              {matchesSoFar}/{matchStarts.length}
-            </Typography>
-            <ToolbarIconButton
-              title={t("nextMatch")}
-              aria-label={t("nextMatch")}
-              onClick={seekToNextMatch}
-              disabled={nextMatch == undefined}
-              data-testid="state-transitions-next-match"
-            >
-              <ChevronRight20Regular />
-            </ToolbarIconButton>
+            {hasCondition && (
+              <>
+                <PanelIconButton
+                  button={STATE_TRANSITIONS_BUTTONS.previousMatch}
+                  onClick={seekToPreviousMatch}
+                  disabled={previousMatch == undefined}
+                  data-testid="state-transitions-previous-match"
+                />
+                <Typography
+                  variant="caption"
+                  data-testid="state-transitions-match-count"
+                  color="textSecondary"
+                >
+                  {matchesSoFar}/{matchStarts.length}
+                </Typography>
+                <PanelIconButton
+                  button={STATE_TRANSITIONS_BUTTONS.nextMatch}
+                  onClick={seekToNextMatch}
+                  disabled={nextMatch == undefined}
+                  data-testid="state-transitions-next-match"
+                />
+              </>
+            )}
+            <PanelIconButton
+              button={STATE_TRANSITIONS_BUTTONS.measure}
+              aria-pressed={deltaMode.active}
+              color={deltaMode.active ? "primary" : "default"}
+              onClick={deltaMode.toggleActive}
+              data-testid="state-transitions-measure-mode-toggle"
+            />
           </>
-        )}
-      </MeasureModeToolbarButton>
+        }
+      />
       <Stack fullWidth fullHeight flex="auto" overflowX="hidden" overflowY="auto">
         <div className={classes.chartWrapper} ref={sizeRef}>
           <TimeBasedChart
@@ -414,11 +415,6 @@ function StateTransitions(props: StateTransitionPanelProps) {
     </Stack>
   );
 }
-
-const defaultConfig: StateTransitionConfig = {
-  paths: [],
-  isSynced: true,
-};
 
 export default Panel(
   Object.assign(StateTransitions, {

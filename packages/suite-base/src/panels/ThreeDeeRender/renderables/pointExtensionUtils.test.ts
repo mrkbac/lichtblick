@@ -4,9 +4,10 @@
 import * as THREE from "three";
 
 import { SettingsTreeField, Topic } from "@lichtblick/suite";
+import { pointSettingsNode } from "@lichtblick/suite-base/panels/ThreeDeeRender/settingsNodes/topics";
 import { BasicBuilder } from "@lichtblick/test-builders";
 
-import { HistoryLimits, RenderObjectHistory, pointSettingsNode } from "./pointExtensionUtils";
+import { HistoryLimits, RenderObjectHistory } from "./pointExtensionUtils";
 import type { Renderer } from "../Renderer";
 
 type SettingsTreeFieldWithOptions = SettingsTreeField & {

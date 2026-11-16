@@ -6,10 +6,9 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { toNanoSec } from "@foxglove/rostime";
-import { t } from "i18next";
 import * as THREE from "three";
 
-import { SettingsTreeAction, SettingsTreeFields } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
 import type { AnyRendererSubscription } from "../IRenderer";
@@ -22,7 +21,7 @@ import {
   onlyLastByTopicMessage,
 } from "../SceneExtension";
 import { SettingsTreeEntry } from "../SettingsManager";
-import { rgbaToCssString, SRGBToLinear, stringToRgba } from "../color";
+import { SRGBToLinear, stringToRgba } from "../color";
 import {
   normalizeHeader,
   normalizePose,
@@ -31,6 +30,7 @@ import {
 } from "../normalizeMessages";
 import { ColorRGBA, OccupancyGrid, OCCUPANCY_GRID_DATATYPES } from "../ros";
 import { BaseSettings } from "../settings";
+import { OCCUPANCY_GRID_DEFAULTS, occupancyGridSettingsNode } from "../settingsNodes/topics";
 import { topicIsConvertibleToSchema } from "../topicIsConvertibleToSchema";
 
 type ColorModes = "custom" | "costmap" | "map" | "raw";
@@ -47,27 +47,7 @@ export type LayerSettingsOccupancyGrid = BaseSettings & {
 
 const INVALID_OCCUPANCY_GRID = "INVALID_OCCUPANCY_GRID";
 
-const DEFAULT_MIN_COLOR = { r: 1, g: 1, b: 1, a: 1 }; // white
-const DEFAULT_MAX_COLOR = { r: 0, g: 0, b: 0, a: 1 }; // black
-const DEFAULT_UNKNOWN_COLOR = { r: 0.5, g: 0.5, b: 0.5, a: 1 }; // gray
-const DEFAULT_INVALID_COLOR = { r: 1, g: 0, b: 1, a: 1 }; // magenta
-const DEFAULT_ALPHA = 1.0;
-
-const DEFAULT_MIN_COLOR_STR = rgbaToCssString(DEFAULT_MIN_COLOR);
-const DEFAULT_MAX_COLOR_STR = rgbaToCssString(DEFAULT_MAX_COLOR);
-const DEFAULT_UNKNOWN_COLOR_STR = rgbaToCssString(DEFAULT_UNKNOWN_COLOR);
-const DEFAULT_INVALID_COLOR_STR = rgbaToCssString(DEFAULT_INVALID_COLOR);
-
-const DEFAULT_SETTINGS: LayerSettingsOccupancyGrid = {
-  visible: false,
-  frameLocked: false,
-  colorMode: "custom",
-  minColor: DEFAULT_MIN_COLOR_STR,
-  maxColor: DEFAULT_MAX_COLOR_STR,
-  unknownColor: DEFAULT_UNKNOWN_COLOR_STR,
-  invalidColor: DEFAULT_INVALID_COLOR_STR,
-  alpha: DEFAULT_ALPHA,
-};
+const DEFAULT_SETTINGS = OCCUPANCY_GRID_DEFAULTS;
 
 export type OccupancyGridUserData = BaseUserData & {
   settings: LayerSettingsOccupancyGrid;
@@ -116,83 +96,10 @@ export class OccupancyGrids extends SceneExtension<OccupancyGridRenderable> {
         continue;
       }
 
-      const configWithDefaults = { ...DEFAULT_SETTINGS, ...configTopics[topic.name] };
-
-      let fields: SettingsTreeFields = {
-        colorMode: {
-          label: t("threeDee:colorMode"),
-          input: "select",
-          value: configWithDefaults.colorMode,
-          options: [
-            { label: t("threeDee:colorModeCustom"), value: "custom" },
-            { label: t("threeDee:colorModeRvizMap"), value: "map" },
-            { label: t("threeDee:colorModeRvizCostmap"), value: "costmap" },
-            { label: t("threeDee:colorModeRaw"), value: "raw" },
-          ],
-        },
-      };
-
-      if (configWithDefaults.colorMode === "custom") {
-        const customFields: SettingsTreeFields = {
-          minColor: {
-            label: t("threeDee:minColor"),
-            input: "rgba",
-            value: configWithDefaults.minColor,
-          },
-          maxColor: {
-            label: t("threeDee:maxColor"),
-            input: "rgba",
-            value: configWithDefaults.maxColor,
-          },
-          unknownColor: {
-            label: t("threeDee:unknownColor"),
-            input: "rgba",
-            value: configWithDefaults.unknownColor,
-          },
-          invalidColor: {
-            label: t("threeDee:invalidColor"),
-            input: "rgba",
-            value: configWithDefaults.invalidColor,
-          },
-        };
-        fields = {
-          ...fields,
-          ...customFields,
-        };
-      } else {
-        const paletteFields: SettingsTreeFields = {
-          alpha: {
-            label: "Alpha",
-            input: "number",
-            value: configWithDefaults.alpha,
-            min: 0.0,
-            max: 1.0,
-            step: 0.1,
-            placeholder: "auto",
-          },
-        };
-        fields = {
-          ...fields,
-          ...paletteFields,
-        };
-      }
-
-      fields.frameLocked = {
-        label: t("threeDee:frameLock"),
-        input: "boolean",
-        value: configWithDefaults.frameLocked,
-      };
-
+      const config = (configTopics[topic.name] ?? {}) as Partial<LayerSettingsOccupancyGrid>;
       entries.push({
         path: ["topics", topic.name],
-        node: {
-          label: topic.name,
-          icon: "Cells",
-          fields,
-          visible: configWithDefaults.visible,
-          order: topic.name.toLocaleLowerCase(),
-          handler,
-        },
+        node: { ...occupancyGridSettingsNode(topic, config), handler },
       });
     }
     return entries;

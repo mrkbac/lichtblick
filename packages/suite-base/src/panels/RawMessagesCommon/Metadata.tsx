@@ -19,6 +19,7 @@ import { useCallback } from "react";
 
 import { useLatest } from "@lichtblick/hooks";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { useStylesMetadata } from "@lichtblick/suite-base/panels/RawMessagesCommon/index.style";
 import { PropsMetadata } from "@lichtblick/suite-base/panels/RawMessagesCommon/types";
@@ -26,6 +27,7 @@ import { getMessageDocumentationLink } from "@lichtblick/suite-base/panels/RawMe
 import { formatTimeRaw } from "@lichtblick/suite-base/util/time";
 
 import { StepButtons } from "./StepButtons";
+import { RAW_MESSAGES_BUTTONS } from "./buttons";
 import { copyMessageReplacer } from "./copyMessageReplacer";
 
 export default function Metadata({
@@ -38,6 +40,7 @@ export default function Metadata({
   stepping,
 }: PropsMetadata): React.JSX.Element {
   const { classes } = useStylesMetadata();
+  const copyTitle = usePanelButtonTitle(RAW_MESSAGES_BUTTONS.copyMessage);
 
   // Access these by ref so that our callbacks aren't invalidated and CopyButton
   // memoization is stable.
@@ -82,7 +85,13 @@ export default function Metadata({
           {` @ ${formatTimeRaw(message.receiveTime)} sec`}
         </Typography>
         {stepping && <StepButtons stepping={stepping} />}
-        <CopyButton size="small" iconSize="small" className={classes.button} getText={copyData} />
+        <CopyButton
+          size="small"
+          iconSize="small"
+          className={classes.button}
+          getText={copyData}
+          title={copyTitle}
+        />
       </Stack>
 
       {diffMessage?.receiveTime && (

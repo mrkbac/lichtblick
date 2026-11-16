@@ -17,6 +17,7 @@ import {
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
+import { usePanelButtonTitle } from "@lichtblick/suite-base/components/PanelButton";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -48,15 +49,18 @@ import { formatSeconds } from "@lichtblick/suite-base/panels/TopicHealth/health"
 import { SubscribePayload } from "@lichtblick/suite-base/players/types";
 import { usePanelSettingsTreeUpdate } from "@lichtblick/suite-base/providers/PanelStateContextProvider";
 import { SaveConfig } from "@lichtblick/suite-base/types/panels";
+import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
 import { OffsetEditor, RotationConventionInfo } from "./OffsetEditor";
 import { useStyles } from "./TransformTree.style";
+import { TRANSFORM_TREE_BUTTONS } from "./buttons";
 import {
   buildSettingsTree,
   DEFAULT_ROTATION_CONVENTION,
   resolveTopics,
   settingsActionReducer,
 } from "./settings";
+import { TRANSFORM_TREE_SHORTCUTS } from "./shortcuts";
 import { isTransformSchema } from "./transforms";
 import {
   addTransformState,
@@ -595,6 +599,14 @@ const FrameTableRow = memo(function FrameTableRowImpl({
   const { classes, cx } = useStyles();
   const { t } = useTranslation("transformTree");
   const { t: tThreeDee } = useTranslation("threeDee");
+  const measureFromButton = {
+    title: usePanelButtonTitle(TRANSFORM_TREE_BUTTONS.measureFrom),
+    icon: TRANSFORM_TREE_BUTTONS.measureFrom.icon,
+  };
+  const measureToButton = {
+    title: usePanelButtonTitle(TRANSFORM_TREE_BUTTONS.measureTo),
+    icon: TRANSFORM_TREE_BUTTONS.measureTo.icon,
+  };
   const { entry: recordedEntry, age, rate } = row;
   const entry = recordedEntry && { ...recordedEntry, ...displayedTransform(recordedEntry, offset) };
   const hasData = !row.notYetPublished && !row.warnings.includes("noData");
@@ -667,14 +679,15 @@ const FrameTableRow = memo(function FrameTableRowImpl({
       onKeyDown={
         entry
           ? (event) => {
-              if (event.key === "Escape" && selected) {
+              const shortcut = findShortcut(TRANSFORM_TREE_SHORTCUTS, event);
+              if (shortcut?.id === "transformTree.closeEditor" && selected) {
                 onSelect(row.frame);
                 return;
               }
               // Only the row itself; the collapse button inside handles its own keys
               if (
                 event.target === event.currentTarget &&
-                (event.key === "Enter" || event.key === " ")
+                shortcut?.id === "transformTree.adjustFrame"
               ) {
                 event.preventDefault();
                 onSelect(row.frame);
@@ -725,26 +738,24 @@ const FrameTableRow = memo(function FrameTableRowImpl({
             />
           )}
           <span className={classes.measureActions} data-measure-actions>
-            {(["from", "to"] as const).map((end) => (
-              <Tooltip
-                key={end}
-                title={tThreeDee(end === "from" ? "frameMeasureFromHere" : "frameMeasureToHere")}
-              >
-                <button
-                  type="button"
-                  className={classes.measureButton}
-                  aria-label={tThreeDee(
-                    end === "from" ? "frameMeasureFromHere" : "frameMeasureToHere",
-                  )}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    onMeasure(row.frame, end);
-                  }}
-                >
-                  {tThreeDee(end === "from" ? "frameMeasureFromBadge" : "frameMeasureToBadge")}
-                </button>
-              </Tooltip>
-            ))}
+            {(["from", "to"] as const).map((end) => {
+              const button = end === "from" ? measureFromButton : measureToButton;
+              return (
+                <Tooltip key={end} title={button.title}>
+                  <button
+                    type="button"
+                    className={classes.measureButton}
+                    aria-label={button.title}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onMeasure(row.frame, end);
+                    }}
+                  >
+                    <button.icon />
+                  </button>
+                </Tooltip>
+              );
+            })}
           </span>
         </div>
       </td>

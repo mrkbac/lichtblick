@@ -95,6 +95,15 @@ E2E tests:
 - Panels never hardcode topic names. A sensible default (e.g. `/tf`, `/tf_static`, or auto-detecting by schema) is fine, but users must be able to change which topics a panel reads in its settings, and any behavior tied to a topic (e.g. "static") must be a per-topic setting, not a name check.
 - For inspiration, look at how Foxglove does it and at [pymcap-cli](https://github.com/mrkbac/pymcap-cli) (recording inspection/stats ideas). Borrow ideas, not code or branding.
 
+## Building a Panel
+
+Declare everything once; the panel and its guide page (ⓘ button, panel guide) both read the declaration, so they can't drift. The Log panel (`packages/suite-base/src/panels/Log`) is the reference.
+
+- **Settings:** a pure builder returning `DocumentedNodes` (`panels/shared/documentedSettings.ts`), used by the panel and by `docs.ts` with the default config. Every field needs `help`; `usePanelSettingsTreeUpdate` rejects trees without it.
+- **Buttons:** `buttons.ts` with `PanelButton` declarations, title and help in `i18n/en/panelButtons.ts`; draw them with `PanelIconButton` (or `usePanelButtonTitle` for custom elements).
+- **Keyboard and mouse:** `shortcuts.ts` with `KeyboardShortcut` declarations (keys and mouse gestures of one action together), registered in `panels/index.ts`. Bind key handling from them with `shortcutKeyHandlers` / `findShortcut`.
+- **`docs.ts`:** a one-sentence intro, schemas from the panel's constants, `buttons`, `settings`, and `sections` only for facts no declaration covers. Never name keys or gestures in prose.
+
 ## Fork Workflow (mrkbac/lichtblick)
 
 - `licht` is the default branch, deployed to https://licht.marko.im. `develop` only mirrors upstream: never commit on it and never base new work on it.

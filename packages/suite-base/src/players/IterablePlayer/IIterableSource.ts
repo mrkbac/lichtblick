@@ -7,8 +7,9 @@
 
 import { Time } from "@foxglove/rostime";
 
-import { Immutable, MessageEvent, Metadata } from "@lichtblick/suite";
+import { Immutable, Metadata } from "@lichtblick/suite";
 import {
+  MessageEvent,
   PlayerAlert,
   CompareSide,
   RecordingFileInfo,

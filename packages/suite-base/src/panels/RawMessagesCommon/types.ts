@@ -1,13 +1,15 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { IconButtonProps, TooltipProps } from "@mui/material";
+import type { SvgIconComponent } from "@mui/icons-material";
+import { IconButtonProps } from "@mui/material";
 import { CSSProperties, ReactNode } from "react";
 
 import { MessagePath, MessagePathStructureItem } from "@lichtblick/message-path";
 import { Immutable, Topic } from "@lichtblick/suite";
 import { MessagePathDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useCachedGetMessagePathDataItems";
 import { useMessageDataItem } from "@lichtblick/suite-base/components/MessagePathSyntax/useMessageDataItem";
+import type { PanelButton } from "@lichtblick/suite-base/components/PanelButton";
 import { Topic as PlayerTopic, MessageEvent } from "@lichtblick/suite-base/players/types";
 import { OpenSiblingPanel, SaveConfig } from "@lichtblick/suite-base/types/panels";
 
@@ -123,8 +125,10 @@ export type PropsValue = {
 
 export type ValueActionItem = {
   key: string;
-  tooltip: TooltipProps["title"];
-  icon: React.ReactNode;
+  /** Declared button: tooltip and icon (a MUI icon, drawn at the text size). */
+  button: PanelButton & { icon: SvgIconComponent };
+  /** Replaces the declared tooltip and icon for a moment, e.g. "Copied" after copying. */
+  feedback?: { tooltip: string; icon: React.ReactNode };
   onClick?: IconButtonProps["onClick"];
   activeColor?: IconButtonProps["color"];
   color?: IconButtonProps["color"];
