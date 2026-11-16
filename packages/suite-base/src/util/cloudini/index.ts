@@ -6,8 +6,6 @@
 
 /* eslint-disable no-underscore-dangle -- Emscripten prefixes the module's exports with "_" */
 
-import { Time } from "@foxglove/rostime";
-
 import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
 import delay from "@lichtblick/suite-base/util/delay";
 
@@ -17,7 +15,7 @@ import wasmUrl from "./wasm/cloudini_decoder.wasm";
 export const CLOUDINI_SCHEMA = "point_cloud_interfaces/msg/CompressedPointCloud2";
 
 type CompressedPointCloud2 = {
-  header: { stamp: Time; frame_id: string };
+  header: unknown;
   height: number;
   width: number;
   fields: unknown[];
