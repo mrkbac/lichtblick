@@ -14,6 +14,7 @@
 //   found at http://www.apache.org/licenses/LICENSE-2.0
 //   You may not use this file except in compliance with the License.
 
+import * as _ from "lodash-es";
 import { StoryObj } from "storybook-react-rsbuild";
 
 import Log from "@lichtblick/suite-base/panels/Log";
@@ -118,7 +119,7 @@ function makeLongFixture(): Fixture {
   return {
     topics: [{ name: "/rosout", schemaName: "rosgraph_msgs/Log" }],
     frame: {
-      "/rosout": Array.from({ length: 200 }, (_, idx) => ({
+      "/rosout": _.range(200).map((idx) => ({
         topic: "/rosout",
         receiveTime: { sec: 10 * idx, nsec: 0 },
         message: {

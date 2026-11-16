@@ -38,7 +38,11 @@ const colorExpansion = lineColors.map((color) => [
 ]);
 
 export const expandedLineColors = [
-  ...new Set(colorExpansion[0]!.flatMap((_color, i) => colorExpansion.map((colors) => colors[i]!))),
+  ...new Set(
+    _.range(0, colorExpansion[0]!.length)
+      .map((i) => colorExpansion.map((colors) => colors[i]!))
+      .flat(),
+  ),
 ];
 
 // RGB brightening by a percent of 255; colord only has HSL lighten.

@@ -18,7 +18,7 @@ import { parseCapnprotoSchema } from "./parseCapnprotoSchema";
 import { parseFlatbufferSchema } from "./parseFlatbufferSchema";
 import { parseJsonSchema } from "./parseJsonSchema";
 import { parseProtobufSchema } from "./parseProtobufSchema";
-import { asBytes, createRos2CdrDeserializer } from "./ros2CdrDecoder";
+import { createRos2CdrDeserializer } from "./ros2CdrDecoder";
 import { MessageDefinitionMap } from "./types";
 
 type Channel = {
@@ -96,6 +96,12 @@ function parsedDefinitionsToDatatypes(
     }
   });
   return datatypes;
+}
+
+function asBytes(data: ArrayBufferView): Uint8Array {
+  return data instanceof Uint8Array
+    ? data
+    : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
 }
 
 /** Decoder for message encodings that need no schema (json, cbor, msgpack), else undefined. */

@@ -5,7 +5,6 @@ import * as _ from "lodash-es";
 import type { LayerSpecification, SourceSpecification, StyleSpecification } from "maplibre-gl";
 
 import { pushAll } from "@lichtblick/den/collection";
-import { omitUndefined } from "@lichtblick/suite-base/util/omitUndefined";
 
 import type { LngLat } from "./geo";
 
@@ -200,6 +199,11 @@ export function validateSourceUrl(params: SourceParams): string | undefined {
   return undefined;
 }
 
+/** Style validation rejects keys that are present but undefined. */
+function defined<T extends object>(spec: T): T {
+  return _.omitBy(spec, _.isUndefined) as T;
+}
+
 /** Template URLs go in `tiles`; TileJSON and PMTiles archives go in `url`. */
 function tileEndpoint(url: string): { tiles: string[] } | { url: string } {
   return url.includes("{") ? { tiles: [url] } : { url };
@@ -381,10 +385,9 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
       continue;
     }
     const id = layer.id;
-    // Style validation rejects keys that are present but undefined.
     switch (params.kind) {
       case "raster":
-        style.sources[id] = omitUndefined({
+        style.sources[id] = defined({
           type: "raster",
           ...tileEndpoint(params.url),
           tileSize: params.tileSize ?? 256,
@@ -417,7 +420,7 @@ export function composeStyle(input: ComposeStyleInput): StyleSpecification {
         break;
       }
       case "dem": {
-        const source = omitUndefined({
+        const source = defined({
           type: "raster-dem" as const,
           ...tileEndpoint(params.url),
           tileSize: params.tileSize ?? 256,

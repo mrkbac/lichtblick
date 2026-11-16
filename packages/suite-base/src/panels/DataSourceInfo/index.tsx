@@ -734,9 +734,7 @@ export function RecordingInspector(): React.JSX.Element {
                     const qos = channels.flatMap((channel) =>
                       parseQosProfiles(channel.metadata.offered_qos_profiles),
                     );
-                    const qosConflicts = conflictingPolicies(qos)
-                      .map((key) => QOS_LABELS[key].toLowerCase())
-                      .join(", ");
+                    const qosConflicts = conflictingPolicies(qos);
                     return (
                       <Fragment key={topic.name}>
                         <tr data-selected={selected === topic.name}>
@@ -774,16 +772,16 @@ export function RecordingInspector(): React.JSX.Element {
                             {qos[0] && (
                               <span
                                 className={cx(classes.schemaLabel, {
-                                  [classes.qosWarning]: qosConflicts !== "",
+                                  [classes.qosWarning]: qosConflicts.length > 0,
                                 })}
                                 title={
-                                  qosConflicts !== ""
-                                    ? `Publishers offer different ${qosConflicts}. A single subscription cannot match all of them.`
+                                  qosConflicts.length > 0
+                                    ? `Publishers offer different ${qosConflicts.map((key) => QOS_LABELS[key].toLowerCase()).join(", ")}. A single subscription cannot match all of them.`
                                     : "Offered QoS"
                                 }
                               >
-                                {qosConflicts !== ""
-                                  ? `⚠ Mixed QoS: ${qosConflicts}`
+                                {qosConflicts.length > 0
+                                  ? `⚠ Mixed QoS: ${qosConflicts.map((key) => QOS_LABELS[key].toLowerCase()).join(", ")}`
                                   : `${qos[0].reliability} · ${qos[0].durability} · ${qos[0].history}`}
                                 {qos.length > 1 ? ` · ${qos.length} publishers` : ""}
                               </span>

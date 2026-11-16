@@ -6,6 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { alpha } from "@mui/material";
+import * as _ from "lodash-es";
 import React, { Fragment } from "react";
 import { makeStyles } from "tss-react/mui";
 
@@ -116,11 +117,11 @@ function EventViewComponent(params: {
     params;
   const { classes, cx } = useStyles();
 
-  const fields = [
+  const fields = _.compact([
     ["start", formattedTime],
     Number(event.event.durationNanos) > 0 && ["duration", formatEventDuration(event.event)],
     ...Object.entries(event.event.metadata),
-  ].filter((field) => field !== false);
+  ]);
 
   return (
     <div

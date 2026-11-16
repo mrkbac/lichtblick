@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { omitUndefined } from "@lichtblick/suite-base/util/omitUndefined";
+import * as _ from "lodash-es";
 
 import type { SourceParams } from "./layers";
 
@@ -33,7 +33,7 @@ function store(sources: SourceParams[]): void {
 /** Remember a source, most recent first; the same kind+url replaces the older entry. */
 export function rememberSource(source: SourceParams): SourceParams[] {
   const saved = loadSavedSources().filter((s) => !(s.kind === source.kind && s.url === source.url));
-  const next = [omitUndefined(source), ...saved].slice(0, MAX_SAVED);
+  const next = [_.omitBy(source, _.isUndefined) as SourceParams, ...saved].slice(0, MAX_SAVED);
   store(next);
   return next;
 }

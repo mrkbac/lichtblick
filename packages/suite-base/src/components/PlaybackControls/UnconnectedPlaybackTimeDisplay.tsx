@@ -5,12 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import {
-  Time,
-  isTimeInRangeInclusive,
-  subtract as subtractTimes,
-  toNanoSec,
-} from "@foxglove/rostime";
+import { Time, isTimeInRangeInclusive, subtract as subtractTimes } from "@foxglove/rostime";
 import ArrowDropDownIcon from "@mui/icons-material/ArrowDropDown";
 import CheckIcon from "@mui/icons-material/Check";
 import WarningIcon from "@mui/icons-material/Warning";
@@ -140,7 +135,11 @@ function timeFormatRows(
     { key: "TOD", label: "timeOfDay", value: timeOfDayString },
     { key: "SEC", label: "seconds", value: timeRawString },
     { key: "ISO", label: "isoUtc", value: formatIsoUtc(currentTime) },
-    { key: "NS", label: "nanoseconds", value: toNanoSec(currentTime).toString() },
+    {
+      key: "NS",
+      label: "nanoseconds",
+      value: (BigInt(currentTime.sec) * 1_000_000_000n + BigInt(currentTime.nsec)).toString(),
+    },
   ];
   if (startTime) {
     rows.push({

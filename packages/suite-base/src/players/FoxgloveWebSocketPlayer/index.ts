@@ -113,8 +113,6 @@ import {
 
 const log = Log.getLogger(__dirname);
 const textEncoder = new TextEncoder();
-/** Message encodings whose schema, if any, is a JSON schema. */
-const SELF_DESCRIBING_ENCODINGS = new Set(["json", "cbor", "msgpack"]);
 
 /** How often history playback advances, in ms. */
 const HISTORY_TICK_MS = 16;
@@ -541,13 +539,13 @@ export default class FoxgloveWebSocketPlayer implements Player {
           let schemaEncoding;
           let schemaData;
           if (
-            SELF_DESCRIBING_ENCODINGS.has(channel.encoding) &&
+            ["json", "cbor", "msgpack"].includes(channel.encoding) &&
             (channel.schemaEncoding == undefined || channel.schemaEncoding === "jsonschema")
           ) {
             schemaEncoding = "jsonschema";
             schemaData = textEncoder.encode(channel.schema);
           } else if (
-            SELF_DESCRIBING_ENCODINGS.has(channel.encoding) &&
+            ["json", "cbor", "msgpack"].includes(channel.encoding) &&
             channel.schemaEncoding === ""
           ) {
             schemaEncoding = "";
