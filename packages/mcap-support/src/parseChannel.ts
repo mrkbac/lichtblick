@@ -11,7 +11,10 @@ import { MessageReader as OmgidlMessageReader } from "@foxglove/omgidl-serializa
 import { parseRos2idl } from "@foxglove/ros2idl-parser";
 import { parse as parseRosmsg } from "@foxglove/rosmsg";
 import { MessageReader } from "@foxglove/rosmsg-serialization";
+import { Decoder as CborDecoder } from "cbor-x";
+import { Unpackr } from "msgpackr";
 
+import { parseCapnprotoSchema } from "./parseCapnprotoSchema";
 import { parseFlatbufferSchema } from "./parseFlatbufferSchema";
 import { parseJsonSchema } from "./parseJsonSchema";
 import { parseProtobufSchema } from "./parseProtobufSchema";
@@ -95,6 +98,35 @@ function parsedDefinitionsToDatatypes(
   return datatypes;
 }
 
+function asBytes(data: ArrayBufferView): Uint8Array {
+  return data instanceof Uint8Array
+    ? data
+    : new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+}
+
+/** Decoder for message encodings that need no schema (json, cbor, msgpack), else undefined. */
+function selfDescribingDecoder(
+  messageEncoding: string,
+): ((data: ArrayBufferView) => unknown) | undefined {
+  switch (messageEncoding) {
+    case "json": {
+      const textDecoder = new TextDecoder();
+      return (data) => JSON.parse(textDecoder.decode(data));
+    }
+    case "cbor": {
+      // Plain objects like JSON (message paths can't walk Maps); no cbor-x record extension.
+      const decoder = new CborDecoder({ mapsAsObjects: true, useRecords: false });
+      return (data) => decoder.decode(asBytes(data));
+    }
+    case "msgpack": {
+      const unpackr = new Unpackr({ mapsAsObjects: true, useRecords: false });
+      return (data) => unpackr.unpack(asBytes(data));
+    }
+    default:
+      return undefined;
+  }
+}
+
 /**
  * Process a channel/schema and extract information that can be used to deserialize messages on the
  * channel, and schemas in the format expected by Studio's RosDatatypes.
@@ -121,19 +153,21 @@ export function parseChannel(
     throw new Error(`Schema for ${channel.schema.name} is empty`);
   }
 
-  if (channel.messageEncoding === "json") {
-    if (channel.schema != undefined && channel.schema.encoding !== "jsonschema") {
+  const decodeSelfDescribing = selfDescribingDecoder(channel.messageEncoding);
+  if (decodeSelfDescribing) {
+    // The registry's empty schema encoding means "no schema", like schema id 0.
+    const channelSchema = channel.schema?.encoding === "" ? undefined : channel.schema;
+    if (channelSchema != undefined && channelSchema.encoding !== "jsonschema") {
       throw new Error(
-        `Message encoding ${channel.messageEncoding} with schema encoding '${channel.schema.encoding}' is not supported (expected jsonschema or no schema)`,
+        `Message encoding ${channel.messageEncoding} with schema encoding '${channelSchema.encoding}' is not supported (expected jsonschema or no schema)`,
       );
     }
-    const textDecoder = new TextDecoder();
     let datatypes: MessageDefinitionMap = new Map();
-    let deserialize = (data: ArrayBufferView) => JSON.parse(textDecoder.decode(data));
-    if (channel.schema != undefined) {
+    let deserialize = decodeSelfDescribing;
+    if (channelSchema != undefined) {
       const schema =
-        channel.schema.data.length > 0
-          ? JSON.parse(textDecoder.decode(channel.schema.data))
+        channelSchema.data.length > 0
+          ? JSON.parse(new TextDecoder().decode(channelSchema.data))
           : undefined;
       if (schema != undefined) {
         if (typeof schema !== "object") {
@@ -141,14 +175,27 @@ export function parseChannel(
         }
         const { datatypes: parsedDatatypes, postprocessValue } = parseJsonSchema(
           schema as Record<string, unknown>,
-          channel.schema.name,
+          channelSchema.name,
         );
         datatypes = parsedDatatypes;
         deserialize = (data) =>
-          postprocessValue(JSON.parse(textDecoder.decode(data)) as Record<string, unknown>);
+          postprocessValue(decodeSelfDescribing(data) as Record<string, unknown>);
       }
     }
     return { deserialize, datatypes };
+  }
+
+  if (channel.messageEncoding === "capnproto") {
+    if (channel.schema?.encoding !== "capnproto") {
+      throw new Error(
+        `Message encoding ${channel.messageEncoding} with ${
+          channel.schema == undefined
+            ? "no encoding"
+            : `schema encoding '${channel.schema.encoding}'`
+        } is not supported (expected capnproto)`,
+      );
+    }
+    return parseCapnprotoSchema(channel.schema.name, channel.schema.data);
   }
 
   if (channel.messageEncoding === "flatbuffer") {
