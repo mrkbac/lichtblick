@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useLatest } from "react-use";
 import type * as THREE from "three";
+
+import { useLatest } from "@lichtblick/hooks";
 
 /** How long to wait for the browser to restore a lost context before recreating it ourselves. */
 export const RESTORE_TIMEOUT_MS = 2_000;

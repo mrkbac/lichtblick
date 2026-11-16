@@ -35,7 +35,7 @@ import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext"
 import { PanelContextMenu } from "@lichtblick/suite-base/components/PanelContextMenu";
 import { useSubscribeMessageRange } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
-import { PANEL_TOOLBAR_MIN_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
+import { PANEL_TITLE_TOOLBAR_SPACE } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import TimeBasedChartTooltipContent from "@lichtblick/suite-base/components/TimeBasedChart/TimeBasedChartTooltipContent";
 import useGlobalVariables from "@lichtblick/suite-base/hooks/useGlobalVariables";
@@ -95,7 +95,9 @@ const Plot = (props: PlotProps): React.JSX.Element => {
       ...(path.timestampPath != undefined && {
         timestampPath: sidePath(path.timestampPath, side.prefix),
       }),
-      ...(path.xValue != undefined && { xValue: sidePath(path.xValue, side.prefix) }),
+      ...(path.xValue != undefined && {
+        xValue: sidePath(path.xValue, side.prefix),
+      }),
     });
   }, [props.config.paths]);
   const { saveConfig, config } = useComparedPaths(
@@ -262,21 +264,23 @@ const Plot = (props: PlotProps): React.JSX.Element => {
   useEffect(() => {
     setMessagePathDropConfig({
       getDropStatus(paths) {
-        if (paths.some((path) => !path.isLeaf)) {
-          return { canDrop: false };
-        }
-        return { canDrop: true, effect: "add" };
+        // Only fields are plotted; whole messages dragged along with them are skipped
+        return paths.some((path) => path.isLeaf)
+          ? { canDrop: true, effect: "add" }
+          : { canDrop: false };
       },
       handleDrop(paths) {
         saveConfig((prevConfig) => ({
           ...prevConfig,
           paths: [
             ...prevConfig.paths,
-            ...paths.map((path) => ({
-              value: path.path,
-              enabled: true,
-              timestampMethod: "receiveTime" as const,
-            })),
+            ...paths
+              .filter((path) => path.isLeaf)
+              .map((path) => ({
+                value: path.path,
+                enabled: true,
+                timestampMethod: "receiveTime" as const,
+              })),
           ],
         }));
       },
@@ -439,7 +443,7 @@ const Plot = (props: PlotProps): React.JSX.Element => {
         direction={legendDisplay === "top" ? "column" : "row"}
         flex="auto"
         fullWidth
-        style={{ height: `calc(100% - ${PANEL_TOOLBAR_MIN_HEIGHT}px)` }}
+        style={{ height: `calc(100% - ${PANEL_TITLE_TOOLBAR_SPACE})` }}
         position="relative"
       >
         {/* Pass stable values here for properties when not showing values so that the legend memoization remains stable. */}

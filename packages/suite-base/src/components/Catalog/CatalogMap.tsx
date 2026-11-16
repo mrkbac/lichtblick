@@ -4,7 +4,6 @@
 import { Button, Typography, useTheme } from "@mui/material";
 import type { FeatureCollection, LineString, Point } from "geojson";
 import {
-  AttributionControl,
   GeoJSONSource,
   LngLatBounds,
   Map as MapLibreMap,
@@ -15,9 +14,10 @@ import {
 } from "maplibre-gl";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLatest } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
+import { useLatest } from "@lichtblick/hooks";
+import { AutoHideAttributionControl } from "@lichtblick/suite-base/panels/Map/AutoHideAttributionControl";
 import { PRESETS } from "@lichtblick/suite-base/panels/Map/layers";
 
 import { Bounds, pickTrack } from "./track";
@@ -127,7 +127,7 @@ export default function CatalogMap({
       zoom: 1.5,
       attributionControl: false,
     });
-    instance.addControl(new AttributionControl({ compact: true }), "bottom-right");
+    instance.addControl(new AutoHideAttributionControl(), "bottom-right");
     instance.addControl(new NavigationControl({ showCompass: false }), "top-right");
     const popup = new Popup({ closeButton: false, closeOnClick: false, offset: 8 });
 

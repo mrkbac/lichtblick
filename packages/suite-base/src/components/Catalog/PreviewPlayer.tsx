@@ -7,9 +7,9 @@ import PlayArrowIcon from "@mui/icons-material/PlayArrow";
 import { IconButton, LinearProgress, MenuItem, Select, Slider, Typography } from "@mui/material";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useAsync } from "react-use";
 import { makeStyles } from "tss-react/mui";
 
+import { useAsync } from "@lichtblick/hooks";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
 

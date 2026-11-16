@@ -7,9 +7,9 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useTranslation } from "react-i18next";
 import "@testing-library/jest-dom/vitest";
-import { AsyncState } from "react-use/lib/useAsyncFn";
 import type { Mock } from "vitest";
 
+import { AsyncState } from "@lichtblick/hooks";
 import useExtensionSettings from "@lichtblick/suite-base/components/ExtensionsSettings/hooks/useExtensionSettings";
 import { UseExtensionSettingsHook } from "@lichtblick/suite-base/components/ExtensionsSettings/types";
 import { ExtensionMarketplaceDetail } from "@lichtblick/suite-base/context/ExtensionMarketplaceContext";

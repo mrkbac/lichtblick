@@ -131,6 +131,31 @@ export function ColorSchemeSettings(): React.JSX.Element {
   );
 }
 
+export function CompactPanelsSettings(): React.JSX.Element {
+  const { t } = useTranslation("appSettings");
+  const [enabled = false, setEnabled] = useAppConfigurationValue<boolean>(
+    AppSetting.COMPACT_PANELS,
+  );
+  const { classes } = useStyles();
+
+  return (
+    <Stack>
+      <FormControlLabel
+        className={classes.formControlLabel}
+        control={
+          <Checkbox
+            className={classes.checkbox}
+            checked={enabled}
+            onChange={(_event, checked) => void setEnabled(checked)}
+          />
+        }
+        label={t("compactPanels")}
+      />
+      <FormHelperText>{t("compactPanelsDescription")}</FormHelperText>
+    </Stack>
+  );
+}
+
 export function TimezoneSettings(): React.ReactElement {
   type Option = { key: string; label: string; data?: string; divider?: boolean };
 

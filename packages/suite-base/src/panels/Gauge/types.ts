@@ -4,7 +4,8 @@
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
-import { PanelExtensionContext, SettingsTreeAction } from "@lichtblick/suite";
+import { SettingsTreeAction } from "@lichtblick/suite";
+import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 
 export enum ColorMapConfig {
   RED_YELLOW_GREEN = "red-yellow-green",
@@ -38,7 +39,7 @@ export type ColorStops = {
 };
 
 export type GaugeProps = {
-  context: PanelExtensionContext;
+  context: BuiltinPanelExtensionContext;
 };
 
 export type BuildConicGradientProps = {

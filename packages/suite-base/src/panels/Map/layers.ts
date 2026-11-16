@@ -33,6 +33,9 @@ export type Preset = SourceParams & {
   variant?: { provider: string; style: string };
 };
 
+/** OSMF attribution guidelines allow hiding attribution on an interactive map after 5 seconds. */
+export const ATTRIBUTION_AUTO_HIDE_MS = 5000;
+
 const OSM_ATTRIBUTION =
   '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors';
 const ESRI = "https://server.arcgisonline.com/ArcGIS/rest/services";

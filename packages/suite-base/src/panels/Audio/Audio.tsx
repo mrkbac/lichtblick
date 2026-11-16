@@ -23,8 +23,10 @@ import {
   useMessagePipelineGetter,
   useMessagePipelineSubscribe,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
+import { hasSchema, replaceDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import {
   useDefaultPanelTitle,
   usePanelSettingsTreeUpdate,
@@ -122,6 +124,16 @@ export function Audio({ config, saveConfig }: Props): React.JSX.Element {
       nodes: buildSettingsTree(config, topic, audioTopics, t),
     });
   }, [audioTopics, config, saveConfig, t, topic, updatePanelSettingsTree]);
+
+  // Drop an audio topic from the topic list to play it
+  const { setMessagePathDropConfig } = usePanelContext();
+  useEffect(() => {
+    setMessagePathDropConfig(
+      replaceDrop(hasSchema(AUDIO_SCHEMAS), (item) => {
+        saveConfig({ topic: item.topicName });
+      }),
+    );
+  }, [saveConfig, setMessagePathDropConfig]);
   const [, setDefaultPanelTitle] = useDefaultPanelTitle();
   useEffect(() => {
     setDefaultPanelTitle(topic);

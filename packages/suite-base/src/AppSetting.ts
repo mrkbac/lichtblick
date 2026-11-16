@@ -15,6 +15,7 @@ export enum AppSetting {
   LANGUAGE = "language",
   DEFAULT_STEP_SIZE = "stepSize",
   PLAYBACK_PREVIEW_TOPIC = "playback.previewTopic",
+  COMPACT_PANELS = "ui.compactPanels",
 
   // ROS
   ROS_PACKAGE_PATH = "ros.ros_package_path",

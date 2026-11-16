@@ -15,6 +15,7 @@ import {
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
 import { EventsStore, useEvents } from "@lichtblick/suite-base/context/EventsContext";
+import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
 import { AppURLState, updateAppURLState } from "@lichtblick/suite-base/util/appURLState";
 
@@ -45,13 +46,20 @@ export function useStateToURLSynchronization(): void {
     maxWait: 500,
   });
   const selectedEventId = useEvents(selectSelectedEventId);
+  const { availableSources } = usePlayerSelection();
 
-  // Sync current time with the url.
+  // Sync current time with the url. Until a player reports its time (no player yet on page load, or
+  // a recording still loading), keep the time from the URL: Workspace seeks to it once it can.
+  // Closing a source clears it (PlayerManager).
+  const hasPlayer = playerUrlState != undefined;
   useEffect(() => {
+    if (!hasPlayer || (canSeek && debouncedCurrentTime == undefined)) {
+      return;
+    }
     updateUrl({
       time: canSeek ? debouncedCurrentTime : undefined,
     });
-  }, [canSeek, debouncedCurrentTime]);
+  }, [canSeek, debouncedCurrentTime, hasPlayer]);
 
   // Sync player state with the url.
   // When an mcap-bundle lookup key is present, skip writing ds/dsParams to avoid URL length issues.
@@ -62,6 +70,17 @@ export function useStateToURLSynchronization(): void {
 
     const currentUrl = new URL(globalThis.location.href);
     if (currentUrl.searchParams.get("mcap-bundle")) {
+      return;
+    }
+
+    // Local files can't be reopened from the URL; a `ds` for them would only make a reload fail and
+    // skip reopening the file from recents (see PlayerManager).
+    const sourceId = stablePlayerUrlState.sourceId;
+    const source = availableSources.find(
+      (candidate) => candidate.id === sourceId || candidate.legacyIds?.includes(sourceId) === true,
+    );
+    if (source?.type === "file") {
+      updateUrl({ ds: undefined, dsParams: {} });
       return;
     }
 
@@ -80,5 +99,5 @@ export function useStateToURLSynchronization(): void {
         _.isArray,
       ),
     });
-  }, [selectedEventId, stablePlayerUrlState]);
+  }, [availableSources, selectedEventId, stablePlayerUrlState]);
 }

@@ -20,7 +20,7 @@ import {
   Diamond20Filled,
   RectangleLandscape20Regular,
 } from "@fluentui/react-icons";
-import { FormControlLabel, IconButton, Radio, RadioGroup } from "@mui/material";
+import { FormControlLabel, IconButton, Radio, RadioGroup, Tooltip } from "@mui/material";
 import Cytoscape from "cytoscape";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { makeStyles } from "tss-react/mui";
@@ -28,10 +28,9 @@ import { makeStyles } from "tss-react/mui";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import ExpandingToolbar, { ToolGroup } from "@lichtblick/suite-base/components/ExpandingToolbar";
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
-import OverlayToolbar from "@lichtblick/suite-base/components/OverlayToolbar";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
-import { PANEL_TOOLBAR_MIN_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
+import { PANEL_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import { measureTextWidth } from "@lichtblick/suite-base/util/measureTextWidth";
 
 import Graph, { GraphMutation } from "./Graph";
@@ -105,7 +104,7 @@ const useStyles = makeStyles()((theme) => ({
     flexDirection: "column",
     alignItems: "flex-end",
     position: "absolute",
-    top: `calc(${PANEL_TOOLBAR_MIN_HEIGHT}px + ${theme.spacing(1)})`,
+    top: `calc(${PANEL_TOOLBAR_HEIGHT} + ${theme.spacing(1)})`,
     right: theme.spacing(1),
     zIndex: 101,
     gap: theme.spacing(1),
@@ -344,36 +343,40 @@ function TopicGraph() {
     <>
       <PanelToolbar />
       <div className={classes.root}>
-        <OverlayToolbar>
-          <IconButton size="small" aria-label="Zoom fit" title="Zoom fit" onClick={onZoomFit}>
-            <PageFit20Regular />
-          </IconButton>
-          <IconButton
-            size="small"
-            aria-label="Orientation"
-            title="Orientation"
-            onClick={toggleOrientation}
-          >
-            <ArrowBidirectionalUpDown20Regular
-              style={{ transform: `rotate(${lrOrientation ? 90 : 0}deg)` }}
-            />
-          </IconButton>
-          <IconButton
-            size="small"
-            aria-pressed={showServices}
-            aria-label={showServices ? "Showing services" : "Hiding services"}
-            title={showServices ? "Showing services" : "Hiding services"}
-            onClick={toggleShowServices}
-          >
-            <RectangleLandscape20Regular />
-          </IconButton>
-        </OverlayToolbar>
-
         <ExpandingToolbar
           checked={topicVisibility !== "none"}
           dataTest="set-topic-visibility"
           tooltip={topicVisibilityTooltip}
           icon={<Diamond20Filled />}
+          toolbarItems={
+            <>
+              <Tooltip placement="left" title="Zoom fit">
+                <IconButton size="small" aria-label="Zoom fit" onClick={onZoomFit}>
+                  <PageFit20Regular />
+                </IconButton>
+              </Tooltip>
+              <Tooltip placement="left" title="Orientation">
+                <IconButton size="small" aria-label="Orientation" onClick={toggleOrientation}>
+                  <ArrowBidirectionalUpDown20Regular
+                    style={{ transform: `rotate(${lrOrientation ? 90 : 0}deg)` }}
+                  />
+                </IconButton>
+              </Tooltip>
+              <Tooltip
+                placement="left"
+                title={showServices ? "Showing services" : "Hiding services"}
+              >
+                <IconButton
+                  size="small"
+                  aria-pressed={showServices}
+                  aria-label={showServices ? "Showing services" : "Hiding services"}
+                  onClick={toggleShowServices}
+                >
+                  <RectangleLandscape20Regular />
+                </IconButton>
+              </Tooltip>
+            </>
+          }
           selectedTab={selectedTab}
           onSelectTab={(newSelectedTab) => {
             setSelectedTab(newSelectedTab);

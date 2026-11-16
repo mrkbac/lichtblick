@@ -6,7 +6,16 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { ArrowMinimize20Filled } from "@fluentui/react-icons";
-import { Paper, IconButton, Tabs, Tab, tabClasses, tabsClasses, Tooltip } from "@mui/material";
+import {
+  Divider,
+  Paper,
+  IconButton,
+  Tabs,
+  Tab,
+  tabClasses,
+  tabsClasses,
+  Tooltip,
+} from "@mui/material";
 import React, { ReactElement, ReactNode } from "react";
 import { makeStyles } from "tss-react/mui";
 
@@ -73,6 +82,8 @@ type Props<T extends string> = {
   selectedTab?: T; // collapse the toolbar if selectedTab is undefined
   tooltip: string;
   dataTest?: string;
+  /** The panel's other floating controls, joined below the toggle into one toolbar. */
+  toolbarItems?: ReactNode;
 };
 
 /** Expands a floating control into a tabbed pane while leaving the surrounding canvas interactive. */
@@ -84,34 +95,41 @@ export default function ExpandingToolbar<T extends string>({
   selectedTab,
   tooltip,
   dataTest,
+  toolbarItems,
 }: Props<T>): React.JSX.Element {
   const { classes } = useStyles();
   const expanded = selectedTab != undefined;
 
-  if (!expanded) {
-    let selectedTabLocal: T | undefined = selectedTab;
-    // default to the first child's name if no tab is selected
-    React.Children.forEach(children, (child) => {
-      selectedTabLocal ??= child.props.name as T;
-    });
+  const toolbar = (
+    <OverlayToolbar>
+      <Tooltip placement="left" title={tooltip}>
+        <IconButton
+          size="small"
+          aria-pressed={expanded || checked === true}
+          aria-label={tooltip}
+          data-testid={`ExpandingToolbar-${tooltip}`}
+          onClick={() => {
+            // Toggle; open on the first tab
+            const firstTab = React.Children.toArray(children)[0] as
+              | React.ReactElement<{ name: T }>
+              | undefined;
+            onSelectTab(expanded ? undefined : firstTab?.props.name);
+          }}
+        >
+          {icon}
+        </IconButton>
+      </Tooltip>
+      {toolbarItems != undefined && (
+        <>
+          <Divider />
+          {toolbarItems}
+        </>
+      )}
+    </OverlayToolbar>
+  );
 
-    return (
-      <OverlayToolbar>
-        <Tooltip placement="left" title={tooltip}>
-          <IconButton
-            size="small"
-            aria-pressed={checked === true}
-            aria-label={tooltip}
-            data-testid={`ExpandingToolbar-${tooltip}`}
-            onClick={() => {
-              onSelectTab(selectedTabLocal);
-            }}
-          >
-            {icon}
-          </IconButton>
-        </Tooltip>
-      </OverlayToolbar>
-    );
+  if (!expanded) {
+    return toolbar;
   }
   let selectedChild: ReactElement | undefined;
 
@@ -128,31 +146,34 @@ export default function ExpandingToolbar<T extends string>({
   };
 
   return (
-    <Paper className={classes.root} data-testid={dataTest} square={false} elevation={4}>
-      <Paper>
-        <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Tabs
-            className={classes.tabs}
-            textColor="inherit"
-            value={selectedTab}
-            onChange={handleChange}
-          >
-            {React.Children.map(children, (child) => (
-              <Tab label={child.props.name} value={child.props.name} />
-            ))}
-          </Tabs>
-          <IconButton
-            size="small"
-            className={classes.minimizeButton}
-            onClick={() => {
-              onSelectTab(undefined);
-            }}
-          >
-            <ArrowMinimize20Filled />
-          </IconButton>
-        </Stack>
+    <>
+      <Paper className={classes.root} data-testid={dataTest} square={false} elevation={4}>
+        <Paper>
+          <Stack direction="row" justifyContent="space-between" alignItems="center">
+            <Tabs
+              className={classes.tabs}
+              textColor="inherit"
+              value={selectedTab}
+              onChange={handleChange}
+            >
+              {React.Children.map(children, (child) => (
+                <Tab label={child.props.name} value={child.props.name} />
+              ))}
+            </Tabs>
+            <IconButton
+              size="small"
+              className={classes.minimizeButton}
+              onClick={() => {
+                onSelectTab(undefined);
+              }}
+            >
+              <ArrowMinimize20Filled />
+            </IconButton>
+          </Stack>
+        </Paper>
+        <div className={classes.content}>{selectedChild}</div>
       </Paper>
-      <div className={classes.content}>{selectedChild}</div>
-    </Paper>
+      {toolbar}
+    </>
   );
 }

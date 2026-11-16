@@ -3,8 +3,8 @@
 
 import * as _ from "lodash-es";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useAsync } from "react-use";
 
+import { useAsync } from "@lichtblick/hooks";
 import { usePlayerSelection } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 
 import {

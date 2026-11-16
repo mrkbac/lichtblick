@@ -10,7 +10,6 @@ import { Chip, alpha } from "@mui/material";
 import type { FeatureCollection, Position } from "geojson";
 import * as _ from "lodash-es";
 import {
-  AttributionControl,
   GeoJSONSource,
   LngLatBounds,
   Map as MapLibreMap,
@@ -21,16 +20,19 @@ import {
   StyleSpecification,
 } from "maplibre-gl";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import { useLatest } from "react-use";
 import { makeStyles } from "tss-react/mui";
 import { useDebounce } from "use-debounce";
 
 import { filterMap } from "@lichtblick/den/collection";
+import { useLatest } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { MessagePath, parseMessagePath } from "@lichtblick/message-path";
-import { MessageEvent, PanelExtensionContext, SettingsTreeAction, Topic } from "@lichtblick/suite";
+import { MessageEvent, SettingsTreeAction, Topic } from "@lichtblick/suite";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 import { OVERLAY_TOOLBAR_BUTTON_SIZE } from "@lichtblick/suite-base/components/OverlayToolbar";
+import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
+import { PANEL_FLOATING_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
+import { addTopicsDrop } from "@lichtblick/suite-base/panels/shared/pathDrop";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import { turboColorString } from "@lichtblick/suite-base/util/colorUtils";
 import { formatTime } from "@lichtblick/suite-base/util/formatTime";
@@ -38,6 +40,7 @@ import { darkColor, lineColors } from "@lichtblick/suite-base/util/plotColors";
 import { formatTimeRaw, isAbsoluteTime } from "@lichtblick/suite-base/util/time";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
+import { AutoHideAttributionControl } from "./AutoHideAttributionControl";
 import { MapToolbar } from "./MapToolbar";
 import { normalize, Sample, sampleAt, speedUnitLabel, speedValues, valueRange } from "./colorBy";
 import {
@@ -146,6 +149,7 @@ const useStyles = makeStyles()((theme) => ({
     width: "100%",
     height: "100%",
     overflow: "hidden",
+    ".maplibregl-ctrl-top-right": { top: PANEL_FLOATING_TOOLBAR_HEIGHT },
     backgroundColor: theme.palette.background.default,
     "& .maplibregl-popup-content": {
       backgroundColor: theme.palette.background.paper,
@@ -197,7 +201,7 @@ const useStyles = makeStyles()((theme) => ({
     // Under the zoom/compass controls; the attribution at the bottom can wrap to several lines.
     position: "absolute",
     right: 10,
-    top: 10 + OVERLAY_TOOLBAR_BUTTON_SIZE * 3 + 10,
+    top: `calc(${10 + OVERLAY_TOOLBAR_BUTTON_SIZE * 3 + 10}px + ${PANEL_FLOATING_TOOLBAR_HEIGHT})`,
     display: "flex",
     flexDirection: "column",
     gap: theme.spacing(0.5),
@@ -222,9 +226,14 @@ const useStyles = makeStyles()((theme) => ({
   },
   notice: {
     position: "absolute",
-    top: 10,
+    top: `calc(10px + ${PANEL_FLOATING_TOOLBAR_HEIGHT})`,
     left: "50%",
     transform: "translateX(-50%)",
+    // Stay between the tool bar on the left and the zoom controls on the right (10px insets).
+    maxWidth: `calc(100% - ${2 * (10 + OVERLAY_TOOLBAR_BUTTON_SIZE + 10)}px)`,
+    // Wrap instead of truncating, so the whole notice stays readable in a narrow panel.
+    height: "auto",
+    "& .MuiChip-label": { whiteSpace: "normal", textAlign: "center", paddingBlock: 2 },
   },
 }));
 
@@ -279,7 +288,7 @@ function MapNotice({ children }: { children: string }): React.JSX.Element {
 }
 
 type MapPanelProps = {
-  context: PanelExtensionContext;
+  context: BuiltinPanelExtensionContext;
 };
 
 function MapPanel({ context }: MapPanelProps): React.JSX.Element {
@@ -407,6 +416,21 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       maxNativeZoom: undefined,
     });
   }, [context, config]);
+
+  // Drop a topic that is turned off from the topic list to show it again
+  useEffect(() => {
+    context.unstable_setMessagePathDropConfig(
+      addTopicsDrop(
+        (item) => config.disabledTopics.includes(item.topicName),
+        (dropped) => {
+          setConfig((prev) => ({
+            ...prev,
+            disabledTopics: prev.disabledTopics.filter((topic) => !dropped.includes(topic)),
+          }));
+        },
+      ),
+    );
+  }, [config.disabledTopics, context]);
 
   /** Remember custom sources that actually worked, for reuse in other panels and layouts. */
   const rememberWorkingSource = useCallback(
@@ -800,7 +824,7 @@ function MapPanel({ context }: MapPanelProps): React.JSX.Element {
       maxPitch: 85,
       attributionControl: false,
     });
-    instance.addControl(new AttributionControl({ compact: true }), "bottom-right");
+    instance.addControl(new AutoHideAttributionControl(), "bottom-right");
     instance.addControl(new NavigationControl({ visualizePitch: true }), "top-right");
 
     instance.on("styleimagemissing", (event) => {

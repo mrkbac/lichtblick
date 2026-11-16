@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import React, { Fragment, useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { useLatest } from "react-use";
 
+import { useLatest } from "@lichtblick/hooks";
 import { DEFAULT_MARKER_COLOR } from "@lichtblick/suite-base/panels/Plot/constants";
 import { getPixelForXValue } from "@lichtblick/suite-base/panels/Plot/utils/getPixelForXValue";
 import { getPixelForYValue } from "@lichtblick/suite-base/panels/Plot/utils/getPixelForYValue";

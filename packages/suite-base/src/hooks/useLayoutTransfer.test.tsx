@@ -40,8 +40,8 @@ vi.mock("../context/AnalyticsContext", () => ({
 
 vi.mock("@lichtblick/suite-base/util/showOpenFilePicker");
 
-vi.mock("react-use", async () => ({
-  ...(await vi.importActual("react-use")),
+vi.mock("@lichtblick/hooks", async () => ({
+  ...(await vi.importActual("@lichtblick/hooks")),
   useMountedState: () => () => true,
 }));
 

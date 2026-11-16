@@ -20,9 +20,13 @@ const useStyles = makeStyles()({
   },
 });
 
-/** Whether the account menu has anything to show; without it the avatar button is hidden. */
+/**
+ * Whether the account menu has anything to show; without it the avatar button is hidden.
+ * While the session loads the button is shown (clicks are ignored) so it doesn't pop in and shift the app bar.
+ */
 export function hasUserMenu(organization: OrganizationState): boolean {
   return (
+    organization.status === "loading" ||
     organization.status === "authenticated" ||
     organization.status === "unavailable" ||
     (organization.status === "unauthenticated" && organization.login != undefined)

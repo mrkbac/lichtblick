@@ -9,6 +9,7 @@ import type { LayoutNode } from "@lichtblick/suite-base/types/layouts";
 import type { PanelConfig } from "@lichtblick/suite-base/types/panels";
 import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import {
+  getGroups,
   getPanelIds,
   isLayoutNode,
   mapGroups,
@@ -96,6 +97,60 @@ export function getLayoutTrees(
 /** Every panel in the layout, including the panels inside tabs. */
 export function getAllPanelIds(data: TreeData): string[] {
   return getLayoutTrees(data).flatMap(({ tree }) => getPanelIds(tree));
+}
+
+/** The panels on screen: the root tree and, recursively, the shown tab of each Tab panel. */
+export function getVisiblePanelIds(data: TreeData): string[] {
+  const result: string[] = [];
+  const visit = (tree: LayoutNode | undefined, ancestors: readonly string[]) => {
+    for (const group of getGroups(tree)) {
+      const id =
+        group.active != undefined && group.panels.includes(group.active)
+          ? group.active
+          : group.panels[0];
+      if (id == undefined) {
+        continue;
+      }
+      result.push(id);
+      // A hand-edited file could nest a Tab panel in itself.
+      if (isTabPanel(id) && !ancestors.includes(id)) {
+        const config = data.configById[id];
+        visit(getTabs(config)[getActiveTabIndex(config)]?.layout, [...ancestors, id]);
+      }
+    }
+  };
+  visit(data.layout, []);
+  return result;
+}
+
+/**
+ * The panel whose settings to show instead of `fromId`, which is nothing, a panel that went off
+ * screen, or a Tab panel (it has no settings of its own): the first panel of the tab shown in the
+ * innermost Tab panel around `fromId` (or `fromId` itself) that is on screen, else the first panel
+ * on screen. Content panels win over Tab panels; an empty tab yields its Tab panel.
+ */
+export function getFallbackPanelId(
+  data: TreeData,
+  fromId: string | undefined,
+  hidden: ReadonlySet<string> = new Set(),
+): string | undefined {
+  const first = (tree: LayoutNode | undefined) => {
+    const ids = getVisiblePanelIds({ ...data, layout: tree }).filter((id) => !hidden.has(id));
+    return ids.find((id) => !isTabPanel(id)) ?? ids[0];
+  };
+  const visible = getVisiblePanelIds(data);
+  const tabPanelIds =
+    fromId == undefined
+      ? []
+      : [
+          ...(findLayoutTree(data, fromId)?.location.ancestors ?? []),
+          ...(isTabPanel(fromId) ? [fromId] : []),
+        ];
+  const tabPanelId = tabPanelIds.reverse().find((id) => visible.includes(id) && !hidden.has(id));
+  if (tabPanelId != undefined) {
+    return first(findActiveTabTree(data, tabPanelId)?.tree) ?? tabPanelId;
+  }
+  return first(data.layout);
 }
 
 /** The tree holding `panelId`, if any. */

@@ -21,10 +21,9 @@ import { ICodeEditorService } from "monaco-editor/editor/browser/services/codeEd
 import * as monacoApi from "monaco-editor/editor/editor.api.js";
 // @ts-expect-error StandaloneService does not have type information in the monaco-editor package
 import { StandaloneServices } from "monaco-editor/editor/standalone/browser/standaloneServices";
-import * as path from "path";
 import React, { Suspense, ReactElement, useCallback, useEffect, useRef } from "react";
-import { useLatest } from "react-use";
 
+import { useLatest } from "@lichtblick/hooks";
 import ErrorBoundary from "@lichtblick/suite-base/components/ErrorBoundary";
 import getPrettifiedCode from "@lichtblick/suite-base/panels/UserScriptEditor/getPrettifiedCode";
 import { Script } from "@lichtblick/suite-base/panels/UserScriptEditor/script";
@@ -32,6 +31,7 @@ import { getUserScriptProjectConfig } from "@lichtblick/suite-base/players/UserS
 import inScreenshotTests from "@lichtblick/suite-base/stories/inScreenshotTests";
 import { DEFAULT_STUDIO_SCRIPT_PREFIX } from "@lichtblick/suite-base/util/constants";
 import { mightActuallyBePartial } from "@lichtblick/suite-base/util/mightActuallyBePartial";
+import { basename } from "@lichtblick/suite-base/util/path";
 
 import MonacoEditor, { EditorDidMount, EditorWillMount } from "./MonacoEditor";
 import { themes } from "./theme";
@@ -142,8 +142,7 @@ const Editor = ({
         if (
           editor &&
           script &&
-          requestedModel.uri.path ===
-            `${DEFAULT_STUDIO_SCRIPT_PREFIX}${path.basename(script.filePath)}`
+          requestedModel.uri.path === `${DEFAULT_STUDIO_SCRIPT_PREFIX}${basename(script.filePath)}`
         ) {
           // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
           gotoSelection(editor, input.options.selection);
@@ -173,8 +172,8 @@ const Editor = ({
     // For the editor to resolve relative imports of the utilities (i.e. ./types), we need the
     // user's code to be in a file next to the utility files. For this we grab the basename
     // of the user's entered node name to remove any path-like sections.
-    const basename = path.basename(script.filePath);
-    const filePath = monacoApi.Uri.parse(`file://${DEFAULT_STUDIO_SCRIPT_PREFIX}${basename}`);
+    const fileName = basename(script.filePath);
+    const filePath = monacoApi.Uri.parse(`file://${DEFAULT_STUDIO_SCRIPT_PREFIX}${fileName}`);
     const model =
       monacoApi.editor.getModel(filePath) ??
       monacoApi.editor.createModel(script.code, "typescript", filePath);
@@ -283,8 +282,8 @@ const Editor = ({
       // For the editor to resolve relative imports of the utilities (i.e. ./types), we need the
       // user's code to be in a file next to the utility files. For this we grab the basename
       // of the user's entered node name to remove any path-like sections.
-      const basename = path.basename(script.filePath);
-      const filePath = monacoApi.Uri.parse(`file://${DEFAULT_STUDIO_SCRIPT_PREFIX}${basename}`);
+      const fileName = basename(script.filePath);
+      const filePath = monacoApi.Uri.parse(`file://${DEFAULT_STUDIO_SCRIPT_PREFIX}${fileName}`);
       const model =
         monaco.editor.getModel(filePath) ??
         monaco.editor.createModel(script.code, "typescript", filePath);

@@ -12,8 +12,8 @@
 
 import { useState, useEffect, useRef } from "react";
 import { createRoot } from "react-dom/client";
-import { useAsync } from "react-use";
 
+import { useAsync } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 
 import FileInfoDisplay from "./FileInfoDisplay";

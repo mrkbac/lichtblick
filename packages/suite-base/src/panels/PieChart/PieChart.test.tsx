@@ -11,7 +11,7 @@ import type { Mock } from "vitest";
 
 import "@testing-library/jest-dom/vitest";
 
-import { PanelExtensionContext } from "@lichtblick/suite";
+import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { useLegendCount } from "@lichtblick/suite-base/components/SettingsTreeEditor/inputs/useLegendCount";
 
 import { PieChart, buildChartConfig, formatTooltip } from "./PieChart";
@@ -25,7 +25,8 @@ vi.mock("./useSettingsTree", () => ({
   useSettingsTree: vi.fn(),
 }));
 
-const mockContext: Partial<PanelExtensionContext> = {
+const mockContext: Partial<BuiltinPanelExtensionContext> = {
+  unstable_setMessagePathDropConfig: vi.fn(),
   saveState: vi.fn(),
   setDefaultPanelTitle: vi.fn(),
   updatePanelSettingsEditor: vi.fn(),
@@ -50,14 +51,14 @@ describe("PieChart", () => {
   });
 
   it("renders the PieChart component with default configuration", () => {
-    render(<PieChart context={mockContext as PanelExtensionContext} />);
+    render(<PieChart context={mockContext as BuiltinPanelExtensionContext} />);
 
     expect(screen.getByText("Pie Chart")).toBeInTheDocument();
     expect(screen.getByText("No data available")).toBeInTheDocument();
   });
 
   it("updates the settings editor on render", () => {
-    render(<PieChart context={mockContext as PanelExtensionContext} />);
+    render(<PieChart context={mockContext as BuiltinPanelExtensionContext} />);
 
     expect(mockContext.updatePanelSettingsEditor).toHaveBeenCalledWith({
       actionHandler: expect.any(Function),

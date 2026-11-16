@@ -18,6 +18,19 @@ function folderOf(file: File): string | undefined {
   return parts.length > 1 ? parts[0] : undefined;
 }
 
+// The handle each opened file was read from, so a comparison of them can be stored in recents
+const handleOfFile = new WeakMap<Blob, FileSystemFileHandle>();
+
+export function rememberHandle(file: Blob, handle: FileSystemFileHandle): void {
+  handleOfFile.set(file, handle);
+}
+
+/** The handles of `files`, or undefined when any of them was not read from a handle */
+export function handlesOf(files: readonly File[]): FileSystemFileHandle[] | undefined {
+  const handles = files.map((file) => handleOfFile.get(file));
+  return handles.every((h) => h != undefined) ? handles : undefined;
+}
+
 /**
  * The side name of each file when comparing them: its folder when the files come from more than
  * one folder (each folder is merged into one side), else its own name (each file is a side).
@@ -93,10 +106,10 @@ export function draftFromFiles(files: readonly File[], compare?: readonly string
   const filesOf = sideNames.map((name) => files.filter((_, index) => names[index] === name));
   const inEvery =
     sideNames.length > 1
-      ? filesOf[0]!.filter((file) => filesOf.every((f) => f.includes(file)))
+      ? [...new Set(filesOf[0])].filter((file) => filesOf.every((f) => f.includes(file)))
       : [];
   // Only shared when every side keeps a file of its own, so no side disappears from the draft
-  const shared = filesOf.every((f) => f.length > inEvery.length) ? inEvery : [];
+  const shared = filesOf.every((f) => f.some((file) => !inEvery.includes(file))) ? inEvery : [];
   return {
     shared,
     sides: sideNames.map((name, index) => {

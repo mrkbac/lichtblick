@@ -17,9 +17,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { useLatest } from "react-use";
 
-import { useSynchronousMountedState, useValueChangedDebugLog } from "@lichtblick/hooks";
+import { useLatest, useSynchronousMountedState, useValueChangedDebugLog } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import {
   AppSettingValue,

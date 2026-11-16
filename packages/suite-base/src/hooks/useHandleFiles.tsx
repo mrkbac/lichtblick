@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import { extname } from "path";
 import { useCallback } from "react";
 
 import Logger from "@lichtblick/log";
@@ -14,6 +13,7 @@ import {
 import { useInstallingExtensionsState } from "@lichtblick/suite-base/hooks/useInstallingExtensionsState";
 import { useLayoutTransfer } from "@lichtblick/suite-base/hooks/useLayoutTransfer";
 import { Namespace } from "@lichtblick/suite-base/types";
+import { extname } from "@lichtblick/suite-base/util/path";
 
 type UseHandleFiles = {
   handleFiles: (

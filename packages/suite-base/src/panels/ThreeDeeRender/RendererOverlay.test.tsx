@@ -28,7 +28,8 @@ vi.mock("./Interactions", () => {
   return {
     __esModule: true,
     InteractionContextMenu: () => undefined,
-    Interactions: () => undefined,
+    // The panel's toolbar buttons are passed to Interactions, which shows them below its own
+    Interactions: ({ toolbarItems }: { toolbarItems?: React.ReactNode }) => <>{toolbarItems}</>,
   };
 });
 
@@ -36,13 +37,6 @@ vi.mock("@lichtblick/suite-base/hooks/usePanelMousePresence", () => {
   return {
     __esModule: true,
     usePanelMousePresence: () => true,
-  };
-});
-
-vi.mock("react-use", () => {
-  return {
-    __esModule: true,
-    useLongPress: () => ({}),
   };
 });
 
