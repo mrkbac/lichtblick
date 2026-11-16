@@ -18,7 +18,8 @@ export const NUMERIC_TYPES = [
   "float64",
 ];
 
-export const SUPPORTED_DATA_TYPES = [...NUMERIC_TYPES, "string"];
+// "array" lets the path input accept a whole array field (`/topic.values`), the usual pie chart input
+export const SUPPORTED_DATA_TYPES = [...NUMERIC_TYPES, "string", "array"];
 
 export const DEFAULT_CONFIG = {
   path: "",
