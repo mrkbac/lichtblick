@@ -102,20 +102,37 @@ export default function ThemeProvider({
     // and a full page); re-check at most once a frame.
     let frame: number | undefined;
     const ownerWindow = ownerDocument.defaultView ?? window;
-    const observer = new ownerWindow.MutationObserver(() => {
+    const schedule = () => {
       frame ??= ownerWindow.requestAnimationFrame(() => {
         frame = undefined;
         update();
       });
+    };
+    // Only modals (portaled to body) carry visible backdrops. Watching just them, not the whole
+    // app, keeps playback (scrubber, panels) from re-running this every frame.
+    const modalObserver = new ownerWindow.MutationObserver(schedule);
+    const observeModals = () => {
+      modalObserver.disconnect();
+      for (const child of ownerDocument.body.children) {
+        if (child.classList.contains("MuiModal-root")) {
+          modalObserver.observe(child, {
+            childList: true,
+            subtree: true,
+            attributes: true,
+            attributeFilter: ["class", "style"],
+          });
+        }
+      }
+    };
+    observeModals();
+    const bodyObserver = new ownerWindow.MutationObserver(() => {
+      observeModals();
+      schedule();
     });
-    observer.observe(ownerDocument.body, {
-      childList: true,
-      subtree: true,
-      attributes: true,
-      attributeFilter: ["class", "style"],
-    });
+    bodyObserver.observe(ownerDocument.body, { childList: true });
     return () => {
-      observer.disconnect();
+      bodyObserver.disconnect();
+      modalObserver.disconnect();
       if (frame != undefined) {
         ownerWindow.cancelAnimationFrame(frame);
       }

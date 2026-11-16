@@ -14,11 +14,12 @@ import SearchIcon from "@mui/icons-material/Search";
 import { IconButton, InputBase, Tooltip } from "@mui/material";
 import { produce } from "immer";
 import * as _ from "lodash-es";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import { MessageEvent, SettingsTreeAction } from "@lichtblick/suite";
 import { useMessageReducer } from "@lichtblick/suite-base/PanelAPI";
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import {
   useMessagePipeline,
@@ -239,7 +240,12 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
     live: new Map(),
     deep: new Map(),
   }));
+  // Hidden (inactive tab, behind a maximized panel): no sampling; showing it samples right away.
+  const visible = useContext(PanelVisibleContext);
   useEffect(() => {
+    if (!visible) {
+      return;
+    }
     const tick = () => {
       const { activeData } = getPipeline().playerState;
       const nowMs = Date.now();
@@ -272,7 +278,7 @@ function TopicHealthTable({ config, saveConfig }: Props): React.JSX.Element {
     return () => {
       clearInterval(id);
     };
-  }, [getPipeline, isRecording]);
+  }, [getPipeline, isRecording, visible]);
 
   // Recordings: scan opted-in topics once over the whole source instead of subscribing.
   useEffect(() => {

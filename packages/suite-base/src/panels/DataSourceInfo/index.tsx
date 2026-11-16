@@ -28,11 +28,12 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import {
   MessagePipelineContext,
@@ -107,26 +108,38 @@ export function RecordingInspector(): React.JSX.Element {
   const [topicStats, setTopicStats] = useState(() => selectTopicStats(getPipeline()));
   // Live sources show the recent rate, which drops to 0 when a publisher stops
   const [liveRates, setLiveRates] = useState(new Map<string, LiveRate>());
+  // Kept across hide/show, so rates continue where they left off.
+  const trackerRef = useRef<{ tracker: LiveTopicRates; playerId?: string }>({
+    tracker: new LiveTopicRates(),
+  });
+  // Hidden (inactive tab, behind a maximized panel): no sampling; showing it samples right away.
+  const visible = useContext(PanelVisibleContext);
   useEffect(() => {
-    let tracker = new LiveTopicRates();
-    let trackedPlayerId: string | undefined;
-    const id = setInterval(() => {
+    if (!visible) {
+      return;
+    }
+    const sample = () => {
       const pipeline = getPipeline();
       const stats = selectTopicStats(pipeline);
       // Start over for a new player, so its rates don't build on the previous player's samples
-      if (pipeline.playerState.playerId !== trackedPlayerId) {
-        trackedPlayerId = pipeline.playerState.playerId;
-        tracker = new LiveTopicRates();
+      const tracked = trackerRef.current;
+      if (pipeline.playerState.playerId !== tracked.playerId) {
+        trackerRef.current = {
+          tracker: new LiveTopicRates(),
+          playerId: pipeline.playerState.playerId,
+        };
       }
       setTopicStats(stats);
       if (stats) {
-        setLiveRates(tracker.update(Date.now(), stats));
+        setLiveRates(trackerRef.current.tracker.update(Date.now(), stats));
       }
-    }, 1000);
+    };
+    sample();
+    const id = setInterval(sample, 1000);
     return () => {
       clearInterval(id);
     };
-  }, [getPipeline]);
+  }, [getPipeline, visible]);
   const start = useMessagePipeline(selectStartTime);
   const end = useMessagePipeline(selectEndTime);
   const name = useMessagePipeline(selectPlayerName);
