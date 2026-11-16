@@ -100,7 +100,7 @@ const memoizedCreateRuleNode = memoizeWeak(
                 type: "action" as const,
                 id: "test-alert",
                 label: "Send test alert",
-                help: "Plays this rule's alert now.",
+                tooltip: "Plays this rule's alert now.",
               },
             ]
           : []),

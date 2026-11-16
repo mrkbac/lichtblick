@@ -4,6 +4,7 @@
 import { TFunction } from "i18next";
 
 import { SettingsTreeAction } from "@lichtblick/suite";
+import { builtinMessagePathField } from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
 import type {
   DocumentedNode,
   DocumentedNodes,
@@ -28,14 +29,14 @@ export function buildSettingsTree(
         { type: "action", id: "remove", label: t("remove"), icon: "Delete", display: "inline" },
       ],
       fields: {
-        path: {
+        path: builtinMessagePathField({
           label: t("path"),
           help: t("pathHelp"),
           input: "messagepath",
           value: row.path,
           supportsMathModifiers: true,
-          supportsStreamModifiers: true,
-        },
+          supportsTimeSeriesMessagePathFunctions: true,
+        }),
         label: {
           label: t("label"),
           help: t("labelHelp"),

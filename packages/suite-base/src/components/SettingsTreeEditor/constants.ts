@@ -3,3 +3,5 @@
 
 export const NODE_HEADER_MIN_HEIGHT = 35;
 export const SETTINGS_NODE_DRAG_TYPE = "SETTINGS_NODE";
+/** Drag of a child of a `childrenReorderable` node (Foxglove settings API). */
+export const SETTINGS_CHILD_DRAG_TYPE = "SETTINGS_CHILD";

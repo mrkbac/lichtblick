@@ -42,7 +42,7 @@ const PANELS: PanelInfo[] = [
         general: {
           label: "View",
           actions: [
-            { type: "action", id: "reset", label: "Reset view", help: "Restores the defaults." },
+            { type: "action", id: "reset", label: "Reset view", tooltip: "Restores the defaults." },
             { type: "action", id: "silent", label: "Undocumented" },
           ],
           fields: { size: { input: "number", label: "Size", help: "Point size in pixels." } },

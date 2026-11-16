@@ -26,8 +26,6 @@ import {
   Immutable,
   PanelExtensionContext,
   ParameterValue,
-  RenderState,
-  SettingsTree,
   SettingsTreeAction,
   Subscription,
   Time,
@@ -45,6 +43,10 @@ import {
   ConverterKey,
 } from "@lichtblick/suite-base/components/PanelExtensionAdapter/messageProcessing";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
+import {
+  EditorSettingsTree,
+  EditorSettingsTreeAction,
+} from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
 import { useAlertsActions } from "@lichtblick/suite-base/context/AlertsContext";
 import { useAppConfiguration } from "@lichtblick/suite-base/context/AppConfigurationContext";
 import {
@@ -52,6 +54,7 @@ import {
   getExtensionPanelSettings,
   useExtensionCatalog,
 } from "@lichtblick/suite-base/context/ExtensionCatalogContext";
+import { ImmutableSettingsTree } from "@lichtblick/suite-base/context/PanelStateContext";
 import {
   useClearHoverValue,
   useHoverValue,
@@ -74,9 +77,10 @@ import { assertNever } from "@lichtblick/suite-base/util/assertNever";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { PanelConfigVersionError } from "./PanelConfigVersionError";
-import { RenderStateConfig, initRenderStateBuilder } from "./renderState";
+import { ExtensionRenderState, RenderStateConfig, initRenderStateBuilder } from "./renderState";
 import {
   BuiltinPanelExtensionContext,
+  ExtensionPanelContext,
   MessageConverterAlertHandler,
   TopicSettingsUpdater,
 } from "./types";
@@ -186,7 +190,7 @@ function PanelExtensionAdapter(
   const isMounted = useMountedState();
   const [error, setError] = useState<Error | undefined>();
   const [forceConversion, setForceConversion] = useState(new Set<string>());
-  const [watchedFields, setWatchedFields] = useState(new Set<keyof RenderState>());
+  const [watchedFields, setWatchedFields] = useState(new Set<keyof ExtensionRenderState>());
   const messageConverters = useExtensionCatalog(selectInstalledMessageConverters);
 
   const [localSubscriptions, setLocalSubscriptions] = useState<Subscription[]>([]);
@@ -435,7 +439,7 @@ function PanelExtensionAdapter(
 
   const extensionsSettings = useExtensionCatalog(getExtensionPanelSettings);
 
-  type PartialPanelExtensionContext = Omit<BuiltinPanelExtensionContext, "panelElement">;
+  type PartialPanelExtensionContext = Omit<ExtensionPanelContext, "panelElement">;
 
   const messagePipelineState = useMessagePipelineGetter();
 
@@ -461,14 +465,16 @@ function PanelExtensionAdapter(
     };
 
     const extensionSettingsActionHandler = (
-      action: SettingsTreeAction,
+      editorAction: EditorSettingsTreeAction,
       updateTopicSettings: TopicSettingsUpdater = (updateSettings) => {
         saveConfig(produce(updateSettings));
       },
     ) => {
-      if (action.action === "reorder-node") {
-        return; // Extensions don't support reordering
+      if (editorAction.action === "reorder-node" || editorAction.action === "reorder-children") {
+        return; // Message converter settings don't support reordering
       }
+      // Converter settings use the Lichtblick API; Foxglove-only inputs reach them unchanged.
+      const action = editorAction as SettingsTreeAction;
       const {
         payload: { path },
       } = action;
@@ -493,6 +499,9 @@ function PanelExtensionAdapter(
         }
       }
     };
+
+    const subscribeMessageRangeIfMounted: PanelExtensionContext["unstable_subscribeMessageRange"] =
+      (args) => (isMounted() ? subscribeMessageRange(args) : () => {});
 
     return {
       initialState: initialState.current,
@@ -559,7 +568,7 @@ function PanelExtensionAdapter(
 
       setSharedPanelState,
 
-      watch: (field: keyof RenderState) => {
+      watch: (field: keyof ExtensionRenderState) => {
         if (!isMounted()) {
           return;
         }
@@ -715,18 +724,17 @@ function PanelExtensionAdapter(
         setSubscribedAppSettings(settings);
       },
 
-      updatePanelSettingsEditor: (
-        settings: SettingsTree,
-        updateTopicSettings?: TopicSettingsUpdater,
-      ) => {
+      updatePanelSettingsEditor: (panelSettings, updateTopicSettings?: TopicSettingsUpdater) => {
         if (!isMounted()) {
           return;
         }
-        const actionHandler: typeof settings.actionHandler = (action) => {
+        // Lichtblick and Foxglove trees both go to the editor as-is; it renders either API.
+        const settings = panelSettings as Immutable<EditorSettingsTree>;
+        const actionHandler = (action: EditorSettingsTreeAction) => {
           settings.actionHandler(action);
           extensionSettingsActionHandler(action, updateTopicSettings);
         };
-        updatePanelSettingsTree({ ...settings, actionHandler });
+        updatePanelSettingsTree({ ...settings, actionHandler } as ImmutableSettingsTree);
       },
 
       setDefaultPanelTitle: (title: string) => {
@@ -764,12 +772,11 @@ function PanelExtensionAdapter(
        * - Error handling is still being refined
        * - API surface may change based on testing feedback
        */
-      unstable_subscribeMessageRange(args) {
-        if (!isMounted()) {
-          return () => {};
-        }
-        return subscribeMessageRange(args);
-      },
+      unstable_subscribeMessageRange: subscribeMessageRangeIfMounted,
+      subscribeMessageRange: subscribeMessageRangeIfMounted,
+      // Deprecated Foxglove name that older Foxglove extensions still call.
+      // eslint-disable-next-line @typescript-eslint/no-deprecated
+      UNSTABLE_subscribeMessageRange: subscribeMessageRangeIfMounted,
 
       async getMessageAtTime(topic: string, time: Time) {
         if (!isMounted()) {
@@ -904,7 +911,7 @@ function PanelExtensionAdapter(
     const advertisements = advertisementsRef.current;
 
     log.info(`Init panel ${panelId}`);
-    const onUnmount = initPanel({
+    const context: ExtensionPanelContext = {
       panelElement,
       ...partialExtensionContext,
       // Wraps both overloads, not only the deprecated one.
@@ -918,7 +925,8 @@ function PanelExtensionAdapter(
       set onRender(renderFunction: RenderFn | undefined) {
         setRenderFn(() => renderFunction);
       },
-    });
+    };
+    const onUnmount = initPanel(context);
     isPanelInitializedRef.current = true;
 
     return () => {

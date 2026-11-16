@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 import { Immutable } from "@lichtblick/suite";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
@@ -26,7 +26,12 @@ const selectSharedState = (state: LayoutState) => state.sharedPanelState ?? Empt
  */
 export function useSharedPanelState(): [
   Immutable<SharedPanelState>,
-  (data: Immutable<SharedPanelState>) => void,
+  (
+    data:
+      | Immutable<SharedPanelState>
+      // Foxglove extensions may pass an updater function.
+      | ((prev: Immutable<SharedPanelState>) => Immutable<SharedPanelState>),
+  ) => void,
 ] {
   const sharedState = useCurrentLayoutSelector(selectSharedState);
   const { updateSharedPanelState } = useCurrentLayoutActions();
@@ -35,10 +40,19 @@ export function useSharedPanelState(): [
   const panelType = useMemo(() => getPanelTypeFromId(panelId), [panelId]);
 
   const sharedData = useMemo(() => sharedState[panelType], [panelType, sharedState]);
+  const sharedDataRef = useRef(sharedData);
+  sharedDataRef.current = sharedData;
 
   const update = useCallback(
-    (data: Immutable<SharedPanelState>) => {
-      updateSharedPanelState(panelType, data);
+    (
+      data:
+        | Immutable<SharedPanelState>
+        | ((prev: Immutable<SharedPanelState>) => Immutable<SharedPanelState>),
+    ) => {
+      updateSharedPanelState(
+        panelType,
+        typeof data === "function" ? data(sharedDataRef.current) : data,
+      );
     },
     [panelType, updateSharedPanelState],
   );

@@ -5,6 +5,8 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import type * as Foxglove from "@foxglove/extension";
+
 import {
   Immutable,
   MessageConverterAlert,
@@ -71,7 +73,8 @@ export type MessagePathDropConfig = {
 export type BuiltinPanelExtensionContext = {
   /** Apply converter settings to the panel's current config before saving. */
   updatePanelSettingsEditor: (
-    settings: SettingsTree,
+    // Foxglove extensions pass Foxglove trees; the settings editor renders both APIs.
+    settings: Immutable<SettingsTree> | Foxglove.Immutable<Foxglove.SettingsTree>,
     updateTopicSettings?: TopicSettingsUpdater,
   ) => void;
 
@@ -107,6 +110,13 @@ export type BuiltinPanelExtensionContext = {
    */
   unstable_setAlert?: (alertId: string, alert: Immutable<PlayerAlert> | undefined) => void;
 } & Omit<PanelExtensionContext, "updatePanelSettingsEditor">;
+
+/**
+ * The context the adapter hands to every panel: the Lichtblick API, the built-in extras, and the
+ * whole `@foxglove/extension` panel API so Foxglove-built extensions work. Typing the runtime
+ * object with this makes tsc enforce Foxglove compatibility; it is not part of `@lichtblick/suite`.
+ */
+export type ExtensionPanelContext = BuiltinPanelExtensionContext & Foxglove.PanelExtensionContext;
 
 export type TopicSettingsUpdater = (
   updateSettings: (config: { topics: Record<string, unknown> }) => void,

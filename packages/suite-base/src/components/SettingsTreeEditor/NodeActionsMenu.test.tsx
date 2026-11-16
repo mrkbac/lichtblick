@@ -123,4 +123,20 @@ describe("NodeActionsMenu", () => {
 
     expect(screen.queryByTestId(`${testIds.iconPrefix}${secondActionItem.id}`)).toBeNull();
   });
+
+  it("does not select a disabled action and shows its tooltip", async () => {
+    const { user } = renderComponent({
+      actions: [
+        { type: "action", id: "off", label: "Off", disabled: true, tooltip: "Not available" },
+      ],
+    });
+
+    await user.click(screen.getByTestId(testIds.menuButton));
+    const item = screen.getByTestId("node-actions-menu-item-off");
+    expect(item.getAttribute("aria-disabled")).toBe("true");
+    await user.hover(item);
+    expect(await screen.findByText("Not available")).toBeTruthy();
+    await user.click(item);
+    expect(mockOnSelectAction).not.toHaveBeenCalled();
+  });
 });

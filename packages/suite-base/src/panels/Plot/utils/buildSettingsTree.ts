@@ -5,6 +5,7 @@ import { TFunction } from "i18next";
 import memoizeWeak from "memoize-weak";
 
 import { parseMessagePath } from "@lichtblick/message-path";
+import { builtinMessagePathField } from "@lichtblick/suite-base/components/SettingsTreeEditor/types";
 import {
   DEFAULT_PLOT_PATH,
   DEFAULT_SLIDING_WINDOW_SECONDS,
@@ -58,15 +59,15 @@ const makeSeriesNode = memoizeWeak(
       reorderable: canReorder,
       icon: canReorder ? ("DragHandle" as const) : undefined,
       fields: {
-        value: {
+        value: builtinMessagePathField({
           input: "messagepath",
           label: isReferenceLine ? t("value") : t("messagePath"),
           help: isReferenceLine ? t("referenceValueHelp") : t("seriesPathHelp"),
           supportsMathModifiers: true,
-          supportsStreamModifiers,
+          supportsTimeSeriesMessagePathFunctions: supportsStreamModifiers,
           validTypes: PLOTABLE_ROS_TYPES,
           value: path.value,
-        },
+        }),
         label: {
           input: "string",
           label: t("label"),

@@ -9,7 +9,6 @@ import { compare } from "@foxglove/rostime";
 
 import Logger from "@lichtblick/log";
 import { parseChannel } from "@lichtblick/mcap-support";
-import { MessageEvent } from "@lichtblick/suite";
 import {
   MessageIteratorArgs,
   IteratorResult,
@@ -19,7 +18,7 @@ import {
   IIterableSource,
 } from "@lichtblick/suite-base/players/IterablePlayer/IIterableSource";
 import { MessageSizeEstimator } from "@lichtblick/suite-base/players/messageMemoryEstimation";
-import { SubscribePayload } from "@lichtblick/suite-base/players/types";
+import { MessageEvent, SubscribePayload } from "@lichtblick/suite-base/players/types";
 import { toError } from "@lichtblick/suite-base/util/toError";
 
 const log = Logger.getLogger(__filename);

@@ -79,6 +79,31 @@ describe("useSubscribeMessageRange", () => {
     }).not.toThrow();
   });
 
+  it("passes start/end and accepts Foxglove's deprecated onReset callback", () => {
+    const mockIterable: AsyncIterable<MessageEvent[]> = { [Symbol.asyncIterator]: vi.fn() };
+    mockCreateMessageRangeIterator.mockReturnValue({ iterable: mockIterable, cancel: vi.fn() });
+    const mockGetBatchIterator = vi.fn().mockReturnValue({ [Symbol.asyncIterator]: vi.fn() });
+    mockUseMessagePipelineGetter.mockReturnValue(
+      vi.fn().mockReturnValue({ sortedTopics: [], getBatchIterator: mockGetBatchIterator }),
+    );
+    const onReset = vi.fn().mockResolvedValue(undefined);
+    const start = { sec: 1, nsec: 0 };
+    const end = { sec: 2, nsec: 0 };
+    const { result } = renderHook(() => useSubscribeMessageRange());
+
+    act(() => {
+      result.current({
+        topic: "/a",
+        start,
+        end,
+        onReset,
+      } as unknown as Parameters<typeof result.current>[0]);
+    });
+
+    expect(mockGetBatchIterator).toHaveBeenCalledWith("/a", { start, end });
+    expect(onReset).toHaveBeenCalledWith(mockIterable);
+  });
+
   it("calls onNewRangeIterator with the iterable when batch iterator is available", () => {
     // Given
     const topic = BasicBuilder.string();
@@ -101,7 +126,7 @@ describe("useSubscribeMessageRange", () => {
     });
 
     // Then
-    expect(mockGetBatchIterator).toHaveBeenCalledWith(topic);
+    expect(mockGetBatchIterator).toHaveBeenCalledWith(topic, { start: undefined, end: undefined });
     expect(onNewRangeIterator).toHaveBeenCalledWith(mockIterable);
     expect(cancel).toBe(mockCancel);
     expect(mockCreateMessageRangeIterator).toHaveBeenCalledWith(

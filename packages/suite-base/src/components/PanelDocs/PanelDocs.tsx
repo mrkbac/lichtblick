@@ -75,10 +75,10 @@ export function settingsRows(
         rows.push({ path: nodePath.join(" › "), label: field.label, help: field.help });
       }
     }
-    // Actions (e.g. "Add all") are listed when they explain themselves.
+    // Actions (e.g. "Send test alert") are listed when they have a tooltip.
     for (const action of node.actions ?? []) {
-      if (action.type === "action" && action.help != undefined) {
-        rows.push({ path: nodePath.join(" › "), label: action.label, help: action.help });
+      if (action.type === "action" && action.tooltip != undefined) {
+        rows.push({ path: nodePath.join(" › "), label: action.label, help: action.tooltip });
       }
     }
     return [...rows, ...settingsRows(node.children ?? {}, nodePath)];
