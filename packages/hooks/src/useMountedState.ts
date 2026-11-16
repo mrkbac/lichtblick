@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: MPL-2.0
 
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 
-/** Returns a stable getter that is true between mount and unmount (tracked in useEffect). */
+/**
+ * Returns a stable getter that is true between mount and unmount. Tracked in useLayoutEffect so
+ * it is already accurate inside the component's own layout effects.
+ */
 export function useMountedState(): () => boolean {
   const mountedRef = useRef(false);
   const get = useCallback(() => mountedRef.current, []);
-  useEffect(() => {
+  useLayoutEffect(() => {
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;

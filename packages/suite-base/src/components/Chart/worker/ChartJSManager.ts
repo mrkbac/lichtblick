@@ -41,7 +41,6 @@ import {
   addEventListener,
   removeEventListener,
 } from "@lichtblick/suite-base/components/Chart/worker/eventHandler";
-import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
 // Not the package index: it pulls MUI component styles and icons, which crash in a worker
 import { fontMonospace } from "@lichtblick/theme/src/typography";
 
@@ -223,21 +222,21 @@ export default class ChartJSManager {
   public panstart(event: PanInput): RpcScales {
     const target = event.target as HTMLElement & { boundingClientRect: DOMRect };
     target.getBoundingClientRect = () => target.boundingClientRect;
-    maybeCast<ZoomableChart>(this.#chartInstance)?.$zoom.panStartHandler(event);
+    (this.#chartInstance as ZoomableChart | undefined)?.$zoom.panStartHandler(event);
     return this.getScales();
   }
 
   public panmove(event: PanInput): RpcScales {
     const target = event.target as HTMLElement & { boundingClientRect: DOMRect };
     target.getBoundingClientRect = () => target.boundingClientRect;
-    maybeCast<ZoomableChart>(this.#chartInstance)?.$zoom.panHandler(event);
+    (this.#chartInstance as ZoomableChart | undefined)?.$zoom.panHandler(event);
     return this.getScales();
   }
 
   public panend(event: PanInput): RpcScales {
     const target = event.target as HTMLElement & { boundingClientRect: DOMRect };
     target.getBoundingClientRect = () => target.boundingClientRect;
-    maybeCast<ZoomableChart>(this.#chartInstance)?.$zoom.panEndHandler(event);
+    (this.#chartInstance as ZoomableChart | undefined)?.$zoom.panEndHandler(event);
     return this.getScales();
   }
 
