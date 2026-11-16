@@ -10,7 +10,9 @@ import type { SettingsTreeNodeAction } from "@lichtblick/suite";
 import type {
   DocumentedFields,
   DocumentedNode,
+  DocumentedNodes,
 } from "@lichtblick/suite-base/panels/shared/documentedSettings";
+import { topicListNode } from "@lichtblick/suite-base/panels/shared/topicList";
 
 import type { RendererConfig } from "../IRenderer";
 import { isTransformPreloadEnabled, MAX_TRANSFORM_MESSAGES } from "../constants";
@@ -308,17 +310,12 @@ export function publishSettingsNode(publish: RendererConfig["publish"]): Documen
 
 // ---- Topics and custom layers ----
 
-export function topicsRootNode(): DocumentedNode {
-  return {
-    enableVisibilityFilter: true,
+export function topicsRootNode(children: DocumentedNodes = {}): DocumentedNode {
+  return topicListNode<DocumentedNode>({
     label: t("threeDee:topics"),
     help: t("threeDee:topicsHelp"),
-    defaultExpansionState: "expanded",
-    actions: [
-      { id: "show-all", type: "action", label: t("threeDee:showAll") },
-      { id: "hide-all", type: "action", label: t("threeDee:hideAll") },
-    ],
-  };
+    children,
+  });
 }
 
 export function customLayersRootNode(

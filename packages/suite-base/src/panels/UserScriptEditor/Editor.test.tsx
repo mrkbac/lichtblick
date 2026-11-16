@@ -22,21 +22,19 @@ let mockOpenHandler:
     ) => Promise<unknown>)
   | undefined = undefined;
 
-vi.mock("monaco-editor", () => ({
-  typescript: {
-    typescriptDefaults: {
-      addExtraLib: vi.fn(() => ({ dispose: vi.fn() })),
-      setEagerModelSync: vi.fn(),
-      setDiagnosticsOptions: vi.fn(),
-      setCompilerOptions: vi.fn(),
-      getCompilerOptions: vi.fn(() => ({})),
-    },
-    javascriptDefaults: {
-      setEagerModelSync: vi.fn(),
-    },
+vi.mock("monaco-editor/languages/definitions/typescript/register.js", () => ({}));
+
+vi.mock("monaco-editor/languages/features/typescript/register.js", () => ({
+  typescriptDefaults: {
+    addExtraLib: vi.fn(() => ({ dispose: vi.fn() })),
+    setEagerModelSync: vi.fn(),
+    setDiagnosticsOptions: vi.fn(),
+    setCompilerOptions: vi.fn(),
+    getCompilerOptions: vi.fn(() => ({})),
   },
-  KeyMod: { CtrlCmd: 1 },
-  KeyCode: { KeyS: 55 },
+  javascriptDefaults: {
+    setEagerModelSync: vi.fn(),
+  },
 }));
 
 vi.mock("@lichtblick/suite-base/panels/UserScriptEditor/getPrettifiedCode", () => ({

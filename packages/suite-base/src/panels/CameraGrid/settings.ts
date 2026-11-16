@@ -7,12 +7,11 @@ import { produce } from "immer";
 import { SettingsTreeAction } from "@lichtblick/suite";
 import { sortPrefixMatchesToFront } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/topicPrefixMatching";
 import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
+import { showHideAllValue, topicListNode } from "@lichtblick/suite-base/panels/shared/topicList";
 import { moveItem, moveUpDownActions } from "@lichtblick/suite-base/panels/utils";
 
 import { tileAnnotationTopics } from "./annotations";
 import { CameraGridConfig, Rotation, makeTile } from "./types";
-
-export const ADD_ALL_ACTION = "add-all";
 
 const ROTATION_OPTIONS = [0, 90, 180, 270].map((value) => ({ label: `${value}°`, value }));
 
@@ -29,12 +28,8 @@ export function buildSettingsTree(
   annotationTopics: string[],
   t: TFunction<"cameraGrid">,
 ): DocumentedNodes {
-  const shown = new Set(config.tiles.map((tile) => tile.topic));
-  const addable = imageTopics.filter((topic) => !shown.has(topic));
-
   const tiles: DocumentedNodes = {};
   config.tiles.forEach((tile, index) => {
-    const topicOptions = [tile.topic, ...addable].map((topic) => ({ label: topic, value: topic }));
     const shownAnnotations = new Set(tileAnnotationTopics(tile, annotationTopics));
     // Same order as the Image panel: topics next to the image topic first.
     const annotationOptions = [...annotationTopics];
@@ -43,23 +38,16 @@ export function buildSettingsTree(
     for (const topic of annotationOptions) {
       annotationNodes[topic] = { label: topic, visible: shownAnnotations.has(topic) };
     }
-    tiles[String(index)] = {
+    tiles[tile.topic] = {
       label: tile.topic,
       visible: tile.visible,
       reorderable: true,
       defaultExpansionState: "collapsed",
-      actions: [
-        ...moveUpDownActions(index, config.tiles.length, { up: t("moveUp"), down: t("moveDown") }),
-        { type: "action", id: "remove", label: t("remove"), icon: "Delete", display: "inline" },
-      ],
+      actions: moveUpDownActions(index, config.tiles.length, {
+        up: t("moveUp"),
+        down: t("moveDown"),
+      }),
       fields: {
-        topic: {
-          label: t("topic"),
-          help: t("topicHelp"),
-          input: "select",
-          value: tile.topic,
-          options: topicOptions,
-        },
         fit: {
           label: t("scaling"),
           help: t("scalingHelp"),
@@ -103,31 +91,15 @@ export function buildSettingsTree(
           : undefined,
     };
   });
+  // Image topics without a tile yet; turning one on adds it to the end of the grid.
+  for (const topic of imageTopics) {
+    tiles[topic] ??= { label: topic, visible: false };
+  }
 
   return {
     general: {
       label: t("general"),
-      actions: [
-        {
-          type: "action",
-          id: ADD_ALL_ACTION,
-          label: t("addAllImageTopics"),
-          help: t("addAllImageTopicsHelp"),
-          icon: "Grid",
-          display: "inline",
-        },
-        { type: "action", id: "remove-all", label: t("removeAll") },
-      ],
       fields: {
-        add: {
-          label: t("addCamera"),
-          help: t("addCameraHelp"),
-          input: "select",
-          value: undefined,
-          tooltip: t("addCameraTooltip"),
-          disabled: addable.length === 0,
-          options: addable.map((topic) => ({ label: topic, value: topic })),
-        },
         columns: {
           label: t("columns"),
           help: t("columnsHelp"),
@@ -164,44 +136,40 @@ export function buildSettingsTree(
         },
       },
     },
-    topics: { label: t("cameras"), help: t("camerasHelp"), children: tiles },
+    topics: topicListNode({ label: t("cameras"), help: t("camerasHelp"), children: tiles }),
   };
 }
 
 export function settingsReducer(
   config: CameraGridConfig,
   action: SettingsTreeAction,
-  /** Topics "Add all" appends; raw images are left out by the caller. */
+  /** Topics "Show all" adds tiles for; raw images are left out by the caller. */
   addAllTopicNames: string[],
   annotationTopics: string[] = [],
 ): CameraGridConfig {
   const { path } = action.payload;
+  const tileIndex = (topic: string | undefined) =>
+    config.tiles.findIndex((tile) => tile.topic === topic);
   if (action.action === "reorder-node") {
-    const from = Number(path[1]);
-    const to = Number(action.payload.targetPath[1]);
+    const from = tileIndex(path[1]);
+    const to = tileIndex(action.payload.targetPath[1]);
+    if (from < 0 || to < 0) {
+      return config;
+    }
     return produce(config, (draft) => {
       moveItem(draft.tiles, from, to);
     });
   }
-  if (action.action === "perform-node-action") {
-    const { id } = action.payload;
-    if (id === ADD_ALL_ACTION) {
-      return addAllTopics(config, addAllTopicNames);
-    }
-    if (id === "remove-all") {
-      return { ...config, tiles: [] };
-    }
+  const showAll = showHideAllValue(action);
+  if (showAll != undefined && path.length === 1 && path[0] === "topics") {
+    const tiles = config.tiles.map((tile) => ({ ...tile, visible: showAll }));
+    return addAllTopics({ ...config, tiles }, showAll ? addAllTopicNames : []);
   }
 
   return produce(config, (draft) => {
     if (path[0] === "general" && action.action === "update") {
       const { value } = action.payload;
       switch (path[1]) {
-        case "add":
-          if (typeof value === "string" && !draft.tiles.some((tile) => tile.topic === value)) {
-            draft.tiles.push(makeTile(value));
-          }
-          break;
         case "columns":
           draft.columns = typeof value === "number" && value >= 1 ? Math.round(value) : undefined;
           break;
@@ -218,17 +186,20 @@ export function settingsReducer(
     if (path[0] !== "topics") {
       return;
     }
-    const index = Number(path[1]);
+    const index = tileIndex(path[1]);
     const tile = draft.tiles[index];
     if (!tile) {
+      // Turning on an image topic that has no tile yet adds one.
+      if (action.action === "update" && path[1] != undefined && path[2] === "visible") {
+        if (action.payload.value === true) {
+          draft.tiles.push(makeTile(path[1]));
+        }
+      }
       return;
     }
 
     if (action.action === "perform-node-action") {
       switch (action.payload.id) {
-        case "remove":
-          draft.tiles.splice(index, 1);
-          break;
         case "move-up":
           moveItem(draft.tiles, index, index - 1);
           break;
@@ -248,12 +219,6 @@ export function settingsReducer(
       return;
     }
     switch (path[2]) {
-      case "topic":
-        // Each topic is shown at most once, so ignore picking a topic that's already in the grid.
-        if (typeof value === "string" && !draft.tiles.some((other) => other.topic === value)) {
-          tile.topic = value;
-        }
-        break;
       case "fit":
         tile.fit = value === "fill" ? "fill" : "fit";
         break;

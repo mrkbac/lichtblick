@@ -16,6 +16,7 @@ const docs: PanelDocs = {
     buildSettingsTree(
       // One example topic, so the per-topic fields are listed too.
       [{ name: "Transforms", visible: true, isStatic: false, available: true }],
+      new Set(),
       DEFAULT_ROTATION_CONVENTION,
       sharedI18nObject.getFixedT(null, "transformTree"),
     ),

@@ -15,12 +15,15 @@
 //   You may not use this file except in compliance with the License.
 
 import { useTheme } from "@mui/material";
-import { typescript } from "monaco-editor";
+// Import only the TypeScript language: the bare "monaco-editor" entry registers ~80 languages and
+// the CSS/HTML/JSON language services with their workers.
+import "monaco-editor/languages/definitions/typescript/register.js";
 // @ts-expect-error ICodeEditorService does not have type information in the monaco-editor package
 import { ICodeEditorService } from "monaco-editor/editor/browser/services/codeEditorService";
 import * as monacoApi from "monaco-editor/editor/editor.api.js";
 // @ts-expect-error StandaloneService does not have type information in the monaco-editor package
 import { StandaloneServices } from "monaco-editor/editor/standalone/browser/standaloneServices";
+import * as typescript from "monaco-editor/languages/features/typescript/register.js";
 import React, { Suspense, ReactElement, useCallback, useEffect, useRef } from "react";
 
 import { useLatest } from "@lichtblick/hooks";

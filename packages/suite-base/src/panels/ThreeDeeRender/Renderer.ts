@@ -43,6 +43,7 @@ import {
 import { LayerErrors } from "@lichtblick/suite-base/panels/ThreeDeeRender/LayerErrors";
 import { ICameraHandler } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/ICameraHandler";
 import type { DocumentedNodes } from "@lichtblick/suite-base/panels/shared/documentedSettings";
+import { showHideAllValue } from "@lichtblick/suite-base/panels/shared/topicList";
 import IAnalytics from "@lichtblick/suite-base/services/IAnalytics";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { palette, fontMonospace } from "@lichtblick/theme";
@@ -947,8 +948,7 @@ export class Renderer extends EventEmitter<RendererEvents> {
     const topics: SettingsTreeEntry = {
       path: ["topics"],
       node: {
-        ...topicsRootNode(),
-        children: this.settings.tree()["topics"]?.children,
+        ...topicsRootNode(this.settings.tree()["topics"]?.children),
         handler: this.#handleTopicsAction,
       },
     };
@@ -1806,16 +1806,9 @@ export class Renderer extends EventEmitter<RendererEvents> {
   };
 
   #handleTopicsAction = (action: SettingsTreeAction): void => {
-    const path = action.payload.path;
-    if (action.action !== "perform-node-action" || path.length !== 1 || path[0] !== "topics") {
-      return;
-    }
-    log.debug(`handleTopicsAction(${action.payload.id})`);
-
-    if (action.payload.id === "show-all") {
-      this.#setTopicsVisible(true);
-    } else if (action.payload.id === "hide-all") {
-      this.#setTopicsVisible(false);
+    const visible = showHideAllValue(action);
+    if (visible != undefined && action.payload.path.length === 1) {
+      this.#setTopicsVisible(visible);
     }
   };
 

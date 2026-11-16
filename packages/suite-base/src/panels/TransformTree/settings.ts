@@ -46,6 +46,8 @@ export const DEFAULT_ROTATION_CONVENTION: RotationConvention = "extrinsic";
 
 export function buildSettingsTree(
   topics: readonly ResolvedTopic[],
+  /** Topics that delivered transforms the panel had to skip */
+  malformedTopics: ReadonlySet<string>,
   convention: RotationConvention,
   t: TFunction<"transformTree">,
 ): DocumentedNodes {
@@ -75,7 +77,11 @@ export function buildSettingsTree(
           {
             label: topic.name,
             visible: topic.visible,
-            error: topic.available ? undefined : t("settings.topicUnavailable"),
+            error: !topic.available
+              ? t("settings.topicUnavailable")
+              : malformedTopics.has(topic.name)
+                ? t("settings.malformedTransforms")
+                : undefined,
             // Configured topics that left the data source would otherwise stay listed forever.
             actions: topic.available
               ? undefined

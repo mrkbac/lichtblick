@@ -11,6 +11,7 @@ import type {
   DocumentedNode,
   DocumentedNodes,
 } from "@lichtblick/suite-base/panels/shared/documentedSettings";
+import { topicListNode } from "@lichtblick/suite-base/panels/shared/topicList";
 
 import { Config, LogLevel, VisibilityFilter } from "./types";
 
@@ -77,14 +78,12 @@ export function buildSettingsTree(
         },
       },
     },
-    topics: {
-      enableVisibilityFilter: true,
+    topics: topicListNode({
       label: t("topics"),
       help: t("topicsHelp"),
       error: availableTopics.length === 0 ? t("noLogTopics") : undefined,
       children: visibilityChildren(availableTopics, (topic) => isTopicVisible(config, topic)),
-      actions: showHideActions,
-    },
+    }),
     nameFilter: {
       enableVisibilityFilter: true,
       children: visibilityChildren(availableNames, config.nameFilter ?? {}),

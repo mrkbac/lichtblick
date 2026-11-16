@@ -8,7 +8,14 @@ import {
 import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 import { samplesFromMessage } from "./transforms";
-import { addTransformEvents, buildRows, measureBetween, mergeEntries } from "./tree";
+import {
+  addTransformEvents,
+  addTransformState,
+  buildRows,
+  EMPTY_TRANSFORM_STATE,
+  measureBetween,
+  mergeEntries,
+} from "./tree";
 import { FrameEntries, FrameEntry } from "./types";
 
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
@@ -277,5 +284,28 @@ describe("measureBetween", () => {
     expect(measureBetween(entries, "lidar", "imu", recorded)).toEqual({
       missing: { between: ["map", "rig"] },
     });
+  });
+});
+
+describe("malformed transforms", () => {
+  it("skips a FrameTransform sliced to fewer fields and reports its topic", () => {
+    // Given a message another panel's `fields` subscription sliced to its translation
+    const sliced: MessageEvent = {
+      topic: "/tf",
+      schemaName: "foxglove.FrameTransform",
+      receiveTime: { sec: 1, nsec: 0 },
+      sizeInBytes: 0,
+      message: { translation: { x: 0, y: 0, z: 0 } },
+    };
+
+    // When it reaches the panel next to a well-formed transform
+    const state = addTransformState(EMPTY_TRANSFORM_STATE, [
+      sliced,
+      rosTf("/tf2", 1, [["a", "b"]]),
+    ]);
+
+    // Then it is skipped without throwing, and its topic is reported
+    expect([...state.entries.keys()]).toEqual(["b"]);
+    expect([...state.malformedTopics]).toEqual(["/tf"]);
   });
 });
