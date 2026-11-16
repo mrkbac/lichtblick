@@ -275,7 +275,7 @@ function layerNode(
       value: layer.heightOffset ?? 0,
       step: 0.5,
       precision: 2,
-      help: "Meters added to the location fix's altitude (WGS 84 ellipsoid height) to line the tiles up with the scene.",
+      help: "Meters to raise the tiles above the location fix's frame; their ground under the fix otherwise meets that frame.",
     };
   } else {
     fields.opacity = {

@@ -81,4 +81,24 @@ describe("handlePath", () => {
 
     expect(newState.latestMessage).toEqual(initialState.latestMessage);
   });
+
+  it("converts the latest message's values for the new path", async () => {
+    const actual = await vi.importActual<typeof import("@lichtblick/message-path")>(
+      "@lichtblick/message-path",
+    );
+    (parseMessagePath as Mock).mockImplementation(actual.parseMessagePath);
+    const message = MessageEventBuilder.messageEvent({
+      topic: "/t",
+      message: { counts: new Uint32Array([2, 3]) },
+    });
+    const initialState = PieChartBuilder.pieChartState({ latestMessage: message });
+
+    const newState = handlePath({
+      state: initialState,
+      action: { type: "path", path: "/t.counts" },
+    });
+
+    expect(newState.latestMatchingQueriedData).toEqual(new Float32Array([2, 3]));
+    expect(newState.error).toBeUndefined();
+  });
 });

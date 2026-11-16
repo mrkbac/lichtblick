@@ -19,7 +19,7 @@ export type PieChartState = {
   path: string;
   parsedPath: MessagePath | undefined;
   latestMessage: MessageEvent | undefined;
-  latestMatchingQueriedData: unknown;
+  latestMatchingQueriedData: Float32Array | undefined;
   error: Error | undefined;
   pathParseError: string | undefined;
 };

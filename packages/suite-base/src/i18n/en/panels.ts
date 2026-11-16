@@ -33,7 +33,7 @@ export const panels = {
   plot: "Plot",
   plotDescription: "Plot numerical values over time or other values.",
   pieChart: "Pie Chart",
-  pieChartDescription: "Display a pie chart based on a continuous value.",
+  pieChartDescription: "Show how the values of a numeric array divide up a whole.",
   publish: "Publish",
   publishDescription: "Publish messages to the data source (live connections only).",
   rawMessages: "Raw Messages",

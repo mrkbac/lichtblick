@@ -14,7 +14,7 @@ const docs: PanelDocs = {
       items: [
         [
           "Message path",
-          "A float32[] field; each element becomes one slice, as a percentage of the sum.",
+          "A numeric array field; each element becomes one slice, as a percentage of the sum.",
         ],
       ],
     },

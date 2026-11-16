@@ -149,7 +149,7 @@ export const keyboardShortcuts = {
   finishNote: "Leave notes editor",
   notesToggleTask: "Tick or untick a task's checkbox",
   pieChartShowSlice: "Show a slice's name and percentage",
-  pieChartDropPath: "Chart a float32[] field dropped from the topic list",
+  pieChartDropPath: "Chart a numeric array field dropped from the topic list",
   parametersClearFilter: "Clear the filter",
   parametersToggleNamespace: "Expand or collapse a namespace",
   parametersSubmitValue: "Set the edited value",

@@ -24,7 +24,7 @@ export function buildSettingsTree(
       value: config.path,
       error: pathParseError,
       validTypes: SUPPORTED_DATA_TYPES,
-      help: "The float32[] field to chart; each element becomes one slice.",
+      help: "The numeric array field to chart; each element becomes one slice.",
     },
     title: {
       label: "Title",

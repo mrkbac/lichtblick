@@ -564,7 +564,7 @@ export function mapSettingsNode(
         step: 0.1,
         precision: PRECISION_DISTANCE,
         value: config.zOffset,
-        help: "Height of the 2D map in meters above the ENU frame's XY plane",
+        help: "Height of the map's ground in meters above the location fix's frame",
       },
     },
     visible: config.visible,

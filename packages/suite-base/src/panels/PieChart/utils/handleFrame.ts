@@ -6,6 +6,7 @@
 
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 
+import { toPieValues } from "./toPieValues";
 import type { PieChartState, PieChartAction } from "../types";
 
 export type HandleFrameProps = {
@@ -28,28 +29,15 @@ export function handleFrame({ state, action }: HandleFrameProps): PieChartState 
       }
 
       try {
-        const extractedData = simpleGetMessagePathDataItems(message, state.parsedPath);
-
-        if (extractedData.length === 0) {
-          throw new Error("No data extracted from message path");
-        }
-
-        // Convert extracted data to numeric array
-        let data: Float32Array | undefined;
-
-        try {
-          const numericData = extractedData.flat().map((item) => Number(item));
-          if (numericData.length > 0 && !numericData.some(isNaN)) {
-            data = new Float32Array(numericData);
-          }
-        } catch {
-          // Keep data as undefined if conversion fails
-        }
-
-        latestMatchingQueriedData = data;
+        latestMatchingQueriedData = toPieValues(
+          simpleGetMessagePathDataItems(message, state.parsedPath),
+        );
         latestMessage = message;
         error = undefined;
       } catch (err) {
+        // Don't keep drawing an older message's slices next to this message's error
+        latestMatchingQueriedData = undefined;
+        latestMessage = message;
         error = err instanceof Error ? err : new Error("Unknown error processing message data");
       }
     }
