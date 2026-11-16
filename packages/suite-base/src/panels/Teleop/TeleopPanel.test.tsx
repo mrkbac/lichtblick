@@ -56,6 +56,7 @@ function getMockContext(overrides: Record<string, unknown> = {}) {
     saveState: vi.fn(),
     setDefaultPanelTitle: vi.fn(),
     watch: vi.fn(),
+    unstable_setMessagePathDropConfig: vi.fn(),
     updatePanelSettingsEditor: vi.fn(),
     advertise: vi.fn(),
     unadvertise: vi.fn(),
@@ -75,6 +76,7 @@ function getMockContext(overrides: Record<string, unknown> = {}) {
     unadvertise: Mock;
     saveState: Mock;
     updatePanelSettingsEditor: Mock;
+    unstable_setMessagePathDropConfig: Mock;
   };
 }
 
@@ -116,6 +118,32 @@ describe("TeleopPanel", () => {
     it("asks for a topic once the topic is cleared", () => {
       setup({ topic: "" });
       expect(screen.getByTestId("empty-state")).toHaveTextContent("Select a publish topic");
+    });
+
+    it("publishes on a Twist topic dropped from the topic list", () => {
+      const { context } = setup();
+      const dropConfig = context.unstable_setMessagePathDropConfig.mock.lastCall![0] as {
+        getDropStatus: (items: unknown[]) => { canDrop: boolean };
+        handleDrop: (items: unknown[]) => void;
+      };
+      const topic = (name: string, schema: string) => ({
+        path: name,
+        rootSchemaName: schema,
+        isTopic: true,
+        isLeaf: false,
+        topicName: name,
+      });
+
+      expect(dropConfig.getDropStatus([topic("/joy", "sensor_msgs/Joy")]).canDrop).toBe(false);
+      expect(
+        dropConfig.getDropStatus([topic("/stamped", "geometry_msgs/msg/TwistStamped")]).canDrop,
+      ).toBe(false);
+      // Same type name in another package: not the message the panel publishes
+      expect(dropConfig.getDropStatus([topic("/custom", "custom_msgs/Twist")]).canDrop).toBe(false);
+      act(() => {
+        dropConfig.handleDrop([topic("/nav_vel", "geometry_msgs/msg/Twist")]);
+      });
+      expect(lastSavedConfig(context).topic).toBe("/nav_vel");
     });
 
     it("works out of the box on /cmd_vel", () => {
