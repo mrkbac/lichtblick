@@ -72,6 +72,7 @@ import {
   Topic,
   TopicStats,
 } from "@lichtblick/suite-base/players/types";
+import { preloadCloudini } from "@lichtblick/suite-base/util/cloudini";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { ros2CommonDatatypes } from "@lichtblick/suite-base/util/ros2CommonDatatypes";
 import rosDatatypesToMessageDefinition from "@lichtblick/suite-base/util/rosDatatypesToMessageDefinition";
@@ -532,6 +533,7 @@ export default class FoxgloveWebSocketPlayer implements Player {
     });
 
     this.#client.on("advertise", (newChannels) => {
+      void preloadCloudini(newChannels);
       for (const channel of newChannels) {
         let parsedChannel;
         let schema;

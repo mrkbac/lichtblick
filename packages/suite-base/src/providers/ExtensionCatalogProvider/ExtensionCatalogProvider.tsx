@@ -34,9 +34,27 @@ import {
 } from "@lichtblick/suite-base/services/extension/IExtensionLoader";
 import { Namespace } from "@lichtblick/suite-base/types";
 import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
+import { InstalledMessageConverter } from "@lichtblick/suite-base/types/messageConverters";
+import { cloudiniMessageConverter } from "@lichtblick/suite-base/util/cloudini";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 
 const log = Logger.getLogger(__filename);
+
+const BUILTIN_MESSAGE_CONVERTERS: readonly InstalledMessageConverter[] = [cloudiniMessageConverter];
+
+/** Built-in converters replace extension converters for the same schemas (e.g. the store's Cloudini
+ * extension), which would otherwise convert each message a second time. */
+function withBuiltinConverters(
+  converters: readonly InstalledMessageConverter[],
+): InstalledMessageConverter[] {
+  const isBuiltin = (converter: InstalledMessageConverter) =>
+    BUILTIN_MESSAGE_CONVERTERS.some(
+      (builtin) =>
+        builtin.fromSchemaName === converter.fromSchemaName &&
+        builtin.toSchemaName === converter.toSchemaName,
+    );
+  return [...BUILTIN_MESSAGE_CONVERTERS, ...converters.filter((c) => !isBuiltin(c))];
+}
 
 function createExtensionRegistryStore(
   loaders: readonly IExtensionLoader[],
@@ -172,7 +190,10 @@ function createExtensionRegistryStore(
           extensionUniqueKey,
         ),
         installedPanels: { ...state.installedPanels, ...panels },
-        installedMessageConverters: [...state.installedMessageConverters!, ...messageConverters],
+        installedMessageConverters: withBuiltinConverters([
+          ...state.installedMessageConverters!,
+          ...messageConverters,
+        ]),
         installedTopicAliasFunctions: [
           ...state.installedTopicAliasFunctions!,
           ...topicAliasFunctions,
@@ -300,7 +321,7 @@ function createExtensionRegistryStore(
         loadedExtensions: new Set([...get().loadedExtensions, ...loadedExtensions]),
         installedExtensions,
         installedPanels: contributionPoints.panels,
-        installedMessageConverters: contributionPoints.messageConverters,
+        installedMessageConverters: withBuiltinConverters(contributionPoints.messageConverters),
         installedTopicAliasFunctions: contributionPoints.topicAliasFunctions,
         installedCameraModels: contributionPoints.cameraModels,
         panelSettings: contributionPoints.panelSettings,
@@ -365,7 +386,7 @@ function createExtensionRegistryStore(
       },
       unMarkExtensionAsInstalled,
       installedExtensions: loaders.length === 0 ? [] : undefined,
-      installedMessageConverters: mockMessageConverters ?? [],
+      installedMessageConverters: mockMessageConverters ?? withBuiltinConverters([]),
       installedPanels: {},
       installedTopicAliasFunctions: [],
       installedCameraModels: new Map(),

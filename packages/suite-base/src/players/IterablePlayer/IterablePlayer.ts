@@ -44,6 +44,7 @@ import {
   TopicStats,
 } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
+import { preloadCloudini } from "@lichtblick/suite-base/util/cloudini";
 import delay from "@lichtblick/suite-base/util/delay";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 import { toError } from "@lichtblick/suite-base/util/toError";
@@ -698,8 +699,8 @@ export class IterablePlayer implements Player {
 
     if (!this.#hasError && this.#start) {
       // Wait a bit until panels have had the chance to subscribe to topics before we start
-      // playback.
-      await delay(START_DELAY_MS);
+      // playback. Built-in decoders load meanwhile, so the first frame is not dropped.
+      await Promise.all([delay(START_DELAY_MS), preloadCloudini(this.#providerTopics)]);
 
       this.#blockLoader?.setTopics(this.#preloadTopics);
 
