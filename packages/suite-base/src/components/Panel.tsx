@@ -76,7 +76,7 @@ import { OpenSiblingPanel, PanelConfig, SaveConfig } from "@lichtblick/suite-bas
 import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcuts";
 import { getPanelIdForType, getPanelTypeFromId } from "@lichtblick/suite-base/util/layout";
 import { getSiblingGroup } from "@lichtblick/suite-base/util/layoutTree";
-import { findLayoutTree, TAB_PANEL_TYPE } from "@lichtblick/suite-base/util/tabLayout";
+import { findLayoutTree, isTabPanel, TAB_PANEL_TYPE } from "@lichtblick/suite-base/util/tabLayout";
 
 const MAX_PANEL_LOGS = 1000;
 
@@ -281,8 +281,12 @@ export default function Panel<
         }
         panelHandledClicks.add(e.nativeEvent);
         if (panelSettingsOpen) {
-          // Allow clicking with no modifiers to select a panel (and deselect others) when panel settings are open
-          setSelectedPanelIds([childId]);
+          // Allow clicking with no modifiers to select a panel (and deselect others) when panel
+          // settings are open. A click on a Tab panel itself is on its tab strip: switching tabs
+          // keeps the settings shown (PanelSettings moves on if they were for the hidden tab).
+          if (!isTabPanel(childId)) {
+            setSelectedPanelIds([childId]);
+          }
         } else if (e.metaKey || e.shiftKey || isSelected) {
           togglePanelSelected(childId);
         }
