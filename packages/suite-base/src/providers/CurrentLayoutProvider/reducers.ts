@@ -183,9 +183,8 @@ const splitPanel = (
 
 const swapPanel = (
   panelsState: LayoutData,
-  { originalId, type, config }: SwapPanelPayload,
+  { originalId, type, config, newId = getPanelIdForType(type) }: SwapPanelPayload,
 ): LayoutData => {
-  const newId = getPanelIdForType(type);
   const withConfig = savePanelConfigs(panelsState, { configs: [{ id: newId, config }] });
   return finish(mapLayoutTrees(withConfig, (tree) => replacePanel(tree, originalId, newId)));
 };

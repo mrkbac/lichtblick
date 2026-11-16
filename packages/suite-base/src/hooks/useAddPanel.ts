@@ -46,10 +46,15 @@ export function splitPlacement(
   };
 }
 
-/** Sizes of the panels on screen, from the `data-panel-id` attribute set by `Panel`. */
+/**
+ * Sizes of the panels on screen, from the `data-panel-id` attribute set by `Panel`. Panels in
+ * background tabs keep their size but are `visibility: hidden`, so they count as zero.
+ */
 function measurePanels(): PanelBox[] {
   return Array.from(document.querySelectorAll<HTMLElement>("[data-panel-id]"), (el) => {
-    const rect = el.getBoundingClientRect();
+    const rect = el.checkVisibility({ visibilityProperty: true })
+      ? el.getBoundingClientRect()
+      : { width: 0, height: 0 };
     return { id: el.dataset.panelId ?? "", width: rect.width, height: rect.height };
   });
 }

@@ -46,6 +46,7 @@ describe("useAppCommands", () => {
   const addLayoutPanel = vi.fn();
   const closePanel = vi.fn();
   const savePanelConfigs = vi.fn();
+  const swapPanel = vi.fn();
   const openPanelSettings = vi.fn();
   // The layout at the time a command runs
   let currentLayout: LayoutNode;
@@ -70,6 +71,7 @@ describe("useAppCommands", () => {
       addPanel: addLayoutPanel,
       closePanel,
       savePanelConfigs,
+      swapPanel,
       getCurrentLayoutState: () => ({
         selectedLayout: { data: { layout: currentLayout, configById: currentConfigs } },
       }),
@@ -192,16 +194,15 @@ describe("useAppCommands", () => {
     const items = await open.children!();
     items.find((cmd) => cmd.id === "topic.open.Image./cam")!.run!();
 
-    // Then the selected panel switches topic, keeping its other settings, and no panel is added
-    expect(savePanelConfigs).toHaveBeenCalledWith({
-      configs: [
-        {
-          id: "Image!a",
-          config: { imageMode: { imageTopic: "/cam", calibrationTopic: "/c" } },
-          override: true,
-        },
-      ],
+    // Then the selected panel is replaced in place with the new topic, keeping its other
+    // settings (the Image panel only reads its config on mount), and stays selected
+    const swap = swapPanel.mock.lastCall?.[0];
+    expect(swap).toMatchObject({
+      originalId: "Image!a",
+      type: "Image",
+      config: { imageMode: { imageTopic: "/cam", calibrationTopic: "/c" } },
     });
+    expect(setSelectedPanelIds).toHaveBeenLastCalledWith([swap.newId]);
     expect(addLayoutPanel).not.toHaveBeenCalled();
   });
 });

@@ -65,6 +65,8 @@ type TopicTarget = {
   config: (value: string) => PanelConfig;
   /** Config of an existing panel of this type after showing `value` in it too, or instead. */
   apply: (prev: PanelConfig, value: string) => PanelConfig;
+  /** The panel reads its config only on mount (3D, Image), so changing it means replacing it. */
+  remount?: true;
 };
 
 const obj = (value: unknown): Record<string, unknown> =>
@@ -90,6 +92,7 @@ export function topicTargets(schemaName: string | undefined): TopicTarget[] {
   if (/(^|[/.])(Raw|Compressed)?Image$/.test(schema)) {
     targets.push({
       panelType: "Image",
+      remount: true,
       config: (topic) => ({ imageMode: { imageTopic: topic } }),
       apply: (prev, topic) => ({
         ...prev,
@@ -110,6 +113,7 @@ export function topicTargets(schemaName: string | undefined): TopicTarget[] {
   ) {
     targets.push({
       panelType: "3D",
+      remount: true,
       config: (topic) => ({ topics: { [topic]: { visible: true } } }),
       // Turns the topic on in the scene; other topics stay as they are.
       apply: (prev, topic) => {
@@ -224,6 +228,7 @@ export function useAppCommands(): {
     getCurrentLayoutState,
     savePanelConfigs,
     splitPanel,
+    swapPanel,
     closePanel,
   } = layoutActions;
   const { selectedPanelIds, setSelectedPanelIds } = useSelectedPanels();
@@ -446,9 +451,15 @@ export function useAppCommands(): {
         run: () => {
           // Read the config when picked so edits made since the palette opened are kept.
           const prev = getCurrentLayoutState().selectedLayout?.data?.configById[panelId] ?? {};
-          savePanelConfigs({
-            configs: [{ id: panelId, config: target.apply(prev, value), override: true }],
-          });
+          const config = target.apply(prev, value);
+          if (target.remount) {
+            // Same place in the layout, new id, so the panel starts again with the new config.
+            const newId = getPanelIdForType(target.panelType);
+            swapPanel({ originalId: panelId, type: target.panelType, config, newId });
+            setSelectedPanelIds([newId]);
+            return;
+          }
+          savePanelConfigs({ configs: [{ id: panelId, config, override: true }] });
         },
         actions: () => [{ ...add, id: `${id}.new`, title: t("addAsNewPanel"), group: undefined }],
       };
@@ -774,6 +785,7 @@ export function useAppCommands(): {
     getCurrentLayoutState,
     savePanelConfigs,
     splitPanel,
+    swapPanel,
     setSelectedLayoutId,
     setSelectedPanelIds,
     setSpeed,
