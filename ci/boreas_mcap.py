@@ -620,8 +620,12 @@ class ContainerWriter:
         self.unchunked += 1
 
     def add_empty_chunk(self) -> None:
-        # Zero times, as stock writers give empty chunks (readers reject anything else).
-        self._write_chunk(Group("", 0), [], 0)
+        """An empty chunk for streaming readers, left out of the chunk index.
+
+        Indexed readers take the recording's start from the earliest chunk index, so an indexed
+        empty chunk (its times are 0) would start the recording in 1970.
+        """
+        self._write_chunk(Group("", 0), [], 0, indexed=False)
         self.empty_chunks += 1
 
     def flush(self, group: str) -> None:
@@ -636,7 +640,9 @@ class ContainerWriter:
         self._write_chunk(g, messages, messages[0].log_time)
         g.messages, g.size = [], 0
 
-    def _write_chunk(self, g: Group, messages: list[Message], time: int) -> None:
+    def _write_chunk(
+        self, g: Group, messages: list[Message], time: int, indexed: bool = True
+    ) -> None:
         records = RecordBuilder()
         indexes: dict[int, MessageIndex] = {}
         for message in messages:
@@ -671,6 +677,8 @@ class ContainerWriter:
                 # Readers binary-search message indexes, so they are sorted by time.
                 index.records.sort()
                 offsets[channel_id] = self._record(index)[0]
+        if not indexed:
+            return
         self.chunk_indexes.append(
             ChunkIndex(
                 message_start_time=chunk.message_start_time,
@@ -729,7 +737,7 @@ class ContainerWriter:
             channel_count=len(self.channels),
             attachment_count=len(self.attachment_indexes),
             metadata_count=len(self.metadata_indexes),
-            chunk_count=len(self.chunk_indexes),
+            chunk_count=len(self.chunk_indexes) + self.empty_chunks,
             message_start_time=self.start_time or 0,
             message_end_time=self.end_time,
             channel_message_counts=dict(self.counts),
@@ -777,6 +785,7 @@ class ContainerWriter:
         )
         return {
             "container": {
+                # Indexed chunks; streaming readers also see the empty chunks.
                 "chunk_count": len(self.chunk_indexes),
                 "chunk_compressions": sorted(self.compressions),
                 "chunks_without_crc": self.without_crc,

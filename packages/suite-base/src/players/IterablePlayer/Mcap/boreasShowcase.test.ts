@@ -115,9 +115,10 @@ function label(channel: ChannelExpectation): string {
 }
 
 /** Every message of every topic through the app's deserializing source, by topic. */
-async function readAll(
-  source: IIterableSource<Uint8Array>,
-): Promise<Map<string, { count: number; first: unknown; errors: string[] }>> {
+async function readAll(source: IIterableSource<Uint8Array>): Promise<{
+  start: bigint;
+  byTopic: Map<string, { count: number; first: unknown; errors: string[] }>;
+}> {
   const deserializing = new DeserializingIterableSource(source);
   const init = await deserializing.initialize();
   const byTopic = new Map<string, { count: number; first: unknown; errors: string[] }>();
@@ -136,7 +137,8 @@ async function readAll(
       byTopic.get(topic ?? "")?.errors.push(result.alert.message);
     }
   }
-  return byTopic;
+  const start = BigInt(init.start.sec) * 1_000_000_000n + BigInt(init.start.nsec);
+  return { start, byTopic };
 }
 
 describe.skipIf(file == undefined)("Boreas showcase recording", () => {
@@ -154,7 +156,7 @@ describe.skipIf(file == undefined)("Boreas showcase recording", () => {
       container.chunk_compressions,
     );
     expect(chunks.filter((c) => c.messageIndexOffsets.size === 0).length).toBe(
-      container.chunks_without_message_index + container.empty_chunks,
+      container.chunks_without_message_index,
     );
     expect(reader.statistics?.messageCount).toBe(BigInt(container.message_count));
     expect(reader.dataSectionCrc).not.toBe(0);
@@ -222,7 +224,7 @@ describe.skipIf(file == undefined)("Boreas showcase recording", () => {
       }
     }
     expect(reader.done()).toBe(true);
-    expect(chunks).toBe(expectations.container.chunk_count);
+    expect(chunks).toBe(expectations.container.chunk_count + expectations.container.empty_chunks);
     expect(unchunked).toBe(expectations.container.unchunked_messages);
     expect(outOfOrder > 0).toBe(expectations.container.out_of_order_chunks > 0);
     for (const channel of expectations.channels) {
@@ -251,7 +253,12 @@ describe.skipIf(file == undefined)("Boreas showcase recording", () => {
               size: (await blob()).size,
               stream: (await blob()).stream(),
             });
-      const byTopic = await readAll(source);
+      const { start, byTopic } = await readAll(source);
+      // The first message's time, not 0 (an indexed empty chunk once started it in 1970).
+      const counted = expectations.channels.filter((c) => c[countKey] > 0);
+      expect(start).toBe(
+        counted.map((c) => BigInt(c.first_log_time)).reduce((a, b) => (a < b ? a : b)),
+      );
       for (const channel of expectations.channels) {
         const read = byTopic.get(channel.topic);
         expect({
