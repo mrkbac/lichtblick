@@ -271,10 +271,17 @@
           "locationTopic": "/boreas/gps",
           "layers": [
             {
-              "id": "base",
-              "source": "ofm-dark",
+              "id": "labels",
+              "source": "ofm-liberty",
               "visible": true,
-              "opacity": 0.8
+              "opacity": 1,
+              "hiddenGroups": ["areas", "buildings"]
+            },
+            {
+              "id": "base",
+              "source": "esri-imagery",
+              "visible": true,
+              "opacity": 1
             }
           ]
         }

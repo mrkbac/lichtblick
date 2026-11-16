@@ -14,6 +14,10 @@ Visualization and diagnosis for robotics, in your browser or as a desktop app on
 
 ## :sparkles: Highlights
 
+<p align="center">
+  <img alt="Lichtblick playing the Boreas showcase recording" src="resources/demo.webp" width="100%">
+</p>
+
 - **Recordings**: MCAP (with ROS 1/2, Protobuf, CDR, JSON, CBOR, MessagePack, Cap'n Proto), ROS bags, ULog, CSV/TSV. Broken or still-growing MCAP files open while their index is rebuilt.
 - **Live data**: Foxglove WebSocket and Rosbridge, with a rolling history you can pause, seek and replay, and every live session recorded to MCAP in the browser.
 - **Compare recordings** side by side, shift them in time, and plot them on one chart.
