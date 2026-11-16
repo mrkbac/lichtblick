@@ -1,23 +1,39 @@
 # /// script
 # requires-python = ">=3.10"
-# dependencies = ["mcap==1.3.0", "numpy==2.2.6", "pillow==11.3.0", "scipy==1.15.3", "jsonschema==4.25.1", "av==16.1.0", "pyproj==3.7.1", "foxglove-schemas-protobuf==0.4.0", "protobuf==7.36.2"]
+# dependencies = [
+#   "mcap==1.6.0", "numpy==2.2.6", "pillow==11.3.0", "scipy==1.15.3", "jsonschema==4.25.1",
+#   "av==16.1.0", "pyproj==3.7.1", "foxglove-schemas-protobuf==0.4.0", "protobuf==7.36.2",
+#   "foxglove-schemas-flatbuffer==0.4.0", "flatbuffers==25.9.23", "mcap-ros1-support==0.9.0",
+#   "mcap-ros2-support==0.6.0", "pycapnp==2.2.4", "cbor2==6.1.5", "msgpack==1.2.4",
+#   "zstandard==0.25.0", "lz4==4.4.5",
+# ]
 # ///
 # SPDX-License-Identifier: MPL-2.0
 """Build the Boreas showcase MCAP: uv run ci/create-boreas-showcase.py (after pnpm install).
 
-A 60-second, fully annotated, full-resolution excerpt of Boreas-Objects-V1 (Keenan Burnett et
+A 20-second, fully annotated, full-resolution excerpt of Boreas-Objects-V1 (Keenan Burnett et
 al., University of Toronto, CC BY 4.0, https://www.boreas.utias.utoronto.ca/) meant to exercise
 every panel: native-rate LiDAR, full-resolution camera with calibration and projected boxes,
 radar image and point cloud, tracked 3D objects, the driven route, GPS and vehicle dynamics.
+
+It doubles as a conformance fixture: its topics use every schema and message encoding Lichtblick
+reads (ci/boreas_mcap.py), its container every MCAP feature, and the converter writes what a
+reader must find to ci/boreas-showcase.expect.json, which boreasShowcase.test.ts checks.
 Every topic is generated lazily and merged in time order, so memory stays flat.
-The file is not committed; it is about 2 GB.
+
+Needs cmake and a C++ compiler: the LiDAR is Cloudini-compressed with upstream's converter,
+built on first use. The file is not committed.
 """
 
 import csv
+import hashlib
 import heapq
 import io
 import json
+import os
+import shutil
 import subprocess
+import tarfile
 import tempfile
 import urllib.error
 import urllib.parse
@@ -33,35 +49,33 @@ from pathlib import Path
 import av
 import jsonschema
 import numpy as np
-from foxglove_schemas_protobuf.CompressedImage_pb2 import CompressedImage
 from foxglove_schemas_protobuf.CompressedVideo_pb2 import CompressedVideo
-from foxglove_schemas_protobuf.LocationFix_pb2 import LocationFix
-from foxglove_schemas_protobuf.PackedElementField_pb2 import PackedElementField
-from foxglove_schemas_protobuf.PointCloud_pb2 import PointCloud
-from foxglove_schemas_protobuf.Pose_pb2 import Pose
-from foxglove_schemas_protobuf.Quaternion_pb2 import Quaternion
-from foxglove_schemas_protobuf.Vector3_pb2 import Vector3
 from google.protobuf.descriptor import Descriptor, FileDescriptor
 from google.protobuf.descriptor_pb2 import FileDescriptorSet
 from google.protobuf.message import Message
 from google.protobuf.timestamp_pb2 import Timestamp
 from mcap.reader import make_reader
-from mcap.writer import CompressionType, Writer
+from mcap.records import Message as McapMessage
+from mcap.writer import Writer
 from PIL import Image
 from pyproj import Transformer
 from scipy.ndimage import uniform_filter1d
 from scipy.optimize import linear_sum_assignment
 from scipy.spatial.transform import Rotation, Slerp
 
+import boreas_mcap as codecs
+
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = Path(tempfile.gettempdir()) / "lichtblick-boreas"
 OUTPUT = CACHE / "boreas-showcase.mcap"
+EXPECTATIONS = ROOT / "ci" / "boreas-showcase.expect.json"
 SEQUENCE = "boreas-objects-v1"
 BASE = "https://boreas.s3.amazonaws.com/"
 LICENSE = "https://creativecommons.org/licenses/by/4.0/"
-# The longest stretch of Boreas-Objects-V1 with contiguous LiDAR and labels on every 5 Hz frame.
-START = 1598988218835735
-SECONDS = 60
+# Inside the longest stretch of Boreas-Objects-V1 with labels on every 5 Hz frame: the car waits
+# at a busy intersection, pulls away, then turns left.
+START = 1598988218835735 + 22_000_000
+SECONDS = 20
 END = START + SECONDS * 1_000_000
 # Ground below the LiDAR origin, measured from near-range LiDAR returns and labelled car boxes.
 GROUND_Z = -2.25
@@ -92,6 +106,8 @@ CALLERS = {
     "/boreas/tf": "/localization",
     "/boreas/gps": "/gnss_ins",
     "/boreas/motion": "/gnss_ins",
+    "/boreas/imu": "/gnss_ins",
+    "/boreas/perception": "/perception",
     "/boreas/route": "/localization",
     "/boreas/map": "/localization",
     "/boreas/vehicle": "/vehicle_monitor",
@@ -107,9 +123,12 @@ CLASS_COLORS = {
     "Misc": (0.78, 0.48, 1.0),
 }
 
-# Time (us), topic, schema, message: a JSON object, or a Protobuf message for the
-# heavy sensor topics (binary payloads would otherwise be base64 in JSON) and for GPS (NaN).
-Event = tuple[int, str, str, dict | Message]
+# Time (us), topic, schema, message: a dict for the topic's codec, a Protobuf message, or bytes
+# already encoded (the Cloudini LiDAR).
+Event = tuple[int, str, str, dict | Message | bytes]
+# The app's Cloudini decoder is built from this commit too (suite-base/src/util/cloudini/build).
+CLOUDINI_COMMIT = "60ddb44740f24a8c4d9585d7e3764443ff7c385a"
+LIDAR_FIELDS = ("x", "y", "z", "intensity", "laser", "time_offset")
 
 
 def fetch(key: str) -> Path:
@@ -173,6 +192,7 @@ def listing(sensor: str, margin: int = 0) -> list[tuple[int, str]]:
 
 
 def stamp(microseconds: int) -> dict[str, int]:
+    """foxglove Time; see codecs.ros1_time and codecs.ros2_time for the ROS layouts."""
     return {"sec": microseconds // 1_000_000, "nsec": microseconds % 1_000_000 * 1000}
 
 
@@ -372,17 +392,18 @@ def boxes_at(
 
 
 def log(t: int, level: int, node: str, message: str) -> Event:
-    """A foxglove.Log record (1 debug, 2 info, 3 warning, 4 error, 5 fatal)."""
+    """An rcl_interfaces/Log record (1 debug, 2 info, 3 warning, 4 error, 5 fatal)."""
     return (
         t,
         "/rosout",
         "Log",
         {
-            "timestamp": stamp(t),
-            "level": level,
-            "message": message,
+            "stamp": codecs.ros2_time(t),
+            "level": level * 10,
             "name": node,
+            "msg": message,
             "file": "",
+            "function": "",
             "line": 0,
         },
     )
@@ -411,21 +432,106 @@ def pb_time(microseconds: int) -> Timestamp:
     )
 
 
-def pb_point_cloud(
-    t: int, frame: str, names: tuple[str, ...], data: bytes
-) -> PointCloud:
-    """float32 fields packed back to back, in the given frame at the identity pose."""
-    return PointCloud(
-        timestamp=pb_time(t),
-        frame_id=frame,
-        pose=Pose(position=Vector3(), orientation=Quaternion(w=1)),
-        point_stride=4 * len(names),
-        fields=[
-            PackedElementField(name=n, offset=4 * i, type=PackedElementField.FLOAT32)
+def cloudini_converter() -> Path:
+    """Upstream's MCAP converter, built from source once (there is no Python encoder)."""
+    source = CACHE / f"cloudini-{CLOUDINI_COMMIT}"
+    binary = source / "build" / "tools" / "cloudini_rosbag_converter"
+    if binary.exists():
+        return binary
+    if shutil.which("cmake") is None:
+        raise SystemExit(
+            "cmake (and a C++ compiler) is needed to build the Cloudini encoder for the LiDAR"
+        )
+    archive = download_url(
+        f"https://github.com/facontidavide/cloudini/archive/{CLOUDINI_COMMIT}.tar.gz"
+    )
+    with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
+        tar.extractall(CACHE, filter="data")
+    build = source / "build"
+    subprocess.run(
+        ["cmake", "-S", str(source / "cloudini_lib"), "-B", str(build)]
+        + [
+            "-DCMAKE_BUILD_TYPE=Release",
+            "-DCLOUDINI_WITH_PCL=OFF",
+            "-DBUILD_TESTING=OFF",
+        ],
+        check=True,
+    )
+    subprocess.run(
+        [
+            "cmake",
+            "--build",
+            str(build),
+            "--target",
+            "cloudini_rosbag_converter",
+            "-j8",
+        ],
+        check=True,
+    )
+    return binary
+
+
+def download_url(url: str) -> bytes:
+    with urllib.request.urlopen(url, timeout=120) as response:
+        return response.read()
+
+
+def cloudini_lidar(frames: list[tuple[int, str]]) -> Path:
+    """Every LiDAR scan as PointCloud2, then Cloudini-compressed by upstream's converter.
+
+    Positions to 1 mm, intensity to 0.01, the laser index exact, time offsets to 1 µs.
+    """
+    output = CACHE / f"lidar-cloudini-{START}-{SECONDS}.mcap"
+    if output.exists():
+        return output
+    codec = codecs.ros2("sensor_msgs/msg/PointCloud2", codecs.POINT_CLOUD2)
+    plain = output.with_suffix(".pointcloud2.mcap")
+    with plain.open("wb") as stream:
+        writer = Writer(stream)
+        writer.start()
+        channel = writer.register_channel(
+            "/boreas/lidar",
+            "cdr",
+            writer.register_schema(
+                codec.schema_name, codec.schema_encoding, codec.schema_data
+            ),
+        )
+        for t, key in frames:
+            raw = download(key)
+            assert len(raw) % 24 == 0 and len(raw) > 24_000
+            writer.add_message(
+                channel,
+                t * 1000,
+                codec.encode(point_cloud2(t, "lidar", LIDAR_FIELDS, raw)),
+                t * 1000,
+            )
+        writer.finish()
+    subprocess.run(
+        [str(cloudini_converter()), "-f", str(plain), "-o", str(output), "-c", "-y"]
+        + ["--profile", "xyz:0.001; intensity:0.01; laser:1; time_offset:0.000001"],
+        check=True,
+    )
+    plain.unlink()
+    return output
+
+
+def point_cloud2(t: int, frame: str, names: tuple[str, ...], data: bytes) -> dict:
+    """float32 fields packed back to back, one row."""
+    width = len(data) // (4 * len(names))
+    return {
+        "header": {"stamp": codecs.ros2_time(t), "frame_id": frame},
+        "height": 1,
+        "width": width,
+        "fields": [
+            {"name": n, "offset": 4 * i, "datatype": 7, "count": 1}
             for i, n in enumerate(names)
         ],
-        data=data,
-    )
+        "is_bigendian": False,
+        "point_step": 4 * len(names),
+        "row_step": 4 * len(names) * width,
+        "data": data,
+        "is_dense": True,
+    }
 
 
 def box_corners(box: Box) -> np.ndarray:
@@ -467,61 +573,11 @@ def main() -> None:
         "pitch",
         "altitude",
     )
-    schemas["Motion"] = {
-        "type": "object",
-        "properties": {k: {"type": "number"} for k in motion_fields},
-        "required": list(motion_fields),
-    }
-    track_fields = {
-        "id": {"type": "string"},
-        "track": {"type": "integer"},
-        "class": {"type": "string"},
-        "distance_m": {"type": "number"},
-        "bearing_deg": {"type": "number"},
-        "speed_kmh": {"type": "number"},
-        "lidar_points": {"type": "integer"},
-        "interpolated": {"type": "boolean"},
-    }
-    schemas["ObjectTracks"] = {
-        "type": "object",
-        "properties": {
-            **{
-                k: {"type": "integer"}
-                for k in ("cars", "pedestrians", "cyclists", "other", "total")
-            },
-            "nearest_distance": {"type": "number"},
-            "nearest_class": {"type": "string"},
-            "interpolated": {"type": "boolean"},
-            "tracks": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": track_fields,
-                    "required": list(track_fields),
-                },
-            },
-        },
-        "required": [
-            "cars",
-            "pedestrians",
-            "cyclists",
-            "other",
-            "total",
-            "interpolated",
-            "tracks",
-        ],
-    }
 
     def enum(*names: str) -> dict:
         # Named constants show as labels in State Transitions, Raw Messages and Plot legends.
         return {"oneOf": [{"const": i, "title": n} for i, n in enumerate(names)]}
 
-    # Pie charts read a numeric array; order matches CLASSES.
-    schemas["ClassCounts"] = {
-        "type": "object",
-        "properties": {"counts": {"type": "array", "items": {"type": "number"}}},
-        "required": ["counts"],
-    }
     schemas["VehicleState"] = {
         "type": "object",
         "properties": {
@@ -530,41 +586,6 @@ def main() -> None:
             "standstill": {"type": "boolean"},
         },
         "required": ["drive_state", "turn", "standstill"],
-    }
-    schemas["DiagnosticArray"] = {
-        "type": "object",
-        "properties": {
-            "header": {
-                "type": "object",
-                "properties": {
-                    "stamp": schemas["FrameTransform"]["properties"]["timestamp"],
-                    "frame_id": {"type": "string"},
-                },
-            },
-            "status": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "level": {"type": "integer", "minimum": 0, "maximum": 3},
-                        "name": {"type": "string"},
-                        "message": {"type": "string"},
-                        "hardware_id": {"type": "string"},
-                        "values": {
-                            "type": "array",
-                            "items": {
-                                "type": "object",
-                                "properties": {
-                                    "key": {"type": "string"},
-                                    "value": {"type": "string"},
-                                },
-                            },
-                        },
-                    },
-                },
-            },
-        },
-        "required": ["header", "status"],
     }
 
     lidar_frames = listing("lidar")
@@ -591,6 +612,7 @@ def main() -> None:
         for i, _ in enumerate(pool.map(fetch, keys)):
             if i % 100 == 0:
                 print(f"Downloaded {i + 1}/{len(keys)}", flush=True)
+    lidar_file = cloudini_lidar(lidar_frames)
 
     first_pose = next(
         r
@@ -692,19 +714,28 @@ def main() -> None:
                 [[np.eye(3), np.array([[0], [0], [GROUND_Z]])], [np.zeros((1, 3)), 1]]
             ),
         }
-        for child, m in frames.items():
-            yield (
-                START,
-                "/boreas/tf_static",
-                "FrameTransform",
-                {
-                    "timestamp": stamp(START),
-                    "parent_frame_id": "lidar",
-                    "child_frame_id": child,
-                    "translation": vec(m[:3, 3]),
-                    "rotation": quat(Rotation.from_matrix(m[:3, :3])),
-                },
-            )
+        yield (
+            START,
+            "/boreas/tf_static",
+            "TFMessage",
+            {
+                "transforms": [
+                    transform(
+                        START, "lidar", child, m[:3, 3], Rotation.from_matrix(m[:3, :3])
+                    )
+                    for child, m in frames.items()
+                ]
+            },
+        )
+
+    def transform(
+        t: int, parent: str, child: str, translation: np.ndarray, rotation: Rotation
+    ) -> dict:
+        return {
+            "header": {"stamp": codecs.ros2_time(t), "frame_id": parent},
+            "child_frame_id": child,
+            "transform": {"translation": vec(translation), "rotation": quat(rotation)},
+        }
 
     def transforms() -> Iterator[Event]:
         for t, position, rotation in zip(
@@ -714,35 +745,31 @@ def main() -> None:
                 yield (
                     int(t),
                     "/boreas/tf",
-                    "FrameTransform",
+                    "TFMessage",
                     {
-                        "timestamp": stamp(int(t)),
-                        "parent_frame_id": "map",
-                        "child_frame_id": "lidar",
-                        "translation": vec(position),
-                        "rotation": quat(rotation),
+                        "transforms": [
+                            transform(int(t), "map", "lidar", position, rotation)
+                        ]
                     },
                 )
 
     def lidar() -> Iterator[Event]:
-        fields = ("x", "y", "z", "intensity", "laser", "time_offset")
-        for i, (t, key) in enumerate(lidar_frames):
-            if i > 0 and t - lidar_frames[i - 1][0] > 150_000:
-                yield log(
-                    t,
-                    3,
-                    "/lidar_driver",
-                    f"LiDAR scan gap {(t - lidar_frames[i - 1][0]) / 1000:.0f} ms",
-                )
-            raw = download(key)
-            assert len(raw) % 24 == 0 and len(raw) > 24_000
-            # All six float32 fields as recorded: laser index and per-point time offset (s).
-            yield (
-                t,
-                "/boreas/lidar",
-                "PointCloud",
-                pb_point_cloud(t, "lidar", fields, raw),
-            )
+        """All six float32 fields as recorded (laser index, per-point time offset in s), Cloudini."""
+        with lidar_file.open("rb") as stream:
+            scans = make_reader(stream).iter_messages(log_time_order=True)
+            for i, ((t, _), (_, _, message)) in enumerate(zip(lidar_frames, scans)):
+                assert message.log_time == t * 1000
+                if i > 0:
+                    interval = t - lidar_frames[i - 1][0]
+                    if interval > 150_000:
+                        yield log(
+                            t,
+                            3,
+                            "/lidar_driver",
+                            f"LiDAR scan gap {interval / 1000:.0f} ms",
+                        )
+                    yield (t, "/boreas/lidar/Δt", "", {"interval_ms": interval / 1000})
+                yield (t, "/boreas/lidar", "Cloudini", message.data)
 
     def object_entities(t: int, boxes: list[Box]) -> list[dict]:
         entities = []
@@ -944,19 +971,20 @@ def main() -> None:
                     }
                 )
             tracks.sort(key=lambda k: k["distance_m"])
-            summary = {
+            stats = {
                 "cars": counts["Car"],
                 "pedestrians": counts["Pedestrian"],
                 "cyclists": counts["Cyclist"],
                 "other": counts["Misc"],
                 "total": len(boxes),
+                # Whether these boxes are labelled or interpolated between labels.
                 "interpolated": bool(boxes) and boxes[0].interpolated,
-                "tracks": tracks,
             }
             if tracks:
-                summary["nearest_distance"] = tracks[0]["distance_m"]
-                summary["nearest_class"] = tracks[0]["class"]
-            yield (t, "/boreas/objects/tracks", "ObjectTracks", summary)
+                stats["nearest_distance"] = tracks[0]["distance_m"]
+                stats["nearest_class"] = tracks[0]["class"]
+            yield (t, "/boreas/perception/stats", "", stats)
+            yield (t, "/boreas/objects/tracks", "", {"tracks": tracks})
             yield (
                 t,
                 "/boreas/objects/class_counts",
@@ -1032,15 +1060,23 @@ def main() -> None:
         width, height = CAMERA_SIZE
         K = projection[:3, :3]
         calibration = {
-            "frame_id": "camera",
-            "width": width,
             "height": height,
+            "width": width,
             # Boreas images are rectified, so the projection matrix is all there is.
             "distortion_model": "plumb_bob",
-            "D": [0.0] * 5,
-            "K": K.flatten().tolist(),
-            "R": np.eye(3).flatten().tolist(),
-            "P": projection[:3, :4].flatten().tolist(),
+            "d": [0.0] * 5,
+            "k": K.flatten().tolist(),
+            "r": np.eye(3).flatten().tolist(),
+            "p": projection[:3, :4].flatten().tolist(),
+            "binning_x": 0,
+            "binning_y": 0,
+            "roi": {
+                "x_offset": 0,
+                "y_offset": 0,
+                "height": 0,
+                "width": 0,
+                "do_rectify": False,
+            },
         }
         encoder = av.CodecContext.create("libx265", "w")
         encoder.width, encoder.height = width, height
@@ -1134,8 +1170,11 @@ def main() -> None:
                 yield (
                     t,
                     "/boreas/camera/calibration",
-                    "CameraCalibration",
-                    {**calibration, "timestamp": stamp(t)},
+                    "CameraInfo",
+                    {
+                        "header": {"stamp": codecs.ros2_time(t), "frame_id": "camera"},
+                        **calibration,
+                    },
                 )
                 yield (
                     t,
@@ -1176,7 +1215,7 @@ def main() -> None:
         right = (cols - centre) * resolution
         cell_range = np.hypot(forward, right)
         cell_azimuth = np.mod(np.arctan2(right, forward), 2 * np.pi)
-        for t, key in radar_frames:
+        for scan, (t, key) in enumerate(radar_frames):
             raw = np.asarray(Image.open(io.BytesIO(download(key))))
             assert raw.ndim == 2 and raw.shape[1] > 1000
             azimuths = (
@@ -1216,12 +1255,15 @@ def main() -> None:
                 t,
                 "/boreas/radar/image",
                 "CompressedImage",
-                CompressedImage(
-                    timestamp=pb_time(t),
-                    frame_id="radar",
-                    format="png",
-                    data=encoded.getvalue(),
-                ),
+                {
+                    "header": {
+                        "seq": scan,
+                        "stamp": codecs.ros1_time(t),
+                        "frame_id": "radar",
+                    },
+                    "format": "png",
+                    "data": encoded.getvalue(),
+                },
             )
             # The strongest returns per azimuth beyond 2 m, as a point cloud in the radar frame.
             top = 12
@@ -1238,8 +1280,8 @@ def main() -> None:
             yield (
                 t,
                 "/boreas/radar/points",
-                "PointCloud",
-                pb_point_cloud(
+                "PointCloud2",
+                point_cloud2(
                     t, "radar", ("x", "y", "z", "intensity"), points.tobytes()
                 ),
             )
@@ -1272,6 +1314,25 @@ def main() -> None:
                     f"Drive state {DRIVE_STATES[drive_state[i - 1]]} -> "
                     f"{DRIVE_STATES[drive_state[i]]} at {speed[i] * 3.6:.0f} km/h",
                 )
+            yield (
+                t,
+                "/boreas/imu",
+                "Imu",
+                {
+                    "timestamp": stamp(t),
+                    "angularVelocity": {
+                        axis: float(r[f"angvel_{axis}"]) for axis in ("x", "y", "z")
+                    },
+                    "roll": float(np.degrees(float(r["roll"]))),
+                    "pitch": float(np.degrees(float(r["pitch"]))),
+                    "heading": float(heading[i]),
+                    "velocityEnu": {
+                        "x": float(r["vel_east"]),
+                        "y": float(r["vel_north"]),
+                        "z": float(r["vel_up"]),
+                    },
+                },
+            )
             if i in brakes:
                 yield log(
                     t,
@@ -1285,19 +1346,19 @@ def main() -> None:
                     t,
                     "/boreas/gps",
                     "LocationFix",
-                    # Protobuf because JSON cannot carry NaN. The dataset's altitude is relative,
-                    # not above the ellipsoid, so it is unknown (NaN, the ROS convention); the
-                    # fix is on the ground under the vehicle, where map layers belong.
-                    LocationFix(
-                        timestamp=pb_time(t),
-                        frame_id="base_link",
-                        latitude=float(latitude[i]),
-                        longitude=float(longitude[i]),
-                        altitude=float("nan"),
+                    # The dataset's altitude is relative, not above the ellipsoid, so it is
+                    # unknown (NaN, the ROS convention); the fix is on the ground under the
+                    # vehicle, where map layers belong.
+                    {
+                        "timestamp": stamp(t),
+                        "frame_id": "base_link",
+                        "latitude": float(latitude[i]),
+                        "longitude": float(longitude[i]),
+                        "altitude": float("nan"),
                         # The postprocessed solution is centimetre-level; 5 cm is conservative.
-                        position_covariance=[0.0025, 0, 0, 0, 0.0025, 0, 0, 0, 0.01],
-                        position_covariance_type=LocationFix.DIAGONAL_KNOWN,
-                    ),
+                        "position_covariance": [0.0025, 0, 0, 0, 0.0025, 0, 0, 0, 0.01],
+                        "position_covariance_type": 2,  # DIAGONAL_KNOWN
+                    },
                 )
                 yield (
                     t,
@@ -1423,7 +1484,10 @@ def main() -> None:
                 t,
                 "/diagnostics",
                 "DiagnosticArray",
-                {"header": {"stamp": stamp(t), "frame_id": ""}, "status": status},
+                {
+                    "header": {"seq": 0, "stamp": codecs.ros1_time(t), "frame_id": ""},
+                    "status": status,
+                },
             )
 
     sources = [
@@ -1443,23 +1507,147 @@ def main() -> None:
         timeout=30,
     ) as response:
         schema_license = response.read().decode()
-    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    intermediate = OUTPUT.with_suffix(".unrechunked.mcap")
-    custom = {
-        "Motion": "lichtblick.BoreasMotion",
-        "ObjectTracks": "lichtblick.BoreasObjectTracks",
-        "VehicleState": "lichtblick.BoreasVehicleState",
-        "ClassCounts": "lichtblick.BoreasClassCounts",
-        # Diagnostics panels recognise the ROS schema name, whatever the encoding.
-        "DiagnosticArray": "diagnostic_msgs/msg/DiagnosticArray",
+
+    with lidar_file.open("rb") as stream:
+        lidar_summary = make_reader(stream).get_summary()
+    assert lidar_summary
+    (lidar_channel,) = lidar_summary.channels.values()
+    # Every encoding Lichtblick reads, each on a topic it suits.
+    scene = codecs.json_codec("foxglove.SceneUpdate", schemas["SceneUpdate"])
+    tf = codecs.ros2idl(
+        "tf2_msgs/msg/TFMessage", codecs.TF_MESSAGE_IDL, codecs.TF_MESSAGE
+    )
+    schemaless = codecs.json_codec("", None)
+    topic_codecs: dict[str, codecs.Codec] = {
+        "/boreas/lidar": codecs.raw_codec(
+            lidar_summary.schemas[lidar_channel.schema_id],
+            lidar_channel.message_encoding,
+        ),
+        "/boreas/lidar/Δt": schemaless,
+        "/boreas/camera/image": codecs.Codec(
+            CompressedVideo.DESCRIPTOR.full_name,
+            "protobuf",
+            descriptor_set(CompressedVideo.DESCRIPTOR),
+            "protobuf",
+            lambda m: m.SerializeToString(),
+        ),
+        "/boreas/camera/calibration": codecs.ros2(
+            "sensor_msgs/msg/CameraInfo", codecs.CAMERA_INFO
+        ),
+        "/boreas/camera/annotations": codecs.json_codec(
+            "foxglove.ImageAnnotations", schemas["ImageAnnotations"]
+        ),
+        "/boreas/radar/image": codecs.ros1(
+            "sensor_msgs/CompressedImage", codecs.COMPRESSED_IMAGE_ROS1
+        ),
+        "/boreas/radar/points": codecs.ros2(
+            "sensor_msgs/msg/PointCloud2", codecs.POINT_CLOUD2
+        ),
+        "/boreas/tf": tf,
+        "/boreas/tf_static": tf,
+        "/boreas/gps": codecs.flatbuffer_location_fix(),
+        "/boreas/motion": codecs.omgidl_doubles("boreas", "Motion", motion_fields),
+        "/boreas/imu": codecs.capnproto_imu(),
+        "/boreas/objects": scene,
+        "/boreas/objects/trails": scene,
+        "/boreas/route": scene,
+        "/boreas/objects/tracks": schemaless,
+        # Pie charts read a numeric array; order matches CLASSES.
+        "/boreas/objects/class_counts": codecs.ros2(
+            "boreas_msgs/msg/ClassCounts", "float32[] counts"
+        ),
+        "/boreas/vehicle/state": codecs.cbor_codec(
+            "lichtblick.BoreasVehicleState", schemas["VehicleState"]
+        ),
+        "/boreas/map/route": codecs.json_codec("foxglove.GeoJSON", schemas["GeoJSON"]),
+        "/boreas/perception/stats": codecs.msgpack_codec(),
+        "/diagnostics": codecs.ros1(
+            "diagnostic_msgs/DiagnosticArray", codecs.DIAGNOSTIC_ARRAY_ROS1
+        ),
+        "/rosout": codecs.ros2("rcl_interfaces/msg/Log", codecs.LOG),
     }
     validators = {
-        name: jsonschema.Draft7Validator(schema) for name, schema in schemas.items()
+        topic: jsonschema.Draft7Validator(json.loads(codec.schema_data))
+        for topic, codec in topic_codecs.items()
+        if codec.schema_encoding == "jsonschema"
     }
+    # Chunk streams: each group writes its own chunks, so their time ranges overlap.
+    groups = {
+        "lidar": codecs.Group("zstd", 32 << 20),
+        "video": codecs.Group("zstd", 8 << 20),
+        "radar": codecs.Group("lz4", 4 << 20, crc=False),
+        "scene": codecs.Group("zstd", 4 << 20),
+        # One message per chunk.
+        "diagnostics": codecs.Group("", 0),
+        # ponytail: message indexes kept until the indexed reader can scan unindexed chunks
+        # (the MCAP spec allows them; it throws today). Then set message_index=False here.
+        "overlays": codecs.Group("", 1 << 20),
+        "small": codecs.Group("", 1 << 20, reverse_first_chunk=True),
+    }
+    group_of = {
+        "/boreas/lidar": "lidar",
+        "/boreas/camera/image": "video",
+        "/boreas/radar/image": "radar",
+        "/boreas/radar/points": "radar",
+        "/boreas/objects": "scene",
+        "/boreas/objects/trails": "scene",
+        "/boreas/camera/annotations": "scene",
+        "/diagnostics": "diagnostics",
+        "/boreas/route": "overlays",
+        "/boreas/map/route": "overlays",
+    }
+    # Sensor messages reach the recorder a few ms after their stamp (publish time).
+    latency = {"lidar": 3_000, "video": 3_000, "radar": 3_000}
+
+    def qos(topic: str) -> str:
+        """rosbag2's offered_qos_profiles for a ROS 2 topic."""
+        static = topic.endswith("_static")
+        best_effort = topic in ("/boreas/radar/points", "/boreas/lidar")
+        infinite = "\n    sec: 2147483647\n    nsec: 4294967295"
+        return (
+            f"- history: keep_last\n  depth: {1 if static else 10}\n"
+            f"  reliability: {'best_effort' if best_effort else 'reliable'}\n"
+            f"  durability: {'transient_local' if static else 'volatile'}\n"
+            f"  deadline:{infinite}\n  lifespan:{infinite}\n  liveliness: automatic\n"
+            f"  liveliness_lease_duration:{infinite}\n"
+            "  avoid_ros_namespace_conventions: false\n"
+        )
+
+    def matrix_yaml(m: np.ndarray) -> str:
+        return (
+            f"{{rows: {m.shape[0]}, cols: {m.shape[1]}, data: {m.flatten().tolist()}}}"
+        )
+
+    width, height = CAMERA_SIZE
+    camera_yaml = (
+        f"image_width: {width}\nimage_height: {height}\ncamera_name: camera\n"
+        f"camera_matrix: {matrix_yaml(projection[:3, :3])}\n"
+        "distortion_model: plumb_bob\n"
+        f"distortion_coefficients: {matrix_yaml(np.zeros((1, 5)))}\n"
+        f"rectification_matrix: {matrix_yaml(np.eye(3))}\n"
+        f"projection_matrix: {matrix_yaml(projection[:3, :4])}\n"
+    )
+    readme = "\n".join(
+        [
+            "# Boreas showcase",
+            "",
+            ATTRIBUTION,
+            "",
+            "| Topic | Schema | Message encoding |",
+        ]
+        + ["|---|---|---|"]
+        + [
+            f"| `{topic}` | {c.schema_encoding or 'none'} `{c.schema_name}` | {c.message_encoding} |"
+            for topic, c in topic_codecs.items()
+        ]
+    )
+
+    staged = OUTPUT.with_suffix(".pending.mcap")
     counts: Counter[str] = Counter()
-    with intermediate.open("wb") as output:
-        writer = Writer(output, compression=CompressionType.ZSTD)
-        writer.start(profile="", library="Lichtblick Boreas showcase converter")
+    with staged.open("wb") as output:
+        writer = codecs.ContainerWriter(
+            output, "Lichtblick Boreas showcase converter", groups
+        )
         writer.add_metadata(
             "attribution",
             {
@@ -1489,39 +1677,60 @@ def main() -> None:
                 "location": "Toronto, Canada",
             },
         )
-        schema_ids: dict[str, int] = {}
+        writer.add_metadata("empty", {})
+        writer.add_attachment(
+            START * 1000, "camera_info.yaml", "application/yaml", camera_yaml.encode()
+        )
+        writer.add_attachment(
+            START * 1000, "README.md", "text/markdown", readme.encode()
+        )
+        schema_ids: dict[tuple[str, str, bytes], int] = {}
         channels: dict[str, int] = {}
-        for i, (t, topic, name, message) in enumerate(
+        for i, (t, topic, _, message) in enumerate(
             heapq.merge(*sources, key=lambda e: e[0])
         ):
-            caller = next(v for k, v in CALLERS.items() if topic.startswith(k))
-            if isinstance(message, Message):
-                full_name = message.DESCRIPTOR.full_name
-                if full_name not in schema_ids:
-                    schema_ids[full_name] = writer.register_schema(
-                        full_name, "protobuf", descriptor_set(message.DESCRIPTOR)
-                    )
-                name = full_name
-                encoding, data = "protobuf", message.SerializeToString()
-            else:
-                # Validate a sample of every topic; full validation of every point cloud is slow.
-                if counts[topic] < 20 or i % 50 == 0:
-                    validators[name].validate(message)
-                if name not in schema_ids:
-                    schema_ids[name] = writer.register_schema(
-                        custom.get(name, f"foxglove.{name}"),
-                        "jsonschema",
-                        json.dumps(schemas[name]).encode(),
-                    )
-                encoding = "json"
-                data = json.dumps(
-                    message, separators=(",", ":"), allow_nan=False
-                ).encode()
+            codec = topic_codecs[topic]
+            group = group_of.get(topic, "small")
             if topic not in channels:
-                channels[topic] = writer.register_channel(
-                    topic, encoding, schema_ids[name], metadata={"callerid": caller}
+                key = (codec.schema_name, codec.schema_encoding, codec.schema_data)
+                if key not in schema_ids:
+                    schema_ids[key] = writer.add_schema(*key)
+                metadata = {
+                    "callerid": next(
+                        v for k, v in CALLERS.items() if topic.startswith(k)
+                    )
+                }
+                if codec.schema_encoding in ("ros2msg", "ros2idl"):
+                    metadata["offered_qos_profiles"] = qos(topic)
+                channels[topic] = writer.add_channel(
+                    topic, codec.message_encoding, schema_ids[key], metadata
                 )
-            writer.add_message(channels[topic], t * 1000, data, publish_time=t * 1000)
+            if isinstance(message, Message):
+                source = {
+                    f.name: v
+                    for f, v in message.ListFields()
+                    if f.type not in (f.TYPE_MESSAGE, f.TYPE_BYTES)
+                }
+            elif isinstance(message, bytes):
+                source = {"format": "cloudini"}
+            else:
+                # Validate a sample of every JSON Schema topic; validating every message is slow.
+                if topic in validators and (counts[topic] < 20 or i % 50 == 0):
+                    validators[topic].validate(message)
+                source = message
+            record = McapMessage(
+                channel_id=channels[topic],
+                sequence=counts[topic],
+                log_time=(t + latency.get(group, 0)) * 1000,
+                publish_time=t * 1000,
+                data=codec.encode(message),
+            )
+            if topic == "/boreas/lidar/Δt" and counts[topic] % 10 == 5:
+                writer.add_unchunked_message(record, source)
+            else:
+                writer.add_message(group, record, source)
+            if i == 2000:
+                writer.add_empty_chunk()
             counts[topic] += 1
             if i % 5000 == 0:
                 print(
@@ -1537,28 +1746,10 @@ def main() -> None:
         "/boreas/radar/image": 3.8,
         "/boreas/objects": 9.5,
         "/boreas/motion": 95,
+        "/boreas/imu": 95,
         "/boreas/gps": 9.5,
     }.items():
         assert counts[topic] >= rate * SECONDS, counts
-    staged = OUTPUT.with_suffix(".pending.mcap")
-    subprocess.run(
-        [
-            "uvx",
-            "pymcap-cli==0.35.0",
-            "rechunk",
-            str(intermediate),
-            "-o",
-            str(staged),
-            "--strategy",
-            "all",
-            "--chunk-size",
-            "4194304",
-            "--compression",
-            "zstd",
-            "--force",
-        ],
-        check=True,
-    )
     with staged.open("rb") as output:
         reader = make_reader(output, validate_crcs=True)
         summary = reader.get_summary()
@@ -1568,15 +1759,45 @@ def main() -> None:
         duration = (
             summary.statistics.message_end_time - summary.statistics.message_start_time
         ) / 1e9
-        assert SECONDS - 0.2 <= duration <= SECONDS, duration
+        assert SECONDS - 0.2 <= duration <= SECONDS + 0.1, duration
         # Read every chunk, so their CRCs are checked too, not just the summary.
-        assert summary.chunk_indexes
-        streamed = sum(1 for _ in reader.iter_messages(log_time_order=False))
-        assert streamed == sum(counts.values()), (streamed, sum(counts.values()))
+        indexed = sum(1 for _ in reader.iter_messages(log_time_order=False))
+        assert indexed == sum(counts.values()) - writer.unchunked, indexed
     staged.replace(OUTPUT)
-    intermediate.unlink()
+
+    digest = hashlib.sha256()
+    with OUTPUT.open("rb") as stream:
+        while block := stream.read(1 << 24):
+            digest.update(block)
+    previous = (
+        json.loads(EXPECTATIONS.read_text()) if EXPECTATIONS.exists() else {"file": {}}
+    )
+    file_facts = {
+        # Set once the file is uploaded; kept while the file is unchanged.
+        "url": previous["file"].get("url", "")
+        if previous["file"].get("sha256") == digest.hexdigest()
+        else "",
+        "sha256": digest.hexdigest(),
+        "size": OUTPUT.stat().st_size,
+    }
+    EXPECTATIONS.write_text(
+        json.dumps(
+            {"file": file_facts, **writer.expectations()}, indent=2, ensure_ascii=False
+        )
+        + "\n"
+    )
     print(
         f"Validated {OUTPUT}: {OUTPUT.stat().st_size:,} bytes, {duration:.3f} seconds, {dict(counts)}"
+    )
+    # The conformance test reads the new file the way the app does.
+    subprocess.run(
+        ["pnpm", "vitest", "run", "--maxWorkers=2"]
+        + [
+            "packages/suite-base/src/players/IterablePlayer/Mcap/boreasShowcase.test.ts"
+        ],
+        cwd=ROOT,
+        env={**os.environ, "BOREAS_SHOWCASE_MCAP": str(OUTPUT)},
+        check=True,
     )
 
 
