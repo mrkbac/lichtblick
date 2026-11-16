@@ -152,12 +152,22 @@ export const mainConfig =
       plugins.push({
         apply: (compiler) => {
           compiler.hooks.afterEmit.tapPromise("GenerateSW", async (compilation) => {
+            const names = compilation.getAssets().map((asset) => asset.name);
+            // web/.cloudflare/_headers caches these types for a year without revalidating
+            const frozen = names.filter(
+              (name) =>
+                /\.(js|mjs|wasm|woff2|ttf)$/.test(name) &&
+                !HASHED_FILE.test(`/${name}`) &&
+                name !== "view-link-redirect.js",
+            );
+            if (frozen.length > 0) {
+              throw new Error(
+                `Unhashed build files would be cached for a year (see web/.cloudflare/_headers): ${frozen.join(", ")}`,
+              );
+            }
             const assetList: AssetList = {
               version: params.version,
-              files: compilation
-                .getAssets()
-                .map((asset) => asset.name)
-                .filter((name) => HASHED_FILE.test(`/${name}`)),
+              files: names.filter((name) => HASHED_FILE.test(`/${name}`)),
             };
             await writeFile(
               path.join(params.outputPath, ASSET_LIST_FILE),

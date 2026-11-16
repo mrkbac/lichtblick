@@ -9,3 +9,23 @@
     Content-Security-Policy: base-uri 'self'
     Cross-Origin-Opener-Policy: same-origin
     Cross-Origin-Embedder-Policy: credentialless
+
+# Build files with a content hash in their name never change: cache them for a year without
+# revalidating, so unchanged chunks (Monaco, TypeScript, MapLibre, ...) survive deploys.
+# Unhashed files keep Cloudflare's default (revalidate on every load).
+/*.js
+    Cache-Control: public, max-age=31536000, immutable
+/*.mjs
+    Cache-Control: public, max-age=31536000, immutable
+/*.wasm
+    Cache-Control: public, max-age=31536000, immutable
+/*.woff2
+    Cache-Control: public, max-age=31536000, immutable
+/*.ttf
+    Cache-Control: public, max-age=31536000, immutable
+
+# The only unhashed scripts: the service worker and the script it imports must pick up new deploys
+/sw.js
+    ! Cache-Control
+/view-link-redirect.js
+    ! Cache-Control
