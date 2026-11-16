@@ -109,6 +109,13 @@ export const useCommandPaletteStore = create<{
   },
 }));
 
+/** The sub-menu command whose prefix `text` starts with, if any. */
+function findPrefixCommand(commands: readonly Command[], text: string): Command | undefined {
+  return commands.find(
+    (cmd) => cmd.children != undefined && cmd.prefix != undefined && text.startsWith(cmd.prefix),
+  );
+}
+
 /** Mounts the Cmd/Ctrl+K shortcut; the palette itself only renders while open. */
 export function CommandPalette(): React.JSX.Element {
   const open = useCommandPaletteStore((state) => state.open);
@@ -147,15 +154,11 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }): React.JSX.E
 
   const results: RankedCommand[] = useMemo(() => {
     const ranked = rankCommands(level.items ?? rootCommands, level.query, recentIds);
-    if (!isRoot) {
-      return ranked;
-    }
-    const fromQuery = queryCommands(level.query).map((command) => ({
-      command,
-      positions: new Set<number>(),
-    }));
+    const fromQuery: RankedCommand[] = isRoot
+      ? queryCommands(level.query).map((command) => ({ command, positions: new Set<number>() }))
+      : (level.parent?.queryChildren?.(level.query) ?? []);
     return [...fromQuery, ...ranked];
-  }, [isRoot, level.items, level.query, queryCommands, recentIds, rootCommands]);
+  }, [isRoot, level.items, level.parent, level.query, queryCommands, recentIds, rootCommands]);
 
   const selectedIndex = Math.min(level.selectedIndex, results.length - 1);
 
@@ -166,7 +169,7 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }): React.JSX.E
   }, [selectedIndex]);
 
   const execute = useCallback(
-    async (command: Command) => {
+    async (command: Command, query?: string) => {
       if (loading) {
         return;
       }
@@ -177,6 +180,7 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }): React.JSX.E
             type: "push",
             parent: command,
             items: await command.children(),
+            query,
           });
         } catch (err: unknown) {
           log.error(err);
@@ -215,6 +219,13 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }): React.JSX.E
           delta: event.key === "ArrowDown" ? 1 : -1,
           count: results.length,
         });
+        break;
+      case "Tab":
+        // Keep focus in the search field; Tab opens the selected item's actions, if any.
+        event.preventDefault();
+        if (selected?.command.actions) {
+          dispatch({ type: "push", parent: selected.command, items: selected.command.actions() });
+        }
         break;
       case "Enter":
         event.preventDefault();
@@ -283,6 +294,14 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }): React.JSX.E
           placeholder={placeholder ?? t("placeholder")}
           value={level.query}
           onChange={(event) => {
+            const value = event.target.value;
+            // A prefix typed (or pasted) into the empty root search opens its mode, e.g. "@".
+            const mode =
+              isRoot && level.query === "" ? findPrefixCommand(rootCommands, value) : undefined;
+            if (mode) {
+              void execute(mode, value.slice(mode.prefix!.length));
+              return;
+            }
             dispatch({ type: "set-query", query: event.target.value });
           }}
           onKeyDown={onKeyDown}
@@ -333,8 +352,8 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }): React.JSX.E
                 {command.group != undefined && (
                   <Typography variant="caption">{command.group}</Typography>
                 )}
-                {command.shortcut != undefined && (
-                  <kbd className={classes.kbd}>{command.shortcut}</kbd>
+                {(command.shortcut ?? command.prefix) != undefined && (
+                  <kbd className={classes.kbd}>{command.shortcut ?? command.prefix}</kbd>
                 )}
                 {command.children && <ChevronRightIcon fontSize="small" />}
               </div>
@@ -346,6 +365,9 @@ function CommandPaletteDialog({ onClose }: { onClose: () => void }): React.JSX.E
       <div className={classes.footer}>
         <Typography variant="caption">↑↓ {t("hintNavigate")}</Typography>
         <Typography variant="caption">↵ {t("hintRun")}</Typography>
+        {results[selectedIndex]?.command.actions && (
+          <Typography variant="caption">⇥ {t("hintActions")}</Typography>
+        )}
         {!isRoot && <Typography variant="caption">⌫ {t("hintBack")}</Typography>}
         <Typography variant="caption">esc {isRoot ? t("hintClose") : t("hintBack")}</Typography>
       </div>

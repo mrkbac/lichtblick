@@ -7,10 +7,13 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Immutable, MessageEvent } from "@lichtblick/suite";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import {
-  MessagePipelineContext,
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectPlayerId,
+  selectSortedTopics,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { useAppConfigurationValue } from "@lichtblick/suite-base/hooks";
 import type { PartialMessage } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtension";
 import { WorkerImageDecoder } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Images/WorkerImageDecoder";
@@ -37,9 +40,6 @@ import * as foxglove from "../../panels/ThreeDeeRender/foxglove";
 
 const DEBOUNCE_MS = 40;
 
-const selectTopics = (ctx: MessagePipelineContext) => ctx.sortedTopics;
-const selectPlayerId = (ctx: MessagePipelineContext) => ctx.playerState.playerId;
-
 /** Image topics available for the scrub preview, and the one currently selected (if any). */
 export function usePreviewTopic(): {
   imageTopics: string[];
@@ -48,7 +48,7 @@ export function usePreviewTopic(): {
   setSetting: (value?: string) => Promise<void>;
 } {
   const [setting, setSetting] = useAppConfigurationValue<string>(AppSetting.PLAYBACK_PREVIEW_TOPIC);
-  const topics = useMessagePipeline(selectTopics);
+  const topics = useMessagePipeline(selectSortedTopics);
   const imageTopics = useMemo(() => previewableTopics(topics), [topics]);
   return { imageTopics, topic: resolvePreviewTopic(setting, imageTopics), setting, setSetting };
 }

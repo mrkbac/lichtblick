@@ -7,6 +7,7 @@
 import { parseMessagePath } from "@lichtblick/message-path";
 import { simpleGetMessagePathDataItems } from "@lichtblick/suite-base/components/MessagePathSyntax/simpleGetMessagePathDataItems";
 
+import { toPieValues } from "./toPieValues";
 import type { PieChartState, PieChartAction } from "../types";
 
 export type HandlePathProps = {
@@ -39,10 +40,12 @@ export function handlePath({ state, action }: HandlePathProps): PieChartState {
     newPath = undefined;
   }
 
-  let latestMatchingQueriedData: unknown;
+  let latestMatchingQueriedData: Float32Array | undefined;
   if (newPath && pathParseError == undefined && state.latestMessage) {
     try {
-      latestMatchingQueriedData = simpleGetMessagePathDataItems(state.latestMessage, newPath);
+      latestMatchingQueriedData = toPieValues(
+        simpleGetMessagePathDataItems(state.latestMessage, newPath),
+      );
     } catch (err: unknown) {
       error = err as Error;
     }

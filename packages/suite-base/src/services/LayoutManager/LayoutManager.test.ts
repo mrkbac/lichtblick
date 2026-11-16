@@ -29,7 +29,10 @@ describe("LayoutManager", () => {
 
     mockLocalStorage = {
       list: vi.fn().mockResolvedValue([]),
-      get: vi.fn().mockResolvedValue(undefined),
+      // Like real storage, get finds what list returns.
+      get: vi.fn(async (namespace: string, id: string) =>
+        (await mockLocalStorage.list(namespace)).find((layout) => layout.id === id),
+      ),
       put: vi.fn().mockImplementation(async (_namespace: string, layout) => layout),
       delete: vi.fn().mockResolvedValue(undefined),
       importLayouts: vi.fn().mockResolvedValue(undefined),

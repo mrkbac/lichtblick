@@ -11,17 +11,14 @@ import { Fragment, useState } from "react";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import { Immutable } from "@lichtblick/suite";
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { RecordingFileInfo } from "@lichtblick/suite-base/players/types";
 import { RosDatatypes } from "@lichtblick/suite-base/types/RosDatatypes";
 
 import { useStyles } from "./index.style";
 import { bucketTime } from "./inspection";
-
-const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
+import { differingPolicies, QOS_LABELS, QosProfile } from "./qos";
 
 function PlaybackMarker({ start, end }: { start: Time; end: Time }): React.JSX.Element | undefined {
   const { classes } = useStyles();
@@ -109,6 +106,36 @@ export function KeyValueTable({
         </Fragment>
       ))}
     </dl>
+  );
+}
+
+/** Offered QoS per publisher; rows where publishers disagree are highlighted. */
+export function QosTable({ profiles }: { profiles: readonly QosProfile[] }): React.JSX.Element {
+  const { classes, cx } = useStyles();
+  const differing = new Set(differingPolicies(profiles));
+  return (
+    <table className={classes.qos}>
+      {profiles.length > 1 && (
+        <thead>
+          <tr>
+            <th />
+            {profiles.map((_, index) => (
+              <th key={index}>Publisher {index + 1}</th>
+            ))}
+          </tr>
+        </thead>
+      )}
+      <tbody>
+        {(Object.keys(QOS_LABELS) as (keyof QosProfile)[]).map((key) => (
+          <tr key={key} className={cx({ [classes.qosDiffers]: differing.has(key) })}>
+            <th scope="row">{QOS_LABELS[key]}</th>
+            {profiles.map((profile, index) => (
+              <td key={index}>{profile[key]}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </table>
   );
 }
 

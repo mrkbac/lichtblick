@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
 import type { CustomLayerInterface, Map as MapLibreMap, StyleSpecification } from "maplibre-gl";
@@ -160,5 +159,64 @@ describe("SharedMap", () => {
     expect(shared.maxCameraDistance).toBe(Infinity);
     shared.dispose();
     expect(map.remove).toHaveBeenCalledOnce();
+  });
+});
+
+describe("SharedMap ground height", () => {
+  /** Eye altitude MapLibre receives for a camera 20 m above the anchor frame. */
+  function eyeAltitude(terrain: number | null, altitude: number | undefined, zOffset = 0): number {
+    const map = {
+      on: vi.fn(),
+      getStyle: () => ({ version: 8, sources: {}, layers: [] }),
+      getLayer: vi.fn(),
+      isStyleLoaded: () => false,
+      setStyle: vi.fn(),
+      queryTerrainElevation: () => terrain,
+      setVerticalFieldOfView: vi.fn(),
+      calculateCameraOptionsFromCameraLngLatAltRotation: vi.fn<
+        MapLibreMap["calculateCameraOptionsFromCameraLngLatAltRotation"]
+      >(() => ({ zoom: 10 })),
+      getMinZoom: () => 0,
+      getZoom: () => 10,
+      getCanvas: () => ({ clientHeight: 800 }),
+      jumpTo: vi.fn(),
+      redraw: vi.fn(),
+    };
+    const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
+    camera.position.set(0, 0, 20);
+    const transformTree = new TransformTree(new ObjectPool(Transform.Empty));
+    transformTree.addTransform("base", "map", 0n, Transform.Identity().setPosition([10, 20, 5]));
+    const renderer = {
+      currentTime: 0n,
+      config: { cameraState: { targetOffset: [0, 0, 0] } },
+      transformTree,
+      cameraHandler: { getActiveCamera: () => camera },
+      hud: { displayIfTrue: vi.fn() },
+    } as unknown as Renderer;
+    const shared = new SharedMap(map as unknown as MapLibreMap, "map-layer");
+    shared.attach(renderer, vi.fn());
+    shared.locate(
+      { lat: 48, lon: 11, altitude, enuFrame: "map", position: new THREE.Vector3(10, 20, 5) },
+      zOffset,
+    );
+    shared.render("base", "map");
+    return map.calculateCameraOptionsFromCameraLngLatAltRotation.mock.calls[0]![1];
+  }
+
+  it("puts flat maps at the anchor frame, ignoring the fix altitude", () => {
+    expect(eyeAltitude(null, 195)).toBeCloseTo(20);
+  });
+
+  it("puts the terrain under the fix at the anchor frame, ignoring the fix altitude", () => {
+    expect(eyeAltitude(300, 195)).toBeCloseTo(320);
+  });
+
+  it("handles fixes without an altitude", () => {
+    expect(eyeAltitude(null, undefined)).toBeCloseTo(20);
+    expect(eyeAltitude(300, undefined)).toBeCloseTo(320);
+  });
+
+  it("raises the map by the Z offset", () => {
+    expect(eyeAltitude(null, 195, 2)).toBeCloseTo(18);
   });
 });

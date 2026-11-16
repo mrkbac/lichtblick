@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import * as _ from "lodash-es";
 import { ReactNode, useCallback, useMemo, useState } from "react";
 
 import { MessagePathStructureItem } from "@lichtblick/message-path";
@@ -66,7 +65,7 @@ export function useValueRenderer({
     ) => (
       <HoverArea className={hoverObserverClassName}>
         {({ isHovering }) => {
-          const lastKeyPath = _.last(keyPath) as number;
+          const lastKeyPath = keyPath.at(-1) as number;
           let valueAction: ValueAction | undefined;
           if (isHovering) {
             valueAction = getValueActionForValue(

@@ -229,8 +229,9 @@ export class SharedMap {
         ),
         UNIT_SCALE,
       );
-      const elevation =
-        anchor.altitude ?? this.map.queryTerrainElevation([anchor.lon, anchor.lat]) ?? 0;
+      // The anchor frame stands on the ground under the fix. The fix altitude is ignored: flat
+      // tiles have no ground height, and terrain heights use a different datum (sea level).
+      const elevation = this.map.queryTerrainElevation([anchor.lon, anchor.lat]) ?? 0;
       const scale = origin.meterInMercatorCoordinateUnits();
       const enuToMercator = this.#enuToMercator.makeScale(scale, -scale, scale);
       enuToMercator.setPosition(

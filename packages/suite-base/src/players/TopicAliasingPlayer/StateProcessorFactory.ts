@@ -107,7 +107,7 @@ function mergeAliases(
         });
       } else {
         inverseMapping.set(name, sourceTopicName);
-        const mergedValues = _.uniq(merged.get(sourceTopicName) ?? []).concat(name);
+        const mergedValues = [...new Set(merged.get(sourceTopicName) ?? [])].concat(name);
         merged.set(sourceTopicName, mergedValues);
       }
     }

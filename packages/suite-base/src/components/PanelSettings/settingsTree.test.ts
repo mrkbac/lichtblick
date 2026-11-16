@@ -12,10 +12,7 @@ import {
   PanelStateStore,
 } from "@lichtblick/suite-base/context/PanelStateContext";
 import PlayerBuilder from "@lichtblick/suite-base/testing/builders/PlayerBuilder";
-import { maybeCast } from "@lichtblick/suite-base/util/maybeCast";
 import { BasicBuilder } from "@lichtblick/test-builders";
-
-vi.mock("@lichtblick/suite-base/util/maybeCast");
 
 describe("buildSettingsTree", () => {
   function setup(): Pick<
@@ -27,7 +24,6 @@ describe("buildSettingsTree", () => {
         topic1: { someConfig: "valueFromConfig" },
       },
     };
-    (maybeCast as Mock).mockReturnValue(config);
 
     const settingsTreeNodes: SettingsTreeNodes = {
       topics: {

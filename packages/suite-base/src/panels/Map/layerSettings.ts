@@ -184,7 +184,7 @@ function layerNode(
           label: "Style",
           input: "select",
           value: layer.source,
-          options: _.flatMap(PRESETS, (preset, value) =>
+          options: Object.entries(PRESETS).flatMap(([value, preset]) =>
             preset.variant?.provider === variant.provider
               ? [{ label: preset.variant.style, value }]
               : [],
@@ -267,7 +267,7 @@ function layerNode(
       value: layer.heightOffset ?? 0,
       step: 0.5,
       precision: 2,
-      help: "Meters added to the location fix's altitude (WGS 84 ellipsoid height) to line the tiles up with the scene.",
+      help: "Meters to raise the tiles above the location fix's frame; their ground under the fix otherwise meets that frame.",
     };
   } else {
     fields.opacity = {
@@ -334,11 +334,13 @@ function updateLayer(
     if (group === "buildings" && show) {
       layer.buildings3d = value === "3d";
     }
-    layer.hiddenGroups = _.uniq(
-      hiddenVectorGroups(layer)
-        .filter((g) => g !== group)
-        .concat(show ? [] : [group]),
-    );
+    layer.hiddenGroups = [
+      ...new Set(
+        hiddenVectorGroups(layer)
+          .filter((g) => g !== group)
+          .concat(show ? [] : [group]),
+      ),
+    ];
     layer.vectorContent = undefined;
     return;
   }

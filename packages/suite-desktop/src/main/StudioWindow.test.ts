@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
 import type { EventEmitter } from "events";
@@ -54,9 +53,6 @@ vi.mock("@lichtblick/theme", () => ({
 vi.mock("../common/webpackDefines", () => ({ LICHTBLICK_PRODUCT_NAME: "Lichtblick" }));
 vi.mock("./StudioAppUpdater", () => ({
   default: { Instance: () => ({ checkNow: vi.fn(), canCheckForUpdates: () => false }) },
-}));
-vi.mock("./telemetry", () => ({
-  getTelemetrySettings: () => ({ crashReportingEnabled: false, telemetryEnabled: false }),
 }));
 vi.mock("./getDevModeIcon", () => ({ default: () => undefined }));
 

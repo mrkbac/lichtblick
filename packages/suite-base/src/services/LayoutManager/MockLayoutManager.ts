@@ -18,6 +18,7 @@ export default class MockLayoutManager implements ILayoutManager {
 
   public on: Mock = vi.fn();
   public off: Mock = vi.fn();
+  public emitChange: Mock = vi.fn();
   public setError: Mock = vi.fn();
   public setOnline: Mock = vi.fn();
   public getLayouts: Mock = vi.fn().mockResolvedValue([]);

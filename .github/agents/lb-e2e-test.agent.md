@@ -85,7 +85,6 @@ e2e/tests/web/<category>/<feature-name>.web.spec.ts
 All spec files must include the MPL-2.0 SPDX header:
 
 ```typescript
-// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 ```
 
@@ -96,7 +95,6 @@ All spec files must include the MPL-2.0 SPDX header:
 ### Desktop
 
 ```typescript
-// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
 import { changeToEpochFormat } from "../../../fixtures/change-to-epoch-format";
@@ -123,7 +121,6 @@ test("should <outcome> when <condition>", { tag: "@smoke" }, async ({ mainWindow
 ### Web
 
 ```typescript
-// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
 import { test, expect } from "@playwright/test";

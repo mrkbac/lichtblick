@@ -90,21 +90,8 @@ export class OrganizationLayoutStorage
   }
 
   public async getLayout(id: LayoutID): Promise<RemoteLayout | undefined> {
-    const organizationId = this.#organizationOf.get(id);
-    if (organizationId == undefined) {
-      return undefined;
-    }
-    const { data, error, response } = await this.#client.GET(
-      "/v1/organizations/{organizationId}/layouts/{layoutId}",
-      { params: { path: { organizationId, layoutId: id } } },
-    );
-    if (response.status === 404) {
-      return undefined;
-    }
-    if (!data) {
-      throw new OrganizationApiError(response, error);
-    }
-    return this.#toRemote(this.#remember(data));
+    const layout = await this.#fetch(id);
+    return layout ? this.#toRemote(layout) : undefined;
   }
 
   public async saveNewLayout(params: SaveNewLayoutParams): Promise<RemoteLayout> {
@@ -134,62 +121,76 @@ export class OrganizationLayoutStorage
   }
 
   public async updateLayout(params: UpdateLayoutRequest): Promise<UpdateLayoutResponse> {
-    const known = this.#layouts.get(params.externalId);
+    let known = await this.#known(params.externalId);
     if (!known) {
       return { status: "conflict" };
     }
-    const { data, error, response } = await this.#client.PUT(
-      "/v1/organizations/{organizationId}/layouts/{layoutId}",
-      {
-        params: {
-          path: { organizationId: known.organizationId, layoutId: known.id },
-          header: { "If-Match": revisionETag(known.revision) },
+    for (let attempt = 0; ; attempt++) {
+      const { data, error, response } = await this.#client.PUT(
+        "/v1/organizations/{organizationId}/layouts/{layoutId}",
+        {
+          params: {
+            path: { organizationId: known.organizationId, layoutId: known.id },
+            header: { "If-Match": revisionETag(known.revision) },
+          },
+          // Full replacement: unchanged fields are resent from the last known version.
+          body: {
+            displayName: params.name ?? known.displayName,
+            data: params.data ?? known.data,
+          },
         },
-        // Full replacement: unchanged fields are resent from the last known version.
-        body: {
-          displayName: params.name ?? known.displayName,
-          data: params.data ?? known.data,
-        },
-      },
-    );
-    if (data) {
-      return {
-        status: "success",
-        newLayout: this.#toRemote(this.#remember(data)),
-      };
-    }
-    if (response.status === 412) {
-      if ("current" in error) {
-        this.#remember(error.current);
+      );
+      if (data) {
+        return {
+          status: "success",
+          newLayout: this.#toRemote(this.#remember(data)),
+        };
       }
-      return { status: "conflict" };
+      if (response.status === 412) {
+        if (!("current" in error)) {
+          return { status: "conflict" };
+        }
+        known = this.#remember(error.current);
+        if (attempt === 0 && this.#isOwnChange(known)) {
+          continue;
+        }
+        return { status: "conflict" };
+      }
+      throw new OrganizationApiError(response, error);
     }
-    throw new OrganizationApiError(response, error);
   }
 
   public async deleteLayout(id: string): Promise<boolean> {
-    const known = this.#layouts.get(id);
+    let known = await this.#known(id);
     if (!known) {
       return false;
     }
-    const { error, response } = await this.#client.DELETE(
-      "/v1/organizations/{organizationId}/layouts/{layoutId}",
-      {
-        params: {
-          path: { organizationId: known.organizationId, layoutId: id },
-          header: { "If-Match": revisionETag(known.revision) },
+    for (let attempt = 0; ; attempt++) {
+      const { error, response } = await this.#client.DELETE(
+        "/v1/organizations/{organizationId}/layouts/{layoutId}",
+        {
+          params: {
+            path: { organizationId: known.organizationId, layoutId: id },
+            header: { "If-Match": revisionETag(known.revision) },
+          },
         },
-      },
-    );
-    if (response.status === 404) {
+      );
+      if (response.status === 404) {
+        this.#forget(id);
+        return false;
+      }
+      if (response.status === 412 && error != undefined && "current" in error && attempt === 0) {
+        known = this.#remember(error.current);
+        if (this.#isOwnChange(known)) {
+          continue;
+        }
+      }
+      if (!response.ok) {
+        throw new OrganizationApiError(response, error);
+      }
       this.#forget(id);
-      return false;
+      return true;
     }
-    if (!response.ok) {
-      throw new OrganizationApiError(response, error);
-    }
-    this.#forget(id);
-    return true;
   }
 
   public async getFavoriteLayoutIds(): Promise<readonly string[]> {
@@ -290,6 +291,45 @@ export class OrganizationLayoutStorage
       throw new OrganizationApiError(response, error);
     }
     return this.#remember(data);
+  }
+
+  /**
+   * The last seen version of a layout, fetched if this tab hasn't seen it: only one tab syncs, so
+   * the others learn of layouts from the shared local storage, not from this class.
+   */
+  async #known(id: string): Promise<ApiLayout | undefined> {
+    return this.#layouts.get(id) ?? (await this.#fetch(id));
+  }
+
+  /** The current version of a layout, from its organization or, if unknown, from each one. */
+  async #fetch(id: string): Promise<ApiLayout | undefined> {
+    const knownOrganization = this.#organizationOf.get(id);
+    const organizationIds =
+      knownOrganization != undefined
+        ? [knownOrganization]
+        : this.organizations().map((org) => org.id);
+    for (const organizationId of organizationIds) {
+      const { data, error, response } = await this.#client.GET(
+        "/v1/organizations/{organizationId}/layouts/{layoutId}",
+        { params: { path: { organizationId, layoutId: id } } },
+      );
+      if (data) {
+        return this.#remember(data);
+      }
+      if (response.status !== 404) {
+        throw new OrganizationApiError(response, error);
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Whether the newer revision a write was rejected for is the user's own (e.g. saved from another
+   * tab, whose revision this tab didn't see). Then the write goes ahead on top of it; a change by
+   * someone else stays a conflict.
+   */
+  #isOwnChange(current: ApiLayout): boolean {
+    return current.updatedBy.id === this.#session.user.id;
   }
 
   #remember(layout: ApiLayout): ApiLayout {

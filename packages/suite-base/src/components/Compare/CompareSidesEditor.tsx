@@ -10,10 +10,8 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { makeStyles } from "tss-react/mui";
 
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import { formatDuration } from "@lichtblick/suite-base/util/formatTime";
 
@@ -47,8 +45,6 @@ const useStyles = makeStyles()((theme) => ({
   offset: { width: 120 },
   nudge: { minWidth: 0, padding: theme.spacing(0, 0.5) },
 }));
-
-const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
 
 const NUDGES = [-1, -0.1, 0.1, 1];
 
