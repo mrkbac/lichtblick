@@ -1,4 +1,3 @@
-// SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
 // The settings trees shown in the 3D and Image panel guides, built by the same builders the
