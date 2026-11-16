@@ -30,7 +30,7 @@ import ExpandingToolbar, { ToolGroup } from "@lichtblick/suite-base/components/E
 import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
-import { PANEL_TOOLBAR_MIN_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
+import { PANEL_TOOLBAR_HEIGHT } from "@lichtblick/suite-base/components/PanelToolbar/constants";
 import { measureTextWidth } from "@lichtblick/suite-base/util/measureTextWidth";
 
 import Graph, { GraphMutation } from "./Graph";
@@ -104,7 +104,7 @@ const useStyles = makeStyles()((theme) => ({
     flexDirection: "column",
     alignItems: "flex-end",
     position: "absolute",
-    top: `calc(${PANEL_TOOLBAR_MIN_HEIGHT}px + ${theme.spacing(1)})`,
+    top: `calc(${PANEL_TOOLBAR_HEIGHT} + ${theme.spacing(1)})`,
     right: theme.spacing(1),
     zIndex: 101,
     gap: theme.spacing(1),

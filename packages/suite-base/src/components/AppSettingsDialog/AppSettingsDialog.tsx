@@ -44,6 +44,7 @@ import { LocalResourceFolders } from "./LocalResourceFolders";
 import {
   AutoUpdate,
   ColorSchemeSettings,
+  CompactPanelsSettings,
   LanguageSettings,
   LaunchDefault,
   MessageFramerate,
@@ -121,6 +122,7 @@ export function AppSettingsDialog(
           >
             <Stack gap={2}>
               <ColorSchemeSettings />
+              <CompactPanelsSettings />
               <TimezoneSettings />
               <TimeFormat orientation={smUp ? "horizontal" : "vertical"} />
               <MessageFramerate />

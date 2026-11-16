@@ -100,7 +100,7 @@ export default React.memo<PanelToolbarProps>(function PanelToolbar({
   const title = customPanelTitle ?? panelContext?.title;
   return (
     <header
-      className={cx(classes.root, className)}
+      className={cx(classes.root, { [classes.floating]: children == undefined }, className)}
       data-testid="mosaic-drag-handle"
       ref={rootDragRef}
       style={{

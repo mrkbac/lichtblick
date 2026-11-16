@@ -67,6 +67,7 @@ function PanelToolbarControlsComponent(
 
   return (
     <Stack
+      className={classes.root}
       direction="row"
       alignItems="center"
       paddingLeft={1}
