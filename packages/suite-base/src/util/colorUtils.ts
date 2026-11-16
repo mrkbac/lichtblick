@@ -275,22 +275,11 @@ const turboColormapData = [
 ];
 
 // Adapted from https://gist.github.com/mikhailov-work/ee72ba4191942acecc03fe6da94fc73f
-function turboColor(x: number): [number, number, number] {
-  // eslint-disable-next-line no-param-reassign
-  x = Math.max(0.0, Math.min(1.0, x));
-  const a = Math.trunc(x * 255.0);
-  const b = Math.min(255, a + 1);
-  const f = x * 255.0 - a;
-  const colorA = turboColormapData[a]!;
-  const colorB = turboColormapData[b]!;
-  return [0, 1, 2].map((i) => (colorA[i]! + (colorB[i]! - colorA[i]!) * f) * 255) as [
-    number,
-    number,
-    number,
-  ];
-}
-
 export function turboColorString(pct: number): string {
-  const rgb = turboColor(pct);
-  return `rgb(${Math.round(rgb[0])}, ${Math.round(rgb[1])}, ${Math.round(rgb[2])})`;
+  const x = Math.max(0, Math.min(1, pct)) * 255;
+  const a = Math.trunc(x);
+  const colorA = turboColormapData[a]!;
+  const colorB = turboColormapData[Math.min(255, a + 1)]!;
+  const [r, g, b] = colorA.map((v, i) => Math.round((v + (colorB[i]! - v) * (x - a)) * 255));
+  return `rgb(${r}, ${g}, ${b})`;
 }
