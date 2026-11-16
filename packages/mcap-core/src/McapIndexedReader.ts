@@ -573,18 +573,32 @@ export class McapIndexedReader<TReadOptions = unknown> {
     let loadAheadFrom: ChunkIndex | undefined;
     const chunkReader = new McapByteReader(new DataView(new ArrayBuffer(0)));
     for (let cursor; (cursor = chunkCursors.peek()); ) {
+      const chunkOffset = cursor.chunkIndex.chunkStartOffset;
       if (!cursor.hasMessageIndexes()) {
         // If we encounter a chunk whose message indexes have not been loaded yet, load them and re-organize the heap.
-        await cursor.loadMessageIndexes(this.#readable, readOptions, this.#chunkCache);
+        // A chunk without message indexes is loaded here to scan it, and kept for its messages.
+        const loadChunk = async () => {
+          const view = await this.#loadChunkData(cursor.chunkIndex, {
+            validateCrcs: validateCrcs ?? true,
+            readOptions,
+          });
+          chunkViewCache.set(chunkOffset, view);
+          return view;
+        };
+        await cursor.loadMessageIndexes(this.#readable, loadChunk, readOptions, this.#chunkCache);
         if (cursor.hasMoreMessages()) {
           chunkCursors.replace(cursor);
+          if (chunkViewCache.has(chunkOffset)) {
+            loadAheadFrom = cursor.chunkIndex;
+          }
         } else {
           chunkCursors.pop();
+          chunkViewCache.delete(chunkOffset);
         }
         continue;
       }
 
-      let chunkView = chunkViewCache.get(cursor.chunkIndex.chunkStartOffset);
+      let chunkView = chunkViewCache.get(chunkOffset);
       if (!chunkView) {
         chunkView = await this.#loadChunkData(cursor.chunkIndex, {
           validateCrcs: validateCrcs ?? true,
@@ -593,7 +607,7 @@ export class McapIndexedReader<TReadOptions = unknown> {
         // Not yet: loading ahead before this chunk's first message is out would delay it (e.g. the
         // first message after a seek, which may need other chunks' message indexes read first)
         loadAheadFrom = cursor.chunkIndex;
-        chunkViewCache.set(cursor.chunkIndex.chunkStartOffset, chunkView);
+        chunkViewCache.set(chunkOffset, chunkView);
       }
 
       const entry = cursor.popMessage();
@@ -893,7 +907,8 @@ function readAheadPlan(
 ): ReadAheadPlan {
   const chunks: ChunkIndex[] = [];
   for (const chunkIndex of chunksInRange) {
-    if (relevantChannels) {
+    // A chunk without message indexes may hold any channel
+    if (relevantChannels && chunkIndex.messageIndexOffsets.size > 0) {
       let relevant = false;
       for (const channelId of chunkIndex.messageIndexOffsets.keys()) {
         if (relevantChannels.has(channelId)) {

@@ -48,7 +48,7 @@ describe("ChunkCursor", () => {
         read: async (offset: bigint, size: bigint) =>
           indexes.subarray(Number(offset), Number(offset + size)),
       };
-      await expect(cursor.loadMessageIndexes(readable)).rejects.toThrow(
+      await expect(cursor.loadMessageIndexes(readable, async () => view(indexes))).rejects.toThrow(
         "earlier than chunk messageStartTime",
       );
     },
