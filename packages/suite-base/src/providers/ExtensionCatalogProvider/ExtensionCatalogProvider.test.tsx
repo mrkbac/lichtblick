@@ -332,7 +332,7 @@ describe("ExtensionCatalogProvider", () => {
     ]);
   });
 
-  it("replaces an extension's Cloudini converter with the built-in one", async () => {
+  it("prefers an installed extension's Cloudini converter over the built-in one", async () => {
     const source = `
       module.exports = {
         activate: function(ctx) {
@@ -360,6 +360,13 @@ describe("ExtensionCatalogProvider", () => {
 
     await waitFor(() => {
       expect(loadExtension).toHaveBeenCalledTimes(1);
+    });
+    expect(result.current.installedMessageConverters).toEqual([
+      expect.objectContaining({ fromSchemaName: CLOUDINI_SCHEMA, extensionId: extension.id }),
+    ]);
+
+    await act(async () => {
+      await result.current.uninstallExtension(extension.namespace!, extension.id);
     });
     expect(result.current.installedMessageConverters).toEqual([cloudiniMessageConverter]);
   });

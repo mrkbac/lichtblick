@@ -42,18 +42,21 @@ const log = Logger.getLogger(__filename);
 
 const BUILTIN_MESSAGE_CONVERTERS: readonly InstalledMessageConverter[] = [cloudiniMessageConverter];
 
-/** Built-in converters replace extension converters for the same schemas (e.g. the store's Cloudini
- * extension), which would otherwise convert each message a second time. */
+/** Adds the built-in converters for schemas no installed extension converts. An extension the user
+ * installed (e.g. the store's Cloudini extension) wins, and both running would convert each
+ * message twice. */
 function withBuiltinConverters(
   converters: readonly InstalledMessageConverter[],
 ): InstalledMessageConverter[] {
-  const isBuiltin = (converter: InstalledMessageConverter) =>
-    BUILTIN_MESSAGE_CONVERTERS.some(
-      (builtin) =>
-        builtin.fromSchemaName === converter.fromSchemaName &&
-        builtin.toSchemaName === converter.toSchemaName,
-    );
-  return [...BUILTIN_MESSAGE_CONVERTERS, ...converters.filter((c) => !isBuiltin(c))];
+  const fromExtensions = converters.filter((c) => !BUILTIN_MESSAGE_CONVERTERS.includes(c));
+  const unhandled = BUILTIN_MESSAGE_CONVERTERS.filter(
+    (builtin) =>
+      !fromExtensions.some(
+        (c) =>
+          c.fromSchemaName === builtin.fromSchemaName && c.toSchemaName === builtin.toSchemaName,
+      ),
+  );
+  return [...unhandled, ...fromExtensions];
 }
 
 function createExtensionRegistryStore(
@@ -359,9 +362,20 @@ function createExtensionRegistryStore(
         throw error;
       }
 
-      set((state) =>
-        removeExtensionData({ id: extension.id, namespace: extension.namespace!, state }),
-      );
+      set((state) => {
+        const remaining = removeExtensionData({
+          id: extension.id,
+          namespace: extension.namespace!,
+          state,
+        });
+        // a built-in converter the removed extension overrode takes over again
+        return {
+          ...remaining,
+          installedMessageConverters:
+            remaining.installedMessageConverters &&
+            withBuiltinConverters(remaining.installedMessageConverters),
+        };
+      });
 
       const stillInstalled = get().installedExtensions?.some((ext) => ext.id === id) ?? false;
       if (!stillInstalled) {
