@@ -15,10 +15,8 @@ import {
   useMessageReducer,
 } from "@lichtblick/suite-base/PanelAPI";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -75,8 +73,6 @@ const addEntries = (prev: FrameEntries, events: Immutable<MessageEvent[]>): Fram
 
 const onlyTopics = (entries: FrameEntries, topics: ReadonlySet<string>): FrameEntries =>
   new Map([...entries].filter(([, entry]) => topics.has(entry.topic)));
-
-const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
 
 const NO_COLLAPSED: ReadonlySet<string> = new Set();
 

@@ -4,10 +4,12 @@
 import { Time, toSec } from "@foxglove/rostime";
 import { useMemo } from "react";
 
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+  selectCurrentTime,
+  selectEndTime,
+  selectStartTime,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { subtractTimes } from "@lichtblick/suite-base/players/UserScriptPlayer/transformerWorker/typescript/userUtils/time";
 
 type UseStateTransitionsTime = {
@@ -15,10 +17,6 @@ type UseStateTransitionsTime = {
   currentTimeSinceStart: number | undefined;
   endTimeSinceStart: number | undefined;
 };
-
-const selectStartTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
-const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
-const selectEndTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
 
 const useStateTransitionsTime = (): UseStateTransitionsTime => {
   const startTime = useMessagePipeline(selectStartTime);

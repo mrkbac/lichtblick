@@ -32,10 +32,10 @@ import {
 import KeyListener from "@lichtblick/suite-base/components/KeyListener";
 import { usePathSampleHistory } from "@lichtblick/suite-base/components/MessagePathSyntax/usePathSampleHistory";
 import {
-  MessagePipelineContext,
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectPlayerPresence } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import ToolbarIconButton from "@lichtblick/suite-base/components/PanelToolbar/ToolbarIconButton";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -70,8 +70,6 @@ import { shortcutKeyHandlers } from "@lichtblick/suite-base/util/keyboardShortcu
 import { StateTransitionConfig, StateTransitionPanelProps } from "./types";
 
 const MATCH_EPSILON = 1e-6;
-
-const selectPlayerPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
 
 // Compared recordings get a row each, named by their topic (`/a/…`, `/b/…`)
 const sameStyle = () => ({});

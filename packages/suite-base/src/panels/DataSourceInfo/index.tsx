@@ -39,6 +39,20 @@ import {
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectEndTime,
+  selectGetBatchIterator,
+  selectInspectionIterator,
+  selectPausePlayback,
+  selectPlayerCapabilities,
+  selectPlayerId,
+  selectPlayerName,
+  selectRecordingFiles,
+  selectSeekPlayback,
+  selectSortedTopics,
+  selectStartTime,
+  selectTopicStats,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import Panel from "@lichtblick/suite-base/components/Panel";
 import PanelToolbar from "@lichtblick/suite-base/components/PanelToolbar";
 import Stack from "@lichtblick/suite-base/components/Stack";
@@ -58,19 +72,8 @@ import { useStyles } from "./index.style";
 import { aggregateBuckets, BUCKET_COUNT, inspectSourceTopics, TopicInspection } from "./inspection";
 import { namespaceTotals, topicTreeRows } from "./topicTree";
 
-const selectTopics = (ctx: MessagePipelineContext) => ctx.sortedTopics;
-const selectStats = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.topicStats;
-const selectStart = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
-const selectEnd = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
-const selectName = (ctx: MessagePipelineContext) => ctx.playerState.name;
-const selectCapabilities = (ctx: MessagePipelineContext) => ctx.playerState.capabilities;
-const selectSeek = (ctx: MessagePipelineContext) => ctx.seekPlayback;
-const selectPause = (ctx: MessagePipelineContext) => ctx.pausePlayback;
-const selectIterator = (ctx: MessagePipelineContext) => ctx.getBatchIterator;
-const selectInspectionIterator = (ctx: MessagePipelineContext) => ctx.getInspectionIterator;
 const selectMetadata = (ctx: MessagePipelineContext) => ctx.getMetadata;
 const selectDatatypes = (ctx: MessagePipelineContext) => ctx.datatypes;
-const selectPlayerId = (ctx: MessagePipelineContext) => ctx.playerState.playerId;
 
 type SortKey =
   | "topic"
@@ -83,7 +86,6 @@ type SortKey =
   | "interval"
   | "median"
   | "jitter";
-const selectFiles = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.recordingFiles;
 
 function offset(time: Time, start: Time): string {
   return `${toSec(subtract(time, start)).toFixed(2)} s`;
@@ -92,10 +94,10 @@ function offset(time: Time, start: Time): string {
 export function RecordingInspector(): React.JSX.Element {
   const { t } = useTranslation("dataSourceInfo");
   const { classes, cx } = useStyles();
-  const topics = useMessagePipeline(selectTopics);
+  const topics = useMessagePipeline(selectSortedTopics);
   const getPipeline = useMessagePipelineGetter();
   // Live players emit a new topicStats map per message, so sample it instead of re-rendering per emit.
-  const [topicStats, setTopicStats] = useState(() => selectStats(getPipeline()));
+  const [topicStats, setTopicStats] = useState(() => selectTopicStats(getPipeline()));
   // Live sources show the recent rate, which drops to 0 when a publisher stops
   const [liveRates, setLiveRates] = useState(new Map<string, LiveRate>());
   useEffect(() => {
@@ -103,7 +105,7 @@ export function RecordingInspector(): React.JSX.Element {
     let trackedPlayerId: string | undefined;
     const id = setInterval(() => {
       const pipeline = getPipeline();
-      const stats = selectStats(pipeline);
+      const stats = selectTopicStats(pipeline);
       // Start over for a new player, so its rates don't build on the previous player's samples
       if (pipeline.playerState.playerId !== trackedPlayerId) {
         trackedPlayerId = pipeline.playerState.playerId;
@@ -118,17 +120,17 @@ export function RecordingInspector(): React.JSX.Element {
       clearInterval(id);
     };
   }, [getPipeline]);
-  const start = useMessagePipeline(selectStart);
-  const end = useMessagePipeline(selectEnd);
-  const name = useMessagePipeline(selectName);
-  const capabilities = useMessagePipeline(selectCapabilities);
-  const seek = useMessagePipeline(selectSeek);
-  const pause = useMessagePipeline(selectPause);
-  const getIterator = useMessagePipeline(selectIterator);
+  const start = useMessagePipeline(selectStartTime);
+  const end = useMessagePipeline(selectEndTime);
+  const name = useMessagePipeline(selectPlayerName);
+  const capabilities = useMessagePipeline(selectPlayerCapabilities);
+  const seek = useMessagePipeline(selectSeekPlayback);
+  const pause = useMessagePipeline(selectPausePlayback);
+  const getIterator = useMessagePipeline(selectGetBatchIterator);
   const getInspectionIterator = useMessagePipeline(selectInspectionIterator);
   const getMetadata = useMessagePipeline(selectMetadata);
   const datatypes = useMessagePipeline(selectDatatypes);
-  const files = useMessagePipeline(selectFiles) ?? [];
+  const files = useMessagePipeline(selectRecordingFiles) ?? [];
   const comparing = files.some((file) => file.topicPrefix != undefined);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<SortKey>("topic");

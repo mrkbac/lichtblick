@@ -49,10 +49,8 @@ import {
   loadDecompressHandlers,
   readMessageTimes,
 } from "@lichtblick/mcap-support";
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectCurrentTime } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 
 import { useStyles } from "./ExportRecordingDialog.style";
 import {
@@ -66,8 +64,6 @@ import {
 } from "./exportRecording";
 import { parseTimeInput } from "./parseTimeInput";
 import { useTrimStore } from "./trimStore";
-
-const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
 
 const NS_PER_SEC = 1e9;
 

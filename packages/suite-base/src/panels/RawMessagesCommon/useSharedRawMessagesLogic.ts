@@ -22,6 +22,13 @@ import {
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectCurrentTime,
+  selectGetBatchIterator,
+  selectPausePlayback,
+  selectSeekPlayback,
+  selectTopicStats,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import { Topic } from "@lichtblick/suite-base/players/types";
 
@@ -43,11 +50,6 @@ const log = Logger.getLogger(__filename);
 
 const ONE_NANOSECOND = Object.freeze({ sec: 0, nsec: 1 });
 
-const selectCurrentTime = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.currentTime;
-const selectTopicStats = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.topicStats;
-const selectSeekPlayback = (ctx: MessagePipelineContext) => ctx.seekPlayback;
-const selectPausePlayback = (ctx: MessagePipelineContext) => ctx.pausePlayback;
-const selectGetBatchIterator = (ctx: MessagePipelineContext) => ctx.getBatchIterator;
 const selectGetMessageAtTime = (ctx: MessagePipelineContext) => ctx.getMessageAtTime;
 
 const LATEST_PER_RENDER_TICK_SAMPLING = Object.freeze({
