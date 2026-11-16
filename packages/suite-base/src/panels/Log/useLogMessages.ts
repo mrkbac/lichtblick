@@ -10,6 +10,10 @@ import {
   MessagePipelineContext,
   useMessagePipeline,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectLastSeekTime,
+  selectPlayerId,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { useSubscribeMessageRange } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { PlayerPresence } from "@lichtblick/suite-base/players/types";
 
@@ -140,9 +144,6 @@ function mergeTwo(
   return out;
 }
 
-const selectPlayerId = (ctx: MessagePipelineContext) => ctx.playerState.playerId;
-const selectLastSeekTime = (ctx: MessagePipelineContext) =>
-  ctx.playerState.activeData?.lastSeekTime;
 const selectReady = (ctx: MessagePipelineContext) =>
   ctx.playerState.presence === PlayerPresence.PRESENT ||
   ctx.playerState.presence === PlayerPresence.BUFFERING;

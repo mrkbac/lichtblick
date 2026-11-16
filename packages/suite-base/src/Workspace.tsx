@@ -47,6 +47,13 @@ import {
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectPausePlayback,
+  selectPlayerId,
+  selectPlayerPresence,
+  selectSeekPlayback,
+  selectStartPlayback,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { MonitorSetupProvider } from "@lichtblick/suite-base/components/MonitorSetupContext";
 import PanelLayout from "@lichtblick/suite-base/components/PanelLayout";
 import PanelSettings from "@lichtblick/suite-base/components/PanelSettings";
@@ -98,16 +105,11 @@ import { severityToBadgeColor } from "./utils";
 
 const log = Logger.getLogger(__filename);
 
-const selectPlayerPresence = ({ playerState }: MessagePipelineContext) => playerState.presence;
 const selectPlayerIsPresent = ({ playerState }: MessagePipelineContext) =>
   playerState.presence !== PlayerPresence.NOT_PRESENT;
 const selectIsPlaying = (ctx: MessagePipelineContext) =>
   ctx.playerState.activeData?.isPlaying === true;
-const selectPause = (ctx: MessagePipelineContext) => ctx.pausePlayback;
-const selectPlay = (ctx: MessagePipelineContext) => ctx.startPlayback;
-const selectSeek = (ctx: MessagePipelineContext) => ctx.seekPlayback;
 const selectPlayUntil = (ctx: MessagePipelineContext) => ctx.playUntil;
-const selectPlayerId = (ctx: MessagePipelineContext) => ctx.playerState.playerId;
 const selectEventsSupported = (store: EventsStore) => store.eventsSupported;
 const selectSelectEvent = (store: EventsStore) => store.selectEvent;
 
@@ -136,10 +138,10 @@ function WorkspaceContent(props: WorkspaceProps): React.JSX.Element {
   const rightSidebarSize = useWorkspaceStore(selectWorkspaceRightSidebarSize);
   const { AppBarComponent = AppBar } = props;
 
-  const play = useMessagePipeline(selectPlay);
+  const play = useMessagePipeline(selectStartPlayback);
   const playUntil = useMessagePipeline(selectPlayUntil);
-  const pause = useMessagePipeline(selectPause);
-  const seek = useMessagePipeline(selectSeek);
+  const pause = useMessagePipeline(selectPausePlayback);
+  const seek = useMessagePipeline(selectSeekPlayback);
   const isPlaying = useMessagePipeline(selectIsPlaying);
   const getMessagePipeline = useMessagePipelineGetter();
   const getTimeInfo = useCallback(

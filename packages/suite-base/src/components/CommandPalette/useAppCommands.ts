@@ -20,6 +20,14 @@ import {
   useMessagePipeline,
   useMessagePipelineGetter,
 } from "@lichtblick/suite-base/components/MessagePipeline";
+import {
+  selectEndTime,
+  selectPausePlayback,
+  selectPlayerPresence,
+  selectSeekPlayback,
+  selectStartPlayback,
+  selectStartTime,
+} from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { PLAYBACK_SPEED_OPTIONS } from "@lichtblick/suite-base/components/PlaybackSpeedControls";
 import { APP_CONFIG } from "@lichtblick/suite-base/constants/config";
 import {
@@ -184,15 +192,9 @@ export function formatOffset(seconds: number): string {
 const selectLeftSidebarOpen = (store: WorkspaceContextStore) => store.sidebars.left.open;
 const selectLeftSidebarItem = (store: WorkspaceContextStore) => store.sidebars.left.item;
 const selectLayout = (state: LayoutState) => state.selectedLayout;
-const selectPresence = (ctx: MessagePipelineContext) => ctx.playerState.presence;
 const selectIsPlaying = (ctx: MessagePipelineContext) =>
   ctx.playerState.activeData?.isPlaying === true;
-const selectStart = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.startTime;
-const selectEnd = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.endTime;
 const selectTopics = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.topics;
-const selectPlay = (ctx: MessagePipelineContext) => ctx.startPlayback;
-const selectPause = (ctx: MessagePipelineContext) => ctx.pausePlayback;
-const selectSeek = (ctx: MessagePipelineContext) => ctx.seekPlayback;
 const selectSetSpeed = (ctx: MessagePipelineContext) => ctx.setPlaybackSpeed;
 
 /** Wraps an async action as a sync callback that logs failures. */
@@ -237,14 +239,14 @@ export function useAppCommands(): {
   const addPanel = useAddPanel();
   const { importLayout, exportLayout } = useLayoutTransfer();
 
-  const presence = useMessagePipeline(selectPresence);
+  const presence = useMessagePipeline(selectPlayerPresence);
   const isPlaying = useMessagePipeline(selectIsPlaying);
-  const startTime = useMessagePipeline(selectStart);
-  const endTime = useMessagePipeline(selectEnd);
+  const startTime = useMessagePipeline(selectStartTime);
+  const endTime = useMessagePipeline(selectEndTime);
   const topics = useMessagePipeline(selectTopics);
-  const play = useMessagePipeline(selectPlay);
-  const pause = useMessagePipeline(selectPause);
-  const seek = useMessagePipeline(selectSeek);
+  const play = useMessagePipeline(selectStartPlayback);
+  const pause = useMessagePipeline(selectPausePlayback);
+  const seek = useMessagePipeline(selectSeekPlayback);
   const setSpeed = useMessagePipeline(selectSetSpeed);
   // Read the current time lazily so the palette does not re-render on every frame.
   const getPipeline = useMessagePipelineGetter();
