@@ -13,8 +13,8 @@ export function loadSavedSources(): SourceParams[] {
   try {
     const parsed: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "[]");
     return Array.isArray(parsed)
-      ? (parsed as SourceParams[]).filter(
-          (s) => typeof s.url === "string" && typeof s.kind === "string",
+      ? parsed.filter(
+          (s): s is SourceParams => typeof s?.url === "string" && typeof s.kind === "string",
         )
       : [];
   } catch {
