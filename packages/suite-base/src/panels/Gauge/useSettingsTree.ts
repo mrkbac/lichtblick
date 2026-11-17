@@ -28,6 +28,7 @@ export function buildSettingsTree(
     warningAngle,
     criticalAngle,
   } = config;
+  const isAngle = displayMode === "roll" || displayMode === "pitch";
   return {
     general: {
       error,
@@ -37,7 +38,7 @@ export function buildSettingsTree(
           help: t("displayModeHelp"),
           input: "select",
           value: displayMode,
-          options: (["arc", "roll", "pitch"] as const).map((mode) => ({
+          options: (["arc", "slider", "roll", "pitch"] as const).map((mode) => ({
             label: t(mode),
             value: mode,
           })),
@@ -51,7 +52,7 @@ export function buildSettingsTree(
           error: pathParseError,
           validTypes: DATA_TYPES,
         },
-        ...(displayMode !== "arc" && {
+        ...(isAngle && {
           angleUnit: {
             label: t("angleUnit"),
             help: t("angleUnitHelp"),
@@ -89,7 +90,7 @@ export function buildSettingsTree(
             value: criticalAngle,
           },
         }),
-        ...(displayMode === "arc" && {
+        ...(!isAngle && {
           minValue: {
             label: t("minValue.label"),
             help: t("minValue.help"),

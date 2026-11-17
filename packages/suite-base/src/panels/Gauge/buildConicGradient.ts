@@ -10,12 +10,8 @@ import {
 } from "@lichtblick/suite-base/panels/Gauge/types";
 import { turboColorString } from "@lichtblick/suite-base/util/colorUtils";
 
-export const buildConicGradient = ({
-  config,
-  gaugeAngle,
-  height,
-  width,
-}: BuildConicGradientProps): string => {
+/** Color stops from min (0) to max (1), shared by the arc and slider displays. */
+export function getColorStops(config: BuildConicGradientProps["config"]): ColorStops[] {
   const { colorMap, colorMode, gradient, reverse } = config;
   let colorStops: ColorStops[] = [];
 
@@ -51,7 +47,16 @@ export const buildConicGradient = ({
       .map((stop) => ({ color: stop.color, location: 1 - stop.location }))
       .reverse();
   }
+  return colorStops;
+}
 
+export const buildConicGradient = ({
+  config,
+  gaugeAngle,
+  height,
+  width,
+}: BuildConicGradientProps): string => {
+  const colorStops = getColorStops(config);
   const angleAndPosition = `from ${-Math.PI / 2 + gaugeAngle}rad at 50% ${
     100 * (width / 2 / height)
   }%`;

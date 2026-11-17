@@ -19,7 +19,7 @@ export enum ColorModeConfig {
 }
 
 export type GaugeConfig = {
-  displayMode: "arc" | "roll" | "pitch";
+  displayMode: "arc" | "slider" | "roll" | "pitch";
   angleUnit: "degrees" | "radians";
   angleRange: number;
   warningAngle: number;
