@@ -25,14 +25,18 @@ import { describeChange } from "./describeChange";
 
 const selectLayoutId = (state: LayoutState) => state.selectedLayout?.id;
 
-const relativeFormat = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
 const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
   ["day", 86_400_000],
   ["hour", 3_600_000],
   ["minute", 60_000],
 ];
 
-function formatAgo(savedAt: number, now: number, justNow: string): string {
+function formatAgo(
+  savedAt: number,
+  now: number,
+  justNow: string,
+  relativeFormat: Intl.RelativeTimeFormat,
+): string {
   const ago = now - savedAt;
   for (const [unit, ms] of UNITS) {
     if (ago >= ms) {
@@ -48,7 +52,13 @@ export default function LayoutHistoryList(): ReactElement {
   const { restoreLayoutData } = useCurrentLayoutActions();
   const panelCatalog = usePanelCatalog();
   const { enqueueSnackbar } = useSnackbar();
-  const { t } = useTranslation("layoutHistory");
+  const { t, i18n } = useTranslation("layoutHistory");
+  // Times follow the app's language, not the browser's.
+  const locale = i18n.language;
+  const relativeFormat = useMemo(
+    () => new Intl.RelativeTimeFormat(locale, { numeric: "auto" }),
+    [locale],
+  );
 
   // Tagged with their layout, so another layout's versions never show (or restore) while the
   // newly selected layout's versions are still loading.
@@ -110,11 +120,14 @@ export default function LayoutHistoryList(): ReactElement {
       // Its own entry, so the state before the restore stays in the history too.
       recordLayoutVersion(layoutId, version.data, { kind: "restored" }).catch(() => {});
       restoreLayoutData(version.data);
-      enqueueSnackbar(t("restoredToast", { time: new Date(version.savedAt).toLocaleString() }), {
-        variant: "success",
-      });
+      enqueueSnackbar(
+        t("restoredToast", { time: new Date(version.savedAt).toLocaleString(locale) }),
+        {
+          variant: "success",
+        },
+      );
     },
-    [enqueueSnackbar, layoutId, restoreLayoutData, t],
+    [enqueueSnackbar, layoutId, locale, restoreLayoutData, t],
   );
 
   if (rows.length === 0) {
@@ -153,8 +166,8 @@ export default function LayoutHistoryList(): ReactElement {
               <ListItemText
                 primary={
                   <Stack direction="row" alignItems="center" gap={0.5}>
-                    <Tooltip title={new Date(version.savedAt).toLocaleString()}>
-                      <span>{formatAgo(version.savedAt, now, t("justNow"))}</span>
+                    <Tooltip title={new Date(version.savedAt).toLocaleString(locale)}>
+                      <span>{formatAgo(version.savedAt, now, t("justNow"), relativeFormat)}</span>
                     </Tooltip>
                     {version.kind === "opened" && <Chip size="small" label={t("opened")} />}
                     {version.kind === "restored" && <Chip size="small" label={t("restored")} />}
