@@ -31,7 +31,8 @@ function allFields(): DocumentedNodes {
 }
 
 const docs: PanelDocs = {
-  intro: "Shows one numeric value as a colored arc gauge or a roll/pitch inclinometer.",
+  intro:
+    "Shows one numeric value as a colored arc gauge, a slider between min/max limits, or a roll/pitch inclinometer.",
   settings: allFields,
   sections: [
     {
