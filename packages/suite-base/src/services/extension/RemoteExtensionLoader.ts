@@ -3,7 +3,6 @@
 
 import Log from "@lichtblick/log";
 import ExtensionsAPI from "@lichtblick/suite-base/api/extensions/ExtensionsAPI";
-import { StoredExtension } from "@lichtblick/suite-base/services/IExtensionStorage";
 import {
   IExtensionLoader,
   InstallExtensionProps,
@@ -15,7 +14,7 @@ import decompressFile from "@lichtblick/suite-base/services/extension/utils/deco
 import extractFoxeFileContent from "@lichtblick/suite-base/services/extension/utils/extractFoxeFileContent";
 import validatePackageInfo from "@lichtblick/suite-base/services/extension/utils/validatePackageInfo";
 import { Namespace } from "@lichtblick/suite-base/types";
-import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
+import { ExtensionInfo, StoredExtension } from "@lichtblick/suite-base/types/Extensions";
 
 const log = Log.getLogger(__filename);
 

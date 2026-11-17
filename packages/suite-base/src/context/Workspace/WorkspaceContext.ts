@@ -11,7 +11,7 @@ import { useStoreWithEqualityFn } from "zustand/traditional";
 
 import { useGuaranteedContext } from "@lichtblick/hooks";
 import { AppSettingsTab } from "@lichtblick/suite-base/components/AppSettingsDialog/types";
-import { DataSourceDialogItem } from "@lichtblick/suite-base/components/DataSourceDialog";
+import { DataSourceDialogItem } from "@lichtblick/suite-base/components/DataSourceDialog/DataSourceDialog";
 import { IDataSourceFactory } from "@lichtblick/suite-base/context/PlayerSelectionContext";
 
 export const SidebarItemKeys = [

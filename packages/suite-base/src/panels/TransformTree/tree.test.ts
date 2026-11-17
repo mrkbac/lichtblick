@@ -9,7 +9,6 @@ import { MessageEvent } from "@lichtblick/suite-base/players/types";
 
 import { samplesFromMessage } from "./transforms";
 import {
-  addTransformEvents,
   addTransformState,
   buildRows,
   EMPTY_TRANSFORM_STATE,
@@ -19,6 +18,9 @@ import {
 import { FrameEntries, FrameEntry } from "./types";
 
 const IDENTITY = { x: 0, y: 0, z: 0, w: 1 };
+
+const addTransformEvents = (entries: FrameEntries, events: MessageEvent[]) =>
+  addTransformState({ entries, malformedTopics: new Set() }, events).entries;
 
 function rosTf(topic: string, receiveSec: number, pairs: [string, string][]): MessageEvent {
   return {
@@ -52,7 +54,7 @@ describe("samplesFromMessage", () => {
     const event = rosTf("/tf", 1, [["/map", "odom"]]);
 
     // When
-    const samples = samplesFromMessage(event.schemaName, event.message);
+    const { samples, malformed } = samplesFromMessage(event.schemaName, event.message);
 
     // Then
     expect(samples).toEqual([
@@ -64,6 +66,7 @@ describe("samplesFromMessage", () => {
         stamp: 1,
       },
     ]);
+    expect(malformed).toBe(false);
   });
 
   it("should read parent, child and stamp when given foxglove FrameTransforms", () => {
@@ -81,7 +84,7 @@ describe("samplesFromMessage", () => {
     };
 
     // When
-    const samples = samplesFromMessage("foxglove.FrameTransforms", message);
+    const { samples } = samplesFromMessage("foxglove.FrameTransforms", message);
 
     // Then
     expect(samples).toMatchObject([{ parent: "base_link", child: "lidar", stamp: 2.5 }]);

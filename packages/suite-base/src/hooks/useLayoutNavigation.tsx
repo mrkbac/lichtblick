@@ -1,10 +1,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2026 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
-import * as _ from "lodash-es";
 import { MouseEvent, Dispatch } from "react";
 
-import { useAsyncFn } from "@lichtblick/hooks";
 import { useLayoutBrowserReducer } from "@lichtblick/suite-base/components/LayoutBrowser/reducer";
 import {
   LayoutSelectionState,
@@ -19,7 +17,7 @@ import {
 import { useLayoutManager } from "@lichtblick/suite-base/context/LayoutManagerContext";
 import useCallbackWithToast from "@lichtblick/suite-base/hooks/useCallbackWithToast";
 import { AppEvent } from "@lichtblick/suite-base/services/IAnalytics";
-import { Layout, layoutIsShared } from "@lichtblick/suite-base/services/ILayoutStorage";
+import { Layout } from "@lichtblick/suite-base/services/ILayoutStorage";
 
 export type UseLayoutNavigation = {
   onSelectLayout: (
@@ -45,21 +43,6 @@ export function useLayoutNavigation(menuClose?: () => void): UseLayoutNavigation
     online: layoutManager.isOnline,
   });
 
-  const [layouts] = useAsyncFn(
-    async () => {
-      const [shared, personal] = _.partition(
-        await layoutManager.getLayouts(),
-        layoutManager.supportsSharing ? layoutIsShared : () => false,
-      );
-      return {
-        personal: personal.sort((a, b) => a.name.localeCompare(b.name)),
-        shared: shared.sort((a, b) => a.name.localeCompare(b.name)),
-      };
-    },
-    [layoutManager],
-    { loading: true },
-  );
-
   const onSelectLayout = useCallbackWithToast(
     async (
       item: Layout,
@@ -78,7 +61,6 @@ export function useLayoutNavigation(menuClose?: () => void): UseLayoutNavigation
           dispatch({
             type: "select-id",
             id: item.id,
-            layouts: layouts.value,
             modKey: event.ctrlKey || event.metaKey,
             shiftKey: event.shiftKey,
           });
@@ -93,7 +75,6 @@ export function useLayoutNavigation(menuClose?: () => void): UseLayoutNavigation
       analytics,
       currentLayoutId,
       dispatch,
-      layouts.value,
       menuClose,
       setSelectedLayoutId,
       state.selectedIds.length,

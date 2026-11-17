@@ -458,7 +458,11 @@ function updatePlayerStateAction(
   const newPublicState = {
     ...prevState.public,
     playerState: action.playerState,
-    messageEventsBySubscriberId: messagesBySubscriberId,
+    // An empty frame after an empty frame keeps the same Map, so selectors see no change.
+    messageEventsBySubscriberId:
+      messagesBySubscriberId.size === 0 && prevState.public.messageEventsBySubscriberId.size === 0
+        ? prevState.public.messageEventsBySubscriberId
+        : messagesBySubscriberId,
   };
   const topics = action.playerState.activeData?.topics;
   if (topics !== prevState.public.playerState.activeData?.topics) {

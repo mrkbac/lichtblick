@@ -4,10 +4,11 @@ import * as _ from "lodash-es";
 
 import type { Immutable } from "@lichtblick/suite";
 import type { SubscribePayload, TopicSelection } from "@lichtblick/suite-base/players/types";
+import { omitUndefined } from "@lichtblick/suite-base/util/omitUndefined";
 
 /** The subscription without unset keys and with its fields in order, to compare by meaning. */
 function normalize(subscription: SubscribePayload): Partial<SubscribePayload> {
-  const { fields, ...rest } = _.omitBy(subscription, _.isUndefined) as SubscribePayload;
+  const { fields, ...rest } = omitUndefined(subscription);
   return fields == undefined ? rest : { ...rest, fields: _.sortBy([...new Set(fields)]) };
 }
 

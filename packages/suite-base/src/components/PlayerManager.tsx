@@ -28,7 +28,7 @@ import {
   useState,
 } from "react";
 
-import { useLatest, useMountedState, useWarnImmediateReRender } from "@lichtblick/hooks";
+import { useLatest, useMountedState } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import { Immutable } from "@lichtblick/suite";
 import { CompareProvider } from "@lichtblick/suite-base/components/Compare/CompareContext";
@@ -133,8 +133,6 @@ export default function PlayerManager(
   props: PropsWithChildren<PlayerManagerProps>,
 ): React.JSX.Element {
   const { children, playerSources } = props;
-
-  useWarnImmediateReRender();
 
   const userScriptActions = useUserScriptState(selectUserScriptActions);
 

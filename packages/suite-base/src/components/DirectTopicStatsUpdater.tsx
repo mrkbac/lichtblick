@@ -9,23 +9,16 @@ import { Time } from "@foxglove/rostime";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 
 import { useLatest } from "@lichtblick/hooks";
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
 import {
   selectPlayerCapabilities,
   selectPlayerId,
+  selectTopicStatsOrEmpty,
 } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { useTopicPublishFrequencies } from "@lichtblick/suite-base/hooks/useTopicPublishFrequences";
 import { isRecordingSource } from "@lichtblick/suite-base/players/constants";
-import { TopicStats } from "@lichtblick/suite-base/players/types";
 
 const EM_DASH = "\u2014";
-const EMPTY_TOPIC_STATS = new Map<string, TopicStats>();
-
-const selectTopicStats = (ctx: MessagePipelineContext) =>
-  ctx.playerState.activeData?.topicStats ?? EMPTY_TOPIC_STATS;
 
 type StatSample = {
   time: Time;
@@ -46,7 +39,7 @@ export function DirectTopicStatsUpdater({
 }: {
   interval?: number;
 }): React.JSX.Element {
-  const topicStats = useMessagePipeline(selectTopicStats);
+  const topicStats = useMessagePipeline(selectTopicStatsOrEmpty);
   const playerCapabilities = useMessagePipeline(selectPlayerCapabilities);
   const playerId = useMessagePipeline(selectPlayerId);
 
@@ -77,16 +70,12 @@ export function DirectTopicStatsUpdater({
       const topic = field.dataset.topic;
       const stat = latestStats.current.get(topic);
       if (field.dataset.topicStat === "count") {
-        if (stat) {
-          field.innerText = stat.numMessages.toLocaleString();
-        } else {
-          field.innerText = EM_DASH;
-        }
+        setText(field, stat ? stat.numMessages.toLocaleString() : EM_DASH);
       }
 
       if (field.dataset.topicStat === "frequency") {
         const frequency = latestFrequenciesByTopic.current[topic];
-        field.innerText = frequency != undefined ? `${frequency.toFixed(2)} Hz` : EM_DASH;
+        setText(field, frequency != undefined ? `${frequency.toFixed(2)} Hz` : EM_DASH);
         // A live rate of 0 means the publisher went quiet
         const stale = !latestIsStaticSource.current && frequency === 0;
         field.dataset.stale = String(stale);
@@ -149,4 +138,11 @@ export function DirectTopicStatsUpdater({
   }, [updateStats]);
 
   return <div ref={rootRef} style={{ display: "none" }} />;
+}
+
+/** Writes only a changed text: every write invalidates layout, and most stats don't change per update. */
+function setText(field: HTMLElement, text: string): void {
+  if (field.textContent !== text) {
+    field.textContent = text;
+  }
 }

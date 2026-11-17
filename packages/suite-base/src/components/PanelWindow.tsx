@@ -30,7 +30,7 @@ import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 import isDesktopApp from "@lichtblick/suite-base/util/isDesktopApp";
 import { getAllPanelIds } from "@lichtblick/suite-base/util/tabLayout";
 
-import { DockPanelContext } from "./DockPanelContext";
+import { DockPanelContext, PanelVisibleContext } from "./DockPanelContext";
 import { useMonitorSetup } from "./MonitorSetupContext";
 import { PanelHostContext } from "./PanelHostContext";
 import { PanelWindowWorkspace } from "./PanelWindowWorkspace";
@@ -470,14 +470,17 @@ export function PanelWindow({ children, title }: PropsWithChildren<{ title: stri
           {createPortal(
             <PanelWindowStyles target={target}>
               <DockPanelContext.Provider value={undefined}>
-                {/* Layouts in the window render their panels there, with the window's styles. */}
-                <PanelHostContext.Provider value={undefined}>
-                  <CurrentLayoutContext.Provider value={windowLayout}>
-                    <PanelWindowWorkspace target={target} title={title} rootId={dock?.api.id}>
-                      {children}
-                    </PanelWindowWorkspace>
-                  </CurrentLayoutContext.Provider>
-                </PanelHostContext.Provider>
+                {/* Shown in its own window: the dock group it left is hidden on purpose. */}
+                <PanelVisibleContext.Provider value>
+                  {/* Layouts in the window render their panels there, with the window's styles. */}
+                  <PanelHostContext.Provider value={undefined}>
+                    <CurrentLayoutContext.Provider value={windowLayout}>
+                      <PanelWindowWorkspace target={target} title={title} rootId={dock?.api.id}>
+                        {children}
+                      </PanelWindowWorkspace>
+                    </CurrentLayoutContext.Provider>
+                  </PanelHostContext.Provider>
+                </PanelVisibleContext.Provider>
               </DockPanelContext.Provider>
             </PanelWindowStyles>,
             target.document.body,

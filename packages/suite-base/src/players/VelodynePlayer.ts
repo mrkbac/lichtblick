@@ -85,6 +85,9 @@ export default class VelodynePlayer implements Player {
   #topic: Topic = { ...TOPIC }; // The one topic we are "subscribed" to
   #topics = [this.#topic]; // Stable list of all topics
   #topicStats = new Map<string, TopicStats>(); // Message count and timestamps for our single topic
+  // Topic stats handed out last; a new Map only when a count changed, so consumers compare by reference.
+  #emittedTopicStats = new Map<string, TopicStats>();
+  #topicStatsChanged = false;
   #start: Time; // The time at which we started playing
   #packets: RawPacket[] = []; // Queue of packets that will form the next parsed message
   #presence: PlayerPresence = PlayerPresence.INITIALIZING;
@@ -188,6 +191,7 @@ export default class VelodynePlayer implements Player {
       stats.numMessages++;
       stats.firstMessageTime ??= receiveTime;
       stats.lastMessageTime = receiveTime;
+      this.#topicStatsChanged = true;
 
       this.#emitState();
     }
@@ -216,6 +220,10 @@ export default class VelodynePlayer implements Player {
 
     const currentTime = fromMillis(Date.now());
     const messages = this.#parsedMessages.drain();
+    if (this.#topicStatsChanged) {
+      this.#topicStatsChanged = false;
+      this.#emittedTopicStats = new Map(this.#topicStats);
+    }
     return this.#listener({
       name: "Velodyne",
       presence: this.#presence,
@@ -237,7 +245,7 @@ export default class VelodynePlayer implements Player {
         // that we don't accidentally hit falsy checks.
         lastSeekTime: 1,
         topics: this.#topics,
-        topicStats: new Map(this.#topicStats),
+        topicStats: this.#emittedTopicStats,
         datatypes: DATATYPES,
         publishedTopics: undefined,
         subscribedTopics: undefined,

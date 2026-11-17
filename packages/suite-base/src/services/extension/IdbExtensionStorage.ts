@@ -9,11 +9,7 @@ import * as IDB from "idb";
 
 import Log from "@lichtblick/log";
 import { KEY_WORKSPACE_PREFIX } from "@lichtblick/suite-base/constants/browserStorageKeys";
-import {
-  IExtensionStorage,
-  StoredExtension,
-} from "@lichtblick/suite-base/services/IExtensionStorage";
-import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
+import { ExtensionInfo, StoredExtension } from "@lichtblick/suite-base/types/Extensions";
 
 const log = Log.getLogger(__filename);
 
@@ -32,7 +28,7 @@ interface ExtensionsDB extends IDB.DBSchema {
   };
 }
 
-export class IdbExtensionStorage implements IExtensionStorage {
+export class IdbExtensionStorage {
   #db: Promise<IDB.IDBPDatabase<ExtensionsDB>>;
   public namespace: string;
 

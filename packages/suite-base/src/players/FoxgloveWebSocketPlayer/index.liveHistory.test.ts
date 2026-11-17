@@ -210,7 +210,16 @@ describe("FoxgloveWebSocketPlayer live history", () => {
     player.pausePlayback();
     await flush();
     const from = states.length;
-    await tick(13, 13);
+    vi.useFakeTimers();
+    try {
+      await tick(13, 13);
+      // Paused: no state per message, the timeline's end moves once a second.
+      expect(states.length).toBe(from);
+      vi.advanceTimersByTime(1000);
+      await flush();
+    } finally {
+      vi.useRealTimers();
+    }
     expect(values(from)).toEqual([]);
     expect(last().currentTime).toEqual({ sec: 12, nsec: 0 });
     expect(last().endTime).toEqual({ sec: 13, nsec: 0 });

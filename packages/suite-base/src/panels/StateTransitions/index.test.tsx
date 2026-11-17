@@ -83,7 +83,9 @@ vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useChartScalesAndB
     sizeRef: { current: undefined },
   }),
 }));
-vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/useMessagePathDropConfig");
+vi.mock("@lichtblick/suite-base/components/PanelContext", () => ({
+  usePanelContext: () => ({ setMessagePathDropConfig: vi.fn() }),
+}));
 vi.mock("@lichtblick/suite-base/panels/StateTransitions/hooks/usePanelSettings");
 const mockSeekPlayback = vi.fn();
 vi.mock("@lichtblick/suite-base/components/MessagePipeline", () => ({

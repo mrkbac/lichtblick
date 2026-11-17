@@ -16,7 +16,7 @@ import AlertsContextProvider from "@lichtblick/suite-base/providers/AlertsContex
 import AppParametersProvider from "@lichtblick/suite-base/providers/AppParametersProvider";
 import EventsProvider from "@lichtblick/suite-base/providers/EventsProvider";
 import LayoutManagerProvider from "@lichtblick/suite-base/providers/LayoutManagerProvider";
-import { StudioLogsSettingsProvider } from "@lichtblick/suite-base/providers/StudioLogsSettingsProvider";
+import { StudioLogsSettingsProvider } from "@lichtblick/suite-base/providers/StudioLogsSettingsProvider/StudioLogsSettingsProvider";
 import TimelineInteractionStateProvider from "@lichtblick/suite-base/providers/TimelineInteractionStateProvider";
 import UserProfileLocalStorageProvider from "@lichtblick/suite-base/providers/UserProfileLocalStorageProvider";
 import { LayoutLoader } from "@lichtblick/suite-base/services/ILayoutLoader";

@@ -6,10 +6,8 @@ import { useCallback, useMemo, useRef, useState } from "react";
 
 import { useDataSourceInfo } from "@lichtblick/suite-base/PanelAPI";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
-import {
-  MessagePipelineContext,
-  useMessagePipeline,
-} from "@lichtblick/suite-base/components/MessagePipeline";
+import { useMessagePipeline } from "@lichtblick/suite-base/components/MessagePipeline";
+import { selectIsPlaying } from "@lichtblick/suite-base/components/MessagePipeline/selectors";
 import { usePanelContext } from "@lichtblick/suite-base/components/PanelContext";
 import Stack from "@lichtblick/suite-base/components/Stack";
 import DiffStats from "@lichtblick/suite-base/panels/RawMessagesCommon/DiffStats";
@@ -47,8 +45,6 @@ import { VirtualizedTree } from "@lichtblick/suite-base/panels/RawMessagesVirtua
 import { RAW_MESSAGES_SHORTCUTS } from "@lichtblick/suite-base/panels/RawMessagesVirtual/shortcuts";
 import { findShortcut } from "@lichtblick/suite-base/util/keyboardShortcuts";
 
-const selectIsPlaying = (ctx: MessagePipelineContext) => ctx.playerState.activeData?.isPlaying;
-
 const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element => {
   const { classes } = useStylesRawMessagesVirtual();
   const { classes: toolbarClasses } = useStylesToolbar();
@@ -57,7 +53,7 @@ const RawMessagesVirtual = (props: PropsRawMessagesVirtual): React.JSX.Element =
   const { topicPath, diffMethod, diffTopicPath, diffEnabled, showFullMessageForDiff, fontSize } =
     config;
   const { datatypes } = useDataSourceInfo();
-  const isPlaying = useMessagePipeline(selectIsPlaying) === true;
+  const isPlaying = useMessagePipeline(selectIsPlaying);
 
   const {
     topic,

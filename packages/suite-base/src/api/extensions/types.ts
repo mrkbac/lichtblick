@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { GenericApiEntity } from "@lichtblick/suite-base/api/types";
-import { StoredExtension } from "@lichtblick/suite-base/services/IExtensionStorage";
 import { Namespace } from "@lichtblick/suite-base/types";
-import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
+import { ExtensionInfo, StoredExtension } from "@lichtblick/suite-base/types/Extensions";
 
 export type ExtensionInfoWorkspace = Pick<StoredExtension, "info" | "workspace">;
 

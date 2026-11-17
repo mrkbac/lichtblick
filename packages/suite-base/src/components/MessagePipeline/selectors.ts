@@ -6,7 +6,7 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { MessagePipelineContext } from "@lichtblick/suite-base/components/MessagePipeline/types";
-import { Topic } from "@lichtblick/suite-base/players/types";
+import { Topic, TopicStats } from "@lichtblick/suite-base/players/types";
 
 // Cache the derived map keyed on the `sortedTopics` array reference. The pipeline store only
 // rebuilds `sortedTopics` (new reference) when the player's topics change, so the same map can be
@@ -49,6 +49,14 @@ export const selectEndTime = (ctx: Ctx): ActiveData["endTime"] | undefined =>
   ctx.playerState.activeData?.endTime;
 export const selectTopicStats = (ctx: Ctx): ActiveData["topicStats"] | undefined =>
   ctx.playerState.activeData?.topicStats;
+// Single empty map so the selector result stays reference-equal while there is no data
+const EMPTY_TOPIC_STATS = new Map<string, TopicStats>();
+export const selectTopicStatsOrEmpty = (ctx: Ctx): ActiveData["topicStats"] =>
+  ctx.playerState.activeData?.topicStats ?? EMPTY_TOPIC_STATS;
+export const selectIsPlaying = (ctx: Ctx): boolean =>
+  ctx.playerState.activeData?.isPlaying === true;
+export const selectHasCurrentTime = (ctx: Ctx): boolean =>
+  ctx.playerState.activeData?.currentTime != undefined;
 export const selectRecordingFiles = (ctx: Ctx): ActiveData["recordingFiles"] | undefined =>
   ctx.playerState.activeData?.recordingFiles;
 export const selectLastSeekTime = (ctx: Ctx): ActiveData["lastSeekTime"] | undefined =>

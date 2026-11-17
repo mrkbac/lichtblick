@@ -7,10 +7,6 @@
 
 import Log from "@lichtblick/log";
 import {
-  IExtensionStorage,
-  StoredExtension,
-} from "@lichtblick/suite-base/services/IExtensionStorage";
-import {
   IExtensionLoader,
   InstallExtensionProps,
   LoadedExtension,
@@ -21,14 +17,14 @@ import decompressFile from "@lichtblick/suite-base/services/extension/utils/deco
 import extractFoxeFileContent from "@lichtblick/suite-base/services/extension/utils/extractFoxeFileContent";
 import validatePackageInfo from "@lichtblick/suite-base/services/extension/utils/validatePackageInfo";
 import { Namespace } from "@lichtblick/suite-base/types";
-import { ExtensionInfo } from "@lichtblick/suite-base/types/Extensions";
+import { ExtensionInfo, StoredExtension } from "@lichtblick/suite-base/types/Extensions";
 
 import { IdbExtensionStorage } from "./IdbExtensionStorage";
 
 const log = Log.getLogger(__filename);
 
 export class IdbExtensionLoader implements IExtensionLoader {
-  readonly #storage: IExtensionStorage;
+  readonly #storage: IdbExtensionStorage;
   public readonly namespace: Namespace;
   public readonly type: TypeExtensionLoader = "browser";
 

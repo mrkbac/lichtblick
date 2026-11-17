@@ -6,7 +6,6 @@
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
 import { add, toNanoSec, toSec } from "@foxglove/rostime";
-import * as _ from "lodash-es";
 
 import { TimelinePositionedEvent } from "@lichtblick/suite-base/context/EventsContext";
 import RosTimeBuilder from "@lichtblick/suite-base/testing/builders/RosTimeBuilder";
@@ -17,7 +16,7 @@ export function makeMockEvents(
   startSec: number = 100,
   stepSec: number = 1,
 ): TimelinePositionedEvent[] {
-  return _.range(0, count).map((idx) => {
+  return Array.from({ length: count }, (_, idx) => {
     const startTime = RosTimeBuilder.time({ sec: idx * stepSec + startSec, nsec: 0 });
     const duration = RosTimeBuilder.time({ sec: (idx % 3) + 1, nsec: 0 });
 

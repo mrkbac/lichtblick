@@ -27,11 +27,12 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useContext, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatByteSize } from "@lichtblick/den/format";
 import CopyButton from "@lichtblick/suite-base/components/CopyButton";
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import EmptyState from "@lichtblick/suite-base/components/EmptyState";
 import {
   MessagePipelineContext,
@@ -112,6 +113,15 @@ export function RecordingInspector(): React.JSX.Element {
   const [topicStats, setTopicStats] = useState(() => selectTopicStats(getPipeline()));
   // Live sources show the recent rate, which drops to 0 when a publisher stops
   const [liveRates, setLiveRates] = useState(new Map<string, LiveRate>());
+  // Rates are sampled every second even while hidden (they rely on regular samples). Hidden
+  // (inactive tab, behind a maximized panel), the panel just doesn't re-render; showing it publishes
+  // the latest sample right away.
+  const visible = useContext(PanelVisibleContext);
+  const visibleRef = useRef(visible);
+  visibleRef.current = visible;
+  const latestRef = useRef<{ stats: typeof topicStats; rates?: Map<string, LiveRate> }>({
+    stats: topicStats,
+  });
   useEffect(() => {
     let tracker = new LiveTopicRates();
     let trackedPlayerId: string | undefined;
@@ -123,15 +133,30 @@ export function RecordingInspector(): React.JSX.Element {
         trackedPlayerId = pipeline.playerState.playerId;
         tracker = new LiveTopicRates();
       }
-      setTopicStats(stats);
-      if (stats) {
-        setLiveRates(tracker.update(Date.now(), stats));
+      latestRef.current = {
+        stats,
+        rates: stats ? tracker.update(Date.now(), stats) : latestRef.current.rates,
+      };
+      if (visibleRef.current) {
+        setTopicStats(stats);
+        if (latestRef.current.rates) {
+          setLiveRates(latestRef.current.rates);
+        }
       }
     }, 1000);
     return () => {
       clearInterval(id);
     };
   }, [getPipeline]);
+  useEffect(() => {
+    if (visible) {
+      const { stats, rates } = latestRef.current;
+      setTopicStats(stats);
+      if (rates) {
+        setLiveRates(rates);
+      }
+    }
+  }, [visible]);
   const start = useMessagePipeline(selectStartTime);
   const end = useMessagePipeline(selectEndTime);
   const name = useMessagePipeline(selectPlayerName);
@@ -737,7 +762,9 @@ export function RecordingInspector(): React.JSX.Element {
                     const qos = channels.flatMap((channel) =>
                       parseQosProfiles(channel.metadata.offered_qos_profiles),
                     );
-                    const qosConflicts = conflictingPolicies(qos);
+                    const qosConflicts = conflictingPolicies(qos)
+                      .map((key) => QOS_LABELS[key].toLowerCase())
+                      .join(", ");
                     return (
                       <Fragment key={topic.name}>
                         <tr data-selected={selected === topic.name}>
@@ -777,16 +804,16 @@ export function RecordingInspector(): React.JSX.Element {
                             {qos[0] && (
                               <span
                                 className={cx(classes.schemaLabel, {
-                                  [classes.qosWarning]: qosConflicts.length > 0,
+                                  [classes.qosWarning]: qosConflicts !== "",
                                 })}
                                 title={
-                                  qosConflicts.length > 0
-                                    ? `Publishers offer different ${qosConflicts.map((key) => QOS_LABELS[key].toLowerCase()).join(", ")}. A single subscription cannot match all of them.`
+                                  qosConflicts !== ""
+                                    ? `Publishers offer different ${qosConflicts}. A single subscription cannot match all of them.`
                                     : "Offered QoS"
                                 }
                               >
-                                {qosConflicts.length > 0
-                                  ? `⚠ Mixed QoS: ${qosConflicts.map((key) => QOS_LABELS[key].toLowerCase()).join(", ")}`
+                                {qosConflicts !== ""
+                                  ? `⚠ Mixed QoS: ${qosConflicts}`
                                   : `${qos[0].reliability} · ${qos[0].durability} · ${qos[0].history}`}
                                 {qos.length > 1 ? ` · ${qos.length} publishers` : ""}
                               </span>

@@ -20,21 +20,33 @@ import { FrameEntries, FrameEntry, FrameRow, FrameWarning } from "./types";
 
 const RATE_WINDOW = 20;
 
+/** Transform entries plus the topics that delivered transforms the panel had to skip. */
+export type TransformState = {
+  entries: FrameEntries;
+  malformedTopics: ReadonlySet<string>;
+};
+
+export const EMPTY_TRANSFORM_STATE: TransformState = {
+  entries: new Map(),
+  malformedTopics: new Set(),
+};
+
 /**
- * Returns a new map with the transforms from `events` applied on top of `entries`. Malformed
- * transforms are skipped, and `onMalformed` is called with the topic of each.
+ * Returns a new state with the transforms from `events` applied on top of `state`. Malformed
+ * transforms are skipped, and the topics that delivered them are remembered.
  */
-export function addTransformEvents(
-  entries: FrameEntries,
+export function addTransformState(
+  state: TransformState,
   events: Immutable<MessageEvent[]>,
-  onMalformed?: (topic: string) => void,
-): Map<string, FrameEntry> {
-  const next = new Map(entries);
+): TransformState {
+  const next = new Map(state.entries);
+  let malformedTopics: Set<string> | undefined;
   for (const event of events) {
     const receiveTime = toSec(event.receiveTime);
-    const samples = samplesFromMessage(event.schemaName, event.message, () => {
-      onMalformed?.(event.topic);
-    });
+    const { samples, malformed } = samplesFromMessage(event.schemaName, event.message);
+    if (malformed && !state.malformedTopics.has(event.topic)) {
+      (malformedTopics ??= new Set(state.malformedTopics)).add(event.topic);
+    }
     for (const sample of samples) {
       const prev = next.get(sample.child);
       const recentReceiveTimes = [...(prev?.recentReceiveTimes ?? []), receiveTime].slice(
@@ -56,32 +68,7 @@ export function addTransformEvents(
       });
     }
   }
-  return next;
-}
-
-/** Transform entries plus the topics that delivered transforms the panel had to skip. */
-export type TransformState = {
-  entries: FrameEntries;
-  malformedTopics: ReadonlySet<string>;
-};
-
-export const EMPTY_TRANSFORM_STATE: TransformState = {
-  entries: new Map(),
-  malformedTopics: new Set(),
-};
-
-/** `addTransformEvents` that remembers which topics had malformed transforms. */
-export function addTransformState(
-  state: TransformState,
-  events: Immutable<MessageEvent[]>,
-): TransformState {
-  let malformedTopics: Set<string> | undefined;
-  const entries = addTransformEvents(state.entries, events, (topic) => {
-    if (!state.malformedTopics.has(topic)) {
-      (malformedTopics ??= new Set(state.malformedTopics)).add(topic);
-    }
-  });
-  return { entries, malformedTopics: malformedTopics ?? state.malformedTopics };
+  return { entries: next, malformedTopics: malformedTopics ?? state.malformedTopics };
 }
 
 /** Entries of `overlay` win, but every parent seen in either map is kept. */

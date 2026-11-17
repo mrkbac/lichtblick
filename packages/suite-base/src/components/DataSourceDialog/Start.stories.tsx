@@ -105,7 +105,7 @@ const playerSelection: PlayerSelection = {
   ],
 };
 
-const Default = (): React.JSX.Element => <DataSourceDialog backdropAnimation={false} />;
+const Default = (): React.JSX.Element => <DataSourceDialog />;
 
 export const DefaultLight: StoryObj = {
   render: Default,
@@ -123,7 +123,7 @@ export const UserNoAuth: StoryObj = {
   render: () => {
     return (
       <PlayerSelectionContext.Provider value={playerSelection}>
-        <DataSourceDialog backdropAnimation={false} />
+        <DataSourceDialog />
       </PlayerSelectionContext.Provider>
     );
   },

@@ -10,7 +10,7 @@ const MAX_COLUMNS = 4096;
 
 /**
  * Scrolling peak envelope of what is audible right now (one column per animation frame), plus
- * a level meter on the right. Freezes while the audio clock is paused.
+ * a level meter on the right. Freezes while the audio clock is paused, without drawing.
  */
 export function Waveform({ player }: { player: AudioPlayer | undefined }): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -30,10 +30,12 @@ export function Waveform({ player }: { player: AudioPlayer | undefined }): React
     let frame = 0;
 
     const draw = () => {
-      frame = requestAnimationFrame(draw);
+      // Paused: stop the loop until the clock runs again, instead of waking 60 times a second.
       if (!player.isRunning()) {
+        frame = 0;
         return;
       }
+      frame = requestAnimationFrame(draw);
       player.analyser.getFloatTimeDomainData(samples);
       let peak = 0;
       for (const sample of samples) {
@@ -58,17 +60,26 @@ export function Waveform({ player }: { player: AudioPlayer | undefined }): React
 
       ctx.fillStyle = waveColor;
       const columns = Math.min(Math.floor(plotWidth / dpr), MAX_COLUMNS);
+      // One path and one fill instead of a fill call per column.
+      ctx.beginPath();
       for (let i = 0; i < columns; i++) {
         const value = peaks[(head - 1 - i + MAX_COLUMNS) % MAX_COLUMNS]!;
         const h = Math.max(dpr, value * height);
-        ctx.fillRect(plotWidth - (i + 1) * dpr, mid - h / 2, dpr, h);
+        ctx.rect(plotWidth - (i + 1) * dpr, mid - h / 2, dpr, h);
       }
+      ctx.fill();
       const level = peaks[(head - 1 + MAX_COLUMNS) % MAX_COLUMNS]!;
       ctx.fillStyle = level >= 0.99 ? theme.palette.error.main : waveColor;
       ctx.fillRect(width - meterWidth, height * (1 - level), meterWidth, height * level);
     };
     frame = requestAnimationFrame(draw);
+    const unsubscribe = player.subscribeRunning(() => {
+      if (frame === 0 && player.isRunning()) {
+        frame = requestAnimationFrame(draw);
+      }
+    });
     return () => {
+      unsubscribe();
       cancelAnimationFrame(frame);
     };
   }, [player, waveColor, axisColor, theme.palette.error.main]);

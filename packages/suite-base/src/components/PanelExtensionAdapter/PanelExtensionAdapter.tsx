@@ -11,6 +11,7 @@ import { produce } from "immer";
 import {
   CSSProperties,
   useCallback,
+  useContext,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -18,7 +19,7 @@ import {
   useState,
 } from "react";
 
-import { useLatest, useMountedState, useValueChangedDebugLog } from "@lichtblick/hooks";
+import { useLatest, useMountedState } from "@lichtblick/hooks";
 import Logger from "@lichtblick/log";
 import {
   AppSettingValue,
@@ -31,6 +32,7 @@ import {
   Time,
   VariableValue,
 } from "@lichtblick/suite";
+import { PanelVisibleContext } from "@lichtblick/suite-base/components/DockPanelContext";
 import {
   MessagePipelineContext,
   useMessagePipeline,
@@ -77,6 +79,7 @@ import { assertNever } from "@lichtblick/suite-base/util/assertNever";
 import { randomUUID } from "@lichtblick/suite-base/util/randomUUID";
 
 import { PanelConfigVersionError } from "./PanelConfigVersionError";
+import { HiddenFrames } from "./hiddenFrames";
 import { ExtensionRenderState, RenderStateConfig, initRenderStateBuilder } from "./renderState";
 import {
   BuiltinPanelExtensionContext,
@@ -302,6 +305,9 @@ function PanelExtensionAdapter(
   // Keep the last message of a newly subscribed topic until a rendered
   // frame has delivered it (see UndeliveredMessages).
   const [undelivered] = useState(() => new UndeliveredMessages());
+  // A hidden panel keeps every message but renders them in batches (see HiddenFrames).
+  const visible = useContext(PanelVisibleContext);
+  const [hiddenFrames] = useState(() => new HiddenFrames());
   // Pending frames belong to the seek that produced them.
   const lastSeekTimeRef = useRef(playerState.activeData?.lastSeekTime);
   const lastCurrentTimeRef = useRef(playerState.activeData?.currentTime);
@@ -310,14 +316,23 @@ function PanelExtensionAdapter(
   // The render-done callback belongs to the render that started it; read the current gate, since
   // the panel may start watching currentFrame while that render is in progress.
   const deliverHeldRef = useLatest(deliverHeld);
-  // Re-runs the render effect when the panel finishes a render while messages are still held, so
-  // they are delivered even if no new frame follows (e.g. a static scene).
+  // Re-runs the render effect when the panel finishes a render while messages are still held or
+  // hidden frames are queued, so they are delivered even if no new frame follows (e.g. a static
+  // scene, or a source that went quiet).
   const [heldRetry, setHeldRetry] = useState(0);
   const retryIfHeld = useCallback(() => {
-    if (deliverHeldRef.current && undelivered.hasHeld()) {
+    if ((deliverHeldRef.current && undelivered.hasHeld()) || hiddenFrames.hasPending()) {
       setHeldRetry((n) => n + 1);
     }
-  }, [deliverHeldRef, undelivered]);
+  }, [deliverHeldRef, hiddenFrames, undelivered]);
+  // A hidden panel's queued frames are delivered when its interval ends, even if no frame follows.
+  const hiddenRetryTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(
+    () => () => {
+      clearTimeout(hiddenRetryTimerRef.current);
+    },
+    [],
+  );
 
   useLayoutEffect(() => {
     const lastSeekTime = playerState.activeData?.lastSeekTime;
@@ -331,10 +346,12 @@ function PanelExtensionAdapter(
       compare(currentTime, lastCurrentTimeRef.current) !== 0;
     if (lastSeekTime !== lastSeekTimeRef.current || seekAcknowledged) {
       undelivered.clearPending();
+      hiddenFrames.clear();
     }
     lastSeekTimeRef.current = lastSeekTime;
     lastCurrentTimeRef.current = currentTime;
     undelivered.hold(messageEvents);
+    hiddenFrames.add(messageEvents, { visible });
 
     /**
      * We need to check that the panel has been initialized because the renderFn function is being
@@ -347,10 +364,28 @@ function PanelExtensionAdapter(
       return;
     }
 
+    const now = performance.now();
+    if (hiddenFrames.shouldWait({ visible, now })) {
+      if (hiddenFrames.hasPending() && hiddenRetryTimerRef.current == undefined) {
+        hiddenRetryTimerRef.current = setTimeout(() => {
+          hiddenRetryTimerRef.current = undefined;
+          setHeldRetry((n) => n + 1);
+        }, hiddenFrames.waitMs(now));
+      }
+      return;
+    }
+    // Still rendering: keep queued frames for when it is done (retryIfHeld) instead of dropping them.
+    if (renderingRef.current && hiddenFrames.hasPending()) {
+      return;
+    }
+    clearTimeout(hiddenRetryTimerRef.current);
+    hiddenRetryTimerRef.current = undefined;
+    const pipelineFrame = hiddenFrames.take(messageEvents, now);
+
     const subscribedTopics = new Set(localSubscriptions.map((sub) => sub.topic));
     const currentFrame = deliverHeld
-      ? undelivered.frameFor(messageEvents, subscribedTopics)
-      : messageEvents;
+      ? undelivered.frameFor(pipelineFrame, subscribedTopics)
+      : pipelineFrame;
 
     const renderState = buildRenderState({
       appSettings,
@@ -417,6 +452,7 @@ function PanelExtensionAdapter(
     emitMessageConverterAlert,
     globalVariables,
     heldRetry,
+    hiddenFrames,
     hoverValue,
     localSubscriptions,
     messageConverters,
@@ -430,6 +466,7 @@ function PanelExtensionAdapter(
     sortedTopics,
     sortedServices,
     undelivered,
+    visible,
     watchedFields,
     initialState,
     forceConversion,
@@ -849,10 +886,6 @@ function PanelExtensionAdapter(
   ]);
 
   const panelContainerRef = useRef<HTMLDivElement>(null);
-
-  useValueChangedDebugLog(initPanel, "initPanel");
-  useValueChangedDebugLog(panelId, "panelId");
-  useValueChangedDebugLog(partialExtensionContext, "partialExtensionContext");
 
   const configTooNew = useMemo(() => {
     const latestConfig = initialState.current;
