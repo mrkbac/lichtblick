@@ -22,13 +22,14 @@ const INSPECT_SHORTCUTS = [
 ] as const satisfies readonly KeyboardShortcut[];
 
 /**
- * Bound from this list: the perspective toggle (ThreeDeeRender), frame offsets (FrameAxes),
+ * Bound from this list: the perspective toggle, recentering and the hover inspector toggle (ThreeDeeRender), frame offsets (FrameAxes),
  * measuring keys (MeasurementTool, FrameMeasureOverlay) and closing hover details (HoverTooltip).
  * Display only: camera keys (three.js OrbitControls, configured by DEFAULT_ORBIT_CONTROLS_CONFIG
  * in camera.ts) and all mouse gestures (pointer handlers of the renderer and its renderables).
  */
 export const THREE_DEE_SHORTCUTS = [
   { id: "3d.togglePerspective", titleKey: "togglePerspective", keys: [{ key: "3" }] },
+  { id: "3d.recenter", titleKey: "recenterCamera", keys: [{ key: "1" }] },
   {
     id: "3d.pan",
     titleKey: "moveCamera",
@@ -60,6 +61,7 @@ export const THREE_DEE_SHORTCUTS = [
   },
   { id: "3d.dropTopic", titleKey: "dropTopicToShow", keys: [], mouse: [{ action: "drop" }] },
   ...INSPECT_SHORTCUTS,
+  { id: "3d.toggleInspector", titleKey: "toggleHoverInspector", keys: [{ key: "i" }] },
   {
     id: "3d.toggleOriginal",
     titleKey: "toggleOriginalTransforms",

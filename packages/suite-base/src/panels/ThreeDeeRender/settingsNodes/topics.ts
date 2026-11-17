@@ -443,7 +443,71 @@ export const FOXGLOVE_GRID_DEFAULTS: LayerSettingsFoxgloveGrid = {
   ],
   colorMap: "turbo",
   explicitAlpha: 1,
+  elevationField: undefined,
+  interpolation: "nearest",
+  showLines: false,
+  lineColor: rgbaToCssString({ r: 0, g: 0, b: 0, a: 0.5 }),
+  lighting: true,
+  drawBehind: false,
 };
+
+/** Elevation, interpolation, cell lines, lighting and draw order of a grid layer. */
+function foxgloveGridDisplayFields(
+  config: Partial<LayerSettingsFoxgloveGrid>,
+  msgFields: string[] | undefined,
+): DocumentedFields {
+  const settings = { ...FOXGLOVE_GRID_DEFAULTS, ...config };
+  const fieldNames = msgFields ?? (settings.elevationField ? [settings.elevationField] : []);
+  return {
+    elevationField: {
+      label: t("threeDee:cellGridElevation"),
+      help: t("threeDee:cellGridElevationHelp"),
+      input: "select",
+      options: [
+        { label: t("threeDee:cellGridElevationNone"), value: undefined },
+        ...fieldNames.map((name) => ({ label: name, value: name })),
+      ],
+      value: settings.elevationField,
+    },
+    lighting: {
+      label: t("threeDee:cellGridLighting"),
+      help: t("threeDee:cellGridLightingHelp"),
+      input: "boolean",
+      value: settings.lighting,
+      disabled: settings.elevationField == undefined,
+    },
+    interpolation: {
+      label: t("threeDee:cellGridInterpolation"),
+      help: t("threeDee:cellGridInterpolationHelp"),
+      input: "select",
+      options: [
+        { label: t("threeDee:cellGridInterpolationNearest"), value: "nearest" },
+        { label: t("threeDee:cellGridInterpolationLinear"), value: "linear" },
+      ],
+      value: settings.interpolation,
+    },
+    showLines: {
+      label: t("threeDee:cellGridShowLines"),
+      help: t("threeDee:cellGridShowLinesHelp"),
+      input: "boolean",
+      value: settings.showLines,
+    },
+    lineColor: settings.showLines
+      ? {
+          label: t("threeDee:cellGridLineColor"),
+          help: t("threeDee:cellGridLineColorHelp"),
+          input: "rgba",
+          value: settings.lineColor,
+        }
+      : undefined,
+    drawBehind: {
+      label: t("threeDee:cellGridDrawBehind"),
+      help: t("threeDee:cellGridDrawBehindHelp"),
+      input: "boolean",
+      value: settings.drawBehind,
+    },
+  };
+}
 
 /** `msgFields`: the grid's cell fields, once a message arrived. */
 export function foxgloveGridSettingsNode(
@@ -462,6 +526,7 @@ export function foxgloveGridSettingsNode(
         defaults: FOXGLOVE_GRID_DEFAULTS,
         modifiers: { supportsPackedRgbModes: false, supportsRgbaFieldsMode: true },
       }),
+      ...foxgloveGridDisplayFields(config, msgFields),
       ...frameLockField("Frame lock", { ...FOXGLOVE_GRID_DEFAULTS, ...config }),
     },
   };
@@ -566,15 +631,17 @@ export function imageProjectionSettingsNode(
 
 // ---- Point clouds, laser scans and velodyne scans ----
 
-export type PointShape = "circle" | "square" | "cube";
-const ALL_POINT_SHAPES: readonly PointShape[] = ["circle", "square", "cube"];
+export type PointShape = "circle" | "square" | "cube" | "sphere";
+const ALL_POINT_SHAPES: readonly PointShape[] = ["circle", "square", "cube", "sphere"];
 
 export type LayerSettingsPointExtension = BaseSettings &
   ColorModeSettings & {
     pointSize: number;
     pointShape: PointShape;
-    /** Edge length in meters when `pointShape` is "cube" */
+    /** Cube edge length or sphere diameter in meters, when `pointShape` is "cube" or "sphere" */
     cubeSize: number;
+    /** Draw cube edges, when `pointShape` is "cube" */
+    showOutlines?: boolean;
     decayTime: number;
   };
 
@@ -607,6 +674,7 @@ const SHAPE_LABELS = {
   circle: "threeDee:pointShapeCircle",
   square: "threeDee:pointShapeSquare",
   cube: "threeDee:pointShapeCube",
+  sphere: "threeDee:pointShapeSphere",
 } as const;
 
 /**
@@ -645,11 +713,11 @@ export function pointSettingsNode(
   });
 
   const sizeFields: DocumentedFields =
-    pointShape === "cube"
+    pointShape === "cube" || pointShape === "sphere"
       ? {
           cubeSize: {
-            label: t("threeDee:cubeSize"),
-            help: t("threeDee:cubeSizeHelp"),
+            label: t(pointShape === "cube" ? "threeDee:cubeSize" : "threeDee:sphereSize"),
+            help: t(pointShape === "cube" ? "threeDee:cubeSizeHelp" : "threeDee:sphereSizeHelp"),
             input: "number",
             step: 0.05,
             placeholder: String(defaultSettings.cubeSize),
@@ -657,6 +725,14 @@ export function pointSettingsNode(
             value: config.cubeSize,
             min: 0,
           },
+          ...(pointShape === "cube" && {
+            showOutlines: {
+              label: t("threeDee:showOutline"),
+              help: t("threeDee:cubeOutlineHelp"),
+              input: "boolean",
+              value: config.showOutlines ?? false,
+            },
+          }),
         }
       : {
           pointSize: {

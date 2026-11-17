@@ -224,6 +224,10 @@ export class CameraStateSettings extends SceneExtension implements ICameraHandle
         this.renderer.updateConfig((draft) => {
           draft.scene.syncCamera = value as boolean;
         });
+      } else if (path[1] === "logDepth") {
+        this.renderer.updateConfig((draft) => {
+          draft.scene.logDepth = value === true;
+        });
       } else {
         const { payload } = action;
         const numberKey = CAMERA_NUMBER_KEYS.find((key) => key === path[1]);

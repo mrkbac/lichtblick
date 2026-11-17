@@ -275,7 +275,8 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
     const needsRebuild =
       colorHasTransparency(settings) !== material.transparent ||
       pointCloudColorEncoding(settings) !== pointCloudColorEncoding(prevSettings) ||
-      settings.pointShape !== prevSettings.pointShape;
+      settings.pointShape !== prevSettings.pointShape ||
+      settings.showOutlines !== prevSettings.showOutlines;
 
     const pointsHistory = this.#pointsHistory;
     const stixelsHistory = this.#stixelsHistory;
@@ -461,8 +462,10 @@ export class PointCloudHistoryRenderable extends Renderable<PointCloudHistoryUse
   }
 
   #applyShape(points: PointCloudRenderable): void {
+    const { pointShape, showOutlines } = this.userData.settings;
     points.setCubeMaterials(
-      this.userData.settings.pointShape === "cube" ? this.#cubeMaterials : undefined,
+      pointShape === "cube" || pointShape === "sphere" ? this.#cubeMaterials : undefined,
+      { shape: pointShape === "sphere" ? "sphere" : "cube", showOutline: showOutlines === true },
     );
   }
 
